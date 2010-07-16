@@ -130,6 +130,37 @@
         will be used.
       </column>
 
+      <column name="fail_mode">
+        <p>When a controller is configured, it is, ordinarily, responsible
+          for setting up all flows on the switch.  Thus, if the connection to
+          the controller fails, no new network connections can be set up.
+          If the connection to the controller stays down long enough,
+          no packets can pass through the switch at all.  This setting
+          determines the switch's response to such a situation.  It may be set
+          to one of the following:
+          <dl>
+            <dt><code>standalone</code></dt>
+            <dd>If no message is received from the controller for three
+              times the inactivity probe interval
+              (see <ref column="inactivity_probe"/>), then Open vSwitch
+              will take over responsibility for setting up flows.  In
+              this mode, Open vSwitch causes the bridge to act like an
+              ordinary MAC-learning switch.  Open vSwitch will continue
+              to retry connecting to the controller in the background
+              and, when the connection succeeds, it will discontinue its
+              standalone behavior.</dd>
+            <dt><code>secure</code></dt>
+            <dd>Open vSwitch will not set up flows on its own when the
+              controller connection fails.  It will continue retry
+              connecting to the controller forever.</dd>
+          </dl>
+        </p>
+        <p>If this value is unset, the default is implementation-specific.</p>
+        <p>When more than one controller is configured, 
+          <ref column="fail_mode"/> is considered only when none of the
+          configured controllers can be contacted.</p>
+      </column>
+
       <column name="datapath_id">
         Reports the OpenFlow datapath ID in use.  Exactly 16 hex
         digits.  (Setting this column will have no useful effect.  Set
@@ -868,43 +899,6 @@
         received for the same additional amount of time, Open vSwitch
         assumes the connection has been broken and attempts to reconnect.
         Default is implementation-specific.
-      </column>
-
-      <column name="fail_mode">
-        <p>When a controller is configured, it is, ordinarily, responsible
-          for setting up all flows on the switch.  Thus, if the connection to
-          the controller fails, no new network connections can be set up.
-          If the connection to the controller stays down long enough,
-          no packets can pass through the switch at all.  This setting
-          determines the switch's response to such a situation.  It may be set
-          to one of the following:
-          <dl>
-            <dt><code>standalone</code></dt>
-            <dd>If no message is received from the controller for three
-              times the inactivity probe interval
-              (see <ref column="inactivity_probe"/>), then Open vSwitch
-              will take over responsibility for setting up flows.  In
-              this mode, Open vSwitch causes the bridge to act like an
-              ordinary MAC-learning switch.  Open vSwitch will continue
-              to retry connecting to the controller in the background
-              and, when the connection succeeds, it will discontinue its
-              standalone behavior.</dd>
-            <dt><code>secure</code></dt>
-            <dd>Open vSwitch will not set up flows on its own when the
-              controller connection fails.  It will continue retry
-              connecting to the controller forever.</dd>
-          </dl>
-        </p>
-        <p>If this value is unset, the default is implementation-specific.</p>
-	<p>When more than one controller is configured,
-	  <ref column="fail_mode"/> is considered only when none of the
-	  configured controllers can be contacted.  At that point, the bridge
-	  enters secure mode if any of the controllers'
-	  <ref column="fail_mode"/> is set to <code>secure</code>.  Otherwise,
-	  it enters standalone mode if at least one <ref column="fail_mode"/>
-	  is set to <code>standalone</code>.  If none of the
-	  <ref column="fail_mode"/> values are set, the default is
-	  implementation-defined.</p>
       </column>
     </group>
 

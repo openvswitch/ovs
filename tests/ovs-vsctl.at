@@ -522,6 +522,7 @@ controller          : []
 datapath_id         : []
 datapath_type       : ""
 external_ids        : {}
+fail_mode           : []
 flood_vlans         : []
 mirrors             : []
 name                : "br0"
@@ -718,6 +719,7 @@ controller          : []
 datapath_id         : []
 datapath_type       : ""
 external_ids        : {}
+fail_mode           : []
 flood_vlans         : []
 mirrors             : []
 name                : "br0"

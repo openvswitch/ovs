@@ -72,7 +72,6 @@ struct ofproto_controller {
     char *target;               /* e.g. "tcp:127.0.0.1" */
     int max_backoff;            /* Maximum reconnection backoff, in seconds. */
     int probe_interval;         /* Max idle time before probing, in seconds. */
-    enum ofproto_fail_mode fail; /* Controller failure handling mode. */
     enum ofproto_band band;      /* In-band or out-of-band? */
 
     /* Discovery options. */
@@ -104,6 +103,7 @@ bool ofproto_is_alive(const struct ofproto *);
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
                              const struct ofproto_controller *, size_t n);
+void ofproto_set_fail_mode(struct ofproto *, enum ofproto_fail_mode fail_mode);
 void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);

@@ -512,6 +512,7 @@ struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
     struct ovsrec_controller **ctrl;
+    char *fail_mode;
     size_t n_ctrl;
     struct vsctl_bridge *parent;
     int vlan;
@@ -570,9 +571,11 @@ add_bridge(struct vsctl_info *b,
     if (parent) {
         br->ctrl = parent->br_cfg->controller;
         br->n_ctrl = parent->br_cfg->n_controller;
+        br->fail_mode = parent->br_cfg->fail_mode;
     } else {
         br->ctrl = br_cfg->controller;
         br->n_ctrl = br_cfg->n_controller;
+        br->fail_mode = br_cfg->fail_mode;
     }
     shash_add(&b->bridges, br->name, br);
     return br;
@@ -1625,55 +1628,20 @@ cmd_set_controller(struct vsctl_context *ctx)
     free_info(&info);
 }
 
-static const char *
-get_fail_mode(struct ovsrec_controller **controllers, size_t n_controllers)
-{
-    const char *fail_mode;
-    size_t i;
-
-    fail_mode = NULL;
-    for (i = 0; i < n_controllers; i++) {
-        const char *s = controllers[i]->fail_mode;
-        if (s) {
-            if (!strcmp(s, "secure")) {
-                return s;
-            } else {
-                fail_mode = s;
-            }
-        }
-    }
-
-    return fail_mode;
-}
-
 static void
 cmd_get_fail_mode(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_bridge *br;
-    const char *fail_mode = NULL;
 
     get_info(ctx->ovs, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
-    fail_mode = get_fail_mode(br->ctrl, br->n_ctrl);
-
-    if (fail_mode && strlen(fail_mode)) {
-        ds_put_format(&ctx->output, "%s\n", fail_mode);
+    if (br->fail_mode && strlen(br->fail_mode)) {
+        ds_put_format(&ctx->output, "%s\n", br->fail_mode);
     }
 
     free_info(&info);
-}
-
-static void
-set_fail_mode(struct ovsrec_controller **controllers, size_t n_controllers,
-              const char *fail_mode)
-{
-    size_t i;
-
-    for (i = 0; i < n_controllers; i++) {
-        ovsrec_controller_set_fail_mode(controllers[i], fail_mode);
-    }
 }
 
 static void
@@ -1685,7 +1653,7 @@ cmd_del_fail_mode(struct vsctl_context *ctx)
     get_info(ctx->ovs, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
 
-    set_fail_mode(br->ctrl, br->n_ctrl, NULL);
+    ovsrec_bridge_set_fail_mode(br->br_cfg, NULL);
 
     free_info(&info);
 }
@@ -1704,10 +1672,7 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
         vsctl_fatal("fail-mode must be \"standalone\" or \"secure\"");
     }
 
-    if (!br->ctrl) {
-        vsctl_fatal("no controller declared for %s", br->name);
-    }
-    set_fail_mode(br->ctrl, br->n_ctrl, fail_mode);
+    ovsrec_bridge_set_fail_mode(br->br_cfg, fail_mode);
 
     free_info(&info);
 }

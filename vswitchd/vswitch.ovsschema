@@ -62,6 +62,10 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "Controller"},
                   "min": 0, "max": "unlimited"}},
+       "fail_mode": {
+         "type": {"key": {"type": "string",
+                          "enum": ["set", ["standalone", "secure"]]},
+                  "min": 0, "max": 1}},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
@@ -226,10 +230,6 @@
                   "min": 0, "max": 1}},
        "inactivity_probe": {
          "type": {"key": "integer", "min": 0, "max": 1}},
-       "fail_mode": {
-         "type": {"key": {"type": "string",
-                          "enum": ["set", ["standalone", "secure"]]},
-                  "min": 0, "max": 1}},
        "discover_accept_regex": {
          "type": {"key": "string", "min": 0, "max": 1}},
        "discover_update_resolv_conf": {

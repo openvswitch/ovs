@@ -53,6 +53,7 @@ struct ofsettings {
     /* Controller configuration. */
     struct ofproto_controller *controllers;
     size_t n_controllers;
+    enum ofproto_fail_mode fail_mode;
 
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
@@ -165,6 +166,7 @@ main(int argc, char *argv[])
         ovs_fatal(error, "failed to configure STP");
     }
     ofproto_set_controllers(ofproto, s.controllers, s.n_controllers);
+    ofproto_set_fail_mode(ofproto, s.fail_mode);
 
     daemonize_complete();
 
@@ -265,12 +267,12 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     controller_opts.target = NULL;
     controller_opts.max_backoff = 8;
     controller_opts.probe_interval = 5;
-    controller_opts.fail = OFPROTO_FAIL_STANDALONE;
     controller_opts.band = OFPROTO_IN_BAND;
     controller_opts.accept_re = NULL;
     controller_opts.update_resolv_conf = true;
     controller_opts.rate_limit = 0;
     controller_opts.burst_limit = 0;
+    s->fail_mode = OFPROTO_FAIL_STANDALONE;
     s->datapath_id = 0;
     s->mfr_desc = NULL;
     s->hw_desc = NULL;
@@ -329,10 +331,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_FAIL_MODE:
             if (!strcmp(optarg, "open") || !strcmp(optarg, "standalone")) {
-                controller_opts.fail = OFPROTO_FAIL_STANDALONE;
+                s->fail_mode = OFPROTO_FAIL_STANDALONE;
             } else if (!strcmp(optarg, "closed")
                        || !strcmp(optarg, "secure")) {
-                controller_opts.fail = OFPROTO_FAIL_SECURE;
+                s->fail_mode = OFPROTO_FAIL_SECURE;
             } else {
                 ovs_fatal(0, "--fail argument must be \"standalone\" "
                           "or \"secure\"");

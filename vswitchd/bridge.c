@@ -1423,6 +1423,7 @@ bridge_reconfigure_one(struct bridge *br)
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
     struct shash_node *node;
+    enum ofproto_fail_mode fail_mode;
     size_t i;
 
     /* Collect old ports. */
@@ -1490,6 +1491,13 @@ bridge_reconfigure_one(struct bridge *br)
     }
     shash_destroy(&old_ports);
     shash_destroy(&new_ports);
+
+    /* Set the fail-mode */
+    fail_mode = !br->cfg->fail_mode
+                || !strcmp(br->cfg->fail_mode, "standalone")
+                    ? OFPROTO_FAIL_STANDALONE
+                    : OFPROTO_FAIL_SECURE;
+    ofproto_set_fail_mode(br->ofproto, fail_mode);
 
     /* Delete all flows if we're switching from connected to standalone or vice
      * versa.  (XXX Should we delete all flows if we are switching from one
@@ -1604,11 +1612,6 @@ bridge_reconfigure_remotes(struct bridge *br,
             oc->max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
             oc->probe_interval = (c->inactivity_probe
                                  ? *c->inactivity_probe / 1000 : 5);
-            oc->fail = (!c->fail_mode
-                       || !strcmp(c->fail_mode, "standalone")
-                       || !strcmp(c->fail_mode, "open")
-                       ? OFPROTO_FAIL_STANDALONE
-                       : OFPROTO_FAIL_SECURE);
             oc->band = (!c->connection_mode
                        || !strcmp(c->connection_mode, "in-band")
                        ? OFPROTO_IN_BAND

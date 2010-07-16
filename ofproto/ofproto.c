@@ -274,6 +274,7 @@ struct ofproto {
     /* OpenFlow connections. */
     struct hmap controllers;   /* Controller "struct ofconn"s. */
     struct list all_conns;     /* Contains "struct ofconn"s. */
+    enum ofproto_fail_mode fail_mode;
     struct pvconn **listeners;
     size_t n_listeners;
     struct pvconn **snoops;
@@ -586,52 +587,13 @@ update_in_band_remotes(struct ofproto *ofproto)
     free(addrs);
 }
 
-void
-ofproto_set_controllers(struct ofproto *p,
-                        const struct ofproto_controller *controllers,
-                        size_t n_controllers)
+static void
+update_fail_open(struct ofproto *p)
 {
-    struct shash new_controllers;
-    enum ofproto_fail_mode fail_mode;
-    struct ofconn *ofconn, *next;
-    bool ss_exists;
-    size_t i;
-
-    shash_init(&new_controllers);
-    for (i = 0; i < n_controllers; i++) {
-        const struct ofproto_controller *c = &controllers[i];
-
-        shash_add_once(&new_controllers, c->target, &controllers[i]);
-        if (!find_controller_by_target(p, c->target)) {
-            add_controller(p, c);
-        }
-    }
-
-    fail_mode = OFPROTO_FAIL_STANDALONE;
-    ss_exists = false;
-    HMAP_FOR_EACH_SAFE (ofconn, next, struct ofconn, hmap_node,
-                        &p->controllers) {
-        struct ofproto_controller *c;
-
-        c = shash_find_data(&new_controllers, ofconn_get_target(ofconn));
-        if (!c) {
-            ofconn_destroy(ofconn);
-        } else {
-            update_controller(ofconn, c);
-            if (ofconn->ss) {
-                ss_exists = true;
-            }
-            if (c->fail == OFPROTO_FAIL_SECURE) {
-                fail_mode = OFPROTO_FAIL_SECURE;
-            }
-        }
-    }
-    shash_destroy(&new_controllers);
-
-    update_in_band_remotes(p);
+    struct ofconn *ofconn;
 
     if (!hmap_is_empty(&p->controllers)
-        && fail_mode == OFPROTO_FAIL_STANDALONE) {
+            && p->fail_mode == OFPROTO_FAIL_STANDALONE) {
         struct rconn **rconns;
         size_t n;
 
@@ -651,6 +613,48 @@ ofproto_set_controllers(struct ofproto *p,
         fail_open_destroy(p->fail_open);
         p->fail_open = NULL;
     }
+}
+
+void
+ofproto_set_controllers(struct ofproto *p,
+                        const struct ofproto_controller *controllers,
+                        size_t n_controllers)
+{
+    struct shash new_controllers;
+    struct ofconn *ofconn, *next;
+    bool ss_exists;
+    size_t i;
+
+    shash_init(&new_controllers);
+    for (i = 0; i < n_controllers; i++) {
+        const struct ofproto_controller *c = &controllers[i];
+
+        shash_add_once(&new_controllers, c->target, &controllers[i]);
+        if (!find_controller_by_target(p, c->target)) {
+            add_controller(p, c);
+        }
+    }
+
+    ss_exists = false;
+    HMAP_FOR_EACH_SAFE (ofconn, next, struct ofconn, hmap_node,
+                        &p->controllers) {
+        struct ofproto_controller *c;
+
+        c = shash_find_data(&new_controllers, ofconn_get_target(ofconn));
+        if (!c) {
+            ofconn_destroy(ofconn);
+        } else {
+            update_controller(ofconn, c);
+            if (ofconn->ss) {
+                ss_exists = true;
+            }
+        }
+    }
+    shash_destroy(&new_controllers);
+
+    update_in_band_remotes(p);
+
+    update_fail_open(p);
 
     if (!hmap_is_empty(&p->controllers) && !ss_exists) {
         ofconn = CONTAINER_OF(hmap_first(&p->controllers),
@@ -658,6 +662,13 @@ ofproto_set_controllers(struct ofproto *p,
         ofconn->ss = switch_status_register(p->switch_status, "remote",
                                             rconn_status_cb, ofconn->rconn);
     }
+}
+
+void
+ofproto_set_fail_mode(struct ofproto *p, enum ofproto_fail_mode fail_mode)
+{
+    p->fail_mode = fail_mode;
+    update_fail_open(p);
 }
 
 /* Drops the connections between 'ofproto' and all of its controllers, forcing
