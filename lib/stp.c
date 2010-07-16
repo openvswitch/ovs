@@ -17,6 +17,8 @@
 /* Based on sample implementation in 802.1D-1998.  Above copyright and license
  * applies to all modifications. */
 
+#include <config.h>
+
 #include "stp.h"
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -27,10 +29,10 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "util.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_stp
+VLOG_DEFINE_THIS_MODULE(stp)
 
 /* Ethernet address used as the destination for STP frames. */
 const uint8_t stp_eth_addr[ETH_ADDR_LEN]

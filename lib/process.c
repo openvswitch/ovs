@@ -32,9 +32,9 @@
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_process
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(process)
 
 struct process {
     struct list node;

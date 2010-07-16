@@ -37,9 +37,9 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "svec.h"
-
-#define THIS_MODULE VLM_netdev
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev)
 
 static const struct netdev_class *base_netdev_classes[] = {
 #ifdef HAVE_NETLINK

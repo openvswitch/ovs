@@ -33,9 +33,9 @@
 #include "svec.h"
 #include "timeval.h"
 #include "vconn.h"
-
-#define THIS_MODULE VLM_status
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(status)
 
 struct status_category {
     struct list node;

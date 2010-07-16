@@ -63,11 +63,11 @@
 #include "vconn.h"
 #include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
+#include "vlog.h"
 #include "xtoxll.h"
 #include "sflow_api.h"
 
-#define THIS_MODULE VLM_bridge
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(bridge)
 
 struct dst {
     uint16_t vlan;

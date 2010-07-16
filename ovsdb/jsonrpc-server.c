@@ -34,9 +34,9 @@
 #include "timeval.h"
 #include "transaction.h"
 #include "trigger.h"
-
-#define THIS_MODULE VLM_ovsdb_jsonrpc_server
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server)
 
 struct ovsdb_jsonrpc_remote;
 struct ovsdb_jsonrpc_session;

@@ -33,9 +33,9 @@
 #include "util.h"
 #include "stream-provider.h"
 #include "stream-fd.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_stream_unix
+
+VLOG_DEFINE_THIS_MODULE(stream_unix)
 
 /* Active UNIX socket. */
 

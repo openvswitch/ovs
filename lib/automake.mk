@@ -274,8 +274,8 @@ check-for-unused-vlog-modules:
 	             lib/vlog-modules.def |				      \
                      LC_ALL=C sort -u |					      \
                      xargs echo`;					      \
-	  used_vlog=`git grep VLM_ |					      \
-	             sed -n 's/.*VLM_\([a-z_0-9]\{1,\}\).*/\1/p' |	      \
+	  used_vlog=`git grep VLOG_DEFINE_THIS_MODULE |                       \
+	             sed -n 's/.*VLOG_DEFINE_THIS_MODULE(\([a-z_0-9]\{1,\}\)).*/\1/p' |	      \
 	             LC_ALL=C sort -u |					      \
                      xargs echo`;					      \
 	  rc=0;								      \

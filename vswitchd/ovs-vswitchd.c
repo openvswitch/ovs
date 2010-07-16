@@ -45,10 +45,10 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_vswitchd
+VLOG_DEFINE_THIS_MODULE(vswitchd)
 
 static unixctl_cb_func ovs_vswitchd_exit;
 

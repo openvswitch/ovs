@@ -26,9 +26,9 @@
 #include "openvswitch/datapath-protocol.h"
 #include "packets.h"
 #include "socket-util.h"
-
-#define THIS_MODULE VLM_netdev_patch
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_patch)
 
 struct netdev_dev_patch {
     struct netdev_dev netdev_dev;

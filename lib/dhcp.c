@@ -24,9 +24,9 @@
 #include <stdlib.h>
 #include "dynamic-string.h"
 #include "ofpbuf.h"
-
-#define THIS_MODULE VLM_dhcp
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(dhcp)
 
 /* Information about a DHCP argument type. */
 struct arg_type {

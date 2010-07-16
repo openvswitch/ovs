@@ -30,9 +30,9 @@
 #include "status.h"
 #include "timeval.h"
 #include "vconn.h"
-
-#define THIS_MODULE VLM_fail_open
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(fail_open)
 
 /*
  * Fail-open mode.

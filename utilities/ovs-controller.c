@@ -36,9 +36,9 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_controller
+
+VLOG_DEFINE_THIS_MODULE(controller)
 
 #define MAX_SWITCHES 16
 #define MAX_LISTENERS 16

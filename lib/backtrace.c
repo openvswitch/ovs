@@ -21,9 +21,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "compiler.h"
-
-#define THIS_MODULE VLM_backtrace
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(backtrace)
 
 static uintptr_t OVS_UNUSED
 get_max_stack(void)

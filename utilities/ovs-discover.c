@@ -33,9 +33,9 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_ovs_discover
+
+VLOG_DEFINE_THIS_MODULE(ovs_discover)
 
 struct iface {
     const char *name;

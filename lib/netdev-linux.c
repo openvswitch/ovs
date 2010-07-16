@@ -61,9 +61,9 @@
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
-
-#define THIS_MODULE VLM_netdev_linux
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_linux)
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */

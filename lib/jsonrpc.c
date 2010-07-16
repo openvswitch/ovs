@@ -32,9 +32,9 @@
 #include "reconnect.h"
 #include "stream.h"
 #include "timeval.h"
-
-#define THIS_MODULE VLM_jsonrpc
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(jsonrpc)
 
 struct jsonrpc {
     struct stream *stream;

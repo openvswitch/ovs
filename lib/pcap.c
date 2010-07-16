@@ -22,9 +22,9 @@
 #include <string.h>
 #include "compiler.h"
 #include "ofpbuf.h"
-
-#define THIS_MODULE VLM_pcap
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(pcap)
 
 struct pcap_hdr {
     uint32_t magic_number;   /* magic number */

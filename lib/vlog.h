@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,10 +129,12 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
     __attribute__((format(printf, 4, 5)));
 
-/* Convenience macros.  To use these, define THIS_MODULE as a macro that
- * expands to the module used by the current source file, e.g.
- *      #include "vlog.h"
- *      #define THIS_MODULE VLM_netlink
+/* Defines THIS_MODULE as MODULE, for use with the convenience macros below. */
+#define VLOG_DEFINE_THIS_MODULE(MODULE) enum { THIS_MODULE = VLM_##MODULE };
+
+/* Convenience macros.  These assume that THIS_MODULE is defined as the current
+ * module, as set up by e.g. the VLOG_DEFINE_MODULE macro above.
+ *
  * Guaranteed to preserve errno.
  */
 #define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)

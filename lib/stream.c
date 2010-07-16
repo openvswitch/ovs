@@ -35,9 +35,9 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_stream
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(stream)
 
 /* State of an active stream.*/
 enum stream_state {

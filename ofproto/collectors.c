@@ -26,9 +26,9 @@
 #include "socket-util.h"
 #include "svec.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_collectors
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(collectors)
 
 struct collectors {
     int *fds;                     /* Sockets. */

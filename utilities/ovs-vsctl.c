@@ -41,9 +41,9 @@
 #include "vswitchd/vswitch-idl.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_vsctl
+
+VLOG_DEFINE_THIS_MODULE(vsctl)
 
 /* vsctl_fatal() also logs the error, so it is preferred in this file. */
 #define ovs_fatal please_use_vsctl_fatal_instead_of_ovs_fatal

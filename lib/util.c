@@ -23,9 +23,9 @@
 #include <string.h>
 #include <unistd.h>
 #include "coverage.h"
-
-#define THIS_MODULE VLM_util
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(util)
 
 const char *program_name;
 

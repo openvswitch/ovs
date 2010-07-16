@@ -27,9 +27,9 @@
 #include "openvswitch/gre.h"
 #include "packets.h"
 #include "socket-util.h"
-
-#define THIS_MODULE VLM_netdev_gre
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_gre)
 
 struct netdev_dev_gre {
     struct netdev_dev netdev_dev;

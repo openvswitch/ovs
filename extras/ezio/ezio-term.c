@@ -37,9 +37,9 @@
 #include "terminal.h"
 #include "timeval.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_ezio_term
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ezio_term)
 
 /* EZIO button status. */
 enum btn_status {

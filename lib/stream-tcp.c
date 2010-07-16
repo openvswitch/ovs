@@ -30,9 +30,9 @@
 #include "util.h"
 #include "stream-provider.h"
 #include "stream-fd.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_stream_tcp
+
+VLOG_DEFINE_THIS_MODULE(stream_tcp)
 
 /* Active TCP. */
 

@@ -25,8 +25,7 @@
 #include "util.h"
 #include "vlog.h"
 
-#define THIS_MODULE VLM_ovsdb_error
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(ovsdb_error)
 
 struct ovsdb_error {
     const char *tag;            /* String for "error" member. */

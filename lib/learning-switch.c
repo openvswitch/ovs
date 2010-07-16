@@ -35,10 +35,10 @@
 #include "stp.h"
 #include "timeval.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_learning_switch
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(learning_switch)
 
 enum port_state {
     P_DISABLED = 1 << 0,

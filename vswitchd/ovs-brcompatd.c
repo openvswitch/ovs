@@ -54,10 +54,10 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_brcompatd
+VLOG_DEFINE_THIS_MODULE(brcompatd)
 
 
 /* xxx Just hangs if datapath is rmmod/insmod.  Learn to reconnect? */

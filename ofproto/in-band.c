@@ -35,9 +35,9 @@
 #include "poll-loop.h"
 #include "status.h"
 #include "timeval.h"
-
-#define THIS_MODULE VLM_in_band
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(in_band)
 
 /* In-band control allows a single network to be used for OpenFlow
  * traffic and other data traffic.  Refer to ovs-vswitchd.conf(5) and 

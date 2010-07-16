@@ -32,9 +32,9 @@
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_socket_util
+
+VLOG_DEFINE_THIS_MODULE(socket_util)
 
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */

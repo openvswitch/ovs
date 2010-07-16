@@ -37,9 +37,9 @@
 #include "svec.h"
 #include "util.h"
 #include "valgrind.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_dpif
+
+VLOG_DEFINE_THIS_MODULE(dpif)
 
 static const struct dpif_class *base_dpif_classes[] = {
 #ifdef HAVE_NETLINK

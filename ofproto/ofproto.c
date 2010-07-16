@@ -57,10 +57,10 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_ofproto
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(ofproto)
 
 #include "sflow_api.h"
 

@@ -40,9 +40,9 @@
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_dpctl
+
+VLOG_DEFINE_THIS_MODULE(dpctl)
 
 static const struct command all_commands[];
 

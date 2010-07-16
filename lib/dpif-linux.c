@@ -41,9 +41,9 @@
 #include "shash.h"
 #include "svec.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_dpif_linux
+
+VLOG_DEFINE_THIS_MODULE(dpif_linux)
 
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {

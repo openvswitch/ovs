@@ -41,9 +41,9 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_ovsdb_client
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_client)
 
 /* --format: Output formatting. */
 static enum {

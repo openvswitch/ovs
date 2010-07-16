@@ -50,10 +50,10 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_ofctl
+VLOG_DEFINE_THIS_MODULE(ofctl)
 
 #define DEFAULT_IDLE_TIMEOUT 60
 

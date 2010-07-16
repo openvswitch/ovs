@@ -31,9 +31,9 @@
 #include "util.h"
 #include "stream-provider.h"
 #include "stream.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_stream_fd
+
+VLOG_DEFINE_THIS_MODULE(stream_fd)
 
 /* Active file descriptor stream. */
 

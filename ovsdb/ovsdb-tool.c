@@ -34,9 +34,9 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_ovsdb_tool
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_tool)
 
 /* -m, --more: Verbosity level for "show-log" command output. */
 static int show_log_verbosity;

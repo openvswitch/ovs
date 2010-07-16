@@ -34,9 +34,9 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_ovsdb_idl
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_idl)
 
 /* An arc from one idl_row to another.  When row A contains a UUID that
  * references row B, this is represented by an arc from A (the source) to B

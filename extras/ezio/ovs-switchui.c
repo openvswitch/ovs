@@ -49,10 +49,10 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_switchui
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(switchui)
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void);

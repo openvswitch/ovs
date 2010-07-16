@@ -44,9 +44,9 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_openflowd
+
+VLOG_DEFINE_THIS_MODULE(openflowd)
 
 /* Settings that may be configured by the user. */
 struct ofsettings {

@@ -28,9 +28,9 @@
 #include "fatal-signal.h"
 #include "list.h"
 #include "timeval.h"
-
-#define THIS_MODULE VLM_poll_loop
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(poll_loop)
 
 /* An event that will wake the following call to poll_block(). */
 struct poll_waiter {

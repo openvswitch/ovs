@@ -22,10 +22,10 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_ofp_util
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(ofp_util)
 
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */

@@ -29,9 +29,9 @@
 #include "tag.h"
 #include "timeval.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_mac_learning
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(mac_learning)
 
 /* Returns the number of seconds since 'e' was last learned. */
 int

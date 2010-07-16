@@ -28,9 +28,9 @@
 #include "fatal-signal.h"
 #include "socket-util.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_tty
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(tty)
 
 /* Get major() and minor() macros. */
 #if MAJOR_IN_MKDEV

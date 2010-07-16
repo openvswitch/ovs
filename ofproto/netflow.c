@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,10 +30,10 @@
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_netflow
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(netflow)
 
 #define NETFLOW_V5_VERSION 5
 

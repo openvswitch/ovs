@@ -28,9 +28,9 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_fatal_signal
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(fatal_signal)
 
 /* Signals to catch. */
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
