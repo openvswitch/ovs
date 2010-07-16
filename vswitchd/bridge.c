@@ -1497,6 +1497,10 @@ bridge_reconfigure_one(struct bridge *br)
                 || !strcmp(br->cfg->fail_mode, "standalone")
                     ? OFPROTO_FAIL_STANDALONE
                     : OFPROTO_FAIL_SECURE;
+    if ((ofproto_get_fail_mode(br->ofproto) != fail_mode)
+            && !ofproto_has_controller(br->ofproto)) {
+        ofproto_flush_flows(br->ofproto);
+    }
     ofproto_set_fail_mode(br->ofproto, fail_mode);
 
     /* Delete all flows if we're switching from connected to standalone or vice
@@ -1552,14 +1556,19 @@ bridge_reconfigure_remotes(struct bridge *br,
         /* Clear out controllers. */
         ofproto_set_controllers(br->ofproto, NULL, 0);
 
-        /* Set up a flow that matches every packet and directs them to
-         * OFPP_NORMAL (which goes to us). */
-        memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
-        action.output.len = htons(sizeof action);
-        action.output.port = htons(OFPP_NORMAL);
-        memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
+        /* If there are no controllers and the bridge is in standalone
+         * mode, set up a flow that matches every packet and directs
+         * them to OFPP_NORMAL (which goes to us).  Otherwise, the
+         * switch is in secure mode and we won't pass any traffic until
+         * a controller has been defined and it tells us to do so. */
+        if (ofproto_get_fail_mode(br->ofproto) == OFPROTO_FAIL_STANDALONE) {
+            memset(&action, 0, sizeof action);
+            action.type = htons(OFPAT_OUTPUT);
+            action.output.len = htons(sizeof action);
+            action.output.port = htons(OFPP_NORMAL);
+            memset(&flow, 0, sizeof flow);
+            ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
+        }
     } else {
         struct ofproto_controller *ocs;
         size_t i;

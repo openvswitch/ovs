@@ -121,6 +121,7 @@ int ofproto_set_stp(struct ofproto *, bool enable_stp);
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
 bool ofproto_has_controller(const struct ofproto *);
+enum ofproto_fail_mode ofproto_get_fail_mode(const struct ofproto *);
 void ofproto_get_listeners(const struct ofproto *, struct svec *);
 void ofproto_get_snoops(const struct ofproto *, struct svec *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);

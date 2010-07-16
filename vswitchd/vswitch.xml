@@ -151,8 +151,9 @@
               standalone behavior.</dd>
             <dt><code>secure</code></dt>
             <dd>Open vSwitch will not set up flows on its own when the
-              controller connection fails.  It will continue retry
-              connecting to the controller forever.</dd>
+              controller connection fails or when no controllers are
+              defined.  The bridge will continue to retry connecting to
+              any defined controllers forever.</dd>
           </dl>
         </p>
         <p>If this value is unset, the default is implementation-specific.</p>

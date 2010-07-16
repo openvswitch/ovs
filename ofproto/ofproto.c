@@ -889,6 +889,12 @@ ofproto_has_controller(const struct ofproto *ofproto)
     return !hmap_is_empty(&ofproto->controllers);
 }
 
+enum ofproto_fail_mode
+ofproto_get_fail_mode(const struct ofproto *p)
+{
+    return p->fail_mode;
+}
+
 void
 ofproto_get_listeners(const struct ofproto *ofproto, struct svec *listeners)
 {
