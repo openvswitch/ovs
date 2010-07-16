@@ -14,6 +14,7 @@
 #include <linux/types.h>
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
+#include <linux/jiffies.h>
 #include <linux/time.h>
 
 #include "openvswitch/datapath-protocol.h"
@@ -34,11 +35,10 @@ struct sw_flow {
 	struct odp_flow_key key;
 	struct sw_flow_actions *sf_acts;
 
-	struct timespec used;	/* Last used time. */
-
 	u8 ip_tos;		/* IP TOS value. */
 
 	spinlock_t lock;	/* Lock for values below. */
+	unsigned long used;	/* Last used time (in jiffies). */
 	u64 packet_count;	/* Number of packets matched. */
 	u64 byte_count;		/* Number of bytes matched. */
 	u8 tcp_flags;		/* Union of seen TCP flags. */
