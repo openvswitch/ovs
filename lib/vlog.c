@@ -69,11 +69,19 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 };
 
 /* Current log levels. */
-static int levels[VLM_N_MODULES][VLF_N_FACILITIES];
+static int levels[VLM_N_MODULES][VLF_N_FACILITIES] = {
+#define VLOG_MODULE(NAME) { VLL_INFO, VLL_INFO, VLL_INFO },
+#include "vlog-modules.def"
+#undef VLOG_MODULE
+};
 
 /* For fast checking whether we're logging anything for a given module and
  * level.*/
-enum vlog_level min_vlog_levels[VLM_N_MODULES];
+enum vlog_level min_vlog_levels[VLM_N_MODULES] = {
+#define VLOG_MODULE(NAME) VLL_INFO,
+#include "vlog-modules.def"
+#undef VLOG_MODULE
+};
 
 /* Time at which vlog was initialized, in milliseconds. */
 static long long int boot_time;
@@ -81,6 +89,9 @@ static long long int boot_time;
 /* VLF_FILE configuration. */
 static char *log_file_name;
 static FILE *log_file;
+
+/* vlog initialized? */
+static bool vlog_inited;
 
 static void format_log_message(enum vlog_module, enum vlog_level,
                                enum vlog_facility, unsigned int msg_num,
@@ -424,8 +435,12 @@ vlog_init(void)
 {
     time_t now;
 
+    if (vlog_inited) {
+        return;
+    }
+    vlog_inited = true;
+
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_INFO);
 
     boot_time = time_msec();
     now = time_wall();
@@ -447,7 +462,10 @@ vlog_init(void)
 void
 vlog_exit(void) 
 {
-    closelog(); 
+    if (vlog_inited) {
+        closelog();
+        vlog_inited = false;
+    }
 }
 
 /* Print the current logging level for each module. */
@@ -601,6 +619,8 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
         int save_errno = errno;
         static unsigned int msg_num;
         struct ds s;
+
+        vlog_init();
 
         ds_init(&s);
         ds_reserve(&s, 1024);

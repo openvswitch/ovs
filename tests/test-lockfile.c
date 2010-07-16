@@ -26,6 +26,7 @@
 #include "process.h"
 #include "timeval.h"
 #include "util.h"
+#include "vlog.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -240,6 +241,7 @@ main(int argc, char *argv[])
     size_t i;
 
     set_program_name(argv[0]);
+    vlog_set_levels(VLM_lockfile, VLF_ANY_FACILITY, VLL_ERR);
 
     if (argc != 2) {
         ovs_fatal(0, "exactly one argument required; use \"%s help\" for help",

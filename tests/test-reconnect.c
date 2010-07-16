@@ -27,6 +27,7 @@
 #include "compiler.h"
 #include "svec.h"
 #include "util.h"
+#include "vlog.h"
 
 static struct reconnect *reconnect;
 static int now;
@@ -43,6 +44,8 @@ main(void)
     unsigned int old_max_tries;
     int old_time;
     char line[128];
+
+    vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_EMER);
 
     now = 1000;
     reconnect = reconnect_create(now);
