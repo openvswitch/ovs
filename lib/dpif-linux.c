@@ -463,7 +463,7 @@ dpif_linux_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                              uint32_t queue_id, uint32_t *priority)
 {
     if (queue_id < 0xf000) {
-        *priority = TC_H_MAKE(1, queue_id);
+        *priority = TC_H_MAKE(1 << 16, queue_id);
         return 0;
     } else {
         return EINVAL;
