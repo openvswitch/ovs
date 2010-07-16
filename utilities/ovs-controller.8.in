@@ -1,3 +1,9 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovs\-controller 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-controller
 .
@@ -21,7 +27,8 @@ one or more of the following OpenFlow connection methods:
 .RE
 .
 .SH OPTIONS
-.IP "\fB\-n\fR, \fB\-\-noflow\fR"
+.IP "\fB\-n\fR"
+.IQ "\fB\-\-noflow\fR"
 By default, \fBovs\-controller\fR sets up a flow in each OpenFlow switch
 whenever it receives a packet whose destination is known due through
 MAC learning.  This option disables flow setup, so that every packet
@@ -45,7 +52,8 @@ on its own.  To set the idle time for those flows, pass
 This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
 .
-.IP "\fB\-H\fR, \fB\-\-hub\fR"
+.IP "\fB\-H\fR"
+.IQ "\fB\-\-hub\fR"
 By default, the controller acts as an L2 MAC-learning switch.  This
 option changes its behavior to that of a hub that floods packets on
 all but the incoming port.
@@ -57,7 +65,8 @@ through the controller and every packet is flooded.
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 .
-.IP "\fB\-w\fR, \fB\-\-wildcard\fR"
+.IP "\fB\-w\fR"
+.IQ "\fB\-\-wildcard\fR"
 By default, \fBovs\-controller\fR sets up exact-match flows.  This
 option allows it to set up wildcarded flows, which may reduce
 flow-setup latency by causing less traffic to be sent up to the
@@ -66,7 +75,8 @@ controller.
 This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
 .
-.IP "\fB\-N\fR, \fB\-\-normal\fR"
+.IP "\fB\-N\fR"
+.IQ "\fB\-\-normal\fR"
 By default, \fBovs\-controller\fR directs packets to a particular port
 or floods them.  This option causes it to direct non-flooded packets
 to the OpenFlow \fBOFPP_NORMAL\fR port.  This allows the switch itself
@@ -80,6 +90,15 @@ to it by switches.
 .IP
 This option is only for debugging the Open vSwitch implementation of
 ``fail open'' mode.  It must not be used in production.
+.
+.IP "\fB\-q \fIid\fR"
+.IQ "\fB\-\-queue=\fIid\fR"
+By default, \fBovs\-controller\fR uses the default OpenFlow queue for
+sending packets and setting up flows.  Use one of these options,
+supplying \fIid\fR as an OpenFlow queue ID as a decimal number, to
+instead use that specific queue.
+.IP
+This option may be useful for debugging quality of service setups.
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
