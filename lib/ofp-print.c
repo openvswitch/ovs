@@ -313,6 +313,20 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         break;
     }
 
+    case OFPAT_ENQUEUE: {
+        struct ofp_action_enqueue *ea = (struct ofp_action_enqueue *)ah;
+        unsigned int port = ntohs(ea->port);
+        unsigned int queue_id = ntohl(ea->queue_id);
+        ds_put_format(string, "enqueue:");
+        if (port != OFPP_IN_PORT) {
+            ds_put_format(string, "%u", port);
+        } else {
+            ds_put_cstr(string, "IN_PORT");
+        }
+        ds_put_format(string, "q%u", queue_id);
+        break;
+    }
+
     case OFPAT_SET_VLAN_VID: {
         struct ofp_action_vlan_vid *va = (struct ofp_action_vlan_vid *)ah;
         ds_put_format(string, "mod_vlan_vid:%"PRIu16, ntohs(va->vlan_vid));
