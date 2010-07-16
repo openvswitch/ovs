@@ -53,7 +53,6 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     run_command(argc - optind, argv + optind, all_commands);

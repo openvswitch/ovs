@@ -66,7 +66,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_init();
     remote = parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);

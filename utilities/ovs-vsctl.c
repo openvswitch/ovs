@@ -125,7 +125,6 @@ main(int argc, char *argv[])
 
     set_program_name(argv[0]);
     signal(SIGPIPE, SIG_IGN);
-    vlog_init();
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
     ovsrec_init();

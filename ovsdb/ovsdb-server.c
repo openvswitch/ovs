@@ -87,7 +87,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_init();
     signal(SIGPIPE, SIG_IGN);
     process_init();
 

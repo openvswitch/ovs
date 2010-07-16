@@ -147,7 +147,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_EMER);

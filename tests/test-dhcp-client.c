@@ -50,7 +50,6 @@ main(int argc, char *argv[])
     int error;
 
     set_program_name(argv[0]);
-    vlog_init();
     parse_options(argc, argv);
 
     argc -= optind;

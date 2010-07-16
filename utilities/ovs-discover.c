@@ -77,7 +77,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_init();
     parse_options(argc, argv);
 
     argc -= optind;
