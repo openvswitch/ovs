@@ -34,8 +34,9 @@
 /* Initialized? */
 static bool inited;
 
-/* Does this system have monotonic timers? */
-static bool monotonic_inited;
+/* The clock to use for measuring time intervals.  This is CLOCK_MONOTONIC by
+ * preference, but on systems that don't have a monotonic clock we fall back
+ * to CLOCK_REALTIME. */
 static clockid_t monotonic_clock;
 
 /* Has a timer tick occurred? */
@@ -73,28 +74,15 @@ time_init(void)
     inited = true;
     time_refresh();
 
-    set_up_signal(SA_RESTART);
-    set_up_timer();
-}
-
-static void
-set_up_monotonic(void)
-{
-    int err;
-
-    if (monotonic_inited) {
-        return;
-    }
-
-    err = clock_gettime(CLOCK_MONOTONIC, &monotonic_time);
-    if (!err) {
+    if (!clock_gettime(CLOCK_MONOTONIC, &monotonic_time)) {
         monotonic_clock = CLOCK_MONOTONIC;
     } else {
         monotonic_clock = CLOCK_REALTIME;
         VLOG_DBG("monotonic timer not available");
     }
 
-    monotonic_inited = true;
+    set_up_signal(SA_RESTART);
+    set_up_timer();
 }
 
 static void
@@ -144,8 +132,6 @@ set_up_timer(void)
     static timer_t timer_id;    /* "static" to avoid apparent memory leak. */
     struct itimerspec itimer;
 
-    set_up_monotonic();
-
     if (timer_create(monotonic_clock, NULL, &timer_id)) {
         ovs_fatal(errno, "timer_create failed");
     }
@@ -167,6 +153,7 @@ set_up_timer(void)
 void
 time_postfork(void)
 {
+    time_init();
     set_up_timer();
 }
 
@@ -180,7 +167,7 @@ refresh_wall(void)
 static void
 refresh_monotonic(void)
 {
-    set_up_monotonic();
+    time_init();
 
     if (monotonic_clock == CLOCK_MONOTONIC) {
         clock_gettime(monotonic_clock, &monotonic_time);
@@ -210,7 +197,7 @@ time_now(void)
 }
 
 /* Same as time_now() except does not write to static variables, for use in
- * signal handlers. set_up_monotonic() must have already been called. */
+ * signal handlers.  */
 static time_t
 time_now_sig(void)
 {
