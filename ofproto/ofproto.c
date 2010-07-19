@@ -30,6 +30,8 @@
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
+#include "hash.h"
+#include "hmap.h"
 #include "in-band.h"
 #include "mac-learning.h"
 #include "netdev.h"
@@ -46,7 +48,6 @@
 #include "pinsched.h"
 #include "pktbuf.h"
 #include "poll-loop.h"
-#include "port-array.h"
 #include "rconn.h"
 #include "shash.h"
 #include "status.h"
@@ -68,9 +69,12 @@ enum {
     TABLEID_CLASSIFIER = 1
 };
 
+
 struct ofport {
+    struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
     struct ofp_phy_port opp;    /* In host byte order. */
+    uint16_t odp_port;
 };
 
 static void ofport_free(struct ofport *);
@@ -272,8 +276,7 @@ struct ofproto {
     /* Datapath. */
     struct dpif *dpif;
     struct netdev_monitor *netdev_monitor;
-    struct port_array ports;    /* Index is ODP port nr; ofport->opp.port_no is
-                                 * OFP port nr. */
+    struct hmap ports;          /* Contains "struct ofport"s. */
     struct shash port_by_name;
     uint32_t max_ports;
 
@@ -336,6 +339,7 @@ static void handle_openflow(struct ofconn *, struct ofproto *,
 
 static void refresh_port_groups(struct ofproto *);
 
+static struct ofport *get_port(const struct ofproto *, uint16_t odp_port);
 static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
@@ -388,7 +392,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Initialize datapath. */
     p->dpif = dpif;
     p->netdev_monitor = netdev_monitor_create();
-    port_array_init(&p->ports);
+    hmap_init(&p->ports);
     shash_init(&p->port_by_name);
     p->max_ports = stats.max_ports;
 
@@ -883,12 +887,11 @@ ofproto_set_sflow(struct ofproto *ofproto,
     if (oso) {
         if (!os) {
             struct ofport *ofport;
-            unsigned int odp_port;
 
             os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
             refresh_port_groups(ofproto);
-            PORT_ARRAY_FOR_EACH (ofport, &ofproto->ports, odp_port) {
-                ofproto_sflow_add_port(os, odp_port,
+            HMAP_FOR_EACH (ofport, struct ofport, hmap_node, &ofproto->ports) {
+                ofproto_sflow_add_port(os, ofport->odp_port,
                                        netdev_get_name(ofport->netdev));
             }
         }
@@ -932,8 +935,7 @@ ofproto_destroy(struct ofproto *p)
 {
     struct ofservice *ofservice, *next_ofservice;
     struct ofconn *ofconn, *next_ofconn;
-    struct ofport *ofport;
-    unsigned int port_no;
+    struct ofport *ofport, *next_ofport;
     size_t i;
 
     if (!p) {
@@ -959,7 +961,9 @@ ofproto_destroy(struct ofproto *p)
 
     dpif_close(p->dpif);
     netdev_monitor_destroy(p->netdev_monitor);
-    PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
+    HMAP_FOR_EACH_SAFE (ofport, next_ofport, struct ofport, hmap_node,
+                        &p->ports) {
+        hmap_remove(&p->ports, &ofport->hmap_node);
         ofport_free(ofport);
     }
     shash_destroy(&p->port_by_name);
@@ -987,7 +991,7 @@ ofproto_destroy(struct ofproto *p)
     free(p->serial_desc);
     free(p->dp_desc);
 
-    port_array_destroy(&p->ports);
+    hmap_destroy(&p->ports);
 
     free(p);
 }
@@ -1343,13 +1347,12 @@ reinit_ports(struct ofproto *p)
 {
     struct svec devnames;
     struct ofport *ofport;
-    unsigned int port_no;
     struct odp_port *odp_ports;
     size_t n_odp_ports;
     size_t i;
 
     svec_init(&devnames);
-    PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
+    HMAP_FOR_EACH (ofport, struct ofport, hmap_node, &p->ports) {
         svec_add (&devnames, (char *) ofport->opp.name);
     }
     dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
@@ -1371,15 +1374,14 @@ refresh_port_group(struct ofproto *p, unsigned int group)
     uint16_t *ports;
     size_t n_ports;
     struct ofport *port;
-    unsigned int port_no;
 
     assert(group == DP_GROUP_ALL || group == DP_GROUP_FLOOD);
 
-    ports = xmalloc(port_array_count(&p->ports) * sizeof *ports);
+    ports = xmalloc(hmap_count(&p->ports) * sizeof *ports);
     n_ports = 0;
-    PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
+    HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
         if (group == DP_GROUP_ALL || !(port->opp.config & OFPPC_NO_FLOOD)) {
-            ports[n_ports++] = port_no;
+            ports[n_ports++] = port->odp_port;
         }
     }
     dpif_port_group_set(p->dpif, group, ports, n_ports);
@@ -1423,6 +1425,7 @@ make_ofport(const struct odp_port *odp_port)
 
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
+    ofport->odp_port = odp_port->port;
     ofport->opp.port_no = odp_port_to_ofp_port(odp_port->port);
     netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
     memcpy(ofport->opp.name, odp_port->devname,
@@ -1444,7 +1447,7 @@ make_ofport(const struct odp_port *odp_port)
 static bool
 ofport_conflicts(const struct ofproto *p, const struct odp_port *odp_port)
 {
-    if (port_array_get(&p->ports, odp_port->port)) {
+    if (get_port(p, odp_port->port)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate port %"PRIu16" in datapath",
                      odp_port->port);
         return true;
@@ -1503,28 +1506,25 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
-    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
     const char *netdev_name = (const char *) ofport->opp.name;
 
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, odp_port, ofport);
+    hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->odp_port, 0));
     shash_add(&p->port_by_name, netdev_name, ofport);
     if (p->sflow) {
-        ofproto_sflow_add_port(p->sflow, odp_port, netdev_name);
+        ofproto_sflow_add_port(p->sflow, ofport->odp_port, netdev_name);
     }
 }
 
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
-    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
-
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
-    port_array_delete(&p->ports, odp_port);
+    hmap_remove(&p->ports, &ofport->hmap_node);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
     if (p->sflow) {
-        ofproto_sflow_del_port(p->sflow, odp_port);
+        ofproto_sflow_del_port(p->sflow, ofport->odp_port);
     }
 }
 
@@ -1535,6 +1535,20 @@ ofport_free(struct ofport *ofport)
         netdev_close(ofport->netdev);
         free(ofport);
     }
+}
+
+static struct ofport *
+get_port(const struct ofproto *ofproto, uint16_t odp_port)
+{
+    struct ofport *port;
+
+    HMAP_FOR_EACH_IN_BUCKET (port, struct ofport, hmap_node,
+                             hash_int(odp_port, 0), &ofproto->ports) {
+        if (port->odp_port == odp_port) {
+            return port;
+        }
+    }
+    return NULL;
 }
 
 static void
@@ -1564,7 +1578,7 @@ update_port(struct ofproto *p, const char *devname)
              * reliably but more portably by comparing the old port's MAC
              * against the new port's MAC.  However, this code isn't that smart
              * and always sends an OFPPR_MODIFY (XXX). */
-            old_ofport = port_array_get(&p->ports, odp_port.port);
+            old_ofport = get_port(p, odp_port.port);
         }
     } else if (error != ENOENT && error != ENODEV) {
         VLOG_WARN_RL(&rl, "dpif_port_query_by_name returned unexpected error "
@@ -2339,7 +2353,6 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
 {
     struct ofp_switch_features *osf;
     struct ofpbuf *buf;
-    unsigned int port_no;
     struct ofport *port;
 
     osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, oh->xid, &buf);
@@ -2361,7 +2374,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_TP_DST) |
                          (1u << OFPAT_ENQUEUE));
 
-    PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
+    HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
     }
 
@@ -2469,7 +2482,7 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
 static void
 add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
 {
-    const struct ofport *ofport = port_array_get(&ctx->ofproto->ports, port);
+    const struct ofport *ofport = get_port(ctx->ofproto, port);
 
     if (ofport) {
         if (ofport->opp.config & OFPPC_NO_FWD) {
@@ -2699,7 +2712,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     const union ofp_action *ia;
     const struct ofport *port;
 
-    port = port_array_get(&ctx->ofproto->ports, ctx->flow.in_port);
+    port = get_port(ctx->ofproto, ctx->flow.in_port);
     if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
         port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
                             ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
@@ -2948,8 +2961,7 @@ handle_port_mod(struct ofproto *p, struct ofconn *ofconn,
     }
     opm = (struct ofp_port_mod *) oh;
 
-    port = port_array_get(&p->ports,
-                          ofp_port_to_odp_port(ntohs(opm->port_no)));
+    port = get_port(p, ofp_port_to_odp_port(ntohs(opm->port_no)));
     if (!port) {
         return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT);
     } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
@@ -3074,7 +3086,7 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static void
-append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn,
+append_port_stat(struct ofport *port, struct ofconn *ofconn,
                  struct ofpbuf **msgp)
 {
     struct netdev_stats stats;
@@ -3086,7 +3098,7 @@ append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn,
     netdev_get_stats(port->netdev, &stats);
 
     ops = append_stats_reply(sizeof *ops, ofconn, msgp);
-    ops->port_no = htons(odp_port_to_ofp_port(port_no));
+    ops->port_no = htons(port->opp.port_no);
     memset(ops->pad, 0, sizeof ops->pad);
     ops->rx_packets = htonll(stats.rx_packets);
     ops->tx_packets = htonll(stats.tx_packets);
@@ -3111,7 +3123,6 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct ofp_port_stats *ops;
     struct ofpbuf *msg;
     struct ofport *port;
-    unsigned int port_no;
 
     if (arg_size != sizeof *psr) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -3120,14 +3131,13 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     msg = start_stats_reply(osr, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
-        port = port_array_get(&p->ports,
-                ofp_port_to_odp_port(ntohs(psr->port_no)));
+        port = get_port(p, ofp_port_to_odp_port(ntohs(psr->port_no)));
         if (port) {
-            append_port_stat(port, ntohs(psr->port_no), ofconn, &msg);
+            append_port_stat(port, ofconn, &msg);
         }
     } else {
-        PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
-            append_port_stat(port, port_no, ofconn, &msg);
+        HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
+            append_port_stat(port, ofconn, &msg);
         }
     }
 
@@ -3389,8 +3399,8 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
 struct queue_stats_cbdata {
     struct ofconn *ofconn;
+    struct ofport *ofport;
     struct ofpbuf *msg;
-    uint16_t port_no;
 };
 
 static void
@@ -3400,7 +3410,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
     struct ofp_queue_stats *reply;
 
     reply = append_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
-    reply->port_no = htons(cbdata->port_no);
+    reply->port_no = htons(cbdata->ofport->opp.port_no);
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
     reply->tx_bytes = htonll(stats->tx_bytes);
@@ -3419,11 +3429,10 @@ handle_queue_stats_dump_cb(uint32_t queue_id,
 }
 
 static void
-handle_queue_stats_for_port(struct ofport *port, uint16_t port_no,
-                            uint32_t queue_id,
+handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
                             struct queue_stats_cbdata *cbdata)
 {
-    cbdata->port_no = port_no;
+    cbdata->ofport = port;
     if (queue_id == OFPQ_ALL) {
         netdev_dump_queue_stats(port->netdev,
                                 handle_queue_stats_dump_cb, cbdata);
@@ -3459,13 +3468,13 @@ handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
     if (port_no == OFPP_ALL) {
-        PORT_ARRAY_FOR_EACH (port, &ofproto->ports, port_no) {
-            handle_queue_stats_for_port(port, port_no, queue_id, &cbdata);
+        HMAP_FOR_EACH (port, struct ofport, hmap_node, &ofproto->ports) {
+            handle_queue_stats_for_port(port, queue_id, &cbdata);
         }
     } else if (port_no < ofproto->max_ports) {
-        port = port_array_get(&ofproto->ports, port_no);
+        port = get_port(ofproto, ofp_port_to_odp_port(port_no));
         if (port) {
-            handle_queue_stats_for_port(port, port_no, queue_id, &cbdata);
+            handle_queue_stats_for_port(port, queue_id, &cbdata);
         }
     } else {
         ofpbuf_delete(cbdata.msg);
@@ -4110,7 +4119,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     rule = lookup_valid_rule(p, &flow);
     if (!rule) {
         /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
-        struct ofport *port = port_array_get(&p->ports, msg->port);
+        struct ofport *port = get_port(p, msg->port);
         if (port) {
             if (port->opp.config & OFPPC_NO_PACKET_IN) {
                 COVERAGE_INC(ofproto_no_packet_in);
@@ -4567,7 +4576,7 @@ pick_datapath_id(const struct ofproto *ofproto)
 {
     const struct ofport *port;
 
-    port = port_array_get(&ofproto->ports, ODPP_LOCAL);
+    port = get_port(ofproto, ODPP_LOCAL);
     if (port) {
         uint8_t ea[ETH_ADDR_LEN];
         int error;
