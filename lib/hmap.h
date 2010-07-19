@@ -69,6 +69,7 @@ struct hmap {
 /* Initialization. */
 void hmap_init(struct hmap *);
 void hmap_destroy(struct hmap *);
+void hmap_clear(struct hmap *);
 void hmap_swap(struct hmap *a, struct hmap *b);
 void hmap_moved(struct hmap *hmap);
 static inline size_t hmap_count(const struct hmap *);
