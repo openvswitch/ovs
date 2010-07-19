@@ -22,11 +22,12 @@
 #include "collectors.h"
 #include "dpif.h"
 #include "compiler.h"
+#include "hash.h"
+#include "hmap.h"
 #include "netdev.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "poll-loop.h"
-#include "port-array.h"
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
@@ -35,8 +36,10 @@
 VLOG_DEFINE_THIS_MODULE(sflow)
 
 struct ofproto_sflow_port {
+    struct hmap_node hmap_node; /* In struct ofproto_sflow's "ports" hmap. */
     struct netdev *netdev;      /* Underlying network device, for stats. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
+    uint16_t odp_port;          /* ODP port number. */
 };
 
 struct ofproto_sflow {
@@ -47,8 +50,11 @@ struct ofproto_sflow {
     struct dpif *dpif;
     time_t next_tick;
     size_t n_flood, n_all;
-    struct port_array ports;    /* Indexed by ODP port number. */
+    struct hmap ports;          /* Contains "struct ofproto_sflow_port"s. */
 };
+
+static void ofproto_sflow_del_port__(struct ofproto_sflow *,
+                                     struct ofproto_sflow_port *);
 
 #define RECEIVER_INDEX 1
 
@@ -129,6 +135,20 @@ sflow_agent_send_packet_cb(void *os_, SFLAgent *agent OVS_UNUSED,
     collectors_send(os->collectors, pkt, pktLen);
 }
 
+static struct ofproto_sflow_port *
+ofproto_sflow_find_port(const struct ofproto_sflow *os, uint16_t odp_port)
+{
+    struct ofproto_sflow_port *osp;
+
+    HMAP_FOR_EACH_IN_BUCKET (osp, struct ofproto_sflow_port, hmap_node,
+                             hash_int(odp_port, 0), &os->ports) {
+        if (osp->odp_port == odp_port) {
+            return osp;
+        }
+    }
+    return NULL;
+}
+
 static void
 sflow_agent_get_counters(void *os_, SFLPoller *poller,
                          SFL_COUNTERS_SAMPLE_TYPE *cs)
@@ -141,7 +161,7 @@ sflow_agent_get_counters(void *os_, SFLPoller *poller,
     enum netdev_flags flags;
     uint32_t current;
 
-    osp = port_array_get(&os->ports, poller->bridgePort);
+    osp = ofproto_sflow_find_port(os, poller->bridgePort);
     if (!osp) {
         return;
     }
@@ -266,7 +286,7 @@ ofproto_sflow_create(struct dpif *dpif)
     os = xcalloc(1, sizeof *os);
     os->dpif = dpif;
     os->next_tick = time_now() + 1;
-    port_array_init(&os->ports);
+    hmap_init(&os->ports);
     return os;
 }
 
@@ -274,14 +294,14 @@ void
 ofproto_sflow_destroy(struct ofproto_sflow *os)
 {
     if (os) {
-        struct ofproto_sflow_port *osp;
-        unsigned int odp_port;
+        struct ofproto_sflow_port *osp, *next;
 
         ofproto_sflow_clear(os);
-        PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-            ofproto_sflow_del_port(os, odp_port);
+        HMAP_FOR_EACH_SAFE (osp, next, struct ofproto_sflow_port, hmap_node,
+                            &os->ports) {
+            ofproto_sflow_del_port__(os, osp);
         }
-        port_array_destroy(&os->ports);
+        hmap_destroy(&os->ports);
         free(os);
     }
 }
@@ -334,7 +354,8 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
         ifindex = (os->sflow_agent->subId << 16) + odp_port;
     }
     SFL_DS_SET(osp->dsi, 0, ifindex, 0);
-    port_array_set(&os->ports, odp_port, osp);
+    osp->odp_port = odp_port;
+    hmap_insert(&os->ports, &osp->hmap_node, hash_int(odp_port, 0));
 
     /* Add poller and sampler. */
     if (os->sflow_agent) {
@@ -343,18 +364,25 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
     }
 }
 
+static void
+ofproto_sflow_del_port__(struct ofproto_sflow *os,
+                         struct ofproto_sflow_port *osp)
+{
+    if (os->sflow_agent) {
+        sfl_agent_removePoller(os->sflow_agent, &osp->dsi);
+        sfl_agent_removeSampler(os->sflow_agent, &osp->dsi);
+    }
+    netdev_close(osp->netdev);
+    hmap_remove(&os->ports, &osp->hmap_node);
+    free(osp);
+}
+
 void
 ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t odp_port)
 {
-    struct ofproto_sflow_port *osp = port_array_get(&os->ports, odp_port);
+    struct ofproto_sflow_port *osp = ofproto_sflow_find_port(os, odp_port);
     if (osp) {
-        if (os->sflow_agent) {
-            sfl_agent_removePoller(os->sflow_agent, &osp->dsi);
-            sfl_agent_removeSampler(os->sflow_agent, &osp->dsi);
-        }
-        netdev_close(osp->netdev);
-        free(osp);
-        port_array_delete(&os->ports, odp_port);
+        ofproto_sflow_del_port__(os, osp);
     }
 }
 
@@ -365,7 +393,6 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     struct ofproto_sflow_port *osp;
     bool options_changed;
     SFLReceiver *receiver;
-    unsigned int odp_port;
     SFLAddress agentIP;
     time_t now;
 
@@ -436,8 +463,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
                                MAX(1, UINT32_MAX / options->sampling_rate));
 
     /* Add samplers and pollers for the currently known ports. */
-    PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-        ofproto_sflow_add_poller(os, osp, odp_port);
+    HMAP_FOR_EACH (osp, struct ofproto_sflow_port, hmap_node, &os->ports) {
+        ofproto_sflow_add_poller(os, osp, osp->odp_port);
         ofproto_sflow_add_sampler(os, osp);
     }
 }
@@ -446,7 +473,7 @@ static int
 ofproto_sflow_odp_port_to_ifindex(const struct ofproto_sflow *os,
                                   uint16_t odp_port)
 {
-    struct ofproto_sflow_port *osp = port_array_get(&os->ports, odp_port);
+    struct ofproto_sflow_port *osp = ofproto_sflow_find_port(os, odp_port);
     return osp ? SFL_DS_INDEX(osp->dsi) : 0;
 }
 
