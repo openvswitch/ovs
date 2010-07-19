@@ -82,6 +82,16 @@ extern const char *program_name;
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
         ((STRUCT *) (void *) ((char *) (POINTER) - offsetof (STRUCT, MEMBER)))
 
+/* Given POINTER, the address of the given MEMBER within an object of the type
+ * that that OBJECT points to, returns OBJECT as a "void *" pointer.  OBJECT
+ * must be an lvalue.
+ *
+ * This is the same as CONTAINER_OF except that it infers the structure type
+ * from the type of '*OBJECT'. */
+#define OBJECT_CONTAINING(POINTER, OBJECT, MEMBER)                      \
+        ((void *) ((char *) (POINTER)                                   \
+                   - ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))))
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
