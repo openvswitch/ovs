@@ -37,6 +37,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "hmap.h"
 #include "jsonrpc.h"
 #include "list.h"
 #include "mac-learning.h"
@@ -49,7 +50,6 @@
 #include "ovsdb-data.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "port-array.h"
 #include "proc-net-compat.h"
 #include "process.h"
 #include "sha1.h"
@@ -85,6 +85,7 @@ struct iface {
 
     /* These members are valid only after bridge_reconfigure() causes them to
      * be initialized. */
+    struct hmap_node dp_ifidx_node; /* In struct bridge's "ifaces" hmap. */
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
@@ -165,7 +166,7 @@ struct bridge {
 
     /* Kernel datapath information. */
     struct dpif *dpif;          /* Datapath. */
-    struct port_array ifaces;   /* Indexed by kernel datapath port number. */
+    struct hmap ifaces;         /* Contains "struct iface"s. */
 
     /* Bridge ports. */
     struct port **ports;
@@ -1318,7 +1319,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->ml = mac_learning_create();
     eth_addr_nicira_random(br->default_ea);
 
-    port_array_init(&br->ifaces);
+    hmap_init(&br->ifaces);
 
     shash_init(&br->port_by_name);
     shash_init(&br->iface_by_name);
@@ -1350,7 +1351,7 @@ bridge_destroy(struct bridge *br)
         dpif_close(br->dpif);
         ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
-        port_array_destroy(&br->ifaces);
+        hmap_destroy(&br->ifaces);
         shash_destroy(&br->port_by_name);
         shash_destroy(&br->iface_by_name);
         free(br->ports);
@@ -1755,7 +1756,7 @@ bridge_fetch_dp_ifaces(struct bridge *br)
             iface->dp_ifidx = -1;
         }
     }
-    port_array_clear(&br->ifaces);
+    hmap_clear(&br->ifaces);
 
     dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
     for (i = 0; i < n_dpif_ports; i++) {
@@ -1769,8 +1770,9 @@ bridge_fetch_dp_ifaces(struct bridge *br)
                 VLOG_WARN("%s reported interface %"PRIu16" twice",
                           dpif_name(br->dpif), p->port);
             } else {
-                port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;
+                hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
+                            hash_int(iface->dp_ifidx, 0));
             }
 
             if (iface->cfg) {
@@ -3734,7 +3736,7 @@ iface_destroy(struct iface *iface)
         shash_find_and_delete_assert(&br->iface_by_name, iface->name);
 
         if (iface->dp_ifidx >= 0) {
-            port_array_set(&br->ifaces, iface->dp_ifidx, NULL);
+            hmap_remove(&br->ifaces, &iface->dp_ifidx_node);
         }
 
         del = port->ifaces[iface->port_ifidx] = port->ifaces[--port->n_ifaces];
@@ -3764,7 +3766,15 @@ iface_lookup(const struct bridge *br, const char *name)
 static struct iface *
 iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
 {
-    return port_array_get(&br->ifaces, dp_ifidx);
+    struct iface *iface;
+
+    HMAP_FOR_EACH_IN_BUCKET (iface, struct iface, dp_ifidx_node,
+                             hash_int(dp_ifidx, 0), &br->ifaces) {
+        if (iface->dp_ifidx == dp_ifidx) {
+            return iface;
+        }
+    }
+    return NULL;
 }
 
 /* Returns true if 'iface' is the name of an "internal" interface on bridge
