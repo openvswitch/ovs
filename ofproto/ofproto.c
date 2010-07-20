@@ -59,9 +59,6 @@
 #include "vconn.h"
 #include "xtoxll.h"
 
-#include <linux/types.h>        /* XXX */
-#include <linux/pkt_sched.h>    /* XXX */
-
 #define THIS_MODULE VLM_ofproto
 #include "vlog.h"
 
@@ -2280,11 +2277,10 @@ add_output_group_action(struct odp_actions *actions, uint16_t group,
 }
 
 static void
-add_controller_action(struct odp_actions *actions,
-                      const struct ofp_action_output *oao)
+add_controller_action(struct odp_actions *actions, uint16_t max_len)
 {
     union odp_action *a = odp_actions_add(actions, ODPAT_CONTROLLER);
-    a->controller.arg = ntohs(oao->max_len);
+    a->controller.arg = max_len;
 }
 
 struct action_xlate_ctx {
@@ -2376,15 +2372,15 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 }
 
 static void
-xlate_output_action(struct action_xlate_ctx *ctx,
-                    const struct ofp_action_output *oao)
+xlate_output_action__(struct action_xlate_ctx *ctx,
+                      uint16_t port, uint16_t max_len)
 {
     uint16_t odp_port;
     uint16_t prev_nf_output_iface = ctx->nf_output_iface;
 
     ctx->nf_output_iface = NF_OUT_DROP;
 
-    switch (ntohs(oao->port)) {
+    switch (port) {
     case OFPP_IN_PORT:
         add_output_action(ctx, ctx->flow.in_port);
         break;
@@ -2408,13 +2404,13 @@ xlate_output_action(struct action_xlate_ctx *ctx,
         add_output_group_action(ctx->out, DP_GROUP_ALL, &ctx->nf_output_iface);
         break;
     case OFPP_CONTROLLER:
-        add_controller_action(ctx->out, oao);
+        add_controller_action(ctx->out, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, ODPP_LOCAL);
         break;
     default:
-        odp_port = ofp_port_to_odp_port(ntohs(oao->port));
+        odp_port = ofp_port_to_odp_port(port);
         if (odp_port != ctx->flow.in_port) {
             add_output_action(ctx, odp_port);
         }
@@ -2429,6 +2425,13 @@ xlate_output_action(struct action_xlate_ctx *ctx,
                ctx->nf_output_iface != NF_OUT_FLOOD) {
         ctx->nf_output_iface = NF_OUT_MULTI;
     }
+}
+
+static void
+xlate_output_action(struct action_xlate_ctx *ctx,
+                    const struct ofp_action_output *oao)
+{
+    xlate_output_action__(ctx, ntohs(oao->port), ntohs(oao->max_len));
 }
 
 /* If the final ODP action in 'ctx' is "pop priority", drop it, as an
@@ -2449,6 +2452,16 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
                      const struct ofp_action_enqueue *oae)
 {
     uint16_t ofp_port, odp_port;
+    uint32_t priority;
+    int error;
+
+    error = dpif_queue_to_priority(ctx->ofproto->dpif, ntohl(oae->queue_id),
+                                   &priority);
+    if (error) {
+        /* Fall back to ordinary output action. */
+        xlate_output_action__(ctx, ntohs(oae->port), 0);
+        return;
+    }
 
     /* Figure out ODP output port. */
     ofp_port = ntohs(oae->port);
@@ -2461,7 +2474,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     /* Add ODP actions. */
     remove_pop_action(ctx);
     odp_actions_add(ctx->out, ODPAT_SET_PRIORITY)->priority.priority
-        = TC_H_MAKE(1, ntohl(oae->queue_id)); /* XXX */
+        = priority;
     add_output_action(ctx, odp_port);
     odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
 

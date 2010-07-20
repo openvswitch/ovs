@@ -101,6 +101,9 @@ void dpif_recv_wait(struct dpif *);
 void dpif_get_netflow_ids(const struct dpif *,
                           uint8_t *engine_type, uint8_t *engine_id);
 
+int dpif_queue_to_priority(const struct dpif *, uint32_t queue_id,
+                           uint32_t *priority);
+
 #ifdef  __cplusplus
 }
 #endif

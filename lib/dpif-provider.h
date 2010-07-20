@@ -302,6 +302,12 @@ struct dpif_class {
      * packet. */
     int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
 
+    /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
+     * priority value for use in the ODPAT_SET_PRIORITY action in
+     * '*priority'. */
+    int (*queue_to_priority)(const struct dpif *dpif, uint32_t queue_id,
+                             uint32_t *priority);
+
     /* Attempts to receive a message from 'dpif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
      * with 'struct odp_msg' as a header, and must have at least

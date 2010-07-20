@@ -1096,6 +1096,25 @@ dpif_get_netflow_ids(const struct dpif *dpif,
     *engine_type = dpif->netflow_engine_type;
     *engine_id = dpif->netflow_engine_id;
 }
+
+/* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a priority
+ * value for use in the ODPAT_SET_PRIORITY action.  On success, returns 0 and
+ * stores the priority into '*priority'.  On failure, returns a positive errno
+ * value and stores 0 into '*priority'. */
+int
+dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
+                       uint32_t *priority)
+{
+    int error = (dpif->dpif_class->queue_to_priority
+                 ? dpif->dpif_class->queue_to_priority(dpif, queue_id,
+                                                       priority)
+                 : EOPNOTSUPP);
+    if (error) {
+        *priority = 0;
+    }
+    log_operation(dpif, "queue_to_priority", error);
+    return error;
+}
 
 void
 dpif_init(struct dpif *dpif, const struct dpif_class *dpif_class,

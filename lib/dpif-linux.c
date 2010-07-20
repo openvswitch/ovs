@@ -25,6 +25,7 @@
 #include <net/if.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <stdlib.h>
@@ -458,6 +459,18 @@ dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
 }
 
 static int
+dpif_linux_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
+                             uint32_t queue_id, uint32_t *priority)
+{
+    if (queue_id < 0xf000) {
+        *priority = TC_H_MAKE(1, queue_id);
+        return 0;
+    } else {
+        return EINVAL;
+    }
+}
+
+static int
 dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
@@ -539,6 +552,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_recv_set_mask,
     dpif_linux_get_sflow_probability,
     dpif_linux_set_sflow_probability,
+    dpif_linux_queue_to_priority,
     dpif_linux_recv,
     dpif_linux_recv_wait,
 };
