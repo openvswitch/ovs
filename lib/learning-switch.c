@@ -60,6 +60,7 @@ struct lswitch {
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
     uint32_t wildcards;         /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
+    uint32_t queue;             /* OpenFlow queue to use, or UINT32_MAX. */
 
     /* Number of outgoing queued packets on the rconn. */
     struct rconn_packet_counter *queued;
@@ -130,6 +131,7 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
         sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
                          | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
     }
+    sw->queue = UINT32_MAX;
     sw->queued = rconn_packet_counter_create();
     sw->next_query = LLONG_MIN;
     sw->last_query = LLONG_MIN;
@@ -150,6 +152,15 @@ lswitch_destroy(struct lswitch *sw)
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
     }
+}
+
+/* Sets 'queue' as the OpenFlow queue used by packets and flows set up by 'sw'.
+ * Specify UINT32_MAX to avoid specifying a particular queue, which is also the
+ * default if this function is never called for 'sw'.  */
+void
+lswitch_set_queue(struct lswitch *sw, uint32_t queue)
+{
+    sw->queue = queue;
 }
 
 /* Takes care of necessary 'sw' activity, except for receiving packets (which
@@ -444,6 +455,9 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     uint16_t in_port = ntohs(opi->in_port);
     uint16_t out_port;
 
+    struct ofp_action_header actions[2];
+    size_t actions_len;
+
     size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
     flow_t flow;
@@ -458,6 +472,26 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     /* Choose output port. */
     out_port = lswitch_choose_destination(sw, &flow);
 
+    /* Make actions. */
+    memset(actions, 0, sizeof actions);
+    if (out_port == OFPP_NONE) {
+        actions_len = 0;
+    } else if (sw->queue == UINT32_MAX || out_port >= OFPP_MAX) {
+        struct ofp_action_output *oao = (struct ofp_action_output *) actions;
+        oao->type = htons(OFPAT_OUTPUT);
+        oao->len = htons(sizeof *oao);
+        oao->port = htons(out_port);
+        actions_len = sizeof *oao;
+    } else {
+        struct ofp_action_enqueue *oae = (struct ofp_action_enqueue *) actions;
+        oae->type = htons(OFPAT_ENQUEUE);
+        oae->len = htons(sizeof *oae);
+        oae->port = htons(out_port);
+        oae->queue_id = htonl(sw->queue);
+        actions_len = sizeof *oae;
+    }
+    assert(actions_len <= sizeof actions);
+
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         struct ofpbuf *buffer;
@@ -465,29 +499,26 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        buffer = make_add_simple_flow(&flow, ntohl(opi->buffer_id),
-                                      out_port, sw->max_idle);
+        buffer = make_add_flow(&flow, ntohl(opi->buffer_id),
+                               sw->max_idle, actions_len);
+        ofpbuf_put(buffer, actions, actions_len);
         ofm = buffer->data;
         ofm->match.wildcards = htonl(sw->wildcards);
         queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
-        if (ntohl(opi->buffer_id) == UINT32_MAX && out_port != OFPP_NONE) {
+        if (ntohl(opi->buffer_id) == UINT32_MAX && actions_len > 0) {
             queue_tx(sw, rconn,
-                     make_unbuffered_packet_out(&pkt, in_port, out_port));
+                     make_packet_out(&pkt, UINT32_MAX, in_port,
+                                     actions, actions_len / sizeof *actions));
         }
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        if (ntohl(opi->buffer_id) == UINT32_MAX) {
-            if (out_port != OFPP_NONE) {
-                queue_tx(sw, rconn,
-                         make_unbuffered_packet_out(&pkt, in_port, out_port));
-            }
-        } else {
+        if (ntohl(opi->buffer_id) != UINT32_MAX || actions_len > 0) {
             queue_tx(sw, rconn,
-                     make_buffered_packet_out(ntohl(opi->buffer_id),
-                                              in_port, out_port));
+                     make_packet_out(&pkt, ntohl(opi->buffer_id), in_port,
+                                     actions, actions_len / sizeof *actions));
         }
     }
 }
