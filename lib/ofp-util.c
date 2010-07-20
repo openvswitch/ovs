@@ -186,14 +186,19 @@ make_add_simple_flow(const flow_t *flow,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {
-    struct ofp_action_output *oao;
-    struct ofpbuf *buffer = make_add_flow(flow, buffer_id, idle_timeout,
-                                          sizeof *oao);
-    oao = ofpbuf_put_zeros(buffer, sizeof *oao);
-    oao->type = htons(OFPAT_OUTPUT);
-    oao->len = htons(sizeof *oao);
-    oao->port = htons(out_port);
-    return buffer;
+    if (out_port != OFPP_NONE) {
+        struct ofp_action_output *oao;
+        struct ofpbuf *buffer;
+
+        buffer = make_add_flow(flow, buffer_id, idle_timeout, sizeof *oao);
+        oao = ofpbuf_put_zeros(buffer, sizeof *oao);
+        oao->type = htons(OFPAT_OUTPUT);
+        oao->len = htons(sizeof *oao);
+        oao->port = htons(out_port);
+        return buffer;
+    } else {
+        return make_add_flow(flow, buffer_id, idle_timeout, 0);
+    }
 }
 
 struct ofpbuf *
@@ -259,12 +264,16 @@ struct ofpbuf *
 make_buffered_packet_out(uint32_t buffer_id,
                          uint16_t in_port, uint16_t out_port)
 {
-    struct ofp_action_output action;
-    action.type = htons(OFPAT_OUTPUT);
-    action.len = htons(sizeof action);
-    action.port = htons(out_port);
-    return make_packet_out(NULL, buffer_id, in_port,
-                           (struct ofp_action_header *) &action, 1);
+    if (out_port != OFPP_NONE) {
+        struct ofp_action_output action;
+        action.type = htons(OFPAT_OUTPUT);
+        action.len = htons(sizeof action);
+        action.port = htons(out_port);
+        return make_packet_out(NULL, buffer_id, in_port,
+                               (struct ofp_action_header *) &action, 1);
+    } else {
+        return make_packet_out(NULL, buffer_id, in_port, NULL, 0);
+    }
 }
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
