@@ -184,7 +184,7 @@ struct ofproto {
     struct fail_open *fail_open;
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
-    bool tun_id_from_cookie;
+    bool tun_id_from_cookie;    /* NXT_TUN_ID_FROM_COOKIE enabled? */
 
     /* In-band control. */
     struct in_band *in_band;
@@ -2092,9 +2092,9 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
                             modify_flows_cb, &cbdata);
     if (cbdata.match) {
-        /* This credits the packet to whichever flow happened to happened to
-         * match last.  That's weird.  Maybe we should do a lookup for the
-         * flow that actually matches the packet?  Who knows. */
+        /* This credits the packet to whichever flow happened to match last.
+         * That's weird.  Maybe we should do a lookup for the flow that
+         * actually matches the packet?  Who knows. */
         send_buffered_packet(p, ofconn, cbdata.match, ofm);
         return 0;
     } else {

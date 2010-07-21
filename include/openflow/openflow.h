@@ -556,7 +556,8 @@ enum ofp_flow_mod_flags {
     OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow
                                     * expires or is deleted. */
     OFPFF_CHECK_OVERLAP = 1 << 1,  /* Check for overlapping entries first. */
-    OFPFF_EMERG         = 1 << 2   /* Ramark this is for emergency. */
+    OFPFF_EMERG         = 1 << 2   /* Use emergency flow cache (not supported
+                                    * by Open vSwitch). */
 };
 
 /* Flow setup and teardown (controller -> datapath). */
@@ -576,7 +577,7 @@ struct ofp_flow_mod {
                                      matching entries to include this as an
                                      output port.  A value of OFPP_NONE
                                      indicates no restriction. */
-    uint16_t flags;               /* One of OFPFF_*. */
+    uint16_t flags;               /* Zero or more of OFPFF_*. */
     struct ofp_action_header actions[0]; /* The action length is inferred
                                             from the length field in the
                                             header. */
