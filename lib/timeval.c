@@ -31,17 +31,17 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_timeval
 
-/* Initialized? */
-static bool inited;
-
 /* The clock to use for measuring time intervals.  This is CLOCK_MONOTONIC by
  * preference, but on systems that don't have a monotonic clock we fall back
  * to CLOCK_REALTIME. */
 static clockid_t monotonic_clock;
 
-/* Has a timer tick occurred? */
-static volatile sig_atomic_t wall_tick;
-static volatile sig_atomic_t monotonic_tick;
+/* Has a timer tick occurred?
+ *
+ * We initialize these to true to force time_init() to get called on the first
+ * call to time_msec() or another function that queries the current time. */
+static volatile sig_atomic_t wall_tick = true;
+static volatile sig_atomic_t monotonic_tick = true;
 
 /* The current time, as of the last refresh. */
 static struct timespec wall_time;
@@ -61,18 +61,20 @@ static void unblock_sigalrm(const sigset_t *);
 static void log_poll_interval(long long int last_wakeup,
                               const struct rusage *last_rusage);
 
-/* Initializes the timetracking module. */
+/* Initializes the timetracking module.
+ *
+ * It is not necessary to call this function directly, because other time
+ * functions will call it automatically, but it doesn't hurt. */
 void
 time_init(void)
 {
+    static bool inited;
     if (inited) {
         return;
     }
+    inited = true;
 
     coverage_init();
-
-    inited = true;
-    time_refresh();
 
     if (!clock_gettime(CLOCK_MONOTONIC, &monotonic_time)) {
         monotonic_clock = CLOCK_MONOTONIC;
@@ -114,6 +116,7 @@ set_up_signal(int flags)
 void
 time_disable_restart(void)
 {
+    time_init();
     set_up_signal(0);
 }
 
@@ -123,6 +126,7 @@ time_disable_restart(void)
 void
 time_enable_restart(void)
 {
+    time_init();
     set_up_signal(SA_RESTART);
 }
 
@@ -160,6 +164,7 @@ time_postfork(void)
 static void
 refresh_wall(void)
 {
+    time_init();
     clock_gettime(CLOCK_REALTIME, &wall_time);
     wall_tick = false;
 }
@@ -340,7 +345,6 @@ sigalrm_handler(int sig_nr)
 static void
 refresh_wall_if_ticked(void)
 {
-    assert(inited);
     if (wall_tick) {
         refresh_wall();
     }
@@ -349,7 +353,6 @@ refresh_wall_if_ticked(void)
 static void
 refresh_monotonic_if_ticked(void)
 {
-    assert(inited);
     if (monotonic_tick) {
         refresh_monotonic();
     }
