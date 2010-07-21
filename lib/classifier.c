@@ -249,7 +249,7 @@ void
 classifier_insert_exact(struct classifier *cls, struct cls_rule *rule)
 {
     hmap_insert(&cls->exact_table, &rule->node.hmap,
-                flow_hash(&rule->flow, 0));
+                flow_hash_headers(&rule->flow, 0));
     cls->n_rules++;
 }
 
@@ -302,7 +302,7 @@ struct cls_rule *
 classifier_lookup_exact(const struct classifier *cls, const flow_t *flow)
 {
     return (!hmap_is_empty(&cls->exact_table)
-            ? search_exact_table(cls, flow_hash(flow, 0), flow)
+            ? search_exact_table(cls, flow_hash_headers(flow, 0), flow)
             : NULL);
 }
 
@@ -335,7 +335,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
 
     if (!target->wildcards) {
         /* Ignores 'priority'. */
-        return search_exact_table(cls, flow_hash(target, 0), target);
+        return search_exact_table(cls, flow_hash_headers(target, 0), target);
     }
 
     assert(target->wildcards == (target->wildcards & OVSFW_ALL));
@@ -350,7 +350,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
                     return NULL;
                 } else if (pos->flow.priority == target->priority &&
                            pos->flow.wildcards == target->wildcards &&
-                           flow_equal(target, &pos->flow)) {
+                           flow_equal_headers(target, &pos->flow)) {
                     return pos;
                 }
             }
@@ -369,7 +369,7 @@ classifier_rule_overlaps(const struct classifier *cls, const flow_t *target)
     const struct hmap *tbl;
 
     if (!target->wildcards) {
-        return search_exact_table(cls, flow_hash(target, 0), target) ?
+        return search_exact_table(cls, flow_hash_headers(target, 0), target) ?
             true : false;
     }
 
@@ -458,7 +458,7 @@ classifier_for_each_match(const struct classifier *cls,
         } else {
             /* Optimization: there can be at most one match in the exact
              * table. */
-            size_t hash = flow_hash(&target.flow, 0);
+            size_t hash = flow_hash_headers(&target.flow, 0);
             struct cls_rule *rule = search_exact_table(cls, hash,
                                                        &target.flow);
             if (rule) {
@@ -670,7 +670,7 @@ insert_exact_rule(struct classifier *cls, struct cls_rule *rule)
     struct cls_rule *old_rule;
     size_t hash;
 
-    hash = flow_hash(&rule->flow, 0);
+    hash = flow_hash_headers(&rule->flow, 0);
     old_rule = search_exact_table(cls, hash, &rule->flow);
     if (old_rule) {
         hmap_remove(&cls->exact_table, &old_rule->node.hmap);
@@ -903,7 +903,7 @@ search_exact_table(const struct classifier *cls, size_t hash,
 
     HMAP_FOR_EACH_WITH_HASH (rule, struct cls_rule, node.hmap,
                              hash, &cls->exact_table) {
-        if (flow_equal(&rule->flow, target)) {
+        if (flow_equal_headers(&rule->flow, target)) {
             return rule;
         }
     }

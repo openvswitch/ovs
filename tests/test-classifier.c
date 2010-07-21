@@ -111,9 +111,8 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
         if (pos->flow.priority == priority
             && pos->flow.wildcards == rule->cls_rule.flow.wildcards
-            && flow_equal(&pos->flow, &rule->cls_rule.flow)) {
-            /* Exact match.
-             * XXX flow_equal should ignore wildcarded fields */
+            && flow_equal_headers(&pos->flow, &rule->cls_rule.flow)) {
+            /* Exact match. */
             free(tcls->rules[i]);
             tcls->rules[i] = xmemdup(rule, sizeof *rule);
             return tcls->rules[i];
@@ -396,7 +395,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
                 const struct test_rule *tr0 = test_rule_from_cls_rule(cr0);
                 const struct test_rule *tr1 = test_rule_from_cls_rule(cr1);
 
-                assert(flow_equal(&cr0->flow, &cr1->flow));
+                assert(flow_equal_headers(&cr0->flow, &cr1->flow));
                 assert(cr0->flow.wildcards == cr1->flow.wildcards);
                 assert(cr0->flow.priority == cr1->flow.priority);
                 /* Skip nw_src_mask, nw_dst_mask, and dl_tci_mask, because they

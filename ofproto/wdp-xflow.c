@@ -412,7 +412,7 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
      * port simply because the xflow actions were composed for the wrong
      * scenario. */
     if (rule->wr.cr.flow.wildcards
-        || !flow_equal(flow, &rule->wr.cr.flow))
+        || !flow_equal_headers(flow, &rule->wr.cr.flow))
     {
         struct wx_rule *super = rule->super ? rule->super : rule;
         if (wx_xlate_actions(wx, super->wr.actions, super->wr.n_actions, flow,

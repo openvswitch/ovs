@@ -73,14 +73,14 @@ void flow_from_match(const struct ofp_match *, uint32_t priority,
 char *flow_to_string(const flow_t *);
 void flow_format(struct ds *, const flow_t *);
 void flow_print(FILE *, const flow_t *);
-static inline int flow_compare(const flow_t *, const flow_t *);
-static inline bool flow_equal(const flow_t *, const flow_t *);
-static inline size_t flow_hash(const flow_t *, uint32_t basis);
+static inline int flow_compare_headers(const flow_t *, const flow_t *);
+static inline bool flow_equal_headers(const flow_t *, const flow_t *);
+static inline size_t flow_hash_headers(const flow_t *, uint32_t basis);
 
 /* Compares members of 'a' and 'b' except for 'wildcards' and 'priority' and
  * returns a strcmp()-like return value. */
 static inline int
-flow_compare(const flow_t *a, const flow_t *b)
+flow_compare_headers(const flow_t *a, const flow_t *b)
 {
     /* Assert that 'wildcards' and 'priority' are leading 32-bit fields. */
     BUILD_ASSERT_DECL(offsetof(struct flow, wildcards) == 0);
@@ -94,15 +94,15 @@ flow_compare(const flow_t *a, const flow_t *b)
 /* Returns true if all members of 'a' and 'b' are equal except for 'wildcards'
  * and 'priority', false otherwise. */
 static inline bool
-flow_equal(const flow_t *a, const flow_t *b)
+flow_equal_headers(const flow_t *a, const flow_t *b)
 {
-    return !flow_compare(a, b);
+    return !flow_compare_headers(a, b);
 }
 
 /* Returns a hash value for 'flow' that does not include 'wildcards' or
  * 'priority', folding 'basis' into the hash value. */
 static inline size_t
-flow_hash(const flow_t *flow, uint32_t basis)
+flow_hash_headers(const flow_t *flow, uint32_t basis)
 {
     /* Assert that 'wildcards' and 'priority' are leading 32-bit fields. */
     BUILD_ASSERT_DECL(offsetof(struct flow, wildcards) == 0);
