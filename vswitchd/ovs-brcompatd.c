@@ -1294,7 +1294,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
     vlog_init();
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);

@@ -39,7 +39,6 @@ main(int argc OVS_UNUSED, char *argv[])
     int n = 0, errors = 0;
 
     set_program_name(argv[0]);
-    time_init();
     vlog_init();
 
     flows = stdin;

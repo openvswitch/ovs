@@ -65,7 +65,7 @@ static void log_poll_interval(long long int last_wakeup,
  *
  * It is not necessary to call this function directly, because other time
  * functions will call it automatically, but it doesn't hurt. */
-void
+static void
 time_init(void)
 {
     static bool inited;

@@ -401,7 +401,6 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    time_init();
     vlog_init();
     vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_EMER);
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_DBG);

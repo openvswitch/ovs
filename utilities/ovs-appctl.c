@@ -45,7 +45,6 @@ main(int argc, char *argv[])
     int i;
 
     set_program_name(argv[0]);
-    time_init();
 
     /* Parse command line and connect to target. */
     target = parse_command_line(argc, argv);

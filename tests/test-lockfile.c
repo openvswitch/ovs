@@ -240,7 +240,6 @@ main(int argc, char *argv[])
     size_t i;
 
     set_program_name(argv[0]);
-    time_init();
 
     if (argc != 2) {
         ovs_fatal(0, "exactly one argument required; use \"%s help\" for help",
