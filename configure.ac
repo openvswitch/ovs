@@ -27,6 +27,7 @@ AM_PROG_CC_C_O
 AC_PROG_CPP
 AC_PROG_RANLIB
 AC_PROG_MKDIR_P
+AC_PROG_FGREP
 
 AC_ARG_VAR([PERL], [path to Perl interpreter])
 AC_PATH_PROG([PERL], perl, no)

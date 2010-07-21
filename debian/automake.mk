@@ -62,7 +62,13 @@ EXTRA_DIST += \
 	debian/rules \
 	debian/rules.modules
 
-dist-hook-debian-changelog:
-	$(srcdir)/build-aux/update-debian-changelog '$(distdir)/debian/changelog' '$(VERSION)'
-DIST_HOOKS += dist-hook-debian-changelog
-EXTRA_DIST += build-aux/update-debian-changelog
+check-debian-changelog-version:
+	@if $(FGREP) '($(VERSION))' $(srcdir)/debian/changelog >/dev/null; \
+	then								   \
+	  :;								   \
+	else								   \
+	  echo "Update debian/changelog to mention version $(VERSION)";	   \
+	  exit 1;							   \
+	fi
+ALL_LOCAL += check-debian-changelog-version
+DIST_HOOKS += check-debian-changelog-version
