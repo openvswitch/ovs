@@ -1359,6 +1359,7 @@ const struct xfif_class xfif_netdev_class = {
     xfif_netdev_recv_set_mask,
     NULL,                       /* get_sflow_probability */
     NULL,                       /* set_sflow_probability */
+    NULL,                       /* queue_to_priority */
     xfif_netdev_recv,
     xfif_netdev_recv_wait,
 };

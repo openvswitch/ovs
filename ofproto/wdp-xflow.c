@@ -763,7 +763,7 @@ xlate_output_action__(struct wx_xlate_ctx *ctx,
 }
 
 static void
-xlate_output_action(struct action_xlate_ctx *ctx,
+xlate_output_action(struct wx_xlate_ctx *ctx,
                     const struct ofp_action_output *oao)
 {
     xlate_output_action__(ctx, ntohs(oao->port), ntohs(oao->max_len));

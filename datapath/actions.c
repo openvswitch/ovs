@@ -70,7 +70,7 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 }
 
 static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-				       struct xflow_key *key, const union xflow_action *a,
+				       const struct xflow_key *key, const union xflow_action *a,
 				       int n_actions, gfp_t gfp)
 {
 	__be16 mask = a->dl_tci.mask;

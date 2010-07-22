@@ -151,7 +151,7 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
         return err;
     }
 
-    err = netdev_vpor_do_ioctl(XFLOW_VPORT_ADD, &ova);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
     if (err == EBUSY) {
         VLOG_WARN("%s: destroying existing device", name);
 

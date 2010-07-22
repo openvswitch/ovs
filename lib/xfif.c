@@ -1103,17 +1103,17 @@ xfif_get_netflow_ids(const struct xfif *xfif,
  * stores the priority into '*priority'.  On failure, returns a positive errno
  * value and stores 0 into '*priority'. */
 int
-dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
+xfif_queue_to_priority(const struct xfif *xfif, uint32_t queue_id,
                        uint32_t *priority)
 {
-    int error = (dpif->dpif_class->queue_to_priority
-                 ? dpif->dpif_class->queue_to_priority(dpif, queue_id,
+    int error = (xfif->xfif_class->queue_to_priority
+                 ? xfif->xfif_class->queue_to_priority(xfif, queue_id,
                                                        priority)
                  : EOPNOTSUPP);
     if (error) {
         *priority = 0;
     }
-    log_operation(dpif, "queue_to_priority", error);
+    log_operation(xfif, "queue_to_priority", error);
     return error;
 }
 
