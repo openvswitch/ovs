@@ -30,11 +30,11 @@
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
+#include "vlog.h"
 #include "wdp.h"
 #include "xfif.h"
 
-#define THIS_MODULE VLM_sflow
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(sflow)
 
 struct ofproto_sflow_port {
     struct netdev *netdev;      /* Underlying network device, for stats. */

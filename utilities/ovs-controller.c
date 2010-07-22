@@ -36,9 +36,9 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_controller
+
+VLOG_DEFINE_THIS_MODULE(controller)
 
 #define MAX_SWITCHES 16
 #define MAX_LISTENERS 16
@@ -67,6 +67,9 @@ static int max_idle = 60;
  * of their messages (for debugging fail-open mode). */
 static bool mute = false;
 
+/* -q, --queue: OpenFlow queue to use, or the default queue if UINT32_MAX. */
+static uint32_t queue_id = UINT32_MAX;
+
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
 
@@ -87,8 +90,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
 
@@ -215,6 +216,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
                                  action_normal);
+    lswitch_set_queue(sw->lswitch, queue_id);
 }
 
 static int
@@ -256,6 +258,7 @@ parse_options(int argc, char *argv[])
         {"wildcard",    no_argument, 0, 'w'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"mute",        no_argument, 0, OPT_MUTE},
+        {"queue",       required_argument, 0, 'q'},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -311,6 +314,10 @@ parse_options(int argc, char *argv[])
             }
             break;
 
+        case 'q':
+            queue_id = atoi(optarg);
+            break;
+
         case OPT_UNIXCTL:
             unixctl_path = optarg;
             break;
@@ -359,6 +366,7 @@ usage(void)
            "  --max-idle=SECS         max idle time for new flows\n"
            "  -N, --normal            use OFPAT_NORMAL action\n"
            "  -w, --wildcard          use wildcards, not exact-match rules\n"
+           "  -q, --queue=QUEUE       OpenFlow queue ID to use for output\n"
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");

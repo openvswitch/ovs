@@ -304,6 +304,12 @@ struct xfif_class {
      * packet. */
     int (*set_sflow_probability)(struct xfif *xfif, uint32_t probability);
 
+    /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
+     * priority value for use in the XFLOWAT_SET_PRIORITY action in
+     * '*priority'. */
+    int (*queue_to_priority)(const struct xfif *xfif, uint32_t queue_id,
+                             uint32_t *priority);
+
     /* Attempts to receive a message from 'xfif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
      * with 'struct xflow_msg' as a header, and must have at least

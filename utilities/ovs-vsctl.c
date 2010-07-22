@@ -41,9 +41,9 @@
 #include "vswitchd/vswitch-idl.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_vsctl
+
+VLOG_DEFINE_THIS_MODULE(vsctl)
 
 /* vsctl_fatal() also logs the error, so it is preferred in this file. */
 #define ovs_fatal please_use_vsctl_fatal_instead_of_ovs_fatal
@@ -118,18 +118,16 @@ static void set_column(const struct vsctl_table_class *,
 int
 main(int argc, char *argv[])
 {
+    extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct vsctl_command *commands;
     size_t n_commands;
     char *args;
-    int trials;
 
     set_program_name(argv[0]);
     signal(SIGPIPE, SIG_IGN);
-    time_init();
-    vlog_init();
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
     ovsrec_init();
 
     /* Log our arguments.  This is often valuable for debugging systems. */
@@ -146,12 +144,8 @@ main(int argc, char *argv[])
 
     /* Now execute the commands. */
     idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
-    trials = 0;
     for (;;) {
         if (ovsdb_idl_run(idl)) {
-            if (++trials > 5) {
-                vsctl_fatal("too many database inconsistency failures");
-            }
             do_vsctl(args, commands, n_commands, idl);
         }
 
@@ -208,7 +202,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_NO_SYSLOG:
-            vlog_set_levels(VLM_vsctl, VLF_SYSLOG, VLL_WARN);
+            vlog_set_levels(&VLM_vsctl, VLF_SYSLOG, VLL_WARN);
             break;
 
         case OPT_NO_WAIT:
@@ -390,7 +384,7 @@ vsctl_fatal(const char *format, ...)
     message = xvasprintf(format, args);
     va_end(args);
 
-    vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(&VLM_vsctl, VLF_CONSOLE, VLL_EMER);
     VLOG_ERR("%s", message);
     ovs_error(0, "%s", message);
     vsctl_exit(EXIT_FAILURE);
@@ -463,13 +457,14 @@ Switch commands:\n\
 \n\
 Database commands:\n\
   list TBL [REC]              list RECord (or all records) in TBL\n\
-  get TBL REC COL[:KEY]       print values of COLumns in RECORD in TBL\n\
+  get TBL REC COL[:KEY]       print values of COLumns in RECord in TBL\n\
   set TBL REC COL[:KEY]=VALUE set COLumn values in RECord in TBL\n\
   add TBL REC COL [KEY=]VALUE add (KEY=)VALUE to COLumn in RECord in TBL\n\
   remove TBL REC COL [KEY=]VALUE  remove (KEY=)VALUE from COLumn\n\
   clear TBL REC COL           clear values from COLumn in RECord in TBL\n\
   create TBL COL[:KEY]=VALUE  create and initialize new record\n\
-  destroy TBL REC             delete REC from TBL\n\
+  destroy TBL REC             delete RECord from TBL\n\
+  wait-until TBL REC [COL[:KEY]=VALUE]  wait until condition is true\n\
 Potentially unsafe database commands require --force option.\n\
 \n\
 Options:\n\
@@ -507,6 +502,10 @@ struct vsctl_context {
     struct ovsdb_idl_txn *txn;
     struct ovsdb_symbol_table *symtab;
     const struct ovsrec_open_vswitch *ovs;
+
+    /* A command may set this member to true if some prerequisite is not met
+     * and the caller should wait for something to change and then retry. */
+    bool try_again;
 };
 
 struct vsctl_bridge {
@@ -1986,34 +1985,23 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
         }
     } else {
         const struct ovsdb_idl_row *row;
-        unsigned int best_score = 0;
-
-        /* It might make sense to relax this assertion. */
-        assert(id->name_column->type.key.type == OVSDB_TYPE_STRING);
 
         referrer = NULL;
         for (row = ovsdb_idl_first_row(ctx->idl, id->table);
-             row != NULL && best_score != UINT_MAX;
+             row != NULL;
              row = ovsdb_idl_next_row(row))
         {
-            struct ovsdb_datum name;
+            const struct ovsdb_datum *name;
 
-            ovsdb_idl_txn_read(row, id->name_column, &name);
-            if (name.n == 1) {
-                unsigned int score = score_partial_match(name.keys[0].string,
-                                                         record_id);
-                if (score > best_score) {
-                    referrer = row;
-                    best_score = score;
-                } else if (score == best_score) {
-                    referrer = NULL;
+            name = ovsdb_idl_get(row, id->name_column,
+                                 OVSDB_TYPE_STRING, OVSDB_TYPE_VOID);
+            if (name->n == 1 && !strcmp(name->keys[0].string, record_id)) {
+                if (referrer) {
+                    vsctl_fatal("multiple rows in %s match \"%s\"",
+                                table->class->name, record_id);
                 }
+                referrer = row;
             }
-            ovsdb_datum_destroy(&name, &id->name_column->type);
-        }
-        if (best_score && !referrer) {
-            vsctl_fatal("multiple rows in %s match \"%s\"",
-                        table->class->name, record_id);
         }
     }
     if (!referrer) {
@@ -2022,17 +2010,14 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 
     final = NULL;
     if (id->uuid_column) {
-        struct ovsdb_datum uuid;
+        const struct ovsdb_datum *uuid;
 
-        assert(id->uuid_column->type.key.type == OVSDB_TYPE_UUID);
-        assert(id->uuid_column->type.value.type == OVSDB_TYPE_VOID);
-
-        ovsdb_idl_txn_read(referrer, id->uuid_column, &uuid);
-        if (uuid.n == 1) {
+        uuid = ovsdb_idl_get(referrer, id->uuid_column,
+                             OVSDB_TYPE_UUID, OVSDB_TYPE_VOID);
+        if (uuid->n == 1) {
             final = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class,
-                                               &uuid.keys[0].uuid);
+                                               &uuid->keys[0].uuid);
         }
-        ovsdb_datum_destroy(&uuid, &id->uuid_column->type);
     } else {
         final = referrer;
     }
@@ -2041,8 +2026,8 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 }
 
 static const struct ovsdb_idl_row *
-get_row(struct vsctl_context *ctx,
-        const struct vsctl_table_class *table, const char *record_id)
+get_row (struct vsctl_context *ctx,
+         const struct vsctl_table_class *table, const char *record_id)
 {
     const struct ovsdb_idl_row *row;
     struct uuid uuid;
@@ -2105,15 +2090,65 @@ get_column(const struct vsctl_table_class *table, const char *column_name,
     }
 }
 
+static char *
+missing_operator_error(const char *arg, const char **allowed_operators,
+                       size_t n_allowed)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_format(&s, "%s: argument does not end in ", arg);
+    ds_put_format(&s, "\"%s\"", allowed_operators[0]);
+    if (n_allowed == 2) {
+        ds_put_format(&s, " or \"%s\"", allowed_operators[1]);
+    } else if (n_allowed > 2) {
+        size_t i;
+
+        for (i = 1; i < n_allowed - 1; i++) {
+            ds_put_format(&s, ", \"%s\"", allowed_operators[i]);
+        }
+        ds_put_format(&s, ", or \"%s\"", allowed_operators[i]);
+    }
+    ds_put_format(&s, " followed by a value.");
+
+    return ds_steal_cstr(&s);
+}
+
+/* Breaks 'arg' apart into a number of fields in the following order:
+ *
+ *      - If 'columnp' is nonnull, the name of a column in 'table'.  The column
+ *        is stored into '*columnp'.  The column name may be abbreviated.
+ *
+ *      - If 'keyp' is nonnull, optionally a key string.  (If both 'columnp'
+ *        and 'keyp' are nonnull, then the column and key names are expected to
+ *        be separated by ':').  The key is stored as a malloc()'d string into
+ *        '*keyp', or NULL if no key is present in 'arg'.
+ *
+ *      - If 'valuep' is nonnull, an operator followed by a value string.  The
+ *        allowed operators are the 'n_allowed' string in 'allowed_operators',
+ *        or just "=" if 'n_allowed' is 0.  If 'operatorp' is nonnull, then the
+ *        operator is stored into '*operatorp' (one of the pointers from
+ *        'allowed_operators' is stored; nothing is malloc()'d).  The value is
+ *        stored as a malloc()'d string into '*valuep', or NULL if no value is
+ *        present in 'arg'.
+ *
+ * At least 'columnp' or 'keyp' must be nonnull.
+ *
+ * On success, returns NULL.  On failure, returned a malloc()'d string error
+ * message and stores NULL into all of the nonnull output arguments. */
 static char * WARN_UNUSED_RESULT
-parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
-                       const struct ovsdb_idl_column **columnp,
-                       char **keyp, char **valuep)
+parse_column_key_value(const char *arg,
+                       const struct vsctl_table_class *table,
+                       const struct ovsdb_idl_column **columnp, char **keyp,
+                       const char **operatorp,
+                       const char **allowed_operators, size_t n_allowed,
+                       char **valuep)
 {
     const char *p = arg;
     char *error;
 
     assert(columnp || keyp);
+    assert(!(operatorp && !valuep));
     if (keyp) {
         *keyp = NULL;
     }
@@ -2158,12 +2193,37 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
     }
 
     /* Parse value string. */
-    if (*p == '=') {
-        if (!valuep) {
-            error = xasprintf("%s: value not accepted here", arg);
+    if (valuep) {
+        const char *best;
+        size_t best_len;
+        size_t i;
+
+        if (!allowed_operators) {
+            static const char *equals = "=";
+            allowed_operators = &equals;
+            n_allowed = 1;
+        }
+
+        best = NULL;
+        best_len = 0;
+        for (i = 0; i < n_allowed; i++) {
+            const char *op = allowed_operators[i];
+            size_t op_len = strlen(op);
+
+            if (op_len > best_len && !strncmp(op, p, op_len) && p[op_len]) {
+                best_len = op_len;
+                best = op;
+            }
+        }
+        if (!best) {
+            error = missing_operator_error(arg, allowed_operators, n_allowed);
             goto error;
         }
-        *valuep = xstrdup(p + 1);
+
+        if (operatorp) {
+            *operatorp = best;
+        }
+        *valuep = xstrdup(p + best_len);
     } else {
         if (valuep) {
             *valuep = NULL;
@@ -2187,6 +2247,9 @@ error:
     if (valuep) {
         free(*valuep);
         *valuep = NULL;
+        if (operatorp) {
+            *operatorp = NULL;
+        }
     }
     return error;
 }
@@ -2206,7 +2269,7 @@ cmd_get(struct vsctl_context *ctx)
     row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
-        struct ovsdb_datum datum;
+        const struct ovsdb_datum *datum;
         char *key_string;
 
         /* Special case for obtaining the UUID of a row.  We can't just do this
@@ -2219,9 +2282,10 @@ cmd_get(struct vsctl_context *ctx)
         }
 
         die_if_error(parse_column_key_value(ctx->argv[i], table,
-                                            &column, &key_string, NULL));
+                                            &column, &key_string,
+                                            NULL, NULL, 0, NULL));
 
-        ovsdb_idl_txn_read(row, column, &datum);
+        datum = ovsdb_idl_read(row, column);
         if (key_string) {
             union ovsdb_atom key;
             unsigned int idx;
@@ -2235,7 +2299,7 @@ cmd_get(struct vsctl_context *ctx)
                                                 &column->type.key,
                                                 key_string, ctx->symtab));
 
-            idx = ovsdb_datum_find_key(&datum, &key,
+            idx = ovsdb_datum_find_key(datum, &key,
                                        column->type.key.type);
             if (idx == UINT_MAX) {
                 if (!if_exists) {
@@ -2244,15 +2308,14 @@ cmd_get(struct vsctl_context *ctx)
                                 column->name);
                 }
             } else {
-                ovsdb_atom_to_string(&datum.values[idx],
+                ovsdb_atom_to_string(&datum->values[idx],
                                      column->type.value.type, out);
             }
             ovsdb_atom_destroy(&key, column->type.key.type);
         } else {
-            ovsdb_datum_to_string(&datum, &column->type, out);
+            ovsdb_datum_to_string(datum, &column->type, out);
         }
         ds_put_char(out, '\n');
-        ovsdb_datum_destroy(&datum, &column->type);
 
         free(key_string);
     }
@@ -2268,15 +2331,13 @@ list_record(const struct vsctl_table_class *table,
                   UUID_ARGS(&row->uuid));
     for (i = 0; i < table->class->n_columns; i++) {
         const struct ovsdb_idl_column *column = &table->class->columns[i];
-        struct ovsdb_datum datum;
+        const struct ovsdb_datum *datum;
 
-        ovsdb_idl_txn_read(row, column, &datum);
+        datum = ovsdb_idl_read(row, column);
 
         ds_put_format(out, "%-20s: ", column->name);
-        ovsdb_datum_to_string(&datum, &column->type, out);
+        ovsdb_datum_to_string(datum, &column->type, out);
         ds_put_char(out, '\n');
-
-        ovsdb_datum_destroy(&datum, &column->type);
     }
 }
 
@@ -2321,7 +2382,7 @@ set_column(const struct vsctl_table_class *table,
     char *error;
 
     error = parse_column_key_value(arg, table, &column, &key_string,
-                                   &value_string);
+                                   NULL, NULL, 0, &value_string);
     die_if_error(error);
     if (!value_string) {
         vsctl_fatal("%s: missing value", arg);
@@ -2329,7 +2390,7 @@ set_column(const struct vsctl_table_class *table,
 
     if (key_string) {
         union ovsdb_atom key, value;
-        struct ovsdb_datum old, new;
+        struct ovsdb_datum datum;
 
         if (column->type.value.type == OVSDB_TYPE_VOID) {
             vsctl_fatal("cannot specify key to set for non-map column %s",
@@ -2341,17 +2402,15 @@ set_column(const struct vsctl_table_class *table,
         die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
                                             value_string, symtab));
 
-        ovsdb_datum_init_empty(&new);
-        ovsdb_datum_add_unsafe(&new, &key, &value, &column->type);
+        ovsdb_datum_init_empty(&datum);
+        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
 
         ovsdb_atom_destroy(&key, column->type.key.type);
         ovsdb_atom_destroy(&value, column->type.value.type);
 
-        ovsdb_idl_txn_read(row, column, &old);
-        ovsdb_datum_union(&old, &new, &column->type, true);
-        ovsdb_idl_txn_write(row, column, &old);
-
-        ovsdb_datum_destroy(&new, &column->type);
+        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
+                          &column->type, false);
+        ovsdb_idl_txn_write(row, column, &datum);
     } else {
         struct ovsdb_datum datum;
 
@@ -2398,7 +2457,7 @@ cmd_add(struct vsctl_context *ctx)
     die_if_error(get_column(table, column_name, &column));
 
     type = &column->type;
-    ovsdb_idl_txn_read(row, column, &old);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
@@ -2439,7 +2498,7 @@ cmd_remove(struct vsctl_context *ctx)
     die_if_error(get_column(table, column_name, &column));
 
     type = &column->type;
-    ovsdb_idl_txn_read(row, column, &old);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type rm_type;
         struct ovsdb_datum rm;
@@ -2578,6 +2637,104 @@ cmd_destroy(struct vsctl_context *ctx)
         }
     }
 }
+
+static bool
+is_condition_satified(const struct vsctl_table_class *table,
+                      const struct ovsdb_idl_row *row, const char *arg,
+                      struct ovsdb_symbol_table *symtab)
+{
+    static const char *operators[] = {
+        "=", "!=", "<", ">", "<=", ">="
+    };
+
+    const struct ovsdb_idl_column *column;
+    const struct ovsdb_datum *have_datum;
+    char *key_string, *value_string;
+    const char *operator;
+    unsigned int idx;
+    char *error;
+    int cmp = 0;
+
+    error = parse_column_key_value(arg, table, &column, &key_string,
+                                   &operator, operators, ARRAY_SIZE(operators),
+                                   &value_string);
+    die_if_error(error);
+    if (!value_string) {
+        vsctl_fatal("%s: missing value", arg);
+    }
+
+    have_datum = ovsdb_idl_read(row, column);
+    if (key_string) {
+        union ovsdb_atom want_key, want_value;
+
+        if (column->type.value.type == OVSDB_TYPE_VOID) {
+            vsctl_fatal("cannot specify key to check for non-map column %s",
+                        column->name);
+        }
+
+        die_if_error(ovsdb_atom_from_string(&want_key, &column->type.key,
+                                            key_string, symtab));
+        die_if_error(ovsdb_atom_from_string(&want_value, &column->type.value,
+                                            value_string, symtab));
+
+        idx = ovsdb_datum_find_key(have_datum,
+                                   &want_key, column->type.key.type);
+        if (idx != UINT_MAX) {
+            cmp = ovsdb_atom_compare_3way(&have_datum->values[idx],
+                                          &want_value,
+                                          column->type.value.type);
+        }
+
+        ovsdb_atom_destroy(&want_key, column->type.key.type);
+        ovsdb_atom_destroy(&want_value, column->type.value.type);
+    } else {
+        struct ovsdb_datum want_datum;
+
+        die_if_error(ovsdb_datum_from_string(&want_datum, &column->type,
+                                             value_string, symtab));
+        idx = 0;
+        cmp = ovsdb_datum_compare_3way(have_datum, &want_datum,
+                                       &column->type);
+        ovsdb_datum_destroy(&want_datum, &column->type);
+    }
+
+    free(key_string);
+    free(value_string);
+
+    return (idx == UINT_MAX ? false
+            : !strcmp(operator, "=") ? cmp == 0
+            : !strcmp(operator, "!=") ? cmp != 0
+            : !strcmp(operator, "<") ? cmp < 0
+            : !strcmp(operator, ">") ? cmp > 0
+            : !strcmp(operator, "<=") ? cmp <= 0
+            : !strcmp(operator, ">=") ? cmp >= 0
+            : (abort(), 0));
+}
+
+static void
+cmd_wait_until(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    int i;
+
+    table = get_table(table_name);
+
+    row = get_row(ctx, table, record_id);
+    if (!row) {
+        ctx->try_again = true;
+        return;
+    }
+
+    for (i = 3; i < ctx->argc; i++) {
+        if (!is_condition_satified(table, row, ctx->argv[i], ctx->symtab)) {
+            ctx->try_again = true;
+            return;
+        }
+    }
+}
 
 static struct json *
 where_uuid_equals(const struct uuid *uuid)
@@ -2608,6 +2765,8 @@ vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
     ctx->txn = txn;
     ctx->ovs = ovs;
     ctx->symtab = symtab;
+
+    ctx->try_again = false;
 }
 
 static void
@@ -2627,7 +2786,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     const char *unused;
     struct vsctl_command *c;
     int64_t next_cfg = 0;
-    char *error;
+    char *error = NULL;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
@@ -2650,12 +2809,18 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
+        ds_init(&c->output);
+    }
+    for (c = commands; c < &commands[n_commands]; c++) {
         struct vsctl_context ctx;
 
-        ds_init(&c->output);
         vsctl_context_init(&ctx, c, idl, txn, ovs, symtab);
         (c->syntax->run)(&ctx);
         vsctl_context_done(&ctx, c);
+
+        if (ctx.try_again) {
+            goto try_again;
+        }
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
@@ -2682,7 +2847,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
                     "with \"-- --id=%s create ...\")", unused, unused);
     }
-    ovsdb_symbol_table_destroy(symtab);
 
     switch (status) {
     case TXN_INCOMPLETE:
@@ -2697,11 +2861,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         break;
 
     case TXN_TRY_AGAIN:
-        for (c = commands; c < &commands[n_commands]; c++) {
-            ds_destroy(&c->output);
-        }
-        free(error);
-        return;
+        goto try_again;
 
     case TXN_ERROR:
         vsctl_fatal("transaction error: %s", error);
@@ -2710,6 +2870,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         NOT_REACHED();
     }
     free(error);
+
+    ovsdb_symbol_table_destroy(symtab);
 
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
@@ -2765,6 +2927,17 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     ovsdb_idl_destroy(idl);
 
     exit(EXIT_SUCCESS);
+
+try_again:
+    /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
+     * resources and return so that the caller can try again. */
+    ovsdb_idl_txn_abort(txn);
+    ovsdb_idl_txn_destroy(txn);
+    ovsdb_symbol_table_destroy(symtab);
+    for (c = commands; c < &commands[n_commands]; c++) {
+        ds_destroy(&c->output);
+    }
+    free(error);
 }
 
 static const struct vsctl_command_syntax all_commands[] = {
@@ -2817,6 +2990,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"clear", 3, INT_MAX, cmd_clear, NULL, ""},
     {"create", 2, INT_MAX, cmd_create, post_create, "--id="},
     {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists"},
+    {"wait-until", 2, INT_MAX, cmd_wait_until, NULL, ""},
 
     {NULL, 0, 0, NULL, NULL, NULL},
 };

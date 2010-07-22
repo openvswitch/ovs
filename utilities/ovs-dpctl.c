@@ -39,10 +39,10 @@
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
+#include "vlog.h"
 #include "xfif.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_dpctl
+VLOG_DEFINE_THIS_MODULE(dpctl)
 
 static const struct command all_commands[];
 
@@ -53,8 +53,6 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     run_command(argc - optind, argv + optind, all_commands);

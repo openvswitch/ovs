@@ -45,11 +45,11 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
 #include "xfif.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_vswitchd
+VLOG_DEFINE_THIS_MODULE(vswitchd)
 
 static unixctl_cb_func ovs_vswitchd_exit;
 
@@ -67,8 +67,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     remote = parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);

@@ -646,9 +646,6 @@ AT_CHECK([RUN_OVS_VSCTL([list interx x])],
 AT_CHECK([RUN_OVS_VSCTL([list b x])], 
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([list b br])], 
-  [1], [], [ovs-vsctl: multiple rows in Bridge match "br"
-], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 d])], 
   [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
 ], [OVS_VSCTL_CLEANUP])
@@ -659,7 +656,13 @@ AT_CHECK([RUN_OVS_VSCTL([get b br0 :y=z])],
   [1], [], [ovs-vsctl: :y=z: missing column name
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])], 
-  [1], [], [ovs-vsctl: datapath_id:y=z: value not accepted here
+  [1], [], [ovs-vsctl: datapath_id:y=z: trailing garbage "=z" in argument
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set b br0 'datapath_id:y>=z'])], 
+  [1], [], [ovs-vsctl: datapath_id:y>=z: argument does not end in "=" followed by a value.
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([wait-until b br0 datapath_id:y,z])], 
+  [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", or ">=" followed by a value.
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])], 
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
@@ -694,6 +697,64 @@ AT_CHECK([RUN_OVS_VSCTL([clear n `cat netflow-uuid` targets])],
 AT_CHECK([RUN_OVS_VSCTL([destroy b br2])], 
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([database commands -- wait-until immediately true])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL(
+    [add-br br0], 
+    [add-bond br0 bond0 eth0 eth1],
+    [set port bond0 bond_updelay=500 other-config:abc=def])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . managers=[]]])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . bridges!=[]]])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Port bond0 other-config:abc=def]])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until port bond0 'bond_updelay>50' 'other-config:abc>d' 'other-config:abc<e']])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([database commands -- wait-until must wait])
+AT_KEYWORDS([ovs-vsctl])
+
+# Disable lcov for this test.  All the programs running in parallel
+# race badly on access to profiling data.
+DISABLE_LCOV=true
+export DISABLE_LCOV
+
+OVS_VSCTL_SETUP
+
+# Start ovs-vsctls in background.
+(RUN_OVS_VSCTL([[wait-until o . bridges!=[] -- get bridge br10 other-config:abc]])) > stdout1 &
+(RUN_OVS_VSCTL([[wait-until bridge br1 -- get bridge br1 other-config:abc]])) > stdout2 &
+(RUN_OVS_VSCTL([[wait-until b br1 other-config={abc=def} -- get bridge br1 other-config]])) > stdout3 &
+(RUN_OVS_VSCTL([[wait-until port bond0 'bond_updelay>50' -- get port bond0 bond-updelay]])) > stdout4 &
+
+# Give the ovs-vsctls a chance to read the database
+sleep 1
+
+AT_CHECK([RUN_OVS_VSCTL([add-br br10 -- set bridge br10 other-config:abc=quux])
+RUN_OVS_VSCTL([add-br br1 -- set bridge br1 other-config:abc=def -- add-bond br1 bond0 eth0 eth1 -- set port bond0 bond_updelay=500])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+
+# Wait for the ovs-vsctls to finish.
+wait
+
+# Check output
+AT_CHECK([cat stdout1], [0], [quux
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([cat stdout2], [0], [def
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([cat stdout3], [0], [{abc=def}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([cat stdout4], [0], [500
+], [], [OVS_VSCTL_CLEANUP])
+
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 

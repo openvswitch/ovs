@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define LEARNING_SWITCH_H 1
 
 #include <stdbool.h>
+#include <stdint.h>
 
 struct ofpbuf;
 struct rconn;
@@ -25,6 +26,7 @@ struct rconn;
 struct lswitch *lswitch_create(struct rconn *, bool learn_macs,
 			       bool exact_flows, int max_idle,
 			       bool action_normal);
+void lswitch_set_queue(struct lswitch *sw, uint32_t queue);
 void lswitch_run(struct lswitch *, struct rconn *);
 void lswitch_wait(struct lswitch *);
 void lswitch_destroy(struct lswitch *);

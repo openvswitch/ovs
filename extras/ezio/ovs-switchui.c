@@ -49,10 +49,10 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_switchui
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(switchui)
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void);
@@ -147,11 +147,9 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_EMER);
     init_reboot_notifier();
 
     argc -= optind;

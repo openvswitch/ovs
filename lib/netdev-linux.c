@@ -61,9 +61,9 @@
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
-
-#define THIS_MODULE VLM_netdev_linux
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_linux)
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */
@@ -1625,7 +1625,7 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
     struct tcmsg *tcmsg;
 
     tcmsg = tc_make_request(netdev, RTM_GETTCLASS, 0, &request);
-    tcmsg->tcm_parent = TC_H_ROOT;
+    tcmsg->tcm_parent = 0;
     nl_dump_start(dump, rtnl_sock, &request);
     ofpbuf_uninit(&request);
 }
@@ -2341,8 +2341,10 @@ htb_parse_tcmsg__(struct ofpbuf *tcmsg, unsigned int *queue_id,
 
     error = tc_parse_class(tcmsg, &handle, &nl_options, stats);
     if (!error && queue_id) {
-        if (tc_get_major(handle) == 1 && tc_get_minor(handle) < HTB_N_QUEUES) {
-            *queue_id = tc_get_minor(handle);
+        unsigned int major = tc_get_major(handle);
+        unsigned int minor = tc_get_minor(handle);
+        if (major == 1 && minor > 0 && minor <= HTB_N_QUEUES) {
+            *queue_id = minor - 1;
         } else {
             error = EPROTO;
         }
@@ -2567,7 +2569,7 @@ htb_class_set(struct netdev *netdev, unsigned int queue_id,
         return error;
     }
 
-    error = htb_setup_class__(netdev, tc_make_handle(1, queue_id),
+    error = htb_setup_class__(netdev, tc_make_handle(1, queue_id + 1),
                               tc_make_handle(1, 0xfffe), &hc);
     if (error) {
         return error;
@@ -2587,7 +2589,7 @@ htb_class_delete(struct netdev *netdev, unsigned int queue_id)
     hc = port_array_get(&htb->tc.queues, queue_id);
     assert(hc != NULL);
 
-    error = tc_delete_class(netdev, tc_make_handle(1, queue_id));
+    error = tc_delete_class(netdev, tc_make_handle(1, queue_id + 1));
     if (!error) {
         free(hc);
         port_array_delete(&htb->tc.queues, queue_id);
@@ -2599,7 +2601,7 @@ static int
 htb_class_get_stats(const struct netdev *netdev, unsigned int queue_id,
                     struct netdev_queue_stats *stats)
 {
-    return htb_query_class__(netdev, tc_make_handle(1, queue_id),
+    return htb_query_class__(netdev, tc_make_handle(1, queue_id + 1),
                              tc_make_handle(1, 0xfffe), NULL, stats);
 }
 
@@ -2609,7 +2611,7 @@ htb_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
                      netdev_dump_queue_stats_cb *cb, void *aux)
 {
     struct netdev_queue_stats stats;
-    unsigned int handle;
+    unsigned int handle, major, minor;
     int error;
 
     error = tc_parse_class(nlmsg, &handle, NULL, &stats);
@@ -2617,7 +2619,9 @@ htb_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
         return error;
     }
 
-    if (tc_get_major(handle) == 1 && tc_get_minor(handle) < HTB_N_QUEUES) {
+    major = tc_get_major(handle);
+    minor = tc_get_minor(handle);
+    if (major == 1 && minor > 0 && minor <= HTB_N_QUEUES) {
         (*cb)(tc_get_minor(handle), &stats, aux);
     }
     return 0;

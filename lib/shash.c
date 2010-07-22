@@ -19,6 +19,9 @@
 #include <assert.h>
 #include "hash.h"
 
+static struct shash_node *shash_find__(const struct shash *,
+                                       const char *name, size_t hash);
+
 static size_t
 hash_name(const char *name)
 {
@@ -100,16 +103,22 @@ shash_count(const struct shash *shash)
     return hmap_count(&shash->map);
 }
 
+static struct shash_node *
+shash_add_nocopy__(struct shash *sh, char *name, const void *data, size_t hash)
+{
+    struct shash_node *node = xmalloc(sizeof *node);
+    node->name = name;
+    node->data = (void *) data;
+    hmap_insert(&sh->map, &node->node, hash);
+    return node;
+}
+
 /* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
 struct shash_node *
 shash_add_nocopy(struct shash *sh, char *name, const void *data)
 {
-    struct shash_node *node = xmalloc(sizeof *node);
-    node->name = name;
-    node->data = (void *) data;
-    hmap_insert(&sh->map, &node->node, hash_name(name));
-    return node;
+    return shash_add_nocopy__(sh, name, data, hash_name(name));
 }
 
 /* It is the caller's responsibility to avoid duplicate names, if that is
@@ -138,6 +147,26 @@ shash_add_assert(struct shash *sh, const char *name, const void *data)
     assert(added);
 }
 
+/* Searches for 'name' in 'sh'.  If it does not already exist, adds it along
+ * with 'data' and returns NULL.  If it does already exist, replaces its data
+ * by 'data' and returns the data that it formerly contained. */
+void *
+shash_replace(struct shash *sh, const char *name, const void *data)
+{
+    size_t hash = hash_name(name);
+    struct shash_node *node;
+
+    node = shash_find__(sh, name, hash);
+    if (!node) {
+        shash_add_nocopy__(sh, xstrdup(name), data, hash);
+        return NULL;
+    } else {
+        void *old_data = node->data;
+        node->data = (void *) data;
+        return old_data;
+    }
+}
+
 void
 shash_delete(struct shash *sh, struct shash_node *node)
 {
@@ -146,19 +175,24 @@ shash_delete(struct shash *sh, struct shash_node *node)
     free(node);
 }
 
-/* If there are duplicates, returns a random element. */
-struct shash_node *
-shash_find(const struct shash *sh, const char *name)
+static struct shash_node *
+shash_find__(const struct shash *sh, const char *name, size_t hash)
 {
     struct shash_node *node;
 
-    HMAP_FOR_EACH_WITH_HASH (node, struct shash_node, node,
-                             hash_name(name), &sh->map) {
+    HMAP_FOR_EACH_WITH_HASH (node, struct shash_node, node, hash, &sh->map) {
         if (!strcmp(node->name, name)) {
             return node;
         }
     }
     return NULL;
+}
+
+/* If there are duplicates, returns a random element. */
+struct shash_node *
+shash_find(const struct shash *sh, const char *name)
+{
+    return shash_find__(sh, name, hash_name(name));
 }
 
 void *

@@ -20,11 +20,11 @@ retrieved.  It should take the form \fBunix:\fIfile\fR, to connect to
 the Unix domain server socket named \fIfile\fR.
 .PP
 .SH OPTIONS
-.IP "\fB--appctl-command=\fIcommand\fR"
+.IP "\fB\-\-appctl\-command=\fIcommand\fR"
 Sets the command that \fBovs\-brcompatd\fR runs to communicate with
 \fBovs\-vswitchd\fR.  The command is run in \fB/bin/sh\fR as a shell
 command, so \fIcommand\fR may contain arbitrary shell metacharacters,
-etc.  The \fB--help\fR option displays the default command.
+etc.  The \fB\-\-help\fR option displays the default command.
 .IP
 \fIcommand\fR must contain exactly one instance of \fB%s\fR, which
 \fBovs\-brcompatd\fR replaces by a command from the set understood by
@@ -40,7 +40,7 @@ can be listed by passing \fBhelp\fR to \fBovs\-appctl\fR with
 standard error streams, because \fBovs\-brcompatd\fR expects to read
 both of these streams separately.
 .TP
-\fB--prune-timeout=\fIsecs\fR
+\fB\-\-prune\-timeout=\fIsecs\fR
 .
 Sets the maximum time between pruning port entries to \fIsecs\fR seconds.
 Pruning ports is the process of removing port entries from \fIdatabase\fR 

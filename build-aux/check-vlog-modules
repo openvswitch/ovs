@@ -1,0 +1,66 @@
+#! /bin/sh
+
+if test "$1" = --help; then
+    cat <<EOF
+$0: cross-check declared and defined vlog modules
+usage: $0 [--help]
+
+Must be run from the top-level source directory.
+
+On systems that don't support user-defined section names, the 'vlog'
+logging subsystem requires the list of modules in lib/vlog-modules.def
+to match the set of vlog modules actually used by the source files.
+However, most Open vSwitch development happens on systems that do
+support user-defined section names and don't have this requirement.
+This utility runs automatically at build time to check this
+requirement "by hand", so that Open vSwitch developers don't
+accidentally break the build for others.
+EOF
+    exit 0
+elif test "$#" != 0; then
+    echo "no arguments accepted (use --help for help)"
+    exit 1
+elif test ! -e lib/vlog-modules.def; then
+    echo "must run from the top-level source directory (use --help for help)"
+    exit 1
+fi
+
+# We can only get a list of source files if this is a Git checkout.
+if test -e .git && (git --version) >/dev/null 2>&1; then
+    :
+else
+    exit 0
+fi
+
+# Get the list of modules declared in lib/vlog-modules.def.
+vlog_modules=`
+    sed -n 's/^VLOG_MODULE(\([_a-zA-Z0-9]\{1,\}\)).*$/\1/p' \
+    lib/vlog-modules.def \
+    | LC_ALL=C sort -u | xargs echo`
+
+# Get the list of modules defined in some source file.
+src_modules=`
+    git grep -h -E '^[ 	]*VLOG_DEFINE(_THIS)?_MODULE\([_a-zA-Z0-9]+\)[ 	]*$' \
+    | sed 's/.*(\([_a-zA-Z0-9]\{1,\}\)).*/\1/' \
+    | LC_ALL=C sort -u \
+    | xargs echo`
+
+rc=0
+
+for module in $vlog_modules; do
+    case " $src_modules " in
+        *" $module "*) ;;
+        *) echo "vlog module $module is declared in lib/vlog-modules.def but not defined by any source file";
+            rc=1 ;;
+    esac
+done
+
+for module in $src_modules; do
+    case " $vlog_modules " in
+        *" $module "*) ;;
+        *) echo "vlog module $module is defined in a source file but not declared in lib/vlog-modules.def";
+            rc=1 ;;
+    esac
+done
+
+exit $rc

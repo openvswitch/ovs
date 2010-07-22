@@ -49,11 +49,11 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xfif.h"
 #include "xtoxll.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_ofctl
+VLOG_DEFINE_THIS_MODULE(ofctl)
 
 #define DEFAULT_IDLE_TIMEOUT 60
 
@@ -74,8 +74,6 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     run_command(argc - optind, argv + optind, all_commands);
@@ -769,6 +767,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
             uint16_t *idle_timeout, uint16_t *hard_timeout, 
             uint64_t *cookie)
 {
+    struct ofp_match normalized;
     char *save_ptr = NULL;
     char *name;
     uint32_t wildcards;
@@ -870,6 +869,18 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
         }
     }
     match->wildcards = htonl(wildcards);
+
+    normalized = *match;
+    normalize_match(&normalized);
+    if (memcmp(match, &normalized, sizeof normalized)) {
+        char *old = ofp_match_to_literal_string(match);
+        char *new = ofp_match_to_literal_string(&normalized);
+        VLOG_WARN("The specified flow is not in normal form:");
+        VLOG_WARN(" as specified: %s", old);
+        VLOG_WARN("as normalized: %s", new);
+        free(old);
+        free(new);
+    }
 }
 
 static void

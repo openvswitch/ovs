@@ -117,19 +117,14 @@ ofpbuf_tailroom(const struct ofpbuf *b)
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
 
-/* Ensures that 'b' has room for at least 'size' bytes at its tail end,
- * reallocating and copying its data if necessary. */
-void
-ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size) 
+/* Changes 'b->base' to 'new_base' and adjusts all of 'b''s internal pointers
+ * to reflect the change. */
+static void
+ofpbuf_rebase__(struct ofpbuf *b, void *new_base)
 {
-    if (size > ofpbuf_tailroom(b)) {
-        size_t new_allocated = b->allocated + MAX(size, 64);
-        void *new_base = xmalloc(new_allocated);
+    if (b->base != new_base) {
         uintptr_t base_delta = (char*)new_base - (char*)b->base;
-        memcpy(new_base, b->base, b->allocated);
-        free(b->base);
         b->base = new_base;
-        b->allocated = new_allocated;
         b->data = (char*)b->data + base_delta;
         if (b->l2) {
             b->l2 = (char*)b->l2 + base_delta;
@@ -146,21 +141,38 @@ ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size)
     }
 }
 
+/* Reallocates 'b' so that it has exactly 'new_tailroom' bytes of tailroom. */
+static void
+ofpbuf_resize_tailroom__(struct ofpbuf *b, size_t new_tailroom)
+{
+    b->allocated = ofpbuf_headroom(b) + b->size + new_tailroom;
+    ofpbuf_rebase__(b, xrealloc(b->base, b->allocated));
+}
+
+/* Ensures that 'b' has room for at least 'size' bytes at its tail end,
+ * reallocating and copying its data if necessary.  Its headroom, if any, is
+ * preserved. */
+void
+ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size) 
+{
+    if (size > ofpbuf_tailroom(b)) {
+        ofpbuf_resize_tailroom__(b, MAX(size, 64));
+    }
+}
+
 void
 ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size) 
 {
     assert(size <= ofpbuf_headroom(b));
 }
 
-/* Trims the size of 'b' to fit its actual content. */
+/* Trims the size of 'b' to fit its actual content, reducing its tailroom to
+ * 0.  Its headroom, if any, is preserved. */
 void
 ofpbuf_trim(struct ofpbuf *b)
 {
-    /* XXX These could be supported, but the current client doesn't care. */
-    assert(b->l2 == NULL && b->l3 == NULL && b->l4 == NULL && b->l7 == NULL);
-    if (b->allocated > b->size) {
-        b->base = b->data = xrealloc(b->data, b->size);
-        b->allocated = b->size;
+    if (ofpbuf_tailroom(b) > 0) {
+        ofpbuf_resize_tailroom__(b, 0);
     }
 }
 

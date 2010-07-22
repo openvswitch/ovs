@@ -18,12 +18,12 @@ struct xflow_key;
 union xflow_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct xflow_key *key,
+		    const struct xflow_key *key,
 		    const union xflow_action *, int n_actions,
 		    gfp_t gfp);
 
-static inline void
-set_skb_csum_bits(const struct sk_buff *old_skb, struct sk_buff *new_skb)
+static inline void set_skb_csum_bits(const struct sk_buff *old_skb,
+				     struct sk_buff *new_skb)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 	/* Before 2.6.24 these fields were not copied when

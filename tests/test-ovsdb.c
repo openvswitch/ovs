@@ -59,8 +59,6 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     run_command(argc - optind, argv + optind, all_commands);
     return 0;
@@ -121,6 +119,10 @@ usage(void)
            "usage: %s [OPTIONS] COMMAND [ARG...]\n\n"
            "  log-io FILE FLAGS COMMAND...\n"
            "    open FILE with FLAGS, run COMMANDs\n"
+           "  default-atoms\n"
+           "    test ovsdb_atom_default()\n"
+           "  default-data\n"
+           "    test ovsdb_datum_default()\n"
            "  parse-atomic-type TYPE\n"
            "    parse TYPE as OVSDB atomic type, and re-serialize\n"
            "  parse-base-type TYPE\n"
@@ -135,6 +137,9 @@ usage(void)
            "    print JSON ATOMs in sorted order\n"
            "  parse-data TYPE DATUM...\n"
            "    parse JSON DATUMs as data of given TYPE, and re-serialize\n"
+           "  parse-data-unique TYPE DATUM...\n"
+           "    parse JSON DATUMs as data of given TYPE, eliminating\n"
+           "    duplicate keys, and re-serialize\n"
            "  parse-data-strings TYPE DATUM...\n"
            "    parse string DATUMs as data of given TYPE, and re-serialize\n"
            "  parse-column NAME OBJECT\n"
@@ -315,6 +320,71 @@ do_log_io(int argc, char *argv[])
 }
 
 static void
+do_default_atoms(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    int type;
+
+    for (type = 0; type < OVSDB_N_TYPES; type++) {
+        union ovsdb_atom atom;
+
+        if (type == OVSDB_TYPE_VOID) {
+            continue;
+        }
+
+        printf("%s: ", ovsdb_atomic_type_to_string(type));
+
+        ovsdb_atom_init_default(&atom, type);
+        if (!ovsdb_atom_equals(&atom, ovsdb_atom_default(type), type)) {
+            printf("wrong\n");
+            exit(1);
+        }
+        ovsdb_atom_destroy(&atom, type);
+
+        printf("OK\n");
+    }
+}
+
+static void
+do_default_data(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    unsigned int n_min;
+    int key, value;
+
+    for (n_min = 0; n_min <= 1; n_min++) {
+        for (key = 0; key < OVSDB_N_TYPES; key++) {
+            if (key == OVSDB_TYPE_VOID) {
+                continue;
+            }
+            for (value = 0; value < OVSDB_N_TYPES; value++) {
+                struct ovsdb_datum datum;
+                struct ovsdb_type type;
+
+                ovsdb_base_type_init(&type.key, key);
+                ovsdb_base_type_init(&type.value, value);
+                type.n_min = n_min;
+                type.n_max = 1;
+                assert(ovsdb_type_is_valid(&type));
+
+                printf("key %s, value %s, n_min %u: ",
+                       ovsdb_atomic_type_to_string(key),
+                       ovsdb_atomic_type_to_string(value), n_min);
+
+                ovsdb_datum_init_default(&datum, &type);
+                if (!ovsdb_datum_equals(&datum, ovsdb_datum_default(&type),
+                                        &type)) {
+                    printf("wrong\n");
+                    exit(1);
+                }
+                ovsdb_datum_destroy(&datum, &type);
+                ovsdb_type_destroy(&type);
+
+                printf("OK\n");
+            }
+        }
+    }
+}
+
+static void
 do_parse_atomic_type(int argc OVS_UNUSED, char *argv[])
 {
     enum ovsdb_atomic_type type;
@@ -409,7 +479,12 @@ do_parse_atom_strings(int argc, char *argv[])
 }
 
 static void
-do_parse_data(int argc, char *argv[])
+do_parse_data__(int argc, char *argv[],
+                struct ovsdb_error *
+                (*parse)(struct ovsdb_datum *datum,
+                         const struct ovsdb_type *type,
+                         const struct json *json,
+                         struct ovsdb_symbol_table *symtab))
 {
     struct ovsdb_type type;
     struct json *json;
@@ -423,7 +498,7 @@ do_parse_data(int argc, char *argv[])
         struct ovsdb_datum datum;
 
         json = unbox_json(parse_json(argv[i]));
-        check_ovsdb_error(ovsdb_datum_from_json(&datum, &type, json, NULL));
+        check_ovsdb_error(parse(&datum, &type, json, NULL));
         json_destroy(json);
 
         print_and_free_json(ovsdb_datum_to_json(&datum, &type));
@@ -431,6 +506,18 @@ do_parse_data(int argc, char *argv[])
         ovsdb_datum_destroy(&datum, &type);
     }
     ovsdb_type_destroy(&type);
+}
+
+static void
+do_parse_data(int argc, char *argv[])
+{
+    do_parse_data__(argc, argv, ovsdb_datum_from_json);
+}
+
+static void
+do_parse_data_unique(int argc, char *argv[])
+{
+    do_parse_data__(argc, argv, ovsdb_datum_from_json_unique);
 }
 
 static void
@@ -1813,12 +1900,15 @@ do_idl(int argc, char *argv[])
 
 static struct command all_commands[] = {
     { "log-io", 2, INT_MAX, do_log_io },
+    { "default-atoms", 0, 0, do_default_atoms },
+    { "default-data", 0, 0, do_default_data },
     { "parse-atomic-type", 1, 1, do_parse_atomic_type },
     { "parse-base-type", 1, 1, do_parse_base_type },
     { "parse-type", 1, 1, do_parse_type },
     { "parse-atoms", 2, INT_MAX, do_parse_atoms },
     { "parse-atom-strings", 2, INT_MAX, do_parse_atom_strings },
     { "parse-data", 2, INT_MAX, do_parse_data },
+    { "parse-data-unique", 2, INT_MAX, do_parse_data_unique },
     { "parse-data-strings", 2, INT_MAX, do_parse_data_strings },
     { "sort-atoms", 2, 2, do_sort_atoms },
     { "parse-column", 2, 2, do_parse_column },

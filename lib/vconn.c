@@ -36,9 +36,9 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_vconn
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(vconn)
 
 /* State of an active vconn.*/
 enum vconn_state {

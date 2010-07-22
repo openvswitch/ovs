@@ -21,9 +21,9 @@
 #include <stdlib.h>
 
 #include "poll-loop.h"
-
-#define THIS_MODULE VLM_reconnect
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(reconnect)
 
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \

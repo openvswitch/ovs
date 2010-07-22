@@ -22,10 +22,10 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_ofp_util
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(ofp_util)
 
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */
@@ -186,14 +186,19 @@ make_add_simple_flow(const flow_t *flow,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {
-    struct ofp_action_output *oao;
-    struct ofpbuf *buffer = make_add_flow(flow, buffer_id, idle_timeout,
-                                          sizeof *oao);
-    oao = ofpbuf_put_zeros(buffer, sizeof *oao);
-    oao->type = htons(OFPAT_OUTPUT);
-    oao->len = htons(sizeof *oao);
-    oao->port = htons(out_port);
-    return buffer;
+    if (out_port != OFPP_NONE) {
+        struct ofp_action_output *oao;
+        struct ofpbuf *buffer;
+
+        buffer = make_add_flow(flow, buffer_id, idle_timeout, sizeof *oao);
+        oao = ofpbuf_put_zeros(buffer, sizeof *oao);
+        oao->type = htons(OFPAT_OUTPUT);
+        oao->len = htons(sizeof *oao);
+        oao->port = htons(out_port);
+        return buffer;
+    } else {
+        return make_add_flow(flow, buffer_id, idle_timeout, 0);
+    }
 }
 
 struct ofpbuf *
@@ -259,12 +264,16 @@ struct ofpbuf *
 make_buffered_packet_out(uint32_t buffer_id,
                          uint16_t in_port, uint16_t out_port)
 {
-    struct ofp_action_output action;
-    action.type = htons(OFPAT_OUTPUT);
-    action.len = htons(sizeof action);
-    action.port = htons(out_port);
-    return make_packet_out(NULL, buffer_id, in_port,
-                           (struct ofp_action_header *) &action, 1);
+    if (out_port != OFPP_NONE) {
+        struct ofp_action_output action;
+        action.type = htons(OFPAT_OUTPUT);
+        action.len = htons(sizeof action);
+        action.port = htons(out_port);
+        return make_packet_out(NULL, buffer_id, in_port,
+                               (struct ofp_action_header *) &action, 1);
+    } else {
+        return make_packet_out(NULL, buffer_id, in_port, NULL, 0);
+    }
 }
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
@@ -773,4 +782,42 @@ ntoh_ofp_phy_port(struct ofp_phy_port *opp)
 {
     /* ntohX and htonX are really the same functions. */
     hton_ofp_phy_port(opp);
+}
+
+/* Returns a string that describes 'match' in a very literal way, without
+ * interpreting its contents except in a very basic fashion.  The returned
+ * string is intended to be fixed-length, so that it is easy to see differences
+ * between two such strings if one is put above another.  This is useful for
+ * describing changes made by normalize_match().
+ *
+ * The caller must free the returned string (with free()). */
+char *
+ofp_match_to_literal_string(const struct ofp_match *match)
+{
+    return xasprintf("wildcards=%#10"PRIx32" "
+                     " in_port=%5"PRId16" "
+                     " dl_src="ETH_ADDR_FMT" "
+                     " dl_dst="ETH_ADDR_FMT" "
+                     " dl_vlan=%5"PRId16" "
+                     " dl_vlan_pcp=%3"PRId8" "
+                     " dl_type=%#6"PRIx16" "
+                     " nw_tos=%#4"PRIx8" "
+                     " nw_proto=%#4"PRIx16" "
+                     " nw_src=%#10"PRIx32" "
+                     " nw_dst=%#10"PRIx32" "
+                     " tp_src=%5"PRId16" "
+                     " tp_dst=%5"PRId16,
+                     ntohl(match->wildcards),
+                     ntohs(match->in_port),
+                     ETH_ADDR_ARGS(match->dl_src),
+                     ETH_ADDR_ARGS(match->dl_dst),
+                     ntohs(match->dl_vlan),
+                     match->dl_vlan_pcp,
+                     ntohs(match->dl_type),
+                     match->nw_tos,
+                     match->nw_proto,
+                     ntohl(match->nw_src),
+                     ntohl(match->nw_dst),
+                     ntohs(match->tp_src),
+                     ntohs(match->tp_dst));
 }

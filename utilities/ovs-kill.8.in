@@ -25,13 +25,13 @@ interface to \fBfcntl\fR-based file locking.
 
 .SH OPTIONS
 .TP
-\fB-s \fInumber\fR|\fIname\fR, \fB\-\^\-signal=\fInumber\fR|\fIname\fR
+\fB\-s \fInumber\fR|\fIname\fR, \fB\-\^\-signal=\fInumber\fR|\fIname\fR
 Sets the signal to be sent to each process.  Signals may be given by
 number (e.g. \fB1\fR) or by name (e.g. \fBHUP\fR or \fBSIGHUP\fR).
 By default, \fBSIGTERM\fR is sent.
 
 .TP
-\fB-f\fR, \fB\-\^\-force\fR
+\fB\-f\fR, \fB\-\^\-force\fR
 Causes \fBovs\-kill\fR to ignore all errors without printing a message
 to \fBstderr\fR, and to exit with return code 0.
 
@@ -39,12 +39,12 @@ to \fBstderr\fR, and to exit with return code 0.
 
 .SH "EXIT CODE"
 
-Without \fB-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR exits with
+Without \fB\-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR exits with
 status 0 if at least one \fIpidfile\fR was given and the process
 represented by every \fIpidfile\fR was signaled successfully,
 otherwise with status 1.
 
-With \fB-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR always exits with
+With \fB\-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR always exits with
 status 0.
 
 .SH BUGS

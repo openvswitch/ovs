@@ -30,9 +30,9 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
-
-#define THIS_MODULE VLM_rconn
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(rconn)
 
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \

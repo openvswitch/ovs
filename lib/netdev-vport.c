@@ -24,9 +24,9 @@
 #include "openvswitch/xflow.h"
 #include "shash.h"
 #include "socket-util.h"
-
-#define THIS_MODULE VLM_netdev_vport
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_vport)
 
 struct netdev_vport_notifier {
     struct netdev_notifier notifier;

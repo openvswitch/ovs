@@ -84,6 +84,6 @@ enum stream_content_type {
 };
 
 void stream_report_content(const void *, size_t, enum stream_content_type,
-                           enum vlog_module, const char *stream_name);
+                           struct vlog_module *, const char *stream_name);
 
 #endif /* stream.h */

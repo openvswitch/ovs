@@ -27,9 +27,9 @@
 #include "openvswitch/xflow.h"
 #include "packets.h"
 #include "socket-util.h"
-
-#define THIS_MODULE VLM_netdev_gre
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_gre)
 
 struct netdev_dev_gre {
     struct netdev_dev netdev_dev;
@@ -151,8 +151,8 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
         return err;
     }
 
-    err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
-    if (err == EEXIST) {
+    err = netdev_vpor_do_ioctl(XFLOW_VPORT_ADD, &ova);
+    if (err == EBUSY) {
         VLOG_WARN("%s: destroying existing device", name);
 
         err = netdev_vport_do_ioctl(XFLOW_VPORT_DEL, ova.devname);

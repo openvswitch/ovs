@@ -1,47 +1,50 @@
 .TP
-\fB--pidfile\fR[\fB=\fIpidfile\fR]
+\fB\-\-pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fB\*(PN.pid\fR) to be created indicating
-the PID of the running process.  If \fIpidfile\fR is not specified, or
+the PID of the running process.  If the \fIpidfile\fR argument is not
+specified, or
 if it does not begin with \fB/\fR, then it is created in
 \fB@RUNDIR@\fR.
+.IP
+If \fB\-\-pidfile\fR is not specified, no pidfile is created.
 .
 .TP
-\fB--overwrite-pidfile\fR
-By default, when \fB--pidfile\fR is specified and the specified pidfile 
+\fB\-\-overwrite\-pidfile\fR
+By default, when \fB\-\-pidfile\fR is specified and the specified pidfile 
 already exists and is locked by a running process, \fB\*(PN\fR refuses 
-to start.  Specify \fB--overwrite-pidfile\fR to cause it to instead 
+to start.  Specify \fB\-\-overwrite\-pidfile\fR to cause it to instead 
 overwrite the pidfile.
 .IP
-When \fB--pidfile\fR is not specified, this option has no effect.
+When \fB\-\-pidfile\fR is not specified, this option has no effect.
 .
 .TP
-\fB--detach\fR
+\fB\-\-detach\fR
 Causes \fB\*(PN\fR to detach itself from the foreground session and
 run as a background process.
 .
 .TP
-\fB--monitor\fR
+\fB\-\-monitor\fR
 Creates an additional process to monitor the \fB\*(PN\fR daemon.  If
 the daemon dies due to a signal that indicates a programming error
 (e.g. \fBSIGSEGV\fR, \fBSIGABRT\fR), then the monitor process starts a
 new copy of it.  If the daemon die or exits for another reason, the
 monitor process exits.
 .IP
-This option is normally used with \fB--detach\fR, but it also
+This option is normally used with \fB\-\-detach\fR, but it also
 functions without it.
 .
 .TP
-\fB--no-chdir\fR
-By default, when \fB--detach\fR is specified, \fB\*(PN\fR 
+\fB\-\-no\-chdir\fR
+By default, when \fB\-\-detach\fR is specified, \fB\*(PN\fR 
 changes its current working directory to the root directory after it 
 detaches.  Otherwise, invoking \fB\*(PN\fR from a carelessly chosen 
 directory would prevent the administrator from unmounting the file 
 system that holds that directory.
 .IP
-Specifying \fB--no-chdir\fR suppresses this behavior, preventing
+Specifying \fB\-\-no\-chdir\fR suppresses this behavior, preventing
 \fB\*(PN\fR from changing its current working directory.  This may be 
 useful for collecting core files, since it is common behavior to write 
 core dumps into the current working directory and the root directory 
 is not a good directory to use.
 .IP
-This option has no effect when \fB--detach\fR is not specified.
+This option has no effect when \fB\-\-detach\fR is not specified.

@@ -44,10 +44,10 @@
 #include "queue.h"
 #include "timeval.h"
 #include "util.h"
+#include "vlog.h"
 #include "xfif-provider.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_xfif_netdev
+VLOG_DEFINE_THIS_MODULE(xfif_netdev)
 
 /* Configuration parameters. */
 enum { N_QUEUES = 2 };          /* Number of queues for xfif_recv(). */
@@ -1137,25 +1137,23 @@ xf_netdev_strip_vlan(struct ofpbuf *packet, struct xflow_key *key)
 }
 
 static void
-xf_netdev_set_dl_src(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_dl_src(struct ofpbuf *packet,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_src, dl_addr, sizeof eh->eth_src);
-    memcpy(key->dl_src, dl_addr, sizeof key->dl_src);
 }
 
 static void
-xf_netdev_set_dl_dst(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_dl_dst(struct ofpbuf *packet,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
-    memcpy(key->dl_dst, dl_addr, sizeof key->dl_dst);
 }
 
 static void
-xf_netdev_set_nw_addr(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_nw_addr(struct ofpbuf *packet, const struct xflow_key *key,
                       const struct xflow_action_nw_addr *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1177,17 +1175,11 @@ xf_netdev_set_nw_addr(struct ofpbuf *packet, struct xflow_key *key,
         }
         nh->ip_csum = recalc_csum32(nh->ip_csum, *field, a->nw_addr);
         *field = a->nw_addr;
-
-        if (a->type == XFLOWAT_SET_NW_SRC) {
-            key->nw_src = a->type;
-        } else {
-            key->nw_dst = a->type;
-        }
     }
 }
 
 static void
-xf_netdev_set_nw_tos(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_nw_tos(struct ofpbuf *packet, const struct xflow_key *key,
                      const struct xflow_action_nw_tos *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1200,12 +1192,11 @@ xf_netdev_set_nw_tos(struct ofpbuf *packet, struct xflow_key *key,
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t)a->nw_tos));
         *field = new;
-        key->nw_tos = a->nw_tos;
     }
 }
 
 static void
-xf_netdev_set_tp_port(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_tp_port(struct ofpbuf *packet, const struct xflow_key *key,
                       const struct xflow_action_tp_port *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1222,12 +1213,6 @@ xf_netdev_set_tp_port(struct ofpbuf *packet, struct xflow_key *key,
             *field = a->tp_port;
         } else {
             return;
-        }
-
-        if (a->type == XFLOWAT_SET_TP_SRC) {
-            key->tp_src = a->tp_port;
-        } else {
-            key->tp_dst = a->tp_port;
         }
     }
 }
@@ -1318,11 +1303,11 @@ xf_netdev_execute_actions(struct xf_netdev *xf,
             break;
 
         case XFLOWAT_SET_DL_SRC:
-            xf_netdev_set_dl_src(packet, key, a->dl_addr.dl_addr);
+            xf_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
             break;
 
         case XFLOWAT_SET_DL_DST:
-            xf_netdev_set_dl_dst(packet, key, a->dl_addr.dl_addr);
+            xf_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
             break;
 
         case XFLOWAT_SET_NW_SRC:

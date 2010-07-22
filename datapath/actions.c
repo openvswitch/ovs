@@ -24,8 +24,7 @@
 #include "openvswitch/xflow.h"
 #include "vport.h"
 
-static struct sk_buff *
-make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
+static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 {
 	if (skb_shared(skb) || skb_cloned(skb)) {
 		struct sk_buff *nskb;
@@ -47,14 +46,7 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 	return NULL;
 }
 
-static void set_tunnel(struct sk_buff *skb, struct xflow_key *key,
-		       __be32 tun_id)
-{
-	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
-}
-
-static struct sk_buff *
-vlan_pull_tag(struct sk_buff *skb)
+static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 {
 	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 	struct ethhdr *eh;
@@ -77,16 +69,12 @@ vlan_pull_tag(struct sk_buff *skb)
 	return skb;
 }
 
-
-static struct sk_buff *
-modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-		struct xflow_key *key, const union xflow_action *a,
-		int n_actions, gfp_t gfp)
+static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
+				       struct xflow_key *key, const union xflow_action *a,
+				       int n_actions, gfp_t gfp)
 {
 	__be16 mask = a->dl_tci.mask;
 	__be16 tci = a->dl_tci.tci;
-
-	key->dl_tci = (key->dl_tci & ~(mask | VLAN_TAG_PRESENT)) | tci;
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
 	if (!skb)
@@ -156,9 +144,8 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				segs = __vlan_put_tag(segs, ntohs(tci));
 				err = -ENOMEM;
 				if (segs) {
-					struct xflow_key segkey = *key;
 					err = execute_actions(dp, segs,
-							      &segkey, a + 1,
+							      key, a + 1,
 							      n_actions - 1,
 							      gfp);
 				}
@@ -198,32 +185,26 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *strip_vlan(struct sk_buff *skb,
-				  struct xflow_key *key, gfp_t gfp)
+static struct sk_buff *strip_vlan(struct sk_buff *skb, gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
-	if (skb) {
+	if (skb)
 		vlan_pull_tag(skb);
-		key->dl_tci = htons(0);
-	}
+
 	return skb;
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
-				   struct xflow_key *key,
 				   const struct xflow_action_dl_addr *a,
 				   gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
-		if (a->type == XFLOWAT_SET_DL_SRC) {
+		if (a->type == XFLOWAT_SET_DL_SRC)
 			memcpy(eh->h_source, a->dl_addr, ETH_ALEN);
-			memcpy(key->dl_src, a->dl_addr, ETH_ALEN);
-		} else {
+		else
 			memcpy(eh->h_dest, a->dl_addr, ETH_ALEN);
-			memcpy(key->dl_dst, a->dl_addr, ETH_ALEN);
-		}
 	}
 	return skb;
 }
@@ -249,7 +230,7 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 }
 
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
-				   struct xflow_key *key,
+				   const struct xflow_key *key,
 				   const struct xflow_action_nw_addr *a,
 				   gfp_t gfp)
 {
@@ -272,17 +253,12 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		}
 		update_csum(&nh->check, skb, old, new, 0);
 		*f = new;
-
-		if (a->type == XFLOWAT_SET_NW_SRC)
-			key->nw_src = a->nw_addr;
-		else
-			key->nw_dst = a->nw_addr;
 	}
 	return skb;
 }
 
 static struct sk_buff *set_nw_tos(struct sk_buff *skb,
-				   struct xflow_key *key,
+				   const struct xflow_key *key,
 				   const struct xflow_action_nw_tos *a,
 				   gfp_t gfp)
 {
@@ -301,15 +277,14 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 		update_csum(&nh->check, skb, htons((uint16_t)old),
 				htons((uint16_t)new), 0);
 		*f = new;
-		key->nw_tos = a->nw_tos;
 	}
 	return skb;
 }
 
-static struct sk_buff *
-set_tp_port(struct sk_buff *skb, struct xflow_key *key,
-	    const struct xflow_action_tp_port *a,
-	    gfp_t gfp)
+static struct sk_buff *set_tp_port(struct sk_buff *skb,
+				   const struct xflow_key *key,
+				   const struct xflow_action_tp_port *a,
+				   gfp_t gfp)
 {
 	int check_ofs;
 
@@ -332,27 +307,13 @@ set_tp_port(struct sk_buff *skb, struct xflow_key *key,
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
 				skb, old, new, 0);
 		*f = new;
-		if (a->type == XFLOWAT_SET_TP_SRC)
-			key->tp_src = a->tp_port;
-		else
-			key->tp_dst = a->tp_port;
 	}
 	return skb;
 }
 
-static inline unsigned packet_length(const struct sk_buff *skb)
-{
-	unsigned length = skb->len - ETH_HLEN;
-	if (skb->protocol == htons(ETH_P_8021Q))
-		length -= VLAN_HLEN;
-	return length;
-}
-
-static void
-do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
+static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
 	struct dp_port *p;
-	int mtu;
 
 	if (!skb)
 		goto error;
@@ -360,13 +321,6 @@ do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	p = rcu_dereference(dp->ports[out_port]);
 	if (!p)
 		goto error;
-
-	mtu = vport_get_mtu(p->vport);
-	if (packet_length(skb) > mtu && !skb_is_gso(skb)) {
-		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-		       dp_name(dp), packet_length(skb), mtu);
-		goto error;
-	}
 
 	vport_send(p->vport, skb);
 	return;
@@ -401,8 +355,8 @@ static int output_group(struct datapath *dp, __u16 group,
 	return prev_port;
 }
 
-static int
-output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg,
+			  gfp_t gfp)
 {
 	skb = skb_clone(skb, gfp);
 	if (!skb)
@@ -434,7 +388,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct xflow_key *key,
+		    const struct xflow_key *key,
 		    const union xflow_action *a, int n_actions,
 		    gfp_t gfp)
 {
@@ -484,7 +438,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case XFLOWAT_SET_TUNNEL:
-			set_tunnel(skb, key, a->tunnel.tun_id);
+			OVS_CB(skb)->tun_id = a->tunnel.tun_id;
 			break;
 
 		case XFLOWAT_SET_DL_TCI:
@@ -494,12 +448,12 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case XFLOWAT_STRIP_VLAN:
-			skb = strip_vlan(skb, key, gfp);
+			skb = strip_vlan(skb, gfp);
 			break;
 
 		case XFLOWAT_SET_DL_SRC:
 		case XFLOWAT_SET_DL_DST:
-			skb = set_dl_addr(skb, key, &a->dl_addr, gfp);
+			skb = set_dl_addr(skb, &a->dl_addr, gfp);
 			break;
 
 		case XFLOWAT_SET_NW_SRC:

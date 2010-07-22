@@ -108,6 +108,12 @@ format_xflow_action(struct ds *ds, const union xflow_action *a)
     case XFLOWAT_SET_TP_DST:
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
+    case XFLOWAT_SET_PRIORITY:
+        ds_put_format(ds, "set_priority(0x%"PRIx32")", a->priority.priority);
+        break;
+    case XFLOWAT_POP_PRIORITY:
+        ds_put_cstr(ds, "pop_priority");
+        break;
     default:
         ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
         break;

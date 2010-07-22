@@ -27,9 +27,9 @@
 #include "coverage.h"
 #include "netlink.h"
 #include "ofpbuf.h"
-
-#define THIS_MODULE VLM_rtnetlink
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(rtnetlink)
 
 /* rtnetlink socket. */
 static struct nl_sock *notify_sock;

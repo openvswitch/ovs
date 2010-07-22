@@ -18,7 +18,7 @@ ovsdb\-tool \- Open vSwitch database management utility
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] [\fB-m\fR | \fB--more\fR]... \fBshow\-log\fI db\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log\fI db\fR
 .br
 \fBovsdb\-tool help\fR
 .so lib/vlog-syn.man
@@ -71,7 +71,7 @@ described in the OVSDB specification.
 .IP
 The \fIdb\fR is opened for read-only access, so this command may
 safely run concurrently with other database activity, including
-\fBovsdb-server\fR and other database writers.  The \fItransaction\fR
+\fBovsdb\-server\fR and other database writers.  The \fItransaction\fR
 may specify database modifications, but these will have no effect on
 \fIdb\fR.
 .
@@ -83,19 +83,19 @@ JSON array in the format of the \fBparams\fR array for the JSON-RPC
 .IP
 The \fIdb\fR is opened and locked for read/write access, so this
 command will fail if the database is opened for writing by any other
-process, including \fBovsdb-server\fR(1).  Use \fBovsdb\-client\fR(1),
+process, including \fBovsdb\-server\fR(1).  Use \fBovsdb\-client\fR(1),
 instead, to write to a database that is served by
-\fBovsdb-server\fR(1).
+\fBovsdb\-server\fR(1).
 .
-.IP "\fBshow-log\fI db\fR"
+.IP "\fBshow\-log\fI db\fR"
 Prints a summary of the records in \fBdb\fR's log, including the time
 and date at which each database change occurred and any associated
 comment.  This may be useful for debugging.
 .PP
-To increase the verbosity of output, add \fB-m\fR (or \fB--more\fR)
-one or more times to the command line.  With one \fB-m\fR,
+To increase the verbosity of output, add \fB\-m\fR (or \fB\-\-more\fR)
+one or more times to the command line.  With one \fB\-m\fR,
 \fBshow\-log\fR prints a summary of the records added, deleted, or
-modified by each transaction.  With two \fB-m\fRs, \fBshow\-log\fR
+modified by each transaction.  With two \fB\-m\fRs, \fBshow\-log\fR
 also prints the values of the columns modified by each change to a
 record.
 .

@@ -20,8 +20,14 @@ dnl Configure linux kernel source tree
 AC_DEFUN([OVS_CHECK_LINUX26], [
   AC_ARG_WITH([l26],
               [AC_HELP_STRING([--with-l26=/path/to/linux-2.6],
-                              [Specify the linux 2.6 kernel sources])],
+                              [Specify the linux 2.6 kernel build directory])],
               [KBUILD26="$withval"], [KBUILD26=])dnl
+  AC_ARG_WITH([l26-source],
+              [AC_HELP_STRING([--with-l26-source=/path/to/linux-2.6-source],
+                              [Specify the linux 2.6 kernel source directory
+			       (usually figured out automatically from build
+			       directory)])],
+              [KSRC26="$withval"], [KSRC26=])dnl
   if test -n "$KBUILD26"; then
     KBUILD26=`eval echo "$KBUILD26"`
     case $KBUILD26 in
@@ -44,18 +50,29 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
     # We want the source headers, but $KBUILD26 gives us the "build" headers.
     # Use heuristics to find the source headers.
     AC_MSG_CHECKING([for Linux 2.6 source directory])
-    KSRC26=$KBUILD26
-    if test ! -e $KSRC26/include/linux/kernel.h; then
-      case `echo "$KBUILD26" | sed 's,/*$,,'` in # (
-        */build)
-          KSRC26=`echo "$KBUILD26" | sed 's,/build/*$,/source,'`
-          ;; # (
-        *)
-          KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
-          ;;
+    if test -n "$KSRC26"; then
+      KSRC26=`eval echo "$KSRC26"`
+      case $KSRC26 in
+          /*) ;;
+          *) KSRC26=`pwd`/$KSRC26 ;;
       esac
       if test ! -e $KSRC26/include/linux/kernel.h; then
-        AC_MSG_ERROR([cannot find source directory])
+        AC_MSG_ERROR([$KSRC26 is not a kernel source directory)])
+      fi
+    else
+      KSRC26=$KBUILD26
+      if test ! -e $KSRC26/include/linux/kernel.h; then
+	case `echo "$KBUILD26" | sed 's,/*$,,'` in # (
+	  */build)
+	    KSRC26=`echo "$KBUILD26" | sed 's,/build/*$,/source,'`
+	    ;; # (
+	  *)
+	    KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+	    ;;
+	esac
+      fi
+      if test ! -e $KSRC26/include/linux/kernel.h; then
+        AC_MSG_ERROR([cannot find source directory (please use --with-l26-source)])
       fi
     fi
     AC_MSG_RESULT([$KSRC26])
@@ -80,6 +97,8 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
 	AC_MSG_ERROR([Linux kernel source in $KBUILD26 is not configured])
     fi
     OVS_CHECK_LINUX26_COMPAT
+  elif test -n "$KSRC26"; then
+    AC_MSG_ERROR([--with-l26-source may not be specified without --with-l26])
   fi
   AM_CONDITIONAL(L26_ENABLED, test -n "$KBUILD26")
 ])

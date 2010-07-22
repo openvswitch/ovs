@@ -5,6 +5,19 @@
 Basic Notation
 --------------
 
+OVSDB uses JSON, as defined by RFC 4627, for its schema format and its
+wire protocol format.  The JSON implementation in Open vSwitch has the
+following limitations:
+
+     - Null bytes (\u0000) are not allowed in strings.
+
+     - Only UTF-8 encoding is supported.  (RFC 4627 also mentions
+       UTF-16BE, UTF-16LE, and UTF-32.)
+
+     - RFC 4627 says that names within a JSON object should be unique.
+       The Open vSwitch JSON parser discards all but the last value
+       for a name that is specified more than once.
+
 The descriptions below use the following shorthand notations for JSON
 values.  Additional notation is presented later.
 
@@ -425,8 +438,10 @@ Request object members:
     "params": [<db-name>, <json-value>, <monitor-requests>]   required
     "id": <nonnull-json-value>                                required
 
-<monitor-requests> is an object that maps from a table name to a
-<monitor-request>.
+<monitor-requests> is an object that maps from a table name to an
+array of <monitor-request> objects.  For backward compatibility, a
+single <monitor-request> may be used instead of an array; it is
+treated as a single-element array.
 
 Each <monitor-request> is an object with the following members:
 
@@ -447,15 +462,16 @@ Response object members:
     "id": same "id" as request
 
 This JSON-RPC request enables a client to replicate tables or subsets
-of tables within database <db-name>.  Each <monitor-request> specifies
-a table to be replicated.  The JSON-RPC response to the "monitor"
-includes the initial contents of each table.  Afterward, when changes
-to those tables are committed, the changes are automatically sent to
-the client using the "update" monitor notification.  This monitoring
-persists until the JSON-RPC session terminates or until the client
-sends a "monitor_cancel" JSON-RPC request.
+of tables within database <db-name>.  Each element of
+<monitor-requests> specifies a table to be replicated.  The JSON-RPC
+response to the "monitor" includes the initial contents of each table,
+unless disabled (see below).  Afterward, when changes to those tables
+are committed, the changes are automatically sent to the client using
+the "update" monitor notification.  This monitoring persists until the
+JSON-RPC session terminates or until the client sends a
+"monitor_cancel" JSON-RPC request.
 
-Each <monitor-request> describes how to monitor a table:
+Each <monitor-request> describes how to monitor columns in a table:
 
     The circumstances in which an "update" notification is sent for a
     row within the table are determined by <monitor-select>:
@@ -473,8 +489,13 @@ Each <monitor-request> describes how to monitor a table:
         sent whenever when a row in the table is modified.
 
     The "columns" member specifies the columns whose values are
-    monitored.  If "columns" is omitted, all columns in the table,
-    except for "_uuid", are monitored.
+    monitored.  It must not contain duplicates.  If "columns" is
+    omitted, all columns in the table, except for "_uuid", are
+    monitored.
+
+If there is more than one <monitor-request> in an array of them, then
+each <monitor-request> in the array should specify both "columns" and
+"select", and the "columns" must be non-overlapping sets.
 
 The "result" in the JSON-RPC response to the "monitor" request is a
 <table-updates> object (see below) that contains the contents of the

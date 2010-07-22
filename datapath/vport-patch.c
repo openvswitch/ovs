@@ -39,22 +39,20 @@ struct patch_vport {
 static struct hlist_head *peer_table;
 #define PEER_HASH_BUCKETS 256
 
-static inline struct patch_vport *
-patch_vport_priv(const struct vport *vport)
+static inline struct patch_vport *patch_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
 }
 
 /* RCU callback. */
-static void
-free_config(struct rcu_head *rcu)
+static void free_config(struct rcu_head *rcu)
 {
 	struct device_config *c = container_of(rcu, struct device_config, rcu);
 	kfree(c);
 }
 
-static void
-assign_config_rcu(struct vport *vport, struct device_config *new_config)
+static void assign_config_rcu(struct vport *vport,
+			      struct device_config *new_config)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *old_config;
@@ -64,15 +62,13 @@ assign_config_rcu(struct vport *vport, struct device_config *new_config)
 	call_rcu(&old_config->rcu, free_config);
 }
 
-static struct hlist_head *
-hash_bucket(const char *name)
+static struct hlist_head *hash_bucket(const char *name)
 {
 	unsigned int hash = full_name_hash(name, strlen(name));
 	return &peer_table[hash & (PEER_HASH_BUCKETS - 1)];
 }
 
-static int
-patch_init(void)
+static int patch_init(void)
 {
 	peer_table = kzalloc(PEER_HASH_BUCKETS * sizeof(struct hlist_head),
 			    GFP_KERNEL);
@@ -82,14 +78,12 @@ patch_init(void)
 	return 0;
 }
 
-static void
-patch_exit(void)
+static void patch_exit(void)
 {
 	kfree(peer_table);
 }
 
-static int
-set_config(struct vport *vport, const void __user *uconfig)
+static int set_config(struct vport *vport, const void __user *uconfig)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	char peer_name[IFNAMSIZ];
@@ -115,8 +109,7 @@ set_config(struct vport *vport, const void __user *uconfig)
 	return 0;
 }
 
-static struct vport *
-patch_create(const char *name, const void __user *config)
+static struct vport *patch_create(const char *name, const void __user *config)
 {
 	struct vport *vport;
 	struct patch_vport *patch_vport;
@@ -153,14 +146,12 @@ error:
 	return ERR_PTR(err);
 }
 
-static int
-patch_modify(struct vport *vport, const void __user *config)
+static int patch_modify(struct vport *vport, const void __user *config)
 {
 	return set_config(vport, config);
 }
 
-static int
-patch_destroy(struct vport *vport)
+static int patch_destroy(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
@@ -170,8 +161,7 @@ patch_destroy(struct vport *vport)
 	return 0;
 }
 
-static void
-update_peers(const char *name, struct vport *vport)
+static void update_peers(const char *name, struct vport *vport)
 {
 	struct hlist_head *bucket = hash_bucket(name);
 	struct patch_vport *peer_vport;
@@ -182,8 +172,7 @@ update_peers(const char *name, struct vport *vport)
 			rcu_assign_pointer(peer_vport->peer, vport);
 }
 
-static int
-patch_attach(struct vport *vport)
+static int patch_attach(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
@@ -195,8 +184,7 @@ patch_attach(struct vport *vport)
 	return 0;
 }
 
-static int
-patch_detach(struct vport *vport)
+static int patch_detach(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
@@ -208,8 +196,7 @@ patch_detach(struct vport *vport)
 	return 0;
 }
 
-static int
-patch_set_mtu(struct vport *vport, int mtu)
+static int patch_set_mtu(struct vport *vport, int mtu)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *devconf;
@@ -224,8 +211,7 @@ patch_set_mtu(struct vport *vport, int mtu)
 	return 0;
 }
 
-static int
-patch_set_addr(struct vport *vport, const unsigned char *addr)
+static int patch_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *devconf;
@@ -241,29 +227,25 @@ patch_set_addr(struct vport *vport, const unsigned char *addr)
 }
 
 
-static const char *
-patch_get_name(const struct vport *vport)
+static const char *patch_get_name(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
 	return patch_vport->name;
 }
 
-static const unsigned char *
-patch_get_addr(const struct vport *vport)
+static const unsigned char *patch_get_addr(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
 	return rcu_dereference(patch_vport->devconf)->eth_addr;
 }
 
-static int
-patch_get_mtu(const struct vport *vport)
+static int patch_get_mtu(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
 	return rcu_dereference(patch_vport->devconf)->mtu;
 }
 
-static int
-patch_send(struct vport *vport, struct sk_buff *skb)
+static int patch_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct vport *peer = rcu_dereference(patch_vport->peer);

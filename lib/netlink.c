@@ -31,9 +31,9 @@
 #include "poll-loop.h"
 #include "timeval.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_netlink
+
+VLOG_DEFINE_THIS_MODULE(netlink)
 
 /* Linux header file confusion causes this to be undefined. */
 #ifndef SOL_NETLINK

@@ -1,12 +1,13 @@
 AT_BANNER([OVSDB -- ovsdb-server monitors])
 
 # OVSDB_CHECK_MONITOR(TITLE, SCHEMA, [PRE-MONITOR-TXN], DB, TABLE,
-#                     TRANSACTIONS, OUTPUT, [KEYWORDS])
+#                     TRANSACTIONS, OUTPUT, [COLUMNS], [KEYWORDS])
 #
 # Creates a database with the given SCHEMA, starts an ovsdb-server on
 # that database, and runs each of the TRANSACTIONS (which should be a
 # quoted list of quoted strings) against it with ovsdb-client one at a
-# time.
+# time.  COLUMNS, if specified, is passed to ovsdb-client as the set
+# of columns and operations to select.
 #
 # Checks that the overall output is OUTPUT, but UUIDs in the output
 # are replaced by markers of the form <N> where N is a number.  The
@@ -17,14 +18,16 @@ AT_BANNER([OVSDB -- ovsdb-server monitors])
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_MONITOR], 
   [AT_SETUP([$1])
-   AT_KEYWORDS([ovsdb server monitor positive $8])
+   AT_KEYWORDS([ovsdb server monitor positive $9])
    AT_DATA([schema], [$2
 ])
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3],
      [AT_CHECK([ovsdb-tool transact db 'txn'], [0], [ignore], [ignore])])
-   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
-   AT_CHECK([ovsdb-client --detach --pidfile=$PWD/client-pid -d json monitor --format=csv unix:socket $4 $5 > output], 
+   AT_CAPTURE_FILE([ovsdb-server-log])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --remote=punix:socket --unixctl=$PWD/unixctl --log-file=$PWD/ovsdb-server-log db >/dev/null 2>&1],
+            [0], [], [])
+   AT_CHECK([ovsdb-client -vjsonrpc --detach --pidfile=$PWD/client-pid -d json monitor --format=csv unix:socket $4 $5 $8 > output], 
             [0], [ignore], [ignore], [kill `cat server-pid`])
    m4_foreach([txn], [$6],
      [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0],
@@ -214,3 +217,103 @@ row,action,a,a2a,a2a1,a2b,_version
 ,new,1,"[""set"",[]]","[""uuid"",""<3>""]","[""uuid"",""<1>""]","[""uuid"",""<5>""]"
 ]])
 
+OVSDB_CHECK_MONITOR([monitor insert-update-and-delete transaction],
+  [ORDINAL_SCHEMA],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals], [ordinals],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 9, "name": "nine"},
+       "uuid-name": "nine"},
+      {"op": "update",
+       "table": "ordinals",
+       "where": [["_uuid", "==", ["named-uuid", "nine"]]],
+       "row": {"name": "three squared"}},
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["_uuid", "==", ["named-uuid", "nine"]]]},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 7, "name": "seven"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
+row,action,name,number,_version
+<2>,insert,"""seven""",7,"[""uuid"",""<3>""]"
+]])
+
+AT_BANNER([ovsdb -- ovsdb-monitor monitor only some operations])
+
+m4_define([OVSDB_MONITOR_INITIAL],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]])
+m4_define([OVSDB_MONITOR_TXNS],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 5, "name": "five"}}]]],
+   [[["ordinals",
+      {"op": "update",
+       "table": "ordinals",
+       "where": [["name", "==", "five"]],
+       "row": {"name": "FIVE"}}]]],
+   [[["ordinals",
+      {"op": "delete",
+       "table": "ordinals",
+       "where": []}]]]])
+
+OVSDB_CHECK_MONITOR([monitor all operations],
+  [ORDINAL_SCHEMA], [OVSDB_MONITOR_INITIAL],
+  [ordinals], [ordinals], [OVSDB_MONITOR_TXNS],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
+row,action,name,number,_version
+<2>,insert,"""five""",5,"[""uuid"",""<3>""]"
+
+row,action,name,number,_version
+<2>,old,"""five""",,"[""uuid"",""<3>""]"
+,new,"""FIVE""",5,"[""uuid"",""<4>""]"
+
+row,action,name,number,_version
+<2>,delete,"""FIVE""",5,"[""uuid"",""<4>""]"
+<0>,delete,"""ten""",10,"[""uuid"",""<1>""]"
+]])
+
+dnl A monitor with "initial" only doesn't really make sense,
+dnl but it's still allowed and should work.
+OVSDB_CHECK_MONITOR([monitor initial only],
+  [ORDINAL_SCHEMA], [OVSDB_MONITOR_INITIAL],
+  [ordinals], [ordinals], [OVSDB_MONITOR_TXNS],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+]], [!insert,!delete,!modify])
+
+OVSDB_CHECK_MONITOR([monitor insert only],
+  [ORDINAL_SCHEMA], [OVSDB_MONITOR_INITIAL],
+  [ordinals], [ordinals], [OVSDB_MONITOR_TXNS],
+  [[row,action,name,number,_version
+<0>,insert,"""five""",5,"[""uuid"",""<1>""]"
+]], [!initial,!delete,!modify])
+
+OVSDB_CHECK_MONITOR([monitor delete only],
+  [ORDINAL_SCHEMA], [OVSDB_MONITOR_INITIAL],
+  [ordinals], [ordinals], [OVSDB_MONITOR_TXNS],
+  [[row,action,name,number,_version
+<0>,delete,"""FIVE""",5,"[""uuid"",""<1>""]"
+<2>,delete,"""ten""",10,"[""uuid"",""<3>""]"
+]], [!initial,!insert,!modify])
+
+OVSDB_CHECK_MONITOR([monitor modify only],
+  [ORDINAL_SCHEMA], [OVSDB_MONITOR_INITIAL],
+  [ordinals], [ordinals], [OVSDB_MONITOR_TXNS],
+  [[row,action,name,number,_version
+<0>,old,"""five""",,"[""uuid"",""<1>""]"
+,new,"""FIVE""",5,"[""uuid"",""<2>""]"
+]], [!initial,!insert,!delete])

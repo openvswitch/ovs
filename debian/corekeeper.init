@@ -57,7 +57,7 @@ case "$1" in
         exit 0
         ;;
   *)
-        N=/etc/init.d/$NAME
+        N=/etc/init.d/corekeeper
         echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
         exit 1
         ;;

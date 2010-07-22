@@ -27,20 +27,21 @@
 #include "coverage.h"
 #include "fatal-signal.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_timeval
 
-/* Initialized? */
-static bool inited;
+VLOG_DEFINE_THIS_MODULE(timeval)
 
-/* Does this system have monotonic timers? */
-static bool monotonic_inited;
+/* The clock to use for measuring time intervals.  This is CLOCK_MONOTONIC by
+ * preference, but on systems that don't have a monotonic clock we fall back
+ * to CLOCK_REALTIME. */
 static clockid_t monotonic_clock;
 
-/* Has a timer tick occurred? */
-static volatile sig_atomic_t wall_tick;
-static volatile sig_atomic_t monotonic_tick;
+/* Has a timer tick occurred?
+ *
+ * We initialize these to true to force time_init() to get called on the first
+ * call to time_msec() or another function that queries the current time. */
+static volatile sig_atomic_t wall_tick = true;
+static volatile sig_atomic_t monotonic_tick = true;
 
 /* The current time, as of the last refresh. */
 static struct timespec wall_time;
@@ -60,41 +61,30 @@ static void unblock_sigalrm(const sigset_t *);
 static void log_poll_interval(long long int last_wakeup,
                               const struct rusage *last_rusage);
 
-/* Initializes the timetracking module. */
-void
+/* Initializes the timetracking module.
+ *
+ * It is not necessary to call this function directly, because other time
+ * functions will call it automatically, but it doesn't hurt. */
+static void
 time_init(void)
 {
+    static bool inited;
     if (inited) {
         return;
     }
+    inited = true;
 
     coverage_init();
 
-    inited = true;
-    time_refresh();
-
-    set_up_signal(SA_RESTART);
-    set_up_timer();
-}
-
-static void
-set_up_monotonic(void)
-{
-    int err;
-
-    if (monotonic_inited) {
-        return;
-    }
-
-    err = clock_gettime(CLOCK_MONOTONIC, &monotonic_time);
-    if (!err) {
+    if (!clock_gettime(CLOCK_MONOTONIC, &monotonic_time)) {
         monotonic_clock = CLOCK_MONOTONIC;
     } else {
         monotonic_clock = CLOCK_REALTIME;
         VLOG_DBG("monotonic timer not available");
     }
 
-    monotonic_inited = true;
+    set_up_signal(SA_RESTART);
+    set_up_timer();
 }
 
 static void
@@ -126,6 +116,7 @@ set_up_signal(int flags)
 void
 time_disable_restart(void)
 {
+    time_init();
     set_up_signal(0);
 }
 
@@ -135,6 +126,7 @@ time_disable_restart(void)
 void
 time_enable_restart(void)
 {
+    time_init();
     set_up_signal(SA_RESTART);
 }
 
@@ -143,8 +135,6 @@ set_up_timer(void)
 {
     static timer_t timer_id;    /* "static" to avoid apparent memory leak. */
     struct itimerspec itimer;
-
-    set_up_monotonic();
 
     if (timer_create(monotonic_clock, NULL, &timer_id)) {
         ovs_fatal(errno, "timer_create failed");
@@ -167,12 +157,14 @@ set_up_timer(void)
 void
 time_postfork(void)
 {
+    time_init();
     set_up_timer();
 }
 
 static void
 refresh_wall(void)
 {
+    time_init();
     clock_gettime(CLOCK_REALTIME, &wall_time);
     wall_tick = false;
 }
@@ -180,7 +172,7 @@ refresh_wall(void)
 static void
 refresh_monotonic(void)
 {
-    set_up_monotonic();
+    time_init();
 
     if (monotonic_clock == CLOCK_MONOTONIC) {
         clock_gettime(monotonic_clock, &monotonic_time);
@@ -210,7 +202,7 @@ time_now(void)
 }
 
 /* Same as time_now() except does not write to static variables, for use in
- * signal handlers. set_up_monotonic() must have already been called. */
+ * signal handlers.  */
 static time_t
 time_now_sig(void)
 {
@@ -353,7 +345,6 @@ sigalrm_handler(int sig_nr)
 static void
 refresh_wall_if_ticked(void)
 {
-    assert(inited);
     if (wall_tick) {
         refresh_wall();
     }
@@ -362,7 +353,6 @@ refresh_wall_if_ticked(void)
 static void
 refresh_monotonic_if_ticked(void)
 {
-    assert(inited);
     if (monotonic_tick) {
         refresh_monotonic();
     }

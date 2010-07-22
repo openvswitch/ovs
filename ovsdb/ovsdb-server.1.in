@@ -8,12 +8,12 @@ ovsdb\-server \- Open vSwitch database server
 .SH SYNOPSIS
 \fBovsdb\-server\fR
 \fIdatabase\fR
-[\fB--remote=\fIremote\fR]\&...
-[\fB--run=\fIcommand\fR]
-.so lib/daemon-syn.man
-.so lib/vlog-syn.man
-.so lib/unixctl-syn.man
-.so lib/common-syn.man
+[\f\-\-remote=\fIremote\fR]\&...
+[\f\-\-run=\fIcommand\fR]
+.so lib/daemon\-syn.man
+.so lib/vlog\-syn.man
+.so lib/unixctl\-syn.man
+.so lib/common\-syn.man
 .
 .SH DESCRIPTION
 The \fBovsdb\-server\fR program provides RPC interfaces to an Open
@@ -54,7 +54,7 @@ otherwise, it exits with exit code 1.
 .IP
 This option can be useful where a database server is needed only to
 run a single command, e.g.:
-.B "ovsdb-server --remote=punix:socket --run='ovsdb-client dump unix:socket Open_vSwitch'"
+.B "ovsdb\-server \-\-remote=punix:socket \-\-run='ovsdb\-client dump unix:socket Open_vSwitch'"
 .SS "Daemon Options"
 .so lib/daemon.man
 .SS "Logging Options"
@@ -78,11 +78,11 @@ one row in \fItable\fR.)
 \fBovs\-appctl\fR(8) can send commands to a running
 \fBovsdb\-server\fR process.  The currently supported commands are
 described below.
-.SS "OVSDB-SERVER COMMANDS"
+.SS "OVSDB\-SERVER COMMANDS"
 These commands are specific to \fBovsdb\-server\fR.
 .IP "\fBexit\fR"
 Causes \fBovsdb\-server\fR to gracefully terminate.
-.IP "\fBovsdb-server/compact\fR"
+.IP "\fBovsdb\-server/compact\fR"
 Compacts the database in-place.  The database is also automatically
 compacted occasionally.
 .

@@ -41,9 +41,9 @@
 #include "stream-provider.h"
 #include "stream.h"
 #include "timeval.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_stream_ssl
+
+VLOG_DEFINE_THIS_MODULE(stream_ssl)
 
 /* Active SSL. */
 

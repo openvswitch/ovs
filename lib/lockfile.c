@@ -29,9 +29,9 @@
 #include "hmap.h"
 #include "timeval.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_lockfile
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(lockfile)
 
 struct lockfile {
     struct hmap_node hmap_node;

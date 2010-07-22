@@ -26,9 +26,9 @@
 #include "ezio.h"
 #include "poll-loop.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_terminal
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(terminal)
 
 /* UTF-8 decoding. */
 static struct utf8_reader *utf8_reader_create(void);

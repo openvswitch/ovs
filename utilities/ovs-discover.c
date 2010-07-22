@@ -33,9 +33,9 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_ovs_discover
+
+VLOG_DEFINE_THIS_MODULE(ovs_discover)
 
 struct iface {
     const char *name;
@@ -77,8 +77,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
 
     argc -= optind;

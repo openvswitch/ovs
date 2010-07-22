@@ -43,13 +43,10 @@
 #include "wdp-provider.h"
 #include "xfif.h"
 #include "xflow-util.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#include <linux/types.h>        /* XXX */
-#include <linux/pkt_sched.h>    /* XXX */
-
-#define THIS_MODULE VLM_wdp_xflow
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(wdp_xflow)
 
 enum {
     TABLEID_HASH = 0,
@@ -615,11 +612,10 @@ add_output_group_action(struct xflow_actions *actions, uint16_t group,
 }
 
 static void
-add_controller_action(struct xflow_actions *actions,
-                      const struct ofp_action_output *oao)
+add_controller_action(struct xflow_actions *actions, uint16_t max_len)
 {
     union xflow_action *a = xflow_actions_add(actions, XFLOWAT_CONTROLLER);
-    a->controller.arg = ntohs(oao->max_len);
+    a->controller.arg = max_len;
 }
 
 struct wx_xlate_ctx {
@@ -710,15 +706,15 @@ xlate_table_action(struct wx_xlate_ctx *ctx, uint16_t in_port)
 }
 
 static void
-xlate_output_action(struct wx_xlate_ctx *ctx,
-                    const struct ofp_action_output *oao)
+xlate_output_action__(struct wx_xlate_ctx *ctx,
+                      uint16_t port, uint16_t max_len)
 {
     uint16_t xflow_port;
     uint16_t prev_nf_output_iface = ctx->nf_output_iface;
 
     ctx->nf_output_iface = NF_OUT_DROP;
 
-    switch (ntohs(oao->port)) {
+    switch (port) {
     case OFPP_IN_PORT:
         add_output_action(ctx, ctx->flow.in_port);
         break;
@@ -743,13 +739,13 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
         add_output_group_action(ctx->out, WX_GROUP_ALL, &ctx->nf_output_iface);
         break;
     case OFPP_CONTROLLER:
-        add_controller_action(ctx->out, oao);
+        add_controller_action(ctx->out, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, XFLOWP_LOCAL);
         break;
     default:
-        xflow_port = ofp_port_to_xflow_port(ntohs(oao->port));
+        xflow_port = ofp_port_to_xflow_port(port);
         if (xflow_port != ctx->flow.in_port) {
             add_output_action(ctx, xflow_port);
         }
@@ -764,6 +760,13 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
                ctx->nf_output_iface != NF_OUT_FLOOD) {
         ctx->nf_output_iface = NF_OUT_MULTI;
     }
+}
+
+static void
+xlate_output_action(struct action_xlate_ctx *ctx,
+                    const struct ofp_action_output *oao)
+{
+    xlate_output_action__(ctx, ntohs(oao->port), ntohs(oao->max_len));
 }
 
 /* If the final xflow action in 'ctx' is "pop priority", drop it, as an
@@ -784,6 +787,16 @@ xlate_enqueue_action(struct wx_xlate_ctx *ctx,
                      const struct ofp_action_enqueue *oae)
 {
     uint16_t ofp_port, xflow_port;
+    uint32_t priority;
+    int error;
+
+    error = xfif_queue_to_priority(ctx->wx->xfif, ntohl(oae->queue_id),
+                                   &priority);
+    if (error) {
+        /* Fall back to ordinary output action. */
+        xlate_output_action__(ctx, ntohs(oae->port), 0);
+        return;
+    }
 
     /* Figure out xflow output port. */
     ofp_port = ntohs(oae->port);
@@ -796,7 +809,7 @@ xlate_enqueue_action(struct wx_xlate_ctx *ctx,
     /* Add xflow actions. */
     remove_pop_action(ctx);
     xflow_actions_add(ctx->out, XFLOWAT_SET_PRIORITY)->priority.priority
-        = TC_H_MAKE(1, ntohl(oae->queue_id)); /* XXX */
+        = priority;
     add_output_action(ctx, xflow_port);
     xflow_actions_add(ctx->out, XFLOWAT_POP_PRIORITY);
 

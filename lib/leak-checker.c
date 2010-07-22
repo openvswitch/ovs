@@ -18,9 +18,9 @@
 #include "leak-checker.h"
 #include <inttypes.h>
 #include "backtrace.h"
-
-#define THIS_MODULE VLM_leak_checker
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(leak_checker)
 
 #ifndef HAVE_MALLOC_HOOKS
 void

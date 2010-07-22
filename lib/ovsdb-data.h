@@ -33,17 +33,28 @@ union ovsdb_atom {
 };
 
 void ovsdb_atom_init_default(union ovsdb_atom *, enum ovsdb_atomic_type);
+const union ovsdb_atom *ovsdb_atom_default(enum ovsdb_atomic_type);
 bool ovsdb_atom_is_default(const union ovsdb_atom *, enum ovsdb_atomic_type);
 void ovsdb_atom_clone(union ovsdb_atom *, const union ovsdb_atom *,
                       enum ovsdb_atomic_type);
 void ovsdb_atom_swap(union ovsdb_atom *, union ovsdb_atom *);
 
+/* Returns false if ovsdb_atom_destroy() is a no-op when it is applied to an
+ * initialized atom of the given 'type', true if ovsdb_atom_destroy() actually
+ * does something.
+ *
+ * This can be used to avoid calling ovsdb_atom_destroy() for each element in
+ * an array of homogeneous atoms.  (It's not worthwhile for a single atom.) */
 static inline bool
 ovsdb_atom_needs_destruction(enum ovsdb_atomic_type type)
 {
     return type == OVSDB_TYPE_STRING;
 }
 
+/* Frees the contents of 'atom', which must have the specified 'type'.
+ *
+ * This does not actually call free(atom).  If necessary, the caller must be
+ * responsible for that. */
 static inline void
 ovsdb_atom_destroy(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -59,6 +70,8 @@ int ovsdb_atom_compare_3way(const union ovsdb_atom *,
                             const union ovsdb_atom *,
                             enum ovsdb_atomic_type);
 
+/* Returns true if 'a' and 'b', which are both of type 'type', has the same
+ * contents, false if their contents differ.  */
 static inline bool ovsdb_atom_equals(const union ovsdb_atom *a,
                                      const union ovsdb_atom *b,
                                      enum ovsdb_atomic_type type)
@@ -70,6 +83,11 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
                                          const struct ovsdb_base_type *,
                                          const struct json *,
                                          struct ovsdb_symbol_table *)
+    WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_datum_from_json_unique(struct ovsdb_datum *,
+                                                 const struct ovsdb_type *,
+                                                 const struct json *,
+                                                 struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
@@ -116,6 +134,7 @@ void ovsdb_datum_init_empty(struct ovsdb_datum *);
 void ovsdb_datum_init_default(struct ovsdb_datum *, const struct ovsdb_type *);
 bool ovsdb_datum_is_default(const struct ovsdb_datum *,
                             const struct ovsdb_type *);
+const struct ovsdb_datum *ovsdb_datum_default(const struct ovsdb_type *);
 void ovsdb_datum_clone(struct ovsdb_datum *, const struct ovsdb_datum *,
                        const struct ovsdb_type *);
 void ovsdb_datum_destroy(struct ovsdb_datum *, const struct ovsdb_type *);
@@ -128,6 +147,10 @@ struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
 
 void ovsdb_datum_sort_assert(struct ovsdb_datum *,
                              enum ovsdb_atomic_type key_type);
+
+size_t ovsdb_datum_sort_unique(struct ovsdb_datum *,
+                               enum ovsdb_atomic_type key_type,
+                               enum ovsdb_atomic_type value_type);
 
 struct ovsdb_error *ovsdb_datum_check_constraints(
     const struct ovsdb_datum *, const struct ovsdb_type *)

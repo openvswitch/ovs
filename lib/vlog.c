@@ -33,7 +33,7 @@
 #include "unixctl.h"
 #include "util.h"
 
-#define THIS_MODULE VLM_vlog
+VLOG_DEFINE_THIS_MODULE(vlog)
 
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {
@@ -49,12 +49,24 @@ static int syslog_levels[VLL_N_LEVELS] = {
 #undef VLOG_LEVEL
 };
 
-/* Name for each logging module */
-static const char *module_names[VLM_N_MODULES] = { 
-#define VLOG_MODULE(NAME) #NAME,
+/* The log modules. */
+#if USE_LINKER_SECTIONS
+extern struct vlog_module *__start_vlog_modules[];
+extern struct vlog_module *__stop_vlog_modules[];
+#define vlog_modules __start_vlog_modules
+#define n_vlog_modules (__stop_vlog_modules - __start_vlog_modules)
+#else
+#define VLOG_MODULE VLOG_DEFINE_MODULE__
+#include "vlog-modules.def"
+#undef VLOG_MODULE
+
+struct vlog_module *vlog_modules[] = {
+#define VLOG_MODULE(NAME) &VLM_##NAME,
 #include "vlog-modules.def"
 #undef VLOG_MODULE
 };
+#define n_vlog_modules ARRAY_SIZE(vlog_modules)
+#endif
 
 /* Information about each facility. */
 struct facility {
@@ -68,13 +80,6 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 #undef VLOG_FACILITY
 };
 
-/* Current log levels. */
-static int levels[VLM_N_MODULES][VLF_N_FACILITIES];
-
-/* For fast checking whether we're logging anything for a given module and
- * level.*/
-enum vlog_level min_vlog_levels[VLM_N_MODULES];
-
 /* Time at which vlog was initialized, in milliseconds. */
 static long long int boot_time;
 
@@ -82,7 +87,10 @@ static long long int boot_time;
 static char *log_file_name;
 static FILE *log_file;
 
-static void format_log_message(enum vlog_module, enum vlog_level,
+/* vlog initialized? */
+static bool vlog_inited;
+
+static void format_log_message(const struct vlog_module *, enum vlog_level,
                                enum vlog_facility, unsigned int msg_num,
                                const char *message, va_list, struct ds *)
     PRINTF_FORMAT(5, 0);
@@ -143,64 +151,76 @@ vlog_get_facility_val(const char *name)
 }
 
 /* Returns the name for logging module 'module'. */
-const char *vlog_get_module_name(enum vlog_module module) 
+const char *
+vlog_get_module_name(const struct vlog_module *module)
 {
-    assert(module < VLM_N_MODULES);
-    return module_names[module];
+    return module->name;
 }
 
-/* Returns the logging module named 'name', or VLM_N_MODULES if 'name' is not
- * the name of a logging module. */
-enum vlog_module
-vlog_get_module_val(const char *name) 
+/* Returns the logging module named 'name', or NULL if 'name' is not the name
+ * of a logging module. */
+struct vlog_module *
+vlog_module_from_name(const char *name)
 {
-    return search_name_array(name, module_names, ARRAY_SIZE(module_names));
+    struct vlog_module **mp;
+
+    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
+        if (!strcasecmp(name, (*mp)->name)) {
+            return *mp;
+        }
+    }
+    return NULL;
 }
 
 /* Returns the current logging level for the given 'module' and 'facility'. */
 enum vlog_level
-vlog_get_level(enum vlog_module module, enum vlog_facility facility) 
+vlog_get_level(const struct vlog_module *module, enum vlog_facility facility) 
 {
-    assert(module < VLM_N_MODULES);
     assert(facility < VLF_N_FACILITIES);
-    return levels[module][facility];
+    return module->levels[facility];
 }
 
 static void
-update_min_level(enum vlog_module module)
+update_min_level(struct vlog_module *module)
 {
-    enum vlog_level min_level = VLL_EMER;
     enum vlog_facility facility;
 
+    module->min_level = VLL_EMER;
     for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
         if (log_file || facility != VLF_FILE) {
-            min_level = MAX(min_level, levels[module][facility]); 
+            enum vlog_level level = module->levels[facility];
+            if (level < module->min_level) {
+                module->min_level = level;
+            }
         }
     }
-    min_vlog_levels[module] = min_level;
 }
 
 static void
-set_facility_level(enum vlog_facility facility, enum vlog_module module,
+set_facility_level(enum vlog_facility facility, struct vlog_module *module,
                    enum vlog_level level)
 {
     assert(facility >= 0 && facility < VLF_N_FACILITIES);
     assert(level < VLL_N_LEVELS);
 
-    if (module == VLM_ANY_MODULE) {
-        for (module = 0; module < VLM_N_MODULES; module++) {
-            levels[module][facility] = level;
-            update_min_level(module);
+    if (!module) {
+        struct vlog_module **mp;
+
+        for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
+            (*mp)->levels[facility] = level;
+            update_min_level(*mp);
         }
     } else {
-        levels[module][facility] = level;
+        module->levels[facility] = level;
         update_min_level(module);
     }
 }
 
-/* Sets the logging level for the given 'module' and 'facility' to 'level'. */
+/* Sets the logging level for the given 'module' and 'facility' to 'level'.  A
+ * null 'module' or a 'facility' of VLF_ANY_FACILITY is treated as a wildcard
+ * across all modules or facilities, respectively. */
 void
-vlog_set_levels(enum vlog_module module, enum vlog_facility facility,
+vlog_set_levels(struct vlog_module *module, enum vlog_facility facility,
                 enum vlog_level level) 
 {
     assert(facility < VLF_N_FACILITIES || facility == VLF_ANY_FACILITY);
@@ -256,7 +276,7 @@ int
 vlog_set_log_file(const char *file_name)
 {
     char *old_log_file_name;
-    enum vlog_module module;
+    struct vlog_module **mp;
     int error;
 
     /* Close old log file. */
@@ -278,8 +298,8 @@ vlog_set_log_file(const char *file_name)
     /* Open new log file and update min_levels[] to reflect whether we actually
      * have a log_file. */
     log_file = fopen(log_file_name, "a");
-    for (module = 0; module < VLM_N_MODULES; module++) {
-        update_min_level(module);
+    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
+        update_min_level(*mp);
     }
 
     /* Log success or failure. */
@@ -320,7 +340,7 @@ vlog_set_levels_from_string(const char *s_)
 
     for (module = strtok_r(s, ": \t", &save_ptr); module != NULL;
          module = strtok_r(NULL, ": \t", &save_ptr)) {
-        enum vlog_module e_module;
+        struct vlog_module *e_module;
         enum vlog_facility e_facility;
 
         facility = strtok_r(NULL, ":", &save_ptr);
@@ -344,10 +364,10 @@ vlog_set_levels_from_string(const char *s_)
             enum vlog_level e_level;
 
             if (!strcmp(module, "ANY")) {
-                e_module = VLM_ANY_MODULE;
+                e_module = NULL;
             } else {
-                e_module = vlog_get_module_val(module);
-                if (e_module >= VLM_N_MODULES) {
+                e_module = vlog_module_from_name(module);
+                if (!e_module) {
                     char *msg = xasprintf("unknown module \"%s\"", module);
                     free(s);
                     return msg;
@@ -380,7 +400,7 @@ vlog_set_verbosity(const char *arg)
             ovs_fatal(0, "processing \"%s\": %s", arg, msg);
         }
     } else {
-        vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_DBG);
+        vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_DBG);
     }
 }
 
@@ -424,8 +444,12 @@ vlog_init(void)
 {
     time_t now;
 
+    if (vlog_inited) {
+        return;
+    }
+    vlog_inited = true;
+
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_INFO);
 
     boot_time = time_msec();
     now = time_wall();
@@ -447,7 +471,10 @@ vlog_init(void)
 void
 vlog_exit(void) 
 {
-    closelog(); 
+    if (vlog_inited) {
+        closelog();
+        vlog_inited = false;
+    }
 }
 
 /* Print the current logging level for each module. */
@@ -455,17 +482,17 @@ char *
 vlog_get_levels(void)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
-    enum vlog_module module;
+    struct vlog_module **mp;
 
     ds_put_format(&s, "                 console    syslog    file\n");
     ds_put_format(&s, "                 -------    ------    ------\n");
 
-    for (module = 0; module < VLM_N_MODULES; module++) {
+    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
         ds_put_format(&s, "%-16s  %4s       %4s       %4s\n",
-           vlog_get_module_name(module),
-           vlog_get_level_name(vlog_get_level(module, VLF_CONSOLE)),
-           vlog_get_level_name(vlog_get_level(module, VLF_SYSLOG)),
-           vlog_get_level_name(vlog_get_level(module, VLF_FILE)));
+           vlog_get_module_name(*mp),
+           vlog_get_level_name(vlog_get_level(*mp, VLF_CONSOLE)),
+           vlog_get_level_name(vlog_get_level(*mp, VLF_SYSLOG)),
+           vlog_get_level_name(vlog_get_level(*mp, VLF_FILE)));
     }
 
     return ds_cstr(&s);
@@ -475,9 +502,9 @@ vlog_get_levels(void)
  * would cause some log output, false if that module and level are completely
  * disabled. */
 bool
-vlog_is_enabled(enum vlog_module module, enum vlog_level level)
+vlog_is_enabled(const struct vlog_module *module, enum vlog_level level)
 {
-    return min_vlog_levels[module] >= level;
+    return module->min_level >= level;
 }
 
 static const char *
@@ -496,7 +523,7 @@ fetch_braces(const char *p, const char *def, char *out, size_t out_size)
 }
 
 static void
-format_log_message(enum vlog_module module, enum vlog_level level,
+format_log_message(const struct vlog_module *module, enum vlog_level level,
                    enum vlog_facility facility, unsigned int msg_num,
                    const char *message, va_list args_, struct ds *s)
 {
@@ -591,16 +618,18 @@ format_log_message(enum vlog_module module, enum vlog_level level,
  *
  * Guaranteed to preserve errno. */
 void
-vlog_valist(enum vlog_module module, enum vlog_level level,
+vlog_valist(const struct vlog_module *module, enum vlog_level level,
             const char *message, va_list args)
 {
-    bool log_to_console = levels[module][VLF_CONSOLE] >= level;
-    bool log_to_syslog = levels[module][VLF_SYSLOG] >= level;
-    bool log_to_file = levels[module][VLF_FILE] >= level && log_file;
+    bool log_to_console = module->levels[VLF_CONSOLE] >= level;
+    bool log_to_syslog = module->levels[VLF_SYSLOG] >= level;
+    bool log_to_file = module->levels[VLF_FILE] >= level && log_file;
     if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;
         static unsigned int msg_num;
         struct ds s;
+
+        vlog_init();
 
         ds_init(&s);
         ds_reserve(&s, 1024);
@@ -640,7 +669,8 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
 }
 
 void
-vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
+vlog(const struct vlog_module *module, enum vlog_level level,
+     const char *message, ...)
 {
     va_list args;
 
@@ -650,7 +680,7 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
 }
 
 bool
-vlog_should_drop(enum vlog_module module, enum vlog_level level,
+vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
                  struct vlog_rate_limit *rl)
 {
     if (!vlog_is_enabled(module, level)) {
@@ -690,7 +720,7 @@ vlog_should_drop(enum vlog_module module, enum vlog_level level,
 }
 
 void
-vlog_rate_limit(enum vlog_module module, enum vlog_level level,
+vlog_rate_limit(const struct vlog_module *module, enum vlog_level level,
                 struct vlog_rate_limit *rl, const char *message, ...)
 {
     if (!vlog_should_drop(module, level, rl)) {

@@ -37,6 +37,20 @@ wrap_json(const char *name, struct json *wrapped)
     return json_array_create_2(json_string_create(name), wrapped);
 }
 
+/* Initializes 'atom' with the default value of the given 'type'.
+ *
+ * The default value for an atom is as defined in ovsdb/SPECS:
+ *
+ *      - "integer" or "real": 0
+ *
+ *      - "boolean": false
+ *
+ *      - "string": "" (the empty string)
+ *
+ *      - "uuid": 00000000-0000-0000-0000-000000000000
+ *
+ * The caller must eventually arrange for 'atom' to be destroyed (with
+ * ovsdb_atom_destroy()). */
 void
 ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -70,6 +84,37 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     }
 }
 
+/* Returns a read-only atom of the given 'type' that has the default value for
+ * 'type'.  The caller must not modify or free the returned atom.
+ *
+ * See ovsdb_atom_init_default() for an explanation of the default value of an
+ * atom. */
+const union ovsdb_atom *
+ovsdb_atom_default(enum ovsdb_atomic_type type)
+{
+    static union ovsdb_atom default_atoms[OVSDB_N_TYPES];
+    static bool inited;
+
+    if (!inited) {
+        int i;
+
+        for (i = 0; i < OVSDB_N_TYPES; i++) {
+            if (i != OVSDB_TYPE_VOID) {
+                ovsdb_atom_init_default(&default_atoms[i], i);
+            }
+        }
+        inited = true;
+    }
+
+    assert(ovsdb_atomic_type_is_valid(type));
+    return &default_atoms[type];
+}
+
+/* Returns true if 'atom', which must have the given 'type', has the default
+ * value for that type.
+ *
+ * See ovsdb_atom_init_default() for an explanation of the default value of an
+ * atom. */
 bool
 ovsdb_atom_is_default(const union ovsdb_atom *atom,
                       enum ovsdb_atomic_type type)
@@ -99,6 +144,10 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
     }
 }
 
+/* Initializes 'new' as a copy of 'old', with the given 'type'.
+ *
+ * The caller must eventually arrange for 'new' to be destroyed (with
+ * ovsdb_atom_destroy()). */
 void
 ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
                  enum ovsdb_atomic_type type)
@@ -133,6 +182,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
     }
 }
 
+/* Swaps the contents of 'a' and 'b', which need not have the same type. */
 void
 ovsdb_atom_swap(union ovsdb_atom *a, union ovsdb_atom *b)
 {
@@ -141,6 +191,8 @@ ovsdb_atom_swap(union ovsdb_atom *a, union ovsdb_atom *b)
     *b = tmp;
 }
 
+/* Returns a hash value for 'atom', which has the specified 'type', folding
+ * 'basis' into the calculation. */
 uint32_t
 ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                 uint32_t basis)
@@ -170,6 +222,8 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     }
 }
 
+/* Compares 'a' and 'b', which both have type 'type', and returns a
+ * strcmp()-like result. */
 int
 ovsdb_atom_compare_3way(const union ovsdb_atom *a,
                         const union ovsdb_atom *b,
@@ -315,6 +369,16 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                               ovsdb_atomic_type_to_string(type));
 }
 
+/* Parses 'json' as an atom of the type described by 'base'.  If successful,
+ * returns NULL and initializes 'atom' with the parsed atom.  On failure,
+ * returns an error and the contents of 'atom' are indeterminate.  The caller
+ * is responsible for freeing the error or the atom that is returned.
+ *
+ * Violations of constraints expressed by 'base' are treated as errors.
+ *
+ * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
+ * ovsdb/SPECS for information about this, and for the syntax that this
+ * function accepts. */
 struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
@@ -335,6 +399,11 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
     return error;
 }
 
+/* Converts 'atom', of the specified 'type', to JSON format, and returns the
+ * JSON.  The caller is responsible for freeing the returned JSON.
+ *
+ * Refer to ovsdb/SPECS for the format of the JSON that this function
+ * produces. */
 struct json *
 ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -463,7 +532,8 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  *        table.
  *
  * Returns a null pointer if successful, otherwise an error message describing
- * the problem.  The caller is responsible for freeing the error.
+ * the problem.  On failure, the contents of 'atom' are indeterminate.  The
+ * caller is responsible for freeing the atom or the error.
  */
 char *
 ovsdb_atom_from_string(union ovsdb_atom *atom,
@@ -706,6 +776,8 @@ alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
     }
 }
 
+/* Initializes 'datum' as an empty datum.  (An empty datum can be treated as
+ * any type.) */
 void
 ovsdb_datum_init_empty(struct ovsdb_datum *datum)
 {
@@ -714,6 +786,18 @@ ovsdb_datum_init_empty(struct ovsdb_datum *datum)
     datum->values = NULL;
 }
 
+/* Initializes 'datum' as a datum that has the default value for 'type'.
+ *
+ * The default value for a particular type is as defined in ovsdb/SPECS:
+ *
+ *    - If n_min is 0, then the default value is the empty set (or map).
+ *
+ *    - If n_min is 1, the default value is a single value or a single
+ *      key-value pair, whose key and value are the defaults for their
+ *      atomic types.  (See ovsdb_atom_init_default() for details.)
+ *
+ *    - n_min > 1 is invalid.  See ovsdb_type_is_valid().
+ */
 void
 ovsdb_datum_init_default(struct ovsdb_datum *datum,
                          const struct ovsdb_type *type)
@@ -723,6 +807,44 @@ ovsdb_datum_init_default(struct ovsdb_datum *datum,
     datum->values = alloc_default_atoms(type->value.type, datum->n);
 }
 
+/* Returns a read-only datum of the given 'type' that has the default value for
+ * 'type'.  The caller must not modify or free the returned datum.
+ *
+ * See ovsdb_datum_init_default() for an explanation of the default value of a
+ * datum. */
+const struct ovsdb_datum *
+ovsdb_datum_default(const struct ovsdb_type *type)
+{
+    if (type->n_min == 0) {
+        static const struct ovsdb_datum empty;
+        return &empty;
+    } else if (type->n_min == 1) {
+        static struct ovsdb_datum default_data[OVSDB_N_TYPES][OVSDB_N_TYPES];
+        struct ovsdb_datum *d;
+        int kt = type->key.type;
+        int vt = type->value.type;
+
+        assert(ovsdb_type_is_valid(type));
+
+        d = &default_data[kt][vt];
+        if (!d->n) {
+            d->n = 1;
+            d->keys = (union ovsdb_atom *) ovsdb_atom_default(kt);
+            if (vt != OVSDB_TYPE_VOID) {
+                d->values = (union ovsdb_atom *) ovsdb_atom_default(vt);
+            }
+        }
+        return d;
+    } else {
+        NOT_REACHED();
+    }
+}
+
+/* Returns true if 'datum', which must have the given 'type', has the default
+ * value for that type.
+ *
+ * See ovsdb_datum_init_default() for an explanation of the default value of a
+ * datum. */
 bool
 ovsdb_datum_is_default(const struct ovsdb_datum *datum,
                        const struct ovsdb_type *type)
@@ -764,6 +886,10 @@ clone_atoms(const union ovsdb_atom *old, enum ovsdb_atomic_type type, size_t n)
     }
 }
 
+/* Initializes 'new' as a copy of 'old', with the given 'type'.
+ *
+ * The caller must eventually arrange for 'new' to be destroyed (with
+ * ovsdb_datum_destroy()). */
 void
 ovsdb_datum_clone(struct ovsdb_datum *new, const struct ovsdb_datum *old,
                   const struct ovsdb_type *type)
@@ -787,6 +913,10 @@ free_data(enum ovsdb_atomic_type type,
     free(atoms);
 }
 
+/* Frees the data owned by 'datum', which must have the given 'type'.
+ *
+ * This does not actually call free(datum).  If necessary, the caller must be
+ * responsible for that. */
 void
 ovsdb_datum_destroy(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 {
@@ -794,6 +924,7 @@ ovsdb_datum_destroy(struct ovsdb_datum *datum, const struct ovsdb_type *type)
     free_data(type->value.type, datum->values, datum->n);
 }
 
+/* Swaps the contents of 'a' and 'b', which need not have the same type. */
 void
 ovsdb_datum_swap(struct ovsdb_datum *a, struct ovsdb_datum *b)
 {
@@ -804,6 +935,7 @@ ovsdb_datum_swap(struct ovsdb_datum *a, struct ovsdb_datum *b)
 
 struct ovsdb_datum_sort_cbdata {
     enum ovsdb_atomic_type key_type;
+    enum ovsdb_atomic_type value_type;
     struct ovsdb_datum *datum;
 };
 
@@ -811,10 +943,18 @@ static int
 ovsdb_datum_sort_compare_cb(size_t a, size_t b, void *cbdata_)
 {
     struct ovsdb_datum_sort_cbdata *cbdata = cbdata_;
+    int retval;
 
-    return ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
-                                   &cbdata->datum->keys[b],
-                                   cbdata->key_type);
+    retval = ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
+                                     &cbdata->datum->keys[b],
+                                     cbdata->key_type);
+    if (retval || cbdata->value_type == OVSDB_TYPE_VOID) {
+        return retval;
+    }
+
+    return ovsdb_atom_compare_3way(&cbdata->datum->values[a],
+                                   &cbdata->datum->values[b],
+                                   cbdata->value_type);
 }
 
 static void
@@ -828,35 +968,54 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     }
 }
 
+static void
+ovsdb_datum_sort__(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type,
+                   enum ovsdb_atomic_type value_type)
+{
+    struct ovsdb_datum_sort_cbdata cbdata;
+
+    cbdata.key_type = key_type;
+    cbdata.value_type = value_type;
+    cbdata.datum = datum;
+    sort(datum->n, ovsdb_datum_sort_compare_cb, ovsdb_datum_sort_swap_cb,
+         &cbdata);
+}
+
+/* The keys in an ovsdb_datum must be unique and in sorted order.  Most
+ * functions that modify an ovsdb_datum maintain these invariants.  For those
+ * that don't, this function checks and restores these invariants for 'datum',
+ * whose keys are of type 'key_type'.
+ *
+ * This function returns NULL if successful, otherwise an error message.  The
+ * caller must free the returned error when it is no longer needed.  On error,
+ * 'datum' is sorted but not unique. */
 struct ovsdb_error *
 ovsdb_datum_sort(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type)
 {
+    size_t i;
+
     if (datum->n < 2) {
         return NULL;
-    } else {
-        struct ovsdb_datum_sort_cbdata cbdata;
-        size_t i;
+    }
 
-        cbdata.key_type = key_type;
-        cbdata.datum = datum;
-        sort(datum->n, ovsdb_datum_sort_compare_cb, ovsdb_datum_sort_swap_cb,
-             &cbdata);
+    ovsdb_datum_sort__(datum, key_type, OVSDB_TYPE_VOID);
 
-        for (i = 0; i < datum->n - 1; i++) {
-            if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
-                                  key_type)) {
-                if (datum->values) {
-                    return ovsdb_error(NULL, "map contains duplicate key");
-                } else {
-                    return ovsdb_error(NULL, "set contains duplicate");
-                }
+    for (i = 0; i < datum->n - 1; i++) {
+        if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
+                              key_type)) {
+            if (datum->values) {
+                return ovsdb_error(NULL, "map contains duplicate key");
+            } else {
+                return ovsdb_error(NULL, "set contains duplicate");
             }
         }
-
-        return NULL;
     }
+    return NULL;
 }
 
+/* This function is the same as ovsdb_datum_sort(), except that the caller
+ * knows that 'datum' is unique.  The operation therefore "cannot fail", so
+ * this function assert-fails if it actually does. */
 void
 ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
                         enum ovsdb_atomic_type key_type)
@@ -865,6 +1024,46 @@ ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
     if (error) {
         NOT_REACHED();
     }
+}
+
+/* This is similar to ovsdb_datum_sort(), except that it drops duplicate keys
+ * instead of reporting an error.  In a map type, the smallest value among a
+ * group of duplicate pairs is retained and the others are dropped.
+ *
+ * Returns the number of keys (or pairs) that were dropped. */
+size_t
+ovsdb_datum_sort_unique(struct ovsdb_datum *datum,
+                        enum ovsdb_atomic_type key_type,
+                        enum ovsdb_atomic_type value_type)
+{
+    size_t src, dst;
+
+    if (datum->n < 2) {
+        return 0;
+    }
+
+    ovsdb_datum_sort__(datum, key_type, value_type);
+
+    dst = 1;
+    for (src = 1; src < datum->n; src++) {
+        if (ovsdb_atom_equals(&datum->keys[src], &datum->keys[dst - 1],
+                              key_type)) {
+            ovsdb_atom_destroy(&datum->keys[src], key_type);
+            if (value_type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_destroy(&datum->values[src], value_type);
+            }
+        } else {
+            if (src != dst) {
+                datum->keys[dst] = datum->keys[src];
+                if (value_type != OVSDB_TYPE_VOID) {
+                    datum->values[dst] = datum->values[src];
+                }
+            }
+            dst++;
+        }
+    }
+    datum->n = dst;
+    return datum->n - src;
 }
 
 /* Checks that each of the atoms in 'datum' conforms to the constraints
@@ -901,11 +1100,11 @@ ovsdb_datum_check_constraints(const struct ovsdb_datum *datum,
     return NULL;
 }
 
-struct ovsdb_error *
-ovsdb_datum_from_json(struct ovsdb_datum *datum,
-                      const struct ovsdb_type *type,
-                      const struct json *json,
-                      struct ovsdb_symbol_table *symtab)
+static struct ovsdb_error *
+ovsdb_datum_from_json__(struct ovsdb_datum *datum,
+                        const struct ovsdb_type *type,
+                        const struct json *json,
+                        struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
 
@@ -966,12 +1165,6 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
 
             datum->n++;
         }
-
-        error = ovsdb_datum_sort(datum, type->key.type);
-        if (error) {
-            goto error;
-        }
-
         return NULL;
 
     error:
@@ -991,12 +1184,64 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     }
 }
 
+/* Parses 'json' as a datum of the type described by 'type'.  If successful,
+ * returns NULL and initializes 'datum' with the parsed datum.  On failure,
+ * returns an error and the contents of 'datum' are indeterminate.  The caller
+ * is responsible for freeing the error or the datum that is returned.
+ *
+ * Violations of constraints expressed by 'type' are treated as errors.
+ *
+ * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
+ * ovsdb/SPECS for information about this, and for the syntax that this
+ * function accepts. */
+struct ovsdb_error *
+ovsdb_datum_from_json(struct ovsdb_datum *datum,
+                      const struct ovsdb_type *type,
+                      const struct json *json,
+                      struct ovsdb_symbol_table *symtab)
+{
+    struct ovsdb_error *error;
+
+    error = ovsdb_datum_from_json__(datum, type, json, symtab);
+    if (error) {
+        return error;
+    }
+
+    error = ovsdb_datum_sort(datum, type->key.type);
+    if (error) {
+        ovsdb_datum_destroy(datum, type);
+    }
+    return error;
+}
+
+/* This is the same as ovsdb_datum_from_json(), except that duplicate values
+ * in a set or map are dropped instead of being treated as an error. */
+struct ovsdb_error *
+ovsdb_datum_from_json_unique(struct ovsdb_datum *datum,
+                             const struct ovsdb_type *type,
+                             const struct json *json,
+                             struct ovsdb_symbol_table *symtab)
+{
+    struct ovsdb_error *error;
+
+    error = ovsdb_datum_from_json__(datum, type, json, symtab);
+    if (!error) {
+        ovsdb_datum_sort_unique(datum, type->key.type, type->value.type);
+    }
+    return error;
+}
+
+/* Converts 'datum', of the specified 'type', to JSON format, and returns the
+ * JSON.  The caller is responsible for freeing the returned JSON.
+ *
+ * 'type' constraints on datum->n are ignored.
+ *
+ * Refer to ovsdb/SPECS for the format of the JSON that this function
+ * produces. */
 struct json *
 ovsdb_datum_to_json(const struct ovsdb_datum *datum,
                     const struct ovsdb_type *type)
 {
-    /* These tests somewhat tolerate a 'datum' that does not exactly match
-     * 'type', in particular a datum with 'n' not in the allowed range. */
     if (datum->n == 1 && !ovsdb_type_is_map(type)) {
         return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
     } else if (type->value.type == OVSDB_TYPE_VOID) {
@@ -1633,5 +1878,5 @@ error:
 bool
 ovsdb_token_is_delim(unsigned char c)
 {
-    return strchr(":=, []{}", c) != NULL;
+    return strchr(":=, []{}!<>", c) != NULL;
 }

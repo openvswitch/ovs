@@ -656,8 +656,7 @@ out:
  * be reverified).  If we receive a packet with CHECKSUM_HW that really means
  * CHECKSUM_PARTIAL, it will be sent with the wrong checksum.  However, there
  * shouldn't be any devices that do this with bridging. */
-void
-compute_ip_summed(struct sk_buff *skb, bool xmit)
+void compute_ip_summed(struct sk_buff *skb, bool xmit)
 {
 	/* For our convenience these defines change repeatedly between kernel
 	 * versions, so we can't just copy them over... */
@@ -714,8 +713,7 @@ compute_ip_summed(struct sk_buff *skb, bool xmit)
  * is slightly different because we are only concerned with bridging and not
  * other types of forwarding and can get away with slightly more optimal
  * behavior.*/
-void
-forward_ip_summed(struct sk_buff *skb)
+void forward_ip_summed(struct sk_buff *skb)
 {
 #ifdef CHECKSUM_HW
 	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
@@ -725,9 +723,8 @@ forward_ip_summed(struct sk_buff *skb)
 
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */
-static int
-queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
-		      int queue_no, u32 arg)
+static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
+				 int queue_no, u32 arg)
 {
 	struct sk_buff *nskb;
 	int port_no;
@@ -769,9 +766,8 @@ err_kfree_skbs:
 	return err;
 }
 
-int
-dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
-		  u32 arg)
+int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
+		      u32 arg)
 {
 	struct dp_stats_percpu *stats;
 	struct sk_buff_head *queue;
@@ -1376,8 +1372,7 @@ void set_internal_devs_mtu(const struct datapath *dp)
 	}
 }
 
-static int
-put_port(const struct dp_port *p, struct xflow_port __user *uop)
+static int put_port(const struct dp_port *p, struct xflow_port __user *uop)
 {
 	struct xflow_port op;
 
@@ -1393,8 +1388,7 @@ put_port(const struct dp_port *p, struct xflow_port __user *uop)
 	return copy_to_user(uop, &op, sizeof op) ? -EFAULT : 0;
 }
 
-static int
-query_port(struct datapath *dp, struct xflow_port __user *uport)
+static int query_port(struct datapath *dp, struct xflow_port __user *uport)
 {
 	struct xflow_port port;
 
@@ -1441,8 +1435,8 @@ error_unlock:
 	return put_port(dp->ports[port.port], uport);
 }
 
-static int
-do_list_ports(struct datapath *dp, struct xflow_port __user *uports, int n_ports)
+static int do_list_ports(struct datapath *dp, struct xflow_port __user *uports,
+			 int n_ports)
 {
 	int idx = 0;
 	if (n_ports) {
@@ -1458,8 +1452,7 @@ do_list_ports(struct datapath *dp, struct xflow_port __user *uports, int n_ports
 	return idx;
 }
 
-static int
-list_ports(struct datapath *dp, struct xflow_portvec __user *upv)
+static int list_ports(struct datapath *dp, struct xflow_portvec __user *upv)
 {
 	struct xflow_portvec pv;
 	int retval;
@@ -1481,8 +1474,8 @@ static void free_port_group(struct rcu_head *rcu)
 	kfree(g);
 }
 
-static int
-do_set_port_group(struct datapath *dp, u16 __user *ports, int n_ports, int group)
+static int do_set_port_group(struct datapath *dp, u16 __user *ports,
+			     int n_ports, int group)
 {
 	struct dp_port_group *new_group, *old_group;
 	int error;
@@ -1513,8 +1506,8 @@ error:
 	return error;
 }
 
-static int
-set_port_group(struct datapath *dp, const struct xflow_port_group __user *upg)
+static int set_port_group(struct datapath *dp,
+			  const struct xflow_port_group __user *upg)
 {
 	struct xflow_port_group pg;
 
@@ -1524,10 +1517,9 @@ set_port_group(struct datapath *dp, const struct xflow_port_group __user *upg)
 	return do_set_port_group(dp, pg.ports, pg.n_ports, pg.group);
 }
 
-static int
-do_get_port_group(struct datapath *dp,
-		  u16 __user *ports, int n_ports, int group,
-		  u16 __user *n_portsp)
+static int do_get_port_group(struct datapath *dp,
+			     u16 __user *ports, int n_ports, int group,
+			     u16 __user *n_portsp)
 {
 	struct dp_port_group *g;
 	u16 n_copy;
@@ -2189,21 +2181,16 @@ success:
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		if (copy_bytes == skb->len) {
 			__wsum csum = 0;
-			int csum_start, csum_offset;
+			unsigned int csum_start, csum_offset;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-			/* Until 2.6.22, the start of the transport header was
-			 * also the start of data to be checksummed.  Linux
-			 * 2.6.22 introduced the csum_start field for this
-			 * purpose, but we should point the transport header to
-			 * it anyway for backward compatibility, as
-			 * dev_queue_xmit() does even in 2.6.28. */
-			skb_set_transport_header(skb, skb->csum_start - skb_headroom(skb));
+			csum_start = skb->csum_start - skb_headroom(skb);
 			csum_offset = skb->csum_offset;
 #else
+			csum_start = skb_transport_header(skb) - skb->data;
 			csum_offset = skb->csum;
 #endif
-			csum_start = skb_transport_header(skb) - skb->data;
+			BUG_ON(csum_start >= skb_headlen(skb));
 			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
 							    copy_bytes - csum_start, &csum);
 			if (!retval) {
@@ -2211,6 +2198,8 @@ success:
 
 				copy_bytes = csum_start;
 				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
+
+				BUG_ON((char *)csump + sizeof(__sum16) > buf + nbytes);
 				put_user(csum_fold(csum), csump);
 			}
 		} else

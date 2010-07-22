@@ -25,6 +25,7 @@
 #include <net/if.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <stdlib.h>
@@ -39,10 +40,10 @@
 #include "shash.h"
 #include "svec.h"
 #include "util.h"
+#include "vlog.h"
 #include "xfif-provider.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_xfif_linux
+VLOG_DEFINE_THIS_MODULE(xfif_linux)
 
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct xfif_linux {
@@ -458,6 +459,18 @@ xfif_linux_set_sflow_probability(struct xfif *xfif_, uint32_t probability)
 }
 
 static int
+xfif_linux_queue_to_priority(const struct xfif *xfif OVS_UNUSED,
+                             uint32_t queue_id, uint32_t *priority)
+{
+    if (queue_id < 0xf000) {
+        *priority = TC_H_MAKE(1 << 16, queue_id + 1);
+        return 0;
+    } else {
+        return EINVAL;
+    }
+}
+
+static int
 xfif_linux_recv(struct xfif *xfif_, struct ofpbuf **bufp)
 {
     struct xfif_linux *xfif = xfif_linux_cast(xfif_);
@@ -539,6 +552,7 @@ const struct xfif_class xfif_linux_class = {
     xfif_linux_recv_set_mask,
     xfif_linux_get_sflow_probability,
     xfif_linux_set_sflow_probability,
+    xfif_linux_queue_to_priority,
     xfif_linux_recv,
     xfif_linux_recv_wait,
 };

@@ -30,11 +30,11 @@
 #include "packets.h"
 #include "status.h"
 #include "stream-ssl.h"
+#include "vlog.h"
 #include "wdp.h"
 #include "xfif.h"
 
-#define THIS_MODULE VLM_discovery
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(discovery)
 
 struct discovery {
     char *dpif_name;

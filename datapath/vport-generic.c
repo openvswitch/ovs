@@ -10,8 +10,7 @@
 
 #include "vport-generic.h"
 
-void
-vport_gen_rand_ether_addr(u8 *addr)
+void vport_gen_rand_ether_addr(u8 *addr)
 {
 	random_ether_addr(addr);
 
@@ -24,20 +23,17 @@ vport_gen_rand_ether_addr(u8 *addr)
 	addr[3] |= 0x80;
 }
 
-unsigned
-vport_gen_get_dev_flags(const struct vport *vport)
+unsigned vport_gen_get_dev_flags(const struct vport *vport)
 {
 	return IFF_UP | IFF_RUNNING | IFF_LOWER_UP;
 }
 
-int
-vport_gen_is_running(const struct vport *vport)
+int vport_gen_is_running(const struct vport *vport)
 {
 	return 1;
 }
 
-unsigned char
-vport_gen_get_operstate(const struct vport *vport)
+unsigned char vport_gen_get_operstate(const struct vport *vport)
 {
 	return IF_OPER_UP;
 }

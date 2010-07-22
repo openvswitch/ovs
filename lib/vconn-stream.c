@@ -32,9 +32,9 @@
 #include "util.h"
 #include "vconn-provider.h"
 #include "vconn.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_vconn_stream
+
+VLOG_DEFINE_THIS_MODULE(vconn_stream)
 
 /* Active stream socket vconn. */
 

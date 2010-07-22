@@ -44,7 +44,6 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
  * much time will be wasted in signal handlers and calls to clock_gettime(). */
 #define TIME_UPDATE_INTERVAL 100
 
-void time_init(void);
 void time_disable_restart(void);
 void time_enable_restart(void);
 void time_postfork(void);

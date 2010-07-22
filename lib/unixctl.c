@@ -36,13 +36,13 @@
 #include "socket-util.h"
 #include "svec.h"
 #include "util.h"
+#include "vlog.h"
 
 #ifndef SCM_CREDENTIALS
 #include <time.h>
 #endif
 
-#define THIS_MODULE VLM_unixctl
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(unixctl)
 
 struct unixctl_command {
     unixctl_cb_func *cb;

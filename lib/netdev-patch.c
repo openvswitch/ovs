@@ -26,9 +26,9 @@
 #include "openvswitch/xflow.h"
 #include "packets.h"
 #include "socket-util.h"
-
-#define THIS_MODULE VLM_netdev_patch
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev_patch)
 
 struct netdev_dev_patch {
     struct netdev_dev netdev_dev;
@@ -103,7 +103,7 @@ netdev_patch_create(const char *name, const char *type OVS_UNUSED,
     ova.config = (char *)peer;
 
     err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
-    if (err == EEXIST) {
+    if (err == EBUSY) {
         VLOG_WARN("%s: destroying existing device", name);
 
         err = netdev_vport_do_ioctl(XFLOW_VPORT_DEL, ova.devname);

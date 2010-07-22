@@ -35,10 +35,10 @@
 #include "stp.h"
 #include "timeval.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_learning_switch
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(learning_switch)
 
 enum port_state {
     P_DISABLED = 1 << 0,
@@ -58,8 +58,9 @@ struct lswitch {
     uint32_t capabilities;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
-    bool exact_flows;           /* Use exact-match flows? */
+    uint32_t wildcards;         /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
+    uint32_t queue;             /* OpenFlow queue to use, or UINT32_MAX. */
 
     /* Number of outgoing queued packets on the rconn. */
     struct rconn_packet_counter *queued;
@@ -120,7 +121,17 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
     sw->last_features_request = time_now() - 1;
     sw->ml = learn_macs ? mac_learning_create() : NULL;
     sw->action_normal = action_normal;
-    sw->exact_flows = exact_flows;
+    if (exact_flows) {
+        /* Exact match. */
+        sw->wildcards = 0;
+    } else {
+        /* We cannot wildcard all fields.
+         * We need in_port to detect moves.
+         * We need both SA and DA to do learning. */
+        sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
+                         | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
+    }
+    sw->queue = UINT32_MAX;
     sw->queued = rconn_packet_counter_create();
     sw->next_query = LLONG_MIN;
     sw->last_query = LLONG_MIN;
@@ -141,6 +152,15 @@ lswitch_destroy(struct lswitch *sw)
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
     }
+}
+
+/* Sets 'queue' as the OpenFlow queue used by packets and flows set up by 'sw'.
+ * Specify UINT32_MAX to avoid specifying a particular queue, which is also the
+ * default if this function is never called for 'sw'.  */
+void
+lswitch_set_queue(struct lswitch *sw, uint32_t queue)
+{
+    sw->queue = queue;
 }
 
 /* Takes care of necessary 'sw' activity, except for receiving packets (which
@@ -383,12 +403,60 @@ process_switch_features(struct lswitch *sw, struct rconn *rconn, void *osf_)
     }
 }
 
+static uint16_t
+lswitch_choose_destination(struct lswitch *sw, const flow_t *flow)
+{
+    uint16_t out_port;
+
+    /* Learn the source MAC. */
+    if (may_learn(sw, flow->in_port) && sw->ml) {
+        if (mac_learning_learn(sw->ml, flow->dl_src, 0, flow->in_port,
+                               GRAT_ARP_LOCK_NONE)) {
+            VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
+                        "port %"PRIu16, sw->datapath_id,
+                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
+        }
+    }
+
+    /* Drop frames for reserved multicast addresses. */
+    if (eth_addr_is_reserved(flow->dl_dst)) {
+        return OFPP_NONE;
+    }
+
+    if (!may_recv(sw, flow->in_port, false)) {
+        /* STP prevents receiving anything on this port. */
+        return OFPP_NONE;
+    }
+
+    out_port = OFPP_FLOOD;
+    if (sw->ml) {
+        int learned_port = mac_learning_lookup(sw->ml, flow->dl_dst, 0, NULL);
+        if (learned_port >= 0 && may_send(sw, learned_port)) {
+            out_port = learned_port;
+            if (out_port == flow->in_port) {
+                /* Don't send a packet back out its input port. */
+                return OFPP_NONE;
+            }
+        }
+    }
+
+    /* Check if we need to use "NORMAL" action. */
+    if (sw->action_normal && out_port != OFPP_FLOOD) {
+        return OFPP_NORMAL;
+    }
+
+    return out_port;
+}
+
 static void
 process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 {
     struct ofp_packet_in *opi = opi_;
     uint16_t in_port = ntohs(opi->in_port);
-    uint16_t out_port = OFPP_FLOOD;
+    uint16_t out_port;
+
+    struct ofp_action_header actions[2];
+    size_t actions_len;
 
     size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
@@ -401,100 +469,58 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     pkt.size = pkt_len;
     flow_extract(&pkt, 0, in_port, &flow);
 
-    if (may_learn(sw, in_port) && sw->ml) {
-        if (mac_learning_learn(sw->ml, flow.dl_src, 0, in_port,
-                               GRAT_ARP_LOCK_NONE)) {
-            VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
-                        "port %"PRIu16, sw->datapath_id,
-                        ETH_ADDR_ARGS(flow.dl_src), in_port);
-        }
-    }
+    /* Choose output port. */
+    out_port = lswitch_choose_destination(sw, &flow);
 
-    if (eth_addr_is_reserved(flow.dl_src)) {
-        goto drop_it;
+    /* Make actions. */
+    memset(actions, 0, sizeof actions);
+    if (out_port == OFPP_NONE) {
+        actions_len = 0;
+    } else if (sw->queue == UINT32_MAX || out_port >= OFPP_MAX) {
+        struct ofp_action_output *oao = (struct ofp_action_output *) actions;
+        oao->type = htons(OFPAT_OUTPUT);
+        oao->len = htons(sizeof *oao);
+        oao->port = htons(out_port);
+        actions_len = sizeof *oao;
+    } else {
+        struct ofp_action_enqueue *oae = (struct ofp_action_enqueue *) actions;
+        oae->type = htons(OFPAT_ENQUEUE);
+        oae->len = htons(sizeof *oae);
+        oae->port = htons(out_port);
+        oae->queue_id = htonl(sw->queue);
+        actions_len = sizeof *oae;
     }
+    assert(actions_len <= sizeof actions);
 
-    if (!may_recv(sw, in_port, false)) {
-        /* STP prevents receiving anything on this port. */
-        goto drop_it;
-    }
-
-    if (sw->ml) {
-        int learned_port = mac_learning_lookup(sw->ml, flow.dl_dst, 0, NULL);
-        if (learned_port >= 0 && may_send(sw, learned_port)) {
-            out_port = learned_port;
-        }
-    }
-
-    if (in_port == out_port) {
-        /* Don't send out packets on their input ports. */
-        goto drop_it;
-    } else if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
+    /* Send the packet, and possibly the whole flow, to the output port. */
+    if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         struct ofpbuf *buffer;
         struct ofp_flow_mod *ofm;
-        uint32_t wildcards;
-
-        /* Check if we need to wildcard the flows. */
-        if (!sw->exact_flows) {
-            /* We can not wildcard all fields.
-             * We need in_port to detect moves.
-             * We need both SA and DA to do learning. */
-            wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
-                         | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
-        } else {
-            /* Exact match */
-            wildcards = 0;
-        }
-
-        /* Check if we need to use "NORMAL" action. */
-        if (sw->action_normal && out_port != OFPP_FLOOD) {
-            out_port = OFPP_NORMAL;
-        }
 
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        buffer = make_add_simple_flow(&flow, ntohl(opi->buffer_id),
-                                      out_port, sw->max_idle);
+        buffer = make_add_flow(&flow, ntohl(opi->buffer_id),
+                               sw->max_idle, actions_len);
+        ofpbuf_put(buffer, actions, actions_len);
         ofm = buffer->data;
-        ofm->match.wildcards = htonl(wildcards);
+        ofm->match.wildcards = htonl(sw->wildcards);
         queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
-        if (ntohl(opi->buffer_id) == UINT32_MAX) {
+        if (ntohl(opi->buffer_id) == UINT32_MAX && actions_len > 0) {
             queue_tx(sw, rconn,
-                     make_unbuffered_packet_out(&pkt, in_port, out_port));
+                     make_packet_out(&pkt, UINT32_MAX, in_port,
+                                     actions, actions_len / sizeof *actions));
         }
     } else {
-        struct ofpbuf *b;
-
-        /* Check if we need to use "NORMAL" action. */
-        if (sw->action_normal && out_port != OFPP_FLOOD) {
-            out_port = OFPP_NORMAL;
-        }
-
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        if (ntohl(opi->buffer_id) == UINT32_MAX) {
-            b = make_unbuffered_packet_out(&pkt, in_port, out_port);
-        } else {
-            b = make_buffered_packet_out(ntohl(opi->buffer_id),
-                                         in_port, out_port);
+        if (ntohl(opi->buffer_id) != UINT32_MAX || actions_len > 0) {
+            queue_tx(sw, rconn,
+                     make_packet_out(&pkt, ntohl(opi->buffer_id), in_port,
+                                     actions, actions_len / sizeof *actions));
         }
-        queue_tx(sw, rconn, b);
     }
-    return;
-
-drop_it:
-    if (sw->max_idle >= 0) {
-        /* Set up a flow to drop packets. */
-        queue_tx(sw, rconn, make_add_flow(&flow, ntohl(opi->buffer_id),
-                                          sw->max_idle, 0));
-    } else {
-        /* Just drop the packet, since we don't set up flows at all.
-         * XXX we should send a packet_out with no actions if buffer_id !=
-         * UINT32_MAX, to avoid clogging the kernel buffers. */
-    }
-    return;
 }
 
 static void

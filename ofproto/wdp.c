@@ -38,10 +38,10 @@
 #include "timeval.h"
 #include "util.h"
 #include "valgrind.h"
+#include "vlog.h"
 #include "wdp-xflow.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_wdp
+VLOG_DEFINE_THIS_MODULE(wdp)
 
 /* wdp_rule */
 

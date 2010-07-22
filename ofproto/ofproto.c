@@ -55,12 +55,12 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "wdp.h"
 #include "xfif.h"
 #include "xtoxll.h"
 
-#define THIS_MODULE VLM_ofproto
-#include "vlog.h"
+VLOG_DEFINE_THIS_MODULE(ofproto)
 
 #include "sflow_api.h"
 
@@ -2257,6 +2257,7 @@ static int
 handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
                 struct ofp_flow_mod *ofm)
 {
+    struct ofp_match orig_match;
     size_t n_actions;
     int error;
 
@@ -2278,7 +2279,25 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
     }
 
+    /* Normalize ofp->match.  If normalization actually changes anything, then
+     * log the differences. */
+    ofm->match.pad1[0] = ofm->match.pad2[0] = 0;
+    orig_match = ofm->match;
     normalize_match(&ofm->match);
+    if (memcmp(&ofm->match, &orig_match, sizeof orig_match)) {
+        static struct vlog_rate_limit normal_rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        if (!VLOG_DROP_INFO(&normal_rl)) {
+            char *old = ofp_match_to_literal_string(&orig_match);
+            char *new = ofp_match_to_literal_string(&ofm->match);
+            VLOG_INFO("%s: normalization changed ofp_match, details:",
+                      rconn_get_name(ofconn->rconn));
+            VLOG_INFO(" pre: %s", old);
+            VLOG_INFO("post: %s", new);
+            free(old);
+            free(new);
+        }
+    }
+
     if (!ofm->match.wildcards) {
         ofm->priority = htons(UINT16_MAX);
     }

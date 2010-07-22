@@ -45,9 +45,9 @@
 #include "trigger.h"
 #include "util.h"
 #include "unixctl.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_ovsdb_server
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_server)
 
 #if HAVE_OPENSSL
 /* SSL configuration. */
@@ -87,8 +87,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     signal(SIGPIPE, SIG_IGN);
     process_init();
 

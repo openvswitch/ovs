@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include "util.h"
-
-#define THIS_MODULE VLM_vt
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(vt)
 
 static bool get_console_fd(int *fd);
 

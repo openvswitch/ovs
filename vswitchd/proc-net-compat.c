@@ -31,9 +31,9 @@
 #include "hmap.h"
 #include "shash.h"
 #include "svec.h"
-
-#define THIS_MODULE VLM_proc_net_compat
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(proc_net_compat)
 
 /* Netlink socket to bridge compatibility kernel module. */
 static struct nl_sock *brc_sock;

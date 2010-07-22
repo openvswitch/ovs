@@ -37,9 +37,9 @@
 #include "terminal.h"
 #include "timeval.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_ezio_term
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ezio_term)
 
 /* EZIO button status. */
 enum btn_status {
@@ -98,8 +98,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
 

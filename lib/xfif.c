@@ -38,9 +38,9 @@
 #include "svec.h"
 #include "util.h"
 #include "valgrind.h"
-
 #include "vlog.h"
-#define THIS_MODULE VLM_xfif
+
+VLOG_DEFINE_THIS_MODULE(xfif)
 
 static const struct xfif_class *base_xfif_classes[] = {
 #ifdef HAVE_NETLINK
@@ -1096,6 +1096,25 @@ xfif_get_netflow_ids(const struct xfif *xfif,
 {
     *engine_type = xfif->netflow_engine_type;
     *engine_id = xfif->netflow_engine_id;
+}
+
+/* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a priority
+ * value for use in the ODPAT_SET_PRIORITY action.  On success, returns 0 and
+ * stores the priority into '*priority'.  On failure, returns a positive errno
+ * value and stores 0 into '*priority'. */
+int
+dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
+                       uint32_t *priority)
+{
+    int error = (dpif->dpif_class->queue_to_priority
+                 ? dpif->dpif_class->queue_to_priority(dpif, queue_id,
+                                                       priority)
+                 : EOPNOTSUPP);
+    if (error) {
+        *priority = 0;
+    }
+    log_operation(dpif, "queue_to_priority", error);
+    return error;
 }
 
 void

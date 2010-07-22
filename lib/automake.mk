@@ -265,30 +265,8 @@ lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl
 	mv $@.tmp $@
 EXTRA_DIST += lib/coverage-scan.pl
 
-
-# Make sure that every vlog module listed in vlog-modules.def is
-# actually used somewhere.
-ALL_LOCAL += check-for-unused-vlog-modules
-check-for-unused-vlog-modules:
-	if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then    \
-	  cd $(srcdir);							      \
-	  decl_vlog=`sed -n 's/^VLOG_MODULE(\([_a-z0-9]\{1,\}\)).*$$/\1/p'    \
-	             lib/vlog-modules.def |				      \
-                     LC_ALL=C sort -u |					      \
-                     xargs echo`;					      \
-	  used_vlog=`git grep VLM_ |					      \
-	             sed -n 's/.*VLM_\([a-z_0-9]\{1,\}\).*/\1/p' |	      \
-	             LC_ALL=C sort -u |					      \
-                     xargs echo`;					      \
-	  rc=0;								      \
-	  for decl in $$decl_vlog; do					      \
-            case " $$used_vlog " in					      \
-	      *" $$decl "*) ;;						      \
-	      *) echo "vlog module $$decl is declared in lib/vlog-modules.def \
-but not used by any source file";					      \
-                 rc=1 ;;						      \
-            esac							      \
-          done;								      \
-	  exit $$rc;							      \
-	fi
-.PHONY: check-for-unused-vlog-modules
+ALL_LOCAL += check-vlog-modules
+check-vlog-modules:
+	cd $(srcdir) && build-aux/check-vlog-modules
+.PHONY: check-vlog-modules
+EXTRA_DIST += build-aux/check-vlog-modules

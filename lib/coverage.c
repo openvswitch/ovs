@@ -23,9 +23,9 @@
 #include "hash.h"
 #include "unixctl.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_coverage
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(coverage)
 
 static unsigned int epoch;
 

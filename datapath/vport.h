@@ -219,8 +219,7 @@ void vport_free(struct vport *);
  * area was allocated on creation.  This allows that area to be accessed and
  * used for any purpose needed by the vport implementer.
  */
-static inline void *
-vport_priv(const struct vport *vport)
+static inline void *vport_priv(const struct vport *vport)
 {
 	return (u8 *)vport + ALIGN(sizeof(struct vport), VPORT_ALIGN);
 }
@@ -235,8 +234,7 @@ vport_priv(const struct vport *vport)
  * the result of a hash table lookup.  @priv must point to the start of the
  * private data area.
  */
-static inline struct vport *
-vport_from_priv(const void *priv)
+static inline struct vport *vport_from_priv(const void *priv)
 {
 	return (struct vport *)(priv - ALIGN(sizeof(struct vport), VPORT_ALIGN));
 }

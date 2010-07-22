@@ -22,9 +22,9 @@
 #include <string.h>
 #include "dynamic-string.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_svec
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(svec)
 
 void
 svec_init(struct svec *svec)

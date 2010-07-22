@@ -44,10 +44,10 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
+#include "vlog.h"
 #include "xfif.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_openflowd
+VLOG_DEFINE_THIS_MODULE(openflowd)
 
 /* Settings that may be configured by the user. */
 struct ofsettings {
@@ -97,8 +97,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    time_init();
-    vlog_init();
     parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 

@@ -36,9 +36,9 @@
 #include "transaction.h"
 #include "uuid.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_ovsdb_file
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ovsdb_file)
 
 /* Minimum number of milliseconds between database compactions. */
 #define COMPACT_MIN_MSEC        (10 * 60 * 1000) /* 10 minutes. */

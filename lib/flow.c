@@ -28,10 +28,10 @@
 #include "openvswitch/xflow.h"
 #include "packets.h"
 #include "unaligned.h"
+#include "vlog.h"
 #include "xtoxll.h"
 
-#include "vlog.h"
-#define THIS_MODULE VLM_flow
+VLOG_DEFINE_THIS_MODULE(flow)
 
 static struct arp_eth_header *
 pull_arp(struct ofpbuf *packet)

@@ -31,6 +31,11 @@ fi
 PATH=$new_path
 export PATH
 
+if test "$DISABLE_LCOV" = true; then
+    exec $wrap_program "$@"
+    exit 1
+fi
+
 # XXX Probably want some kind of synchronization here to deal with
 # programs running in parallel.
 LCOV="lcov -b $abs_top_builddir -d $abs_top_builddir -q"

@@ -1,3 +1,76 @@
+AT_BANNER([OVSDB -- default values])
+
+OVSDB_CHECK_POSITIVE([default atoms],
+  [default-atoms],
+  [[integer: OK
+real: OK
+boolean: OK
+string: OK
+uuid: OK]])
+
+OVSDB_CHECK_POSITIVE([default data],
+  [default-data],
+  [[key integer, value void, n_min 0: OK
+key integer, value integer, n_min 0: OK
+key integer, value real, n_min 0: OK
+key integer, value boolean, n_min 0: OK
+key integer, value string, n_min 0: OK
+key integer, value uuid, n_min 0: OK
+key real, value void, n_min 0: OK
+key real, value integer, n_min 0: OK
+key real, value real, n_min 0: OK
+key real, value boolean, n_min 0: OK
+key real, value string, n_min 0: OK
+key real, value uuid, n_min 0: OK
+key boolean, value void, n_min 0: OK
+key boolean, value integer, n_min 0: OK
+key boolean, value real, n_min 0: OK
+key boolean, value boolean, n_min 0: OK
+key boolean, value string, n_min 0: OK
+key boolean, value uuid, n_min 0: OK
+key string, value void, n_min 0: OK
+key string, value integer, n_min 0: OK
+key string, value real, n_min 0: OK
+key string, value boolean, n_min 0: OK
+key string, value string, n_min 0: OK
+key string, value uuid, n_min 0: OK
+key uuid, value void, n_min 0: OK
+key uuid, value integer, n_min 0: OK
+key uuid, value real, n_min 0: OK
+key uuid, value boolean, n_min 0: OK
+key uuid, value string, n_min 0: OK
+key uuid, value uuid, n_min 0: OK
+key integer, value void, n_min 1: OK
+key integer, value integer, n_min 1: OK
+key integer, value real, n_min 1: OK
+key integer, value boolean, n_min 1: OK
+key integer, value string, n_min 1: OK
+key integer, value uuid, n_min 1: OK
+key real, value void, n_min 1: OK
+key real, value integer, n_min 1: OK
+key real, value real, n_min 1: OK
+key real, value boolean, n_min 1: OK
+key real, value string, n_min 1: OK
+key real, value uuid, n_min 1: OK
+key boolean, value void, n_min 1: OK
+key boolean, value integer, n_min 1: OK
+key boolean, value real, n_min 1: OK
+key boolean, value boolean, n_min 1: OK
+key boolean, value string, n_min 1: OK
+key boolean, value uuid, n_min 1: OK
+key string, value void, n_min 1: OK
+key string, value integer, n_min 1: OK
+key string, value real, n_min 1: OK
+key string, value boolean, n_min 1: OK
+key string, value string, n_min 1: OK
+key string, value uuid, n_min 1: OK
+key uuid, value void, n_min 1: OK
+key uuid, value integer, n_min 1: OK
+key uuid, value real, n_min 1: OK
+key uuid, value boolean, n_min 1: OK
+key uuid, value string, n_min 1: OK
+key uuid, value uuid, n_min 1: OK]])
+
 AT_BANNER([OVSDB -- atoms without constraints])
 
 OVSDB_CHECK_POSITIVE([integer atom from JSON], 

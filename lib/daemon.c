@@ -32,9 +32,9 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_daemon
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(daemon)
 
 /* Should we run in the background? */
 static bool detach;

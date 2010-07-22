@@ -431,16 +431,24 @@ class DatapathVswitch(Datapath):
     def bring_down_existing(self):
         # interface-reconfigure is never explicitly called to down a
         # bond master.  However, when we are called to up a slave it
-        # is implicit that we are destroying the master.
+        # is implicit that we are destroying the master.  Conversely,
+        # when we are called to up a bond is is implicit that we are
+        # taking down the slaves.
         #
-        # This is (only) important in the case where the bond master
-        # uses DHCP.  We need to kill the dhclient process, otherwise
-        # bringing the bond master back up later will fail because
-        # ifup will refuse to start a duplicate dhclient.
+        # This is (only) important in the case where the device being
+        # implicitly taken down uses DHCP.  We need to kill the
+        # dhclient process, otherwise performing the inverse operation
+        # later later will fail because ifup will refuse to start a
+        # duplicate dhclient.
         bond_masters = pif_get_bond_masters(self._pif)
         for master in bond_masters:
             log("action_up: bring down bond master %s" % (pif_netdev_name(master)))
             run_command(["/sbin/ifdown", pif_bridge_name(master)])
+
+        bond_slaves = pif_get_bond_slaves(self._pif)
+        for slave in bond_slaves:
+            log("action_up: bring down bond slave %s" % (pif_netdev_name(slave)))
+            run_command(["/sbin/ifdown", pif_bridge_name(slave)])
 
     def configure(self):
         # Bring up physical devices. ovs-vswitchd initially enables or

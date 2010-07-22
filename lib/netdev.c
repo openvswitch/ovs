@@ -37,9 +37,9 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "svec.h"
-
-#define THIS_MODULE VLM_netdev
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(netdev)
 
 static const struct netdev_class *base_netdev_classes[] = {
 #ifdef HAVE_NETLINK
@@ -1493,9 +1493,7 @@ netdev_monitor_cb(struct netdev_notifier *notifier)
 {
     struct netdev_monitor *monitor = notifier->aux;
     const char *name = netdev_get_name(notifier->netdev);
-    if (!shash_find(&monitor->changed_netdevs, name)) {
-        shash_add(&monitor->changed_netdevs, name, NULL);
-    }
+    shash_add_once(&monitor->changed_netdevs, name, NULL);
 }
 
 /* Attempts to add 'netdev' as a netdev monitored by 'monitor'.  Returns 0 if

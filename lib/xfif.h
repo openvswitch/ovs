@@ -101,6 +101,9 @@ void xfif_recv_wait(struct xfif *);
 void xfif_get_netflow_ids(const struct xfif *,
                           uint8_t *engine_type, uint8_t *engine_id);
 
+int xfif_queue_to_priority(const struct xfif *, uint32_t queue_id,
+                           uint32_t *priority);
+
 #ifdef  __cplusplus
 }
 #endif

@@ -27,7 +27,7 @@ itself to the background.
 
 .SH OPTIONS
 .TP
-\fB--accept-vconn=\fIregex\fR
+\fB\-\-accept\-vconn=\fIregex\fR
 With this option, only controllers whose names match POSIX extended
 regular expression \fIregex\fR will be accepted.  Specifying
 \fBssl:.*\fR for \fIregex\fR, for example, would cause only SSL
@@ -39,7 +39,7 @@ controller location string, as if it begins with \fB^\fR.
 When this option is not given, the default \fIregex\fR is
 \fBtcp:.*\fR.
 .TP
-\fB--exit-without-bind\fR
+\fB\-\-exit\-without\-bind\fR
 By default, \fBovs\-discover\fR binds the network device that receives
 the first acceptable response to the IP address received over DHCP.
 With this option, the configuration of the network device is not
@@ -47,11 +47,11 @@ changed at all, except to bring it up if it is initially down, and
 \fBovs\-discover\fR will exit immediately after it receives an
 acceptable DHCP response.
 
-This option is mutually exclusive with \fB--exit-after-bind\fR and
-\fB--no-detach\fR.
+This option is mutually exclusive with \fB\-\-exit\-after\-bind\fR and
+\fB\-\-no\-detach\fR.
 
 .TP
-\fB--exit-after-bind\fR
+\fB\-\-exit\-after\-bind\fR
 By default, after it receives an acceptable DHCP response,
 \fBovs\-discover\fR detaches itself from the foreground session and
 runs in the background maintaining the DHCP lease as necessary.  With
@@ -60,39 +60,39 @@ receives an acceptable DHCP response and configures the network device
 with the received IP address.  The address obtained via DHCP could
 therefore be used past the expiration of its lease.
 
-This option is mutually exclusive with \fB--exit-without-bind\fR and
-\fB--no-detach\fR.
+This option is mutually exclusive with \fB\-\-exit\-without\-bind\fR and
+\fB\-\-no\-detach\fR.
 
 .TP
-\fB--no-detach\fR
+\fB\-\-no\-detach\fR
 By default, \fBovs\-discover\fR runs in the foreground until it obtains
 an acceptable DHCP response, then it detaches itself from the
 foreground session and run as a background process.  This option
 prevents \fBovs\-discover\fR from detaching, causing it to run in the
 foreground even after it obtains a DHCP response.
 
-This option is mutually exclusive with \fB--exit-without-bind\fR and
-\fB--exit-after-bind\fR.
+This option is mutually exclusive with \fB\-\-exit\-without\-bind\fR and
+\fB\-\-exit\-after\-bind\fR.
 
 .TP
-\fB--pidfile\fR[\fB=\fIpidfile\fR]
+\fB\-\-pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fBovs\-discover.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
 \fB@RUNDIR@\fR.
 
 The \fIpidfile\fR is created when \fBovs\-discover\fR detaches, so
-this this option has no effect when one of \fB--exit-without-bind\fR,
-\fB--exit-after-bind\fR, or \fB--no-detach\fR is also given.
+this this option has no effect when one of \fB\-\-exit\-without\-bind\fR,
+\fB\-\-exit\-after\-bind\fR, or \fB\-\-no\-detach\fR is also given.
 
 .TP
-\fB--overwrite-pidfile\fR
-By default, when \fB--pidfile\fR is specified and the specified pidfile 
+\fB\-\-overwrite\-pidfile\fR
+By default, when \fB\-\-pidfile\fR is specified and the specified pidfile 
 already exists and is locked by a running process, \fBcontroller\fR refuses 
-to start.  Specify \fB--overwrite-pidfile\fR to cause it to instead 
+to start.  Specify \fB\-\-overwrite\-pidfile\fR to cause it to instead 
 overwrite the pidfile.
 
-When \fB--pidfile\fR is not specified, this option has no effect.
+When \fB\-\-pidfile\fR is not specified, this option has no effect.
 
 .so lib/vlog.man
 .so lib/common.man

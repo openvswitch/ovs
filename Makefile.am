@@ -69,7 +69,6 @@ SUFFIXES =
 noinst_HEADERS += $(EXTRA_DIST)
 
 EXTRA_DIST += \
-	build-aux/update-debian-changelog \
 	soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'

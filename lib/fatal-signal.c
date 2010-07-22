@@ -28,9 +28,9 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "util.h"
-
-#define THIS_MODULE VLM_fatal_signal
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(fatal_signal)
 
 /* Signals to catch. */
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
@@ -215,9 +215,7 @@ fatal_signal_add_file_to_unlink(const char *file)
         fatal_signal_add_hook(unlink_files, cancel_files, NULL, true);
     }
 
-    if (!shash_find(&files, file)) {
-        shash_add(&files, file, NULL);
-    }
+    shash_add_once(&files, file, NULL);
 }
 
 /* Unregisters 'file' from being unlinked when the program terminates via

@@ -35,9 +35,9 @@
 #include "poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"
-
-#define THIS_MODULE VLM_dhcp_client
 #include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(dhcp_client)
 
 #define DHCLIENT_STATES                         \
     DHCLIENT_STATE(INIT, 1 << 0)                \
