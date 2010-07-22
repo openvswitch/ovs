@@ -251,10 +251,14 @@ struct wdp_class {
      * callback. */
     int (*port_poll_wait)(const struct wdp *wdp);
 
-    /* If 'wdp' contains a flow exactly equal to 'flow', returns that flow.
-     * Otherwise returns null. */
+    /* If 'wdp' contains exactly one flow exactly equal to 'flow' in one of the
+     * tables in the bit-mask in 'include', returns that flow.  Otherwise (if
+     * there is no match or more than one match), returns null.
+     *
+     * A flow in table 'table_id' is a candidate for matching if 'include & (1u
+     * << table_id)' is nonzero. */
     struct wdp_rule *(*flow_get)(const struct wdp *wdp,
-                                 const flow_t *flow);
+                                 const flow_t *flow, unsigned int include);
 
     /* If 'wdp' contains one or more flows that match 'flow', returns the
      * highest-priority matching flow.  If there is more than one
@@ -303,22 +307,47 @@ struct wdp_class {
      * feature. */
     bool (*flow_overlaps)(const struct wdp *wdp, const flow_t *flow);
 
-    /* Adds or modifies a flow in 'wdp' as specified in 'put':
+    /* Adds or modifies a flow in 'wdp' as specified in 'put'.
      *
-     *   - If a rule with the same priority, wildcards, and values for fields
-     *     that are not wildcarded specified in 'put->flow' does not already
-     *     exist in 'wdp', then behavior depends on whether WDP_PUT_CREATE is
-     *     specified in 'put->flags': if it is, the flow will be added,
-     *     otherwise the operation will fail with ENOENT.
+     * As the first step, this function determines the table of 'wdp' in which
+     * the flow should be inserted or modified:
+     *
+     *   - If 'put->ofp_table_id' is 0xff, then 'wdp' chooses the flow table
+     *     itself.  It may do so based on, for example, the flow's wildcards
+     *     and how full the various tables in 'wdp' already are.
+     *
+     *     If a flow identical to 'put->flow' already exists in one of 'wdp''s
+     *     tables, this does not necessarily mean that that table must be
+     *     chosen.  That is, 'wdp' may allow duplicate flows, as long as they
+     *     are in different tables.  Conversely, 'wdp' may refuse to add
+     *     duplicate flows.  (Whether to allow duplicate flows ordinarily
+     *     depends on the structure of the hardware.)
+     *
+     *   - If 'put->ofp_table_id' is not 0xff, then that table must be used.
+     *     If 'wdp' cannot support 'put->flow' in the specified table, or if no
+     *     such table exists, then the function must return an error.  Reasons
+     *     that 'wdp' might not support a flow in a given table include: the
+     *     table is full, the flow has wildcards not supported by that table or
+     *     otherwise is not in a form supported by the table, or (if 'wdp' does
+     *     not support duplicate flows) putting the flow in that table would
+     *     cause a duplicate flow.
+     *
+     * Afterward, it performs the action:
+     *
+     *   - If a rule with the same priority, wildcards, values specified in
+     *     'put->flow' (for fields that are not wildcarded) does not already
+     *     exist in 'wdp' in the selected table, then behavior depends on
+     *     whether WDP_PUT_CREATE is specified in 'put->flags': if it is, the
+     *     flow will be added, otherwise the operation will fail with ENOENT.
      *
      *     The new flow's actions and timeouts are set from the values in
      *     'put'.
      *
-     *   - Otherwise, the flow specified in 'put->flow' does exist in 'wdp'.
-     *     Behavior in this case depends on whether WDP_PUT_MODIFY is specified
-     *     in 'put->flags': if it is, the flow will be updated, otherwise the
-     *     operation will fail with EEXIST.  The exact updates depend on the
-     *     remaining flags in 'put->flags':
+     *   - Otherwise, the flow specified in 'put->flow' does exist in 'wdp' in
+     *     the selected table.  Behavior in this case depends on whether
+     *     WDP_PUT_MODIFY is specified in 'put->flags': if it is, the flow will
+     *     be updated, otherwise the operation will fail with EEXIST.  The
+     *     exact updates depend on the remaining flags in 'put->flags':
      *
      *       . If WDP_PUT_COUNTERS is set, packet counters, byte counters, TCP
      *         flags, and IP TOS values are set to 0.

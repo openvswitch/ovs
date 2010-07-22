@@ -782,10 +782,16 @@ wdp_flow_flush(struct wdp *wdp)
     return error;
 }
 
+/* If 'wdp' contains exactly one flow exactly equal to 'flow' in one of the
+ * tables in the bit-mask in 'include', returns that flow.  Otherwise (if there
+ * is no match or more than one match), returns null.
+ *
+ * A flow in table 'table_id' is a candidate for matching if 'include & (1u <<
+ * table_id)' is nonzero. */
 struct wdp_rule *
-wdp_flow_get(struct wdp *wdp, const flow_t *flow)
+wdp_flow_get(struct wdp *wdp, const flow_t *flow, unsigned int include)
 {
-    return wdp->wdp_class->flow_get(wdp, flow);
+    return wdp->wdp_class->flow_get(wdp, flow, include);
 }
 
 struct wdp_rule *

@@ -141,7 +141,8 @@ struct wdp_flow_stats {
 };
 
 /* Finding and inspecting flows. */
-struct wdp_rule *wdp_flow_get(struct wdp *, const flow_t *);
+struct wdp_rule *wdp_flow_get(struct wdp *, const flow_t *,
+                              unsigned int include);
 struct wdp_rule *wdp_flow_match(struct wdp *, const flow_t *);
 
 typedef void wdp_flow_cb_func(struct wdp_rule *, void *aux);
@@ -178,6 +179,10 @@ struct wdp_flow_put {
 
     unsigned short int idle_timeout;
     unsigned short int hard_timeout;
+
+    /* OpenFlow 'table_id' to which a new flow is to be added.  Value 0xff
+     * means that the WDP implementation should select a table. */
+    uint8_t ofp_table_id;
 };
 
 int wdp_flow_put(struct wdp *, struct wdp_flow_put *,

@@ -732,9 +732,10 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
                    int verbosity)
 {
     const struct ofp_flow_mod *ofm = oh;
+    unsigned int command = ntohs(ofm->command);
 
     ofp_print_match(string, &ofm->match, verbosity);
-    switch (ntohs(ofm->command)) {
+    switch (command & 0xff) {
     case OFPFC_ADD:
         ds_put_cstr(string, " ADD: ");
         break;
@@ -751,7 +752,10 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
         ds_put_cstr(string, " DEL_STRICT: ");
         break;
     default:
-        ds_put_format(string, " cmd:%d ", ntohs(ofm->command));
+        ds_put_format(string, " cmd:%u ", command);
+    }
+    if (command & 0xff00) {
+        ds_put_format(string, "table_id:%u ", command >> 8);
     }
     ds_put_format(string, "cookie:0x%"PRIx64" idle:%d hard:%d pri:%d "
             "buf:%#x flags:%"PRIx16" ", ntohll(ofm->cookie), 

@@ -1544,10 +1544,16 @@ wx_port_poll_wait(const struct wdp *wdp)
 }
 
 static struct wdp_rule *
-wx_flow_get(const struct wdp *wdp, const flow_t *flow)
+wx_flow_get(const struct wdp *wdp, const flow_t *flow, unsigned int include)
 {
     struct wx *wx = wx_cast(wdp);
     struct wx_rule *rule;
+    int table_id;
+
+    table_id = flow->wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
+    if (!(include & (1u << table_id))) {
+        return NULL;
+    }
 
     rule = wx_rule_cast(classifier_find_rule_exactly(&wx->cls, flow));
     return rule && !wx_rule_is_hidden(rule) ? &rule->wr : NULL;
@@ -1699,6 +1705,12 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
 {
     struct wx *wx = wx_cast(wdp);
     struct wx_rule *rule;
+    uint8_t ofp_table_id;
+
+    ofp_table_id = put->flow->wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
+    if (put->ofp_table_id != 0xff && put->ofp_table_id != ofp_table_id) {
+        return EINVAL;
+    }
 
     rule = wx_rule_cast(classifier_find_rule_exactly(&wx->cls, put->flow));
     if (rule && wx_rule_is_hidden(rule)) {
@@ -1724,8 +1736,7 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
     rule = wx_rule_create(NULL, put->actions, put->n_actions,
                           put->idle_timeout, put->hard_timeout);
     cls_rule_from_flow(put->flow, &rule->wr.cr);
-    rule->wr.ofp_table_id = (put->flow->wildcards
-                             ? TABLEID_CLASSIFIER : TABLEID_HASH);
+    rule->wr.ofp_table_id = ofp_table_id;
     wx_rule_insert(wx, rule, NULL, 0);
 
     if (old_stats) {

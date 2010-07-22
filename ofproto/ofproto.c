@@ -120,6 +120,7 @@ struct ofconn {
     struct list node;           /* In struct ofproto's "all_conns" list. */
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
+    bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
@@ -1053,6 +1054,8 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
     return 0;
 }
 
+/* Intended for used by ofproto clients and ofproto submodules to add flows to
+ * the flow table. */
 void
 ofproto_add_flow(struct ofproto *p, const flow_t *flow,
                  const union ofp_action *actions, size_t n_actions,
@@ -1067,16 +1070,19 @@ ofproto_add_flow(struct ofproto *p, const flow_t *flow,
     put.n_actions = n_actions;
     put.idle_timeout = idle_timeout;
     put.hard_timeout = 0;
+    put.ofp_table_id = 0xff;
 
     if (!wdp_flow_put(p->wdp, &put, NULL, &rule)) {
         ofproto_rule_init(rule);
     }
 }
 
+/* Intended for used by ofproto clients and ofproto submodules to delete flows
+ * that they earlier added to the flow table. */
 void
 ofproto_delete_flow(struct ofproto *ofproto, const flow_t *flow)
 {
-    struct wdp_rule *rule = wdp_flow_get(ofproto->wdp, flow);
+    struct wdp_rule *rule = wdp_flow_get(ofproto->wdp, flow, UINT_MAX);
     if (rule) {
         delete_flow(ofproto, rule, OFPRR_DELETE);
     }
@@ -1693,6 +1699,12 @@ table_id_to_include(uint8_t table_id)
             : 0);
 }
 
+static unsigned int
+flow_mod_table_id(const struct ofconn *ofconn, const struct ofp_flow_mod *ofm)
+{
+    return ofconn->flow_mod_table_id ? ntohs(ofm->command) >> 8 : 0xff;
+}
+
 static int
 handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
                           const struct ofp_stats_request *osr,
@@ -2003,6 +2015,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     put.n_actions = n_actions;
     put.idle_timeout = ntohs(ofm->idle_timeout);
     put.hard_timeout = ntohs(ofm->hard_timeout);
+    put.ofp_table_id = flow_mod_table_id(ofconn, ofm);
     error = wdp_flow_put(p->wdp, &put, NULL, &rule);
     if (error) {
         /* XXX wdp_flow_put should return OpenFlow error code. */
@@ -2023,13 +2036,16 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static struct wdp_rule *
-find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
+find_flow_strict(struct ofproto *p, const struct ofconn *ofconn,
+                 const struct ofp_flow_mod *ofm)
 {
+    uint8_t table_id;
     flow_t flow;
 
     flow_from_match(&ofm->match, ntohs(ofm->priority),
                     p->tun_id_from_cookie, ofm->cookie, &flow);
-    return wdp_flow_get(p->wdp, &flow);
+    table_id = flow_mod_table_id(ofconn, ofm);
+    return wdp_flow_get(p->wdp, &flow, table_id_to_include(table_id));
 }
 
 static int
@@ -2069,8 +2085,8 @@ static int modify_flow(struct ofproto *, const struct ofp_flow_mod *,
                        size_t n_actions, struct wdp_rule *);
 static void modify_flows_cb(struct wdp_rule *, void *cbdata_);
 
-/* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code as
- * encoded by ofp_mkerr() on failure.
+/* Implements OFPFC_ADD and OFPFC_MODIFY.  Returns 0 on success or an OpenFlow
+ * error code as encoded by ofp_mkerr() on failure.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
@@ -2079,6 +2095,7 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
                    const struct ofp_flow_mod *ofm, size_t n_actions)
 {
     struct modify_flows_cbdata cbdata;
+    uint8_t table_id;
     flow_t target;
 
     cbdata.ofproto = p;
@@ -2089,7 +2106,8 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     flow_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
                     &target);
 
-    wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
+    table_id = flow_mod_table_id(ofconn, ofm);
+    wdp_flow_for_each_match(p->wdp, &target, table_id_to_include(table_id),
                             modify_flows_cb, &cbdata);
     if (cbdata.match) {
         /* This credits the packet to whichever flow happened to match last.
@@ -2111,7 +2129,7 @@ static int
 modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
                    struct ofp_flow_mod *ofm, size_t n_actions)
 {
-    struct wdp_rule *rule = find_flow_strict(p, ofm);
+    struct wdp_rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule && !rule_is_hidden(rule)) {
         modify_flow(p, ofm, n_actions, rule);
         return send_buffered_packet(p, ofconn, rule, ofm);
@@ -2158,6 +2176,7 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     put.actions = (const union ofp_action *) actions;
     put.n_actions = n_actions;
     put.idle_timeout = put.hard_timeout = 0;
+    put.ofp_table_id = rule->ofp_table_id;
     return wdp_flow_put(p->wdp, &put, NULL, NULL);
 }
 
@@ -2174,9 +2193,11 @@ static void delete_flow_core(struct ofproto *, struct wdp_rule *,
 
 /* Implements OFPFC_DELETE. */
 static void
-delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
+delete_flows_loose(struct ofproto *p, const struct ofconn *ofconn,
+                   const struct ofp_flow_mod *ofm)
 {
     struct delete_flows_cbdata cbdata;
+    uint8_t table_id;
     flow_t target;
 
     cbdata.ofproto = p;
@@ -2184,16 +2205,18 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
 
     flow_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
                     &target);
+    table_id = flow_mod_table_id(ofconn, ofm);
 
-    wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
+    wdp_flow_for_each_match(p->wdp, &target, table_id_to_include(table_id),
                             delete_flows_cb, &cbdata);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
 static void
-delete_flow_strict(struct ofproto *p, struct ofp_flow_mod *ofm)
+delete_flow_strict(struct ofproto *p, const struct ofconn *ofconn,
+                   struct ofp_flow_mod *ofm)
 {
-    struct wdp_rule *rule = find_flow_strict(p, ofm);
+    struct wdp_rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule) {
         delete_flow_core(p, rule, ofm->out_port);
     }
@@ -2266,7 +2289,15 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
 
-    switch (ntohs(ofm->command)) {
+    if (!ofconn->flow_mod_table_id && ofm->command & htons(0xff00)) {
+        static struct vlog_rate_limit table_id_rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&table_id_rl, "%s: flow_mod table_id feature must be "
+                     "enabled with NXT_FLOW_MOD_TABLE_ID",
+                     rconn_get_name(ofconn->rconn));
+        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
+    }
+
+    switch (ntohs(ofm->command) & 0xff) {
     case OFPFC_ADD:
         return modify_flows_loose(p, ofconn, ofm, n_actions);
 
@@ -2277,11 +2308,11 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return modify_flow_strict(p, ofconn, ofm, n_actions);
 
     case OFPFC_DELETE:
-        delete_flows_loose(p, ofm);
+        delete_flows_loose(p, ofconn, ofm);
         return 0;
 
     case OFPFC_DELETE_STRICT:
-        delete_flow_strict(p, ofm);
+        delete_flow_strict(p, ofconn, ofm);
         return 0;
 
     default:
@@ -2300,6 +2331,21 @@ handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
     }
 
     p->tun_id_from_cookie = !!msg->set;
+    return 0;
+}
+
+static int
+handle_flow_mod_table_id(struct ofconn *ofconn,
+                         struct nxt_flow_mod_table_id *msg)
+{
+    int error;
+
+    error = check_ofp_message(&msg->header, OFPT_VENDOR, sizeof *msg);
+    if (error) {
+        return error;
+    }
+
+    ofconn->flow_mod_table_id = !!msg->set;
     return 0;
 }
 
@@ -2386,6 +2432,9 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 
     case NXT_TUN_ID_FROM_COOKIE:
         return handle_tun_id_from_cookie(p, msg);
+
+    case NXT_FLOW_MOD_TABLE_ID:
+        return handle_flow_mod_table_id(ofconn, msg);
 
     case NXT_ROLE_REQUEST:
         return handle_role_request(p, ofconn, msg);

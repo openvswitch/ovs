@@ -567,7 +567,8 @@ struct ofp_flow_mod {
     uint64_t cookie;             /* Opaque controller-issued identifier. */
 
     /* Flow actions. */
-    uint16_t command;             /* One of OFPFC_*. */
+    uint16_t command;             /* One of OFPFC_* (NXT_FLOW_MOD_TABLE_ID
+                                   * affects interpretation of high 8 bits). */
     uint16_t idle_timeout;        /* Idle time before discarding (seconds). */
     uint16_t hard_timeout;        /* Max time before discarding (seconds). */
     uint16_t priority;            /* Priority level of flow entry. */
