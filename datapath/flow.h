@@ -50,12 +50,16 @@ void flow_deferred_free_acts(struct sw_flow_actions *);
 int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
-struct sw_flow *flow_cast(const struct tbl_node *);
 u32 flow_hash(const struct odp_flow_key *key);
 int flow_cmp(const struct tbl_node *, void *target);
 void flow_free_tbl(struct tbl_node *);
 
 int flow_init(void);
 void flow_exit(void);
+
+static inline struct sw_flow *flow_cast(const struct tbl_node *node)
+{
+	return container_of(node, struct sw_flow, tbl_node);
+}
 
 #endif /* flow.h */

@@ -319,11 +319,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	return retval;
 }
 
-struct sw_flow *flow_cast(const struct tbl_node *node)
-{
-	return container_of(node, struct sw_flow, tbl_node);
-}
-
 u32 flow_hash(const struct odp_flow_key *key)
 {
 	return jhash2((u32*)key, sizeof *key / sizeof(u32), hash_seed);
