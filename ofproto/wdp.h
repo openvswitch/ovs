@@ -187,9 +187,11 @@ struct wdp_flow_put {
 
 int wdp_flow_put(struct wdp *, struct wdp_flow_put *,
                    struct wdp_flow_stats *old_stats,
-                   struct wdp_rule **rulep);
+                   struct wdp_rule **rulep)
+    WARN_UNUSED_RESULT;
 int wdp_flow_delete(struct wdp *, struct wdp_rule *,
-                      struct wdp_flow_stats *final_stats);
+                      struct wdp_flow_stats *final_stats)
+    WARN_UNUSED_RESULT;
 
 /* Sending packets in flows. */
 int wdp_flow_inject(struct wdp *, struct wdp_rule *,

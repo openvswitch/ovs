@@ -97,7 +97,7 @@ rule_is_hidden(const struct wdp_rule *rule)
     return false;
 }
 
-static void delete_flow(struct ofproto *, struct wdp_rule *, uint8_t reason);
+static int delete_flow(struct ofproto *, struct wdp_rule *, uint8_t reason);
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -2160,12 +2160,12 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(ofm->buffer_id),
                                 &packet, &in_port);
         if (!error) {
-            wdp_flow_inject(p->wdp, rule, in_port, packet);
+            error = wdp_flow_inject(p->wdp, rule, in_port, packet);
             ofpbuf_delete(packet);
         }
     }
 
-    return 0;
+    return error;
 }
 
 static struct wdp_rule *
@@ -2199,10 +2199,10 @@ send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
         return error;
     }
 
-    wdp_flow_inject(ofproto->wdp, rule, in_port, packet);
+    error = wdp_flow_inject(ofproto->wdp, rule, in_port, packet);
     ofpbuf_delete(packet);
 
-    return 0;
+    return error;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -2215,7 +2215,8 @@ struct modify_flows_cbdata {
 };
 
 static int modify_flow(struct ofproto *, const struct ofp_flow_mod *,
-                       size_t n_actions, struct wdp_rule *);
+                       size_t n_actions, struct wdp_rule *)
+    WARN_UNUSED_RESULT;
 static int modify_flows_cb(struct wdp_rule *, void *cbdata_);
 
 /* Implements OFPFC_ADD and OFPFC_MODIFY.  Returns 0 on success or an OpenFlow
@@ -2230,6 +2231,7 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     struct modify_flows_cbdata cbdata;
     uint8_t table_id;
     flow_t target;
+    int error;
 
     cbdata.ofproto = p;
     cbdata.ofm = ofm;
@@ -2240,14 +2242,18 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
                     &target);
 
     table_id = flow_mod_table_id(ofconn, ofm);
-    wdp_flow_for_each_match(p->wdp, &target, table_id_to_include(table_id),
-                            modify_flows_cb, &cbdata);
+    error = wdp_flow_for_each_match(p->wdp, &target,
+                                    table_id_to_include(table_id),
+                                    modify_flows_cb, &cbdata);
+    if (error) {
+        return error;
+    }
+
     if (cbdata.match) {
         /* This credits the packet to whichever flow happened to match last.
          * That's weird.  Maybe we should do a lookup for the flow that
          * actually matches the packet?  Who knows. */
-        send_buffered_packet(p, ofconn, cbdata.match, ofm);
-        return 0;
+        return send_buffered_packet(p, ofconn, cbdata.match, ofm);
     } else {
         return add_flow(p, ofconn, ofm, n_actions);
     }
@@ -2264,8 +2270,8 @@ modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
 {
     struct wdp_rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule && !rule_is_hidden(rule)) {
-        modify_flow(p, ofm, n_actions, rule);
-        return send_buffered_packet(p, ofconn, rule, ofm);
+        int error = modify_flow(p, ofm, n_actions, rule);
+        return error ? error : send_buffered_packet(p, ofconn, rule, ofm);
     } else {
         return add_flow(p, ofconn, ofm, n_actions);
     }
@@ -2279,7 +2285,8 @@ modify_flows_cb(struct wdp_rule *rule, void *cbdata_)
 
     if (!rule_is_hidden(rule)) {
         cbdata->match = rule;
-        modify_flow(cbdata->ofproto, cbdata->ofm, cbdata->n_actions, rule);
+        return modify_flow(cbdata->ofproto, cbdata->ofm, cbdata->n_actions,
+                           rule);
     }
     return 0;
 }
@@ -2322,11 +2329,11 @@ struct delete_flows_cbdata {
 };
 
 static int delete_flows_cb(struct wdp_rule *, void *cbdata_);
-static void delete_flow_core(struct ofproto *, struct wdp_rule *,
+static int delete_flow_core(struct ofproto *, struct wdp_rule *,
                              uint16_t out_port);
 
 /* Implements OFPFC_DELETE. */
-static void
+static int
 delete_flows_loose(struct ofproto *p, const struct ofconn *ofconn,
                    const struct ofp_flow_mod *ofm)
 {
@@ -2341,19 +2348,21 @@ delete_flows_loose(struct ofproto *p, const struct ofconn *ofconn,
                     &target);
     table_id = flow_mod_table_id(ofconn, ofm);
 
-    wdp_flow_for_each_match(p->wdp, &target, table_id_to_include(table_id),
-                            delete_flows_cb, &cbdata);
+    return wdp_flow_for_each_match(p->wdp, &target,
+                                   table_id_to_include(table_id),
+                                   delete_flows_cb, &cbdata);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
-static void
+static int
 delete_flow_strict(struct ofproto *p, const struct ofconn *ofconn,
                    struct ofp_flow_mod *ofm)
 {
     struct wdp_rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule) {
-        delete_flow_core(p, rule, ofm->out_port);
+        return delete_flow_core(p, rule, ofm->out_port);
     }
+    return 0;
 }
 
 /* Callback for delete_flows_loose(). */
@@ -2362,8 +2371,7 @@ delete_flows_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct delete_flows_cbdata *cbdata = cbdata_;
 
-    delete_flow_core(cbdata->ofproto, rule, cbdata->out_port);
-    return 0;
+    return delete_flow_core(cbdata->ofproto, rule, cbdata->out_port);
 }
 
 /* Implements core of OFPFC_DELETE and OFPFC_DELETE_STRICT where 'rule' has
@@ -2374,18 +2382,18 @@ delete_flows_cb(struct wdp_rule *rule, void *cbdata_)
  * Will not delete 'rule' if it is hidden.  Will delete 'rule' only if
  * 'out_port' is htons(OFPP_NONE) or if 'rule' actually outputs to the
  * specified 'out_port'. */
-static void
+static int
 delete_flow_core(struct ofproto *p, struct wdp_rule *rule, uint16_t out_port)
 {
     if (rule_is_hidden(rule)) {
-        return;
+        return 0;
     }
 
     if (out_port != htons(OFPP_NONE) && !rule_has_out_port(rule, out_port)) {
-        return;
+        return 0;
     }
 
-    delete_flow(p, rule, OFPRR_DELETE);
+    return delete_flow(p, rule, OFPRR_DELETE);
 }
 
 static int
@@ -2462,12 +2470,10 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return modify_flow_strict(p, ofconn, ofm, n_actions);
 
     case OFPFC_DELETE:
-        delete_flows_loose(p, ofconn, ofm);
-        return 0;
+        return delete_flows_loose(p, ofconn, ofm);
 
     case OFPFC_DELETE_STRICT:
-        delete_flow_strict(p, ofconn, ofm);
-        return 0;
+        return delete_flow_strict(p, ofconn, ofm);
 
     default:
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
@@ -2776,7 +2782,7 @@ compose_flow_removed(struct ofproto *p, const struct wdp_rule *rule,
     return buf;
 }
 
-static void
+static int
 delete_flow(struct ofproto *p, struct wdp_rule *rule, uint8_t reason)
 {
     /* We limit the maximum number of queued flow expirations it by accounting
@@ -2788,6 +2794,7 @@ delete_flow(struct ofproto *p, struct wdp_rule *rule, uint8_t reason)
     struct ofproto_rule *ofproto_rule = ofproto_rule_cast(rule);
     struct wdp_flow_stats stats;
     struct ofpbuf *buf;
+    int error;
 
     if (ofproto_rule->send_flow_removed) {
         /* Compose most of the ofp_flow_removed before 'rule' is destroyed. */
@@ -2796,8 +2803,9 @@ delete_flow(struct ofproto *p, struct wdp_rule *rule, uint8_t reason)
         buf = NULL;
     }
 
-    if (wdp_flow_delete(p->wdp, rule, &stats)) {
-        return;
+    error = wdp_flow_delete(p->wdp, rule, &stats);
+    if (error) {
+        return error;
     }
 
     if (buf) {
@@ -2825,6 +2833,8 @@ delete_flow(struct ofproto *p, struct wdp_rule *rule, uint8_t reason)
         }
     }
     free(ofproto_rule);
+
+    return 0;
 }
 
 /* pinsched callback for sending 'packet' on 'ofconn'. */
