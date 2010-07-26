@@ -189,7 +189,7 @@ update_min_level(struct vlog_module *module)
     for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
         if (log_file || facility != VLF_FILE) {
             enum vlog_level level = module->levels[facility];
-            if (level < module->min_level) {
+            if (level > module->min_level) {
                 module->min_level = level;
             }
         }
