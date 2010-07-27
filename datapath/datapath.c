@@ -926,7 +926,7 @@ static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats,
 
 	stats->n_packets = flow->packet_count;
 	stats->n_bytes = flow->byte_count;
-	stats->ip_tos = flow->ip_tos;
+	stats->reserved = 0;
 	stats->tcp_flags = flow->tcp_flags;
 	stats->error = 0;
 }
@@ -935,7 +935,6 @@ static void clear_stats(struct sw_flow *flow)
 {
 	flow->used = 0;
 	flow->tcp_flags = 0;
-	flow->ip_tos = 0;
 	flow->packet_count = 0;
 	flow->byte_count = 0;
 }

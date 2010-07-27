@@ -210,7 +210,7 @@ struct odp_flow_stats {
     uint64_t used_sec;          /* Time last used, in system monotonic time. */
     uint32_t used_nsec;
     uint8_t  tcp_flags;
-    uint8_t  ip_tos;
+    uint8_t  reserved;
     uint16_t error;             /* Used by ODP_FLOW_GET. */
 };
 

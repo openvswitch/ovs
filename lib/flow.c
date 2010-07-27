@@ -231,8 +231,6 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
     memset(stats, '\0', sizeof(*stats));
 
     if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
-        struct ip_header *ip = packet->l3;
-        stats->ip_tos = ip->ip_tos;
         if ((flow->nw_proto == IP_TYPE_TCP) && packet->l7) {
             struct tcp_header *tcp = packet->l4;
             stats->tcp_flags = TCP_FLAGS(tcp->tcp_ctl);

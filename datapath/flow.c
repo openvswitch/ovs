@@ -96,13 +96,10 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 {
 	u8 tcp_flags = 0;
 
-	if (flow->key.dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
-		struct iphdr *nh = ip_hdr(skb);
-		flow->ip_tos = nh->tos;
-		if (flow->key.nw_proto == IPPROTO_TCP && tcphdr_ok(skb)) {
-			u8 *tcp = (u8 *)tcp_hdr(skb);
-			tcp_flags = *(tcp + TCP_FLAGS_OFFSET) & TCP_FLAG_MASK;
-		}
+	if (flow->key.dl_type == htons(ETH_P_IP) &&
+	    flow->key.nw_proto == IPPROTO_TCP) {
+		u8 *tcp = (u8 *)tcp_hdr(skb);
+		tcp_flags = *(tcp + TCP_FLAGS_OFFSET) & TCP_FLAG_MASK;
 	}
 
 	spin_lock_bh(&flow->lock);

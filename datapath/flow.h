@@ -35,8 +35,6 @@ struct sw_flow {
 	struct odp_flow_key key;
 	struct sw_flow_actions *sf_acts;
 
-	u8 ip_tos;		/* IP TOS value. */
-
 	spinlock_t lock;	/* Lock for values below. */
 	unsigned long used;	/* Last used time (in jiffies). */
 	u64 packet_count;	/* Number of packets matched. */

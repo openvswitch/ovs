@@ -3388,8 +3388,7 @@ update_stats(struct ofproto *ofproto, struct rule *rule,
         update_time(ofproto, rule, stats);
         rule->packet_count += stats->n_packets;
         rule->byte_count += stats->n_bytes;
-        netflow_flow_update_flags(&rule->nf_flow, stats->ip_tos,
-                                  stats->tcp_flags);
+        netflow_flow_update_flags(&rule->nf_flow, stats->tcp_flags);
     }
 }
 
@@ -4211,7 +4210,7 @@ active_timeout(struct ofproto *ofproto, struct rule *rule)
 
             if (odp_flow.stats.n_packets) {
                 update_time(ofproto, rule, &odp_flow.stats);
-                netflow_flow_update_flags(&rule->nf_flow, odp_flow.stats.ip_tos,
+                netflow_flow_update_flags(&rule->nf_flow,
                                           odp_flow.stats.tcp_flags);
             }
         }

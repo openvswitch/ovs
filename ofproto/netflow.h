@@ -52,7 +52,6 @@ struct netflow_flow {
     uint64_t byte_count_off;      /* Byte count at last time out. */
 
     uint16_t output_iface;        /* Output interface index. */
-    uint8_t ip_tos;               /* Last-seen IP type-of-service. */
     uint8_t tcp_flags;            /* Bitwise-OR of all TCP flags seen. */
 };
 
@@ -66,8 +65,7 @@ void netflow_run(struct netflow *);
 void netflow_flow_clear(struct netflow_flow *);
 void netflow_flow_update_time(struct netflow *, struct netflow_flow *,
                               long long int used);
-void netflow_flow_update_flags(struct netflow_flow *, uint8_t ip_tos,
-                               uint8_t tcp_flags);
+void netflow_flow_update_flags(struct netflow_flow *, uint8_t tcp_flags);
 bool netflow_active_timeout_expired(struct netflow *, struct netflow_flow *);
 
 #endif /* netflow.h */

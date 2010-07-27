@@ -170,7 +170,7 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
     }
     nf_rec->tcp_flags = nf_flow->tcp_flags;
     nf_rec->ip_proto = expired->flow.nw_proto;
-    nf_rec->ip_tos = nf_flow->ip_tos;
+    nf_rec->ip_tos = expired->flow.nw_tos;
 
     /* Update flow tracking data. */
     nf_flow->created = 0;
@@ -271,10 +271,8 @@ netflow_flow_update_time(struct netflow *nf, struct netflow_flow *nf_flow,
 }
 
 void
-netflow_flow_update_flags(struct netflow_flow *nf_flow, uint8_t ip_tos,
-                          uint8_t tcp_flags)
+netflow_flow_update_flags(struct netflow_flow *nf_flow, uint8_t tcp_flags)
 {
-    nf_flow->ip_tos = ip_tos;
     nf_flow->tcp_flags |= tcp_flags;
 }
 

@@ -102,7 +102,6 @@ struct dp_netdev_flow {
 	struct timespec used;       /* Last used time. */
 	long long int packet_count; /* Number of packets matched. */
 	long long int byte_count;   /* Number of bytes matched. */
-	uint8_t ip_tos;             /* IP TOS value. */
 	uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
 
     /* Actions. */
@@ -682,7 +681,7 @@ answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
         odp_flow->stats.used_sec = flow->used.tv_sec;
         odp_flow->stats.used_nsec = flow->used.tv_nsec;
         odp_flow->stats.tcp_flags = TCP_FLAGS(flow->tcp_ctl);
-        odp_flow->stats.ip_tos = flow->ip_tos;
+        odp_flow->stats.reserved = 0;
         odp_flow->stats.error = 0;
         if (odp_flow->n_actions > 0) {
             unsigned int n = MIN(odp_flow->n_actions, flow->n_actions);
@@ -829,7 +828,6 @@ clear_stats(struct dp_netdev_flow *flow)
     flow->used.tv_nsec = 0;
     flow->packet_count = 0;
     flow->byte_count = 0;
-    flow->ip_tos = 0;
     flow->tcp_ctl = 0;
 }
 
@@ -1006,14 +1004,9 @@ dp_netdev_flow_used(struct dp_netdev_flow *flow, const flow_t *key,
     time_timespec(&flow->used);
     flow->packet_count++;
     flow->byte_count += packet->size;
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
-        struct ip_header *nh = packet->l3;
-        flow->ip_tos = nh->ip_tos;
-
-        if (key->nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = packet->l4;
-            flow->tcp_ctl |= th->tcp_ctl;
-        }
+    if (key->dl_type == htons(ETH_TYPE_IP) && key->nw_proto == IPPROTO_TCP) {
+        struct tcp_header *th = packet->l4;
+        flow->tcp_ctl |= th->tcp_ctl;
     }
 }
 
