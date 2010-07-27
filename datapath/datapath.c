@@ -1049,12 +1049,12 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		}
 
 		/* Allocate flow. */
-		error = -ENOMEM;
-		flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
-		if (flow == NULL)
+		flow = flow_alloc();
+		if (IS_ERR(flow)) {
+			error = PTR_ERR(flow);
 			goto error;
+		}
 		flow->key = uf->flow.key;
-		spin_lock_init(&flow->lock);
 		clear_stats(flow);
 
 		/* Obtain actions. */
@@ -1109,7 +1109,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 error_free_flow_acts:
 	kfree(flow->sf_acts);
 error_free_flow:
-	kmem_cache_free(flow_cache, flow);
+	flow_free(flow);
 error:
 	return error;
 }

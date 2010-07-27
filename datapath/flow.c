@@ -123,27 +123,45 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 	return sfa;
 }
 
+struct sw_flow *flow_alloc(void)
+{
+	struct sw_flow *flow;
 
-/* Frees 'flow' immediately. */
-static void flow_free(struct sw_flow *flow)
+	flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
+	if (!flow)
+		return ERR_PTR(-ENOMEM);
+
+	spin_lock_init(&flow->lock);
+
+	return flow;
+}
+
+void flow_free(struct sw_flow *flow)
 {
 	if (unlikely(!flow))
 		return;
-	kfree(flow->sf_acts);
+
 	kmem_cache_free(flow_cache, flow);
+}
+
+/* Frees the entire 'flow' (both base and actions) immediately. */
+static void flow_free_full(struct sw_flow *flow)
+{
+	kfree(flow->sf_acts);
+	flow_free(flow);
 }
 
 void flow_free_tbl(struct tbl_node *node)
 {
 	struct sw_flow *flow = flow_cast(node);
-	flow_free(flow);
+	flow_free_full(flow);
 }
 
 /* RCU callback used by flow_deferred_free. */
 static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
-	flow_free(flow);
+	flow_free_full(flow);
 }
 
 /* Schedules 'flow' to be freed after the next RCU grace period.
