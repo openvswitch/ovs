@@ -700,6 +700,14 @@
           Mbps.</dd>
       </dl>
     </column>
+
+    <column name="external_ids">
+      Key-value pairs for use by external frameworks that integrate with Open
+      vSwitch, rather than by Open vSwitch itself.  System integrators should
+      either use the Open vSwitch development mailing list to coordinate on
+      common key-value definitions, or choose key names that are likely to be
+      unique.  No common key-value pairs are currently defined.
+    </column>
   </table>
 
   <table name="Queue" title="QoS output queue.">
@@ -740,6 +748,14 @@
           a queue with a larger value receives any.  Specific priority
           values are unimportant; only relative ordering matters.</dd>
       </dl>
+    </column>
+
+    <column name="external_ids">
+      Key-value pairs for use by external frameworks that integrate with Open
+      vSwitch, rather than by Open vSwitch itself.  System integrators should
+      either use the Open vSwitch development mailing list to coordinate on
+      common key-value definitions, or choose key names that are likely to be
+      unique.  No common key-value pairs are currently defined.
     </column>
   </table>
 
@@ -820,6 +836,16 @@
           Open vSwitch is being used as an intermediate switch, learning can be
           disabled by adding the mirrored VLAN to <ref column="flood_vlans"/>
           in the appropriate <ref table="Bridge"/> table or tables.</p>
+      </column>
+    </group>
+
+    <group title="Other Features">
+      <column name="external_ids">
+        Key-value pairs for use by external frameworks that integrate with Open
+        vSwitch, rather than by Open vSwitch itself.  System integrators should
+        either use the Open vSwitch development mailing list to coordinate on
+        common key-value definitions, or choose key names that are likely to be
+        unique.  No common key-value pairs are currently defined.
       </column>
     </group>
   </table>
@@ -1009,6 +1035,16 @@
         this network has no gateway.
       </column>
     </group>
+
+    <group title="Other Features">
+      <column name="external_ids">
+        Key-value pairs for use by external frameworks that integrate with Open
+        vSwitch, rather than by Open vSwitch itself.  System integrators should
+        either use the Open vSwitch development mailing list to coordinate on
+        common key-value definitions, or choose key names that are likely to be
+        unique.  No common key-value pairs are currently defined.
+      </column>
+    </group>
   </table>
 
   <table name="NetFlow">
@@ -1050,6 +1086,14 @@
         disambiguate the traffic.</p>
       <p>When this option is enabled, a maximum of 508 ports are supported.</p>
     </column>
+
+    <column name="external_ids">
+      Key-value pairs for use by external frameworks that integrate with Open
+      vSwitch, rather than by Open vSwitch itself.  System integrators should
+      either use the Open vSwitch development mailing list to coordinate on
+      common key-value definitions, or choose key names that are likely to be
+      unique.  No common key-value pairs are currently defined.
+    </column>
   </table>
 
   <table name="SSL">
@@ -1081,6 +1125,14 @@
       by the CA certificate thus obtained.  <em>This option exposes the
         SSL connection to a man-in-the-middle attack obtaining the initial
         CA certificate.</em>  It may still be useful for bootstrapping.
+    </column>
+
+    <column name="external_ids">
+      Key-value pairs for use by external frameworks that integrate with Open
+      vSwitch, rather than by Open vSwitch itself.  System integrators should
+      either use the Open vSwitch development mailing list to coordinate on
+      common key-value definitions, or choose key names that are likely to be
+      unique.  No common key-value pairs are currently defined.
     </column>
   </table>
 
@@ -1115,6 +1167,14 @@
     <column name="targets">
       sFlow targets in the form
       <code><var>ip</var>:<var>port</var></code>.
+    </column>
+
+    <column name="external_ids">
+      Key-value pairs for use by external frameworks that integrate with Open
+      vSwitch, rather than by Open vSwitch itself.  System integrators should
+      either use the Open vSwitch development mailing list to coordinate on
+      common key-value definitions, or choose key names that are likely to be
+      unique.  No common key-value pairs are currently defined.
     </column>
   </table>
 

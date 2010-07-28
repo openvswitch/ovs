@@ -136,7 +136,10 @@
          "ephemeral": true},
        "statistics": {
          "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
-         "ephemeral": true}}},
+         "ephemeral": true},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "QoS": {
      "columns": {
        "type": {
@@ -150,11 +153,17 @@
                   "min": 0, "max": "unlimited"}},
        "other_config": {
          "type": {"key": "string", "value": "string", 
+                  "min": 0, "max": "unlimited"}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
    "Queue": {
      "columns": {
        "other_config": {
          "type": {"key": "string", "value": "string", 
+                  "min": 0, "max": "unlimited"}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
    "Mirror": {
      "columns": {
@@ -187,7 +196,10 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 1,
                           "maxInteger": 4095},
-                  "min": 0, "max": 1}}}},
+                  "min": 0, "max": 1}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "NetFlow": {
      "columns": {
        "targets": {
@@ -207,7 +219,10 @@
          "type": "boolean"},
        "active_timeout": {
          "type": {"key": {"type": "integer",
-                          "minInteger": -1}}}}},
+                          "minInteger": -1}}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "sFlow": {
      "columns": {
        "targets": {
@@ -219,7 +234,10 @@
        "header": {
          "type": {"key": "integer", "min": 0, "max": 1}},
        "agent": {
-         "type": {"key": "string", "min": 0, "max": 1}}}},
+         "type": {"key": "string", "min": 0, "max": 1}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "Controller": {
      "columns": {
        "target": {
@@ -254,7 +272,10 @@
        "controller_burst_limit": {
          "type": {"key": {"type": "integer", 
                           "minInteger": 25},
-                  "min": 0, "max": 1}}}},
+                  "min": 0, "max": 1}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "SSL": {
      "columns": {
        "private_key": {
@@ -264,5 +285,8 @@
        "ca_cert": {
          "type": "string"},
        "bootstrap_ca_cert": {
-         "type": "boolean"}},
+         "type": "boolean"},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}},
      "maxRows": 1}}}
