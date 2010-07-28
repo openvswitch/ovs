@@ -1090,12 +1090,14 @@ dp_netdev_wait(void)
  * bits outside of 'mask'.
  */
 static void
-dp_netdev_modify_vlan_tci(struct ofpbuf *packet, const flow_t *key,
-                          uint16_t tci, uint16_t mask)
+dp_netdev_modify_vlan_tci(struct ofpbuf *packet, uint16_t tci, uint16_t mask)
 {
     struct vlan_eth_header *veh;
+    struct eth_header *eh;
 
-    if (key->dl_vlan != htons(ODP_VLAN_NONE)) {
+    eh = packet->l2;
+    if (packet->size >= sizeof(struct vlan_eth_header)
+        && eh->eth_type == htons(ETH_TYPE_VLAN)) {
         /* Clear 'mask' bits, but maintain other TCI bits. */
         veh = packet->l2;
         veh->veth_tci &= ~htons(mask);
@@ -1292,14 +1294,14 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 			break;
 
 		case ODPAT_SET_VLAN_VID:
-			dp_netdev_modify_vlan_tci(packet, key, ntohs(a->vlan_vid.vlan_vid),
+			dp_netdev_modify_vlan_tci(packet, ntohs(a->vlan_vid.vlan_vid),
                                       VLAN_VID_MASK);
             break;
 
 		case ODPAT_SET_VLAN_PCP:
-			dp_netdev_modify_vlan_tci(
-                packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
-                VLAN_PCP_MASK);
+			dp_netdev_modify_vlan_tci(packet,
+                                      a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
+                                      VLAN_PCP_MASK);
             break;
 
 		case ODPAT_STRIP_VLAN:
