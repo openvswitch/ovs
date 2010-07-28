@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "command-line.h"
@@ -69,6 +70,10 @@ static bool mute = false;
 
 /* -q, --queue: OpenFlow queue to use, or the default queue if UINT32_MAX. */
 static uint32_t queue_id = UINT32_MAX;
+
+/* --with-flows: File with flows to send to switch, or null to not load 
+ * any default flows. */
+static FILE *flow_file = NULL;
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -213,9 +218,17 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
 {
     sw->rconn = rconn_create(60, 0);
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
+
+    /* If it was set, rewind 'flow_file' to the beginning, since a
+     * previous call to lswitch_create() will leave the stream at the
+     * end. */
+    if (flow_file) {
+        rewind(flow_file);
+    }
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
-                                 action_normal, NULL);
+                                 action_normal, flow_file);
+
     lswitch_set_queue(sw->lswitch, queue_id);
 }
 
@@ -248,6 +261,7 @@ parse_options(int argc, char *argv[])
         OPT_MAX_IDLE = UCHAR_MAX + 1,
         OPT_PEER_CA_CERT,
         OPT_MUTE,
+        OPT_WITH_FLOWS,
         OPT_UNIXCTL,
         VLOG_OPTION_ENUMS
     };
@@ -259,6 +273,7 @@ parse_options(int argc, char *argv[])
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"mute",        no_argument, 0, OPT_MUTE},
         {"queue",       required_argument, 0, 'q'},
+        {"with-flows",  required_argument, 0, OPT_WITH_FLOWS},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -318,6 +333,13 @@ parse_options(int argc, char *argv[])
             queue_id = atoi(optarg);
             break;
 
+        case OPT_WITH_FLOWS:
+            flow_file = fopen(optarg, "r");
+            if (flow_file == NULL) {
+                ovs_fatal(errno, "%s: open", optarg);
+            }
+            break;
+
         case OPT_UNIXCTL:
             unixctl_path = optarg;
             break;
@@ -367,6 +389,7 @@ usage(void)
            "  -N, --normal            use OFPAT_NORMAL action\n"
            "  -w, --wildcard          use wildcards, not exact-match rules\n"
            "  -q, --queue=QUEUE       OpenFlow queue ID to use for output\n"
+           "  --with-flows FILE       use the flows from FILE\n"
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");

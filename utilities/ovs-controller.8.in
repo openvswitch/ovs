@@ -100,6 +100,12 @@ instead use that specific queue.
 .IP
 This option may be useful for debugging quality of service setups.
 .
+.IP "\fB\-\-with\-flows \fIfile\fR"
+When a switch connects, push the flow entries as described in
+\fIfile\fR.  Each line in \fIfile\fR is a flow entry in the format
+described for the \fBadd\-flows\fR command in the \fBFlow Syntax\fR
+section of the \fBovs\-ofctl\fR(8) man page.
+.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-peer-ca-cert.man
@@ -133,4 +139,5 @@ connection and set the controller, e.g.:
 .
 .BR ovs\-openflowd (8),
 .BR ovs\-appctl (8),
+.BR ovs\-ofctl (8),
 .BR ovs\-dpctl (8)
