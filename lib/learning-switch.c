@@ -26,6 +26,7 @@
 #include "flow.h"
 #include "mac-learning.h"
 #include "ofpbuf.h"
+#include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"
@@ -84,6 +85,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
+static void send_default_flows(struct lswitch *sw, struct rconn *rconn, 
+                               FILE *default_flows);
 static void schedule_query(struct lswitch *, long long int delay);
 static bool may_learn(const struct lswitch *, uint16_t port_no);
 static bool may_recv(const struct lswitch *, uint16_t port_no,
@@ -107,10 +110,17 @@ static packet_handler_func process_stats_reply;
  * after the given number of seconds (or never expire, if 'max_idle' is
  * OFP_FLOW_PERMANENT).  Otherwise, the new switch will process every packet.
  *
+ * The caller may provide the file stream 'default_flows' that defines
+ * default flows that should be pushed when a switch connects.  Each
+ * line is a flow entry in the format described for "add-flows" command
+ * in the Flow Syntax section of the ovs-ofct(8) man page.  The caller
+ * is responsible for closing the stream.
+ *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
 lswitch_create(struct rconn *rconn, bool learn_macs,
-	       bool exact_flows, int max_idle, bool action_normal)
+               bool exact_flows, int max_idle, bool action_normal,
+               FILE *default_flows)
 {
     struct lswitch *sw;
     size_t i;
@@ -140,6 +150,9 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
         sw->port_states[i] = P_DISABLED;
     }
     send_features_request(sw, rconn);
+    if (default_flows) {
+        send_default_flows(sw, rconn, default_flows);
+    }
     return sw;
 }
 
@@ -356,6 +369,53 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
         queue_tx(sw, rconn, b);
 
         sw->last_features_request = now;
+    }
+}
+
+static void
+send_default_flows(struct lswitch *sw, struct rconn *rconn, 
+                   FILE *default_flows)
+{
+    char line[1024];
+
+    while (fgets(line, sizeof line, default_flows)) {
+        struct ofpbuf *b;
+        struct ofp_flow_mod *ofm;
+        uint16_t priority, idle_timeout, hard_timeout;
+        uint64_t cookie;
+        struct ofp_match match;
+        
+        char *comment;
+        
+        /* Delete comments. */
+        comment = strchr(line, '#');
+        if (comment) { 
+            *comment = '\0';
+        }
+        
+        /* Drop empty lines. */
+        if (line[strspn(line, " \t\n")] == '\0') {
+            continue;
+        }   
+    
+        /* Parse and send.  str_to_flow() will expand and reallocate the data
+         * in 'buffer', so we can't keep pointers to across the str_to_flow()
+         * call. */
+        make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &b);
+        parse_ofp_str(line, &match, b,
+                      NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                      &cookie);
+        ofm = b->data;
+        ofm->match = match;
+        ofm->command = htons(OFPFC_ADD);
+        ofm->cookie = htonll(cookie);
+        ofm->idle_timeout = htons(idle_timeout);
+        ofm->hard_timeout = htons(hard_timeout);
+        ofm->buffer_id = htonl(UINT32_MAX);
+        ofm->priority = htons(priority);
+
+        update_openflow_length(b);
+        queue_tx(sw, rconn, b);
     }
 }
 

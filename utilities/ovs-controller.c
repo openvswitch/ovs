@@ -215,7 +215,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
-                                 action_normal);
+                                 action_normal, NULL);
     lswitch_set_queue(sw->lswitch, queue_id);
 }
 
