@@ -25,8 +25,12 @@
       </column>
 
       <column name="external_ids">
-        Key-value pairs that identify this Open vSwitch's role in
-        external systems.  The currently defined key-value pairs are:
+        Key-value pairs for use by external frameworks that integrate
+        with Open vSwitch, rather than by Open vSwitch itself.  System
+        integrators should either use the Open vSwitch development
+        mailing list to coordinate on common key-value definitions, or
+        choose key names that are likely to be unique.  The currently
+        defined common key-value pairs are:
         <dl>
           <dt><code>system-uuid</code></dt>
           <dd>A universally unique identifier for the Open vSwitch's
@@ -178,8 +182,12 @@
       </column>
 
       <column name="external_ids">
-        Key-value pairs that identify this bridge's role in external systems.
-        The currently defined key-value pairs are:
+        Key-value pairs for use by external frameworks that integrate
+        with Open vSwitch, rather than by Open vSwitch itself.  System
+        integrators should either use the Open vSwitch development
+        mailing list to coordinate on common key-value definitions, or
+        choose key names that are likely to be unique.  The currently
+        defined common key-value pairs are:
         <dl>
           <dt><code>network-uuids</code></dt>
           <dd>Semicolon-delimited set of universally unique identifier(s) for
@@ -332,13 +340,21 @@
       </column>
 
       <column name="external_ids">
-        Key-value pairs that identify this port's role in external systems.  No
-        key-value pairs native to <ref table="Port"/> are currently defined.
-        For fake bridges (see the <ref column="fake_bridge"/> column), external
-        IDs for the fake bridge are defined here by prefixing a
-        <ref table="Bridge"/> <ref table="Bridge" column="external_ids"/> key
-        with <code>fake-bridge-</code>,
-        e.g. <code>fake-bridge-network-uuids</code>.
+        <p>
+          Key-value pairs for use by external frameworks that integrate with
+          Open vSwitch, rather than by Open vSwitch itself.  System integrators
+          should either use the Open vSwitch development mailing list to
+          coordinate on common key-value definitions, or choose key names that
+          are likely to be unique.
+        </p>
+        <p>
+          No key-value pairs native to <ref table="Port"/> are currently
+          defined.  For fake bridges (see the <ref column="fake_bridge"/>
+          column), external IDs for the fake bridge are defined here by
+          prefixing a <ref table="Bridge"/> <ref table="Bridge"
+          column="external_ids"/> key with <code>fake-bridge-</code>,
+          e.g. <code>fake-bridge-network-uuids</code>.
+        </p>
       </column>
 
       <column name="other_config">
@@ -547,15 +563,23 @@
 
     <group title="Other Features">
       <column name="external_ids">
-        <p>Key-value pairs that identify this interface's role in external
-          systems.  All of the currently defined key-value pairs specifically
+        <p>
+          Key-value pairs for use by external frameworks that integrate
+          with Open vSwitch, rather than by Open vSwitch itself.  System
+          integrators should either use the Open vSwitch development
+          mailing list to coordinate on common key-value definitions, or
+          choose key names that are likely to be unique.
+        </p>
+        <p>
+          All of the currently defined key-value pairs specifically
           apply to an interface that represents a virtual Ethernet interface
           connected to a virtual machine.  These key-value pairs should not be
           present for other types of interfaces.  Keys whose names end
           in <code>-uuid</code> have values that uniquely identify the entity
           in question.  For a Citrix XenServer hypervisor, these values are
           UUIDs in RFC 4122 format.  Other hypervisors may use other
-          formats.</p>
+          formats.
+        </p>
         <p>The currently defined key-value pairs are:</p>
         <dl>
           <dt><code>vif-uuid</code></dt>
