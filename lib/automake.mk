@@ -67,6 +67,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
+	lib/ofp-parse.c \
+	lib/ofp-parse.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofp-util.c \
