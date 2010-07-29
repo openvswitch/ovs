@@ -599,7 +599,11 @@ out:
 	/* Update datapath statistics. */
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+
+	write_seqcount_begin(&stats->seqlock);
 	(*(u64 *)((u8 *)stats + stats_counter_off))++;
+	write_seqcount_end(&stats->seqlock);
+
 	local_bh_enable();
 }
 
@@ -860,7 +864,11 @@ err_kfree_skb:
 err:
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+
+	write_seqcount_begin(&stats->seqlock);
 	stats->n_lost++;
+	write_seqcount_end(&stats->seqlock);
+
 	local_bh_enable();
 
 	return err;
@@ -1394,12 +1402,21 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	stats.max_groups = DP_MAX_GROUPS;
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
 	for_each_possible_cpu(i) {
-		const struct dp_stats_percpu *s;
-		s = per_cpu_ptr(dp->stats_percpu, i);
-		stats.n_frags += s->n_frags;
-		stats.n_hit += s->n_hit;
-		stats.n_missed += s->n_missed;
-		stats.n_lost += s->n_lost;
+		const struct dp_stats_percpu *percpu_stats;
+		struct dp_stats_percpu local_stats;
+		unsigned seqcount;
+
+		percpu_stats = per_cpu_ptr(dp->stats_percpu, i);
+
+		do {
+			seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+			local_stats = *percpu_stats;
+		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+
+		stats.n_frags += local_stats.n_frags;
+		stats.n_hit += local_stats.n_hit;
+		stats.n_missed += local_stats.n_missed;
+		stats.n_lost += local_stats.n_lost;
 	}
 	stats.max_miss_queue = DP_MAX_QUEUE_LEN;
 	stats.max_action_queue = DP_MAX_QUEUE_LEN;

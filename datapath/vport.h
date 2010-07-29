@@ -10,6 +10,7 @@
 #define VPORT_H 1
 
 #include <linux/list.h>
+#include <linux/seqlock.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 
@@ -83,6 +84,7 @@ struct vport_percpu_stats {
 	u64 rx_packets;
 	u64 tx_bytes;
 	u64 tx_packets;
+	seqcount_t seqlock;
 };
 
 struct vport_err_stats {

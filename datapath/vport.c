@@ -1052,12 +1052,20 @@ int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
 
 		for_each_possible_cpu(i) {
 			const struct vport_percpu_stats *percpu_stats;
+			struct vport_percpu_stats local_stats;
+			unsigned seqcount;
 
 			percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
-			stats->rx_bytes		+= percpu_stats->rx_bytes;
-			stats->rx_packets	+= percpu_stats->rx_packets;
-			stats->tx_bytes		+= percpu_stats->tx_bytes;
-			stats->tx_packets	+= percpu_stats->tx_packets;
+
+			do {
+				seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+				local_stats = *percpu_stats;
+			} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+
+			stats->rx_bytes		+= local_stats.rx_bytes;
+			stats->rx_packets	+= local_stats.rx_packets;
+			stats->tx_bytes		+= local_stats.tx_bytes;
+			stats->tx_packets	+= local_stats.tx_packets;
 		}
 
 		err = 0;
@@ -1192,10 +1200,12 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 		struct vport_percpu_stats *stats;
 
 		local_bh_disable();
-
 		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
+
+		write_seqcount_begin(&stats->seqlock);
 		stats->rx_packets++;
 		stats->rx_bytes += skb->len;
+		write_seqcount_end(&stats->seqlock);
 
 		local_bh_enable();
 	}
@@ -1244,10 +1254,12 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 		struct vport_percpu_stats *stats;
 
 		local_bh_disable();
-
 		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
+
+		write_seqcount_begin(&stats->seqlock);
 		stats->tx_packets++;
 		stats->tx_bytes += sent;
+		write_seqcount_end(&stats->seqlock);
 
 		local_bh_enable();
 	}
