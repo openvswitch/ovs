@@ -69,9 +69,6 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static struct datapath *dps[ODP_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
-/* Number of milliseconds between runs of the maintenance thread. */
-#define MAINT_SLEEP_MSECS 1000
-
 static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
 
 /* Must be called with rcu_read_lock or dp_mutex. */

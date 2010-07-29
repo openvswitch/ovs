@@ -92,11 +92,6 @@ static inline int icmphdr_ok(struct sk_buff *skb)
 #define TCP_FLAGS_OFFSET 13
 #define TCP_FLAG_MASK 0x3f
 
-static inline struct ovs_tcphdr *ovs_tcp_hdr(const struct sk_buff *skb)
-{
-	return (struct ovs_tcphdr *)skb_transport_header(skb);
-}
-
 void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 {
 	u8 tcp_flags = 0;

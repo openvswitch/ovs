@@ -17,7 +17,6 @@
 #include <linux/netdevice.h>
 #include <linux/if_bridge.h>
 #include <linux/rtnetlink.h>
-#include <linux/spinlock.h>
 
 #include "datapath.h"
 #include "dp_sysfs.h"
@@ -42,17 +41,10 @@ struct brport_attribute brport_attr_##_name = { 	        \
 
 static ssize_t show_path_cost(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->path_cost);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static ssize_t store_path_cost(struct dp_port *p, unsigned long v)
 {
-#if 0
-	br_stp_set_path_cost(p, v);
-#endif
 	return 0;
 }
 static BRPORT_ATTR(path_cost, S_IRUGO | S_IWUSR,
@@ -60,19 +52,10 @@ static BRPORT_ATTR(path_cost, S_IRUGO | S_IWUSR,
 
 static ssize_t show_priority(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->priority);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static ssize_t store_priority(struct dp_port *p, unsigned long v)
 {
-#if 0
-	if (v >= (1<<(16-BR_PORT_BITS)))
-		return -ERANGE;
-	br_stp_set_port_priority(p, v);
-#endif
 	return 0;
 }
 static BRPORT_ATTR(priority, S_IRUGO | S_IWUSR,
@@ -80,51 +63,31 @@ static BRPORT_ATTR(priority, S_IRUGO | S_IWUSR,
 
 static ssize_t show_designated_root(struct dp_port *p, char *buf)
 {
-#if 0
-	return br_show_bridge_id(buf, &p->designated_root);
-#else
 	return sprintf(buf, "0000.010203040506\n");
-#endif
 }
 static BRPORT_ATTR(designated_root, S_IRUGO, show_designated_root, NULL);
 
 static ssize_t show_designated_bridge(struct dp_port *p, char *buf)
 {
-#if 0
-	return br_show_bridge_id(buf, &p->designated_bridge);
-#else
 	return sprintf(buf, "0000.060504030201\n");
-#endif
 }
 static BRPORT_ATTR(designated_bridge, S_IRUGO, show_designated_bridge, NULL);
 
 static ssize_t show_designated_port(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->designated_port);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(designated_port, S_IRUGO, show_designated_port, NULL);
 
 static ssize_t show_designated_cost(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->designated_cost);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(designated_cost, S_IRUGO, show_designated_cost, NULL);
 
 static ssize_t show_port_id(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "0x%x\n", p->port_id);
-#else
 	return sprintf(buf, "0x%x\n", 0);
-#endif
 }
 static BRPORT_ATTR(port_id, S_IRUGO, show_port_id, NULL);
 
@@ -137,64 +100,40 @@ static BRPORT_ATTR(port_no, S_IRUGO, show_port_no, NULL);
 
 static ssize_t show_change_ack(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->topology_change_ack);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(change_ack, S_IRUGO, show_change_ack, NULL);
 
 static ssize_t show_config_pending(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->config_pending);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(config_pending, S_IRUGO, show_config_pending, NULL);
 
 static ssize_t show_port_state(struct dp_port *p, char *buf)
 {
-#if 0
-	return sprintf(buf, "%d\n", p->state);
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(state, S_IRUGO, show_port_state, NULL);
 
 static ssize_t show_message_age_timer(struct dp_port *p,
 					    char *buf)
 {
-#if 0
-	return sprintf(buf, "%ld\n", br_timer_value(&p->message_age_timer));
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(message_age_timer, S_IRUGO, show_message_age_timer, NULL);
 
 static ssize_t show_forward_delay_timer(struct dp_port *p,
 					    char *buf)
 {
-#if 0
-	return sprintf(buf, "%ld\n", br_timer_value(&p->forward_delay_timer));
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(forward_delay_timer, S_IRUGO, show_forward_delay_timer, NULL);
 
 static ssize_t show_hold_timer(struct dp_port *p,
 					    char *buf)
 {
-#if 0
-	return sprintf(buf, "%ld\n", br_timer_value(&p->hold_timer));
-#else
 	return sprintf(buf, "%d\n", 0);
-#endif
 }
 static BRPORT_ATTR(hold_timer, S_IRUGO, show_hold_timer, NULL);
 
@@ -233,33 +172,14 @@ static ssize_t brport_store(struct kobject * kobj,
 			    const char * buf, size_t count)
 {
 	struct dp_port * p = to_brport(kobj);
-#if 0
-	struct brport_attribute * brport_attr = to_brport_attr(attr);
-	char *endp;
-	unsigned long val;
-#endif
 	ssize_t ret = -EINVAL;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-#if 0
-	val = simple_strtoul(buf, &endp, 0);
-	if (endp != buf) {
-		rtnl_lock();
-		if (p->dev && p->br && brport_attr->store) {
-			spin_lock_bh(&p->br->lock);
-			ret = brport_attr->store(p, val);
-			spin_unlock_bh(&p->br->lock);
-			if (ret == 0)
-				ret = count;
-		}
-		rtnl_unlock();
-	}
-#else
 	printk("%s: xxx writing port parms not supported yet!\n", 
 	       dp_name(p->dp));
-#endif
+
 	return ret;
 }
 
