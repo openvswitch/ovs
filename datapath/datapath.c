@@ -377,6 +377,7 @@ static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_
 
 	p->port_no = port_no;
 	p->dp = dp;
+	p->vport = vport;
 	atomic_set(&p->sflow_pool, 0);
 
 	err = vport_attach(vport, p);

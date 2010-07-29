@@ -798,9 +798,6 @@ int vport_attach(struct vport *vport, struct dp_port *dp_port)
 {
 	ASSERT_RTNL();
 
-	if (dp_port->vport)
-		return -EBUSY;
-
 	if (vport_get_dp_port(vport))
 		return -EBUSY;
 
@@ -812,7 +809,6 @@ int vport_attach(struct vport *vport, struct dp_port *dp_port)
 			return err;
 	}
 
-	dp_port->vport = vport;
 	rcu_assign_pointer(vport->dp_port, dp_port);
 
 	return 0;
@@ -836,7 +832,6 @@ int vport_detach(struct vport *vport)
 	if (!dp_port)
 		return -EINVAL;
 
-	dp_port->vport = NULL;
 	rcu_assign_pointer(vport->dp_port, NULL);
 
 	if (vport->ops->detach)
