@@ -19,7 +19,7 @@
 #include "vport-netdev.h"
 
 struct internal_dev {
-	struct vport *vport;
+	struct vport *attached_vport, *vport;
 	struct net_device_stats stats;
 };
 
@@ -70,11 +70,12 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	struct vport *vport = internal_dev_get_vport(netdev);
+	struct internal_dev *internal_dev = internal_dev_priv(netdev);
+	struct vport *vport = rcu_dereference(internal_dev->vport);
 
 	/* We need our own clone. */
 	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (!skb) {
+	if (unlikely(!skb)) {
 		vport_record_error(vport, VPORT_E_RX_DROPPED);
 		return 0;
 	}
@@ -102,9 +103,15 @@ static int internal_dev_stop(struct net_device *netdev)
 static void internal_dev_getinfo(struct net_device *netdev,
 				 struct ethtool_drvinfo *info)
 {
-	struct dp_port *dp_port = vport_get_dp_port(internal_dev_get_vport(netdev));
+	struct vport *vport = internal_dev_get_vport(netdev);
+	struct dp_port *dp_port;
 
 	strcpy(info->driver, "openvswitch");
+
+	if (!vport)
+		return;
+
+	dp_port = vport_get_dp_port(vport);
 	if (dp_port)
 		sprintf(info->bus_info, "%d.%d", dp_port->dp->dp_idx, dp_port->port_no);
 }
@@ -122,14 +129,18 @@ static struct ethtool_ops internal_dev_ethtool_ops = {
 
 static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 {
-	struct dp_port *dp_port = vport_get_dp_port(internal_dev_get_vport(netdev));
+	struct vport *vport = internal_dev_get_vport(netdev);
 
 	if (new_mtu < 68)
 		return -EINVAL;
 
-	if (dp_port) {
-		if (new_mtu > dp_min_mtu(dp_port->dp))
-			return -EINVAL;
+	if (vport) {
+		struct dp_port *dp_port = vport_get_dp_port(vport);
+
+		if (dp_port) {
+			if (new_mtu > dp_min_mtu(dp_port->dp))
+				return -EINVAL;
+		}
 	}
 
 	netdev->mtu = new_mtu;
@@ -211,7 +222,7 @@ static struct vport *internal_dev_create(const char *name,
 	}
 
 	internal_dev = internal_dev_priv(netdev_vport->dev);
-	internal_dev->vport = vport;
+	rcu_assign_pointer(internal_dev->vport, vport);
 
 	err = register_netdevice(netdev_vport->dev);
 	if (err)
@@ -240,13 +251,11 @@ static int internal_dev_destroy(struct vport *vport)
 static int internal_dev_attach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
+	struct internal_dev *internal_dev = internal_dev_priv(netdev_vport->dev);
 
+	rcu_assign_pointer(internal_dev->attached_vport, internal_dev->vport);
 	dev_set_promiscuity(netdev_vport->dev, 1);
-
-	/* It would make sense to assign dev->br_port here too, but
-	 * that causes packets received on internal ports to get caught
-	 * in netdev_frame_hook().  In turn netdev_frame_hook() can reject them
-	 * back to the network stack, but that's a waste of time. */
+	netif_start_queue(netdev_vport->dev);
 
 	return 0;
 }
@@ -254,13 +263,11 @@ static int internal_dev_attach(struct vport *vport)
 static int internal_dev_detach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
+	struct internal_dev *internal_dev = internal_dev_priv(netdev_vport->dev);
 
+	netif_stop_queue(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
-
-	/* Make sure that no packets arrive from now on, since
-	 * internal_dev_xmit() will try to find itself through
-	 * p->dp->ports[], and we're about to set that to null. */
-	netif_tx_disable(netdev_vport->dev);
+	rcu_assign_pointer(internal_dev->attached_vport, NULL);
 
 	return 0;
 }
@@ -322,5 +329,5 @@ int is_internal_vport(const struct vport *vport)
 struct vport *internal_dev_get_vport(struct net_device *netdev)
 {
 	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-	return rcu_dereference(internal_dev->vport);
+	return rcu_dereference(internal_dev->attached_vport);
 }

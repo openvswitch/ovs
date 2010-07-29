@@ -24,12 +24,11 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 
 	if (is_internal_dev(dev))
 		vport = internal_dev_get_vport(dev);
-	else {
+	else
 		vport = netdev_get_vport(dev);
 
-		if (!vport)
-			return NOTIFY_DONE;
-	}
+	if (!vport)
+		return NOTIFY_DONE;
 
 	p = vport_get_dp_port(vport);
 

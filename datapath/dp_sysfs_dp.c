@@ -43,9 +43,18 @@
 
 struct datapath *sysfs_get_dp(struct net_device *netdev)
 {
-	return vport_get_dp_port(internal_dev_get_vport(netdev))->dp;
-}
+	struct vport *vport = internal_dev_get_vport(netdev);
+	struct dp_port *dp_port;
 
+	if (!vport)
+		return NULL;
+
+	dp_port = vport_get_dp_port(vport);
+	if (!dp_port)
+		return NULL;
+
+	return dp_port->dp;
+}
 /*
  * Common code for storing bridge parameters.
  */
@@ -53,9 +62,9 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 				 const char *buf, size_t len,
 				 void (*set)(struct datapath *, unsigned long))
 {
-	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	char *endp;
 	unsigned long val;
+	ssize_t result = len;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
@@ -69,11 +78,21 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 	 * xxx ignore the request. 
 	 */
 	if (val != 0) {
-		printk("%s: xxx writing dp parms not supported yet!\n", 
-		       dp_name(dp));
+		struct datapath *dp;
+
+		rcu_read_lock();
+
+		dp = sysfs_get_dp(to_net_dev(d));
+		if (dp)
+			printk("%s: xxx writing dp parms not supported yet!\n", 
+			       dp_name(dp));
+		else
+			result = -ENODEV;
+
+		rcu_read_unlock();
 	}
 
-	return len;
+	return result;
 }
 
 
@@ -159,11 +178,20 @@ static ssize_t store_stp_state(DEVICE_PARAMS,
 			       const char *buf,
 			       size_t len)
 {
-	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
+	struct datapath *dp;
+	ssize_t result = len;
 
-	printk("%s: xxx attempt to set_stp_state()\n", dp_name(dp));
+	rcu_read_lock();
 
-	return len;
+	dp = sysfs_get_dp(to_net_dev(d));
+	if (dp)
+		printk("%s: xxx attempt to set_stp_state()\n", dp_name(dp));
+	else
+		result = -ENODEV;
+
+	rcu_read_unlock();
+
+	return result;
 }
 static INTERNAL_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
 		   store_stp_state);
@@ -193,12 +221,24 @@ static INTERNAL_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 
 static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 {
-	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
-	const unsigned char *addr = vport_get_addr(dp->ports[ODPP_LOCAL]->vport);
+	struct vport *vport;
+	ssize_t result;
 
-	/* xxx Do we need a lock of some sort? */
-	return sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
-			0, 0, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+	rcu_read_lock();
+
+	vport = internal_dev_get_vport(to_net_dev(d));
+	if (vport) {
+		const unsigned char *addr;
+
+		addr = vport_get_addr(vport);
+		result = sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
+				 0, 0, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+	} else
+		result = -ENODEV;
+
+	rcu_read_unlock();
+
+	return result;
 }
 static INTERNAL_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
 
@@ -260,10 +300,20 @@ static ssize_t show_group_addr(DEVICE_PARAMS, char *buf)
 static ssize_t store_group_addr(DEVICE_PARAMS,
 				const char *buf, size_t len)
 {
-	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
+	struct datapath *dp;
+	ssize_t result = len;
 
-	printk("%s: xxx attempt to store_group_addr()\n", dp_name(dp));
-	return len;
+	rcu_read_lock();
+
+	dp = sysfs_get_dp(to_net_dev(d));
+	if (dp)
+		printk("%s: xxx attempt to store_group_addr()\n", dp_name(dp));
+	else
+		result = -ENODEV;
+
+	rcu_read_unlock();
+
+	return result;
 }
 
 static INTERNAL_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
