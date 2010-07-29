@@ -23,7 +23,7 @@ guide.
 
 Create the following two files and store them in known locations.
 
-For example /etc/ovs-ifup and /etc/ifdown
+For example /etc/ovs-ifup and /etc/ovs-ifdown
 
 /etc/ovs-ifup
 --------------------------------------------------------------------
