@@ -59,8 +59,7 @@ static int netdev_init(void)
 	return 0;
 }
 
-static void
-netdev_exit(void)
+static void netdev_exit(void)
 {
 	br_handle_frame_hook = NULL;
 }
@@ -224,8 +223,7 @@ unsigned char netdev_get_operstate(const struct vport *vport)
 	return netdev_vport->dev->operstate;
 }
 
-int
-netdev_get_ifindex(const struct vport *vport)
+int netdev_get_ifindex(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->ifindex;
