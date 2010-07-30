@@ -362,6 +362,11 @@ of the following keywords:
 .IP \fBoutput\fR:\fIport\fR
 Outputs the packet on the port specified by \fIport\fR.
 .
+.IP \fBenqueue\fR:\fIport\fB:\fIqueue\fR
+Enqueues the packet on the specified \fIqueue\fR within port
+\fIport\fR.  The number of supported queues depends on the switch;
+some OpenFlow implementations do not support queuing at all.
+.
 .IP \fBnormal\fR
 Subjects the packet to the device's normal L2/L3 processing.  (This
 action is not implemented by all OpenFlow switches.)

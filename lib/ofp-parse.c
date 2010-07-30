@@ -145,6 +145,14 @@ put_output_action(struct ofpbuf *b, uint16_t port)
 }
 
 static void
+put_enqueue_action(struct ofpbuf *b, uint16_t port, uint32_t queue)
+{
+    struct ofp_action_enqueue *oae = put_action(b, sizeof *oae, OFPAT_ENQUEUE);
+    oae->port = htons(port);
+    oae->queue_id = htonl(queue);
+}
+
+static void
 put_dl_addr_action(struct ofpbuf *b, uint16_t type, const char *addr)
 {
     struct ofp_action_dl_addr *oada = put_action(b, sizeof *oada, type);
@@ -257,6 +265,14 @@ str_to_action(char *str, struct ofpbuf *b)
             nast->tun_id = htonl(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
+        } else if (!strcasecmp(act, "enqueue")) {
+            char *sp = NULL;
+            char *port = strtok_r(arg, ":q", &sp);
+            char *queue = strtok_r(NULL, "", &sp);
+            if (port == NULL || queue == NULL) {
+                ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
+            }
+            put_enqueue_action(b, str_to_u32(port), str_to_u32(queue));
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */
