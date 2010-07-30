@@ -522,9 +522,6 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct odp_flow_key key;
 	struct tbl_node *flow_node;
 
-	WARN_ON_ONCE(skb_shared(skb));
-	skb_warn_if_lro(skb);
-
 	OVS_CB(skb)->dp_port = p;
 
 	if (flow_extract(skb, p ? p->port_no : ODPP_NONE, &key)) {

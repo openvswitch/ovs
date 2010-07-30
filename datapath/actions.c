@@ -26,7 +26,7 @@
 
 static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 {
-	if (skb_shared(skb) || skb_cloned(skb)) {
+	if (skb_cloned(skb)) {
 		struct sk_buff *nskb;
 		unsigned headroom = max(min_headroom, skb_headroom(skb));
 
@@ -420,7 +420,6 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	OVS_CB(skb)->tun_id = 0;
 
 	for (; n_actions > 0; a++, n_actions--) {
-		WARN_ON_ONCE(skb_shared(skb));
 		if (prev_port != -1) {
 			do_output(dp, skb_clone(skb, gfp), prev_port);
 			prev_port = -1;

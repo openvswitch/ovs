@@ -251,8 +251,10 @@ static void netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
 	 * (No one comes after us, since we tell handle_bridge() that we took
 	 * the packet.) */
 	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (!skb)
+	if (unlikely(!skb))
 		return;
+
+	skb_warn_if_lro(skb);
 
 	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
