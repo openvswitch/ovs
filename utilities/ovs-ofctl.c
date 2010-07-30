@@ -830,6 +830,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
         
             if (table_idx && !strcmp(name, "table")) {
                 *table_idx = atoi(value);
+                if (*table_idx < 0 || *table_idx > 31) {
+                    ovs_fatal(0, "table %s is invalid, must be between 0 and 31", value);
+                }
             } else if (out_port && !strcmp(name, "out_port")) {
                 *out_port = atoi(value);
             } else if (priority && !strcmp(name, "priority")) {
@@ -916,6 +919,21 @@ do_dump_aggregate(int argc, char *argv[])
 }
 
 static void
+enable_flow_mod_table_id_ext(struct vconn *vconn, uint8_t enable)
+{
+    struct nxt_flow_mod_table_id *flow_mod_table_id;
+    struct ofpbuf *buffer;
+
+    flow_mod_table_id = make_openflow(sizeof *flow_mod_table_id, OFPT_VENDOR, &buffer);
+
+    flow_mod_table_id->vendor = htonl(NX_VENDOR_ID);
+    flow_mod_table_id->subtype = htonl(NXT_FLOW_MOD_TABLE_ID);
+    flow_mod_table_id->set = enable;
+
+    send_openflow_buffer(vconn, buffer);
+}
+
+static void
 do_add_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
@@ -924,12 +942,13 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
     uint16_t priority, idle_timeout, hard_timeout;
     uint64_t cookie;
     struct ofp_match match;
+    uint8_t table_idx;
 
     /* Parse and send.  str_to_flow() will expand and reallocate the data in
      * 'buffer', so we can't keep pointers to across the str_to_flow() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &match, buffer,
-                NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                &table_idx, NULL, &priority, &idle_timeout, &hard_timeout,
                 &cookie);
     ofm = buffer->data;
     ofm->match = match;
@@ -941,6 +960,10 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
@@ -951,6 +974,8 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     FILE *file;
     char line[1024];
+    uint8_t table_idx;
+    int table_id_enabled = 0;
 
     file = fopen(argv[2], "r");
     if (file == NULL) {
@@ -983,7 +1008,7 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
          * call. */
         make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
         str_to_flow(line, &match, buffer,
-                    NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                    &table_idx, NULL, &priority, &idle_timeout, &hard_timeout,
                     &cookie);
         ofm = buffer->data;
         ofm->match = match;
@@ -994,6 +1019,18 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->priority = htons(priority);
 
+        if (table_idx != 0xff) {
+            if (!table_id_enabled) {
+                enable_flow_mod_table_id_ext(vconn, 1);
+                table_id_enabled = 1;
+            }
+            ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+        } else {
+            if (table_id_enabled) {
+                enable_flow_mod_table_id_ext(vconn, 0);
+                table_id_enabled = 0;
+            }
+        }
         send_openflow_buffer(vconn, buffer);
     }
     vconn_close(vconn);
@@ -1009,12 +1046,13 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     struct ofp_match match;
+    uint8_t table_idx;
 
     /* Parse and send.  str_to_flow() will expand and reallocate the data in
      * 'buffer', so we can't keep pointers to across the str_to_flow() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &match, buffer,
-                NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                &table_idx, NULL, &priority, &idle_timeout, &hard_timeout,
                 &cookie);
     ofm = buffer->data;
     ofm->match = match;
@@ -1030,6 +1068,10 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
@@ -1041,6 +1083,7 @@ static void do_del_flows(int argc, char *argv[])
     uint16_t out_port;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
+    uint8_t table_idx;
 
     /* Parse and send. */
     ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
@@ -1058,6 +1101,10 @@ static void do_del_flows(int argc, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
