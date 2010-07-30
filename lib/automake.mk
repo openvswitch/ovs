@@ -168,6 +168,9 @@ lib_libsflow_a_CFLAGS = $(AM_CFLAGS)
 if HAVE_WNO_UNUSED
 lib_libsflow_a_CFLAGS += -Wno-unused
 endif
+if HAVE_WNO_UNUSED_PARAMETER
+lib_libsflow_a_CFLAGS += -Wno-unused-parameter
+endif
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
