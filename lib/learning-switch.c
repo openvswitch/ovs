@@ -533,22 +533,29 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     out_port = lswitch_choose_destination(sw, &flow);
 
     /* Make actions. */
-    memset(actions, 0, sizeof actions);
     if (out_port == OFPP_NONE) {
         actions_len = 0;
     } else if (sw->queue == UINT32_MAX || out_port >= OFPP_MAX) {
-        struct ofp_action_output *oao = (struct ofp_action_output *) actions;
-        oao->type = htons(OFPAT_OUTPUT);
-        oao->len = htons(sizeof *oao);
-        oao->port = htons(out_port);
-        actions_len = sizeof *oao;
+        struct ofp_action_output oao;
+
+        memset(&oao, 0, sizeof oao);
+        oao.type = htons(OFPAT_OUTPUT);
+        oao.len = htons(sizeof oao);
+        oao.port = htons(out_port);
+
+        memcpy(actions, &oao, sizeof oao);
+        actions_len = sizeof oao;
     } else {
-        struct ofp_action_enqueue *oae = (struct ofp_action_enqueue *) actions;
-        oae->type = htons(OFPAT_ENQUEUE);
-        oae->len = htons(sizeof *oae);
-        oae->port = htons(out_port);
-        oae->queue_id = htonl(sw->queue);
-        actions_len = sizeof *oae;
+        struct ofp_action_enqueue oae;
+
+        memset(&oae, 0, sizeof oae);
+        oae.type = htons(OFPAT_ENQUEUE);
+        oae.len = htons(sizeof oae);
+        oae.port = htons(out_port);
+        oae.queue_id = htonl(sw->queue);
+
+        memcpy(actions, &oae, sizeof oae);
+        actions_len = sizeof oae;
     }
     assert(actions_len <= sizeof actions);
 
