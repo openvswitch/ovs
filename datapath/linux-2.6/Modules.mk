@@ -38,6 +38,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/slab.h \
 	linux-2.6/compat-2.6/include/linux/stddef.h \
 	linux-2.6/compat-2.6/include/linux/tcp.h \
+	linux-2.6/compat-2.6/include/linux/time.h \
 	linux-2.6/compat-2.6/include/linux/timer.h \
 	linux-2.6/compat-2.6/include/linux/types.h \
 	linux-2.6/compat-2.6/include/linux/udp.h \
