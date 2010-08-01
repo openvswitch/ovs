@@ -1,7 +1,4 @@
-#ifndef __LINUX_TIME_WRAPPER_H
-#define __LINUX_TIME_WRAPPER_H 1
-
-#include_next <linux/time.h>
+#include <linux/time.h>
 
 #include <linux/version.h>
 
@@ -9,8 +6,6 @@
 
 /* "set_normalized_timespec" is defined but not exported in kernels 
  * before 2.6.26. */
-#define set_normalized_timespec(ts, sec, nsec) \
-	rpl_set_normalized_timespec(ts, sec, nsec)
 
 /**
  * set_normalized_timespec - set timespec sec and nsec parts and normalize
@@ -26,7 +21,7 @@
  *      0 <= tv_nsec < NSEC_PER_SEC
  * For negative values only the tv_sec field is negative !
  */
-static inline void rpl_set_normalized_timespec(struct timespec *ts, 
+void set_normalized_timespec(struct timespec *ts, 
                    time_t sec, long nsec)
 {
 	while (nsec >= NSEC_PER_SEC) {
@@ -42,5 +37,3 @@ static inline void rpl_set_normalized_timespec(struct timespec *ts,
 }
 
 #endif /* linux kernel < 2.6.26 */
-
-#endif

@@ -25,6 +25,7 @@
 /random32.c
 /skbuff-openvswitch.c
 /table.c
+/time.c
 /tmp
 /veth.c
 /vport-generic.c
