@@ -238,9 +238,16 @@ Before starting ovs-vswitchd itself, you need to start its
 configuration database, ovsdb-server.  Each machine on which Open
 vSwitch is installed should run its own copy of ovsdb-server.
 Configure it to use the database you created during step 7 of
-installation, above, and to listen on a Unix domain socket, e.g.:
+installation, above, to listen on a Unix domain socket, to connect to
+any managers specified in the database itself, and to use the SSL
+configuration in the database:
 
-      % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db --remote=punix:/usr/local/var/run/openvswitch/db.sock
+      % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db \
+                      --remote=punix:/usr/local/var/run/openvswitch/db.sock \
+                      --remote=db:Open_vSwitch,managers \
+                      --private-key=db:SSL,private_key \
+                      --certificate=db:SSL,certificate \
+                      --bootstrap-ca-cert=db:SSL,ca_cert
 
 Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
