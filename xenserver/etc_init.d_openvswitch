@@ -359,6 +359,10 @@ case "$1" in
     restart)
         restart
         ;;
+    reload|force-reload)
+	# Nothing to do--ovs-vswitchd and ovsdb-server keep their configuration
+	# up-to-date all the time.
+	;;
     strace-vswitchd)
         shift
         strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
@@ -379,7 +383,7 @@ case "$1" in
         /usr/sbin/ovs-brcompatd -V
         ;;
     help)
-        printf "openvswitch [start|stop|restart|unload|status|version]\n"
+        printf "openvswitch [start|stop|restart|reload|force-reload|status|version]\n"
         ;;
     *)
         printf "Unknown command: $1\n"
