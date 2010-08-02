@@ -228,17 +228,4 @@ static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 #endif /* NETIF_F_LRO */
 #endif /* HAVE_SKB_WARN_LRO */
 
-#ifndef HAVE_NETDEV_ALLOC_SKB_IP_ALIGN
-static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,
-							unsigned int length)
-{
-	struct sk_buff *skb = netdev_alloc_skb(dev, length + NET_IP_ALIGN);
-
-	if (NET_IP_ALIGN && skb)
-		skb_reserve(skb, NET_IP_ALIGN);
-	return skb;
-}
-#endif
-
-
 #endif
