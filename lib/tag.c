@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ tag_type
 tag_create_deterministic(uint32_t seed)
 {
     int x = seed & (N_TAG_BITS - 1);
-    int y = (seed >> LOG2_N_TAG_BITS) % 31;
+    int y = (seed >> LOG2_N_TAG_BITS) % (N_TAG_BITS - 1);
     y += y >= x;
     return (1u << x) | (1u << y);
 }
