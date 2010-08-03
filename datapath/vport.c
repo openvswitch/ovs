@@ -35,17 +35,6 @@ static int n_vport_types;
 static struct hlist_head *dev_table;
 #define VPORT_HASH_BUCKETS 1024
 
-/* We limit the number of times that we pass through vport_send() to
- * avoid blowing out the stack in the event that we have a loop. There is
- * a separate counter for each CPU for both interrupt and non-interrupt
- * context in order to keep the limit deterministic for a given packet. */
-struct percpu_loop_counter {
-	int count[2];
-};
-
-static DEFINE_PER_CPU(struct percpu_loop_counter, vport_loop_counter);
-#define VPORT_MAX_LOOPS 5
-
 /* Both RTNL lock and vport_mutex need to be held when updating dev_table.
  *
  * If you use vport_locate and then perform some operations, you need to hold
@@ -1238,19 +1227,8 @@ static inline unsigned packet_length(const struct sk_buff *skb)
  */
 int vport_send(struct vport *vport, struct sk_buff *skb)
 {
-	int *loop_count;
 	int mtu;
 	int sent;
-
-	loop_count = &get_cpu_var(vport_loop_counter).count[!!in_interrupt()];
-	(*loop_count)++;
-
-	if (unlikely(*loop_count > VPORT_MAX_LOOPS)) {
-		if (net_ratelimit())
-			printk(KERN_WARNING "%s: dropping packet that has looped more than %d times\n",
-			       dp_name(vport_get_dp_port(vport)->dp), VPORT_MAX_LOOPS);
-		goto error;
-	}
 
 	mtu = vport_get_mtu(vport);
 	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
@@ -1274,17 +1252,12 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 		local_bh_enable();
 	}
 
-	goto out;
+	return sent;
 
 error:
-	sent = 0;
 	kfree_skb(skb);
 	vport_record_error(vport, VPORT_E_TX_DROPPED);
-out:
-	(*loop_count)--;
-	put_cpu_var(vport_loop_counter);
-
-	return sent;
+	return 0;
 }
 
 /**

@@ -69,6 +69,23 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static struct datapath *dps[ODP_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
+/* We limit the number of times that we pass into dp_process_received_packet()
+ * to avoid blowing out the stack in the event that we have a loop. */
+struct loop_counter {
+	int count;		/* Count. */
+	bool looping;		/* Loop detected? */
+};
+
+#define DP_MAX_LOOPS 5
+
+/* We use a separate counter for each CPU for both interrupt and non-interrupt
+ * context in order to keep the limit deterministic for a given packet. */
+struct percpu_loop_counters {
+	struct loop_counter counters[2];
+};
+
+static DEFINE_PER_CPU(struct percpu_loop_counters, dp_loop_counters);
+
 static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
@@ -511,6 +528,14 @@ out:
 	return err;
 }
 
+static void suppress_loop(struct datapath *dp, struct sw_flow_actions *actions)
+{
+	if (net_ratelimit())
+		printk(KERN_WARNING "%s: flow looped %d times, dropping\n",
+		       dp_name(dp), DP_MAX_LOOPS);
+	actions->n_actions = 0;
+}
+
 /* Must be called with rcu_read_lock. */
 void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 {
@@ -519,9 +544,13 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	int stats_counter_off;
 	struct odp_flow_key key;
 	struct tbl_node *flow_node;
+	struct sw_flow *flow;
+	struct sw_flow_actions *acts;
+	struct loop_counter *loop;
 
 	OVS_CB(skb)->dp_port = p;
 
+	/* Extract flow from 'skb' into 'key'. */
 	if (flow_extract(skb, p ? p->port_no : ODPP_NONE, &key)) {
 		if (dp->drop_frags) {
 			kfree_skb(skb);
@@ -530,20 +559,44 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 		}
 	}
 
+	/* Look up flow. */
 	flow_node = tbl_lookup(rcu_dereference(dp->table), &key, flow_hash(&key), flow_cmp);
-	if (flow_node) {
-		struct sw_flow *flow = flow_cast(flow_node);
-		struct sw_flow_actions *acts = rcu_dereference(flow->sf_acts);
-		flow_used(flow, skb);
-		execute_actions(dp, skb, &key, acts->actions, acts->n_actions,
-				GFP_ATOMIC);
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
-	} else {
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
+	if (unlikely(!flow_node)) {
 		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
+		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
+		goto out;
 	}
 
+	flow = flow_cast(flow_node);
+	flow_used(flow, skb);
+
+	acts = rcu_dereference(flow->sf_acts);
+
+	/* Check whether we've looped too much. */
+	loop = &get_cpu_var(dp_loop_counters).counters[!!in_interrupt()];
+	if (unlikely(++loop->count > DP_MAX_LOOPS))
+		loop->looping = true;
+	if (unlikely(loop->looping)) {
+		suppress_loop(dp, acts);
+		goto out_loop;
+	}
+
+	/* Execute actions. */
+	execute_actions(dp, skb, &key, acts->actions, acts->n_actions, GFP_ATOMIC);
+	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
+
+	/* Check whether sub-actions looped too much. */
+	if (unlikely(loop->looping))
+		suppress_loop(dp, acts);
+
+out_loop:
+	/* Decrement loop counter. */
+	if (!--loop->count)
+		loop->looping = false;
+	put_cpu_var(dp_loop_counters);
+
 out:
+	/* Update datapath statistics. */
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 	(*(u64 *)((u8 *)stats + stats_counter_off))++;
