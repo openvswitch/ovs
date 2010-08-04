@@ -32,11 +32,20 @@
         choose key names that are likely to be unique.  The currently
         defined common key-value pairs are:
         <dl>
-          <dt><code>system-uuid</code></dt>
-          <dd>A universally unique identifier for the Open vSwitch's
-            physical host.  The form of the identifier depends on the
-            type of the host.  On a Citrix XenServer, this is the host
-            UUID displayed by, e.g., <code>xe host-list</code>.</dd>
+          <dt><code>system-type</code></dt>
+          <dd>An identifier for the switch type, such as
+            <code>XenServer</code> or <code>KVM</code>.</dd>
+          <dt><code>system-version</code></dt>
+          <dd>The version of the switch software, such as
+            <code>5.6.0</code> on XenServer.</dd>
+          <dt><code>system-id</code></dt>
+          <dd>A unique identifier for the Open vSwitch's physical host.
+            The form of the identifier depends on the type of the host.
+            On a Citrix XenServer, this will likely be the same as
+            <code>xs-system-uuid</code>.</dd>
+          <dt><code>xs-system-uuid</code></dt>
+          <dd>The Citrix XenServer universally unique identifier for the
+            physical host as displayed by <code>xe host-list</code>.</dd>
         </dl>
       </column>
     </group>
@@ -187,13 +196,15 @@
         integrators should either use the Open vSwitch development
         mailing list to coordinate on common key-value definitions, or
         choose key names that are likely to be unique.  The currently
-        defined common key-value pairs are:
+        defined key-value pairs are:
         <dl>
-          <dt><code>network-uuids</code></dt>
+          <dt><code>bridge-id</code></dt>
+          <dd>A unique identifier of the bridge.  On Citrix XenServer this 
+            will commonly be the same as <code>xs-network-uuids</code>.</dd>
+          <dt><code>xs-network-uuids</code></dt>
           <dd>Semicolon-delimited set of universally unique identifier(s) for
-            the network with which this bridge is associated.  The form of the
-            identifier(s) depends on the type of the host.  On a Citrix
-            XenServer host, the network identifiers are RFC 4122 UUIDs as
+            the network with which this bridge is associated on a Citrix
+            XenServer host.  The network identifiers are RFC 4122 UUIDs as
             displayed by, e.g., <code>xe network-list</code>.</dd>
         </dl>
       </column>
@@ -649,15 +660,19 @@
 
     <group title="Other Features">
       <column name="external_ids">
+        Key-value pairs for use by external frameworks that integrate
+        with Open vSwitch, rather than by Open vSwitch itself.  System
+        integrators should either use the Open vSwitch development
+        mailing list to coordinate on common key-value definitions, or
+        choose key names that are likely to be unique.  The currently
+        defined common key-value pair is:
+        <dl>
+          <dt><code>iface-id</code></dt>
+          <dd>A system-unique identifier for the interface.  On XenServer, 
+            this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
+        </dl>
         <p>
-          Key-value pairs for use by external frameworks that integrate
-          with Open vSwitch, rather than by Open vSwitch itself.  System
-          integrators should either use the Open vSwitch development
-          mailing list to coordinate on common key-value definitions, or
-          choose key names that are likely to be unique.
-        </p>
-        <p>
-          All of the currently defined key-value pairs specifically
+          Additionally the following key-value pairs specifically
           apply to an interface that represents a virtual Ethernet interface
           connected to a virtual machine.  These key-value pairs should not be
           present for other types of interfaces.  Keys whose names end
@@ -666,15 +681,15 @@
           UUIDs in RFC 4122 format.  Other hypervisors may use other
           formats.
         </p>
-        <p>The currently defined key-value pairs are:</p>
+        <p>The currently defined key-value pairs for XenServer are:</p>
         <dl>
-          <dt><code>vif-uuid</code></dt>
+          <dt><code>xs-vif-uuid</code></dt>
           <dd>The virtual interface associated with this interface.</dd>
-          <dt><code>network-uuid</code></dt>
+          <dt><code>xs-network-uuid</code></dt>
           <dd>The virtual network to which this interface is attached.</dd>
-          <dt><code>vm-uuid</code></dt>
+          <dt><code>xs-vm-uuid</code></dt>
           <dd>The VM to which this interface belongs.</dd>
-          <dt><code>vif-mac</code></dt>
+          <dt><code>xs-vif-mac</code></dt>
           <dd>The MAC address programmed into the "virtual hardware" for this
               interface, in the
               form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
