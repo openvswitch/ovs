@@ -609,6 +609,20 @@
         Configuration options whose interpretation varies based on
         <ref column="type"/>.
       </column>
+
+      <column name="status">
+        <p>
+          Key-value pairs that report port status.  Supported status
+          values are <code>type</code>-dependent.
+        </p>
+        <p>The only currently defined key-value pair is:</p>
+        <dl>
+          <dt><code>source_ip</code></dt>
+          <dd>The source IP address used for an IPv4 tunnel end-point,
+            such as <code>gre</code> or <code>capwap</code>.  Not
+            supported by all implementations.</dd>
+        </dl>
+      </column>
     </group>
 
     <group title="Ingress Policing">
