@@ -1927,6 +1927,39 @@ rule_has_out_port(const struct rule *rule, uint16_t out_port)
     return false;
 }
 
+static bool
+execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
+                    const union odp_action *actions, size_t n_actions,
+                    const struct ofpbuf *packet)
+{
+    if (n_actions > 0 && actions[0].type == ODPAT_CONTROLLER) {
+        /* As an optimization, avoid a round-trip from userspace to kernel to
+         * userspace.  This also avoids possibly filling up kernel packet
+         * buffers along the way. */
+        struct ofpbuf *copy;
+        struct odp_msg *msg;
+
+        copy = ofpbuf_new(DPIF_RECV_MSG_PADDING + sizeof(struct odp_msg)
+                          + packet->size);
+        ofpbuf_reserve(copy, DPIF_RECV_MSG_PADDING);
+        msg = ofpbuf_put_uninit(copy, sizeof *msg);
+        msg->type = _ODPL_ACTION_NR;
+        msg->length = sizeof(struct odp_msg) + packet->size;
+        msg->port = in_port;
+        msg->reserved = 0;
+        msg->arg = actions[0].controller.arg;
+        ofpbuf_put(copy, packet->data, packet->size);
+
+        send_packet_in(ofproto, copy);
+
+        actions++;
+        n_actions--;
+    }
+
+    return !n_actions || !dpif_execute(ofproto->dpif, in_port,
+                                       actions, n_actions, packet);
+}
+
 /* Executes the actions indicated by 'rule' on 'packet', which is in flow
  * 'flow' and is considered to have arrived on ODP port 'in_port'.
  *
@@ -1969,8 +2002,8 @@ rule_execute(struct ofproto *ofproto, struct rule *rule,
     }
 
     /* Execute the ODP actions. */
-    if (!dpif_execute(ofproto->dpif, flow->in_port,
-                      actions, n_actions, packet)) {
+    if (execute_odp_actions(ofproto, flow->in_port,
+                            actions, n_actions, packet)) {
         struct odp_flow_stats stats;
         flow_extract_stats(flow, packet, &stats);
         update_stats(ofproto, rule, &stats);

@@ -18,10 +18,12 @@
 #ifndef DPIF_H
 #define DPIF_H 1
 
-#include "openvswitch/datapath-protocol.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openflow/openflow.h"
+#include "openvswitch/datapath-protocol.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -89,6 +91,14 @@ int dpif_flow_list_all(const struct dpif *,
 int dpif_execute(struct dpif *, uint16_t in_port,
                  const union odp_action[], size_t n_actions,
                  const struct ofpbuf *);
+
+/* Minimum number of bytes of headroom for a packet returned by dpif_recv()
+ * member function.  This headroom allows "struct odp_msg" to be replaced by
+ * "struct ofp_packet_in" without copying the buffer. */
+#define DPIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
+                               - sizeof(struct odp_msg))
+BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct odp_msg));
+BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 4 == 0);
 
 int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
 int dpif_recv_set_mask(struct dpif *, int listen_mask);

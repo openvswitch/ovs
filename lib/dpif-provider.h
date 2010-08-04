@@ -324,14 +324,6 @@ struct dpif_class {
     void (*recv_wait)(struct dpif *dpif);
 };
 
-/* Minimum number of bytes of headroom for a packet returned by the 'recv'
- * member function (see above).  This headroom allows "struct odp_msg" to be
- * replaced by "struct ofp_packet_in" without copying the buffer. */
-#define DPIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
-                               - sizeof(struct odp_msg))
-BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct odp_msg));
-BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 4 == 0);
-
 extern const struct dpif_class dpif_linux_class;
 extern const struct dpif_class dpif_netdev_class;
 
