@@ -2772,6 +2772,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
         *nf_output_iface = ctx.nf_output_iface;
     }
     if (odp_actions_overflow(out)) {
+        COVERAGE_INC(odp_overflow);
         odp_actions_init(out);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_TOO_MANY);
     }

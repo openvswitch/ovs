@@ -30,13 +30,10 @@ union odp_action *
 odp_actions_add(struct odp_actions *actions, uint16_t type)
 {
     union odp_action *a;
-    if (actions->n_actions < MAX_ODP_ACTIONS) {
-        a = &actions->actions[actions->n_actions++];
-    } else {
-        COVERAGE_INC(odp_overflow);
-        actions->n_actions = MAX_ODP_ACTIONS + 1;
-        a = &actions->actions[MAX_ODP_ACTIONS - 1];
-    }
+    size_t idx;
+
+    idx = actions->n_actions++ & (MAX_ODP_ACTIONS - 1);
+    a = &actions->actions[idx];
     memset(a, 0, sizeof *a);
     a->type = type;
     return a;
