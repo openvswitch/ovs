@@ -5,8 +5,6 @@
 
 set -e
 
-depmod -a
-
 #DEBHELPER#
 
 # If the switch is running, restart it.  This ensures that we are using the
