@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,17 +23,35 @@
 
 #include "util.h"
 
+/* This is the 32-bit PRNG recommended in G. Marsaglia, "Xorshift RNGs",
+ * _Journal of Statistical Software_ 8:14 (July 2003).  According to the paper,
+ * it has a period of 2**32 - 1 and passes almost all tests of randomness.
+ *
+ * We use this PRNG instead of libc's rand() because rand() varies in quality
+ * and because its maximum value also varies between 32767 and INT_MAX, whereas
+ * we often want random numbers in the full range of uint32_t.  */
+
+/* Current random state. */
+static uint32_t seed;
+
+static uint32_t random_next(void);
+
 void
 random_init(void)
 {
-    static bool inited = false;
-    if (!inited) {
+    if (!seed) {
         struct timeval tv;
-        inited = true;
+
         if (gettimeofday(&tv, NULL) < 0) {
             ovs_fatal(errno, "gettimeofday");
         }
-        srand(tv.tv_sec ^ tv.tv_usec);
+
+        seed = tv.tv_sec ^ tv.tv_usec;
+        if (!seed) {
+            /* A 'seed' of 0 is fatal to randomness--the random value will
+             * always be 0--so use the initial seed mentioned by Marsaglia. */
+            seed = UINT32_C(2463534242);
+        }
     }
 }
 
@@ -41,50 +59,51 @@ void
 random_bytes(void *p_, size_t n)
 {
     uint8_t *p = p_;
+
     random_init();
-    while (n--) {
-        *p++ = rand();
+
+    for (; n > 4; p += 4, n -= 4) {
+        uint32_t x = random_next();
+        memcpy(p, &x, 4);
+    }
+
+    if (n) {
+        uint32_t x = random_next();
+        memcpy(p, &x, n);
     }
 }
 
 uint8_t
 random_uint8(void)
 {
-    random_init();
-    return rand();
+    return random_uint32();
 }
 
 uint16_t
 random_uint16(void)
 {
-    if (RAND_MAX >= UINT16_MAX) {
-        random_init();
-        return rand();
-    } else {
-        uint16_t x;
-        random_bytes(&x, sizeof x);
-        return x;
-    }
+    return random_uint32();
 }
 
 uint32_t
 random_uint32(void)
 {
-    if (RAND_MAX >= UINT32_MAX) {
-        random_init();
-        return rand();
-    } else if (RAND_MAX == INT32_MAX) {
-        random_init();
-        return rand() | ((rand() & 1u) << 31);
-    } else {
-        uint32_t x;
-        random_bytes(&x, sizeof x);
-        return x;
-    }
+    random_init();
+    return random_next();
 }
 
 int
-random_range(int max) 
+random_range(int max)
 {
     return random_uint32() % max;
+}
+
+static uint32_t
+random_next(void)
+{
+    seed ^= seed << 13;
+    seed >>= 17;
+    seed ^= seed << 5;
+
+    return seed;
 }
