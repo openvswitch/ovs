@@ -170,17 +170,17 @@ static void send_flow_removed(struct ofproto *p, struct rule *rule,
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
- *   - "Controller connections": Connections to ordinary OpenFlow controllers.
- *     ofproto maintains persistent connections to these controllers and by
- *     default sends them asynchronous messages such as packet-ins.
+ *   - "Primary" connections to ordinary OpenFlow controllers.  ofproto
+ *     maintains persistent connections to these controllers and by default
+ *     sends them asynchronous messages such as packet-ins.
  *
- *   - "Transient connections", e.g. from ovs-ofctl.  When these connections
+ *   - "Service" connections, e.g. from ovs-ofctl.  When these connections
  *     drop, it is the other side's responsibility to reconnect them if
  *     necessary.  ofproto does not send them asynchronous messages by default.
  */
 enum ofconn_type {
-    OFCONN_CONTROLLER,          /* An OpenFlow controller. */
-    OFCONN_TRANSIENT            /* A transient connection. */
+    OFCONN_PRIMARY,             /* An ordinary OpenFlow controller. */
+    OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
 };
 
 /* An OpenFlow connection. */
@@ -202,7 +202,7 @@ struct ofconn {
 #define OFCONN_REPLY_MAX 100
     struct rconn_packet_counter *reply_counter;
 
-    /* type == OFCONN_CONTROLLER only. */
+    /* type == OFCONN_PRIMARY only. */
     enum nx_role role;           /* Role. */
     struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
     struct discovery *discovery; /* Controller discovery object, if enabled. */
@@ -452,7 +452,7 @@ add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
         discovery = NULL;
     }
 
-    ofconn = ofconn_create(ofproto, rconn_create(5, 8), OFCONN_CONTROLLER);
+    ofconn = ofconn_create(ofproto, rconn_create(5, 8), OFCONN_PRIMARY);
     ofconn->pktbuf = pktbuf_create();
     ofconn->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
     if (discovery) {
@@ -1028,7 +1028,7 @@ add_snooper(struct ofproto *ofproto, struct vconn *vconn)
     /* Pick a controller for monitoring. */
     best = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
-        if (ofconn->type == OFCONN_CONTROLLER
+        if (ofconn->type == OFCONN_PRIMARY
             && (!best || snoop_preference(ofconn) > snoop_preference(best))) {
             best = ofconn;
         }
@@ -1115,7 +1115,7 @@ ofproto_run1(struct ofproto *p)
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
 
-            ofconn_create(p, rconn, OFCONN_TRANSIENT);
+            ofconn_create(p, rconn, OFCONN_SERVICE);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }
@@ -1638,7 +1638,7 @@ ofconn_create(struct ofproto *p, struct rconn *rconn, enum ofconn_type type)
 static void
 ofconn_destroy(struct ofconn *ofconn)
 {
-    if (ofconn->type == OFCONN_CONTROLLER) {
+    if (ofconn->type == OFCONN_PRIMARY) {
         hmap_remove(&ofconn->ofproto->controllers, &ofconn->hmap_node);
     }
     discovery_destroy(ofconn->discovery);
@@ -1724,14 +1724,13 @@ ofconn_wait(struct ofconn *ofconn)
 static bool
 ofconn_receives_async_msgs(const struct ofconn *ofconn)
 {
-    if (ofconn->type == OFCONN_CONTROLLER) {
-        /* Ordinary controllers always get asynchronous messages unless they
+    if (ofconn->type == OFCONN_PRIMARY) {
+        /* Primary controllers always get asynchronous messages unless they
          * have configured themselves as "slaves".  */
         return ofconn->role != NX_ROLE_SLAVE;
     } else {
-        /* Transient connections don't get asynchronous messages unless they
-         * have explicitly asked for them by setting a nonzero miss send
-         * length. */
+        /* Service connections don't get asynchronous messages unless they have
+         * explicitly asked for them by setting a nonzero miss send length. */
         return ofconn->miss_send_len > 0;
     }
 }
@@ -2262,7 +2261,7 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     }
     flags = ntohs(osc->flags);
 
-    if (ofconn->type == OFCONN_CONTROLLER && ofconn->role != NX_ROLE_SLAVE) {
+    if (ofconn->type == OFCONN_PRIMARY && ofconn->role != NX_ROLE_SLAVE) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
             dpif_set_drop_frags(p->dpif, false);
@@ -2680,7 +2679,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
 static int
 reject_slave_controller(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    if (ofconn->type == OFCONN_CONTROLLER && ofconn->role == NX_ROLE_SLAVE) {
+    if (ofconn->type == OFCONN_PRIMARY && ofconn->role == NX_ROLE_SLAVE) {
         static struct vlog_rate_limit perm_rl = VLOG_RATE_LIMIT_INIT(1, 5);
         char *type_name;
 
@@ -3772,7 +3771,7 @@ handle_role_request(struct ofproto *ofproto,
     }
     nrr = (struct nx_role_request *) msg;
 
-    if (ofconn->type != OFCONN_CONTROLLER) {
+    if (ofconn->type != OFCONN_PRIMARY) {
         VLOG_WARN_RL(&rl, "ignoring role request on non-controller "
                      "connection");
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
