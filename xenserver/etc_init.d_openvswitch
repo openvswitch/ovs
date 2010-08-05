@@ -290,12 +290,15 @@ EOF
     esac
 }
 
-function set_system_uuid {
-    if test -n "$INSTALLATION_UUID"; then
-        action "Configuring Open vSwitch system UUID" true
-        $vsctl --no-wait set Open_vSwitch . external-ids:system-uuid="$INSTALLATION_UUID"
+function set_system_ids {
+    if [ -f /etc/xensource-inventory ]; then
+        action "Configuring Open vSwitch system IDs" true
+        $vsctl --no-wait set Open_vSwitch . \
+            external-ids:system-type="$PRODUCT_BRAND" \
+            external-ids:system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
+            external-ids:system-uuid="$INSTALLATION_UUID"
     else
-        action "Configuring Open vSwitch system UUID" false
+        action "Configuring Open vSwitch system IDs" false
     fi
 }
 
@@ -333,7 +336,7 @@ function start {
         done
     fi
 
-    set_system_uuid
+    set_system_ids
 
     start_vswitchd
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
