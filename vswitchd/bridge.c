@@ -344,18 +344,6 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     svec_destroy(&dpif_types);
 }
 
-#ifdef HAVE_OPENSSL
-static void
-bridge_configure_ssl(const struct ovsrec_ssl *ssl)
-{
-    /* XXX SSL should be configurable on a per-bridge basis. */
-    if (ssl) {
-        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
-        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
-    }
-}
-#endif
-
 /* Attempt to create the network device 'iface_name' through the netdev
  * library. */
 static int
@@ -594,11 +582,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
     shash_destroy(&old_br);
     shash_destroy(&new_br);
-
-#ifdef HAVE_OPENSSL
-    /* Configure SSL. */
-    bridge_configure_ssl(ovs_cfg->ssl);
-#endif
 
     /* Reconfigure all bridges. */
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -1105,7 +1088,10 @@ iface_refresh_stats(struct iface *iface)
 void
 bridge_run(void)
 {
+    const struct ovsrec_open_vswitch *cfg;
+
     bool datapath_destroyed;
+    bool database_changed;
     struct bridge *br;
 
     /* Let each bridge do the work that it needs to do. */
@@ -1121,8 +1107,9 @@ bridge_run(void)
     }
 
     /* (Re)configure if necessary. */
-    if (ovsdb_idl_run(idl) || datapath_destroyed) {
-        const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
+    database_changed = ovsdb_idl_run(idl);
+    cfg = ovsrec_open_vswitch_first(idl);
+    if (database_changed || datapath_destroyed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
 
@@ -1140,6 +1127,18 @@ bridge_run(void)
             bridge_reconfigure(&null_cfg);
         }
     }
+
+#ifdef HAVE_OPENSSL
+    /* Re-configure SSL.  We do this on every trip through the main loop,
+     * instead of just when the database changes, because the contents of the
+     * key and certificate files can change without the database changing. */
+    if (cfg && cfg->ssl) {
+        const struct ovsrec_ssl *ssl = cfg->ssl;
+
+        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
+        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
+    }
+#endif
 
     /* Refresh interface stats if necessary. */
     if (time_msec() >= iface_stats_timer) {
