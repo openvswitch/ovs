@@ -975,32 +975,75 @@ update_ssl_config(struct ssl_config_file *config, const char *file_name)
     return true;
 }
 
+static void
+stream_ssl_set_private_key_file__(const char *file_name)
+{
+    if (SSL_CTX_use_PrivateKey_file(ctx, file_name, SSL_FILETYPE_PEM) == 1) {
+        private_key.read = true;
+    } else {
+        VLOG_ERR("SSL_use_PrivateKey_file: %s",
+                 ERR_error_string(ERR_get_error(), NULL));
+    }
+}
+
 void
 stream_ssl_set_private_key_file(const char *file_name)
 {
-    if (!update_ssl_config(&private_key, file_name)) {
-        return;
+    if (update_ssl_config(&private_key, file_name)) {
+        stream_ssl_set_private_key_file__(file_name);
     }
-    if (SSL_CTX_use_PrivateKey_file(ctx, file_name, SSL_FILETYPE_PEM) != 1) {
-        VLOG_ERR("SSL_use_PrivateKey_file: %s",
+}
+
+static void
+stream_ssl_set_certificate_file__(const char *file_name)
+{
+    if (SSL_CTX_use_certificate_chain_file(ctx, file_name) == 1) {
+        certificate.read = true;
+    } else {
+        VLOG_ERR("SSL_use_certificate_file: %s",
                  ERR_error_string(ERR_get_error(), NULL));
-        return;
     }
-    private_key.read = true;
 }
 
 void
 stream_ssl_set_certificate_file(const char *file_name)
 {
-    if (!update_ssl_config(&certificate, file_name)) {
-        return;
+    if (update_ssl_config(&certificate, file_name)) {
+        stream_ssl_set_certificate_file__(file_name);
     }
-    if (SSL_CTX_use_certificate_chain_file(ctx, file_name) != 1) {
-        VLOG_ERR("SSL_use_certificate_file: %s",
-                 ERR_error_string(ERR_get_error(), NULL));
-        return;
+}
+
+/* Sets the private key and certificate files in one operation.  Use this
+ * interface, instead of calling stream_ssl_set_private_key_file() and
+ * stream_ssl_set_certificate_file() individually, in the main loop of a
+ * long-running program whose key and certificate might change at runtime.
+ *
+ * This is important because of OpenSSL's behavior.  If an OpenSSL context
+ * already has a certificate, and stream_ssl_set_private_key_file() is called
+ * to install a new private key, OpenSSL will report an error because the new
+ * private key does not match the old certificate.  The other order, of setting
+ * a new certificate, then setting a new private key, does work.
+ *
+ * If this were the only problem, calling stream_ssl_set_certificate_file()
+ * before stream_ssl_set_private_key_file() would fix it.  But, if the private
+ * key is changed before the certificate (e.g. someone "scp"s or "mv"s the new
+ * private key in place before the certificate), then OpenSSL would reject that
+ * change, and then the change of certificate would succeed, but there would be
+ * no associated private key (because it had only changed once and therefore
+ * there was no point in re-reading it).
+ *
+ * This function avoids both problems by, whenever either the certificate or
+ * the private key file changes, re-reading both of them, in the correct order.
+ */
+void
+stream_ssl_set_key_and_cert(const char *private_key_file,
+                            const char *certificate_file)
+{
+    if (update_ssl_config(&private_key, private_key_file)
+        || update_ssl_config(&certificate, certificate_file)) {
+        stream_ssl_set_certificate_file__(certificate_file);
+        stream_ssl_set_private_key_file__(private_key_file);
     }
-    certificate.read = true;
 }
 
 /* Reads the X509 certificate or certificates in file 'file_name'.  On success,

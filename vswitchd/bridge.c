@@ -350,8 +350,7 @@ bridge_configure_ssl(const struct ovsrec_ssl *ssl)
 {
     /* XXX SSL should be configurable on a per-bridge basis. */
     if (ssl) {
-        stream_ssl_set_private_key_file(ssl->private_key);
-        stream_ssl_set_certificate_file(ssl->certificate);
+        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
 }

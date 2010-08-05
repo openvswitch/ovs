@@ -283,8 +283,8 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
 
 #if HAVE_OPENSSL
     /* Configure SSL. */
-    stream_ssl_set_private_key_file(query_db_string(db, private_key_file));
-    stream_ssl_set_certificate_file(query_db_string(db, certificate_file));
+    stream_ssl_set_key_and_cert(query_db_string(db, private_key_file),
+                                query_db_string(db, certificate_file));
     stream_ssl_set_ca_cert_file(query_db_string(db, ca_cert_file),
                                 bootstrap_ca_cert);
 #endif
