@@ -32,6 +32,10 @@
 
 #include "shash.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct ds;
 
 /* Type of a JSON value. */
@@ -127,5 +131,9 @@ void json_to_ds(const struct json *, int flags, struct ds *);
 /* JSON string formatting operations. */
 
 bool json_string_unescape(const char *in, size_t in_len, char **outp);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* json.h */
