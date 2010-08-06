@@ -451,8 +451,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     argc -= optind;
     argv += optind;
-    if (argc < 1 || argc > 2) {
-        ovs_fatal(0, "need one or two non-option arguments; "
+    if (argc < 1) {
+        ovs_fatal(0, "need at least one non-option arguments; "
                   "use --help for usage");
     }
 

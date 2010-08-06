@@ -19,11 +19,20 @@ to relay.  It takes one of the following forms:
 .so lib/dpif.man
 .
 .PP
-The optional \fIcontroller\fR arguments specify how to connect to
-the OpenFlow controller.  It takes one of the following forms:
+The optional \fIcontroller\fR arguments specify how to connect to the
+OpenFlow controller or controllers.  Each takes one of the following
+forms:
 .
 .so lib/vconn-active.man
 .
+.PP
+When multiple controllers are configured, \fBovs\-openflowd\fR
+connects to all of them simultaneously.  OpenFlow 1.0 does not specify
+how multiple controllers coordinate in interacting with a single
+switch, so more than one controller should be specified only if the
+controllers are themselves designed to coordinate with each other.
+(The Nicira-defined \fBNXT_ROLE\fR OpenFlow vendor extension may be
+useful for this.)
 .PP
 If no \fIcontroller\fR is specified, \fBovs\-openflowd\fR attempts to
 discover the location of a controller automatically (see below).
