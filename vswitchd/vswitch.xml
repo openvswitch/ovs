@@ -449,8 +449,8 @@
              the same except one has an optional identifier and the other does
              not, the more specific one is matched first.  <code>in_key</code>
              is considered more specific than <code>local_ip</code> if a port
-             defines one and another port defines the other.  The arguments
-             are:
+             defines one and another port defines the other.  The following 
+             options may be specified in the <ref column="options"/> column:
             <dl>
               <dt><code>remote_ip</code></dt>
               <dd>Required.  The tunnel endpoint.</dd>
@@ -525,11 +525,23 @@
             </dl>
           </dd>
           <dt><code>patch</code></dt>
-          <dd>A pair of virtual devices that act as a patch cable.  A 
-            <code>peer</code> argument is required that indicates the name
-            of the other side of the patch.  Since a patch must work in
-            pairs, a second patch interface must be declared with the
-            <code>name</code> and <code>peer</code> arguments reversed.</dd>
+          <dd>
+            <p>
+              A pair of virtual devices that act as a patch cable.  The <ref
+              column="options"/> column must have the following key-value pair:
+            </p>
+            <dl>
+              <dt><code>peer</code></dt>
+              <dd>
+                The <ref column="name"/> of the <ref table="Interface"/> for
+                the other side of the patch.  The named <ref
+                table="Interface"/>'s own <code>peer</code> option must specify
+                this <ref table="Interface"/>'s name.  That is, the two patch
+                interfaces must have reversed <ref column="name"/> and
+                <code>peer</code> values.
+              </dd>
+            </dl>
+          </dd>
         </dl>
       </column>
 
