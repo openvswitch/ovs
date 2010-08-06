@@ -61,11 +61,36 @@ tag_set_init(struct tag_set *set)
     memset(set, 0, sizeof *set);
 }
 
+static bool
+tag_is_worth_adding(const struct tag_set *set, tag_type tag)
+{
+    if (!tag) {
+        /* Nothing to add. */
+        return false;
+    } else if ((set->total & tag) != tag) {
+        /* 'set' doesn't have all the bits in 'tag', so we need to add it. */
+        return true;
+    } else {
+        /* We can drop it if some member of 'set' already includes all of the
+         * 1-bits in 'tag'.  (tag_set_intersects() does a different test:
+         * whether some member of 'set' has at least two 1-bit in common with
+         * 'tag'.) */
+        int i;
+
+        for (i = 0; i < TAG_SET_SIZE; i++) {
+            if ((set->tags[i] & tag) == tag) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
 /* Adds 'tag' to 'set'. */
 void
 tag_set_add(struct tag_set *set, tag_type tag)
 {
-    if (tag && (!tag_is_valid(tag) || !tag_set_intersects(set, tag))) {
+    if (tag_is_worth_adding(set, tag)) {
         /* XXX We could do better by finding the set member to which we would
          * add the fewest number of 1-bits.  This would reduce the amount of
          * ambiguity, since e.g. three 1-bits match 3 * 2 / 2 = 3 unique tags
