@@ -177,11 +177,36 @@ static void send_flow_removed(struct ofproto *p, struct rule *rule,
  *   - "Service" connections, e.g. from ovs-ofctl.  When these connections
  *     drop, it is the other side's responsibility to reconnect them if
  *     necessary.  ofproto does not send them asynchronous messages by default.
+ *
+ * Currently, active (tcp, ssl, unix) connections are always "primary"
+ * connections and passive (ptcp, pssl, punix) connections are always "service"
+ * connections.  There is no inherent reason for this, but it reflects the
+ * common case.
  */
 enum ofconn_type {
     OFCONN_PRIMARY,             /* An ordinary OpenFlow controller. */
     OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
 };
+
+/* A listener for incoming OpenFlow "service" connections. */
+struct ofservice {
+    struct hmap_node node;      /* In struct ofproto's "services" hmap. */
+    struct pvconn *pvconn;      /* OpenFlow connection listener. */
+
+    /* These are not used by ofservice directly.  They are settings for
+     * accepted "struct ofconn"s from the pvconn. */
+    int probe_interval;         /* Max idle time before probing, in seconds. */
+    int rate_limit;             /* Max packet-in rate in packets per second. */
+    int burst_limit;            /* Limit on accumulating packet credits. */
+};
+
+static struct ofservice *ofservice_lookup(struct ofproto *,
+                                          const char *target);
+static int ofservice_create(struct ofproto *,
+                            const struct ofproto_controller *);
+static void ofservice_reconfigure(struct ofservice *,
+                                  const struct ofproto_controller *);
+static void ofservice_destroy(struct ofproto *, struct ofservice *);
 
 /* An OpenFlow connection. */
 struct ofconn {
@@ -227,6 +252,7 @@ static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static bool ofconn_receives_async_msgs(const struct ofconn *);
 static char *ofconn_make_name(const struct ofproto *, const char *target);
+static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -275,8 +301,9 @@ struct ofproto {
     struct hmap controllers;   /* Controller "struct ofconn"s. */
     struct list all_conns;     /* Contains "struct ofconn"s. */
     enum ofproto_fail_mode fail_mode;
-    struct pvconn **listeners;
-    size_t n_listeners;
+
+    /* OpenFlow listeners. */
+    struct hmap services;       /* Contains "struct ofservice"s. */
     struct pvconn **snoops;
     size_t n_snoops;
 
@@ -382,8 +409,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Initialize OpenFlow connections. */
     list_init(&p->all_conns);
     hmap_init(&p->controllers);
-    p->listeners = NULL;
-    p->n_listeners = 0;
+    hmap_init(&p->services);
     p->snoops = NULL;
     p->n_snoops = 0;
 
@@ -473,9 +499,7 @@ add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
 static void
 update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
 {
-    struct ofproto *ofproto = ofconn->ofproto;
     int probe_interval;
-    int i;
 
     ofconn->band = (is_in_band_controller(c)
                     ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND);
@@ -491,21 +515,7 @@ update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
         discovery_set_accept_controller_re(ofconn->discovery, c->accept_re);
     }
 
-    for (i = 0; i < N_SCHEDULERS; i++) {
-        struct pinsched **s = &ofconn->schedulers[i];
-
-        if (c->rate_limit > 0) {
-            if (!*s) {
-                *s = pinsched_create(c->rate_limit, c->burst_limit,
-                                     ofproto->switch_status);
-            } else {
-                pinsched_set_limits(*s, c->rate_limit, c->burst_limit);
-            }
-        } else {
-            pinsched_destroy(*s);
-            *s = NULL;
-        }
-    }
+    ofconn_set_rate_limit(ofconn, c->rate_limit, c->burst_limit);
 }
 
 static const char *
@@ -621,22 +631,38 @@ ofproto_set_controllers(struct ofproto *p,
                         size_t n_controllers)
 {
     struct shash new_controllers;
-    struct ofconn *ofconn, *next;
+    struct ofconn *ofconn, *next_ofconn;
+    struct ofservice *ofservice, *next_ofservice;
     bool ss_exists;
     size_t i;
 
+    /* Create newly configured controllers and services.
+     * Create a name to ofproto_controller mapping in 'new_controllers'. */
     shash_init(&new_controllers);
     for (i = 0; i < n_controllers; i++) {
         const struct ofproto_controller *c = &controllers[i];
 
-        shash_add_once(&new_controllers, c->target, &controllers[i]);
-        if (!find_controller_by_target(p, c->target)) {
-            add_controller(p, c);
+        if (!vconn_verify_name(c->target) || !strcmp(c->target, "discover")) {
+            if (!find_controller_by_target(p, c->target)) {
+                add_controller(p, c);
+            }
+        } else if (!pvconn_verify_name(c->target)) {
+            if (!ofservice_lookup(p, c->target) && ofservice_create(p, c)) {
+                continue;
+            }
+        } else {
+            VLOG_WARN_RL(&rl, "%s: unsupported controller \"%s\"",
+                         dpif_name(p->dpif), c->target);
+            continue;
         }
+
+        shash_add_once(&new_controllers, c->target, &controllers[i]);
     }
 
+    /* Delete controllers that are no longer configured.
+     * Update configuration of all now-existing controllers. */
     ss_exists = false;
-    HMAP_FOR_EACH_SAFE (ofconn, next, struct ofconn, hmap_node,
+    HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, hmap_node,
                         &p->controllers) {
         struct ofproto_controller *c;
 
@@ -650,10 +676,25 @@ ofproto_set_controllers(struct ofproto *p,
             }
         }
     }
+
+    /* Delete services that are no longer configured.
+     * Update configuration of all now-existing services. */
+    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, struct ofservice, node,
+                        &p->services) {
+        struct ofproto_controller *c;
+
+        c = shash_find_data(&new_controllers,
+                            pvconn_get_name(ofservice->pvconn));
+        if (!c) {
+            ofservice_destroy(p, ofservice);
+        } else {
+            ofservice_reconfigure(ofservice, c);
+        }
+    }
+
     shash_destroy(&new_controllers);
 
     update_in_band_remotes(p);
-
     update_fail_open(p);
 
     if (!hmap_is_empty(&p->controllers) && !ss_exists) {
@@ -814,12 +855,6 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
 }
 
 int
-ofproto_set_listeners(struct ofproto *ofproto, const struct svec *listeners)
-{
-    return set_pvconns(&ofproto->listeners, &ofproto->n_listeners, listeners);
-}
-
-int
 ofproto_set_snoops(struct ofproto *ofproto, const struct svec *snoops)
 {
     return set_pvconns(&ofproto->snoops, &ofproto->n_snoops, snoops);
@@ -884,7 +919,7 @@ ofproto_get_datapath_id(const struct ofproto *ofproto)
 }
 
 bool
-ofproto_has_controller(const struct ofproto *ofproto)
+ofproto_has_primary_controller(const struct ofproto *ofproto)
 {
     return !hmap_is_empty(&ofproto->controllers);
 }
@@ -893,16 +928,6 @@ enum ofproto_fail_mode
 ofproto_get_fail_mode(const struct ofproto *p)
 {
     return p->fail_mode;
-}
-
-void
-ofproto_get_listeners(const struct ofproto *ofproto, struct svec *listeners)
-{
-    size_t i;
-
-    for (i = 0; i < ofproto->n_listeners; i++) {
-        svec_add(listeners, pvconn_get_name(ofproto->listeners[i]));
-    }
 }
 
 void
@@ -918,6 +943,7 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct svec *snoops)
 void
 ofproto_destroy(struct ofproto *p)
 {
+    struct ofservice *ofservice, *next_ofservice;
     struct ofconn *ofconn, *next_ofconn;
     struct ofport *ofport;
     unsigned int port_no;
@@ -955,10 +981,11 @@ ofproto_destroy(struct ofproto *p)
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
 
-    for (i = 0; i < p->n_listeners; i++) {
-        pvconn_close(p->listeners[i]);
+    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, struct ofservice, node,
+                        &p->services) {
+        ofservice_destroy(p, ofservice);
     }
-    free(p->listeners);
+    hmap_destroy(&p->services);
 
     for (i = 0; i < p->n_snoops; i++) {
         pvconn_close(p->snoops[i]);
@@ -1046,6 +1073,7 @@ int
 ofproto_run1(struct ofproto *p)
 {
     struct ofconn *ofconn, *next_ofconn;
+    struct ofservice *ofservice;
     char *devname;
     int error;
     int i;
@@ -1101,21 +1129,24 @@ ofproto_run1(struct ofproto *p)
         fail_open_run(p->fail_open);
     }
 
-    for (i = 0; i < p->n_listeners; i++) {
+    HMAP_FOR_EACH (ofservice, struct ofservice, node, &p->services) {
         struct vconn *vconn;
         int retval;
 
-        retval = pvconn_accept(p->listeners[i], OFP_VERSION, &vconn);
+        retval = pvconn_accept(ofservice->pvconn, OFP_VERSION, &vconn);
         if (!retval) {
+            struct ofconn *ofconn;
             struct rconn *rconn;
             char *name;
 
-            rconn = rconn_create(60, 0);
+            rconn = rconn_create(ofservice->probe_interval, 0);
             name = ofconn_make_name(p, vconn_get_name(vconn));
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
 
-            ofconn_create(p, rconn, OFCONN_SERVICE);
+            ofconn = ofconn_create(p, rconn, OFCONN_SERVICE);
+            ofconn_set_rate_limit(ofconn, ofservice->rate_limit,
+                                  ofservice->burst_limit);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }
@@ -1188,6 +1219,7 @@ ofproto_run2(struct ofproto *p, bool revalidate_all)
 void
 ofproto_wait(struct ofproto *p)
 {
+    struct ofservice *ofservice;
     struct ofconn *ofconn;
     size_t i;
 
@@ -1217,8 +1249,8 @@ ofproto_wait(struct ofproto *p)
     } else if (p->next_expiration != LLONG_MAX) {
         poll_timer_wait_until(p->next_expiration);
     }
-    for (i = 0; i < p->n_listeners; i++) {
-        pvconn_wait(p->listeners[i]);
+    HMAP_FOR_EACH (ofservice, struct ofservice, node, &p->services) {
+        pvconn_wait(ofservice->pvconn);
     }
     for (i = 0; i < p->n_snoops; i++) {
         pvconn_wait(p->snoops[i]);
@@ -1745,6 +1777,85 @@ static char *
 ofconn_make_name(const struct ofproto *ofproto, const char *target)
 {
     return xasprintf("%s<->%s", dpif_base_name(ofproto->dpif), target);
+}
+
+static void
+ofconn_set_rate_limit(struct ofconn *ofconn, int rate, int burst)
+{
+    int i;
+
+    for (i = 0; i < N_SCHEDULERS; i++) {
+        struct pinsched **s = &ofconn->schedulers[i];
+
+        if (rate > 0) {
+            if (!*s) {
+                *s = pinsched_create(rate, burst,
+                                     ofconn->ofproto->switch_status);
+            } else {
+                pinsched_set_limits(*s, rate, burst);
+            }
+        } else {
+            pinsched_destroy(*s);
+            *s = NULL;
+        }
+    }
+}
+
+static void
+ofservice_reconfigure(struct ofservice *ofservice,
+                      const struct ofproto_controller *c)
+{
+    ofservice->probe_interval = c->probe_interval;
+    ofservice->rate_limit = c->rate_limit;
+    ofservice->burst_limit = c->burst_limit;
+}
+
+/* Creates a new ofservice in 'ofproto'.  Returns 0 if successful, otherwise a
+ * positive errno value. */
+static int
+ofservice_create(struct ofproto *ofproto, const struct ofproto_controller *c)
+{
+    struct ofservice *ofservice;
+    struct pvconn *pvconn;
+    int error;
+
+    error = pvconn_open(c->target, &pvconn);
+    if (error) {
+        return error;
+    }
+
+    ofservice = xzalloc(sizeof *ofservice);
+    hmap_insert(&ofproto->services, &ofservice->node,
+                hash_string(c->target, 0));
+    ofservice->pvconn = pvconn;
+
+    ofservice_reconfigure(ofservice, c);
+
+    return 0;
+}
+
+static void
+ofservice_destroy(struct ofproto *ofproto, struct ofservice *ofservice)
+{
+    hmap_remove(&ofproto->services, &ofservice->node);
+    pvconn_close(ofservice->pvconn);
+    free(ofservice);
+}
+
+/* Finds and returns the ofservice within 'ofproto' that has the given
+ * 'target', or a null pointer if none exists. */
+static struct ofservice *
+ofservice_lookup(struct ofproto *ofproto, const char *target)
+{
+    struct ofservice *ofservice;
+
+    HMAP_FOR_EACH_WITH_HASH (ofservice, struct ofservice, node,
+                             hash_string(target, 0), &ofproto->services) {
+        if (!strcmp(pvconn_get_name(ofservice->pvconn), target)) {
+            return ofservice;
+        }
+    }
+    return NULL;
 }
 
 /* Caller is responsible for initializing the 'cr' member of the returned

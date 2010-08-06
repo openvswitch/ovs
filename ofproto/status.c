@@ -132,20 +132,11 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
 {
     const struct ofproto *ofproto = ofproto_;
     uint64_t datapath_id;
-    struct svec listeners;
-    size_t i;
 
     datapath_id = ofproto_get_datapath_id(ofproto);
     if (datapath_id) {
         status_reply_put(sr, "datapath-id=%016"PRIx64, datapath_id);
     }
-
-    svec_init(&listeners);
-    ofproto_get_listeners(ofproto, &listeners);
-    for (i = 0; i < listeners.n; i++) {
-        status_reply_put(sr, "management%zu=%s", i, listeners.names[i]);
-    }
-    svec_destroy(&listeners);
 }
 
 static void

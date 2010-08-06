@@ -69,7 +69,6 @@ struct ofsettings {
     const char *dp_desc;        /* Datapath description. */
 
     /* Related vconns and network devices. */
-    struct svec listeners;       /* Listen for management connections. */
     struct svec snoops;          /* Listen for controller snooping conns. */
 
     /* Failure behavior. */
@@ -140,16 +139,6 @@ main(int argc, char *argv[])
     }
     ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc,
                      s.serial_desc, s.dp_desc);
-    if (!s.listeners.n) {
-        svec_add_nocopy(&s.listeners, xasprintf("punix:%s/%s.mgmt",
-                                              ovs_rundir, s.dp_name));
-    } else if (s.listeners.n == 1 && !strcmp(s.listeners.names[0], "none")) {
-        svec_clear(&s.listeners);
-    }
-    error = ofproto_set_listeners(ofproto, &s.listeners);
-    if (error) {
-        ovs_fatal(error, "failed to configure management connections");
-    }
     error = ofproto_set_snoops(ofproto, &s.snoops);
     if (error) {
         ovs_fatal(error,
@@ -262,6 +251,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     };
     char *short_options = long_options_to_short_options(long_options);
     struct ofproto_controller controller_opts;
+    struct svec controllers;
+    int i;
 
     /* Set defaults that we can figure out before parsing options. */
     controller_opts.target = NULL;
@@ -279,7 +270,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->sw_desc = NULL;
     s->serial_desc = NULL;
     s->dp_desc = NULL;
-    svec_init(&s->listeners);
+    svec_init(&controllers);
     svec_init(&s->snoops);
     s->max_idle = 0;
     s->enable_stp = false;
@@ -408,7 +399,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case 'l':
-            svec_add(&s->listeners, optarg);
+            svec_add(&controllers, optarg);
             break;
 
         case OPT_SNOOP:
@@ -471,19 +462,28 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     /* Local vconns. */
     dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
 
-    /* Controllers. */
-    s->n_controllers = argc > 1 ? argc - 1 : 1;
+    /* Figure out controller names. */
+    if (!controllers.n) {
+        svec_add_nocopy(&controllers,
+                        xasprintf("punix:%s/%s.mgmt", ovs_rundir, s->dp_name));
+    }
+    for (i = 1; i < argc; i++) {
+        svec_add(&controllers, argv[i]);
+    }
+    if (argc < 2) {
+        svec_add(&controllers, "discover");
+    }
+
+    /* Set up controllers. */
+    s->n_controllers = controllers.n;
     s->controllers = xmalloc(s->n_controllers * sizeof *s->controllers);
     if (argc > 1) {
         size_t i;
 
         for (i = 0; i < s->n_controllers; i++) {
             s->controllers[i] = controller_opts;
-            s->controllers[i].target = argv[i + 1];
+            s->controllers[i].target = controllers.names[i];
         }
-    } else {
-        s->controllers[0] = controller_opts;
-        s->controllers[0].target = "discover";
     }
 
     /* Sanity check. */

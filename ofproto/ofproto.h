@@ -111,7 +111,6 @@ void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,
                       const char *dp_desc);
-int ofproto_set_listeners(struct ofproto *, const struct svec *listeners);
 int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
@@ -120,7 +119,7 @@ int ofproto_set_stp(struct ofproto *, bool enable_stp);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-bool ofproto_has_controller(const struct ofproto *);
+bool ofproto_has_primary_controller(const struct ofproto *);
 enum ofproto_fail_mode ofproto_get_fail_mode(const struct ofproto *);
 void ofproto_get_listeners(const struct ofproto *, struct svec *);
 void ofproto_get_snoops(const struct ofproto *, struct svec *);
