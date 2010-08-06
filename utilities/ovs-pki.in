@@ -161,11 +161,11 @@ if test -z "$command"; then
     exit 1
 fi
 if test "$keytype" != rsa && test "$keytype" != dsa; then
-    echo "$0: argument to -k or --key must be rsa or dsa"
+    echo "$0: argument to -k or --key must be rsa or dsa" >&2
     exit 1
 fi
 if test "$bits" -lt 1024; then
-    echo "$0: argument to -B or --bits must be at least 1024"
+    echo "$0: argument to -B or --bits must be at least 1024" >&2
     exit 1
 fi
 if test -z "$dsaparam"; then
@@ -316,7 +316,7 @@ resolve_prefix() {
         ????*)
             ;;
         *)
-            echo "Prefix $arg1 is too short (less than 4 hex digits)"
+            echo "Prefix $arg1 is too short (less than 4 hex digits)" >&2
             exit 0
             ;;
     esac
@@ -324,13 +324,13 @@ resolve_prefix() {
     fingerprint=$(cd "$pkidir/${type}ca/incoming" && echo "$1"*-req.pem | sed 's/-req\.pem$//')
     case $fingerprint in
         "${1}*")
-            echo "No certificate requests matching $1"
+            echo "No certificate requests matching $1" >&2
             exit 1
             ;;
         *" "*)
-            echo "$1 matches more than one certificate request:"
+            echo "$1 matches more than one certificate request:" >&2
             echo $fingerprint | sed 's/ /\
-/g'
+/g' >&2
             exit 1
             ;;
         *)
