@@ -176,6 +176,15 @@ case $log in
     *) $log="$PWD/$log" ;;
 esac
 
+logdir=$(dirname "$log")
+if test ! -d "$logdir"; then
+    mkdir -p -m755 "$logdir" 2>/dev/null || true
+    if test ! -d "$logdir"; then
+        echo "$0: log directory $logdir does not exist and cannot be created" >&2
+        exit 1
+    fi
+fi
+
 if test "$command" = "init"; then
     if test -e "$pkidir" && test "$force" != "yes"; then
         echo "$0: $pkidir already exists and --force not specified" >&2
