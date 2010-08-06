@@ -145,9 +145,9 @@ struct ofhooks {
     bool (*normal_cb)(const flow_t *, const struct ofpbuf *packet,
                       struct odp_actions *, tag_type *,
                       uint16_t *nf_output_iface, void *aux);
-    void (*account_flow_cb)(const flow_t *, const union odp_action *,
-                            size_t n_actions, unsigned long long int n_bytes,
-                            void *aux);
+    void (*account_flow_cb)(const flow_t *, tag_type tags,
+                            const union odp_action *, size_t n_actions,
+                            unsigned long long int n_bytes, void *aux);
     void (*account_checkpoint_cb)(void *aux);
 };
 void ofproto_revalidate(struct ofproto *, tag_type);

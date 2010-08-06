@@ -2062,7 +2062,7 @@ rule_account(struct ofproto *ofproto, struct rule *rule, uint64_t extra_bytes)
         && total_bytes > rule->accounted_bytes)
     {
         ofproto->ofhooks->account_flow_cb(
-            &rule->cr.flow, rule->odp_actions, rule->n_odp_actions,
+            &rule->cr.flow, rule->tags, rule->odp_actions, rule->n_odp_actions,
             total_bytes - rule->accounted_bytes, ofproto->aux);
         rule->accounted_bytes = total_bytes;
     }

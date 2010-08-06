@@ -2470,11 +2470,12 @@ bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     struct bridge *br = br_;
 
     COVERAGE_INC(bridge_process_flow);
+
     return process_flow(br, flow, packet, actions, tags, nf_output_iface);
 }
 
 static void
-bridge_account_flow_ofhook_cb(const flow_t *flow,
+bridge_account_flow_ofhook_cb(const flow_t *flow, tag_type tags,
                               const union odp_action *actions,
                               size_t n_actions, unsigned long long int n_bytes,
                               void *br_)
@@ -2482,20 +2483,24 @@ bridge_account_flow_ofhook_cb(const flow_t *flow,
     struct bridge *br = br_;
     const union odp_action *a;
     struct port *in_port;
-    tag_type tags = 0;
+    tag_type dummy = 0;
     int vlan;
 
-    /* Feed information from the active flows back into the learning table
-     * to ensure that table is always in sync with what is actually flowing
-     * through the datapath. */
-    if (is_admissible(br, flow, false, &tags, &vlan, &in_port)) {
+    /* Feed information from the active flows back into the learning table to
+     * ensure that table is always in sync with what is actually flowing
+     * through the datapath.
+     *
+     * We test that 'tags' is nonzero to ensure that only flows that include an
+     * OFPP_NORMAL action are used for learning.  This works because
+     * bridge_normal_ofhook_cb() always sets a nonzero tag value. */
+    if (tags && is_admissible(br, flow, false, &dummy, &vlan, &in_port)) {
         update_learning_table(br, flow, vlan, in_port);
     }
 
+    /* Account for bond slave utilization. */
     if (!br->has_bonded_ports) {
         return;
     }
-
     for (a = actions; a < &actions[n_actions]; a++) {
         if (a->type == ODPAT_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, a->output.port);
