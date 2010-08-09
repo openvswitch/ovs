@@ -18,6 +18,8 @@
 #define PACKETS_H 1
 
 #include <inttypes.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
@@ -194,6 +196,24 @@ BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 
 #define VLAN_PCP_MASK 0xe000
 #define VLAN_PCP_SHIFT 13
+
+#define VLAN_CFI 0x1000
+
+/* Given the vlan_tci field from an 802.1Q header, in network byte order,
+ * returns the VLAN ID in host byte order. */
+static inline uint16_t
+vlan_tci_to_vid(uint16_t vlan_tci)
+{
+    return (ntohs(vlan_tci) & VLAN_VID_MASK) >> VLAN_VID_SHIFT;
+}
+
+/* Given the vlan_tci field from an 802.1Q header, in network byte order,
+ * returns the priority code point (PCP) in host byte order. */
+static inline int
+vlan_tci_to_pcp(uint16_t vlan_tci)
+{
+    return (ntohs(vlan_tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+}
 
 #define VLAN_HEADER_LEN 4
 struct vlan_header {

@@ -47,6 +47,10 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Number of bytes of fields in a rule. */
 #define CLS_N_BYTES 37
 
@@ -119,27 +123,26 @@ struct cls_rule {
     } node;
     flow_t flow;                /* All field values. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
-    unsigned int priority;      /* Larger numbers are higher priorities. */
     unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
-void cls_rule_from_flow(const flow_t *, uint32_t wildcards,
-                        unsigned int priority, struct cls_rule *);
+void cls_rule_from_flow(const flow_t *, struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          bool tun_id_from_cookie, uint64_t cookie,
                          struct cls_rule *);
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 void cls_rule_moved(struct classifier *,
-                    struct cls_rule *old, struct cls_rule *new);
-void cls_rule_replace(struct classifier *, const struct cls_rule *old,
-                      struct cls_rule *new);
+                    struct cls_rule *old_rule, struct cls_rule *new_rule);
+void cls_rule_replace(struct classifier *, const struct cls_rule *old_rule,
+                      struct cls_rule *new_rule);
 
 void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 int classifier_count_exact(const struct classifier *);
+int classifier_count_wild(const struct classifier *);
 struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
 void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
@@ -148,8 +151,7 @@ struct cls_rule *classifier_lookup_wild(const struct classifier *,
                                         const flow_t *);
 struct cls_rule *classifier_lookup_exact(const struct classifier *,
                                          const flow_t *);
-bool classifier_rule_overlaps(const struct classifier *, const flow_t *, 
-                              uint32_t wildcards, unsigned int priority);
+bool classifier_rule_overlaps(const struct classifier *, const flow_t *);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
@@ -160,12 +162,13 @@ enum {
 };
 void classifier_for_each(const struct classifier *, int include,
                          cls_cb_func *, void *aux);
-void classifier_for_each_match(const struct classifier *,
-                               const struct cls_rule *,
+void classifier_for_each_match(const struct classifier *, const flow_t *,
                                int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const flow_t *target,
-                                              uint32_t wildcards,
-                                              unsigned int priority);
+                                              const flow_t *target);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* classifier.h */

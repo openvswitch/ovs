@@ -171,7 +171,10 @@ tests_test_aes128_SOURCES = tests/test-aes128.c
 tests_test_aes128_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-classifier
-tests_test_classifier_SOURCES = tests/test-classifier.c
+tests_test_classifier_SOURCES = \
+	tests/test-classifier.c \
+	tests/test-command-line.c \
+	tests/test-command-line.h
 tests_test_classifier_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-csum

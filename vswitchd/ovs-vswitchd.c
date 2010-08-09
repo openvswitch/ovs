@@ -30,9 +30,9 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "dpif.h"
 #include "leak-checker.h"
 #include "netdev.h"
+#include "ofproto/wdp.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "proc-net-compat.h"
@@ -47,6 +47,7 @@
 #include "vconn.h"
 #include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
+#include "xfif.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd)
 
@@ -91,13 +92,13 @@ main(int argc, char *argv[])
         }
         bridge_run();
         unixctl_server_run(unixctl);
-        dp_run();
+        wdp_run();
         netdev_run();
 
         signal_wait(sighup);
         bridge_wait();
         unixctl_server_wait(unixctl);
-        dp_wait();
+        wdp_wait();
         netdev_wait();
         poll_block();
     }

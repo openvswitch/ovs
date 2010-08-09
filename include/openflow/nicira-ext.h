@@ -53,7 +53,12 @@ enum nicira_type {
     /* Controller role support.  The request body is struct nx_role_request.
      * The reply echos the request. */
     NXT_ROLE_REQUEST,
-    NXT_ROLE_REPLY
+    NXT_ROLE_REPLY,
+
+    /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
+     * designate the table to which a flow is to be added?  See the big comment
+     * on struct nxt_flow_mod_table_id for more information. */
+    NXT_FLOW_MOD_TABLE_ID
 };
 
 struct nicira_header {
@@ -71,6 +76,53 @@ struct nxt_tun_id_cookie {
     uint8_t pad[7];
 };
 OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
+
+/* This command enables or disables an Open vSwitch extension that allows a
+ * controller to specify the OpenFlow table to which a flow should be added,
+ * instead of having the switch decide which table is most appropriate as
+ * required by OpenFlow 1.0.  By default, the extension is disabled.
+ *
+ * When this feature is enabled, Open vSwitch treats struct ofp_flow_mod's
+ * 16-bit 'command' member as two separate fields.  The upper 8 bits are used
+ * as the table ID, the lower 8 bits specify the command as usual.  A table ID
+ * of 0xff is treated like a wildcarded table ID.
+ *
+ * The specific treatment of the table ID depends on the type of flow mod:
+ *
+ *    - OFPFC_ADD: Given a specific table ID, the flow is always placed in that
+ *      table.  If an identical flow already exists in that table only, then it
+ *      is replaced.  If the flow cannot be placed in the specified table,
+ *      either because the table is full or because the table cannot support
+ *      flows of the given type, the switch replies with an
+ *      OFPFMFC_ALL_TABLES_FULL error.  (A controller can distinguish these
+ *      cases by comparing the current and maximum number of entries reported
+ *      in ofp_table_stats.)
+ *
+ *      If the table ID is wildcarded, the switch picks an appropriate table
+ *      itself.  If an identical flow or flows already exist in some flow
+ *      table, then one of them is replaced.  The choice of table might depend
+ *      on the flows that are already in the switch; for example, if one table
+ *      fills up then the switch might fall back to another one.
+ *
+ *    - OFPFC_MODIFY, OFPFC_DELETE: Given a specific table ID, only flows
+ *      within that table are matched and modified or deleted.  If the table ID
+ *      is wildcarded, flows within any table may be matched and modified or
+ *      deleted.
+ *
+ *    - OFPFC_MODIFY_STRICT, OFPFC_DELETE_STRICT: Given a specific table ID,
+ *      only a flow within that table may be matched and modified or deleted.
+ *      If the table ID is wildcarded and exactly one flow within any table
+ *      matches, then it is modified or deleted; if flows in more than one
+ *      table match, then none is modified or deleted.
+ */
+struct nxt_flow_mod_table_id {
+    struct ofp_header header;
+    uint32_t vendor;            /* NX_VENDOR_ID. */
+    uint32_t subtype;           /* NXT_FLOW_MOD_TABLE_ID. */
+    uint8_t set;                /* Nonzero to enable, zero to disable. */
+    uint8_t pad[7];
+};
+OFP_ASSERT(sizeof(struct nxt_flow_mod_table_id) == 24);
 
 /* Configures the "role" of the sending controller.  The default role is:
  *

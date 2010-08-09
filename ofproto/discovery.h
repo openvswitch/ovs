@@ -19,13 +19,13 @@
 
 #include <stdbool.h>
 
-struct dpif;
 struct discovery;
 struct settings;
 struct switch_status;
+struct wdp;
 
 int discovery_create(const char *accept_controller_re, bool update_resolv_conf,
-                     struct dpif *, struct switch_status *,
+                     struct wdp *, struct switch_status *,
                      struct discovery **);
 void discovery_destroy(struct discovery *);
 bool discovery_get_update_resolv_conf(const struct discovery *);

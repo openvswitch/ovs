@@ -32,6 +32,7 @@
 #include "command-line.h"
 #include "flow.h"
 #include "packets.h"
+#include "test-command-line.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -83,7 +84,7 @@ tcls_count_exact(const struct tcls *tcls)
 
     n_exact = 0;
     for (i = 0; i < tcls->n_rules; i++) {
-        n_exact += tcls->rules[i]->cls_rule.wc.wildcards == 0;
+        n_exact += tcls->rules[i]->cls_rule.flow.wildcards == 0;
     }
     return n_exact;
 }
@@ -94,23 +95,28 @@ tcls_is_empty(const struct tcls *tcls)
     return tcls->n_rules == 0;
 }
 
+static unsigned int
+effective_priority(const flow_t *flow)
+{
+    return flow->wildcards ? flow->priority : MAX(flow->priority, UINT16_MAX);
+}
+
 static struct test_rule *
 tcls_insert(struct tcls *tcls, const struct test_rule *rule)
 {
+    unsigned int priority = effective_priority(&rule->cls_rule.flow);
     size_t i;
 
-    assert(rule->cls_rule.wc.wildcards || rule->cls_rule.priority == UINT_MAX);
     for (i = 0; i < tcls->n_rules; i++) {
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
-        if (pos->priority == rule->cls_rule.priority
-            && pos->wc.wildcards == rule->cls_rule.wc.wildcards
-            && flow_equal(&pos->flow, &rule->cls_rule.flow)) {
-            /* Exact match.
-             * XXX flow_equal should ignore wildcarded fields */
+        if (pos->flow.priority == priority
+            && pos->flow.wildcards == rule->cls_rule.flow.wildcards
+            && flow_equal_headers(&pos->flow, &rule->cls_rule.flow)) {
+            /* Exact match. */
             free(tcls->rules[i]);
             tcls->rules[i] = xmemdup(rule, sizeof *rule);
             return tcls->rules[i];
-        } else if (pos->priority < rule->cls_rule.priority) {
+        } else if (pos->flow.priority < priority) {
             break;
         }
     }
@@ -164,18 +170,18 @@ match(const struct cls_rule *wild, const flow_t *fixed)
         void *wild_field = (char *) &wild->flow + f->ofs;
         void *fixed_field = (char *) fixed + f->ofs;
 
-        if ((wild->wc.wildcards & f->wildcards) == f->wildcards ||
+        if ((wild->flow.wildcards & f->wildcards) == f->wildcards ||
             !memcmp(wild_field, fixed_field, f->len)) {
             /* Definite match. */
             continue;
         }
 
-        if (wild->wc.wildcards & f->wildcards) {
+        if (wild->flow.wildcards & f->wildcards) {
             uint32_t test = read_uint32(wild_field);
             uint32_t ip = read_uint32(fixed_field);
             int shift = (f_idx == CLS_F_IDX_NW_SRC
                          ? OFPFW_NW_SRC_SHIFT : OFPFW_NW_DST_SHIFT);
-            uint32_t mask = flow_nw_bits_to_mask(wild->wc.wildcards, shift);
+            uint32_t mask = flow_nw_bits_to_mask(wild->flow.wildcards, shift);
             if (!((test ^ ip) & mask)) {
                 continue;
             }
@@ -193,7 +199,7 @@ tcls_lookup(const struct tcls *cls, const flow_t *flow, int include)
 
     for (i = 0; i < cls->n_rules; i++) {
         struct test_rule *pos = cls->rules[i];
-        uint32_t wildcards = pos->cls_rule.wc.wildcards;
+        uint32_t wildcards = pos->cls_rule.flow.wildcards;
         if (include & (wildcards ? CLS_INC_WILD : CLS_INC_EXACT)
             && match(&pos->cls_rule, flow)) {
             return &pos->cls_rule;
@@ -211,7 +217,7 @@ tcls_delete_matches(struct tcls *cls,
 
     for (i = 0; i < cls->n_rules; ) {
         struct test_rule *pos = cls->rules[i];
-        uint32_t wildcards = pos->cls_rule.wc.wildcards;
+        uint32_t wildcards = pos->cls_rule.flow.wildcards;
         if (include & (wildcards ? CLS_INC_WILD : CLS_INC_EXACT)
             && match(target, &pos->cls_rule.flow)) {
             tcls_remove(cls, pos);
@@ -380,7 +386,6 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
                ETH_ADDR_LEN);
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
-        memset(flow.reserved, 0, sizeof flow.reserved);
 
         for (include = 1; include <= 3; include++) {
             cr0 = lookup_with_include_bits(cls, &flow, include);
@@ -390,11 +395,11 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
                 const struct test_rule *tr0 = test_rule_from_cls_rule(cr0);
                 const struct test_rule *tr1 = test_rule_from_cls_rule(cr1);
 
-                assert(flow_equal(&cr0->flow, &cr1->flow));
-                assert(cr0->wc.wildcards == cr1->wc.wildcards);
-                assert(cr0->priority == cr1->priority);
-                /* Skip nw_src_mask and nw_dst_mask, because they are derived
-                 * members whose values are used only for optimization. */
+                assert(flow_equal_headers(&cr0->flow, &cr1->flow));
+                assert(cr0->flow.wildcards == cr1->flow.wildcards);
+                assert(cr0->flow.priority == cr1->flow.priority);
+                /* Skip nw_src_mask, nw_dst_mask, and dl_tci_mask, because they
+                 * are derived members used only for optimization. */
                 assert(tr0->aux == tr1->aux);
             }
         }
@@ -453,15 +458,14 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
 {
     const struct cls_field *f;
     struct test_rule *rule;
-    uint32_t wildcards;
     flow_t flow;
 
-    wildcards = 0;
     memset(&flow, 0, sizeof flow);
+    flow.priority = priority;
     for (f = &cls_fields[0]; f < &cls_fields[CLS_N_FIELDS]; f++) {
         int f_idx = f - cls_fields;
         if (wc_fields & (1u << f_idx)) {
-            wildcards |= f->wildcards;
+            flow.wildcards |= f->wildcards;
         } else {
             int value_idx = (value_pat & (1u << f_idx)) != 0;
             memcpy((char *) &flow + f->ofs, values[f_idx][value_idx], f->len);
@@ -469,8 +473,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     }
 
     rule = xzalloc(sizeof *rule);
-    cls_rule_from_flow(&flow, wildcards, !wildcards ? UINT_MAX : priority,
-                       &rule->cls_rule);
+    cls_rule_from_flow(&flow, &rule->cls_rule);
     return rule;
 }
 
@@ -959,9 +962,9 @@ test_many_rules_in_different_tables(int argc OVS_UNUSED,
             struct test_rule *rule = xmemdup(tcls.rules[rand() % tcls.n_rules],
                                              sizeof(struct test_rule));
             int include = rand() % 2 ? CLS_INC_WILD : CLS_INC_EXACT;
-            include |= (rule->cls_rule.wc.wildcards
+            include |= (rule->cls_rule.flow.wildcards
                         ? CLS_INC_WILD : CLS_INC_EXACT);
-            classifier_for_each_match(&cls, &rule->cls_rule, include,
+            classifier_for_each_match(&cls, &rule->cls_rule.flow, include,
                                       free_rule, &cls);
             tcls_delete_matches(&tcls, &rule->cls_rule, include);
             compare_classifiers(&cls, &tcls);
@@ -973,26 +976,29 @@ test_many_rules_in_different_tables(int argc OVS_UNUSED,
     }
 }
 
-static const struct command commands[] = {
-    {"empty", 0, 0, test_empty},
-    {"destroy-null", 0, 0, test_destroy_null},
-    {"single-rule", 0, 0, test_single_rule},
-    {"rule-replacement", 0, 0, test_rule_replacement},
-    {"two-rules-in-one-bucket", 0, 0, test_two_rules_in_one_bucket},
-    {"two-rules-in-one-table", 0, 0, test_two_rules_in_one_table},
-    {"two-rules-in-different-tables", 0, 0,
-     test_two_rules_in_different_tables},
-    {"many-rules-in-one-bucket", 0, 0, test_many_rules_in_one_bucket},
-    {"many-rules-in-one-table", 0, 0, test_many_rules_in_one_table},
-    {"many-rules-in-different-tables", 0, 0,
-     test_many_rules_in_different_tables},
-    {NULL, 0, 0, NULL},
-};
-
 int
 main(int argc, char *argv[])
 {
+    static const struct command all_commands[] = {
+        { "empty", 0, 0, test_empty },
+        { "destroy-null", 0, 0, test_destroy_null },
+        { "single-rule", 0, 0, test_single_rule },
+        { "rule-replacement", 0, 0, test_rule_replacement },
+        { "two-rules-in-one-bucket", 0, 0, test_two_rules_in_one_bucket },
+        { "two-rules-in-one-table", 0, 0, test_two_rules_in_one_table },
+        { "two-rules-in-different-tables", 0, 0,
+          test_two_rules_in_different_tables },
+        { "many-rules-in-one-bucket", 0, 0,
+          test_many_rules_in_one_bucket },
+        { "many-rules-in-one-table", 0, 0, test_many_rules_in_one_table },
+        { "many-rules-in-different-tables", 0, 0,
+          test_many_rules_in_different_tables },
+        { NULL, 0, 0, NULL },
+    };
+
+    set_program_name(argv[0]);
     init_values();
-    run_command(argc - 1, argv + 1, commands);
+    parse_test_options(argc, argv, all_commands);
+    run_command(argc - 1, argv + 1, all_commands);
     return 0;
 }

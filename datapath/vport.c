@@ -170,7 +170,7 @@ void vport_exit(void)
 	kfree(dev_table);
 }
 
-static int do_vport_add(struct odp_vport_add *vport_config)
+static int do_vport_add(struct xflow_vport_add *vport_config)
 {
 	struct vport *vport;
 	int err = 0;
@@ -208,23 +208,23 @@ out:
  * on device type).  This function is for userspace callers and assumes no
  * locks are held.
  */
-int vport_user_add(const struct odp_vport_add __user *uvport_config)
+int vport_user_add(const struct xflow_vport_add __user *uvport_config)
 {
-	struct odp_vport_add vport_config;
+	struct xflow_vport_add vport_config;
 
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_add)))
+	if (copy_from_user(&vport_config, uvport_config, sizeof(struct xflow_vport_add)))
 		return -EFAULT;
 
 	return do_vport_add(&vport_config);
 }
 
 #ifdef CONFIG_COMPAT
-int compat_vport_user_add(struct compat_odp_vport_add *ucompat)
+int compat_vport_user_add(struct compat_xflow_vport_add *ucompat)
 {
-	struct compat_odp_vport_add compat;
-	struct odp_vport_add vport_config;
+	struct compat_xflow_vport_add compat;
+	struct xflow_vport_add vport_config;
 
-	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_add)))
+	if (copy_from_user(&compat, ucompat, sizeof(struct compat_xflow_vport_add)))
 		return -EFAULT;
 
 	memcpy(vport_config.port_type, compat.port_type, VPORT_TYPE_SIZE);
@@ -235,7 +235,7 @@ int compat_vport_user_add(struct compat_odp_vport_add *ucompat)
 }
 #endif
 
-static int do_vport_mod(struct odp_vport_mod *vport_config)
+static int do_vport_mod(struct xflow_vport_mod *vport_config)
 {
 	struct vport *vport;
 	int err;
@@ -268,23 +268,23 @@ out:
  * dependent on device type).  This function is for userspace callers and
  * assumes no locks are held.
  */
-int vport_user_mod(const struct odp_vport_mod __user *uvport_config)
+int vport_user_mod(const struct xflow_vport_mod __user *uvport_config)
 {
-	struct odp_vport_mod vport_config;
+	struct xflow_vport_mod vport_config;
 
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_mod)))
+	if (copy_from_user(&vport_config, uvport_config, sizeof(struct xflow_vport_mod)))
 		return -EFAULT;
 
 	return do_vport_mod(&vport_config);
 }
 
 #ifdef CONFIG_COMPAT
-int compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
+int compat_vport_user_mod(struct compat_xflow_vport_mod *ucompat)
 {
-	struct compat_odp_vport_mod compat;
-	struct odp_vport_mod vport_config;
+	struct compat_xflow_vport_mod compat;
+	struct xflow_vport_mod vport_config;
 
-	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_mod)))
+	if (copy_from_user(&compat, ucompat, sizeof(struct compat_xflow_vport_mod)))
 		return -EFAULT;
 
 	memcpy(vport_config.devname, compat.devname, IFNAMSIZ);
@@ -364,13 +364,13 @@ out:
  * Retrieves transmit, receive, and error stats for the given device.  This
  * function is for userspace callers and assumes no locks are held.
  */
-int vport_user_stats_get(struct odp_vport_stats_req __user *ustats_req)
+int vport_user_stats_get(struct xflow_vport_stats_req __user *ustats_req)
 {
-	struct odp_vport_stats_req stats_req;
+	struct xflow_vport_stats_req stats_req;
 	struct vport *vport;
 	int err;
 
-	if (copy_from_user(&stats_req, ustats_req, sizeof(struct odp_vport_stats_req)))
+	if (copy_from_user(&stats_req, ustats_req, sizeof(struct xflow_vport_stats_req)))
 		return -EFAULT;
 
 	stats_req.devname[IFNAMSIZ - 1] = '\0';
@@ -389,7 +389,7 @@ out:
 	vport_unlock();
 
 	if (!err)
-		if (copy_to_user(ustats_req, &stats_req, sizeof(struct odp_vport_stats_req)))
+		if (copy_to_user(ustats_req, &stats_req, sizeof(struct xflow_vport_stats_req)))
 			err = -EFAULT;
 
 	return err;
@@ -406,13 +406,13 @@ out:
  * -EOPNOTSUPP.  This function is for userspace callers and assumes no locks
  * are held.
  */
-int vport_user_stats_set(struct odp_vport_stats_req __user *ustats_req)
+int vport_user_stats_set(struct xflow_vport_stats_req __user *ustats_req)
 {
-	struct odp_vport_stats_req stats_req;
+	struct xflow_vport_stats_req stats_req;
 	struct vport *vport;
 	int err;
 
-	if (copy_from_user(&stats_req, ustats_req, sizeof(struct odp_vport_stats_req)))
+	if (copy_from_user(&stats_req, ustats_req, sizeof(struct xflow_vport_stats_req)))
 		return -EFAULT;
 
 	stats_req.devname[IFNAMSIZ - 1] = '\0';
@@ -443,13 +443,13 @@ out:
  * Retrieves the Ethernet address of the given device.  This function is for
  * userspace callers and assumes no locks are held.
  */
-int vport_user_ether_get(struct odp_vport_ether __user *uvport_ether)
+int vport_user_ether_get(struct xflow_vport_ether __user *uvport_ether)
 {
-	struct odp_vport_ether vport_ether;
+	struct xflow_vport_ether vport_ether;
 	struct vport *vport;
 	int err = 0;
 
-	if (copy_from_user(&vport_ether, uvport_ether, sizeof(struct odp_vport_ether)))
+	if (copy_from_user(&vport_ether, uvport_ether, sizeof(struct xflow_vport_ether)))
 		return -EFAULT;
 
 	vport_ether.devname[IFNAMSIZ - 1] = '\0';
@@ -470,7 +470,7 @@ out:
 	vport_unlock();
 
 	if (!err)
-		if (copy_to_user(uvport_ether, &vport_ether, sizeof(struct odp_vport_ether)))
+		if (copy_to_user(uvport_ether, &vport_ether, sizeof(struct xflow_vport_ether)))
 			err = -EFAULT;
 
 	return err;
@@ -486,13 +486,13 @@ out:
  * -EOPNOTSUPP.  This function is for userspace callers and assumes no locks
  * are held.
  */
-int vport_user_ether_set(struct odp_vport_ether __user *uvport_ether)
+int vport_user_ether_set(struct xflow_vport_ether __user *uvport_ether)
 {
-	struct odp_vport_ether vport_ether;
+	struct xflow_vport_ether vport_ether;
 	struct vport *vport;
 	int err;
 
-	if (copy_from_user(&vport_ether, uvport_ether, sizeof(struct odp_vport_ether)))
+	if (copy_from_user(&vport_ether, uvport_ether, sizeof(struct xflow_vport_ether)))
 		return -EFAULT;
 
 	vport_ether.devname[IFNAMSIZ - 1] = '\0';
@@ -522,13 +522,13 @@ out:
  * Retrieves the MTU of the given device.  This function is for userspace
  * callers and assumes no locks are held.
  */
-int vport_user_mtu_get(struct odp_vport_mtu __user *uvport_mtu)
+int vport_user_mtu_get(struct xflow_vport_mtu __user *uvport_mtu)
 {
-	struct odp_vport_mtu vport_mtu;
+	struct xflow_vport_mtu vport_mtu;
 	struct vport *vport;
 	int err = 0;
 
-	if (copy_from_user(&vport_mtu, uvport_mtu, sizeof(struct odp_vport_mtu)))
+	if (copy_from_user(&vport_mtu, uvport_mtu, sizeof(struct xflow_vport_mtu)))
 		return -EFAULT;
 
 	vport_mtu.devname[IFNAMSIZ - 1] = '\0';
@@ -547,7 +547,7 @@ out:
 	vport_unlock();
 
 	if (!err)
-		if (copy_to_user(uvport_mtu, &vport_mtu, sizeof(struct odp_vport_mtu)))
+		if (copy_to_user(uvport_mtu, &vport_mtu, sizeof(struct xflow_vport_mtu)))
 			err = -EFAULT;
 
 	return err;
@@ -562,13 +562,13 @@ out:
  * MTU, in which case the result will always be -EOPNOTSUPP.  This function is
  * for userspace callers and assumes no locks are held.
  */
-int vport_user_mtu_set(struct odp_vport_mtu __user *uvport_mtu)
+int vport_user_mtu_set(struct xflow_vport_mtu __user *uvport_mtu)
 {
-	struct odp_vport_mtu vport_mtu;
+	struct xflow_vport_mtu vport_mtu;
 	struct vport *vport;
 	int err;
 
-	if (copy_from_user(&vport_mtu, uvport_mtu, sizeof(struct odp_vport_mtu)))
+	if (copy_from_user(&vport_mtu, uvport_mtu, sizeof(struct xflow_vport_mtu)))
 		return -EFAULT;
 
 	vport_mtu.devname[IFNAMSIZ - 1] = '\0';
@@ -897,13 +897,13 @@ int vport_set_addr(struct vport *vport, const unsigned char *addr)
  * support setting the stats, in which case the result will always be
  * -EOPNOTSUPP.  RTNL lock must be held.
  */
-int vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_set_stats(struct vport *vport, struct xflow_vport_stats *stats)
 {
 	ASSERT_RTNL();
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		spin_lock_bh(&vport->stats_lock);
-		memcpy(&vport->offset_stats, stats, sizeof(struct odp_vport_stats));
+		memcpy(&vport->offset_stats, stats, sizeof(struct xflow_vport_stats));
 		spin_unlock_bh(&vport->stats_lock);
 
 		return 0;
@@ -991,10 +991,10 @@ struct kobject *vport_get_kobj(const struct vport *vport)
  *
  * Retrieves transmit, receive, and error stats for the given device.
  */
-int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_get_stats(struct vport *vport, struct xflow_vport_stats *stats)
 {
-	struct odp_vport_stats dev_stats;
-	struct odp_vport_stats *dev_statsp = NULL;
+	struct xflow_vport_stats dev_stats;
+	struct xflow_vport_stats *dev_statsp = NULL;
 	int err;
 
 	if (vport->ops->get_stats) {
@@ -1023,7 +1023,7 @@ int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
 
 		spin_lock_bh(&vport->stats_lock);
 
-		memcpy(stats, &vport->offset_stats, sizeof(struct odp_vport_stats));
+		memcpy(stats, &vport->offset_stats, sizeof(struct xflow_vport_stats));
 
 		stats->rx_errors	+= vport->err_stats.rx_errors
 						+ vport->err_stats.rx_frame_err
@@ -1130,7 +1130,7 @@ int vport_get_ifindex(const struct vport *vport)
 	if (!dp_port)
 		return -EAGAIN;
 
-	return vport_get_ifindex(dp_port->dp->ports[ODPP_LOCAL]->vport);
+	return vport_get_ifindex(dp_port->dp->ports[XFLOWP_LOCAL]->vport);
 }
 
 /**

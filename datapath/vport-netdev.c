@@ -99,7 +99,7 @@ static struct vport *netdev_create(const char *name, const void __user *config)
 	/* If we are using the vport stats layer initialize it to the current
 	 * values so we are roughly consistent with the device stats. */
 	if (USE_VPORT_STATS) {
-		struct odp_vport_stats stats;
+		struct xflow_vport_stats stats;
 
 		err = netdev_get_stats(vport, &stats);
 		if (!err)
@@ -182,7 +182,7 @@ struct kobject *netdev_get_kobj(const struct vport *vport)
 	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
 }
 
-int netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
+int netdev_get_stats(const struct vport *vport, struct xflow_vport_stats *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	const struct net_device_stats *netdev_stats;

@@ -143,7 +143,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     ofm->header.length = htons(size);
     ofm->cookie = 0;
     ofm->match.wildcards = htonl(0);
-    ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
+    ofm->match.in_port = htons(flow->in_port == XFLOWP_LOCAL ? OFPP_LOCAL
                                : flow->in_port);
     memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
     memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);
@@ -239,7 +239,7 @@ make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
     opo->header.length = htons(size);
     opo->header.xid = htonl(0);
     opo->buffer_id = htonl(buffer_id);
-    opo->in_port = htons(in_port == ODPP_LOCAL ? OFPP_LOCAL : in_port);
+    opo->in_port = htons(in_port == XFLOWP_LOCAL ? XFLOWP_LOCAL : in_port);
     opo->actions_len = htons(actions_len);
     ofpbuf_put(out, actions, actions_len);
     if (packet) {
@@ -761,6 +761,27 @@ normalize_match(struct ofp_match *m)
         memset(m->dl_dst, 0, sizeof m->dl_dst);
     }
     m->wildcards = htonl(wc);
+}
+
+/* Converts all of the fields in 'opp' from host to native byte-order. */
+void
+hton_ofp_phy_port(struct ofp_phy_port *opp)
+{
+    opp->port_no = htons(opp->port_no);
+    opp->config = htonl(opp->config);
+    opp->state = htonl(opp->state);
+    opp->curr = htonl(opp->curr);
+    opp->advertised = htonl(opp->advertised);
+    opp->supported = htonl(opp->supported);
+    opp->peer = htonl(opp->peer);
+}
+
+/* Converts all of the fields in 'opp' from native to host byte-order. */
+void
+ntoh_ofp_phy_port(struct ofp_phy_port *opp)
+{
+    /* ntohX and htonX are really the same functions. */
+    hton_ofp_phy_port(opp);
 }
 
 /* Returns a string that describes 'match' in a very literal way, without

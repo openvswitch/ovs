@@ -37,7 +37,7 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 	struct net_device_stats *stats = &internal_dev_priv(netdev)->stats;
 
 	if (vport) {
-		struct odp_vport_stats vport_stats;
+		struct xflow_vport_stats vport_stats;
 
 		vport_get_stats(vport, &vport_stats);
 

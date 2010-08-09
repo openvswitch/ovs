@@ -111,6 +111,16 @@ svec_append(struct svec *svec, const struct svec *other)
 }
 
 void
+svec_move(struct svec *svec, struct svec *other)
+{
+    size_t i;
+    for (i = 0; i < other->n; i++) {
+        svec_add_nocopy(svec, other->names[i]);
+    }
+    other->n = 0;
+}
+
+void
 svec_terminate(struct svec *svec)
 {
     svec_expand(svec);

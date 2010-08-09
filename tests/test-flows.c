@@ -66,7 +66,7 @@ main(int argc OVS_UNUSED, char *argv[])
         }
 
         flow_extract(packet, 0, 1, &flow);
-        flow_to_match(&flow, 0, false, &extracted_match);
+        flow_to_match(&flow, false, &extracted_match);
 
         if (memcmp(&expected_match, &extracted_match, sizeof expected_match)) {
             char *exp_s = ofp_match_to_string(&expected_match, 2);

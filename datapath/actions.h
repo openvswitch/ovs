@@ -14,12 +14,12 @@
 
 struct datapath;
 struct sk_buff;
-struct odp_flow_key;
-union odp_action;
+struct xflow_key;
+union xflow_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    const struct odp_flow_key *key,
-		    const union odp_action *, int n_actions,
+		    const struct xflow_key *key,
+		    const union xflow_action *, int n_actions,
 		    gfp_t gfp);
 
 static inline void set_skb_csum_bits(const struct sk_buff *old_skb,

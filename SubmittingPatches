@@ -145,7 +145,7 @@ true (at the time) for bridges named dpN.  Now that assumption has been
 eliminated, so this commit eliminates the restriction too.
 
 This change is also a cleanup in that it eliminates one form of the
-vswitch's dependence on specifics of the dpif implementation.
+vswitch's dependence on specifics of the xfif implementation.
 ---
  vswitchd/bridge.c               |   23 +++++------------------
  vswitchd/ovs-vswitchd.conf.5.in |    3 +--
@@ -195,10 +195,10 @@ index 32647ea..00cffbc 100644
 @@ -793,7 +780,7 @@ bridge_create(const char *name)
      br = xzalloc(sizeof *br);
  
-     error = dpif_create(name, &br->dpif);
+     error = xfif_create(name, &br->xfif);
 -    if (error == EEXIST) {
 +    if (error == EEXIST || error == EBUSY) {
-         error = dpif_open(name, &br->dpif);
+         error = xfif_open(name, &br->xfif);
          if (error) {
              VLOG_ERR("datapath %s already exists but cannot be opened: %s",
 diff --git a/vswitchd/ovs-vswitchd.conf.5.in b/vswitchd/ovs-vswitchd.conf.5.in

@@ -21,6 +21,7 @@
 #include "coverage.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "openflow/openflow.h"
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
@@ -152,7 +153,7 @@ pktbuf_get_null(void)
  * datapath port number on which the packet was received in '*in_port'.  The
  * caller becomes responsible for freeing the buffer.  However, if 'id'
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
- * NULL in '*bufferp' and UINT16_max in '*in_port'.
+ * NULL in '*bufferp' and OFPP_NONE in '*in_port'.
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 int
@@ -195,7 +196,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
         error = 0;
     }
     *bufferp = NULL;
-    *in_port = UINT16_MAX;
+    *in_port = OFPP_NONE;
     return error;
 }
 

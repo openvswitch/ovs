@@ -292,7 +292,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
  * capture frames of that type received on the device.  It may also be one of
  * the 'enum netdev_pseudo_ethertype' values to receive frames in one of those
  * categories. */
-
 int
 netdev_open(struct netdev_options *options, struct netdev **netdevp)
 {
@@ -350,6 +349,14 @@ netdev_open_default(const char *name, struct netdev **netdevp)
     return netdev_open(&options, netdevp);
 }
 
+/* Increments the reference count on 'netdev'.  Returns 'netdev'. */
+struct netdev *
+netdev_reopen(struct netdev *netdev)
+{
+    netdev->ref_cnt++;
+    return netdev;
+}
+
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
  * or NULL if none are needed. */
 int
@@ -375,11 +382,13 @@ netdev_reconfigure(struct netdev *netdev, const struct shash *args)
     return 0;
 }
 
-/* Closes and destroys 'netdev'. */
+/* Decrements the reference count on 'netdev'.  If the reference count reaches
+ * zero, closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)
 {
-    if (netdev) {
+    assert(!netdev || netdev->ref_cnt > 0);
+    if (netdev && !--netdev->ref_cnt) {
         struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
 
         assert(netdev_dev->ref_cnt);
@@ -1390,6 +1399,7 @@ netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
 {
     memset(netdev, 0, sizeof *netdev);
     netdev->netdev_dev = netdev_dev;
+    netdev->ref_cnt = 1;
     list_push_back(&netdev_list, &netdev->node);
 }
 
@@ -1397,7 +1407,7 @@ netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
  *
  * Normally this function only needs to be called from netdev_close().
  * However, it may be called by providers due to an error on opening
- * that occurs after initialization.  It this case netdev_close() would
+ * that occurs after initialization.  In this case netdev_close() would
  * never be called. */
 void
 netdev_uninit(struct netdev *netdev, bool close)

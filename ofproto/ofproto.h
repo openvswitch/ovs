@@ -30,15 +30,10 @@
 extern "C" {
 #endif
 
-struct odp_actions;
+struct xflow_actions;
 struct ofhooks;
 struct ofproto;
 struct svec;
-
-enum {
-    DP_GROUP_FLOOD = 0,
-    DP_GROUP_ALL = 1
-};
 
 struct ofexpired {
     flow_t flow;
@@ -129,28 +124,28 @@ void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 int ofproto_send_packet(struct ofproto *, const flow_t *,
                         const union ofp_action *, size_t n_actions,
                         const struct ofpbuf *);
-void ofproto_add_flow(struct ofproto *, const flow_t *, uint32_t wildcards,
-                      unsigned int priority,
+void ofproto_add_flow(struct ofproto *, const flow_t *,
                       const union ofp_action *, size_t n_actions,
                       int idle_timeout);
-void ofproto_delete_flow(struct ofproto *, const flow_t *, uint32_t wildcards,
-                         unsigned int priority);
+void ofproto_delete_flow(struct ofproto *, const flow_t *);
 void ofproto_flush_flows(struct ofproto *);
 
-/* Hooks for ovs-vswitchd. */
+/* Hooks for ovs-vswitchd.
+ *
+ * This needs to be redesigned; it only makes sense for wdp-xflow. */
 struct ofhooks {
     void (*port_changed_cb)(enum ofp_port_reason, const struct ofp_phy_port *,
                             void *aux);
     bool (*normal_cb)(const flow_t *, const struct ofpbuf *packet,
-                      struct odp_actions *, tag_type *,
+                      struct xflow_actions *, tag_type *,
                       uint16_t *nf_output_iface, void *aux);
     void (*account_flow_cb)(const flow_t *, tag_type tags,
-                            const union odp_action *, size_t n_actions,
+                            const union xflow_action *, size_t n_actions,
                             unsigned long long int n_bytes, void *aux);
     void (*account_checkpoint_cb)(void *aux);
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
-struct tag_set *ofproto_get_revalidate_set(struct ofproto *);
+void ofproto_revalidate_all(struct ofproto *);
 
 #ifdef  __cplusplus
 }

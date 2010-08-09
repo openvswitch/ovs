@@ -556,7 +556,8 @@ enum ofp_flow_mod_flags {
     OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow
                                     * expires or is deleted. */
     OFPFF_CHECK_OVERLAP = 1 << 1,  /* Check for overlapping entries first. */
-    OFPFF_EMERG         = 1 << 2   /* Ramark this is for emergency. */
+    OFPFF_EMERG         = 1 << 2   /* Use emergency flow cache (not supported
+                                    * by Open vSwitch). */
 };
 
 /* Flow setup and teardown (controller -> datapath). */
@@ -566,7 +567,8 @@ struct ofp_flow_mod {
     uint64_t cookie;             /* Opaque controller-issued identifier. */
 
     /* Flow actions. */
-    uint16_t command;             /* One of OFPFC_*. */
+    uint16_t command;             /* One of OFPFC_* (NXT_FLOW_MOD_TABLE_ID
+                                   * affects interpretation of high 8 bits). */
     uint16_t idle_timeout;        /* Idle time before discarding (seconds). */
     uint16_t hard_timeout;        /* Max time before discarding (seconds). */
     uint16_t priority;            /* Priority level of flow entry. */
@@ -576,7 +578,7 @@ struct ofp_flow_mod {
                                      matching entries to include this as an
                                      output port.  A value of OFPP_NONE
                                      indicates no restriction. */
-    uint16_t flags;               /* One of OFPFF_*. */
+    uint16_t flags;               /* Zero or more of OFPFF_*. */
     struct ofp_action_header actions[0]; /* The action length is inferred
                                             from the length field in the
                                             header. */

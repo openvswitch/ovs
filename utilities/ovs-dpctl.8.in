@@ -29,7 +29,7 @@ Do not use \fBovs\-dpctl\fR commands to modify datapaths if
 Most \fBovs\-dpctl\fR commands that work with datapaths take an argument
 that specifies the name of the datapath, in one of the following
 forms:
-.so lib/dpif.man
+.so lib/xfif.man
 .PP
 The following commands manage datapaths.
 .

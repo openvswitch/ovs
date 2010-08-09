@@ -74,6 +74,8 @@ struct netdev {
 
     enum netdev_flags save_flags;    /* Initial device flags. */
     enum netdev_flags changed_flags; /* Flags that we changed. */
+
+    int ref_cnt;                     /* Times this 'netdev' was opened. */
 };
 
 void netdev_init(struct netdev *, struct netdev_dev *);

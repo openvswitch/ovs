@@ -16,7 +16,7 @@ OpenFlow controllers over TCP or SSL.
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
 to relay.  It takes one of the following forms:
 .
-.so lib/dpif.man
+.so lib/xfif.man
 .
 .PP
 The optional \fIcontroller\fR arguments specify how to connect to the

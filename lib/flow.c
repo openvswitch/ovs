@@ -25,7 +25,7 @@
 #include "hash.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "packets.h"
 #include "unaligned.h"
 #include "vlog.h"
@@ -91,7 +91,7 @@ pull_vlan(struct ofpbuf *packet)
 
 /* Returns 1 if 'packet' is an IP fragment, 0 otherwise.
  * 'tun_id' is in network byte order, while 'in_port' is in host byte order.
- * These byte orders are the same as they are in struct odp_flow_key. */
+ * These byte orders are the same as they are in struct xflow_key. */
 int
 flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
              flow_t *flow)
@@ -226,7 +226,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
  */
 void
 flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
-        struct odp_flow_stats *stats)
+        struct xflow_flow_stats *stats)
 {
     memset(stats, '\0', sizeof(*stats));
 
@@ -241,18 +241,15 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
     stats->n_packets = 1;
 }
 
-/* Extract 'flow' with 'wildcards' into the OpenFlow match structure
- * 'match'. */
+/* Extract 'flow' into the OpenFlow match structure 'match'. */
 void
-flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
+flow_to_match(const flow_t *flow, bool tun_id_from_cookie,
               struct ofp_match *match)
 {
-    if (!tun_id_from_cookie) {
-        wildcards &= OFPFW_ALL;
-    }
-    match->wildcards = htonl(wildcards);
+    uint32_t wildcard_mask = tun_id_from_cookie ? OVSFW_ALL : OFPFW_ALL;
+    match->wildcards = htonl(flow->wildcards & wildcard_mask);
 
-    match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
+    match->in_port = htons(flow->in_port == XFLOWP_LOCAL ? OFPP_LOCAL
                            : flow->in_port);
     match->dl_vlan = flow->dl_vlan;
     match->dl_vlan_pcp = flow->dl_vlan_pcp;
@@ -270,20 +267,20 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
 }
 
 void
-flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
-                uint64_t cookie, flow_t *flow, uint32_t *flow_wildcards)
+flow_from_match(const struct ofp_match *match, uint32_t priority,
+                bool tun_id_from_cookie, uint64_t cookie, flow_t *flow)
 {
-	uint32_t wildcards = ntohl(match->wildcards);
-
+    flow->wildcards = ntohl(match->wildcards);
+    flow->priority = priority;
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
-    if (tun_id_from_cookie && !(wildcards & NXFW_TUN_ID)) {
+    if (tun_id_from_cookie && !(flow->wildcards & NXFW_TUN_ID)) {
         flow->tun_id = htonl(ntohll(cookie) >> 32);
     } else {
-        wildcards |= NXFW_TUN_ID;
+        flow->wildcards |= NXFW_TUN_ID;
         flow->tun_id = 0;
     }
-    flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
+    flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? XFLOWP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
     flow->dl_vlan_pcp = match->dl_vlan_pcp;
@@ -294,11 +291,6 @@ flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
     flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
-    memset(flow->reserved, 0, sizeof flow->reserved);
-
-    if (flow_wildcards) {
-        *flow_wildcards = wildcards;
-    }
 }
 
 char *
@@ -312,7 +304,8 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16
+    ds_put_format(ds, "wild%08"PRIx32" pri%"PRIu32" "
+                      "tunnel%08"PRIx32":in_port%04"PRIx16
                       ":vlan%"PRIu16":pcp%"PRIu8
                       " mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT
                       " type%04"PRIx16
@@ -320,6 +313,8 @@ flow_format(struct ds *ds, const flow_t *flow)
                       " tos%"PRIu8
                       " ip"IP_FMT"->"IP_FMT
                       " port%"PRIu16"->%"PRIu16,
+                  flow->wildcards,
+                  flow->priority,
                   ntohl(flow->tun_id),
                   flow->in_port,
                   ntohs(flow->dl_vlan),

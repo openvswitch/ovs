@@ -114,10 +114,10 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 {
 	struct sw_flow_actions *sfa;
 
-	if (n_actions > (PAGE_SIZE - sizeof *sfa) / sizeof(union odp_action))
+	if (n_actions > (PAGE_SIZE - sizeof *sfa) / sizeof(union xflow_action))
 		return ERR_PTR(-EINVAL);
 
-	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union odp_action),
+	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union xflow_action),
 		      GFP_KERNEL);
 	if (!sfa)
 		return ERR_PTR(-ENOMEM);
@@ -193,7 +193,7 @@ static int is_snap(const struct eth_snap_hdr *esh)
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
  * fragment, 0 otherwise. */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
+int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 {
 	struct ethhdr *eth;
 	struct eth_snap_hdr *esh;
@@ -203,7 +203,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
-	key->dl_vlan = htons(ODP_VLAN_NONE);
+	key->dl_tci = htons(0);
 
 	if (skb->len < sizeof *eth)
 		return 0;
@@ -215,13 +215,13 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	eth = eth_hdr(skb);
 	esh = (struct eth_snap_hdr *) eth;
 	nh_ofs = sizeof *eth;
-	if (likely(ntohs(eth->h_proto) >= ODP_DL_TYPE_ETH2_CUTOFF))
+	if (likely(ntohs(eth->h_proto) >= XFLOW_DL_TYPE_ETH2_CUTOFF))
 		key->dl_type = eth->h_proto;
 	else if (skb->len >= sizeof *esh && is_snap(esh)) {
 		key->dl_type = esh->ethertype;
 		nh_ofs = sizeof *esh;
 	} else {
-		key->dl_type = htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+		key->dl_type = htons(XFLOW_DL_TYPE_NOT_ETH_TYPE);
 		if (skb->len >= nh_ofs + sizeof(struct llc_pdu_un)) {
 			nh_ofs += sizeof(struct llc_pdu_un); 
 		}
@@ -232,8 +232,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	    skb->len >= nh_ofs + sizeof(struct vlan_hdr)) {
 		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
-		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
-		key->dl_vlan_pcp = (ntohs(vh->h_vlan_TCI) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+		key->dl_tci = vh->h_vlan_TCI | htons(XFLOW_TCI_PRESENT);
 		nh_ofs += sizeof(struct vlan_hdr);
 	}
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);
@@ -319,17 +318,17 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	return retval;
 }
 
-u32 flow_hash(const struct odp_flow_key *key)
+u32 flow_hash(const struct xflow_key *key)
 {
 	return jhash2((u32*)key, sizeof *key / sizeof(u32), hash_seed);
 }
 
 int flow_cmp(const struct tbl_node *node, void *key2_)
 {
-	const struct odp_flow_key *key1 = &flow_cast(node)->key;
-	const struct odp_flow_key *key2 = key2_;
+	const struct xflow_key *key1 = &flow_cast(node)->key;
+	const struct xflow_key *key2 = key2_;
 
-	return !memcmp(key1, key2, sizeof(struct odp_flow_key));
+	return !memcmp(key1, key2, sizeof(struct xflow_key));
 }
 
 /* Initializes the flow module.

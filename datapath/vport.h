@@ -14,29 +14,29 @@
 #include <linux/spinlock.h>
 
 #include "datapath.h"
-#include "openvswitch/datapath-protocol.h"
-#include "odp-compat.h"
+#include "openvswitch/xflow.h"
+#include "xflow-compat.h"
 
 struct vport;
 struct dp_port;
 
 /* The following definitions are for users of the vport subsytem: */
 
-int vport_user_add(const struct odp_vport_add __user *);
-int vport_user_mod(const struct odp_vport_mod __user *);
+int vport_user_add(const struct xflow_vport_add __user *);
+int vport_user_mod(const struct xflow_vport_mod __user *);
 int vport_user_del(const char __user *udevname);
 
 #ifdef CONFIG_COMPAT
-int compat_vport_user_add(struct compat_odp_vport_add __user *);
-int compat_vport_user_mod(struct compat_odp_vport_mod __user *);
+int compat_vport_user_add(struct compat_xflow_vport_add __user *);
+int compat_vport_user_mod(struct compat_xflow_vport_mod __user *);
 #endif
 
-int vport_user_stats_get(struct odp_vport_stats_req __user *);
-int vport_user_stats_set(struct odp_vport_stats_req __user *);
-int vport_user_ether_get(struct odp_vport_ether __user *);
-int vport_user_ether_set(struct odp_vport_ether __user *);
-int vport_user_mtu_get(struct odp_vport_mtu __user *);
-int vport_user_mtu_set(struct odp_vport_mtu __user *);
+int vport_user_stats_get(struct xflow_vport_stats_req __user *);
+int vport_user_stats_set(struct xflow_vport_stats_req __user *);
+int vport_user_ether_get(struct xflow_vport_ether __user *);
+int vport_user_ether_set(struct xflow_vport_ether __user *);
+int vport_user_mtu_get(struct xflow_vport_mtu __user *);
+int vport_user_mtu_set(struct xflow_vport_mtu __user *);
 
 void vport_lock(void);
 void vport_unlock(void);
@@ -55,7 +55,7 @@ int vport_detach(struct vport *);
 
 int vport_set_mtu(struct vport *, int mtu);
 int vport_set_addr(struct vport *, const unsigned char *);
-int vport_set_stats(struct vport *, struct odp_vport_stats *);
+int vport_set_stats(struct vport *, struct xflow_vport_stats *);
 
 const char *vport_get_name(const struct vport *);
 const char *vport_get_type(const struct vport *);
@@ -63,7 +63,7 @@ const unsigned char *vport_get_addr(const struct vport *);
 
 struct dp_port *vport_get_dp_port(const struct vport *);
 struct kobject *vport_get_kobj(const struct vport *);
-int vport_get_stats(struct vport *, struct odp_vport_stats *);
+int vport_get_stats(struct vport *, struct xflow_vport_stats *);
 
 unsigned vport_get_flags(const struct vport *);
 int vport_is_running(const struct vport *);
@@ -105,7 +105,7 @@ struct vport {
 
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
-	struct odp_vport_stats offset_stats;
+	struct xflow_vport_stats offset_stats;
 };
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
@@ -174,13 +174,13 @@ struct vport_ops {
 
 	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);
-	int (*set_stats)(const struct vport *, struct odp_vport_stats *);
+	int (*set_stats)(const struct vport *, struct xflow_vport_stats *);
 
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);
 	const unsigned char *(*get_addr)(const struct vport *);
 	struct kobject *(*get_kobj)(const struct vport *);
-	int (*get_stats)(const struct vport *, struct odp_vport_stats *);
+	int (*get_stats)(const struct vport *, struct xflow_vport_stats *);
 
 	unsigned (*get_dev_flags)(const struct vport *);
 	int (*is_running)(const struct vport *);

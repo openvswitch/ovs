@@ -29,9 +29,9 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dpif.h"
+#include "dynamic-string.h"
+#include "netdev.h"
 #include "netlink.h"
-#include "odp-util.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -44,6 +44,8 @@
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
+#include "xfif.h"
+#include "xflow-util.h"
 #include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl)
@@ -209,12 +211,12 @@ static void
 open_vconn__(const char *name, const char *default_suffix,
              struct vconn **vconnp)
 {
-    struct dpif *dpif;
+    struct xfif *xfif;
     struct stat s;
     char *bridge_path, *datapath_name, *datapath_type;
 
     bridge_path = xasprintf("%s/%s.%s", ovs_rundir, name, default_suffix);
-    dp_parse_name(name, &datapath_name, &datapath_type);
+    xf_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
         run(vconn_open_block(name, OFP_VERSION, vconnp),
@@ -223,19 +225,19 @@ open_vconn__(const char *name, const char *default_suffix,
         open_vconn_socket(name, vconnp);
     } else if (!stat(bridge_path, &s) && S_ISSOCK(s.st_mode)) {
         open_vconn_socket(bridge_path, vconnp);
-    } else if (!dpif_open(datapath_name, datapath_type, &dpif)) {
-        char dpif_name[IF_NAMESIZE + 1];
+    } else if (!xfif_open(datapath_name, datapath_type, &xfif)) {
+        char xfif_name[IF_NAMESIZE + 1];
         char *socket_name;
 
-        run(dpif_port_get_name(dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
-            "obtaining name of %s", dpif_name);
-        dpif_close(dpif);
-        if (strcmp(dpif_name, name)) {
-            VLOG_INFO("datapath %s is named %s", name, dpif_name);
+        run(xfif_port_get_name(xfif, XFLOWP_LOCAL, xfif_name, sizeof xfif_name),
+            "obtaining name of %s", xfif_name);
+        xfif_close(xfif);
+        if (strcmp(xfif_name, name)) {
+            VLOG_INFO("datapath %s is named %s", name, xfif_name);
         }
 
         socket_name = xasprintf("%s/%s.%s",
-                                ovs_rundir, dpif_name, default_suffix);
+                                ovs_rundir, xfif_name, default_suffix);
         if (stat(socket_name, &s)) {
             ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
                       name, socket_name);
@@ -465,6 +467,21 @@ do_dump_aggregate(int argc, char *argv[])
 }
 
 static void
+enable_flow_mod_table_id_ext(struct vconn *vconn, uint8_t enable)
+{
+    struct nxt_flow_mod_table_id *flow_mod_table_id;
+    struct ofpbuf *buffer;
+
+    flow_mod_table_id = make_openflow(sizeof *flow_mod_table_id, OFPT_VENDOR, &buffer);
+
+    flow_mod_table_id->vendor = htonl(NX_VENDOR_ID);
+    flow_mod_table_id->subtype = htonl(NXT_FLOW_MOD_TABLE_ID);
+    flow_mod_table_id->set = enable;
+
+    send_openflow_buffer(vconn, buffer);
+}
+
+static void
 do_add_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
@@ -473,13 +490,14 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
     uint16_t priority, idle_timeout, hard_timeout;
     uint64_t cookie;
     struct ofp_match match;
+    uint8_t table_idx;
 
     /* Parse and send.  parse_ofp_str() will expand and reallocate the
      * data in 'buffer', so we can't keep pointers to across the
      * parse_ofp_str() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     parse_ofp_str(argv[2], &match, buffer,
-                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                  &table_idx, NULL, &priority, &idle_timeout, &hard_timeout,
                   &cookie);
     ofm = buffer->data;
     ofm->match = match;
@@ -491,6 +509,10 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
@@ -501,6 +523,8 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     FILE *file;
     char line[1024];
+    uint8_t table_idx;
+    int table_id_enabled = 0;
 
     file = fopen(argv[2], "r");
     if (file == NULL) {
@@ -532,9 +556,8 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
          * the data in 'buffer', so we can't keep pointers to across the
          * parse_ofp_str() call. */
         make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-        parse_ofp_str(line, &match, buffer,
-                      NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                      &cookie);
+        parse_ofp_str(line, &match, buffer, &table_idx, NULL, &priority,
+                      &idle_timeout, &hard_timeout, &cookie);
         ofm = buffer->data;
         ofm->match = match;
         ofm->command = htons(OFPFC_ADD);
@@ -544,6 +567,18 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->priority = htons(priority);
 
+        if (table_idx != 0xff) {
+            if (!table_id_enabled) {
+                enable_flow_mod_table_id_ext(vconn, 1);
+                table_id_enabled = 1;
+            }
+            ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+        } else {
+            if (table_id_enabled) {
+                enable_flow_mod_table_id_ext(vconn, 0);
+                table_id_enabled = 0;
+            }
+        }
         send_openflow_buffer(vconn, buffer);
     }
     vconn_close(vconn);
@@ -559,13 +594,14 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     struct ofp_match match;
+    uint8_t table_idx;
 
     /* Parse and send.  parse_ofp_str() will expand and reallocate the
      * data in 'buffer', so we can't keep pointers to across the
      * parse_ofp_str() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     parse_ofp_str(argv[2], &match, buffer,
-                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                  &table_idx, NULL, &priority, &idle_timeout, &hard_timeout,
                   &cookie);
     ofm = buffer->data;
     ofm->match = match;
@@ -581,6 +617,10 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
@@ -592,10 +632,11 @@ static void do_del_flows(int argc, char *argv[])
     uint16_t out_port;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
+    uint8_t table_idx;
 
     /* Parse and send. */
     ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, 
+    parse_ofp_str(argc > 2 ? argv[2] : "", &ofm->match, NULL, &table_idx,
                   &out_port, &priority, NULL, NULL, NULL);
     if (strict) {
         ofm->command = htons(OFPFC_DELETE_STRICT);
@@ -609,6 +650,10 @@ static void do_del_flows(int argc, char *argv[])
     ofm->priority = htons(priority);
 
     open_vconn(argv[1], &vconn);
+    if (table_idx != 0xff) {
+        enable_flow_mod_table_id_ext(vconn, 1);
+        ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
+    }
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }

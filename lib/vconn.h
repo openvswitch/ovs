@@ -24,6 +24,10 @@
 
 #include "flow.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct ofpbuf;
 struct ofp_action_header;
 struct ofp_header;

@@ -82,7 +82,7 @@ int mac_learning_lookup_tag(const struct mac_learning *,
                             uint16_t vlan, tag_type *tag,
                             bool *is_grat_arp_locked);
 void mac_learning_flush(struct mac_learning *);
-void mac_learning_run(struct mac_learning *, struct tag_set *);
+tag_type mac_learning_run(struct mac_learning *);
 void mac_learning_wait(struct mac_learning *);
 
 #endif /* mac-learning.h */
