@@ -23,6 +23,6 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
-	xenserver/usr_share_openvswitch_scripts_refresh-network-uuids \
+	xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template \
 	xenserver/uuid.py

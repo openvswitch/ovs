@@ -73,8 +73,8 @@ install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/vif
-install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-network-uuids \
-               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-network-uuids
+install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
+               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
@@ -158,12 +158,12 @@ EOF
     fi
 fi
 
-# On XenServer 5.5.0, we need refresh-network-uuids to run whenever
+# On XenServer 5.5.0, we need refresh-xs-network-uuids to run whenever
 # XAPI starts or restarts.  (On XenServer 5.6.0, XAPI calls the
 # "update" method of the vswitch-cfg-update plugin whenever it starts
 # or restarts, so this is no longer necessary.)
 if test "$PRODUCT_VERSION" = "5.5.0"; then
-    RNU=/usr/share/openvswitch/scripts/refresh-network-uuids
+    RNU=/usr/share/openvswitch/scripts/refresh-xs-network-uuids
     XSS=/opt/xensource/libexec/xapi-startup-script
     if test -e $XSS && (test ! -L $XSS || test "`readlink $XSS`" != $RNU); then
         echo "$XSS is already in use, refusing to overwrite"
@@ -390,7 +390,7 @@ fi
 /usr/share/openvswitch/python/ovs/timeval.py
 /usr/share/openvswitch/python/ovs/util.py
 /usr/share/openvswitch/python/uuid.py
-/usr/share/openvswitch/scripts/refresh-network-uuids
+/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py
 /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.py

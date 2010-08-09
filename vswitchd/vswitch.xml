@@ -364,7 +364,7 @@
           column), external IDs for the fake bridge are defined here by
           prefixing a <ref table="Bridge"/> <ref table="Bridge"
           column="external_ids"/> key with <code>fake-bridge-</code>,
-          e.g. <code>fake-bridge-network-uuids</code>.
+          e.g. <code>fake-bridge-xs-network-uuids</code>.
         </p>
       </column>
 
