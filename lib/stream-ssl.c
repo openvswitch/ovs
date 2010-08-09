@@ -61,7 +61,6 @@ struct ssl_stream
 {
     struct stream stream;
     enum ssl_state state;
-    int connect_error;
     enum session_type type;
     int fd;
     SSL *ssl;
