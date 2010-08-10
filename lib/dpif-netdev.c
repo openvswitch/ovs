@@ -1017,6 +1017,9 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     struct dp_netdev_flow *flow;
     flow_t key;
 
+    if (packet->size < ETH_HEADER_LEN) {
+        return;
+    }
     if (flow_extract(packet, 0, port->port_no, &key) && dp->drop_frags) {
         dp->n_frags++;
         return;
@@ -1117,7 +1120,8 @@ static void
 dp_netdev_strip_vlan(struct ofpbuf *packet)
 {
     struct vlan_eth_header *veh = packet->l2;
-    if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
+    if (packet->size >= sizeof *veh
+        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
         struct eth_header tmp;
 
         memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
