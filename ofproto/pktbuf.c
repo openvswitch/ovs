@@ -112,7 +112,9 @@ pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
     if (++p->cookie >= COOKIE_MAX) {
         p->cookie = 0;
     }
-    p->buffer = ofpbuf_clone(buffer);
+    p->buffer = ofpbuf_new(sizeof(struct ofp_packet_in) + buffer->size);
+    ofpbuf_reserve(p->buffer, sizeof(struct ofp_packet_in));
+    ofpbuf_put(p->buffer, buffer->data, buffer->size);
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;
     return make_id(p - pb->packets, p->cookie);
@@ -153,6 +155,9 @@ pktbuf_get_null(void)
  * caller becomes responsible for freeing the buffer.  However, if 'id'
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
  * NULL in '*bufferp' and UINT16_max in '*in_port'.
+ *
+ * A returned packet will have at least sizeof(struct ofp_packet_in) bytes of
+ * headroom.
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 int
