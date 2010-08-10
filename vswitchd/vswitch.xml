@@ -477,7 +477,7 @@
                 either be a 32-bit number or the word <code>flow</code>.  If
                 <code>flow</code> is specified then the key may be set using
                 the <code>set_tunnel</code> Nicira OpenFlow vendor extension (0
-                is used in the absense of an action).  The ovs-ofctl manual
+                is used in the absence of an action).  The ovs-ofctl manual
                 page contains additional information about the Nicira OpenFlow
                 vendor extensions.  Default is no key.</dd>
             </dl>
