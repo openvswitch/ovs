@@ -171,23 +171,52 @@ void flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
 	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
 }
 
-#define SNAP_OUI_LEN 3
-
-struct eth_snap_hdr
+static void parse_vlan(struct sk_buff *skb, struct odp_flow_key *key)
 {
-	struct ethhdr eth;
-	u8  dsap;  /* Always 0xAA */
-	u8  ssap;  /* Always 0xAA */
-	u8  ctrl;
-	u8  oui[SNAP_OUI_LEN];
-	u16 ethertype;
-} __attribute__ ((packed));
+	struct qtag_prefix {
+		__be16 eth_type; /* ETH_P_8021Q */
+		__be16 tci;
+	};
+	struct qtag_prefix *qp;
 
-static int is_snap(const struct eth_snap_hdr *esh)
+	if (skb->len < sizeof(struct qtag_prefix) + sizeof(__be16))
+		return;
+
+	qp = (struct qtag_prefix *) skb->data;
+	key->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
+	key->dl_vlan_pcp = (ntohs(qp->tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+	__skb_pull(skb, sizeof(struct qtag_prefix));
+}
+
+static __be16 parse_ethertype(struct sk_buff *skb)
 {
-	return (esh->dsap == LLC_SAP_SNAP
-		&& esh->ssap == LLC_SAP_SNAP
-		&& !memcmp(esh->oui, "\0\0\0", 3));
+	struct llc_snap_hdr {
+		u8  dsap;  /* Always 0xAA */
+		u8  ssap;  /* Always 0xAA */
+		u8  ctrl;
+		u8  oui[3];
+		u16 ethertype;
+	};
+	struct llc_snap_hdr *llc;
+	__be16 proto;
+
+	proto = *(__be16 *) skb->data;
+	__skb_pull(skb, sizeof(__be16));
+
+	if (ntohs(proto) >= ODP_DL_TYPE_ETH2_CUTOFF)
+		return proto;
+
+	if (unlikely(skb->len < sizeof(struct llc_snap_hdr)))
+		return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+
+	llc = (struct llc_snap_hdr *) skb->data;
+	if (llc->dsap != LLC_SAP_SNAP ||
+	    llc->ssap != LLC_SAP_SNAP ||
+	    (llc->oui[0] | llc->oui[1] | llc->oui[2]) != 0)
+		return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+
+	__skb_pull(skb, sizeof(struct llc_snap_hdr));
+	return llc->ethertype;
 }
 
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
@@ -196,9 +225,7 @@ static int is_snap(const struct eth_snap_hdr *esh)
 int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 {
 	struct ethhdr *eth;
-	struct eth_snap_hdr *esh;
 	int retval = 0;
-	int nh_ofs;
 
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
@@ -207,43 +234,28 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 
 	if (skb->len < sizeof *eth)
 		return 0;
-	if (!pskb_may_pull(skb, skb->len >= 64 ? 64 : skb->len)) {
+	if (!pskb_may_pull(skb, skb->len >= 64 ? 64 : skb->len))
 		return 0;
-	}
 
 	skb_reset_mac_header(skb);
-	eth = eth_hdr(skb);
-	esh = (struct eth_snap_hdr *) eth;
-	nh_ofs = sizeof *eth;
-	if (likely(ntohs(eth->h_proto) >= ODP_DL_TYPE_ETH2_CUTOFF))
-		key->dl_type = eth->h_proto;
-	else if (skb->len >= sizeof *esh && is_snap(esh)) {
-		key->dl_type = esh->ethertype;
-		nh_ofs = sizeof *esh;
-	} else {
-		key->dl_type = htons(ODP_DL_TYPE_NOT_ETH_TYPE);
-		if (skb->len >= nh_ofs + sizeof(struct llc_pdu_un)) {
-			nh_ofs += sizeof(struct llc_pdu_un); 
-		}
-	}
 
-	/* Check for a VLAN tag */
-	if (key->dl_type == htons(ETH_P_8021Q) &&
-	    skb->len >= nh_ofs + sizeof(struct vlan_hdr)) {
-		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
-		key->dl_type = vh->h_vlan_encapsulated_proto;
-		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
-		key->dl_vlan_pcp = (ntohs(vh->h_vlan_TCI) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
-		nh_ofs += sizeof(struct vlan_hdr);
-	}
+	/* Link layer. */
+	eth = eth_hdr(skb);
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);
 	memcpy(key->dl_dst, eth->h_dest, ETH_ALEN);
-	skb_set_network_header(skb, nh_ofs);
+
+	/* dl_type, dl_vlan, dl_vlan_pcp. */
+	__skb_pull(skb, 2 * ETH_ALEN);
+	if (eth->h_proto == htons(ETH_P_8021Q))
+		parse_vlan(skb, key);
+	key->dl_type = parse_ethertype(skb);
+	skb_reset_network_header(skb);
+	__skb_push(skb, skb->data - (unsigned char *)eth);
 
 	/* Network layer. */
 	if (key->dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
 		struct iphdr *nh = ip_hdr(skb);
-		int th_ofs = nh_ofs + nh->ihl * 4;
+		int th_ofs = skb_network_offset(skb) + nh->ihl * 4;
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
 		key->nw_tos = nh->tos & ~INET_ECN_MASK;
