@@ -374,6 +374,13 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     struct ofpbuf pkt;
     flow_t flow;
 
+    /* Ignore packets sent via output to OFPP_CONTROLLER.  This library never
+     * uses such an action.  You never know what experiments might be going on,
+     * though, and it seems best not to interfere with them. */
+    if (opi->reason != OFPR_NO_MATCH) {
+        return;
+    }
+
     /* Extract flow data from 'opi' into 'flow'. */
     pkt_ofs = offsetof(struct ofp_packet_in, data);
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
