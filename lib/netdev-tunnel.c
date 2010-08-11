@@ -29,32 +29,36 @@
 #include "socket-util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_gre)
+VLOG_DEFINE_THIS_MODULE(netdev_tunnel)
 
-struct netdev_dev_gre {
+struct netdev_dev_tunnel {
     struct netdev_dev netdev_dev;
 };
 
-struct netdev_gre {
+struct netdev_tunnel {
     struct netdev netdev;
 };
 
-static struct netdev_dev_gre *
-netdev_dev_gre_cast(const struct netdev_dev *netdev_dev)
+static int netdev_tunnel_create(const char *name, const char *type,
+                                const struct shash *args, struct netdev_dev **);
+
+static struct netdev_dev_tunnel *
+netdev_dev_tunnel_cast(const struct netdev_dev *netdev_dev)
 {
-    netdev_dev_assert_class(netdev_dev, &netdev_gre_class);
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_gre, netdev_dev);
+    assert(netdev_dev_get_class(netdev_dev)->create == netdev_tunnel_create);
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_tunnel, netdev_dev);
 }
 
-static struct netdev_gre *
-netdev_gre_cast(const struct netdev *netdev)
+static struct netdev_tunnel *
+netdev_tunnel_cast(const struct netdev *netdev)
 {
-    netdev_assert_class(netdev, &netdev_gre_class);
-    return CONTAINER_OF(netdev, struct netdev_gre, netdev);
+    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+    assert(netdev_dev_get_class(netdev_dev)->create == netdev_tunnel_create);
+    return CONTAINER_OF(netdev, struct netdev_tunnel, netdev);
 }
 
 static int
-parse_config(const char *name, const struct shash *args,
+parse_config(const char *name, const char *type, const struct shash *args,
              struct tnl_port_config *config)
 {
     struct shash_node *node;
@@ -67,14 +71,14 @@ parse_config(const char *name, const struct shash *args,
         if (!strcmp(node->name, "remote_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("%s: bad gre 'remote_ip'", name);
+                VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
             } else {
                 config->daddr = in_addr.s_addr;
             }
         } else if (!strcmp(node->name, "local_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("%s: bad gre 'local_ip'", name);
+                VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
                 config->saddr = in_addr.s_addr;
             }
@@ -118,12 +122,12 @@ parse_config(const char *name, const struct shash *args,
                 config->flags &= ~TNL_F_PMTUD;
             }
         } else {
-            VLOG_WARN("%s: unknown gre argument '%s'", name, node->name);
+            VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->name);
         }
     }
 
     if (!config->daddr) {
-        VLOG_WARN("%s: gre type requires valid 'remote_ip' argument", name);
+        VLOG_WARN("%s: %s type requires valid 'remote_ip' argument", name, type);
         return EINVAL;
     }
 
@@ -131,19 +135,19 @@ parse_config(const char *name, const struct shash *args,
 }
 
 static int
-netdev_gre_create(const char *name, const char *type OVS_UNUSED,
-                  const struct shash *args, struct netdev_dev **netdev_devp)
+netdev_tunnel_create(const char *name, const char *type,
+                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
     int err;
     struct odp_vport_add ova;
     struct tnl_port_config port_config;
-    struct netdev_dev_gre *netdev_dev;
+    struct netdev_dev_tunnel *netdev_dev;
 
-    ovs_strlcpy(ova.port_type, "gre", sizeof ova.port_type);
+    ovs_strlcpy(ova.port_type, type, sizeof ova.port_type);
     ovs_strlcpy(ova.devname, name, sizeof ova.devname);
     ova.config = &port_config;
 
-    err = parse_config(name, args, &port_config);
+    err = parse_config(name, type, args, &port_config);
     if (err) {
         return err;
     }
@@ -172,7 +176,7 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
 }
 
 static int
-netdev_gre_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
+netdev_tunnel_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
 {
     const char *name = netdev_dev_get_name(netdev_dev_);
     struct odp_vport_mod ovm;
@@ -182,7 +186,8 @@ netdev_gre_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
     ovs_strlcpy(ovm.devname, name, sizeof ovm.devname);
     ovm.config = &port_config;
 
-    err = parse_config(name, args, &port_config);
+    err = parse_config(name, netdev_dev_get_class(netdev_dev_)->type, args,
+                       &port_config);
     if (err) {
         return err;
     }
@@ -191,19 +196,19 @@ netdev_gre_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
 }
 
 static void
-netdev_gre_destroy(struct netdev_dev *netdev_dev_)
+netdev_tunnel_destroy(struct netdev_dev *netdev_dev_)
 {
-    struct netdev_dev_gre *netdev_dev = netdev_dev_gre_cast(netdev_dev_);
+    struct netdev_dev_tunnel *netdev_dev = netdev_dev_tunnel_cast(netdev_dev_);
 
     netdev_vport_do_ioctl(ODP_VPORT_DEL, (char *)netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 
 static int
-netdev_gre_open(struct netdev_dev *netdev_dev_, int ethertype OVS_UNUSED,
+netdev_tunnel_open(struct netdev_dev *netdev_dev_, int ethertype OVS_UNUSED,
                 struct netdev **netdevp)
 {
-    struct netdev_gre *netdev;
+    struct netdev_tunnel *netdev;
 
     netdev = xmalloc(sizeof *netdev);
     netdev_init(&netdev->netdev, netdev_dev_);
@@ -213,9 +218,9 @@ netdev_gre_open(struct netdev_dev *netdev_dev_, int ethertype OVS_UNUSED,
 }
 
 static void
-netdev_gre_close(struct netdev *netdev_)
+netdev_tunnel_close(struct netdev *netdev_)
 {
-    struct netdev_gre *netdev = netdev_gre_cast(netdev_);
+    struct netdev_tunnel *netdev = netdev_tunnel_cast(netdev_);
     free(netdev);
 }
 
@@ -226,12 +231,12 @@ const struct netdev_class netdev_gre_class = {
     NULL,                       /* run */
     NULL,                       /* wait */
 
-    netdev_gre_create,
-    netdev_gre_destroy,
-    netdev_gre_reconfigure,
+    netdev_tunnel_create,
+    netdev_tunnel_destroy,
+    netdev_tunnel_reconfigure,
 
-    netdev_gre_open,
-    netdev_gre_close,
+    netdev_tunnel_open,
+    netdev_tunnel_close,
 
     NULL,                       /* enumerate */
 
