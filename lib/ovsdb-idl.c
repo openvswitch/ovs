@@ -112,13 +112,13 @@ static void ovsdb_idl_send_monitor_request(struct ovsdb_idl *);
 static void ovsdb_idl_parse_update(struct ovsdb_idl *, const struct json *);
 static struct ovsdb_error *ovsdb_idl_parse_update__(struct ovsdb_idl *,
                                                     const struct json *);
-static void ovsdb_idl_process_update(struct ovsdb_idl_table *,
+static bool ovsdb_idl_process_update(struct ovsdb_idl_table *,
                                      const struct uuid *,
                                      const struct json *old,
                                      const struct json *new);
 static void ovsdb_idl_insert_row(struct ovsdb_idl_row *, const struct json *);
 static void ovsdb_idl_delete_row(struct ovsdb_idl_row *);
-static void ovsdb_idl_modify_row(struct ovsdb_idl_row *, const struct json *);
+static bool ovsdb_idl_modify_row(struct ovsdb_idl_row *, const struct json *);
 
 static bool ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *);
 static struct ovsdb_idl_row *ovsdb_idl_row_create__(
@@ -159,6 +159,8 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
 
         shash_add_assert(&idl->table_by_name, tc->name, table);
         table->class = tc;
+        table->modes = xmalloc(tc->n_columns);
+        memset(table->modes, OVSDB_IDL_MODE_RW, tc->n_columns);
         shash_init(&table->columns);
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
@@ -189,6 +191,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
             struct ovsdb_idl_table *table = &idl->tables[i];
             shash_destroy(&table->columns);
             hmap_destroy(&table->rows);
+            free(table->modes);
         }
         shash_destroy(&idl->table_by_name);
         free(idl->tables);
@@ -290,6 +293,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         } else if (msg->type == JSONRPC_REPLY
                    && idl->monitor_request_id
                    && json_equal(idl->monitor_request_id, msg->id)) {
+            idl->change_seqno++;
             json_destroy(idl->monitor_request_id);
             idl->monitor_request_id = NULL;
             ovsdb_idl_clear(idl);
@@ -357,6 +361,65 @@ ovsdb_idl_force_reconnect(struct ovsdb_idl *idl)
 {
     jsonrpc_session_force_reconnect(idl->session);
 }
+
+static void
+ovsdb_idl_set_mode(struct ovsdb_idl *idl,
+                   const struct ovsdb_idl_column *column,
+                   enum ovsdb_idl_mode mode)
+{
+    size_t i;
+
+    for (i = 0; i < idl->class->n_tables; i++) {
+        const struct ovsdb_idl_table *table = &idl->tables[i];
+        const struct ovsdb_idl_table_class *tc = table->class;
+
+        if (column >= tc->columns && column < &tc->columns[tc->n_columns]) {
+            unsigned char *modep = &table->modes[column - tc->columns];
+            assert(*modep == OVSDB_IDL_MODE_RW || *modep == mode);
+            *modep = mode;
+            return;
+        }
+    }
+
+    NOT_REACHED();
+}
+
+/* By default, 'idl' replicates all of the columns in the remote database, and
+ * ovsdb_idl_run() returns true upon a change to any column in the database.
+ * Call this function to avoid alerting ovsdb_idl_run()'s caller upon changes
+ * to 'column'.
+ *
+ * This is useful for columns that a client treats as "write-only", that is, it
+ * updates them but doesn't want to get alerted about its own updates.  It also
+ * won't be alerted about other clients' updates, so this is suitable only for
+ * use by a client that "owns" a particular column.
+ *
+ * The client must be careful not to retain pointers to data in 'column' across
+ * calls to ovsdb_idl_run(), even when that function returns false, because
+ * the client is not alerted to changes.
+ *
+ * This function should be called after ovsdb_idl_create(), but before the
+ * first call to ovsdb_idl_run().  For any given column, this function may be
+ * called or ovsdb_idl_omit() may be called, but not both. */
+void
+ovsdb_idl_set_write_only(struct ovsdb_idl *idl,
+                         const struct ovsdb_idl_column *column)
+{
+    ovsdb_idl_set_mode(idl, column, OVSDB_IDL_MODE_WO);
+}
+
+/* By default, 'idl' replicates all of the columns in the remote database.
+ * Call this function to omit replicating 'column'.  This saves CPU time and
+ * bandwidth to the database.
+ *
+ * This function should be called after ovsdb_idl_create(), but before the
+ * first call to ovsdb_idl_run().  For any given column, this function may be
+ * called or ovsdb_idl_set_write_only() may be called, but not both. */
+void
+ovsdb_idl_omit(struct ovsdb_idl *idl, const struct ovsdb_idl_column *column)
+{
+    ovsdb_idl_set_mode(idl, column, OVSDB_IDL_MODE_NONE);
+}
 
 static void
 ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
@@ -376,7 +439,9 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
         columns = json_array_create_empty();
         for (i = 0; i < tc->n_columns; i++) {
             const struct ovsdb_idl_column *column = &tc->columns[i];
-            json_array_add(columns, json_string_create(column->name));
+            if (table->modes[i] != OVSDB_IDL_MODE_NONE) {
+                json_array_add(columns, json_string_create(column->name));
+            }
         }
         json_object_put(monitor_request, "columns", columns);
         json_object_put(monitor_requests, tc->name, monitor_request);
@@ -394,11 +459,7 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
 static void
 ovsdb_idl_parse_update(struct ovsdb_idl *idl, const struct json *table_updates)
 {
-    struct ovsdb_error *error;
-
-    idl->change_seqno++;
-
-    error = ovsdb_idl_parse_update__(idl, table_updates);
+    struct ovsdb_error *error = ovsdb_idl_parse_update__(idl, table_updates);
     if (error) {
         if (!VLOG_DROP_WARN(&syntax_rl)) {
             char *s = ovsdb_error_to_string(error);
@@ -478,7 +539,9 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
                                           "and \"new\" members");
             }
 
-            ovsdb_idl_process_update(table, &uuid, old_json, new_json);
+            if (ovsdb_idl_process_update(table, &uuid, old_json, new_json)) {
+                idl->change_seqno++;
+            }
         }
     }
 
@@ -499,7 +562,9 @@ ovsdb_idl_get_row(struct ovsdb_idl_table *table, const struct uuid *uuid)
     return NULL;
 }
 
-static void
+/* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
+ * otherwise. */
+static bool
 ovsdb_idl_process_update(struct ovsdb_idl_table *table,
                          const struct uuid *uuid, const struct json *old,
                          const struct json *new)
@@ -516,6 +581,7 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
             VLOG_WARN_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
                          "from table %s",
                          UUID_ARGS(uuid), table->class->name);
+            return false;
         }
     } else if (!old) {
         /* Insert row. */
@@ -526,14 +592,14 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
                          "table %s", UUID_ARGS(uuid), table->class->name);
-            ovsdb_idl_modify_row(row, new);
+            return ovsdb_idl_modify_row(row, new);
         }
     } else {
         /* Modify row. */
         if (row) {
             /* XXX perhaps we should check the 'old' values? */
             if (!ovsdb_idl_row_is_orphan(row)) {
-                ovsdb_idl_modify_row(row, new);
+                return ovsdb_idl_modify_row(row, new);
             } else {
                 VLOG_WARN_RL(&semantic_rl, "cannot modify missing but "
                              "referenced row "UUID_FMT" in table %s",
@@ -546,13 +612,18 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
             ovsdb_idl_insert_row(ovsdb_idl_row_create(table, uuid), new);
         }
     }
+
+    return true;
 }
 
-static void
+/* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
+ * otherwise. */
+static bool
 ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
 {
     struct ovsdb_idl_table *table = row->table;
     struct shash_node *node;
+    bool changed = false;
 
     SHASH_FOR_EACH (node, json_object(row_json)) {
         const char *column_name = node->name;
@@ -569,9 +640,12 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
 
         error = ovsdb_datum_from_json(&datum, &column->type, node->data, NULL);
         if (!error) {
-            ovsdb_datum_swap(&row->old[column - table->class->columns],
-                             &datum);
+            unsigned int column_idx = column - table->class->columns;
+            ovsdb_datum_swap(&row->old[column_idx], &datum);
             ovsdb_datum_destroy(&datum, &column->type);
+            if (table->modes[column_idx] == OVSDB_IDL_MODE_RW) {
+                changed = true;
+            }
         } else {
             char *s = ovsdb_error_to_string(error);
             VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
@@ -581,6 +655,7 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
             ovsdb_error_destroy(error);
         }
     }
+    return changed;
 }
 
 /* When a row A refers to row B through a column with a "refTable" constraint,
@@ -787,13 +862,19 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
     }
 }
 
-static void
+/* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
+ * otherwise. */
+static bool
 ovsdb_idl_modify_row(struct ovsdb_idl_row *row, const struct json *row_json)
 {
+    bool changed;
+
     ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
-    ovsdb_idl_row_update(row, row_json);
+    changed = ovsdb_idl_row_update(row, row_json);
     ovsdb_idl_row_parse(row);
+
+    return changed;
 }
 
 static bool
@@ -1469,6 +1550,8 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
 
     assert(row->new != NULL);
     assert(column_idx < class->n_columns);
+    assert(row->table->modes[column_idx] != OVSDB_IDL_MODE_NONE);
+
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
