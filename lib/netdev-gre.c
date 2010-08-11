@@ -24,7 +24,7 @@
 #include "netdev-vport.h"
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
-#include "openvswitch/gre.h"
+#include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "socket-util.h"
 #include "vlog.h"
@@ -55,13 +55,13 @@ netdev_gre_cast(const struct netdev *netdev)
 
 static int
 parse_config(const char *name, const struct shash *args,
-             struct gre_port_config *config)
+             struct tnl_port_config *config)
 {
     struct shash_node *node;
 
     memset(config, 0, sizeof *config);
 
-    config->flags |= GRE_F_PMTUD;
+    config->flags |= TNL_F_PMTUD;
 
     SHASH_FOR_EACH (node, args) {
         if (!strcmp(node->name, "remote_ip")) {
@@ -80,42 +80,42 @@ parse_config(const char *name, const struct shash *args,
             }
         } else if (!strcmp(node->name, "key")) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= GRE_F_IN_KEY_MATCH;
-                config->flags |= GRE_F_OUT_KEY_ACTION;
+                config->flags |= TNL_F_IN_KEY_MATCH;
+                config->flags |= TNL_F_OUT_KEY_ACTION;
             } else {
                 config->out_key = config->in_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "in_key")) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= GRE_F_IN_KEY_MATCH;
+                config->flags |= TNL_F_IN_KEY_MATCH;
             } else {
                 config->in_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "out_key")) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= GRE_F_OUT_KEY_ACTION;
+                config->flags |= TNL_F_OUT_KEY_ACTION;
             } else {
                 config->out_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "tos")) {
             if (!strcmp(node->data, "inherit")) {
-                config->flags |= GRE_F_TOS_INHERIT;
+                config->flags |= TNL_F_TOS_INHERIT;
             } else {
                 config->tos = atoi(node->data);
             }
         } else if (!strcmp(node->name, "ttl")) {
             if (!strcmp(node->data, "inherit")) {
-                config->flags |= GRE_F_TTL_INHERIT;
+                config->flags |= TNL_F_TTL_INHERIT;
             } else {
                 config->ttl = atoi(node->data);
             }
         } else if (!strcmp(node->name, "csum")) {
             if (!strcmp(node->data, "true")) {
-                config->flags |= GRE_F_CSUM;
+                config->flags |= TNL_F_CSUM;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
-                config->flags &= ~GRE_F_PMTUD;
+                config->flags &= ~TNL_F_PMTUD;
             }
         } else {
             VLOG_WARN("%s: unknown gre argument '%s'", name, node->name);
@@ -136,7 +136,7 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
 {
     int err;
     struct odp_vport_add ova;
-    struct gre_port_config port_config;
+    struct tnl_port_config port_config;
     struct netdev_dev_gre *netdev_dev;
 
     ovs_strlcpy(ova.port_type, "gre", sizeof ova.port_type);
@@ -176,7 +176,7 @@ netdev_gre_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
 {
     const char *name = netdev_dev_get_name(netdev_dev_);
     struct odp_vport_mod ovm;
-    struct gre_port_config port_config;
+    struct tnl_port_config port_config;
     int err;
 
     ovs_strlcpy(ovm.devname, name, sizeof ovm.devname);

@@ -37,19 +37,19 @@
  * ----------------------------------------------------------------------
  */
 
-#ifndef OPENVSWITCH_GRE_H
-#define OPENVSWITCH_GRE_H 1
+#ifndef OPENVSWITCH_TUNNEL_H
+#define OPENVSWITCH_TUNNEL_H 1
 
 #include <linux/types.h>
 
-#define GRE_F_CSUM		(1 << 1) /* Checksum packets. */
-#define GRE_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
-#define GRE_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
-#define GRE_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
-#define GRE_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
-#define GRE_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
+#define TNL_F_CSUM		(1 << 1) /* Checksum packets. */
+#define TNL_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
+#define TNL_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
+#define TNL_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
+#define TNL_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
+#define TNL_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
 
-struct gre_port_config {
+struct tnl_port_config {
 	__u32	flags;
 	__be32	saddr;
 	__be32	daddr;
@@ -59,4 +59,4 @@ struct gre_port_config {
 	__u8	ttl;
 };
 
-#endif /* openvswitch/gre.h */
+#endif /* openvswitch/tunnel.h */

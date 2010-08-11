@@ -53,7 +53,6 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/gre.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "port-array.h"

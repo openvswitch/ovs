@@ -27,7 +27,7 @@
 /table.c
 /time.c
 /tmp
-/veth.c
+/tunnel.c
 /vport-generic.c
 /vport-gre.c
 /vport-internal_dev.c
