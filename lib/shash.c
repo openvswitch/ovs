@@ -279,3 +279,14 @@ shash_equal_keys(const struct shash *a, const struct shash *b)
     }
     return true;
 }
+
+/* Chooses and returns a randomly selected node from 'sh', which must not be
+ * empty.
+ *
+ * I wouldn't depend on this algorithm to be fair, since I haven't analyzed it.
+ * But it does at least ensure that any node in 'sh' can be chosen. */
+struct shash_node *
+shash_random_node(struct shash *sh)
+{
+    return CONTAINER_OF(hmap_random_node(&sh->map), struct shash_node, node);
+}

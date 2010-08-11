@@ -255,6 +255,7 @@ COVERAGE_FILES = \
 	lib/rconn.c \
 	lib/rtnetlink.c \
 	lib/stream.c \
+	lib/stream-ssl.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \

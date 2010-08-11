@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include "coverage.h"
+#include "random.h"
 #include "util.h"
 
 /* Initializes 'hmap' as an empty hash table. */
@@ -163,3 +164,35 @@ hmap_node_moved(struct hmap *hmap,
     *bucket = node;
 }
 
+/* Chooses and returns a randomly selected node from 'hmap', which must not be
+ * empty.
+ *
+ * I wouldn't depend on this algorithm to be fair, since I haven't analyzed it.
+ * But it does at least ensure that any node in 'hmap' can be chosen. */
+struct hmap_node *
+hmap_random_node(const struct hmap *hmap)
+{
+    struct hmap_node *bucket, *node;
+    size_t n, i;
+
+    /* Choose a random non-empty bucket. */
+    for (i = random_uint32(); ; i++) {
+        bucket = hmap->buckets[i & hmap->mask];
+        if (bucket) {
+            break;
+        }
+    }
+
+    /* Count nodes in bucket. */
+    n = 0;
+    for (node = bucket; node; node = node->next) {
+        n++;
+    }
+
+    /* Choose random node from bucket. */
+    i = random_range(n);
+    for (node = bucket; i-- > 0; node = node->next) {
+        continue;
+    }
+    return node;
+}
