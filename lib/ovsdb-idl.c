@@ -641,11 +641,19 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
         error = ovsdb_datum_from_json(&datum, &column->type, node->data, NULL);
         if (!error) {
             unsigned int column_idx = column - table->class->columns;
-            ovsdb_datum_swap(&row->old[column_idx], &datum);
-            ovsdb_datum_destroy(&datum, &column->type);
-            if (table->modes[column_idx] == OVSDB_IDL_MODE_RW) {
-                changed = true;
+            struct ovsdb_datum *old = &row->old[column_idx];
+
+            if (!ovsdb_datum_equals(old, &datum, &column->type)) {
+                ovsdb_datum_swap(old, &datum);
+                if (table->modes[column_idx] == OVSDB_IDL_MODE_RW) {
+                    changed = true;
+                }
+            } else {
+                /* Didn't really change but the OVSDB monitor protocol always
+                 * includes every value in a row. */
             }
+
+            ovsdb_datum_destroy(&datum, &column->type);
         } else {
             char *s = ovsdb_error_to_string(error);
             VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
