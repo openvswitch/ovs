@@ -228,17 +228,18 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  *
  * The caller must ensure that skb->len >= ETH_HLEN.
  *
- * Returns 1 if @skb contains an IPv4 fragment, 0 otherwise.
+ * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
+ * %false.
  */
 int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 {
 	struct ethhdr *eth;
-	int retval = 0;
 
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
 	key->dl_vlan = htons(ODP_VLAN_NONE);
+	OVS_CB(skb)->is_frag = false;
 
 	if (!pskb_may_pull(skb, min(skb->len, 64u)))
 		return 0;
@@ -308,7 +309,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 				}
 			}
 		} else {
-			retval = 1;
+			OVS_CB(skb)->is_frag = true;
 		}
 	} else if (key->dl_type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
 		struct arp_eth_header *arp;
@@ -334,7 +335,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	} else {
 		skb_reset_transport_header(skb);
 	}
-	return retval;
+	return 0;
 }
 
 u32 flow_hash(const struct odp_flow_key *key)

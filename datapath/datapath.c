@@ -551,12 +551,11 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	OVS_CB(skb)->dp_port = p;
 
 	/* Extract flow from 'skb' into 'key'. */
-	if (flow_extract(skb, p ? p->port_no : ODPP_NONE, &key)) {
-		if (dp->drop_frags) {
-			kfree_skb(skb);
-			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
-			goto out;
-		}
+	flow_extract(skb, p ? p->port_no : ODPP_NONE, &key);
+	if (OVS_CB(skb)->is_frag && dp->drop_frags) {
+		kfree_skb(skb);
+		stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+		goto out;
 	}
 
 	/* Look up flow. */

@@ -150,11 +150,13 @@ enum csum_type {
  * kernel versions.
  * @tun_id: ID (in network byte order) of the tunnel that encapsulated this
  * packet. It is 0 if the packet was not received on a tunnel.
+ * @is_frag: %true if this packet is an IPv4 fragment, %false otherwise.
  */
 struct ovs_skb_cb {
 	struct dp_port		*dp_port;
 	enum csum_type		ip_summed;
 	__be32			tun_id;
+	bool			is_frag;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 
