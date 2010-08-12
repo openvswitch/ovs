@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+#include "entropy.h"
 #include "util.h"
 
 /* This is the 32-bit PRNG recommended in G. Marsaglia, "Xorshift RNGs",
@@ -29,7 +30,10 @@
  *
  * We use this PRNG instead of libc's rand() because rand() varies in quality
  * and because its maximum value also varies between 32767 and INT_MAX, whereas
- * we often want random numbers in the full range of uint32_t.  */
+ * we often want random numbers in the full range of uint32_t.
+ *
+ * This random number generator is intended for purposes that do not require
+ * cryptographic-quality randomness. */
 
 /* Current random state. */
 static uint32_t seed;
@@ -39,19 +43,16 @@ static uint32_t random_next(void);
 void
 random_init(void)
 {
-    if (!seed) {
+    while (!seed) {
         struct timeval tv;
+        uint32_t entropy;
 
         if (gettimeofday(&tv, NULL) < 0) {
             ovs_fatal(errno, "gettimeofday");
         }
+        get_entropy_or_die(&entropy, 4);
 
-        seed = tv.tv_sec ^ tv.tv_usec;
-        if (!seed) {
-            /* A 'seed' of 0 is fatal to randomness--the random value will
-             * always be 0--so use the initial seed mentioned by Marsaglia. */
-            seed = UINT32_C(2463534242);
-        }
+        seed = tv.tv_sec ^ tv.tv_usec ^ entropy;
     }
 }
 
