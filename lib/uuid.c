@@ -22,11 +22,10 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #include "aes128.h"
+#include "entropy.h"
 #include "sha1.h"
-#include "socket-util.h"
 #include "util.h"
 
 static struct aes128 key;
@@ -181,27 +180,6 @@ error:
 }
 
 static void
-read_urandom(void *buffer, size_t n)
-{
-    static const char urandom[] = "/dev/urandom";
-    size_t bytes_read;
-    int error;
-    int fd;
-
-    fd = open(urandom, O_RDONLY);
-    if (fd < 0) {
-        ovs_fatal(errno, "%s: open failed", urandom);
-    }
-    error = read_fully(fd, buffer, n, &bytes_read);
-    if (error == EOF) {
-        ovs_fatal(0, "%s: unexpected end of file", urandom);
-    } else if (error) {
-        ovs_fatal(error, "%s: read error", urandom);
-    }
-    close(fd);
-}
-
-static void
 do_init(void)
 {
     uint8_t sha1[SHA1_DIGEST_SIZE];
@@ -213,7 +191,7 @@ do_init(void)
     gid_t gid;
 
     /* Get seed data. */
-    read_urandom(random_seed, sizeof random_seed);
+    get_entropy_or_die(random_seed, sizeof random_seed);
     if (gettimeofday(&now, NULL)) {
         ovs_fatal(errno, "gettimeofday failed");
     }
@@ -236,5 +214,5 @@ do_init(void)
     aes128_schedule(&key, sha1);
 
     /* Generate initial counter. */
-    read_urandom(counter, sizeof counter);
+    get_entropy_or_die(counter, sizeof counter);
 }

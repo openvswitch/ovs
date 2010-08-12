@@ -40,6 +40,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dpif.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
+	lib/entropy.c \
+	lib/entropy.h \
 	lib/fatal-signal.c \
 	lib/fatal-signal.h \
 	lib/flow.c \
