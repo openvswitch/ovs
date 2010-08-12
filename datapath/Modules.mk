@@ -19,6 +19,7 @@ openvswitch_sources = \
 	table.c \
 	tunnel.c \
 	vport.c \
+	vport-capwap.c \
 	vport-generic.c \
 	vport-gre.c \
 	vport-internal_dev.c \

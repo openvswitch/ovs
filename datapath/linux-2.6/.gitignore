@@ -28,6 +28,7 @@
 /time.c
 /tmp
 /tunnel.c
+/vport-capwap.c
 /vport-generic.c
 /vport-gre.c
 /vport-internal_dev.c

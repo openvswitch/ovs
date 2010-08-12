@@ -250,5 +250,6 @@ extern struct vport_ops netdev_vport_ops;
 extern struct vport_ops internal_vport_ops;
 extern struct vport_ops patch_vport_ops;
 extern struct vport_ops gre_vport_ops;
+extern struct vport_ops capwap_vport_ops;
 
 #endif /* vport.h */

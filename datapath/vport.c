@@ -16,6 +16,7 @@
 #include <linux/percpu.h>
 #include <linux/rtnetlink.h>
 #include <linux/compat.h>
+#include <linux/version.h>
 
 #include "vport.h"
 #include "vport-internal_dev.h"
@@ -27,6 +28,9 @@ static struct vport_ops *base_vport_ops_list[] = {
 	&internal_vport_ops,
 	&patch_vport_ops,
 	&gre_vport_ops,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+	&capwap_vport_ops,
+#endif
 };
 
 static const struct vport_ops **vport_ops_list;

@@ -25,6 +25,7 @@
  * you have only the first 10 bits to define protocol identifiers.
  */
 #define TNL_T_PROTO_GRE		0
+#define TNL_T_PROTO_CAPWAP	1
 
 /* You only need these flags when you are calling tnl_find_port(). */
 #define TNL_T_KEY_EXACT		(1 << 10)
