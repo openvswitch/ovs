@@ -2536,7 +2536,6 @@ struct switch_config {
     uint32_t switch_mask;
     uint32_t switch_gw;
     enum { FAIL_DROP, FAIL_SWITCH } disconnected;
-    bool stp;
     int rate_limit;
     int inactivity_probe;
     int max_backoff;
@@ -2577,7 +2576,6 @@ cmd_configure(const struct dict *dict OVS_UNUSED)
                                                    "DISCONNECTED_MODE", ""),
                                    "switch")
                            ? FAIL_SWITCH : FAIL_DROP);
-    config.stp = !strcmp(dict_get_string(&config_dict, "stp", ""), "yes");
     config.rate_limit = dict_get_int(&config_dict, "RATE_LIMIT", -1);
     config.inactivity_probe = dict_get_int(&config_dict, "INACTIVITY_PROBE",
                                            -1);
@@ -2613,7 +2611,6 @@ cmd_configure(const struct dict *dict OVS_UNUSED)
             MENU_CONTROLLER,
             MENU_DISCONNECTED_MODE,
             MENU_DATAPATH_ID,
-            MENU_STP,
             MENU_RATE_LIMIT,
             MENU_INACTIVITY_PROBE,
             MENU_MAX_BACKOFF,
@@ -2680,13 +2677,6 @@ cmd_configure(const struct dict *dict OVS_UNUSED)
         item = menu_add_item(&menu, "Datapath ID:\n%s", config.datapath_id);
         item->id = MENU_DATAPATH_ID;
         item->enabled = strcmp(config.datapath_id, "DMI");
-
-        /* Spanning tree protocol. */
-        if (debug_mode) {
-            item = menu_add_item(&menu, "802.1D-1998 STP:\n%s",
-                                 config.stp ? "Enabled" : "Disabled");
-            item->id = MENU_STP;
-        }
 
         /* Rate-limiting. */
         if (debug_mode) {
@@ -2792,14 +2782,6 @@ cmd_configure(const struct dict *dict OVS_UNUSED)
             config.datapath_id = out;
             break;
 
-        case MENU_STP:
-            out = prompt("802.1D-1998 STP:",
-                         config.stp ? "Enabled" : "Disabled",
-                         "^(Enabled|Disabled)$");
-            config.stp = !strcmp(out, "Enabled");
-            free(out);
-            break;
-
         case MENU_RATE_LIMIT:
             in = (config.rate_limit < 0
                   ? xstrdup("Disabled")
@@ -2866,7 +2848,6 @@ cmd_configure(const struct dict *dict OVS_UNUSED)
         svec_add(&set, (config.disconnected == FAIL_DROP
                         ? "DISCONNECTED_MODE=drop"
                         : "DISCONNECTED_MODE=switch"));
-        svec_add_nocopy(&set, xasprintf("STP=%s", config.stp ? "yes" : "no"));
         if (config.rate_limit < 0) {
             svec_add(&set, "RATE_LIMIT=");
         } else {

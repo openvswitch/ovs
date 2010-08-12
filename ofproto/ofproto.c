@@ -50,7 +50,6 @@
 #include "rconn.h"
 #include "shash.h"
 #include "status.h"
-#include "stp.h"
 #include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
@@ -897,18 +896,6 @@ ofproto_set_sflow(struct ofproto *ofproto,
     } else {
         ofproto_sflow_destroy(os);
         ofproto->sflow = NULL;
-    }
-}
-
-int
-ofproto_set_stp(struct ofproto *ofproto OVS_UNUSED, bool enable_stp)
-{
-    /* XXX */
-    if (enable_stp) {
-        VLOG_WARN("STP is not yet implemented");
-        return EINVAL;
-    } else {
-        return 0;
     }
 }
 
@@ -2654,7 +2641,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
     port = port_array_get(&ctx->ofproto->ports, ctx->flow.in_port);
     if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, stp_eth_addr)
+        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
                             ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
         /* Drop this flow. */
         return;
