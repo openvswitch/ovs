@@ -36,8 +36,7 @@ static unsigned int hash_seed;
 
 static inline bool arphdr_ok(struct sk_buff *skb)
 {
-	int nh_ofs = skb_network_offset(skb);
-	return pskb_may_pull(skb, nh_ofs + sizeof(struct arp_eth_header));
+	return skb->len >= skb_network_offset(skb) + sizeof(struct arp_eth_header);
 }
 
 static inline int check_iphdr(struct sk_buff *skb)
@@ -66,7 +65,7 @@ static inline int check_iphdr(struct sk_buff *skb)
 static inline bool tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
-	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
+	if (skb->len >= th_ofs + sizeof(struct tcphdr)) {
 		int tcp_len = tcp_hdrlen(skb);
 		return (tcp_len >= sizeof(struct tcphdr)
 			&& skb->len >= th_ofs + tcp_len);
@@ -76,14 +75,12 @@ static inline bool tcphdr_ok(struct sk_buff *skb)
 
 static inline bool udphdr_ok(struct sk_buff *skb)
 {
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
+	return skb->len >= skb_transport_offset(skb) + sizeof(struct udphdr);
 }
 
 static inline bool icmphdr_ok(struct sk_buff *skb)
 {
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
+	return skb->len >= skb_transport_offset(skb) + sizeof(struct icmphdr);
 }
 
 #define TCP_FLAGS_OFFSET 13
