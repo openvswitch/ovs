@@ -438,7 +438,8 @@ vlog_unixctl_reopen(struct unixctl_conn *conn,
     }
 }
 
-/* Initializes the logging subsystem. */
+/* Initializes the logging subsystem and registers its unixctl server
+ * commands. */
 void
 vlog_init(void) 
 {
