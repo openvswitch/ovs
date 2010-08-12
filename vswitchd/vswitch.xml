@@ -529,6 +529,61 @@
                 Default is enabled, set to <code>false</code> to disable.</dd>
             </dl>
           </dd>
+          <dt><code>capwap</code></dt>
+          <dd>Ethernet tunneling over the UDP transport portion of CAPWAP
+             (RFC 5415).  This allows interoperability with certain switches
+             where GRE is not available.  Note that only the tunneling component
+             of the protocol is implemented.  Due to the non-standard use of
+             CAPWAP, UDP ports 58881 and 58882 are used as the source and
+             destinations ports respectivedly.  Each tunnel must be uniquely
+             identified by the combination of <code>remote_ip</code> and
+             <code>local_ip</code>.  If two ports are defined that are the same
+             except one includes <code>local_ip</code> and the other does not,
+             the more specific one is matched first.  CAPWAP support is not
+             available on all platforms.  Currently it is only supported in the
+             Linux kernel module with kernel versions >= 2.6.25.  The following
+             options may be specified in the <ref column="options"/> column:
+            <dl>
+              <dt><code>remote_ip</code></dt>
+              <dd>Required.  The tunnel endpoint.</dd>
+            </dl>
+            <dl>
+              <dt><code>local_ip</code></dt>
+              <dd>Optional.  The destination IP that received packets must
+                match.  Default is to match all addresses.</dd>
+            </dl>
+            <dl>
+              <dt><code>tos</code></dt>
+              <dd>Optional.  The value of the ToS bits to be set on the
+                encapsulating packet.  It may also be the word
+                <code>inherit</code>, in which case the ToS will be copied from
+                the inner packet if it is IPv4 or IPv6 (otherwise it will be
+                0).  Note that the ECN fields are always inherited.  Default is
+                0.</dd>
+            </dl>
+            <dl>
+              <dt><code>ttl</code></dt>
+              <dd>Optional.  The TTL to be set on the encapsulating packet.
+                It may also be the word <code>inherit</code>, in which case the
+                TTL will be copied from the inner packet if it is IPv4 or IPv6
+                (otherwise it will be the system default, typically 64).
+                Default is the system default TTL.</dd>
+            </dl>
+            <dl>
+              <dt><code>pmtud</code></dt>
+              <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
+                ``ICMP destination unreachable - fragmentation'' needed
+                messages will be generated for IPv4 packets with the DF bit set
+                and IPv6 packets above the minimum MTU if the packet size
+                exceeds the path MTU minus the size of the tunnel headers.  It
+                also forces the encapsulating packet DF bit to be set (it is
+                always set if the inner packet implies path MTU discovery).
+                Note that this option causes behavior that is typically
+                reserved for routers and therefore is not entirely in
+                compliance with the IEEE 802.1D specification for bridges.
+                Default is enabled, set to <code>false</code> to disable.</dd>
+            </dl>
+          </dd>
           <dt><code>patch</code></dt>
           <dd>
             <p>

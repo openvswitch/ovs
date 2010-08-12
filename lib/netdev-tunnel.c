@@ -82,20 +82,20 @@ parse_config(const char *name, const char *type, const struct shash *args,
             } else {
                 config->saddr = in_addr.s_addr;
             }
-        } else if (!strcmp(node->name, "key")) {
+        } else if (!strcmp(node->name, "key") && !strcmp(type, "gre")) {
             if (!strcmp(node->data, "flow")) {
                 config->flags |= TNL_F_IN_KEY_MATCH;
                 config->flags |= TNL_F_OUT_KEY_ACTION;
             } else {
                 config->out_key = config->in_key = htonl(atoi(node->data));
             }
-        } else if (!strcmp(node->name, "in_key")) {
+        } else if (!strcmp(node->name, "in_key") && !strcmp(type, "gre")) {
             if (!strcmp(node->data, "flow")) {
                 config->flags |= TNL_F_IN_KEY_MATCH;
             } else {
                 config->in_key = htonl(atoi(node->data));
             }
-        } else if (!strcmp(node->name, "out_key")) {
+        } else if (!strcmp(node->name, "out_key") && !strcmp(type, "gre")) {
             if (!strcmp(node->data, "flow")) {
                 config->flags |= TNL_F_OUT_KEY_ACTION;
             } else {
@@ -113,7 +113,7 @@ parse_config(const char *name, const char *type, const struct shash *args,
             } else {
                 config->ttl = atoi(node->data);
             }
-        } else if (!strcmp(node->name, "csum")) {
+        } else if (!strcmp(node->name, "csum") && !strcmp(type, "gre")) {
             if (!strcmp(node->data, "true")) {
                 config->flags |= TNL_F_CSUM;
             }
@@ -169,7 +169,12 @@ netdev_tunnel_create(const char *name, const char *type,
     }
 
     netdev_dev = xmalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
+
+    if (!strcmp(type, "gre")) {
+        netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
+    } else {
+        netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_capwap_class);
+    }
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -226,6 +231,66 @@ netdev_tunnel_close(struct netdev *netdev_)
 
 const struct netdev_class netdev_gre_class = {
     "gre",
+
+    NULL,                       /* init */
+    NULL,                       /* run */
+    NULL,                       /* wait */
+
+    netdev_tunnel_create,
+    netdev_tunnel_destroy,
+    netdev_tunnel_reconfigure,
+
+    netdev_tunnel_open,
+    netdev_tunnel_close,
+
+    NULL,                       /* enumerate */
+
+    NULL,                       /* recv */
+    NULL,                       /* recv_wait */
+    NULL,                       /* drain */
+
+    NULL,                       /* send */
+    NULL,                       /* send_wait */
+
+    netdev_vport_set_etheraddr,
+    netdev_vport_get_etheraddr,
+    netdev_vport_get_mtu,
+    NULL,                       /* get_ifindex */
+    netdev_vport_get_carrier,
+    netdev_vport_get_stats,
+    netdev_vport_set_stats,
+
+    NULL,                       /* get_features */
+    NULL,                       /* set_advertisements */
+    NULL,                       /* get_vlan_vid */
+
+    NULL,                       /* set_policing */
+    NULL,                       /* get_qos_types */
+    NULL,                       /* get_qos_capabilities */
+    NULL,                       /* get_qos */
+    NULL,                       /* set_qos */
+    NULL,                       /* get_queue */
+    NULL,                       /* set_queue */
+    NULL,                       /* delete_queue */
+    NULL,                       /* get_queue_stats */
+    NULL,                       /* dump_queues */
+    NULL,                       /* dump_queue_stats */
+
+    NULL,                       /* get_in4 */
+    NULL,                       /* set_in4 */
+    NULL,                       /* get_in6 */
+    NULL,                       /* add_router */
+    NULL,                       /* get_next_hop */
+    NULL,                       /* arp_lookup */
+
+    netdev_vport_update_flags,
+
+    netdev_vport_poll_add,
+    netdev_vport_poll_remove,
+};
+
+const struct netdev_class netdev_capwap_class = {
+    "capwap",
 
     NULL,                       /* init */
     NULL,                       /* run */
