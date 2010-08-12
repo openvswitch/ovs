@@ -254,6 +254,13 @@ function stop_daemon {
     if test -f "$pidfile"; then
         local pid=$(cat "$pidfile")
         action "Killing `basename $BINARY` ($pid)" kill $pid
+        for delay in .1 .25 .65 1 1 1 1; do
+            if kill -0 $pid >/dev/null 2>&1; then
+                sleep $delay
+            else
+                break
+            fi
+        done
         rm -f "$pidfile"
     fi
 }
