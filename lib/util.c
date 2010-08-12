@@ -156,7 +156,8 @@ ovs_fatal(int err_no, const char *format, ...)
     vfprintf(stderr, format, args);
     va_end(args);
     if (err_no != 0)
-        fprintf(stderr, " (%s)", strerror(err_no));
+        fprintf(stderr, " (%s)",
+                err_no == EOF ? "end of file" : strerror(err_no));
     putc('\n', stderr);
 
     exit(EXIT_FAILURE);
