@@ -311,22 +311,12 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 					struct tcphdr *tcp = tcp_hdr(skb);
 					key->tp_src = tcp->source;
 					key->tp_dst = tcp->dest;
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			} else if (key->nw_proto == IPPROTO_UDP) {
 				if (udphdr_ok(skb)) {
 					struct udphdr *udp = udp_hdr(skb);
 					key->tp_src = udp->source;
 					key->tp_dst = udp->dest;
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			} else if (key->nw_proto == IPPROTO_ICMP) {
 				if (icmphdr_ok(skb)) {
@@ -336,11 +326,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 					 * in 16-bit network byte order. */
 					key->tp_src = htons(icmp->type);
 					key->tp_dst = htons(icmp->code);
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			}
 		} else {

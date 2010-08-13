@@ -1151,19 +1151,25 @@ dp_netdev_set_dl_dst(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
 }
 
+static bool
+is_ip(const struct ofpbuf *packet, const flow_t *key)
+{
+    return key->dl_type == htons(ETH_TYPE_IP) && packet->l4;
+}
+
 static void
 dp_netdev_set_nw_addr(struct ofpbuf *packet, const flow_t *key,
                       const struct odp_action_nw_addr *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
         uint32_t *field;
 
         field = a->type == ODPAT_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
-        if (key->nw_proto == IP_TYPE_TCP) {
+        if (key->nw_proto == IP_TYPE_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             th->tcp_csum = recalc_csum32(th->tcp_csum, *field, a->nw_addr);
-        } else if (key->nw_proto == IP_TYPE_UDP) {
+        } else if (key->nw_proto == IP_TYPE_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             if (uh->udp_csum) {
                 uh->udp_csum = recalc_csum32(uh->udp_csum, *field, a->nw_addr);
@@ -1181,7 +1187,7 @@ static void
 dp_netdev_set_nw_tos(struct ofpbuf *packet, const flow_t *key,
                      const struct odp_action_nw_tos *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
         uint8_t *field = &nh->ip_tos;
 
@@ -1198,14 +1204,14 @@ static void
 dp_netdev_set_tp_port(struct ofpbuf *packet, const flow_t *key,
                       const struct odp_action_tp_port *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+	if (is_ip(packet, key)) {
         uint16_t *field;
-        if (key->nw_proto == IPPROTO_TCP) {
+        if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             field = a->type == ODPAT_SET_TP_SRC ? &th->tcp_src : &th->tcp_dst;
             th->tcp_csum = recalc_csum16(th->tcp_csum, *field, a->tp_port);
             *field = a->tp_port;
-        } else if (key->nw_proto == IPPROTO_UDP) {
+        } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             field = a->type == ODPAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
             uh->udp_csum = recalc_csum16(uh->udp_csum, *field, a->tp_port);

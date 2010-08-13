@@ -120,9 +120,23 @@ parse_ethertype(struct ofpbuf *b)
     return llc->snap.snap_type;
 }
 
-/* Returns 1 if 'packet' is an IP fragment, 0 otherwise.
- * 'tun_id' is in network byte order, while 'in_port' is in host byte order.
- * These byte orders are the same as they are in struct odp_flow_key. */
+/* 'tun_id' is in network byte order, while 'in_port' is in host byte order.
+ * These byte orders are the same as they are in struct odp_flow_key.
+ *
+ * Initializes packet header pointers as follows:
+ *
+ *    - packet->l2 to the start of the Ethernet header.
+ *
+ *    - packet->l3 to just past the Ethernet header, or just past the
+ *      vlan_header if one is present, to the first byte of the payload of the
+ *      Ethernet frame.
+ *
+ *    - packet->l4 to just past the IPv4 header, if one is present and has a
+ *      correct length, and otherwise NULL.
+ *
+ *    - packet->l7 to just past the TCP or UDP or ICMP header, if one is
+ *      present and has a correct length, and otherwise NULL.
+ */
 int
 flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
              flow_t *flow)
@@ -176,10 +190,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->tp_src = tcp->tcp_src;
                         flow->tp_dst = tcp->tcp_dst;
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 } else if (flow->nw_proto == IP_TYPE_UDP) {
                     const struct udp_header *udp = pull_udp(&b);
@@ -187,10 +197,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->tp_src = udp->udp_src;
                         flow->tp_dst = udp->udp_dst;
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 } else if (flow->nw_proto == IP_TYPE_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
@@ -198,10 +204,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->icmp_type = htons(icmp->icmp_type);
                         flow->icmp_code = htons(icmp->icmp_code);
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 }
             } else {
