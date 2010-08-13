@@ -219,9 +219,17 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	return llc->ethertype;
 }
 
-/* Parses the Ethernet frame in 'skb', which was received on 'in_port',
- * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
- * fragment, 0 otherwise. */
+/**
+ * flow_extract - extracts a flow key from an Ethernet frame.
+ * @skb: sk_buff that contains the frame, with skb->data pointing to the
+ * Ethernet header
+ * @in_port: port number on which @skb was received.
+ * @key: output flow key
+ *
+ * The caller must ensure that skb->len >= ETH_HLEN.
+ *
+ * Returns 1 if @skb contains an IPv4 fragment, 0 otherwise.
+ */
 int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 {
 	struct ethhdr *eth;
@@ -232,8 +240,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	key->in_port = in_port;
 	key->dl_vlan = htons(ODP_VLAN_NONE);
 
-	if (skb->len < sizeof *eth)
-		return 0;
 	if (!pskb_may_pull(skb, min(skb->len, 64u)))
 		return 0;
 
