@@ -442,7 +442,7 @@
           <dt><code>tap</code></dt>
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
           <dt><code>gre</code></dt>
-          <dd>An Ethernet over RFC 1702 Generic Routing Encapsulation over IPv4
+          <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
              tunnel.  Each tunnel must be uniquely identified by the
              combination of <code>remote_ip</code>, <code>local_ip</code>, and
              <code>in_key</code>.  Note that if two ports are defined that are
@@ -506,8 +506,12 @@
             <dl>
               <dt><code>csum</code></dt>
               <dd>Optional.  Compute GRE checksums for outgoing packets and
-                require checksums for incoming packets.  Default is enabled,
-                set to <code>false</code> to disable.</dd>
+                require checksums for incoming packets.  Note that GRE checksums
+                impose a significant performance penalty as they cover the
+                entire packet.  As the contents of the packet is typically
+                covered by L3 and L4 checksums, this additional checksum only
+                adds value for the GRE and encapsulated Ethernet headers.
+                Default is disabled, set to <code>true</code> to enable.</dd>
             </dl>
             <dl>
               <dt><code>pmtud</code></dt>

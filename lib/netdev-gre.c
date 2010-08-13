@@ -61,8 +61,6 @@ parse_config(const char *name, const struct shash *args,
 
     memset(config, 0, sizeof *config);
 
-    config->flags |= GRE_F_IN_CSUM;
-    config->flags |= GRE_F_OUT_CSUM;
     config->flags |= GRE_F_PMTUD;
 
     SHASH_FOR_EACH (node, args) {
@@ -112,9 +110,9 @@ parse_config(const char *name, const struct shash *args,
                 config->ttl = atoi(node->data);
             }
         } else if (!strcmp(node->name, "csum")) {
-            if (!strcmp(node->data, "false")) {
-                config->flags &= ~GRE_F_IN_CSUM;
-                config->flags &= ~GRE_F_OUT_CSUM;
+            if (!strcmp(node->data, "true")) {
+                config->flags |= GRE_F_IN_CSUM;
+                config->flags |= GRE_F_OUT_CSUM;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
