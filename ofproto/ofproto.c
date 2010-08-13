@@ -2414,6 +2414,10 @@ struct action_xlate_ctx {
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
 };
 
+/* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
+ * flow translation. */
+#define MAX_RESUBMIT_RECURSION 8
+
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
 
@@ -2461,7 +2465,7 @@ lookup_valid_rule(struct ofproto *ofproto, const flow_t *flow)
 static void
 xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 {
-    if (!ctx->recurse) {
+    if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
         uint16_t old_in_port;
         struct rule *rule;
 
@@ -2482,6 +2486,11 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
             do_xlate_actions(rule->actions, rule->n_actions, ctx);
             ctx->recurse--;
         }
+    } else {
+        struct vlog_rate_limit recurse_rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        VLOG_ERR_RL(&recurse_rl, "NXAST_RESUBMIT recursed over %d times",
+                    MAX_RESUBMIT_RECURSION);
     }
 }
 
