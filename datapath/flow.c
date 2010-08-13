@@ -234,7 +234,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 
 	if (skb->len < sizeof *eth)
 		return 0;
-	if (!pskb_may_pull(skb, skb->len >= 64 ? 64 : skb->len))
+	if (!pskb_may_pull(skb, min(skb->len, 64u)))
 		return 0;
 
 	skb_reset_mac_header(skb);
