@@ -49,13 +49,13 @@ struct arp_eth_header
 	unsigned char       ar_tip[4];		/* target IP address        */
 } __attribute__((packed));
 
-static inline int arphdr_ok(struct sk_buff *skb)
+static inline bool arphdr_ok(struct sk_buff *skb)
 {
 	int nh_ofs = skb_network_offset(skb);
 	return pskb_may_pull(skb, nh_ofs + sizeof(struct arp_eth_header));
 }
 
-static inline int iphdr_ok(struct sk_buff *skb)
+static inline bool iphdr_ok(struct sk_buff *skb)
 {
 	int nh_ofs = skb_network_offset(skb);
 	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
@@ -63,10 +63,10 @@ static inline int iphdr_ok(struct sk_buff *skb)
 		return (ip_len >= sizeof(struct iphdr)
 			&& pskb_may_pull(skb, nh_ofs + ip_len));
 	}
-	return 0;
+	return false;
 }
 
-static inline int tcphdr_ok(struct sk_buff *skb)
+static inline bool tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
 	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
@@ -74,16 +74,16 @@ static inline int tcphdr_ok(struct sk_buff *skb)
 		return (tcp_len >= sizeof(struct tcphdr)
 			&& skb->len >= th_ofs + tcp_len);
 	}
-	return 0;
+	return false;
 }
 
-static inline int udphdr_ok(struct sk_buff *skb)
+static inline bool udphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
 	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
 }
 
-static inline int icmphdr_ok(struct sk_buff *skb)
+static inline bool icmphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
 	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
