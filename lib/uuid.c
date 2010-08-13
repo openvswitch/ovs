@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "aes128.h"
 #include "entropy.h"
@@ -33,7 +34,6 @@ static uint64_t counter[2];
 BUILD_ASSERT_DECL(sizeof counter == 16);
 
 static void do_init(void);
-static void read_urandom(void *buffer, size_t n);
 
 /*
  * Initialize the UUID module.  Aborts the program with an error message if
