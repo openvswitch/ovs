@@ -592,7 +592,7 @@ static void create_gre_header(struct sk_buff *skb,
 		options--;
 	}
 
-	if (mutable->port_config.flags & GRE_F_OUT_CSUM) {
+	if (mutable->port_config.flags & GRE_F_CSUM) {
 		greh->flags |= GRE_CSUM;
 
 		*options = 0;
@@ -787,7 +787,7 @@ static void gre_err(struct sk_buff *skb, u32 info)
 	    !!(mutable->port_config.flags & GRE_F_OUT_KEY_ACTION))
 		return;
 
-	if ((mutable->port_config.flags & GRE_F_OUT_CSUM) && !(flags & GRE_CSUM))
+	if ((mutable->port_config.flags & GRE_F_CSUM) && !(flags & GRE_CSUM))
 		return;
 
 	tunnel_hdr_len += iph->ihl << 2;
@@ -878,11 +878,6 @@ static int gre_rcv(struct sk_buff *skb)
 	vport = find_port(iph->daddr, iph->saddr, key, FIND_PORT_ANY, &mutable);
 	if (!vport) {
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
-		goto error;
-	}
-
-	if ((mutable->port_config.flags & GRE_F_IN_CSUM) && !(flags & GRE_CSUM)) {
-		vport_record_error(vport, VPORT_E_RX_CRC);
 		goto error;
 	}
 
@@ -1196,7 +1191,7 @@ static int set_config(const struct vport *cur_vport,
 
 	mutable->tunnel_hlen = sizeof(struct iphdr) + GRE_HEADER_SECTION;
 
-	if (mutable->port_config.flags & GRE_F_OUT_CSUM)
+	if (mutable->port_config.flags & GRE_F_CSUM)
 		mutable->tunnel_hlen += GRE_HEADER_SECTION;
 
 	if (mutable->port_config.out_key ||

@@ -42,8 +42,7 @@
 
 #include <linux/types.h>
 
-#define GRE_F_IN_CSUM		(1 << 0) /* Require incoming packets to have checksums. */
-#define GRE_F_OUT_CSUM		(1 << 1) /* Checksum outgoing packets. */
+#define GRE_F_CSUM		(1 << 1) /* Checksum packets. */
 #define GRE_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
 #define GRE_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
 #define GRE_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */

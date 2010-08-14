@@ -505,8 +505,9 @@
             </dl>
             <dl>
               <dt><code>csum</code></dt>
-              <dd>Optional.  Compute GRE checksums for outgoing packets and
-                require checksums for incoming packets.  Note that GRE checksums
+              <dd>Optional.  Compute GRE checksums on outgoing packets.
+                Checksums present on incoming packets will be validated
+                regardless of this setting.  Note that GRE checksums
                 impose a significant performance penalty as they cover the
                 entire packet.  As the contents of the packet is typically
                 covered by L3 and L4 checksums, this additional checksum only

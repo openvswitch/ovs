@@ -111,8 +111,7 @@ parse_config(const char *name, const struct shash *args,
             }
         } else if (!strcmp(node->name, "csum")) {
             if (!strcmp(node->data, "true")) {
-                config->flags |= GRE_F_IN_CSUM;
-                config->flags |= GRE_F_OUT_CSUM;
+                config->flags |= GRE_F_CSUM;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
