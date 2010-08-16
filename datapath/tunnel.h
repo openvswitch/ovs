@@ -13,8 +13,10 @@
 #include "table.h"
 #include "vport.h"
 
-/* The absolute minimum fragment size.  Note that there are many other
- * definitions of the minimum MTU. */
+/*
+ * The absolute minimum fragment size.  Note that there are many other
+ * definitions of the minimum MTU.
+ */
 #define IP_MIN_MTU 68
 
 /*
@@ -47,9 +49,24 @@ struct tnl_ops {
 	u32 tunnel_type;
 	u8 ipproto;
 
+	/*
+	 * Returns the length of the tunnel header you will add in
+	 * build_header() (i.e. excludes the IP header).  Returns a negative
+	 * error code if the configuration is invalid.
+	 */
 	int (*hdr_len)(const struct tnl_port_config *);
-	void (*build_header)(struct sk_buff *, const struct vport *,
-			     const struct tnl_mutable_config *);
+
+	/*
+	 * Returns a linked list of SKBs with tunnel headers (multiple
+	 * packets may be generated in the event of fragmentation).  Space
+	 * will have already been allocated at the start of the packet equal
+	 * to sizeof(struct iphdr) + value returned by hdr_len().  The IP
+	 * header will have already been constructed.
+	 */
+	struct sk_buff *(*build_header)(struct sk_buff *,
+					const struct vport *,
+					const struct tnl_mutable_config *,
+					struct dst_entry *);
 };
 
 struct tnl_vport {
@@ -61,6 +78,8 @@ struct tnl_vport {
 
 	/* Protected by RCU. */
 	struct tnl_mutable_config *mutable;
+
+	atomic_t frag_id;
 };
 
 int tnl_init(void);

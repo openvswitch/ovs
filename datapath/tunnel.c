@@ -680,29 +680,48 @@ static int build_packet(struct vport *vport, const struct tnl_mutable_config *mu
 	new_iph->frag_off = frag_off;
 	ip_select_ident(new_iph, &rt_dst(rt), NULL);
 
-	tnl_vport->tnl_ops->build_header(skb, vport, mutable);
-
-	/* Allow our local IP stack to fragment the outer packet even if the
-	 * DF bit is set as a last resort. */
-	skb->local_df = 1;
-
-	memset(&(IPCB(skb)->opt), 0, sizeof(IPCB(skb)->opt));
+	memset(&IPCB(skb)->opt, 0, sizeof(IPCB(skb)->opt));
 	IPCB(skb)->flags = 0;
 
-	err = ip_local_out(skb);
-	if (likely(net_xmit_eval(err) == 0))
-		return orig_len;
-	else {
-		vport_record_error(vport, VPORT_E_TX_ERROR);
-		return 0;
-	}
+	skb = tnl_vport->tnl_ops->build_header(skb, vport, mutable, &rt_dst(rt));
+	if (unlikely(!skb))
+		goto error;
+
+	while (skb) {
+		struct sk_buff *next = skb->next;
+		int frag_len = skb->len - mutable->tunnel_hlen;
+
+		skb->next = NULL;
+
+		err = ip_local_out(skb);
+		if (unlikely(net_xmit_eval(err) != 0)) {
+			orig_len -= frag_len;
+			skb = next;
+			goto free_frags;
+		}
+
+		skb = next;
+	};
+
+	return orig_len;
 
 error_free:
 	kfree_skb(skb);
 error:
-	vport_record_error(vport, VPORT_E_TX_DROPPED);
-
 	return 0;
+free_frags:
+	/*
+	 * There's no point in continuing to send fragments once one has been
+	 * dropped so just free the rest.  This may help improve the congestion
+	 * that caused the first packet to be dropped.
+	 */
+	while (skb) {
+		struct sk_buff *next = skb->next;
+		orig_len -= skb->len - mutable->tunnel_hlen;
+		kfree_skb(skb);
+		skb = next;
+	};
+	return orig_len;
 }
 
 int tnl_send(struct vport *vport, struct sk_buff *skb)
@@ -847,6 +866,9 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 		skb = next_skb;
 	} while (skb);
 
+	if (unlikely(orig_len == 0))
+		vport_record_error(vport, VPORT_E_TX_DROPPED);
+
 	return orig_len;
 
 error_free:
@@ -914,6 +936,7 @@ struct vport *tnl_create(const char *name, const void __user *config,
 {
 	struct vport *vport;
 	struct tnl_vport *tnl_vport;
+	int initial_frag_id;
 	int err;
 
 	vport = vport_alloc(sizeof(struct tnl_vport), vport_ops);
@@ -935,6 +958,9 @@ struct vport *tnl_create(const char *name, const void __user *config,
 
 	vport_gen_rand_ether_addr(tnl_vport->mutable->eth_addr);
 	tnl_vport->mutable->mtu = ETH_DATA_LEN;
+
+	get_random_bytes(&initial_frag_id, sizeof(int));
+	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
 	err = set_config(config, tnl_ops, NULL, tnl_vport->mutable);
 	if (err)

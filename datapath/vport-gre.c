@@ -48,9 +48,10 @@ static int gre_hdr_len(const struct tnl_port_config *port_config)
 	return len;
 }
 
-static void gre_build_header(struct sk_buff *skb,
-			     const struct vport *vport,
-			     const struct tnl_mutable_config *mutable)
+static struct sk_buff *gre_build_header(struct sk_buff *skb,
+					const struct vport *vport,
+					const struct tnl_mutable_config *mutable,
+					struct dst_entry *dst)
 {
 	struct gre_base_hdr *greh = (struct gre_base_hdr *)skb_transport_header(skb);
 	__be32 *options = (__be32 *)(skb_network_header(skb) + mutable->tunnel_hlen
@@ -81,6 +82,14 @@ static void gre_build_header(struct sk_buff *skb,
 						skb->len - sizeof(struct iphdr),
 						0));
 	}
+
+	/*
+	 * Allow our local IP stack to fragment the outer packet even if the
+	 * DF bit is set as a last resort.
+	 */
+	skb->local_df = 1;
+
+	return skb;
 }
 
 static int parse_header(struct iphdr *iph, __be16 *flags, __be32 *key)
