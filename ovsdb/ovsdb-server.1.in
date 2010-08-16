@@ -15,6 +15,8 @@ ovsdb\-server \- Open vSwitch database server
 [\fB\-\-run=\fIcommand\fR]
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
+.so lib/ssl-syn.man
+.so lib/ssl-bootstrap-syn.man
 .so lib/unixctl-syn.man
 .so lib/common-syn.man
 .

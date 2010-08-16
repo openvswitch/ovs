@@ -3,4 +3,4 @@
 .br
 [\fB\-\-certificate=\fIcert.pem\fR]
 .br
-[\fB\-\-ca\-cert=\fIswitch\-cacert.pem\fR]
+[\fB\-\-ca\-cert=\fIcacert.pem\fR]

@@ -15,7 +15,7 @@ for bootstrapping.
 This option is only useful if the SSL peer sends its CA certificate as
 part of the SSL certificate chain.  The SSL protocol does not require
 the server to send the CA certificate, but
-\fBovs\-controller\fR(8) can be configured to do so with the
+\fB\*(SN\fR(8) can be configured to do so with the
 \fB\-\-peer\-ca\-cert\fR option.
 .IP
 This option is mutually exclusive with \fB\-C\fR and
