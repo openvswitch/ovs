@@ -1,6 +1,9 @@
 .\" -*- nroff -*-
 .TH ovsdb\-server 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.\" This program's name:
 .ds PN ovsdb\-server
+.\" SSL peer program's name:
+.ds SN ovsdb\-client
 .
 .SH NAME
 ovsdb\-server \- Open vSwitch database server
@@ -8,12 +11,12 @@ ovsdb\-server \- Open vSwitch database server
 .SH SYNOPSIS
 \fBovsdb\-server\fR
 \fIdatabase\fR
-[\f\-\-remote=\fIremote\fR]\&...
-[\f\-\-run=\fIcommand\fR]
-.so lib/daemon\-syn.man
-.so lib/vlog\-syn.man
-.so lib/unixctl\-syn.man
-.so lib/common\-syn.man
+[\fB\-\-remote=\fIremote\fR]\&...
+[\fB\-\-run=\fIcommand\fR]
+.so lib/daemon-syn.man
+.so lib/vlog-syn.man
+.so lib/unixctl-syn.man
+.so lib/common-syn.man
 .
 .SH DESCRIPTION
 The \fBovsdb\-server\fR program provides RPC interfaces to an Open

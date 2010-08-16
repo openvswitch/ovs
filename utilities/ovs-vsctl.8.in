@@ -406,7 +406,7 @@ for bootstrapping.
 This option is only useful if the controller sends its CA certificate
 as part of the SSL certificate chain.  The SSL protocol does not
 require the controller to send the CA certificate, but
-\fBcontroller\fR(8) can be configured to do so with the
+\fBovs\-controller\fR(8) can be configured to do so with the
 \fB\-\-peer\-ca\-cert\fR option.
 .
 .SS "Database Commands"
