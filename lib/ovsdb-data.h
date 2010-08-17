@@ -84,11 +84,6 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
                                          const struct json *,
                                          struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_datum_from_json_unique(struct ovsdb_datum *,
-                                                 const struct ovsdb_type *,
-                                                 const struct json *,
-                                                 struct ovsdb_symbol_table *)
-    WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
