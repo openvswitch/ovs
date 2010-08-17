@@ -272,8 +272,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 
     netdev_class = shash_find_data(&netdev_classes, options->type);
     if (!netdev_class) {
-        VLOG_WARN("could not create netdev %s of unknown type %s",
-                  options->name, options->type);
         return EAFNOSUPPORT;
     }
 
@@ -312,6 +310,10 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
     if (!netdev_dev) {
         error = create_device(options, &netdev_dev);
         if (error) {
+            if (error == EAFNOSUPPORT) {
+                VLOG_WARN("could not create netdev %s of unknown type %s",
+                          options->name, options->type);
+            }
             return error;
         }
         update_device_args(netdev_dev, options->args);
