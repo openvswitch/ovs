@@ -2,7 +2,7 @@ Source: openvswitch
 Section: net
 Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
-Uploaders: Ben Pfaff <blp@nicira.com>, Simon Horman <horms@verge.net.au>
+Uploaders: Ben Pfaff <blp@nicira.com>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev,
  pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev,
