@@ -1386,33 +1386,14 @@ queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
 }
 
 static void
-send_error(const struct ofconn *ofconn, const struct ofp_header *oh,
-           int error, const void *data, size_t len)
-{
-    struct ofpbuf *buf;
-    struct ofp_error_msg *oem;
-
-    if (!(error >> 16)) {
-        VLOG_WARN_RL(&rl, "not sending bad error code %d to controller",
-                     error);
-        return;
-    }
-
-    COVERAGE_INC(ofproto_error);
-    oem = make_openflow_xid(len + sizeof *oem, OFPT_ERROR,
-                            oh ? oh->xid : 0, &buf);
-    oem->type = htons((unsigned int) error >> 16);
-    oem->code = htons(error & 0xffff);
-    memcpy(oem->data, data, len);
-    queue_tx(buf, ofconn, ofconn->reply_counter);
-}
-
-static void
 send_error_oh(const struct ofconn *ofconn, const struct ofp_header *oh,
               int error)
 {
-    size_t oh_length = ntohs(oh->length);
-    send_error(ofconn, oh, error, oh, MIN(oh_length, 64));
+    struct ofpbuf *buf = make_ofp_error_msg(error, oh);
+    if (buf) {
+        COVERAGE_INC(ofproto_error);
+        queue_tx(buf, ofconn, ofconn->reply_counter);
+    }
 }
 
 static int

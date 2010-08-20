@@ -20,10 +20,53 @@
 #include "openflow/openflow.h"
 
 /* The following vendor extensions, proposed by Nicira Networks, are not yet
- * ready for standardization (and may never be), so they are not included in
- * openflow.h. */
+ * standardized, so they are not included in openflow.h.  Some of them may be
+ * suitable for standardization; others we never expect to standardize. */
 
 #define NX_VENDOR_ID 0x00002320
+
+/* Nicira vendor-specific error messages extension.
+ *
+ * OpenFlow 1.0 has a set of predefined error types (OFPET_*) and codes (which
+ * are specific to each type).  It does not have any provision for
+ * vendor-specific error codes, and it does not even provide "generic" error
+ * codes that can apply to problems not anticipated by the OpenFlow
+ * specification authors.
+ *
+ * This extension attempts to address the problem by adding a generic "error
+ * vendor extension".  The extension works as follows: use NXET_VENDOR as type
+ * and NXVC_VENDOR_CODE as code, followed by struct nx_vendor_error with
+ * vendor-specific details, followed by at least 64 bytes of the failed
+ * request.
+ *
+ * It would be better to have type-specific vendor extension, e.g. so that
+ * OFPET_BAD_ACTION could be used with vendor-specific code values.  But
+ * OFPET_BAD_ACTION and most other standardized types already specify that
+ * their 'data' values are (the start of) the OpenFlow message being replied
+ * to, so there is no room to insert a vendor ID.
+ *
+ * Currently this extension is only implemented by Open vSwitch, but it seems
+ * like a reasonable candidate for future standardization.
+ */
+
+/* This is a random number to avoid accidental collision with any other
+ * vendor's extension. */
+#define NXET_VENDOR 0xb0c2
+
+/* ofp_error msg 'code' values for NXET_VENDOR. */
+enum nx_vendor_code {
+    NXVC_VENDOR_ERROR           /* 'data' contains struct nx_vendor_error. */
+};
+
+/* 'data' for 'type' == NXET_VENDOR, 'code' == NXVC_VENDOR_ERROR. */
+struct nx_vendor_error {
+    uint32_t vendor;            /* Vendor ID as in struct ofp_vendor_header. */
+    uint16_t type;              /* Vendor-defined type. */
+    uint16_t code;              /* Vendor-defined subtype. */
+    /* Followed by at least the first 64 bytes of the failed request. */
+};
+
+/* Nicira vendor requests and replies. */
 
 enum nicira_type {
     /* Switch status request.  The request body is an ASCII string that
@@ -151,6 +194,8 @@ enum nx_role {
     NX_ROLE_MASTER,             /* Full access, at most one. */
     NX_ROLE_SLAVE               /* Read-only access. */
 };
+
+/* Nicira vendor flow actions. */
 
 enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,           /* No longer used. */

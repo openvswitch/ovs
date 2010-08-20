@@ -86,57 +86,111 @@ char *ofp_match_to_literal_string(const struct ofp_match *match);
 void hton_ofp_phy_port(struct ofp_phy_port *);
 void ntoh_ofp_phy_port(struct ofp_phy_port *);
 
-/* OpenFlow errors.
+/* OpenFlow vendors.
  *
- * OpenFlow errors have two 16-bit parts: a "type" and a "code".  A "type" has
- * a unique meaning.  The "code" values are different for each "type".
+ * These functions map vendor */
+/* Vendor error numbers currently used in Open vSwitch. */
+#define OFPUTIL_VENDORS                                     \
+    /*             vendor name              vendor value */ \
+    OFPUTIL_VENDOR(OFPUTIL_VENDOR_OPENFLOW, 0x00000000)     \
+    OFPUTIL_VENDOR(OFPUTIL_VENDOR_NICIRA,   0x00002320)
+
+/* OFPUTIL_VENDOR_* definitions. */
+enum ofputil_vendor_codes {
+#define OFPUTIL_VENDOR(NAME, VENDOR_ID) NAME,
+    OFPUTIL_VENDORS
+    OFPUTIL_N_VENDORS
+#undef OFPUTIL_VENDOR
+};
+
+/* Error codes.
  *
- * We embed OpenFlow errors in the same space as errno values by shifting
- * 'type' left 16 bits and adding the 'code'.  An "int" value is thus broken
- * into a few different ranges:
+ * We embed system errno values and OpenFlow standard and vendor extension
+ * error codes into a single 31-bit space using the following encoding.
+ * (Bit 31 is unused and assumed 0 to avoid negative "int" values.)
  *
- *      - 0: success.
+ *   31                                                   0
+ *  +------------------------------------------------------+
+ *  |                           0                          |  success
+ *  +------------------------------------------------------+
  *
- *      - 1...65535: system errno values.
+ *   30 29                                                0
+ *  +--+---------------------------------------------------+
+ *  |0 |                    errno value                    |  errno value
+ *  +--+---------------------------------------------------+
  *
- *        The assumption that system errno values are less than 65536 is true
- *        on at least Linux, FreeBSD, OpenBSD, and Windows.  RFC 1813 defines
- *        NFSv3-specific errno codes starting at 10000, another hint that this
- *        is a reasonable assumption.
+ *   30 29   26 25            16 15                       0
+ *  +--+-------+----------------+--------------------------+
+ *  |1 |   0   |      type      |           code           |  standard OpenFlow
+ *  +--+-------+----------------+--------------------------+  error
  *
- *        C and POSIX say that errno values are positive.
+ *   30 29   26 25            16 15                       0
+ *  +--+-------+----------------+--------------------------+  Nicira
+ *  | 1| vendor|      type      |           code           |  NXET_VENDOR
+ *  +--+-------+----------------+--------------------------+  error extension
  *
- *      - 65536...INT_MAX: OpenFlow errors.
+ * C and POSIX say that errno values are positive.  We assume that they are
+ * less than 2**29.  They are actually less than 65536 on at least Linux,
+ * FreeBSD, OpenBSD, and Windows.
  *
- *        In OpenFlow, a "type" of 0 is valid, but it corresponds to
- *        OFPET_HELLO_FAILED.  That's not a general-purpose error: only the
- *        vconn library would ever care to send it.  So we ignore it.
+ * The 'vendor' field holds one of the OFPUTIL_VENDOR_* codes defined above.
+ * It must be nonzero.
  *
- *      - negative values: not used.
+ * Negative values are not defined.
  */
 
-/* Returns the OpenFlow error with the specified 'type' and 'code' as an
- * integer. */
+/* Currently 4 bits are allocated to the "vendor" field.  Make sure that all
+ * the vendor codes can fit. */
+BUILD_ASSERT_DECL(OFPUTIL_N_VENDORS <= 16);
+
+/* Returns the standard OpenFlow error with the specified 'type' and 'code' as
+ * an integer. */
 static inline int
 ofp_mkerr(uint16_t type, uint16_t code)
 {
-    assert(type > 0 && type <= 0x7fff);
-    return (type << 16) | code;
+    return (1 << 30) | (type << 16) | code;
 }
 
-/* Returns true if 'error' is in the range of values used as OpenFlow error
- * codes as explained above. */
+/* Returns the OpenFlow vendor error with the specified 'vendor', 'type', and
+ * 'code' as an integer.  'vendor' must be an OFPUTIL_VENDOR_* constant. */
+static inline int
+ofp_mkerr_vendor(uint8_t vendor, uint16_t type, uint16_t code)
+{
+    assert(vendor < OFPUTIL_N_VENDORS);
+    return (1 << 30) | (vendor << 26) | (type << 16) | code;
+}
+
+/* Returns the OpenFlow vendor error with Nicira as vendor, with the specific
+ * 'type' and 'code', as an integer. */
+static inline int
+ofp_mkerr_nicira(uint16_t type, uint16_t code)
+{
+    return ofp_mkerr_vendor(OFPUTIL_VENDOR_NICIRA, type, code);
+}
+
+/* Returns true if 'error' encodes an OpenFlow standard or vendor extension
+ * error codes as documented above. */
 static inline bool
 is_ofp_error(int error)
 {
-    return error >= 0x10000;
+    return (error & (1 << 30)) != 0;
 }
 
 /* Returns true if 'error' appears to be a system errno value. */
 static inline bool
 is_errno(int error)
 {
-    return error < 0x10000;
+    return !is_ofp_error(error);
+}
+
+/* Returns the "vendor" part of the OpenFlow error code 'error' (which must be
+ * in the format explained above).  This is normally one of the
+ * OFPUTIL_VENDOR_* constants.  Returns OFPUTIL_VENDOR_OPENFLOW (0) for a
+ * standard OpenFlow error. */
+static inline uint8_t
+get_ofp_err_vendor(int error)
+{
+    return (error >> 26) & 0xf;
 }
 
 /* Returns the "type" part of the OpenFlow error code 'error' (which must be in
@@ -144,7 +198,7 @@ is_errno(int error)
 static inline uint16_t
 get_ofp_err_type(int error)
 {
-    return error >> 16;
+    return (error >> 16) & 0x3ff;
 }
 
 /* Returns the "code" part of the OpenFlow error code 'error' (which must be in
@@ -154,5 +208,7 @@ get_ofp_err_code(int error)
 {
     return error & 0xffff;
 }
+
+struct ofpbuf *make_ofp_error_msg(int error, const struct ofp_header *);
 
 #endif /* ofp-util.h */
