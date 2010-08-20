@@ -69,6 +69,24 @@ struct nx_vendor_error {
     /* Followed by at least the first 64 bytes of the failed request. */
 };
 
+/* Specific Nicira extension error numbers.
+ *
+ * These are the "code" values used in nx_vendor_error.  So far, the "type"
+ * values in nx_vendor_error are the same as those in ofp_error_msg.  That is,
+ * at Nicira so far we've only needed additional vendor-specific 'code' values,
+ * so we're using the existing 'type' values to avoid having to invent new ones
+ * that duplicate the current ones' meanings. */
+
+/* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
+enum {
+    /* Generic hardware error. */
+    NXFMFC_HARDWARE = 0x100,
+
+    /* A nonexistent table ID was specified in the "command" field of struct
+     * ofp_flow_mod, when the nxt_flow_mod_table_id extension is enabled. */
+    NXFMFC_BAD_TABLE_ID
+};
+
 /* Nicira vendor requests and replies. */
 
 enum nicira_type {
