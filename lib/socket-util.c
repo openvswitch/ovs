@@ -270,7 +270,6 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
         make_sockaddr_un(connect_path, &un, &un_len);
         if (connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
-            printf("connect failed with %s\n", strerror(errno));
             goto error;
         }
     }
