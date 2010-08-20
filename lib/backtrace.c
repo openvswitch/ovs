@@ -69,20 +69,8 @@ stack_high(void)
 static uintptr_t
 stack_low(void)
 {
-#ifdef __i386__
-    uintptr_t low;
-    asm("movl %%esp,%0" : "=g" (low));
+    uintptr_t low = (uintptr_t) &low;
     return low;
-#elif __x86_64__
-    uintptr_t low;
-    asm("movq %%rsp,%0" : "=g" (low));
-    return low;
-#else
-    /* This causes a warning in GCC that cannot be disabled, so use it only on
-     * non-x86. */
-    int dummy;
-    return (uintptr_t) &dummy;
-#endif
 }
 
 static bool
