@@ -456,7 +456,7 @@ inet_open_passive(int style, const char *target_, int default_port,
     struct sockaddr_in sin;
     const char *host_name;
     const char *port_string;
-    int fd, error, port;
+    int fd = 0, error, port;
     unsigned int yes  = 1;
 
     /* Address defaults. */
