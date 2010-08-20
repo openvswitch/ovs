@@ -173,8 +173,7 @@ vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
     oh = s->rxbuf->data;
     rx_len = ntohs(oh->length);
     if (rx_len < sizeof(struct ofp_header)) {
-        VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
-                    rx_len);
+        VLOG_ERR_RL(&rl, "received too-short ofp_header (%d bytes)", rx_len);
         return EPROTO;
     } else if (s->rxbuf->size < rx_len) {
         int retval = vconn_stream_recv__(s, rx_len);
