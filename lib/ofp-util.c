@@ -823,3 +823,93 @@ ofp_match_to_literal_string(const struct ofp_match *match)
                      ntohs(match->tp_src),
                      ntohs(match->tp_dst));
 }
+
+static uint32_t
+vendor_code_to_id(uint8_t code)
+{
+    switch (code) {
+#define OFPUTIL_VENDOR(NAME, VENDOR_ID) case NAME: return VENDOR_ID;
+    default:
+        return UINT32_MAX;
+    }
+}
+
+/* Creates and returns an OpenFlow message of type OFPT_ERROR with the error
+ * information taken from 'error', whose encoding must be as described in the
+ * large comment in ofp-util.h.  If 'oh' is nonnull, then the error will use
+ * oh->xid as its transaction ID, and it will include up to the first 64 bytes
+ * of 'oh'.
+ *
+ * Returns NULL if 'error' is not an OpenFlow error code. */
+struct ofpbuf *
+make_ofp_error_msg(int error, const struct ofp_header *oh)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+    struct ofpbuf *buf;
+    const void *data;
+    size_t len;
+    uint8_t vendor;
+    uint16_t type;
+    uint16_t code;
+    uint32_t xid;
+
+    if (!is_ofp_error(error)) {
+        /* We format 'error' with strerror() here since it seems likely to be
+         * a system errno value. */
+        VLOG_WARN_RL(&rl, "invalid OpenFlow error code %d (%s)",
+                     error, strerror(error));
+        return NULL;
+    }
+
+    if (oh) {
+        xid = oh->xid;
+        data = oh;
+        len = ntohs(oh->length);
+        if (len > 64) {
+            len = 64;
+        }
+    } else {
+        xid = 0;
+        data = NULL;
+        len = 0;
+    }
+
+    vendor = get_ofp_err_vendor(error);
+    type = get_ofp_err_type(error);
+    code = get_ofp_err_code(error);
+    if (vendor == OFPUTIL_VENDOR_OPENFLOW) {
+        struct ofp_error_msg *oem;
+
+        oem = make_openflow_xid(len + sizeof *oem, OFPT_ERROR, xid, &buf);
+        oem->type = htons(type);
+        oem->code = htons(code);
+    } else {
+        struct ofp_error_msg *oem;
+        struct nx_vendor_error *ove;
+        uint32_t vendor_id;
+
+        vendor_id = vendor_code_to_id(vendor);
+        if (vendor_id == UINT32_MAX) {
+            VLOG_WARN_RL(&rl, "error %x contains invalid vendor code %d",
+                         error, vendor);
+            return NULL;
+        }
+
+        oem = make_openflow_xid(len + sizeof *oem + sizeof *ove,
+                                OFPT_ERROR, xid, &buf);
+        oem->type = htons(NXET_VENDOR);
+        oem->code = htons(NXVC_VENDOR_ERROR);
+
+        ove = ofpbuf_put_uninit(buf, sizeof *ove);
+        ove->vendor = htonl(vendor_id);
+        ove->type = htons(type);
+        ove->code = htons(code);
+    }
+
+    if (len) {
+        ofpbuf_put(buf, data, len);
+    }
+
+    return buf;
+}
