@@ -1019,6 +1019,9 @@ xf_netdev_port_input(struct xf_netdev *xf, struct xf_netdev_port *port,
     struct xflow_key key;
     flow_t f;
 
+    if (packet->size < ETH_HEADER_LEN) {
+        return;
+    }
     if (flow_extract(packet, 0, port->port_no, &f) && xf->drop_frags) {
         xf->n_frags++;
         return;
@@ -1083,12 +1086,15 @@ xf_netdev_wait(void)
 
 /* Modify or add a 802.1Q header in 'packet' according to 'a'. */
 static void
-xf_netdev_set_dl_tci(struct ofpbuf *packet, struct xflow_key *key,
+xf_netdev_set_dl_tci(struct ofpbuf *packet,
                      const struct xflow_action_dl_tci *a)
 {
     struct vlan_eth_header *veh;
+    struct eth_header *eh;
 
-    if (key->dl_tci) {
+    eh = packet->l2;
+    if (packet->size >= sizeof(struct vlan_eth_header)
+        && eh->eth_type == htons(ETH_TYPE_VLAN)) {
         veh = packet->l2;
         veh->veth_tci = (veh->veth_tci & ~a->mask) | a->tci;
     } else {
@@ -1105,15 +1111,14 @@ xf_netdev_set_dl_tci(struct ofpbuf *packet, struct xflow_key *key,
         memcpy(veh, &tmp, sizeof tmp);
         packet->l2 = (char*)packet->l2 - VLAN_HEADER_LEN;
     }
-
-    key->dl_tci = veh->veth_tci | htons(XFLOW_TCI_PRESENT);
 }
 
 static void
 xf_netdev_strip_vlan(struct ofpbuf *packet, struct xflow_key *key)
 {
     struct vlan_eth_header *veh = packet->l2;
-    if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
+    if (packet->size >= sizeof *veh
+        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
         struct eth_header tmp;
 
         memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
@@ -1288,7 +1293,7 @@ xf_netdev_execute_actions(struct xf_netdev *xf,
             break;
 
         case XFLOWAT_SET_DL_TCI:
-            xf_netdev_set_dl_tci(packet, key, &a->dl_tci);
+            xf_netdev_set_dl_tci(packet, &a->dl_tci);
             break;
 
         case XFLOWAT_STRIP_VLAN:

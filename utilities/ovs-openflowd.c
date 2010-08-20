@@ -75,9 +75,6 @@ struct ofsettings {
     /* Failure behavior. */
     int max_idle;             /* Idle time for flows in fail-open mode. */
 
-    /* Spanning tree protocol. */
-    bool enable_stp;
-
     /* NetFlow. */
     struct svec netflow;        /* NetFlow targets. */
 };
@@ -151,10 +148,6 @@ main(int argc, char *argv[])
     if (error) {
         ovs_fatal(error, "failed to configure NetFlow collectors");
     }
-    error = ofproto_set_stp(ofproto, s.enable_stp);
-    if (error) {
-        ovs_fatal(error, "failed to configure STP");
-    }
     ofproto_set_controllers(ofproto, s.controllers, s.n_controllers);
     ofproto_set_fail_mode(ofproto, s.fail_mode);
 
@@ -204,8 +197,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_RATE_LIMIT,
         OPT_BURST_LIMIT,
         OPT_BOOTSTRAP_CA_CERT,
-        OPT_STP,
-        OPT_NO_STP,
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
         OPT_NETFLOW,
@@ -232,8 +223,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"snoop",      required_argument, 0, OPT_SNOOP},
         {"rate-limit",  optional_argument, 0, OPT_RATE_LIMIT},
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
-        {"stp",         no_argument, 0, OPT_STP},
-        {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
@@ -274,7 +263,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     svec_init(&controllers);
     svec_init(&s->snoops);
     s->max_idle = 0;
-    s->enable_stp = false;
     svec_init(&s->netflow);
     svec_init(&s->ports);
     for (;;) {
@@ -377,14 +365,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             if (controller_opts.burst_limit < 1) {
                 ovs_fatal(0, "--burst-limit argument must be at least 1");
             }
-            break;
-
-        case OPT_STP:
-            s->enable_stp = true;
-            break;
-
-        case OPT_NO_STP:
-            s->enable_stp = false;
             break;
 
         case OPT_OUT_OF_BAND:

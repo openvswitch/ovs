@@ -268,6 +268,19 @@ bridge_init(const char *remote)
     /* Create connection to database. */
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
 
+    ovsdb_idl_set_write_only(idl, &ovsrec_open_vswitch_col_cur_cfg);
+    ovsdb_idl_set_write_only(idl, &ovsrec_open_vswitch_col_statistics);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_bridge_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
+    ovsdb_idl_omit(idl, &ovsrec_port_col_fake_bridge);
+
+    ovsdb_idl_set_write_only(idl, &ovsrec_interface_col_ofport);
+    ovsdb_idl_set_write_only(idl, &ovsrec_interface_col_statistics);
+    ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
+
     /* Register unixctl commands. */
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,

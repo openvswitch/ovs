@@ -64,6 +64,7 @@ void *shash_find_and_delete_assert(struct shash *, const char *);
 struct shash_node *shash_first(const struct shash *);
 const struct shash_node **shash_sort(const struct shash *);
 bool shash_equal_keys(const struct shash *, const struct shash *);
+struct shash_node *shash_random_node(struct shash *);
 
 #ifdef  __cplusplus
 }

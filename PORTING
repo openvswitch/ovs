@@ -205,9 +205,9 @@ during a port:
 Miscellaneous Notes
 -------------------
 
-lib/uuid.c, used in OVSDB, assumes that it can obtain a high-quality
-random number seed at startup by reading from /dev/urandom.  You may
-need to modify it if this is not true on your platform.
+lib/entropy.c assumes that it can obtain high-quality random number
+seeds at startup by reading from /dev/urandom.  You will need to
+modify it if this is not true on your platform.
 
 Questions
 ---------

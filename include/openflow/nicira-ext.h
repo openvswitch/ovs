@@ -231,14 +231,16 @@ enum nx_action_subtype {
      * Following the lookup, the original in_port is restored.
      *
      * If the modified flow matched in the flow table, then the corresponding
-     * actions are executed, except that NXAST_RESUBMIT actions found in the
-     * secondary set of actions are ignored.  Afterward, actions following
-     * NXAST_RESUBMIT in the original set of actions, if any, are executed; any
-     * changes made to the packet (e.g. changes to VLAN) by secondary actions
-     * persist when those actions are executed, although the original in_port
-     * is restored.
+     * actions are executed.  Afterward, actions following NXAST_RESUBMIT in
+     * the original set of actions, if any, are executed; any changes made to
+     * the packet (e.g. changes to VLAN) by secondary actions persist when
+     * those actions are executed, although the original in_port is restored.
      *
      * NXAST_RESUBMIT may be used any number of times within a set of actions.
+     *
+     * NXAST_RESUBMIT may nest to an implementation-defined depth.  Beyond this
+     * implementation-defined depth, further NXAST_RESUBMIT actions are simply
+     * ignored.  (Open vSwitch 1.0.1 and earlier did not support recursion.)
      */
     NXAST_RESUBMIT,
 

@@ -270,7 +270,6 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
         make_sockaddr_un(connect_path, &un, &un_len);
         if (connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
-            printf("connect failed with %s\n", strerror(errno));
             goto error;
         }
     }
@@ -457,7 +456,7 @@ inet_open_passive(int style, const char *target_, int default_port,
     struct sockaddr_in sin;
     const char *host_name;
     const char *port_string;
-    int fd, error, port;
+    int fd = 0, error, port;
     unsigned int yes  = 1;
 
     /* Address defaults. */

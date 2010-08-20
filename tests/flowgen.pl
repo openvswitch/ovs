@@ -111,6 +111,10 @@ sub output {
     my $packet = '';
     $packet .= pack_ethaddr($flow{DL_DST});
     $packet .= pack_ethaddr($flow{DL_SRC});
+    if ($flow{DL_VLAN} != 0xffff) {
+        $packet .= pack('nn', 0x8100, $flow{DL_VLAN});
+    }
+    my $len_ofs = length($packet);
     $packet .= pack('n', 0) if $attrs{DL_HEADER} =~ /^802.2/;
     if ($attrs{DL_HEADER} eq '802.2') {
         $packet .= pack('CCC', 0x42, 0x42, 0x03); # LLC for 802.1D STP.
@@ -118,9 +122,6 @@ sub output {
         if ($attrs{DL_HEADER} eq '802.2+SNAP') {
             $packet .= pack('CCC', 0xaa, 0xaa, 0x03); # LLC for SNAP.
             $packet .= pack('CCC', 0, 0, 0);          # SNAP OUI.
-        }
-        if ($attrs{DL_VLAN} ne 'none') {
-            $packet .= pack('nn', 0x8100, $flow{DL_VLAN});
         }
         $packet .= pack('n', $flow{DL_TYPE});
         if ($attrs{DL_TYPE} eq 'ip') {
@@ -193,8 +194,11 @@ sub output {
             $packet .= $ip;
         }
     }
-    substr($packet, 12, 2) = pack('n', length($packet))
-      if $attrs{DL_HEADER} =~ /^802.2/;
+    if ($attrs{DL_HEADER} =~ /^802.2/) {
+        my $len = length ($packet);
+        $len -= 4 if $flow{DL_VLAN} != 0xffff;
+        substr($packet, $len_ofs, 2) = pack('n', $len);
+    }
 
     print join(' ', map("$_=$attrs{$_}", keys(%attrs))), "\n";
     print join(' ', map("$_=$flow{$_}", keys(%flow))), "\n";

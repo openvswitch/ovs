@@ -30,13 +30,10 @@ union xflow_action *
 xflow_actions_add(struct xflow_actions *actions, uint16_t type)
 {
     union xflow_action *a;
-    if (actions->n_actions < MAX_XFLOW_ACTIONS) {
-        a = &actions->actions[actions->n_actions++];
-    } else {
-        COVERAGE_INC(xflow_overflow);
-        actions->n_actions = MAX_XFLOW_ACTIONS + 1;
-        a = &actions->actions[MAX_XFLOW_ACTIONS - 1];
-    }
+    size_t idx;
+
+    idx = actions->n_actions++ & (MAX_XFLOW_ACTIONS - 1);
+    a = &actions->actions[idx];
     memset(a, 0, sizeof *a);
     a->type = type;
     return a;

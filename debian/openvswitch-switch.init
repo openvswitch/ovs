@@ -273,13 +273,13 @@ case "$1" in
         ;;
     stop)
         echo -n "Stopping ovs-vswitchd: "
-        start-stop-daemon --stop --quiet --oknodo \
+        start-stop-daemon --stop --quiet --oknodo --retry 5 \
             --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
             --exec $ovs_vswitchd
         echo "ovs-vswitchd."
 
         echo -n "Stopping ovsdb-server: "
-        start-stop-daemon --stop --quiet --oknodo \
+        start-stop-daemon --stop --quiet --oknodo --retry 5 \
             --pidfile /var/run/openvswitch/ovsdb-server.pid \
             --exec $ovsdb_server
         echo "ovsdb-server."

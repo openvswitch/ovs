@@ -11,7 +11,10 @@
 .  RE
 ..
 .TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.\" This program's name:
 .ds PN ovs\-vsctl
+.\" SSL peer program's name:
+.ds SN ovsdb\-server
 .
 .SH NAME
 ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
@@ -123,6 +126,8 @@ not used, \fBovs\-vsctl\fR uses a timeout of five seconds.
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
+.so lib/ssl-bootstrap.man
+.so lib/ssl-peer-ca-cert.man
 .so lib/vlog.man
 .
 .SH COMMANDS
@@ -406,7 +411,7 @@ for bootstrapping.
 This option is only useful if the controller sends its CA certificate
 as part of the SSL certificate chain.  The SSL protocol does not
 require the controller to send the CA certificate, but
-\fBcontroller\fR(8) can be configured to do so with the
+\fBovs\-controller\fR(8) can be configured to do so with the
 \fB\-\-peer\-ca\-cert\fR option.
 .
 .SS "Database Commands"

@@ -36,6 +36,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dirs.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
+	lib/entropy.c \
+	lib/entropy.h \
 	lib/fatal-signal.c \
 	lib/fatal-signal.h \
 	lib/flow.c \
@@ -109,8 +111,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/socket-util.h \
 	lib/sort.c \
 	lib/sort.h \
-	lib/stp.c \
-	lib/stp.h \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
@@ -253,6 +253,7 @@ COVERAGE_FILES = \
 	lib/rconn.c \
 	lib/rtnetlink.c \
 	lib/stream.c \
+	lib/stream-ssl.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \

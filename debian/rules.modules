@@ -20,7 +20,7 @@ kdist_clean:
 kdist_config: prep-deb-files
 
 .PHONY: binary-modules
-binary-modules: DSTDIR = $(CURDIR)/debian/$(PKGNAME)/lib/modules/$(KVERS)
+binary-modules: DSTDIR = $(CURDIR)/debian/$(PKGNAME)/lib/modules/$(KVERS)/kernel
 binary-modules: prep-deb-files
 	dh_testdir
 	dh_testroot
@@ -30,6 +30,7 @@ binary-modules: prep-deb-files
 	cd openvswitch && $(MAKE) -C datapath/linux-2.6
 	install -d -m755 $(DSTDIR)
 	install -m644 openvswitch/datapath/linux-2.6/*_mod.ko $(DSTDIR)/
+	dh_installmodules
 	dh_installdocs
 	dh_installchangelogs
 	dh_compress

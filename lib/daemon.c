@@ -448,6 +448,10 @@ daemonize_start(void)
     }
 
     make_pidfile();
+
+    /* Make sure that the unixctl commands for vlog get registered in a
+     * daemon, even before the first log message. */
+    vlog_init();
 }
 
 /* If daemonization is configured, then this function notifies the parent

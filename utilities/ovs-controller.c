@@ -189,7 +189,7 @@ main(int argc, char *argv[])
         }
         for (i = 0; i < n_switches; i++) {
             struct switch_ *this = &switches[i];
-            lswitch_run(this->lswitch, this->rconn);
+            lswitch_run(this->lswitch);
         }
 
         unixctl_server_run(unixctl);

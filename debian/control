@@ -2,8 +2,12 @@ Source: openvswitch
 Section: net
 Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
-Build-Depends: debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev, libpcre3-dev
-Standards-Version: 3.7.3
+Uploaders: Ben Pfaff <blp@nicira.com>, Simon Horman <horms@debian.org>
+Build-Depends:
+ debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev,
+ pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev,
+ libpcre3-dev, python
+Standards-Version: 3.9.1
 
 Package: openvswitch-datapath-source
 Architecture: all
@@ -61,7 +65,9 @@ Description: Monitoring utility for OpenFlow switches
 
 Package: openvswitch-pki
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version})
+Depends:
+ ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (>= ${source:Version}),
+ openvswitch-common (<< ${source:Version}.1~)
 Description: A dependency package for the Open vSwitch public key infrastructure
  openvswitch-pki provides PKI (public key infrastructure) support for
  Open vSwitch switches and controllers, reducing the risk of
@@ -83,7 +89,9 @@ Description: Open vSwitch public key infrastructure (HTTP server support)
 
 Package: openvswitch-controller
 Architecture: any
-Depends: ${shlibs:Depends}, openvswitch-common (= ${binary:Version}), openvswitch-pki (= ${binary:Version}), ${misc:Depends}
+Depends:
+ ${shlibs:Depends}, openvswitch-common (= ${binary:Version}),
+ openvswitch-pki (= ${source:Version}), ${misc:Depends}
 Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
@@ -126,10 +134,14 @@ Description: Watchdog utility for Open vSwitch switches
 Package: nicira-switch
 Architecture: all
 Depends: 
- openvswitch-common (= ${binary:Version}), 
- openvswitch-switch (= ${binary:Version}), 
- openvswitch-switchui (= ${binary:Version}), 
- openvswitch-datapath-module (= ${binary:Version}),
+ openvswitch-common (>= ${source:Version}),
+ openvswitch-common (<< ${source:Version}.1~),
+ openvswitch-switch (>= ${source:Version}),
+ openvswitch-switch (<< ${source:Version}.1~),
+ openvswitch-switchui (>= ${source:Version}),
+ openvswitch-switchui (<< ${source:Version}.1~),
+ openvswitch-datapath-module (>= ${source:Version}),
+ openvswitch-datapath-module (<< ${source:Version}.1~),
  corekeeper, openvswitch-monitor, openvswitch-wdt, ${misc:Depends}
 Description: A meta-package for installing a Nicira Open vSwitch switch
  Installing this package will install everything needed for a Nicira

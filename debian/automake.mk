@@ -6,6 +6,7 @@ EXTRA_DIST += \
 	debian/copyright \
 	debian/corekeeper.cron.daily \
 	debian/corekeeper.init \
+	debian/corekeeper.override \
 	debian/dirs \
 	debian/openvswitch-common.dirs \
 	debian/openvswitch-common.install \

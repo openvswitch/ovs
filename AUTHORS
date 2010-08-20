@@ -3,6 +3,7 @@ signed off on commits in the Open vSwitch version control repository.
 
 Andy Southgate          andy.southgate@citrix.com
 Ben Pfaff               blp@nicira.com
+Bryan Phillippe         bp@toroki.com
 Dan Wendlandt           dan@nicira.com
 David Erickson          derickso@stanford.edu
 Glen Gibb               grg@stanford.edu
@@ -18,10 +19,12 @@ Natasha Gude            natasha@nicira.com
 Neil McKee              neil.mckee@inmon.com
 Paul Fazzone            pfazzone@nicira.com
 Reid Price              reid@nicira.com
+Simon Horman            horms@verge.net.au
 Tetsuo NAKAGAWA         nakagawa@mxc.nes.nec.co.jp
 Thomas Lacroix          thomas.lacroix@citrix.com
 Todd Deshane            deshantm@gmail.com
 Tom Everman             teverman@google.com
+Tsvi Slonim             tsvi@toroki.com
 Wei Yongjun             yjwei@cn.fujitsu.com
 Yu Zhiguo               yuzg@cn.fujitsu.com
 
@@ -45,7 +48,9 @@ Rob Hoes                rob.hoes@citrix.com
 Sajjad Lateef           slateef@nicira.com
 Sean Brady              sbrady@gtfservices.com
 Srini Seetharaman       seethara@stanford.edu
+Stephen Hemminger       shemminger@vyatta.com
 Takayuki HAMA           t-hama@cb.jp.nec.com
+Teemu Koponen           koponen@nicira.com
 kk yap                  yapkke@stanford.edu
 
 Thanks to all Open vSwitch contributors.  If you are not listed above

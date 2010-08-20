@@ -1,5 +1,8 @@
 .TH ovs\-openflowd 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.\" This program's name:
 .ds PN ovs\-openflowd
+.\" SSL peer program's name:
+.ds SN ovs\-controller
 .
 .SH NAME
 ovs\-openflowd \- OpenFlow switch implementation

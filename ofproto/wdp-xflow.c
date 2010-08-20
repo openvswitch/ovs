@@ -35,7 +35,6 @@
 #include "poll-loop.h"
 #include "port-array.h"
 #include "shash.h"
-#include "stp.h"
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
@@ -861,7 +860,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
     port = port_array_get(&ctx->wx->ports, ctx->flow.in_port);
     if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, stp_eth_addr)
+        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
                             ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
         /* Drop this flow. */
         return;
@@ -1014,6 +1013,7 @@ wx_xlate_actions(struct wx *wx, const union ofp_action *in, size_t n_in,
     }
 #endif
     if (xflow_actions_overflow(out)) {
+        COVERAGE_INC(xflow_overflow);
         xflow_actions_init(out);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_TOO_MANY);
     }

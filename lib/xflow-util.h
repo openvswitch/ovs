@@ -24,6 +24,7 @@
 #include "hash.h"
 #include "openflow/openflow.h"
 #include "openvswitch/xflow.h"
+#include "util.h"
 
 struct ds;
 struct flow;
@@ -36,6 +37,9 @@ struct xflow_actions {
     size_t n_actions;
     union xflow_action actions[MAX_XFLOW_ACTIONS];
 };
+
+/* xflow_actions_add() assumes that MAX_XFLOW_ACTIONS is a power of 2. */
+BUILD_ASSERT_DECL(IS_POW2(MAX_XFLOW_ACTIONS));
 
 static inline void
 xflow_actions_init(struct xflow_actions *actions)

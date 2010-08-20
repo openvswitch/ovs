@@ -48,7 +48,6 @@
 #include "rconn.h"
 #include "shash.h"
 #include "status.h"
-#include "stp.h"
 #include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
@@ -772,18 +771,6 @@ ofproto_set_sflow(struct ofproto *ofproto,
     } else {
         ofproto_sflow_destroy(os);
         ofproto->sflow = NULL;
-    }
-}
-
-int
-ofproto_set_stp(struct ofproto *ofproto OVS_UNUSED, bool enable_stp)
-{
-    /* XXX */
-    if (enable_stp) {
-        VLOG_WARN("STP is not yet implemented");
-        return EINVAL;
-    } else {
-        return 0;
     }
 }
 

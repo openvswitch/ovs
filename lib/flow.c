@@ -77,16 +77,47 @@ pull_icmp(struct ofpbuf *packet)
     return ofpbuf_try_pull(packet, ICMP_HEADER_LEN);
 }
 
-static struct eth_header *
-pull_eth(struct ofpbuf *packet) 
+static void
+parse_vlan(struct ofpbuf *b, flow_t *flow)
 {
-    return ofpbuf_try_pull(packet, ETH_HEADER_LEN);
+    struct qtag_prefix {
+        uint16_t eth_type;      /* ETH_TYPE_VLAN */
+        uint16_t tci;
+    };
+
+    if (b->size >= sizeof(struct qtag_prefix) + sizeof(uint16_t)) {
+        struct qtag_prefix *qp = ofpbuf_pull(b, sizeof *qp);
+        flow->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
+        flow->dl_vlan_pcp = (ntohs(qp->tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+    }
 }
 
-static struct vlan_header *
-pull_vlan(struct ofpbuf *packet)
+static uint16_t
+parse_ethertype(struct ofpbuf *b)
 {
-    return ofpbuf_try_pull(packet, VLAN_HEADER_LEN);
+    struct llc_snap_header *llc;
+    uint16_t proto;
+
+    proto = *(uint16_t *) ofpbuf_pull(b, sizeof proto);
+    if (ntohs(proto) >= XFLOW_DL_TYPE_ETH2_CUTOFF) {
+        return proto;
+    }
+
+    if (b->size < sizeof *llc) {
+        return htons(XFLOW_DL_TYPE_NOT_ETH_TYPE);
+    }
+
+    llc = b->data;
+    if (llc->llc.llc_dsap != LLC_DSAP_SNAP
+        || llc->llc.llc_ssap != LLC_SSAP_SNAP
+        || llc->llc.llc_cntl != LLC_CNTL_SNAP
+        || memcmp(llc->snap.snap_org, SNAP_ORG_ETHERNET,
+                  sizeof llc->snap.snap_org)) {
+        return htons(XFLOW_DL_TYPE_NOT_ETH_TYPE);
+    }
+
+    ofpbuf_pull(b, sizeof *llc);
+    return llc->snap.snap_type;
 }
 
 /* Returns 1 if 'packet' is an IP fragment, 0 otherwise.
@@ -112,109 +143,86 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
     packet->l4 = NULL;
     packet->l7 = NULL;
 
-    eth = pull_eth(&b);
-    if (eth) {
-        if (ntohs(eth->eth_type) >= OFP_DL_TYPE_ETH2_CUTOFF) {
-            /* This is an Ethernet II frame */
-            flow->dl_type = eth->eth_type;
-        } else {
-            /* This is an 802.2 frame */
-            struct llc_header *llc = ofpbuf_at(&b, 0, sizeof *llc);
-            struct snap_header *snap = ofpbuf_at(&b, sizeof *llc,
-                                                 sizeof *snap);
-            if (llc == NULL) {
-                return 0;
-            }
-            if (snap
-                && llc->llc_dsap == LLC_DSAP_SNAP
-                && llc->llc_ssap == LLC_SSAP_SNAP
-                && llc->llc_cntl == LLC_CNTL_SNAP
-                && !memcmp(snap->snap_org, SNAP_ORG_ETHERNET,
-                           sizeof snap->snap_org)) {
-                flow->dl_type = snap->snap_type;
-                ofpbuf_pull(&b, LLC_SNAP_HEADER_LEN);
-            } else {
-                flow->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
-                ofpbuf_pull(&b, sizeof(struct llc_header));
-            }
-        }
+    if (b.size < sizeof *eth) {
+        return 0;
+    }
 
-        /* Check for a VLAN tag */
-        if (flow->dl_type == htons(ETH_TYPE_VLAN)) {
-            struct vlan_header *vh = pull_vlan(&b);
-            if (vh) {
-                flow->dl_type = vh->vlan_next_type;
-                flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID_MASK);
-                flow->dl_vlan_pcp = (ntohs(vh->vlan_tci) & 0xe000) >> 13;
-            }
-        }
-        memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
-        memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
+    /* Link layer. */
+    eth = b.data;
+    memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
+    memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
 
-        packet->l3 = b.data;
-        if (flow->dl_type == htons(ETH_TYPE_IP)) {
-            const struct ip_header *nh = pull_ip(&b);
-            if (nh) {
-                flow->nw_src = get_unaligned_u32(&nh->ip_src);
-                flow->nw_dst = get_unaligned_u32(&nh->ip_dst);
-                flow->nw_tos = nh->ip_tos & IP_DSCP_MASK;
-                flow->nw_proto = nh->ip_proto;
-                packet->l4 = b.data;
-                if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
-                    if (flow->nw_proto == IP_TYPE_TCP) {
-                        const struct tcp_header *tcp = pull_tcp(&b);
-                        if (tcp) {
-                            flow->tp_src = tcp->tcp_src;
-                            flow->tp_dst = tcp->tcp_dst;
-                            packet->l7 = b.data;
-                        } else {
-                            /* Avoid tricking other code into thinking that
-                             * this packet has an L4 header. */
-                            flow->nw_proto = 0;
-                        }
-                    } else if (flow->nw_proto == IP_TYPE_UDP) {
-                        const struct udp_header *udp = pull_udp(&b);
-                        if (udp) {
-                            flow->tp_src = udp->udp_src;
-                            flow->tp_dst = udp->udp_dst;
-                            packet->l7 = b.data;
-                        } else {
-                            /* Avoid tricking other code into thinking that
-                             * this packet has an L4 header. */
-                            flow->nw_proto = 0;
-                        }
-                    } else if (flow->nw_proto == IP_TYPE_ICMP) {
-                        const struct icmp_header *icmp = pull_icmp(&b);
-                        if (icmp) {
-                            flow->icmp_type = htons(icmp->icmp_type);
-                            flow->icmp_code = htons(icmp->icmp_code);
-                            packet->l7 = b.data;
-                        } else {
-                            /* Avoid tricking other code into thinking that
-                             * this packet has an L4 header. */
-                            flow->nw_proto = 0;
-                        }
+    /* dl_type, dl_vlan, dl_vlan_pcp. */
+    ofpbuf_pull(&b, ETH_ADDR_LEN * 2);
+    if (eth->eth_type == htons(ETH_TYPE_VLAN)) {
+        parse_vlan(&b, flow);
+    }
+    flow->dl_type = parse_ethertype(&b);
+
+    /* Network layer. */
+    packet->l3 = b.data;
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        const struct ip_header *nh = pull_ip(&b);
+        if (nh) {
+            flow->nw_src = get_unaligned_u32(&nh->ip_src);
+            flow->nw_dst = get_unaligned_u32(&nh->ip_dst);
+            flow->nw_tos = nh->ip_tos & IP_DSCP_MASK;
+            flow->nw_proto = nh->ip_proto;
+            packet->l4 = b.data;
+            if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
+                if (flow->nw_proto == IP_TYPE_TCP) {
+                    const struct tcp_header *tcp = pull_tcp(&b);
+                    if (tcp) {
+                        flow->tp_src = tcp->tcp_src;
+                        flow->tp_dst = tcp->tcp_dst;
+                        packet->l7 = b.data;
+                    } else {
+                        /* Avoid tricking other code into thinking that
+                         * this packet has an L4 header. */
+                        flow->nw_proto = 0;
                     }
-                } else {
-                    retval = 1;
+                } else if (flow->nw_proto == IP_TYPE_UDP) {
+                    const struct udp_header *udp = pull_udp(&b);
+                    if (udp) {
+                        flow->tp_src = udp->udp_src;
+                        flow->tp_dst = udp->udp_dst;
+                        packet->l7 = b.data;
+                    } else {
+                        /* Avoid tricking other code into thinking that
+                         * this packet has an L4 header. */
+                        flow->nw_proto = 0;
+                    }
+                } else if (flow->nw_proto == IP_TYPE_ICMP) {
+                    const struct icmp_header *icmp = pull_icmp(&b);
+                    if (icmp) {
+                        flow->icmp_type = htons(icmp->icmp_type);
+                        flow->icmp_code = htons(icmp->icmp_code);
+                        packet->l7 = b.data;
+                    } else {
+                        /* Avoid tricking other code into thinking that
+                         * this packet has an L4 header. */
+                        flow->nw_proto = 0;
+                    }
                 }
+            } else {
+                retval = 1;
             }
-        } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-            const struct arp_eth_header *arp = pull_arp(&b);
-            if (arp && arp->ar_hrd == htons(1)
-                    && arp->ar_pro == htons(ETH_TYPE_IP) 
-                    && arp->ar_hln == ETH_ADDR_LEN
-                    && arp->ar_pln == 4) {
-                /* We only match on the lower 8 bits of the opcode. */
-                if (ntohs(arp->ar_op) <= 0xff) {
-                    flow->nw_proto = ntohs(arp->ar_op);
-                }
+        }
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+        const struct arp_eth_header *arp = pull_arp(&b);
+        if (arp && arp->ar_hrd == htons(1)
+            && arp->ar_pro == htons(ETH_TYPE_IP) 
+            && arp->ar_hln == ETH_ADDR_LEN
+            && arp->ar_pln == 4) {
+            /* We only match on the lower 8 bits of the opcode. */
+            if (ntohs(arp->ar_op) <= 0xff) {
+                flow->nw_proto = ntohs(arp->ar_op);
+            }
 
-                if ((flow->nw_proto == ARP_OP_REQUEST) 
-                        || (flow->nw_proto == ARP_OP_REPLY)) {
-                    flow->nw_src = arp->ar_spa;
-                    flow->nw_dst = arp->ar_tpa;
-                }
+            if ((flow->nw_proto == ARP_OP_REQUEST) 
+                || (flow->nw_proto == ARP_OP_REPLY)) {
+                flow->nw_src = arp->ar_spa;
+                flow->nw_dst = arp->ar_tpa;
             }
         }
     }

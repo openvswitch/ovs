@@ -110,7 +110,6 @@ int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
-int ofproto_set_stp(struct ofproto *, bool enable_stp);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);

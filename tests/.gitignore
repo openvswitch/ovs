@@ -21,7 +21,6 @@
 /test-reconnect
 /test-timeval
 /test-sha1
-/test-stp
 /test-type-props
 /test-uuid
 /test-vconn

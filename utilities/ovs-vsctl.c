@@ -182,12 +182,16 @@ parse_options(int argc, char *argv[])
 #endif
         {0, 0, 0, 0},
     };
+    char *tmp, *short_options;
 
+    tmp = long_options_to_short_options(long_options);
+    short_options = xasprintf("+%s", tmp);
+    free(tmp);
 
     for (;;) {
         int c;
 
-        c = getopt_long(argc, argv, "+v::hVt:", long_options, NULL);
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -245,6 +249,7 @@ parse_options(int argc, char *argv[])
             abort();
         }
     }
+    free(short_options);
 
     if (!db) {
         db = default_db();

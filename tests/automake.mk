@@ -38,7 +38,6 @@ TESTSUITE_AT = \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
-	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
@@ -72,7 +71,6 @@ lcov_wrappers = \
 	tests/lcov/test-ovsdb \
 	tests/lcov/test-reconnect \
 	tests/lcov/test-sha1 \
-	tests/lcov/test-stp \
 	tests/lcov/test-timeval \
 	tests/lcov/test-type-props \
 	tests/lcov/test-uuid \
@@ -121,7 +119,6 @@ valgrind_wrappers = \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-reconnect \
 	tests/valgrind/test-sha1 \
-	tests/valgrind/test-stp \
 	tests/valgrind/test-timeval \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-uuid \
@@ -253,10 +250,6 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 noinst_PROGRAMS += tests/test-dhcp-client
 tests_test_dhcp_client_SOURCES = tests/test-dhcp-client.c
 tests_test_dhcp_client_LDADD = lib/libopenvswitch.a
-
-noinst_PROGRAMS += tests/test-stp
-tests_test_stp_SOURCES = tests/test-stp.c
-tests_test_stp_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-uuid
 tests_test_uuid_SOURCES = tests/test-uuid.c

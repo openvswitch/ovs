@@ -53,6 +53,10 @@ unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
 
+void ovsdb_idl_set_write_only(struct ovsdb_idl *,
+                              const struct ovsdb_idl_column *);
+void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+
 const struct ovsdb_idl_row *ovsdb_idl_get_row_for_uuid(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *,
     const struct uuid *);
