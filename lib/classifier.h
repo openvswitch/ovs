@@ -153,17 +153,17 @@ struct cls_rule *classifier_lookup_exact(const struct classifier *,
                                          const flow_t *);
 bool classifier_rule_overlaps(const struct classifier *, const flow_t *);
 
-typedef void cls_cb_func(struct cls_rule *, void *aux);
+typedef int cls_cb_func(struct cls_rule *, void *aux);
 
 enum {
     CLS_INC_EXACT = 1 << 0,     /* Include exact-match flows? */
     CLS_INC_WILD = 1 << 1,      /* Include flows with wildcards? */
     CLS_INC_ALL = CLS_INC_EXACT | CLS_INC_WILD
 };
-void classifier_for_each(const struct classifier *, int include,
-                         cls_cb_func *, void *aux);
-void classifier_for_each_match(const struct classifier *, const flow_t *,
-                               int include, cls_cb_func *, void *aux);
+int classifier_for_each(const struct classifier *, int include,
+                        cls_cb_func *, void *aux);
+int classifier_for_each_match(const struct classifier *, const flow_t *,
+                              int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const flow_t *target);
 

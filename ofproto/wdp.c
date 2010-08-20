@@ -802,6 +802,10 @@ wdp_flow_match(struct wdp *wdp, const flow_t *flow)
 
 /* Iterates through all of the flows in 'wdp''s flow table, passing each flow
  * that matches the specified search criteria to 'callback' along with 'aux'.
+ * If 'callback' returns nonzero, then this stops the iteration and
+ * wdp_flow_for_each_match() passes the return value along.  Otherwise
+ * wdp_flow_for_each_match() returns zero after all matching flows have been
+ * visited.
  *
  * Flows are filtered out in two ways.  First, based on the bit-mask in
  * 'include': wdp_rule 'wr' is included only if 'include & (1u <<
@@ -818,12 +822,13 @@ wdp_flow_match(struct wdp *wdp, const flow_t *flow)
  * may modify any flow in 'wdp', e.g. changing their actions.  'callback' must
  * not delete flows from 'wdp' other than its argument flow, nor may it insert
  * new flows into 'wdp'. */
-void
+int
 wdp_flow_for_each_match(const struct wdp *wdp, const flow_t *target,
                         unsigned int include,
                         wdp_flow_cb_func *callback, void *aux)
 {
-    wdp->wdp_class->flow_for_each_match(wdp, target, include, callback, aux);
+    return wdp->wdp_class->flow_for_each_match(wdp, target, include,
+                                               callback, aux);
 }
 
 int

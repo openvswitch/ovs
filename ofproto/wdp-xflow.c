@@ -1065,7 +1065,7 @@ uninstall_idle_flow(struct wx *wx, struct wx_rule *rule)
     }
 }
 
-static void
+static int
 expire_rule(struct cls_rule *cls_rule, void *wx_)
 {
     struct wx *wx = wx_;
@@ -1089,7 +1089,7 @@ expire_rule(struct cls_rule *cls_rule, void *wx_)
             //XXX active_timeout(wx, rule);
         }
 
-        return;
+        return 0;
     }
 
     COVERAGE_INC(wx_expired);
@@ -1113,6 +1113,8 @@ expire_rule(struct cls_rule *cls_rule, void *wx_)
     }
 #endif
     wx_rule_remove(wx, rule);
+
+    return 0;
 }
 
 struct revalidate_cbdata {
@@ -1150,7 +1152,7 @@ revalidate_rule(struct wx *wx, struct wx_rule *rule)
     return true;
 }
 
-static void
+static int
 revalidate_cb(struct cls_rule *sub_, void *cbdata_)
 {
     struct wx_rule *sub = wx_rule_cast(sub_);
@@ -1161,6 +1163,7 @@ revalidate_cb(struct cls_rule *sub_, void *cbdata_)
         || tag_set_intersects(&cbdata->revalidate_set, sub->tags)) {
         revalidate_rule(cbdata->wx, sub);
     }
+    return 0;
 }
 
 static void
@@ -1332,7 +1335,7 @@ wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
     return 0;
 }
 
-static void
+static int
 count_subrules(struct cls_rule *cls_rule, void *n_subrules_)
 {
     struct wx_rule *rule = wx_rule_cast(cls_rule);
@@ -1341,6 +1344,7 @@ count_subrules(struct cls_rule *cls_rule, void *n_subrules_)
     if (rule->super) {
         (*n_subrules)++;
     }
+    return 0;
 }
 
 static int
@@ -1593,18 +1597,19 @@ struct wx_for_each_thunk_aux {
     void *client_aux;
 };
 
-static void
+static int
 wx_for_each_thunk(struct cls_rule *cls_rule, void *aux_)
 {
     struct wx_for_each_thunk_aux *aux = aux_;
     struct wx_rule *rule = wx_rule_cast(cls_rule);
 
     if (!wx_rule_is_hidden(rule)) {
-        aux->client_callback(&rule->wr, aux->client_aux);
+        return aux->client_callback(&rule->wr, aux->client_aux);
     }
+    return 0;
 }
 
-static void
+static int
 wx_flow_for_each_match(const struct wdp *wdp, const flow_t *target,
                        unsigned int include,
                        wdp_flow_cb_func *client_callback, void *client_aux)
@@ -1623,8 +1628,8 @@ wx_flow_for_each_match(const struct wdp *wdp, const flow_t *target,
 
     aux.client_callback = client_callback;
     aux.client_aux = client_aux;
-    classifier_for_each_match(&wx->cls, target, cls_include,
-                              wx_for_each_thunk, &aux);
+    return classifier_for_each_match(&wx->cls, target, cls_include,
+                                     wx_for_each_thunk, &aux);
 }
 
 /* Obtains statistic counters for 'rule' within 'wx' and stores them into
@@ -1772,7 +1777,7 @@ wx_flow_delete(struct wdp *wdp, struct wdp_rule *wdp_rule,
     return 0;
 }
 
-static void
+static int
 wx_flush_rule(struct cls_rule *cls_rule, void *wx_)
 {
     struct wx_rule *rule = wx_rule_cast(cls_rule);
@@ -1785,6 +1790,8 @@ wx_flush_rule(struct cls_rule *cls_rule, void *wx_)
     rule->installed = false;
 
     wx_rule_remove(wx, rule);
+
+    return 0;
 }
 
 static int

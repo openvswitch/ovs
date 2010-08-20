@@ -406,11 +406,12 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
     }
 }
 
-static void
+static int
 free_rule(struct cls_rule *cls_rule, void *cls)
 {
     classifier_remove(cls, cls_rule);
     free(test_rule_from_cls_rule(cls_rule));
+    return 0;
 }
 
 static void

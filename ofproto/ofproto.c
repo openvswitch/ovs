@@ -1779,7 +1779,7 @@ query_stats(struct ofproto *p, struct wdp_rule *rule,
     }
 }
 
-static void
+static int
 flow_stats_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct flow_stats_cbdata *cbdata = cbdata_;
@@ -1792,7 +1792,7 @@ flow_stats_cb(struct wdp_rule *rule, void *cbdata_)
 
     if (rule_is_hidden(rule)
         || !rule_has_out_port(rule, cbdata->out_port)) {
-        return;
+        return 0;
     }
 
     act_len = sizeof *rule->actions * rule->n_actions;
@@ -1816,6 +1816,8 @@ flow_stats_cb(struct wdp_rule *rule, void *cbdata_)
     ofs->packet_count = htonll(packet_count);
     ofs->byte_count = htonll(byte_count);
     memcpy(ofs->actions, rule->actions, act_len);
+
+    return 0;
 }
 
 static unsigned int
@@ -1864,7 +1866,7 @@ struct flow_stats_ds_cbdata {
     struct ds *results;
 };
 
-static void
+static int
 flow_stats_ds_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct flow_stats_ds_cbdata *cbdata = cbdata_;
@@ -1885,6 +1887,8 @@ flow_stats_ds_cb(struct wdp_rule *rule, void *cbdata_)
     ofp_print_match(results, &match, true);
     ofp_print_actions(results, &rule->actions->header, act_len);
     ds_put_cstr(results, "\n");
+
+    return 0;
 }
 
 /* Adds a pretty-printed description of all flows to 'results', including 
@@ -1915,14 +1919,14 @@ struct aggregate_stats_cbdata {
     uint32_t n_flows;
 };
 
-static void
+static int
 aggregate_stats_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct aggregate_stats_cbdata *cbdata = cbdata_;
     uint64_t packet_count, byte_count;
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
-        return;
+        return 0;
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
@@ -1930,6 +1934,8 @@ aggregate_stats_cb(struct wdp_rule *rule, void *cbdata_)
     cbdata->packet_count += packet_count;
     cbdata->byte_count += byte_count;
     cbdata->n_flows++;
+
+    return 0;
 }
 
 static int
@@ -2210,7 +2216,7 @@ struct modify_flows_cbdata {
 
 static int modify_flow(struct ofproto *, const struct ofp_flow_mod *,
                        size_t n_actions, struct wdp_rule *);
-static void modify_flows_cb(struct wdp_rule *, void *cbdata_);
+static int modify_flows_cb(struct wdp_rule *, void *cbdata_);
 
 /* Implements OFPFC_ADD and OFPFC_MODIFY.  Returns 0 on success or an OpenFlow
  * error code as encoded by ofp_mkerr() on failure.
@@ -2266,7 +2272,7 @@ modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
 }
 
 /* Callback for modify_flows_loose(). */
-static void
+static int
 modify_flows_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct modify_flows_cbdata *cbdata = cbdata_;
@@ -2275,6 +2281,7 @@ modify_flows_cb(struct wdp_rule *rule, void *cbdata_)
         cbdata->match = rule;
         modify_flow(cbdata->ofproto, cbdata->ofm, cbdata->n_actions, rule);
     }
+    return 0;
 }
 
 /* Implements core of OFPFC_MODIFY and OFPFC_MODIFY_STRICT where 'rule' has
@@ -2314,7 +2321,7 @@ struct delete_flows_cbdata {
     uint16_t out_port;
 };
 
-static void delete_flows_cb(struct wdp_rule *, void *cbdata_);
+static int delete_flows_cb(struct wdp_rule *, void *cbdata_);
 static void delete_flow_core(struct ofproto *, struct wdp_rule *,
                              uint16_t out_port);
 
@@ -2350,12 +2357,13 @@ delete_flow_strict(struct ofproto *p, const struct ofconn *ofconn,
 }
 
 /* Callback for delete_flows_loose(). */
-static void
+static int
 delete_flows_cb(struct wdp_rule *rule, void *cbdata_)
 {
     struct delete_flows_cbdata *cbdata = cbdata_;
 
     delete_flow_core(cbdata->ofproto, rule, cbdata->out_port);
+    return 0;
 }
 
 /* Implements core of OFPFC_DELETE and OFPFC_DELETE_STRICT where 'rule' has

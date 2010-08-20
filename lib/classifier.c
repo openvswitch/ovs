@@ -400,8 +400,12 @@ classifier_rule_overlaps(const struct classifier *cls, const flow_t *target)
  * it must not delete (or move) any other rules in 'cls' that are in the same
  * table as the argument rule.  Two rules are in the same table if their
  * cls_rule structs have the same table_idx; as a special case, a rule with
- * wildcards and an exact-match rule will never be in the same table. */
-void
+ * wildcards and an exact-match rule will never be in the same table.
+ *
+ * If 'callback' returns nonzero then the iteration stops immediately and
+ * classifier_for_each_match() passes up the return value.  Otherwise,
+ * classifier_for_each_match() returns 0 after completing the iteration. */
+int
 classifier_for_each_match(const struct classifier *cls,
                           const flow_t *target_flow,
                           int include, cls_cb_func *callback, void *aux)
@@ -433,13 +437,19 @@ classifier_for_each_match(const struct classifier *cls,
                                &bucket->rules) {
                     if (rules_match_1wild(rule, &target, 0)) {
                         if (prev_rule) {
-                            callback(prev_rule, aux);
+                            int retval = callback(prev_rule, aux);
+                            if (retval) {
+                                return retval;
+                            }
                         }
                         prev_rule = rule;
                     }
                 }
                 if (prev_rule) {
-                    callback(prev_rule, aux);
+                    int retval = callback(prev_rule, aux);
+                    if (retval) {
+                        return retval;
+                    }
                 }
             }
         }
@@ -452,7 +462,10 @@ classifier_for_each_match(const struct classifier *cls,
             HMAP_FOR_EACH_SAFE (rule, next_rule, struct cls_rule, node.hmap,
                                 &cls->exact_table) {
                 if (rules_match_1wild(rule, &target, 0)) {
-                    callback(rule, aux);
+                    int retval = callback(rule, aux);
+                    if (retval) {
+                        return retval;
+                    }
                 }
             }
         } else {
@@ -462,20 +475,29 @@ classifier_for_each_match(const struct classifier *cls,
             struct cls_rule *rule = search_exact_table(cls, hash,
                                                        &target.flow);
             if (rule) {
-                callback(rule, aux);
+                int retval = callback(rule, aux);
+                if (retval) {
+                    return retval;
+                }
             }
         }
     }
+
+    return 0;
 }
 
 /* 'callback' is allowed to delete the rule that is passed as its argument, but
  * it must not delete (or move) any other rules in 'cls' that are in the same
  * table as the argument rule.  Two rules are in the same table if their
  * cls_rule structs have the same table_idx; as a special case, a rule with
- * wildcards and an exact-match rule will never be in the same table. */
-void
+ * wildcards and an exact-match rule will never be in the same table.
+ *
+ * If 'callback' returns nonzero then the iteration stops immediately and
+ * classifier_for_each() passes up the return value.  Otherwise,
+ * classifier_for_each() returns 0 after completing the iteration. */
+int
 classifier_for_each(const struct classifier *cls, int include,
-                    void (*callback)(struct cls_rule *, void *aux),
+                    int (*callback)(struct cls_rule *, void *aux),
                     void *aux)
 {
     if (include & CLS_INC_WILD) {
@@ -496,12 +518,18 @@ classifier_for_each(const struct classifier *cls, int include,
                 LIST_FOR_EACH (rule, struct cls_rule, node.list,
                                &bucket->rules) {
                     if (prev_rule) {
-                        callback(prev_rule, aux);
+                        int retval = callback(prev_rule, aux);
+                        if (retval) {
+                            return retval;
+                        }
                     }
                     prev_rule = rule;
                 }
                 if (prev_rule) {
-                    callback(prev_rule, aux);
+                    int retval = callback(prev_rule, aux);
+                    if (retval) {
+                        return retval;
+                    }
                 }
             }
         }
@@ -512,9 +540,14 @@ classifier_for_each(const struct classifier *cls, int include,
 
         HMAP_FOR_EACH_SAFE (rule, next_rule,
                             struct cls_rule, node.hmap, &cls->exact_table) {
-            callback(rule, aux);
+            int retval = callback(rule, aux);
+            if (retval) {
+                return retval;
+            }
         }
     }
+
+    return 0;
 }
 
 static struct cls_bucket *create_bucket(struct hmap *, size_t hash,

@@ -273,6 +273,10 @@ struct wdp_class {
      * flow that matches the specified search criteria to 'callback' along with
      * 'aux'.
      *
+     * If 'callback' returns nonzero, then this must stop the iteration and the
+     * return value must be propagated to the caller.  Otherwise, this function
+     * must return zero after all matching flows (if any) have been visited.
+     *
      * Flows are filtered out in two ways.  First, based on the bit-mask in
      * 'include': wdp_rule 'wr' is included only if 'include & (1u <<
      * wr->ofp_table_id)' is nonzero.
@@ -288,9 +292,9 @@ struct wdp_class {
      * It may modify any flow in 'wdp', e.g. changing their actions.
      * 'callback' must not delete flows from 'wdp' other than its argument
      * flow, nor may it insert new flows into 'wdp'. */
-    void (*flow_for_each_match)(const struct wdp *wdp, const flow_t *flow,
-                                unsigned int include,
-                                wdp_flow_cb_func *callback, void *aux);
+    int (*flow_for_each_match)(const struct wdp *wdp, const flow_t *flow,
+                               unsigned int include,
+                               wdp_flow_cb_func *callback, void *aux);
 
     /* Retrieves flow statistics for 'rule', which must be in 'wdp''s flow
      * table, and stores them into '*stats'.  Returns 0 if successful,

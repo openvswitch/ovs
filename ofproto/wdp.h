@@ -145,10 +145,10 @@ struct wdp_rule *wdp_flow_get(struct wdp *, const flow_t *,
                               unsigned int include);
 struct wdp_rule *wdp_flow_match(struct wdp *, const flow_t *);
 
-typedef void wdp_flow_cb_func(struct wdp_rule *, void *aux);
-void wdp_flow_for_each_match(const struct wdp *, const flow_t *,
-                             unsigned int include, wdp_flow_cb_func *,
-                             void *aux);
+typedef int wdp_flow_cb_func(struct wdp_rule *, void *aux);
+int wdp_flow_for_each_match(const struct wdp *, const flow_t *,
+                            unsigned int include, wdp_flow_cb_func *,
+                            void *aux);
 
 int wdp_flow_get_stats(const struct wdp *, const struct wdp_rule *,
                          struct wdp_flow_stats *);
