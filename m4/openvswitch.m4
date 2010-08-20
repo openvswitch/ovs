@@ -60,30 +60,34 @@ AC_DEFUN([OVS_CHECK_NETLINK],
                 [Define to 1 if Netlink protocol is available.])
    fi])
 
-dnl Checks for OpenSSL, if --enable-ssl is passed in.
+dnl Checks for OpenSSL.
 AC_DEFUN([OVS_CHECK_OPENSSL],
   [AC_ARG_ENABLE(
      [ssl],
-     [AC_HELP_STRING([--enable-ssl], 
-                     [Enable ssl support (requires libssl)])],
+     [AC_HELP_STRING([--disable-ssl], [Disable OpenSSL support])],
      [case "${enableval}" in
         (yes) ssl=true ;;
         (no)  ssl=false ;;
         (*) AC_MSG_ERROR([bad value ${enableval} for --enable-ssl]) ;;
       esac],
-     [ssl=false])
+     [ssl=check])
 
-   if test "$ssl" = true; then
+   if test "$ssl" != false; then
        dnl Make sure that pkg-config is installed.
        m4_pattern_forbid([PKG_CHECK_MODULES])
        PKG_CHECK_MODULES([SSL], [libssl], 
          [HAVE_OPENSSL=yes],
          [HAVE_OPENSSL=no
-          AC_MSG_WARN([Cannot find libssl:
+          if test "$ssl" = check; then
+            AC_MSG_WARN([Cannot find libssl:
 
 $SSL_PKG_ERRORS
 
-OpenFlow connections over SSL will not be supported.])])
+OpenFlow connections over SSL will not be supported.
+(You may use --disable-ssl to suppress this warning.)])
+          else
+            AC_MSG_ERROR([Cannot find libssl (use --disable-ssl to configure without SSL support)])
+          fi])
    else
        HAVE_OPENSSL=no
    fi

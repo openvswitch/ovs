@@ -24,8 +24,9 @@ you will need the following software:
     - libssl, from OpenSSL, is optional but recommended if you plan to
       connect the Open vSwitch to an OpenFlow controller.  libssl is
       required to establish confidentiality and authenticity in the
-      connections from an Open vSwitch to an OpenFlow controller.  To
-      enable, configure with --enable-ssl=yes.
+      connections from an Open vSwitch to an OpenFlow controller.  If
+      libssl is installed, then Open vSwitch will automatically build
+      with support for it.
 
 To compile the kernel module, you must also install the following.  If
 you cannot build or install the kernel module, you may use the
