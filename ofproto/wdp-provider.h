@@ -367,8 +367,7 @@ struct wdp_class {
      *         are updated from 'put->idle_timeout' and 'put->hard_timeout',
      *         respectively.
      *
-     * Returns 0 if successful, otherwise a positive errno value.  If
-     * successful:
+     * If successful, returns 0 and:
      *
      *   - If 'old_stats' is nonnull, then 'old_stats' is filled with the
      *     flow's stats as they existed just before the update, or it is zeroed
@@ -376,22 +375,40 @@ struct wdp_class {
      *
      *   - If 'rulep' is nonnull, then it is set to the newly created rule.
      *
-     * Some error return values have specific meanings:
+     * On failure, ordinarily returns an OpenFlow error code constructed with
+     * e.g. ofp_mkerr(), that will be reported to the controller.  Some
+     * examples:
+     *
+     *   - ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL): Flow
+     *     table full.
+     *
+     *   - ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT): Output to
+     *     unsupported output port.
+     *
+     *   - ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_UNSUPPORTED): The flow
+     *     table supports the supplied actions but not in the supplied order or
+     *     combination.
+     *
+     *   - OpenFlow lacks appropriate error types and codes for many
+     *     situations.  Feel free to add a new error vendor extension to
+     *     nicira-ext.h to handle these situations with your own vendor ID.  If
+     *     it is a reasonably generic error and you want to use the Nicira
+     *     vendor ID instead of your own, please coordinate with
+     *     dev@openvswitch.org.
+     *
+     * The following specific kinds of failures should instead be reported as
+     * errno values, for the caller to interpret, instead of the controller:
      *
      *   - ENOENT: Flow does not exist and WDP_PUT_CREATE not specified.
      *
      *   - EEXIST: Flow exists and WDP_PUT_MODIFY not specified.
-     *
-     *   - ENOBUFS: Flow table full.
-     *
-     *   - EINVAL: Flow table cannot accept flow of this form.
      */
     int (*flow_put)(struct wdp *wdp, const struct wdp_flow_put *put,
                     struct wdp_flow_stats *old_stats,
                     struct wdp_rule **rulep);
 
-    /* Deletes 'rule' from 'wdp'.  Returns 0 if successful, otherwise a
-     * positive errno value.
+    /* Deletes 'rule' from 'wdp'.  Returns 0 if successful, otherwise an
+     * OpenFlow error code.
      *
      * If successful and 'final_stats' is non-null, stores the flow's
      * statistics just before it is deleted into '*final_stats'. */
@@ -405,7 +422,9 @@ struct wdp_class {
     /* Performs the actions for 'rule' on the Ethernet frame specified in
      * 'packet'.  Pretends that the frame was originally received on the port
      * numbered 'in_port'.  Packets and bytes sent should be credited to
-     * 'rule'. */
+     * 'rule'.
+     *
+     * Returns 0 if successful, otherwise an OpenFlow error code. */
     int (*flow_inject)(struct wdp *wdp, struct wdp_rule *rule,
                        uint16_t in_port, const struct ofpbuf *packet);
 

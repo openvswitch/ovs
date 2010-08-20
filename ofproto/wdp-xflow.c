@@ -1722,7 +1722,7 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
 
     ofp_table_id = put->flow->wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
     if (put->ofp_table_id != 0xff && put->ofp_table_id != ofp_table_id) {
-        return EINVAL;
+        return ofp_mkerr_nicira(OFPET_FLOW_MOD_FAILED, NXFMFC_BAD_TABLE_ID);
     }
 
     rule = wx_rule_cast(classifier_find_rule_exactly(&wx->cls, put->flow));
@@ -1742,7 +1742,7 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
              ? classifier_count_wild(&wx->cls) >= WX_MAX_WILD
              : classifier_count_exact(&wx->cls) >= WX_MAX_EXACT)) {
             /* XXX subrules should not count against exact-match limit */
-            return ENOBUFS;
+            return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
         }
     }
 
@@ -1821,9 +1821,9 @@ wx_execute(struct wdp *wdp, uint16_t in_port,
     if (error) {
         return error;
     }
-    xfif_execute(wx->xfif, ofp_port_to_xflow_port(in_port),
-                 xflow_actions.actions, xflow_actions.n_actions, packet);
-    return 0;
+    return xfif_execute(wx->xfif, ofp_port_to_xflow_port(in_port),
+                        xflow_actions.actions, xflow_actions.n_actions,
+                        packet);
 }
 
 static int
