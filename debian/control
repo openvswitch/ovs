@@ -5,8 +5,7 @@ Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <blp@nicira.com>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev,
- pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev,
- libpcre3-dev, python
+ pkg-config (>= 0.21), po-debconf, bzip2, openssl, python
 Standards-Version: 3.9.1
 
 Package: openvswitch-datapath-source
@@ -48,20 +47,6 @@ Description: Open vSwitch switch implementations
  the Open vSwitch switch provided in the openvswitch-switch package.
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
-
-Package: openvswitch-switchui
-Architecture: any
-Recommends: openvswitch-switch
-Depends: ${shlibs:Depends}, ${misc:Depends}, console-tools
-Description: Monitoring utility for OpenFlow switches
- The ovs-switchui utility included in this package provides a
- "front-panel display" to allow administrators to view the status of
- an OpenFlow switch at a glance.
- .
- The ezio-term utility, also included, provides a VT100-compatible
- terminal interface for EZIO3 (aka MTB-134) 16x2 LCD displays found on
- server appliances made by Portwell.  It allows ovs-switchui to work
- with such displays.
 
 Package: openvswitch-pki
 Architecture: all
@@ -130,20 +115,3 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Watchdog utility for Open vSwitch switches
  The ovs-wdt program included in this package manages the hardware
  watchdog timer in switches based on the Portwell NAR-5520 hardware.
-
-Package: nicira-switch
-Architecture: all
-Depends: 
- openvswitch-common (>= ${source:Version}),
- openvswitch-common (<< ${source:Version}.1~),
- openvswitch-switch (>= ${source:Version}),
- openvswitch-switch (<< ${source:Version}.1~),
- openvswitch-switchui (>= ${source:Version}),
- openvswitch-switchui (<< ${source:Version}.1~),
- openvswitch-datapath-module (>= ${source:Version}),
- openvswitch-datapath-module (<< ${source:Version}.1~),
- corekeeper, openvswitch-monitor, openvswitch-wdt, ${misc:Depends}
-Description: A meta-package for installing a Nicira Open vSwitch switch
- Installing this package will install everything needed for a Nicira
- Portwell-based Open vSwitch switch, including monitoring and the switch UI.
-

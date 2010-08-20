@@ -10,8 +10,6 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
 AM_CPPFLAGS = $(SSL_CFLAGS)
-AM_CPPFLAGS += $(NCURSES_CFLAGS)
-AM_CPPFLAGS += $(PCRE_CFLAGS)
 AM_CPPFLAGS += -I $(top_srcdir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
 
@@ -132,5 +130,4 @@ include debian/automake.mk
 include vswitchd/automake.mk
 include ovsdb/automake.mk
 include xenserver/automake.mk
-include extras/ezio/automake.mk
 

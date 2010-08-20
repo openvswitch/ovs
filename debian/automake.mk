@@ -46,11 +46,6 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
-	debian/openvswitch-switchui.copyright \
-	debian/openvswitch-switchui.default \
-	debian/openvswitch-switchui.dirs \
-	debian/openvswitch-switchui.init \
-	debian/openvswitch-switchui.install \
 	debian/openvswitch-wdt.default \
 	debian/openvswitch-wdt.dirs \
 	debian/openvswitch-wdt.init \
