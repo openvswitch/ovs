@@ -445,7 +445,7 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
 
             if (table_idx && !strcmp(name, "table")) {
                 *table_idx = atoi(value);
-                if (*table_idx < 0 || *table_idx > 31) {
+                if (*table_idx > 31) {
                     ovs_fatal(0, "table %s is invalid, "
                               "must be between 0 and 31", value);
                 }
