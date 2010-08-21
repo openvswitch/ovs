@@ -903,8 +903,8 @@ jsonrpc_session_recv(struct jsonrpc_session *s)
                 reply = jsonrpc_create_reply(json_clone(msg->params), msg->id);
                 jsonrpc_session_send(s, reply);
             } else if (msg->type == JSONRPC_REPLY
-                && msg->id && msg->id->type == JSON_STRING
-                && !strcmp(msg->id->u.string, "echo")) {
+                       && msg->id && msg->id->type == JSON_STRING
+                       && !strcmp(msg->id->u.string, "echo")) {
                 /* It's a reply to our echo request.  Suppress it. */
             } else {
                 return msg;
