@@ -22,12 +22,7 @@
  * calls one (or more) of the functions poll_fd_wait(), poll_immediate_wake(),
  * and poll_timer_wait() to register to be awakened when the appropriate event
  * occurs.  Then the main loop calls poll_block(), which blocks until one of
- * the registered events happens.
- *
- * There is also some support for autonomous subroutines that are executed by
- * poll_block() when a file descriptor becomes ready.  To prevent these
- * routines from starving if events are continuously ready, the application
- * should bound the amount of work it does between poll_block() calls. */
+ * the registered events happens. */
 
 #ifndef POLL_LOOP_H
 #define POLL_LOOP_H 1
