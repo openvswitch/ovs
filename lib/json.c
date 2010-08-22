@@ -1186,7 +1186,7 @@ json_parser_put_value(struct json_parser *p, struct json *value)
     }
 }
 
-static struct json_parser_node *
+static void
 json_parser_push(struct json_parser *p,
                  struct json *new_json, enum json_parse_state new_state)
 {
@@ -1205,12 +1205,10 @@ json_parser_push(struct json_parser *p,
         node = &p->stack[p->height++];
         node->json = new_json;
         p->parse_state = new_state;
-        return node;
     } else {
         json_destroy(new_json);
         json_error(p, "input exceeds maximum nesting depth %d",
                    JSON_MAX_HEIGHT);
-        return NULL;
     }
 }
 
