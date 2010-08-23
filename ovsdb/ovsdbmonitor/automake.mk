@@ -41,6 +41,10 @@ DISTCLEANFILES += \
 	ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 endif
 
+uninstall-local: ovsdbmonitor-uninstall-local
+ovsdbmonitor-uninstall-local:
+	rm -f $(DESTDIR)$(bindir)/ovsdbmonitor
+
 SUFFIXES += .ui .py
 .ui.py:
 	$(PYUIC4) $< | sed 's/from PyQt4 import QtCore, QtGui/\
