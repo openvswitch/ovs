@@ -30,6 +30,15 @@ struct brport_attribute {
 	ssize_t (*store)(struct dp_port *, unsigned long);
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#define BRPORT_ATTR(_name,_mode,_show,_store)		        \
+struct brport_attribute brport_attr_##_name = {		        \
+	.attr = {.name = __stringify(_name),			\
+		 .mode = _mode },				\
+	.show	= _show,					\
+	.store	= _store,					\
+};
+#else
 #define BRPORT_ATTR(_name,_mode,_show,_store)		        \
 struct brport_attribute brport_attr_##_name = { 	        \
 	.attr = {.name = __stringify(_name), 			\
@@ -38,6 +47,7 @@ struct brport_attribute brport_attr_##_name = { 	        \
 	.show	= _show,					\
 	.store	= _store,					\
 };
+#endif
 
 static ssize_t show_path_cost(struct dp_port *p, char *buf)
 {
