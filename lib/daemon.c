@@ -36,16 +36,17 @@
 
 VLOG_DEFINE_THIS_MODULE(daemon)
 
-/* Should we run in the background? */
+/* --detach: Should we run in the background? */
 static bool detach;
 
-/* Name of pidfile (null if none). */
+/* --pidfile: Name of pidfile (null if none). */
 static char *pidfile;
 
-/* Create pidfile even if one already exists and is locked? */
+/* --overwrite-pidfile: Create pidfile even if one already exists and is
+   locked? */
 static bool overwrite_pidfile;
 
-/* Should we chdir to "/"? */
+/* --no-chdir: Should we chdir to "/"? */
 static bool chdir_ = true;
 
 /* File descriptor used by daemonize_start() and daemonize_complete(). */
@@ -174,9 +175,9 @@ die_if_already_running(void)
     }
 }
 
-/* If a pidfile has been configured, creates it and stores the running process'
- * pid init.  Ensures that the pidfile will be deleted when the process
- * exits. */
+/* If a pidfile has been configured, creates it and stores the running
+ * process's pid in it.  Ensures that the pidfile will be deleted when the
+ * process exits. */
 static void
 make_pidfile(void)
 {
