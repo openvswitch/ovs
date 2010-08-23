@@ -211,9 +211,15 @@ struct kobject *netdev_get_kobj(const struct vport *vport)
 int netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+	struct rtnl_link_stats64 *netdev_stats, storage;
+
+	netdev_stats = dev_get_stats(netdev_vport->dev, &storage);
+#else
 	const struct net_device_stats *netdev_stats;
 
 	netdev_stats = dev_get_stats(netdev_vport->dev);
+#endif
 
 	stats->rx_bytes		= netdev_stats->rx_bytes;
 	stats->rx_packets	= netdev_stats->rx_packets;
