@@ -44,6 +44,12 @@
  * number of options. */
 #define GRE_HEADER_SECTION 4
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#define rt_dst(rt) (rt->dst)
+#else
+#define rt_dst(rt) (rt->u.dst)
+#endif
+
 struct gre_base_hdr {
 	__be16 flags;
 	__be16 protocol;
@@ -963,7 +969,7 @@ static int build_packet(struct vport *vport, const struct mutable_config *mutabl
 
 	memcpy(new_iph, iph, sizeof(struct iphdr));
 	new_iph->frag_off = frag_off;
-	ip_select_ident(new_iph, &rt->u.dst, NULL);
+	ip_select_ident(new_iph, &rt_dst(rt), NULL);
 
 	create_gre_header(skb, mutable);
 
@@ -1057,11 +1063,11 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 #endif
 	}
 	if (!iph.ttl)
-		iph.ttl = dst_metric(&rt->u.dst, RTAX_HOPLIMIT);
+		iph.ttl = dst_metric(&rt_dst(rt), RTAX_HOPLIMIT);
 
 	iph.frag_off = (mutable->port_config.flags & GRE_F_PMTUD) ? htons(IP_DF) : 0;
 	if (iph.frag_off)
-		mtu = dst_mtu(&rt->u.dst)
+		mtu = dst_mtu(&rt_dst(rt))
 			- ETH_HLEN
 			- mutable->tunnel_hlen
 			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
@@ -1086,7 +1092,7 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 	nf_reset(skb);
 	secpath_reset(skb);
 	skb_dst_drop(skb);
-	skb_dst_set(skb, &rt->u.dst);
+	skb_dst_set(skb, &rt_dst(rt));
 
 	/* If we are doing GSO on a pskb it is better to make sure that the
 	 * headroom is correct now.  We will only have to copy the portion in
@@ -1094,7 +1100,7 @@ static int gre_send(struct vport *vport, struct sk_buff *skb)
 	 * the segments.  This is particularly beneficial on Xen where we get
 	 * lots of GSO pskbs.  Conversely, we delay copying if it is just to
 	 * get our own writable clone because GSO may do the copy for us. */
-	max_headroom = LL_RESERVED_SPACE(rt->u.dst.dev) + rt->u.dst.header_len
+	max_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ mutable->tunnel_hlen;
 
 	if (skb_headroom(skb) < max_headroom) {
