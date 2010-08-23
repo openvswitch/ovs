@@ -304,7 +304,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 /* Returns null if this device is not attached to a datapath. */
 struct vport *netdev_get_vport(struct net_device *dev)
 {
-	return (struct vport *)dev->br_port;
+	return (struct vport *)rcu_dereference(dev->br_port);
 }
 
 struct vport_ops netdev_vport_ops = {
