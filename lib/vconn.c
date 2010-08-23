@@ -461,10 +461,10 @@ vcs_send_error(struct vconn *vconn)
     }
 }
 
-/* Tries to complete the connection on 'vconn', which must be an active
- * vconn.  If 'vconn''s connection is complete, returns 0 if the connection
- * was successful or a positive errno value if it failed.  If the
- * connection is still in progress, returns EAGAIN. */
+/* Tries to complete the connection on 'vconn'. If 'vconn''s connection is
+ * complete, returns 0 if the connection was successful or a positive errno
+ * value if it failed.  If the connection is still in progress, returns
+ * EAGAIN. */
 int
 vconn_connect(struct vconn *vconn)
 {
@@ -504,11 +504,11 @@ vconn_connect(struct vconn *vconn)
     return EAGAIN;
 }
 
-/* Tries to receive an OpenFlow message from 'vconn', which must be an active
- * vconn.  If successful, stores the received message into '*msgp' and returns
- * 0.  The caller is responsible for destroying the message with
- * ofpbuf_delete().  On failure, returns a positive errno value and stores a
- * null pointer into '*msgp'.  On normal connection close, returns EOF.
+/* Tries to receive an OpenFlow message from 'vconn'.  If successful, stores
+ * the received message into '*msgp' and returns 0.  The caller is responsible
+ * for destroying the message with ofpbuf_delete().  On failure, returns a
+ * positive errno value and stores a null pointer into '*msgp'.  On normal
+ * connection close, returns EOF.
  *
  * vconn_recv will not block waiting for a packet to arrive.  If no packets
  * have been received, it returns EAGAIN immediately. */
@@ -565,11 +565,10 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
     return retval;
 }
 
-/* Tries to queue 'msg' for transmission on 'vconn', which must be an active
- * vconn.  If successful, returns 0, in which case ownership of 'msg' is
- * transferred to the vconn.  Success does not guarantee that 'msg' has been or
- * ever will be delivered to the peer, only that it has been queued for
- * transmission.
+/* Tries to queue 'msg' for transmission on 'vconn'.  If successful, returns 0,
+ * in which case ownership of 'msg' is transferred to the vconn.  Success does
+ * not guarantee that 'msg' has been or ever will be delivered to the peer,
+ * only that it has been queued for transmission.
  *
  * Returns a positive errno value on failure, in which case the caller
  * retains ownership of 'msg'.

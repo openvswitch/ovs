@@ -323,10 +323,10 @@ scs_connecting(struct stream *stream)
     }
 }
 
-/* Tries to complete the connection on 'stream', which must be an active
- * stream.  If 'stream''s connection is complete, returns 0 if the connection
- * was successful or a positive errno value if it failed.  If the
- * connection is still in progress, returns EAGAIN. */
+/* Tries to complete the connection on 'stream'.  If 'stream''s connection is
+ * complete, returns 0 if the connection was successful or a positive errno
+ * value if it failed.  If the connection is still in progress, returns
+ * EAGAIN. */
 int
 stream_connect(struct stream *stream)
 {
