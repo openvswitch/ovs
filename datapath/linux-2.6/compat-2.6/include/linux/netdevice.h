@@ -96,9 +96,13 @@ static inline int netdev_rx_handler_register(struct net_device *dev,
 {
 	if (dev->br_port)
 		return -EBUSY;
+	rcu_assign_pointer(dev->br_port, rx_handler_data);
 	return 0;
 }
-static inline void netdev_rx_handler_unregister(struct net_device *dev) { }
+static inline void netdev_rx_handler_unregister(struct net_device *dev)
+{
+	rcu_assign_pointer(dev->br_port, NULL);
+}
 #endif
 
 #endif

@@ -10,4 +10,11 @@
 
 #endif /* linux kernel < 2.6.31 */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+/* XXX: Change to a unique value after merge */
+#define IFF_OVS_DATAPATH IFF_BRIDGE_PORT
+#else
+#define IFF_OVS_DATAPATH 0		/* no-op flag */
+#endif
+
 #endif

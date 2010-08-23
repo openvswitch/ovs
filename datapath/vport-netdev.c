@@ -36,7 +36,7 @@ static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return skb;
 
-	vport = (struct vport *)rcu_dereference(skb->dev->br_port);
+	vport = netdev_get_vport(skb->dev);
 
 	netdev_port_receive(vport, skb);
 
@@ -150,15 +150,14 @@ static int netdev_attach(struct vport *vport)
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	int err;
 
-	rcu_assign_pointer(netdev_vport->dev->br_port,
-			   (struct net_bridge_port *)vport);
 	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
-					 NULL);
+					 vport);
 	if (err)
 		return err;
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
 	dev_disable_lro(netdev_vport->dev);
+	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
 
 	return 0;
 }
@@ -167,8 +166,8 @@ static int netdev_detach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
+	netdev_vport->dev->priv_flags &= ~IFF_OVS_DATAPATH;
 	netdev_rx_handler_unregister(netdev_vport->dev);
-	rcu_assign_pointer(netdev_vport->dev->br_port, NULL);
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
 	return 0;
@@ -304,7 +303,18 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 /* Returns null if this device is not attached to a datapath. */
 struct vport *netdev_get_vport(struct net_device *dev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+	/* XXX: The bridge code may have registered the data.
+	 * So check that the handler pointer is the datapath's.
+	 * Once the merge is done and IFF_OVS_DATAPATH stops
+	 * being the same value as IFF_BRIDGE_PORT the check can
+	 * simply be netdev_vport->dev->priv_flags & IFF_OVS_DATAPATH. */
+	if (rcu_dereference(dev->rx_handler) != netdev_frame_hook)
+		return NULL;
+	return (struct vport *)rcu_dereference(dev->rx_handler_data);
+#else
 	return (struct vport *)rcu_dereference(dev->br_port);
+#endif
 }
 
 struct vport_ops netdev_vport_ops = {
@@ -332,10 +342,12 @@ struct vport_ops netdev_vport_ops = {
 	.send		= netdev_send,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 /*
- * Open vSwitch cannot safely coexist with the Linux bridge module on any
- * released version of Linux, because there is only a single bridge hook
- * function and only a single br_port member in struct net_device.
+ * In kernels earlier than 2.6.36, Open vSwitch cannot safely coexist with
+ * the Linux bridge module on any released version of Linux, because there
+ * is only a single bridge hook function and only a single br_port member
+ * in struct net_device.
  *
  * Declaring and exporting this symbol enforces mutual exclusion.  The bridge
  * module also exports the same symbol, so the module loader will refuse to
@@ -347,3 +359,4 @@ struct vport_ops netdev_vport_ops = {
  */
 typeof(br_should_route_hook) br_should_route_hook;
 EXPORT_SYMBOL(br_should_route_hook);
+#endif
