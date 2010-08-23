@@ -89,4 +89,14 @@ dev_get_stats(struct net_device *dev)
 #define skb_checksum_help(skb) skb_checksum_help((skb), 0)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+static inline int netdev_rx_handler_register(struct net_device *dev,
+					     void *rx_handler,
+					     void *rx_handler_data)
+{
+	return 0;
+}
+static inline void netdev_rx_handler_unregister(struct net_device *dev) { }
+#endif
+
 #endif

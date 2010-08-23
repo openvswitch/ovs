@@ -25,31 +25,54 @@
 /* If the native device stats aren't 64 bit use the vport stats tracking instead. */
 #define USE_VPORT_STATS (sizeof(((struct net_device_stats *)0)->rx_bytes) < sizeof(u64))
 
-static void netdev_port_receive(struct net_bridge_port *, struct sk_buff *);
+static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+/* Called with rcu_read_lock and bottom-halves disabled. */
+static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
+{
+	struct vport *vport;
+
+	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
+		return skb;
+
+	vport = (struct vport *)rcu_dereference(skb->dev->br_port);
+
+	netdev_port_receive(vport, skb);
+
+	return NULL;
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 /*
  * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
  * different set of devices!)
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static struct sk_buff *netdev_frame_hook(struct net_bridge_port *p,
 					 struct sk_buff *skb)
 {
-	netdev_port_receive(p, skb);
+	netdev_port_receive((struct vport *)p, skb);
 	return NULL;
 }
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+/*
+ * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
+ * different set of devices!)
+ */
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static int netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 {
-	netdev_port_receive(p, *pskb);
+	netdev_port_receive((struct vport *)p, *pskb);
 	return 1;
 }
 #else
 #error
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+static int netdev_init(void) { return 0; }
+static void netdev_exit(void) { }
+#else
 static int netdev_init(void)
 {
 	/* Hook into callback used by the bridge to intercept packets.
@@ -63,6 +86,7 @@ static void netdev_exit(void)
 {
 	br_handle_frame_hook = NULL;
 }
+#endif
 
 static struct vport *netdev_create(const char *name, const void __user *config)
 {
@@ -129,10 +153,17 @@ static int netdev_destroy(struct vport *vport)
 static int netdev_attach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
+	int err;
+
+	rcu_assign_pointer(netdev_vport->dev->br_port,
+			   (struct net_bridge_port *)vport);
+	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
+					 NULL);
+	if (err)
+		return err;
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
 	dev_disable_lro(netdev_vport->dev);
-	rcu_assign_pointer(netdev_vport->dev->br_port, (struct net_bridge_port *)vport);
 
 	return 0;
 }
@@ -141,6 +172,7 @@ static int netdev_detach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
+	netdev_rx_handler_unregister(netdev_vport->dev);
 	rcu_assign_pointer(netdev_vport->dev->br_port, NULL);
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
@@ -242,10 +274,8 @@ int netdev_get_mtu(const struct vport *vport)
 }
 
 /* Must be called with rcu_read_lock. */
-static void netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
+static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 {
-	struct vport *vport = (struct vport *)p;
-
 	/* Make our own copy of the packet.  Otherwise we will mangle the
 	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
 	 * (No one comes after us, since we tell handle_bridge() that we took
