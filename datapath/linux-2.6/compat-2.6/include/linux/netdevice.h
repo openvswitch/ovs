@@ -94,6 +94,8 @@ static inline int netdev_rx_handler_register(struct net_device *dev,
 					     void *rx_handler,
 					     void *rx_handler_data)
 {
+	if (dev->br_port)
+		return -EBUSY;
 	return 0;
 }
 static inline void netdev_rx_handler_unregister(struct net_device *dev) { }

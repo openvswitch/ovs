@@ -115,11 +115,6 @@ static struct vport *netdev_create(const char *name, const void __user *config)
 		goto error_put;
 	}
 
-	if (netdev_vport->dev->br_port) {
-		err = -EBUSY;
-		goto error_put;
-	}
-
 	/* If we are using the vport stats layer initialize it to the current
 	 * values so we are roughly consistent with the device stats. */
 	if (USE_VPORT_STATS) {
