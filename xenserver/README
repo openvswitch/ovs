@@ -49,6 +49,11 @@ files are:
 
         Open vSwitch-aware replacement for Citrix script of the same name.
 
+    usr_share_openvswitch_scripts_monitor-external-ids
+
+        Daemon to monitor the external_ids columns of the Bridge and
+        Interface OVSDB tables.
+
     usr_share_openvswitch_scripts_refresh-xs-network-uuids
 
         Script to refresh Bridge table external-ids:xs-network-uuids

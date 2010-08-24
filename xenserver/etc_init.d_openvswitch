@@ -342,6 +342,12 @@ function start {
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
         start_brcompatd
     fi
+
+    # Start daemon to monitor external ids
+    PYTHONPATH=/usr/share/openvswitch/python \
+               /usr/share/openvswitch/scripts/monitor-external-ids \
+               --pidfile --detach "$VSWITCHD_OVSDB_SERVER"
+
     touch /var/lock/subsys/openvswitch
 }
 
@@ -349,6 +355,10 @@ function stop {
     stop_daemon BRCOMPATD "$brcompatd"
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
+    if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
+        kill `cat /var/run/openvswitch/monitor-external-ids.pid`
+        rm /var/run/openvswitch/monitor-external-ids.pid
+    fi
     rm -f /var/lock/subsys/openvswitch
 }
 
