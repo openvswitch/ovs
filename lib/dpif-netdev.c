@@ -99,10 +99,10 @@ struct dp_netdev_flow {
     flow_t key;
 
     /* Statistics. */
-	struct timespec used;       /* Last used time. */
-	long long int packet_count; /* Number of packets matched. */
-	long long int byte_count;   /* Number of bytes matched. */
-	uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
+    struct timespec used;       /* Last used time. */
+    long long int packet_count; /* Number of packets matched. */
+    long long int byte_count;   /* Number of bytes matched. */
+    uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
 
     /* Actions. */
     union odp_action *actions;
@@ -1198,7 +1198,7 @@ static void
 dp_netdev_set_tp_port(struct ofpbuf *packet, const flow_t *key,
                       const struct odp_action_tp_port *a)
 {
-	if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
         uint16_t *field;
         if (key->nw_proto == IPPROTO_TCP) {
             struct tcp_header *th = packet->l4;
@@ -1220,7 +1220,7 @@ static void
 dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
                       uint16_t out_port)
 {
-	struct dp_netdev_port *p = dp->ports[out_port];
+    struct dp_netdev_port *p = dp->ports[out_port];
     if (p) {
         netdev_send(p->netdev, packet);
     }
@@ -1230,15 +1230,15 @@ static void
 dp_netdev_output_group(struct dp_netdev *dp, uint16_t group, uint16_t in_port,
                        struct ofpbuf *packet)
 {
-	struct odp_port_group *g = &dp->groups[group];
-	int i;
+    struct odp_port_group *g = &dp->groups[group];
+    int i;
 
-	for (i = 0; i < g->n_ports; i++) {
+    for (i = 0; i < g->n_ports; i++) {
         uint16_t out_port = g->ports[i];
         if (out_port != in_port) {
             dp_netdev_output_port(dp, packet, out_port);
         }
-	}
+    }
 }
 
 static int
@@ -1306,64 +1306,64 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     for (i = 0; i < n_actions; i++) {
         const union odp_action *a = &actions[i];
 
-		switch (a->type) {
-		case ODPAT_OUTPUT:
+        switch (a->type) {
+        case ODPAT_OUTPUT:
             dp_netdev_output_port(dp, packet, a->output.port);
-			break;
+            break;
 
-		case ODPAT_OUTPUT_GROUP:
-			dp_netdev_output_group(dp, a->output_group.group, key->in_port,
+        case ODPAT_OUTPUT_GROUP:
+            dp_netdev_output_group(dp, a->output_group.group, key->in_port,
                                    packet);
-			break;
+            break;
 
-		case ODPAT_CONTROLLER:
+        case ODPAT_CONTROLLER:
             dp_netdev_output_control(dp, packet, _ODPL_ACTION_NR,
                                      key->in_port, a->controller.arg);
-			break;
+            break;
 
-		case ODPAT_SET_VLAN_VID:
-			dp_netdev_modify_vlan_tci(packet, ntohs(a->vlan_vid.vlan_vid),
+        case ODPAT_SET_VLAN_VID:
+            dp_netdev_modify_vlan_tci(packet, ntohs(a->vlan_vid.vlan_vid),
                                       VLAN_VID_MASK);
             break;
 
-		case ODPAT_SET_VLAN_PCP:
-			dp_netdev_modify_vlan_tci(packet,
+        case ODPAT_SET_VLAN_PCP:
+            dp_netdev_modify_vlan_tci(packet,
                                       a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
                                       VLAN_PCP_MASK);
             break;
 
-		case ODPAT_STRIP_VLAN:
-			dp_netdev_strip_vlan(packet);
-			break;
+        case ODPAT_STRIP_VLAN:
+            dp_netdev_strip_vlan(packet);
+            break;
 
-		case ODPAT_SET_DL_SRC:
+        case ODPAT_SET_DL_SRC:
             dp_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
-			break;
+            break;
 
-		case ODPAT_SET_DL_DST:
+        case ODPAT_SET_DL_DST:
             dp_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
-			break;
+            break;
 
-		case ODPAT_SET_NW_SRC:
-		case ODPAT_SET_NW_DST:
-			dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
-			break;
+        case ODPAT_SET_NW_SRC:
+        case ODPAT_SET_NW_DST:
+            dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
+            break;
 
-		case ODPAT_SET_NW_TOS:
-			dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
-			break;
+        case ODPAT_SET_NW_TOS:
+            dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
+            break;
 
-		case ODPAT_SET_TP_SRC:
-		case ODPAT_SET_TP_DST:
-			dp_netdev_set_tp_port(packet, key, &a->tp_port);
-			break;
+        case ODPAT_SET_TP_SRC:
+        case ODPAT_SET_TP_DST:
+            dp_netdev_set_tp_port(packet, key, &a->tp_port);
+            break;
 
         case ODPAT_DROP_SPOOFED_ARP:
             if (dp_netdev_is_spoofed_arp(packet, key)) {
                 return 0;
             }
-		}
-	}
+        }
+    }
     return 0;
 }
 
