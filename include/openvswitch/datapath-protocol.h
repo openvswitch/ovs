@@ -281,7 +281,8 @@ struct odp_flowvec {
 #define ODPAT_SET_TUNNEL        13   /* Set the encapsulating tunnel ID. */
 #define ODPAT_SET_PRIORITY      14   /* Set skb->priority. */
 #define ODPAT_POP_PRIORITY      15   /* Restore original skb->priority. */
-#define ODPAT_N_ACTIONS         16
+#define ODPAT_DROP_SPOOFED_ARP  16   /* Drop ARPs with spoofed source MAC. */
+#define ODPAT_N_ACTIONS         17
 
 struct odp_action_output {
     uint16_t type;              /* ODPAT_OUTPUT. */

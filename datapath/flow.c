@@ -34,21 +34,6 @@
 struct kmem_cache *flow_cache;
 static unsigned int hash_seed;
 
-struct arp_eth_header
-{
-	__be16      ar_hrd;	/* format of hardware address   */
-	__be16      ar_pro;	/* format of protocol address   */
-	unsigned char   ar_hln;	/* length of hardware address   */
-	unsigned char   ar_pln;	/* length of protocol address   */
-	__be16      ar_op;	/* ARP opcode (command)     */
-
-	/* Ethernet+IPv4 specific members. */
-	unsigned char       ar_sha[ETH_ALEN];	/* sender hardware address  */
-	unsigned char       ar_sip[4];		/* sender IP address        */
-	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
-	unsigned char       ar_tip[4];		/* target IP address        */
-} __attribute__((packed));
-
 static inline bool arphdr_ok(struct sk_buff *skb)
 {
 	int nh_ofs = skb_network_offset(skb);

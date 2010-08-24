@@ -2631,6 +2631,12 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         ctx->flow.tun_id = oa->tunnel.tun_id = nast->tun_id;
         break;
 
+    case NXAST_DROP_SPOOFED_ARP:
+        if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
+            odp_actions_add(ctx->out, ODPAT_DROP_SPOOFED_ARP);
+        }
+        break;
+
     /* If you add a new action here that modifies flow data, don't forget to
      * update the flow key in ctx->flow at the same time. */
 

@@ -1269,6 +1269,34 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
     return 0;
 }
 
+/* Returns true if 'packet' is an invalid Ethernet+IPv4 ARP packet: one with
+ * screwy or truncated header fields or one whose inner and outer Ethernet
+ * address differ. */
+static bool
+dp_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct odp_flow_key *key)
+{
+    struct arp_eth_header *arp;
+    struct eth_header *eth;
+    ptrdiff_t l3_size;
+
+    if (key->dl_type != htons(ETH_TYPE_ARP)) {
+        return false;
+    }
+
+    l3_size = (char *) ofpbuf_end(packet) - (char *) packet->l3;
+    if (l3_size < sizeof(struct arp_eth_header)) {
+        return true;
+    }
+
+    eth = packet->l2;
+    arp = packet->l3;
+    return (arp->ar_hrd != htons(ARP_HRD_ETHERNET)
+            || arp->ar_pro != htons(ARP_PRO_IP)
+            || arp->ar_hln != ETH_HEADER_LEN
+            || arp->ar_pln != 4
+            || !eth_addr_equals(arp->ar_sha, eth->eth_src));
+}
+
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, const flow_t *key,
@@ -1329,6 +1357,11 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 		case ODPAT_SET_TP_DST:
 			dp_netdev_set_tp_port(packet, key, &a->tp_port);
 			break;
+
+        case ODPAT_DROP_SPOOFED_ARP:
+            if (dp_netdev_is_spoofed_arp(packet, key)) {
+                return 0;
+            }
 		}
 	}
     return 0;

@@ -14,6 +14,7 @@
 #include <linux/types.h>
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
+#include <linux/if_ether.h>
 #include <linux/jiffies.h>
 #include <linux/time.h>
 
@@ -41,6 +42,21 @@ struct sw_flow {
 	u64 byte_count;		/* Number of bytes matched. */
 	u8 tcp_flags;		/* Union of seen TCP flags. */
 };
+
+struct arp_eth_header
+{
+	__be16      ar_hrd;	/* format of hardware address   */
+	__be16      ar_pro;	/* format of protocol address   */
+	unsigned char   ar_hln;	/* length of hardware address   */
+	unsigned char   ar_pln;	/* length of protocol address   */
+	__be16      ar_op;	/* ARP opcode (command)     */
+
+	/* Ethernet+IPv4 specific members. */
+	unsigned char       ar_sha[ETH_ALEN];	/* sender hardware address  */
+	unsigned char       ar_sip[4];		/* sender IP address        */
+	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
+	unsigned char       ar_tip[4];		/* target IP address        */
+} __attribute__((packed));
 
 extern struct kmem_cache *flow_cache;
 
