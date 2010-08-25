@@ -183,6 +183,15 @@ struct wdp_flow_put {
     /* OpenFlow 'table_id' to which a new flow is to be added.  Value 0xff
      * means that the WDP implementation should select a table. */
     uint8_t ofp_table_id;
+
+    /* If this is a new flow being created due to an OpenFlow OFPT_FLOW_MOD
+     * request, these values are copied from the ofp_header and ofp_flow_mod,
+     * respectively, in network byte order.  Otherwise they are zero.
+     *
+     * These values are provided to enable better logging.  The WDP provider
+     * may otherwise ignore them. */
+    uint64_t cookie;
+    uint32_t xid;
 };
 
 int wdp_flow_put(struct wdp *, struct wdp_flow_put *,

@@ -82,7 +82,6 @@ ofproto_rule_init(struct wdp_rule *wdp_rule)
     wdp_rule->client_data = xzalloc(sizeof(struct ofproto_rule));
 }
 
-
 static inline bool
 rule_is_hidden(const struct wdp_rule *rule)
 {
@@ -1107,6 +1106,8 @@ ofproto_add_flow(struct ofproto *p, const flow_t *flow,
     put.idle_timeout = idle_timeout;
     put.hard_timeout = 0;
     put.ofp_table_id = 0xff;
+    put.cookie = htonll(0);
+    put.xid = htonl(0);
 
     if (!wdp_flow_put(p->wdp, &put, NULL, &rule)) {
         ofproto_rule_init(rule);
@@ -2117,6 +2118,8 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     put.idle_timeout = ntohs(ofm->idle_timeout);
     put.hard_timeout = ntohs(ofm->hard_timeout);
     put.ofp_table_id = flow_mod_table_id(ofconn, ofm);
+    put.cookie = ofm->cookie;
+    put.xid = ofm->header.xid;
     error = wdp_flow_put(p->wdp, &put, NULL, &rule);
     if (error) {
         /* XXX wdp_flow_put should return OpenFlow error code. */
@@ -2286,6 +2289,8 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     put.n_actions = n_actions;
     put.idle_timeout = put.hard_timeout = 0;
     put.ofp_table_id = rule->ofp_table_id;
+    put.cookie = ofm->cookie;
+    put.xid = ofm->header.xid;
     return wdp_flow_put(p->wdp, &put, NULL, NULL);
 }
 
