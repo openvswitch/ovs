@@ -625,8 +625,8 @@ wdp_port_del(struct wdp *wdp, uint16_t port_no)
  * initializes 'port' with port details.  On failure, returns a positive errno
  * value and clears the contents of 'port' (with wdp_port_clear()).
  *
- * The caller must not modify or free the returned wdp_port.  Calling
- * wdp_run() or wdp_port_poll() may free the returned wdp_port.
+ * The caller takes ownership of everything in '*portp' and will eventually
+ * free it with, e.g., wdp_port_free().
  *
  * Possible error return values include:
  *
