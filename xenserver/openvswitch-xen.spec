@@ -395,6 +395,7 @@ fi
 /usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
+/usr/share/man/man8/ovs-parse-leaks.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
