@@ -3,3 +3,4 @@ _debian/ovsdb/ovsdb-tool.1
 _debian/utilities/ovs-appctl.8
 _debian/utilities/ovs-ofctl.8
 _debian/utilities/ovs-pki.8
+utilities/ovs-parse-leaks.8

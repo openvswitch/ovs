@@ -19,6 +19,7 @@ EXTRA_DIST += \
 	utilities/ovs-kill.8.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-openflowd.8.in \
+	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
@@ -46,6 +47,7 @@ man_MANS += \
 	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-openflowd.8 \
+	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pki.8 \
 	utilities/ovs-vsctl.8
 
