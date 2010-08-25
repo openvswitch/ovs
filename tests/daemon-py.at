@@ -1,13 +1,12 @@
-AT_BANNER([daemon unit tests - C])
+AT_BANNER([daemon unit tests - Python])
 
-AT_SETUP([daemon])
-AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov wrapper make pids differ
-OVSDB_INIT([db])
+AT_SETUP([daemon - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([ovsdb-server --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > expected], [0], [ignore], [ignore])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid& echo $! > expected], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
 AT_CHECK(
   [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -19,15 +18,14 @@ OVS_WAIT_WHILE([kill -0 `cat expected`])
 AT_CHECK([test ! -e pid])
 AT_CLEANUP
 
-AT_SETUP([daemon --monitor])
-AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov wrapper make pids differ
-OVSDB_INIT([db])
+AT_SETUP([daemon --monitor - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([ovsdb-server --monitor --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > parent], [0], [ignore], [ignore])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --monitor& echo $! > parent], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
@@ -63,14 +61,13 @@ OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e pid],
   [kill `cat parent`])
 AT_CLEANUP
 
-AT_SETUP([daemon --detach])
-AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov wrapper make pids differ
+AT_SETUP([daemon --detach - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0], [ignore], [ignore])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
@@ -80,11 +77,10 @@ OVS_WAIT_WHILE([kill -0 `cat saved-pid`])
 AT_CHECK([test ! -e pid])
 AT_CLEANUP
 
-AT_SETUP([daemon --detach --monitor])
-AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov wrapper make pids differ
+AT_SETUP([daemon --detach --monitor - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 m4_define([CHECK], 
   [AT_CHECK([$1], [$2], [$3], [$4], [kill `cat daemon monitor`])])
-OVSDB_INIT([db])
 AT_CAPTURE_FILE([daemon])
 AT_CAPTURE_FILE([olddaemon])
 AT_CAPTURE_FILE([newdaemon])
@@ -94,7 +90,7 @@ AT_CAPTURE_FILE([init])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/daemon --monitor --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/daemon --detach --monitor], [0], [ignore], [ignore])
 AT_CHECK([test -s daemon])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is a running process,
@@ -130,30 +126,30 @@ OVS_WAIT_WHILE(
 m4_undefine([CHECK])
 AT_CLEANUP
 
-AT_SETUP([daemon --detach startup errors])
+AT_SETUP([daemon --detach startup errors - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/nonexistent/unixctl db], [1], [], [stderr])
-AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach --bail], [1], [], [stderr])
+AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
 AT_CLEANUP
 
-AT_SETUP([daemon --detach --monitor startup errors])
+AT_SETUP([daemon --detach --monitor startup errors - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --monitor --unixctl=$PWD/nonexistent/unixctl db], [1], [], [stderr])
-AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach --monitor --bail], [1], [], [stderr])
+AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
 AT_CLEANUP
 
-AT_SETUP([daemon --detach closes standard fds])
+AT_SETUP([daemon --detach closes standard fds - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
-OVSDB_INIT([db])
-AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
@@ -173,7 +169,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --monitor --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then

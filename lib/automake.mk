@@ -234,7 +234,8 @@ lib/dirs.c: Makefile
 	 echo 'const char ovs_bindir[] = "$(bindir)";') > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
 
-install-data-local:
+install-data-local: lib-install-data-local
+lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(RUNDIR)
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)

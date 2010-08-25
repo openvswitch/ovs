@@ -130,4 +130,4 @@ include debian/automake.mk
 include vswitchd/automake.mk
 include ovsdb/automake.mk
 include xenserver/automake.mk
-
+include python/ovs/automake.mk

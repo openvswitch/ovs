@@ -319,7 +319,7 @@ do_notify(int argc OVS_UNUSED, char *argv[])
 
     error = jsonrpc_send_block(rpc, msg);
     if (error) {
-        ovs_fatal(error, "could not send request");
+        ovs_fatal(error, "could not send notification");
     }
     jsonrpc_close(rpc);
 }

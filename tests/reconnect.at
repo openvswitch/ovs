@@ -2,13 +2,25 @@ AT_BANNER([reconnect library])
 
 m4_define([__RECONNECT_CHECK],
   [AT_SETUP([$1])
+   $2
    AT_KEYWORDS([reconnect])
-   AT_DATA([input], [$2])
-   AT_CHECK([$3], [0], [$4])
+   AT_DATA([input], [$3])
+   AT_CHECK([$4], [0], [$5])
    AT_CLEANUP])
 
 m4_define([RECONNECT_CHECK],
-  [__RECONNECT_CHECK([$1], [$2], [test-reconnect < input], [$3])])
+  [__RECONNECT_CHECK(
+     [$1 - C],
+     [],
+     [$2],
+     [test-reconnect < input],
+     [$3])
+   __RECONNECT_CHECK(
+     [$1 - Python],
+     [AT_SKIP_IF([test $HAVE_PYTHON = no])],
+     [$2],
+     [$PYTHON $srcdir/test-reconnect.py < input],
+     [$3])])
 
 ######################################################################
 RECONNECT_CHECK([nothing happens if not enabled],

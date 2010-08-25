@@ -88,6 +88,7 @@ install -m 644 \
 
 install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch
 find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch \;
+install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -367,6 +368,28 @@ fi
 /etc/profile.d/openvswitch.sh
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
+/usr/share/openvswitch/python/ovs/__init__.py
+/usr/share/openvswitch/python/ovs/daemon.py
+/usr/share/openvswitch/python/ovs/db/__init__.py
+/usr/share/openvswitch/python/ovs/db/data.py
+/usr/share/openvswitch/python/ovs/db/error.py
+/usr/share/openvswitch/python/ovs/db/idl.py
+/usr/share/openvswitch/python/ovs/db/parser.py
+/usr/share/openvswitch/python/ovs/db/schema.py
+/usr/share/openvswitch/python/ovs/db/types.py
+/usr/share/openvswitch/python/ovs/dirs.py
+/usr/share/openvswitch/python/ovs/fatal_signal.py
+/usr/share/openvswitch/python/ovs/json.py
+/usr/share/openvswitch/python/ovs/jsonrpc.py
+/usr/share/openvswitch/python/ovs/ovsuuid.py
+/usr/share/openvswitch/python/ovs/poller.py
+/usr/share/openvswitch/python/ovs/process.py
+/usr/share/openvswitch/python/ovs/reconnect.py
+/usr/share/openvswitch/python/ovs/socket_util.py
+/usr/share/openvswitch/python/ovs/stream.py
+/usr/share/openvswitch/python/ovs/timeval.py
+/usr/share/openvswitch/python/ovs/util.py
+/usr/share/openvswitch/python/uuid.py
 /usr/share/openvswitch/scripts/refresh-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py
@@ -399,7 +422,8 @@ fi
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
-%exclude /usr/lib/xsconsole/plugins-base/*.pyc
-%exclude /usr/lib/xsconsole/plugins-base/*.pyo
-%exclude /usr/share/openvswitch/scripts/*.pyc
-%exclude /usr/share/openvswitch/scripts/*.pyo
+%exclude /usr/lib/xsconsole/plugins-base/*.py[co]
+%exclude /usr/share/openvswitch/scripts/*.py[co]
+%exclude /usr/share/openvswitch/python/*.py[co]
+%exclude /usr/share/openvswitch/python/ovs/*.py[co]
+%exclude /usr/share/openvswitch/python/ovs/db/*.py[co]

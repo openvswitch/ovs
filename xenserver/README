@@ -74,6 +74,12 @@ files are:
 
         Open vSwitch-aware replacement for Citrix script of the same name.
 
+    uuid.py
+
+        This is uuid.py from Python 2.5.  It is installed into the
+        Open vSwitch RPM because XenServer 5.5 and 5.6 use Python 2.4,
+        which do not have uuid.py.
+
 To install, build the Open vSwitch RPM with a command like this:
 
         rpmbuild -D "openvswitch_version $full_version" \
