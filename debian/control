@@ -99,15 +99,6 @@ Description: Debug symbols for Open vSwitch packages
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
 
-Package: openvswitch-monitor
-Architecture: any
-Recommends: openvswitch-switch
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Monitor utility for Open vSwitch switches
- The ovs-monitor utility included in this package monitors the
- ovs-openflowd process and the kernel datapath.  If either become
- unresponsive, it reboots the machine.
-
 Package: openvswitch-wdt
 Architecture: any
 Recommends: openvswitch-switch

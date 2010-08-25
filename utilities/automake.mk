@@ -9,7 +9,6 @@ bin_PROGRAMS += \
 	utilities/ovs-vsctl
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
-dist_sbin_SCRIPTS += utilities/ovs-monitor 
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \

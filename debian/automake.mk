@@ -23,10 +23,6 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
-	debian/openvswitch-monitor.default \
-	debian/openvswitch-monitor.dirs \
-	debian/openvswitch-monitor.init \
-	debian/openvswitch-monitor.install \
 	debian/openvswitch-pki-server.apache2 \
 	debian/openvswitch-pki-server.dirs \
 	debian/openvswitch-pki-server.install \

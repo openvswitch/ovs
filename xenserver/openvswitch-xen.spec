@@ -97,7 +97,6 @@ rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-openflowd \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/bin/ovs-wdt \
-    $RPM_BUILD_ROOT/usr/sbin/ovs-monitor \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-discover.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
