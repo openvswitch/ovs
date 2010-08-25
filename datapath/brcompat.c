@@ -425,8 +425,7 @@ static int brc_genl_dp_result(struct sk_buff *skb, struct genl_info *info)
 	if (brc_seq == info->snd_seq) {
 		brc_seq++;
 
-		if (brc_reply)
-			kfree_skb(brc_reply);
+		kfree_skb(brc_reply);
 		brc_reply = skb;
 
 		complete(&brc_done);
