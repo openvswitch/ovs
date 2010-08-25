@@ -98,11 +98,3 @@ Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
-
-Package: openvswitch-wdt
-Architecture: any
-Recommends: openvswitch-switch
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Watchdog utility for Open vSwitch switches
- The ovs-wdt program included in this package manages the hardware
- watchdog timer in switches based on the Portwell NAR-5520 hardware.

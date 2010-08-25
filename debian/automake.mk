@@ -42,10 +42,6 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
-	debian/openvswitch-wdt.default \
-	debian/openvswitch-wdt.dirs \
-	debian/openvswitch-wdt.init \
-	debian/openvswitch-wdt.install \
 	debian/ovs-switch-setup \
 	debian/ovs-switch-setup.8 \
 	debian/po/POTFILES.in \
