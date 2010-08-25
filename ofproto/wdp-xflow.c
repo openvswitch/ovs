@@ -2306,10 +2306,8 @@ wx_port_remove(struct wx *wx, struct wdp_port *wdp_port)
 static void
 wx_port_free(struct wdp_port *wdp_port)
 {
-    if (wdp_port) {
-        netdev_close(wdp_port->netdev);
-        free(wdp_port);
-    }
+    wdp_port_free(wdp_port);
+    free(wdp_port);
 }
 
 static void
