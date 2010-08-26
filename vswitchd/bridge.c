@@ -3340,7 +3340,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     if (port->updelay < 0) {
         port->updelay = 0;
     }
-    port->updelay = cfg->bond_downdelay;
+    port->downdelay = cfg->bond_downdelay;
     if (port->downdelay < 0) {
         port->downdelay = 0;
     }
