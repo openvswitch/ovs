@@ -188,6 +188,9 @@ def main(argv):
     interfaces = {}
     while True:
         if not idl.run():
+            poller = ovs.poller.Poller()
+            idl.wait(poller)
+            poller.block()
             continue
  
         new_bridges = {}
