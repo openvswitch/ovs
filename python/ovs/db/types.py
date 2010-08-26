@@ -386,7 +386,7 @@ class Type(object):
                 self.n_min == other.n_min and self.n_max == other.n_max)
 
     def __ne__(self, other):
-        if not isinstance(other, BaseType):
+        if not isinstance(other, Type):
             return NotImplemented
         else:
             return not (self == other)

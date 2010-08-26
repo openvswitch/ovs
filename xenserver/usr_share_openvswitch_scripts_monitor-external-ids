@@ -131,6 +131,12 @@ def keep_table_columns(schema, table_name, column_types):
         if not column:
             raise error.Error("%s table schema lacks %s column"
                               % (table_name, column_name))
+        if column.type != column_type:
+            raise error.Error("%s column in %s table has type \"%s\", "
+                              "expected type \"%s\""
+                              % (column_name, table_name,
+                                 column.type.toEnglish(),
+                                 column_type.toEnglish()))
         new_columns[column_name] = column
     table.columns = new_columns
     return table
