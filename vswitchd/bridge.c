@@ -141,7 +141,7 @@ struct port {
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
-    long bond_next_fake_iface_update; /* Next update to fake bond stats. */
+    long long int bond_next_fake_iface_update; /* Time of next update. */
     int bond_rebalance_interval; /* Interval between rebalances, in ms. */
     long long int bond_next_rebalance; /* Next rebalancing time. */
 
