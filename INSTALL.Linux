@@ -247,7 +247,8 @@ configuration in the database:
                       --remote=db:Open_vSwitch,managers \
                       --private-key=db:SSL,private_key \
                       --certificate=db:SSL,certificate \
-                      --bootstrap-ca-cert=db:SSL,ca_cert
+                      --bootstrap-ca-cert=db:SSL,ca_cert \
+                      --pidfile --detach
 
 Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
@@ -258,7 +259,8 @@ ovsdb-tool (but running it at any time is harmless):
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
 
-      % ovs-vswitchd unix:/usr/local/var/run/openvswitch/db.sock
+      % ovs-vswitchd unix:/usr/local/var/run/openvswitch/db.sock \
+            --pidfile --detach 
 
 Now you may use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named br0 and add ports
@@ -269,6 +271,33 @@ eth0 and vif1.0 to it:
       % ovs-vsctl add-port br0 vif1.0
 
 Please refer to ovs-vsctl(8) for more details.
+
+Upgrading
+=========
+
+When you upgrade Open vSwitch from one version to another, you should
+also upgrade the database schema:
+
+1. Stop the Open vSwitch daemons, e.g.:
+
+      % ovs-kill ovsdb-server.pid ovs-vswitchd.pid
+
+2. Install the new Open vSwitch release.
+
+3. Upgrade the database, in one of the following two ways:
+
+      - If there is no important data in your database, then you may
+        delete the database file and recreate it with ovsdb-tool,
+        following the instructions under "Building and Installing Open
+        vSwitch for Linux".
+
+      - If you want to preserve the contents of your database, back it
+        up first, then use "ovsdb-tool convert" to upgrade it, e.g.:
+
+        % ovsdb-tool convert /usr/local/etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
+
+4. Start the Open vSwitch daemons as described under "Building and
+   Installing Open vSwitch for Linux" above.
 
 Bug Reporting
 -------------
