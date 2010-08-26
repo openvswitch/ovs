@@ -296,7 +296,8 @@ function set_system_ids {
         $vsctl --no-wait set Open_vSwitch . \
             external-ids:system-type="$PRODUCT_BRAND" \
             external-ids:system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
-            external-ids:system-uuid="$INSTALLATION_UUID"
+            external-ids:system-id="$INSTALLATION_UUID" \
+            external-ids:xs-system-uuid="$INSTALLATION_UUID"
     else
         action "Configuring Open vSwitch system IDs" false
     fi
