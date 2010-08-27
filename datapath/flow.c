@@ -40,15 +40,27 @@ static inline bool arphdr_ok(struct sk_buff *skb)
 	return pskb_may_pull(skb, nh_ofs + sizeof(struct arp_eth_header));
 }
 
-static inline bool iphdr_ok(struct sk_buff *skb)
+static inline int check_iphdr(struct sk_buff *skb)
 {
-	int nh_ofs = skb_network_offset(skb);
-	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
-		int ip_len = ip_hdrlen(skb);
-		return (ip_len >= sizeof(struct iphdr)
-			&& pskb_may_pull(skb, nh_ofs + ip_len));
-	}
-	return false;
+	unsigned int nh_ofs = skb_network_offset(skb);
+	unsigned int ip_len;
+
+	if (skb->len < nh_ofs + sizeof(struct iphdr))
+		return -EINVAL;
+
+	ip_len = ip_hdrlen(skb);
+	if (ip_len < sizeof(struct iphdr) || skb->len < nh_ofs + ip_len)
+		return -EINVAL;
+
+	/*
+	 * Pull enough header bytes to account for the IP header plus the
+	 * longest transport header that we parse, currently 20 bytes for TCP.
+	 */
+	if (!pskb_may_pull(skb, min(nh_ofs + ip_len + 20, skb->len)))
+		return -ENOMEM;
+
+	skb_set_transport_header(skb, nh_ofs + ip_len);
+	return 0;
 }
 
 static inline bool tcphdr_ok(struct sk_buff *skb)
@@ -213,6 +225,8 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  *
  * The caller must ensure that skb->len >= ETH_HLEN.
  *
+ * Returns 0 if successful, otherwise a negative errno value.
+ *
  * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
  * %false.
  */
@@ -226,8 +240,25 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	key->dl_vlan = htons(ODP_VLAN_NONE);
 	OVS_CB(skb)->is_frag = false;
 
+	/*
+	 * We would really like to pull as many bytes as we could possibly
+	 * want to parse into the linear data area.  Currently that is:
+	 *
+	 *    14     Ethernet header
+	 *     4     VLAN header
+	 *    60     max IP header with options
+	 *    20     max TCP/UDP/ICMP header (don't care about options)
+	 *    --
+	 *    98
+	 *
+	 * But Xen only allocates 64 or 72 bytes for the linear data area in
+	 * netback, which means that we would reallocate and copy the skb's
+	 * linear data on every packet if we did that.  So instead just pull 64
+	 * bytes, which is always sufficient without IP options, and then check
+	 * whether we need to pull more later when we look at the IP header.
+	 */
 	if (!pskb_may_pull(skb, min(skb->len, 64u)))
-		return 0;
+		return -ENOMEM;
 
 	skb_reset_mac_header(skb);
 
@@ -245,14 +276,24 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	__skb_push(skb, skb->data - (unsigned char *)eth);
 
 	/* Network layer. */
-	if (key->dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
-		struct iphdr *nh = ip_hdr(skb);
-		int th_ofs = skb_network_offset(skb) + nh->ihl * 4;
+	if (key->dl_type == htons(ETH_P_IP)) {
+		struct iphdr *nh;
+		int error;
+
+		error = check_iphdr(skb);
+		if (unlikely(error)) {
+			if (error == -EINVAL) {
+				skb->transport_header = skb->network_header;
+				return 0;
+			}
+			return error;
+		}
+
+		nh = ip_hdr(skb);
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
 		key->nw_tos = nh->tos & ~INET_ECN_MASK;
 		key->nw_proto = nh->protocol;
-		skb_set_transport_header(skb, th_ofs);
 
 		/* Transport layer. */
 		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET))) {
