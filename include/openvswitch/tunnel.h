@@ -48,6 +48,7 @@
 #define TNL_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
 #define TNL_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
 #define TNL_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
+#define TNL_F_HDR_CACHE		(1 << 7) /* Enable tunnel header caching. */
 
 struct tnl_port_config {
 	__u32	flags;

@@ -128,24 +128,32 @@ static int capwap_hdr_len(const struct tnl_port_config *port_config)
 	return CAPWAP_HLEN;
 }
 
-static struct sk_buff *capwap_build_header(struct sk_buff *skb,
-					   const struct vport *vport,
-					   const struct tnl_mutable_config *mutable,
-					   struct dst_entry *dst)
+static void capwap_build_header(const struct vport *vport,
+				const struct tnl_mutable_config *mutable,
+				void *header)
 {
-	struct udphdr *udph = udp_hdr(skb);
-	struct capwaphdr *cwh = capwap_hdr(skb);
+	struct udphdr *udph = header;
+	struct capwaphdr *cwh = (struct capwaphdr *)(udph + 1);
 
 	udph->source = htons(CAPWAP_SRC_PORT);
 	udph->dest = htons(CAPWAP_DST_PORT);
-	udph->len = htons(skb->len - sizeof(struct iphdr));
 	udph->check = 0;
 
 	cwh->begin = NO_FRAG_HDR;
 	cwh->frag_id = 0;
 	cwh->frag_off = 0;
+}
 
-	if (unlikely(skb->len > dst_mtu(dst)))
+static struct sk_buff *capwap_update_header(const struct vport *vport,
+					    const struct tnl_mutable_config *mutable,
+					    struct dst_entry *dst,
+					    struct sk_buff *skb)
+{
+	struct udphdr *udph = udp_hdr(skb);
+
+	udph->len = htons(skb->len - skb_transport_offset(skb));
+
+	if (unlikely(skb->len - skb_network_offset(skb) > dst_mtu(dst)))
 		skb = fragment(skb, vport, dst);
 
 	return skb;
@@ -209,6 +217,7 @@ struct tnl_ops capwap_tnl_ops = {
 	.ipproto	= IPPROTO_UDP,
 	.hdr_len	= capwap_hdr_len,
 	.build_header	= capwap_build_header,
+	.update_header	= capwap_update_header,
 };
 
 static struct vport *capwap_create(const char *name, const void __user *config)
@@ -241,7 +250,7 @@ static int capwap_init(void)
 
 	defrag_init();
 
-	return tnl_init();
+	return 0;
 
 error_sock:
 	sock_release(capwap_rcv_socket);
@@ -252,7 +261,6 @@ error:
 
 static void capwap_exit(void)
 {
-	tnl_exit();
 	defrag_exit();
 	sock_release(capwap_rcv_socket);
 }
@@ -282,17 +290,19 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 				struct dst_entry *dst)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	unsigned int hlen = sizeof(struct iphdr) + CAPWAP_HLEN;
-	unsigned int headroom = LL_RESERVED_SPACE(dst->dev) + dst->header_len;
+	unsigned int hlen = skb_transport_offset(skb) + CAPWAP_HLEN;
+	unsigned int headroom;
+	unsigned int max_frame_len = dst_mtu(dst) + skb_network_offset(skb);
 	struct sk_buff *result = NULL, *list_cur = NULL;
 	unsigned int remaining;
 	unsigned int offset;
 	__be16 frag_id;
 
-	if (hlen + ~FRAG_OFF_MASK + 1 > dst_mtu(dst)) {
+	if (hlen + ~FRAG_OFF_MASK + 1 > max_frame_len) {
 		if (net_ratelimit())
 			pr_warn("capwap link mtu (%d) is less than minimum packet (%d)\n",
-				dst_mtu(dst), hlen + ~FRAG_OFF_MASK + 1);
+				dst_mtu(dst),
+				hlen - skb_network_offset(skb) + ~FRAG_OFF_MASK + 1);
 		goto error;
 	}
 
@@ -300,14 +310,17 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 	offset = 0;
 	frag_id = htons(atomic_inc_return(&tnl_vport->frag_id));
 
+	headroom = dst->header_len + 16;
+	if (!skb_network_offset(skb))
+		headroom += LL_RESERVED_SPACE(dst->dev);
+
 	while (remaining) {
 		struct sk_buff *skb2;
 		int frag_size;
-		struct iphdr *iph;
 		struct udphdr *udph;
 		struct capwaphdr *cwh;
 
-		frag_size = min(remaining, dst_mtu(dst) - hlen);
+		frag_size = min(remaining, max_frame_len - hlen);
 		if (remaining > frag_size)
 			frag_size &= FRAG_OFF_MASK;
 
@@ -317,23 +330,22 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 
 		skb_reserve(skb2, headroom);
 		__skb_put(skb2, hlen + frag_size);
-		skb_reset_network_header(skb2);
-		skb_set_transport_header(skb2, sizeof(struct iphdr));
 
-		/* Copy IP/UDP/CAPWAP header. */
+		if (skb_network_offset(skb))
+			skb_reset_mac_header(skb2);
+		skb_set_network_header(skb2, skb_network_offset(skb));
+		skb_set_transport_header(skb2, skb_transport_offset(skb));
+
+		/* Copy (Ethernet)/IP/UDP/CAPWAP header. */
 		copy_skb_metadata(skb, skb2);
-		skb_copy_from_linear_data(skb, skb_network_header(skb2), hlen);
+		skb_copy_from_linear_data(skb, skb2->data, hlen);
 
 		/* Copy this data chunk. */
 		if (skb_copy_bits(skb, hlen + offset, skb2->data + hlen, frag_size))
 			BUG();
 
-		iph = ip_hdr(skb2);
-		iph->tot_len = hlen + frag_size;
-		ip_send_check(iph);
-
 		udph = udp_hdr(skb2);
-		udph->len = htons(skb2->len - sizeof(struct iphdr));
+		udph->len = htons(skb2->len - skb_transport_offset(skb2));
 
 		cwh = capwap_hdr(skb2);
 		if (remaining > frag_size)
@@ -356,11 +368,7 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 	goto out;
 
 error:
-	while (result) {
-		list_cur = result->next;
-		kfree_skb(result);
-		result = list_cur;
-	}
+	tnl_free_linked_skbs(result);
 out:
 	kfree_skb(skb);
 	return result;
