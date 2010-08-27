@@ -224,6 +224,18 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  *
  * Returns 0 if successful, otherwise a negative errno value.
  *
+ * Initializes @skb header pointers as follows:
+ *
+ *    - skb->mac_header: the Ethernet header.
+ *
+ *    - skb->network_header: just past the Ethernet header, or just past the
+ *      VLAN header, to the first byte of the Ethernet payload.
+ *
+ *    - skb->transport_header: If key->dl_type is ETH_P_IP on output, then just
+ *      past the IPv4 header, if one is present and of a correct length,
+ *      otherwise the same as skb->network_header.  For other key->dl_type
+ *      values it is left untouched.
+ *
  * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
  * %false.
  */
@@ -355,8 +367,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 				memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
 			}
 		}
-	} else {
-		skb_reset_transport_header(skb);
 	}
 	return 0;
 }
