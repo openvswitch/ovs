@@ -74,7 +74,7 @@ void flow_deferred_free_acts(struct sw_flow_actions *);
 void flow_hold(struct sw_flow *);
 void flow_put(struct sw_flow *);
 
-int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
+int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *, bool *is_frag);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
 u32 flow_hash(const struct odp_flow_key *key);

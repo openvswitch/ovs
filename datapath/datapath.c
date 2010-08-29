@@ -552,15 +552,16 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	if (!OVS_CB(skb)->flow) {
 		struct odp_flow_key key;
 		struct tbl_node *flow_node;
+		bool is_frag;
 
 		/* Extract flow from 'skb' into 'key'. */
-		error = flow_extract(skb, p ? p->port_no : ODPP_NONE, &key);
+		error = flow_extract(skb, p ? p->port_no : ODPP_NONE, &key, &is_frag);
 		if (unlikely(error)) {
 			kfree_skb(skb);
 			return;
 		}
 
-		if (OVS_CB(skb)->is_frag && dp->drop_frags) {
+		if (is_frag && dp->drop_frags) {
 			kfree_skb(skb);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
 			goto out;
@@ -1325,6 +1326,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
 	struct ethhdr *eth;
+	bool is_frag;
 	int err;
 
 	err = -EINVAL;
@@ -1372,7 +1374,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	else
 		skb->protocol = htons(ETH_P_802_2);
 
-	err = flow_extract(skb, execute->in_port, &key);
+	err = flow_extract(skb, execute->in_port, &key, &is_frag);
 	if (err)
 		goto error_free_skb;
 

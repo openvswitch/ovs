@@ -267,7 +267,8 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
  * %false.
  */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
+int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
+		 bool *is_frag)
 {
 	struct ethhdr *eth;
 
@@ -275,7 +276,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
 	key->dl_vlan = htons(ODP_VLAN_NONE);
-	OVS_CB(skb)->is_frag = false;
+	*is_frag = false;
 
 	/*
 	 * We would really like to pull as many bytes as we could possibly
@@ -356,9 +357,9 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 					key->tp_dst = htons(icmp->code);
 				}
 			}
-		} else {
-			OVS_CB(skb)->is_frag = true;
-		}
+		} else
+			*is_frag = true;
+
 	} else if (key->dl_type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
 		struct arp_eth_header *arp;
 
@@ -370,9 +371,8 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 				&& arp->ar_pln == 4) {
 
 			/* We only match on the lower 8 bits of the opcode. */
-			if (ntohs(arp->ar_op) <= 0xff) {
+			if (ntohs(arp->ar_op) <= 0xff)
 				key->nw_proto = ntohs(arp->ar_op);
-			}
 
 			if (key->nw_proto == ARPOP_REQUEST
 					|| key->nw_proto == ARPOP_REPLY) {
