@@ -132,36 +132,27 @@ struct sw_flow *flow_alloc(void)
 		return ERR_PTR(-ENOMEM);
 
 	spin_lock_init(&flow->lock);
+	atomic_set(&flow->refcnt, 1);
+	flow->dead = false;
 
 	return flow;
-}
-
-void flow_free(struct sw_flow *flow)
-{
-	if (unlikely(!flow))
-		return;
-
-	kmem_cache_free(flow_cache, flow);
-}
-
-/* Frees the entire 'flow' (both base and actions) immediately. */
-static void flow_free_full(struct sw_flow *flow)
-{
-	kfree(flow->sf_acts);
-	flow_free(flow);
 }
 
 void flow_free_tbl(struct tbl_node *node)
 {
 	struct sw_flow *flow = flow_cast(node);
-	flow_free_full(flow);
+
+	flow->dead = true;
+	flow_put(flow);
 }
 
 /* RCU callback used by flow_deferred_free. */
 static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
-	flow_free_full(flow);
+
+	flow->dead = true;
+	flow_put(flow);
 }
 
 /* Schedules 'flow' to be freed after the next RCU grace period.
@@ -169,6 +160,22 @@ static void rcu_free_flow_callback(struct rcu_head *rcu)
 void flow_deferred_free(struct sw_flow *flow)
 {
 	call_rcu(&flow->rcu, rcu_free_flow_callback);
+}
+
+void flow_hold(struct sw_flow *flow)
+{
+	atomic_inc(&flow->refcnt);
+}
+
+void flow_put(struct sw_flow *flow)
+{
+	if (unlikely(!flow))
+		return;
+
+	if (atomic_dec_and_test(&flow->refcnt)) {
+		kfree(flow->sf_acts);
+		kmem_cache_free(flow_cache, flow);
+	}
 }
 
 /* RCU callback used by flow_deferred_free_acts. */

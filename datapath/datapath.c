@@ -1109,7 +1109,8 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 error_free_flow_acts:
 	kfree(flow->sf_acts);
 error_free_flow:
-	flow_free(flow);
+	flow->sf_acts = NULL;
+	flow_put(flow);
 error:
 	return error;
 }

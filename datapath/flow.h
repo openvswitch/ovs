@@ -36,6 +36,9 @@ struct sw_flow {
 	struct odp_flow_key key;
 	struct sw_flow_actions *sf_acts;
 
+	atomic_t refcnt;
+	bool dead;
+
 	spinlock_t lock;	/* Lock for values below. */
 	unsigned long used;	/* Last used time (in jiffies). */
 	u64 packet_count;	/* Number of packets matched. */
@@ -62,12 +65,14 @@ int flow_init(void);
 void flow_exit(void);
 
 struct sw_flow *flow_alloc(void);
-void flow_free(struct sw_flow *flow);
 void flow_deferred_free(struct sw_flow *);
 void flow_free_tbl(struct tbl_node *);
 
 struct sw_flow_actions *flow_actions_alloc(size_t n_actions);
 void flow_deferred_free_acts(struct sw_flow_actions *);
+
+void flow_hold(struct sw_flow *);
+void flow_put(struct sw_flow *);
 
 int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
