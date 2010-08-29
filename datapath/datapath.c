@@ -543,40 +543,44 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
 	int stats_counter_off;
-	struct odp_flow_key key;
-	struct tbl_node *flow_node;
-	struct sw_flow *flow;
 	struct sw_flow_actions *acts;
 	struct loop_counter *loop;
 	int error;
 
 	OVS_CB(skb)->dp_port = p;
 
-	/* Extract flow from 'skb' into 'key'. */
-	error = flow_extract(skb, p ? p->port_no : ODPP_NONE, &key);
-	if (unlikely(error)) {
-		kfree_skb(skb);
-		return;
+	if (!OVS_CB(skb)->flow) {
+		struct odp_flow_key key;
+		struct tbl_node *flow_node;
+
+		/* Extract flow from 'skb' into 'key'. */
+		error = flow_extract(skb, p ? p->port_no : ODPP_NONE, &key);
+		if (unlikely(error)) {
+			kfree_skb(skb);
+			return;
+		}
+
+		if (OVS_CB(skb)->is_frag && dp->drop_frags) {
+			kfree_skb(skb);
+			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+			goto out;
+		}
+
+		/* Look up flow. */
+		flow_node = tbl_lookup(rcu_dereference(dp->table), &key,
+					flow_hash(&key), flow_cmp);
+		if (unlikely(!flow_node)) {
+			dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
+			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
+			goto out;
+		}
+
+		OVS_CB(skb)->flow = flow_cast(flow_node);
 	}
 
-	if (OVS_CB(skb)->is_frag && dp->drop_frags) {
-		kfree_skb(skb);
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
-		goto out;
-	}
+	flow_used(OVS_CB(skb)->flow, skb);
 
-	/* Look up flow. */
-	flow_node = tbl_lookup(rcu_dereference(dp->table), &key, flow_hash(&key), flow_cmp);
-	if (unlikely(!flow_node)) {
-		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
-		goto out;
-	}
-
-	flow = flow_cast(flow_node);
-	flow_used(flow, skb);
-
-	acts = rcu_dereference(flow->sf_acts);
+	acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 
 	/* Check whether we've looped too much. */
 	loop = &get_cpu_var(dp_loop_counters).counters[!!in_interrupt()];
@@ -588,7 +592,8 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	}
 
 	/* Execute actions. */
-	execute_actions(dp, skb, &key, acts->actions, acts->n_actions, GFP_ATOMIC);
+	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
+			acts->n_actions, GFP_ATOMIC);
 	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 
 	/* Check whether sub-actions looped too much. */

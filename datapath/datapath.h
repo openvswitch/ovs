@@ -146,17 +146,19 @@ enum csum_type {
 /**
  * struct ovs_skb_cb - OVS data in skb CB
  * @dp_port: The datapath port on which the skb entered the switch.
+ * @flow: The flow associated with this packet.  May be %NULL if no flow.
+ * @is_frag: %true if this packet is an IPv4 fragment, %false otherwise.
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
  * @tun_id: ID (in network byte order) of the tunnel that encapsulated this
  * packet. It is 0 if the packet was not received on a tunnel.
- * @is_frag: %true if this packet is an IPv4 fragment, %false otherwise.
  */
 struct ovs_skb_cb {
 	struct dp_port		*dp_port;
+	struct sw_flow		*flow;
+	bool			is_frag;
 	enum csum_type		ip_summed;
 	__be32			tun_id;
-	bool			is_frag;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 

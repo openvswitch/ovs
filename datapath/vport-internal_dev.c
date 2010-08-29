@@ -82,6 +82,7 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 
 	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, true);
+	OVS_CB(skb)->flow = NULL;
 
 	vport_receive(vport, skb);
 
@@ -293,7 +294,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 
 struct vport_ops internal_vport_ops = {
 	.type		= "internal",
-	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS,
+	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
 	.attach		= internal_dev_attach,

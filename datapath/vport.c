@@ -1217,6 +1217,9 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 		local_bh_enable();
 	}
 
+	if (!(vport->ops->flags & VPORT_F_FLOW))
+		OVS_CB(skb)->flow = NULL;
+
 	if (!(vport->ops->flags & VPORT_F_TUN_ID))
 		OVS_CB(skb)->tun_id = 0;
 
