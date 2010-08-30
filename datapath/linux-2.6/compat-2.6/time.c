@@ -4,7 +4,7 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 
-/* "set_normalized_timespec" is defined but not exported in kernels 
+/* "set_normalized_timespec" is defined but not exported in kernels
  * before 2.6.26. */
 
 /**
@@ -21,7 +21,7 @@
  *      0 <= tv_nsec < NSEC_PER_SEC
  * For negative values only the tv_sec field is negative !
  */
-void set_normalized_timespec(struct timespec *ts, 
+void set_normalized_timespec(struct timespec *ts,
                    time_t sec, long nsec)
 {
 	while (nsec >= NSEC_PER_SEC) {

@@ -353,8 +353,8 @@ classifier_find_rule_exactly(const struct classifier *cls,
     return NULL;
 }
 
-/* Checks if the flow defined by 'target' with 'wildcards' at 'priority' 
- * overlaps with any other rule at the same priority in the classifier.  
+/* Checks if the flow defined by 'target' with 'wildcards' at 'priority'
+ * overlaps with any other rule at the same priority in the classifier.
  * Two rules are considered overlapping if a packet could match both. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
@@ -379,7 +379,7 @@ classifier_rule_overlaps(const struct classifier *cls,
 
             LIST_FOR_EACH (rule, struct cls_rule, node.list,
                            &bucket->rules) {
-                if (rule->priority == priority 
+                if (rule->priority == priority
                         && rules_match_2wild(rule, &target_rule, 0)) {
                     return true;
                 }
@@ -828,10 +828,10 @@ static bool
 rules_match_2wild(const struct cls_rule *wild1, const struct cls_rule *wild2,
                   int field_idx)
 {
-    return rules_match(wild1, wild2, 
-                       wild1->wc.wildcards | wild2->wc.wildcards, 
+    return rules_match(wild1, wild2,
+                       wild1->wc.wildcards | wild2->wc.wildcards,
                        wild1->wc.nw_src_mask & wild2->wc.nw_src_mask,
-                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask, 
+                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask,
                        field_idx);
 }
 

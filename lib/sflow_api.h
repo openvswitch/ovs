@@ -25,7 +25,7 @@
 #endif
 
 #include "sflow.h"
-  
+
 /* define SFLOW_SOFTWARE_SAMPLING to 1 if you need to use the
    sfl_sampler_takeSample routine and give it every packet */
 /* #define SFLOW_SOFTWARE_SAMPLING */
@@ -42,7 +42,7 @@
    __________________________________
    | cls|  index     |   instance     |
    ----------------------------------
- 
+
    but now is opened up to a 12-byte struct to ensure
    that ds_index has a full 32-bit field, and to make
    accessing the components simpler. The macros have

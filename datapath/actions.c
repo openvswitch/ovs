@@ -122,7 +122,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		if (unlikely(err)) {
 			kfree_skb(skb);
 			return ERR_PTR(err);
-		}	
+		}
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.

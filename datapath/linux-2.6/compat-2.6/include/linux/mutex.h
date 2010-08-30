@@ -50,10 +50,10 @@ static inline void mutex_unlock(struct mutex *lock)
 {
 	up(&lock->sema);
 }
-#else 
+#else
 
 #include_next <linux/mutex.h>
 
 #endif /* linux version < 2.6.16 */
 
-#endif 
+#endif

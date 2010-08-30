@@ -226,7 +226,7 @@ struct odp_flow_key {
     uint8_t  dl_src[6];         /* Ethernet source address. */
     uint8_t  dl_dst[6];         /* Ethernet destination address. */
     uint8_t  nw_proto;          /* IP protocol or lower 8 bits of
-                                   ARP opcode. */ 
+                                   ARP opcode. */
     uint8_t  dl_vlan_pcp;       /* Input VLAN priority. */
     uint8_t  nw_tos;            /* IP ToS (DSCP field, 6 bits). */
     uint8_t  reserved[3];       /* Align to 32-bits...must be zeroed. */

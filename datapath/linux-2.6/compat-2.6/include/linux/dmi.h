@@ -80,7 +80,7 @@ struct dmi_device {
 };
 
 /* No CONFIG_DMI before 2.6.16 */
-#if defined(CONFIG_DMI) || defined(CONFIG_X86_32)  
+#if defined(CONFIG_DMI) || defined(CONFIG_X86_32)
 
 extern int dmi_check_system(struct dmi_system_id *list);
 extern char * dmi_get_system_info(int field);
@@ -111,4 +111,4 @@ static inline int dmi_name_in_vendors(char *s) { return 0; }
 
 #endif /* linux kernel < 2.6.22 */
 
-#endif 
+#endif

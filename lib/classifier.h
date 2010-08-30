@@ -148,7 +148,7 @@ struct cls_rule *classifier_lookup_wild(const struct classifier *,
                                         const flow_t *);
 struct cls_rule *classifier_lookup_exact(const struct classifier *,
                                          const flow_t *);
-bool classifier_rule_overlaps(const struct classifier *, const flow_t *, 
+bool classifier_rule_overlaps(const struct classifier *, const flow_t *,
                               uint32_t wildcards, unsigned int priority);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);

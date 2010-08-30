@@ -187,7 +187,7 @@ static ssize_t brport_store(struct kobject * kobj,
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	printk("%s: xxx writing port parms not supported yet!\n", 
+	printk("%s: xxx writing port parms not supported yet!\n",
 	       dp_name(p->dp));
 
 	return ret;

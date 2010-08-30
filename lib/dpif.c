@@ -321,7 +321,7 @@ dpif_close(struct dpif *dpif)
     if (dpif) {
         struct registered_dpif_class *registered_class;
 
-        registered_class = shash_find_data(&dpif_classes, 
+        registered_class = shash_find_data(&dpif_classes,
                 dpif->dpif_class->type);
         assert(registered_class);
         assert(registered_class->refcount);

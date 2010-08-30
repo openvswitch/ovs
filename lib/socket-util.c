@@ -98,7 +98,7 @@ get_max_fds(void)
  * address, into a numeric IP address in '*addr'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
-lookup_ip(const char *host_name, struct in_addr *addr) 
+lookup_ip(const char *host_name, struct in_addr *addr)
 {
     if (!inet_aton(host_name, addr)) {
         struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -111,7 +111,7 @@ lookup_ip(const char *host_name, struct in_addr *addr)
 /* Returns the error condition associated with socket 'fd' and resets the
  * socket's error status. */
 int
-get_socket_error(int fd) 
+get_socket_error(int fd)
 {
     int error;
     socklen_t len = sizeof(error);
@@ -124,7 +124,7 @@ get_socket_error(int fd)
 }
 
 int
-check_connection_completion(int fd) 
+check_connection_completion(int fd)
 {
     struct pollfd pfd;
     int retval;

@@ -85,7 +85,7 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
 struct rule {
     struct cls_rule cr;
 
-    uint64_t flow_cookie;       /* Controller-issued identifier. 
+    uint64_t flow_cookie;       /* Controller-issued identifier.
                                    (Kept in network-byte order.) */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
@@ -1291,7 +1291,7 @@ ofproto_add_flow(struct ofproto *p,
 {
     struct rule *rule;
     rule = rule_create(p, NULL, actions, n_actions,
-                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 
+                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */,
                        0, 0, false);
     cls_rule_from_flow(flow, wildcards, priority, &rule->cr);
     rule_insert(p, rule, NULL, 0);
@@ -3076,14 +3076,14 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static void
-append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn, 
+append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn,
                  struct ofpbuf **msgp)
 {
     struct netdev_stats stats;
     struct ofp_port_stats *ops;
 
-    /* Intentionally ignore return value, since errors will set 
-     * 'stats' to all-1s, which is correct for OpenFlow, and 
+    /* Intentionally ignore return value, since errors will set
+     * 'stats' to all-1s, which is correct for OpenFlow, and
      * netdev_get_stats() will log errors. */
     netdev_get_stats(port->netdev, &stats);
 
@@ -3122,7 +3122,7 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     msg = start_stats_reply(osr, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
-        port = port_array_get(&p->ports, 
+        port = port_array_get(&p->ports,
                 ofp_port_to_odp_port(ntohs(psr->port_no)));
         if (port) {
             append_port_stat(port, ntohs(psr->port_no), ofconn, &msg);
@@ -3307,7 +3307,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     ds_put_cstr(results, "\n");
 }
 
-/* Adds a pretty-printed description of all flows to 'results', including 
+/* Adds a pretty-printed description of all flows to 'results', including
  * those marked hidden by secchan (e.g., by in-band control). */
 void
 ofproto_get_all_flows(struct ofproto *p, struct ds *results)

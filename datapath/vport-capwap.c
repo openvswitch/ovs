@@ -223,7 +223,7 @@ static int capwap_init(void)
 	err = sock_create(AF_INET, SOCK_DGRAM, 0, &capwap_rcv_socket);
 	if (err)
 		goto error;
-	
+
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
 	sin.sin_port = htons(CAPWAP_DST_PORT);

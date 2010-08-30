@@ -1082,7 +1082,7 @@ dp_netdev_wait(void)
 
 
 /* Modify the TCI field of 'packet'.  If a VLAN tag is not present, one
- * is added with the TCI field set to 'tci'.  If a VLAN tag is present, 
+ * is added with the TCI field set to 'tci'.  If a VLAN tag is present,
  * then 'mask' bits are cleared before 'tci' is logically OR'd into the
  * TCI field.
  *

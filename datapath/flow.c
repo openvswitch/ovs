@@ -153,7 +153,7 @@ void flow_deferred_free(struct sw_flow *flow)
 /* RCU callback used by flow_deferred_free_acts. */
 static void rcu_free_acts_callback(struct rcu_head *rcu)
 {
-	struct sw_flow_actions *sf_acts = container_of(rcu, 
+	struct sw_flow_actions *sf_acts = container_of(rcu,
 			struct sw_flow_actions, rcu);
 	kfree(sf_acts);
 }
@@ -346,7 +346,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 				key->nw_proto = ntohs(arp->ar_op);
 			}
 
-			if (key->nw_proto == ARPOP_REQUEST 
+			if (key->nw_proto == ARPOP_REQUEST
 					|| key->nw_proto == ARPOP_REPLY) {
 				memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
 				memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));

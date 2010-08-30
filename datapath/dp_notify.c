@@ -14,8 +14,8 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
-static int dp_device_event(struct notifier_block *unused, unsigned long event, 
-		void *ptr) 
+static int dp_device_event(struct notifier_block *unused, unsigned long event,
+		void *ptr)
 {
 	struct net_device *dev = ptr;
 	struct vport *vport;

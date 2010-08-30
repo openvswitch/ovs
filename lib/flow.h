@@ -34,7 +34,7 @@ struct ofpbuf;
 typedef struct odp_flow_key flow_t;
 
 int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port, flow_t *);
-void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
+void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats);
 void flow_to_match(const flow_t *, uint32_t wildcards, bool tun_id_cookie,
                    struct ofp_match *);

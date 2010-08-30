@@ -1008,7 +1008,7 @@ netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
     if (!(netdev_dev->cache_valid & VALID_IS_PSEUDO)) {
         const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
         const char *type = netdev_dev_get_type(&netdev_dev->netdev_dev);
-        
+
         netdev_dev->is_tap = !strcmp(type, "tap");
         netdev_dev->is_internal = false;
         if (!netdev_dev->is_tap) {
@@ -1872,7 +1872,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
                        iface, &dest, &gateway, &flags, &refcnt,
                        &use, &metric, &mask, &mtu, &window, &irtt) != 11) {
 
-                VLOG_WARN_RL(&rl, "%s: could not parse line %d: %s", 
+                VLOG_WARN_RL(&rl, "%s: could not parse line %d: %s",
                         fn, ln, line);
                 continue;
             }
@@ -1882,7 +1882,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
             }
 
             /* The output of 'dest', 'mask', and 'gateway' were given in
-             * network byte order, so we don't need need any endian 
+             * network byte order, so we don't need need any endian
              * conversions here. */
             if ((dest & mask) == (host->s_addr & mask)) {
                 if (!gateway) {

@@ -20,18 +20,18 @@ void sfl_sampler_init(SFLSampler *sampler, SFLAgent *agent, SFLDataSource_instan
        and to Andy Kitchingman for pointing out that it applies to the hash_nxt ptr too) */
     SFLSampler *nxtPtr = sampler->nxt;
     SFLSampler *hashPtr = sampler->hash_nxt;
-  
+
     /* clear everything */
     memset(sampler, 0, sizeof(*sampler));
-  
+
     /* restore the linked list and hash-table ptr */
     sampler->nxt = nxtPtr;
     sampler->hash_nxt = hashPtr;
-  
+
     /* now copy in the parameters */
     sampler->agent = agent;
     sampler->dsi = dsi;
-  
+
     /* set defaults */
     sampler->sFlowFsMaximumHeaderSize = SFL_DEFAULT_HEADER_SIZE;
     sampler->sFlowFsPacketSamplingRate = SFL_DEFAULT_SAMPLING_RATE;
@@ -157,7 +157,7 @@ inline static u_int32_t nextRandomSkip(u_int32_t mean)
 {
     if(mean == 0 || mean == 1) return 1;
     return ((random() % ((2 * mean) - 1)) + 1);
-} 
+}
 
 /*_________________---------------------------__________________
   _________________  sfl_sampler_takeSample   __________________

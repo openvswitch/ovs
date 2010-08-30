@@ -101,7 +101,7 @@ time_t sfl_receiver_get_sFlowRcvrTimeout(SFLReceiver *receiver) {
 }
 void sfl_receiver_set_sFlowRcvrTimeout(SFLReceiver *receiver, time_t sFlowRcvrTimeout) {
     receiver->sFlowRcvrTimeout =sFlowRcvrTimeout;
-} 
+}
 u_int32_t sfl_receiver_get_sFlowRcvrMaximumDatagramSize(SFLReceiver *receiver) {
     return receiver->sFlowRcvrMaximumDatagramSize;
 }
@@ -150,7 +150,7 @@ void sfl_receiver_tick(SFLReceiver *receiver, time_t now)
   _________________   receiver write utilities  __________________
   -----------------_____________________________------------------
 */
- 
+
 inline static void put32(SFLReceiver *receiver, u_int32_t val)
 {
     *receiver->sampleCollector.datap++ = val;
@@ -265,9 +265,9 @@ inline static void putGateway(SFLReceiver *receiver, SFLExtended_gateway *gw)
 inline static u_int32_t gatewayEncodingLength(SFLExtended_gateway *gw) {
     u_int32_t elemSiz = addressEncodingLength(&gw->nexthop);
     u_int32_t seg = 0;
-    elemSiz += 16; // as, src_as, src_peer_as, dst_as_path_segments 
+    elemSiz += 16; // as, src_as, src_peer_as, dst_as_path_segments
     for(; seg < gw->dst_as_path_segments; seg++) {
-	elemSiz += 8; // type, length 
+	elemSiz += 8; // type, length
 	elemSiz += 4 * gw->dst_as_path[seg].length; // set/seq bytes
     }
     elemSiz += 4; // communities_length
@@ -490,7 +490,7 @@ int sfl_receiver_writeFlowSample(SFLReceiver *receiver, SFL_FLOW_SAMPLE_TYPE *fs
     // it over the limit, then we should send it now before going on.
     if((receiver->sampleCollector.pktlen + packedSize) >= receiver->sFlowRcvrMaximumDatagramSize)
 	sendSample(receiver);
-    
+
     receiver->sampleCollector.numSamples++;
 
 #ifdef SFL_USE_32BIT_INDEX
@@ -528,10 +528,10 @@ int sfl_receiver_writeFlowSample(SFLReceiver *receiver, SFL_FLOW_SAMPLE_TYPE *fs
     {
 	SFLFlow_sample_element *elem = fs->elements;
 	for(; elem != NULL; elem = elem->nxt) {
-	    
+
 	    putNet32(receiver, elem->tag);
 	    putNet32(receiver, elem->length); // length cached in computeFlowSampleSize()
-	    
+
 	    switch(elem->tag) {
 	    case SFLFLOW_HEADER:
 		putNet32(receiver, elem->flowType.header.header_protocol);
@@ -648,7 +648,7 @@ int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
     // if the sample pkt is full enough so that this sample might put
     // it over the limit, then we should send it now.
     if((packedSize = computeCountersSampleSize(receiver, cs)) == -1) return -1;
-  
+
     // check in case this one sample alone is too big for the datagram
     // in fact - if it is even half as big then we should ditch it. Very
     // important to avoid overruning the packet buffer.
@@ -656,12 +656,12 @@ int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 	sflError(receiver, "counters sample too big for datagram");
 	return -1;
     }
-  
+
     if((receiver->sampleCollector.pktlen + packedSize) >= receiver->sFlowRcvrMaximumDatagramSize)
 	sendSample(receiver);
-  
+
     receiver->sampleCollector.numSamples++;
-  
+
 #ifdef SFL_USE_32BIT_INDEX
     putNet32(receiver, SFLCOUNTERS_SAMPLE_EXPANDED);
 #else
@@ -679,14 +679,14 @@ int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_
 #endif
 
     putNet32(receiver, cs->num_elements);
-  
+
     {
 	SFLCounters_sample_element *elem = cs->elements;
 	for(; elem != NULL; elem = elem->nxt) {
-	    
+
 	    putNet32(receiver, elem->tag);
 	    putNet32(receiver, elem->length); // length cached in computeCountersSampleSize()
-	    
+
 	    switch(elem->tag) {
 	    case SFLCOUNTERS_GENERIC:
 		putGenericCounters(receiver, &(elem->counterBlock.generic));
@@ -758,7 +758,7 @@ u_int32_t sfl_receiver_samplePacketsSent(SFLReceiver *receiver)
 */
 
 static void sendSample(SFLReceiver *receiver)
-{  
+{
     /* construct and send out the sample, then reset for the next one... */
     /* first fill in the header with the latest values */
     /* version, agent_address and sub_agent_id were pre-set. */
@@ -770,7 +770,7 @@ static void sendSample(SFLReceiver *receiver)
     if(receiver->agent->sendFn) (*receiver->agent->sendFn)(receiver->agent->magic,
 							   receiver->agent,
 							   receiver,
-							   (u_char *)receiver->sampleCollector.data, 
+							   (u_char *)receiver->sampleCollector.data,
 							   receiver->sampleCollector.pktlen);
     else {
 #ifdef SFLOW_DO_SOCKET

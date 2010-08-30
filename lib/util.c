@@ -30,13 +30,13 @@ VLOG_DEFINE_THIS_MODULE(util)
 const char *program_name;
 
 void
-out_of_memory(void) 
+out_of_memory(void)
 {
     ovs_fatal(0, "virtual memory exhausted");
 }
 
 void *
-xcalloc(size_t count, size_t size) 
+xcalloc(size_t count, size_t size)
 {
     void *p = count && size ? calloc(count, size) : malloc(1);
     COVERAGE_INC(util_xalloc);
@@ -53,7 +53,7 @@ xzalloc(size_t size)
 }
 
 void *
-xmalloc(size_t size) 
+xmalloc(size_t size)
 {
     void *p = malloc(size ? size : 1);
     COVERAGE_INC(util_xalloc);
@@ -64,7 +64,7 @@ xmalloc(size_t size)
 }
 
 void *
-xrealloc(void *p, size_t size) 
+xrealloc(void *p, size_t size)
 {
     p = realloc(p, size ? size : 1);
     COVERAGE_INC(util_xalloc);
@@ -92,7 +92,7 @@ xmemdup0(const char *p_, size_t length)
 }
 
 char *
-xstrdup(const char *s) 
+xstrdup(const char *s)
 {
     return xmemdup0(s, strlen(s));
 }
@@ -192,7 +192,7 @@ void set_program_name(const char *argv0)
 
 /* Print the version information for the program.  */
 void
-ovs_print_version(char *date, char *time, 
+ovs_print_version(char *date, char *time,
                   uint8_t min_ofp, uint8_t max_ofp)
 {
     printf("%s (Open vSwitch) "VERSION BUILDNR"\n", program_name);
@@ -448,7 +448,7 @@ abs_file_name(const char *dir, const char *file_name)
 
 
 /* Pass a value to this function if it is marked with
- * __attribute__((warn_unused_result)) and you genuinely want to ignore 
- * its return value.  (Note that every scalar type can be implicitly 
+ * __attribute__((warn_unused_result)) and you genuinely want to ignore
+ * its return value.  (Note that every scalar type can be implicitly
  * converted to bool.) */
 void ignore(bool x OVS_UNUSED) { }

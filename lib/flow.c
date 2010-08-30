@@ -53,7 +53,7 @@ pull_ip(struct ofpbuf *packet)
 }
 
 static struct tcp_header *
-pull_tcp(struct ofpbuf *packet) 
+pull_tcp(struct ofpbuf *packet)
 {
     if (packet->size >= TCP_HEADER_LEN) {
         struct tcp_header *tcp = packet->data;
@@ -66,13 +66,13 @@ pull_tcp(struct ofpbuf *packet)
 }
 
 static struct udp_header *
-pull_udp(struct ofpbuf *packet) 
+pull_udp(struct ofpbuf *packet)
 {
     return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
 }
 
 static struct icmp_header *
-pull_icmp(struct ofpbuf *packet) 
+pull_icmp(struct ofpbuf *packet)
 {
     return ofpbuf_try_pull(packet, ICMP_HEADER_LEN);
 }
@@ -213,7 +213,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         const struct arp_eth_header *arp = pull_arp(&b);
         if (arp && arp->ar_hrd == htons(1)
-            && arp->ar_pro == htons(ETH_TYPE_IP) 
+            && arp->ar_pro == htons(ETH_TYPE_IP)
             && arp->ar_hln == ETH_ADDR_LEN
             && arp->ar_pln == 4) {
             /* We only match on the lower 8 bits of the opcode. */
@@ -221,7 +221,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                 flow->nw_proto = ntohs(arp->ar_op);
             }
 
-            if ((flow->nw_proto == ARP_OP_REQUEST) 
+            if ((flow->nw_proto == ARP_OP_REQUEST)
                 || (flow->nw_proto == ARP_OP_REPLY)) {
                 flow->nw_src = arp->ar_spa;
                 flow->nw_dst = arp->ar_tpa;
@@ -235,7 +235,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
  * arguments must have been initialized through a call to flow_extract().
  */
 void
-flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
+flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats)
 {
     memset(stats, '\0', sizeof(*stats));
@@ -346,7 +346,7 @@ flow_format(struct ds *ds, const flow_t *flow)
 }
 
 void
-flow_print(FILE *stream, const flow_t *flow) 
+flow_print(FILE *stream, const flow_t *flow)
 {
     char *s = flow_to_string(flow);
     fputs(s, stream);

@@ -125,10 +125,10 @@ put_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
 /* Updates the 'length' field of the OpenFlow message in 'buffer' to
  * 'buffer->size'. */
 void
-update_openflow_length(struct ofpbuf *buffer) 
+update_openflow_length(struct ofpbuf *buffer)
 {
     struct ofp_header *oh = ofpbuf_at_assert(buffer, 0, sizeof *oh);
-    oh->length = htons(buffer->size); 
+    oh->length = htons(buffer->size);
 }
 
 struct ofpbuf *
@@ -303,7 +303,7 @@ make_echo_reply(const struct ofp_header *rq)
 }
 
 static int
-check_message_type(uint8_t got_type, uint8_t want_type) 
+check_message_type(uint8_t got_type, uint8_t want_type)
 {
     if (got_type != want_type) {
         char *want_type_name = ofp_message_type_to_string(want_type);

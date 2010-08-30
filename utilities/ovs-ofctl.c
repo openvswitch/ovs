@@ -399,7 +399,7 @@ str_to_port_no(const char *vconn_name, const char *str)
     int n_ports;
     int port_idx;
     unsigned int port_no;
-    
+
 
     /* Check if the argument is a port index.  Otherwise, treat it as
      * the port name. */
@@ -595,7 +595,7 @@ static void do_del_flows(int argc, char *argv[])
 
     /* Parse and send. */
     ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, 
+    parse_ofp_str(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL,
                   &out_port, &priority, NULL, NULL, NULL);
     if (strict) {
         ofm->command = htons(OFPFC_DELETE_STRICT);
@@ -710,7 +710,7 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
     int n_ports;
     int port_idx;
     int port_no;
-    
+
 
     /* Check if the argument is a port index.  Otherwise, treat it as
      * the port name. */
@@ -719,7 +719,7 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
         port_no = -1;
     }
 
-    /* Send a "Features Request" to get the information we need in order 
+    /* Send a "Features Request" to get the information we need in order
      * to modify the port. */
     make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
     open_vconn(argv[1], &vconn);
@@ -736,7 +736,7 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
             }
         } else {
             /* Check argument as an interface name */
-            if (!strncmp((char *)osf->ports[port_idx].name, argv[2], 
+            if (!strncmp((char *)osf->ports[port_idx].name, argv[2],
                         sizeof osf->ports[0].name)) {
                 break;
             }
@@ -758,14 +758,14 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
 
     if (!strncasecmp(argv[3], MOD_PORT_CMD_UP, sizeof MOD_PORT_CMD_UP)) {
         opm->mask |= htonl(OFPPC_PORT_DOWN);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_DOWN, 
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_DOWN,
                 sizeof MOD_PORT_CMD_DOWN)) {
         opm->mask |= htonl(OFPPC_PORT_DOWN);
         opm->config |= htonl(OFPPC_PORT_DOWN);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_FLOOD, 
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_FLOOD,
                 sizeof MOD_PORT_CMD_FLOOD)) {
         opm->mask |= htonl(OFPPC_NO_FLOOD);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_NOFLOOD, 
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_NOFLOOD,
                 sizeof MOD_PORT_CMD_NOFLOOD)) {
         opm->mask |= htonl(OFPPC_NO_FLOOD);
         opm->config |= htonl(OFPPC_NO_FLOOD);

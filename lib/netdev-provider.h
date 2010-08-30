@@ -40,7 +40,7 @@ struct arg {
  * implementations. */
 struct netdev_dev {
     char *name;                         /* Name of network device. */
-    const struct netdev_class *netdev_class; /* Functions to control 
+    const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */

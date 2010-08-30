@@ -88,7 +88,7 @@ extern "C" {
 
 void set_program_name(const char *);
 
-void ovs_print_version(char *date, char *time, 
+void ovs_print_version(char *date, char *time,
                        uint8_t min_ofp, uint8_t max_ofp);
 #define OVS_PRINT_VERSION(min_ofp, max_ofp) \
         ovs_print_version(__DATE__, __TIME__, (min_ofp), (max_ofp))

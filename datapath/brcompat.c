@@ -252,7 +252,7 @@ static int brc_get_port_list(struct net_device *dev, int __user *uindices,
  *            (limited to a page for sanity)
  * offset  -- number of records to skip
  */
-static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf, 
+static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf,
 			       unsigned long maxnum, unsigned long offset)
 {
 	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
@@ -370,7 +370,7 @@ static int brc_genl_query(struct sk_buff *skb, struct genl_info *info)
 	void *data;
 
 	ans_skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
-	if (!ans_skb) 
+	if (!ans_skb)
 		return -ENOMEM;
 
 	data = genlmsg_put_reply(ans_skb, info, &brc_genl_family,
@@ -530,15 +530,15 @@ static int __init brc_init(void)
 		goto error;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_query_dp);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_dp_result);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_set_proc);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	strcpy(brc_mc_group.name, "brcompat");

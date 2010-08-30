@@ -49,7 +49,7 @@ svec_destroy(struct svec *svec)
 }
 
 void
-svec_clear(struct svec *svec) 
+svec_clear(struct svec *svec)
 {
     size_t i;
 

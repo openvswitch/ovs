@@ -127,7 +127,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
     /* Really this should be implemented via callbacks into the vconn
      * providers, but that seems too heavy-weight to bother with at the
      * moment. */
-    
+
     printf("\n");
     if (active) {
         printf("Active OpenFlow connection methods:\n");
@@ -318,38 +318,38 @@ vconn_get_name(const struct vconn *vconn)
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not yet known. */
 uint32_t
-vconn_get_remote_ip(const struct vconn *vconn) 
+vconn_get_remote_ip(const struct vconn *vconn)
 {
     return vconn->remote_ip;
 }
 
-/* Returns the transport port of the peer, or 0 if the connection does not 
+/* Returns the transport port of the peer, or 0 if the connection does not
  * contain a port or if the port is not yet known. */
 uint16_t
-vconn_get_remote_port(const struct vconn *vconn) 
+vconn_get_remote_port(const struct vconn *vconn)
 {
     return vconn->remote_port;
 }
 
-/* Returns the IP address used to connect to the peer, or 0 if the 
- * connection is not an IP-based protocol or if its IP address is not 
+/* Returns the IP address used to connect to the peer, or 0 if the
+ * connection is not an IP-based protocol or if its IP address is not
  * yet known. */
 uint32_t
-vconn_get_local_ip(const struct vconn *vconn) 
+vconn_get_local_ip(const struct vconn *vconn)
 {
     return vconn->local_ip;
 }
 
-/* Returns the transport port used to connect to the peer, or 0 if the 
+/* Returns the transport port used to connect to the peer, or 0 if the
  * connection does not contain a port or if the port is not yet known. */
 uint16_t
-vconn_get_local_port(const struct vconn *vconn) 
+vconn_get_local_port(const struct vconn *vconn)
 {
     return vconn->local_port;
 }
 
 static void
-vcs_connecting(struct vconn *vconn) 
+vcs_connecting(struct vconn *vconn)
 {
     int retval = (vconn->class->connect)(vconn);
     assert(retval != EINPROGRESS);
@@ -913,13 +913,13 @@ vconn_set_remote_port(struct vconn *vconn, uint16_t port)
     vconn->remote_port = port;
 }
 
-void 
+void
 vconn_set_local_ip(struct vconn *vconn, uint32_t ip)
 {
     vconn->local_ip = ip;
 }
 
-void 
+void
 vconn_set_local_port(struct vconn *vconn, uint16_t port)
 {
     vconn->local_port = port;

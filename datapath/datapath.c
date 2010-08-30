@@ -754,7 +754,7 @@ void compute_ip_summed(struct sk_buff *skb, bool xmit)
 		       skb->ip_summed);
 		/* None seems the safest... */
 		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
-	}	
+	}
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
@@ -2283,7 +2283,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 	}
 success:
 	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
-	
+
 	retval = 0;
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		if (copy_bytes == skb->len) {

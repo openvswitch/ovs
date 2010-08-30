@@ -75,7 +75,7 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 
 	/* xxx We use a default value of 0 for all fields.  If the caller is
 	 * xxx attempting to set the value to our default, just silently
-	 * xxx ignore the request. 
+	 * xxx ignore the request.
 	 */
 	if (val != 0) {
 		struct datapath *dp;
@@ -84,7 +84,7 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 
 		dp = sysfs_get_dp(to_net_dev(d));
 		if (dp)
-			printk("%s: xxx writing dp parms not supported yet!\n", 
+			printk("%s: xxx writing dp parms not supported yet!\n",
 			       dp_name(dp));
 		else
 			result = -ENODEV;

@@ -249,7 +249,7 @@ fatal_signal_unlink_file_now(const char *file)
 static void
 unlink_files(void *aux OVS_UNUSED)
 {
-    do_unlink_files(); 
+    do_unlink_files();
 }
 
 static void

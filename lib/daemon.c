@@ -59,7 +59,7 @@ static bool monitor;
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
 char *
-make_pidfile_name(const char *name) 
+make_pidfile_name(const char *name)
 {
     return (!name
             ? xasprintf("%s/%s.pid", ovs_rundir, program_name)

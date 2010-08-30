@@ -32,7 +32,7 @@ ds_init(struct ds *ds)
 }
 
 void
-ds_clear(struct ds *ds) 
+ds_clear(struct ds *ds)
 {
     ds->length = 0;
 }
@@ -162,7 +162,7 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
 }
 
 void
-ds_put_printable(struct ds *ds, const char *s, size_t n) 
+ds_put_printable(struct ds *ds, const char *s, size_t n)
 {
     ds_reserve(ds, ds->length + n);
     while (n-- > 0) {
@@ -189,7 +189,7 @@ ds_put_strftime(struct ds *ds, const char *template, const struct tm *tm)
             ds->length += used;
             return;
         }
-        ds_reserve(ds, ds->length + (avail < 32 ? 64 : 2 * avail)); 
+        ds_reserve(ds, ds->length + (avail < 32 ? 64 : 2 * avail));
     }
 }
 

@@ -23,10 +23,10 @@ void sfl_poller_init(SFLPoller *poller,
 
     /* clear everything */
     memset(poller, 0, sizeof(*poller));
-  
+
     /* restore the linked list ptr */
     poller->nxt = nxtPtr;
-  
+
     /* now copy in the parameters */
     poller->agent = agent;
     poller->dsi = dsi; /* structure copy */

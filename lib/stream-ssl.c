@@ -1045,7 +1045,7 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 
 /* Returns true if SSL is at least partially configured. */
 bool
-stream_ssl_is_configured(void) 
+stream_ssl_is_configured(void)
 {
     return private_key.file_name || certificate.file_name || ca_cert.file_name;
 }

@@ -37,7 +37,7 @@ void sfl_agent_init(SFLAgent *agent,
     agent->errorFn = errorFn;
     agent->sendFn = sendFn;
 
-#ifdef SFLOW_DO_SOCKET  
+#ifdef SFLOW_DO_SOCKET
     if(sendFn == NULL) {
 	/* open the socket - really need one for v4 and another for v6? */
 	if((agent->receiverSocket4 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
@@ -186,14 +186,14 @@ SFLSampler *sfl_agent_addSampler(SFLAgent *agent, SFLDataSource_instance *pdsi)
 	if(cmp < 0) break;       /* insert here */
     }
     /* either we found the insert point, or reached the end of the list...*/
-    
+
     {
 	SFLSampler *newsm = (SFLSampler *)sflAlloc(agent, sizeof(SFLSampler));
 	sfl_sampler_init(newsm, agent, pdsi);
 	if(prev) prev->nxt = newsm;
 	else agent->samplers = newsm;
 	newsm->nxt = sm;
-	
+
 	/* see if we should go in the ifIndex jumpTable */
 	if(SFL_DS_CLASS(newsm->dsi) == 0) {
 	    SFLSampler *test = sfl_agent_getSamplerByIfIndex(agent, SFL_DS_INDEX(newsm->dsi));
@@ -431,7 +431,7 @@ void sfl_agent_resetReceiver(SFLAgent *agent, SFLReceiver *receiver)
 
 	    for(; sm != NULL; sm = sm->nxt)
 		if(sfl_sampler_get_sFlowFsReceiver(sm) == rcvIdx) sfl_sampler_set_sFlowFsReceiver(sm, 0);
-      
+
 	    for(; pl != NULL; pl = pl->nxt)
 		if(sfl_poller_get_sFlowCpReceiver(pl) == rcvIdx) sfl_poller_set_sFlowCpReceiver(pl, 0);
 
@@ -439,7 +439,7 @@ void sfl_agent_resetReceiver(SFLAgent *agent, SFLReceiver *receiver)
 	}
     }
 }
-  
+
 /*_________________---------------------------__________________
   _________________     sfl_agent_error       __________________
   -----------------___________________________------------------

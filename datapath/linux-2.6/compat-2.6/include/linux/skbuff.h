@@ -101,7 +101,7 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
-/* Emulate Linux 2.6.17 and later behavior, in which kfree_skb silently ignores 
+/* Emulate Linux 2.6.17 and later behavior, in which kfree_skb silently ignores
  * null pointer arguments. */
 #define kfree_skb(skb) kfree_skb_maybe_null(skb)
 static inline void kfree_skb_maybe_null(struct sk_buff *skb)
