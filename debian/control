@@ -94,7 +94,11 @@ Description: Core file centralizer and reaper
 Package: openvswitch-dbg
 Section: debug
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends:
+ ${shlibs:Depends}, ${misc:Depends},
+ openvswitch-common (= ${binary:Version}),
+ openvswitch-controller (= ${binary:Version}),
+ openvswitch-switch (= ${binary:Version})
 Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
