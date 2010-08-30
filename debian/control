@@ -40,15 +40,6 @@ Description: Open vSwitch switch implementations
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
-Package: openvswitch-switch-config
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch (= ${binary:Version}), libwww-perl, libdigest-sha1-perl
-Description: Open vSwitch switch implementations
- openvswitch-switch-config provides a utility for interactively configuring
- the Open vSwitch switch provided in the openvswitch-switch package.
- .
- Open vSwitch is a full-featured software-based Ethernet switch.
-
 Package: openvswitch-pki
 Architecture: all
 Depends:

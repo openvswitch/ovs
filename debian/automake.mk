@@ -28,11 +28,6 @@ EXTRA_DIST += \
 	debian/openvswitch-pki-server.install \
 	debian/openvswitch-pki-server.postinst \
 	debian/openvswitch-pki.postinst \
-	debian/openvswitch-switch-config.dirs \
-	debian/openvswitch-switch-config.install \
-	debian/openvswitch-switch-config.manpages \
-	debian/openvswitch-switch-config.overrides \
-	debian/openvswitch-switch-config.templates \
 	debian/openvswitch-switch.README.Debian \
 	debian/openvswitch-switch.dirs \
 	debian/openvswitch-switch.init \
@@ -42,11 +37,6 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
-	debian/ovs-switch-setup \
-	debian/ovs-switch-setup.8 \
-	debian/po/POTFILES.in \
-	debian/po/templates.pot \
-	debian/reconfigure \
 	debian/rules \
 	debian/rules.modules
 
