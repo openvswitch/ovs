@@ -981,6 +981,24 @@ struct ovsdb_jsonrpc_monitor_aux {
 };
 
 static bool
+any_reportable_change(const struct ovsdb_jsonrpc_monitor_table *mt,
+                      const unsigned long int *changed)
+{
+    size_t i;
+
+    for (i = 0; i < mt->n_columns; i++) {
+        const struct ovsdb_jsonrpc_monitor_column *c = &mt->columns[i];
+        unsigned int idx = c->column->index;
+
+        if (c->select & OJMS_MODIFY && bitmap_is_set(changed, idx)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool
 ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
                                 const struct ovsdb_row *new,
                                 const unsigned long int *changed,
@@ -993,7 +1011,6 @@ ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
     struct json *old_json, *new_json;
     struct json *row_json;
     char uuid[UUID_LEN + 1];
-    int n_changed;
     size_t i;
 
     if (!aux->mt || table != aux->mt->table) {
@@ -1016,13 +1033,22 @@ ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
         return true;
     }
 
+    if (type == OJMS_MODIFY && !any_reportable_change(aux->mt, changed)) {
+        /* Nothing of interest changed. */
+        return true;
+    }
+
     old_json = new_json = NULL;
-    n_changed = 0;
+    if (type & (OJMS_DELETE | OJMS_MODIFY)) {
+        old_json = json_object_create();
+    }
+    if (type & (OJMS_INITIAL | OJMS_INSERT | OJMS_MODIFY)) {
+        new_json = json_object_create();
+    }
     for (i = 0; i < aux->mt->n_columns; i++) {
         const struct ovsdb_jsonrpc_monitor_column *c = &aux->mt->columns[i];
         const struct ovsdb_column *column = c->column;
         unsigned int idx = c->column->index;
-        bool column_changed = false;
 
         if (!(type & c->select)) {
             /* We don't care about this type of change for this particular
@@ -1030,32 +1056,17 @@ ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
             continue;
         }
 
-        if (type == OJMS_MODIFY) {
-            column_changed = bitmap_is_set(changed, idx);
-            n_changed += column_changed;
-        }
-        if (column_changed || type == OJMS_DELETE) {
-            if (!old_json) {
-                old_json = json_object_create();
-            }
+        if ((type == OJMS_MODIFY && bitmap_is_set(changed, idx))
+            || type == OJMS_DELETE) {
             json_object_put(old_json, column->name,
                             ovsdb_datum_to_json(&old->fields[idx],
                                                 &column->type));
         }
         if (type & (OJMS_INITIAL | OJMS_INSERT | OJMS_MODIFY)) {
-            if (!new_json) {
-                new_json = json_object_create();
-            }
             json_object_put(new_json, column->name,
                             ovsdb_datum_to_json(&new->fields[idx],
                                                 &column->type));
         }
-    }
-    if ((type == OJMS_MODIFY && !n_changed) || (!old_json && !new_json)) {
-        /* No reportable changes. */
-        json_destroy(old_json);
-        json_destroy(new_json);
-        return true;
     }
 
     /* Create JSON object for transaction overall. */
