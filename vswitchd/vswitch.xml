@@ -539,6 +539,17 @@
                 compliance with the IEEE 802.1D specification for bridges.
                 Default is enabled, set to <code>false</code> to disable.</dd>
             </dl>
+            <dl>
+              <dt><code>header_cache</code></dt>
+              <dd>Optional.  Enable caching of tunnel headers and the output
+		path.  This can lead to a significant performance increase
+		without changing behavior.  In general it should not be
+		necessary to adjust this setting.  However, the caching can
+		bypass certain components of the IP stack (such as IP tables)
+		and it may be useful to disable it if these features are
+		required or as a debugging measure.  Default is enabled, set to
+		<code>false</code> to disable.</dd>
+            </dl>
           </dd>
           <dt><code>capwap</code></dt>
           <dd>Ethernet tunneling over the UDP transport portion of CAPWAP
@@ -593,6 +604,17 @@
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
                 Default is enabled, set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
+              <dt><code>header_cache</code></dt>
+              <dd>Optional.  Enable caching of tunnel headers and the output
+		path.  This can lead to a significant performance increase
+		without changing behavior.  In general it should not be
+		necessary to adjust this setting.  However, the caching can
+		bypass certain components of the IP stack (such as IP tables)
+		and it may be useful to disable it if these features are
+		required or as a debugging measure.  Default is enabled, set to
+		<code>false</code> to disable.</dd>
             </dl>
           </dd>
           <dt><code>patch</code></dt>

@@ -66,6 +66,7 @@ parse_config(const char *name, const char *type, const struct shash *args,
     memset(config, 0, sizeof *config);
 
     config->flags |= TNL_F_PMTUD;
+    config->flags |= TNL_F_HDR_CACHE;
 
     SHASH_FOR_EACH (node, args) {
         if (!strcmp(node->name, "remote_ip")) {
@@ -120,6 +121,10 @@ parse_config(const char *name, const char *type, const struct shash *args,
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
                 config->flags &= ~TNL_F_PMTUD;
+            }
+        } else if (!strcmp(node->name, "header_cache")) {
+            if (!strcmp(node->data, "false")) {
+                config->flags &= ~TNL_F_HDR_CACHE;
             }
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->name);
