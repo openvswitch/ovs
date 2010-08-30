@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 
@@ -160,7 +162,7 @@ static inline struct sk_buff *process_capwap_proto(struct sk_buff *skb)
 		return defrag(skb, true);
 	else {
 		if (net_ratelimit())
-			printk(KERN_WARNING "openvswitch: unparsable packet receive on capwap socket\n");
+			pr_warn("unparsable packet receive on capwap socket\n");
 
 		kfree_skb(skb);
 		return NULL;
@@ -243,7 +245,7 @@ static int capwap_init(void)
 error_sock:
 	sock_release(capwap_rcv_socket);
 error:
-	printk(KERN_WARNING "openvswitch: cannot register capwap protocol handler\n");
+	pr_warn("cannot register capwap protocol handler\n");
 	return err;
 }
 
@@ -288,7 +290,7 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 
 	if (hlen + ~FRAG_OFF_MASK + 1 > dst_mtu(dst)) {
 		if (net_ratelimit())
-			printk(KERN_WARNING "openvswitch: capwap link mtu (%d) is less than minimum packet (%d)\n",
+			pr_warn("capwap link mtu (%d) is less than minimum packet (%d)\n",
 				dst_mtu(dst), hlen + ~FRAG_OFF_MASK + 1);
 		goto error;
 	}

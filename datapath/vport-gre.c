@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/if.h>
 #include <linux/skbuff.h>
 #include <linux/ip.h>
@@ -345,7 +347,7 @@ static int gre_init(void)
 
 	err = inet_add_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 	if (err) {
-		printk(KERN_WARNING "openvswitch: cannot register gre protocol handler\n");
+		pr_warn("cannot register gre protocol handler\n");
 		goto out;
 	}
 

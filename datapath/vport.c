@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/dcache.h>
 #include <linux/etherdevice.h>
 #include <linux/if.h>
@@ -76,13 +78,14 @@ void vport_unlock(void)
 	mutex_unlock(&vport_mutex);
 }
 
-#define ASSERT_VPORT() do { \
-	if (unlikely(!mutex_is_locked(&vport_mutex))) { \
-		printk(KERN_ERR "openvswitch: vport lock not held at %s (%d)\n", \
-			__FILE__, __LINE__); \
-		dump_stack(); \
-	} \
-} while(0)
+#define ASSERT_VPORT()						\
+do {								\
+	if (unlikely(!mutex_is_locked(&vport_mutex))) {		\
+		pr_err("vport lock not held at %s (%d)\n",	\
+		       __FILE__, __LINE__);			\
+		dump_stack();					\
+	}							\
+} while (0)
 
 /**
  *	vport_init - initialize vport subsystem
@@ -616,7 +619,7 @@ struct vport *vport_locate(const char *name)
 	struct hlist_node *node;
 
 	if (unlikely(!mutex_is_locked(&vport_mutex) && !rtnl_is_locked())) {
-		printk(KERN_ERR "openvswitch: neither RTNL nor vport lock held in vport_locate\n");
+		pr_err("neither RTNL nor vport lock held in vport_locate\n");
 		dump_stack();
 	}
 
@@ -1247,8 +1250,9 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	mtu = vport_get_mtu(vport);
 	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
 		if (net_ratelimit())
-			printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-			       dp_name(vport_get_dp_port(vport)->dp), packet_length(skb), mtu);
+			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
+				dp_name(vport_get_dp_port(vport)->dp),
+				packet_length(skb), mtu);
 		goto error;
 	}
 

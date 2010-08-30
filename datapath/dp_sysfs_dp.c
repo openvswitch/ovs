@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/version.h>
 
 /*

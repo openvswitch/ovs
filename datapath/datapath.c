@@ -8,6 +8,8 @@
 
 /* Functions for managing the dp interface/device. */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -531,8 +533,8 @@ out:
 static void suppress_loop(struct datapath *dp, struct sw_flow_actions *actions)
 {
 	if (net_ratelimit())
-		printk(KERN_WARNING "%s: flow looped %d times, dropping\n",
-		       dp_name(dp), DP_MAX_LOOPS);
+		pr_warn("%s: flow looped %d times, dropping\n",
+			dp_name(dp), DP_MAX_LOOPS);
 	actions->n_actions = 0;
 }
 
@@ -645,9 +647,9 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 		break;
 	default:
 		if (net_ratelimit())
-			printk(KERN_ERR "Attempting to checksum a non-"
-			       "TCP/UDP packet, dropping a protocol"
-			       " %d packet", iph->protocol);
+			pr_err("Attempting to checksum a non-TCP/UDP packet, "
+			       "dropping a protocol %d packet",
+			       iph->protocol);
 		goto out;
 	}
 
@@ -750,8 +752,7 @@ void compute_ip_summed(struct sk_buff *skb, bool xmit)
 		break;
 #endif
 	default:
-		printk(KERN_ERR "openvswitch: unknown checksum type %d\n",
-		       skb->ip_summed);
+		pr_err("unknown checksum type %d\n", skb->ip_summed);
 		/* None seems the safest... */
 		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
 	}

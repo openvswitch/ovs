@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/kernel.h>
 #include <asm/uaccess.h>
 #include <linux/completion.h>
@@ -481,7 +483,7 @@ static struct sk_buff *brc_send_command(struct sk_buff *request,
 	/* Wait for reply. */
 	error = -ETIMEDOUT;
 	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT)) {
-		printk(KERN_WARNING "brcompat: timed out waiting for userspace\n");
+		pr_warn("timed out waiting for userspace\n");
 		goto error;
     }
 
@@ -551,7 +553,7 @@ static int __init brc_init(void)
 err_unregister:
 	genl_unregister_family(&brc_genl_family);
 error:
-	printk(KERN_EMERG "brcompat: failed to install!");
+	pr_emerg("failed to install!\n");
 	return err;
 }
 
