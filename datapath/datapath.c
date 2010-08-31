@@ -39,7 +39,6 @@
 #include <linux/inetdevice.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
-#include <linux/workqueue.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
 #include <linux/compat.h>
