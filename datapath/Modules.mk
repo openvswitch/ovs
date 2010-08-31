@@ -17,7 +17,9 @@ openvswitch_sources = \
 	dp_sysfs_if.c \
 	flow.c \
 	table.c \
+	tunnel.c \
 	vport.c \
+	vport-capwap.c \
 	vport-generic.c \
 	vport-gre.c \
 	vport-internal_dev.c \
@@ -31,6 +33,7 @@ openvswitch_headers = \
 	dp_sysfs.h \
 	flow.h \
 	table.h \
+	tunnel.h \
 	vport.h \
 	vport-generic.h \
 	vport-internal_dev.h \

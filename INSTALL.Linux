@@ -5,10 +5,9 @@ This document describes how to build and install Open vSwitch on a
 generic Linux host.  If you want to install Open vSwitch on a Citrix
 XenServer version 5.5.0, see INSTALL.XenServer instead.
 
-This version of Open vSwitch should be built manually with "configure"
-and "make".  Debian packaging for Open vSwitch is also included, but
-they have not been recently tested, and so Debian packages are not a
-recommended way to use this version of Open vSwitch.
+This version of Open vSwitch may be built manually with "configure"
+and "make", as described below.  You may also build Debian packages by
+running "dpkg-buildpackage".
 
 Build Requirements
 ------------------
@@ -24,8 +23,9 @@ you will need the following software:
     - libssl, from OpenSSL, is optional but recommended if you plan to
       connect the Open vSwitch to an OpenFlow controller.  libssl is
       required to establish confidentiality and authenticity in the
-      connections from an Open vSwitch to an OpenFlow controller.  To
-      enable, configure with --enable-ssl=yes.
+      connections from an Open vSwitch to an OpenFlow controller.  If
+      libssl is installed, then Open vSwitch will automatically build
+      with support for it.
 
 To compile the kernel module, you must also install the following.  If
 you cannot build or install the kernel module, you may use the

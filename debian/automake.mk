@@ -23,20 +23,11 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
-	debian/openvswitch-monitor.default \
-	debian/openvswitch-monitor.dirs \
-	debian/openvswitch-monitor.init \
-	debian/openvswitch-monitor.install \
 	debian/openvswitch-pki-server.apache2 \
 	debian/openvswitch-pki-server.dirs \
 	debian/openvswitch-pki-server.install \
 	debian/openvswitch-pki-server.postinst \
 	debian/openvswitch-pki.postinst \
-	debian/openvswitch-switch-config.dirs \
-	debian/openvswitch-switch-config.install \
-	debian/openvswitch-switch-config.manpages \
-	debian/openvswitch-switch-config.overrides \
-	debian/openvswitch-switch-config.templates \
 	debian/openvswitch-switch.README.Debian \
 	debian/openvswitch-switch.dirs \
 	debian/openvswitch-switch.init \
@@ -46,20 +37,6 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
-	debian/openvswitch-switchui.copyright \
-	debian/openvswitch-switchui.default \
-	debian/openvswitch-switchui.dirs \
-	debian/openvswitch-switchui.init \
-	debian/openvswitch-switchui.install \
-	debian/openvswitch-wdt.default \
-	debian/openvswitch-wdt.dirs \
-	debian/openvswitch-wdt.init \
-	debian/openvswitch-wdt.install \
-	debian/ovs-switch-setup \
-	debian/ovs-switch-setup.8 \
-	debian/po/POTFILES.in \
-	debian/po/templates.pot \
-	debian/reconfigure \
 	debian/rules \
 	debian/rules.modules
 

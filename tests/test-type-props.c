@@ -33,7 +33,7 @@
     MUST_SUCCEED(TYPE_MINIMUM(type) == minimum);
 
 int
-main (void) 
+main (void)
 {
     TEST_TYPE(char, CHAR_MIN, CHAR_MAX, (CHAR_MIN < 0));
 

@@ -47,6 +47,7 @@ static const struct netdev_class *base_netdev_classes[] = {
     &netdev_tap_class,
     &netdev_patch_class,
     &netdev_gre_class,
+    &netdev_capwap_class,
 #endif
 };
 
@@ -207,7 +208,7 @@ compare_device_args(const struct netdev_dev *dev, const struct shash *args)
 
     new_args = shash_sort(args);
     for (i = 0; i < dev->n_args; i++) {
-        if (strcmp(dev->args[i].key, new_args[i]->name) || 
+        if (strcmp(dev->args[i].key, new_args[i]->name) ||
             strcmp(dev->args[i].value, new_args[i]->data)) {
             result = false;
             goto finish;
@@ -272,8 +273,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 
     netdev_class = shash_find_data(&netdev_classes, options->type);
     if (!netdev_class) {
-        VLOG_WARN("could not create netdev %s of unknown type %s",
-                  options->name, options->type);
         return EAFNOSUPPORT;
     }
 
@@ -311,6 +310,10 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
     if (!netdev_dev) {
         error = create_device(options, &netdev_dev);
         if (error) {
+            if (error == EAFNOSUPPORT) {
+                VLOG_WARN("could not create netdev %s of unknown type %s",
+                          options->name, options->type);
+            }
             return error;
         }
         update_device_args(netdev_dev, options->args);
@@ -323,7 +326,7 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         return EINVAL;
     }
 
-    error = netdev_dev->netdev_class->open(netdev_dev, options->ethertype, 
+    error = netdev_dev->netdev_class->open(netdev_dev, options->ethertype,
                 netdevp);
 
     if (!error) {
@@ -735,7 +738,7 @@ netdev_get_in4(const struct netdev *netdev,
     int error;
 
     error = (netdev_get_dev(netdev)->netdev_class->get_in4
-             ? netdev_get_dev(netdev)->netdev_class->get_in4(netdev, 
+             ? netdev_get_dev(netdev)->netdev_class->get_in4(netdev,
                     &address, &netmask)
              : EOPNOTSUPP);
     if (address_) {
@@ -810,7 +813,7 @@ netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
     int error;
 
     error = (netdev_get_dev(netdev)->netdev_class->get_in6
-             ? netdev_get_dev(netdev)->netdev_class->get_in6(netdev, 
+             ? netdev_get_dev(netdev)->netdev_class->get_in6(netdev,
                     in6 ? in6 : &dummy)
              : EOPNOTSUPP);
     if (error && in6) {
@@ -831,7 +834,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
     enum netdev_flags old_flags;
     int error;
 
-    error = netdev_get_dev(netdev)->netdev_class->update_flags(netdev, 
+    error = netdev_get_dev(netdev)->netdev_class->update_flags(netdev,
                 off & ~on, on, &old_flags);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to %s flags for network device %s: %s",
@@ -906,7 +909,7 @@ netdev_arp_lookup(const struct netdev *netdev,
                   uint32_t ip, uint8_t mac[ETH_ADDR_LEN])
 {
     int error = (netdev_get_dev(netdev)->netdev_class->arp_lookup
-                 ? netdev_get_dev(netdev)->netdev_class->arp_lookup(netdev, 
+                 ? netdev_get_dev(netdev)->netdev_class->arp_lookup(netdev,
                         ip, mac)
                  : EOPNOTSUPP);
     if (error) {
@@ -921,7 +924,7 @@ int
 netdev_get_carrier(const struct netdev *netdev, bool *carrier)
 {
     int error = (netdev_get_dev(netdev)->netdev_class->get_carrier
-                 ? netdev_get_dev(netdev)->netdev_class->get_carrier(netdev, 
+                 ? netdev_get_dev(netdev)->netdev_class->get_carrier(netdev,
                         carrier)
                  : EOPNOTSUPP);
     if (error) {
@@ -967,7 +970,7 @@ netdev_set_policing(struct netdev *netdev, uint32_t kbits_rate,
                     uint32_t kbits_burst)
 {
     return (netdev_get_dev(netdev)->netdev_class->set_policing
-            ? netdev_get_dev(netdev)->netdev_class->set_policing(netdev, 
+            ? netdev_get_dev(netdev)->netdev_class->set_policing(netdev,
                     kbits_rate, kbits_burst)
             : EOPNOTSUPP);
 }
@@ -1260,7 +1263,7 @@ int
 netdev_get_vlan_vid(const struct netdev *netdev, int *vlan_vid)
 {
     int error = (netdev_get_dev(netdev)->netdev_class->get_vlan_vid
-                 ? netdev_get_dev(netdev)->netdev_class->get_vlan_vid(netdev, 
+                 ? netdev_get_dev(netdev)->netdev_class->get_vlan_vid(netdev,
                         vlan_vid)
                  : ENOENT);
     if (error) {
@@ -1426,7 +1429,7 @@ netdev_uninit(struct netdev *netdev, bool close)
 }
 
 
-/* Returns the class type of 'netdev'.  
+/* Returns the class type of 'netdev'.
  *
  * The caller must not free the returned value. */
 const char *

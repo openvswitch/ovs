@@ -379,7 +379,8 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
 /* Tell 'fsm' that a connection or listening attempt is in progress.
  *
  * The FSM will start a timer, after which the connection or listening attempt
- * will be aborted (by returning RECONNECT_DISCONNECT from reconect_run()).  */
+ * will be aborted (by returning RECONNECT_DISCONNECT from
+ * reconnect_run()).  */
 void
 reconnect_connecting(struct reconnect *fsm, long long int now)
 {

@@ -59,38 +59,14 @@ DISTCLEANFILES += ovsdb/ovsdb-server.1
 EXTRA_DIST += ovsdb/ovsdb-server.1.in
 
 # ovsdb-idlc
-EXTRA_DIST += \
-	ovsdb/OVSDB.py \
-	ovsdb/SPECS \
-	ovsdb/simplejson/__init__.py \
-	ovsdb/simplejson/_speedups.c				\
-	ovsdb/simplejson/decoder.py				\
-	ovsdb/simplejson/encoder.py				\
-	ovsdb/simplejson/scanner.py				\
-	ovsdb/simplejson/tests/__init__.py			\
-	ovsdb/simplejson/tests/test_check_circular.py		\
-	ovsdb/simplejson/tests/test_decode.py			\
-	ovsdb/simplejson/tests/test_default.py			\
-	ovsdb/simplejson/tests/test_dump.py			\
-	ovsdb/simplejson/tests/test_encode_basestring_ascii.py	\
-	ovsdb/simplejson/tests/test_fail.py			\
-	ovsdb/simplejson/tests/test_float.py			\
-	ovsdb/simplejson/tests/test_indent.py			\
-	ovsdb/simplejson/tests/test_pass1.py			\
-	ovsdb/simplejson/tests/test_pass2.py			\
-	ovsdb/simplejson/tests/test_pass3.py			\
-	ovsdb/simplejson/tests/test_recursion.py		\
-	ovsdb/simplejson/tests/test_scanstring.py		\
-	ovsdb/simplejson/tests/test_separators.py		\
-	ovsdb/simplejson/tests/test_unicode.py			\
-	ovsdb/simplejson/tool.py
+EXTRA_DIST += ovsdb/SPECS 
 noinst_SCRIPTS += ovsdb/ovsdb-idlc 
 EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.in \
 	ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
 SUFFIXES += .ovsidl
-OVSDB_IDLC = $(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in
+OVSDB_IDLC = $(run_python) $(srcdir)/ovsdb/ovsdb-idlc.in
 .ovsidl.c:
 	$(OVSDB_IDLC) c-idl-source $< > $@.tmp
 	mv $@.tmp $@
@@ -115,12 +91,12 @@ $(OVSIDL_BUILT): ovsdb/ovsdb-idlc.in
 EXTRA_DIST += ovsdb/ovsdb-doc.in
 noinst_SCRIPTS += ovsdb/ovsdb-doc
 DISTCLEANFILES += ovsdb/ovsdb-doc
-OVSDB_DOC = $(PYTHON) $(srcdir)/ovsdb/ovsdb-doc.in
+OVSDB_DOC = $(run_python) $(srcdir)/ovsdb/ovsdb-doc.in
 
 # ovsdb-dot
 EXTRA_DIST += ovsdb/ovsdb-dot.in
 noinst_SCRIPTS += ovsdb/ovsdb-dot
 DISTCLEANFILES += ovsdb/ovsdb-dot
-OVSDB_DOT = $(PYTHON) $(srcdir)/ovsdb/ovsdb-dot.in
+OVSDB_DOT = $(run_python) $(srcdir)/ovsdb/ovsdb-dot.in
 
 include ovsdb/ovsdbmonitor/automake.mk

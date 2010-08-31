@@ -9,7 +9,6 @@ bin_PROGRAMS += \
 	utilities/ovs-vsctl
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
-dist_sbin_SCRIPTS += utilities/ovs-monitor 
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \
@@ -19,6 +18,7 @@ EXTRA_DIST += \
 	utilities/ovs-kill.8.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-openflowd.8.in \
+	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
@@ -46,6 +46,7 @@ man_MANS += \
 	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-openflowd.8 \
+	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pki.8 \
 	utilities/ovs-vsctl.8
 
@@ -78,9 +79,6 @@ utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 if HAVE_NETLINK
-bin_PROGRAMS += utilities/ovs-wdt
-utilities_ovs_wdt_SOURCES = utilities/ovs-wdt.c
-
 noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.a

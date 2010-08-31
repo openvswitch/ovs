@@ -8,6 +8,8 @@
 
 /* Functions for managing the dp interface/device. */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -531,8 +533,8 @@ out:
 static void suppress_loop(struct datapath *dp, struct sw_flow_actions *actions)
 {
 	if (net_ratelimit())
-		printk(KERN_WARNING "%s: flow looped %d times, dropping\n",
-		       dp_name(dp), DP_MAX_LOOPS);
+		pr_warn("%s: flow looped %d times, dropping\n",
+			dp_name(dp), DP_MAX_LOOPS);
 	actions->n_actions = 0;
 }
 
@@ -547,16 +549,21 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct sw_flow *flow;
 	struct sw_flow_actions *acts;
 	struct loop_counter *loop;
+	int error;
 
 	OVS_CB(skb)->dp_port = p;
 
 	/* Extract flow from 'skb' into 'key'. */
-	if (flow_extract(skb, p ? p->port_no : XFLOWP_NONE, &key)) {
-		if (dp->drop_frags) {
-			kfree_skb(skb);
-			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
-			goto out;
-		}
+	error = flow_extract(skb, p ? p->port_no : XFLOWP_NONE, &key);
+	if (unlikely(error)) {
+		kfree_skb(skb);
+		return;
+	}
+
+	if (OVS_CB(skb)->is_frag && dp->drop_frags) {
+		kfree_skb(skb);
+		stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+		goto out;
 	}
 
 	/* Look up flow. */
@@ -599,7 +606,11 @@ out:
 	/* Update datapath statistics. */
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+
+	write_seqcount_begin(&stats->seqlock);
 	(*(u64 *)((u8 *)stats + stats_counter_off))++;
+	write_seqcount_end(&stats->seqlock);
+
 	local_bh_enable();
 }
 
@@ -636,9 +647,9 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 		break;
 	default:
 		if (net_ratelimit())
-			printk(KERN_ERR "Attempting to checksum a non-"
-			       "TCP/UDP packet, dropping a protocol"
-			       " %d packet", iph->protocol);
+			pr_err("Attempting to checksum a non-TCP/UDP packet, "
+			       "dropping a protocol %d packet",
+			       iph->protocol);
 		goto out;
 	}
 
@@ -741,11 +752,10 @@ void compute_ip_summed(struct sk_buff *skb, bool xmit)
 		break;
 #endif
 	default:
-		printk(KERN_ERR "openvswitch: unknown checksum type %d\n",
-		       skb->ip_summed);
+		pr_err("unknown checksum type %d\n", skb->ip_summed);
 		/* None seems the safest... */
 		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
-	}	
+	}
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
@@ -860,7 +870,11 @@ err_kfree_skb:
 err:
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+
+	write_seqcount_begin(&stats->seqlock);
 	stats->n_lost++;
+	write_seqcount_end(&stats->seqlock);
+
 	local_bh_enable();
 
 	return err;
@@ -1349,7 +1363,9 @@ static int do_execute(struct datapath *dp, const struct xflow_execute *execute)
 	else
 		skb->protocol = htons(ETH_P_802_2);
 
-	flow_extract(skb, execute->in_port, &key);
+	err = flow_extract(skb, execute->in_port, &key);
+	if (err)
+		goto error_free_skb;
 
 	rcu_read_lock();
 	err = execute_actions(dp, skb, &key, actions->actions,
@@ -1391,12 +1407,21 @@ static int get_dp_stats(struct datapath *dp, struct xflow_stats __user *statsp)
 	stats.max_groups = DP_MAX_GROUPS;
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
 	for_each_possible_cpu(i) {
-		const struct dp_stats_percpu *s;
-		s = per_cpu_ptr(dp->stats_percpu, i);
-		stats.n_frags += s->n_frags;
-		stats.n_hit += s->n_hit;
-		stats.n_missed += s->n_missed;
-		stats.n_lost += s->n_lost;
+		const struct dp_stats_percpu *percpu_stats;
+		struct dp_stats_percpu local_stats;
+		unsigned seqcount;
+
+		percpu_stats = per_cpu_ptr(dp->stats_percpu, i);
+
+		do {
+			seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+			local_stats = *percpu_stats;
+		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+
+		stats.n_frags += local_stats.n_frags;
+		stats.n_hit += local_stats.n_hit;
+		stats.n_missed += local_stats.n_missed;
+		stats.n_lost += local_stats.n_lost;
 	}
 	stats.max_miss_queue = DP_MAX_QUEUE_LEN;
 	stats.max_action_queue = DP_MAX_QUEUE_LEN;
@@ -2255,7 +2280,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 	}
 success:
 	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
-	
+
 	retval = 0;
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		if (copy_bytes == skb->len) {

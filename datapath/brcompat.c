@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/kernel.h>
 #include <asm/uaccess.h>
 #include <linux/completion.h>
@@ -252,7 +254,7 @@ static int brc_get_port_list(struct net_device *dev, int __user *uindices,
  *            (limited to a page for sanity)
  * offset  -- number of records to skip
  */
-static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf, 
+static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf,
 			       unsigned long maxnum, unsigned long offset)
 {
 	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
@@ -370,7 +372,7 @@ static int brc_genl_query(struct sk_buff *skb, struct genl_info *info)
 	void *data;
 
 	ans_skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
-	if (!ans_skb) 
+	if (!ans_skb)
 		return -ENOMEM;
 
 	data = genlmsg_put_reply(ans_skb, info, &brc_genl_family,
@@ -425,8 +427,7 @@ static int brc_genl_dp_result(struct sk_buff *skb, struct genl_info *info)
 	if (brc_seq == info->snd_seq) {
 		brc_seq++;
 
-		if (brc_reply)
-			kfree_skb(brc_reply);
+		kfree_skb(brc_reply);
 		brc_reply = skb;
 
 		complete(&brc_done);
@@ -482,7 +483,7 @@ static struct sk_buff *brc_send_command(struct sk_buff *request,
 	/* Wait for reply. */
 	error = -ETIMEDOUT;
 	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT)) {
-		printk(KERN_WARNING "brcompat: timed out waiting for userspace\n");
+		pr_warn("timed out waiting for userspace\n");
 		goto error;
     }
 
@@ -531,15 +532,15 @@ static int __init brc_init(void)
 		goto error;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_query_dp);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_dp_result);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	err = genl_register_ops(&brc_genl_family, &brc_genl_ops_set_proc);
-	if (err != 0) 
+	if (err != 0)
 		goto err_unregister;
 
 	strcpy(brc_mc_group.name, "brcompat");
@@ -552,7 +553,7 @@ static int __init brc_init(void)
 err_unregister:
 	genl_unregister_family(&brc_genl_family);
 error:
-	printk(KERN_EMERG "brcompat: failed to install!");
+	pr_emerg("failed to install!\n");
 	return err;
 }
 

@@ -64,7 +64,7 @@ BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port, flow_t *);
-void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
+void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
         struct xflow_flow_stats *stats);
 void flow_to_match(const flow_t *,
                    bool tun_id_from_cookie, struct ofp_match *);

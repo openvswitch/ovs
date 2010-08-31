@@ -1,0 +1,48 @@
+AT_BANNER([JSON-RPC - Python])
+
+AT_SETUP([JSON-RPC request and successful reply - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([test -s pid])
+AT_CHECK([kill -0 `cat pid`])
+AT_CHECK(
+  [[$PYTHON $srcdir/test-jsonrpc.py request unix:socket echo '[{"a": "b", "x": null}]']], [0],
+  [[{"error":null,"id":0,"result":[{"a":"b","x":null}]}
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK([kill `cat pid`])
+AT_CLEANUP
+
+AT_SETUP([JSON-RPC request and error reply - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([test -s pid])
+AT_CHECK([kill -0 `cat pid`])
+AT_CHECK(
+  [[$PYTHON $srcdir/test-jsonrpc.py request unix:socket bad-request '[]']], [0],
+  [[{"error":{"error":"unknown method"},"id":0,"result":null}
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK([kill `cat pid`])
+AT_CLEANUP
+
+AT_SETUP([JSON-RPC notification - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([test -s pid])
+# When a daemon dies it deletes its pidfile, so make a copy.
+AT_CHECK([cp pid pid2])
+AT_CHECK([kill -0 `cat pid2`])
+AT_CHECK([[$PYTHON $srcdir/test-jsonrpc.py notify unix:socket shutdown '[]']], [0], [], 
+  [ignore], [kill `cat pid2`])
+AT_CHECK(
+  [pid=`cat pid2`
+   # First try a quick sleep, so that the test completes very quickly
+   # in the normal case.  POSIX doesn't require fractional times to
+   # work, so this might not work.
+   sleep 0.1; if kill -0 $pid; then :; else echo success; exit 0; fi
+   # Then wait up to 2 seconds.
+   sleep 1; if kill -0 $pid; then :; else echo success; exit 0; fi
+   sleep 1; if kill -0 $pid; then :; else echo success; exit 0; fi
+   echo failure; exit 1], [0], [success
+], [ignore])
+AT_CHECK([test ! -e pid])
+AT_CLEANUP

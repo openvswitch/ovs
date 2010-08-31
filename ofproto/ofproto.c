@@ -64,7 +64,7 @@ VLOG_DEFINE_THIS_MODULE(ofproto)
 #include "sflow_api.h"
 
 struct ofproto_rule {
-    uint64_t flow_cookie;       /* Controller-issued identifier. 
+    uint64_t flow_cookie;       /* Controller-issued identifier.
                                    (Kept in network-byte order.) */
     bool send_flow_removed;     /* Send a flow removed message? */
     tag_type tags;              /* Tags (set only by hooks). */
@@ -1663,8 +1663,8 @@ append_port_stat(struct wdp_port *port, struct ofconn *ofconn,
     struct netdev_stats stats;
     struct ofp_port_stats *ops;
 
-    /* Intentionally ignore return value, since errors will set 
-     * 'stats' to all-1s, which is correct for OpenFlow, and 
+    /* Intentionally ignore return value, since errors will set
+     * 'stats' to all-1s, which is correct for OpenFlow, and
      * netdev_get_stats() will log errors. */
     netdev_get_stats(port->netdev, &stats);
 
@@ -1823,7 +1823,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.out_port = fsr->out_port;
     cbdata.msg = start_stats_reply(osr, 1024);
     flow_from_match(&fsr->match, 0, false, 0, &target);
-    wdp_flow_for_each_match(p->wdp, &target, 
+    wdp_flow_for_each_match(p->wdp, &target,
                             table_id_to_include(fsr->table_id),
                             flow_stats_cb, &cbdata);
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
@@ -1860,7 +1860,7 @@ flow_stats_ds_cb(struct wdp_rule *rule, void *cbdata_)
     return 0;
 }
 
-/* Adds a pretty-printed description of all flows to 'results', including 
+/* Adds a pretty-printed description of all flows to 'results', including
  * those marked hidden by secchan (e.g., by in-band control). */
 void
 ofproto_get_all_flows(struct ofproto *p, struct ds *results)

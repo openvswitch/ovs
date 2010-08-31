@@ -282,7 +282,8 @@ struct xflow_flowvec {
 #define XFLOWAT_SET_TUNNEL        12 /* Set the encapsulating tunnel ID. */
 #define XFLOWAT_SET_PRIORITY      14 /* Set skb->priority. */
 #define XFLOWAT_POP_PRIORITY      15 /* Restore original skb->priority. */
-#define XFLOWAT_N_ACTIONS         16
+#define XFLOWAT_DROP_SPOOFED_ARP  16 /* Drop ARPs with spoofed source MAC. */
+#define XFLOWAT_N_ACTIONS         17
 
 struct xflow_action_output {
     uint16_t type;              /* XFLOWAT_OUTPUT. */

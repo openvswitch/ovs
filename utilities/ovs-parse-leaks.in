@@ -1,6 +1,6 @@
 #! @PERL@
 
-# Copyright (c) 2009 Nicira Networks.
+# Copyright (c) 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ die "$0: $ARGV[0] does not exist" if @ARGV > 0 && ! -e $ARGV[0];
 
 our ($binary);
 our ($a2l) = search_path("addr2line");
-my ($no_syms) = "symbols will not be translated";
+my ($no_syms) = "symbols will not be translated (use --help for help)";
 if (!@ARGV) {
     print "no binary specified; $no_syms\n";
 } elsif (! -e $ARGV[0]) {

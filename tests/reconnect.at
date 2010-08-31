@@ -1,23 +1,41 @@
 AT_BANNER([reconnect library])
 
+m4_define([__RECONNECT_CHECK],
+  [AT_SETUP([$1])
+   $2
+   AT_KEYWORDS([reconnect])
+   AT_DATA([input], [$3])
+   AT_CHECK([$4], [0], [$5])
+   AT_CLEANUP])
+
+m4_define([RECONNECT_CHECK],
+  [__RECONNECT_CHECK(
+     [$1 - C],
+     [],
+     [$2],
+     [test-reconnect < input],
+     [$3])
+   __RECONNECT_CHECK(
+     [$1 - Python],
+     [AT_SKIP_IF([test $HAVE_PYTHON = no])],
+     [$2],
+     [$PYTHON $srcdir/test-reconnect.py < input],
+     [$3])])
+
 ######################################################################
-AT_SETUP([nothing happens if not enabled])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [run
+RECONNECT_CHECK([nothing happens if not enabled],
+  [run
 timeout
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 run
 timeout
   no timeout
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([quick connect, idle disconnect])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([quick connect, idle disconnect],
+  [enable
 
 # Connection succeeds.
 run
@@ -31,8 +49,7 @@ run
 timeout
 run
 disconnected
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -70,12 +87,10 @@ disconnected
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([slow connect, idle disconnect])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([slow connect, idle disconnect],
+  [enable
 
 # Start connecting.
 run
@@ -94,8 +109,7 @@ run
 timeout
 run
 disconnected
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -143,12 +157,10 @@ disconnected
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([connect backs off])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([connect backs off],
+  [enable
 
 # First connection attempt fails after 1000 ms.
 run
@@ -207,8 +219,7 @@ connecting
 timeout
 run
 connect-failed
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -345,12 +356,10 @@ connect-failed
   in BACKOFF for 0 ms (8000 ms backoff)
   0 successful connections out of 6 attempts, seqno 0
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([connections with no data preserve backoff])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([connections with no data preserve backoff],
+  [enable
 
 # First connect, then idle timeout kills connection.
 run
@@ -506,14 +515,11 @@ timeout
 
 ### t=38000 ###
   in BACKOFF for 4000 ms (4000 ms backoff)
-
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([brief connection preserves backoff])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([brief connection preserves backoff],
+  [enable
 
 # First connection attempt fails after 1000 ms.
 run
@@ -551,9 +557,7 @@ run
 # Back off for 4000 ms.
 timeout
 run
-])
-AT_CHECK([test-reconnect < input], [0], 
-  [### t=1000 ###
+], [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
 
@@ -641,12 +645,10 @@ timeout
 run
   should connect
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([brief connection with data preserves backoff])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([brief connection with data preserves backoff],
+  [enable
 
 # First connection attempt fails after 1000 ms.
 run
@@ -694,8 +696,7 @@ run
 # Back off for 4000 ms.
 timeout
 run
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -805,12 +806,10 @@ timeout
 run
   should connect
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([long connection resets backoff])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([long connection resets backoff],
+  [enable
 
 # First connection attempt fails after 1000 ms.
 run
@@ -858,8 +857,7 @@ run
 # Back off for 1000 ms.
 timeout
 run
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -969,12 +967,10 @@ timeout
 run
   should connect
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([connection attempt fails quickly])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [enable
+RECONNECT_CHECK([connection attempt fails quickly],
+  [enable
 
 # Connection fails quickly.
 run
@@ -991,9 +987,8 @@ connect-failed ECONNREFUSED
 # Back off for 2000 ms.
 run
 timeout
-])
-AT_CHECK([test-reconnect < input], [0], 
-  [### t=1000 ###
+],
+   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
 
@@ -1027,12 +1022,10 @@ timeout
 ### t=4000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([max-tries of 1 honored])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [set-max-tries 1
+RECONNECT_CHECK([max-tries of 1 honored],
+  [set-max-tries 1
 enable
 
 # Connection succeeds.
@@ -1047,8 +1040,7 @@ run
 timeout
 run
 disconnected
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 set-max-tries 1
   1 tries left
@@ -1089,17 +1081,14 @@ disconnected
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([max-tries of 0 honored])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [set-max-tries 0
+RECONNECT_CHECK([max-tries of 0 honored],
+  [set-max-tries 0
 enable
 run
 timeout
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 set-max-tries 0
   0 tries left
@@ -1108,12 +1097,10 @@ run
 timeout
   no timeout
 ])
-AT_CLEANUP
 
 ######################################################################
-AT_SETUP([passive mode])
-AT_KEYWORDS([reconnect])
-AT_DATA([input], [passive
+RECONNECT_CHECK([passive mode],
+  [passive
 enable
 
 # Start listening.
@@ -1148,8 +1135,7 @@ disconnected
 timeout
 run
 listening
-])
-AT_CHECK([test-reconnect < input], [0], 
+],
   [### t=1000 ###
 passive
 enable
@@ -1228,4 +1214,3 @@ run
 listening
   in LISTENING for 0 ms (0 ms backoff)
 ])
-AT_CLEANUP

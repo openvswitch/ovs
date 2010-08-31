@@ -31,7 +31,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport)
 struct netdev_vport_notifier {
     struct netdev_notifier notifier;
     struct list list_node;
-    struct shash_node *shash_node; 
+    struct shash_node *shash_node;
 };
 
 static struct shash netdev_vport_notifiers =

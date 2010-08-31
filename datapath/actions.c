@@ -14,6 +14,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in6.h>
+#include <linux/if_arp.h>
 #include <linux/if_vlan.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
@@ -52,7 +53,7 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 	struct ethhdr *eh;
 
 	/* Verify we were given a vlan packet */
-	if (vh->h_vlan_proto != htons(ETH_P_8021Q))
+	if (vh->h_vlan_proto != htons(ETH_P_8021Q) || skb->len < VLAN_ETH_HLEN)
 		return skb;
 
 	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
@@ -82,8 +83,14 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 	if (skb->protocol == htons(ETH_P_8021Q)) {
 		/* Modify vlan id, but maintain other TCI values */
-		struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
-		__be16 old_tci = vh->h_vlan_TCI;
+		struct vlan_ethhdr *vh;
+		__be16 old_tci;
+
+		if (skb->len < VLAN_ETH_HLEN)
+			return skb;
+
+		vh = vlan_eth_hdr(skb);
+		old_tci = vh->h_vlan_TCI;
 
 		vh->h_vlan_TCI = (vh->h_vlan_TCI & ~mask) | tci;
 
@@ -107,7 +114,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		if (unlikely(err)) {
 			kfree_skb(skb);
 			return ERR_PTR(err);
-		}	
+		}
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.
@@ -229,31 +236,51 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 				csum_unfold(*sum)));
 }
 
+static bool is_ip(struct sk_buff *skb, const struct xflow_key *key)
+{
+	return (key->dl_type == htons(ETH_P_IP) &&
+		skb->transport_header > skb->network_header);
+}
+
+static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct xflow_key *key)
+{
+	int transport_len = skb->len - skb_transport_offset(skb);
+	if (key->nw_proto == IPPROTO_TCP) {
+		if (likely(transport_len >= sizeof(struct tcphdr)))
+			return &tcp_hdr(skb)->check;
+	} else if (key->nw_proto == IPPROTO_UDP) {
+		if (likely(transport_len >= sizeof(struct udphdr)))
+			return &udp_hdr(skb)->check;
+	}
+	return NULL;
+}
+
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 				   const struct xflow_key *key,
 				   const struct xflow_action_nw_addr *a,
 				   gfp_t gfp)
 {
-	if (key->dl_type != htons(ETH_P_IP))
+	struct iphdr *nh;
+	__sum16 *check;
+	__be32 *nwaddr;
+
+	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
 	skb = make_writable(skb, 0, gfp);
-	if (skb) {
-		struct iphdr *nh = ip_hdr(skb);
-		u32 *f = a->type == XFLOWAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
-		u32 old = *f;
-		u32 new = a->nw_addr;
+	if (unlikely(!skb))
+		return NULL;
 
-		if (key->nw_proto == IPPROTO_TCP) {
-			struct tcphdr *th = tcp_hdr(skb);
-			update_csum(&th->check, skb, old, new, 1);
-		} else if (key->nw_proto == IPPROTO_UDP) {
-			struct udphdr *th = udp_hdr(skb);
-			update_csum(&th->check, skb, old, new, 1);
-		}
-		update_csum(&nh->check, skb, old, new, 0);
-		*f = new;
-	}
+	nh = ip_hdr(skb);
+	nwaddr = a->type == XFLOWAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
+
+	check = get_l4_checksum(skb, key);
+	if (likely(check))
+		update_csum(check, skb, *nwaddr, a->nw_addr, 1);
+	update_csum(&nh->check, skb, *nwaddr, a->nw_addr, 0);
+
+	*nwaddr = a->nw_addr;
+
 	return skb;
 }
 
@@ -262,7 +289,7 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 				   const struct xflow_action_nw_tos *a,
 				   gfp_t gfp)
 {
-	if (key->dl_type != htons(ETH_P_IP))
+	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
 	skb = make_writable(skb, 0, gfp);
@@ -274,8 +301,8 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 
 		/* Set the DSCP bits and preserve the ECN bits. */
 		new = a->nw_tos | (nh->tos & INET_ECN_MASK);
-		update_csum(&nh->check, skb, htons((uint16_t)old),
-				htons((uint16_t)new), 0);
+		update_csum(&nh->check, skb, htons((u16)old),
+			    htons((u16)new), 0);
 		*f = new;
 	}
 	return skb;
@@ -286,29 +313,64 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 				   const struct xflow_action_tp_port *a,
 				   gfp_t gfp)
 {
-	int check_ofs;
+	struct udphdr *th;
+	__sum16 *check;
+	__be16 *port;
 
-	if (key->dl_type != htons(ETH_P_IP))
-		return skb;
-
-	if (key->nw_proto == IPPROTO_TCP)
-		check_ofs = offsetof(struct tcphdr, check);
-	else if (key->nw_proto == IPPROTO_UDP)
-		check_ofs = offsetof(struct udphdr, check);
-	else
+	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
 	skb = make_writable(skb, 0, gfp);
-	if (skb) {
-		struct udphdr *th = udp_hdr(skb);
-		u16 *f = a->type == XFLOWAT_SET_TP_SRC ? &th->source : &th->dest;
-		u16 old = *f;
-		u16 new = a->tp_port;
-		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
-				skb, old, new, 0);
-		*f = new;
-	}
+	if (unlikely(!skb))
+		return NULL;
+
+	/* Must follow make_writable() since that can move the skb data. */
+	check = get_l4_checksum(skb, key);
+	if (unlikely(!check))
+		return skb;
+
+	/*
+	 * Update port and checksum.
+	 *
+	 * This is OK because source and destination port numbers are at the
+	 * same offsets in both UDP and TCP headers, and get_l4_checksum() only
+	 * supports those protocols.
+	 */
+	th = udp_hdr(skb);
+	port = a->type == XFLOWAT_SET_TP_SRC ? &th->source : &th->dest;
+	update_csum(check, skb, *port, a->tp_port, 0);
+	*port = a->tp_port;
+
 	return skb;
+}
+
+/**
+ * is_spoofed_arp - check for invalid ARP packet
+ *
+ * @skb: skbuff containing an Ethernet packet, with network header pointing
+ * just past the Ethernet and optional 802.1Q header.
+ * @key: flow key extracted from @skb by flow_extract()
+ *
+ * Returns true if @skb is an invalid Ethernet+IPv4 ARP packet: one with screwy
+ * or truncated header fields or one whose inner and outer Ethernet address
+ * differ.
+ */
+static bool is_spoofed_arp(struct sk_buff *skb, const struct xflow_key *key)
+{
+	struct arp_eth_header *arp;
+
+	if (key->dl_type != htons(ETH_P_ARP))
+		return false;
+
+	if (skb_network_offset(skb) + sizeof(struct arp_eth_header) > skb->len)
+		return true;
+
+	arp = (struct arp_eth_header *)skb_network_header(skb);
+	return (arp->ar_hrd != htons(ARPHRD_ETHER) ||
+		arp->ar_pro != htons(ETH_P_IP) ||
+		arp->ar_hln != ETH_ALEN ||
+		arp->ar_pln != 4 ||
+		compare_ether_addr(arp->ar_sha, eth_hdr(skb)->h_source));
 }
 
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
@@ -476,10 +538,16 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case XFLOWAT_POP_PRIORITY:
 			skb->priority = priority;
 			break;
+
+		case XFLOWAT_DROP_SPOOFED_ARP:
+			if (unlikely(is_spoofed_arp(skb, key)))
+				goto exit;
+			break;
 		}
 		if (!skb)
 			return -ENOMEM;
 	}
+exit:
 	if (prev_port != -1)
 		do_output(dp, skb, prev_port);
 	else

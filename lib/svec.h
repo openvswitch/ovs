@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
- 
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -72,7 +72,7 @@ void svec_pop_back(struct svec *);
           ? (NAME) = (SVEC)->names[INDEX], 1    \
           : 0);                                 \
          (INDEX)++)
- 
+
 #ifdef  __cplusplus
 }
 #endif

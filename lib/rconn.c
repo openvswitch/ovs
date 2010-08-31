@@ -710,7 +710,7 @@ rconn_failure_duration(const struct rconn *rconn)
 /* Returns the IP address of the peer, or 0 if the peer's IP address is not
  * known. */
 uint32_t
-rconn_get_remote_ip(const struct rconn *rconn) 
+rconn_get_remote_ip(const struct rconn *rconn)
 {
     return rconn->remote_ip;
 }
@@ -718,16 +718,16 @@ rconn_get_remote_ip(const struct rconn *rconn)
 /* Returns the transport port of the peer, or 0 if the peer's port is not
  * known. */
 uint16_t
-rconn_get_remote_port(const struct rconn *rconn) 
+rconn_get_remote_port(const struct rconn *rconn)
 {
     return rconn->remote_port;
 }
 
 /* Returns the IP address used to connect to the peer, or 0 if the
- * connection is not an IP-based protocol or if its IP address is not 
+ * connection is not an IP-based protocol or if its IP address is not
  * known. */
 uint32_t
-rconn_get_local_ip(const struct rconn *rconn) 
+rconn_get_local_ip(const struct rconn *rconn)
 {
     return rconn->local_ip;
 }
@@ -735,7 +735,7 @@ rconn_get_local_ip(const struct rconn *rconn)
 /* Returns the transport port used to connect to the peer, or 0 if the
  * connection does not contain a port or if the port is not known. */
 uint16_t
-rconn_get_local_port(const struct rconn *rconn) 
+rconn_get_local_port(const struct rconn *rconn)
 {
     return rconn->vconn ? vconn_get_local_port(rconn->vconn) : 0;
 }
@@ -1059,7 +1059,7 @@ state_transition(struct rconn *rc, enum state state)
 }
 
 static void
-question_connectivity(struct rconn *rc) 
+question_connectivity(struct rconn *rc)
 {
     time_t now = time_now();
     if (now - rc->last_questioned > 60) {
@@ -1097,7 +1097,7 @@ copy_to_monitor(struct rconn *rc, const struct ofpbuf *b)
 }
 
 static bool
-is_connected_state(enum state state) 
+is_connected_state(enum state state)
 {
     return (state & (S_ACTIVE | S_IDLE)) != 0;
 }

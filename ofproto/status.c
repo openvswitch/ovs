@@ -101,10 +101,10 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
     status_reply_put(sr, "name=%s", rconn_get_target(rconn));
     if (remote_ip) {
         status_reply_put(sr, "remote-ip="IP_FMT, IP_ARGS(&remote_ip));
-        status_reply_put(sr, "remote-port=%d", 
+        status_reply_put(sr, "remote-port=%d",
                          ntohs(rconn_get_remote_port(rconn)));
         status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip));
-        status_reply_put(sr, "local-port=%d", 
+        status_reply_put(sr, "local-port=%d",
                          ntohs(rconn_get_local_port(rconn)));
     }
     status_reply_put(sr, "state=%s", rconn_get_state(rconn));

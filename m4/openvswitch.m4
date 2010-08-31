@@ -60,30 +60,34 @@ AC_DEFUN([OVS_CHECK_NETLINK],
                 [Define to 1 if Netlink protocol is available.])
    fi])
 
-dnl Checks for OpenSSL, if --enable-ssl is passed in.
+dnl Checks for OpenSSL.
 AC_DEFUN([OVS_CHECK_OPENSSL],
   [AC_ARG_ENABLE(
      [ssl],
-     [AC_HELP_STRING([--enable-ssl], 
-                     [Enable ssl support (requires libssl)])],
+     [AC_HELP_STRING([--disable-ssl], [Disable OpenSSL support])],
      [case "${enableval}" in
         (yes) ssl=true ;;
         (no)  ssl=false ;;
         (*) AC_MSG_ERROR([bad value ${enableval} for --enable-ssl]) ;;
       esac],
-     [ssl=false])
+     [ssl=check])
 
-   if test "$ssl" = true; then
+   if test "$ssl" != false; then
        dnl Make sure that pkg-config is installed.
        m4_pattern_forbid([PKG_CHECK_MODULES])
        PKG_CHECK_MODULES([SSL], [libssl], 
          [HAVE_OPENSSL=yes],
          [HAVE_OPENSSL=no
-          AC_MSG_WARN([Cannot find libssl:
+          if test "$ssl" = check; then
+            AC_MSG_WARN([Cannot find libssl:
 
 $SSL_PKG_ERRORS
 
-OpenFlow connections over SSL will not be supported.])])
+OpenFlow connections over SSL will not be supported.
+(You may use --disable-ssl to suppress this warning.)])
+          else
+            AC_MSG_ERROR([Cannot find libssl (use --disable-ssl to configure without SSL support)])
+          fi])
    else
        HAVE_OPENSSL=no
    fi
@@ -152,83 +156,6 @@ AC_DEFUN([OVS_CHECK_MALLOC_HOOKS],
 dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND], 
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
-
-dnl Searches for a directory to put lockfiles for tty devices.
-dnl Defines C preprocessor variable TTY_LOCK_DIR to a quoted string
-dnl for that directory.
-AC_DEFUN([OVS_CHECK_TTY_LOCK_DIR],
-  [AC_CACHE_CHECK([directory used for serial device lockfiles],
-                  [ovs_cv_path_tty_locks],
-  		  [# This list of candidate directories is from minicom.
-		   ovs_cv_path_tty_locks=none
-                   for dir in /etc/locks /var/lock /usr/spool/locks \
-                              /var/spool/locks /var/spool/lock \
-                              /usr/spool/uucp /var/spool/uucp /var/run; do
-		     if test -d $dir; then
-		       ovs_cv_path_tty_locks=$dir
-		       break
-		     fi
-                   done])
-   if test "$ovs_cv_path_tty_locks" = none; then
-     AC_MSG_ERROR([cannot find a directory for tty locks])
-   fi
-   AC_DEFINE_UNQUOTED([TTY_LOCK_DIR], "$ovs_cv_path_tty_locks",
-                      [Directory used for serial device lockfiles])])
-
-dnl The following check is adapted from GNU PSPP.
-dnl It searches for the ncurses library.  If it finds it, it sets
-dnl HAVE_CURSES to yes and sets NCURSES_LIBS and NCURSES_CFLAGS
-dnl appropriate.  Otherwise, it sets HAVE_CURSES to no. 
-AC_DEFUN([OVS_CHECK_CURSES],
-  [if test "$cross_compiling" != yes; then
-     AC_CHECK_PROGS([NCURSES_CONFIG], [ncurses5-config ncurses8-config])
-   fi
-   if test "$NCURSES_CONFIG" = ""; then
-     AC_SEARCH_LIBS([tgetent], [ncurses],
-         [AC_CHECK_HEADERS([term.h curses.h], 
-                           [HAVE_CURSES=yes],
-                           [HAVE_CURSES=no])])
-   else
-     save_cflags=$CFLAGS
-     CFLAGS="$CFLAGS $($NCURSES_CONFIG --cflags)"
-     AC_CHECK_HEADERS([term.h curses.h], 
-                      [HAVE_CURSES=yes],
-                      [HAVE_CURSES=no])
-     CFLAGS=$save_cflags
-     if test "$HAVE_CURSES" = yes; then
-       NCURSES_LIBS=$($NCURSES_CONFIG --libs)
-       NCURSES_CFLAGS=$($NCURSES_CONFIG --cflags)
-       AC_SUBST(NCURSES_CFLAGS)
-       AC_SUBST(NCURSES_LIBS)
-     fi
-   fi
-   AM_CONDITIONAL([HAVE_CURSES], [test "$HAVE_CURSES" = yes])])
-
-dnl Checks for linux/vt.h.
-AC_DEFUN([OVS_CHECK_LINUX_VT_H],
-  [AC_CHECK_HEADER([linux/vt.h],
-                   [HAVE_LINUX_VT_H=yes],
-                   [HAVE_LINUX_VT_H=no])
-   AM_CONDITIONAL([HAVE_LINUX_VT_H], [test "$HAVE_LINUX_VT_H" = yes])
-   if test "$HAVE_LINUX_VT_H" = yes; then
-      AC_DEFINE([HAVE_LINUX_VT_H], [1],
-                [Define to 1 if linux/vt.h is available.])
-   fi])
-
-dnl Checks for libpcre.
-dnl
-dnl ezio-term wants libpcre that supports the PCRE_PARTIAL feature,
-dnl which is libpcre 7.2 or later.
-AC_DEFUN([OVS_CHECK_PCRE],
-  [dnl Make sure that pkg-config is installed.
-   m4_pattern_forbid([PKG_CHECK_MODULES])
-   PKG_CHECK_MODULES([PCRE],
-                     [libpcre >= 7.2], 
-                     [HAVE_PCRE_PARTIAL=yes],
-                     [HAVE_PCRE_PARTIAL=no])
-   AM_CONDITIONAL([HAVE_PCRE_PARTIAL], [test "$HAVE_PCRE_PARTIAL" = yes])
-   AC_SUBST([HAVE_PCRE_PARTIAL])
-])
 
 dnl Checks for Python 2.x, x >= 4.
 AC_DEFUN([OVS_CHECK_PYTHON],

@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/dcache.h>
 #include <linux/etherdevice.h>
 #include <linux/if.h>
@@ -16,6 +18,7 @@
 #include <linux/percpu.h>
 #include <linux/rtnetlink.h>
 #include <linux/compat.h>
+#include <linux/version.h>
 
 #include "vport.h"
 #include "vport-internal_dev.h"
@@ -27,6 +30,9 @@ static struct vport_ops *base_vport_ops_list[] = {
 	&internal_vport_ops,
 	&patch_vport_ops,
 	&gre_vport_ops,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+	&capwap_vport_ops,
+#endif
 };
 
 static const struct vport_ops **vport_ops_list;
@@ -72,13 +78,14 @@ void vport_unlock(void)
 	mutex_unlock(&vport_mutex);
 }
 
-#define ASSERT_VPORT() do { \
-	if (unlikely(!mutex_is_locked(&vport_mutex))) { \
-		printk(KERN_ERR "openvswitch: vport lock not held at %s (%d)\n", \
-			__FILE__, __LINE__); \
-		dump_stack(); \
-	} \
-} while(0)
+#define ASSERT_VPORT()						\
+do {								\
+	if (unlikely(!mutex_is_locked(&vport_mutex))) {		\
+		pr_err("vport lock not held at %s (%d)\n",	\
+		       __FILE__, __LINE__);			\
+		dump_stack();					\
+	}							\
+} while (0)
 
 /**
  *	vport_init - initialize vport subsystem
@@ -612,7 +619,7 @@ struct vport *vport_locate(const char *name)
 	struct hlist_node *node;
 
 	if (unlikely(!mutex_is_locked(&vport_mutex) && !rtnl_is_locked())) {
-		printk(KERN_ERR "openvswitch: neither RTNL nor vport lock held in vport_locate\n");
+		pr_err("neither RTNL nor vport lock held in vport_locate\n");
 		dump_stack();
 	}
 
@@ -1052,12 +1059,20 @@ int vport_get_stats(struct vport *vport, struct xflow_vport_stats *stats)
 
 		for_each_possible_cpu(i) {
 			const struct vport_percpu_stats *percpu_stats;
+			struct vport_percpu_stats local_stats;
+			unsigned seqcount;
 
 			percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
-			stats->rx_bytes		+= percpu_stats->rx_bytes;
-			stats->rx_packets	+= percpu_stats->rx_packets;
-			stats->tx_bytes		+= percpu_stats->tx_bytes;
-			stats->tx_packets	+= percpu_stats->tx_packets;
+
+			do {
+				seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+				local_stats = *percpu_stats;
+			} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+
+			stats->rx_bytes		+= local_stats.rx_bytes;
+			stats->rx_packets	+= local_stats.rx_packets;
+			stats->tx_bytes		+= local_stats.tx_bytes;
+			stats->tx_packets	+= local_stats.tx_packets;
 		}
 
 		err = 0;
@@ -1192,10 +1207,12 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 		struct vport_percpu_stats *stats;
 
 		local_bh_disable();
-
 		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
+
+		write_seqcount_begin(&stats->seqlock);
 		stats->rx_packets++;
 		stats->rx_bytes += skb->len;
+		write_seqcount_end(&stats->seqlock);
 
 		local_bh_enable();
 	}
@@ -1233,8 +1250,9 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	mtu = vport_get_mtu(vport);
 	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
 		if (net_ratelimit())
-			printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-			       dp_name(vport_get_dp_port(vport)->dp), packet_length(skb), mtu);
+			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
+				dp_name(vport_get_dp_port(vport)->dp),
+				packet_length(skb), mtu);
 		goto error;
 	}
 
@@ -1244,10 +1262,12 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 		struct vport_percpu_stats *stats;
 
 		local_bh_disable();
-
 		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
+
+		write_seqcount_begin(&stats->seqlock);
 		stats->tx_packets++;
 		stats->tx_bytes += sent;
+		write_seqcount_end(&stats->seqlock);
 
 		local_bh_enable();
 	}

@@ -60,7 +60,6 @@ clean:
 	rm -rf _debian
 	[ ! -f Makefile ] || $(MAKE) distclean
 	dh_clean 
-	debconf-updatepo
 
 install: install-indep install-arch
 install-indep: build-indep
@@ -83,10 +82,8 @@ install-arch: build-arch
 	dh_clean -k -s 
 	dh_installdirs -s
 	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openvswitch install
-	cp debian/openvswitch-switch-config.overrides debian/openvswitch-switch-config/usr/share/lintian/overrides/openvswitch-switch-config
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
 	dh_install -s
-	env TERMINFO=debian/openvswitch-switchui/usr/share/terminfo tic -x extras/ezio/ezio3.ti
 
 # Must not depend on anything. This is to be called by
 # binary-arch/binary-indep

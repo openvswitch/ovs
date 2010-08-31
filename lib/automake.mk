@@ -175,9 +175,9 @@ endif
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
-	lib/netdev-gre.c \
 	lib/netdev-linux.c \
 	lib/netdev-patch.c \
+	lib/netdev-tunnel.c \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
 	lib/netlink-protocol.h \
@@ -234,7 +234,8 @@ lib/dirs.c: Makefile
 	 echo 'const char ovs_bindir[] = "$(bindir)";') > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
 
-install-data-local:
+install-data-local: lib-install-data-local
+lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(RUNDIR)
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)

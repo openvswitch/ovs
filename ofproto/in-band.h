@@ -37,7 +37,7 @@ void in_band_set_remotes(struct in_band *,
 void in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
 
-bool in_band_msg_in_hook(struct in_band *, const flow_t *, 
+bool in_band_msg_in_hook(struct in_band *, const flow_t *,
                          const struct ofpbuf *packet);
 bool in_band_rule_check(struct in_band *, const flow_t *,
                         const struct xflow_actions *);

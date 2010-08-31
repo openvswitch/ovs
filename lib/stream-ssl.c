@@ -1045,7 +1045,7 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 
 /* Returns true if SSL is at least partially configured. */
 bool
-stream_ssl_is_configured(void) 
+stream_ssl_is_configured(void)
 {
     return private_key.file_name || certificate.file_name || ca_cert.file_name;
 }
@@ -1262,7 +1262,7 @@ log_ca_cert(const char *file_name, X509 *cert)
     subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
     VLOG_INFO("Trusting CA cert from %s (%s) (fingerprint %s)", file_name,
               subject ? subject : "<out of memory>", ds_cstr(&fp));
-    free(subject);
+    OPENSSL_free(subject);
     ds_destroy(&fp);
 }
 

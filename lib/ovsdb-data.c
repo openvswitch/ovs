@@ -1214,23 +1214,6 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     return error;
 }
 
-/* This is the same as ovsdb_datum_from_json(), except that duplicate values
- * in a set or map are dropped instead of being treated as an error. */
-struct ovsdb_error *
-ovsdb_datum_from_json_unique(struct ovsdb_datum *datum,
-                             const struct ovsdb_type *type,
-                             const struct json *json,
-                             struct ovsdb_symbol_table *symtab)
-{
-    struct ovsdb_error *error;
-
-    error = ovsdb_datum_from_json__(datum, type, json, symtab);
-    if (!error) {
-        ovsdb_datum_sort_unique(datum, type->key.type, type->value.type);
-    }
-    return error;
-}
-
 /* Converts 'datum', of the specified 'type', to JSON format, and returns the
  * JSON.  The caller is responsible for freeing the returned JSON.
  *

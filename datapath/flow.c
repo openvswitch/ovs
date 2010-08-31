@@ -34,59 +34,53 @@
 struct kmem_cache *flow_cache;
 static unsigned int hash_seed;
 
-struct arp_eth_header
+static inline bool arphdr_ok(struct sk_buff *skb)
 {
-	__be16      ar_hrd;	/* format of hardware address   */
-	__be16      ar_pro;	/* format of protocol address   */
-	unsigned char   ar_hln;	/* length of hardware address   */
-	unsigned char   ar_pln;	/* length of protocol address   */
-	__be16      ar_op;	/* ARP opcode (command)     */
-
-	/* Ethernet+IPv4 specific members. */
-	unsigned char       ar_sha[ETH_ALEN];	/* sender hardware address  */
-	unsigned char       ar_sip[4];		/* sender IP address        */
-	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
-	unsigned char       ar_tip[4];		/* target IP address        */
-} __attribute__((packed));
-
-static inline int arphdr_ok(struct sk_buff *skb)
-{
-	int nh_ofs = skb_network_offset(skb);
-	return pskb_may_pull(skb, nh_ofs + sizeof(struct arp_eth_header));
+	return skb->len >= skb_network_offset(skb) + sizeof(struct arp_eth_header);
 }
 
-static inline int iphdr_ok(struct sk_buff *skb)
+static inline int check_iphdr(struct sk_buff *skb)
 {
-	int nh_ofs = skb_network_offset(skb);
-	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
-		int ip_len = ip_hdrlen(skb);
-		return (ip_len >= sizeof(struct iphdr)
-			&& pskb_may_pull(skb, nh_ofs + ip_len));
-	}
+	unsigned int nh_ofs = skb_network_offset(skb);
+	unsigned int ip_len;
+
+	if (skb->len < nh_ofs + sizeof(struct iphdr))
+		return -EINVAL;
+
+	ip_len = ip_hdrlen(skb);
+	if (ip_len < sizeof(struct iphdr) || skb->len < nh_ofs + ip_len)
+		return -EINVAL;
+
+	/*
+	 * Pull enough header bytes to account for the IP header plus the
+	 * longest transport header that we parse, currently 20 bytes for TCP.
+	 */
+	if (!pskb_may_pull(skb, min(nh_ofs + ip_len + 20, skb->len)))
+		return -ENOMEM;
+
+	skb_set_transport_header(skb, nh_ofs + ip_len);
 	return 0;
 }
 
-static inline int tcphdr_ok(struct sk_buff *skb)
+static inline bool tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
-	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
+	if (skb->len >= th_ofs + sizeof(struct tcphdr)) {
 		int tcp_len = tcp_hdrlen(skb);
 		return (tcp_len >= sizeof(struct tcphdr)
 			&& skb->len >= th_ofs + tcp_len);
 	}
-	return 0;
+	return false;
 }
 
-static inline int udphdr_ok(struct sk_buff *skb)
+static inline bool udphdr_ok(struct sk_buff *skb)
 {
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
+	return skb->len >= skb_transport_offset(skb) + sizeof(struct udphdr);
 }
 
-static inline int icmphdr_ok(struct sk_buff *skb)
+static inline bool icmphdr_ok(struct sk_buff *skb)
 {
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
+	return skb->len >= skb_transport_offset(skb) + sizeof(struct icmphdr);
 }
 
 #define TCP_FLAGS_OFFSET 13
@@ -159,7 +153,7 @@ void flow_deferred_free(struct sw_flow *flow)
 /* RCU callback used by flow_deferred_free_acts. */
 static void rcu_free_acts_callback(struct rcu_head *rcu)
 {
-	struct sw_flow_actions *sf_acts = container_of(rcu, 
+	struct sw_flow_actions *sf_acts = container_of(rcu,
 			struct sw_flow_actions, rcu);
 	kfree(sf_acts);
 }
@@ -218,23 +212,60 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	return llc->ethertype;
 }
 
-/* Parses the Ethernet frame in 'skb', which was received on 'in_port',
- * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
- * fragment, 0 otherwise. */
+/**
+ * flow_extract - extracts a flow key from an Ethernet frame.
+ * @skb: sk_buff that contains the frame, with skb->data pointing to the
+ * Ethernet header
+ * @in_port: port number on which @skb was received.
+ * @key: output flow key
+ *
+ * The caller must ensure that skb->len >= ETH_HLEN.
+ *
+ * Returns 0 if successful, otherwise a negative errno value.
+ *
+ * Initializes @skb header pointers as follows:
+ *
+ *    - skb->mac_header: the Ethernet header.
+ *
+ *    - skb->network_header: just past the Ethernet header, or just past the
+ *      VLAN header, to the first byte of the Ethernet payload.
+ *
+ *    - skb->transport_header: If key->dl_type is ETH_P_IP on output, then just
+ *      past the IPv4 header, if one is present and of a correct length,
+ *      otherwise the same as skb->network_header.  For other key->dl_type
+ *      values it is left untouched.
+ *
+ * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
+ * %false.
+ */
 int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 {
 	struct ethhdr *eth;
-	int retval = 0;
 
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
-	key->dl_tci = htons(0);
+	OVS_CB(skb)->is_frag = false;
 
-	if (skb->len < sizeof *eth)
-		return 0;
-	if (!pskb_may_pull(skb, skb->len >= 64 ? 64 : skb->len))
-		return 0;
+	/*
+	 * We would really like to pull as many bytes as we could possibly
+	 * want to parse into the linear data area.  Currently that is:
+	 *
+	 *    14     Ethernet header
+	 *     4     VLAN header
+	 *    60     max IP header with options
+	 *    20     max TCP/UDP/ICMP header (don't care about options)
+	 *    --
+	 *    98
+	 *
+	 * But Xen only allocates 64 or 72 bytes for the linear data area in
+	 * netback, which means that we would reallocate and copy the skb's
+	 * linear data on every packet if we did that.  So instead just pull 64
+	 * bytes, which is always sufficient without IP options, and then check
+	 * whether we need to pull more later when we look at the IP header.
+	 */
+	if (!pskb_may_pull(skb, min(skb->len, 64u)))
+		return -ENOMEM;
 
 	skb_reset_mac_header(skb);
 
@@ -252,14 +283,24 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 	__skb_push(skb, skb->data - (unsigned char *)eth);
 
 	/* Network layer. */
-	if (key->dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
-		struct iphdr *nh = ip_hdr(skb);
-		int th_ofs = skb_network_offset(skb) + nh->ihl * 4;
+	if (key->dl_type == htons(ETH_P_IP)) {
+		struct iphdr *nh;
+		int error;
+
+		error = check_iphdr(skb);
+		if (unlikely(error)) {
+			if (error == -EINVAL) {
+				skb->transport_header = skb->network_header;
+				return 0;
+			}
+			return error;
+		}
+
+		nh = ip_hdr(skb);
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
 		key->nw_tos = nh->tos & ~INET_ECN_MASK;
 		key->nw_proto = nh->protocol;
-		skb_set_transport_header(skb, th_ofs);
 
 		/* Transport layer. */
 		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET))) {
@@ -268,22 +309,12 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 					struct tcphdr *tcp = tcp_hdr(skb);
 					key->tp_src = tcp->source;
 					key->tp_dst = tcp->dest;
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			} else if (key->nw_proto == IPPROTO_UDP) {
 				if (udphdr_ok(skb)) {
 					struct udphdr *udp = udp_hdr(skb);
 					key->tp_src = udp->source;
 					key->tp_dst = udp->dest;
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			} else if (key->nw_proto == IPPROTO_ICMP) {
 				if (icmphdr_ok(skb)) {
@@ -293,15 +324,10 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 					 * in 16-bit network byte order. */
 					key->tp_src = htons(icmp->type);
 					key->tp_dst = htons(icmp->code);
-				} else {
-					/* Avoid tricking other code into
-					 * thinking that this packet has an L4
-					 * header. */
-					key->nw_proto = 0;
 				}
 			}
 		} else {
-			retval = 1;
+			OVS_CB(skb)->is_frag = true;
 		}
 	} else if (key->dl_type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
 		struct arp_eth_header *arp;
@@ -318,16 +344,14 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 				key->nw_proto = ntohs(arp->ar_op);
 			}
 
-			if (key->nw_proto == ARPOP_REQUEST 
+			if (key->nw_proto == ARPOP_REQUEST
 					|| key->nw_proto == ARPOP_REPLY) {
 				memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
 				memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
 			}
 		}
-	} else {
-		skb_reset_transport_header(skb);
 	}
-	return retval;
+	return 0;
 }
 
 u32 flow_hash(const struct xflow_key *key)

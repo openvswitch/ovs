@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -69,9 +71,9 @@ static struct proc_dir_entry *brc_open_dir(const char *dir_name,
 	if (!*dirp) {
 		struct proc_dir_entry *dir;
 		if (brc_lookup_entry(parent, dir_name)) {
-			printk(KERN_WARNING "%s proc directory exists, can't "
-			       "simulate--probably its real module is "
-			       "loaded\n", dir_name);
+			pr_warn("%s proc directory exists, can't simulate--"
+				"probably its real module is loaded\n",
+				dir_name);
 			return NULL;
 		}
 		dir = *dirp = proc_mkdir(dir_name, parent);

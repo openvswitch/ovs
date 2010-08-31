@@ -61,7 +61,7 @@ discovery_status_cb(struct status_reply *sr, void *d_)
     if (d->dhcp) {
         status_reply_put(sr, "state=%s", dhclient_get_state(d->dhcp));
         status_reply_put(sr, "state-elapsed=%u",
-                         dhclient_get_state_elapsed(d->dhcp)); 
+                         dhclient_get_state_elapsed(d->dhcp));
         if (dhclient_is_bound(d->dhcp)) {
             uint32_t ip = dhclient_get_ip(d->dhcp);
             uint32_t netmask = dhclient_get_netmask(d->dhcp);
@@ -219,7 +219,7 @@ void
 discovery_question_connectivity(struct discovery *d)
 {
     if (d->dhcp) {
-        dhclient_force_renew(d->dhcp, 15); 
+        dhclient_force_renew(d->dhcp, 15);
     }
 }
 
@@ -262,7 +262,7 @@ void
 discovery_wait(struct discovery *d)
 {
     if (d->dhcp) {
-        dhclient_wait(d->dhcp); 
+        dhclient_wait(d->dhcp);
     }
 }
 

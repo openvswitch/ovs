@@ -21,4 +21,4 @@ static inline unsigned int nf_bridge_encap_header_len(const struct sk_buff *skb)
 
 #endif /* linux version < 2.6.22 */
 
-#endif 
+#endif

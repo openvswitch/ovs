@@ -1,0 +1,237 @@
+#!/usr/bin/python
+# Copyright (c) 2009, 2010 Nicira Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# A daemon to monitor the external_ids columns of the Bridge and
+# Interface OVSDB tables.  Its primary responsibility is to set the
+# "bridge-id" and "iface-id" keys in the Bridge and Interface tables,
+# respectively.  It also looks for the use of "network-uuids" in the
+# Bridge table and duplicates its value to the preferred "xs-network-uuids".
+
+import getopt
+import subprocess
+import sys
+import syslog
+
+import XenAPI
+
+from ovs.db import error
+from ovs.db import types
+import ovs.util
+import ovs.daemon
+import ovs.db.idl
+
+vsctl="/usr/bin/ovs-vsctl"
+session = None
+
+# Set up a session to interact with XAPI.
+#
+# On system start-up, OVS comes up before XAPI, so we can't log into the
+# session until later.  Try to do this on-demand, since we won't
+# actually do anything interesting until XAPI is up.
+def init_session():
+    global session
+    if session is not None:
+        return True
+
+    try:
+        session = XenAPI.xapi_local()
+        session.xenapi.login_with_password("", "")
+    except:
+        session = None
+        syslog.syslog(syslog.LOG_WARNING, 
+                "monitor-external-ids: Couldn't login to XAPI")
+        return False
+
+    return True
+
+# By default, the "bridge-id" external id in the Bridge table is the 
+# same as "xs-network-uuids".  This may be overridden by defining a
+# "nicira-bridge-id" key in the "other_config" field of the network
+# record of XAPI.
+def get_bridge_id(br_name, default=None):
+    if not init_session():
+        return default
+
+    for n in session.xenapi.network.get_all():
+        rec = session.xenapi.network.get_record(n)
+        if rec['bridge'] != br_name:
+            continue
+        return rec['other_config'].get('nicira-bridge-id', default)
+
+# By default, the "iface-id" external id in the Interface table is the 
+# same as "xs-vif-uuid".  This may be overridden by defining a
+# "nicira-iface-id" key in the "other_config" field of the VIF
+# record of XAPI.
+def get_iface_id(if_name, default=None):
+    if not if_name.startswith("vif"):
+        return default
+
+    domain,device = if_name.strip("vif").split(".")
+
+    if not init_session():
+        return default
+
+    for n in session.xenapi.VM.get_all():
+        if session.xenapi.VM.get_domid(n) == domain:
+            vifs = session.xenapi.VM.get_VIFs(n)
+            for vif in vifs:
+                rec = session.xenapi.VIF.get_record(vif)
+                if rec['device'] == device:
+                    return rec['other_config'].get('nicira-iface-id', default)
+    return None
+
+
+def set_external_id(table, record, key, value):
+    col = 'external-ids:"' + key + '"="' + value + '"'
+    cmd = [vsctl, "-vANY:console:emer", "set", table, record, col]
+    exitcode = subprocess.call(cmd)
+    if exitcode != 0:
+        syslog.syslog(syslog.LOG_WARNING, 
+                "monitor-external-ids: Couldn't call ovs-vsctl")
+
+# XAPI on XenServer 5.6 uses the external-id "network-uuids" for internal
+# networks, but we now prefer "xs-network-uuids".  Look for its use and 
+# write our preferred external-id.
+def update_network_uuids(name, ids):
+    if ids["network-uuids"] and not ids["xs-network-uuids"]:
+        set_external_id("Bridge", name, "xs-network-uuids", 
+                ids["network-uuids"])
+
+def update_bridge_id(name, ids):
+    id = get_bridge_id(name, ids.get("xs-network-uuids"))
+    if ids.get("bridge-id") != id and id:
+        set_external_id("Bridge", name, "bridge-id", id)
+
+def update_iface_id(name, ids):
+    id = get_iface_id(name, ids.get("xs-vif-uuid"))
+    if ids.get("iface-id") != id and id:
+        set_external_id("Interface", name, "iface-id", id)
+
+def keep_table_columns(schema, table_name, column_types):
+    table = schema.tables.get(table_name)
+    if not table:
+        raise error.Error("schema has no %s table" % table_name)
+
+    new_columns = {}
+    for column_name, column_type in column_types.iteritems():
+        column = table.columns.get(column_name)
+        if not column:
+            raise error.Error("%s table schema lacks %s column"
+                              % (table_name, column_name))
+        if column.type != column_type:
+            raise error.Error("%s column in %s table has type \"%s\", "
+                              "expected type \"%s\""
+                              % (column_name, table_name,
+                                 column.type.toEnglish(),
+                                 column_type.toEnglish()))
+        new_columns[column_name] = column
+    table.columns = new_columns
+    return table
+ 
+def monitor_uuid_schema_cb(schema):
+    string_type = types.Type(types.BaseType(types.StringType))
+    string_map_type = types.Type(types.BaseType(types.StringType),
+                                 types.BaseType(types.StringType),
+                                 0, sys.maxint)
+ 
+    new_tables = {}
+    for table_name in ("Bridge", "Interface"):
+        new_tables[table_name] = keep_table_columns(
+            schema, table_name, {"name": string_type,
+                                 "external_ids": string_map_type})
+    schema.tables = new_tables
+
+def usage():
+    print "usage: %s [OPTIONS] DATABASE" % sys.argv[0]
+    print "where DATABASE is a socket on which ovsdb-server is listening."
+    ovs.daemon.usage()
+    print "Other options:"
+    print "  -h, --help               display this help message"
+    sys.exit(0)
+ 
+def main(argv):
+    try:
+        options, args = getopt.gnu_getopt(
+            argv[1:], 'h', ['help'] + ovs.daemon.LONG_OPTIONS)
+    except getopt.GetoptError, geo:
+        sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
+        sys.exit(1)
+ 
+    for key, value in options:
+        if key in ['-h', '--help']:
+            usage()
+        elif not ovs.daemon.parse_opt(key, value):
+            sys.stderr.write("%s: unhandled option %s\n"
+                             % (ovs.util.PROGRAM_NAME, key))
+            sys.exit(1)
+ 
+    if len(args) != 1:
+        sys.stderr.write("%s: exactly one nonoption argument is required "
+                         "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
+        sys.exit(1)
+
+    ovs.daemon.die_if_already_running()
+ 
+    remote = args[0]
+    idl = ovs.db.idl.Idl(remote, "Open_vSwitch", monitor_uuid_schema_cb)
+
+    ovs.daemon.daemonize()
+ 
+    bridges = {}
+    interfaces = {}
+    while True:
+        if not idl.run():
+            poller = ovs.poller.Poller()
+            idl.wait(poller)
+            poller.block()
+            continue
+ 
+        new_bridges = {}
+        for rec in idl.data["Bridge"].itervalues():
+            name = rec.name.as_scalar()
+            xs_network_uuids = rec.external_ids.get("xs-network-uuids")
+            network_uuids = rec.external_ids.get("network-uuids")
+            new_bridges[name] = {"xs-network-uuids": xs_network_uuids,
+                                 "network-uuids": network_uuids}
+ 
+        new_interfaces = {}
+        for rec in idl.data["Interface"].itervalues():
+            name = rec.name.as_scalar()
+            xs_vif_uuid = rec.external_ids.get("xs-vif-uuid")
+            new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid}
+ 
+        if bridges != new_bridges:
+            for name,ids in new_bridges.items():
+                # Network uuids shouldn't change in the life of a bridge,
+                # so only check for "network-uuids" on creation.
+                if name not in bridges:
+                    update_network_uuids(name, ids)
+
+                update_bridge_id(name, ids)
+
+            bridges = new_bridges
+
+        if interfaces != new_interfaces:
+            for name,ids in new_interfaces.items():
+                update_iface_id(name, ids)
+            interfaces = new_interfaces
+ 
+if __name__ == '__main__':
+    try:
+        main(sys.argv)
+    except error.Error, e:
+        sys.stderr.write("%s\n" % e)
+        sys.exit(1)

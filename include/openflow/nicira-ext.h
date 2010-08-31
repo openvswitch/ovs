@@ -244,7 +244,18 @@ enum nx_action_subtype {
      */
     NXAST_RESUBMIT,
 
-    NXAST_SET_TUNNEL                /* Set encapsulating tunnel ID. */
+    /* Set encapsulating tunnel ID. */
+    NXAST_SET_TUNNEL,
+
+    /* Stops processing further actions, if the packet being processed is an
+     * Ethernet+IPv4 ARP packet for which the source Ethernet address inside
+     * the ARP packet differs from the source Ethernet address in the Ethernet
+     * header.
+     *
+     * This is useful because OpenFlow does not provide a way to match on the
+     * Ethernet addresses inside ARP packets, so there is no other way to drop
+     * spoofed ARPs other than sending every packet up to the controller. */
+    NXAST_DROP_SPOOFED_ARP
 };
 
 /* Action structure for NXAST_RESUBMIT. */

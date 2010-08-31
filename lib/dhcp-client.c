@@ -851,7 +851,7 @@ state_transition(struct dhclient *cli, enum dhclient_state state)
     bool am_bound;
 
     if (cli->state != state) {
-        VLOG_DBG("%s: entering %s", cli_name, state_name(state)); 
+        VLOG_DBG("%s: entering %s", cli_name, state_name(state));
         cli->state = state;
     }
     cli->state_entered = time_now();
@@ -980,7 +980,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         if (!error) {
             if (VLOG_IS_DBG_ENABLED()) {
                 VLOG_DBG_RL(&rl, "%s: received %s", cli_name,
-                            dhcp_msg_to_string(msg, false, &cli->s)); 
+                            dhcp_msg_to_string(msg, false, &cli->s));
             } else {
                 VLOG_INFO_RL(&rl, "%s: received %s",
                              cli_name, dhcp_type_name(msg->type));
@@ -1062,7 +1062,7 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     if (b.size <= ETH_TOTAL_MAX) {
         if (VLOG_IS_DBG_ENABLED()) {
             VLOG_DBG("%s: sending %s",
-                     cli_name, dhcp_msg_to_string(msg, false, &cli->s)); 
+                     cli_name, dhcp_msg_to_string(msg, false, &cli->s));
         } else {
             VLOG_INFO("%s: sending %s", cli_name, dhcp_type_name(msg->type));
         }

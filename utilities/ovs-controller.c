@@ -71,7 +71,7 @@ static bool mute = false;
 /* -q, --queue: OpenFlow queue to use, or the default queue if UINT32_MAX. */
 static uint32_t queue_id = UINT32_MAX;
 
-/* --with-flows: File with flows to send to switch, or null to not load 
+/* --with-flows: File with flows to send to switch, or null to not load
  * any default flows. */
 static FILE *flow_file = NULL;
 

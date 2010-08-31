@@ -75,7 +75,7 @@ static void usage(void) NO_RETURN;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
 
-/* Maximum number of milliseconds to wait before pruning port entries that 
+/* Maximum number of milliseconds to wait before pruning port entries that
  * no longer exist.  If set to zero, ports are never pruned. */
 static int prune_timeout = 5000;
 
@@ -224,7 +224,7 @@ execute_appctl_command(const char *unixctl_command, char **output)
 }
 
 static void
-do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts, 
+do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
                     int vlan, bool break_down_bonds)
 {
     struct svec ports;
@@ -261,7 +261,7 @@ do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
  * reported.  If 'vlan' > 0, only interfaces with implicit VLAN 'vlan' are
  * reported.  */
 static void
-get_bridge_ifaces(const struct ovsrec_bridge *br, struct svec *ifaces, 
+get_bridge_ifaces(const struct ovsrec_bridge *br, struct svec *ifaces,
                   int vlan)
 {
     do_get_bridge_parts(br, ifaces, vlan, true);
@@ -274,7 +274,7 @@ get_bridge_ifaces(const struct ovsrec_bridge *br, struct svec *ifaces,
  * only trunk ports or ports with implicit VLAN 0 are reported.  If 'vlan' > 0,
  * only port with implicit VLAN 'vlan' are reported.  */
 static void
-get_bridge_ports(const struct ovsrec_bridge *br, struct svec *ports, 
+get_bridge_ports(const struct ovsrec_bridge *br, struct svec *ports,
                  int vlan)
 {
     do_get_bridge_parts(br, ports, vlan, false);
@@ -299,7 +299,7 @@ ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
                   struct ovsrec_bridge *bridge)
 {
     struct ovsrec_bridge **bridges;
-    size_t i;     
+    size_t i;
 
     bridges = xmalloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
     for (i = 0; i < ovs->n_bridges; i++) {
@@ -308,7 +308,7 @@ ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
     bridges[ovs->n_bridges] = bridge;
     ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
     free(bridges);
-}   
+}
 
 static struct json *
 where_uuid_equals(const struct uuid *uuid)
@@ -437,18 +437,18 @@ add_bridge(struct ovsdb_idl *idl, const struct ovsrec_open_vswitch *ovs,
     port = ovsrec_port_insert(txn_from_openvswitch(ovs));
     ovsrec_port_set_name(port, br_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    
+
     br = ovsrec_bridge_insert(txn_from_openvswitch(ovs));
     ovsrec_bridge_set_name(br, br_name);
     ovsrec_bridge_set_ports(br, &port, 1);
-    
+
     ovs_insert_bridge(ovs, br);
 
     return commit_txn(txn, true);
 }
 
 static void
-add_port(const struct ovsrec_open_vswitch *ovs, 
+add_port(const struct ovsrec_open_vswitch *ovs,
          const struct ovsrec_bridge *br, const char *port_name)
 {
     struct ovsrec_interface *iface;
@@ -692,7 +692,7 @@ send_simple_reply(uint32_t seq, int error)
 
 static int
 handle_bridge_cmd(struct ovsdb_idl *idl,
-                  const struct ovsrec_open_vswitch *ovs, 
+                  const struct ovsrec_open_vswitch *ovs,
                   struct ofpbuf *buffer, bool add)
 {
     const char *br_name;
@@ -859,7 +859,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
     }
 
     /* Figure out vswitchd bridge and VLAN. */
-    error = linux_bridge_to_ovs_bridge(ovs, linux_name, 
+    error = linux_bridge_to_ovs_bridge(ovs, linux_name,
                                        &ovs_bridge, &br_vlan);
     if (error) {
         send_simple_reply(seq, error);
@@ -1057,7 +1057,7 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
         return error;
     }
 
-    error = linux_bridge_to_ovs_bridge(ovs, linux_name, 
+    error = linux_bridge_to_ovs_bridge(ovs, linux_name,
                                        &ovs_bridge, &br_vlan);
     if (error) {
         send_simple_reply(seq, error);
@@ -1172,7 +1172,7 @@ rtnl_recv_update(struct ovsdb_idl *idl,
     } else if (error == ENOBUFS) {
         VLOG_WARN_RL(&rl, "network monitor socket overflowed");
     } else if (error) {
-        VLOG_WARN_RL(&rl, "error on network monitor socket: %s", 
+        VLOG_WARN_RL(&rl, "error on network monitor socket: %s",
                 strerror(error));
     } else {
         struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
@@ -1185,8 +1185,8 @@ rtnl_recv_update(struct ovsdb_idl *idl,
             VLOG_WARN_RL(&rl, "received bad rtnl message (no ifinfomsg)");
             ofpbuf_delete(buf);
             return;
-        } 
-    
+        }
+
         if (!nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
                              rtnlgrp_link_policy,
                              attrs, ARRAY_SIZE(rtnlgrp_link_policy))) {
@@ -1216,7 +1216,7 @@ rtnl_recv_update(struct ovsdb_idl *idl,
 
                 br = find_bridge(ovs, br_name);
                 if (!br) {
-                    VLOG_WARN("no bridge named %s from which to remove %s", 
+                    VLOG_WARN("no bridge named %s from which to remove %s",
                             br_name, port_name);
                     ofpbuf_delete(buf);
                     return;
@@ -1343,8 +1343,8 @@ main(int argc, char *argv[])
         netdev_run();
 
         /* If 'prune_timeout' is non-zero, we actively prune from the
-         * configuration of port entries that are no longer valid.  We 
-         * use two methods: 
+         * configuration of port entries that are no longer valid.  We
+         * use two methods:
          *
          *   1) The kernel explicitly notifies us of removed ports
          *      through the RTNL messages.

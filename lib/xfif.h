@@ -18,10 +18,12 @@
 #ifndef XFIF_H
 #define XFIF_H 1
 
-#include "openvswitch/xflow.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openflow/openflow.h"
+#include "openvswitch/xflow.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -89,6 +91,14 @@ int xfif_flow_list_all(const struct xfif *,
 int xfif_execute(struct xfif *, uint16_t in_port,
                  const union xflow_action[], size_t n_actions,
                  const struct ofpbuf *);
+
+/* Minimum number of bytes of headroom for a packet returned by xfif_recv()
+ * member function.  This headroom allows "struct xflow_msg" to be replaced by
+ * "struct ofp_packet_in" without copying the buffer. */
+#define XFIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
+                               - sizeof(struct xflow_msg))
+BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct xflow_msg));
+BUILD_ASSERT_DECL(XFIF_RECV_MSG_PADDING % 4 == 0);
 
 int xfif_recv_get_mask(const struct xfif *, int *listen_mask);
 int xfif_recv_set_mask(struct xfif *, int listen_mask);

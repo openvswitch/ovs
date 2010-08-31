@@ -63,7 +63,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
-static void send_default_flows(struct lswitch *sw, struct rconn *rconn, 
+static void send_default_flows(struct lswitch *sw, struct rconn *rconn,
                                FILE *default_flows);
 
 typedef void packet_handler_func(struct lswitch *, struct rconn *, void *);
@@ -249,7 +249,7 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 }
 
 static void
-send_default_flows(struct lswitch *sw, struct rconn *rconn, 
+send_default_flows(struct lswitch *sw, struct rconn *rconn,
                    FILE *default_flows)
 {
     char line[1024];
@@ -260,20 +260,20 @@ send_default_flows(struct lswitch *sw, struct rconn *rconn,
         uint16_t priority, idle_timeout, hard_timeout;
         uint64_t cookie;
         struct ofp_match match;
-        
+
         char *comment;
-        
+
         /* Delete comments. */
         comment = strchr(line, '#');
-        if (comment) { 
+        if (comment) {
             *comment = '\0';
         }
-        
+
         /* Drop empty lines. */
         if (line[strspn(line, " \t\n")] == '\0') {
             continue;
-        }   
-    
+        }
+
         /* Parse and send.  str_to_flow() will expand and reallocate the data
          * in 'buffer', so we can't keep pointers to across the str_to_flow()
          * call. */
@@ -373,6 +373,13 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
     flow_t flow;
+
+    /* Ignore packets sent via output to OFPP_CONTROLLER.  This library never
+     * uses such an action.  You never know what experiments might be going on,
+     * though, and it seems best not to interfere with them. */
+    if (opi->reason != OFPR_NO_MATCH) {
+        return;
+    }
 
     /* Extract flow data from 'opi' into 'flow'. */
     pkt_ofs = offsetof(struct ofp_packet_in, data);

@@ -64,7 +64,7 @@ typedef struct _SFLSampled_header {
 /* decoded ethernet header */
 
 typedef struct _SFLSampled_ethernet {
-    u_int32_t eth_len;       /* The length of the MAC packet excluding 
+    u_int32_t eth_len;       /* The length of the MAC packet excluding
 				lower layer encapsulations */
     u_int8_t src_mac[8];    /* 6 bytes + 2 pad */
     u_int8_t dst_mac[8];
@@ -123,7 +123,7 @@ enum SFLExtended_as_path_segment_type {
     SFLEXTENDED_AS_SET = 1,      /* Unordered set of ASs */
     SFLEXTENDED_AS_SEQUENCE = 2  /* Ordered sequence of ASs */
 };
-  
+
 typedef struct _SFLExtended_as_path_segment {
     u_int32_t type;   /* enum SFLExtended_as_path_segment_type */
     u_int32_t length; /* number of AS numbers in set/sequence */
@@ -184,7 +184,7 @@ typedef struct _SFLLabelStack {
 } SFLLabelStack;
 
 typedef struct _SFLExtended_mpls {
-    SFLAddress nextHop;        /* Address of the next hop */ 
+    SFLAddress nextHop;        /* Address of the next hop */
     SFLLabelStack in_stack;
     SFLLabelStack out_stack;
 } SFLExtended_mpls;
@@ -192,7 +192,7 @@ typedef struct _SFLExtended_mpls {
 /* Extended NAT data
    Packet header records report addresses as seen at the sFlowDataSource.
    The extended_nat structure reports on translated source and/or destination
-   addesses for this packet. If an address was not translated it should 
+   addesses for this packet. If an address was not translated it should
    be equal to that reported for the header. */
 
 typedef struct _SFLExtended_nat {
@@ -231,29 +231,29 @@ typedef struct _SFLExtended_mpls_LDP_FEC {
     u_int32_t mplsFecAddrPrefixLength;
 } SFLExtended_mpls_LDP_FEC;
 
-/* Extended VLAN tunnel information 
-   Record outer VLAN encapsulations that have 
-   been stripped. extended_vlantunnel information 
-   should only be reported if all the following conditions are satisfied: 
-   1. The packet has nested vlan tags, AND 
-   2. The reporting device is VLAN aware, AND 
-   3. One or more VLAN tags have been stripped, either 
-   because they represent proprietary encapsulations, or 
-   because switch hardware automatically strips the outer VLAN 
-   encapsulation. 
-   Reporting extended_vlantunnel information is not a substitute for 
-   reporting extended_switch information. extended_switch data must 
-   always be reported to describe the ingress/egress VLAN information 
-   for the packet. The extended_vlantunnel information only applies to 
-   nested VLAN tags, and then only when one or more tags has been 
-   stripped. */ 
+/* Extended VLAN tunnel information
+   Record outer VLAN encapsulations that have
+   been stripped. extended_vlantunnel information
+   should only be reported if all the following conditions are satisfied:
+   1. The packet has nested vlan tags, AND
+   2. The reporting device is VLAN aware, AND
+   3. One or more VLAN tags have been stripped, either
+   because they represent proprietary encapsulations, or
+   because switch hardware automatically strips the outer VLAN
+   encapsulation.
+   Reporting extended_vlantunnel information is not a substitute for
+   reporting extended_switch information. extended_switch data must
+   always be reported to describe the ingress/egress VLAN information
+   for the packet. The extended_vlantunnel information only applies to
+   nested VLAN tags, and then only when one or more tags has been
+   stripped. */
 
 typedef SFLLabelStack SFLVlanStack;
-typedef struct _SFLExtended_vlan_tunnel { 
-    SFLVlanStack stack;  /* List of stripped 802.1Q TPID/TCI layers. Each 
-			    TPID,TCI pair is represented as a single 32 bit 
-			    integer. Layers listed from outermost to 
-			    innermost. */ 
+typedef struct _SFLExtended_vlan_tunnel {
+    SFLVlanStack stack;  /* List of stripped 802.1Q TPID/TCI layers. Each
+			    TPID,TCI pair is represented as a single 32 bit
+			    integer. Layers listed from outermost to
+			    innermost. */
 } SFLExtended_vlan_tunnel;
 
 enum SFLFlow_type_tag {
@@ -308,7 +308,7 @@ enum SFL_sample_tag {
     SFLFLOW_SAMPLE_EXPANDED = 3,     /* enterprise = 0 : format = 3 */
     SFLCOUNTERS_SAMPLE_EXPANDED = 4  /* enterprise = 0 : format = 4 */
 };
-  
+
 /* Format of a single flow sample */
 
 typedef struct _SFLFlow_sample {

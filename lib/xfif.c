@@ -322,7 +322,7 @@ xfif_close(struct xfif *xfif)
     if (xfif) {
         struct registered_xfif_class *registered_class;
 
-        registered_class = shash_find_data(&xfif_classes, 
+        registered_class = shash_find_data(&xfif_classes,
                 xfif->xfif_class->type);
         assert(registered_class);
         assert(registered_class->refcount);

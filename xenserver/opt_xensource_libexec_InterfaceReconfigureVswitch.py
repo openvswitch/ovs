@@ -345,9 +345,9 @@ def set_br_external_ids(pif):
         xs_network_uuids += [nwrec['uuid']]
 
     vsctl_argv = []
-    vsctl_argv += ['# configure network-uuids']
+    vsctl_argv += ['# configure xs-network-uuids']
     vsctl_argv += ['--', 'br-set-external-id', pif_bridge_name(pif),
-            'network-uuids', ';'.join(xs_network_uuids)]
+            'xs-network-uuids', ';'.join(xs_network_uuids)]
 
     return vsctl_argv
 

@@ -383,7 +383,7 @@ classifier_rule_overlaps(const struct classifier *cls, const flow_t *target)
 
             LIST_FOR_EACH (rule, struct cls_rule, node.list,
                            &bucket->rules) {
-                if (rule->flow.priority == target->priority 
+                if (rule->flow.priority == target->priority
                         && rules_match_2wild(rule, &target_rule, 0)) {
                     return true;
                 }
@@ -868,10 +868,10 @@ static bool
 rules_match_2wild(const struct cls_rule *wild1, const struct cls_rule *wild2,
                   int field_idx)
 {
-    return rules_match(wild1, wild2, 
-                       wild1->flow.wildcards | wild2->flow.wildcards, 
+    return rules_match(wild1, wild2,
+                       wild1->flow.wildcards | wild2->flow.wildcards,
                        wild1->wc.nw_src_mask & wild2->wc.nw_src_mask,
-                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask, 
+                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask,
                        field_idx);
 }
 

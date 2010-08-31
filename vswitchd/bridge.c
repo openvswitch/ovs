@@ -141,7 +141,7 @@ struct port {
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
-    long bond_next_fake_iface_update; /* Next update to fake bond stats. */
+    long long int bond_next_fake_iface_update; /* Time of next update. */
     int bond_rebalance_interval; /* Interval between rebalances, in ms. */
     long long int bond_next_rebalance; /* Next rebalancing time. */
 
@@ -244,7 +244,7 @@ static void mirror_reconfigure(struct bridge *);
 static void mirror_reconfigure_one(struct mirror *, struct ovsrec_mirror *);
 static bool vlan_is_mirrored(const struct mirror *, int vlan);
 
-static struct iface *iface_create(struct port *port, 
+static struct iface *iface_create(struct port *port,
                                   const struct ovsrec_interface *if_cfg);
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
@@ -751,7 +751,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             opts.collectors.n = nf_cfg->n_targets;
             opts.collectors.names = nf_cfg->targets;
             if (ofproto_set_netflow(br->ofproto, &opts)) {
-                VLOG_ERR("bridge %s: problem setting netflow collectors", 
+                VLOG_ERR("bridge %s: problem setting netflow collectors",
                          br->name);
             }
         } else {
@@ -1347,7 +1347,7 @@ bridge_unixctl_dump_flows(struct unixctl_conn *conn,
 {
     struct bridge *br;
     struct ds results;
-    
+
     br = bridge_lookup(args);
     if (!br) {
         unixctl_command_reply(conn, 501, "Unknown bridge");
@@ -2349,7 +2349,7 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
             VLOG_WARN_RL(&rl, "bridge %s: received packet on unknown "
-                         "interface %"PRIu16, br->name, flow->in_port); 
+                         "interface %"PRIu16, br->name, flow->in_port);
         }
 
         *in_portp = NULL;
@@ -3328,7 +3328,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     if (port->updelay < 0) {
         port->updelay = 0;
     }
-    port->updelay = cfg->bond_downdelay;
+    port->downdelay = cfg->bond_downdelay;
     if (port->downdelay < 0) {
         port->downdelay = 0;
     }
@@ -3558,15 +3558,15 @@ port_update_bond_compat(struct port *port)
 
         /* We need to make the same determination as the Linux bonding
          * code to determine whether a slave should be consider "up".
-         * The Linux function bond_miimon_inspect() supports four 
+         * The Linux function bond_miimon_inspect() supports four
          * BOND_LINK_* states:
-         *      
+         *
          *    - BOND_LINK_UP: carrier detected, updelay has passed.
          *    - BOND_LINK_FAIL: carrier lost, downdelay in progress.
          *    - BOND_LINK_DOWN: carrier lost, downdelay has passed.
          *    - BOND_LINK_BACK: carrier detected, updelay in progress.
          *
-         * The function bond_info_show_slave() only considers BOND_LINK_UP 
+         * The function bond_info_show_slave() only considers BOND_LINK_UP
          * to be "up" and anything else to be "down".
          */
         slave->up = iface->enabled && iface->delay_expires == LLONG_MAX;

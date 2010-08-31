@@ -5,72 +5,19 @@ import os
 import re
 import sys
 
-sys.path.insert(0, "@abs_top_srcdir@/ovsdb")
-import simplejson as json
-
-from OVSDB import *
+import ovs.json
+import ovs.db.error
+import ovs.db.schema
 
 argv0 = sys.argv[0]
 
-class Datum:
-    def __init__(self, type, values):
-        self.type = type
-        self.values = values
-
-    @staticmethod
-    def fromJson(type_, json):
-        if not type_.value:
-            if len(json) == 2 and json[0] == "set":
-                values = []
-                for atomJson in json[1]:
-                    values += [Atom.fromJson(type_.key, atomJson)]
-            else:
-                values = [Atom.fromJson(type_.key, json)]
-        else:
-            if len(json) != 2 or json[0] != "map":
-                raise Error("%s is not valid JSON for a map" % json)
-            values = []
-            for pairJson in json[1]:
-                values += [(Atom.fromJson(type_.key, pairJson[0]),
-                            Atom.fromJson(type_.value, pairJson[1]))]
-        return Datum(type_, values)
-
-    def cInitDatum(self, var):
-        if len(self.values) == 0:
-            return ["ovsdb_datum_init_empty(%s);" % var]
-
-        s = ["%s->n = %d;" % (var, len(self.values))]
-        s += ["%s->keys = xmalloc(%d * sizeof *%s->keys);"
-              % (var, len(self.values), var)]
-
-        for i in range(len(self.values)):
-            key = self.values[i]
-            if self.type.value:
-                key = key[0]
-            s += key.cInitAtom("%s->keys[%d]" % (var, i))
-        
-        if self.type.value:
-            s += ["%s->values = xmalloc(%d * sizeof *%s->values);"
-                  % (var, len(self.values), var)]
-            for i in range(len(self.values)):
-                value = self.values[i][1]
-                s += key.cInitAtom("%s->values[%d]" % (var, i))
-        else:
-            s += ["%s->values = NULL;" % var]
-
-        if len(self.values) > 1:
-            s += ["ovsdb_datum_sort_assert(%s, OVSDB_TYPE_%s);"
-                  % (var, self.type.key.upper())]
-
-        return s
-
 def parseSchema(filename):
-    return IdlSchema.fromJson(json.load(open(filename, "r")))
+    return ovs.db.schema.IdlSchema.from_json(ovs.json.from_file(filename))
 
 def annotateSchema(schemaFile, annotationFile):
-    schemaJson = json.load(open(schemaFile, "r"))
+    schemaJson = ovs.json.from_file(schemaFile)
     execfile(annotationFile, globals(), {"s": schemaJson})
-    json.dump(schemaJson, sys.stdout)
+    ovs.json.to_stream(schemaJson, sys.stdout)
 
 def constify(cType, const):
     if (const
@@ -82,12 +29,12 @@ def constify(cType, const):
 
 def cMembers(prefix, columnName, column, const):
     type = column.type
-    if type.min == 1 and type.max == 1:
+    if type.n_min == 1 and type.n_max == 1:
         singleton = True
         pointer = ''
     else:
         singleton = False
-        if type.isOptionalPointer():
+        if type.is_optional_pointer():
             pointer = ''
         else:
             pointer = '*'
@@ -106,7 +53,7 @@ def cMembers(prefix, columnName, column, const):
              'comment': type.cDeclComment()}
         members = [m]
 
-    if not singleton and not type.isOptionalPointer():
+    if not singleton and not type.is_optional_pointer():
         members.append({'name': 'n_%s' % columnName,
                         'type': 'size_t ',
                         'comment': ''})
@@ -270,28 +217,28 @@ static void
                 keyVar = "row->%s" % columnName
                 valueVar = None
 
-            if (type.min == 1 and type.max == 1) or type.isOptionalPointer():
+            if (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
                 print "    assert(inited);"
                 print "    if (datum->n >= 1) {"
-                if not type.key.refTable:
-                    print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type)
+                if not type.key.ref_table:
+                    print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string())
                 else:
-                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.key.refTable.lower(), prefix, prefix.upper(), type.key.refTable.upper())
+                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.lower(), prefix, prefix.upper(), type.key.ref_table.upper())
 
                 if valueVar:
-                    if type.value.refTable:
-                        print "        %s = datum->values[0].%s;" % (valueVar, type.value.type)
+                    if type.value.ref_table:
+                        print "        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_string())
                     else:
-                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.value.refTable.lower(), prefix, prefix.upper(), type.value.refTable.upper())
+                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.lower(), prefix, prefix.upper(), type.value.ref_table.upper())
                 print "    } else {"
-                print "        %s" % type.key.initCDefault(keyVar, type.min == 0)
+                print "        %s" % type.key.initCDefault(keyVar, type.n_min == 0)
                 if valueVar:
-                    print "        %s" % type.value.initCDefault(valueVar, type.min == 0)
+                    print "        %s" % type.value.initCDefault(valueVar, type.n_min == 0)
                 print "    }"
             else:
-                if type.max != 'unlimited':
-                    print "    size_t n = MIN(%d, datum->n);" % type.max
+                if type.n_max != sys.maxint:
+                    print "    size_t n = MIN(%d, datum->n);" % type.n_max
                     nMax = "n"
                 else:
                     nMax = "datum->n"
@@ -304,18 +251,18 @@ static void
                 print "    row->n_%s = 0;" % columnName
                 print "    for (i = 0; i < %s; i++) {" % nMax
                 refs = []
-                if type.key.refTable:
-                    print "        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));" % (prefix, type.key.refTable.lower(), prefix, type.key.refTable.lower(), prefix, prefix.upper(), type.key.refTable.upper())
+                if type.key.ref_table:
+                    print "        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));" % (prefix, type.key.ref_table.lower(), prefix, type.key.ref_table.lower(), prefix, prefix.upper(), type.key.ref_table.upper())
                     keySrc = "keyRow"
                     refs.append('keyRow')
                 else:
-                    keySrc = "datum->keys[i].%s" % type.key.type
-                if type.value and type.value.refTable:
-                    print "        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));" % (prefix, type.value.refTable.lower(), prefix, type.value.refTable.lower(), prefix, prefix.upper(), type.value.refTable.upper())
+                    keySrc = "datum->keys[i].%s" % type.key.type.to_string()
+                if type.value and type.value.ref_table:
+                    print "        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));" % (prefix, type.value.ref_table.lower(), prefix, type.value.ref_table.lower(), prefix, prefix.upper(), type.value.ref_table.upper())
                     valueSrc = "valueRow"
                     refs.append('valueRow')
                 elif valueVar:
-                    valueSrc = "datum->values[i].%s" % type.value.type
+                    valueSrc = "datum->values[i].%s" % type.value.type.to_string()
                 if refs:
                     print "        if (%s) {" % ' && '.join(refs)
                     indent = "            "
@@ -338,7 +285,7 @@ static void
         # Unparse functions.
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
-            if (type.min != 1 or type.max != 1) and not type.isOptionalPointer():
+            if (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
@@ -467,24 +414,24 @@ const struct ovsdb_datum *
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
             print "    struct ovsdb_datum datum;"
-            if type.min == 1 and type.max == 1:
+            if type.n_min == 1 and type.n_max == 1:
                 print
                 print "    assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = xmalloc(sizeof *datum.keys);"
-                print "    " + type.key.copyCValue("datum.keys[0].%s" % type.key.type, keyVar)
+                print "    " + type.key.copyCValue("datum.keys[0].%s" % type.key.type.to_string(), keyVar)
                 if type.value:
                     print "    datum.values = xmalloc(sizeof *datum.values);"
-                    print "    "+ type.value.copyCValue("datum.values[0].%s" % type.value.type, valueVar)
+                    print "    "+ type.value.copyCValue("datum.values[0].%s" % type.value.type.to_string(), valueVar)
                 else:
                     print "    datum.values = NULL;"
-            elif type.isOptionalPointer():
+            elif type.is_optional_pointer():
                 print
                 print "    assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = xmalloc(sizeof *datum.keys);"
-                print "        " + type.key.copyCValue("datum.keys[0].%s" % type.key.type, keyVar)
+                print "        " + type.key.copyCValue("datum.keys[0].%s" % type.key.type.to_string(), keyVar)
                 print "    } else {"
                 print "        datum.n = 0;"
                 print "        datum.keys = NULL;"
@@ -501,9 +448,9 @@ const struct ovsdb_datum *
                 else:
                     print "    datum.values = NULL;"
                 print "    for (i = 0; i < %s; i++) {" % nVar
-                print "        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type, "%s[i]" % keyVar)
+                print "        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar)
                 if type.value:
-                    print "        " + type.value.copyCValue("datum.values[i].%s" % type.value.type, "%s[i]" % valueVar)
+                    print "        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar)
                 print "    }"
                 if type.value:
                     valueType = type.value.toAtomicType()
@@ -573,7 +520,7 @@ def ovsdb_escape(string):
     def escape(match):
         c = match.group(0)
         if c == '\0':
-            raise Error("strings may not contain null bytes")
+            raise ovs.db.error.Error("strings may not contain null bytes")
         elif c == '\\':
             return '\\\\'
         elif c == '\n':
@@ -654,8 +601,8 @@ if __name__ == "__main__":
             sys.exit(1)
 
         func(*args[1:])
-    except Error, e:
-        sys.stderr.write("%s: %s\n" % (argv0, e.msg))
+    except ovs.db.error.Error, e:
+        sys.stderr.write("%s: %s\n" % (argv0, e))
         sys.exit(1)
 
 # Local variables:

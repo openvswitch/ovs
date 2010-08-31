@@ -1150,19 +1150,25 @@ xf_netdev_set_dl_dst(struct ofpbuf *packet,
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
 }
 
+static bool
+is_ip(const struct ofpbuf *packet, const struct xflow_key *key)
+{
+    return key->dl_type == htons(ETH_TYPE_IP) && packet->l4;
+}
+
 static void
 xf_netdev_set_nw_addr(struct ofpbuf *packet, const struct xflow_key *key,
                       const struct xflow_action_nw_addr *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
         uint32_t *field;
 
         field = a->type == XFLOWAT_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
-        if (key->nw_proto == IP_TYPE_TCP) {
+        if (key->nw_proto == IP_TYPE_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             th->tcp_csum = recalc_csum32(th->tcp_csum, *field, a->nw_addr);
-        } else if (key->nw_proto == IP_TYPE_UDP) {
+        } else if (key->nw_proto == IP_TYPE_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             if (uh->udp_csum) {
                 uh->udp_csum = recalc_csum32(uh->udp_csum, *field, a->nw_addr);
@@ -1180,7 +1186,7 @@ static void
 xf_netdev_set_nw_tos(struct ofpbuf *packet, const struct xflow_key *key,
                      const struct xflow_action_nw_tos *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
         uint8_t *field = &nh->ip_tos;
 
@@ -1197,14 +1203,14 @@ static void
 xf_netdev_set_tp_port(struct ofpbuf *packet, const struct xflow_key *key,
                       const struct xflow_action_tp_port *a)
 {
-    if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip(packet, key)) {
         uint16_t *field;
-        if (key->nw_proto == IPPROTO_TCP) {
+        if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             field = a->type == XFLOWAT_SET_TP_SRC ? &th->tcp_src : &th->tcp_dst;
             th->tcp_csum = recalc_csum16(th->tcp_csum, *field, a->tp_port);
             *field = a->tp_port;
-        } else if (key->nw_proto == IPPROTO_UDP) {
+        } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             field = a->type == XFLOWAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
             uh->udp_csum = recalc_csum16(uh->udp_csum, *field, a->tp_port);
@@ -1268,6 +1274,34 @@ xf_netdev_output_control(struct xf_netdev *xf, const struct ofpbuf *packet,
     return 0;
 }
 
+/* Returns true if 'packet' is an invalid Ethernet+IPv4 ARP packet: one with
+ * screwy or truncated header fields or one whose inner and outer Ethernet
+ * address differ. */
+static bool
+xf_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct xflow_key *key)
+{
+    struct arp_eth_header *arp;
+    struct eth_header *eth;
+    ptrdiff_t l3_size;
+
+    if (key->dl_type != htons(ETH_TYPE_ARP)) {
+        return false;
+    }
+
+    l3_size = (char *) ofpbuf_end(packet) - (char *) packet->l3;
+    if (l3_size < sizeof(struct arp_eth_header)) {
+        return true;
+    }
+
+    eth = packet->l2;
+    arp = packet->l3;
+    return (arp->ar_hrd != htons(ARP_HRD_ETHERNET)
+            || arp->ar_pro != htons(ARP_PRO_IP)
+            || arp->ar_hln != ETH_HEADER_LEN
+            || arp->ar_pln != 4
+            || !eth_addr_equals(arp->ar_sha, eth->eth_src));
+}
+
 static int
 xf_netdev_execute_actions(struct xf_netdev *xf,
                           struct ofpbuf *packet, struct xflow_key *key,
@@ -1321,6 +1355,11 @@ xf_netdev_execute_actions(struct xf_netdev *xf,
         case XFLOWAT_SET_TP_DST:
             xf_netdev_set_tp_port(packet, key, &a->tp_port);
             break;
+
+        case XFLOWAT_DROP_SPOOFED_ARP:
+            if (xf_netdev_is_spoofed_arp(packet, key)) {
+                return 0;
+            }
         }
     }
     return 0;

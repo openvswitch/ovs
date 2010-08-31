@@ -607,7 +607,6 @@ json_lex_number(struct json_parser *p)
     const char *cp = ds_cstr(&p->buffer);
     unsigned long long int significand = 0;
     struct json_token token;
-    int sig_digits = 0;
     bool imprecise = false;
     bool negative = false;
     int pow10 = 0;
@@ -621,7 +620,6 @@ json_lex_number(struct json_parser *p)
     /* At least one integer digit, but 0 may not be used as a leading digit for
      * a longer number. */
     significand = 0;
-    sig_digits = 0;
     if (*cp == '0') {
         cp++;
         if (isdigit(*cp)) {
@@ -632,7 +630,6 @@ json_lex_number(struct json_parser *p)
         do {
             if (significand <= ULLONG_MAX / 10) {
                 significand = significand * 10 + (*cp - '0');
-                sig_digits++;
             } else {
                 pow10++;
                 if (*cp != '0') {
@@ -656,7 +653,6 @@ json_lex_number(struct json_parser *p)
         do {
             if (significand <= ULLONG_MAX / 10) {
                 significand = significand * 10 + (*cp - '0');
-                sig_digits++;
                 pow10--;
             } else if (*cp != '0') {
                 imprecise = true;
@@ -719,12 +715,10 @@ json_lex_number(struct json_parser *p)
     if (!imprecise) {
         while (pow10 > 0 && significand < ULLONG_MAX / 10) {
             significand *= 10;
-            sig_digits++;
             pow10--;
         }
         while (pow10 < 0 && significand % 10 == 0) {
             significand /= 10;
-            sig_digits--;
             pow10++;
         }
         if (pow10 == 0
@@ -1192,7 +1186,7 @@ json_parser_put_value(struct json_parser *p, struct json *value)
     }
 }
 
-static struct json_parser_node *
+static void
 json_parser_push(struct json_parser *p,
                  struct json *new_json, enum json_parse_state new_state)
 {
@@ -1211,12 +1205,10 @@ json_parser_push(struct json_parser *p,
         node = &p->stack[p->height++];
         node->json = new_json;
         p->parse_state = new_state;
-        return node;
     } else {
         json_destroy(new_json);
         json_error(p, "input exceeds maximum nesting depth %d",
                    JSON_MAX_HEIGHT);
-        return NULL;
     }
 }
 

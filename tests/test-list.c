@@ -34,10 +34,10 @@ struct element {
  * elements in order into 'list'. */
 static void
 make_list(struct list *list, struct element elements[],
-          int values[], size_t n) 
+          int values[], size_t n)
 {
     size_t i;
-    
+
     list_init(list);
     for (i = 0; i < n; i++) {
         elements[i].value = i;
@@ -49,11 +49,11 @@ make_list(struct list *list, struct element elements[],
 /* Verifies that 'list' contains exactly the 'n' values in 'values', in the
  * specified order. */
 static void
-check_list(struct list *list, const int values[], size_t n) 
+check_list(struct list *list, const int values[], size_t n)
 {
     struct element *e;
     size_t i;
-    
+
     i = 0;
     LIST_FOR_EACH (e, struct element, node, list) {
         assert(i < n);
@@ -79,10 +79,10 @@ check_list(struct list *list, const int values[], size_t n)
 #if 0
 /* Prints the values in 'list', plus 'name' as a title. */
 static void
-print_list(const char *name, struct list *list) 
+print_list(const char *name, struct list *list)
 {
     struct element *e;
-    
+
     printf("%s:", name);
     LIST_FOR_EACH (e, struct element, node, list) {
         printf(" %d", e->value);
@@ -93,7 +93,7 @@ print_list(const char *name, struct list *list)
 
 /* Tests basic list construction. */
 static void
-test_list_construction(void) 
+test_list_construction(void)
 {
     enum { MAX_ELEMS = 100 };
     size_t n;
@@ -102,7 +102,7 @@ test_list_construction(void)
         struct element elements[MAX_ELEMS];
         int values[MAX_ELEMS];
         struct list list;
-        
+
         make_list(&list, elements, values, n);
         check_list(&list, values, n);
     }
@@ -111,7 +111,7 @@ test_list_construction(void)
 /* Tests that LIST_FOR_EACH_SAFE properly allows for deletion of the current
  * element of a list.  */
 static void
-test_list_for_each_safe(void) 
+test_list_for_each_safe(void)
 {
     enum { MAX_ELEMS = 10 };
     size_t n;
@@ -125,7 +125,7 @@ test_list_for_each_safe(void)
             struct element *e, *next;
             size_t values_idx, n_remaining;
             int i;
-        
+
             make_list(&list, elements, values, n);
 
             i = 0;
@@ -158,14 +158,14 @@ test_list_for_each_safe(void)
 }
 
 static void
-run_test(void (*function)(void)) 
+run_test(void (*function)(void))
 {
     function();
     printf(".");
 }
 
 int
-main(void) 
+main(void)
 {
     run_test(test_list_construction);
     run_test(test_list_for_each_safe);

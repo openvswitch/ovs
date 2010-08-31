@@ -326,14 +326,6 @@ struct xfif_class {
     void (*recv_wait)(struct xfif *xfif);
 };
 
-/* Minimum number of bytes of headroom for a packet returned by the 'recv'
- * member function (see above).  This headroom allows "struct xflow_msg" to be
- * replaced by "struct ofp_packet_in" without copying the buffer. */
-#define XFIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
-                               - sizeof(struct xflow_msg))
-BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct xflow_msg));
-BUILD_ASSERT_DECL(XFIF_RECV_MSG_PADDING % 4 == 0);
-
 extern const struct xfif_class xfif_linux_class;
 extern const struct xfif_class xfif_netdev_class;
 

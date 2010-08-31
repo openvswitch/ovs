@@ -137,6 +137,9 @@
        "statistics": {
          "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
          "ephemeral": true},
+       "status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},

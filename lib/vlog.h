@@ -22,7 +22,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "util.h"
- 
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

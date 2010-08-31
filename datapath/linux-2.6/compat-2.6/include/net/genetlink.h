@@ -11,7 +11,7 @@
 #include <linux/genetlink.h>
 
 /*----------------------------------------------------------------------------
- * In 2.6.23, registering of multicast groups was added.  Our compatability 
+ * In 2.6.23, registering of multicast groups was added.  Our compatability
  * layer just supports registering a single group, since that's all we
  * need.
  */
@@ -59,7 +59,7 @@ static inline int genlmsg_total_size(int payload)
 #define genlmsg_multicast(s, p, g, f) \
 		genlmsg_multicast_flags((s), (p), (g), (f))
 
-static inline int genlmsg_multicast_flags(struct sk_buff *skb, u32 pid, 
+static inline int genlmsg_multicast_flags(struct sk_buff *skb, u32 pid,
 		unsigned int group, gfp_t flags)
 {
 	int err;

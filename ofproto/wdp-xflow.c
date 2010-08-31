@@ -34,6 +34,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "port-array.h"
+#include "queue.h"
 #include "shash.h"
 #include "svec.h"
 #include "timeval.h"
@@ -68,6 +69,7 @@ struct wx {
                                  * wdp_port->opp.port_no is OFP port nr. */
     struct shash port_by_name;
     long long int next_expiration;
+    int wdp_listen_mask;
 
     /* Rules that might need to be revalidated. */
     bool need_revalidate;      /* Revalidate all subrules? */
@@ -80,6 +82,12 @@ struct wx {
 
     /* Used by default ofhooks. */
     struct mac_learning *ml;
+
+    /* List of "struct wdp_packets" queued for the controller by
+     * execute_xflow_actions(). */
+#define MAX_CTL_PACKETS 50
+    struct list ctl_packets;
+    int n_ctl_packets;
 };
 
 static const struct ofhooks default_ofhooks;
@@ -90,6 +98,8 @@ static int wx_port_init(struct wx *);
 static void wx_port_process_change(struct wx *wx, int error, char *devname,
                                    wdp_port_poll_cb_func *cb, void *aux);
 static void wx_port_refresh_groups(struct wx *);
+
+static void wx_purge_ctl_packets__(struct wx *);
 
 enum {
     WX_GROUP_FLOOD = 0,
@@ -381,8 +391,48 @@ wx_rule_create(struct wx_rule *super,
     return rule;
 }
 
+/* Executes, within 'wx', the 'n_actions' actions in 'actions' on 'packet',
+ * which arrived on 'in_port'.
+ *
+ * Takes ownership of 'packet'. */
+static bool
+execute_xflow_actions(struct wx *wx, uint16_t in_port,
+                      const union xflow_action *actions, size_t n_actions,
+                      struct ofpbuf *packet)
+{
+    if (n_actions == 1 && actions[0].type == XFLOWAT_CONTROLLER
+        && wx->n_ctl_packets < MAX_CTL_PACKETS) {
+        /* As an optimization, avoid a round-trip from userspace to kernel to
+         * userspace.  This also avoids possibly filling up kernel packet
+         * buffers along the way. */
+        struct wdp_packet *wdp_packet;
+
+        if (!(wx->wdp_listen_mask & WDP_CHAN_ACTION)) {
+            return true;
+        }
+
+        wdp_packet = xmalloc(sizeof *wdp_packet);
+        wdp_packet->channel = WDP_CHAN_ACTION;
+        wdp_packet->tun_id = 0;
+        wdp_packet->in_port = in_port;
+        wdp_packet->send_len = actions[0].controller.arg;
+        wdp_packet->payload = packet;
+
+        list_push_back(&wx->ctl_packets, &wdp_packet->list);
+
+        return true;
+    } else {
+        int error;
+
+        error = xfif_execute(wx->xfif, in_port, actions, n_actions, packet);
+        ofpbuf_delete(packet);
+        return !error;
+    }
+}
+
 /* Executes the actions indicated by 'rule' on 'packet', which is in flow
- * 'flow' and is considered to have arrived on xflow port 'in_port'.
+ * 'flow' and is considered to have arrived on xflow port 'in_port'.  'packet'
+ * must have at least sizeof(struct ofp_packet_in) bytes of headroom.
  *
  * The flow that 'packet' actually contains does not need to actually match
  * 'rule'; the actions in 'rule' will be applied to it either way.  Likewise,
@@ -394,14 +444,19 @@ wx_rule_create(struct wx_rule *super,
  * 'packet' using rule_make_actions().  If 'rule' is a wildcard rule, or if
  * 'rule' is an exact-match rule but 'flow' is not the rule's flow, then this
  * function will compose a set of xflow actions based on 'rule''s OpenFlow
- * actions and apply them to 'packet'. */
+ * actions and apply them to 'packet'.
+ *
+ * Takes ownership of 'packet'. */
 static void
 wx_rule_execute(struct wx *wx, struct wx_rule *rule,
                 struct ofpbuf *packet, const flow_t *flow)
 {
     const union xflow_action *actions;
+    struct xflow_flow_stats stats;
     size_t n_actions;
     struct xflow_actions a;
+
+    assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
     /* Grab or compose the xflow actions.
      *
@@ -415,6 +470,7 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
         struct wx_rule *super = rule->super ? rule->super : rule;
         if (wx_xlate_actions(wx, super->wr.actions, super->wr.n_actions, flow,
                              packet, NULL, &a, NULL)) {
+            ofpbuf_delete(packet);
             return;
         }
         actions = a.actions;
@@ -425,16 +481,21 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
     }
 
     /* Execute the xflow actions. */
-    if (!xfif_execute(wx->xfif, flow->in_port,
-                      actions, n_actions, packet)) {
-        struct xflow_flow_stats stats;
-        flow_extract_stats(flow, packet, &stats);
+    flow_extract_stats(flow, packet, &stats);
+    if (!execute_xflow_actions(wx, flow->in_port,
+                               actions, n_actions, packet)) {
         wx_rule_update_stats(wx, rule, &stats);
         rule->used = time_msec();
         //XXX netflow_flow_update_time(wx->netflow, &rule->nf_flow, rule->used);
     }
 }
 
+/* Inserts 'rule' into 'p''s flow table.
+ *
+ * If 'packet' is nonnull, takes ownership of 'packet', executes 'rule''s
+ * actions on it and credits the statistics for sending the packet to 'rule'.
+ * 'packet' must have at least sizeof(struct ofp_packet_in) bytes of
+ * headroom. */
 static void
 wx_rule_insert(struct wx *wx, struct wx_rule *rule, struct ofpbuf *packet,
                uint16_t in_port)
@@ -839,6 +900,12 @@ xlate_nicira_action(struct wx_xlate_ctx *ctx,
         nast = (const struct nx_action_set_tunnel *) nah;
         oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TUNNEL);
         ctx->flow.tun_id = oa->tunnel.tun_id = nast->tun_id;
+        break;
+
+    case NXAST_DROP_SPOOFED_ARP:
+        if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
+            xflow_actions_add(ctx->out, XFLOWAT_DROP_SPOOFED_ARP);
+        }
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
@@ -1264,6 +1331,8 @@ wx_open(const struct wdp_class *wdp_class, const char *name, bool create,
         wx->ofhooks = &default_ofhooks;
         wx->aux = wx;
         wx->ml = mac_learning_create();
+
+        list_init(&wx->ctl_packets);
 
         *wdpp = &wx->wdp;
     }
@@ -1872,12 +1941,16 @@ wx_recv_set_mask(struct wdp *wdp, int listen_mask)
     struct wx *wx = wx_cast(wdp);
     int xflow_listen_mask;
 
+    wx->wdp_listen_mask = listen_mask;
+
     xflow_listen_mask = 0;
     if (listen_mask & (1 << WDP_CHAN_MISS)) {
         xflow_listen_mask |= XFLOWL_MISS;
     }
     if (listen_mask & (1 << WDP_CHAN_ACTION)) {
         xflow_listen_mask |= XFLOWL_ACTION;
+    } else {
+        wx_purge_ctl_packets__(wx);
     }
     if (listen_mask & (1 << WDP_CHAN_SFLOW)) {
         xflow_listen_mask |= XFLOWL_SFLOW;
@@ -1966,13 +2039,18 @@ wx_is_local_dhcp_reply(const struct wx *wx,
     return false;
 }
 
+/* Determines whether 'payload' that arrived on 'in_port' is included in any of
+ * the flows in 'wx''s OpenFlow flow table.  If so, then it adds a
+ * corresponding flow to the xfif's exact-match flow table, taking ownership of
+ * 'payload', and returns true.  If not, it returns false and the caller
+ * retains ownership of 'payload'. */
 static bool
-wx_explode_rule(struct wx *wx, struct xflow_msg *msg, struct ofpbuf *payload)
+wx_explode_rule(struct wx *wx, uint16_t in_port, struct ofpbuf *payload)
 {
     struct wx_rule *rule;
     flow_t flow;
 
-    flow_extract(payload, 0, xflow_port_to_ofp_port(msg->port), &flow);
+    flow_extract(payload, 0, xflow_port_to_ofp_port(in_port), &flow);
 
     if (wx_is_local_dhcp_reply(wx, &flow, payload)) {
         union xflow_action action;
@@ -1980,7 +2058,7 @@ wx_explode_rule(struct wx *wx, struct xflow_msg *msg, struct ofpbuf *payload)
         memset(&action, 0, sizeof(action));
         action.output.type = XFLOWAT_OUTPUT;
         action.output.port = XFLOWP_LOCAL;
-        xfif_execute(wx->xfif, msg->port, &action, 1, payload);
+        xfif_execute(wx->xfif, in_port, &action, 1, payload);
     }
 
     rule = wx_rule_lookup_valid(wx, &flow);
@@ -2014,6 +2092,19 @@ wx_recv(struct wdp *wdp, struct wdp_packet *packet)
     struct wx *wx = wx_cast(wdp);
     int i;
 
+    if (wx->n_ctl_packets) {
+        struct wdp_packet *wdp_packet;
+
+        wdp_packet = CONTAINER_OF(list_pop_front(&wx->ctl_packets),
+                                  struct wdp_packet, list);
+        wx->n_ctl_packets--;
+
+        *packet = *wdp_packet;
+        free(wdp_packet);
+
+        return 0;
+    }
+
     /* XXX need to avoid 50*50 potential cost for caller. */
     for (i = 0; i < 50; i++) {
         struct xflow_msg *msg;
@@ -2026,10 +2117,10 @@ wx_recv(struct wdp *wdp, struct wdp_packet *packet)
         }
 
         msg = ofpbuf_pull(buf, sizeof *msg);
-        if (msg->type != _XFLOWL_MISS_NR || !wx_explode_rule(wx, msg, buf)) {
+        if (msg->type != _XFLOWL_MISS_NR
+            || !wx_explode_rule(wx, msg->port, buf)) {
             return wx_translate_xflow_msg(msg, buf, packet);
         }
-        ofpbuf_delete(buf);
     }
     return EAGAIN;
 }
@@ -2054,6 +2145,20 @@ wx_recv_purge_queue__(struct wx *wx, int max, int xflow_listen_mask,
     }
 }
 
+static void
+wx_purge_ctl_packets__(struct wx *wx)
+{
+    struct wdp_packet *this, *next;
+
+    LIST_FOR_EACH_SAFE (this, next, struct wdp_packet, list,
+                        &wx->ctl_packets) {
+        list_remove(&this->list);
+        ofpbuf_delete(this->payload);
+        free(this);
+    }
+    wx->n_ctl_packets = 0;
+}
+
 static int
 wx_recv_purge(struct wdp *wdp)
 {
@@ -2076,6 +2181,7 @@ wx_recv_purge(struct wdp *wdp)
     if (xflow_listen_mask & XFLOWL_ACTION) {
         wx_recv_purge_queue__(wx, xflow_stats.max_action_queue, XFLOWL_ACTION,
                               &error);
+        wx_purge_ctl_packets__(wx);
     }
     if (xflow_listen_mask & XFLOWL_SFLOW) {
         wx_recv_purge_queue__(wx, xflow_stats.max_sflow_queue, XFLOWL_SFLOW,
@@ -2092,7 +2198,11 @@ wx_recv_wait(struct wdp *wdp)
 {
     struct wx *wx = wx_cast(wdp);
 
-    xfif_recv_wait(wx->xfif);
+    if (wx->n_ctl_packets) {
+        poll_immediate_wake();
+    } else {
+        xfif_recv_wait(wx->xfif);
+    }
 }
 
 static int

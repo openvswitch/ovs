@@ -32,11 +32,20 @@
         choose key names that are likely to be unique.  The currently
         defined common key-value pairs are:
         <dl>
-          <dt><code>system-uuid</code></dt>
-          <dd>A universally unique identifier for the Open vSwitch's
-            physical host.  The form of the identifier depends on the
-            type of the host.  On a Citrix XenServer, this is the host
-            UUID displayed by, e.g., <code>xe host-list</code>.</dd>
+          <dt><code>system-type</code></dt>
+          <dd>An identifier for the switch type, such as
+            <code>XenServer</code> or <code>KVM</code>.</dd>
+          <dt><code>system-version</code></dt>
+          <dd>The version of the switch software, such as
+            <code>5.6.0</code> on XenServer.</dd>
+          <dt><code>system-id</code></dt>
+          <dd>A unique identifier for the Open vSwitch's physical host.
+            The form of the identifier depends on the type of the host.
+            On a Citrix XenServer, this will likely be the same as
+            <code>xs-system-uuid</code>.</dd>
+          <dt><code>xs-system-uuid</code></dt>
+          <dd>The Citrix XenServer universally unique identifier for the
+            physical host as displayed by <code>xe host-list</code>.</dd>
         </dl>
       </column>
     </group>
@@ -187,13 +196,15 @@
         integrators should either use the Open vSwitch development
         mailing list to coordinate on common key-value definitions, or
         choose key names that are likely to be unique.  The currently
-        defined common key-value pairs are:
+        defined key-value pairs are:
         <dl>
-          <dt><code>network-uuids</code></dt>
+          <dt><code>bridge-id</code></dt>
+          <dd>A unique identifier of the bridge.  On Citrix XenServer this 
+            will commonly be the same as <code>xs-network-uuids</code>.</dd>
+          <dt><code>xs-network-uuids</code></dt>
           <dd>Semicolon-delimited set of universally unique identifier(s) for
-            the network with which this bridge is associated.  The form of the
-            identifier(s) depends on the type of the host.  On a Citrix
-            XenServer host, the network identifiers are RFC 4122 UUIDs as
+            the network with which this bridge is associated on a Citrix
+            XenServer host.  The network identifiers are RFC 4122 UUIDs as
             displayed by, e.g., <code>xe network-list</code>.</dd>
         </dl>
       </column>
@@ -353,7 +364,7 @@
           column), external IDs for the fake bridge are defined here by
           prefixing a <ref table="Bridge"/> <ref table="Bridge"
           column="external_ids"/> key with <code>fake-bridge-</code>,
-          e.g. <code>fake-bridge-network-uuids</code>.
+          e.g. <code>fake-bridge-xs-network-uuids</code>.
         </p>
       </column>
 
@@ -442,7 +453,7 @@
           <dt><code>tap</code></dt>
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
           <dt><code>gre</code></dt>
-          <dd>An Ethernet over RFC 1702 Generic Routing Encapsulation over IPv4
+          <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
              tunnel.  Each tunnel must be uniquely identified by the
              combination of <code>remote_ip</code>, <code>local_ip</code>, and
              <code>in_key</code>.  Note that if two ports are defined that are
@@ -505,9 +516,69 @@
             </dl>
             <dl>
               <dt><code>csum</code></dt>
-              <dd>Optional.  Compute GRE checksums for outgoing packets and
-                require checksums for incoming packets.  Default is enabled,
-                set to <code>false</code> to disable.</dd>
+              <dd>Optional.  Compute GRE checksums on outgoing packets.
+                Checksums present on incoming packets will be validated
+                regardless of this setting.  Note that GRE checksums
+                impose a significant performance penalty as they cover the
+                entire packet.  As the contents of the packet is typically
+                covered by L3 and L4 checksums, this additional checksum only
+                adds value for the GRE and encapsulated Ethernet headers.
+                Default is disabled, set to <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>pmtud</code></dt>
+              <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
+                ``ICMP destination unreachable - fragmentation'' needed
+                messages will be generated for IPv4 packets with the DF bit set
+                and IPv6 packets above the minimum MTU if the packet size
+                exceeds the path MTU minus the size of the tunnel headers.  It
+                also forces the encapsulating packet DF bit to be set (it is
+                always set if the inner packet implies path MTU discovery).
+                Note that this option causes behavior that is typically
+                reserved for routers and therefore is not entirely in
+                compliance with the IEEE 802.1D specification for bridges.
+                Default is enabled, set to <code>false</code> to disable.</dd>
+            </dl>
+          </dd>
+          <dt><code>capwap</code></dt>
+          <dd>Ethernet tunneling over the UDP transport portion of CAPWAP
+             (RFC 5415).  This allows interoperability with certain switches
+             where GRE is not available.  Note that only the tunneling component
+             of the protocol is implemented.  Due to the non-standard use of
+             CAPWAP, UDP ports 58881 and 58882 are used as the source and
+             destinations ports respectivedly.  Each tunnel must be uniquely
+             identified by the combination of <code>remote_ip</code> and
+             <code>local_ip</code>.  If two ports are defined that are the same
+             except one includes <code>local_ip</code> and the other does not,
+             the more specific one is matched first.  CAPWAP support is not
+             available on all platforms.  Currently it is only supported in the
+             Linux kernel module with kernel versions >= 2.6.25.  The following
+             options may be specified in the <ref column="options"/> column:
+            <dl>
+              <dt><code>remote_ip</code></dt>
+              <dd>Required.  The tunnel endpoint.</dd>
+            </dl>
+            <dl>
+              <dt><code>local_ip</code></dt>
+              <dd>Optional.  The destination IP that received packets must
+                match.  Default is to match all addresses.</dd>
+            </dl>
+            <dl>
+              <dt><code>tos</code></dt>
+              <dd>Optional.  The value of the ToS bits to be set on the
+                encapsulating packet.  It may also be the word
+                <code>inherit</code>, in which case the ToS will be copied from
+                the inner packet if it is IPv4 or IPv6 (otherwise it will be
+                0).  Note that the ECN fields are always inherited.  Default is
+                0.</dd>
+            </dl>
+            <dl>
+              <dt><code>ttl</code></dt>
+              <dd>Optional.  The TTL to be set on the encapsulating packet.
+                It may also be the word <code>inherit</code>, in which case the
+                TTL will be copied from the inner packet if it is IPv4 or IPv6
+                (otherwise it will be the system default, typically 64).
+                Default is the system default TTL.</dd>
             </dl>
             <dl>
               <dt><code>pmtud</code></dt>
@@ -549,6 +620,20 @@
         Configuration options whose interpretation varies based on
         <ref column="type"/>.
       </column>
+
+      <column name="status">
+        <p>
+          Key-value pairs that report port status.  Supported status
+          values are <code>type</code>-dependent.
+        </p>
+        <p>The only currently defined key-value pair is:</p>
+        <dl>
+          <dt><code>source_ip</code></dt>
+          <dd>The source IP address used for an IPv4 tunnel end-point,
+            such as <code>gre</code> or <code>capwap</code>.  Not
+            supported by all implementations.</dd>
+        </dl>
+      </column>
     </group>
 
     <group title="Ingress Policing">
@@ -575,15 +660,19 @@
 
     <group title="Other Features">
       <column name="external_ids">
+        Key-value pairs for use by external frameworks that integrate
+        with Open vSwitch, rather than by Open vSwitch itself.  System
+        integrators should either use the Open vSwitch development
+        mailing list to coordinate on common key-value definitions, or
+        choose key names that are likely to be unique.  The currently
+        defined common key-value pair is:
+        <dl>
+          <dt><code>iface-id</code></dt>
+          <dd>A system-unique identifier for the interface.  On XenServer, 
+            this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
+        </dl>
         <p>
-          Key-value pairs for use by external frameworks that integrate
-          with Open vSwitch, rather than by Open vSwitch itself.  System
-          integrators should either use the Open vSwitch development
-          mailing list to coordinate on common key-value definitions, or
-          choose key names that are likely to be unique.
-        </p>
-        <p>
-          All of the currently defined key-value pairs specifically
+          Additionally the following key-value pairs specifically
           apply to an interface that represents a virtual Ethernet interface
           connected to a virtual machine.  These key-value pairs should not be
           present for other types of interfaces.  Keys whose names end
@@ -592,15 +681,15 @@
           UUIDs in RFC 4122 format.  Other hypervisors may use other
           formats.
         </p>
-        <p>The currently defined key-value pairs are:</p>
+        <p>The currently defined key-value pairs for XenServer are:</p>
         <dl>
-          <dt><code>vif-uuid</code></dt>
+          <dt><code>xs-vif-uuid</code></dt>
           <dd>The virtual interface associated with this interface.</dd>
-          <dt><code>network-uuid</code></dt>
+          <dt><code>xs-network-uuid</code></dt>
           <dd>The virtual network to which this interface is attached.</dd>
-          <dt><code>vm-uuid</code></dt>
+          <dt><code>xs-vm-uuid</code></dt>
           <dd>The VM to which this interface belongs.</dd>
-          <dt><code>vif-mac</code></dt>
+          <dt><code>xs-vif-mac</code></dt>
           <dd>The MAC address programmed into the "virtual hardware" for this
               interface, in the
               form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.

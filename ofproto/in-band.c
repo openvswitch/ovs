@@ -39,7 +39,7 @@
 VLOG_DEFINE_THIS_MODULE(in_band)
 
 /* In-band control allows a single network to be used for OpenFlow
- * traffic and other data traffic.  Refer to ovs-vswitchd.conf(5) and 
+ * traffic and other data traffic.  Refer to ovs-vswitchd.conf(5) and
  * secchan(8) for a description of configuring in-band control.
  *
  * This comment is an attempt to describe how in-band control works at a
@@ -72,7 +72,7 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  * In-band also sets up the following rules for each unique next-hop MAC
  * address for the remotes' IPs (the "next hop" is either the remote
  * itself, if it is on a local subnet, or the gateway to reach the remote):
- * 
+ *
  *    (d) ARP replies to the next hop's MAC address.
  *    (e) ARP requests from the next hop's MAC address.
  *
@@ -90,7 +90,7 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  * The goal of these rules is to be as narrow as possible to allow a
  * switch to join a network and be able to communicate with the
  * remotes.  As mentioned earlier, these rules have higher priority
- * than the controller's rules, so if they are too broad, they may 
+ * than the controller's rules, so if they are too broad, they may
  * prevent the controller from implementing its policy.  As such,
  * in-band actively monitors some aspects of flow and packet processing
  * so that the rules can be made more precise.
@@ -100,40 +100,40 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  * match entries, so in-band control is able to be very precise about
  * the flows it prevents.  Flows that miss in the datapath are sent to
  * userspace to be processed, so preventing these flows from being
- * cached in the "fast path" does not affect correctness.  The only type 
- * of flow that is currently prevented is one that would prevent DHCP 
- * replies from being seen by the local port.  For example, a rule that 
- * forwarded all DHCP traffic to the controller would not be allowed, 
+ * cached in the "fast path" does not affect correctness.  The only type
+ * of flow that is currently prevented is one that would prevent DHCP
+ * replies from being seen by the local port.  For example, a rule that
+ * forwarded all DHCP traffic to the controller would not be allowed,
  * but one that forwarded to all ports (including the local port) would.
  *
  * As mentioned earlier, packets that miss in the datapath are sent to
  * the userspace for processing.  The userspace has its own flow table,
- * the "classifier", so in-band checks whether any special processing 
- * is needed before the classifier is consulted.  If a packet is a DHCP 
- * response to a request from the local port, the packet is forwarded to 
- * the local port, regardless of the flow table.  Note that this requires 
- * L7 processing of DHCP replies to determine whether the 'chaddr' field 
+ * the "classifier", so in-band checks whether any special processing
+ * is needed before the classifier is consulted.  If a packet is a DHCP
+ * response to a request from the local port, the packet is forwarded to
+ * the local port, regardless of the flow table.  Note that this requires
+ * L7 processing of DHCP replies to determine whether the 'chaddr' field
  * matches the MAC address of the local port.
  *
  * It is interesting to note that for an L3-based in-band control
- * mechanism, the majority of rules are devoted to ARP traffic.  At first 
- * glance, some of these rules appear redundant.  However, each serves an 
- * important role.  First, in order to determine the MAC address of the 
- * remote side (controller or gateway) for other ARP rules, we must allow 
- * ARP traffic for our local port with rules (b) and (c).  If we are 
- * between a switch and its connection to the remote, we have to 
- * allow the other switch's ARP traffic to through.  This is done with 
+ * mechanism, the majority of rules are devoted to ARP traffic.  At first
+ * glance, some of these rules appear redundant.  However, each serves an
+ * important role.  First, in order to determine the MAC address of the
+ * remote side (controller or gateway) for other ARP rules, we must allow
+ * ARP traffic for our local port with rules (b) and (c).  If we are
+ * between a switch and its connection to the remote, we have to
+ * allow the other switch's ARP traffic to through.  This is done with
  * rules (d) and (e), since we do not know the addresses of the other
- * switches a priori, but do know the remote's or gateway's.  Finally, 
- * if the remote is running in a local guest VM that is not reached 
- * through the local port, the switch that is connected to the VM must 
- * allow ARP traffic based on the remote's IP address, since it will 
- * not know the MAC address of the local port that is sending the traffic 
+ * switches a priori, but do know the remote's or gateway's.  Finally,
+ * if the remote is running in a local guest VM that is not reached
+ * through the local port, the switch that is connected to the VM must
+ * allow ARP traffic based on the remote's IP address, since it will
+ * not know the MAC address of the local port that is sending the traffic
  * or the MAC address of the remote in the guest VM.
  *
  * With a few notable exceptions below, in-band should work in most
  * network setups.  The following are considered "supported' in the
- * current implementation: 
+ * current implementation:
  *
  *    - Locally Connected.  The switch and remote are on the same
  *      subnet.  This uses rules (a), (b), (c), (h), and (i).
@@ -156,7 +156,7 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  *      "Between Switch and Remote" configuration described earlier.
  *
  *    - Remote on Local VM.  The remote is a guest VM on the
- *      system running in-band control.  This uses rules (a), (b), (c), 
+ *      system running in-band control.  This uses rules (a), (b), (c),
  *      (h), and (i).
  *
  *    - Remote on Local VM with Different Networks.  The remote
@@ -167,17 +167,17 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  *      IP address has not been configured for that port on the switch.
  *      As such, the switch will use eth0 to connect to the remote,
  *      and eth1's rules about the local port will not work.  In the
- *      example, the switch attached to eth0 would use rules (a), (b), 
- *      (c), (h), and (i) on eth0.  The switch attached to eth1 would use 
+ *      example, the switch attached to eth0 would use rules (a), (b),
+ *      (c), (h), and (i) on eth0.  The switch attached to eth1 would use
  *      rules (f), (g), (h), and (i).
  *
  * The following are explicitly *not* supported by in-band control:
  *
- *    - Specify Remote by Name.  Currently, the remote must be 
+ *    - Specify Remote by Name.  Currently, the remote must be
  *      identified by IP address.  A naive approach would be to permit
  *      all DNS traffic.  Unfortunately, this would prevent the
  *      controller from defining any policy over DNS.  Since switches
- *      that are located behind us need to connect to the remote, 
+ *      that are located behind us need to connect to the remote,
  *      in-band cannot simply add a rule that allows DNS traffic from
  *      the local port.  The "correct" way to support this is to parse
  *      DNS requests to allow all traffic related to a request for the
@@ -186,15 +186,15 @@ VLOG_DEFINE_THIS_MODULE(in_band)
  *      the time-being.
  *
  *    - Differing Remotes for Switches.  All switches must know
- *      the L3 addresses for all the remotes that other switches 
+ *      the L3 addresses for all the remotes that other switches
  *      may use, since rules need to be set up to allow traffic related
  *      to those remotes through.  See rules (f), (g), (h), and (i).
  *
- *    - Differing Routes for Switches.  In order for the switch to 
- *      allow other switches to connect to a remote through a 
+ *    - Differing Routes for Switches.  In order for the switch to
+ *      allow other switches to connect to a remote through a
  *      gateway, it allows the gateway's traffic through with rules (d)
  *      and (e).  If the routes to the remote differ for the two
- *      switches, we will not know the MAC address of the alternate 
+ *      switches, we will not know the MAC address of the alternate
  *      gateway.
  */
 

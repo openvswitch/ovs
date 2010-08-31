@@ -137,9 +137,6 @@ usage(void)
            "    print JSON ATOMs in sorted order\n"
            "  parse-data TYPE DATUM...\n"
            "    parse JSON DATUMs as data of given TYPE, and re-serialize\n"
-           "  parse-data-unique TYPE DATUM...\n"
-           "    parse JSON DATUMs as data of given TYPE, eliminating\n"
-           "    duplicate keys, and re-serialize\n"
            "  parse-data-strings TYPE DATUM...\n"
            "    parse string DATUMs as data of given TYPE, and re-serialize\n"
            "  parse-column NAME OBJECT\n"
@@ -512,12 +509,6 @@ static void
 do_parse_data(int argc, char *argv[])
 {
     do_parse_data__(argc, argv, ovsdb_datum_from_json);
-}
-
-static void
-do_parse_data_unique(int argc, char *argv[])
-{
-    do_parse_data__(argc, argv, ovsdb_datum_from_json_unique);
 }
 
 static void
@@ -1908,7 +1899,6 @@ static struct command all_commands[] = {
     { "parse-atoms", 2, INT_MAX, do_parse_atoms },
     { "parse-atom-strings", 2, INT_MAX, do_parse_atom_strings },
     { "parse-data", 2, INT_MAX, do_parse_data },
-    { "parse-data-unique", 2, INT_MAX, do_parse_data_unique },
     { "parse-data-strings", 2, INT_MAX, do_parse_data_strings },
     { "sort-atoms", 2, 2, do_sort_atoms },
     { "parse-column", 2, 2, do_parse_column },

@@ -11,6 +11,7 @@
 
 #include <linux/gfp.h>
 #include <linux/skbuff.h>
+#include <linux/version.h>
 
 struct datapath;
 struct sk_buff;

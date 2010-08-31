@@ -1,35 +1,35 @@
 AT_BANNER([OVSDB -- tables])
 
-OVSDB_CHECK_POSITIVE([table with one column],
+OVSDB_CHECK_POSITIVE_CPY([table with one column],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}}']],
   [[{"columns":{"name":{"type":"string"}}}]])
 
-OVSDB_CHECK_POSITIVE([immutable table with one column],
+OVSDB_CHECK_POSITIVE_CPY([immutable table with one column],
   [[parse-table mytable \
     '{"columns": {"name": {"type": "string"}},
       "mutable": false}']],
   [[{"columns":{"name":{"type":"string"}},"mutable":false}]])
 
-OVSDB_CHECK_POSITIVE([table with maxRows of 2],
+OVSDB_CHECK_POSITIVE_CPY([table with maxRows of 2],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 
                           "maxRows": 2}']],
   [[{"columns":{"name":{"type":"string"}},"maxRows":2}]])
 
-OVSDB_CHECK_NEGATIVE([column names may not begin with _],
+OVSDB_CHECK_NEGATIVE_CPY([column names may not begin with _],
   [[parse-table mytable \
     '{"columns": {"_column": {"type": "integer"}}}']],
   [[names beginning with "_" are reserved]],
   [table])
 
-OVSDB_CHECK_NEGATIVE([table must have at least one column (1)],
+OVSDB_CHECK_NEGATIVE_CPY([table must have at least one column (1)],
   [[parse-table mytable '{}']],
   [[Parsing table schema for table mytable failed: Required 'columns' member is missing.]])
 
-OVSDB_CHECK_NEGATIVE([table must have at least one column (2)],
+OVSDB_CHECK_NEGATIVE_CPY([table must have at least one column (2)],
   [[parse-table mytable '{"columns": {}}']],
   [[table must have at least one column]])
 
-OVSDB_CHECK_NEGATIVE([table maxRows must be positive],
+OVSDB_CHECK_NEGATIVE_CPY([table maxRows must be positive],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 
                           "maxRows": 0}']],
   [[syntax "{"columns":{"name":{"type":"string"}},"maxRows":0}": syntax error: maxRows must be at least 1]])

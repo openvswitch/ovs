@@ -16,7 +16,7 @@
 
 #ifndef UNIXCTL_H
 #define UNIXCTL_H 1
- 
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -45,7 +45,7 @@ void unixctl_command_register(const char *name,
                               unixctl_cb_func *cb, void *aux);
 void unixctl_command_reply(struct unixctl_conn *, int code,
                            const char *body);
- 
+
 #ifdef  __cplusplus
 }
 #endif

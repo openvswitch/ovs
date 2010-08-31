@@ -98,7 +98,7 @@ static void format_log_message(const struct vlog_module *, enum vlog_level,
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
 static size_t
-search_name_array(const char *target, const char **names, size_t n_names) 
+search_name_array(const char *target, const char **names, size_t n_names)
 {
     size_t i;
 
@@ -122,14 +122,14 @@ vlog_get_level_name(enum vlog_level level)
 /* Returns the logging level with the given 'name', or VLL_N_LEVELS if 'name'
  * is not the name of a logging level. */
 enum vlog_level
-vlog_get_level_val(const char *name) 
+vlog_get_level_val(const char *name)
 {
     return search_name_array(name, level_names, ARRAY_SIZE(level_names));
 }
 
 /* Returns the name for logging facility 'facility'. */
 const char *
-vlog_get_facility_name(enum vlog_facility facility) 
+vlog_get_facility_name(enum vlog_facility facility)
 {
     assert(facility < VLF_N_FACILITIES);
     return facilities[facility].name;
@@ -138,7 +138,7 @@ vlog_get_facility_name(enum vlog_facility facility)
 /* Returns the logging facility named 'name', or VLF_N_FACILITIES if 'name' is
  * not the name of a logging facility. */
 enum vlog_facility
-vlog_get_facility_val(const char *name) 
+vlog_get_facility_val(const char *name)
 {
     size_t i;
 
@@ -174,7 +174,7 @@ vlog_module_from_name(const char *name)
 
 /* Returns the current logging level for the given 'module' and 'facility'. */
 enum vlog_level
-vlog_get_level(const struct vlog_module *module, enum vlog_facility facility) 
+vlog_get_level(const struct vlog_module *module, enum vlog_facility facility)
 {
     assert(facility < VLF_N_FACILITIES);
     return module->levels[facility];
@@ -221,7 +221,7 @@ set_facility_level(enum vlog_facility facility, struct vlog_module *module,
  * across all modules or facilities, respectively. */
 void
 vlog_set_levels(struct vlog_module *module, enum vlog_facility facility,
-                enum vlog_level level) 
+                enum vlog_level level)
 {
     assert(facility < VLF_N_FACILITIES || facility == VLF_ANY_FACILITY);
     if (facility == VLF_ANY_FACILITY) {
@@ -234,7 +234,7 @@ vlog_set_levels(struct vlog_module *module, enum vlog_facility facility,
 }
 
 static void
-do_set_pattern(enum vlog_facility facility, const char *pattern) 
+do_set_pattern(enum vlog_facility facility, const char *pattern)
 {
     struct facility *f = &facilities[facility];
     if (!f->default_pattern) {
@@ -441,7 +441,7 @@ vlog_unixctl_reopen(struct unixctl_conn *conn,
 /* Initializes the logging subsystem and registers its unixctl server
  * commands. */
 void
-vlog_init(void) 
+vlog_init(void)
 {
     time_t now;
 
@@ -470,7 +470,7 @@ vlog_init(void)
 
 /* Closes the logging subsystem. */
 void
-vlog_exit(void) 
+vlog_exit(void)
 {
     if (vlog_inited) {
         closelog();
@@ -734,7 +734,7 @@ vlog_rate_limit(const struct vlog_module *module, enum vlog_level level,
 }
 
 void
-vlog_usage(void) 
+vlog_usage(void)
 {
     printf("\nLogging options:\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"

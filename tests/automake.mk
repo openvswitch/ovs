@@ -11,12 +11,14 @@ TESTSUITE_AT = \
 	tests/classifier.at \
 	tests/check-structs.at \
 	tests/daemon.at \
+	tests/daemon-py.at \
 	tests/vconn.at \
 	tests/dir_name.at \
 	tests/aes128.at \
 	tests/uuid.at \
 	tests/json.at \
 	tests/jsonrpc.at \
+	tests/jsonrpc-py.at \
 	tests/timeval.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
@@ -38,6 +40,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
+	tests/ovsdb-idl-py.at \
 	tests/ovs-vsctl.at \
 	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
@@ -266,3 +269,11 @@ EXTRA_DIST += \
 	tests/testpki-privkey2.pem \
 	tests/testpki-req.pem \
 	tests/testpki-req2.pem
+
+# Python tests.
+EXTRA_DIST += \
+	tests/test-daemon.py \
+	tests/test-json.py \
+	tests/test-jsonrpc.py \
+	tests/test-ovsdb.py \
+	tests/test-reconnect.py

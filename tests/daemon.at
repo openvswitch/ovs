@@ -1,4 +1,4 @@
-AT_BANNER([daemon unit tests])
+AT_BANNER([daemon unit tests - C])
 
 AT_SETUP([daemon])
 AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov wrapper make pids differ

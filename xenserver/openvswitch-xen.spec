@@ -73,8 +73,10 @@ install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/vif
-install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-network-uuids \
-               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-network-uuids
+install -m 755 xenserver/usr_share_openvswitch_scripts_monitor-external-ids \
+               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/monitor-external-ids
+install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
+               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
@@ -88,6 +90,7 @@ install -m 644 \
 
 install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch
 find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch \;
+install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -96,8 +99,6 @@ rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-kill \
     $RPM_BUILD_ROOT/usr/bin/ovs-openflowd \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
-    $RPM_BUILD_ROOT/usr/bin/ovs-wdt \
-    $RPM_BUILD_ROOT/usr/sbin/ovs-monitor \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-discover.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
@@ -159,12 +160,12 @@ EOF
     fi
 fi
 
-# On XenServer 5.5.0, we need refresh-network-uuids to run whenever
+# On XenServer 5.5.0, we need refresh-xs-network-uuids to run whenever
 # XAPI starts or restarts.  (On XenServer 5.6.0, XAPI calls the
 # "update" method of the vswitch-cfg-update plugin whenever it starts
 # or restarts, so this is no longer necessary.)
 if test "$PRODUCT_VERSION" = "5.5.0"; then
-    RNU=/usr/share/openvswitch/scripts/refresh-network-uuids
+    RNU=/usr/share/openvswitch/scripts/refresh-xs-network-uuids
     XSS=/opt/xensource/libexec/xapi-startup-script
     if test -e $XSS && (test ! -L $XSS || test "`readlink $XSS`" != $RNU); then
         echo "$XSS is already in use, refusing to overwrite"
@@ -369,7 +370,30 @@ fi
 /etc/profile.d/openvswitch.sh
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
-/usr/share/openvswitch/scripts/refresh-network-uuids
+/usr/share/openvswitch/python/ovs/__init__.py
+/usr/share/openvswitch/python/ovs/daemon.py
+/usr/share/openvswitch/python/ovs/db/__init__.py
+/usr/share/openvswitch/python/ovs/db/data.py
+/usr/share/openvswitch/python/ovs/db/error.py
+/usr/share/openvswitch/python/ovs/db/idl.py
+/usr/share/openvswitch/python/ovs/db/parser.py
+/usr/share/openvswitch/python/ovs/db/schema.py
+/usr/share/openvswitch/python/ovs/db/types.py
+/usr/share/openvswitch/python/ovs/dirs.py
+/usr/share/openvswitch/python/ovs/fatal_signal.py
+/usr/share/openvswitch/python/ovs/json.py
+/usr/share/openvswitch/python/ovs/jsonrpc.py
+/usr/share/openvswitch/python/ovs/ovsuuid.py
+/usr/share/openvswitch/python/ovs/poller.py
+/usr/share/openvswitch/python/ovs/process.py
+/usr/share/openvswitch/python/ovs/reconnect.py
+/usr/share/openvswitch/python/ovs/socket_util.py
+/usr/share/openvswitch/python/ovs/stream.py
+/usr/share/openvswitch/python/ovs/timeval.py
+/usr/share/openvswitch/python/ovs/util.py
+/usr/share/openvswitch/python/uuid.py
+/usr/share/openvswitch/scripts/monitor-external-ids
+/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py
 /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.py
@@ -397,10 +421,12 @@ fi
 /usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
+/usr/share/man/man8/ovs-parse-leaks.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
-%exclude /usr/lib/xsconsole/plugins-base/*.pyc
-%exclude /usr/lib/xsconsole/plugins-base/*.pyo
-%exclude /usr/share/openvswitch/scripts/*.pyc
-%exclude /usr/share/openvswitch/scripts/*.pyo
+%exclude /usr/lib/xsconsole/plugins-base/*.py[co]
+%exclude /usr/share/openvswitch/scripts/*.py[co]
+%exclude /usr/share/openvswitch/python/*.py[co]
+%exclude /usr/share/openvswitch/python/ovs/*.py[co]
+%exclude /usr/share/openvswitch/python/ovs/db/*.py[co]

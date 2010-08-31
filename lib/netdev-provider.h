@@ -40,7 +40,7 @@ struct arg {
  * implementations. */
 struct netdev_dev {
     char *name;                         /* Name of network device. */
-    const struct netdev_class *netdev_class; /* Functions to control 
+    const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
@@ -552,6 +552,7 @@ extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
 extern const struct netdev_class netdev_patch_class;
 extern const struct netdev_class netdev_gre_class;
+extern const struct netdev_class netdev_capwap_class;
 
 #ifdef  __cplusplus
 }

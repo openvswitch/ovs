@@ -1,21 +1,67 @@
-Upstream Authors: 
+The original sources for this package can be found at:
 
-    Nicira Networks
+	http://openvswitch.org/
 
-Copyright: 
 
-    Copyright (C) 2008 Nicira Networks.
+Upstream Authors (from AUTHORS):
+
+	Andy Southgate          andy.southgate@citrix.com
+	Ben Pfaff               blp@nicira.com
+	Bryan Phillippe         bp@toroki.com
+	Dan Wendlandt           dan@nicira.com
+	David Erickson          derickso@stanford.edu
+	Glen Gibb               grg@stanford.edu
+	Ian Campbell            Ian.Campbell@citrix.com
+	Jean Tourrilhes         jt@hpl.hp.com
+	Jeremy Stribling        strib@nicira.com
+	Jesse Gross             jesse@nicira.com
+	Jun Nakajima            jun.nakajima@intel.com
+	Justin Pettit           jpettit@nicira.com
+	Keith Amidon            keith@nicira.com
+	Martin Casado           casado@nicira.com
+	Natasha Gude            natasha@nicira.com
+	Neil McKee              neil.mckee@inmon.com
+	Paul Fazzone            pfazzone@nicira.com
+	Reid Price              reid@nicira.com
+	Simon Horman            horms@verge.net.au
+	Tetsuo NAKAGAWA         nakagawa@mxc.nes.nec.co.jp
+	Thomas Lacroix          thomas.lacroix@citrix.com
+	Todd Deshane            deshantm@gmail.com
+	Tom Everman             teverman@google.com
+	Tsvi Slonim             tsvi@toroki.com
+	Wei Yongjun             yjwei@cn.fujitsu.com
+	Yu Zhiguo               yuzg@cn.fujitsu.com
+
+Upstream Copyright Holders:
+
+	Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
+	Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
+	Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
+	and authors listed above.
 
 License:
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at:
+* The following components are licensed under the GNU General Public Licence
+  version 2.
 
-        http://www.apache.org/licenses/LICENSE-2.0
+	datapath/
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+  On Debian systems, the complete text of the GNU General Public Licence
+  version 2 can be found in `/usr/share/common-licenses/GPL-2'
+
+* The following components are dual-licensed under the
+  GNU General Public Licence version 3 and the Apache Licence Version 2.0.
+
+	include/openvswitch/
+
+  On Debian systems, the complete text of the GNU General Public Licence
+  version 2 can be found in `/usr/share/common-licenses/GPL-2'.
+  On Debian systems, the complete text of the Apache License version 2.0
+  can be found in '/usr/share/common-licenses/Apache-2.0'.
+
+* All other components of this package are licensed under
+  The Apache License Version 2.0.
+
+  On Debian systems, the complete text of the Apache License version 2.0
+  can be found in '/usr/share/common-licenses/Apache-2.0'.
+

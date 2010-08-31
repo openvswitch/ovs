@@ -53,7 +53,7 @@ pull_ip(struct ofpbuf *packet)
 }
 
 static struct tcp_header *
-pull_tcp(struct ofpbuf *packet) 
+pull_tcp(struct ofpbuf *packet)
 {
     if (packet->size >= TCP_HEADER_LEN) {
         struct tcp_header *tcp = packet->data;
@@ -66,13 +66,13 @@ pull_tcp(struct ofpbuf *packet)
 }
 
 static struct udp_header *
-pull_udp(struct ofpbuf *packet) 
+pull_udp(struct ofpbuf *packet)
 {
     return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
 }
 
 static struct icmp_header *
-pull_icmp(struct ofpbuf *packet) 
+pull_icmp(struct ofpbuf *packet)
 {
     return ofpbuf_try_pull(packet, ICMP_HEADER_LEN);
 }
@@ -120,9 +120,23 @@ parse_ethertype(struct ofpbuf *b)
     return llc->snap.snap_type;
 }
 
-/* Returns 1 if 'packet' is an IP fragment, 0 otherwise.
- * 'tun_id' is in network byte order, while 'in_port' is in host byte order.
- * These byte orders are the same as they are in struct xflow_key. */
+/* 'tun_id' is in network byte order, while 'in_port' is in host byte order.
+ * These byte orders are the same as they are in struct xflow_key.
+ *
+ * Initializes packet header pointers as follows:
+ *
+ *    - packet->l2 to the start of the Ethernet header.
+ *
+ *    - packet->l3 to just past the Ethernet header, or just past the
+ *      vlan_header if one is present, to the first byte of the payload of the
+ *      Ethernet frame.
+ *
+ *    - packet->l4 to just past the IPv4 header, if one is present and has a
+ *      correct length, and otherwise NULL.
+ *
+ *    - packet->l7 to just past the TCP or UDP or ICMP header, if one is
+ *      present and has a correct length, and otherwise NULL.
+ */
 int
 flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
              flow_t *flow)
@@ -176,10 +190,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->tp_src = tcp->tcp_src;
                         flow->tp_dst = tcp->tcp_dst;
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 } else if (flow->nw_proto == IP_TYPE_UDP) {
                     const struct udp_header *udp = pull_udp(&b);
@@ -187,10 +197,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->tp_src = udp->udp_src;
                         flow->tp_dst = udp->udp_dst;
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 } else if (flow->nw_proto == IP_TYPE_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
@@ -198,10 +204,6 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                         flow->icmp_type = htons(icmp->icmp_type);
                         flow->icmp_code = htons(icmp->icmp_code);
                         packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that
-                         * this packet has an L4 header. */
-                        flow->nw_proto = 0;
                     }
                 }
             } else {
@@ -211,7 +213,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         const struct arp_eth_header *arp = pull_arp(&b);
         if (arp && arp->ar_hrd == htons(1)
-            && arp->ar_pro == htons(ETH_TYPE_IP) 
+            && arp->ar_pro == htons(ETH_TYPE_IP)
             && arp->ar_hln == ETH_ADDR_LEN
             && arp->ar_pln == 4) {
             /* We only match on the lower 8 bits of the opcode. */
@@ -219,7 +221,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
                 flow->nw_proto = ntohs(arp->ar_op);
             }
 
-            if ((flow->nw_proto == ARP_OP_REQUEST) 
+            if ((flow->nw_proto == ARP_OP_REQUEST)
                 || (flow->nw_proto == ARP_OP_REPLY)) {
                 flow->nw_src = arp->ar_spa;
                 flow->nw_dst = arp->ar_tpa;
@@ -233,7 +235,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
  * arguments must have been initialized through a call to flow_extract().
  */
 void
-flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
+flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
         struct xflow_flow_stats *stats)
 {
     memset(stats, '\0', sizeof(*stats));
@@ -339,7 +341,7 @@ flow_format(struct ds *ds, const flow_t *flow)
 }
 
 void
-flow_print(FILE *stream, const flow_t *flow) 
+flow_print(FILE *stream, const flow_t *flow)
 {
     char *s = flow_to_string(flow);
     fputs(s, stream);
