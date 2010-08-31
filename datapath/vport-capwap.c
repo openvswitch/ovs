@@ -21,6 +21,7 @@
 #include <net/inet_frag.h>
 #include <net/ip.h>
 #include <net/protocol.h>
+#include <net/udp.h>
 
 #include "tunnel.h"
 #include "vport.h"
