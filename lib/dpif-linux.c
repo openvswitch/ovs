@@ -478,8 +478,7 @@ dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
     int retval;
     int error;
 
-    buf = ofpbuf_new(65536 + DPIF_RECV_MSG_PADDING);
-    ofpbuf_reserve(buf, DPIF_RECV_MSG_PADDING);
+    buf = ofpbuf_new_with_headroom(65536, DPIF_RECV_MSG_PADDING);
     retval = read(dpif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
     if (retval < 0) {
         error = errno;
