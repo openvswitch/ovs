@@ -103,26 +103,19 @@ struct netflow {
     long long int reconfig_time;  /* When we reconfigured the timeouts. */
 };
 
-void
-netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
-               struct ofexpired *expired)
+static void
+gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
+                struct ofexpired *expired, 
+                uint32_t packet_count, uint32_t byte_count)
 {
     struct netflow_v5_header *nf_hdr;
     struct netflow_v5_record *nf_rec;
-    struct timespec now;
-
-    nf_flow->last_expired += nf->active_timeout;
-
-    /* NetFlow only reports on IP packets and we should only report flows
-     * that actually have traffic. */
-    if (expired->flow.dl_type != htons(ETH_TYPE_IP) ||
-        expired->packet_count - nf_flow->packet_count_off == 0) {
-        return;
-    }
-
-    time_wall_timespec(&now);
 
     if (!nf->packet.size) {
+        struct timespec now;
+
+        time_wall_timespec(&now);
+
         nf_hdr = ofpbuf_put_zeros(&nf->packet, sizeof *nf_hdr);
         nf_hdr->version = htons(NETFLOW_V5_VERSION);
         nf_hdr->count = htons(0);
@@ -150,10 +143,8 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
         nf_rec->input = htons(expired->flow.in_port);
         nf_rec->output = htons(nf_flow->output_iface);
     }
-    nf_rec->packet_count = htonl(MIN(expired->packet_count -
-                                     nf_flow->packet_count_off, UINT32_MAX));
-    nf_rec->byte_count = htonl(MIN(expired->byte_count -
-                                   nf_flow->byte_count_off, UINT32_MAX));
+    nf_rec->packet_count = htonl(packet_count);
+    nf_rec->byte_count = htonl(byte_count);
     nf_rec->init_time = htonl(nf_flow->created - nf->boot_time);
     nf_rec->used_time = htonl(MAX(nf_flow->created, expired->used)
                              - nf->boot_time);
@@ -172,16 +163,48 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
     nf_rec->ip_proto = expired->flow.nw_proto;
     nf_rec->ip_tos = expired->flow.nw_tos;
 
+    /* NetFlow messages are limited to 30 records. */
+    if (ntohs(nf_hdr->count) >= 30) {
+        netflow_run(nf);
+    }
+}
+
+void
+netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
+               struct ofexpired *expired)
+{
+    uint64_t pkt_delta = expired->packet_count - nf_flow->packet_count_off;
+    uint64_t byte_delta = expired->byte_count - nf_flow->byte_count_off;
+
+    nf_flow->last_expired += nf->active_timeout;
+
+    /* NetFlow only reports on IP packets and we should only report flows
+     * that actually have traffic. */
+    if (expired->flow.dl_type != htons(ETH_TYPE_IP) || pkt_delta == 0) {
+        return;
+    }
+
+    /* NetFlow v5 records are limited to 32-bit counters.  If we've
+     * wrapped a counter, send as multiple records so we don't lose
+     * track of any traffic.  We try to evenly distribute the packet and
+     * byte counters, so that the bytes-per-packet lengths don't look
+     * wonky across the records. */
+    while (byte_delta) {
+        int n_recs = (byte_delta + UINT32_MAX - 1) / UINT32_MAX;
+        uint32_t pkt_count = pkt_delta / n_recs;
+        uint32_t byte_count = byte_delta / n_recs;
+        
+        gen_netflow_rec(nf, nf_flow, expired, pkt_count, byte_count);
+
+        pkt_delta -= pkt_count;
+        byte_delta -= byte_count;
+    }
+
     /* Update flow tracking data. */
     nf_flow->created = 0;
     nf_flow->packet_count_off = expired->packet_count;
     nf_flow->byte_count_off = expired->byte_count;
     nf_flow->tcp_flags = 0;
-
-    /* NetFlow messages are limited to 30 records. */
-    if (ntohs(nf_hdr->count) >= 30) {
-        netflow_run(nf);
-    }
 }
 
 void
