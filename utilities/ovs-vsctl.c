@@ -59,6 +59,7 @@ struct vsctl_command_syntax {
     vsctl_handler_func *run;
     vsctl_handler_func *postprocess;
     const char *options;
+    enum { RO, RW } mode;       /* Does this command modify the database? */
 };
 
 struct vsctl_command {
@@ -101,6 +102,7 @@ static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
+static bool might_write_to_db(char **argv);
 
 static struct vsctl_command *parse_commands(int argc, char *argv[],
                                             size_t *n_commandsp);
@@ -114,7 +116,6 @@ static const struct vsctl_table_class *get_table(const char *table_name);
 static void set_column(const struct vsctl_table_class *,
                        const struct ovsdb_idl_row *, const char *arg,
                        struct ovsdb_symbol_table *);
-
 
 int
 main(int argc, char *argv[])
@@ -133,7 +134,7 @@ main(int argc, char *argv[])
 
     /* Log our arguments.  This is often valuable for debugging systems. */
     args = process_escape_args(argv);
-    VLOG_INFO("Called as %s", args);
+    VLOG(might_write_to_db(argv) ? VLL_INFO : VLL_DBG, "Called as %s", args);
 
     /* Parse command line. */
     parse_options(argc, argv);
@@ -509,6 +510,21 @@ default_db(void)
         def = xasprintf("unix:%s/db.sock", ovs_rundir);
     }
     return def;
+}
+
+/* Returns true if it looks like this set of arguments might modify the
+ * database, otherwise false.  (Not very smart, so it's prone to false
+ * positives.) */
+static bool
+might_write_to_db(char **argv)
+{
+    for (; *argv; argv++) {
+        const struct vsctl_command_syntax *p = find_command(*argv);
+        if (p && p->mode == RW) {
+            return true;
+        }
+    }
+    return false;
 }
 
 struct vsctl_context {
@@ -2856,56 +2872,56 @@ try_again:
 
 static const struct vsctl_command_syntax all_commands[] = {
     /* Open vSwitch commands. */
-    {"init", 0, 0, cmd_init, NULL, ""},
+    {"init", 0, 0, cmd_init, NULL, "", RW},
 
     /* Bridge commands. */
-    {"add-br", 1, 3, cmd_add_br, NULL, "--may-exist"},
-    {"del-br", 1, 1, cmd_del_br, NULL, "--if-exists"},
-    {"list-br", 0, 0, cmd_list_br, NULL, ""},
-    {"br-exists", 1, 1, cmd_br_exists, NULL, ""},
-    {"br-to-vlan", 1, 1, cmd_br_to_vlan, NULL, ""},
-    {"br-to-parent", 1, 1, cmd_br_to_parent, NULL, ""},
-    {"br-set-external-id", 2, 3, cmd_br_set_external_id, NULL, ""},
-    {"br-get-external-id", 1, 2, cmd_br_get_external_id, NULL, ""},
+    {"add-br", 1, 3, cmd_add_br, NULL, "--may-exist", RW},
+    {"del-br", 1, 1, cmd_del_br, NULL, "--if-exists", RW},
+    {"list-br", 0, 0, cmd_list_br, NULL, "", RO},
+    {"br-exists", 1, 1, cmd_br_exists, NULL, "", RO},
+    {"br-to-vlan", 1, 1, cmd_br_to_vlan, NULL, "", RO},
+    {"br-to-parent", 1, 1, cmd_br_to_parent, NULL, "", RO},
+    {"br-set-external-id", 2, 3, cmd_br_set_external_id, NULL, "", RW},
+    {"br-get-external-id", 1, 2, cmd_br_get_external_id, NULL, "", RO},
 
     /* Port commands. */
-    {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
-    {"add-port", 2, INT_MAX, cmd_add_port, NULL, "--may-exist"},
-    {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface"},
-    {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists,--with-iface"},
-    {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},
+    {"list-ports", 1, 1, cmd_list_ports, NULL, "", RO},
+    {"add-port", 2, INT_MAX, cmd_add_port, NULL, "--may-exist", RW},
+    {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface", RW},
+    {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists,--with-iface", RW},
+    {"port-to-br", 1, 1, cmd_port_to_br, NULL, "", RO},
 
     /* Interface commands. */
-    {"list-ifaces", 1, 1, cmd_list_ifaces, NULL, ""},
-    {"iface-to-br", 1, 1, cmd_iface_to_br, NULL, ""},
+    {"list-ifaces", 1, 1, cmd_list_ifaces, NULL, "", RO},
+    {"iface-to-br", 1, 1, cmd_iface_to_br, NULL, "", RO},
 
     /* Controller commands. */
-    {"get-controller", 1, 1, cmd_get_controller, NULL, ""},
-    {"del-controller", 1, 1, cmd_del_controller, NULL, ""},
-    {"set-controller", 1, INT_MAX, cmd_set_controller, NULL, ""},
-    {"get-fail-mode", 1, 1, cmd_get_fail_mode, NULL, ""},
-    {"del-fail-mode", 1, 1, cmd_del_fail_mode, NULL, ""},
-    {"set-fail-mode", 2, 2, cmd_set_fail_mode, NULL, ""},
+    {"get-controller", 1, 1, cmd_get_controller, NULL, "", RO},
+    {"del-controller", 1, 1, cmd_del_controller, NULL, "", RW},
+    {"set-controller", 1, INT_MAX, cmd_set_controller, NULL, "", RW},
+    {"get-fail-mode", 1, 1, cmd_get_fail_mode, NULL, "", RO},
+    {"del-fail-mode", 1, 1, cmd_del_fail_mode, NULL, "", RW},
+    {"set-fail-mode", 2, 2, cmd_set_fail_mode, NULL, "", RW},
 
     /* SSL commands. */
-    {"get-ssl", 0, 0, cmd_get_ssl, NULL, ""},
-    {"del-ssl", 0, 0, cmd_del_ssl, NULL, ""},
-    {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap"},
+    {"get-ssl", 0, 0, cmd_get_ssl, NULL, "", RO},
+    {"del-ssl", 0, 0, cmd_del_ssl, NULL, "", RW},
+    {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap", RW},
 
     /* Switch commands. */
-    {"emer-reset", 0, 0, cmd_emer_reset, NULL, ""},
+    {"emer-reset", 0, 0, cmd_emer_reset, NULL, "", RW},
 
     /* Parameter commands. */
-    {"get", 2, INT_MAX, cmd_get, NULL, "--if-exists,--id="},
-    {"list", 1, INT_MAX, cmd_list, NULL, ""},
-    {"set", 3, INT_MAX, cmd_set, NULL, ""},
-    {"add", 4, INT_MAX, cmd_add, NULL, ""},
-    {"remove", 4, INT_MAX, cmd_remove, NULL, ""},
-    {"clear", 3, INT_MAX, cmd_clear, NULL, ""},
-    {"create", 2, INT_MAX, cmd_create, post_create, "--id="},
-    {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists"},
-    {"wait-until", 2, INT_MAX, cmd_wait_until, NULL, ""},
+    {"get", 2, INT_MAX, cmd_get, NULL, "--if-exists,--id=", RO},
+    {"list", 1, INT_MAX, cmd_list, NULL, "", RO},
+    {"set", 3, INT_MAX, cmd_set, NULL, "", RW},
+    {"add", 4, INT_MAX, cmd_add, NULL, "", RW},
+    {"remove", 4, INT_MAX, cmd_remove, NULL, "", RW},
+    {"clear", 3, INT_MAX, cmd_clear, NULL, "", RW},
+    {"create", 2, INT_MAX, cmd_create, post_create, "--id=", RW},
+    {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists", RW},
+    {"wait-until", 2, INT_MAX, cmd_wait_until, NULL, "", RO},
 
-    {NULL, 0, 0, NULL, NULL, NULL},
+    {NULL, 0, 0, NULL, NULL, NULL, RO},
 };
 
