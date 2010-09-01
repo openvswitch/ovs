@@ -184,23 +184,38 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
         return;
     }
 
-    /* NetFlow v5 records are limited to 32-bit counters.  If we've wrapped
-     * a counter, send as multiple records so we don't lose track of any
-     * traffic.  We try to evenly distribute the packet and byte counters,
-     * so that the bytes-per-packet lengths don't look wonky across the
-     * records. */
-    while (byte_delta > UINT32_MAX) {
-        uint32_t n_recs = byte_delta >> 32;
-        uint32_t pkt_count = pkt_delta / n_recs;
-        uint32_t byte_count = byte_delta / n_recs;
+    if ((byte_delta >> 32) <= 175) {
+        /* NetFlow v5 records are limited to 32-bit counters.  If we've wrapped
+         * a counter, send as multiple records so we don't lose track of any
+         * traffic.  We try to evenly distribute the packet and byte counters,
+         * so that the bytes-per-packet lengths don't look wonky across the
+         * records. */
+        while (byte_delta > UINT32_MAX) {
+            uint32_t n_recs = byte_delta >> 32;
+            uint32_t pkt_count = pkt_delta / n_recs;
+            uint32_t byte_count = byte_delta / n_recs;
 
-        gen_netflow_rec(nf, nf_flow, expired, pkt_count, byte_count);
+            gen_netflow_rec(nf, nf_flow, expired, pkt_count, byte_count);
 
-        pkt_delta -= pkt_count;
-        byte_delta -= byte_count;
-    }
-    if (byte_delta > 0) {
-        gen_netflow_rec(nf, nf_flow, expired, pkt_delta, byte_delta);
+            pkt_delta -= pkt_count;
+            byte_delta -= byte_count;
+        }
+        if (byte_delta > 0) {
+            gen_netflow_rec(nf, nf_flow, expired, pkt_delta, byte_delta);
+        }
+    } else {
+        /* In 600 seconds, a 10GbE link can theoretically transmit 75 * 10**10
+         * == 175 * 2**32 bytes.  The byte counter is bigger than that, so it's
+         * probably a bug--for example, the netdev code uses UINT64_MAX to
+         * report "unknown value", and perhaps that has leaked through to here.
+         *
+         * We wouldn't want to hit the loop above in this case, because it
+         * would try to send up to UINT32_MAX netflow records, which would take
+         * a long time.
+         */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        VLOG_WARN_RL(&rl, "impossible byte counter %"PRIu64, byte_delta);
     }
 
     /* Update flow tracking data. */
