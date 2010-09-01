@@ -114,7 +114,7 @@ handle_vswitch_vif_details()
 
     local address=$(xenstore-read "/local/domain/$DOMID/device/vif/$DEVID/mac" 2>/dev/null)
     if [ -n "${address}" ] ; then
-        set_vif_external_id "xs-vif-mac" "${address}"
+        set_vif_external_id "attached-mac" "${address}"
     fi
 
     if $xs550; then

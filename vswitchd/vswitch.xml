@@ -665,8 +665,15 @@
         integrators should either use the Open vSwitch development
         mailing list to coordinate on common key-value definitions, or
         choose key names that are likely to be unique.  The currently
-        defined common key-value pair is:
+        defined common key-value pairs are:
         <dl>
+          <dt><code>attached-mac</code></dt>
+          <dd>
+            The MAC address programmed into the ``virtual hardware'' for this
+            interface, in the form
+            <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+            For Citrix XenServer, this is the value of the <code>MAC</code>
+            field in the VIF record for this interface.</dd>
           <dt><code>iface-id</code></dt>
           <dd>A system-unique identifier for the interface.  On XenServer, 
             this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
@@ -689,12 +696,6 @@
           <dd>The virtual network to which this interface is attached.</dd>
           <dt><code>xs-vm-uuid</code></dt>
           <dd>The VM to which this interface belongs.</dd>
-          <dt><code>xs-vif-mac</code></dt>
-          <dd>The MAC address programmed into the "virtual hardware" for this
-              interface, in the
-              form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-              For Citrix XenServer, this is the value of the <code>MAC</code>
-              field in the VIF record for this interface.</dd>
         </dl>
       </column>
 
