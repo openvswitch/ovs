@@ -105,6 +105,7 @@ static void parse_options(int argc, char *argv[]);
 static struct vsctl_command *parse_commands(int argc, char *argv[],
                                             size_t *n_commandsp);
 static void parse_command(int argc, char *argv[], struct vsctl_command *);
+static const struct vsctl_command_syntax *find_command(const char *name);
 static void do_vsctl(const char *args,
                      struct vsctl_command *, size_t n_commands,
                      struct ovsdb_idl *);
@@ -295,6 +296,8 @@ static void
 parse_command(int argc, char *argv[], struct vsctl_command *command)
 {
     const struct vsctl_command_syntax *p;
+    struct shash_node *node;
+    int n_arg;
     int i;
 
     shash_init(&command->options);
@@ -325,58 +328,71 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
         vsctl_fatal("missing command name");
     }
 
-    for (p = all_commands; p->name; p++) {
-        if (!strcmp(p->name, argv[i])) {
-            struct shash_node *node;
-            int n_arg;
+    p = find_command(argv[i]);
+    if (!p) {
+        vsctl_fatal("unknown command '%s'; use --help for help", argv[i]);
+    }
 
-            SHASH_FOR_EACH (node, &command->options) {
-                const char *s = strstr(p->options, node->name);
-                int end = s ? s[strlen(node->name)] : EOF;
+    SHASH_FOR_EACH (node, &command->options) {
+        const char *s = strstr(p->options, node->name);
+        int end = s ? s[strlen(node->name)] : EOF;
 
-                if (end != '=' && end != ',' && end != ' ' && end != '\0') {
-                    vsctl_fatal("'%s' command has no '%s' option",
-                                argv[i], node->name);
-                }
-                if ((end == '=') != (node->data != NULL)) {
-                    if (end == '=') {
-                        vsctl_fatal("missing argument to '%s' option on '%s' "
-                                    "command", node->name, argv[i]);
-                    } else {
-                        vsctl_fatal("'%s' option on '%s' does not accept an "
-                                    "argument", node->name, argv[i]);
-                    }
-                }
-            }
-
-            n_arg = argc - i - 1;
-            if (n_arg < p->min_args) {
-                vsctl_fatal("'%s' command requires at least %d arguments",
-                            p->name, p->min_args);
-            } else if (n_arg > p->max_args) {
-                int j;
-
-                for (j = i + 1; j < argc; j++) {
-                    if (argv[j][0] == '-') {
-                        vsctl_fatal("'%s' command takes at most %d arguments "
-                                    "(note that options must precede command "
-                                    "names and follow a \"--\" argument)",
-                                    p->name, p->max_args);
-                    }
-                }
-
-                vsctl_fatal("'%s' command takes at most %d arguments",
-                            p->name, p->max_args);
+        if (end != '=' && end != ',' && end != ' ' && end != '\0') {
+            vsctl_fatal("'%s' command has no '%s' option",
+                        argv[i], node->name);
+        }
+        if ((end == '=') != (node->data != NULL)) {
+            if (end == '=') {
+                vsctl_fatal("missing argument to '%s' option on '%s' "
+                            "command", node->name, argv[i]);
             } else {
-                command->syntax = p;
-                command->argc = n_arg + 1;
-                command->argv = &argv[i];
-                return;
+                vsctl_fatal("'%s' option on '%s' does not accept an "
+                            "argument", node->name, argv[i]);
             }
         }
     }
 
-    vsctl_fatal("unknown command '%s'; use --help for help", argv[i]);
+    n_arg = argc - i - 1;
+    if (n_arg < p->min_args) {
+        vsctl_fatal("'%s' command requires at least %d arguments",
+                    p->name, p->min_args);
+    } else if (n_arg > p->max_args) {
+        int j;
+
+        for (j = i + 1; j < argc; j++) {
+            if (argv[j][0] == '-') {
+                vsctl_fatal("'%s' command takes at most %d arguments "
+                            "(note that options must precede command "
+                            "names and follow a \"--\" argument)",
+                            p->name, p->max_args);
+            }
+        }
+
+        vsctl_fatal("'%s' command takes at most %d arguments",
+                    p->name, p->max_args);
+    }
+
+    command->syntax = p;
+    command->argc = n_arg + 1;
+    command->argv = &argv[i];
+}
+
+/* Returns the "struct vsctl_command_syntax" for a given command 'name', or a
+ * null pointer if there is none. */
+static const struct vsctl_command_syntax *
+find_command(const char *name)
+{
+    static struct shash commands = SHASH_INITIALIZER(&commands);
+
+    if (shash_is_empty(&commands)) {
+        const struct vsctl_command_syntax *p;
+
+        for (p = all_commands; p->name; p++) {
+            shash_add_assert(&commands, p->name, p);
+        }
+    }
+
+    return shash_find_data(&commands, name);
 }
 
 static void
