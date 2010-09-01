@@ -4154,7 +4154,8 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
          *
          * See the top-level comment in fail-open.c for more information.
          */
-        send_packet_in(p, ofpbuf_clone(packet));
+        send_packet_in(p, ofpbuf_clone_with_headroom(packet,
+                                                     DPIF_RECV_MSG_PADDING));
     }
 
     ofpbuf_pull(packet, sizeof *msg);
