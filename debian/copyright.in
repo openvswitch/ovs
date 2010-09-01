@@ -2,36 +2,9 @@ The original sources for this package can be found at:
 
 	http://openvswitch.org/
 
-
 Upstream Authors (from AUTHORS):
 
-	Andy Southgate          andy.southgate@citrix.com
-	Ben Pfaff               blp@nicira.com
-	Bryan Phillippe         bp@toroki.com
-	Dan Wendlandt           dan@nicira.com
-	David Erickson          derickso@stanford.edu
-	Glen Gibb               grg@stanford.edu
-	Ian Campbell            Ian.Campbell@citrix.com
-	Jean Tourrilhes         jt@hpl.hp.com
-	Jeremy Stribling        strib@nicira.com
-	Jesse Gross             jesse@nicira.com
-	Joe Perches             joe@perches.com
-	Jun Nakajima            jun.nakajima@intel.com
-	Justin Pettit           jpettit@nicira.com
-	Keith Amidon            keith@nicira.com
-	Martin Casado           casado@nicira.com
-	Natasha Gude            natasha@nicira.com
-	Neil McKee              neil.mckee@inmon.com
-	Paul Fazzone            pfazzone@nicira.com
-	Reid Price              reid@nicira.com
-	Simon Horman            horms@verge.net.au
-	Tetsuo NAKAGAWA         nakagawa@mxc.nes.nec.co.jp
-	Thomas Lacroix          thomas.lacroix@citrix.com
-	Todd Deshane            deshantm@gmail.com
-	Tom Everman             teverman@google.com
-	Tsvi Slonim             tsvi@toroki.com
-	Wei Yongjun             yjwei@cn.fujitsu.com
-	Yu Zhiguo               yuzg@cn.fujitsu.com
+%AUTHORS%
 
 Upstream Copyright Holders:
 

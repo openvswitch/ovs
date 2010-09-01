@@ -4,6 +4,7 @@ EXTRA_DIST += \
 	debian/control \
 	debian/control.modules.in \
 	debian/copyright \
+	debian/copyright.in \
 	debian/corekeeper.cron.daily \
 	debian/corekeeper.init \
 	debian/corekeeper.override \
@@ -50,3 +51,12 @@ check-debian-changelog-version:
 	fi
 ALL_LOCAL += check-debian-changelog-version
 DIST_HOOKS += check-debian-changelog-version
+
+$(srcdir)/debian/copyright: AUTHORS debian/copyright.in
+	{ sed -n -e '/%AUTHORS%/q' -e p < $(srcdir)/debian/copyright.in;   \
+	  sed '1,/^$$/d' $(srcdir)/AUTHORS |				   \
+		sed -n -e '/^$$/q' -e 's/^/  /p';			   \
+	  sed -e '1,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
+	} > $@
+
+DISTCLEANFILES += debian/copyright
