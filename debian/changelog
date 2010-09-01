@@ -1,4 +1,4 @@
-openvswitch (1.1.0-pre1) unstable; urgency=low
+openvswitch (1.1.0pre1) unstable; urgency=low
 
   * OpenFlow 1.0 slicing (QoS) functionality
   * Python bindings for configuration database (no write support)
