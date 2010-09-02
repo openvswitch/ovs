@@ -629,7 +629,6 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         /* Parse "rows" into 'expected'. */
         ovsdb_row_hash_init(&expected, &columns);
         for (i = 0; i < rows->u.array.n; i++) {
-            struct ovsdb_error *error;
             struct ovsdb_row *row;
 
             row = ovsdb_row_create(table);
