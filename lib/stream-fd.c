@@ -214,7 +214,7 @@ pfd_accept(struct pstream *pstream, struct stream **new_streamp)
 
     new_fd = accept(ps->fd, (struct sockaddr *) &ss, &ss_len);
     if (new_fd < 0) {
-        int retval = errno;
+        retval = errno;
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&rl, "accept: %s", strerror(retval));
         }

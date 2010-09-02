@@ -517,7 +517,7 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
     block_sigchld(&oldsigs);
     pid = fork();
     if (pid < 0) {
-        int error = errno;
+        error = errno;
 
         unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(error));

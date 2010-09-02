@@ -433,13 +433,13 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
         const struct ovsdb_idl_table *table = &idl->tables[i];
         const struct ovsdb_idl_table_class *tc = table->class;
         struct json *monitor_request, *columns;
-        size_t i;
+        size_t j;
 
         monitor_request = json_object_create();
         columns = json_array_create_empty();
-        for (i = 0; i < tc->n_columns; i++) {
-            const struct ovsdb_idl_column *column = &tc->columns[i];
-            if (table->modes[i] != OVSDB_IDL_MODE_NONE) {
+        for (j = 0; j < tc->n_columns; j++) {
+            const struct ovsdb_idl_column *column = &tc->columns[j];
+            if (table->modes[j] != OVSDB_IDL_MODE_NONE) {
                 json_array_add(columns, json_string_create(column->name));
             }
         }

@@ -270,12 +270,12 @@ str_to_action(char *str, struct ofpbuf *b)
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {
             char *sp = NULL;
-            char *port = strtok_r(arg, ":q", &sp);
+            char *port_s = strtok_r(arg, ":q", &sp);
             char *queue = strtok_r(NULL, "", &sp);
-            if (port == NULL || queue == NULL) {
+            if (port_s == NULL || queue == NULL) {
                 ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
             }
-            put_enqueue_action(b, str_to_u32(port), str_to_u32(queue));
+            put_enqueue_action(b, str_to_u32(port_s), str_to_u32(queue));
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */

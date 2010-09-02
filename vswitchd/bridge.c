@@ -632,7 +632,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         struct odp_port *dpif_ports;
         size_t n_dpif_ports;
         struct shash cur_ifaces, want_ifaces;
-        struct shash_node *node;
 
         /* Get the set of interfaces currently in this datapath. */
         dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
@@ -765,7 +764,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             struct ovsrec_controller **controllers;
             struct ofproto_sflow_options oso;
             size_t n_controllers;
-            size_t i;
 
             memset(&oso, 0, sizeof oso);
 
@@ -2822,7 +2820,6 @@ bond_rebalance_port(struct port *port)
              * smallest hashes instead of the biggest ones.  There is little
              * reason behind this decision; we could use the opposite sort
              * order to shift away big hashes ahead of small ones. */
-            size_t i;
             bool order_swapped;
 
             for (i = 0; i < from->n_hashes; i++) {
@@ -3407,7 +3404,6 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     trunks = NULL;
     if (vlan < 0 && cfg->n_trunks) {
         size_t n_errors;
-        size_t i;
 
         trunks = bitmap_allocate(4096);
         n_errors = 0;

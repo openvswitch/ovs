@@ -458,8 +458,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->n_controllers = controllers.n;
     s->controllers = xmalloc(s->n_controllers * sizeof *s->controllers);
     if (argc > 1) {
-        size_t i;
-
         for (i = 0; i < s->n_controllers; i++) {
             s->controllers[i] = controller_opts;
             s->controllers[i].target = controllers.names[i];
@@ -468,8 +466,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     /* Sanity check. */
     if (controller_opts.band == OFPROTO_OUT_OF_BAND) {
-        size_t i;
-
         for (i = 0; i < s->n_controllers; i++) {
             if (!strcmp(s->controllers[i].target, "discover")) {
                 ovs_fatal(0, "Cannot perform discovery with out-of-band "

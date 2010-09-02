@@ -1779,12 +1779,12 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
         if (file != NULL) {
             const char *name = netdev_get_name(netdev_);
             while (fgets(line, sizeof line, file)) {
-                struct in6_addr in6;
+                struct in6_addr in6_tmp;
                 char ifname[16 + 1];
-                if (parse_if_inet6_line(line, &in6, ifname)
+                if (parse_if_inet6_line(line, &in6_tmp, ifname)
                     && !strcmp(name, ifname))
                 {
-                    netdev_dev->in6 = in6;
+                    netdev_dev->in6 = in6_tmp;
                     break;
                 }
             }

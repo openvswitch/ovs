@@ -103,8 +103,6 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
         || !params->u.array.n
         || params->u.array.elems[0]->type != JSON_STRING
         || strcmp(params->u.array.elems[0]->u.string, db->schema->name)) {
-        struct ovsdb_error *error;
-
         if (params->type != JSON_ARRAY) {
             error = ovsdb_syntax_error(params, NULL, "array expected");
         } else {

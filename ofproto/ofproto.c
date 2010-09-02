@@ -1071,7 +1071,6 @@ ofproto_run1(struct ofproto *p)
 
     for (i = 0; i < 50; i++) {
         struct ofpbuf *buf;
-        int error;
 
         error = dpif_recv(p->dpif, &buf);
         if (error) {
@@ -1122,7 +1121,6 @@ ofproto_run1(struct ofproto *p)
 
         retval = pvconn_accept(ofservice->pvconn, OFP_VERSION, &vconn);
         if (!retval) {
-            struct ofconn *ofconn;
             struct rconn *rconn;
             char *name;
 

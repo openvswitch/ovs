@@ -1104,7 +1104,6 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, uint16_t tci, uint16_t mask)
         veh->veth_tci |= htons(tci);
     } else {
         /* Insert new 802.1Q header. */
-        struct eth_header *eh = packet->l2;
         struct vlan_eth_header tmp;
         memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
         memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);

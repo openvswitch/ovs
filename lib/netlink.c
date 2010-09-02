@@ -1036,19 +1036,19 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
 
         type = nla->nla_type;
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
-            const struct nl_policy *p = &policy[type];
+            const struct nl_policy *e = &policy[type];
             size_t min_len, max_len;
 
             /* Validate length and content. */
-            min_len = p->min_len ? p->min_len : attr_len_range[p->type][0];
-            max_len = p->max_len ? p->max_len : attr_len_range[p->type][1];
+            min_len = e->min_len ? e->min_len : attr_len_range[e->type][0];
+            max_len = e->max_len ? e->max_len : attr_len_range[e->type][1];
             if (len < min_len || len > max_len) {
                 VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" length %zu not in "
                             "allowed range %zu...%zu",
                             offset, type, len, min_len, max_len);
                 return false;
             }
-            if (p->type == NL_A_STRING) {
+            if (e->type == NL_A_STRING) {
                 if (((char *) nla)[nla->nla_len - 1]) {
                     VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" lacks null at end",
                                 offset, type);
@@ -1060,7 +1060,7 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
                     return false;
                 }
             }
-            if (!p->optional && attrs[type] == NULL) {
+            if (!e->optional && attrs[type] == NULL) {
                 assert(n_required > 0);
                 --n_required;
             }

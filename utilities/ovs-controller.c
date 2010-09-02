@@ -107,7 +107,6 @@ main(int argc, char *argv[])
     for (i = optind; i < argc; i++) {
         const char *name = argv[i];
         struct vconn *vconn;
-        int retval;
 
         retval = vconn_open(name, OFP_VERSION, &vconn);
         if (!retval) {
@@ -146,12 +145,10 @@ main(int argc, char *argv[])
 
     while (n_switches > 0 || n_listeners > 0) {
         int iteration;
-        int i;
 
         /* Accept connections on listening vconns. */
         for (i = 0; i < n_listeners && n_switches < MAX_SWITCHES; ) {
             struct vconn *new_vconn;
-            int retval;
 
             retval = pvconn_accept(listeners[i], OFP_VERSION, &new_vconn);
             if (!retval || retval == EAGAIN) {
@@ -171,7 +168,8 @@ main(int argc, char *argv[])
             bool progress = false;
             for (i = 0; i < n_switches; ) {
                 struct switch_ *this = &switches[i];
-                int retval = do_switching(this);
+
+                retval = do_switching(this);
                 if (!retval || retval == EAGAIN) {
                     if (!retval) {
                         progress = true;

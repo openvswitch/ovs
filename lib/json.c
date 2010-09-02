@@ -705,7 +705,6 @@ json_lex_number(struct json_parser *p)
      *
      * We suppress negative zeros as a matter of policy. */
     if (!significand) {
-        struct json_token token;
         token.type = T_INTEGER;
         token.u.integer = 0;
         json_parser_input(p, &token);

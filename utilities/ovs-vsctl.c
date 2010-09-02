@@ -1305,12 +1305,11 @@ add_port(struct vsctl_context *ctx,
 
     get_info(ctx->ovs, &info);
     if (may_exist) {
-        struct vsctl_port *port;
+        struct vsctl_port *vsctl_port;
 
-        port = find_port(&info, port_name, false);
-        if (port) {
+        vsctl_port = find_port(&info, port_name, false);
+        if (vsctl_port) {
             struct svec want_names, have_names;
-            size_t i;
 
             svec_init(&want_names);
             for (i = 0; i < n_ifaces; i++) {
@@ -1319,15 +1318,16 @@ add_port(struct vsctl_context *ctx,
             svec_sort(&want_names);
 
             svec_init(&have_names);
-            for (i = 0; i < port->port_cfg->n_interfaces; i++) {
-                svec_add(&have_names, port->port_cfg->interfaces[i]->name);
+            for (i = 0; i < vsctl_port->port_cfg->n_interfaces; i++) {
+                svec_add(&have_names,
+                         vsctl_port->port_cfg->interfaces[i]->name);
             }
             svec_sort(&have_names);
 
-            if (strcmp(port->bridge->name, br_name)) {
+            if (strcmp(vsctl_port->bridge->name, br_name)) {
                 char *command = vsctl_context_to_string(ctx);
                 vsctl_fatal("\"%s\" but %s is actually attached to bridge %s",
-                            command, port_name, port->bridge->name);
+                            command, port_name, vsctl_port->bridge->name);
             }
 
             if (!svec_equal(&want_names, &have_names)) {
@@ -2767,8 +2767,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
             ds_chomp(ds, '\n');
             for (j = 0; j < ds->length; j++) {
-                int c = ds->string[j];
-                switch (c) {
+                int ch = ds->string[j];
+                switch (ch) {
                 case '\n':
                     fputs("\\n", stdout);
                     break;
@@ -2778,7 +2778,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
                     break;
 
                 default:
-                    putchar(c);
+                    putchar(ch);
                 }
             }
             putchar('\n');
@@ -2796,8 +2796,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
     if (wait_for_reload && status != TXN_UNCHANGED) {
         for (;;) {
-            const struct ovsrec_open_vswitch *ovs;
-
             ovsdb_idl_run(idl);
             OVSREC_OPEN_VSWITCH_FOR_EACH (ovs, idl) {
                 if (ovs->cur_cfg >= next_cfg) {

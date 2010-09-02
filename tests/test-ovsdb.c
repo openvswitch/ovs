@@ -1095,7 +1095,7 @@ do_query_distinct(int argc OVS_UNUSED, char *argv[])
     size_t n_classes;
     struct json *json;
     int exit_code = 0;
-    size_t i, j, k;
+    size_t i;
 
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(argv[1]));
@@ -1161,6 +1161,7 @@ do_query_distinct(int argc OVS_UNUSED, char *argv[])
     for (i = 0; i < json->u.array.n; i++) {
         struct ovsdb_row_set results;
         struct ovsdb_condition cnd;
+        size_t j;
 
         check_ovsdb_error(ovsdb_condition_from_json(ts, json->u.array.elems[i],
                                                     NULL, &cnd));
@@ -1171,6 +1172,8 @@ do_query_distinct(int argc OVS_UNUSED, char *argv[])
         ovsdb_row_set_init(&results);
         ovsdb_query_distinct(table, &cnd, &columns, &results);
         for (j = 0; j < results.n_rows; j++) {
+            size_t k;
+
             for (k = 0; k < n_rows; k++) {
                 if (uuid_equals(ovsdb_row_get_uuid(results.rows[j]),
                                 &rows[k].uuid)) {
@@ -1833,7 +1836,6 @@ do_idl(int argc, char *argv[])
     for (i = 2; i < argc; i++) {
         char *arg = argv[i];
         struct jsonrpc_msg *request, *reply;
-        int error;
 
         if (*arg == '+') {
             /* The previous transaction didn't change anything. */

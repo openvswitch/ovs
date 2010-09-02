@@ -220,10 +220,10 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         }
     }
     if (VLOG_IS_DBG_ENABLED()) {
-        char *p = ofp_to_string(msg->data, msg->size, 2);
+        char *s = ofp_to_string(msg->data, msg->size, 2);
         VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
-                    sw->datapath_id, p);
-        free(p);
+                    sw->datapath_id, s);
+        free(s);
     }
 }
 

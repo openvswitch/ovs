@@ -147,8 +147,6 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
     if (needed < available) {
         ds->length += needed;
     } else {
-        size_t available;
-
         ds_reserve(ds, ds->length + needed);
 
         va_copy(args, args_);

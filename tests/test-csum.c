@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,6 @@ main(void)
         const uint16_t *data16 = (const uint16_t *) tc->data;
         const uint32_t *data32 = (const uint32_t *) tc->data;
         uint32_t partial;
-        size_t i;
 
         /* Test csum(). */
         assert(ntohs(csum(tc->data, tc->size)) == tc->csum);
