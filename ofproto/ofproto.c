@@ -2434,10 +2434,10 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
 
     switch (ntohs(ofm->command) & 0xff) {
     case OFPFC_ADD:
-        return modify_flows_loose(p, ofconn, ofm, n_actions);
+        return add_flow(p, ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY:
-        return modify_flow_strict(p, ofconn, ofm, n_actions);
+        return modify_flows_loose(p, ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY_STRICT:
         return modify_flow_strict(p, ofconn, ofm, n_actions);
