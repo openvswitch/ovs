@@ -56,7 +56,7 @@
  * performance (see above).  To adjust the ordering, change the order of the
  * lines. */
 #define CLS_FIELDS                                          \
-    /*                           flow_t       all-caps */   \
+    /*                           struct flow  all-caps */   \
     /*        wildcard bit(s)    member name  name     */   \
     /*        -----------------  -----------  -------- */   \
     CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
@@ -86,7 +86,7 @@ enum {
 
 /* Field information. */
 struct cls_field {
-    int ofs;                    /* Offset in flow_t. */
+    int ofs;                    /* Offset in struct flow. */
     int len;                    /* Length in bytes. */
     uint32_t wildcards;         /* OFPFW_* bit or bits for this field. */
     const char *name;           /* Name (for debugging). */
@@ -104,7 +104,7 @@ struct classifier {
 struct cls_bucket {
     struct hmap_node hmap_node; /* Within struct classifier 'tables'. */
     struct list rules;          /* In order from highest to lowest priority. */
-    flow_t fixed;               /* Values for fixed fields. */
+    struct flow fixed;          /* Values for fixed fields. */
 };
 
 /* A flow classification rule.
@@ -117,13 +117,13 @@ struct cls_rule {
         struct list list;       /* Within struct cls_bucket 'rules'. */
         struct hmap_node hmap;  /* Within struct classifier 'exact_table'. */
     } node;
-    flow_t flow;                /* All field values. */
+    struct flow flow;           /* All field values. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
     unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
-void cls_rule_from_flow(const flow_t *, uint32_t wildcards,
+void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
                         unsigned int priority, struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          bool tun_id_from_cookie, uint64_t cookie,
@@ -143,12 +143,13 @@ int classifier_count_exact(const struct classifier *);
 struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
 void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
-struct cls_rule *classifier_lookup(const struct classifier *, const flow_t *);
+struct cls_rule *classifier_lookup(const struct classifier *,
+                                   const struct flow *);
 struct cls_rule *classifier_lookup_wild(const struct classifier *,
-                                        const flow_t *);
+                                        const struct flow *);
 struct cls_rule *classifier_lookup_exact(const struct classifier *,
-                                         const flow_t *);
-bool classifier_rule_overlaps(const struct classifier *, const flow_t *,
+                                         const struct flow *);
+bool classifier_rule_overlaps(const struct classifier *, const struct flow *,
                               uint32_t wildcards, unsigned int priority);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
@@ -164,7 +165,7 @@ void classifier_for_each_match(const struct classifier *,
                                const struct cls_rule *,
                                int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const flow_t *target,
+                                              const struct flow *target,
                                               uint32_t wildcards,
                                               unsigned int priority);
 

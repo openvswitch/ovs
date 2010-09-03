@@ -78,7 +78,7 @@ pull_icmp(struct ofpbuf *packet)
 }
 
 static void
-parse_vlan(struct ofpbuf *b, flow_t *flow)
+parse_vlan(struct ofpbuf *b, struct flow *flow)
 {
     struct qtag_prefix {
         uint16_t eth_type;      /* ETH_TYPE_VLAN */
@@ -139,7 +139,7 @@ parse_ethertype(struct ofpbuf *b)
  */
 int
 flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
-             flow_t *flow)
+             struct flow *flow)
 {
     struct ofpbuf b = *packet;
     struct eth_header *eth;
@@ -235,7 +235,7 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
  * arguments must have been initialized through a call to flow_extract().
  */
 void
-flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
+flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats)
 {
     memset(stats, '\0', sizeof(*stats));
@@ -254,8 +254,8 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
  * 'match'. */
 void
-flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
-              struct ofp_match *match)
+flow_to_match(const struct flow *flow, uint32_t wildcards,
+              bool tun_id_from_cookie, struct ofp_match *match)
 {
     if (!tun_id_from_cookie) {
         wildcards &= OFPFW_ALL;
@@ -281,7 +281,7 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
 
 void
 flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
-                uint64_t cookie, flow_t *flow, uint32_t *flow_wildcards)
+                uint64_t cookie, struct flow *flow, uint32_t *flow_wildcards)
 {
 	uint32_t wildcards = ntohl(match->wildcards);
 
@@ -310,7 +310,7 @@ flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
 }
 
 char *
-flow_to_string(const flow_t *flow)
+flow_to_string(const struct flow *flow)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     flow_format(&ds, flow);
@@ -318,7 +318,7 @@ flow_to_string(const flow_t *flow)
 }
 
 void
-flow_format(struct ds *ds, const flow_t *flow)
+flow_format(struct ds *ds, const struct flow *flow)
 {
     ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16
                       ":vlan%"PRIu16":pcp%"PRIu8
@@ -344,7 +344,7 @@ flow_format(struct ds *ds, const flow_t *flow)
 }
 
 void
-flow_print(FILE *stream, const flow_t *flow)
+flow_print(FILE *stream, const struct flow *flow)
 {
     char *s = flow_to_string(flow);
     fputs(s, stream);

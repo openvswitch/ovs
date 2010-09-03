@@ -25,17 +25,18 @@
 
 const struct cls_field cls_fields[CLS_N_FIELDS + 1] = {
 #define CLS_FIELD(WILDCARDS, MEMBER, NAME)      \
-    { offsetof(flow_t, MEMBER),                 \
-      sizeof ((flow_t *)0)->MEMBER,             \
+    { offsetof(struct flow, MEMBER),            \
+      sizeof ((struct flow *)0)->MEMBER,        \
       WILDCARDS,                                \
       #NAME },
     CLS_FIELDS
 #undef CLS_FIELD
-    { sizeof(flow_t), 0, 0, "exact" },
+    { sizeof(struct flow), 0, 0, "exact" },
 };
 
-static uint32_t hash_fields(const flow_t *, int table_idx);
-static bool equal_fields(const flow_t *, const flow_t *, int table_idx);
+static uint32_t hash_fields(const struct flow *, int table_idx);
+static bool equal_fields(const struct flow *, const struct flow *,
+                         int table_idx);
 
 static int table_idx_from_wildcards(uint32_t wildcards);
 static struct cls_rule *table_insert(struct hmap *, struct cls_rule *);
@@ -46,7 +47,7 @@ static struct cls_bucket *find_bucket(struct hmap *, size_t hash,
 static struct cls_rule *search_table(const struct hmap *table, int field_idx,
                                      const struct cls_rule *);
 static struct cls_rule *search_exact_table(const struct classifier *,
-                                           size_t hash, const flow_t *);
+                                           size_t hash, const struct flow *);
 static bool rules_match_1wild(const struct cls_rule *fixed,
                               const struct cls_rule *wild, int field_idx);
 static bool rules_match_2wild(const struct cls_rule *wild1,
@@ -55,7 +56,7 @@ static bool rules_match_2wild(const struct cls_rule *wild1,
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'.*/
 void
-cls_rule_from_flow(const flow_t *flow, uint32_t wildcards,
+cls_rule_from_flow(const struct flow *flow, uint32_t wildcards,
                    unsigned int priority, struct cls_rule *rule)
 {
     rule->flow = *flow;
@@ -280,7 +281,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
  * rules added more recently take priority over rules added less recently, but
  * this is subject to change and should not be depended upon.) */
 struct cls_rule *
-classifier_lookup(const struct classifier *cls, const flow_t *flow)
+classifier_lookup(const struct classifier *cls, const struct flow *flow)
 {
     struct cls_rule *rule = classifier_lookup_exact(cls, flow);
     if (!rule) {
@@ -290,7 +291,7 @@ classifier_lookup(const struct classifier *cls, const flow_t *flow)
 }
 
 struct cls_rule *
-classifier_lookup_exact(const struct classifier *cls, const flow_t *flow)
+classifier_lookup_exact(const struct classifier *cls, const struct flow *flow)
 {
     return (!hmap_is_empty(&cls->exact_table)
             ? search_exact_table(cls, flow_hash(flow, 0), flow)
@@ -298,7 +299,7 @@ classifier_lookup_exact(const struct classifier *cls, const flow_t *flow)
 }
 
 struct cls_rule *
-classifier_lookup_wild(const struct classifier *cls, const flow_t *flow)
+classifier_lookup_wild(const struct classifier *cls, const struct flow *flow)
 {
     struct cls_rule *best = NULL;
     if (cls->n_rules > hmap_count(&cls->exact_table)) {
@@ -318,7 +319,7 @@ classifier_lookup_wild(const struct classifier *cls, const flow_t *flow)
 
 struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
-                             const flow_t *target, uint32_t wildcards,
+                             const struct flow *target, uint32_t wildcards,
                              unsigned int priority)
 {
     struct cls_bucket *bucket;
@@ -356,7 +357,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
  * Two rules are considered overlapping if a packet could match both. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
-                         const flow_t *target, uint32_t wildcards,
+                         const struct flow *target, uint32_t wildcards,
                          unsigned int priority)
 {
     struct cls_rule target_rule;
@@ -506,7 +507,7 @@ classifier_for_each(const struct classifier *cls, int include,
 }
 
 static struct cls_bucket *create_bucket(struct hmap *, size_t hash,
-                                        const flow_t *fixed);
+                                        const struct flow *fixed);
 static struct cls_rule *bucket_insert(struct cls_bucket *, struct cls_rule *);
 
 static inline bool equal_bytes(const void *, const void *, size_t n);
@@ -515,7 +516,7 @@ static inline bool equal_bytes(const void *, const void *, size_t n);
  * (CLS_F_IDX_*) are less than 'table_idx'.  (If 'table_idx' is
  * CLS_F_IDX_EXACT, hashes all the fields in 'flow'). */
 static uint32_t
-hash_fields(const flow_t *flow, int table_idx)
+hash_fields(const struct flow *flow, int table_idx)
 {
     /* I just know I'm going to hell for writing code this way.
      *
@@ -581,7 +582,7 @@ finish:
  *
  * Returns true if all the compared fields are equal, false otherwise. */
 static bool
-equal_fields(const flow_t *a, const flow_t *b, int table_idx)
+equal_fields(const struct flow *a, const struct flow *b, int table_idx)
 {
     /* XXX The generated code could be better here. */
 #define CLS_FIELD(WILDCARDS, MEMBER, NAME)                              \
@@ -685,7 +686,7 @@ find_bucket(struct hmap *table, size_t hash, const struct cls_rule *rule)
 /* Creates a bucket and inserts it in 'table' with the given 'hash' and 'fixed'
  * values.  Returns the new bucket. */
 static struct cls_bucket *
-create_bucket(struct hmap *table, size_t hash, const flow_t *fixed)
+create_bucket(struct hmap *table, size_t hash, const struct flow *fixed)
 {
     struct cls_bucket *bucket = xmalloc(sizeof *bucket);
     list_init(&bucket->rules);
@@ -746,7 +747,7 @@ read_uint32(const void *p)
  * The compared field is the one with wildcard bit or bits 'field_wc', offset
  * 'rule_ofs' within cls_rule's "fields" member, and length 'len', in bytes. */
 static inline bool ALWAYS_INLINE
-field_matches(const flow_t *a_, const flow_t *b_,
+field_matches(const struct flow *a_, const struct flow *b_,
               uint32_t wildcards, uint32_t nw_src_mask, uint32_t nw_dst_mask,
               uint32_t field_wc, int ofs, int len)
 {
@@ -787,7 +788,7 @@ rules_match(const struct cls_rule *a, const struct cls_rule *b,
         case CLS_F_IDX_##NAME:                                      \
             if (!field_matches(&a->flow, &b->flow,                  \
                                wildcards, nw_src_mask, nw_dst_mask, \
-                               WILDCARDS, offsetof(flow_t, MEMBER), \
+                               WILDCARDS, offsetof(struct flow, MEMBER), \
                                sizeof a->flow.MEMBER)) {            \
                 return false;                                       \
             }                                                       \
@@ -884,7 +885,7 @@ search_table(const struct hmap *table, int field_idx,
 
 static struct cls_rule *
 search_exact_table(const struct classifier *cls, size_t hash,
-                   const flow_t *target)
+                   const struct flow *target)
 {
     struct cls_rule *rule;
 

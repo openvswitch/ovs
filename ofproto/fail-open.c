@@ -257,7 +257,7 @@ static void
 fail_open_recover(struct fail_open *fo)
 {
     if (fail_open_is_active(fo)) {
-        flow_t flow;
+        struct flow flow;
 
         VLOG_WARN("No longer in fail-open mode");
         fo->last_disconn_secs = 0;
@@ -283,7 +283,7 @@ fail_open_flushed(struct fail_open *fo)
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
         union ofp_action action;
-        flow_t flow;
+        struct flow flow;
 
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL. */

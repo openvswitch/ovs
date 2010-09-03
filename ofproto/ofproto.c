@@ -81,7 +81,7 @@ static void ofport_free(struct ofport *);
 static void hton_ofp_phy_port(struct ofp_phy_port *);
 
 static int xlate_actions(const union ofp_action *in, size_t n_in,
-                         const flow_t *flow, struct ofproto *ofproto,
+                         const struct flow *, struct ofproto *,
                          const struct ofpbuf *packet,
                          struct odp_actions *out, tag_type *tags,
                          bool *may_set_up_flow, uint16_t *nf_output_iface);
@@ -1278,7 +1278,7 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
 }
 
 int
-ofproto_send_packet(struct ofproto *p, const flow_t *flow,
+ofproto_send_packet(struct ofproto *p, const struct flow *flow,
                     const union ofp_action *actions, size_t n_actions,
                     const struct ofpbuf *packet)
 {
@@ -1298,8 +1298,8 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
 }
 
 void
-ofproto_add_flow(struct ofproto *p,
-                 const flow_t *flow, uint32_t wildcards, unsigned int priority,
+ofproto_add_flow(struct ofproto *p, const struct flow *flow,
+                 uint32_t wildcards, unsigned int priority,
                  const union ofp_action *actions, size_t n_actions,
                  int idle_timeout)
 {
@@ -1312,7 +1312,7 @@ ofproto_add_flow(struct ofproto *p,
 }
 
 void
-ofproto_delete_flow(struct ofproto *ofproto, const flow_t *flow,
+ofproto_delete_flow(struct ofproto *ofproto, const struct flow *flow,
                     uint32_t wildcards, unsigned int priority)
 {
     struct rule *rule;
@@ -1967,7 +1967,7 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
  * Takes ownership of 'packet'. */
 static void
 rule_execute(struct ofproto *ofproto, struct rule *rule,
-             struct ofpbuf *packet, const flow_t *flow)
+             struct ofpbuf *packet, const struct flow *flow)
 {
     const union odp_action *actions;
     struct odp_flow_stats stats;
@@ -2026,7 +2026,7 @@ rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
 
     /* Send the packet and credit it to the rule. */
     if (packet) {
-        flow_t flow;
+        struct flow flow;
         flow_extract(packet, 0, in_port, &flow);
         rule_execute(p, rule, packet, &flow);
     }
@@ -2048,7 +2048,7 @@ rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
 
 static struct rule *
 rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
-                    const flow_t *flow)
+                    const struct flow *flow)
 {
     struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
                                        rule->idle_timeout, rule->hard_timeout,
@@ -2439,7 +2439,7 @@ add_controller_action(struct odp_actions *actions, uint16_t max_len)
 
 struct action_xlate_ctx {
     /* Input. */
-    flow_t flow;                /* Flow to which these actions correspond. */
+    struct flow flow;           /* Flow to which these actions correspond. */
     int recurse;                /* Recursion level, via xlate_table_action. */
     struct ofproto *ofproto;
     const struct ofpbuf *packet; /* The packet corresponding to 'flow', or a
@@ -2484,7 +2484,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
 }
 
 static struct rule *
-lookup_valid_rule(struct ofproto *ofproto, const flow_t *flow)
+lookup_valid_rule(struct ofproto *ofproto, const struct flow *flow)
 {
     struct rule *rule;
     rule = rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow));
@@ -2830,7 +2830,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
 static int
 xlate_actions(const union ofp_action *in, size_t n_in,
-              const flow_t *flow, struct ofproto *ofproto,
+              const struct flow *flow, struct ofproto *ofproto,
               const struct ofpbuf *packet,
               struct odp_actions *out, tag_type *tags, bool *may_set_up_flow,
               uint16_t *nf_output_iface)
@@ -2900,9 +2900,9 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
     struct ofp_packet_out *opo;
     struct ofpbuf payload, *buffer;
     struct odp_actions actions;
+    struct flow flow;
     int n_actions;
     uint16_t in_port;
-    flow_t flow;
     int error;
 
     error = reject_slave_controller(ofconn, oh);
@@ -3600,7 +3600,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     int error;
 
     if (ofm->flags & htons(OFPFF_CHECK_OVERLAP)) {
-        flow_t flow;
+        struct flow flow;
         uint32_t wildcards;
 
         flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
@@ -3635,7 +3635,7 @@ static struct rule *
 find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
 {
     uint32_t wildcards;
-    flow_t flow;
+    struct flow flow;
 
     flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
                     &flow, &wildcards);
@@ -3650,7 +3650,7 @@ send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
 {
     struct ofpbuf *packet;
     uint16_t in_port;
-    flow_t flow;
+    struct flow flow;
     int error;
 
     if (ofm->buffer_id == htonl(UINT32_MAX)) {
@@ -4120,7 +4120,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     struct odp_msg *msg = packet->data;
     struct rule *rule;
     struct ofpbuf payload;
-    flow_t flow;
+    struct flow flow;
 
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
@@ -4282,7 +4282,7 @@ ofproto_update_used(struct ofproto *p)
     for (i = 0; i < n_flows; i++) {
         struct odp_flow *f = &flows[i];
         struct rule *rule;
-        flow_t flow;
+        struct flow flow;
 
         odp_flow_key_to_flow(&f->key, &flow);
 
@@ -4518,7 +4518,7 @@ revalidate_cb(struct cls_rule *sub_, void *cbdata_)
 static bool
 revalidate_rule(struct ofproto *p, struct rule *rule)
 {
-    const flow_t *flow = &rule->cr.flow;
+    const struct flow *flow = &rule->cr.flow;
 
     COVERAGE_INC(ofproto_revalidate_rule);
     if (rule->super) {
@@ -4778,7 +4778,7 @@ pick_fallback_dpid(void)
 }
 
 static bool
-default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
+default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
                          struct odp_actions *actions, tag_type *tags,
                          uint16_t *nf_output_iface, void *ofproto_)
 {

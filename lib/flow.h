@@ -31,7 +31,6 @@ struct ds;
 struct ofp_match;
 struct ofpbuf;
 
-typedef struct flow flow_t;
 struct flow {
     uint32_t tun_id;            /* Encapsulating tunnel ID. */
     uint32_t nw_src;            /* IP source address. */
@@ -56,39 +55,40 @@ BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
-int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port, flow_t *);
-void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
+int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port,
+                 struct flow *);
+void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats);
-void flow_to_match(const flow_t *, uint32_t wildcards, bool tun_id_cookie,
+void flow_to_match(const struct flow *, uint32_t wildcards, bool tun_id_cookie,
                    struct ofp_match *);
 void flow_from_match(const struct ofp_match *, bool tun_id_from_cookie,
-                     uint64_t cookie, flow_t *, uint32_t *wildcards);
-char *flow_to_string(const flow_t *);
-void flow_format(struct ds *, const flow_t *);
-void flow_print(FILE *, const flow_t *);
-static inline int flow_compare(const flow_t *, const flow_t *);
-static inline bool flow_equal(const flow_t *, const flow_t *);
-static inline size_t flow_hash(const flow_t *, uint32_t basis);
+                     uint64_t cookie, struct flow *, uint32_t *wildcards);
+char *flow_to_string(const struct flow *);
+void flow_format(struct ds *, const struct flow *);
+void flow_print(FILE *, const struct flow *);
+static inline int flow_compare(const struct flow *, const struct flow *);
+static inline bool flow_equal(const struct flow *, const struct flow *);
+static inline size_t flow_hash(const struct flow *, uint32_t basis);
 
 static inline int
-flow_compare(const flow_t *a, const flow_t *b)
+flow_compare(const struct flow *a, const struct flow *b)
 {
     return memcmp(a, b, FLOW_SIG_SIZE);
 }
 
 static inline bool
-flow_equal(const flow_t *a, const flow_t *b)
+flow_equal(const struct flow *a, const struct flow *b)
 {
     return !flow_compare(a, b);
 }
 
 static inline size_t
-flow_hash(const flow_t *flow, uint32_t basis)
+flow_hash(const struct flow *flow, uint32_t basis)
 {
     return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
-/* Information on wildcards for a flow, as a supplement to flow_t. */
+/* Information on wildcards for a flow, as a supplement to struct flow. */
 struct flow_wildcards {
     uint32_t wildcards;         /* enum ofp_flow_wildcards (in host order). */
     uint32_t nw_src_mask;       /* 1-bit in each significant nw_src bit. */

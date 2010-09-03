@@ -835,7 +835,7 @@ dpif_netdev_execute(struct dpif *dpif,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct ofpbuf copy;
     bool mutates;
-    flow_t key;
+    struct flow key;
     int error;
 
     if (packet->size < ETH_HEADER_LEN || packet->size > UINT16_MAX) {

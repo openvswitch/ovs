@@ -130,7 +130,7 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        flow_t flow;
+        struct flow flow;
         struct ofpbuf packet;
         struct ofp_match match;
         packet.data = (void *) op->data;

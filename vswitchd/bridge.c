@@ -1751,7 +1751,7 @@ bridge_reconfigure_remotes(struct bridge *br,
     if (!n_controllers
         && ofproto_get_fail_mode(br->ofproto) == OFPROTO_FAIL_STANDALONE) {
         union ofp_action action;
-        flow_t flow;
+        struct flow flow;
 
         memset(&action, 0, sizeof action);
         action.type = htons(OFPAT_OUTPUT);
@@ -2115,7 +2115,7 @@ bond_wait(struct bridge *br)
 }
 
 static bool
-set_dst(struct dst *p, const flow_t *flow,
+set_dst(struct dst *p, const struct flow *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
@@ -2204,7 +2204,7 @@ port_includes_vlan(const struct port *port, uint16_t vlan)
 }
 
 static size_t
-compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
+compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
              const struct port *in_port, const struct port *out_port,
              struct dst dsts[], tag_type *tags, uint16_t *nf_output_iface)
 {
@@ -2292,7 +2292,7 @@ print_dsts(const struct dst *dsts, size_t n)
 }
 
 static void
-compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
+compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
                 const struct port *in_port, const struct port *out_port,
                 tag_type *tags, struct odp_actions *actions,
                 uint16_t *nf_output_iface)
@@ -2326,7 +2326,7 @@ compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
  * 802.1Q header and implicitly tagged ports.  A value of 0 indicates that
  * the packet is untagged and -1 indicates it has an invalid header and
  * should be dropped. */
-static int flow_get_vlan(struct bridge *br, const flow_t *flow,
+static int flow_get_vlan(struct bridge *br, const struct flow *flow,
                          struct port *in_port, bool have_packet)
 {
     /* Note that dl_vlan of 0 and of OFP_VLAN_NONE both mean that the packet
@@ -2372,7 +2372,7 @@ static int flow_get_vlan(struct bridge *br, const flow_t *flow,
  * migration.  Older Citrix-patched Linux DomU used gratuitous ARP replies to
  * indicate this; newer upstream kernels use gratuitous ARP requests. */
 static bool
-is_gratuitous_arp(const flow_t *flow)
+is_gratuitous_arp(const struct flow *flow)
 {
     return (flow->dl_type == htons(ETH_TYPE_ARP)
             && eth_addr_is_broadcast(flow->dl_dst)
@@ -2382,7 +2382,7 @@ is_gratuitous_arp(const flow_t *flow)
 }
 
 static void
-update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
+update_learning_table(struct bridge *br, const struct flow *flow, int vlan,
                       struct port *in_port)
 {
     enum grat_arp_lock_type lock_type;
@@ -2430,7 +2430,7 @@ update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
  * so in one special case.
  */
 static bool
-is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
+is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
               tag_type *tags, int *vlanp, struct port **in_portp)
 {
     struct iface *in_iface;
@@ -2519,7 +2519,7 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
  * returns true.  Otherwise, the actions should only be applied to 'packet', or
  * not at all, if 'packet' was NULL. */
 static bool
-process_flow(struct bridge *br, const flow_t *flow,
+process_flow(struct bridge *br, const struct flow *flow,
              const struct ofpbuf *packet, struct odp_actions *actions,
              tag_type *tags, uint16_t *nf_output_iface)
 {
@@ -2570,7 +2570,7 @@ done:
 }
 
 static bool
-bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
+bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
                         struct odp_actions *actions, tag_type *tags,
                         uint16_t *nf_output_iface, void *br_)
 {
@@ -2582,7 +2582,7 @@ bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
 }
 
 static void
-bridge_account_flow_ofhook_cb(const flow_t *flow, tag_type tags,
+bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
                               const union odp_action *actions,
                               size_t n_actions, unsigned long long int n_bytes,
                               void *br_)
@@ -2963,7 +2963,7 @@ bond_send_learning_packets(struct port *port)
         union ofp_action actions[2], *a;
         uint16_t dp_ifidx;
         tag_type tags = 0;
-        flow_t flow;
+        struct flow flow;
         int retval;
 
         if (e->port == port->port_idx

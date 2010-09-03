@@ -54,7 +54,7 @@ main(int argc OVS_UNUSED, char *argv[])
     while (fread(&expected_match, sizeof expected_match, 1, flows)) {
         struct ofpbuf *packet;
         struct ofp_match extracted_match;
-        flow_t flow;
+        struct flow flow;
 
         n++;
 

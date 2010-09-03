@@ -155,7 +155,7 @@ read_uint32(const void *p)
 }
 
 static bool
-match(const struct cls_rule *wild, const flow_t *fixed)
+match(const struct cls_rule *wild, const struct flow *fixed)
 {
     int f_idx;
 
@@ -187,7 +187,7 @@ match(const struct cls_rule *wild, const flow_t *fixed)
 }
 
 static struct cls_rule *
-tcls_lookup(const struct tcls *cls, const flow_t *flow, int include)
+tcls_lookup(const struct tcls *cls, const struct flow *flow, int include)
 {
     size_t i;
 
@@ -335,7 +335,7 @@ get_value(unsigned int *x, unsigned n_values)
 
 static struct cls_rule *
 lookup_with_include_bits(const struct classifier *cls,
-                         const flow_t *flow, int include)
+                         const struct flow *flow, int include)
 {
     switch (include) {
     case CLS_INC_WILD:
@@ -359,7 +359,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
     assert(classifier_count_exact(cls) == tcls_count_exact(tcls));
     for (i = 0; i < confidence; i++) {
         struct cls_rule *cr0, *cr1;
-        flow_t flow;
+        struct flow flow;
         unsigned int x;
         int include;
 
@@ -453,7 +453,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     const struct cls_field *f;
     struct test_rule *rule;
     uint32_t wildcards;
-    flow_t flow;
+    struct flow flow;
 
     wildcards = 0;
     memset(&flow, 0, sizeof flow);

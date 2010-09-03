@@ -224,7 +224,7 @@ enum {
 };
 
 struct in_band_rule {
-    flow_t flow;
+    struct flow flow;
     uint32_t wildcards;
     unsigned int priority;
 };
@@ -396,7 +396,7 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
 /* Returns true if 'packet' should be sent to the local port regardless
  * of the flow table. */
 bool
-in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow,
+in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
                     const struct ofpbuf *packet)
 {
     if (!in_band) {
@@ -431,7 +431,7 @@ in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow,
 /* Returns true if the rule that would match 'flow' with 'actions' is
  * allowed to be set up in the datapath. */
 bool
-in_band_rule_check(struct in_band *in_band, const flow_t *flow,
+in_band_rule_check(struct in_band *in_band, const struct flow *flow,
                    const struct odp_actions *actions)
 {
     if (!in_band) {

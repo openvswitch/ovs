@@ -305,7 +305,7 @@ process_switch_features(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
 }
 
 static uint16_t
-lswitch_choose_destination(struct lswitch *sw, const flow_t *flow)
+lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
 {
     uint16_t out_port;
 
@@ -372,7 +372,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 
     size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
-    flow_t flow;
+    struct flow flow;
 
     /* Ignore packets sent via output to OFPP_CONTROLLER.  This library never
      * uses such an action.  You never know what experiments might be going on,

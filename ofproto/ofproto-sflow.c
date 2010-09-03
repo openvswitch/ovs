@@ -488,8 +488,8 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     const union odp_action *actions;
     struct ofpbuf payload;
     size_t n_actions, n_outputs;
+    struct flow flow;
     size_t min_size;
-    flow_t flow;
     size_t i;
 
     /* Get odp_sflow_sample_header. */

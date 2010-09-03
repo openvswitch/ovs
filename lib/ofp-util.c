@@ -132,7 +132,7 @@ update_openflow_length(struct ofpbuf *buffer)
 }
 
 struct ofpbuf *
-make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
+make_flow_mod(uint16_t command, const struct flow *flow, size_t actions_len)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + actions_len;
@@ -161,7 +161,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
 }
 
 struct ofpbuf *
-make_add_flow(const flow_t *flow, uint32_t buffer_id,
+make_add_flow(const struct flow *flow, uint32_t buffer_id,
               uint16_t idle_timeout, size_t actions_len)
 {
     struct ofpbuf *out = make_flow_mod(OFPFC_ADD, flow, actions_len);
@@ -173,7 +173,7 @@ make_add_flow(const flow_t *flow, uint32_t buffer_id,
 }
 
 struct ofpbuf *
-make_del_flow(const flow_t *flow)
+make_del_flow(const struct flow *flow)
 {
     struct ofpbuf *out = make_flow_mod(OFPFC_DELETE_STRICT, flow, 0);
     struct ofp_flow_mod *ofm = out->data;
@@ -182,7 +182,7 @@ make_del_flow(const flow_t *flow)
 }
 
 struct ofpbuf *
-make_add_simple_flow(const flow_t *flow,
+make_add_simple_flow(const struct flow *flow,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {

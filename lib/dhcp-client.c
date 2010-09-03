@@ -942,7 +942,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
     for (; cli->received < 50; cli->received++) {
         const struct ip_header *ip;
         const struct dhcp_header *dhcp;
-        flow_t flow;
+        struct flow flow;
         int error;
 
         ofpbuf_clear(&b);
