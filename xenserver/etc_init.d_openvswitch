@@ -358,7 +358,6 @@ function stop {
     stop_daemon OVSDB_SERVER "$ovsdb_server"
     if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
         kill `cat /var/run/openvswitch/monitor-external-ids.pid`
-        rm /var/run/openvswitch/monitor-external-ids.pid
     fi
     rm -f /var/lock/subsys/openvswitch
 }
