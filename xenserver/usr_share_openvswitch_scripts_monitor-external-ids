@@ -21,9 +21,11 @@
 # Bridge table and duplicates its value to the preferred "xs-network-uuids".
 
 import getopt
+import os
 import subprocess
 import sys
 import syslog
+import time
 
 import XenAPI
 
@@ -189,6 +191,11 @@ def main(argv):
     idl = ovs.db.idl.Idl(remote, "Open_vSwitch", monitor_uuid_schema_cb)
 
     ovs.daemon.daemonize()
+
+    # This daemon is usually started before XAPI, but to complete our
+    # tasks, we need it.  Wait here until it's up.
+    while not os.path.exists("/var/run/xapi_init_complete.cookie"):
+        time.sleep(1)
  
     bridges = {}
     interfaces = {}
