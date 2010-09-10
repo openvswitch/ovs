@@ -226,7 +226,6 @@ struct odp_flow_key {
     uint8_t  nw_proto;          /* IP protocol or lower 8 bits of
                                    ARP opcode. */
     uint8_t  nw_tos;            /* IP ToS (DSCP field, 6 bits). */
-    uint32_t reserved[1];          /* Reserved for later use. */
 };
 
 /* Flags for ODP_FLOW. */

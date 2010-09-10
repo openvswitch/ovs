@@ -198,7 +198,6 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
     memcpy(key->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
     key->nw_proto = flow->nw_proto;
     key->nw_tos = flow->nw_tos;
-    memset(key->reserved, 0, sizeof key->reserved);
 }
 
 void

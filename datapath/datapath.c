@@ -1040,8 +1040,6 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	struct tbl *table;
 	int error;
 
-	memset(uf->flow.key.reserved, 0, sizeof uf->flow.key.reserved);
-
 	table = rcu_dereference(dp->table);
 	flow_node = tbl_lookup(table, &uf->flow.key, flow_hash(&uf->flow.key), flow_cmp);
 	if (!flow_node) {
@@ -1200,7 +1198,6 @@ static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key
 	struct tbl_node *flow_node;
 	int error;
 
-	memset(key->reserved, 0, sizeof key->reserved);
 	flow_node = tbl_lookup(table, key, flow_hash(key), flow_cmp);
 	if (!flow_node)
 		return ERR_PTR(-ENOENT);
@@ -1250,7 +1247,6 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 
 		if (copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
-		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 		if (!flow_node)
