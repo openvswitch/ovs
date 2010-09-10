@@ -9,7 +9,6 @@
 #ifndef ACTIONS_H
 #define ACTIONS_H 1
 
-#include <linux/gfp.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
 
@@ -20,8 +19,7 @@ union odp_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    const struct odp_flow_key *key,
-		    const union odp_action *, int n_actions,
-		    gfp_t gfp);
+		    const union odp_action *, int n_actions);
 
 static inline void set_skb_csum_bits(const struct sk_buff *old_skb,
 				     struct sk_buff *new_skb)

@@ -25,13 +25,13 @@
 #include "openvswitch/datapath-protocol.h"
 #include "vport.h"
 
-static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
+static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
 {
 	if (skb_cloned(skb)) {
 		struct sk_buff *nskb;
 		unsigned headroom = max(min_headroom, skb_headroom(skb));
 
-		nskb = skb_copy_expand(skb, headroom, skb_tailroom(skb), gfp);
+		nskb = skb_copy_expand(skb, headroom, skb_tailroom(skb), GFP_ATOMIC);
 		if (nskb) {
 			set_skb_csum_bits(skb, nskb);
 			kfree_skb(skb);
@@ -72,13 +72,12 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 
 static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				       const struct odp_flow_key *key,
-				       const union odp_action *a, int n_actions,
-				       gfp_t gfp)
+				       const union odp_action *a, int n_actions)
 {
 	__be16 mask = a->dl_tci.mask;
 	__be16 tci = a->dl_tci.tci;
 
-	skb = make_writable(skb, VLAN_HLEN, gfp);
+	skb = make_writable(skb, VLAN_HLEN);
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
 
@@ -154,8 +153,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				if (segs) {
 					err = execute_actions(dp, segs,
 							      key, a + 1,
-							      n_actions - 1,
-							      gfp);
+							      n_actions - 1);
 				}
 
 				if (unlikely(err)) {
@@ -193,19 +191,18 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *strip_vlan(struct sk_buff *skb, gfp_t gfp)
+static struct sk_buff *strip_vlan(struct sk_buff *skb)
 {
-	skb = make_writable(skb, 0, gfp);
+	skb = make_writable(skb, 0);
 	if (skb)
 		vlan_pull_tag(skb);
 	return skb;
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
-				   const struct odp_action_dl_addr *a,
-				   gfp_t gfp)
+				   const struct odp_action_dl_addr *a)
 {
-	skb = make_writable(skb, 0, gfp);
+	skb = make_writable(skb, 0);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
 		if (a->type == ODPAT_SET_DL_SRC)
@@ -257,8 +254,7 @@ static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct odp_flow_key *
 
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 				   const struct odp_flow_key *key,
-				   const struct odp_action_nw_addr *a,
-				   gfp_t gfp)
+				   const struct odp_action_nw_addr *a)
 {
 	struct iphdr *nh;
 	__sum16 *check;
@@ -267,7 +263,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
-	skb = make_writable(skb, 0, gfp);
+	skb = make_writable(skb, 0);
 	if (unlikely(!skb))
 		return NULL;
 
@@ -286,13 +282,12 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 
 static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 				   const struct odp_flow_key *key,
-				   const struct odp_action_nw_tos *a,
-				   gfp_t gfp)
+				   const struct odp_action_nw_tos *a)
 {
 	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
-	skb = make_writable(skb, 0, gfp);
+	skb = make_writable(skb, 0);
 	if (skb) {
 		struct iphdr *nh = ip_hdr(skb);
 		u8 *f = &nh->tos;
@@ -310,7 +305,7 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 
 static struct sk_buff *set_tp_port(struct sk_buff *skb,
 				   const struct odp_flow_key *key,
-				   const struct odp_action_tp_port *a, gfp_t gfp)
+				   const struct odp_action_tp_port *a)
 {
 	struct udphdr *th;
 	__sum16 *check;
@@ -319,7 +314,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 	if (unlikely(!is_ip(skb, key)))
 		return skb;
 
-	skb = make_writable(skb, 0, gfp);
+	skb = make_writable(skb, 0);
 	if (unlikely(!skb))
 		return NULL;
 
@@ -390,10 +385,9 @@ error:
 	kfree_skb(skb);
 }
 
-static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg,
-			  gfp_t gfp)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg)
 {
-	skb = skb_clone(skb, gfp);
+	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
 		return -ENOMEM;
 	return dp_output_control(dp, skb, _ODPL_ACTION_NR, arg);
@@ -403,14 +397,14 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg,
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 			 const union odp_action *a, int n_actions,
-			 gfp_t gfp, struct dp_port *dp_port)
+			 struct dp_port *dp_port)
 {
 	struct odp_sflow_sample_header *hdr;
 	unsigned int actlen = n_actions * sizeof(union odp_action);
 	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
 	struct sk_buff *nskb;
 
-	nskb = skb_copy_expand(skb, actlen + hdrlen, 0, gfp);
+	nskb = skb_copy_expand(skb, actlen + hdrlen, 0, GFP_ATOMIC);
 	if (!nskb)
 		return;
 
@@ -424,8 +418,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    const struct odp_flow_key *key,
-		    const union odp_action *a, int n_actions,
-		    gfp_t gfp)
+		    const union odp_action *a, int n_actions)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -441,7 +434,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			atomic_inc(&p->sflow_pool);
 			if (dp->sflow_probability == UINT_MAX ||
 			    net_random() < dp->sflow_probability)
-				sflow_sample(dp, skb, a, n_actions, gfp, p);
+				sflow_sample(dp, skb, a, n_actions, p);
 		}
 	}
 
@@ -449,7 +442,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 	for (; n_actions > 0; a++, n_actions--) {
 		if (prev_port != -1) {
-			do_output(dp, skb_clone(skb, gfp), prev_port);
+			do_output(dp, skb_clone(skb, GFP_ATOMIC), prev_port);
 			prev_port = -1;
 		}
 
@@ -459,7 +452,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_CONTROLLER:
-			err = output_control(dp, skb, a->controller.arg, gfp);
+			err = output_control(dp, skb, a->controller.arg);
 			if (err) {
 				kfree_skb(skb);
 				return err;
@@ -471,32 +464,32 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_SET_DL_TCI:
-			skb = modify_vlan_tci(dp, skb, key, a, n_actions, gfp);
+			skb = modify_vlan_tci(dp, skb, key, a, n_actions);
 			if (IS_ERR(skb))
 				return PTR_ERR(skb);
 			break;
 
 		case ODPAT_STRIP_VLAN:
-			skb = strip_vlan(skb, gfp);
+			skb = strip_vlan(skb);
 			break;
 
 		case ODPAT_SET_DL_SRC:
 		case ODPAT_SET_DL_DST:
-			skb = set_dl_addr(skb, &a->dl_addr, gfp);
+			skb = set_dl_addr(skb, &a->dl_addr);
 			break;
 
 		case ODPAT_SET_NW_SRC:
 		case ODPAT_SET_NW_DST:
-			skb = set_nw_addr(skb, key, &a->nw_addr, gfp);
+			skb = set_nw_addr(skb, key, &a->nw_addr);
 			break;
 
 		case ODPAT_SET_NW_TOS:
-			skb = set_nw_tos(skb, key, &a->nw_tos, gfp);
+			skb = set_nw_tos(skb, key, &a->nw_tos);
 			break;
 
 		case ODPAT_SET_TP_SRC:
 		case ODPAT_SET_TP_DST:
-			skb = set_tp_port(skb, key, &a->tp_port, gfp);
+			skb = set_tp_port(skb, key, &a->tp_port);
 			break;
 
 		case ODPAT_SET_PRIORITY:

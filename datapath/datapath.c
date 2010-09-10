@@ -591,7 +591,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 
 	/* Execute actions. */
 	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
-			acts->n_actions, GFP_ATOMIC);
+			acts->n_actions);
 	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 
 	/* Check whether sub-actions looped too much. */
@@ -1376,8 +1376,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 		goto error_free_skb;
 
 	rcu_read_lock();
-	err = execute_actions(dp, skb, &key, actions->actions,
-			      actions->n_actions, GFP_KERNEL);
+	err = execute_actions(dp, skb, &key, actions->actions, actions->n_actions);
 	rcu_read_unlock();
 
 	kfree(actions);
