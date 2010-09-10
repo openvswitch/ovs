@@ -263,6 +263,11 @@ str_to_action(char *str, struct ofpbuf *b)
             nast->vendor = htonl(NX_VENDOR_ID);
             nast->subtype = htons(NXAST_SET_TUNNEL);
             nast->tun_id = htonl(str_to_u32(arg));
+        } else if (!strcasecmp(act, "drop_spoofed_arp")) {
+            struct nx_action_header *nah;
+            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
+            nah->vendor = htonl(NX_VENDOR_ID);
+            nah->subtype = htons(NXAST_DROP_SPOOFED_ARP);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

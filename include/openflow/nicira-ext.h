@@ -141,7 +141,7 @@ enum nx_action_subtype {
      *
      * This is useful because OpenFlow does not provide a way to match on the
      * Ethernet addresses inside ARP packets, so there is no other way to drop
-     * spoofed ARPs other than sending every packet up to the controller. */
+     * spoofed ARPs other than sending every ARP packet to a controller. */
     NXAST_DROP_SPOOFED_ARP
 };
 

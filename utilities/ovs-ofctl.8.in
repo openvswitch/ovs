@@ -451,6 +451,15 @@ addition to any other actions in this flow entry.  Recursive
 If outputting to a port that encapsulates the packet in a tunnel and supports
 an identifier (such as GRE), sets the identifier to \fBid\fR.
 .
+.IP \fBdrop_spoofed_arp\fR
+Stops processing further actions, if the packet being processed is an
+Ethernet+IPv4 ARP packet for which the source Ethernet address inside
+the ARP packet differs from the source Ethernet address in the
+Ethernet header.
+.
+This is useful because OpenFlow does not provide a way to match on the
+Ethernet addresses inside ARP packets, so there is no other way to
+drop spoofed ARPs other than sending every ARP packet to a controller.
 .RE
 .
 .IP
