@@ -775,7 +775,12 @@
         defined types are listed below:</p>
       <dl>
         <dt><code>linux-htb</code></dt>
-        <dd>Linux ``hierarchy token bucket'' classifier.</dd>
+        <dd>
+          Linux ``hierarchy token bucket'' classifier.  See tc-htb(8) (also at
+          <code>http://linux.die.net/man/8/tc-htb</code>) and the HTB manual
+          (<code>http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm</code>)
+          for information on how this classifier works and how to configure it.
+        </dd>
       </dl>
     </column>
 
