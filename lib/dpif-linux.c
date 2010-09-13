@@ -731,11 +731,7 @@ get_major(const char *target)
                 return major;
             }
         } else {
-            static bool warned;
-            if (!warned) {
-                VLOG_WARN("%s:%d: syntax error", fn, ln);
-            }
-            warned = true;
+            VLOG_WARN_ONCE("%s:%d: syntax error", fn, ln);
         }
     }
 
