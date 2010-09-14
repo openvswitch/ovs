@@ -136,7 +136,10 @@ static struct vport *patch_create(const char *name, const void __user *config)
 	}
 
 	vport_gen_rand_ether_addr(patch_vport->devconf->eth_addr);
-	patch_vport->devconf->mtu = ETH_DATA_LEN;
+
+    /* Make the default MTU fairly large so that it doesn't become the
+     * bottleneck on systems using jumbo frames. */
+	patch_vport->devconf->mtu = 65535;
 
 	return vport;
 
