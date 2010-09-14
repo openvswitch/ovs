@@ -1,3 +1,7 @@
+v1.1.0pre2 - 13 Sep 2010
+------------------------
+    - Bug fixes
+
 v1.1.0pre1 - 31 Aug 2010
 ------------------------
     - OpenFlow 1.0 slicing (QoS) functionality
