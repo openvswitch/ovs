@@ -33,8 +33,6 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse)
 
-#define DEFAULT_IDLE_TIMEOUT 60
-
 static uint32_t
 str_to_u32(const char *str)
 {
@@ -402,7 +400,7 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
         *priority = OFP_DEFAULT_PRIORITY;
     }
     if (idle_timeout) {
-        *idle_timeout = DEFAULT_IDLE_TIMEOUT;
+        *idle_timeout = OFP_FLOW_PERMANENT;
     }
     if (hard_timeout) {
         *hard_timeout = OFP_FLOW_PERMANENT;

@@ -495,8 +495,8 @@ optional fields:
 .TP
 \fBidle_timeout=\fIseconds\fR
 Causes the flow to expire after the given number of seconds of
-inactivity.  A value of 0 prevents a flow from expiring due to
-inactivity.  The default is 60 seconds.
+inactivity.  A value of 0 (the default) prevents a flow from expiring due to
+inactivity.
 .
 .IP \fBhard_timeout=\fIseconds\fR
 Causes the flow to expire after the given number of seconds,
