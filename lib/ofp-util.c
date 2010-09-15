@@ -564,6 +564,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
     switch (ntohs(nah->subtype)) {
     case NXAST_RESUBMIT:
     case NXAST_SET_TUNNEL:
+    case NXAST_DROP_SPOOFED_ARP:
         return check_action_exact_len(a, len, 16);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
