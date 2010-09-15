@@ -110,7 +110,6 @@ usage(void)
            "  create DB SCHEMA   create DB with the given SCHEMA\n"
            "  compact DB [DST]   compact DB in-place (or to DST)\n"
            "  convert DB SCHEMA [DST]   convert DB to SCHEMA (to DST)\n"
-           "  extract-schema DB  print DB's schema on stdout\n"
            "  query DB TRNS      execute read-only transaction on DB\n"
            "  transact DB TRNS   execute read/write transaction on DB\n"
            "  show-log DB        prints information about DB's log entries\n",
