@@ -38,6 +38,7 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
+	debian/ovs-bugtool \
 	debian/rules \
 	debian/rules.modules
 
