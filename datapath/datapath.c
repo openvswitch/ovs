@@ -1326,10 +1326,11 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	if (execute->length < ETH_HLEN || execute->length > 65535)
 		goto error;
 
-	err = -ENOMEM;
 	actions = flow_actions_alloc(execute->n_actions);
-	if (!actions)
+	if (IS_ERR(actions)) {
+		err = PTR_ERR(actions);
 		goto error;
+	}
 
 	err = -EFAULT;
 	if (copy_from_user(actions->actions, execute->actions,
