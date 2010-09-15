@@ -200,8 +200,12 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         break;
     }
 
+    case NXAST_DROP_SPOOFED_ARP:
+        ds_put_cstr(string, "drop_spoofed_arp");
+        break;
+
     default:
-        ds_put_format(string, "***unknown Nicira action:%d***\n",
+        ds_put_format(string, "***unknown Nicira action:%d***",
                       ntohs(nah->subtype));
     }
 }

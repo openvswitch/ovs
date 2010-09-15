@@ -95,6 +95,9 @@ format_odp_action(struct ds *ds, const union odp_action *a)
     case ODPAT_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
         break;
+    case ODPAT_DROP_SPOOFED_ARP:
+        ds_put_cstr(ds, "drop_spoofed_arp");
+        break;
     default:
         ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
         break;
