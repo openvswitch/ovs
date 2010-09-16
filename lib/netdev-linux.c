@@ -2659,7 +2659,7 @@ htb_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
     major = tc_get_major(handle);
     minor = tc_get_minor(handle);
     if (major == 1 && minor > 0 && minor <= HTB_N_QUEUES) {
-        (*cb)(tc_get_minor(handle), &stats, aux);
+        (*cb)(minor - 1, &stats, aux);
     }
     return 0;
 }
