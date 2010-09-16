@@ -150,6 +150,7 @@ usage(void)
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
            "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
+           "  queue-stats SWITCH [PORT [QUEUE]]  dump queue stats\n"
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
@@ -460,6 +461,30 @@ do_dump_aggregate(int argc, char *argv[])
                   &req->table_id, &out_port, NULL, NULL, NULL, NULL);
     memset(&req->pad, 0, sizeof req->pad);
     req->out_port = htons(out_port);
+
+    dump_stats_transaction(argv[1], request);
+}
+
+static void
+do_queue_stats(int argc, char *argv[])
+{
+    struct ofp_queue_stats_request *req;
+    struct ofpbuf *request;
+
+    req = alloc_stats_request(sizeof *req, OFPST_QUEUE, &request);
+
+    if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
+        req->port_no = htons(str_to_port_no(argv[1], argv[2]));
+    } else {
+        req->port_no = htons(OFPP_ALL);
+    }
+    if (argc > 3 && argv[3][0] && strcasecmp(argv[3], "all")) {
+        req->queue_id = htonl(atoi(argv[3]));
+    } else {
+        req->queue_id = htonl(OFPQ_ALL);
+    }
+
+    memset(req->pad, 0, sizeof req->pad);
 
     dump_stats_transaction(argv[1], request);
 }
@@ -884,6 +909,7 @@ static const struct command all_commands[] = {
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },
+    { "queue-stats", 1, 3, do_queue_stats },
     { "add-flow", 2, 2, do_add_flow },
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },

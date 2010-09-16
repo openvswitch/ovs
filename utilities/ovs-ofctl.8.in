@@ -115,6 +115,15 @@ the statistics are aggregated across all flows in the switch's flow
 tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
 The output format is descrbed in \fBTable Entry Output\fR.
 .
+.IP "\fBqueue\-stats \fIswitch \fR[\fIport \fR[\fIqueue\fR]]"
+Prints to the console statistics for the specified \fIqueue\fR on
+\fIport\fR within \fIswitch\fR.  Either of \fIport\fR or \fIqueue\fR
+or both may be omitted (or equivalently specified as \fBALL\fR).  If
+both are omitted, statistics are printed for all queues on all ports.
+If only \fIqueue\fR is omitted, then statistics are printed for all
+queues on \fIport\fR; if only \fIport\fR is omitted, then statistics
+are printed for \fIqueue\fR on every port where it exists.
+.
 .TP
 \fBadd\-flow \fIswitch flow\fR
 Add the flow entry as described by \fIflow\fR to the \fIswitch\fR's 

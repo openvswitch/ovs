@@ -38,6 +38,7 @@
 #include "xtoxll.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
+static void ofp_print_queue_name(struct ds *string, uint32_t port);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
@@ -1166,6 +1167,53 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
 }
 
 static void
+ofp_print_queue_name(struct ds *string, uint32_t queue_id)
+{
+    if (queue_id == OFPQ_ALL) {
+        ds_put_cstr(string, "ALL");
+    } else {
+        ds_put_format(string, "%"PRIu32, queue_id);
+    }
+}
+
+static void
+ofp_queue_stats_request(struct ds *string, const void *body_,
+                       size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
+{
+    const struct ofp_queue_stats_request *qsr = body_;
+
+    ds_put_cstr(string, "port=");
+    ofp_print_port_name(string, ntohs(qsr->port_no));
+
+    ds_put_cstr(string, " queue=");
+    ofp_print_queue_name(string, ntohl(qsr->queue_id));
+}
+
+static void
+ofp_queue_stats_reply(struct ds *string, const void *body, size_t len,
+                     int verbosity)
+{
+    const struct ofp_queue_stats *qs = body;
+    size_t n = len / sizeof *qs;
+    ds_put_format(string, " %zu queues\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (; n--; qs++) {
+        ds_put_cstr(string, "  port ");
+        ofp_print_port_name(string, ntohs(qs->port_no));
+        ds_put_cstr(string, " queue ");
+        ofp_print_queue_name(string, ntohl(qs->queue_id));
+        ds_put_cstr(string, ": ");
+
+        print_port_stat(string, "bytes=", ntohll(qs->tx_bytes), 1);
+        print_port_stat(string, "pkts=", ntohll(qs->tx_packets), 1);
+        print_port_stat(string, "errors=", ntohll(qs->tx_errors), 0);
+    }
+}
+
+static void
 vendor_stat(struct ds *string, const void *body, size_t len,
             int verbosity OVS_UNUSED)
 {
@@ -1233,6 +1281,14 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
               sizeof(struct ofp_port_stats_request),
               ofp_port_stats_request },
             { 0, SIZE_MAX, ofp_port_stats_reply },
+        },
+        {
+            OFPST_QUEUE,
+            "queue",
+            { sizeof(struct ofp_queue_stats_request),
+              sizeof(struct ofp_queue_stats_request),
+              ofp_queue_stats_request },
+            { 0, SIZE_MAX, ofp_queue_stats_reply },
         },
         {
             OFPST_VENDOR,
