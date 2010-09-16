@@ -3433,8 +3433,9 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
     } else {
         struct netdev_queue_stats stats;
 
-        netdev_get_queue_stats(port->netdev, queue_id, &stats);
-        put_queue_stats(cbdata, queue_id, &stats);
+        if (!netdev_get_queue_stats(port->netdev, queue_id, &stats)) {
+            put_queue_stats(cbdata, queue_id, &stats);
+        }
     }
 }
 
