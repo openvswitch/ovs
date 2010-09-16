@@ -145,6 +145,37 @@ lookup_ipv6(const char *host_name, struct in6_addr *addr)
     return 0;
 }
 
+/* Translates 'host_name', which must be a host name or a string representation
+ * of an IP address, into a numeric IP address in '*addr'.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Most Open vSwitch code should not use this because it causes deadlocks:
+ * gethostbyname() sends out a DNS request but that starts a new flow for which
+ * OVS must set up a flow, but it can't because it's waiting for a DNS reply.
+ * The synchronous lookup also delays other activty.  (Of course we can solve
+ * this but it doesn't seem worthwhile quite yet.)  */
+int
+lookup_hostname(const char *host_name, struct in_addr *addr)
+{
+    struct hostent *h;
+
+    if (inet_aton(host_name, addr)) {
+        return 0;
+    }
+
+    h = gethostbyname(host_name);
+    if (h) {
+        *addr = *(struct in_addr *) h->h_addr;
+        return 0;
+    }
+
+    return (h_errno == HOST_NOT_FOUND ? ENOENT
+            : h_errno == TRY_AGAIN ? EAGAIN
+            : h_errno == NO_RECOVERY ? EIO
+            : h_errno == NO_ADDRESS ? ENXIO
+            : EINVAL);
+}
+
 /* Returns the error condition associated with socket 'fd' and resets the
  * socket's error status. */
 int
