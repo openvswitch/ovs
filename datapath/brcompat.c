@@ -84,6 +84,9 @@ static int brc_add_del_bridge(char __user *uname, int add)
 	struct sk_buff *request;
 	char name[IFNAMSIZ];
 
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
 	if (copy_from_user(name, uname, IFNAMSIZ))
 		return -EFAULT;
 
@@ -195,6 +198,9 @@ static int brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 	struct sk_buff *request;
 	struct net_device *port;
 	int err;
+
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
 
 	port = __dev_get_by_index(&init_net, port_ifindex);
 	if (!port)
