@@ -252,7 +252,7 @@ case "$1" in
             echo " ERROR."
         fi
 
-        ovs-vsctl --no-wait init
+        ovs-vsctl --no-wait --timeout=5 init
 
         # Start ovs-vswitchd.
         set --

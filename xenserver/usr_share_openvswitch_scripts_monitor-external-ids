@@ -98,7 +98,7 @@ def get_iface_id(if_name, default=None):
 
 def set_external_id(table, record, key, value):
     col = 'external-ids:"' + key + '"="' + value + '"'
-    cmd = [vsctl, "-vANY:console:emer", "set", table, record, col]
+    cmd = [vsctl, "--timeout=30", "-vANY:console:emer", "set", table, record, col]
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
         syslog.syslog(syslog.LOG_WARNING, 
