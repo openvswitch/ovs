@@ -1591,7 +1591,7 @@ static void
 close_all_netdevs(void *aux OVS_UNUSED)
 {
     struct netdev *netdev, *next;
-    LIST_FOR_EACH_SAFE(netdev, next, struct netdev, node, &netdev_list) {
+    LIST_FOR_EACH_SAFE(netdev, next, node, &netdev_list) {
         netdev_close(netdev);
     }
 }

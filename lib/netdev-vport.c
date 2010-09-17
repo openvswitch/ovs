@@ -269,8 +269,7 @@ netdev_vport_poll_notify(const struct netdev *netdev)
     if (list) {
         struct netdev_vport_notifier *notifier;
 
-        LIST_FOR_EACH (notifier, struct netdev_vport_notifier,
-                       list_node, list) {
+        LIST_FOR_EACH (notifier, list_node, list) {
             struct netdev_notifier *n = &notifier->notifier;
             n->cb(n);
         }

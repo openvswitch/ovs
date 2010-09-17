@@ -427,7 +427,7 @@ ovsdb_file_save_copy__(const char *file_name, int locking,
         const struct ovsdb_table *table = node->data;
         const struct ovsdb_row *row;
 
-        HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
             ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL);
         }
     }

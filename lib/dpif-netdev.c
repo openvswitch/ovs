@@ -457,7 +457,7 @@ get_port_by_name(struct dp_netdev *dp,
 {
     struct dp_netdev_port *port;
 
-    LIST_FOR_EACH (port, struct dp_netdev_port, node, &dp->port_list) {
+    LIST_FOR_EACH (port, node, &dp->port_list) {
         if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
@@ -545,8 +545,7 @@ dp_netdev_flow_flush(struct dp_netdev *dp)
 {
     struct dp_netdev_flow *flow, *next;
 
-    HMAP_FOR_EACH_SAFE (flow, next, struct dp_netdev_flow, node,
-                        &dp->flow_table) {
+    HMAP_FOR_EACH_SAFE (flow, next, node, &dp->flow_table) {
         dp_netdev_free_flow(dp, flow);
     }
 }
@@ -567,7 +566,7 @@ dpif_netdev_port_list(const struct dpif *dpif, struct odp_port *ports, int n)
     int i;
 
     i = 0;
-    LIST_FOR_EACH (port, struct dp_netdev_port, node, &dp->port_list) {
+    LIST_FOR_EACH (port, node, &dp->port_list) {
         struct odp_port *odp_port = &ports[i];
         if (i >= n) {
             break;
@@ -661,8 +660,7 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
     struct dp_netdev_flow *flow;
 
     assert(!key->reserved[0] && !key->reserved[1] && !key->reserved[2]);
-    HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
-                             flow_hash(key, 0), &dp->flow_table) {
+    HMAP_FOR_EACH_WITH_HASH (flow, node, flow_hash(key, 0), &dp->flow_table) {
         if (flow_equal(&flow->key, key)) {
             return flow;
         }
@@ -886,7 +884,7 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
     int i;
 
     i = 0;
-    HMAP_FOR_EACH (flow, struct dp_netdev_flow, node, &dp->flow_table) {
+    HMAP_FOR_EACH (flow, node, &dp->flow_table) {
         if (i >= n) {
             break;
         }
@@ -1044,10 +1042,10 @@ dp_netdev_run(void)
     struct dp_netdev *dp;
 
     ofpbuf_init(&packet, DP_NETDEV_HEADROOM + max_mtu);
-    LIST_FOR_EACH (dp, struct dp_netdev, node, &dp_netdev_list) {
+    LIST_FOR_EACH (dp, node, &dp_netdev_list) {
         struct dp_netdev_port *port;
 
-        LIST_FOR_EACH (port, struct dp_netdev_port, node, &dp->port_list) {
+        LIST_FOR_EACH (port, node, &dp->port_list) {
             int error;
 
             /* Reset packet contents. */
@@ -1072,9 +1070,9 @@ dp_netdev_wait(void)
 {
     struct dp_netdev *dp;
 
-    LIST_FOR_EACH (dp, struct dp_netdev, node, &dp_netdev_list) {
+    LIST_FOR_EACH (dp, node, &dp_netdev_list) {
         struct dp_netdev_port *port;
-        LIST_FOR_EACH (port, struct dp_netdev_port, node, &dp->port_list) {
+        LIST_FOR_EACH (port, node, &dp->port_list) {
             netdev_recv_wait(port->netdev);
         }
     }

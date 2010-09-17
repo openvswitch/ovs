@@ -70,7 +70,7 @@ switch_status_handle_request(struct switch_status *ss, struct rconn *rconn,
     sr.request.string = (void *) (request + 1);
     sr.request.length = ntohs(request->header.length) - sizeof *request;
     ds_init(&sr.output);
-    LIST_FOR_EACH (c, struct status_category, node, &ss->categories) {
+    LIST_FOR_EACH (c, node, &ss->categories) {
         if (!memcmp(c->name, sr.request.string,
                     MIN(strlen(c->name), sr.request.length))) {
             sr.category = c;
@@ -170,8 +170,7 @@ switch_status_destroy(struct switch_status *ss)
         /* Orphan any remaining categories, so that unregistering them later
          * won't write to bad memory. */
         struct status_category *c, *next;
-        LIST_FOR_EACH_SAFE (c, next,
-                            struct status_category, node, &ss->categories) {
+        LIST_FOR_EACH_SAFE (c, next, node, &ss->categories) {
             list_init(&c->node);
         }
         switch_status_unregister(ss->config_cat);

@@ -1483,8 +1483,7 @@ tc_find_queue__(const struct netdev *netdev, unsigned int queue_id,
                                 netdev_dev_linux_cast(netdev_get_dev(netdev));
     struct tc_queue *queue;
 
-    HMAP_FOR_EACH_IN_BUCKET (queue, struct tc_queue, hmap_node,
-                             hash, &netdev_dev->tc->queues) {
+    HMAP_FOR_EACH_IN_BUCKET (queue, hmap_node, hash, &netdev_dev->tc->queues) {
         if (queue->queue_id == queue_id) {
             return queue;
         }
@@ -1679,8 +1678,7 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 
     last_error = 0;
     shash_init(&details);
-    HMAP_FOR_EACH (queue, struct tc_queue, hmap_node,
-                   &netdev_dev->tc->queues) {
+    HMAP_FOR_EACH (queue, hmap_node, &netdev_dev->tc->queues) {
         shash_clear(&details);
 
         error = netdev_dev->tc->ops->class_get(netdev, queue, &details);
@@ -2012,7 +2010,7 @@ static void
 poll_notify(struct list *list)
 {
     struct netdev_linux_notifier *notifier;
-    LIST_FOR_EACH (notifier, struct netdev_linux_notifier, node, list) {
+    LIST_FOR_EACH (notifier, node, list) {
         struct netdev_notifier *n = &notifier->notifier;
         n->cb(n);
     }
@@ -2551,8 +2549,7 @@ htb_tc_destroy(struct tc *tc)
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
     struct htb_class *hc, *next;
 
-    HMAP_FOR_EACH_SAFE (hc, next, struct htb_class, tc_queue.hmap_node,
-                        &htb->tc.queues) {
+    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
         hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
         free(hc);
     }

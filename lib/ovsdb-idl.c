@@ -215,15 +215,13 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
         }
 
         changed = true;
-        HMAP_FOR_EACH_SAFE (row, next_row, struct ovsdb_idl_row, hmap_node,
-                            &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, next_row, hmap_node, &table->rows) {
             struct ovsdb_idl_arc *arc, *next_arc;
 
             if (!ovsdb_idl_row_is_orphan(row)) {
                 ovsdb_idl_row_unparse(row);
             }
-            LIST_FOR_EACH_SAFE (arc, next_arc, struct ovsdb_idl_arc, src_node,
-                                &row->src_arcs) {
+            LIST_FOR_EACH_SAFE (arc, next_arc, src_node, &row->src_arcs) {
                 free(arc);
             }
             /* No need to do anything with dst_arcs: some node has those arcs
@@ -553,8 +551,7 @@ ovsdb_idl_get_row(struct ovsdb_idl_table *table, const struct uuid *uuid)
 {
     struct ovsdb_idl_row *row;
 
-    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_idl_row, hmap_node,
-                             uuid_hash(uuid), &table->rows) {
+    HMAP_FOR_EACH_WITH_HASH (row, hmap_node, uuid_hash(uuid), &table->rows) {
         if (uuid_equals(&row->uuid, uuid)) {
             return row;
         }
@@ -771,8 +768,7 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
 
     /* Delete all forward arcs.  If 'destroy_dsts', destroy any orphaned rows
      * that this causes to be unreferenced. */
-    LIST_FOR_EACH_SAFE (arc, next, struct ovsdb_idl_arc, src_node,
-                        &row->src_arcs) {
+    LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
         list_remove(&arc->dst_node);
         if (destroy_dsts
             && ovsdb_idl_row_is_orphan(arc->dst)
@@ -800,8 +796,7 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row)
      * (If duplicate arcs were possible then we would need to make sure that
      * 'next' didn't also point into 'arc''s destination, but we forbid
      * duplicate arcs.) */
-    LIST_FOR_EACH_SAFE (arc, next, struct ovsdb_idl_arc, dst_node,
-                        &row->dst_arcs) {
+    LIST_FOR_EACH_SAFE (arc, next, dst_node, &row->dst_arcs) {
         struct ovsdb_idl_row *ref = arc->src;
 
         ovsdb_idl_row_unparse(ref);
@@ -1145,8 +1140,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     free(txn->inc_table);
     free(txn->inc_column);
     json_destroy(txn->inc_where);
-    HMAP_FOR_EACH_SAFE (insert, next, struct ovsdb_idl_txn_insert, hmap_node,
-                        &txn->inserted_rows) {
+    HMAP_FOR_EACH_SAFE (insert, next, hmap_node, &txn->inserted_rows) {
         free(insert);
     }
     hmap_destroy(&txn->inserted_rows);
@@ -1196,8 +1190,7 @@ ovsdb_idl_txn_get_row(const struct ovsdb_idl_txn *txn, const struct uuid *uuid)
 {
     const struct ovsdb_idl_row *row;
 
-    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_idl_row, txn_node,
-                             uuid_hash(uuid), &txn->txn_rows) {
+    HMAP_FOR_EACH_WITH_HASH (row, txn_node, uuid_hash(uuid), &txn->txn_rows) {
         if (uuid_equals(&row->uuid, uuid)) {
             return row;
         }
@@ -1255,8 +1248,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
      * transaction and fail to update the graph.  */
     txn->idl->txn = NULL;
 
-    HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_idl_row, txn_node,
-                        &txn->txn_rows) {
+    HMAP_FOR_EACH_SAFE (row, next, txn_node, &txn->txn_rows) {
         if (row->old) {
             if (row->written) {
                 ovsdb_idl_row_unparse(row);
@@ -1300,7 +1292,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         json_string_create(txn->idl->class->database));
 
     /* Add prerequisites and declarations of new rows. */
-    HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
+    HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
         /* XXX check that deleted rows exist even if no prereqs? */
         if (row->prereqs) {
             const struct ovsdb_idl_table_class *class = row->table->class;
@@ -1332,7 +1324,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
     /* Add updates. */
     any_updates = false;
-    HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
+    HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
         const struct ovsdb_idl_table_class *class = row->table->class;
 
         if (row->old == row->new) {
@@ -1530,7 +1522,7 @@ ovsdb_idl_txn_get_insert_uuid(const struct ovsdb_idl_txn *txn,
     const struct ovsdb_idl_txn_insert *insert;
 
     assert(txn->status == TXN_SUCCESS || txn->status == TXN_UNCHANGED);
-    HMAP_FOR_EACH_IN_BUCKET (insert, struct ovsdb_idl_txn_insert, hmap_node,
+    HMAP_FOR_EACH_IN_BUCKET (insert, hmap_node,
                              uuid_hash(uuid), &txn->inserted_rows) {
         if (uuid_equals(uuid, &insert->dummy)) {
             return &insert->real;
@@ -1653,8 +1645,7 @@ ovsdb_idl_txn_abort_all(struct ovsdb_idl *idl)
 {
     struct ovsdb_idl_txn *txn;
 
-    HMAP_FOR_EACH (txn, struct ovsdb_idl_txn, hmap_node,
-                   &idl->outstanding_txns) {
+    HMAP_FOR_EACH (txn, hmap_node, &idl->outstanding_txns) {
         ovsdb_idl_txn_complete(txn, TXN_TRY_AGAIN);
     }
 }
@@ -1664,7 +1655,7 @@ ovsdb_idl_txn_find(struct ovsdb_idl *idl, const struct json *id)
 {
     struct ovsdb_idl_txn *txn;
 
-    HMAP_FOR_EACH_WITH_HASH (txn, struct ovsdb_idl_txn, hmap_node,
+    HMAP_FOR_EACH_WITH_HASH (txn, hmap_node,
                              json_hash(id, 0), &idl->outstanding_txns) {
         if (json_equal(id, txn->request_id)) {
             return txn;
@@ -1844,8 +1835,7 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                 hard_errors++;
             }
 
-            HMAP_FOR_EACH (insert, struct ovsdb_idl_txn_insert, hmap_node,
-                           &txn->inserted_rows) {
+            HMAP_FOR_EACH (insert, hmap_node, &txn->inserted_rows) {
                 if (!ovsdb_idl_txn_process_insert_reply(insert, ops)) {
                     hard_errors++;
                 }

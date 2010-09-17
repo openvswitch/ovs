@@ -430,7 +430,7 @@ check_tables(const struct classifier *cls,
         if (!hmap_is_empty(&cls->tables[i])) {
             found_tables++;
         }
-        HMAP_FOR_EACH (bucket, struct cls_bucket, hmap_node, &cls->tables[i]) {
+        HMAP_FOR_EACH (bucket, hmap_node, &cls->tables[i]) {
             found_buckets++;
             assert(!list_is_empty(&bucket->rules));
             found_rules += list_size(&bucket->rules);

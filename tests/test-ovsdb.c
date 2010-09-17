@@ -1468,8 +1468,7 @@ do_transact_print(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     n_rows = hmap_count(&do_transact_table->rows);
     rows = xmalloc(n_rows * sizeof *rows);
     i = 0;
-    HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node,
-                   &do_transact_table->rows) {
+    HMAP_FOR_EACH (row, hmap_node, &do_transact_table->rows) {
         rows[i++] = row;
     }
     assert(i == n_rows);

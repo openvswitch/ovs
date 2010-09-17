@@ -56,7 +56,7 @@ check_hmap(struct hmap *hmap, const int values[], size_t n,
     hmap_values = xmalloc(sizeof *sort_values * n);
 
     i = 0;
-    HMAP_FOR_EACH (e, struct element, node, hmap) {
+    HMAP_FOR_EACH (e, node, hmap) {
         assert(i < n);
         hmap_values[i++] = e->value;
     }
@@ -77,8 +77,7 @@ check_hmap(struct hmap *hmap, const int values[], size_t n,
     for (i = 0; i < n; i++) {
         size_t count = 0;
 
-        HMAP_FOR_EACH_WITH_HASH (e, struct element, node,
-                                 hash(values[i]), hmap) {
+        HMAP_FOR_EACH_WITH_HASH (e, node, hash(values[i]), hmap) {
             count += e->value == values[i];
         }
         assert(count == 1);
@@ -124,7 +123,7 @@ print_hmap(const char *name, struct hmap *hmap)
     struct element *e;
 
     printf("%s:", name);
-    HMAP_FOR_EACH (e, struct element, node, hmap) {
+    HMAP_FOR_EACH (e, node, hmap) {
         printf(" %d(%zu)", e->value, e->node.hash & hmap->mask);
     }
     printf("\n");
@@ -242,7 +241,7 @@ test_hmap_for_each_safe(hash_func *hash)
 
             i = 0;
             n_remaining = n;
-            HMAP_FOR_EACH_SAFE (e, next, struct element, node, &hmap) {
+            HMAP_FOR_EACH_SAFE (e, next, node, &hmap) {
                 assert(i < n);
                 if (pattern & (1ul << e->value)) {
                     size_t j;

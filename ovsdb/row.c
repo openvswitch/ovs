@@ -82,15 +82,13 @@ ovsdb_row_destroy(struct ovsdb_row *row)
         struct ovsdb_weak_ref *weak, *next;
         const struct shash_node *node;
 
-        LIST_FOR_EACH_SAFE (weak, next, struct ovsdb_weak_ref, dst_node,
-                            &row->dst_refs) {
+        LIST_FOR_EACH_SAFE (weak, next, dst_node, &row->dst_refs) {
             list_remove(&weak->src_node);
             list_remove(&weak->dst_node);
             free(weak);
         }
 
-        LIST_FOR_EACH_SAFE (weak, next, struct ovsdb_weak_ref, src_node,
-                            &row->src_refs) {
+        LIST_FOR_EACH_SAFE (weak, next, src_node, &row->src_refs) {
             list_remove(&weak->src_node);
             list_remove(&weak->dst_node);
             free(weak);
@@ -326,8 +324,7 @@ ovsdb_row_hash_destroy(struct ovsdb_row_hash *rh, bool destroy_rows)
 {
     struct ovsdb_row_hash_node *node, *next;
 
-    HMAP_FOR_EACH_SAFE (node, next, struct ovsdb_row_hash_node, hmap_node,
-                        &rh->rows) {
+    HMAP_FOR_EACH_SAFE (node, next, hmap_node, &rh->rows) {
         hmap_remove(&rh->rows, &node->hmap_node);
         if (destroy_rows) {
             ovsdb_row_destroy((struct ovsdb_row *) node->row);
@@ -360,7 +357,7 @@ ovsdb_row_hash_contains_all(const struct ovsdb_row_hash *a,
     struct ovsdb_row_hash_node *node;
 
     assert(ovsdb_column_set_equals(&a->columns, &b->columns));
-    HMAP_FOR_EACH (node, struct ovsdb_row_hash_node, hmap_node, &b->rows) {
+    HMAP_FOR_EACH (node, hmap_node, &b->rows) {
         if (!ovsdb_row_hash_contains__(a, node->row, node->hmap_node.hash)) {
             return false;
         }
@@ -380,8 +377,7 @@ ovsdb_row_hash_contains__(const struct ovsdb_row_hash *rh,
                           const struct ovsdb_row *row, size_t hash)
 {
     struct ovsdb_row_hash_node *node;
-    HMAP_FOR_EACH_WITH_HASH (node, struct ovsdb_row_hash_node, hmap_node,
-                             hash, &rh->rows) {
+    HMAP_FOR_EACH_WITH_HASH (node, hmap_node, hash, &rh->rows) {
         if (ovsdb_row_equal_columns(row, node->row, &rh->columns)) {
             return true;
         }

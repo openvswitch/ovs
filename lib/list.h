@@ -53,18 +53,18 @@ struct list *list_back(struct list *);
 size_t list_size(const struct list *);
 bool list_is_empty(const struct list *);
 
-#define LIST_FOR_EACH(ITER, STRUCT, MEMBER, LIST)                   \
-    for (ITER = CONTAINER_OF((LIST)->next, STRUCT, MEMBER);         \
-         &(ITER)->MEMBER != (LIST);                                 \
-         ITER = CONTAINER_OF((ITER)->MEMBER.next, STRUCT, MEMBER))
-#define LIST_FOR_EACH_REVERSE(ITER, STRUCT, MEMBER, LIST)           \
-    for (ITER = CONTAINER_OF((LIST)->prev, STRUCT, MEMBER);         \
-         &(ITER)->MEMBER != (LIST);                                 \
-         ITER = CONTAINER_OF((ITER)->MEMBER.prev, STRUCT, MEMBER))
-#define LIST_FOR_EACH_SAFE(ITER, NEXT, STRUCT, MEMBER, LIST)        \
-    for (ITER = CONTAINER_OF((LIST)->next, STRUCT, MEMBER);         \
-         (NEXT = CONTAINER_OF((ITER)->MEMBER.next, STRUCT, MEMBER), \
-          &(ITER)->MEMBER != (LIST));                               \
+#define LIST_FOR_EACH(ITER, MEMBER, LIST)                               \
+    for (ITER = OBJECT_CONTAINING((LIST)->next, ITER, MEMBER);          \
+         &(ITER)->MEMBER != (LIST);                                     \
+         ITER = OBJECT_CONTAINING((ITER)->MEMBER.next, ITER, MEMBER))
+#define LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
+    for (ITER = OBJECT_CONTAINING((LIST)->prev, ITER, MEMBER);          \
+         &(ITER)->MEMBER != (LIST);                                     \
+         ITER = OBJECT_CONTAINING((ITER)->MEMBER.prev, ITER, MEMBER))
+#define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)                    \
+    for (ITER = OBJECT_CONTAINING((LIST)->next, ITER, MEMBER);          \
+         (NEXT = OBJECT_CONTAINING((ITER)->MEMBER.next, ITER, MEMBER),  \
+          &(ITER)->MEMBER != (LIST));                                   \
          ITER = NEXT)
 
 #endif /* list.h */

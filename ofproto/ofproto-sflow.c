@@ -140,7 +140,7 @@ ofproto_sflow_find_port(const struct ofproto_sflow *os, uint16_t odp_port)
 {
     struct ofproto_sflow_port *osp;
 
-    HMAP_FOR_EACH_IN_BUCKET (osp, struct ofproto_sflow_port, hmap_node,
+    HMAP_FOR_EACH_IN_BUCKET (osp, hmap_node,
                              hash_int(odp_port, 0), &os->ports) {
         if (osp->odp_port == odp_port) {
             return osp;
@@ -297,8 +297,7 @@ ofproto_sflow_destroy(struct ofproto_sflow *os)
         struct ofproto_sflow_port *osp, *next;
 
         ofproto_sflow_clear(os);
-        HMAP_FOR_EACH_SAFE (osp, next, struct ofproto_sflow_port, hmap_node,
-                            &os->ports) {
+        HMAP_FOR_EACH_SAFE (osp, next, hmap_node, &os->ports) {
             ofproto_sflow_del_port__(os, osp);
         }
         hmap_destroy(&os->ports);
@@ -463,7 +462,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
                                MAX(1, UINT32_MAX / options->sampling_rate));
 
     /* Add samplers and pollers for the currently known ports. */
-    HMAP_FOR_EACH (osp, struct ofproto_sflow_port, hmap_node, &os->ports) {
+    HMAP_FOR_EACH (osp, hmap_node, &os->ports) {
         ofproto_sflow_add_poller(os, osp, osp->odp_port);
         ofproto_sflow_add_sampler(os, osp);
     }

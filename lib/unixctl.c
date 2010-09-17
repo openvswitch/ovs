@@ -411,8 +411,7 @@ unixctl_server_run(struct unixctl_server *server)
         new_connection(server, fd);
     }
 
-    LIST_FOR_EACH_SAFE (conn, next,
-                        struct unixctl_conn, node, &server->conns) {
+    LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
         int error = run_connection(conn);
         if (error && error != EAGAIN) {
             kill_connection(conn);
@@ -426,7 +425,7 @@ unixctl_server_wait(struct unixctl_server *server)
     struct unixctl_conn *conn;
 
     poll_fd_wait(server->fd, POLLIN);
-    LIST_FOR_EACH (conn, struct unixctl_conn, node, &server->conns) {
+    LIST_FOR_EACH (conn, node, &server->conns) {
         if (conn->state == S_RECV) {
             poll_fd_wait(conn->fd, POLLIN);
         } else if (conn->state == S_SEND) {
@@ -442,8 +441,7 @@ unixctl_server_destroy(struct unixctl_server *server)
     if (server) {
         struct unixctl_conn *conn, *next;
 
-        LIST_FOR_EACH_SAFE (conn, next,
-                            struct unixctl_conn, node, &server->conns) {
+        LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
             kill_connection(conn);
         }
 

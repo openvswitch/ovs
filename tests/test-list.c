@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ check_list(struct list *list, const int values[], size_t n)
     size_t i;
 
     i = 0;
-    LIST_FOR_EACH (e, struct element, node, list) {
+    LIST_FOR_EACH (e, node, list) {
         assert(i < n);
         assert(e->value == values[i]);
         i++;
@@ -64,7 +64,7 @@ check_list(struct list *list, const int values[], size_t n)
     assert(i == n);
 
     i = 0;
-    LIST_FOR_EACH_REVERSE (e, struct element, node, list) {
+    LIST_FOR_EACH_REVERSE (e, node, list) {
         assert(i < n);
         assert(e->value == values[n - i - 1]);
         i++;
@@ -84,7 +84,7 @@ print_list(const char *name, struct list *list)
     struct element *e;
 
     printf("%s:", name);
-    LIST_FOR_EACH (e, struct element, node, list) {
+    LIST_FOR_EACH (e, node, list) {
         printf(" %d", e->value);
     }
     printf("\n");
@@ -131,7 +131,7 @@ test_list_for_each_safe(void)
             i = 0;
             values_idx = 0;
             n_remaining = n;
-            LIST_FOR_EACH_SAFE (e, next, struct element, node, &list) {
+            LIST_FOR_EACH_SAFE (e, next, node, &list) {
                 assert(i < n);
                 if (pattern & (1ul << i)) {
                     list_remove(&e->node);

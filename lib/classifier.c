@@ -177,8 +177,7 @@ classifier_destroy(struct classifier *cls)
         struct hmap *tbl;
 
         for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket,
-                                struct cls_bucket, hmap_node, tbl) {
+            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, tbl) {
                 free(bucket);
             }
             hmap_destroy(tbl);
@@ -335,11 +334,11 @@ classifier_find_rule_exactly(const struct classifier *cls,
     assert(wildcards == (wildcards & OVSFW_ALL));
     table_idx = table_idx_from_wildcards(wildcards);
     hash = hash_fields(target, table_idx);
-    HMAP_FOR_EACH_WITH_HASH (bucket, struct cls_bucket, hmap_node, hash,
+    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node, hash,
                              &cls->tables[table_idx]) {
         if (equal_fields(&bucket->fixed, target, table_idx)) {
             struct cls_rule *pos;
-            LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
+            LIST_FOR_EACH (pos, node.list, &bucket->rules) {
                 if (pos->priority < priority) {
                     return NULL;
                 } else if (pos->priority == priority &&
@@ -374,13 +373,12 @@ classifier_rule_overlaps(const struct classifier *cls,
     for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
         struct cls_bucket *bucket;
 
-        HMAP_FOR_EACH (bucket, struct cls_bucket, hmap_node, tbl) {
+        HMAP_FOR_EACH (bucket, hmap_node, tbl) {
             struct cls_rule *rule;
 
-            LIST_FOR_EACH (rule, struct cls_rule, node.list,
-                           &bucket->rules) {
+            LIST_FOR_EACH (rule, node.list, &bucket->rules) {
                 if (rule->priority == priority
-                        && rules_match_2wild(rule, &target_rule, 0)) {
+                    && rules_match_2wild(rule, &target_rule, 0)) {
                     return true;
                 }
             }
@@ -409,8 +407,7 @@ classifier_for_each_match(const struct classifier *cls,
              table++) {
             struct cls_bucket *bucket, *next_bucket;
 
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket,
-                                struct cls_bucket, hmap_node, table) {
+            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, table) {
                 /* XXX there is a bit of room for optimization here based on
                  * rejecting entire buckets on their fixed fields, but it will
                  * only be worthwhile for big buckets (which we hope we won't
@@ -422,8 +419,7 @@ classifier_for_each_match(const struct classifier *cls,
                  * bucket itself will be destroyed.  The bucket contains the
                  * list head so that's a use-after-free error. */
                 prev_rule = NULL;
-                LIST_FOR_EACH (rule, struct cls_rule, node.list,
-                               &bucket->rules) {
+                LIST_FOR_EACH (rule, node.list, &bucket->rules) {
                     if (rules_match_1wild(rule, target, 0)) {
                         if (prev_rule) {
                             callback(prev_rule, aux);
@@ -442,7 +438,7 @@ classifier_for_each_match(const struct classifier *cls,
         if (target->wc.wildcards) {
             struct cls_rule *rule, *next_rule;
 
-            HMAP_FOR_EACH_SAFE (rule, next_rule, struct cls_rule, node.hmap,
+            HMAP_FOR_EACH_SAFE (rule, next_rule, node.hmap,
                                 &cls->exact_table) {
                 if (rules_match_1wild(rule, target, 0)) {
                     callback(rule, aux);
@@ -477,8 +473,7 @@ classifier_for_each(const struct classifier *cls, int include,
         for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
             struct cls_bucket *bucket, *next_bucket;
 
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket,
-                                struct cls_bucket, hmap_node, tbl) {
+            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, tbl) {
                 struct cls_rule *prev_rule, *rule;
 
                 /* We can't just use LIST_FOR_EACH_SAFE here because, if the
@@ -486,8 +481,7 @@ classifier_for_each(const struct classifier *cls, int include,
                  * bucket itself will be destroyed.  The bucket contains the
                  * list head so that's a use-after-free error. */
                 prev_rule = NULL;
-                LIST_FOR_EACH (rule, struct cls_rule, node.list,
-                               &bucket->rules) {
+                LIST_FOR_EACH (rule, node.list, &bucket->rules) {
                     if (prev_rule) {
                         callback(prev_rule, aux);
                     }
@@ -503,8 +497,7 @@ classifier_for_each(const struct classifier *cls, int include,
     if (include & CLS_INC_EXACT) {
         struct cls_rule *rule, *next_rule;
 
-        HMAP_FOR_EACH_SAFE (rule, next_rule,
-                            struct cls_rule, node.hmap, &cls->exact_table) {
+        HMAP_FOR_EACH_SAFE (rule, next_rule, node.hmap, &cls->exact_table) {
             callback(rule, aux);
         }
     }
@@ -641,7 +634,7 @@ static struct cls_rule *
 bucket_insert(struct cls_bucket *bucket, struct cls_rule *rule)
 {
     struct cls_rule *pos;
-    LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
+    LIST_FOR_EACH (pos, node.list, &bucket->rules) {
         if (pos->priority == rule->priority) {
             if (pos->wc.wildcards == rule->wc.wildcards
                 && rules_match_1wild(pos, rule, rule->table_idx))
@@ -679,8 +672,7 @@ static struct cls_bucket *
 find_bucket(struct hmap *table, size_t hash, const struct cls_rule *rule)
 {
     struct cls_bucket *bucket;
-    HMAP_FOR_EACH_WITH_HASH (bucket, struct cls_bucket, hmap_node, hash,
-                             table) {
+    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node, hash, table) {
         if (equal_fields(&bucket->fixed, &rule->flow, rule->table_idx)) {
             return bucket;
         }
@@ -850,7 +842,7 @@ search_bucket(struct cls_bucket *bucket, int field_idx,
         return NULL;
     }
 
-    LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
+    LIST_FOR_EACH (pos, node.list, &bucket->rules) {
         if (rules_match_1wild(target, pos, field_idx)) {
             return pos;
         }
@@ -878,7 +870,7 @@ search_table(const struct hmap *table, int field_idx,
         return search_bucket(bucket, field_idx, target);
     }
 
-    HMAP_FOR_EACH_WITH_HASH (bucket, struct cls_bucket, hmap_node,
+    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node,
                              hash_fields(&target->flow, field_idx), table) {
         struct cls_rule *rule = search_bucket(bucket, field_idx, target);
         if (rule) {
@@ -894,8 +886,7 @@ search_exact_table(const struct classifier *cls, size_t hash,
 {
     struct cls_rule *rule;
 
-    HMAP_FOR_EACH_WITH_HASH (rule, struct cls_rule, node.hmap,
-                             hash, &cls->exact_table) {
+    HMAP_FOR_EACH_WITH_HASH (rule, node.hmap, hash, &cls->exact_table) {
         if (flow_equal(&rule->flow, target)) {
             return rule;
         }

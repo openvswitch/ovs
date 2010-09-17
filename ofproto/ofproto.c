@@ -532,7 +532,7 @@ find_controller_by_target(struct ofproto *ofproto, const char *target)
 {
     struct ofconn *ofconn;
 
-    HMAP_FOR_EACH_WITH_HASH (ofconn, struct ofconn, hmap_node,
+    HMAP_FOR_EACH_WITH_HASH (ofconn, hmap_node,
                              hash_string(target, 0), &ofproto->controllers) {
         if (!strcmp(ofconn_get_target(ofconn), target)) {
             return ofconn;
@@ -557,7 +557,7 @@ update_in_band_remotes(struct ofproto *ofproto)
 
     /* Add all the remotes. */
     discovery = false;
-    HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &ofproto->controllers) {
+    HMAP_FOR_EACH (ofconn, hmap_node, &ofproto->controllers) {
         struct sockaddr_in *sin = &addrs[n_addrs];
 
         if (ofconn->band == OFPROTO_OUT_OF_BAND) {
@@ -616,7 +616,7 @@ update_fail_open(struct ofproto *p)
 
         n = 0;
         rconns = xmalloc(hmap_count(&p->controllers) * sizeof *rconns);
-        HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &p->controllers) {
+        HMAP_FOR_EACH (ofconn, hmap_node, &p->controllers) {
             rconns[n++] = ofconn->rconn;
         }
 
@@ -665,8 +665,7 @@ ofproto_set_controllers(struct ofproto *p,
     /* Delete controllers that are no longer configured.
      * Update configuration of all now-existing controllers. */
     ss_exists = false;
-    HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, hmap_node,
-                        &p->controllers) {
+    HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, hmap_node, &p->controllers) {
         struct ofproto_controller *c;
 
         c = shash_find_data(&new_controllers, ofconn_get_target(ofconn));
@@ -682,8 +681,7 @@ ofproto_set_controllers(struct ofproto *p,
 
     /* Delete services that are no longer configured.
      * Update configuration of all now-existing services. */
-    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, struct ofservice, node,
-                        &p->services) {
+    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, node, &p->services) {
         struct ofproto_controller *c;
 
         c = shash_find_data(&new_controllers,
@@ -722,7 +720,7 @@ ofproto_reconnect_controllers(struct ofproto *ofproto)
 {
     struct ofconn *ofconn;
 
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &ofproto->all_conns) {
         rconn_reconnect(ofconn->rconn);
     }
 }
@@ -890,7 +888,7 @@ ofproto_set_sflow(struct ofproto *ofproto,
 
             os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
             refresh_port_groups(ofproto);
-            HMAP_FOR_EACH (ofport, struct ofport, hmap_node, &ofproto->ports) {
+            HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
                 ofproto_sflow_add_port(os, ofport->odp_port,
                                        netdev_get_name(ofport->netdev));
             }
@@ -953,16 +951,14 @@ ofproto_destroy(struct ofproto *p)
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);
 
-    LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
-                        &p->all_conns) {
+    LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &p->all_conns) {
         ofconn_destroy(ofconn);
     }
     hmap_destroy(&p->controllers);
 
     dpif_close(p->dpif);
     netdev_monitor_destroy(p->netdev_monitor);
-    HMAP_FOR_EACH_SAFE (ofport, next_ofport, struct ofport, hmap_node,
-                        &p->ports) {
+    HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
         hmap_remove(&p->ports, &ofport->hmap_node);
         ofport_free(ofport);
     }
@@ -972,8 +968,7 @@ ofproto_destroy(struct ofproto *p)
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
 
-    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, struct ofservice, node,
-                        &p->services) {
+    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, node, &p->services) {
         ofservice_destroy(p, ofservice);
     }
     hmap_destroy(&p->services);
@@ -1045,7 +1040,7 @@ add_snooper(struct ofproto *ofproto, struct vconn *vconn)
 
     /* Pick a controller for monitoring. */
     best = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &ofproto->all_conns) {
         if (ofconn->type == OFCONN_PRIMARY
             && (!best || snoop_preference(ofconn) > snoop_preference(best))) {
             best = ofconn;
@@ -1108,8 +1103,7 @@ ofproto_run1(struct ofproto *p)
         in_band_run(p->in_band);
     }
 
-    LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
-                        &p->all_conns) {
+    LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &p->all_conns) {
         ofconn_run(ofconn, p);
     }
 
@@ -1119,7 +1113,7 @@ ofproto_run1(struct ofproto *p)
         fail_open_run(p->fail_open);
     }
 
-    HMAP_FOR_EACH (ofservice, struct ofservice, node, &p->services) {
+    HMAP_FOR_EACH (ofservice, node, &p->services) {
         struct vconn *vconn;
         int retval;
 
@@ -1215,7 +1209,7 @@ ofproto_wait(struct ofproto *p)
     dpif_recv_wait(p->dpif);
     dpif_port_poll_wait(p->dpif);
     netdev_monitor_poll_wait(p->netdev_monitor);
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         ofconn_wait(ofconn);
     }
     if (p->in_band) {
@@ -1238,7 +1232,7 @@ ofproto_wait(struct ofproto *p)
     } else if (p->next_expiration != LLONG_MAX) {
         poll_timer_wait_until(p->next_expiration);
     }
-    HMAP_FOR_EACH (ofservice, struct ofservice, node, &p->services) {
+    HMAP_FOR_EACH (ofservice, node, &p->services) {
         pvconn_wait(ofservice->pvconn);
     }
     for (i = 0; i < p->n_snoops; i++) {
@@ -1352,7 +1346,7 @@ reinit_ports(struct ofproto *p)
     size_t i;
 
     svec_init(&devnames);
-    HMAP_FOR_EACH (ofport, struct ofport, hmap_node, &p->ports) {
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         svec_add (&devnames, (char *) ofport->opp.name);
     }
     dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
@@ -1379,7 +1373,7 @@ refresh_port_group(struct ofproto *p, unsigned int group)
 
     ports = xmalloc(hmap_count(&p->ports) * sizeof *ports);
     n_ports = 0;
-    HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
+    HMAP_FOR_EACH (port, hmap_node, &p->ports) {
         if (group == DP_GROUP_ALL || !(port->opp.config & OFPPC_NO_FLOOD)) {
             ports[n_ports++] = port->odp_port;
         }
@@ -1484,7 +1478,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 {
     /* XXX Should limit the number of queued port status change messages. */
     struct ofconn *ofconn;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         struct ofp_port_status *ops;
         struct ofpbuf *b;
 
@@ -1542,7 +1536,7 @@ get_port(const struct ofproto *ofproto, uint16_t odp_port)
 {
     struct ofport *port;
 
-    HMAP_FOR_EACH_IN_BUCKET (port, struct ofport, hmap_node,
+    HMAP_FOR_EACH_IN_BUCKET (port, hmap_node,
                              hash_int(odp_port, 0), &ofproto->ports) {
         if (port->odp_port == odp_port) {
             return port;
@@ -1848,8 +1842,8 @@ ofservice_lookup(struct ofproto *ofproto, const char *target)
 {
     struct ofservice *ofservice;
 
-    HMAP_FOR_EACH_WITH_HASH (ofservice, struct ofservice, node,
-                             hash_string(target, 0), &ofproto->services) {
+    HMAP_FOR_EACH_WITH_HASH (ofservice, node, hash_string(target, 0),
+                             &ofproto->services) {
         if (!strcmp(pvconn_get_name(ofservice->pvconn), target)) {
             return ofservice;
         }
@@ -1912,7 +1906,7 @@ rule_destroy(struct ofproto *ofproto, struct rule *rule)
 {
     if (!rule->super) {
         struct rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, &rule->list) {
+        LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
             revalidate_rule(ofproto, subrule);
         }
     } else {
@@ -2374,7 +2368,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_TP_DST) |
                          (1u << OFPAT_ENQUEUE));
 
-    HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
+    HMAP_FOR_EACH (port, hmap_node, &p->ports) {
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
     }
 
@@ -3136,7 +3130,7 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
             append_port_stat(port, ofconn, &msg);
         }
     } else {
-        HMAP_FOR_EACH (port, struct ofport, hmap_node, &p->ports) {
+        HMAP_FOR_EACH (port, hmap_node, &p->ports) {
             append_port_stat(port, ofconn, &msg);
         }
     }
@@ -3181,7 +3175,7 @@ query_stats(struct ofproto *p, struct rule *rule,
     odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
-        LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {
+        LIST_FOR_EACH (subrule, list, &rule->list) {
             odp_flows[i++].key = subrule->cr.flow;
             packet_count += subrule->packet_count;
             byte_count += subrule->byte_count;
@@ -3468,7 +3462,7 @@ handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
     if (port_no == OFPP_ALL) {
-        HMAP_FOR_EACH (port, struct ofport, hmap_node, &ofproto->ports) {
+        HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
             handle_queue_stats_for_port(port, queue_id, &cbdata);
         }
     } else if (port_no < ofproto->max_ports) {
@@ -3955,8 +3949,7 @@ handle_role_request(struct ofproto *ofproto,
     if (role == NX_ROLE_MASTER) {
         struct ofconn *other;
 
-        HMAP_FOR_EACH (other, struct ofconn, hmap_node,
-                       &ofproto->controllers) {
+        HMAP_FOR_EACH (other, hmap_node, &ofproto->controllers) {
             if (other->role == NX_ROLE_MASTER) {
                 other->role = NX_ROLE_SLAVE;
             }
@@ -4293,7 +4286,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
      * requests that would not add new flows, so it is imperfect.) */
 
     prev = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)
             && ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
@@ -4343,7 +4336,7 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
      * due to an idle timeout. */
     if (rule->cr.wc.wildcards) {
         struct rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, &rule->list) {
+        LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
             rule_remove(p, subrule);
         }
     } else {
@@ -4556,7 +4549,7 @@ send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
     max_len = do_convert_to_packet_in(packet);
 
     prev = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+    LIST_FOR_EACH (ofconn, node, &ofproto->all_conns) {
         if (ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
                 schedule_packet_in(prev, packet, max_len, true);

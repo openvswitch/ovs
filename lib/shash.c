@@ -193,7 +193,7 @@ shash_find__(const struct shash *sh, const char *name, size_t hash)
 {
     struct shash_node *node;
 
-    HMAP_FOR_EACH_WITH_HASH (node, struct shash_node, node, hash, &sh->map) {
+    HMAP_FOR_EACH_WITH_HASH (node, node, hash, &sh->map) {
         if (!strcmp(node->name, name)) {
             return node;
         }

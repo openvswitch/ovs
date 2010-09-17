@@ -590,7 +590,7 @@ sigchld_handler(int signr OVS_UNUSED)
     struct process *p;
 
     COVERAGE_INC(process_sigchld);
-    LIST_FOR_EACH (p, struct process, node, &all_processes) {
+    LIST_FOR_EACH (p, node, &all_processes) {
         if (!p->exited) {
             int retval, status;
             do {

@@ -210,8 +210,7 @@ ovsdb_table_destroy(struct ovsdb_table *table)
     if (table) {
         struct ovsdb_row *row, *next;
 
-        HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_row, hmap_node,
-                            &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
             ovsdb_row_destroy(row);
         }
         hmap_destroy(&table->rows);
@@ -226,8 +225,7 @@ ovsdb_table_get_row(const struct ovsdb_table *table, const struct uuid *uuid)
 {
     struct ovsdb_row *row;
 
-    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_row, hmap_node, uuid_hash(uuid),
-                             &table->rows) {
+    HMAP_FOR_EACH_WITH_HASH (row, hmap_node, uuid_hash(uuid), &table->rows) {
         if (uuid_equals(ovsdb_row_get_uuid(row), uuid)) {
             return row;
         }

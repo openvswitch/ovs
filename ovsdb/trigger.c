@@ -73,7 +73,7 @@ ovsdb_trigger_run(struct ovsdb *db, long long int now)
 
     run_triggers = db->run_triggers;
     db->run_triggers = false;
-    LIST_FOR_EACH_SAFE (t, next, struct ovsdb_trigger, node, &db->triggers) {
+    LIST_FOR_EACH_SAFE (t, next, node, &db->triggers) {
         if (run_triggers || now - t->created >= t->timeout_msec) {
             ovsdb_trigger_try(db, t, now);
         }
@@ -89,7 +89,7 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
         long long int deadline = LLONG_MAX;
         struct ovsdb_trigger *t;
 
-        LIST_FOR_EACH (t, struct ovsdb_trigger, node, &db->triggers) {
+        LIST_FOR_EACH (t, node, &db->triggers) {
             if (t->created < LLONG_MAX - t->timeout_msec) {
                 long long int t_deadline = t->created + t->timeout_msec;
                 if (deadline > t_deadline) {
