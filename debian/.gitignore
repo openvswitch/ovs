@@ -12,6 +12,7 @@
 /openvswitch-controller
 /openvswitch-datapath-source
 /openvswitch-dbg
+/openvswitch-ipsec
 /openvswitch-pki
 /openvswitch-pki-server
 /openvswitch-switch

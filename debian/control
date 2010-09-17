@@ -41,6 +41,19 @@ Description: Open vSwitch switch implementations
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
+Package: openvswitch-ipsec
+Architecture: any
+Depends:
+ ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, ipsec-tools, racoon,
+ openvswitch-common (= ${binary:Version}),
+ openvswitch-switch (= ${binary:Version}),
+ python-openvswitch (= ${binary:Version})
+Description: Open vSwitch GRE-over-IPsec support
+ The ovs-monitor-ipsec script provides support for encrypting GRE
+ tunnels with IPsec.
+ .
+ Open vSwitch is a full-featured software-based Ethernet switch.
+
 Package: openvswitch-pki
 Architecture: all
 Depends:
@@ -90,13 +103,14 @@ Depends:
  ${shlibs:Depends}, ${misc:Depends},
  openvswitch-common (= ${binary:Version}),
  openvswitch-controller (= ${binary:Version}),
+ openvswitch-ipsec (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version})
 Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
 
-Package: python-openvswitch 
+Package: python-openvswitch
 Architecture: all
 Section: python
 Depends: ${python:Depends}, openvswitch-switch (= ${binary:Version})

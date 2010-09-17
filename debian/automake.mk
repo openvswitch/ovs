@@ -24,6 +24,9 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
+	debian/openvswitch-ipsec.dirs \
+	debian/openvswitch-ipsec.init \
+	debian/openvswitch-ipsec.install \
 	debian/openvswitch-pki-server.apache2 \
 	debian/openvswitch-pki-server.dirs \
 	debian/openvswitch-pki-server.install \
@@ -39,6 +42,7 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
 	debian/ovs-bugtool \
+	debian/ovs-monitor-ipsec \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \
 	debian/rules \

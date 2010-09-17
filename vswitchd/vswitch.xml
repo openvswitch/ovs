@@ -775,6 +775,27 @@
         </dl>
       </column>
 
+      <column name="other_config">
+        Key-value pairs for rarely used interface features.  Currently,
+        the only keys are for configuring GRE-over-IPsec, which is only
+        available through the <code>openvswitch-ipsec</code> package for
+        Debian.  The currently defined key-value pairs are:
+        <dl>
+          <dt><code>ipsec-local-ip</code></dt>
+          <dd>Required key for GRE-over-IPsec interfaces.  Additionally,
+            the <ref column="type"/> must be <code>gre</code> and the
+            <code>ipsec-psk</code> <ref column="other_config"/> key must
+            be set.  The <code>in_key</code>, <code>out_key</code>, and
+            <code>key</code> <ref column="options"/> must not be
+            set.</dd>
+          <dt><code>ipsec-psk</code></dt>
+          <dd>Required key for GRE-over-IPsec interfaces.  Specifies a
+            pre-shared key for authentication that must be identical on 
+            both sides of the tunnel.  Additionally, the
+            <code>ipsec-local-ip</code> key must also be set.</dd>
+        </dl>
+      </column>
+
       <column name="statistics">
         <p>
           Key-value pairs that report interface statistics.  The current
