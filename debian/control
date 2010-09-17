@@ -5,7 +5,8 @@ Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev,
- pkg-config (>= 0.21), po-debconf, bzip2, openssl, python
+ pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
+ python-support (>= 0.8.4)
 Standards-Version: 3.9.1
 Homepage: http://openvswitch.org/
 
@@ -94,3 +95,10 @@ Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
+
+Package: openvswitch-python 
+Architecture: all
+Depends: ${python:Depends}, openvswitch-switch (= ${binary:Version})
+Provides: ${python:Provides}
+Description: Python bindings for Open vSwitch
+ This package contains the full Python bindings for Open vSwitch database.

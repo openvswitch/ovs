@@ -29,6 +29,8 @@ EXTRA_DIST += \
 	debian/openvswitch-pki-server.install \
 	debian/openvswitch-pki-server.postinst \
 	debian/openvswitch-pki.postinst \
+	debian/openvswitch-python.dirs \
+	debian/openvswitch-python.install \
 	debian/openvswitch-switch.README.Debian \
 	debian/openvswitch-switch.dirs \
 	debian/openvswitch-switch.init \
