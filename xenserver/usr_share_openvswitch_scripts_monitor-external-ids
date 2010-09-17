@@ -227,13 +227,15 @@ def main(argv):
                 if name not in bridges:
                     update_network_uuids(name, ids)
 
-                update_bridge_id(name, ids)
+                if (name not in bridges) or (bridges[name] != ids):
+                    update_bridge_id(name, ids)
 
             bridges = new_bridges
 
         if interfaces != new_interfaces:
             for name,ids in new_interfaces.items():
-                update_iface_id(name, ids)
+                if (name not in interfaces) or (interfaces[name] != ids):
+                    update_iface_id(name, ids)
             interfaces = new_interfaces
  
 if __name__ == '__main__':
