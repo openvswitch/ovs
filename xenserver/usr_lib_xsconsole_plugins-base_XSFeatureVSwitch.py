@@ -79,7 +79,7 @@ class VSwitchConfig:
     @staticmethod
     def Get(action):
         try:
-            arg = [vsctl, "-vANY:console:emer"] + action.split()
+            arg = [vsctl, "--timeout=30", "-vANY:console:emer"] + action.split()
             output = ShellPipe(arg).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))

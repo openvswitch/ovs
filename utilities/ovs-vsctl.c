@@ -85,7 +85,7 @@ static bool dry_run;
 static bool wait_for_reload = true;
 
 /* --timeout: Time to wait for a connection to 'db'. */
-static int timeout = 5;
+static int timeout;
 
 /* All supported commands. */
 static const struct vsctl_command_syntax all_commands[];

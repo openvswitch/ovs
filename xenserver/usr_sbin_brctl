@@ -35,7 +35,7 @@ def delegate():
 
 def call_vsctl(cmd, arg=""):
     database = '--db=' + OVSDB_SERVER
-    command = [VSCTL, database, cmd]
+    command = [VSCTL, '--timeout=30', database, cmd]
     if (arg):
         command.append(arg)
     return subprocess.Popen(command, stdout=subprocess.PIPE).communicate()[0].split()

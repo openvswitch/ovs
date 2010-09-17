@@ -293,7 +293,7 @@ EOF
 function set_system_ids {
     if [ -f /etc/xensource-inventory ]; then
         action "Configuring Open vSwitch system IDs" true
-        $vsctl --no-wait set Open_vSwitch . \
+        $vsctl --no-wait --timeout=5 set Open_vSwitch . \
             external-ids:system-type="$PRODUCT_BRAND" \
             external-ids:system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
             external-ids:system-id="$INSTALLATION_UUID" \
@@ -329,11 +329,11 @@ function start {
     fi
 
     start_ovsdb_server
-    $vsctl --no-wait init
+    $vsctl --no-wait --timeout=5 init
     if [ ! -e /var/run/openvswitch.booted ]; then
         touch /var/run/openvswitch.booted
         for bridge in $($vsctl list-br); do
-            $vsctl --no-wait del-br $bridge
+            $vsctl --no-wait --timeout=5 del-br $bridge
         done
     fi
 
