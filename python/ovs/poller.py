@@ -15,6 +15,7 @@
 import errno
 import logging
 import select
+import ovs.timeval
 
 class Poller(object):
     """High-level wrapper around the "poll" system call.
@@ -62,15 +63,15 @@ class Poller(object):
             self.__timer_wait(msec)
 
     def timer_wait_until(self, msec):
-        """Causes the following call to self.block() to wake up when the
-        current time, as returned by Time.msec(), reaches 'msec' or later.  If
+        """Causes the following call to self.block() to wake up when the current
+        time, as returned by ovs.timeval.msec(), reaches 'msec' or later.  If
         'msec' is earlier than the current time, the following call to
         self.block() will not block at all.
 
         The timer registration is one-shot: only the following call to
         self.block() is affected.  The timer will need to be re-registered
         after self.block() is called if it is to persist."""
-        now = Time.msec()
+        now = ovs.timeval.msec()
         if msec <= now:
             self.immediate_wake()
         else:
