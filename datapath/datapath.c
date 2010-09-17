@@ -29,7 +29,6 @@
 #include <linux/udp.h>
 #include <linux/version.h>
 #include <linux/ethtool.h>
-#include <linux/random.h>
 #include <linux/wait.h>
 #include <asm/system.h>
 #include <asm/div64.h>
