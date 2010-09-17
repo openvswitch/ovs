@@ -117,6 +117,12 @@ else
     monitor_opt=
 fi
 
+function hup_monitor_external_ids {
+    if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
+        action "Configuring Open vSwitch external IDs" kill -HUP `cat /var/run/openvswitch/monitor-external-ids.pid`
+    fi
+}
+
 function dp_list {
     "$dpctl" show | grep '^dp[0-9]\+:' | cut -d':' -f 1
 }
@@ -380,8 +386,10 @@ case "$1" in
         restart
         ;;
     reload|force-reload)
-	# Nothing to do--ovs-vswitchd and ovsdb-server keep their configuration
-	# up-to-date all the time.
+        # Nothing to do to ovs-vswitchd and ovsdb-server as they keep their
+        # configuration up-to-date all the time.  HUP monitor-external-ids so it
+        # re-runs.
+        hup_monitor_external_ids
 	;;
     strace-vswitchd)
         shift
