@@ -490,7 +490,7 @@ pair of double quotes (\fB""\fR).
 .IP "UUID"
 Either a universally unique identifier in the style of RFC 4122,
 e.g. \fBf81d4fae\-7dec\-11d0\-a765\-00a0c91e6bf6\fR, or an \fB@\fIname\fR
-defined by the \fBcreate\fR command within the same \fBovs\-vsctl\fR
+defined by a \fBget\fR or \fBcreate\fR command within the same \fBovs\-vsctl\fR
 invocation.
 .PP
 Multiple values in a single column may be separated by spaces or a
@@ -518,7 +518,7 @@ records are specified, lists all the records in \fItable\fR.
 The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
 invocation will be wrong.
 .
-.IP "[\fB\-\-if\-exists\fR] \fBget \fItable record column\fR[\fB:\fIkey\fR]..."
+.IP "[\fB\-\-id=@\fIname\fR] [\fB\-\-if\-exists\fR] \fBget \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]]..."
 Prints the value of each specified \fIcolumn\fR in the given
 \fIrecord\fR in \fItable\fR.  For map columns, a \fIkey\fR may
 optionally be specified, in which case the value associated with
@@ -528,6 +528,10 @@ For a map column, without \fB\-\-if\-exists\fR it is an error if
 \fIkey\fR does not exist; with it, a blank line is printed.  If
 \fIcolumn\fR is not a map column or if \fIkey\fR is not specified,
 \fB\-\-if\-exists\fR has no effect.
+.IP
+If \fB@\fIname\fR is specified, then the UUID for \fIrecord\fR may be
+referred to by that name later in the same \fBovs\-vsctl\fR
+invocation in contexts where a UUID is expected.
 .
 .IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Sets the value of each specified \fIcolumn\fR in the given

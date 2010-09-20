@@ -1975,6 +1975,28 @@ get_column(const struct vsctl_table_class *table, const char *column_name,
     }
 }
 
+static struct uuid *
+create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
+{
+    struct ovsdb_symbol *symbol;
+
+    if (id[0] != '@') {
+        vsctl_fatal("row id \"%s\" does not begin with \"@\"", id);
+    }
+
+    if (newp) {
+        *newp = ovsdb_symbol_table_get(symtab, id) == NULL;
+    }
+
+    symbol = ovsdb_symbol_table_insert(symtab, id);
+    if (symbol->used) {
+        vsctl_fatal("row id \"%s\" may only be specified on one --id option",
+                    id);
+    }
+    symbol->used = true;
+    return &symbol->uuid;
+}
+
 static char *
 missing_operator_error(const char *arg, const char **allowed_operators,
                        size_t n_allowed)
@@ -2142,6 +2164,7 @@ error:
 static void
 cmd_get(struct vsctl_context *ctx)
 {
+    const char *id = shash_find_data(&ctx->options, "--id");
     bool if_exists = shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
@@ -2152,6 +2175,15 @@ cmd_get(struct vsctl_context *ctx)
 
     table = get_table(table_name);
     row = must_get_row(ctx, table, record_id);
+    if (id) {
+        bool new;
+
+        *create_symbol(ctx->symtab, id, &new) = row->uuid;
+        if (!new) {
+            vsctl_fatal("row id \"%s\" specified on \"get\" command was used "
+                        "before it was defined", id);
+        }
+    }
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
         const struct ovsdb_datum *datum;
@@ -2453,24 +2485,7 @@ cmd_create(struct vsctl_context *ctx)
     const struct uuid *uuid;
     int i;
 
-    if (id) {
-        struct ovsdb_symbol *symbol;
-
-        if (id[0] != '@') {
-            vsctl_fatal("row id \"%s\" does not begin with \"@\"", id);
-        }
-
-        symbol = ovsdb_symbol_table_insert(ctx->symtab, id);
-        if (symbol->used) {
-            vsctl_fatal("row id \"%s\" may only be used to insert a single "
-                        "row", id);
-        }
-        symbol->used = true;
-
-        uuid = &symbol->uuid;
-    } else {
-        uuid = NULL;
-    }
+    uuid = id ? create_symbol(ctx->symtab, id, NULL) : NULL;
 
     table = get_table(table_name);
     row = ovsdb_idl_txn_insert(ctx->txn, table->class, uuid);
@@ -2865,7 +2880,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"emer-reset", 0, 0, cmd_emer_reset, NULL, ""},
 
     /* Parameter commands. */
-    {"get", 3, INT_MAX, cmd_get, NULL, "--if-exists"},
+    {"get", 2, INT_MAX, cmd_get, NULL, "--if-exists,--id="},
     {"list", 1, INT_MAX, cmd_list, NULL, ""},
     {"set", 3, INT_MAX, cmd_set, NULL, ""},
     {"add", 4, INT_MAX, cmd_add, NULL, ""},
