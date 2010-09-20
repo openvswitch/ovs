@@ -637,24 +637,78 @@
     </group>
 
     <group title="Ingress Policing">
+      <p>
+        These settings control ingress policing for packets received on this
+        interface.  On a physical interface, this limits the rate at which
+        traffic is allowed into the system from the outside; on a virtual
+        interface (one connected to a virtual machine), this limits the rate at
+        which the VM is able to transmit.
+      </p>
+      <p>
+        Policing is a simple form of quality-of-service that simply drops
+        packets received in excess of the configured rate.  Due to its
+        simplicity, policing is usually less accurate and less effective than
+        egress QoS (which is configured using the <ref table="QoS"/> and <ref
+        table="Queue"/> tables).
+      </p>
+      <p>
+        Policing is currently implemented only on Linux.  The Linux
+        implementation uses a simple ``token bucket'' approach:
+      </p>
+      <ul>
+        <li>
+          The size of the bucket corresponds to <ref
+          column="ingress_policing_burst"/>.  Initially the bucket is full.
+        </li>
+        <li>
+          Whenever a packet is received, its size (converted to tokens) is
+          compared to the number of tokens currently in the bucket.  If the
+          required number of tokens are available, they are removed and the
+          packet is forwarded.  Otherwise, the packet is dropped.
+        </li>
+        <li>
+          Whenever it is not full, the bucket is refilled with tokens at the
+          rate specified by <ref column="ingress_policing_rate"/>.
+        </li>
+      </ul>
+      <p>
+        Policing interacts badly with some network protocols, and especially
+        with fragmented IP packets.  Suppose that there is enough network
+        activity to keep the bucket nearly empty all the time.  Then this token
+        bucket algorithm will forward a single packet every so often, with the
+        period depending on packet size and on the configured rate.  All of the
+        fragments of an IP packets are normally transmitted back-to-back, as a
+        group.  In such a situation, therefore, only one of these fragments
+        will be forwarded and the rest will be dropped.  IP does not provide
+        any way for the intended recipient to ask for only the remaining
+        fragments.  In such a case there are two likely possibilities for what
+        will happen next: either all of the fragments will eventually be
+        retransmitted (as TCP will do), in which case the same problem will
+        recur, or the sender will not realize that its packet has been dropped
+        and data will simply be lost (as some UDP-based protocols will do).
+        Either way, it is possible that no forward progress will ever occur.
+      </p>
+      <column name="ingress_policing_rate">
+        <p>
+          Maximum rate for data received on this interface, in kbps.  Data
+          received faster than this rate is dropped.  Set to <code>0</code>
+          (the default) to disable policing.
+        </p>
+      </column>
+
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
           default burst size if set to <code>0</code> is 1000 kb.  This value
           has no effect if <ref column="ingress_policing_rate"/>
           is <code>0</code>.</p>
-        <p>The burst size should be at least the size of the interface's
-          MTU.</p>
-      </column>
-
-      <column name="ingress_policing_rate">
-        <p>Maximum rate for data received on this interface, in kbps.  Data
-          received faster than this rate is dropped.  Set to <code>0</code> to
-          disable policing.</p>
-        <p>The meaning of ``ingress'' is from Open vSwitch's perspective.  If
-          configured on a physical interface, then it limits the rate at which
-          traffic is allowed into the system from the outside.  If configured
-          on a virtual interface that is connected to a virtual machine, then
-          it limits the rate at which the guest is able to transmit.</p>
+        <p>
+          Specifying a larger burst size lets the algorithm be more forgiving,
+          which is important for protocols like TCP that react severely to
+          dropped packets.  The burst size should be at least the size of the
+          interface's MTU.  Specifying a value that is numerically at least as
+          large as 10% of <ref column="ingress_policing_rate"/> helps TCP come
+          closer to achieving the full rate.
+        </p>
       </column>
     </group>
 
