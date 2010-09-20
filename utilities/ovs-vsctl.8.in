@@ -631,7 +631,97 @@ point to a new \fBQoS\fR record, which in turn points with its queue 0
 to a new \fBQueue\fR record:
 .IP
 .B "ovs\-vsctl \-\- set port eth0 qos=@newqos \-\- \-\-id=@newqos create qos type=linux\-htb other\-config:max\-rate=1000000 queues:0=@newqueue \-\- \-\-id=@newqueue create queue other\-config:min\-rate=1000000 other\-config:max\-rate=1000000"
+.SH "CONFIGURATION COOKBOOK"
+.SS "Port Configuration"
+.PP
+Add an ``internal port'' \fBvlan10\fR to bridge \fBbr0\fR as a VLAN
+access port for VLAN 10, and configure it with an IP address:
+.IP
+.B "ovs\-vsctl add\-port br0 vlan10 tag=10 \-\- set Interface vlan10 type=internal"
+.IP
+.B "ifconfig vlan10 192.168.0.123"
 .
+.SS "Port Mirroring"
+.PP
+Mirror all packets received or sent on \fBeth0\fR or \fBeth1\fR onto
+\fBeth2\fR, assuming that all of those ports exist on bridge \fBbr0\fR
+(as a side-effect this causes any packets received on \fBeth2\fR to be
+ignored):
+.IP
+.B "ovs\-vsctl \-\- set Bridge br0 mirrors=@m \(rs"
+.IP
+.B "\-\- \-\-id=@eth0 get Port eth0 \(rs"
+.IP
+.B "\-\- \-\-id=@eth1 get Port eth1 \(rs"
+.IP
+.B "\-\- \-\-id=@eth2 get Port eth2 \(rs"
+.IP
+.B "\-\- \-\-id=@m create Mirror name=mymirror select-dst-port=@eth0,@eth1 select-src-port=@eth0,@eth1 output-port=@eth2"
+.PP
+Remove the mirror created above from \fBbr0\fR and destroy the Mirror
+record (to avoid having an unreferenced record in the database):
+.IP
+.B "ovs\-vsctl destroy Mirror mymirror \-\- clear Bridge br0 mirrors"
+.SS "Quality of Service (QoS)"
+.PP
+Create a \fBlinux\-htb\fR QoS record that points to a few queues and
+use it on \fBeth0\fR and \fBeth1\fR:
+.IP
+.B "ovs\-vsctl \-\- set Port eth0 qos=@newqos \(rs"
+.IP
+.B "\-\- set Port eth1 qos=@newqos \(rs"
+.IP
+.B "\-\- \-\-id=@newqos create QoS type=linux\-htb other\-config:max\-rate=1000000000 queues=0=@q0,1=@q1 \(rs"
+.IP
+.B "\-\- \-\-id=@q0 create Queue other\-config:min\-rate=100000000 other\-config:max\-rate=100000000 \(rs"
+.IP
+.B "\-\- \-\-id=@q1 create Queue other\-config:min\-rate=500000000"
+.PP
+Deconfigure the QoS record above from \fBeth1\fR only:
+.IP
+.B "ovs\-vsctl clear Port eth1 qos"
+.PP
+To deconfigure the QoS record from both \fBeth0\fR and \fBeth1\fR and
+then delete the QoS record:
+.IP
+.B "ovs\-vsctl \-\- destroy QoS eth0 \-\- clear Port eth0 qos \-\- clear Port eth1 qos"
+.PP
+(This command will leave two unreferenced Queue records in the
+database.  To delete them, use "\fBovs\-vsctl list Queue\fR" to find
+their UUIDs, then "\fBovs\-vsctl destroy Queue \fIuuid1\fR
+\fIuuid2\fR" to destroy each of them.)
+.SS "NetFlow"
+.PP
+Configure bridge \fBbr0\fR to send NetFlow records to UDP port 5566 on
+host 192.168.0.34, with an active timeout of 30 seconds:
+.IP
+.B "ovs\-vsctl \-\- set Bridge br0 netflow=@nf \(rs"
+.IP
+.B "\-\- \-\-id=@nf create NetFlow targets=\(rs\(dq192.168.0.34:5566\(rs\(dq active\-timeout=30"
+.PP
+Update the NetFlow configuration created by the previous command to
+instead use an active timeout of 60 seconds:
+.IP
+.B "ovs\-vsctl set NetFlow br0 active_timeout=60"
+.PP
+Deconfigure the NetFlow settings from \fBbr0\fR and delete the NetFlow
+record (to avoid having an unreferenced record in the database):
+.IP
+.B "ovs\-vsctl destroy NetFlow br0 \-\- clear Bridge br0 netflow"
+.SS "sFlow"
+.PP
+Configure bridge \fBbr0\fR to send sFlow records to a collector on
+10.0.0.1 at port 6343, using \fBeth1\fR\'s IP address as the source,
+with specific sampling parameters:
+.IP
+.B "ovs\-vsctl \-\- \-\-id=@s create sFlow agent=eth1 target=\(rs\(dq10.0.0.1:6343\(rs\(dq header=128 sampling=64 polling=10 \(rs"
+.IP
+.B "\-\- set Bridge br0 sflow=@s"
+.PP
+Deconfigure sFlow from br0 and destroy the sFlow record (to avoid
+having an unreferenced record in the database):
+.IP
+.B "ovs\-vsctl \-\- destroy sFlow br0 \-\- clear Bridge br0 sflow"
 .SH "EXIT STATUS"
 .IP "0"
 Successful program execution.
