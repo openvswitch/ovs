@@ -96,8 +96,9 @@ Description: Debug symbols for Open vSwitch packages
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
 
-Package: openvswitch-python 
+Package: python-openvswitch 
 Architecture: all
+Section: python
 Depends: ${python:Depends}, openvswitch-switch (= ${binary:Version})
 Provides: ${python:Provides}
 Description: Python bindings for Open vSwitch
