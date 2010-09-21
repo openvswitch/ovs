@@ -157,7 +157,7 @@ load_module() {
             echo "For instructions, read"
             echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
         fi
-        exit 1
+        exit 0
     fi
 }
 
