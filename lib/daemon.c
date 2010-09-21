@@ -330,11 +330,13 @@ monitor_daemon(pid_t daemon_pid)
     const char *saved_program_name;
     time_t last_restart;
     char *status_msg;
+    int crashes;
 
     saved_program_name = program_name;
     program_name = xasprintf("monitor(%s)", program_name);
     status_msg = xstrdup("healthy");
     last_restart = TIME_MIN;
+    crashes = 0;
     for (;;) {
         int retval;
         int status;
@@ -352,7 +354,8 @@ monitor_daemon(pid_t daemon_pid)
         } else if (retval == daemon_pid) {
             char *s = process_status_msg(status);
             free(status_msg);
-            status_msg = xasprintf("pid %lu died, %s",
+            status_msg = xasprintf("%d crashes: pid %lu died, %s",
+                                   ++crashes,
                                    (unsigned long int) daemon_pid, s);
             free(s);
 
