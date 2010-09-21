@@ -5,9 +5,9 @@ Open vSwitch for Debian
 
     - Building with module-assistant:
 
-        $ module-assistant auto-install openvswitch
+        $ module-assistant auto-install openvswitch-datapath
       or
-        $ m-a a-i openvswitch
+        $ m-a a-i openvswitch-datapath
 
       If kernel source or headers are in a non-standard directory, add
       the option -k /path/to/kernel/source with the correct path.
