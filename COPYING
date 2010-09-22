@@ -20,8 +20,7 @@ Files under the datapath directory are licensed under the GNU General
 Public License, version 2.
 
 Files under the xenserver directory are licensed on a file-by-file
-basis.  Some files are under an uncertain license that may not be
-DFSG-compliant or GPL-compatible.  Refer to each file for details.
+basis.  Refer to each file for details.
 
 Files lib/sflow*.[ch] are licensed under the terms of the InMon sFlow
 licence that is available at:
