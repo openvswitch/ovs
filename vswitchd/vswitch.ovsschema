@@ -25,7 +25,7 @@
                             "refTable": "Capability"},
                   "min": 0, "max": "unlimited"}},
        "statistics": {
-         "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true}},
      "maxRows": 1},
    "Capability": {

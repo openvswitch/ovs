@@ -55,7 +55,8 @@ OVS_CHECK_IF_PACKET
 OVS_CHECK_STRTOK_R
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
-AC_CHECK_FUNCS([mlockall])
+AC_CHECK_FUNCS([mlockall strsignal getloadavg statvfs setmntent])
+AC_CHECK_HEADERS([mntent.h sys/statvfs.h])
 
 OVS_CHECK_PKIDIR
 OVS_CHECK_RUNDIR
@@ -63,8 +64,6 @@ OVS_CHECK_MALLOC_HOOKS
 OVS_CHECK_VALGRIND
 OVS_CHECK_SOCKET_LIBS
 OVS_CHECK_LINKER_SECTIONS
-
-AC_CHECK_FUNCS([strsignal])
 
 OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wno-sign-compare])

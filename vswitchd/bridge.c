@@ -57,6 +57,7 @@
 #include "socket-util.h"
 #include "stream-ssl.h"
 #include "svec.h"
+#include "system-stats.h"
 #include "timeval.h"
 #include "util.h"
 #include "unixctl.h"
@@ -1096,6 +1097,20 @@ iface_refresh_stats(struct iface *iface)
     ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
 }
 
+static void
+refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
+{
+    struct ovsdb_datum datum;
+    struct shash stats;
+
+    shash_init(&stats);
+    get_system_stats(&stats);
+
+    ovsdb_datum_from_shash(&datum, &stats);
+    ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
+                        &datum);
+}
+
 void
 bridge_run(void)
 {
@@ -1153,24 +1168,27 @@ bridge_run(void)
 
     /* Refresh interface stats if necessary. */
     if (time_msec() >= iface_stats_timer) {
-        struct ovsdb_idl_txn *txn;
+        if (cfg) {
+            struct ovsdb_idl_txn *txn;
 
-        txn = ovsdb_idl_txn_create(idl);
-        LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-            size_t i;
+            txn = ovsdb_idl_txn_create(idl);
+            LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+                size_t i;
 
-            for (i = 0; i < br->n_ports; i++) {
-                struct port *port = br->ports[i];
-                size_t j;
+                for (i = 0; i < br->n_ports; i++) {
+                    struct port *port = br->ports[i];
+                    size_t j;
 
-                for (j = 0; j < port->n_ifaces; j++) {
-                    struct iface *iface = port->ifaces[j];
-                    iface_refresh_stats(iface);
+                    for (j = 0; j < port->n_ifaces; j++) {
+                        struct iface *iface = port->ifaces[j];
+                        iface_refresh_stats(iface);
+                    }
                 }
             }
+            refresh_system_stats(cfg);
+            ovsdb_idl_txn_commit(txn);
+            ovsdb_idl_txn_destroy(txn); /* XXX */
         }
-        ovsdb_idl_txn_commit(txn);
-        ovsdb_idl_txn_destroy(txn); /* XXX */
 
         iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
     }

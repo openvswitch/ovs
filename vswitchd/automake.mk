@@ -12,6 +12,7 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/proc-net-compat.c \
 	vswitchd/proc-net-compat.h \
 	vswitchd/ovs-vswitchd.c \
+	vswitchd/system-stats.c \
 	vswitchd/vswitch-idl.c \
 	vswitchd/vswitch-idl.h \
 	vswitchd/xenserver.c \

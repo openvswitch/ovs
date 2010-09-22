@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <database title="Open vSwitch Configuration Database">
   <p>A database with this schema holds the configuration for one Open
     vSwitch daemon.  The root of the configuration for the daemon is
@@ -74,21 +75,133 @@
 
       <column name="statistics">
         <p>
-          Key-value pairs that report statistics about a running Open_vSwitch
-          daemon.  The current implementation updates these counters
-          periodically.  In the future, we plan to, instead, update them only
-          when they are queried (e.g. using an OVSDB <code>select</code>
-          operation) and perhaps at other times, but not on any regular
-          periodic basis.</p>
-        <p>
-          The currently defined key-value pairs are listed below.  Some Open
-          vSwitch implementations may not support some statistics, in which
-          case those key-value pairs are omitted.</p>
+          Key-value pairs that report statistics about a system running an Open
+          vSwitch.  These are updated periodically (currently, every 5
+          seconds).  Key-value pairs that cannot be determined or that do not
+          apply to a platform are omitted.
+        </p>
+
         <dl>
-          <dt><code>load-average</code></dt>
+          <dt><code>cpu</code></dt>
           <dd>
-            System load average multiplied by 100 and rounded to the nearest
-            integer.</dd>
+            <p>
+              Number of CPU processors, threads, or cores currently online and
+              available to the operating system on which Open vSwitch is
+              running, as an integer.  This may be less than the number
+              installed, if some are not online or if they are not available to
+              the operating system.
+            </p>
+            <p>
+              Open vSwitch userspace processes are not multithreaded, but the
+              Linux kernel-based datapath is.
+            </p>
+          </dd>
+
+          <dt><code>load_average</code></dt>
+          <dd>
+            <p>
+              A comma-separated list of three floating-point numbers,
+              representing the system load average over the last 1, 5, and 15
+              minutes, respectively.
+            </p>
+          </dd>
+
+          <dt><code>memory</code></dt>
+          <dd>
+            <p>
+              A comma-separated list of integers, each of which represents a
+              quantity of memory in kilobytes that describes the operating
+              system on which Open vSwitch is running.  In respective order,
+              these values are:
+            </p>
+
+            <ol>
+              <li>Total amount of RAM allocated to the OS.</li>
+              <li>RAM allocated to the OS that is in use.</li>
+              <li>RAM that can be flushed out to disk or otherwise discarded
+              if that space is needed for another purpose.  This number is
+              necessarily less than or equal to the previous value.</li>
+              <li>Total disk space allocated for swap.</li>
+              <li>Swap space currently in use.</li>
+            </ol>
+
+            <p>
+              On Linux, all five values can be determined and are included.  On
+              other operating systems, only the first two values can be
+              determined, so the list will only have two values.
+            </p>
+          </dd>
+
+          <dt><code>process_</code><var>name</var></dt>
+          <dd>
+            <p>
+              One such key-value pair will exist for each running Open vSwitch
+              daemon process, with <var>name</var> replaced by the daemon's
+              name (e.g. <code>process_ovs-vswitchd</code>).  The value is a
+              comma-separated list of integers.  The integers represent the
+              following, with memory measured in kilobytes and durations in
+              milliseconds:
+            </p>
+
+            <ol>
+              <li>The process's virtual memory size.</li>
+              <li>The process's resident set size.</li>
+              <li>The amount of user and system CPU time consumed by the
+              process.</li>
+              <li>The number of times that the process has crashed and been
+              automatically restarted by the monitor.</li>
+              <li>The duration since the process was started.</li>
+              <li>The duration for which the process has been running.</li>
+            </ol>
+
+            <p>
+              The interpretation of some of these values depends on whether the
+              process was started with the <option>--monitor</option>.  If it
+              was not, then the crash count will always be 0 and the two
+              durations will always be the same.  If <option>--monitor</option>
+              was given, then the crash count may be positive; if it is, the
+              latter duration is the amount of time since the most recent crash
+              and restart.
+            </p>
+
+            <p>
+              There will be one key-value pair for each file in Open vSwitch's
+              ``run directory'' (usually <code>/var/run/openvswitch</code>)
+              whose name ends in <code>.pid</code>, whose contents are a
+              process ID, and which is locked by a running process.  The
+              <var>name</var> is taken from the pidfile's name.
+            </p>
+
+            <p>
+              Currently Open vSwitch is only able to obtain all of the above
+              detail on Linux systems.  On other systems, the same key-value
+              pairs will be present but the values will always be the empty
+              string.
+            </p>
+          </dd>
+
+          <dt><code>file_systems</code></dt>
+          <dd>
+            <p>
+              A space-separated list of information on local, writable file
+              systems.  Each item in the list describes one file system and
+              consists in turn of a comma-separated list of the following:
+            </p>
+
+            <ol>
+              <li>Mount point, e.g. <code>/</code> or <code>/var/log</code>.
+              Any spaces or commas in the mount point are replaced by
+              underscores.</li>
+              <li>Total size, in kilobytes, as an integer.</li>
+              <li>Amount of storage in use, in kilobytes, as an integer.</li>
+            </ol>
+
+            <p>
+              This key-value pair is omitted if there are no local, writable
+              file systems or if Open vSwitch cannot obtain the needed
+              information.
+            </p>
+          </dd>
         </dl>
       </column>
     </group>
