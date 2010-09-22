@@ -49,7 +49,7 @@ files are:
 
         Open vSwitch-aware replacement for Citrix script of the same name.
 
-    usr_share_openvswitch_scripts_monitor-external-ids
+    usr_share_openvswitch_scripts_ovs-external-ids
 
         Daemon to monitor the external_ids columns of the Bridge and
         Interface OVSDB tables.
