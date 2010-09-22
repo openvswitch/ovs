@@ -6,6 +6,7 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
+	xenserver/GPLv2 \
 	xenserver/LICENSE \
 	xenserver/README \
 	xenserver/automake.mk \
