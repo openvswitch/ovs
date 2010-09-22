@@ -116,8 +116,14 @@ def update_network_uuids(name, ids):
 
 def update_bridge_id(name, ids):
     id = get_bridge_id(name, ids.get("xs-network-uuids"))
-    if ids.get("bridge-id") != id and id:
-        set_external_id("Bridge", name, "bridge-id", id)
+
+    if not id:
+        return
+
+    primary_id = id.split(";")[0]
+
+    if ids.get("bridge-id") != primary_id:
+        set_external_id("Bridge", name, "bridge-id", primary_id)
 
 def update_iface_id(name, ids):
     id = get_iface_id(name, ids.get("xs-vif-uuid"))

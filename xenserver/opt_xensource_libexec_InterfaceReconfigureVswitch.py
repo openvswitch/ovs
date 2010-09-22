@@ -342,7 +342,12 @@ def set_br_external_ids(pif):
         #    log("Network PIF %s not currently attached (%s)" % (rec['uuid'],pifrec['uuid']))
         #    continue
         nwrec = db().get_network_record(rec['network'])
-        xs_network_uuids += [nwrec['uuid']]
+
+        uuid = nwrec['uuid']
+        if pif_is_vlan(nwpif):
+            xs_network_uuids.append(uuid)
+        else:
+            xs_network_uuids.insert(0, uuid)
 
     vsctl_argv = []
     vsctl_argv += ['# configure xs-network-uuids']
