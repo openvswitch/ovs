@@ -279,4 +279,4 @@ if __name__ == '__main__':
         raise
     except:
         s_log.exception("traceback")
-        sys.exit(1)
+        sys.exit(ovs.daemon.RESTART_EXIT_CODE)

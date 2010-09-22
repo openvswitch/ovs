@@ -353,7 +353,7 @@ function start {
     # Start daemon to monitor external ids
     PYTHONPATH=/usr/share/openvswitch/python \
                /usr/share/openvswitch/scripts/ovs-external-ids \
-               --pidfile --detach "$VSWITCHD_OVSDB_SERVER"
+               --pidfile --detach $monitor_opt "$VSWITCHD_OVSDB_SERVER"
 
     touch /var/lock/subsys/openvswitch
 }

@@ -52,6 +52,8 @@ _monitor = False
 # File descriptor used by daemonize_start() and daemonize_complete().
 _daemonize_fd = None
 
+RESTART_EXIT_CODE = 5
+
 def make_pidfile_name(name):
     """Returns the file name that would be used for a pidfile if 'name' were
     provided to set_pidfile()."""
@@ -266,6 +268,11 @@ def _fork_notify_startup(fd):
         os.close(fd)
 
 def _should_restart(status):
+    global RESTART_EXIT_CODE
+
+    if os.WIFEXITED(status) and os.WEXITSTATUS(status) == RESTART_EXIT_CODE:
+        return True
+
     if os.WIFSIGNALED(status):
         for signame in ("SIGABRT", "SIGALRM", "SIGBUS", "SIGFPE", "SIGILL",
                         "SIGPIPE", "SIGSEGV", "SIGXCPU", "SIGXFSZ"):
