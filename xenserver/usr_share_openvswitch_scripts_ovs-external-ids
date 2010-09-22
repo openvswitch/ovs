@@ -21,11 +21,11 @@
 # Bridge table and duplicates its value to the preferred "xs-network-uuids".
 
 import getopt
+import logging, logging.handlers
 import os
 import signal
 import subprocess
 import sys
-import syslog
 import time
 
 import XenAPI
@@ -35,6 +35,14 @@ from ovs.db import types
 import ovs.util
 import ovs.daemon
 import ovs.db.idl
+
+s_log     = logging.getLogger("ovs-external-ids")
+l_handler = logging.handlers.SysLogHandler(
+        "/dev/log",
+        facility=logging.handlers.SysLogHandler.LOG_DAEMON)
+l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
+l_handler.setFormatter(l_formatter)
+s_log.addHandler(l_handler)
 
 vsctl="/usr/bin/ovs-vsctl"
 session = None
@@ -55,8 +63,7 @@ def init_session():
         session.xenapi.login_with_password("", "")
     except:
         session = None
-        syslog.syslog(syslog.LOG_WARNING,
-                "ovs-external-ids: Couldn't login to XAPI")
+        s_log.warning("Couldn't login to XAPI")
         return False
 
     return True
@@ -67,6 +74,8 @@ def init_session():
 # record of XAPI.
 def get_bridge_id(br_name, default=None):
     if not init_session():
+        s_log.warning("Failed to get bridge id %s because"
+                " XAPI session could not be initialized" % br_name)
         return default
 
     for n in session.xenapi.network.get_all():
@@ -86,6 +95,8 @@ def get_iface_id(if_name, default=None):
     domain,device = if_name.strip("vif").split(".")
 
     if not init_session():
+        s_log.warning("Failed to get interface id %s because"
+                " XAPI session could not be initialized" % if_name)
         return default
 
     for n in session.xenapi.VM.get_all():
@@ -103,8 +114,7 @@ def set_external_id(table, record, key, value):
     cmd = [vsctl, "--timeout=30", "-vANY:console:emer", "set", table, record, col]
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        syslog.syslog(syslog.LOG_WARNING,
-                "ovs-external-ids: Couldn't call ovs-vsctl")
+        s_log.warning("Couldn't call ovs-vsctl")
 
 # XAPI on XenServer 5.6 uses the external-id "network-uuids" for internal
 # networks, but we now prefer "xs-network-uuids".  Look for its use and
@@ -224,6 +234,7 @@ def main(argv):
             continue
 
         if force_run:
+            s_log.info("Forced to re-run as the result of a SIGHUP")
             bridges    = {}
             interfaces = {}
             force_run  = False
@@ -263,6 +274,9 @@ def main(argv):
 if __name__ == '__main__':
     try:
         main(sys.argv)
-    except error.Error, e:
-        sys.stderr.write("%s\n" % e)
+    except SystemExit:
+        # Let system.exit() calls complete normally
+        raise
+    except:
+        s_log.exception("traceback")
         sys.exit(1)
