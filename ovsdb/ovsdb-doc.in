@@ -43,7 +43,7 @@ def inlineXmlToNroff(node, font):
     if node.nodeType == node.TEXT_NODE:
         return textToNroff(node.data, font)
     elif node.nodeType == node.ELEMENT_NODE:
-        if node.tagName == 'code' or node.tagName == 'em':
+        if node.tagName in ['code', 'em', 'option']:
             s = r'\fB'
             for child in node.childNodes:
                 s += inlineXmlToNroff(child, r'\fB')
@@ -76,17 +76,23 @@ def blockXmlToNroff(nodes, para='.PP'):
             s += textToNroff(node.data)
             s = s.lstrip()
         elif node.nodeType == node.ELEMENT_NODE:
-            if node.tagName == 'ul':
+            if node.tagName in ['ul', 'ol']:
                 if s != "":
                     s += "\n"
                 s += ".RS\n"
+                i = 0
                 for liNode in node.childNodes:
                     if (liNode.nodeType == node.ELEMENT_NODE
                         and liNode.tagName == 'li'):
-                        s += ".IP \\(bu\n" + blockXmlToNroff(liNode.childNodes, ".IP")
+                        i += 1
+                        if node.tagName == 'ul':
+                            s += ".IP \\bu\n"
+                        else:
+                            s += ".IP %d. .25in\n" % i
+                        s += blockXmlToNroff(liNode.childNodes, ".IP")
                     elif (liNode.nodeType != node.TEXT_NODE
                           or not liNode.data.isspace()):
-                        raise error.Error("<ul> element may only have <li> children")
+                        raise error.Error("<%s> element may only have <li> children" % node.tagName)
                 s += ".RE\n"
             elif node.tagName == 'dl':
                 if s != "":
