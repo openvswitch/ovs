@@ -118,8 +118,8 @@ else
 fi
 
 function hup_monitor_external_ids {
-    if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
-        action "Configuring Open vSwitch external IDs" kill -HUP `cat /var/run/openvswitch/monitor-external-ids.pid`
+    if [ -e /var/run/openvswitch/ovs-external-ids.pid ]; then
+        action "Configuring Open vSwitch external IDs" kill -HUP `cat /var/run/openvswitch/ovs-external-ids.pid`
     fi
 }
 
@@ -352,7 +352,7 @@ function start {
 
     # Start daemon to monitor external ids
     PYTHONPATH=/usr/share/openvswitch/python \
-               /usr/share/openvswitch/scripts/monitor-external-ids \
+               /usr/share/openvswitch/scripts/ovs-external-ids \
                --pidfile --detach "$VSWITCHD_OVSDB_SERVER"
 
     touch /var/lock/subsys/openvswitch
@@ -362,8 +362,8 @@ function stop {
     stop_daemon BRCOMPATD "$brcompatd"
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
-    if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
-        kill `cat /var/run/openvswitch/monitor-external-ids.pid`
+    if [ -e /var/run/openvswitch/ovs-external-ids.pid ]; then
+        kill `cat /var/run/openvswitch/ovs-external-ids.pid`
     fi
     rm -f /var/lock/subsys/openvswitch
 }
@@ -387,7 +387,7 @@ case "$1" in
         ;;
     reload|force-reload)
         # Nothing to do to ovs-vswitchd and ovsdb-server as they keep their
-        # configuration up-to-date all the time.  HUP monitor-external-ids so it
+        # configuration up-to-date all the time.  HUP ovs-external-ids so it
         # re-runs.
         hup_monitor_external_ids
 	;;
