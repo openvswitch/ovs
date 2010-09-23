@@ -35,6 +35,10 @@ _detach = False
 # --pidfile: Name of pidfile (null if none).
 _pidfile = None
 
+# Our pidfile's inode and device, if we have created one.
+_pidfile_dev = None
+_pidfile_ino = None
+
 # --overwrite-pidfile: Create pidfile even if one already exists and is locked?
 _overwrite_pidfile = False
 
@@ -163,7 +167,7 @@ def _make_pidfile():
             logging.error("%s: create failed: %s"
                           % (tmpfile, os.strerror(e.errno)))
             return
-            
+
         try:
             fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError, e:
@@ -190,6 +194,10 @@ def _make_pidfile():
                           % (tmpfile, _pidfile, os.strerror(e.errno)))
             file.close()
             return
+
+        s = os.fstat(file.fileno())
+        _pidfile_dev = s.st_dev
+        _pidfile_ino = s.st_ino
 
 def daemonize():
     """If configured with set_pidfile() or set_detach(), creates the pid file
@@ -368,6 +376,19 @@ Daemon options:
 def read_pidfile(pidfile):
     """Opens and reads a PID from 'pidfile'.  Returns the nonnegative PID if
     successful, otherwise a negative errno value."""
+    if _pidfile_dev is not None:
+        try:
+            s = os.stat(pidfile)
+            if s.st_ino == _pidfile_ino and s.st_dev == _pidfile_dev:
+                # It's our own pidfile.  We can't afford to open it,
+                # because closing *any* fd for a file that a process
+                # has locked also releases all the locks on that file.
+                #
+                # Fortunately, we know the associated pid anyhow.
+                return os.getpid()
+        except OSError:
+            pass
+
     try:
         file = open(pidfile, "r")
     except IOError, e:
