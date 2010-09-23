@@ -114,7 +114,6 @@ CAT = '/bin/cat'
 DF = '/bin/df'
 DMESG = '/bin/dmesg'
 DMIDECODE = '/usr/sbin/dmidecode'
-ETHTOOL = '/sbin/ethtool'
 FDISK = '/sbin/fdisk'
 FIND = '/usr/bin/find'
 IFCONFIG = '/sbin/ifconfig'
@@ -135,6 +134,11 @@ SYSCTL = '/sbin/sysctl'
 TC = '/sbin/tc'
 UPTIME = '/usr/bin/uptime'
 ZCAT = '/bin/zcat'
+
+ETHTOOL = '/sbin/ethtool'
+# ETHTOOL recently moved from /usr/sbin to /sbin in debian
+if not os.path.isfile(ETHTOOL):
+    ETHTOOL = '/usr/sbin/ethtool'
 
 #
 # PII -- Personally identifiable information.  Of particular concern are
