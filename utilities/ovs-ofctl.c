@@ -524,8 +524,8 @@ static void
 do_add_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
+    struct ofpbuf *b;
     FILE *file;
-    char line[1024];
 
     file = fopen(argv[2], "r");
     if (file == NULL) {
@@ -533,43 +533,8 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     }
 
     open_vconn(argv[1], &vconn);
-    while (fgets(line, sizeof line, file)) {
-        struct ofpbuf *buffer;
-        struct ofp_flow_mod *ofm;
-        uint16_t priority, idle_timeout, hard_timeout;
-        uint64_t cookie;
-        struct ofp_match match;
-
-        char *comment;
-
-        /* Delete comments. */
-        comment = strchr(line, '#');
-        if (comment) {
-            *comment = '\0';
-        }
-
-        /* Drop empty lines. */
-        if (line[strspn(line, " \t\n")] == '\0') {
-            continue;
-        }
-
-        /* Parse and send.  parse_ofp_str() will expand and reallocate
-         * the data in 'buffer', so we can't keep pointers to across the
-         * parse_ofp_str() call. */
-        make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-        parse_ofp_str(line, &match, buffer,
-                      NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                      &cookie);
-        ofm = buffer->data;
-        ofm->match = match;
-        ofm->command = htons(OFPFC_ADD);
-        ofm->cookie = htonll(cookie);
-        ofm->idle_timeout = htons(idle_timeout);
-        ofm->hard_timeout = htons(hard_timeout);
-        ofm->buffer_id = htonl(UINT32_MAX);
-        ofm->priority = htons(priority);
-
-        send_openflow_buffer(vconn, buffer);
+    while ((b = parse_ofp_add_flow_file(file)) != NULL) {
+        send_openflow_buffer(vconn, b);
     }
     vconn_close(vconn);
     fclose(file);

@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "dynamic-string.h"
 #include "netdev.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -29,7 +30,7 @@
 #include "socket-util.h"
 #include "vconn.h"
 #include "vlog.h"
-
+#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse)
 
@@ -501,4 +502,66 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
         free(old);
         free(new);
     }
+}
+
+/* Parses 'string' as a OFPT_FLOW_MOD with subtype OFPFC_ADD and returns an
+ * ofpbuf that contains it. */
+struct ofpbuf *
+parse_ofp_add_flow_str(char *string)
+{
+    struct ofpbuf *buffer;
+    struct ofp_flow_mod *ofm;
+    uint16_t priority, idle_timeout, hard_timeout;
+    uint64_t cookie;
+    struct ofp_match match;
+
+    /* parse_ofp_str() will expand and reallocate the data in 'buffer', so we
+     * can't keep pointers to across the parse_ofp_str() call. */
+    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
+    parse_ofp_str(string, &match, buffer,
+                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                  &cookie);
+    ofm = buffer->data;
+    ofm->match = match;
+    ofm->command = htons(OFPFC_ADD);
+    ofm->cookie = htonll(cookie);
+    ofm->idle_timeout = htons(idle_timeout);
+    ofm->hard_timeout = htons(hard_timeout);
+    ofm->buffer_id = htonl(UINT32_MAX);
+    ofm->priority = htons(priority);
+    update_openflow_length(buffer);
+
+    return buffer;
+}
+
+/* Parses an OFPT_FLOW_MOD with subtype OFPFC_ADD from 'stream' and returns an
+ * ofpbuf that contains it.  Returns a null pointer if end-of-file is reached
+ * before reading a flow. */
+struct ofpbuf *
+parse_ofp_add_flow_file(FILE *stream)
+{
+    struct ofpbuf *b = NULL;
+    struct ds s = DS_EMPTY_INITIALIZER;
+
+    while (!ds_get_line(&s, stream)) {
+        char *line = ds_cstr(&s);
+        char *comment;
+
+        /* Delete comments. */
+        comment = strchr(line, '#');
+        if (comment) {
+            *comment = '\0';
+        }
+
+        /* Drop empty lines. */
+        if (line[strspn(line, " \t\n")] == '\0') {
+            continue;
+        }
+
+        b = parse_ofp_add_flow_str(line);
+        break;
+    }
+    ds_destroy(&s);
+
+    return b;
 }

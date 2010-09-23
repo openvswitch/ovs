@@ -20,6 +20,7 @@
 #define OFP_PARSE_H 1
 
 #include <stdint.h>
+#include <stdio.h>
 
 struct ofp_match;
 struct ofpbuf;
@@ -29,5 +30,7 @@ void parse_ofp_str(char *string, struct ofp_match *match,
                    uint16_t *out_port, uint16_t *priority,
                    uint16_t *idle_timeout, uint16_t *hard_timeout,
                    uint64_t *cookie);
+struct ofpbuf *parse_ofp_add_flow_str(char *string);
+struct ofpbuf *parse_ofp_add_flow_file(FILE *);
 
 #endif /* ofp-parse.h */
