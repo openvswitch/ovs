@@ -189,10 +189,10 @@ static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
 
-/* Each time this timer expires, the bridge fetches statistics for every
- * interface and pushes them into the database. */
-#define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
-static long long int iface_stats_timer = LLONG_MIN;
+/* Each time this timer expires, the bridge fetches systems and interface
+ * statistics and pushes them into the database. */
+#define STATS_INTERVAL (5 * 1000) /* In milliseconds. */
+static long long int stats_timer = LLONG_MIN;
 
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
@@ -307,7 +307,7 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     }
     already_configured_once = true;
 
-    iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+    stats_timer = time_msec() + STATS_INTERVAL;
 
     /* Get all the configured bridges' names from 'cfg' into 'bridge_names'. */
     svec_init(&bridge_names);
@@ -1166,8 +1166,8 @@ bridge_run(void)
     }
 #endif
 
-    /* Refresh interface stats if necessary. */
-    if (time_msec() >= iface_stats_timer) {
+    /* Refresh system and interface stats if necessary. */
+    if (time_msec() >= stats_timer) {
         if (cfg) {
             struct ovsdb_idl_txn *txn;
 
@@ -1190,7 +1190,7 @@ bridge_run(void)
             ovsdb_idl_txn_destroy(txn); /* XXX */
         }
 
-        iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+        stats_timer = time_msec() + STATS_INTERVAL;
     }
 }
 
@@ -1209,7 +1209,7 @@ bridge_wait(void)
         bond_wait(br);
     }
     ovsdb_idl_wait(idl);
-    poll_timer_wait_until(iface_stats_timer);
+    poll_timer_wait_until(stats_timer);
 }
 
 /* Forces 'br' to revalidate all of its flows.  This is appropriate when 'br''s
