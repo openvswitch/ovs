@@ -93,10 +93,10 @@ force_stop() {
     [ ! -f "$pidfile" ] && return
     if running $name; then
         kill $pid
-        [ -n "$DODTIME" ] && sleep "$DODTIME"s
+        [ -n "$DODTIME" ] && sleep "$DODTIME"
         if running $name; then
             kill -KILL $pid
-            [ -n "$DODTIME" ] && sleep "$DODTIME"s
+            [ -n "$DODTIME" ] && sleep "$DODTIME"
             if running $name; then
                 echo "Cannot kill $name (pid=$pid)!"
                 exit 1
