@@ -655,15 +655,15 @@
             <dl>
               <dt><code>header_cache</code></dt>
               <dd>Optional.  Enable caching of tunnel headers and the output
-		path.  This can lead to a significant performance increase
-		without changing behavior.  In general it should not be
-		necessary to adjust this setting.  However, the caching can
-		bypass certain components of the IP stack (such as IP tables)
-		and it may be useful to disable it if these features are
-		required or as a debugging measure.  Default is enabled, set to
-		<code>false</code> to disable.  If IPsec is enabled through the
-		<ref column="other_config"/> parameters, header caching will be
-		automatically disabled.</dd>
+                path.  This can lead to a significant performance increase
+                without changing behavior.  In general it should not be
+                necessary to adjust this setting.  However, the caching can
+                bypass certain components of the IP stack (such as IP tables)
+                and it may be useful to disable it if these features are
+                required or as a debugging measure.  Default is enabled, set to
+                <code>false</code> to disable.  If IPsec is enabled through the
+                <ref column="other_config"/> parameters, header caching will be
+                automatically disabled.</dd>
             </dl>
           </dd>
           <dt><code>capwap</code></dt>
@@ -723,13 +723,13 @@
             <dl>
               <dt><code>header_cache</code></dt>
               <dd>Optional.  Enable caching of tunnel headers and the output
-		path.  This can lead to a significant performance increase
-		without changing behavior.  In general it should not be
-		necessary to adjust this setting.  However, the caching can
-		bypass certain components of the IP stack (such as IP tables)
-		and it may be useful to disable it if these features are
-		required or as a debugging measure.  Default is enabled, set to
-		<code>false</code> to disable.</dd>
+                path.  This can lead to a significant performance increase
+                without changing behavior.  In general it should not be
+                necessary to adjust this setting.  However, the caching can
+                bypass certain components of the IP stack (such as IP tables)
+                and it may be useful to disable it if these features are
+                required or as a debugging measure.  Default is enabled, set to
+                <code>false</code> to disable.</dd>
             </dl>
           </dd>
           <dt><code>patch</code></dt>
@@ -1300,34 +1300,34 @@
             restricted to the specified local IP address.
           </dd>
         </dl>
-	<p>When multiple controllers are configured for a single bridge, the
-	  <ref column="target"/> values must be unique.  Duplicate
-	  <ref column="target"/> values yield unspecified results.</p>
+        <p>When multiple controllers are configured for a single bridge, the
+          <ref column="target"/> values must be unique.  Duplicate
+          <ref column="target"/> values yield unspecified results.</p>
       </column>
 
       <column name="connection_mode">
-	<p>If it is specified, this setting must be one of the following
-	strings that describes how Open vSwitch contacts this OpenFlow
-	controller over the network:</p>
+        <p>If it is specified, this setting must be one of the following
+        strings that describes how Open vSwitch contacts this OpenFlow
+        controller over the network:</p>
 
-	<dl>
-	  <dt><code>in-band</code></dt>
-	  <dd>In this mode, this controller's OpenFlow traffic travels over the
-	    bridge associated with the controller.  With this setting, Open
-	    vSwitch allows traffic to and from the controller regardless of the
-	    contents of the OpenFlow flow table.  (Otherwise, Open vSwitch
-	    would never be able to connect to the controller, because it did
-	    not have a flow to enable it.)  This is the most common connection
-	    mode because it is not necessary to maintain two independent
-	    networks.</dd>
-	  <dt><code>out-of-band</code></dt>
-	  <dd>In this mode, OpenFlow traffic uses a control network separate
-	    from the bridge associated with this controller, that is, the
-	    bridge does not use any of its own network devices to communicate
-	    with the controller.  The control network must be configured
-	    separately, before or after <code>ovs-vswitchd</code> is started.
-	  </dd>
-	</dl>
+        <dl>
+          <dt><code>in-band</code></dt>
+          <dd>In this mode, this controller's OpenFlow traffic travels over the
+            bridge associated with the controller.  With this setting, Open
+            vSwitch allows traffic to and from the controller regardless of the
+            contents of the OpenFlow flow table.  (Otherwise, Open vSwitch
+            would never be able to connect to the controller, because it did
+            not have a flow to enable it.)  This is the most common connection
+            mode because it is not necessary to maintain two independent
+            networks.</dd>
+          <dt><code>out-of-band</code></dt>
+          <dd>In this mode, OpenFlow traffic uses a control network separate
+            from the bridge associated with this controller, that is, the
+            bridge does not use any of its own network devices to communicate
+            with the controller.  The control network must be configured
+            separately, before or after <code>ovs-vswitchd</code> is started.
+          </dd>
+        </dl>
 
         <p>If not specified, the default is implementation-specific.  If
           <ref column="target"/> is <code>discover</code>, the connection mode
@@ -1384,7 +1384,7 @@
 
     <group title="Additional Discovery Configuration">
       <p>These values are considered only when <ref column="target"/>
-	is <code>discover</code>.</p>
+        is <code>discover</code>.</p>
 
       <column name="discover_accept_regex">
         A POSIX
@@ -1406,14 +1406,14 @@
 
     <group title="Additional In-Band Configuration">
       <p>These values are considered only in in-band control mode (see
-	<ref column="connection_mode"/>) and only when <ref column="target"/>
-	is not <code>discover</code>.  (For controller discovery, the network
-	configuration obtained via DHCP is used instead.)</p>
+        <ref column="connection_mode"/>) and only when <ref column="target"/>
+        is not <code>discover</code>.  (For controller discovery, the network
+        configuration obtained via DHCP is used instead.)</p>
 
       <p>When multiple controllers are configured on a single bridge, there
-	should be only one set of unique values in these columns.  If different
-	values are set for these columns in different controllers, the effect
-	is unspecified.</p>
+        should be only one set of unique values in these columns.  If different
+        values are set for these columns in different controllers, the effect
+        is unspecified.</p>
 
       <column name="local_ip">
         The IP address to configure on the local port,
