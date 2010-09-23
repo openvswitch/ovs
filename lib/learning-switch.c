@@ -69,35 +69,23 @@ static packet_handler_func process_switch_features;
 static packet_handler_func process_packet_in;
 static packet_handler_func process_echo_request;
 
-/* Creates and returns a new learning switch.
- *
- * If 'learn_macs' is true, the new switch will learn the ports on which MAC
- * addresses appear.  Otherwise, the new switch will flood all packets.
- *
- * If 'max_idle' is nonnegative, the new switch will set up flows that expire
- * after the given number of seconds (or never expire, if 'max_idle' is
- * OFP_FLOW_PERMANENT).  Otherwise, the new switch will process every packet.
- *
- * The caller may provide an ofpbuf 'default_flows' that consists of a chain of
- * one or more OpenFlow messages to send to the switch at time of connection.
- * Presumably these will be OFPT_FLOW_MOD requests to set up the flow table.
+/* Creates and returns a new learning switch whose configuration is given by
+ * 'cfg'.
  *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
-lswitch_create(struct rconn *rconn, bool learn_macs,
-               bool exact_flows, int max_idle, bool action_normal,
-               const struct ofpbuf *default_flows)
+lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
     const struct ofpbuf *b;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
-    sw->max_idle = max_idle;
+    sw->max_idle = cfg->max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;
-    sw->ml = learn_macs ? mac_learning_create() : NULL;
-    sw->action_normal = action_normal;
-    if (exact_flows) {
+    sw->ml = cfg->mode == LSW_LEARN ? mac_learning_create() : NULL;
+    sw->action_normal = cfg->mode == LSW_NORMAL;
+    if (cfg->exact_flows) {
         /* Exact match. */
         sw->wildcards = 0;
     } else {
@@ -107,11 +95,11 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
         sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
                          | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
     }
-    sw->queue = UINT32_MAX;
+    sw->queue = cfg->queue_id;
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
 
-    for (b = default_flows; b; b = b->next) {
+    for (b = cfg->default_flows; b; b = b->next) {
         queue_tx(sw, rconn, ofpbuf_clone(b));
     }
 
@@ -127,15 +115,6 @@ lswitch_destroy(struct lswitch *sw)
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
     }
-}
-
-/* Sets 'queue' as the OpenFlow queue used by packets and flows set up by 'sw'.
- * Specify UINT32_MAX to avoid specifying a particular queue, which is also the
- * default if this function is never called for 'sw'.  */
-void
-lswitch_set_queue(struct lswitch *sw, uint32_t queue)
-{
-    sw->queue = queue;
 }
 
 /* Takes care of necessary 'sw' activity, except for receiving packets (which

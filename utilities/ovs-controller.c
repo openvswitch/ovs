@@ -215,13 +215,18 @@ main(int argc, char *argv[])
 static void
 new_switch(struct switch_ *sw, struct vconn *vconn)
 {
+    struct lswitch_config cfg;
+
     sw->rconn = rconn_create(60, 0);
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
-    sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
-                                 set_up_flows ? max_idle : -1,
-                                 action_normal, default_flows.head);
 
-    lswitch_set_queue(sw->lswitch, queue_id);
+    cfg.mode = (action_normal ? LSW_NORMAL
+                : learn_macs ? LSW_LEARN
+                : LSW_FLOOD);
+    cfg.max_idle = set_up_flows ? max_idle : -1;
+    cfg.default_flows = default_flows.head;
+    cfg.queue_id = queue_id;
+    sw->lswitch = lswitch_create(sw->rconn, &cfg);
 }
 
 static int
