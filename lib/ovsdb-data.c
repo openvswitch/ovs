@@ -1444,6 +1444,31 @@ ovsdb_datum_to_string(const struct ovsdb_datum *datum,
     }
 }
 
+/* Initializes 'datum' as a string-to-string map whose contents are taken from
+ * 'sh'.  Destroys 'sh'. */
+void
+ovsdb_datum_from_shash(struct ovsdb_datum *datum, struct shash *sh)
+{
+    struct shash_node *node, *next;
+    size_t i;
+
+    datum->n = shash_count(sh);
+    datum->keys = xmalloc(datum->n * sizeof *datum->keys);
+    datum->values = xmalloc(datum->n * sizeof *datum->values);
+
+    i = 0;
+    SHASH_FOR_EACH_SAFE (node, next, sh) {
+        datum->keys[i].string = node->name;
+        datum->values[i].string = node->data;
+        shash_steal(sh, node);
+        i++;
+    }
+    assert(i == datum->n);
+
+    shash_destroy(sh);
+    ovsdb_datum_sort_unique(datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+}
+
 static uint32_t
 hash_atoms(enum ovsdb_atomic_type type, const union ovsdb_atom *atoms,
            unsigned int n, uint32_t basis)

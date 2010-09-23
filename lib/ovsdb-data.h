@@ -22,6 +22,7 @@
 
 struct ds;
 struct ovsdb_symbol_table;
+struct shash;
 
 /* One value of an atomic type (given by enum ovs_atomic_type). */
 union ovsdb_atom {
@@ -166,6 +167,8 @@ char *ovsdb_datum_from_string(struct ovsdb_datum *,
     WARN_UNUSED_RESULT;
 void ovsdb_datum_to_string(const struct ovsdb_datum *,
                            const struct ovsdb_type *, struct ds *);
+
+void ovsdb_datum_from_shash(struct ovsdb_datum *, struct shash *);
 
 /* Comparison. */
 uint32_t ovsdb_datum_hash(const struct ovsdb_datum *,
