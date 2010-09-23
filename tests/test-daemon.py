@@ -13,13 +13,20 @@
 # limitations under the License.
 
 import getopt
+import signal
 import sys
 import time
 
 import ovs.daemon
 import ovs.util
 
+def handler(signum, frame):
+    raise Exception("Signal handler called with %d" % signum)
+
 def main(argv):
+
+    signal.signal(signal.SIGHUP, handler)
+
     try:
         options, args = getopt.gnu_getopt(
             argv[1:], 'b', ["bail", "help"] + ovs.daemon.LONG_OPTIONS)
@@ -63,4 +70,10 @@ Other options:
     sys.exit(0)
 
 if __name__ == '__main__':
-    main(sys.argv)
+    try:
+        main(sys.argv)
+    except SystemExit:
+        # Let system.exit() calls complete normally
+        raise
+    except:
+        sys.exit(ovs.daemon.RESTART_EXIT_CODE)
