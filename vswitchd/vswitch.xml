@@ -661,7 +661,9 @@
 		bypass certain components of the IP stack (such as IP tables)
 		and it may be useful to disable it if these features are
 		required or as a debugging measure.  Default is enabled, set to
-		<code>false</code> to disable.</dd>
+		<code>false</code> to disable.  If IPsec is enabled through the
+		<ref column="other_config"/> parameters, header caching will be
+		automatically disabled.</dd>
             </dl>
           </dd>
           <dt><code>capwap</code></dt>

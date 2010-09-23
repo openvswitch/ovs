@@ -62,6 +62,8 @@ parse_config(const char *name, const char *type, const struct shash *args,
              struct tnl_port_config *config)
 {
     struct shash_node *node;
+    bool ipsec_ip_set = false;
+    bool ipsec_mech_set = false;
 
     memset(config, 0, sizeof *config);
 
@@ -126,9 +128,22 @@ parse_config(const char *name, const char *type, const struct shash *args,
             if (!strcmp(node->data, "false")) {
                 config->flags &= ~TNL_F_HDR_CACHE;
             }
+        } else if (!strcmp(node->name, "ipsec_local_ip")) {
+            ipsec_ip_set = true;
+        } else if (!strcmp(node->name, "ipsec_cert")
+                   || !strcmp(node->name, "ipsec_psk")) {
+            ipsec_mech_set = true;
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->name);
         }
+    }
+
+    /* IPsec doesn't work when header caching is enabled.  Disable it if
+     * the IPsec local IP address and authentication mechanism have been
+     * defined. */
+    if (ipsec_ip_set && ipsec_mech_set) {
+        VLOG_INFO("%s: header caching disabled due to use of IPsec", name);
+        config->flags &= ~TNL_F_HDR_CACHE;
     }
 
     if (!config->daddr) {

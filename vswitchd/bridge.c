@@ -374,6 +374,20 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
                   xstrdup(iface_cfg->value_options[i]));
     }
 
+    /* Include 'other_config' keys in hash of netdev options.  The
+     * namespace of 'other_config' and 'options' must be disjoint.
+     * Prefer 'options' keys over 'other_config' keys. */
+    for (i = 0; i < iface_cfg->n_other_config; i++) {
+        char *value = xstrdup(iface_cfg->value_other_config[i]);
+        if (!shash_add_once(&options, iface_cfg->key_other_config[i],
+                            value)) {
+            VLOG_WARN("%s: \"other_config\" key %s conflicts with existing "
+                      "\"other_config\" or \"options\" entry...ignoring",
+                      iface_cfg->name, iface_cfg->key_other_config[i]);
+            free(value);
+        }
+    }
+
     if (create) {
         struct netdev_options netdev_options;
 
