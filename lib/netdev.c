@@ -1553,8 +1553,7 @@ netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
         *devnamep = NULL;
         return EAGAIN;
     } else {
-        *devnamep = xstrdup(node->name);
-        shash_delete(&monitor->changed_netdevs, node);
+        *devnamep = shash_steal(&monitor->changed_netdevs, node);
         return 0;
     }
 }

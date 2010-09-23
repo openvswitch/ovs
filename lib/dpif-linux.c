@@ -338,8 +338,7 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
         return ENOBUFS;
     } else if (!shash_is_empty(&dpif->changed_ports)) {
         struct shash_node *node = shash_first(&dpif->changed_ports);
-        *devnamep = xstrdup(node->name);
-        shash_delete(&dpif->changed_ports, node);
+        *devnamep = shash_steal(&dpif->changed_ports, node);
         return 0;
     } else {
         return EAGAIN;
