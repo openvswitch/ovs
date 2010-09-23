@@ -33,8 +33,8 @@ AT_CHECK([kill -0 `cat pid`], [0], [], [], [kill `cat parent`])
 AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
   [0], [], [], [kill `cat parent`])
 AT_CHECK(
-  [parentpid=`cat parentpid` && 
-   parent=`cat parent` && 
+  [parentpid=`cat parentpid` &&
+   parent=`cat parent` &&
    test $parentpid = $parent],
   [0], [], [], [kill `cat parent`])
 # Kill the daemon process, making it look like a segfault,
@@ -50,8 +50,8 @@ AT_CHECK([cp pid newpid], [0], [], [], [kill `cat parent`])
 AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
   [0], [], [], [kill `cat parent`])
 AT_CHECK(
-  [parentpid=`cat parentpid` && 
-   parent=`cat parent` && 
+  [parentpid=`cat parentpid` &&
+   parent=`cat parent` &&
    test $parentpid = $parent],
   [0], [], [], [kill `cat parent`])
 # Kill the daemon process with SIGTERM, and wait for the daemon
@@ -79,7 +79,7 @@ AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-m4_define([CHECK], 
+m4_define([CHECK],
   [AT_CHECK([$1], [$2], [$3], [$4], [kill `cat daemon monitor`])])
 AT_CAPTURE_FILE([daemon])
 AT_CAPTURE_FILE([olddaemon])
