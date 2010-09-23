@@ -42,6 +42,7 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
 	debian/ovs-bugtool \
+	debian/ovs-bugtool.8 \
 	debian/ovs-monitor-ipsec \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \

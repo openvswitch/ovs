@@ -1,0 +1,46 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-bugtool 8 "September 2010" "Open vSwitch" "Open vSwitch Manual"
+.\" This program's name:
+.ds PN ovs\-bugtool
+.
+.SH NAME
+ovs\-bugtool \- Open vSwitch
+.
+.SH SYNOPSIS
+.B ovs\-bugtool
+.
+.SH DESCRIPTION
+Generate a debug bundle with useful information about Open vSwitch on this
+system. The bundle is placed in /var/log/openvswitch.
+.
+.SH OPTIONS
+.
+.IP "\fB\-\-all\fR"
+use all available capabilities.
+.
+.IP "\fB\-\-capabilities\fR"
+list \fBovs\-bugtool\fR capabilities.
+.
+.IP "\fB\-\-debug\fR"
+print verbose debugging output.
+.
+.IP "\fB\-\-entries=\fIlist\fR\fR"
+use the capabilities specified in a comma separated list.
+.
+.IP "\fB\-\-output=\fIfiletype\fR\fR"
+generate a debug bundle with the specified file type.  Options include \fBtar\fR,
+\fBtar.bz2\fR, and \fBzip\fR.
+.
+.IP "\fB\-\-silent\fR"
+suppress output.
+.
+.IP "\fB\-\-unlimited\fR"
+do not exclude files which are too large.
+.
+.IP "\fB\-\-yestoall\fR"
+answer yes to all prompts.
