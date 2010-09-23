@@ -105,6 +105,8 @@ When a switch connects, push the flow entries as described in
 \fIfile\fR.  Each line in \fIfile\fR is a flow entry in the format
 described for the \fBadd\-flows\fR command in the \fBFlow Syntax\fR
 section of the \fBovs\-ofctl\fR(8) man page.
+.IP
+Use this option more than once to add flows from multiple files.
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man

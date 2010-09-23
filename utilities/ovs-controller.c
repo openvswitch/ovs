@@ -28,6 +28,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "learning-switch.h"
+#include "ofp-parse.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
@@ -73,7 +74,7 @@ static uint32_t queue_id = UINT32_MAX;
 
 /* --with-flows: File with flows to send to switch, or null to not load
  * any default flows. */
-static FILE *flow_file = NULL;
+static struct ovs_queue default_flows = OVS_QUEUE_INITIALIZER;
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -216,16 +217,9 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
 {
     sw->rconn = rconn_create(60, 0);
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
-
-    /* If it was set, rewind 'flow_file' to the beginning, since a
-     * previous call to lswitch_create() will leave the stream at the
-     * end. */
-    if (flow_file) {
-        rewind(flow_file);
-    }
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
-                                 action_normal, flow_file);
+                                 action_normal, default_flows.head);
 
     lswitch_set_queue(sw->lswitch, queue_id);
 }
@@ -250,6 +244,24 @@ do_switching(struct switch_ *sw)
     return (!rconn_is_alive(sw->rconn) ? EOF
             : rconn_packets_sent(sw->rconn) != packets_sent ? 0
             : EAGAIN);
+}
+
+static void
+read_flow_file(const char *name)
+{
+    struct ofpbuf *b;
+    FILE *stream;
+
+    stream = fopen(optarg, "r");
+    if (!stream) {
+        ovs_fatal(errno, "%s: open", name);
+    }
+
+    while ((b = parse_ofp_add_flow_file(stream)) != NULL) {
+        queue_push_tail(&default_flows, b);
+    }
+
+    fclose(stream);
 }
 
 static void
@@ -332,10 +344,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_WITH_FLOWS:
-            flow_file = fopen(optarg, "r");
-            if (flow_file == NULL) {
-                ovs_fatal(errno, "%s: open", optarg);
-            }
+            read_flow_file(optarg);
             break;
 
         case OPT_UNIXCTL:

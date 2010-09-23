@@ -26,7 +26,8 @@ struct rconn;
 
 struct lswitch *lswitch_create(struct rconn *, bool learn_macs,
                                bool exact_flows, int max_idle,
-                               bool action_normal, FILE *default_flows);
+                               bool action_normal,
+                               const struct ofpbuf *default_flows);
 void lswitch_set_queue(struct lswitch *sw, uint32_t queue);
 void lswitch_run(struct lswitch *);
 void lswitch_wait(struct lswitch *);

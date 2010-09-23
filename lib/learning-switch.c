@@ -63,8 +63,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
-static void send_default_flows(struct lswitch *sw, struct rconn *rconn,
-                               FILE *default_flows);
 
 typedef void packet_handler_func(struct lswitch *, struct rconn *, void *);
 static packet_handler_func process_switch_features;
@@ -80,18 +78,17 @@ static packet_handler_func process_echo_request;
  * after the given number of seconds (or never expire, if 'max_idle' is
  * OFP_FLOW_PERMANENT).  Otherwise, the new switch will process every packet.
  *
- * The caller may provide the file stream 'default_flows' that defines
- * default flows that should be pushed when a switch connects.  Each
- * line is a flow entry in the format described for "add-flows" command
- * in the Flow Syntax section of the ovs-ofct(8) man page.  The caller
- * is responsible for closing the stream.
+ * The caller may provide an ofpbuf 'default_flows' that consists of a chain of
+ * one or more OpenFlow messages to send to the switch at time of connection.
+ * Presumably these will be OFPT_FLOW_MOD requests to set up the flow table.
  *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
 lswitch_create(struct rconn *rconn, bool learn_macs,
                bool exact_flows, int max_idle, bool action_normal,
-               FILE *default_flows)
+               const struct ofpbuf *default_flows)
 {
+    const struct ofpbuf *b;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
@@ -113,9 +110,11 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
     sw->queue = UINT32_MAX;
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
-    if (default_flows) {
-        send_default_flows(sw, rconn, default_flows);
+
+    for (b = default_flows; b; b = b->next) {
+        queue_tx(sw, rconn, ofpbuf_clone(b));
     }
+
     return sw;
 }
 
@@ -245,17 +244,6 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
         queue_tx(sw, rconn, b);
 
         sw->last_features_request = now;
-    }
-}
-
-static void
-send_default_flows(struct lswitch *sw, struct rconn *rconn,
-                   FILE *default_flows)
-{
-    struct ofpbuf *b;
-
-    while ((b = parse_ofp_add_flow_file(default_flows)) != NULL) {
-        queue_tx(sw, rconn, b);
     }
 }
 
