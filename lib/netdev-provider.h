@@ -129,11 +129,11 @@ struct netdev_class {
      * to be called.  May be null if nothing is needed here. */
     void (*wait)(void);
 
-    /* Attempts to create a network device of 'type' with 'name'.
-     * 'type' corresponds to the 'type' field used in the netdev_class
-     * structure. On success sets 'netdev_devp' to the newly created device. */
-    int (*create)(const char *name, const char *type, const struct shash *args,
-                  struct netdev_dev **netdev_devp);
+    /* Attempts to create a network device named 'name' with initial 'args' in
+     * 'netdev_class'.  On success sets 'netdev_devp' to the newly created
+     * device. */
+    int (*create)(const struct netdev_class *netdev_class, const char *name,
+                  const struct shash *args, struct netdev_dev **netdev_devp);
 
     /* Destroys 'netdev_dev'.
      *

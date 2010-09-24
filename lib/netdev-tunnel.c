@@ -39,7 +39,7 @@ struct netdev_tunnel {
     struct netdev netdev;
 };
 
-static int netdev_tunnel_create(const char *name, const char *type,
+static int netdev_tunnel_create(const struct netdev_class *, const char *name,
                                 const struct shash *args, struct netdev_dev **);
 
 static struct netdev_dev_tunnel *
@@ -155,7 +155,7 @@ parse_config(const char *name, const char *type, const struct shash *args,
 }
 
 static int
-netdev_tunnel_create(const char *name, const char *type,
+netdev_tunnel_create(const struct netdev_class *class, const char *name,
                      const struct shash *args, struct netdev_dev **netdev_devp)
 {
     int err;
@@ -163,11 +163,11 @@ netdev_tunnel_create(const char *name, const char *type,
     struct tnl_port_config port_config;
     struct netdev_dev_tunnel *netdev_dev;
 
-    ovs_strlcpy(ova.port_type, type, sizeof ova.port_type);
+    ovs_strlcpy(ova.port_type, class->type, sizeof ova.port_type);
     ovs_strlcpy(ova.devname, name, sizeof ova.devname);
     ova.config = &port_config;
 
-    err = parse_config(name, type, args, &port_config);
+    err = parse_config(name, class->type, args, &port_config);
     if (err) {
         return err;
     }
@@ -190,12 +190,7 @@ netdev_tunnel_create(const char *name, const char *type,
 
     netdev_dev = xmalloc(sizeof *netdev_dev);
 
-    if (!strcmp(type, "gre")) {
-        netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
-    } else {
-        netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_capwap_class);
-    }
-
+    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 }

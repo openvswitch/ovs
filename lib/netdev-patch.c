@@ -85,8 +85,9 @@ parse_config(const char *name, const struct shash *args,
 }
 
 static int
-netdev_patch_create(const char *name, const char *type OVS_UNUSED,
-                  const struct shash *args, struct netdev_dev **netdev_devp)
+netdev_patch_create(const struct netdev_class *class OVS_UNUSED,
+                    const char *name, const struct shash *args,
+                    struct netdev_dev **netdev_devp)
 {
     int err;
     struct odp_vport_add ova;

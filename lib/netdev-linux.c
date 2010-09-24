@@ -487,8 +487,9 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
 
 /* Creates the netdev device of 'type' with 'name'. */
 static int
-netdev_linux_create_system(const char *name, const char *type OVS_UNUSED,
-                    const struct shash *args, struct netdev_dev **netdev_devp)
+netdev_linux_create_system(const struct netdev_class *class OVS_UNUSED,
+                           const char *name, const struct shash *args,
+                           struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
     int error;
@@ -520,8 +521,9 @@ netdev_linux_create_system(const char *name, const char *type OVS_UNUSED,
  * buffers, across all readers.  Therefore once data is read it will
  * be unavailable to other reads for tap devices. */
 static int
-netdev_linux_create_tap(const char *name, const char *type OVS_UNUSED,
-                    const struct shash *args, struct netdev_dev **netdev_devp)
+netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
+                        const char *name, const struct shash *args,
+                        struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
     struct tap_state *state;

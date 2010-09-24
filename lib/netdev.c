@@ -276,7 +276,7 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
         return EAFNOSUPPORT;
     }
 
-    return netdev_class->create(options->name, options->type, options->args,
+    return netdev_class->create(netdev_class, options->name, options->args,
                                 netdev_devp);
 }
 
