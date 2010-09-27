@@ -684,12 +684,21 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                     reconfigure_iface_netdev(iface);
                 }
             } else {
-                /* Need to add to datapath. */
                 bool internal;
                 int error;
 
-                /* Add to datapath. */
+                /* Create interface if it doesn't already exist. */
                 internal = iface_is_internal(br, if_name);
+                if (!internal) {
+                    error = create_iface_netdev(iface);
+                    if (error) {
+                        VLOG_WARN("could not create iface %s: %s", iface->name,
+                                  strerror(error));
+                    }
+                    continue;
+                }
+
+                /* Add to datapath. */
                 error = dpif_port_add(br->dpif, if_name,
                                       internal ? ODP_PORT_INTERNAL : 0, NULL);
                 if (error == EFBIG) {
@@ -3692,7 +3701,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     struct bridge *br = port->bridge;
     struct iface *iface;
     char *name = if_cfg->name;
-    int error;
 
     iface = xzalloc(sizeof *iface);
     iface->port = port;
@@ -3705,20 +3713,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->cfg = if_cfg;
 
     shash_add_assert(&br->iface_by_name, iface->name, iface);
-
-    /* Attempt to create the network interface in case it doesn't exist yet. */
-    if (!iface_is_internal(br, iface->name)) {
-        error = create_iface_netdev(iface);
-        if (error) {
-            VLOG_WARN("could not create iface %s: %s", iface->name,
-                      strerror(error));
-
-            shash_find_and_delete_assert(&br->iface_by_name, iface->name);
-            free(iface->name);
-            free(iface);
-            return NULL;
-        }
-    }
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
