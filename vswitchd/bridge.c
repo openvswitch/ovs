@@ -362,29 +362,28 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 /* Attempt to create the network device 'iface_name' through the netdev
  * library. */
 static int
-set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
-             bool create)
+set_up_iface(struct iface *iface, bool create)
 {
     struct shash options;
     int error = 0;
     size_t i;
 
     shash_init(&options);
-    for (i = 0; i < iface_cfg->n_options; i++) {
-        shash_add(&options, iface_cfg->key_options[i],
-                  xstrdup(iface_cfg->value_options[i]));
+    for (i = 0; i < iface->cfg->n_options; i++) {
+        shash_add(&options, iface->cfg->key_options[i],
+                  xstrdup(iface->cfg->value_options[i]));
     }
 
     /* Include 'other_config' keys in hash of netdev options.  The
      * namespace of 'other_config' and 'options' must be disjoint.
      * Prefer 'options' keys over 'other_config' keys. */
-    for (i = 0; i < iface_cfg->n_other_config; i++) {
-        char *value = xstrdup(iface_cfg->value_other_config[i]);
-        if (!shash_add_once(&options, iface_cfg->key_other_config[i],
+    for (i = 0; i < iface->cfg->n_other_config; i++) {
+        char *value = xstrdup(iface->cfg->value_other_config[i]);
+        if (!shash_add_once(&options, iface->cfg->key_other_config[i],
                             value)) {
             VLOG_WARN("%s: \"other_config\" key %s conflicts with existing "
                       "\"other_config\" or \"options\" entry...ignoring",
-                      iface_cfg->name, iface_cfg->key_other_config[i]);
+                      iface->cfg->name, iface->cfg->key_other_config[i]);
             free(value);
         }
     }
@@ -393,12 +392,12 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         struct netdev_options netdev_options;
 
         memset(&netdev_options, 0, sizeof netdev_options);
-        netdev_options.name = iface_cfg->name;
-        if (!strcmp(iface_cfg->type, "internal")) {
+        netdev_options.name = iface->cfg->name;
+        if (!strcmp(iface->cfg->type, "internal")) {
             /* An "internal" config type maps to a netdev "system" type. */
             netdev_options.type = "system";
         } else {
-            netdev_options.type = iface_cfg->type;
+            netdev_options.type = iface->cfg->type;
         }
         netdev_options.args = &options;
         netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
@@ -410,8 +409,8 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         }
     } else if (iface->netdev) {
         const char *netdev_type = netdev_get_type(iface->netdev);
-        const char *iface_type = iface_cfg->type && strlen(iface_cfg->type)
-                                  ? iface_cfg->type : NULL;
+        const char *iface_type = iface->cfg->type && strlen(iface->cfg->type)
+                                  ? iface->cfg->type : NULL;
 
         /* An "internal" config type maps to a netdev "system" type. */
         if (iface_type && !strcmp(iface_type, "internal")) {
@@ -422,7 +421,7 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
             error = netdev_reconfigure(iface->netdev, &options);
         } else {
             VLOG_WARN("%s: attempting change device type from %s to %s",
-                      iface_cfg->name, netdev_type, iface_type);
+                      iface->cfg->name, netdev_type, iface_type);
             error = EINVAL;
         }
     }
@@ -431,18 +430,12 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
     return error;
 }
 
-static int
-reconfigure_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface)
-{
-    return set_up_iface(iface_cfg, iface, false);
-}
-
 static bool
 check_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
                    void *aux OVS_UNUSED)
 {
     if (!iface->netdev) {
-        int error = set_up_iface(iface->cfg, iface, true);
+        int error = set_up_iface(iface, true);
         if (error) {
             VLOG_WARN("could not open netdev on %s, dropping: %s", iface->name,
                                                                strerror(error));
@@ -668,7 +661,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             if (shash_find(&cur_ifaces, if_name)) {
                 /* Already exists, just reconfigure it. */
                 if (iface) {
-                    reconfigure_iface(iface->cfg, iface);
+                    set_up_iface(iface, false);
                 }
             } else {
                 /* Need to add to datapath. */
@@ -3695,7 +3688,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 
     /* Attempt to create the network interface in case it doesn't exist yet. */
     if (!iface_is_internal(br, iface->name)) {
-        error = set_up_iface(if_cfg, iface, true);
+        error = set_up_iface(iface, true);
         if (error) {
             VLOG_WARN("could not create iface %s: %s", iface->name,
                       strerror(error));
