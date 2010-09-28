@@ -2563,29 +2563,20 @@ bridge_port_changed_ofhook_cb(enum ofp_port_reason reason,
     struct iface *iface;
     struct port *port;
 
+    if (reason == OFPPR_DELETE || !br->has_bonded_ports) {
+        return;
+    }
+
     iface = iface_from_dp_ifidx(br, ofp_port_to_odp_port(opp->port_no));
     if (!iface) {
         return;
     }
     port = iface->port;
 
-    if (reason == OFPPR_DELETE) {
-        VLOG_WARN("bridge %s: interface %s deleted unexpectedly",
-                  br->name, iface->name);
-        iface_destroy(iface);
-        if (!port->n_ifaces) {
-            VLOG_WARN("bridge %s: port %s has no interfaces, dropping",
-                      br->name, port->name);
-            port_destroy(port);
-        }
-
-        bridge_flush(br);
-    } else {
-        if (port->n_ifaces > 1) {
-            bool up = !(opp->state & OFPPS_LINK_DOWN);
-            bond_link_status_update(iface, up);
-            port_update_bond_compat(port);
-        }
+    if (port->n_ifaces > 1) {
+        bool up = !(opp->state & OFPPS_LINK_DOWN);
+        bond_link_status_update(iface, up);
+        port_update_bond_compat(port);
     }
 }
 
