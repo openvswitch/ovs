@@ -451,38 +451,27 @@ reconfigure_iface_netdev(struct iface *iface)
     return error;
 }
 
+/* Callback for iterate_and_prune_ifaces(). */
 static bool
-check_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
-                   void *aux OVS_UNUSED)
+check_iface(struct bridge *br, struct iface *iface, void *aux OVS_UNUSED)
 {
     if (!iface->netdev) {
-        int error = create_iface_netdev(iface);
-        if (error) {
-            VLOG_WARN("could not open netdev on %s, dropping: %s", iface->name,
-                                                               strerror(error));
-            return false;
-        }
+        /* We already reported a related error, don't bother duplicating it. */
+        return false;
     }
 
-    return true;
-}
-
-static bool
-check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
-                     void *aux OVS_UNUSED)
-{
-    if (iface->dp_ifidx >= 0) {
-        VLOG_DBG("%s has interface %s on port %d",
-                 dpif_name(br->dpif),
-                 iface->name, iface->dp_ifidx);
-        return true;
-    } else {
+    if (iface->dp_ifidx < 0) {
         VLOG_ERR("%s interface not in %s, dropping",
                  iface->name, dpif_name(br->dpif));
         return false;
     }
+
+    VLOG_DBG("%s has interface %s on port %d", dpif_name(br->dpif),
+             iface->name, iface->dp_ifidx);
+    return true;
 }
 
+/* Callback for iterate_and_prune_ifaces(). */
 static bool
 set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
                      void *aux OVS_UNUSED)
@@ -760,8 +749,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         bridge_fetch_dp_ifaces(br);
 
-        iterate_and_prune_ifaces(br, check_iface_netdev, NULL);
-        iterate_and_prune_ifaces(br, check_iface_dp_ifidx, NULL);
+        iterate_and_prune_ifaces(br, check_iface, NULL);
 
         /* Pick local port hardware address, datapath ID. */
         bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
