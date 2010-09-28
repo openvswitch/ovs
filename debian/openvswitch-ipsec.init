@@ -69,6 +69,10 @@ running() {
 }
 
 start_server() {
+    if [ ! -d /var/run/openvswitch ]; then
+        install -d -m 755 -o root -g root /var/run/openvswitch
+    fi
+
     PYTHONPATH=/usr/share/openvswitch/python \
            /usr/share/openvswitch/scripts/ovs-monitor-ipsec \
            --pidfile-name=$PIDFILE --detach --monitor \
