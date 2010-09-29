@@ -40,6 +40,9 @@ bool inet_parse_active(const char *target, uint16_t default_port,
                        struct sockaddr_in *sinp);
 int inet_open_active(int style, const char *target, uint16_t default_port,
                     struct sockaddr_in *sinp, int *fdp);
+
+bool inet_parse_passive(const char *target, uint16_t default_port,
+                        struct sockaddr_in *sinp);
 int inet_open_passive(int style, const char *target, int default_port,
                       struct sockaddr_in *sinp);
 

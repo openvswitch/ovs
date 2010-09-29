@@ -554,9 +554,7 @@ exit:
     return error;
 }
 
-/* Opens a non-blocking IPv4 socket of the specified 'style', binds to
- * 'target', and listens for incoming connections.  'target' should be a string
- * in the format "[<port>][:<ip>]":
+/* Parses 'target', which should be a string in the format "[<port>][:<ip>]":
  *
  *      - If 'default_port' is -1, then <port> is required.  Otherwise, if
  *        <port> is omitted, then 'default_port' is used instead.
@@ -565,6 +563,55 @@ exit:
  *        and the TCP/IP stack will select a port.
  *
  *      - If <ip> is omitted then the IP address is wildcarded.
+ *
+ * If successful, stores the address into '*sinp' and returns true; otherwise
+ * zeros '*sinp' and returns false. */
+bool
+inet_parse_passive(const char *target_, uint16_t default_port,
+                   struct sockaddr_in *sinp)
+{
+    char *target = xstrdup(target_);
+    char *string_ptr = target;
+    const char *host_name;
+    const char *port_string;
+    bool ok = false;
+    int port;
+
+    /* Address defaults. */
+    memset(sinp, 0, sizeof *sinp);
+    sinp->sin_family = AF_INET;
+    sinp->sin_addr.s_addr = htonl(INADDR_ANY);
+    sinp->sin_port = htons(default_port);
+
+    /* Parse optional port number. */
+    port_string = strsep(&string_ptr, ":");
+    if (port_string && str_to_int(port_string, 10, &port)) {
+        sinp->sin_port = htons(port);
+    } else if (default_port < 0) {
+        VLOG_ERR("%s: port number must be specified", target_);
+        goto exit;
+    }
+
+    /* Parse optional bind IP. */
+    host_name = strsep(&string_ptr, ":");
+    if (host_name && host_name[0] && lookup_ip(host_name, &sinp->sin_addr)) {
+        goto exit;
+    }
+
+    ok = true;
+
+exit:
+    if (!ok) {
+        memset(sinp, 0, sizeof *sinp);
+    }
+    free(target);
+    return ok;
+}
+
+
+/* Opens a non-blocking IPv4 socket of the specified 'style', binds to
+ * 'target', and listens for incoming connections.  Parses 'target' in the same
+ * way was inet_parse_passive().
  *
  * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
@@ -576,96 +623,68 @@ exit:
  * If 'sinp' is non-null, then on success the bound address is stored into
  * '*sinp'. */
 int
-inet_open_passive(int style, const char *target_, int default_port,
+inet_open_passive(int style, const char *target, int default_port,
                   struct sockaddr_in *sinp)
 {
-    char *target = xstrdup(target_);
-    char *string_ptr = target;
     struct sockaddr_in sin;
-    const char *host_name;
-    const char *port_string;
-    int fd = 0, error, port;
-    unsigned int yes  = 1;
+    int fd = 0, error;
+    unsigned int yes = 1;
 
-    /* Address defaults. */
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_port = htons(default_port);
-
-    /* Parse optional port number. */
-    port_string = strsep(&string_ptr, ":");
-    if (port_string && str_to_int(port_string, 10, &port)) {
-        sin.sin_port = htons(port);
-    } else if (default_port < 0) {
-        VLOG_ERR("%s: port number must be specified", target_);
-        error = EAFNOSUPPORT;
-        goto exit;
-    }
-
-    /* Parse optional bind IP. */
-    host_name = strsep(&string_ptr, ":");
-    if (host_name && host_name[0]) {
-        error = lookup_ip(host_name, &sin.sin_addr);
-        if (error) {
-            goto exit;
-        }
+    if (!inet_parse_passive(target, default_port, &sin)) {
+        return EAFNOSUPPORT;
     }
 
     /* Create non-blocking socket, set SO_REUSEADDR. */
     fd = socket(AF_INET, style, 0);
     if (fd < 0) {
         error = errno;
-        VLOG_ERR("%s: socket: %s", target_, strerror(error));
-        goto exit;
+        VLOG_ERR("%s: socket: %s", target, strerror(error));
+        return error;
     }
     error = set_nonblocking(fd);
     if (error) {
-        goto exit_close;
+        goto error;
     }
     if (style == SOCK_STREAM
         && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
         error = errno;
-        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", target_, strerror(error));
-        goto exit_close;
+        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", target, strerror(error));
+        goto error;
     }
 
     /* Bind. */
     if (bind(fd, (struct sockaddr *) &sin, sizeof sin) < 0) {
         error = errno;
-        VLOG_ERR("%s: bind: %s", target_, strerror(error));
-        goto exit_close;
+        VLOG_ERR("%s: bind: %s", target, strerror(error));
+        goto error;
     }
 
     /* Listen. */
     if (listen(fd, 10) < 0) {
         error = errno;
-        VLOG_ERR("%s: listen: %s", target_, strerror(error));
-        goto exit_close;
+        VLOG_ERR("%s: listen: %s", target, strerror(error));
+        goto error;
     }
 
     if (sinp) {
         socklen_t sin_len = sizeof sin;
         if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0){
             error = errno;
-            VLOG_ERR("%s: getsockname: %s", target_, strerror(error));
-            goto exit_close;
+            VLOG_ERR("%s: getsockname: %s", target, strerror(error));
+            goto error;
         }
         if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
-            VLOG_ERR("%s: getsockname: invalid socket name", target_);
-            goto exit_close;
+            VLOG_ERR("%s: getsockname: invalid socket name", target);
+            goto error;
         }
         *sinp = sin;
     }
 
-    error = 0;
-    goto exit;
+    return fd;
 
-exit_close:
+error:
     close(fd);
-exit:
-    free(target);
-    return error ? -error : fd;
+    return error;
 }
 
 /* Returns a readable and writable fd for /dev/null, if successful, otherwise
