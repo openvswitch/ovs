@@ -4339,10 +4339,6 @@ rule_active_timeout(struct ofproto *ofproto, struct rule *rule)
         expired.used = rule->used;
 
         netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
-
-        /* Schedule us to send the accumulated records once we have
-         * collected all of them. */
-        poll_immediate_wake();
     }
 }
 
