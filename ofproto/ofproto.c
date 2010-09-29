@@ -4221,9 +4221,13 @@ ofproto_expire(struct ofproto *ofproto)
     /* Update 'used' for each flow in the datapath. */
     ofproto_update_used(ofproto);
 
-    /* Expire idle flows. */
+    /* Expire idle flows.
+     *
+     * A wildcarded flow is idle only when all of its subrules have expired due
+     * to becoming idle, so iterate through the exact-match flows first. */
     cbdata.ofproto = ofproto;
-    classifier_for_each(&ofproto->cls, CLS_INC_ALL, rule_expire, &cbdata);
+    classifier_for_each(&ofproto->cls, CLS_INC_EXACT, rule_expire, &cbdata);
+    classifier_for_each(&ofproto->cls, CLS_INC_WILD, rule_expire, &cbdata);
 
     /* Let the hook know that we're at a stable point: all outstanding data
      * in existing flows has been accounted to the account_cb.  Thus, the
