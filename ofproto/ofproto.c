@@ -2064,6 +2064,17 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
     return subrule;
 }
 
+/* Remove 'rule' from 'ofproto' and free up the associated memory:
+ *
+ *   - If 'rule' was installed in the datapath, uninstalls it and updates
+ *     'rule''s statistics (or its super-rule's statistics, if it is a
+ *     subrule), via rule_uninstall().
+ *
+ *   - Removes 'rule' from the classifier.
+ *
+ *   - If 'rule' is a super-rule that has subrules, revalidates (and possibly
+ *     uninstalls and destroys) its subrules, via rule_destroy().
+ */
 static void
 rule_remove(struct ofproto *ofproto, struct rule *rule)
 {
@@ -2201,6 +2212,14 @@ rule_account(struct ofproto *ofproto, struct rule *rule, uint64_t extra_bytes)
     }
 }
 
+/* 'rule' must be an exact-match rule in 'p'.
+ *
+ * If 'rule' is installed in the datapath, uninstalls it and updates's
+ * statistics.  If 'rule' is a subrule, the statistics that are updated are
+ * actually its super-rule's statistics; otherwise 'rule''s own statistics are
+ * updated.
+ *
+ * If 'rule' is not installed, this function has no effect. */
 static void
 rule_uninstall(struct ofproto *p, struct rule *rule)
 {
@@ -4318,16 +4337,24 @@ rule_expire(struct cls_rule *cls_rule, void *cbdata_)
     now = time_msec();
     if (now < expire) {
         /* 'rule' has not expired according to OpenFlow rules. */
-        if (rule->installed && now >= rule->used + 5000) {
-            /* This rule is idle, so uninstall it from the datapath. */
-            if (rule->super) {
-                rule_remove(ofproto, rule);
+        if (!rule->cr.wc.wildcards) {
+            if (now >= rule->used + 5000) {
+                /* This rule is idle, so drop it to free up resources. */
+                if (rule->super) {
+                    /* It's not part of the OpenFlow flow table, so we can
+                     * delete it entirely and fold its statistics into its
+                     * super-rule. */
+                    rule_remove(ofproto, rule);
+                } else {
+                    /* It is part of the OpenFlow flow table, so we have to
+                     * keep the rule but we can at least uninstall it from the
+                     * datapath. */
+                    rule_uninstall(ofproto, rule);
+                }
             } else {
-                rule_uninstall(ofproto, rule);
+                /* Send NetFlow active timeout if appropriate. */
+                rule_active_timeout(cbdata->ofproto, rule);
             }
-        } else if (!rule->cr.wc.wildcards) {
-            /* Send NetFlow active timeout if appropriate. */
-            rule_active_timeout(cbdata->ofproto, rule);
         }
     } else {
         /* 'rule' has expired according to OpenFlow rules. */
