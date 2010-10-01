@@ -465,10 +465,12 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
                     wildcards |= f->wildcard;
                 } else {
+                    uint16_t port_no;
+
                     wildcards &= ~f->wildcard;
                     if (f->wildcard == OFPFW_IN_PORT
-                        && parse_port_name(value, (uint16_t *) data)) {
-                        /* Nothing to do. */
+                        && parse_port_name(value, &port_no)) {
+                        match->in_port = htons(port_no);
                     } else if (f->type == F_U8) {
                         *(uint8_t *) data = str_to_u32(value);
                     } else if (f->type == F_U16) {
