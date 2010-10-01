@@ -147,6 +147,7 @@ struct port {
     long long int bond_next_fake_iface_update; /* Time of next update. */
     int bond_rebalance_interval; /* Interval between rebalances, in ms. */
     long long int bond_next_rebalance; /* Next rebalancing time. */
+    struct netdev_monitor *monitor; /* Tracks carrier up/down status. */
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
@@ -2054,6 +2055,21 @@ bond_run(struct bridge *br)
         struct port *port = br->ports[i];
 
         if (port->n_ifaces >= 2) {
+            char *devname;
+
+            /* Track carrier going up and down on interfaces. */
+            while (!netdev_monitor_poll(port->monitor, &devname)) {
+                struct iface *iface;
+                bool carrier;
+
+                iface = port_lookup_iface(port, devname);
+                if (iface && !netdev_get_carrier(iface->netdev, &carrier)) {
+                    bond_link_status_update(iface, carrier);
+                    port_update_bond_compat(port);
+                }
+                free(devname);
+            }
+
             for (j = 0; j < port->n_ifaces; j++) {
                 struct iface *iface = port->ifaces[j];
                 if (time_msec() >= iface->delay_expires) {
@@ -2085,6 +2101,7 @@ bond_wait(struct bridge *br)
         if (port->n_ifaces < 2) {
             continue;
         }
+        netdev_monitor_poll_wait(port->monitor);
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
             if (iface->delay_expires != LLONG_MAX) {
@@ -2552,34 +2569,6 @@ done:
     return true;
 }
 
-/* Careful: 'opp' is in host byte order and opp->port_no is an OFP port
- * number. */
-static void
-bridge_port_changed_ofhook_cb(enum ofp_port_reason reason,
-                              const struct ofp_phy_port *opp,
-                              void *br_)
-{
-    struct bridge *br = br_;
-    struct iface *iface;
-    struct port *port;
-
-    if (reason == OFPPR_DELETE || !br->has_bonded_ports) {
-        return;
-    }
-
-    iface = iface_from_dp_ifidx(br, ofp_port_to_odp_port(opp->port_no));
-    if (!iface) {
-        return;
-    }
-    port = iface->port;
-
-    if (port->n_ifaces > 1) {
-        bool up = !(opp->state & OFPPS_LINK_DOWN);
-        bond_link_status_update(iface, up);
-        port_update_bond_compat(port);
-    }
-}
-
 static bool
 bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
                         struct odp_actions *actions, tag_type *tags,
@@ -2653,7 +2642,6 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
 }
 
 static struct ofhooks bridge_ofhooks = {
-    bridge_port_changed_ofhook_cb,
     bridge_normal_ofhook_cb,
     bridge_account_flow_ofhook_cb,
     bridge_account_checkpoint_ofhook_cb,
@@ -3542,6 +3530,7 @@ port_destroy(struct port *port)
         del = br->ports[port->port_idx] = br->ports[--br->n_ports];
         del->port_idx = port->port_idx;
 
+        netdev_monitor_destroy(port->monitor);
         free(port->ifaces);
         bitmap_free(port->trunks);
         free(port->name);
@@ -3573,6 +3562,10 @@ port_lookup_iface(const struct port *port, const char *name)
 static void
 port_update_bonding(struct port *port)
 {
+    if (port->monitor) {
+        netdev_monitor_destroy(port->monitor);
+        port->monitor = NULL;
+    }
     if (port->n_ifaces < 2) {
         /* Not a bonded port. */
         if (port->bond_hash) {
@@ -3582,9 +3575,9 @@ port_update_bonding(struct port *port)
             port->bond_fake_iface = false;
         }
     } else {
-        if (!port->bond_hash) {
-            size_t i;
+        size_t i;
 
+        if (!port->bond_hash) {
             port->bond_hash = xcalloc(BOND_MASK + 1, sizeof *port->bond_hash);
             for (i = 0; i <= BOND_MASK; i++) {
                 struct bond_entry *e = &port->bond_hash[i];
@@ -3602,6 +3595,11 @@ port_update_bonding(struct port *port)
         }
         port->bond_compat_is_stale = true;
         port->bond_fake_iface = port->cfg->bond_fake_iface;
+
+        port->monitor = netdev_monitor_create();
+        for (i = 0; i < port->n_ifaces; i++) {
+            netdev_monitor_add(port->monitor, port->ifaces[i]->netdev);
+        }
     }
 }
 

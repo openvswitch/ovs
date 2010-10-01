@@ -1256,9 +1256,6 @@ ofproto_is_alive(const struct ofproto *p)
  * to do because of the conflict.  (The netdev would eventually get closed on
  * the next trip through ofproto_run(), but this interface is more direct.)
  *
- * The caller must be prepared for a callback to its port_changed_cb hook
- * function.
- *
  * Returns 0 if successful, otherwise a positive errno. */
 int
 ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
@@ -1516,9 +1513,6 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
         ops->desc = ofport->opp;
         hton_ofp_phy_port(&ops->desc);
         queue_tx(b, ofconn, NULL);
-    }
-    if (p->ofhooks->port_changed_cb) {
-        p->ofhooks->port_changed_cb(reason, &ofport->opp, p->aux);
     }
 }
 
@@ -4865,7 +4859,6 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
 }
 
 static const struct ofhooks default_ofhooks = {
-    NULL,
     default_normal_ofhook_cb,
     NULL,
     NULL

@@ -140,8 +140,6 @@ void ofproto_flush_flows(struct ofproto *);
 
 /* Hooks for ovs-vswitchd. */
 struct ofhooks {
-    void (*port_changed_cb)(enum ofp_port_reason, const struct ofp_phy_port *,
-                            void *aux);
     bool (*normal_cb)(const flow_t *, const struct ofpbuf *packet,
                       struct odp_actions *, tag_type *,
                       uint16_t *nf_output_iface, void *aux);
