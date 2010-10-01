@@ -36,12 +36,12 @@ import ovs.daemon
 import ovs.db.idl
 
 s_log     = logging.getLogger("ovs-external-ids")
-l_handler = logging.handlers.SysLogHandler(
-        "/dev/log",
-        facility=logging.handlers.SysLogHandler.LOG_DAEMON)
+l_handler = logging.handlers.RotatingFileHandler(
+        "/var/log/openvswitch/ovs-external-ids.log")
 l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
 l_handler.setFormatter(l_formatter)
 s_log.addHandler(l_handler)
+s_log.setLevel(logging.INFO)
 
 vsctl="/usr/bin/ovs-vsctl"
 session = None
