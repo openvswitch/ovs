@@ -752,31 +752,50 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
 {
     const struct ofp_flow_mod *ofm = oh;
 
+    ds_put_char(string, ' ');
     ofp_print_match(string, &ofm->match, verbosity);
+    if (ds_last(string) != ' ') {
+        ds_put_char(string, ' ');
+    }
+
     switch (ntohs(ofm->command)) {
     case OFPFC_ADD:
-        ds_put_cstr(string, " ADD: ");
+        ds_put_cstr(string, "ADD:");
         break;
     case OFPFC_MODIFY:
-        ds_put_cstr(string, " MOD: ");
+        ds_put_cstr(string, "MOD:");
         break;
     case OFPFC_MODIFY_STRICT:
-        ds_put_cstr(string, " MOD_STRICT: ");
+        ds_put_cstr(string, "MOD_STRICT:");
         break;
     case OFPFC_DELETE:
-        ds_put_cstr(string, " DEL: ");
+        ds_put_cstr(string, "DEL:");
         break;
     case OFPFC_DELETE_STRICT:
-        ds_put_cstr(string, " DEL_STRICT: ");
+        ds_put_cstr(string, "DEL_STRICT:");
         break;
     default:
-        ds_put_format(string, " cmd:%d ", ntohs(ofm->command));
+        ds_put_format(string, "cmd:%d", ntohs(ofm->command));
     }
-    ds_put_format(string, "cookie:0x%"PRIx64" idle:%d hard:%d pri:%d "
-            "buf:%#x flags:%"PRIx16" ", ntohll(ofm->cookie),
-            ntohs(ofm->idle_timeout), ntohs(ofm->hard_timeout),
-            ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
-            ntohl(ofm->buffer_id), ntohs(ofm->flags));
+    if (ofm->cookie != htonll(0)) {
+        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(ofm->cookie));
+    }
+    if (ofm->idle_timeout != htons(OFP_FLOW_PERMANENT)) {
+        ds_put_format(string, " idle:%d", ntohs(ofm->idle_timeout));
+    }
+    if (ofm->hard_timeout != htons(OFP_FLOW_PERMANENT)) {
+        ds_put_format(string, " hard:%d", ntohs(ofm->hard_timeout));
+    }
+    if (ofm->priority != htons(32768)) {
+        ds_put_format(string, " pri:%"PRIu16, ntohs(ofm->priority));
+    }
+    if (ofm->buffer_id != htonl(UINT32_MAX)) {
+        ds_put_format(string, " buf:%#"PRIx32, ntohl(ofm->buffer_id));
+    }
+    if (ofm->flags != htons(0)) {
+        ds_put_format(string, " flags:%"PRIx16, ntohs(ofm->flags));
+    }
+    ds_put_cstr(string, " ");
     ofp_print_actions(string, ofm->actions,
                       len - offsetof(struct ofp_flow_mod, actions));
     ds_put_char(string, '\n');
@@ -806,11 +825,15 @@ ofp_print_flow_removed(struct ds *string, const void *oh,
         ds_put_format(string, "**%"PRIu8"**", ofr->reason);
         break;
     }
-    ds_put_format(string,
-         " cookie0x%"PRIx64" pri%"PRIu16" secs%"PRIu32" nsecs%"PRIu32
+
+    if (ofr->cookie != htonll(0)) {
+        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(ofr->cookie));
+    }
+    if (ofr->priority != htons(32768)) {
+        ds_put_format(string, " pri:%"PRIu16, ntohs(ofr->priority));
+    }
+    ds_put_format(string, " secs%"PRIu32" nsecs%"PRIu32
          " idle%"PRIu16" pkts%"PRIu64" bytes%"PRIu64"\n",
-         ntohll(ofr->cookie),
-         ofr->match.wildcards ? ntohs(ofr->priority) : (uint16_t)-1,
          ntohl(ofr->duration_sec), ntohl(ofr->duration_nsec),
          ntohs(ofr->idle_timeout), ntohll(ofr->packet_count),
          ntohll(ofr->byte_count));
