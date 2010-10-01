@@ -46,9 +46,12 @@ struct lswitch_config {
      * requests to set up the flow table. */
     const struct ofpbuf *default_flows;
 
-    /* The OpenFlow queue used by packets and flows set up by 'sw'.  Use
-     * UINT32_MAX to avoid specifying a particular queue. */
-    uint32_t queue_id;
+    /* The OpenFlow queue to use by default.  Use UINT32_MAX to avoid
+     * specifying a particular queue. */
+    uint32_t default_queue;
+
+    /* Maps from a port name to a queue_id (cast to void *). */
+    const struct shash *port_queues;
 };
 
 struct lswitch *lswitch_create(struct rconn *, const struct lswitch_config *);

@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include "flow.h"
+#include "hmap.h"
 #include "mac-learning.h"
 #include "ofpbuf.h"
 #include "ofp-parse.h"
@@ -33,12 +34,19 @@
 #include "poll-loop.h"
 #include "queue.h"
 #include "rconn.h"
+#include "shash.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"
 #include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(learning_switch)
+
+struct lswitch_port {
+    struct hmap_node hmap_node; /* Hash node for port number. */
+    uint16_t port_no;           /* OpenFlow port number, in host byte order. */
+    uint32_t queue_id;          /* OpenFlow queue number. */
+};
 
 struct lswitch {
     /* If nonnegative, the switch sets up flows that expire after the given
@@ -51,7 +59,11 @@ struct lswitch {
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
     uint32_t wildcards;         /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
-    uint32_t queue;             /* OpenFlow queue to use, or UINT32_MAX. */
+
+    /* Queue distribution. */
+    uint32_t default_queue;     /* Default OpenFlow queue, or UINT32_MAX. */
+    struct hmap queue_numbers;  /* Map from port number to lswitch_port. */
+    struct shash queue_names;   /* Map from port name to lswitch_port. */
 
     /* Number of outgoing queued packets on the rconn. */
     struct rconn_packet_counter *queued;
@@ -95,7 +107,21 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
         sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
                          | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
     }
-    sw->queue = cfg->queue_id;
+
+    sw->default_queue = cfg->default_queue;
+    hmap_init(&sw->queue_numbers);
+    shash_init(&sw->queue_names);
+    if (cfg->port_queues) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, cfg->port_queues) {
+            struct lswitch_port *port = xmalloc(sizeof *port);
+            hmap_node_nullify(&port->hmap_node);
+            port->queue_id = (uintptr_t) node->data;
+            shash_add(&sw->queue_names, node->name, port);
+        }
+    }
+
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
 
@@ -111,6 +137,13 @@ void
 lswitch_destroy(struct lswitch *sw)
 {
     if (sw) {
+        struct lswitch_port *node, *next;
+
+        HMAP_FOR_EACH_SAFE (node, next, hmap_node, &sw->queue_numbers) {
+            hmap_remove(&sw->queue_numbers, &node->hmap_node);
+            free(node);
+        }
+        shash_destroy(&sw->queue_names);
         mac_learning_destroy(sw->ml);
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
@@ -247,8 +280,28 @@ process_switch_features(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
                         void *osf_)
 {
     struct ofp_switch_features *osf = osf_;
+    size_t n_ports;
+    size_t i;
+
+    if (check_ofp_message_array(&osf->header, OFPT_FEATURES_REPLY,
+                                sizeof *osf, sizeof *osf->ports, &n_ports)) {
+        return;
+    }
 
     sw->datapath_id = ntohll(osf->datapath_id);
+
+    for (i = 0; i < n_ports; i++) {
+        struct ofp_phy_port *opp = &osf->ports[i];
+        struct lswitch_port *lp;
+
+        opp->name[OFP_MAX_PORT_NAME_LEN - 1] = '\0';
+        lp = shash_find_data(&sw->queue_names, (char *) opp->name);
+        if (lp && hmap_node_is_null(&lp->hmap_node)) {
+            lp->port_no = ntohs(opp->port_no);
+            hmap_insert(&sw->queue_numbers, &lp->hmap_node,
+                        hash_int(lp->port_no, 0));
+        }
+    }
 }
 
 static uint16_t
@@ -291,11 +344,27 @@ lswitch_choose_destination(struct lswitch *sw, const flow_t *flow)
     return out_port;
 }
 
+static uint32_t
+get_queue_id(const struct lswitch *sw, uint16_t in_port)
+{
+    const struct lswitch_port *port;
+
+    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_int(in_port, 0),
+                             &sw->queue_numbers) {
+        if (port->port_no == in_port) {
+            return port->queue_id;
+        }
+    }
+
+    return sw->default_queue;
+}
+
 static void
 process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 {
     struct ofp_packet_in *opi = opi_;
     uint16_t in_port = ntohs(opi->in_port);
+    uint32_t queue_id;
     uint16_t out_port;
 
     struct ofp_action_header actions[2];
@@ -323,9 +392,10 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     out_port = lswitch_choose_destination(sw, &flow);
 
     /* Make actions. */
+    queue_id = get_queue_id(sw, in_port);
     if (out_port == OFPP_NONE) {
         actions_len = 0;
-    } else if (sw->queue == UINT32_MAX || out_port >= OFPP_MAX) {
+    } else if (queue_id == UINT32_MAX || out_port >= OFPP_MAX) {
         struct ofp_action_output oao;
 
         memset(&oao, 0, sizeof oao);
@@ -342,7 +412,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
         oae.type = htons(OFPAT_ENQUEUE);
         oae.len = htons(sizeof oae);
         oae.port = htons(out_port);
-        oae.queue_id = htonl(sw->queue);
+        oae.queue_id = htonl(queue_id);
 
         memcpy(actions, &oae, sizeof oae);
         actions_len = sizeof oae;

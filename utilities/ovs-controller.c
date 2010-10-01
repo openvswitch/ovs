@@ -33,6 +33,7 @@
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "shash.h"
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -50,10 +51,11 @@ struct switch_ {
     struct rconn *rconn;
 };
 
-/* Learn the ports on which MAC addresses appear? */
+/* -H, --hub: Learn the ports on which MAC addresses appear? */
 static bool learn_macs = true;
 
-/* Set up flows?  (If not, every packet is processed at the controller.) */
+/* -n, --noflow: Set up flows?  (If not, every packet is processed at the
+ * controller.) */
 static bool set_up_flows = true;
 
 /* -N, --normal: Use "NORMAL" action instead of explicit port? */
@@ -69,8 +71,11 @@ static int max_idle = 60;
  * of their messages (for debugging fail-open mode). */
 static bool mute = false;
 
-/* -q, --queue: OpenFlow queue to use, or the default queue if UINT32_MAX. */
-static uint32_t queue_id = UINT32_MAX;
+/* -q, --queue: default OpenFlow queue, none if UINT32_MAX. */
+static uint32_t default_queue = UINT32_MAX;
+
+/* -Q, --port-queue: map from port name to port number (cast to void *). */
+static struct shash port_queues = SHASH_INITIALIZER(&port_queues);
 
 /* --with-flows: File with flows to send to switch, or null to not load
  * any default flows. */
@@ -225,7 +230,8 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
                 : LSW_FLOOD);
     cfg.max_idle = set_up_flows ? max_idle : -1;
     cfg.default_flows = default_flows.head;
-    cfg.queue_id = queue_id;
+    cfg.default_queue = default_queue;
+    cfg.port_queues = &port_queues;
     sw->lswitch = lswitch_create(sw->rconn, &cfg);
 }
 
@@ -270,6 +276,27 @@ read_flow_file(const char *name)
 }
 
 static void
+add_port_queue(char *s)
+{
+    char *save_ptr = NULL;
+    char *port_name;
+    char *queue_id;
+
+    port_name = strtok_r(s, ":", &save_ptr);
+    queue_id = strtok_r(NULL, "", &save_ptr);
+    if (!queue_id) {
+        ovs_fatal(0, "argument to -Q or --port-queue should take the form "
+                  "\"<port-name>:<queue-id>\"");
+    }
+
+    if (!shash_add_once(&port_queues, port_name,
+                        (void *) (uintptr_t) atoi(queue_id))) {
+        ovs_fatal(0, "<port-name> arguments for -Q or --port-queue must "
+                  "be unique");
+    }
+}
+
+static void
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -288,6 +315,7 @@ parse_options(int argc, char *argv[])
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"mute",        no_argument, 0, OPT_MUTE},
         {"queue",       required_argument, 0, 'q'},
+        {"port-queue",  required_argument, 0, 'Q'},
         {"with-flows",  required_argument, 0, OPT_WITH_FLOWS},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
@@ -345,7 +373,11 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'q':
-            queue_id = atoi(optarg);
+            default_queue = atoi(optarg);
+            break;
+
+        case 'Q':
+            add_port_queue(optarg);
             break;
 
         case OPT_WITH_FLOWS:
@@ -382,6 +414,20 @@ parse_options(int argc, char *argv[])
         }
     }
     free(short_options);
+
+    if (!shash_is_empty(&port_queues) || default_queue != UINT32_MAX) {
+        if (action_normal) {
+            ovs_error(0, "queue IDs are incompatible with -N or --normal; "
+                      "not using OFPP_NORMAL");
+            action_normal = false;
+        }
+
+        if (!learn_macs) {
+            ovs_error(0, "queue IDs are incompatible with -H or --hub; "
+                      "not acting as hub");
+            learn_macs = true;
+        }
+    }
 }
 
 static void
@@ -398,9 +444,10 @@ usage(void)
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
-           "  -N, --normal            use OFPAT_NORMAL action\n"
+           "  -N, --normal            use OFPP_NORMAL action\n"
            "  -w, --wildcard          use wildcards, not exact-match rules\n"
-           "  -q, --queue=QUEUE       OpenFlow queue ID to use for output\n"
+           "  -q, --queue=QUEUE-ID    OpenFlow queue ID to use for output\n"
+           "  -Q PORT-NAME:QUEUE-ID   use QUEUE-ID for frames from PORT-NAME\n"
            "  --with-flows FILE       use the flows from FILE\n"
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
