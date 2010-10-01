@@ -859,6 +859,26 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
            count * message_size / (duration / 1000.0));
 }
 
+/* This command is really only useful for testing the flow parser (ofp_parse),
+ * so it is undocumented. */
+static void
+do_parse_flows(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofpbuf *b;
+    FILE *file;
+
+    file = fopen(argv[1], "r");
+    if (file == NULL) {
+        ovs_fatal(errno, "%s: open", argv[2]);
+    }
+
+    while ((b = parse_ofp_add_flow_file(file)) != NULL) {
+        ofp_print(stdout, b->data, b->size, 0);
+        ofpbuf_delete(b);
+    }
+    fclose(file);
+}
+
 static void
 do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -885,6 +905,7 @@ static const struct command all_commands[] = {
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
+    { "parse-flows", 1, 1, do_parse_flows },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };
