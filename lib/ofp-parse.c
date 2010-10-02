@@ -267,6 +267,17 @@ str_to_action(char *str, struct ofpbuf *b)
             nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
             nah->vendor = htonl(NX_VENDOR_ID);
             nah->subtype = htons(NXAST_DROP_SPOOFED_ARP);
+        } else if (!strcasecmp(act, "set_queue")) {
+            struct nx_action_set_queue *nasq;
+            nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
+            nasq->vendor = htonl(NX_VENDOR_ID);
+            nasq->subtype = htons(NXAST_SET_QUEUE);
+            nasq->queue_id = htonl(str_to_u32(arg));
+        } else if (!strcasecmp(act, "pop_queue")) {
+            struct nx_action_header *nah;
+            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
+            nah->vendor = htonl(NX_VENDOR_ID);
+            nah->subtype = htons(NXAST_POP_QUEUE);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

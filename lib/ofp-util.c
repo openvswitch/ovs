@@ -565,6 +565,8 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
     case NXAST_RESUBMIT:
     case NXAST_SET_TUNNEL:
     case NXAST_DROP_SPOOFED_ARP:
+    case NXAST_SET_QUEUE:
+    case NXAST_POP_QUEUE:
         return check_action_exact_len(a, len, 16);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);

@@ -2662,11 +2662,32 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
 }
 
 static void
+xlate_set_queue_action(struct action_xlate_ctx *ctx,
+                       const struct nx_action_set_queue *nasq)
+{
+    uint32_t priority;
+    int error;
+
+    error = dpif_queue_to_priority(ctx->ofproto->dpif, ntohl(nasq->queue_id),
+                                   &priority);
+    if (error) {
+        /* Couldn't translate queue to a priority, so ignore.  A warning
+         * has already been logged. */
+        return;
+    }
+
+    remove_pop_action(ctx);
+    odp_actions_add(ctx->out, ODPAT_SET_PRIORITY)->priority.priority
+        = priority;
+}
+
+static void
 xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
     const struct nx_action_resubmit *nar;
     const struct nx_action_set_tunnel *nast;
+    const struct nx_action_set_queue *nasq;
     union odp_action *oa;
     int subtype = ntohs(nah->subtype);
 
@@ -2687,6 +2708,15 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
             odp_actions_add(ctx->out, ODPAT_DROP_SPOOFED_ARP);
         }
+        break;
+
+    case NXAST_SET_QUEUE:
+        nasq = (const struct nx_action_set_queue *) nah;
+        xlate_set_queue_action(ctx, nasq);
+        break;
+
+    case NXAST_POP_QUEUE:
+        odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to

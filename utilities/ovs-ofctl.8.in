@@ -469,6 +469,16 @@ Ethernet header.
 This is useful because OpenFlow does not provide a way to match on the
 Ethernet addresses inside ARP packets, so there is no other way to
 drop spoofed ARPs other than sending every ARP packet to a controller.
+.
+.IP \fBset_queue\fB:\fIqueue\fR
+Sets the queue that should be used to \fIqueue\fR when packets are
+output.  The number of supported queues depends on the switch; some
+OpenFlow implementations do not support queuing at all.
+.
+.IP \fBpop_queue\fR
+Restores the queue to the value it was before any \fBset_queue\fR
+actions were applied.
+.
 .RE
 .
 .IP

@@ -205,6 +205,17 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         ds_put_cstr(string, "drop_spoofed_arp");
         break;
 
+    case NXAST_SET_QUEUE: {
+        const struct nx_action_set_queue *nasq =
+                                            (struct nx_action_set_queue *)nah;
+        ds_put_format(string, "set_queue:%u", ntohl(nasq->queue_id));
+        break;
+    }
+
+    case NXAST_POP_QUEUE:
+        ds_put_cstr(string, "pop_queue");
+        break;
+
     default:
         ds_put_format(string, "***unknown Nicira action:%d***",
                       ntohs(nah->subtype));
