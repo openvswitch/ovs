@@ -619,9 +619,10 @@ int
 validate_actions(const union ofp_action *actions, size_t n_actions,
                  int max_ports)
 {
-    const union ofp_action *a;
+    size_t i;
 
-    for (a = actions; a < &actions[n_actions]; ) {
+    for (i = 0; i < n_actions; ) {
+        const union ofp_action *a = &actions[i];
         unsigned int len = ntohs(a->header.len);
         unsigned int n_slots = len / ACTION_ALIGNMENT;
         unsigned int slots_left = &actions[n_actions] - a;
@@ -645,7 +646,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         if (error) {
             return error;
         }
-        a += n_slots;
+        i += n_slots;
     }
     return 0;
 }
@@ -679,7 +680,7 @@ actions_first(struct actions_iterator *iter,
 const union ofp_action *
 actions_next(struct actions_iterator *iter)
 {
-    if (iter->pos < iter->end) {
+    if (iter->pos != iter->end) {
         const union ofp_action *a = iter->pos;
         unsigned int len = ntohs(a->header.len);
         iter->pos += len / ACTION_ALIGNMENT;

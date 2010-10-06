@@ -1871,8 +1871,10 @@ rule_create(struct ofproto *ofproto, struct rule *super,
     } else {
         list_init(&rule->list);
     }
-    rule->n_actions = n_actions;
-    rule->actions = xmemdup(actions, n_actions * sizeof *actions);
+    if (n_actions > 0) {
+        rule->n_actions = n_actions;
+        rule->actions = xmemdup(actions, n_actions * sizeof *actions);
+    }
     netflow_flow_clear(&rule->nf_flow);
     netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->created);
 
@@ -3266,7 +3268,9 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count = htonll(packet_count);
     ofs->byte_count = htonll(byte_count);
-    memcpy(ofs->actions, rule->actions, act_len);
+    if (rule->n_actions > 0) {
+        memcpy(ofs->actions, rule->actions, act_len);
+    }
 }
 
 static int
@@ -3335,7 +3339,9 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     ofp_print_match(results, &match, true);
-    ofp_print_actions(results, &rule->actions->header, act_len);
+    if (act_len > 0) {
+        ofp_print_actions(results, &rule->actions->header, act_len);
+    }
     ds_put_cstr(results, "\n");
 }
 
@@ -3763,14 +3769,14 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
 
     /* If the actions are the same, do nothing. */
     if (n_actions == rule->n_actions
-        && !memcmp(ofm->actions, rule->actions, actions_len))
+        && (!n_actions || !memcmp(ofm->actions, rule->actions, actions_len)))
     {
         return 0;
     }
 
     /* Replace actions. */
     free(rule->actions);
-    rule->actions = xmemdup(ofm->actions, actions_len);
+    rule->actions = n_actions ? xmemdup(ofm->actions, actions_len) : NULL;
     rule->n_actions = n_actions;
 
     /* Make sure that the datapath gets updated properly. */
