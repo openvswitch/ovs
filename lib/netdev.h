@@ -93,8 +93,6 @@ struct netdev_class;
 void netdev_run(void);
 void netdev_wait(void);
 
-int netdev_register_provider(const struct netdev_class *);
-int netdev_unregister_provider(const char *type);
 void netdev_enumerate_types(struct svec *types);
 
 /* Open and close. */

@@ -176,8 +176,6 @@ if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
 	lib/dpif-linux.c \
 	lib/netdev-linux.c \
-	lib/netdev-patch.c \
-	lib/netdev-tunnel.c \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
 	lib/netlink-protocol.h \

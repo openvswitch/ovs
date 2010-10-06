@@ -546,11 +546,11 @@ struct netdev_class {
     void (*poll_remove)(struct netdev_notifier *notifier);
 };
 
+int netdev_register_provider(const struct netdev_class *);
+int netdev_unregister_provider(const char *type);
+
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
-extern const struct netdev_class netdev_patch_class;
-extern const struct netdev_class netdev_gre_class;
-extern const struct netdev_class netdev_capwap_class;
 
 #ifdef  __cplusplus
 }

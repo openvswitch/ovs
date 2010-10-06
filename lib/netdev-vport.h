@@ -17,27 +17,13 @@
 #ifndef NETDEV_VPORT_H
 #define NETDEV_VPORT_H 1
 
-#include "netdev-provider.h"
-#include "packets.h"
+struct netdev;
+struct netdev_stats;
+struct odp_port;
+struct shash;
 
-int netdev_vport_do_ioctl(int cmd, void *arg);
-
-int netdev_vport_set_etheraddr(struct netdev *,
-                               const uint8_t mac[ETH_ADDR_LEN]);
-int netdev_vport_get_etheraddr(const struct netdev *,
-                               uint8_t mac[ETH_ADDR_LEN]);
-int netdev_vport_get_mtu(const struct netdev *, int *mtup);
-int netdev_vport_get_carrier(const struct netdev *, bool *carrier);
+void netdev_vport_register(void);
 int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);
 int netdev_vport_set_stats(struct netdev *, const struct netdev_stats *);
-int netdev_vport_update_flags(struct netdev *, enum netdev_flags off,
-                              enum netdev_flags on,
-                              enum netdev_flags *old_flagsp);
-
-int netdev_vport_poll_add(struct netdev *,
-                          void (*cb)(struct netdev_notifier *), void *aux,
-                          struct netdev_notifier **);
-void netdev_vport_poll_remove(struct netdev_notifier *);
-void netdev_vport_poll_notify(const struct netdev *);
 
 #endif /* netdev-vport.h */

@@ -31,6 +31,7 @@
 #include "hash.h"
 #include "list.h"
 #include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -40,16 +41,6 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev)
-
-static const struct netdev_class *base_netdev_classes[] = {
-#ifdef HAVE_NETLINK
-    &netdev_linux_class,
-    &netdev_tap_class,
-    &netdev_patch_class,
-    &netdev_gre_class,
-    &netdev_capwap_class,
-#endif
-};
 
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
 
@@ -70,17 +61,18 @@ void update_device_args(struct netdev_dev *, const struct shash *args);
 static void
 netdev_initialize(void)
 {
-    static int status = -1;
+    static bool inited;
 
-    if (status < 0) {
-        int i;
+    if (!inited) {
+        inited = true;
 
         fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
 
-        status = 0;
-        for (i = 0; i < ARRAY_SIZE(base_netdev_classes); i++) {
-            netdev_register_provider(base_netdev_classes[i]);
-        }
+#ifdef HAVE_NETLINK
+        netdev_register_provider(&netdev_linux_class);
+        netdev_register_provider(&netdev_tap_class);
+        netdev_vport_register();
+#endif
     }
 }
 
@@ -121,8 +113,6 @@ netdev_wait(void)
 int
 netdev_register_provider(const struct netdev_class *new_class)
 {
-    struct netdev_class *new_provider;
-
     if (shash_find(&netdev_classes, new_class->type)) {
         VLOG_WARN("attempted to register duplicate netdev provider: %s",
                    new_class->type);
@@ -138,10 +128,7 @@ netdev_register_provider(const struct netdev_class *new_class)
         }
     }
 
-    new_provider = xmalloc(sizeof *new_provider);
-    memcpy(new_provider, new_class, sizeof *new_provider);
-
-    shash_add(&netdev_classes, new_class->type, new_provider);
+    shash_add(&netdev_classes, new_class->type, new_class);
 
     return 0;
 }
@@ -171,7 +158,6 @@ netdev_unregister_provider(const char *type)
     }
 
     shash_delete(&netdev_classes, del_node);
-    free(del_node->data);
 
     return 0;
 }
