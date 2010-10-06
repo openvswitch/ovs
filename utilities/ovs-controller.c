@@ -28,10 +28,13 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "learning-switch.h"
+#include "ofp-parse.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "shash.h"
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -49,10 +52,11 @@ struct switch_ {
     struct rconn *rconn;
 };
 
-/* Learn the ports on which MAC addresses appear? */
+/* -H, --hub: Learn the ports on which MAC addresses appear? */
 static bool learn_macs = true;
 
-/* Set up flows?  (If not, every packet is processed at the controller.) */
+/* -n, --noflow: Set up flows?  (If not, every packet is processed at the
+ * controller.) */
 static bool set_up_flows = true;
 
 /* -N, --normal: Use "NORMAL" action instead of explicit port? */
@@ -68,12 +72,15 @@ static int max_idle = 60;
  * of their messages (for debugging fail-open mode). */
 static bool mute = false;
 
-/* -q, --queue: OpenFlow queue to use, or the default queue if UINT32_MAX. */
-static uint32_t queue_id = UINT32_MAX;
+/* -q, --queue: default OpenFlow queue, none if UINT32_MAX. */
+static uint32_t default_queue = UINT32_MAX;
+
+/* -Q, --port-queue: map from port name to port number (cast to void *). */
+static struct shash port_queues = SHASH_INITIALIZER(&port_queues);
 
 /* --with-flows: File with flows to send to switch, or null to not load
  * any default flows. */
-static FILE *flow_file = NULL;
+static struct ovs_queue default_flows = OVS_QUEUE_INITIALIZER;
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -107,7 +114,6 @@ main(int argc, char *argv[])
     for (i = optind; i < argc; i++) {
         const char *name = argv[i];
         struct vconn *vconn;
-        int retval;
 
         retval = vconn_open(name, OFP_VERSION, &vconn);
         if (!retval) {
@@ -146,12 +152,10 @@ main(int argc, char *argv[])
 
     while (n_switches > 0 || n_listeners > 0) {
         int iteration;
-        int i;
 
         /* Accept connections on listening vconns. */
         for (i = 0; i < n_listeners && n_switches < MAX_SWITCHES; ) {
             struct vconn *new_vconn;
-            int retval;
 
             retval = pvconn_accept(listeners[i], OFP_VERSION, &new_vconn);
             if (!retval || retval == EAGAIN) {
@@ -171,7 +175,8 @@ main(int argc, char *argv[])
             bool progress = false;
             for (i = 0; i < n_switches; ) {
                 struct switch_ *this = &switches[i];
-                int retval = do_switching(this);
+
+                retval = do_switching(this);
                 if (!retval || retval == EAGAIN) {
                     if (!retval) {
                         progress = true;
@@ -216,20 +221,19 @@ main(int argc, char *argv[])
 static void
 new_switch(struct switch_ *sw, struct vconn *vconn)
 {
+    struct lswitch_config cfg;
+
     sw->rconn = rconn_create(60, 0);
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
 
-    /* If it was set, rewind 'flow_file' to the beginning, since a
-     * previous call to lswitch_create() will leave the stream at the
-     * end. */
-    if (flow_file) {
-        rewind(flow_file);
-    }
-    sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
-                                 set_up_flows ? max_idle : -1,
-                                 action_normal, flow_file);
-
-    lswitch_set_queue(sw->lswitch, queue_id);
+    cfg.mode = (action_normal ? LSW_NORMAL
+                : learn_macs ? LSW_LEARN
+                : LSW_FLOOD);
+    cfg.max_idle = set_up_flows ? max_idle : -1;
+    cfg.default_flows = default_flows.head;
+    cfg.default_queue = default_queue;
+    cfg.port_queues = &port_queues;
+    sw->lswitch = lswitch_create(sw->rconn, &cfg);
 }
 
 static int
@@ -255,6 +259,52 @@ do_switching(struct switch_ *sw)
 }
 
 static void
+read_flow_file(const char *name)
+{
+    bool table_id_enabled = false;
+    uint8_t table_idx;
+    struct ofpbuf *b;
+    FILE *stream;
+
+    stream = fopen(optarg, "r");
+    if (!stream) {
+        ovs_fatal(errno, "%s: open", name);
+    }
+
+    while ((b = parse_ofp_add_flow_file(stream, &table_idx)) != NULL) {
+        if ((table_idx != 0xff) != table_id_enabled) {
+            table_id_enabled = table_idx != 0xff;
+            queue_push_tail(&default_flows,
+                            make_nxt_flow_mod_table_id(table_id_enabled));
+        }
+        queue_push_tail(&default_flows, b);
+    }
+
+    fclose(stream);
+}
+
+static void
+add_port_queue(char *s)
+{
+    char *save_ptr = NULL;
+    char *port_name;
+    char *queue_id;
+
+    port_name = strtok_r(s, ":", &save_ptr);
+    queue_id = strtok_r(NULL, "", &save_ptr);
+    if (!queue_id) {
+        ovs_fatal(0, "argument to -Q or --port-queue should take the form "
+                  "\"<port-name>:<queue-id>\"");
+    }
+
+    if (!shash_add_once(&port_queues, port_name,
+                        (void *) (uintptr_t) atoi(queue_id))) {
+        ovs_fatal(0, "<port-name> arguments for -Q or --port-queue must "
+                  "be unique");
+    }
+}
+
+static void
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -273,6 +323,7 @@ parse_options(int argc, char *argv[])
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"mute",        no_argument, 0, OPT_MUTE},
         {"queue",       required_argument, 0, 'q'},
+        {"port-queue",  required_argument, 0, 'Q'},
         {"with-flows",  required_argument, 0, OPT_WITH_FLOWS},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
@@ -330,14 +381,15 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'q':
-            queue_id = atoi(optarg);
+            default_queue = atoi(optarg);
+            break;
+
+        case 'Q':
+            add_port_queue(optarg);
             break;
 
         case OPT_WITH_FLOWS:
-            flow_file = fopen(optarg, "r");
-            if (flow_file == NULL) {
-                ovs_fatal(errno, "%s: open", optarg);
-            }
+            read_flow_file(optarg);
             break;
 
         case OPT_UNIXCTL:
@@ -370,6 +422,20 @@ parse_options(int argc, char *argv[])
         }
     }
     free(short_options);
+
+    if (!shash_is_empty(&port_queues) || default_queue != UINT32_MAX) {
+        if (action_normal) {
+            ovs_error(0, "queue IDs are incompatible with -N or --normal; "
+                      "not using OFPP_NORMAL");
+            action_normal = false;
+        }
+
+        if (!learn_macs) {
+            ovs_error(0, "queue IDs are incompatible with -H or --hub; "
+                      "not acting as hub");
+            learn_macs = true;
+        }
+    }
 }
 
 static void
@@ -386,9 +452,10 @@ usage(void)
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
-           "  -N, --normal            use OFPAT_NORMAL action\n"
+           "  -N, --normal            use OFPP_NORMAL action\n"
            "  -w, --wildcard          use wildcards, not exact-match rules\n"
-           "  -q, --queue=QUEUE       OpenFlow queue ID to use for output\n"
+           "  -q, --queue=QUEUE-ID    OpenFlow queue ID to use for output\n"
+           "  -Q PORT-NAME:QUEUE-ID   use QUEUE-ID for frames from PORT-NAME\n"
            "  --with-flows FILE       use the flows from FILE\n"
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"

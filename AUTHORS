@@ -6,6 +6,7 @@ Ben Pfaff               blp@nicira.com
 Bryan Phillippe         bp@toroki.com
 Dan Wendlandt           dan@nicira.com
 David Erickson          derickso@stanford.edu
+Ethan Jackson           ethan@nicira.com
 Glen Gibb               grg@stanford.edu
 Ian Campbell            Ian.Campbell@citrix.com
 Jean Tourrilhes         jt@hpl.hp.com
@@ -26,13 +27,17 @@ Thomas Lacroix          thomas.lacroix@citrix.com
 Todd Deshane            deshantm@gmail.com
 Tom Everman             teverman@google.com
 Tsvi Slonim             tsvi@toroki.com
+Vivien Bernet-Rollande  vbr@soprive.net
 Wei Yongjun             yjwei@cn.fujitsu.com
 Yu Zhiguo               yuzg@cn.fujitsu.com
 
 The following additional people are mentioned in commit logs as having
 provided helpful bug reports or suggestions.
 
+Alexey I. Froloff       raorn@altlinux.org
+Brad Hall               brad@nicira.com
 Brandon Heller          brandonh@stanford.edu
+Bryan Fulton            bryan@nicira.com
 Cedric Hobbs            cedric@nicira.com
 Ghanem Bahri            bahri.ghanem@gmail.com
 Henrik Amren            henrik@nicira.com

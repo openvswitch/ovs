@@ -338,8 +338,7 @@ xfif_linux_port_poll(const struct xfif *xfif_, char **devnamep)
         return ENOBUFS;
     } else if (!shash_is_empty(&xfif->changed_ports)) {
         struct shash_node *node = shash_first(&xfif->changed_ports);
-        *devnamep = xstrdup(node->name);
-        shash_delete(&xfif->changed_ports, node);
+        *devnamep = shash_steal(&xfif->changed_ports, node);
         return 0;
     } else {
         return EAGAIN;
@@ -478,8 +477,7 @@ xfif_linux_recv(struct xfif *xfif_, struct ofpbuf **bufp)
     int retval;
     int error;
 
-    buf = ofpbuf_new(65536 + XFIF_RECV_MSG_PADDING);
-    ofpbuf_reserve(buf, XFIF_RECV_MSG_PADDING);
+    buf = ofpbuf_new_with_headroom(65536, XFIF_RECV_MSG_PADDING);
     retval = read(xfif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
     if (retval < 0) {
         error = errno;
@@ -732,11 +730,7 @@ get_major(const char *target)
                 return major;
             }
         } else {
-            static bool warned;
-            if (!warned) {
-                VLOG_WARN("%s:%d: syntax error", fn, ln);
-            }
-            warned = true;
+            VLOG_WARN_ONCE("%s:%d: syntax error", fn, ln);
         }
     }
 

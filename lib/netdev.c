@@ -285,7 +285,7 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
  * to the new network device, otherwise to null.
  *
  * If this is the first time the device has been opened, then create is called
- * before opening.  The device is  created using the given type and arguments.
+ * before opening.  The device is created using the given type and arguments.
  *
  * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order to
  * capture frames of that type received on the device.  It may also be one of
@@ -474,8 +474,7 @@ netdev_enumerate(struct svec *svec)
  * be returned.
  *
  * Some network devices may not implement support for this function.  In such
- * cases this function will always return EOPNOTSUPP.
- */
+ * cases this function will always return EOPNOTSUPP. */
 int
 netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
 {
@@ -641,8 +640,7 @@ netdev_get_ifindex(const struct netdev *netdev)
  * passed-in values are set to 0.
  *
  * Some network devices may not implement support for this function.  In such
- * cases this function will always return EOPNOTSUPP.
- */
+ * cases this function will always return EOPNOTSUPP. */
 int
 netdev_get_features(struct netdev *netdev,
                     uint32_t *current, uint32_t *advertised,
@@ -727,8 +725,8 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
  *
  *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
  *
- * 'address' or 'netmask' or both may be null, in which case the address or netmask
- * is not reported. */
+ * 'address' or 'netmask' or both may be null, in which case the address or 
+ * netmask is not reported. */
 int
 netdev_get_in4(const struct netdev *netdev,
                struct in_addr *address_, struct in_addr *netmask_)
@@ -1159,8 +1157,7 @@ netdev_get_queue(const struct netdev *netdev,
  * the current form of QoS (e.g. as returned by netdev_get_n_queues(netdev)).
  *
  * This function does not modify 'details', and the caller retains ownership of
- * it.
- */
+ * it. */
 int
 netdev_set_queue(struct netdev *netdev,
                  unsigned int queue_id, const struct shash *details)
@@ -1553,8 +1550,7 @@ netdev_monitor_remove(struct netdev_monitor *monitor, struct netdev *netdev)
  * sets '*devnamep' to the name of a device that has changed and returns 0.
  * The caller is responsible for freeing '*devnamep' (with free()).
  *
- * If no devices have changed, sets '*devnamep' to NULL and returns EAGAIN.
- */
+ * If no devices have changed, sets '*devnamep' to NULL and returns EAGAIN. */
 int
 netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
 {
@@ -1563,8 +1559,7 @@ netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
         *devnamep = NULL;
         return EAGAIN;
     } else {
-        *devnamep = xstrdup(node->name);
-        shash_delete(&monitor->changed_netdevs, node);
+        *devnamep = shash_steal(&monitor->changed_netdevs, node);
         return 0;
     }
 }
@@ -1607,7 +1602,7 @@ static void
 close_all_netdevs(void *aux OVS_UNUSED)
 {
     struct netdev *netdev, *next;
-    LIST_FOR_EACH_SAFE(netdev, next, struct netdev, node, &netdev_list) {
+    LIST_FOR_EACH_SAFE(netdev, next, node, &netdev_list) {
         netdev_close(netdev);
     }
 }

@@ -4,7 +4,6 @@ openvswitch_sources += \
 	linux-2.6/compat-2.6/genetlink-openvswitch.c \
 	linux-2.6/compat-2.6/ip_output-openvswitch.c \
 	linux-2.6/compat-2.6/kmemdup.c \
-	linux-2.6/compat-2.6/random32.c \
 	linux-2.6/compat-2.6/skbuff-openvswitch.c \
 	linux-2.6/compat-2.6/time.c
 openvswitch_headers += \
@@ -32,7 +31,6 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/netfilter_bridge.h \
 	linux-2.6/compat-2.6/include/linux/netfilter_ipv4.h \
 	linux-2.6/compat-2.6/include/linux/netlink.h \
-	linux-2.6/compat-2.6/include/linux/random.h \
 	linux-2.6/compat-2.6/include/linux/rculist.h \
 	linux-2.6/compat-2.6/include/linux/rtnetlink.h \
 	linux-2.6/compat-2.6/include/linux/skbuff.h \

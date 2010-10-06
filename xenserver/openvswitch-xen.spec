@@ -73,8 +73,8 @@ install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/vif
-install -m 755 xenserver/usr_share_openvswitch_scripts_monitor-external-ids \
-               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/monitor-external-ids
+install -m 755 xenserver/usr_share_openvswitch_scripts_ovs-external-ids \
+               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-external-ids
 install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
                $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
@@ -392,7 +392,7 @@ fi
 /usr/share/openvswitch/python/ovs/timeval.py
 /usr/share/openvswitch/python/ovs/util.py
 /usr/share/openvswitch/python/uuid.py
-/usr/share/openvswitch/scripts/monitor-external-ids
+/usr/share/openvswitch/scripts/ovs-external-ids
 /usr/share/openvswitch/scripts/refresh-xs-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py

@@ -1,11 +1,18 @@
-# Copyright (c) Citrix Systems 2008. All rights reserved.
-# xsconsole is proprietary software.
+# Copyright (c) 2007-2010 Citrix Systems Inc.
+# Copyright (c) 2009,2010 Nicira Networks.
 #
-# Xen, the Xen logo, XenCenter, XenMotion are trademarks or registered
-# trademarks of Citrix Systems, Inc., in the United States and other
-# countries.
-
-# Copyright (c) 2009, 2010 Nicira Networks.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 only.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 from XSConsoleLog import *
 
@@ -79,7 +86,7 @@ class VSwitchConfig:
     @staticmethod
     def Get(action):
         try:
-            arg = [vsctl, "-vANY:console:emer"] + action.split()
+            arg = [vsctl, "--timeout=30", "-vANY:console:emer"] + action.split()
             output = ShellPipe(arg).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))

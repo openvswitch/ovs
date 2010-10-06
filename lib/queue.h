@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define QUEUE_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Packet queue. */
 struct ovs_queue {
@@ -25,6 +26,8 @@ struct ovs_queue {
     struct ofpbuf *head;        /* First queued packet, null if n == 0. */
     struct ofpbuf *tail;        /* Last queued packet, null if n == 0. */
 };
+
+#define OVS_QUEUE_INITIALIZER { 0, NULL, NULL }
 
 void queue_init(struct ovs_queue *);
 void queue_destroy(struct ovs_queue *);

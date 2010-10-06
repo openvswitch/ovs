@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,7 @@ ovsdb_query(struct ovsdb_table *table, const struct ovsdb_condition *cnd,
         /* Linear scan. */
         const struct ovsdb_row *row, *next;
 
-        HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_row, hmap_node,
-                            &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
             if (ovsdb_condition_evaluate(row, cnd) && !output_row(row, aux)) {
                 break;
             }
@@ -90,8 +89,7 @@ ovsdb_query_distinct(struct ovsdb_table *table,
 
         ovsdb_row_hash_init(&hash, columns);
         ovsdb_query(table, condition, query_distinct_cb, &hash);
-        HMAP_FOR_EACH (node, struct ovsdb_row_hash_node, hmap_node,
-                       &hash.rows) {
+        HMAP_FOR_EACH (node, hmap_node, &hash.rows) {
             ovsdb_row_set_add_row(results, node->row);
         }
         ovsdb_row_hash_destroy(&hash, false);

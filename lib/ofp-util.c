@@ -438,6 +438,21 @@ check_ofp_packet_out(const struct ofp_header *oh, struct ofpbuf *data,
     return 0;
 }
 
+struct ofpbuf *
+make_nxt_flow_mod_table_id(bool enable)
+{
+    struct nxt_flow_mod_table_id *flow_mod_table_id;
+    struct ofpbuf *buffer;
+
+    flow_mod_table_id = make_openflow(sizeof *flow_mod_table_id, OFPT_VENDOR,
+                                      &buffer);
+
+    flow_mod_table_id->vendor = htonl(NX_VENDOR_ID);
+    flow_mod_table_id->subtype = htonl(NXT_FLOW_MOD_TABLE_ID);
+    flow_mod_table_id->set = enable;
+    return buffer;
+}
+
 const struct ofp_flow_stats *
 flow_stats_first(struct flow_stats_iterator *iter,
                  const struct ofp_stats_reply *osr)
@@ -564,6 +579,9 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
     switch (ntohs(nah->subtype)) {
     case NXAST_RESUBMIT:
     case NXAST_SET_TUNNEL:
+    case NXAST_DROP_SPOOFED_ARP:
+    case NXAST_SET_QUEUE:
+    case NXAST_POP_QUEUE:
         return check_action_exact_len(a, len, 16);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);

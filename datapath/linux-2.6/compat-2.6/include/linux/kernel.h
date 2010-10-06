@@ -6,6 +6,7 @@
 #include <linux/log2.h>
 #endif
 
+#include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 #undef pr_emerg
 #define pr_emerg(fmt, ...) \

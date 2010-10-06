@@ -48,7 +48,10 @@ void ofpbuf_uninit(struct ofpbuf *);
 void ofpbuf_reinit(struct ofpbuf *, size_t);
 
 struct ofpbuf *ofpbuf_new(size_t);
+struct ofpbuf *ofpbuf_new_with_headroom(size_t, size_t headroom);
 struct ofpbuf *ofpbuf_clone(const struct ofpbuf *);
+struct ofpbuf *ofpbuf_clone_with_headroom(const struct ofpbuf *,
+                                          size_t headroom);
 struct ofpbuf *ofpbuf_clone_data(const void *, size_t);
 void ofpbuf_delete(struct ofpbuf *);
 

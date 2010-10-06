@@ -48,6 +48,8 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
+#include "hash.h"
+#include "hmap.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"
@@ -55,7 +57,6 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "port-array.h"
 #include "rtnetlink.h"
 #include "socket-util.h"
 #include "shash.h"
@@ -102,19 +103,24 @@ struct tap_state {
 /* Traffic control. */
 
 /* An instance of a traffic control class.  Always associated with a particular
- * network device. */
+ * network device.
+ *
+ * Each TC implementation subclasses this with whatever additional data it
+ * needs. */
 struct tc {
     const struct tc_ops *ops;
+    struct hmap queues;         /* Contains "struct tc_queue"s.
+                                 * Read by generic TC layer.
+                                 * Written only by TC implementation. */
+};
 
-    /* Maps from queue ID to tc-specific data.
-     *
-     * The generic netdev TC layer uses this to the following extent: if an
-     * entry is nonnull, then the queue whose ID is the index is assumed to
-     * exist; if an entry is null, then that queue is assumed not to exist.
-     * Implementations must adhere to this scheme, although they may store
-     * whatever they like as data.
-     */
-    struct port_array queues;
+/* One traffic control queue.
+ *
+ * Each TC implementation subclasses this with whatever additional data it
+ * needs. */
+struct tc_queue {
+    struct hmap_node hmap_node; /* In struct tc's "queues" hmap. */
+    unsigned int queue_id;      /* OpenFlow queue ID. */
 };
 
 /* A particular kind of traffic control.  Each implementation generally maps to
@@ -204,8 +210,8 @@ struct tc_ops {
      */
     int (*qdisc_set)(struct netdev *, const struct shash *details);
 
-    /* Retrieves details of 'queue_id' on 'netdev->tc' into 'details'.  The
-     * caller ensures that 'queues' has a nonnull value for index 'queue_id.
+    /* Retrieves details of 'queue' on 'netdev->tc' into 'details'.  'queue' is
+     * one of the 'struct tc_queue's within 'netdev->tc->queues'.
      *
      * The contents of 'details' should be documented as valid for 'ovs_name'
      * in the "other_config" column in the "Queue" table in
@@ -217,7 +223,7 @@ struct tc_ops {
      *
      * This function may be null if 'tc' does not have queues ('n_queues' is
      * 0). */
-    int (*class_get)(const struct netdev *netdev, unsigned int queue_id,
+    int (*class_get)(const struct netdev *netdev, const struct tc_queue *queue,
                      struct shash *details);
 
     /* Configures or reconfigures 'queue_id' on 'netdev->tc' according to
@@ -234,21 +240,22 @@ struct tc_ops {
     int (*class_set)(struct netdev *, unsigned int queue_id,
                      const struct shash *details);
 
-    /* Deletes 'queue_id' from 'netdev->tc'.  The caller ensures that 'queues'
-     * has a nonnull value for index 'queue_id.
+    /* Deletes 'queue' from 'netdev->tc'.  'queue' is one of the 'struct
+     * tc_queue's within 'netdev->tc->queues'.
      *
      * This function may be null if 'tc' does not have queues or its queues
      * cannot be deleted. */
-    int (*class_delete)(struct netdev *, unsigned int queue_id);
+    int (*class_delete)(struct netdev *, struct tc_queue *queue);
 
-    /* Obtains stats for 'queue' from 'netdev->tc'.  The caller ensures that
-     * 'queues' has a nonnull value for index 'queue_id.
+    /* Obtains stats for 'queue' from 'netdev->tc'.  'queue' is one of the
+     * 'struct tc_queue's within 'netdev->tc->queues'.
      *
      * On success, initializes '*stats'.
      *
      * This function may be null if 'tc' does not have queues or if it cannot
      * report queue statistics. */
-    int (*class_get_stats)(const struct netdev *netdev, unsigned int queue_id,
+    int (*class_get_stats)(const struct netdev *netdev,
+                           const struct tc_queue *queue,
                            struct netdev_queue_stats *stats);
 
     /* Extracts queue stats from 'nlmsg', which is a response to a
@@ -265,13 +272,13 @@ static void
 tc_init(struct tc *tc, const struct tc_ops *ops)
 {
     tc->ops = ops;
-    port_array_init(&tc->queues);
+    hmap_init(&tc->queues);
 }
 
 static void
 tc_destroy(struct tc *tc)
 {
-    port_array_destroy(&tc->queues);
+    hmap_destroy(&tc->queues);
 }
 
 static const struct tc_ops tc_ops_htb;
@@ -1468,6 +1475,28 @@ tc_lookup_linux_name(const char *name)
     return NULL;
 }
 
+static struct tc_queue *
+tc_find_queue__(const struct netdev *netdev, unsigned int queue_id,
+                size_t hash)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct tc_queue *queue;
+
+    HMAP_FOR_EACH_IN_BUCKET (queue, hmap_node, hash, &netdev_dev->tc->queues) {
+        if (queue->queue_id == queue_id) {
+            return queue;
+        }
+    }
+    return NULL;
+}
+
+static struct tc_queue *
+tc_find_queue(const struct netdev *netdev, unsigned int queue_id)
+{
+    return tc_find_queue__(netdev, queue_id, hash_int(queue_id, 0));
+}
+
 static int
 netdev_linux_get_qos_capabilities(const struct netdev *netdev OVS_UNUSED,
                                   const char *type,
@@ -1548,12 +1577,12 @@ netdev_linux_get_queue(const struct netdev *netdev,
     error = tc_query_qdisc(netdev);
     if (error) {
         return error;
-    } else if (queue_id > UINT16_MAX
-               || !port_array_get(&netdev_dev->tc->queues, queue_id)) {
-        return ENOENT;
+    } else {
+        struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        return (queue
+                ? netdev_dev->tc->ops->class_get(netdev, queue, details)
+                : ENOENT);
     }
-
-    return netdev_dev->tc->ops->class_get(netdev, queue_id, details);
 }
 
 static int
@@ -1587,12 +1616,12 @@ netdev_linux_delete_queue(struct netdev *netdev, unsigned int queue_id)
         return error;
     } else if (!netdev_dev->tc->ops->class_delete) {
         return EINVAL;
-    } else if (queue_id > UINT16_MAX
-               || !port_array_get(&netdev_dev->tc->queues, queue_id)) {
-        return ENOENT;
+    } else {
+        struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        return (queue
+                ? netdev_dev->tc->ops->class_delete(netdev, queue)
+                : ENOENT);
     }
-
-    return netdev_dev->tc->ops->class_delete(netdev, queue_id);
 }
 
 static int
@@ -1607,14 +1636,14 @@ netdev_linux_get_queue_stats(const struct netdev *netdev,
     error = tc_query_qdisc(netdev);
     if (error) {
         return error;
-    } else if (queue_id > UINT16_MAX
-               || !port_array_get(&netdev_dev->tc->queues, queue_id)) {
-        return ENOENT;
     } else if (!netdev_dev->tc->ops->class_get_stats) {
         return EOPNOTSUPP;
+    } else {
+        const struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        return (queue
+                ? netdev_dev->tc->ops->class_get_stats(netdev, queue, stats)
+                : ENOENT);
     }
-
-    return netdev_dev->tc->ops->class_get_stats(netdev, queue_id, stats);
 }
 
 static void
@@ -1635,10 +1664,9 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev));
-    unsigned int queue_id;
+    struct tc_queue *queue;
     struct shash details;
     int last_error;
-    void *queue;
     int error;
 
     error = tc_query_qdisc(netdev);
@@ -1650,12 +1678,12 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 
     last_error = 0;
     shash_init(&details);
-    PORT_ARRAY_FOR_EACH (queue, &netdev_dev->tc->queues, queue_id) {
+    HMAP_FOR_EACH (queue, hmap_node, &netdev_dev->tc->queues) {
         shash_clear(&details);
 
-        error = netdev_dev->tc->ops->class_get(netdev, queue_id, &details);
+        error = netdev_dev->tc->ops->class_get(netdev, queue, &details);
         if (!error) {
-            (*cb)(queue_id, &details, aux);
+            (*cb)(queue->queue_id, &details, aux);
         } else {
             last_error = error;
         }
@@ -1779,12 +1807,12 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
         if (file != NULL) {
             const char *name = netdev_get_name(netdev_);
             while (fgets(line, sizeof line, file)) {
-                struct in6_addr in6;
+                struct in6_addr in6_tmp;
                 char ifname[16 + 1];
-                if (parse_if_inet6_line(line, &in6, ifname)
+                if (parse_if_inet6_line(line, &in6_tmp, ifname)
                     && !strcmp(name, ifname))
                 {
-                    netdev_dev->in6 = in6;
+                    netdev_dev->in6 = in6_tmp;
                     break;
                 }
             }
@@ -1982,7 +2010,7 @@ static void
 poll_notify(struct list *list)
 {
     struct netdev_linux_notifier *notifier;
-    LIST_FOR_EACH (notifier, struct netdev_linux_notifier, node, list) {
+    LIST_FOR_EACH (notifier, node, list) {
         struct netdev_notifier *n = &notifier->notifier;
         n->cb(n);
     }
@@ -2191,6 +2219,7 @@ struct htb {
 };
 
 struct htb_class {
+    struct tc_queue tc_queue;
     unsigned int min_rate;      /* In bytes/s. */
     unsigned int max_rate;      /* In bytes/s. */
     unsigned int burst;         /* In bytes. */
@@ -2454,19 +2483,35 @@ htb_tc_install(struct netdev *netdev, const struct shash *details)
     return error;
 }
 
+static struct htb_class *
+htb_class_cast__(const struct tc_queue *queue)
+{
+    return CONTAINER_OF(queue, struct htb_class, tc_queue);
+}
+
 static void
 htb_update_queue__(struct netdev *netdev, unsigned int queue_id,
                    const struct htb_class *hc)
 {
     struct htb *htb = htb_get__(netdev);
+    size_t hash = hash_int(queue_id, 0);
+    struct tc_queue *queue;
     struct htb_class *hcp;
 
-    hcp = port_array_get(&htb->tc.queues, queue_id);
-    if (!hcp) {
+    queue = tc_find_queue__(netdev, queue_id, hash);
+    if (queue) {
+        hcp = htb_class_cast__(queue);
+    } else {
         hcp = xmalloc(sizeof *hcp);
-        port_array_set(&htb->tc.queues, queue_id, hcp);
+        queue = &hcp->tc_queue;
+        queue->queue_id = queue_id;
+        hmap_insert(&htb->tc.queues, &queue->hmap_node, hash);
     }
-    *hcp = *hc;
+
+    hcp->min_rate = hc->min_rate;
+    hcp->max_rate = hc->max_rate;
+    hcp->burst = hc->burst;
+    hcp->priority = hc->priority;
 }
 
 static int
@@ -2502,10 +2547,10 @@ static void
 htb_tc_destroy(struct tc *tc)
 {
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
-    unsigned int queue_id;
-    struct htb_class *hc;
+    struct htb_class *hc, *next;
 
-    PORT_ARRAY_FOR_EACH (hc, &htb->tc.queues, queue_id) {
+    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
+        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
         free(hc);
     }
     tc_destroy(tc);
@@ -2536,14 +2581,10 @@ htb_qdisc_set(struct netdev *netdev, const struct shash *details)
 }
 
 static int
-htb_class_get(const struct netdev *netdev, unsigned int queue_id,
-              struct shash *details)
+htb_class_get(const struct netdev *netdev OVS_UNUSED,
+              const struct tc_queue *queue, struct shash *details)
 {
-    const struct htb *htb = htb_get__(netdev);
-    const struct htb_class *hc;
-
-    hc = port_array_get(&htb->tc.queues, queue_id);
-    assert(hc != NULL);
+    const struct htb_class *hc = htb_class_cast__(queue);
 
     shash_add(details, "min-rate", xasprintf("%llu", 8ULL * hc->min_rate));
     if (hc->min_rate != hc->max_rate) {
@@ -2579,28 +2620,25 @@ htb_class_set(struct netdev *netdev, unsigned int queue_id,
 }
 
 static int
-htb_class_delete(struct netdev *netdev, unsigned int queue_id)
+htb_class_delete(struct netdev *netdev, struct tc_queue *queue)
 {
+    struct htb_class *hc = htb_class_cast__(queue);
     struct htb *htb = htb_get__(netdev);
-    struct htb_class *hc;
     int error;
 
-    hc = port_array_get(&htb->tc.queues, queue_id);
-    assert(hc != NULL);
-
-    error = tc_delete_class(netdev, tc_make_handle(1, queue_id + 1));
+    error = tc_delete_class(netdev, tc_make_handle(1, queue->queue_id + 1));
     if (!error) {
+        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
         free(hc);
-        port_array_delete(&htb->tc.queues, queue_id);
     }
     return error;
 }
 
 static int
-htb_class_get_stats(const struct netdev *netdev, unsigned int queue_id,
+htb_class_get_stats(const struct netdev *netdev, const struct tc_queue *queue,
                     struct netdev_queue_stats *stats)
 {
-    return htb_query_class__(netdev, tc_make_handle(1, queue_id + 1),
+    return htb_query_class__(netdev, tc_make_handle(1, queue->queue_id + 1),
                              tc_make_handle(1, 0xfffe), NULL, stats);
 }
 
@@ -2621,7 +2659,7 @@ htb_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
     major = tc_get_major(handle);
     minor = tc_get_minor(handle);
     if (major == 1 && minor > 0 && minor <= HTB_N_QUEUES) {
-        (*cb)(tc_get_minor(handle), &stats, aux);
+        (*cb)(minor - 1, &stats, aux);
     }
     return 0;
 }

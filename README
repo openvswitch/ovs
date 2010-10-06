@@ -29,7 +29,7 @@ vSwitch supports the following features:
     * Support for OpenFlow
     * Compatibility layer for the Linux bridging code
 
-The included Linux kernel module supports Linux 2.6.15 and up, with
+The included Linux kernel module supports Linux 2.6.18 and up, with
 testing focused on 2.6.18 with Centos and Xen patches and version
 2.6.26 from kernel.org.  Open vSwitch also has special support for
 Citrix XenServer hosts.

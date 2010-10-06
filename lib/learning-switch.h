@@ -24,9 +24,37 @@
 struct ofpbuf;
 struct rconn;
 
-struct lswitch *lswitch_create(struct rconn *, bool learn_macs,
-                               bool exact_flows, int max_idle,
-                               bool action_normal, FILE *default_flows);
+enum lswitch_mode {
+    LSW_NORMAL,                 /* Always use OFPP_NORMAL. */
+    LSW_FLOOD,                  /* Always use OFPP_FLOOD. */
+    LSW_LEARN                   /* Learn MACs at controller. */
+};
+
+struct lswitch_config {
+    enum lswitch_mode mode;
+
+    /* Set up only exact-match flows? */
+    bool exact_flows;
+
+    /* <0: Process every packet at the controller.
+     * >=0: Expire flows after they are unused for 'max_idle' seconds.
+     * OFP_FLOW_PERMANENT: Set up permanent flows. */
+    int max_idle;
+
+    /* Optionally, a chain of one or more OpenFlow messages to send to the
+     * switch at time of connection.  Presumably these will be OFPT_FLOW_MOD
+     * requests to set up the flow table. */
+    const struct ofpbuf *default_flows;
+
+    /* The OpenFlow queue to use by default.  Use UINT32_MAX to avoid
+     * specifying a particular queue. */
+    uint32_t default_queue;
+
+    /* Maps from a port name to a queue_id (cast to void *). */
+    const struct shash *port_queues;
+};
+
+struct lswitch *lswitch_create(struct rconn *, const struct lswitch_config *);
 void lswitch_set_queue(struct lswitch *sw, uint32_t queue);
 void lswitch_run(struct lswitch *);
 void lswitch_wait(struct lswitch *);

@@ -115,6 +115,15 @@ the statistics are aggregated across all flows in the switch's flow
 tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
 The output format is descrbed in \fBTable Entry Output\fR.
 .
+.IP "\fBqueue\-stats \fIswitch \fR[\fIport \fR[\fIqueue\fR]]"
+Prints to the console statistics for the specified \fIqueue\fR on
+\fIport\fR within \fIswitch\fR.  Either of \fIport\fR or \fIqueue\fR
+or both may be omitted (or equivalently specified as \fBALL\fR).  If
+both are omitted, statistics are printed for all queues on all ports.
+If only \fIqueue\fR is omitted, then statistics are printed for all
+queues on \fIport\fR; if only \fIport\fR is omitted, then statistics
+are printed for \fIqueue\fR on every port where it exists.
+.
 .TP
 \fBadd\-flow \fIswitch flow\fR
 Add the flow entry as described by \fIflow\fR to the \fIswitch\fR's 
@@ -467,6 +476,25 @@ addition to any other actions in this flow entry.  Recursive
 If outputting to a port that encapsulates the packet in a tunnel and supports
 an identifier (such as GRE), sets the identifier to \fBid\fR.
 .
+.IP \fBdrop_spoofed_arp\fR
+Stops processing further actions, if the packet being processed is an
+Ethernet+IPv4 ARP packet for which the source Ethernet address inside
+the ARP packet differs from the source Ethernet address in the
+Ethernet header.
+.
+This is useful because OpenFlow does not provide a way to match on the
+Ethernet addresses inside ARP packets, so there is no other way to
+drop spoofed ARPs other than sending every ARP packet to a controller.
+.
+.IP \fBset_queue\fB:\fIqueue\fR
+Sets the queue that should be used to \fIqueue\fR when packets are
+output.  The number of supported queues depends on the switch; some
+OpenFlow implementations do not support queuing at all.
+.
+.IP \fBpop_queue\fR
+Restores the queue to the value it was before any \fBset_queue\fR
+actions were applied.
+.
 .RE
 .
 .IP
@@ -502,8 +530,8 @@ optional fields:
 .TP
 \fBidle_timeout=\fIseconds\fR
 Causes the flow to expire after the given number of seconds of
-inactivity.  A value of 0 prevents a flow from expiring due to
-inactivity.  The default is 60 seconds.
+inactivity.  A value of 0 (the default) prevents a flow from expiring due to
+inactivity.
 .
 .IP \fBhard_timeout=\fIseconds\fR
 Causes the flow to expire after the given number of seconds,

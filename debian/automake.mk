@@ -4,6 +4,7 @@ EXTRA_DIST += \
 	debian/control \
 	debian/control.modules.in \
 	debian/copyright \
+	debian/copyright.in \
 	debian/corekeeper.cron.daily \
 	debian/corekeeper.init \
 	debian/corekeeper.override \
@@ -23,6 +24,9 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
+	debian/openvswitch-ipsec.dirs \
+	debian/openvswitch-ipsec.init \
+	debian/openvswitch-ipsec.install \
 	debian/openvswitch-pki-server.apache2 \
 	debian/openvswitch-pki-server.dirs \
 	debian/openvswitch-pki-server.install \
@@ -37,6 +41,11 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
+	debian/ovs-bugtool \
+	debian/ovs-bugtool.8 \
+	debian/ovs-monitor-ipsec \
+	debian/python-openvswitch.dirs \
+	debian/python-openvswitch.install \
 	debian/rules \
 	debian/rules.modules
 
@@ -50,3 +59,12 @@ check-debian-changelog-version:
 	fi
 ALL_LOCAL += check-debian-changelog-version
 DIST_HOOKS += check-debian-changelog-version
+
+$(srcdir)/debian/copyright: AUTHORS debian/copyright.in
+	{ sed -n -e '/%AUTHORS%/q' -e p < $(srcdir)/debian/copyright.in;   \
+	  sed '1,/^$$/d' $(srcdir)/AUTHORS |				   \
+		sed -n -e '/^$$/q' -e 's/^/  /p';			   \
+	  sed -e '1,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
+	} > $@
+
+DISTCLEANFILES += debian/copyright

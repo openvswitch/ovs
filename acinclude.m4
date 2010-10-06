@@ -188,6 +188,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
                   [OVS_DEFINE([HAVE_BOOL_TYPE])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [__wsum],
+                  [OVS_DEFINE([HAVE_CSUM_TYPES])])
 
   OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_unfold],
                   [OVS_DEFINE([HAVE_CSUM_UNFOLD])])

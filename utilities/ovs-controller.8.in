@@ -98,13 +98,37 @@ sending packets and setting up flows.  Use one of these options,
 supplying \fIid\fR as an OpenFlow queue ID as a decimal number, to
 instead use that specific queue.
 .IP
-This option may be useful for debugging quality of service setups.
+This option is incompatible with \fB\-N\fR or \fB\-\-normal\fR and
+with \fB\-H\fR or \fB\-\-hub\fR.  If more than one is specified then
+this option takes precedence.
+.IP
+This option may be useful for testing or debugging quality of service
+setups.
+.
+.IP "\fB\-Q \fIport-name\fB:\fIqueue-id\fR"
+.IP "\fB\-\-port\-queue \fIport-name\fB:\fIqueue-id\fR"
+Configures packets received on the port named \fIport-name\fR
+(e.g. \fBeth0\fR) to be output on OpenFlow queue ID \fIqueue-id\fR
+(specified as a decimal number).  For the specified port, this option
+overrides the default specified on \fB\-q\fR or \fB\-\-queue\fR.
+.IP
+This option may be specified any number of times with different
+\Iport-name\fR arguments.
+.IP
+This option is incompatible with \fB\-N\fR or \fB\-\-normal\fR and
+with \fB\-H\fR or \fB\-\-hub\fR.  If more than one is specified then
+this option takes precedence.
+.IP
+This option may be useful for testing or debugging quality of service
+setups.
 .
 .IP "\fB\-\-with\-flows \fIfile\fR"
 When a switch connects, push the flow entries as described in
 \fIfile\fR.  Each line in \fIfile\fR is a flow entry in the format
 described for the \fBadd\-flows\fR command in the \fBFlow Syntax\fR
 section of the \fBovs\-ofctl\fR(8) man page.
+.IP
+Use this option more than once to add flows from multiple files.
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man

@@ -75,10 +75,30 @@ ofpbuf_new(size_t size)
     return b;
 }
 
+/* Creates and returns a new ofpbuf with an initial capacity of 'size +
+ * headroom' bytes, reserving the first 'headroom' bytes as headroom. */
+struct ofpbuf *
+ofpbuf_new_with_headroom(size_t size, size_t headroom)
+{
+    struct ofpbuf *b = ofpbuf_new(size + headroom);
+    ofpbuf_reserve(b, headroom);
+    return b;
+}
+
 struct ofpbuf *
 ofpbuf_clone(const struct ofpbuf *buffer)
 {
     return ofpbuf_clone_data(buffer->data, buffer->size);
+}
+
+/* Creates and returns a new ofpbuf whose data are copied from 'buffer'.   The
+ * returned ofpbuf will additionally have 'headroom' bytes of headroom. */
+struct ofpbuf *
+ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
+{
+    struct ofpbuf *b = ofpbuf_new_with_headroom(buffer->size, headroom);
+    ofpbuf_put(b, buffer->data, buffer->size);
+    return b;
 }
 
 struct ofpbuf *

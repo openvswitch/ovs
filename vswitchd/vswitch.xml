@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <database title="Open vSwitch Configuration Database">
   <p>A database with this schema holds the configuration for one Open
     vSwitch daemon.  The root of the configuration for the daemon is
@@ -74,21 +75,133 @@
 
       <column name="statistics">
         <p>
-          Key-value pairs that report statistics about a running Open_vSwitch
-          daemon.  The current implementation updates these counters
-          periodically.  In the future, we plan to, instead, update them only
-          when they are queried (e.g. using an OVSDB <code>select</code>
-          operation) and perhaps at other times, but not on any regular
-          periodic basis.</p>
-        <p>
-          The currently defined key-value pairs are listed below.  Some Open
-          vSwitch implementations may not support some statistics, in which
-          case those key-value pairs are omitted.</p>
+          Key-value pairs that report statistics about a system running an Open
+          vSwitch.  These are updated periodically (currently, every 5
+          seconds).  Key-value pairs that cannot be determined or that do not
+          apply to a platform are omitted.
+        </p>
+
         <dl>
-          <dt><code>load-average</code></dt>
+          <dt><code>cpu</code></dt>
           <dd>
-            System load average multiplied by 100 and rounded to the nearest
-            integer.</dd>
+            <p>
+              Number of CPU processors, threads, or cores currently online and
+              available to the operating system on which Open vSwitch is
+              running, as an integer.  This may be less than the number
+              installed, if some are not online or if they are not available to
+              the operating system.
+            </p>
+            <p>
+              Open vSwitch userspace processes are not multithreaded, but the
+              Linux kernel-based datapath is.
+            </p>
+          </dd>
+
+          <dt><code>load_average</code></dt>
+          <dd>
+            <p>
+              A comma-separated list of three floating-point numbers,
+              representing the system load average over the last 1, 5, and 15
+              minutes, respectively.
+            </p>
+          </dd>
+
+          <dt><code>memory</code></dt>
+          <dd>
+            <p>
+              A comma-separated list of integers, each of which represents a
+              quantity of memory in kilobytes that describes the operating
+              system on which Open vSwitch is running.  In respective order,
+              these values are:
+            </p>
+
+            <ol>
+              <li>Total amount of RAM allocated to the OS.</li>
+              <li>RAM allocated to the OS that is in use.</li>
+              <li>RAM that can be flushed out to disk or otherwise discarded
+              if that space is needed for another purpose.  This number is
+              necessarily less than or equal to the previous value.</li>
+              <li>Total disk space allocated for swap.</li>
+              <li>Swap space currently in use.</li>
+            </ol>
+
+            <p>
+              On Linux, all five values can be determined and are included.  On
+              other operating systems, only the first two values can be
+              determined, so the list will only have two values.
+            </p>
+          </dd>
+
+          <dt><code>process_</code><var>name</var></dt>
+          <dd>
+            <p>
+              One such key-value pair will exist for each running Open vSwitch
+              daemon process, with <var>name</var> replaced by the daemon's
+              name (e.g. <code>process_ovs-vswitchd</code>).  The value is a
+              comma-separated list of integers.  The integers represent the
+              following, with memory measured in kilobytes and durations in
+              milliseconds:
+            </p>
+
+            <ol>
+              <li>The process's virtual memory size.</li>
+              <li>The process's resident set size.</li>
+              <li>The amount of user and system CPU time consumed by the
+              process.</li>
+              <li>The number of times that the process has crashed and been
+              automatically restarted by the monitor.</li>
+              <li>The duration since the process was started.</li>
+              <li>The duration for which the process has been running.</li>
+            </ol>
+
+            <p>
+              The interpretation of some of these values depends on whether the
+              process was started with the <option>--monitor</option>.  If it
+              was not, then the crash count will always be 0 and the two
+              durations will always be the same.  If <option>--monitor</option>
+              was given, then the crash count may be positive; if it is, the
+              latter duration is the amount of time since the most recent crash
+              and restart.
+            </p>
+
+            <p>
+              There will be one key-value pair for each file in Open vSwitch's
+              ``run directory'' (usually <code>/var/run/openvswitch</code>)
+              whose name ends in <code>.pid</code>, whose contents are a
+              process ID, and which is locked by a running process.  The
+              <var>name</var> is taken from the pidfile's name.
+            </p>
+
+            <p>
+              Currently Open vSwitch is only able to obtain all of the above
+              detail on Linux systems.  On other systems, the same key-value
+              pairs will be present but the values will always be the empty
+              string.
+            </p>
+          </dd>
+
+          <dt><code>file_systems</code></dt>
+          <dd>
+            <p>
+              A space-separated list of information on local, writable file
+              systems.  Each item in the list describes one file system and
+              consists in turn of a comma-separated list of the following:
+            </p>
+
+            <ol>
+              <li>Mount point, e.g. <code>/</code> or <code>/var/log</code>.
+              Any spaces or commas in the mount point are replaced by
+              underscores.</li>
+              <li>Total size, in kilobytes, as an integer.</li>
+              <li>Amount of storage in use, in kilobytes, as an integer.</li>
+            </ol>
+
+            <p>
+              This key-value pair is omitted if there are no local, writable
+              file systems or if Open vSwitch cannot obtain the needed
+              information.
+            </p>
+          </dd>
         </dl>
       </column>
     </group>
@@ -539,6 +652,19 @@
                 compliance with the IEEE 802.1D specification for bridges.
                 Default is enabled, set to <code>false</code> to disable.</dd>
             </dl>
+            <dl>
+              <dt><code>header_cache</code></dt>
+              <dd>Optional.  Enable caching of tunnel headers and the output
+                path.  This can lead to a significant performance increase
+                without changing behavior.  In general it should not be
+                necessary to adjust this setting.  However, the caching can
+                bypass certain components of the IP stack (such as IP tables)
+                and it may be useful to disable it if these features are
+                required or as a debugging measure.  Default is enabled, set to
+                <code>false</code> to disable.  If IPsec is enabled through the
+                <ref column="other_config"/> parameters, header caching will be
+                automatically disabled.</dd>
+            </dl>
           </dd>
           <dt><code>capwap</code></dt>
           <dd>Ethernet tunneling over the UDP transport portion of CAPWAP
@@ -594,6 +720,17 @@
                 compliance with the IEEE 802.1D specification for bridges.
                 Default is enabled, set to <code>false</code> to disable.</dd>
             </dl>
+            <dl>
+              <dt><code>header_cache</code></dt>
+              <dd>Optional.  Enable caching of tunnel headers and the output
+                path.  This can lead to a significant performance increase
+                without changing behavior.  In general it should not be
+                necessary to adjust this setting.  However, the caching can
+                bypass certain components of the IP stack (such as IP tables)
+                and it may be useful to disable it if these features are
+                required or as a debugging measure.  Default is enabled, set to
+                <code>false</code> to disable.</dd>
+            </dl>
           </dd>
           <dt><code>patch</code></dt>
           <dd>
@@ -637,24 +774,78 @@
     </group>
 
     <group title="Ingress Policing">
+      <p>
+        These settings control ingress policing for packets received on this
+        interface.  On a physical interface, this limits the rate at which
+        traffic is allowed into the system from the outside; on a virtual
+        interface (one connected to a virtual machine), this limits the rate at
+        which the VM is able to transmit.
+      </p>
+      <p>
+        Policing is a simple form of quality-of-service that simply drops
+        packets received in excess of the configured rate.  Due to its
+        simplicity, policing is usually less accurate and less effective than
+        egress QoS (which is configured using the <ref table="QoS"/> and <ref
+        table="Queue"/> tables).
+      </p>
+      <p>
+        Policing is currently implemented only on Linux.  The Linux
+        implementation uses a simple ``token bucket'' approach:
+      </p>
+      <ul>
+        <li>
+          The size of the bucket corresponds to <ref
+          column="ingress_policing_burst"/>.  Initially the bucket is full.
+        </li>
+        <li>
+          Whenever a packet is received, its size (converted to tokens) is
+          compared to the number of tokens currently in the bucket.  If the
+          required number of tokens are available, they are removed and the
+          packet is forwarded.  Otherwise, the packet is dropped.
+        </li>
+        <li>
+          Whenever it is not full, the bucket is refilled with tokens at the
+          rate specified by <ref column="ingress_policing_rate"/>.
+        </li>
+      </ul>
+      <p>
+        Policing interacts badly with some network protocols, and especially
+        with fragmented IP packets.  Suppose that there is enough network
+        activity to keep the bucket nearly empty all the time.  Then this token
+        bucket algorithm will forward a single packet every so often, with the
+        period depending on packet size and on the configured rate.  All of the
+        fragments of an IP packets are normally transmitted back-to-back, as a
+        group.  In such a situation, therefore, only one of these fragments
+        will be forwarded and the rest will be dropped.  IP does not provide
+        any way for the intended recipient to ask for only the remaining
+        fragments.  In such a case there are two likely possibilities for what
+        will happen next: either all of the fragments will eventually be
+        retransmitted (as TCP will do), in which case the same problem will
+        recur, or the sender will not realize that its packet has been dropped
+        and data will simply be lost (as some UDP-based protocols will do).
+        Either way, it is possible that no forward progress will ever occur.
+      </p>
+      <column name="ingress_policing_rate">
+        <p>
+          Maximum rate for data received on this interface, in kbps.  Data
+          received faster than this rate is dropped.  Set to <code>0</code>
+          (the default) to disable policing.
+        </p>
+      </column>
+
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
           default burst size if set to <code>0</code> is 1000 kb.  This value
           has no effect if <ref column="ingress_policing_rate"/>
           is <code>0</code>.</p>
-        <p>The burst size should be at least the size of the interface's
-          MTU.</p>
-      </column>
-
-      <column name="ingress_policing_rate">
-        <p>Maximum rate for data received on this interface, in kbps.  Data
-          received faster than this rate is dropped.  Set to <code>0</code> to
-          disable policing.</p>
-        <p>The meaning of ``ingress'' is from Open vSwitch's perspective.  If
-          configured on a physical interface, then it limits the rate at which
-          traffic is allowed into the system from the outside.  If configured
-          on a virtual interface that is connected to a virtual machine, then
-          it limits the rate at which the guest is able to transmit.</p>
+        <p>
+          Specifying a larger burst size lets the algorithm be more forgiving,
+          which is important for protocols like TCP that react severely to
+          dropped packets.  The burst size should be at least the size of the
+          interface's MTU.  Specifying a value that is numerically at least as
+          large as 10% of <ref column="ingress_policing_rate"/> helps TCP come
+          closer to achieving the full rate.
+        </p>
       </column>
     </group>
 
@@ -665,8 +856,15 @@
         integrators should either use the Open vSwitch development
         mailing list to coordinate on common key-value definitions, or
         choose key names that are likely to be unique.  The currently
-        defined common key-value pair is:
+        defined common key-value pairs are:
         <dl>
+          <dt><code>attached-mac</code></dt>
+          <dd>
+            The MAC address programmed into the ``virtual hardware'' for this
+            interface, in the form
+            <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+            For Citrix XenServer, this is the value of the <code>MAC</code>
+            field in the VIF record for this interface.</dd>
           <dt><code>iface-id</code></dt>
           <dd>A system-unique identifier for the interface.  On XenServer, 
             this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
@@ -689,12 +887,27 @@
           <dd>The virtual network to which this interface is attached.</dd>
           <dt><code>xs-vm-uuid</code></dt>
           <dd>The VM to which this interface belongs.</dd>
-          <dt><code>xs-vif-mac</code></dt>
-          <dd>The MAC address programmed into the "virtual hardware" for this
-              interface, in the
-              form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-              For Citrix XenServer, this is the value of the <code>MAC</code>
-              field in the VIF record for this interface.</dd>
+        </dl>
+      </column>
+
+      <column name="other_config">
+        Key-value pairs for rarely used interface features.  Currently,
+        the only keys are for configuring GRE-over-IPsec, which is only
+        available through the <code>openvswitch-ipsec</code> package for
+        Debian.  The currently defined key-value pairs are:
+        <dl>
+          <dt><code>ipsec_local_ip</code></dt>
+          <dd>Required key for GRE-over-IPsec interfaces.  Additionally,
+            the <ref column="type"/> must be <code>gre</code> and the
+            <code>ipsec_psk</code> <ref column="other_config"/> key must
+            be set.  The <code>in_key</code>, <code>out_key</code>, and
+            <code>key</code> <ref column="options"/> must not be
+            set.</dd>
+          <dt><code>ipsec_psk</code></dt>
+          <dd>Required key for GRE-over-IPsec interfaces.  Specifies a
+            pre-shared key for authentication that must be identical on 
+            both sides of the tunnel.  Additionally, the
+            <code>ipsec_local_ip</code> key must also be set.</dd>
         </dl>
       </column>
 
@@ -774,7 +987,12 @@
         defined types are listed below:</p>
       <dl>
         <dt><code>linux-htb</code></dt>
-        <dd>Linux ``hierarchy token bucket'' classifier.</dd>
+        <dd>
+          Linux ``hierarchy token bucket'' classifier.  See tc-htb(8) (also at
+          <code>http://linux.die.net/man/8/tc-htb</code>) and the HTB manual
+          (<code>http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm</code>)
+          for information on how this classifier works and how to configure it.
+        </dd>
       </dl>
     </column>
 
@@ -1082,34 +1300,34 @@
             restricted to the specified local IP address.
           </dd>
         </dl>
-	<p>When multiple controllers are configured for a single bridge, the
-	  <ref column="target"/> values must be unique.  Duplicate
-	  <ref column="target"/> values yield unspecified results.</p>
+        <p>When multiple controllers are configured for a single bridge, the
+          <ref column="target"/> values must be unique.  Duplicate
+          <ref column="target"/> values yield unspecified results.</p>
       </column>
 
       <column name="connection_mode">
-	<p>If it is specified, this setting must be one of the following
-	strings that describes how Open vSwitch contacts this OpenFlow
-	controller over the network:</p>
+        <p>If it is specified, this setting must be one of the following
+        strings that describes how Open vSwitch contacts this OpenFlow
+        controller over the network:</p>
 
-	<dl>
-	  <dt><code>in-band</code></dt>
-	  <dd>In this mode, this controller's OpenFlow traffic travels over the
-	    bridge associated with the controller.  With this setting, Open
-	    vSwitch allows traffic to and from the controller regardless of the
-	    contents of the OpenFlow flow table.  (Otherwise, Open vSwitch
-	    would never be able to connect to the controller, because it did
-	    not have a flow to enable it.)  This is the most common connection
-	    mode because it is not necessary to maintain two independent
-	    networks.</dd>
-	  <dt><code>out-of-band</code></dt>
-	  <dd>In this mode, OpenFlow traffic uses a control network separate
-	    from the bridge associated with this controller, that is, the
-	    bridge does not use any of its own network devices to communicate
-	    with the controller.  The control network must be configured
-	    separately, before or after <code>ovs-vswitchd</code> is started.
-	  </dd>
-	</dl>
+        <dl>
+          <dt><code>in-band</code></dt>
+          <dd>In this mode, this controller's OpenFlow traffic travels over the
+            bridge associated with the controller.  With this setting, Open
+            vSwitch allows traffic to and from the controller regardless of the
+            contents of the OpenFlow flow table.  (Otherwise, Open vSwitch
+            would never be able to connect to the controller, because it did
+            not have a flow to enable it.)  This is the most common connection
+            mode because it is not necessary to maintain two independent
+            networks.</dd>
+          <dt><code>out-of-band</code></dt>
+          <dd>In this mode, OpenFlow traffic uses a control network separate
+            from the bridge associated with this controller, that is, the
+            bridge does not use any of its own network devices to communicate
+            with the controller.  The control network must be configured
+            separately, before or after <code>ovs-vswitchd</code> is started.
+          </dd>
+        </dl>
 
         <p>If not specified, the default is implementation-specific.  If
           <ref column="target"/> is <code>discover</code>, the connection mode
@@ -1166,7 +1384,7 @@
 
     <group title="Additional Discovery Configuration">
       <p>These values are considered only when <ref column="target"/>
-	is <code>discover</code>.</p>
+        is <code>discover</code>.</p>
 
       <column name="discover_accept_regex">
         A POSIX
@@ -1188,14 +1406,14 @@
 
     <group title="Additional In-Band Configuration">
       <p>These values are considered only in in-band control mode (see
-	<ref column="connection_mode"/>) and only when <ref column="target"/>
-	is not <code>discover</code>.  (For controller discovery, the network
-	configuration obtained via DHCP is used instead.)</p>
+        <ref column="connection_mode"/>) and only when <ref column="target"/>
+        is not <code>discover</code>.  (For controller discovery, the network
+        configuration obtained via DHCP is used instead.)</p>
 
       <p>When multiple controllers are configured on a single bridge, there
-	should be only one set of unique values in these columns.  If different
-	values are set for these columns in different controllers, the effect
-	is unspecified.</p>
+        should be only one set of unique values in these columns.  If different
+        values are set for these columns in different controllers, the effect
+        is unspecified.</p>
 
       <column name="local_ip">
         The IP address to configure on the local port,

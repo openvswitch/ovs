@@ -79,7 +79,7 @@ search_bucket(struct list *bucket, const uint8_t mac[ETH_ADDR_LEN],
               uint16_t vlan)
 {
     struct mac_entry *e;
-    LIST_FOR_EACH (e, struct mac_entry, hash_node, bucket) {
+    LIST_FOR_EACH (e, hash_node, bucket) {
         if (eth_addr_equals(e->mac, mac) && e->vlan == vlan) {
             return e;
         }

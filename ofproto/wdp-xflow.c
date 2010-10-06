@@ -59,14 +59,19 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 #define WX_MAX_WILD     65536   /* Wildcarded rules. */
 #define WX_MAX_EXACT    1048576 /* Exact-match rules. */
 
+struct wx_port {
+    struct hmap_node hmap_node;
+    struct wdp_port wdp_port;
+    uint16_t xflow_port;
+};
+
 struct wx {
     struct list list_node;
     struct wdp wdp;
     struct xfif *xfif;
     struct classifier cls;
     struct netdev_monitor *netdev_monitor;
-    struct port_array ports;    /* Index is xflow port nr;
-                                 * wdp_port->opp.port_no is OFP port nr. */
+    struct hmap ports;          /* Contains "struct wx_port"s. */
     struct shash port_by_name;
     long long int next_expiration;
     int wdp_listen_mask;
@@ -95,6 +100,7 @@ static const struct ofhooks default_ofhooks;
 static struct list all_wx = LIST_INITIALIZER(&all_wx);
 
 static int wx_port_init(struct wx *);
+static struct wx_port *wx_port_get(const struct wx *, uint16_t xflow_port);
 static void wx_port_process_change(struct wx *wx, int error, char *devname,
                                    wdp_port_poll_cb_func *cb, void *aux);
 static void wx_port_refresh_groups(struct wx *);
@@ -334,7 +340,7 @@ wx_rule_destroy(struct wx *wx, struct wx_rule *rule)
 {
     if (!rule->super) {
         struct wx_rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, struct wx_rule, list, &rule->list) {
+        LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
             wx_rule_revalidate(wx, subrule);
         }
     } else {
@@ -700,10 +706,10 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
 static void
 add_output_action(struct wx_xlate_ctx *ctx, uint16_t port)
 {
-    const struct wdp_port *wdp_port = port_array_get(&ctx->wx->ports, port);
+    const struct wx_port *wx_port = wx_port_get(ctx->wx, port);
 
-    if (wdp_port) {
-        if (wdp_port->opp.config & OFPPC_NO_FWD) {
+    if (wx_port) {
+        if (wx_port->wdp_port.opp.config & OFPPC_NO_FWD) {
             /* Forwarding disabled on port. */
             return;
         }
@@ -881,11 +887,32 @@ xlate_enqueue_action(struct wx_xlate_ctx *ctx,
 }
 
 static void
+xlate_set_queue_action(struct wx_xlate_ctx *ctx,
+                       const struct nx_action_set_queue *nasq)
+{
+    uint32_t priority;
+    int error;
+
+    error = xfif_queue_to_priority(ctx->wx->xfif, ntohl(nasq->queue_id),
+                                   &priority);
+    if (error) {
+        /* Couldn't translate queue to a priority, so ignore.  A warning
+         * has already been logged. */
+        return;
+    }
+
+    remove_pop_action(ctx);
+    xflow_actions_add(ctx->out, XFLOWAT_SET_PRIORITY)->priority.priority
+        = priority;
+}
+
+static void
 xlate_nicira_action(struct wx_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
     const struct nx_action_resubmit *nar;
     const struct nx_action_set_tunnel *nast;
+    const struct nx_action_set_queue *nasq;
     union xflow_action *oa;
     int subtype = ntohs(nah->subtype);
 
@@ -908,6 +935,15 @@ xlate_nicira_action(struct wx_xlate_ctx *ctx,
         }
         break;
 
+    case NXAST_SET_QUEUE:
+        nasq = (const struct nx_action_set_queue *) nah;
+        xlate_set_queue_action(ctx, nasq);
+        break;
+
+    case NXAST_POP_QUEUE:
+        xflow_actions_add(ctx->out, XFLOWAT_POP_PRIORITY);
+        break;
+
     /* If you add a new action here that modifies flow data, don't forget to
      * update the flow key in ctx->flow at the same time. */
 
@@ -923,14 +959,17 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 {
     struct actions_iterator iter;
     const union ofp_action *ia;
-    const struct wdp_port *port;
+    const struct wx_port *port;
 
-    port = port_array_get(&ctx->wx->ports, ctx->flow.in_port);
-    if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
-                            ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
-        /* Drop this flow. */
-        return;
+    port = wx_port_get(ctx->wx, ctx->flow.in_port);
+    if (port) {
+        const struct ofp_phy_port *opp = &port->wdp_port.opp;
+        if (opp->config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
+            opp->config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
+                           ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
+            /* Drop this flow. */
+            return;
+        }
     }
 
     for (ia = actions_first(&iter, in, n_in); ia; ia = actions_next(&iter)) {
@@ -1165,7 +1204,7 @@ expire_rule(struct cls_rule *cls_rule, void *wx_)
      * due to an idle timeout. */
     if (rule->wr.cr.flow.wildcards) {
         struct wx_rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, struct wx_rule, list, &rule->list) {
+        LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
             wx_rule_remove(wx, subrule);
         }
     } else {
@@ -1264,7 +1303,7 @@ wx_run(void)
 {
     struct wx *wx;
 
-    LIST_FOR_EACH (wx, struct wx, list_node, &all_wx) {
+    LIST_FOR_EACH (wx, list_node, &all_wx) {
         wx_run_one(wx);
     }
     xf_run();
@@ -1285,7 +1324,7 @@ wx_wait(void)
 {
     struct wx *wx;
 
-    LIST_FOR_EACH (wx, struct wx, list_node, &all_wx) {
+    LIST_FOR_EACH (wx, list_node, &all_wx) {
         wx_wait_one(wx);
     }
     xf_wait();
@@ -1321,7 +1360,7 @@ wx_open(const struct wdp_class *wdp_class, const char *name, bool create,
         wx->xfif = xfif;
         classifier_init(&wx->cls);
         wx->netdev_monitor = netdev_monitor_create();
-        port_array_init(&wx->ports);
+        hmap_init(&wx->ports);
         shash_init(&wx->port_by_name);
         wx->next_expiration = time_msec() + 1000;
         tag_set_init(&wx->revalidate_set);
@@ -1351,6 +1390,8 @@ wx_close(struct wdp *wdp)
     netdev_monitor_destroy(wx->netdev_monitor);
     list_remove(&wx->list_node);
     mac_learning_destroy(wx->ml);
+    hmap_destroy(&wx->ports);
+    shash_destroy(&wx->port_by_name);
     free(wx);
 }
 
@@ -1376,8 +1417,7 @@ wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
     struct wx *wx = wx_cast(wdp);
     struct ofp_switch_features *osf;
     struct ofpbuf *buf;
-    unsigned int port_no;
-    struct wdp_port *port;
+    struct wx_port *port;
 
     buf = ofpbuf_new(sizeof *osf);
     osf = ofpbuf_put_zeros(buf, sizeof *osf);
@@ -1396,8 +1436,9 @@ wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
                          (1u << OFPAT_SET_TP_DST) |
                          (1u << OFPAT_ENQUEUE));
 
-    PORT_ARRAY_FOR_EACH (port, &wx->ports, port_no) {
-        hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
+    HMAP_FOR_EACH (port, hmap_node, &wx->ports) {
+        const struct ofp_phy_port *opp = &port->wdp_port.opp;
+        hton_ofp_phy_port(ofpbuf_put(buf, opp, sizeof *opp));
     }
 
     *featuresp = buf;
@@ -1498,10 +1539,10 @@ wx_port_del(struct wdp *wdp, uint16_t port_no)
 }
 
 static int
-wx_answer_port_query(const struct wdp_port *port, struct wdp_port *portp)
+wx_answer_port_query(const struct wx_port *port, struct wdp_port *portp)
 {
     if (port) {
-        wdp_port_copy(portp, port);
+        wdp_port_copy(portp, &port->wdp_port);
         return 0;
     } else {
         return ENOENT;
@@ -1513,10 +1554,9 @@ wx_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
                         struct wdp_port *portp)
 {
     struct wx *wx = wx_cast(wdp);
-    const struct wdp_port *port;
+    struct wx_port *wx_port = wx_port_get(wx, ofp_port_to_xflow_port(port_no));
 
-    port = port_array_get(&wx->ports, ofp_port_to_xflow_port(port_no));
-    return wx_answer_port_query(port, portp);
+    return wx_answer_port_query(wx_port, portp);
 }
 
 static int
@@ -1533,42 +1573,46 @@ static int
 wx_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
 {
     struct wx *wx = wx_cast(wdp);
-    struct wdp_port *port;
+    struct wx_port *port;
+    struct ofp_phy_port *opp;
     uint32_t changes;
 
-    port = port_array_get(&wx->ports, ofp_port_to_xflow_port(port_no));
+    port = wx_port_get(wx, ofp_port_to_xflow_port(port_no));
     if (!port) {
         return ENOENT;
     }
-    changes = config ^ port->opp.config;
+    opp = &port->wdp_port.opp;
+    changes = config ^ opp->config;
 
     if (changes & OFPPC_PORT_DOWN) {
+        struct netdev *netdev = port->wdp_port.netdev;
         int error;
+
         if (config & OFPPC_PORT_DOWN) {
-            error = netdev_turn_flags_off(port->netdev, NETDEV_UP, true);
+            error = netdev_turn_flags_off(netdev, NETDEV_UP, true);
         } else {
-            error = netdev_turn_flags_on(port->netdev, NETDEV_UP, true);
+            error = netdev_turn_flags_on(netdev, NETDEV_UP, true);
         }
         if (!error) {
-            port->opp.config ^= OFPPC_PORT_DOWN;
+            opp->config ^= OFPPC_PORT_DOWN;
         }
     }
 
 #define REVALIDATE_BITS (OFPPC_NO_RECV | OFPPC_NO_RECV_STP | OFPPC_NO_FWD)
     if (changes & REVALIDATE_BITS) {
         COVERAGE_INC(wx_costly_flags);
-        port->opp.config ^= changes & REVALIDATE_BITS;
+        opp->config ^= changes & REVALIDATE_BITS;
         wx->need_revalidate = true;
     }
 #undef REVALIDATE_BITS
 
     if (changes & OFPPC_NO_FLOOD) {
-        port->opp.config ^= OFPPC_NO_FLOOD;
+        opp->config ^= OFPPC_NO_FLOOD;
         wx_port_refresh_groups(wx);
     }
 
     if (changes & OFPPC_NO_PACKET_IN) {
-        port->opp.config ^= OFPPC_NO_PACKET_IN;
+        opp->config ^= OFPPC_NO_PACKET_IN;
     }
 
     return 0;
@@ -1578,15 +1622,15 @@ static int
 wx_port_list(const struct wdp *wdp, struct wdp_port **portsp, size_t *n_portsp)
 {
     struct wx *wx = wx_cast(wdp);
-    struct wdp_port *ports, *port;
-    unsigned int port_no;
+    struct wdp_port *ports;
+    struct wx_port *port;
     size_t n_ports, i;
 
-    *n_portsp = n_ports = port_array_count(&wx->ports);
+    *n_portsp = n_ports = hmap_count(&wx->ports);
     *portsp = ports = xmalloc(n_ports * sizeof *ports);
     i = 0;
-    PORT_ARRAY_FOR_EACH (port, &wx->ports, port_no) {
-        wdp_port_copy(&ports[i++], port);
+    HMAP_FOR_EACH (port, hmap_node, &wx->ports) {
+        wdp_port_copy(&ports[i++], &port->wdp_port);
     }
     assert(i == n_ports);
 
@@ -1732,7 +1776,7 @@ query_stats(struct wx *wx, struct wx_rule *rule, struct wdp_flow_stats *stats)
     xflow_flows = xzalloc(n_xflow_flows * sizeof *xflow_flows);
     if (rule->wr.cr.flow.wildcards) {
         size_t i = 0;
-        LIST_FOR_EACH (subrule, struct wx_rule, list, &rule->list) {
+        LIST_FOR_EACH (subrule, list, &rule->list) {
             xflow_key_from_flow(&xflow_flows[i++].key, &subrule->wr.cr.flow);
             stats->n_packets += subrule->packet_count;
             stats->n_bytes += subrule->byte_count;
@@ -2012,8 +2056,8 @@ wx_translate_xflow_msg(struct xflow_msg *msg, struct ofpbuf *payload,
 static const uint8_t *
 get_local_mac(const struct wx *wx)
 {
-    const struct wdp_port *port = port_array_get(&wx->ports, XFLOWP_LOCAL);
-    return port ? port->opp.hw_addr : NULL;
+    const struct wx_port *port = wx_port_get(wx, XFLOWP_LOCAL);
+    return port ? port->wdp_port.opp.hw_addr : NULL;
 }
 
 /* Returns true if 'packet' is a DHCP reply to the local port.  Such a reply
@@ -2150,8 +2194,7 @@ wx_purge_ctl_packets__(struct wx *wx)
 {
     struct wdp_packet *this, *next;
 
-    LIST_FOR_EACH_SAFE (this, next, struct wdp_packet, list,
-                        &wx->ctl_packets) {
+    LIST_FOR_EACH_SAFE (this, next, list, &wx->ctl_packets) {
         list_remove(&this->list);
         ofpbuf_delete(this->payload);
         free(this);
@@ -2257,16 +2300,16 @@ wx_port_refresh_group(struct wx *wx, unsigned int group)
 {
     uint16_t *ports;
     size_t n_ports;
-    struct wdp_port *port;
-    unsigned int port_no;
+    struct wx_port *port;
 
     assert(group == WX_GROUP_ALL || group == WX_GROUP_FLOOD);
 
-    ports = xmalloc(port_array_count(&wx->ports) * sizeof *ports);
+    ports = xmalloc(hmap_count(&wx->ports) * sizeof *ports);
     n_ports = 0;
-    PORT_ARRAY_FOR_EACH (port, &wx->ports, port_no) {
-        if (group == WX_GROUP_ALL || !(port->opp.config & OFPPC_NO_FLOOD)) {
-            ports[n_ports++] = port_no;
+    HMAP_FOR_EACH (port, hmap_node, &wx->ports) {
+        const struct ofp_phy_port *opp = &port->wdp_port.opp;
+        if (group == WX_GROUP_ALL || !(opp->config & OFPPC_NO_FLOOD)) {
+            ports[n_ports++] = port->xflow_port;
         }
     }
     xfif_port_group_set(wx->xfif, group, ports, n_ports);
@@ -2286,15 +2329,14 @@ static void
 wx_port_reinit(struct wx *wx, wdp_port_poll_cb_func *cb, void *aux)
 {
     struct svec devnames;
-    struct wdp_port *wdp_port;
-    unsigned int port_no;
+    struct wx_port *wx_port;
     struct xflow_port *xflow_ports;
     size_t n_xflow_ports;
     size_t i;
 
     svec_init(&devnames);
-    PORT_ARRAY_FOR_EACH (wdp_port, &wx->ports, port_no) {
-        svec_add (&devnames, (char *) wdp_port->opp.name);
+    HMAP_FOR_EACH (wx_port, hmap_node, &wx->ports) {
+        svec_add (&devnames, (char *) wx_port->wdp_port.opp.name);
     }
     xfif_port_list(wx->xfif, &xflow_ports, &n_xflow_ports);
     for (i = 0; i < n_xflow_ports; i++) {
@@ -2311,11 +2353,12 @@ wx_port_reinit(struct wx *wx, wdp_port_poll_cb_func *cb, void *aux)
     wx_port_refresh_groups(wx);
 }
 
-static struct wdp_port *
-make_wdp_port(const struct xflow_port *xflow_port)
+static struct wx_port *
+make_wx_port(const struct xflow_port *xflow_port)
 {
     struct netdev_options netdev_options;
     enum netdev_flags flags;
+    struct wx_port *wx_port;
     struct wdp_port *wdp_port;
     struct netdev *netdev;
     bool carrier;
@@ -2334,7 +2377,9 @@ make_wdp_port(const struct xflow_port *xflow_port)
         return NULL;
     }
 
-    wdp_port = xmalloc(sizeof *wdp_port);
+    wx_port = xmalloc(sizeof *wx_port);
+    wx_port->xflow_port = xflow_port->port;
+    wdp_port = &wx_port->wdp_port;
     wdp_port->netdev = netdev;
     wdp_port->opp.port_no = xflow_port_to_ofp_port(xflow_port->port);
     netdev_get_etheraddr(netdev, wdp_port->opp.hw_addr);
@@ -2354,13 +2399,13 @@ make_wdp_port(const struct xflow_port *xflow_port)
 
     wdp_port->devname = xstrdup(xflow_port->devname);
     wdp_port->internal = (xflow_port->flags & XFLOW_PORT_INTERNAL) != 0;
-    return wdp_port;
+    return wx_port;
 }
 
 static bool
 wx_port_conflicts(const struct wx *wx, const struct xflow_port *xflow_port)
 {
-    if (port_array_get(&wx->ports, xflow_port->port)) {
+    if (wx_port_get(wx, xflow_port->port)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate port %"PRIu16" in datapath",
                      xflow_port->port);
         return true;
@@ -2374,10 +2419,10 @@ wx_port_conflicts(const struct wx *wx, const struct xflow_port *xflow_port)
 }
 
 static int
-wdp_port_equal(const struct wdp_port *a_, const struct wdp_port *b_)
+wx_port_equal(const struct wx_port *a_, const struct wx_port *b_)
 {
-    const struct ofp_phy_port *a = &a_->opp;
-    const struct ofp_phy_port *b = &b_->opp;
+    const struct ofp_phy_port *a = &a_->wdp_port.opp;
+    const struct ofp_phy_port *b = &b_->wdp_port.opp;
 
     BUILD_ASSERT_DECL(sizeof *a == 48); /* Detect ofp_phy_port changes. */
     return (a->port_no == b->port_no
@@ -2392,32 +2437,35 @@ wdp_port_equal(const struct wdp_port *a_, const struct wdp_port *b_)
 }
 
 static void
-wx_port_install(struct wx *wx, struct wdp_port *wdp_port)
+wx_port_install(struct wx *wx, struct wx_port *wx_port)
 {
-    uint16_t xflow_port = ofp_port_to_xflow_port(wdp_port->opp.port_no);
-    const char *netdev_name = (const char *) wdp_port->opp.name;
+    const struct ofp_phy_port *opp = &wx_port->wdp_port.opp;
+    uint16_t xflow_port = ofp_port_to_xflow_port(opp->port_no);
+    const char *name = (const char *) opp->name;
 
-    netdev_monitor_add(wx->netdev_monitor, wdp_port->netdev);
-    port_array_set(&wx->ports, xflow_port, wdp_port);
-    shash_add(&wx->port_by_name, netdev_name, wdp_port);
+    netdev_monitor_add(wx->netdev_monitor, wx_port->wdp_port.netdev);
+    hmap_insert(&wx->ports, &wx_port->hmap_node, hash_int(xflow_port, 0));
+    shash_add(&wx->port_by_name, name, wx_port);
 }
 
 static void
-wx_port_remove(struct wx *wx, struct wdp_port *wdp_port)
+wx_port_remove(struct wx *wx, struct wx_port *wx_port)
 {
-    uint16_t xflow_port = ofp_port_to_xflow_port(wdp_port->opp.port_no);
+    const struct ofp_phy_port *opp = &wx_port->wdp_port.opp;
+    const char *name = (const char *) opp->name;
 
-    netdev_monitor_remove(wx->netdev_monitor, wdp_port->netdev);
-    port_array_delete(&wx->ports, xflow_port);
-    shash_delete(&wx->port_by_name,
-                 shash_find(&wx->port_by_name, (char *) wdp_port->opp.name));
+    netdev_monitor_remove(wx->netdev_monitor, wx_port->wdp_port.netdev);
+    hmap_remove(&wx->ports, &wx_port->hmap_node);
+    shash_delete(&wx->port_by_name, shash_find(&wx->port_by_name, name));
 }
 
 static void
-wx_port_free(struct wdp_port *wdp_port)
+wx_port_free(struct wx_port *wx_port)
 {
-    wdp_port_free(wdp_port);
-    free(wdp_port);
+    if (wx_port) {
+        wdp_port_free(&wx_port->wdp_port);
+        free(wx_port);
+    }
 }
 
 static void
@@ -2425,8 +2473,8 @@ wx_port_update(struct wx *wx, const char *devname,
                wdp_port_poll_cb_func *cb, void *aux)
 {
     struct xflow_port xflow_port;
-    struct wdp_port *old_wdp_port;
-    struct wdp_port *new_wdp_port;
+    struct wx_port *old_wx_port;
+    struct wx_port *new_wx_port;
     int error;
 
     COVERAGE_INC(wx_update_port);
@@ -2434,10 +2482,10 @@ wx_port_update(struct wx *wx, const char *devname,
     /* Query the datapath for port information. */
     error = xfif_port_query_by_name(wx->xfif, devname, &xflow_port);
 
-    /* Find the old wdp_port. */
-    old_wdp_port = shash_find_data(&wx->port_by_name, devname);
+    /* Find the old wx_port. */
+    old_wx_port = shash_find_data(&wx->port_by_name, devname);
     if (!error) {
-        if (!old_wdp_port) {
+        if (!old_wx_port) {
             /* There's no port named 'devname' but there might be a port with
              * the same port number.  This could happen if a port is deleted
              * and then a new one added in its place very quickly, or if a port
@@ -2448,7 +2496,7 @@ wx_port_update(struct wx *wx, const char *devname,
              * reliably but more portably by comparing the old port's MAC
              * against the new port's MAC.  However, this code isn't that smart
              * and always sends an OFPPR_MODIFY (XXX). */
-            old_wdp_port = port_array_get(&wx->ports, xflow_port.port);
+            old_wx_port = wx_port_get(wx, xflow_port.port);
         }
     } else if (error != ENOENT && error != ENODEV) {
         VLOG_WARN_RL(&rl, "xfif_port_query_by_name returned unexpected error "
@@ -2456,48 +2504,50 @@ wx_port_update(struct wx *wx, const char *devname,
         return;
     }
 
-    /* Create a new wdp_port. */
-    new_wdp_port = !error ? make_wdp_port(&xflow_port) : NULL;
+    /* Create a new wx_port. */
+    new_wx_port = !error ? make_wx_port(&xflow_port) : NULL;
 
     /* Eliminate a few pathological cases. */
-    if (!old_wdp_port && !new_wdp_port) {
+    if (!old_wx_port && !new_wx_port) {
         return;
-    } else if (old_wdp_port && new_wdp_port) {
+    } else if (old_wx_port && new_wx_port) {
         /* Most of the 'config' bits are OpenFlow soft state, but
          * OFPPC_PORT_DOWN is maintained by the kernel.  So transfer the
-         * OpenFlow bits from old_wdp_port.  (make_wdp_port() only sets
+         * OpenFlow bits from old_wx_port.  (make_wx_port() only sets
          * OFPPC_PORT_DOWN and leaves the other bits 0.)  */
-        new_wdp_port->opp.config |= old_wdp_port->opp.config & ~OFPPC_PORT_DOWN;
+        struct ofp_phy_port *new_opp = &new_wx_port->wdp_port.opp;
+        struct ofp_phy_port *old_opp = &old_wx_port->wdp_port.opp;
+        new_opp->config |= old_opp->config & ~OFPPC_PORT_DOWN;
 
-        if (wdp_port_equal(old_wdp_port, new_wdp_port)) {
+        if (wx_port_equal(old_wx_port, new_wx_port)) {
             /* False alarm--no change. */
-            wx_port_free(new_wdp_port);
+            wx_port_free(new_wx_port);
             return;
         }
     }
 
     /* Now deal with the normal cases. */
-    if (old_wdp_port) {
-        wx_port_remove(wx, old_wdp_port);
+    if (old_wx_port) {
+        wx_port_remove(wx, old_wx_port);
     }
-    if (new_wdp_port) {
-        wx_port_install(wx, new_wdp_port);
+    if (new_wx_port) {
+        wx_port_install(wx, new_wx_port);
     }
 
     /* Call back. */
-    if (!old_wdp_port) {
-        (*cb)(&new_wdp_port->opp, OFPPR_ADD, aux);
-    } else if (!new_wdp_port) {
-        (*cb)(&old_wdp_port->opp, OFPPR_DELETE, aux);
+    if (!old_wx_port) {
+        (*cb)(&new_wx_port->wdp_port.opp, OFPPR_ADD, aux);
+    } else if (!new_wx_port) {
+        (*cb)(&old_wx_port->wdp_port.opp, OFPPR_DELETE, aux);
     } else {
-        (*cb)(&new_wdp_port->opp, OFPPR_MODIFY, aux);
+        (*cb)(&new_wx_port->wdp_port.opp, OFPPR_MODIFY, aux);
     }
 
     /* Update port groups. */
     wx_port_refresh_groups(wx);
 
     /* Clean up. */
-    wx_port_free(old_wdp_port);
+    wx_port_free(old_wx_port);
 }
 
 static int
@@ -2516,15 +2566,30 @@ wx_port_init(struct wx *wx)
     for (i = 0; i < n_ports; i++) {
         const struct xflow_port *xflow_port = &ports[i];
         if (!wx_port_conflicts(wx, xflow_port)) {
-            struct wdp_port *wdp_port = make_wdp_port(xflow_port);
-            if (wdp_port) {
-                wx_port_install(wx, wdp_port);
+            struct wx_port *wx_port = make_wx_port(xflow_port);
+            if (wx_port) {
+                wx_port_install(wx, wx_port);
             }
         }
     }
     free(ports);
     wx_port_refresh_groups(wx);
     return 0;
+}
+
+/* Returns the port in 'wx' with xflow port number 'xflow_port'. */
+static struct wx_port *
+wx_port_get(const struct wx *wx, uint16_t xflow_port)
+{
+    struct wx_port *port;
+
+    HMAP_FOR_EACH_IN_BUCKET (port, hmap_node, hash_int(xflow_port, 0),
+                             &wx->ports) {
+        if (port->xflow_port == xflow_port) {
+            return port;
+        }
+    }
+    return NULL;
 }
 
 void

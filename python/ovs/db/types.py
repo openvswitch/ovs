@@ -290,14 +290,14 @@ class BaseType(object):
                 return 'at most %s' % commafy(self.max)
             else:
                 return 'at most %g' % self.max
-        elif self.min_length is not None and self.max_length is not None:
+        elif self.min_length != 0 and self.max_length != sys.maxint:
             if self.min_length == self.max_length:
                 return 'exactly %d characters long' % (self.min_length)
             else:
                 return 'between %d and %d characters long' % (self.min_length, self.max_length)
-        elif self.min_length is not None:
+        elif self.min_length != 0:
             return 'at least %d characters long' % self.min_length
-        elif self.max_length is not None:
+        elif self.max_length != sys.maxint:
             return 'at most %d characters long' % self.max_length
         else:
             return ''

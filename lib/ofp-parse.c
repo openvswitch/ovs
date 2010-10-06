@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "dynamic-string.h"
 #include "netdev.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -29,11 +30,9 @@
 #include "socket-util.h"
 #include "vconn.h"
 #include "vlog.h"
-
+#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse)
-
-#define DEFAULT_IDLE_TIMEOUT 60
 
 static uint32_t
 str_to_u32(const char *str)
@@ -263,16 +262,32 @@ str_to_action(char *str, struct ofpbuf *b)
             nast->vendor = htonl(NX_VENDOR_ID);
             nast->subtype = htons(NXAST_SET_TUNNEL);
             nast->tun_id = htonl(str_to_u32(arg));
+        } else if (!strcasecmp(act, "drop_spoofed_arp")) {
+            struct nx_action_header *nah;
+            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
+            nah->vendor = htonl(NX_VENDOR_ID);
+            nah->subtype = htons(NXAST_DROP_SPOOFED_ARP);
+        } else if (!strcasecmp(act, "set_queue")) {
+            struct nx_action_set_queue *nasq;
+            nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
+            nasq->vendor = htonl(NX_VENDOR_ID);
+            nasq->subtype = htons(NXAST_SET_QUEUE);
+            nasq->queue_id = htonl(str_to_u32(arg));
+        } else if (!strcasecmp(act, "pop_queue")) {
+            struct nx_action_header *nah;
+            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
+            nah->vendor = htonl(NX_VENDOR_ID);
+            nah->subtype = htons(NXAST_POP_QUEUE);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {
             char *sp = NULL;
-            char *port = strtok_r(arg, ":q", &sp);
+            char *port_s = strtok_r(arg, ":q", &sp);
             char *queue = strtok_r(NULL, "", &sp);
-            if (port == NULL || queue == NULL) {
+            if (port_s == NULL || queue == NULL) {
                 ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
             }
-            put_enqueue_action(b, str_to_u32(port), str_to_u32(queue));
+            put_enqueue_action(b, str_to_u32(port_s), str_to_u32(queue));
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */
@@ -397,7 +412,7 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
         *priority = OFP_DEFAULT_PRIORITY;
     }
     if (idle_timeout) {
-        *idle_timeout = DEFAULT_IDLE_TIMEOUT;
+        *idle_timeout = OFP_FLOW_PERMANENT;
     }
     if (hard_timeout) {
         *hard_timeout = OFP_FLOW_PERMANENT;
@@ -466,10 +481,12 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
                     wildcards |= f->wildcard;
                 } else {
+                    uint16_t port_no;
+
                     wildcards &= ~f->wildcard;
                     if (f->wildcard == OFPFW_IN_PORT
-                        && parse_port_name(value, (uint16_t *) data)) {
-                        /* Nothing to do. */
+                        && parse_port_name(value, &port_no)) {
+                        match->in_port = htons(port_no);
                     } else if (f->type == F_U8) {
                         *(uint8_t *) data = str_to_u32(value);
                     } else if (f->type == F_U16) {
@@ -500,4 +517,69 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
         free(old);
         free(new);
     }
+}
+
+/* Parses 'string' as a OFPT_FLOW_MOD with subtype OFPFC_ADD and returns an
+ * ofpbuf that contains it.  Sets '*table_idx' to the index of the table to
+ * which the flow should be added, or to 0xff if none was specified. */
+struct ofpbuf *
+parse_ofp_add_flow_str(char *string, uint8_t *table_idx)
+{
+    struct ofpbuf *buffer;
+    struct ofp_flow_mod *ofm;
+    uint16_t priority, idle_timeout, hard_timeout;
+    uint64_t cookie;
+    struct ofp_match match;
+
+    /* parse_ofp_str() will expand and reallocate the data in 'buffer', so we
+     * can't keep pointers to across the parse_ofp_str() call. */
+    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
+    parse_ofp_str(string, &match, buffer, table_idx, NULL, &priority,
+                  &idle_timeout, &hard_timeout, &cookie);
+    ofm = buffer->data;
+    ofm->match = match;
+    ofm->command = htons(OFPFC_ADD);
+    if (*table_idx != 0xff) {
+        ofm->command |= htons(*table_idx << 8);
+    }
+    ofm->cookie = htonll(cookie);
+    ofm->idle_timeout = htons(idle_timeout);
+    ofm->hard_timeout = htons(hard_timeout);
+    ofm->buffer_id = htonl(UINT32_MAX);
+    ofm->priority = htons(priority);
+    update_openflow_length(buffer);
+
+    return buffer;
+}
+
+/* Parses an OFPT_FLOW_MOD with subtype OFPFC_ADD from 'stream' and returns an
+ * ofpbuf that contains it.  Returns a null pointer if end-of-file is reached
+ * before reading a flow. */
+struct ofpbuf *
+parse_ofp_add_flow_file(FILE *stream, uint8_t *table_idx)
+{
+    struct ofpbuf *b = NULL;
+    struct ds s = DS_EMPTY_INITIALIZER;
+
+    while (!ds_get_line(&s, stream)) {
+        char *line = ds_cstr(&s);
+        char *comment;
+
+        /* Delete comments. */
+        comment = strchr(line, '#');
+        if (comment) {
+            *comment = '\0';
+        }
+
+        /* Drop empty lines. */
+        if (line[strspn(line, " \t\n")] == '\0') {
+            continue;
+        }
+
+        b = parse_ofp_add_flow_str(line, table_idx);
+        break;
+    }
+    ds_destroy(&s);
+
+    return b;
 }

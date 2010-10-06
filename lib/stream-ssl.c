@@ -385,7 +385,7 @@ do_ca_cert_bootstrap(struct stream *stream)
 
     file = fdopen(fd, "w");
     if (!file) {
-        int error = errno;
+        error = errno;
         VLOG_ERR("could not bootstrap CA cert: fdopen failed: %s",
                  strerror(error));
         unlink(ca_cert.file_name);
@@ -402,7 +402,7 @@ do_ca_cert_bootstrap(struct stream *stream)
     }
 
     if (fclose(file)) {
-        int error = errno;
+        error = errno;
         VLOG_ERR("could not bootstrap CA cert: writing %s failed: %s",
                  ca_cert.file_name, strerror(error));
         unlink(ca_cert.file_name);
@@ -921,7 +921,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
 
     new_fd = accept(pssl->fd, &sin, &sin_len);
     if (new_fd < 0) {
-        int error = errno;
+        error = errno;
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "accept: %s", strerror(error));
         }

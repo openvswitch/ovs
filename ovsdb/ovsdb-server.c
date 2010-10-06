@@ -222,7 +222,7 @@ query_db_string(const struct ovsdb *db, const char *name)
 
         parse_db_string_column(db, name, &table, &column);
 
-        HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
             const struct ovsdb_datum *datum;
             size_t i;
 
@@ -248,7 +248,7 @@ query_db_remotes(const char *name, const struct ovsdb *db,
 
     parse_db_string_column(db, name, &table, &column);
 
-    HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+    HMAP_FOR_EACH (row, hmap_node, &table->rows) {
         const struct ovsdb_datum *datum;
         size_t i;
 

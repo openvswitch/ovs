@@ -1,0 +1,1114 @@
+#!/usr/bin/env python
+
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of version 2.1 of the GNU Lesser General Public
+# License as published by the Free Software Foundation.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Copyright (c) 2005, 2007 XenSource Ltd.
+# Copyright (c) 2010, Nicira Networks.
+
+#
+# To add new entries to the bugtool, you need to:
+#
+# Create a new capability.  These declare the new entry to the GUI, including
+# the expected size, time to collect, privacy implications, and whether the
+# capability should be selected by default.  One capability may refer to
+# multiple files, assuming that they can be reasonably grouped together, and
+# have the same privacy implications.  You need:
+#
+#   A new CAP_ constant.
+#   A cap() invocation to declare the capability.
+#
+# You then need to add calls to main() to collect the files.  These will
+# typically be calls to the helpers file_output(), tree_output(), cmd_output(),
+# or func_output().
+#
+
+import getopt
+import re
+import os
+import StringIO
+import sys
+import tarfile
+import time
+import commands
+import pprint
+from xml.dom.minidom import parse, getDOMImplementation
+import zipfile
+from subprocess import Popen, PIPE
+from select import select
+from signal import SIGTERM, SIGUSR1
+import md5
+import platform
+import fcntl
+import glob
+import urllib
+import socket
+import base64
+
+sys.path.append('/usr/lib/python')
+sys.path.append('/usr/lib64/python')
+
+OS_RELEASE = platform.release()
+
+#
+# Files & directories
+#
+
+BUG_DIR = "/var/log/openvswitch"
+PLUGIN_DIR = "/etc/openvswitch/bugtool"
+GRUB_CONFIG = '/boot/grub/menu.lst'
+BOOT_KERNEL = '/boot/vmlinuz-' + OS_RELEASE
+BOOT_INITRD = '/boot/initrd-' + OS_RELEASE + '.img'
+PROC_PARTITIONS = '/proc/partitions'
+FSTAB = '/etc/fstab'
+PROC_MOUNTS = '/proc/mounts'
+PROC_CPUINFO = '/proc/cpuinfo'
+PROC_MEMINFO = '/proc/meminfo'
+PROC_IOPORTS = '/proc/ioports'
+PROC_INTERRUPTS = '/proc/interrupts'
+PROC_SCSI = '/proc/scsi/scsi'
+PROC_VERSION = '/proc/version'
+PROC_MODULES = '/proc/modules'
+PROC_DEVICES = '/proc/devices'
+PROC_FILESYSTEMS = '/proc/filesystems'
+PROC_CMDLINE = '/proc/cmdline'
+PROC_CONFIG = '/proc/config.gz'
+PROC_USB_DEV = '/proc/bus/usb/devices'
+PROC_NET_SOFTNET_STAT = '/proc/net/softnet_stat'
+MODPROBE_DIR = '/etc/modprobe.d'
+RESOLV_CONF = '/etc/resolv.conf'
+NSSWITCH_CONF = '/etc/nsswitch.conf'
+NTP_CONF = '/etc/ntp.conf'
+HOSTS = '/etc/hosts'
+HOSTS_ALLOW = '/etc/hosts.allow'
+HOSTS_DENY = '/etc/hosts.deny'
+DHCP_LEASE_DIR = '/var/lib/dhcp3'
+OPENVSWITCH_CORE_DIR = '/var/log/openvswitch/cores'
+OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch'
+OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
+OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
+OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
+VAR_LOG_DIR = '/var/log/'
+X11_LOGS_DIR = VAR_LOG_DIR
+X11_LOGS_RE = re.compile(r'.*/Xorg\..*$')
+X11_AUTH_DIR = '/root/'
+X11_AUTH_RE = re.compile(r'.*/\.((Xauthority)|(serverauth\.[0-9]*))$')
+PAM_DIR = '/etc/pam.d'
+
+#
+# External programs
+#
+
+ARP = '/usr/sbin/arp'
+CAT = '/bin/cat'
+DF = '/bin/df'
+DMESG = '/bin/dmesg'
+DMIDECODE = '/usr/sbin/dmidecode'
+FDISK = '/sbin/fdisk'
+FIND = '/usr/bin/find'
+IFCONFIG = '/sbin/ifconfig'
+IPTABLES = '/sbin/iptables'
+LOSETUP = '/sbin/losetup'
+LS = '/bin/ls'
+LSPCI = '/usr/bin/lspci'
+MD5SUM = '/usr/bin/md5sum'
+MODINFO = '/sbin/modinfo'
+NETSTAT = '/bin/netstat'
+OVS_DPCTL = '/usr/sbin/ovs-dpctl'
+OVS_OFCTL = '/usr/sbin/ovs-ofctl'
+OVS_VSCTL = '/usr/sbin/ovs-vsctl'
+OVS_APPCTL = '/usr/sbin/ovs-appctl'
+PS = '/bin/ps'
+ROUTE = '/sbin/route'
+SYSCTL = '/sbin/sysctl'
+TC = '/sbin/tc'
+UPTIME = '/usr/bin/uptime'
+ZCAT = '/bin/zcat'
+
+ETHTOOL = '/sbin/ethtool'
+# ETHTOOL recently moved from /usr/sbin to /sbin in debian
+if not os.path.isfile(ETHTOOL):
+    ETHTOOL = '/usr/sbin/ethtool'
+
+#
+# PII -- Personally identifiable information.  Of particular concern are
+# things that would identify customers, or their network topology.
+# Passwords are never to be included in any bug report, regardless of any PII
+# declaration.
+#
+# NO            -- No PII will be in these entries.
+# YES           -- PII will likely or certainly be in these entries.
+# MAYBE         -- The user may wish to audit these entries for PII.
+# IF_CUSTOMIZED -- If the files are unmodified, then they will contain no PII,
+# but since we encourage customers to edit these files, PII may have been
+# introduced by the customer.  This is used in particular for the networking
+# scripts in dom0.
+#
+
+PII_NO            = 'no'
+PII_YES           = 'yes'
+PII_MAYBE         = 'maybe'
+PII_IF_CUSTOMIZED = 'if_customized'
+KEY      = 0
+PII      = 1
+MIN_SIZE = 2
+MAX_SIZE = 3
+MIN_TIME = 4
+MAX_TIME = 5
+MIME     = 6
+CHECKED  = 7
+HIDDEN   = 8
+
+MIME_DATA = 'application/data'
+MIME_TEXT = 'text/plain'
+
+INVENTORY_XML_ROOT = "system-status-inventory"
+INVENTORY_XML_SUMMARY = 'system-summary'
+INVENTORY_XML_ELEMENT = 'inventory-entry'
+CAP_XML_ROOT = "system-status-capabilities"
+CAP_XML_ELEMENT = 'capability'
+
+
+CAP_BLOBS                = 'blobs'
+CAP_BOOT_LOADER          = 'boot-loader'
+CAP_DISK_INFO            = 'disk-info'
+CAP_FIRSTBOOT            = 'firstboot'
+CAP_HARDWARE_INFO        = 'hardware-info'
+CAP_HIGH_AVAILABILITY    = 'high-availability'
+CAP_HOST_CRASHDUMP_DUMPS = 'host-crashdump-dumps'
+CAP_HOST_CRASHDUMP_LOGS  = 'host-crashdump-logs'
+CAP_KERNEL_INFO          = 'kernel-info'
+CAP_LOSETUP_A            = 'loopback-devices'
+CAP_NETWORK_CONFIG       = 'network-config'
+CAP_NETWORK_STATUS       = 'network-status'
+CAP_OEM                  = 'oem'
+CAP_PAM                  = 'pam'
+CAP_PROCESS_LIST         = 'process-list'
+CAP_PERSISTENT_STATS     = 'persistent-stats'
+CAP_SYSTEM_LOGS          = 'system-logs'
+CAP_SYSTEM_SERVICES      = 'system-services'
+CAP_VNCTERM              = 'vncterm'
+CAP_WLB                  = 'wlb'
+CAP_X11_LOGS             = 'X11'
+CAP_X11_AUTH             = 'X11-auth'
+
+KB = 1024
+MB = 1024 * 1024
+
+caps = {}
+cap_sizes = {}
+unlimited_data = False
+dbg = False
+
+def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
+        max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
+    caps[key] = (key, pii, min_size, max_size, min_time, max_time, mime,
+                 checked, hidden)
+    cap_sizes[key] = 0
+
+
+cap(CAP_BLOBS,               PII_NO,                    max_size=5*MB)
+cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
+    max_time=5)
+cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=25*KB,
+    max_time=20)
+cap(CAP_FIRSTBOOT,           PII_YES,   min_size=60*KB, max_size=80*KB)
+cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=30*KB,
+    max_time=20)
+cap(CAP_HIGH_AVAILABILITY,   PII_MAYBE,                 max_size=5*MB)
+cap(CAP_HOST_CRASHDUMP_DUMPS,PII_YES, checked = False)
+cap(CAP_HOST_CRASHDUMP_LOGS, PII_NO)
+cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
+    max_time=5)
+cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
+cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
+                                        min_size=0,     max_size=20*KB)
+cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=19*KB,
+    max_time=30)
+cap(CAP_PAM,                 PII_NO,                    max_size=30*KB)
+cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
+    max_time=60)
+cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
+    max_time=20)
+cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=50*MB,
+    max_time=5)
+cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
+    max_time=20)
+cap(CAP_VNCTERM,             PII_MAYBE, checked = False)
+cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
+    max_time=20)
+cap(CAP_X11_LOGS,            PII_NO,                    max_size=100*KB)
+cap(CAP_X11_AUTH,            PII_NO,                    max_size=100*KB)
+
+ANSWER_YES_TO_ALL = False
+SILENT_MODE = False
+entries = None
+data = {}
+dev_null = open('/dev/null', 'r+')
+
+def output(x):
+    global SILENT_MODE
+    if not SILENT_MODE:
+        print x
+
+def output_ts(x):
+    output("[%s]  %s" % (time.strftime("%x %X %Z"), x))
+
+def cmd_output(cap, args, label = None, filter = None):
+    if cap in entries:
+        if not label:
+            if isinstance(args, list):
+                a = [aa for aa in args]
+                a[0] = os.path.basename(a[0])
+                label = ' '.join(a)
+            else:
+                label = args
+        data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter}
+
+def file_output(cap, path_list):
+    if cap in entries:
+        for p in path_list:
+            if os.path.exists(p):
+                if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
+                        cap_sizes[cap] < caps[cap][MAX_SIZE]:
+                    data[p] = {'cap': cap, 'filename': p}
+                    try:
+                        s = os.stat(p)
+                        cap_sizes[cap] += s.st_size
+                    except:
+                        pass
+                else:
+                    output("Omitting %s, size constraint of %s exceeded" % (p, cap))
+
+def tree_output(cap, path, pattern = None, negate = False):
+    if cap in entries:
+        if os.path.exists(path):
+            for f in os.listdir(path):
+                fn = os.path.join(path, f)
+                if os.path.isfile(fn) and matches(fn, pattern, negate):
+                    file_output(cap, [fn])
+                elif os.path.isdir(fn):
+                    tree_output(cap, fn, pattern, negate)
+
+def func_output(cap, label, func):
+    if cap in entries:
+        t = str(func).split()
+        data[label] = {'cap': cap, 'func': func}
+
+def collect_data():
+    process_lists = {}
+
+    for (k, v) in data.items():
+        cap = v['cap']
+        if v.has_key('cmd_args'):
+            v['output'] = StringIOmtime()
+            if not process_lists.has_key(cap):
+                process_lists[cap] = []
+            process_lists[cap].append(ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'], v['filter']))
+        elif v.has_key('filename') and v['filename'].startswith('/proc/'):
+            # proc files must be read into memory
+            try:
+                f = open(v['filename'], 'r')
+                s = f.read()
+                f.close()
+                if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
+                        cap_sizes[cap] < caps[cap][MAX_SIZE]:
+                    v['output'] = StringIOmtime(s)
+                    cap_sizes[cap] += len(s)
+                else:
+                    output("Omitting %s, size constraint of %s exceeded" % (v['filename'], cap))
+            except:
+                pass
+        elif v.has_key('func'):
+            try:
+                s = v['func'](cap)
+            except Exception, e:
+                s = str(e)
+            if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
+                    cap_sizes[cap] < caps[cap][MAX_SIZE]:
+                v['output'] = StringIOmtime(s)
+                cap_sizes[cap] += len(s)
+            else:
+                output("Omitting %s, size constraint of %s exceeded" % (k, cap))
+
+    run_procs(process_lists.values())
+
+
+def main(argv = None):
+    global ANSWER_YES_TO_ALL, SILENT_MODE
+    global entries, data, dbg
+
+    # we need access to privileged files, exit if we are not running as root
+    if os.getuid() != 0:
+        print >>sys.stderr, "Error: ovs-bugtool must be run as root"
+        return 1
+
+    output_type = 'tar.bz2'
+    output_fd = -1
+
+    if argv is None:
+        argv = sys.argv
+
+    try:
+        (options, params) = getopt.gnu_getopt(
+            argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
+                         'output=', 'outfd=', 'all', 'unlimited', 'debug'])
+    except getopt.GetoptError, opterr:
+        print >>sys.stderr, opterr
+        return 2
+
+    try:
+        load_plugins(True)
+    except:
+        pass
+
+    entries = [e for e in caps.keys() if caps[e][CHECKED]]
+
+    for (k, v) in options:
+        if k == '--capabilities':
+            update_capabilities()
+            print_capabilities()
+            return 0
+
+        if k == '--output':
+            if  v in ['tar', 'tar.bz2', 'zip']:
+                output_type = v
+            else:
+                print >>sys.stderr, "Invalid output format '%s'" % v
+                return 2
+
+        # "-s" or "--silent" means suppress output (except for the final
+        # output filename at the end)
+        if k in ['-s', '--silent']:
+            SILENT_MODE = True
+
+        if k == '--entries' and v != '':
+            entries = v.split(',')
+
+        # If the user runs the script with "-y" or "--yestoall" we don't ask
+        # all the really annoying questions.
+        if k in ['-y', '--yestoall']:
+            ANSWER_YES_TO_ALL = True
+
+        if k == '--outfd':
+            output_fd = int(v)
+            try:
+                old = fcntl.fcntl(output_fd, fcntl.F_GETFD)
+                fcntl.fcntl(output_fd, fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
+            except:
+                print >>sys.stderr, "Invalid output file descriptor", output_fd
+                return 2
+
+        elif k == '--all':
+            entries = caps.keys()
+        elif k == '--unlimited':
+            unlimited_data = True
+        elif k == '--debug':
+            dbg = True
+            ProcOutput.debug = True
+
+    if len(params) != 1:
+        print >>sys.stderr, "Invalid additional arguments", str(params)
+        return 2
+
+    if output_fd != -1 and output_type != 'tar':
+        print >>sys.stderr, "Option '--outfd' only valid with '--output=tar'"
+        return 2
+
+    if ANSWER_YES_TO_ALL:
+        output("Warning: '--yestoall' argument provided, will not prompt for individual files.")
+
+    output('''
+This application will collate dmesg output, details of the
+hardware configuration of your machine, information about the build of
+openvswitch that you are using, plus, if you allow it, various logs.
+
+The collated information will be saved as a .%s for archiving or
+sending to a Technical Support Representative.
+
+The logs may contain private information, and if you are at all
+worried about that, you should exit now, or you should explicitly
+exclude those logs from the archive.
+
+''' % output_type)
+
+    # assemble potential data
+
+    file_output(CAP_BOOT_LOADER, [GRUB_CONFIG])
+    cmd_output(CAP_BOOT_LOADER, [LS, '-lR', '/boot'])
+    cmd_output(CAP_BOOT_LOADER, [MD5SUM, BOOT_KERNEL, BOOT_INITRD], label='vmlinuz-initrd.md5sum')
+
+    cmd_output(CAP_DISK_INFO, [FDISK, '-l'])
+    file_output(CAP_DISK_INFO, [PROC_PARTITIONS, PROC_MOUNTS])
+    file_output(CAP_DISK_INFO, [FSTAB])
+    cmd_output(CAP_DISK_INFO, [DF, '-alT'])
+    cmd_output(CAP_DISK_INFO, [DF, '-alTi'])
+    cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_host'])
+    cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_disk'])
+    cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/fc_transport'])
+    func_output(CAP_DISK_INFO, 'scsi-hosts', dump_scsi_hosts)
+
+
+    file_output(CAP_HARDWARE_INFO, [PROC_CPUINFO, PROC_MEMINFO, PROC_IOPORTS, PROC_INTERRUPTS])
+    cmd_output(CAP_HARDWARE_INFO, [DMIDECODE])
+    cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-n'])
+    cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-vv'])
+    file_output(CAP_HARDWARE_INFO, [PROC_USB_DEV, PROC_SCSI])
+    cmd_output(CAP_HARDWARE_INFO, [LS, '-lR', '/dev'])
+
+    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES,
+                                  PROC_FILESYSTEMS, PROC_CMDLINE])
+    cmd_output(CAP_KERNEL_INFO, [ZCAT, PROC_CONFIG], label='config')
+    cmd_output(CAP_KERNEL_INFO, [SYSCTL, '-A'])
+    tree_output(CAP_KERNEL_INFO, MODPROBE_DIR)
+    func_output(CAP_KERNEL_INFO, 'modinfo', module_info)
+
+    cmd_output(CAP_LOSETUP_A, [LOSETUP, '-a'])
+
+    file_output(CAP_NETWORK_CONFIG, [RESOLV_CONF, NSSWITCH_CONF, HOSTS])
+    file_output(CAP_NETWORK_CONFIG, [NTP_CONF, HOSTS_ALLOW, HOSTS_DENY])
+    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,
+        OPENVSWITCH_DEFAULT_CONTROLLER, OPENVSWITCH_CONF_DB])
+
+    cmd_output(CAP_NETWORK_STATUS, [IFCONFIG, '-a'])
+    cmd_output(CAP_NETWORK_STATUS, [ROUTE, '-n'])
+    cmd_output(CAP_NETWORK_STATUS, [ARP, '-n'])
+    cmd_output(CAP_NETWORK_STATUS, [NETSTAT, '-an'])
+    tree_output(CAP_NETWORK_STATUS, DHCP_LEASE_DIR)
+    cmd_output(CAP_NETWORK_STATUS, [IPTABLES, '-nL'])
+    for p in os.listdir('/sys/class/net/'):
+        try:
+            f = open('/sys/class/net/%s/type' % p, 'r')
+            t = f.readline()
+            f.close()
+            if int(t) == 1:
+                # ARPHRD_ETHER
+                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, p])
+                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-S', p])
+                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-k', p])
+                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-i', p])
+                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-c', p])
+        except:
+            pass
+    cmd_output(CAP_NETWORK_STATUS, [TC, '-s', 'qdisc'])
+    file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
+    tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_CORE_DIR)
+    if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
+        cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show'])
+        for d in dp_list():
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'show', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'status', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'dump-flows', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', d])
+        try:
+            vspidfile = open(OPENVSWITCH_VSWITCHD_PID)
+            vspid = int(vspidfile.readline().strip())
+            vspidfile.close()
+            for b in bond_list(vspid):
+                cmd_output(CAP_NETWORK_STATUS,
+                           [OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % vspid, '-e' 'bond/show %s' % b],
+                           'ovs-appctl-bond-show-%s.out' % b)
+        except e:
+            pass
+
+    tree_output(CAP_PAM, PAM_DIR)
+
+    cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
+    func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
+
+    file_output(CAP_SYSTEM_LOGS,
+         [ VAR_LOG_DIR + x for x in
+           [ 'kern.log', 'daemon.log', 'user.log', 'syslog', 'messages',
+             'debug', 'dmesg', 'boot'] +
+           [ f % n for n in range(1, 20) \
+                 for f in ['kern.log.%d', 'kern.log.%d.gz',
+                           'daemon.log.%d', 'daemon.log.%d.gz',
+                           'user.log.%d', 'user.log.%d.gz',
+                           'messages.%d', 'messages.%d.gz']]])
+    if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
+        cmd_output(CAP_SYSTEM_LOGS, [DMESG])
+
+
+    tree_output(CAP_X11_LOGS, X11_LOGS_DIR, X11_LOGS_RE)
+    tree_output(CAP_X11_AUTH, X11_AUTH_DIR, X11_AUTH_RE)
+
+
+    try:
+        load_plugins()
+    except:
+        pass
+
+    # permit the user to filter out data
+    for k in sorted(data.keys()):
+        if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % k):
+            del data[k]
+
+    # collect selected data now
+    output_ts('Running commands to collect data')
+    collect_data()
+
+    subdir = "bug-report-%s" % time.strftime("%Y%m%d%H%M%S")
+
+    # include inventory
+    data['inventory.xml'] = {'cap': None, 'output': StringIOmtime(make_inventory(data, subdir))}
+
+    # create archive
+    if output_fd == -1 and not os.path.exists(BUG_DIR):
+        try:
+            os.makedirs(BUG_DIR)
+        except:
+            pass
+
+    if output_fd == -1:
+        output_ts('Creating output file')
+
+    if output_type.startswith('tar'):
+        make_tar(subdir, output_type, output_fd)
+    else:
+        make_zip(subdir)
+
+    clean_tapdisk_logs()
+
+    if dbg:
+        print >>sys.stderr, "Category sizes (max, actual):\n"
+        for c in caps.keys():
+            print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE],
+                                                     cap_sizes[c])
+    return 0
+
+def find_tapdisk_logs():
+    return glob.glob('/var/log/blktap/*.log*')
+
+def generate_tapdisk_logs():
+    for pid in pidof('tapdisk'):
+	try:
+	    os.kill(pid, SIGUSR1)
+            output_ts("Including logs for tapdisk process %d" % pid)
+        except :
+            pass
+    # give processes a second to write their logs
+    time.sleep(1)
+
+def clean_tapdisk_logs():
+    for filename in find_tapdisk_logs():
+        try:
+            os.remove(filename)
+        except :
+            pass
+
+def filter_db_pii(str, state):
+    if 'in_secret_table' not in state:
+        state['in_secret_table'] = False
+
+    if str.startswith('<table ') and 'name="secret"' in str:
+        state['in_secret_table'] = True
+    elif str.startswith('</table>'):
+        state['in_secret_table'] = False
+
+    if state['in_secret_table'] and str.startswith("<row"): # match only on DB rows
+        str = re.sub(r'(value=")[^"]+(")', r'\1REMOVED\2', str)
+    return str
+
+def dump_scsi_hosts(cap):
+    output = ''
+    l = os.listdir('/sys/class/scsi_host')
+    l.sort()
+
+    for h in l:
+        procname = ''
+        try:
+                f = open('/sys/class/scsi_host/%s/proc_name' % h)
+                procname = f.readline().strip("\n")
+                f.close()
+        except:
+                pass
+        modelname = None
+        try:
+                f = open('/sys/class/scsi_host/%s/model_name' % h)
+                modelname = f.readline().strip("\n")
+                f.close()
+        except:
+                pass
+
+        output += "%s:\n" %h
+        output += "    %s%s\n" % (procname, modelname and (" -> %s" % modelname) or '')
+
+    return output
+
+def module_info(cap):
+    output = StringIO.StringIO()
+    modules = open(PROC_MODULES, 'r')
+    procs = []
+
+    for line in modules:
+        module = line.split()[0]
+        procs.append(ProcOutput([MODINFO, module], caps[cap][MAX_TIME], output))
+    modules.close()
+
+    run_procs([procs])
+
+    return output.getvalue()
+
+def dp_list():
+    output = StringIO.StringIO()
+    procs = [ProcOutput([OVS_DPCTL, 'dump-dps'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        return output.getvalue().splitlines()
+    return []
+
+def bond_list(pid):
+    output = StringIO.StringIO()
+    procs = [ProcOutput([OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % pid, '-e' 'bond/list'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        bonds = output.getvalue().splitlines()[1:]
+        return [x.split('\t')[1] for x in bonds]
+    return []
+
+def fd_usage(cap):
+    output = ''
+    fd_dict = {}
+    for d in [p for p in os.listdir('/proc') if p.isdigit()]:
+        try:
+            fh = open('/proc/'+d+'/cmdline')
+            name = fh.readline()
+            num_fds = len(os.listdir(os.path.join('/proc/'+d+'/fd')))
+            if num_fds > 0:
+                if not num_fds in fd_dict:
+                    fd_dict[num_fds] = []
+                fd_dict[num_fds].append(name.replace('\0', ' ').strip())
+        finally:
+            fh.close()
+    keys = fd_dict.keys()
+    keys.sort(lambda a, b: int(b) - int(a))
+    for k in keys:
+        output += "%s: %s\n" % (k, str(fd_dict[k]))
+    return output
+
+def load_plugins(just_capabilities = False):
+    def getText(nodelist):
+        rc = ""
+        for node in nodelist:
+            if node.nodeType == node.TEXT_NODE:
+                rc += node.data
+        return rc.encode()
+
+    def getBoolAttr(el, attr, default = False):
+        ret = default
+        val = el.getAttribute(attr).lower()
+        if val in ['true', 'false', 'yes', 'no']:
+            ret = val in ['true', 'yes']
+        return ret
+
+    for dir in [d for d in os.listdir(PLUGIN_DIR) if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
+        if not caps.has_key(dir):
+            if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
+                continue
+            xmldoc = parse("%s/%s.xml" % (PLUGIN_DIR, dir))
+            assert xmldoc.documentElement.tagName == "capability"
+
+            pii, min_size, max_size, min_time, max_time, mime = \
+                 PII_MAYBE, -1,-1,-1,-1, MIME_TEXT
+
+            if xmldoc.documentElement.getAttribute("pii") in [PII_NO, PII_YES, PII_MAYBE, PII_IF_CUSTOMIZED]:
+                pii = xmldoc.documentElement.getAttribute("pii")
+            if xmldoc.documentElement.getAttribute("min_size") != '':
+                min_size = long(xmldoc.documentElement.getAttribute("min_size"))
+            if xmldoc.documentElement.getAttribute("max_size") != '':
+                max_size = long(xmldoc.documentElement.getAttribute("max_size"))
+            if xmldoc.documentElement.getAttribute("min_time") != '':
+                min_time = int(xmldoc.documentElement.getAttribute("min_time"))
+            if xmldoc.documentElement.getAttribute("max_time") != '':
+                max_time = int(xmldoc.documentElement.getAttribute("max_time"))
+            if xmldoc.documentElement.getAttribute("mime") in [MIME_DATA, MIME_TEXT]:
+                mime = xmldoc.documentElement.getAttribute("mime")
+            checked = getBoolAttr(xmldoc.documentElement, 'checked', True)
+            hidden = getBoolAttr(xmldoc.documentElement, 'hidden', False)
+
+            cap(dir, pii, min_size, max_size, min_time, max_time, mime, checked, hidden)
+
+        if just_capabilities:
+            continue
+
+        plugdir = os.path.join(PLUGIN_DIR, dir)
+        for file in [f for f in os.listdir(plugdir) if f.endswith('.xml')]:
+            xmldoc = parse(os.path.join(plugdir, file))
+            assert xmldoc.documentElement.tagName == "collect"
+
+            for el in xmldoc.documentElement.getElementsByTagName("*"):
+                if el.tagName == "files":
+                    file_output(dir, getText(el.childNodes).split())
+                elif el.tagName == "directory":
+                    pattern = el.getAttribute("pattern")
+                    if pattern == '': pattern = None
+                    negate = getBoolAttr(el, 'negate')
+                    tree_output(dir, getText(el.childNodes), pattern and re.compile(pattern) or None, negate)
+                elif el.tagName == "command":
+                    label = el.getAttribute("label")
+                    if label == '': label = None
+                    cmd_output(dir, getText(el.childNodes), label)
+
+def make_tar(subdir, suffix, output_fd):
+    global SILENT_MODE, data
+
+    mode = 'w'
+    if suffix == 'tar.bz2':
+        mode = 'w:bz2'
+    filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
+
+    if output_fd == -1:
+        tf = tarfile.open(filename, mode)
+    else:
+        tf = tarfile.open(None, 'w', os.fdopen(output_fd, 'a'))
+
+    try:
+        for (k, v) in data.items():
+            try:
+                tar_filename = os.path.join(subdir, construct_filename(k, v))
+                ti = tarfile.TarInfo(tar_filename)
+
+                ti.uname = 'root'
+                ti.gname = 'root'
+
+                if v.has_key('output'):
+                    ti.mtime = v['output'].mtime
+                    ti.size = len(v['output'].getvalue())
+                    v['output'].seek(0)
+                    tf.addfile(ti, v['output'])
+                elif v.has_key('filename'):
+                    s = os.stat(v['filename'])
+                    ti.mtime = s.st_mtime
+                    ti.size = s.st_size
+                    tf.addfile(ti, file(v['filename']))
+            except:
+                pass
+    finally:
+        tf.close()
+
+    if output_fd == -1:
+        output ('Writing tarball %s successful.' % filename)
+        if SILENT_MODE:
+            print filename
+
+
+def make_zip(subdir):
+    global SILENT_MODE, data
+
+    filename = "%s/%s.zip" % (BUG_DIR, subdir)
+    zf = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
+
+    try:
+        for (k, v) in data.items():
+            try:
+                dest = os.path.join(subdir, construct_filename(k, v))
+
+                if v.has_key('output'):
+                    zf.writestr(dest, v['output'].getvalue())
+                else:
+                    if os.stat(v['filename']).st_size < 50:
+                        compress_type = zipfile.ZIP_STORED
+                    else:
+                        compress_type = zipfile.ZIP_DEFLATED
+                    zf.write(v['filename'], dest, compress_type)
+            except:
+                pass
+    finally:
+        zf.close()
+
+    output ('Writing archive %s successful.' % filename)
+    if SILENT_MODE:
+        print filename
+
+
+def make_inventory(inventory, subdir):
+    document = getDOMImplementation().createDocument(
+        None, INVENTORY_XML_ROOT, None)
+
+    # create summary entry
+    s = document.createElement(INVENTORY_XML_SUMMARY)
+    user = os.getenv('SUDO_USER', os.getenv('USER'))
+    if user:
+        s.setAttribute('user', user)
+    s.setAttribute('date', time.strftime('%c'))
+    s.setAttribute('hostname', platform.node())
+    s.setAttribute('uname', ' '.join(platform.uname()))
+    s.setAttribute('uptime', commands.getoutput(UPTIME))
+    document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(s)
+
+    map(lambda (k, v): inventory_entry(document, subdir, k, v),
+        inventory.items())
+    return document.toprettyxml()
+
+def inventory_entry(document, subdir, k, v):
+    try:
+        el = document.createElement(INVENTORY_XML_ELEMENT)
+        el.setAttribute('capability', v['cap'])
+        el.setAttribute('filename', os.path.join(subdir, construct_filename(k, v)))
+        el.setAttribute('md5sum', md5sum(v))
+        document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(el)
+    except:
+        pass
+
+
+def md5sum(d):
+    m = md5.new()
+    if d.has_key('filename'):
+        f = open(d['filename'])
+        data = f.read(1024)
+        while len(data) > 0:
+            m.update(data)
+            data = f.read(1024)
+        f.close()
+    elif d.has_key('output'):
+        m.update(d['output'].getvalue())
+    return m.hexdigest()
+
+
+def construct_filename(k, v):
+    if v.has_key('filename'):
+        if v['filename'][0] == '/':
+            return v['filename'][1:]
+        else:
+            return v['filename']
+    s = k.replace(' ', '-')
+    s = s.replace('--', '-')
+    s = s.replace('/', '%')
+    if s.find('.') == -1:
+        s += '.out'
+
+    return s
+
+def update_capabilities():
+    pass
+
+def update_cap_size(cap, size):
+    update_cap(cap, MIN_SIZE, size)
+    update_cap(cap, MAX_SIZE, size)
+    update_cap(cap, CHECKED, size > 0)
+
+
+def update_cap(cap, k, v):
+    global caps
+    l = list(caps[cap])
+    l[k] = v
+    caps[cap] = tuple(l)
+
+
+def size_of_dir(d, pattern = None, negate = False):
+    if os.path.isdir(d):
+        return size_of_all([os.path.join(d, fn) for fn in os.listdir(d)],
+                           pattern, negate)
+    else:
+        return 0
+
+
+def size_of_all(files, pattern = None, negate = False):
+    return sum([size_of(f, pattern, negate) for f in files])
+
+
+def matches(f, pattern, negate):
+    if negate:
+        return not matches(f, pattern, False)
+    else:
+        return pattern is None or pattern.match(f)
+
+
+def size_of(f, pattern, negate):
+    if os.path.isfile(f) and matches(f, pattern, negate):
+        return os.stat(f)[6]
+    else:
+        return size_of_dir(f, pattern, negate)
+
+
+def print_capabilities():
+    document = getDOMImplementation().createDocument(
+        "ns", CAP_XML_ROOT, None)
+    map(lambda key: capability(document, key), [k for k in caps.keys() if not caps[k][HIDDEN]])
+    print document.toprettyxml()
+
+def capability(document, key):
+    c = caps[key]
+    el = document.createElement(CAP_XML_ELEMENT)
+    el.setAttribute('key', c[KEY])
+    el.setAttribute('pii', c[PII])
+    el.setAttribute('min-size', str(c[MIN_SIZE]))
+    el.setAttribute('max-size', str(c[MAX_SIZE]))
+    el.setAttribute('min-time', str(c[MIN_TIME]))
+    el.setAttribute('max-time', str(c[MAX_TIME]))
+    el.setAttribute('content-type', c[MIME])
+    el.setAttribute('default-checked', c[CHECKED] and 'yes' or 'no')
+    document.getElementsByTagName(CAP_XML_ROOT)[0].appendChild(el)
+
+
+def prettyDict(d):
+    format = '%%-%ds: %%s' % max(map(len, [k for k, _ in d.items()]))
+    return '\n'.join([format % i for i in d.items()]) + '\n'
+
+
+def yes(prompt):
+    yn = raw_input(prompt)
+
+    return len(yn) == 0 or yn.lower()[0] == 'y'
+
+
+partition_re = re.compile(r'(.*[0-9]+$)|(^xvd)')
+
+def disk_list():
+    disks = []
+    try:
+        f = open('/proc/partitions')
+        f.readline()
+        f.readline()
+        for line in f.readlines():
+            (major, minor, blocks, name) = line.split()
+            if int(major) < 254 and not partition_re.match(name):
+                disks.append(name)
+        f.close()
+    except:
+        pass
+    return disks
+
+
+class ProcOutput:
+    debug = False
+
+    def __init__(self, command, max_time, inst=None, filter=None):
+        self.command = command
+        self.max_time = max_time
+        self.inst = inst
+        self.running = False
+        self.status = None
+        self.timed_out = False
+        self.failed = False
+        self.timeout = int(time.time()) + self.max_time
+        self.filter = filter
+        self.filter_state = {}
+
+    def __del__(self):
+        self.terminate()
+
+    def cmdAsStr(self):
+        return isinstance(self.command, list) and ' '.join(self.command) or self.command
+
+    def run(self):
+        self.timed_out = False
+        try:
+            if ProcOutput.debug:
+                output_ts("Starting '%s'" % self.cmdAsStr())
+            self.proc = Popen(self.command, bufsize=1, stdin=dev_null, stdout=PIPE, stderr=dev_null, shell=isinstance(self.command, str))
+            old = fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_GETFD)
+            fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
+            self.running = True
+            self.failed = False
+        except:
+            output_ts("'%s' failed" % self.cmdAsStr())
+            self.running = False
+            self.failed = True
+
+    def terminate(self):
+        if self.running:
+            try:
+                os.kill(self.proc.pid, SIGTERM)
+            except:
+                pass
+            self.proc = None
+            self.running = False
+            self.status = SIGTERM
+
+    def read_line(self):
+        assert self.running
+        line = self.proc.stdout.readline()
+        if line == '':
+            # process exited
+            self.status = self.proc.wait()
+            self.proc = None
+            self.running = False
+        else:
+            if self.filter:
+                line = self.filter(line, self.filter_state)
+            if self.inst:
+                self.inst.write(line)
+
+def run_procs(procs):
+    while True:
+        pipes = []
+        active_procs = []
+
+        for pp in procs:
+            for p in pp:
+                if p.running:
+                    active_procs.append(p)
+                    pipes.append(p.proc.stdout)
+                    break
+                elif p.status == None and not p.failed and not p.timed_out:
+                    p.run()
+                    if p.running:
+                        active_procs.append(p)
+                        pipes.append(p.proc.stdout)
+                        break
+
+        if len(pipes) == 0:
+            # all finished
+            break
+
+        (i, o, x) = select(pipes, [], [], 1.0)
+        now = int(time.time())
+
+        # handle process output
+        for p in active_procs:
+            if p.proc.stdout in i:
+                p.read_line()
+
+            # handle timeout
+            if p.running and now > p.timeout:
+                output_ts("'%s' timed out" % p.cmdAsStr())
+                if p.inst:
+                    p.inst.write("\n** timeout **\n")
+                p.timed_out = True
+                p.terminate()
+
+
+def pidof(name):
+    pids = []
+
+    for d in [p for p in os.listdir('/proc') if p.isdigit()]:
+        try:
+            if os.path.basename(os.readlink('/proc/%s/exe' % d)) == name:
+                pids.append(int(d))
+        except:
+            pass
+
+    return pids
+
+
+class StringIOmtime(StringIO.StringIO):
+    def __init__(self, buf = ''):
+        StringIO.StringIO.__init__(self, buf)
+        self.mtime = time.time()
+
+    def write(self, s):
+        StringIO.StringIO.write(self, s)
+        self.mtime = time.time()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print "\nInterrupted."
+        sys.exit(3)

@@ -21,9 +21,12 @@
 # Bridge table and duplicates its value to the preferred "xs-network-uuids".
 
 import getopt
+import logging, logging.handlers
+import os
+import signal
 import subprocess
 import sys
-import syslog
+import time
 
 import XenAPI
 
@@ -33,8 +36,17 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
+s_log     = logging.getLogger("ovs-external-ids")
+l_handler = logging.handlers.SysLogHandler(
+        "/dev/log",
+        facility=logging.handlers.SysLogHandler.LOG_DAEMON)
+l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
+l_handler.setFormatter(l_formatter)
+s_log.addHandler(l_handler)
+
 vsctl="/usr/bin/ovs-vsctl"
 session = None
+force_run = False
 
 # Set up a session to interact with XAPI.
 #
@@ -51,18 +63,19 @@ def init_session():
         session.xenapi.login_with_password("", "")
     except:
         session = None
-        syslog.syslog(syslog.LOG_WARNING, 
-                "monitor-external-ids: Couldn't login to XAPI")
+        s_log.warning("Couldn't login to XAPI")
         return False
 
     return True
 
-# By default, the "bridge-id" external id in the Bridge table is the 
+# By default, the "bridge-id" external id in the Bridge table is the
 # same as "xs-network-uuids".  This may be overridden by defining a
 # "nicira-bridge-id" key in the "other_config" field of the network
 # record of XAPI.
 def get_bridge_id(br_name, default=None):
     if not init_session():
+        s_log.warning("Failed to get bridge id %s because"
+                " XAPI session could not be initialized" % br_name)
         return default
 
     for n in session.xenapi.network.get_all():
@@ -71,7 +84,7 @@ def get_bridge_id(br_name, default=None):
             continue
         return rec['other_config'].get('nicira-bridge-id', default)
 
-# By default, the "iface-id" external id in the Interface table is the 
+# By default, the "iface-id" external id in the Interface table is the
 # same as "xs-vif-uuid".  This may be overridden by defining a
 # "nicira-iface-id" key in the "other_config" field of the VIF
 # record of XAPI.
@@ -82,6 +95,8 @@ def get_iface_id(if_name, default=None):
     domain,device = if_name.strip("vif").split(".")
 
     if not init_session():
+        s_log.warning("Failed to get interface id %s because"
+                " XAPI session could not be initialized" % if_name)
         return default
 
     for n in session.xenapi.VM.get_all():
@@ -96,24 +111,29 @@ def get_iface_id(if_name, default=None):
 
 def set_external_id(table, record, key, value):
     col = 'external-ids:"' + key + '"="' + value + '"'
-    cmd = [vsctl, "-vANY:console:emer", "set", table, record, col]
+    cmd = [vsctl, "--timeout=30", "-vANY:console:emer", "set", table, record, col]
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        syslog.syslog(syslog.LOG_WARNING, 
-                "monitor-external-ids: Couldn't call ovs-vsctl")
+        s_log.warning("Couldn't call ovs-vsctl")
 
 # XAPI on XenServer 5.6 uses the external-id "network-uuids" for internal
-# networks, but we now prefer "xs-network-uuids".  Look for its use and 
+# networks, but we now prefer "xs-network-uuids".  Look for its use and
 # write our preferred external-id.
 def update_network_uuids(name, ids):
     if ids["network-uuids"] and not ids["xs-network-uuids"]:
-        set_external_id("Bridge", name, "xs-network-uuids", 
+        set_external_id("Bridge", name, "xs-network-uuids",
                 ids["network-uuids"])
 
 def update_bridge_id(name, ids):
     id = get_bridge_id(name, ids.get("xs-network-uuids"))
-    if ids.get("bridge-id") != id and id:
-        set_external_id("Bridge", name, "bridge-id", id)
+
+    if not id:
+        return
+
+    primary_id = id.split(";")[0]
+
+    if ids.get("bridge-id") != primary_id:
+        set_external_id("Bridge", name, "bridge-id", primary_id)
 
 def update_iface_id(name, ids):
     id = get_iface_id(name, ids.get("xs-vif-uuid"))
@@ -140,13 +160,13 @@ def keep_table_columns(schema, table_name, column_types):
         new_columns[column_name] = column
     table.columns = new_columns
     return table
- 
+
 def monitor_uuid_schema_cb(schema):
     string_type = types.Type(types.BaseType(types.StringType))
     string_map_type = types.Type(types.BaseType(types.StringType),
                                  types.BaseType(types.StringType),
                                  0, sys.maxint)
- 
+
     new_tables = {}
     for table_name in ("Bridge", "Interface"):
         new_tables[table_name] = keep_table_columns(
@@ -161,15 +181,22 @@ def usage():
     print "Other options:"
     print "  -h, --help               display this help message"
     sys.exit(0)
- 
+
+def handler(signum, frame):
+    global force_run
+    if (signum == signal.SIGHUP):
+        force_run = True
+
 def main(argv):
+    global force_run
+
     try:
         options, args = getopt.gnu_getopt(
             argv[1:], 'h', ['help'] + ovs.daemon.LONG_OPTIONS)
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
- 
+
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
@@ -177,28 +204,41 @@ def main(argv):
             sys.stderr.write("%s: unhandled option %s\n"
                              % (ovs.util.PROGRAM_NAME, key))
             sys.exit(1)
- 
+
     if len(args) != 1:
         sys.stderr.write("%s: exactly one nonoption argument is required "
                          "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
         sys.exit(1)
 
     ovs.daemon.die_if_already_running()
- 
+
     remote = args[0]
     idl = ovs.db.idl.Idl(remote, "Open_vSwitch", monitor_uuid_schema_cb)
 
     ovs.daemon.daemonize()
- 
+
+    # This daemon is usually started before XAPI, but to complete our
+    # tasks, we need it.  Wait here until it's up.
+    while not os.path.exists("/var/run/xapi_init_complete.cookie"):
+        time.sleep(1)
+
+    signal.signal(signal.SIGHUP, handler)
+
     bridges = {}
     interfaces = {}
     while True:
-        if not idl.run():
+        if not force_run and not idl.run():
             poller = ovs.poller.Poller()
             idl.wait(poller)
             poller.block()
             continue
- 
+
+        if force_run:
+            s_log.info("Forced to re-run as the result of a SIGHUP")
+            bridges    = {}
+            interfaces = {}
+            force_run  = False
+
         new_bridges = {}
         for rec in idl.data["Bridge"].itervalues():
             name = rec.name.as_scalar()
@@ -206,13 +246,13 @@ def main(argv):
             network_uuids = rec.external_ids.get("network-uuids")
             new_bridges[name] = {"xs-network-uuids": xs_network_uuids,
                                  "network-uuids": network_uuids}
- 
+
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
             name = rec.name.as_scalar()
             xs_vif_uuid = rec.external_ids.get("xs-vif-uuid")
             new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid}
- 
+
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
                 # Network uuids shouldn't change in the life of a bridge,
@@ -220,18 +260,23 @@ def main(argv):
                 if name not in bridges:
                     update_network_uuids(name, ids)
 
-                update_bridge_id(name, ids)
+                if (name not in bridges) or (bridges[name] != ids):
+                    update_bridge_id(name, ids)
 
             bridges = new_bridges
 
         if interfaces != new_interfaces:
             for name,ids in new_interfaces.items():
-                update_iface_id(name, ids)
+                if (name not in interfaces) or (interfaces[name] != ids):
+                    update_iface_id(name, ids)
             interfaces = new_interfaces
- 
+
 if __name__ == '__main__':
     try:
         main(sys.argv)
-    except error.Error, e:
-        sys.stderr.write("%s\n" % e)
-        sys.exit(1)
+    except SystemExit:
+        # Let system.exit() calls complete normally
+        raise
+    except:
+        s_log.exception("traceback")
+        sys.exit(ovs.daemon.RESTART_EXIT_CODE)

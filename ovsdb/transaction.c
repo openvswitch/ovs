@@ -138,7 +138,7 @@ find_txn_row(const struct ovsdb_table *table, const struct uuid *uuid)
         return NULL;
     }
 
-    HMAP_FOR_EACH_WITH_HASH (txn_row, struct ovsdb_txn_row, hmap_node,
+    HMAP_FOR_EACH_WITH_HASH (txn_row, hmap_node,
                              uuid_hash(uuid), &table->txn_table->txn_rows) {
         const struct ovsdb_row *row;
 
@@ -315,8 +315,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
          * that their weak references will get reassessed. */
         struct ovsdb_weak_ref *weak, *next;
 
-        LIST_FOR_EACH_SAFE (weak, next, struct ovsdb_weak_ref, dst_node,
-                            &txn_row->old->dst_refs) {
+        LIST_FOR_EACH_SAFE (weak, next, dst_node, &txn_row->old->dst_refs) {
             if (!weak->src->txn_row) {
                 ovsdb_txn_row_modify(txn, weak->src);
             }
@@ -451,7 +450,7 @@ check_max_rows(struct ovsdb_txn *txn)
 {
     struct ovsdb_txn_table *t;
 
-    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
+    LIST_FOR_EACH (t, node, &txn->txn_tables) {
         size_t n_rows = hmap_count(&t->table->rows);
         unsigned int max_rows = t->table->schema->max_rows;
 
@@ -508,7 +507,7 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
     }
 
     /* Send the commit to each replica. */
-    LIST_FOR_EACH (replica, struct ovsdb_replica, node, &txn->db->replicas) {
+    LIST_FOR_EACH (replica, node, &txn->db->replicas) {
         error = (replica->class->commit)(replica, txn, durable);
         if (error) {
             /* We don't support two-phase commit so only the first replica is
@@ -535,8 +534,8 @@ ovsdb_txn_for_each_change(const struct ovsdb_txn *txn,
     struct ovsdb_txn_table *t;
     struct ovsdb_txn_row *r;
 
-    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
-        HMAP_FOR_EACH (r, struct ovsdb_txn_row, hmap_node, &t->txn_rows) {
+    LIST_FOR_EACH (t, node, &txn->txn_tables) {
+        HMAP_FOR_EACH (r, hmap_node, &t->txn_rows) {
             if (!cb(r->old, r->new, r->changed, aux)) {
                 break;
             }
@@ -714,8 +713,7 @@ for_each_txn_row(struct ovsdb_txn *txn,
         struct ovsdb_txn_table *t, *next_txn_table;
 
         any_work = false;
-        LIST_FOR_EACH_SAFE (t, next_txn_table, struct ovsdb_txn_table, node,
-                            &txn->txn_tables) {
+        LIST_FOR_EACH_SAFE (t, next_txn_table, node, &txn->txn_tables) {
             if (t->serial != serial) {
                 t->serial = serial;
                 t->n_processed = 0;
@@ -724,9 +722,7 @@ for_each_txn_row(struct ovsdb_txn *txn,
             while (t->n_processed < hmap_count(&t->txn_rows)) {
                 struct ovsdb_txn_row *r, *next_txn_row;
 
-                HMAP_FOR_EACH_SAFE (r, next_txn_row,
-                                    struct ovsdb_txn_row, hmap_node,
-                                    &t->txn_rows) {
+                HMAP_FOR_EACH_SAFE (r, next_txn_row, hmap_node, &t->txn_rows) {
                     if (r->serial != serial) {
                         struct ovsdb_error *error;
 

@@ -117,6 +117,12 @@ else
     monitor_opt=
 fi
 
+function hup_monitor_external_ids {
+    if [ -e /var/run/openvswitch/ovs-external-ids.pid ]; then
+        action "Configuring Open vSwitch external IDs" kill -HUP `cat /var/run/openvswitch/ovs-external-ids.pid`
+    fi
+}
+
 function dp_list {
     "$dpctl" show | grep '^dp[0-9]\+:' | cut -d':' -f 1
 }
@@ -293,7 +299,7 @@ EOF
 function set_system_ids {
     if [ -f /etc/xensource-inventory ]; then
         action "Configuring Open vSwitch system IDs" true
-        $vsctl --no-wait set Open_vSwitch . \
+        $vsctl --no-wait --timeout=5 set Open_vSwitch . \
             external-ids:system-type="$PRODUCT_BRAND" \
             external-ids:system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
             external-ids:system-id="$INSTALLATION_UUID" \
@@ -329,11 +335,11 @@ function start {
     fi
 
     start_ovsdb_server
-    $vsctl --no-wait init
+    $vsctl --no-wait --timeout=5 init
     if [ ! -e /var/run/openvswitch.booted ]; then
         touch /var/run/openvswitch.booted
         for bridge in $($vsctl list-br); do
-            $vsctl --no-wait del-br $bridge
+            $vsctl --no-wait --timeout=5 del-br $bridge
         done
     fi
 
@@ -346,8 +352,8 @@ function start {
 
     # Start daemon to monitor external ids
     PYTHONPATH=/usr/share/openvswitch/python \
-               /usr/share/openvswitch/scripts/monitor-external-ids \
-               --pidfile --detach "$VSWITCHD_OVSDB_SERVER"
+               /usr/share/openvswitch/scripts/ovs-external-ids \
+               --pidfile --detach $monitor_opt "$VSWITCHD_OVSDB_SERVER"
 
     touch /var/lock/subsys/openvswitch
 }
@@ -356,9 +362,8 @@ function stop {
     stop_daemon BRCOMPATD "$brcompatd"
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
-    if [ -e /var/run/openvswitch/monitor-external-ids.pid ]; then
-        kill `cat /var/run/openvswitch/monitor-external-ids.pid`
-        rm /var/run/openvswitch/monitor-external-ids.pid
+    if [ -e /var/run/openvswitch/ovs-external-ids.pid ]; then
+        kill `cat /var/run/openvswitch/ovs-external-ids.pid`
     fi
     rm -f /var/lock/subsys/openvswitch
 }
@@ -381,8 +386,10 @@ case "$1" in
         restart
         ;;
     reload|force-reload)
-	# Nothing to do--ovs-vswitchd and ovsdb-server keep their configuration
-	# up-to-date all the time.
+        # Nothing to do to ovs-vswitchd and ovsdb-server as they keep their
+        # configuration up-to-date all the time.  HUP ovs-external-ids so it
+        # re-runs.
+        hup_monitor_external_ids
 	;;
     strace-vswitchd)
         shift

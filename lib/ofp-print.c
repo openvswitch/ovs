@@ -38,6 +38,7 @@
 #include "xtoxll.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
+static void ofp_print_queue_name(struct ds *string, uint32_t port);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
@@ -200,8 +201,23 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         break;
     }
 
+    case NXAST_DROP_SPOOFED_ARP:
+        ds_put_cstr(string, "drop_spoofed_arp");
+        break;
+
+    case NXAST_SET_QUEUE: {
+        const struct nx_action_set_queue *nasq =
+                                            (struct nx_action_set_queue *)nah;
+        ds_put_format(string, "set_queue:%u", ntohl(nasq->queue_id));
+        break;
+    }
+
+    case NXAST_POP_QUEUE:
+        ds_put_cstr(string, "pop_queue");
+        break;
+
     default:
-        ds_put_format(string, "***unknown Nicira action:%d***\n",
+        ds_put_format(string, "***unknown Nicira action:%d***",
                       ntohs(nah->subtype));
     }
 }
@@ -748,34 +764,53 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     const struct ofp_flow_mod *ofm = oh;
     unsigned int command = ntohs(ofm->command);
 
+    ds_put_char(string, ' ');
     ofp_print_match(string, &ofm->match, verbosity);
+    if (ds_last(string) != ' ') {
+        ds_put_char(string, ' ');
+    }
+
     switch (command & 0xff) {
     case OFPFC_ADD:
-        ds_put_cstr(string, " ADD: ");
+        ds_put_cstr(string, "ADD:");
         break;
     case OFPFC_MODIFY:
-        ds_put_cstr(string, " MOD: ");
+        ds_put_cstr(string, "MOD:");
         break;
     case OFPFC_MODIFY_STRICT:
-        ds_put_cstr(string, " MOD_STRICT: ");
+        ds_put_cstr(string, "MOD_STRICT:");
         break;
     case OFPFC_DELETE:
-        ds_put_cstr(string, " DEL: ");
+        ds_put_cstr(string, "DEL:");
         break;
     case OFPFC_DELETE_STRICT:
-        ds_put_cstr(string, " DEL_STRICT: ");
+        ds_put_cstr(string, "DEL_STRICT:");
         break;
     default:
-        ds_put_format(string, " cmd:%u ", command);
+        ds_put_format(string, "cmd:%u", command & 0xff);
     }
     if (command & 0xff00) {
-        ds_put_format(string, "table_id:%u ", command >> 8);
+        ds_put_format(string, " table_id:%u", command >> 8);
     }
-    ds_put_format(string, "cookie:0x%"PRIx64" idle:%d hard:%d pri:%d "
-            "buf:%#x flags:%"PRIx16" ", ntohll(ofm->cookie),
-            ntohs(ofm->idle_timeout), ntohs(ofm->hard_timeout),
-            ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
-            ntohl(ofm->buffer_id), ntohs(ofm->flags));
+    if (ofm->cookie != htonll(0)) {
+        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(ofm->cookie));
+    }
+    if (ofm->idle_timeout != htons(OFP_FLOW_PERMANENT)) {
+        ds_put_format(string, " idle:%d", ntohs(ofm->idle_timeout));
+    }
+    if (ofm->hard_timeout != htons(OFP_FLOW_PERMANENT)) {
+        ds_put_format(string, " hard:%d", ntohs(ofm->hard_timeout));
+    }
+    if (ofm->priority != htons(32768)) {
+        ds_put_format(string, " pri:%"PRIu16, ntohs(ofm->priority));
+    }
+    if (ofm->buffer_id != htonl(UINT32_MAX)) {
+        ds_put_format(string, " buf:%#"PRIx32, ntohl(ofm->buffer_id));
+    }
+    if (ofm->flags != htons(0)) {
+        ds_put_format(string, " flags:%"PRIx16, ntohs(ofm->flags));
+    }
+    ds_put_cstr(string, " ");
     ofp_print_actions(string, ofm->actions,
                       len - offsetof(struct ofp_flow_mod, actions));
     ds_put_char(string, '\n');
@@ -805,11 +840,15 @@ ofp_print_flow_removed(struct ds *string, const void *oh,
         ds_put_format(string, "**%"PRIu8"**", ofr->reason);
         break;
     }
-    ds_put_format(string,
-         " cookie0x%"PRIx64" pri%"PRIu16" secs%"PRIu32" nsecs%"PRIu32
+
+    if (ofr->cookie != htonll(0)) {
+        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(ofr->cookie));
+    }
+    if (ofr->priority != htons(32768)) {
+        ds_put_format(string, " pri:%"PRIu16, ntohs(ofr->priority));
+    }
+    ds_put_format(string, " secs%"PRIu32" nsecs%"PRIu32
          " idle%"PRIu16" pkts%"PRIu64" bytes%"PRIu64"\n",
-         ntohll(ofr->cookie),
-         ofr->match.wildcards ? ntohs(ofr->priority) : (uint16_t)-1,
          ntohl(ofr->duration_sec), ntohl(ofr->duration_nsec),
          ntohs(ofr->idle_timeout), ntohll(ofr->packet_count),
          ntohll(ofr->byte_count));
@@ -1166,6 +1205,53 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
 }
 
 static void
+ofp_print_queue_name(struct ds *string, uint32_t queue_id)
+{
+    if (queue_id == OFPQ_ALL) {
+        ds_put_cstr(string, "ALL");
+    } else {
+        ds_put_format(string, "%"PRIu32, queue_id);
+    }
+}
+
+static void
+ofp_queue_stats_request(struct ds *string, const void *body_,
+                       size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
+{
+    const struct ofp_queue_stats_request *qsr = body_;
+
+    ds_put_cstr(string, "port=");
+    ofp_print_port_name(string, ntohs(qsr->port_no));
+
+    ds_put_cstr(string, " queue=");
+    ofp_print_queue_name(string, ntohl(qsr->queue_id));
+}
+
+static void
+ofp_queue_stats_reply(struct ds *string, const void *body, size_t len,
+                     int verbosity)
+{
+    const struct ofp_queue_stats *qs = body;
+    size_t n = len / sizeof *qs;
+    ds_put_format(string, " %zu queues\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (; n--; qs++) {
+        ds_put_cstr(string, "  port ");
+        ofp_print_port_name(string, ntohs(qs->port_no));
+        ds_put_cstr(string, " queue ");
+        ofp_print_queue_name(string, ntohl(qs->queue_id));
+        ds_put_cstr(string, ": ");
+
+        print_port_stat(string, "bytes=", ntohll(qs->tx_bytes), 1);
+        print_port_stat(string, "pkts=", ntohll(qs->tx_packets), 1);
+        print_port_stat(string, "errors=", ntohll(qs->tx_errors), 0);
+    }
+}
+
+static void
 vendor_stat(struct ds *string, const void *body, size_t len,
             int verbosity OVS_UNUSED)
 {
@@ -1233,6 +1319,14 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
               sizeof(struct ofp_port_stats_request),
               ofp_port_stats_request },
             { 0, SIZE_MAX, ofp_port_stats_reply },
+        },
+        {
+            OFPST_QUEUE,
+            "queue",
+            { sizeof(struct ofp_queue_stats_request),
+              sizeof(struct ofp_queue_stats_request),
+              ofp_queue_stats_request },
+            { 0, SIZE_MAX, ofp_queue_stats_reply },
         },
         {
             OFPST_VENDOR,

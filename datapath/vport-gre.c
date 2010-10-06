@@ -50,41 +50,49 @@ static int gre_hdr_len(const struct tnl_port_config *port_config)
 	return len;
 }
 
-static struct sk_buff *gre_build_header(struct sk_buff *skb,
-					const struct vport *vport,
-					const struct tnl_mutable_config *mutable,
-					struct dst_entry *dst)
+static void gre_build_header(const struct vport *vport,
+			     const struct tnl_mutable_config *mutable,
+			     void *header)
 {
-	struct gre_base_hdr *greh = (struct gre_base_hdr *)skb_transport_header(skb);
-	__be32 *options = (__be32 *)(skb_network_header(skb) + mutable->tunnel_hlen
-					       - GRE_HEADER_SECTION);
+	struct gre_base_hdr *greh = header;
+	__be32 *options = (__be32 *)(greh + 1);
 
 	greh->protocol = htons(ETH_P_TEB);
 	greh->flags = 0;
 
-	/* Work backwards over the options so the checksum is last. */
+	if (mutable->port_config.flags & TNL_F_CSUM) {
+		greh->flags |= GRE_CSUM;
+		*options = 0;
+		options++;
+	}
+
 	if (mutable->port_config.out_key ||
-	    mutable->port_config.flags & TNL_F_OUT_KEY_ACTION) {
+	    mutable->port_config.flags & TNL_F_OUT_KEY_ACTION)
 		greh->flags |= GRE_KEY;
 
-		if (mutable->port_config.flags & TNL_F_OUT_KEY_ACTION)
-			*options = OVS_CB(skb)->tun_id;
-		else
-			*options = mutable->port_config.out_key;
+	if (mutable->port_config.out_key)
+		*options = mutable->port_config.out_key;
+}
 
+static struct sk_buff *gre_update_header(const struct vport *vport,
+					 const struct tnl_mutable_config *mutable,
+					 struct dst_entry *dst,
+					 struct sk_buff *skb)
+{
+	__be32 *options = (__be32 *)(skb_network_header(skb) + mutable->tunnel_hlen
+					       - GRE_HEADER_SECTION);
+
+	/* Work backwards over the options so the checksum is last. */
+	if (mutable->port_config.flags & TNL_F_OUT_KEY_ACTION) {
+		*options = OVS_CB(skb)->tun_id;
 		options--;
 	}
 
-	if (mutable->port_config.flags & TNL_F_CSUM) {
-		greh->flags |= GRE_CSUM;
-
-		*options = 0;
+	if (mutable->port_config.flags & TNL_F_CSUM)
 		*(__sum16 *)options = csum_fold(skb_checksum(skb,
-						sizeof(struct iphdr),
-						skb->len - sizeof(struct iphdr),
+						skb_transport_offset(skb),
+						skb->len - skb_transport_offset(skb),
 						0));
-	}
-
 	/*
 	 * Allow our local IP stack to fragment the outer packet even if the
 	 * DF bit is set as a last resort.
@@ -329,6 +337,7 @@ struct tnl_ops gre_tnl_ops = {
 	.ipproto	= IPPROTO_GRE,
 	.hdr_len	= gre_hdr_len,
 	.build_header	= gre_build_header,
+	.update_header	= gre_update_header,
 };
 
 static struct vport *gre_create(const char *name, const void __user *config)
@@ -346,20 +355,14 @@ static int gre_init(void)
 	int err;
 
 	err = inet_add_protocol(&gre_protocol_handlers, IPPROTO_GRE);
-	if (err) {
+	if (err)
 		pr_warn("cannot register gre protocol handler\n");
-		goto out;
-	}
 
-	err = tnl_init();
-
-out:
 	return err;
 }
 
 static void gre_exit(void)
 {
-	tnl_exit();
 	inet_del_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 }
 

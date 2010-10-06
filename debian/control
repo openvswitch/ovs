@@ -4,8 +4,9 @@ Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
 Build-Depends:
- debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev,
- pkg-config (>= 0.21), po-debconf, bzip2, openssl, python
+ debhelper (>= 5), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
+ libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
+ python-support (>= 0.8.4)
 Standards-Version: 3.9.1
 Homepage: http://openvswitch.org/
 
@@ -23,7 +24,8 @@ Description: Source code for Open vSwitch datapath Linux module
 
 Package: openvswitch-common
 Architecture: any
-Depends: ${shlibs:Depends}, openssl, ${misc:Depends}
+Depends: ${shlibs:Depends}, openssl, ${misc:Depends}, python
+Suggests: ethtool
 Description: Open vSwitch common components
  openvswitch-common provides components required by both openvswitch-switch
  and openvswitch-controller.
@@ -37,6 +39,19 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Vers
 Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  
+ .
+ Open vSwitch is a full-featured software-based Ethernet switch.
+
+Package: openvswitch-ipsec
+Architecture: any
+Depends:
+ ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, ipsec-tools, racoon,
+ openvswitch-common (= ${binary:Version}),
+ openvswitch-switch (= ${binary:Version}),
+ python-openvswitch (= ${binary:Version})
+Description: Open vSwitch GRE-over-IPsec support
+ The ovs-monitor-ipsec script provides support for encrypting GRE
+ tunnels with IPsec.
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
@@ -89,8 +104,17 @@ Depends:
  ${shlibs:Depends}, ${misc:Depends},
  openvswitch-common (= ${binary:Version}),
  openvswitch-controller (= ${binary:Version}),
+ openvswitch-ipsec (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version})
 Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
+
+Package: python-openvswitch
+Architecture: all
+Section: python
+Depends: ${python:Depends}, openvswitch-switch (= ${binary:Version})
+Provides: ${python:Provides}
+Description: Python bindings for Open vSwitch
+ This package contains the full Python bindings for Open vSwitch database.

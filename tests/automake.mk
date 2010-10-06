@@ -12,6 +12,7 @@ TESTSUITE_AT = \
 	tests/check-structs.at \
 	tests/daemon.at \
 	tests/daemon-py.at \
+	tests/ovs-ofctl.at \
 	tests/vconn.at \
 	tests/dir_name.at \
 	tests/aes128.at \

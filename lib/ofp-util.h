@@ -62,6 +62,8 @@ int check_ofp_message_array(const struct ofp_header *, uint8_t type,
 int check_ofp_packet_out(const struct ofp_header *, struct ofpbuf *data,
                          int *n_actions, int max_ports);
 
+struct ofpbuf *make_nxt_flow_mod_table_id(bool enable);
+
 struct flow_stats_iterator {
     const uint8_t *pos, *end;
 };

@@ -18,6 +18,7 @@
 #include "hmap.h"
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 #include "coverage.h"
 #include "random.h"
 #include "util.h"
@@ -39,6 +40,22 @@ hmap_destroy(struct hmap *hmap)
 {
     if (hmap && hmap->buckets != &hmap->one) {
         free(hmap->buckets);
+    }
+}
+
+/* Removes all node from 'hmap', leaving it ready to accept more nodes.  Does
+ * not free memory allocated for 'hmap'.
+ *
+ * This function is appropriate when 'hmap' will soon have about as many
+ * elements as it before.  If 'hmap' will likely have fewer elements than
+ * before, use hmap_destroy() followed by hmap_clear() to save memory and
+ * iteration time. */
+void
+hmap_clear(struct hmap *hmap)
+{
+    if (hmap->n > 0) {
+        hmap->n = 0;
+        memset(hmap->buckets, 0, (hmap->mask + 1) * sizeof *hmap->buckets);
     }
 }
 

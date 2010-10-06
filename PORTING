@@ -209,6 +209,9 @@ lib/entropy.c assumes that it can obtain high-quality random number
 seeds at startup by reading from /dev/urandom.  You will need to
 modify it if this is not true on your platform.
 
+vswitchd/system-stats.c only knows how to obtain some statistics on
+Linux.  Optionally you may implement them for your platform as well.
+
 Questions
 ---------
 

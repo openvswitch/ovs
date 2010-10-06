@@ -167,12 +167,25 @@ shash_replace(struct shash *sh, const char *name, const void *data)
     }
 }
 
+/* Deletes 'node' from 'sh' and frees the node's name.  The caller is still
+ * responsible for freeing the node's data, if necessary. */
 void
 shash_delete(struct shash *sh, struct shash_node *node)
 {
+    free(shash_steal(sh, node));
+}
+
+/* Deletes 'node' from 'sh'.  Neither the node's name nor its data is freed;
+ * instead, ownership is transferred to the caller.  Returns the node's
+ * name. */
+char *
+shash_steal(struct shash *sh, struct shash_node *node)
+{
+    char *name = node->name;
+
     hmap_remove(&sh->map, &node->node);
-    free(node->name);
     free(node);
+    return name;
 }
 
 static struct shash_node *
@@ -180,7 +193,7 @@ shash_find__(const struct shash *sh, const char *name, size_t hash)
 {
     struct shash_node *node;
 
-    HMAP_FOR_EACH_WITH_HASH (node, struct shash_node, node, hash, &sh->map) {
+    HMAP_FOR_EACH_WITH_HASH (node, node, hash, &sh->map) {
         if (!strcmp(node->name, name)) {
             return node;
         }

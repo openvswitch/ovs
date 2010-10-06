@@ -111,6 +111,9 @@ format_xflow_action(struct ds *ds, const union xflow_action *a)
     case XFLOWAT_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
         break;
+    case XFLOWAT_DROP_SPOOFED_ARP:
+        ds_put_cstr(ds, "drop_spoofed_arp");
+        break;
     default:
         ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
         break;

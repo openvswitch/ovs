@@ -112,7 +112,8 @@ struct vport {
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
 #define VPORT_F_GEN_STATS	(1 << 1) /* Track stats at the generic layer. */
-#define VPORT_F_TUN_ID		(1 << 2) /* Sets OVS_CB(skb)->tun_id. */
+#define VPORT_F_FLOW		(1 << 2) /* Sets OVS_CB(skb)->flow. */
+#define VPORT_F_TUN_ID		(1 << 3) /* Sets OVS_CB(skb)->tun_id. */
 
 /**
  * struct vport_ops - definition of a type of virtual port

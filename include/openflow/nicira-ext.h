@@ -254,8 +254,18 @@ enum nx_action_subtype {
      *
      * This is useful because OpenFlow does not provide a way to match on the
      * Ethernet addresses inside ARP packets, so there is no other way to drop
-     * spoofed ARPs other than sending every packet up to the controller. */
-    NXAST_DROP_SPOOFED_ARP
+     * spoofed ARPs other than sending every ARP packet to a controller. */
+    NXAST_DROP_SPOOFED_ARP,
+
+    /* Set the queue that should be used when packets are output.  This
+     * is similar to the OpenFlow OFPAT_ENQUEUE action, but does not
+     * take the output port as an argument.  This allows the queue
+     * to be defined before the port is known. */
+    NXAST_SET_QUEUE,
+
+    /* Restore the queue to the value it was before any NXAST_SET_QUEUE
+     * actions were used. */
+    NXAST_POP_QUEUE
 };
 
 /* Action structure for NXAST_RESUBMIT. */
@@ -279,6 +289,17 @@ struct nx_action_set_tunnel {
     uint32_t tun_id;                /* Tunnel ID. */
 };
 OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
+
+/* Action structure for NXAST_SET_QUEUE. */
+struct nx_action_set_queue {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SET_QUEUE. */
+    uint8_t pad[2];
+    uint32_t queue_id;              /* Where to enqueue packets. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_queue) == 16);
 
 /* Header for Nicira-defined actions. */
 struct nx_action_header {

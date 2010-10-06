@@ -111,7 +111,7 @@ def setControllerCfg(controller):
                    'managers="ssl:' + controller + ':6632"'])
 
 def vswitchCfgQuery(action_args):
-    cmd = [vsctl, "-vANY:console:emer"] + action_args
+    cmd = [vsctl, "--timeout=5", "-vANY:console:emer"] + action_args
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
     if len(output) == 0 or output[0] == None:
         output = ""
@@ -120,14 +120,14 @@ def vswitchCfgQuery(action_args):
     return output
 
 def vswitchCfgMod(action_args):
-    cmd = [vsctl, "-vANY:console:emer"] + action_args
+    cmd = [vsctl, "--timeout=5", "-vANY:console:emer"] + action_args
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
         raise XenAPIPlugin.Failure("VSWITCH_CONFIG_MOD_FAILURE",
                                    [ str(exitcode) , str(action_args) ])
 
 def emergency_reset(session, args):
-    cmd = [vsctl, "emer-reset"]
+    cmd = [vsctl, "--timeout=5", "emer-reset"]
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
         raise XenAPIPlugin.Failure("VSWITCH_EMER_RESET_FAILURE",

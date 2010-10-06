@@ -6,6 +6,7 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
+	xenserver/GPLv2 \
 	xenserver/LICENSE \
 	xenserver/README \
 	xenserver/automake.mk \
@@ -23,7 +24,7 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
-	xenserver/usr_share_openvswitch_scripts_monitor-external-ids \
+	xenserver/usr_share_openvswitch_scripts_ovs-external-ids \
 	xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template \
 	xenserver/uuid.py

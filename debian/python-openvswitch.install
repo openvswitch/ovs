@@ -1,0 +1,2 @@
+python/ovs/*.py usr/share/python-support/python-openvswitch/ovs/
+python/ovs/db/*.py usr/share/python-support/python-openvswitch/ovs/db/

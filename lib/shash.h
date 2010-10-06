@@ -35,12 +35,11 @@ struct shash {
 
 #define SHASH_INITIALIZER(SHASH) { HMAP_INITIALIZER(&(SHASH)->map) }
 
-#define SHASH_FOR_EACH(SHASH_NODE, SHASH)                               \
-    HMAP_FOR_EACH (SHASH_NODE, struct shash_node, node, &(SHASH)->map)
+#define SHASH_FOR_EACH(SHASH_NODE, SHASH) \
+    HMAP_FOR_EACH (SHASH_NODE, node, &(SHASH)->map)
 
-#define SHASH_FOR_EACH_SAFE(SHASH_NODE, NEXT, SHASH)                \
-    HMAP_FOR_EACH_SAFE (SHASH_NODE, NEXT, struct shash_node, node,  \
-                        &(SHASH)->map)
+#define SHASH_FOR_EACH_SAFE(SHASH_NODE, NEXT, SHASH) \
+    HMAP_FOR_EACH_SAFE (SHASH_NODE, NEXT, node, &(SHASH)->map)
 
 void shash_init(struct shash *);
 void shash_destroy(struct shash *);
@@ -57,6 +56,7 @@ bool shash_add_once(struct shash *, const char *, const void *);
 void shash_add_assert(struct shash *, const char *, const void *);
 void *shash_replace(struct shash *, const char *, const void *data);
 void shash_delete(struct shash *, struct shash_node *);
+char *shash_steal(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);
 void *shash_find_and_delete(struct shash *, const char *);

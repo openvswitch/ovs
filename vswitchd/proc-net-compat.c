@@ -248,8 +248,7 @@ proc_net_compat_update_vlan(const char *tagged_dev, const char *trunk_dev,
         /* 'tagged_dev' is not attached to any compat_vlan.  Find the
          * compat_vlan corresponding to (trunk_dev,vid) to attach it to, or
          * create a new compat_vlan if none exists for (trunk_dev,vid). */
-        HMAP_FOR_EACH_WITH_HASH (vlan, struct compat_vlan, trunk_node,
-                                 hash_vlan(trunk_dev, vid),
+        HMAP_FOR_EACH_WITH_HASH (vlan, trunk_node, hash_vlan(trunk_dev, vid),
                                  &vlans_by_trunk) {
             if (!strcmp(trunk_dev, vlan->trunk_dev) && vid == vlan->vid) {
                 break;
@@ -340,7 +339,7 @@ update_vlan_config(void)
     ds_init(&ds);
     ds_put_cstr(&ds, "VLAN Dev name     | VLAN ID\n"
                 "Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD\n");
-    HMAP_FOR_EACH (vlan, struct compat_vlan, trunk_node, &vlans_by_trunk) {
+    HMAP_FOR_EACH (vlan, trunk_node, &vlans_by_trunk) {
         ds_put_format(&ds, "%-15s| %d  | %s\n",
                       vlan->vlan_dev, vlan->vid, vlan->trunk_dev);
     }

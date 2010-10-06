@@ -175,10 +175,10 @@ force_stop() {
     if running ; then
         kill -15 $pid
         # Is it really dead?
-        sleep "$DIETIME"s
+        sleep "$DODTIME"
         if running ; then
             kill -9 $pid
-            sleep "$DIETIME"s
+            sleep "$DODTIME"
             if running ; then
                 echo "Cannot kill $NAME (pid=$pid)!"
                 exit 1
@@ -237,7 +237,7 @@ case "$1" in
         log_daemon_msg "Restarting $DESC" "$NAME"
         stop_server
         # Wait some sensible amount, some server need this
-        [ -n "$DIETIME" ] && sleep $DIETIME
+        [ -n "$DODTIME" ] && sleep $DODTIME
         start_server
         running
         log_end_msg $?

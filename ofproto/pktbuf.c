@@ -113,8 +113,8 @@ pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
     if (++p->cookie >= COOKIE_MAX) {
         p->cookie = 0;
     }
-    p->buffer = ofpbuf_new(sizeof(struct ofp_packet_in) + buffer->size);
-    ofpbuf_reserve(p->buffer, sizeof(struct ofp_packet_in));
+    p->buffer = ofpbuf_new_with_headroom(buffer->size,
+                                         sizeof(struct ofp_packet_in));
     ofpbuf_put(p->buffer, buffer->data, buffer->size);
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;

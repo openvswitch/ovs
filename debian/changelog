@@ -1,3 +1,18 @@
+openvswitch (1.1.0pre2) unstable; urgency=low
+
+  * Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 13 Sep 2010 21:50:00 +0000
+
+openvswitch (1.1.0pre1) unstable; urgency=low
+
+  * OpenFlow 1.0 slicing (QoS) functionality
+  * Python bindings for configuration database (no write support)
+  * Performance and scalability improvements
+  * Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 31 Aug 2010 23:20:00 +0000
+
 openvswitch (1.0.1) unstable; urgency=low
 
   * New upstream version.

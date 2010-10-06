@@ -457,7 +457,7 @@ get_port_by_name(struct xf_netdev *xf,
 {
     struct xf_netdev_port *port;
 
-    LIST_FOR_EACH (port, struct xf_netdev_port, node, &xf->port_list) {
+    LIST_FOR_EACH (port, node, &xf->port_list) {
         if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
@@ -545,8 +545,7 @@ xf_netdev_flow_flush(struct xf_netdev *xf)
 {
     struct xf_netdev_flow *flow, *next;
 
-    HMAP_FOR_EACH_SAFE (flow, next, struct xf_netdev_flow, node,
-                        &xf->flow_table) {
+    HMAP_FOR_EACH_SAFE (flow, next, node, &xf->flow_table) {
         xf_netdev_free_flow(xf, flow);
     }
 }
@@ -567,7 +566,7 @@ xfif_netdev_port_list(const struct xfif *xfif, struct xflow_port *ports, int n)
     int i;
 
     i = 0;
-    LIST_FOR_EACH (port, struct xf_netdev_port, node, &xf->port_list) {
+    LIST_FOR_EACH (port, node, &xf->port_list) {
         struct xflow_port *xflow_port = &ports[i];
         if (i >= n) {
             break;
@@ -661,7 +660,7 @@ xf_netdev_lookup_flow(const struct xf_netdev *xf,
 {
     struct xf_netdev_flow *flow;
 
-    HMAP_FOR_EACH_WITH_HASH (flow, struct xf_netdev_flow, node,
+    HMAP_FOR_EACH_WITH_HASH (flow, node,
                              xflow_key_hash(key, 0), &xf->flow_table) {
         if (xflow_key_equal(&flow->key, key)) {
             return flow;
@@ -884,7 +883,7 @@ xfif_netdev_flow_list(const struct xfif *xfif, struct xflow_flow flows[], int n)
     int i;
 
     i = 0;
-    HMAP_FOR_EACH (flow, struct xf_netdev_flow, node, &xf->flow_table) {
+    HMAP_FOR_EACH (flow, node, &xf->flow_table) {
         if (i >= n) {
             break;
         }
@@ -1047,10 +1046,10 @@ xf_netdev_run(void)
     struct xf_netdev *xf;
 
     ofpbuf_init(&packet, XF_NETDEV_HEADROOM + max_mtu);
-    LIST_FOR_EACH (xf, struct xf_netdev, node, &xf_netdev_list) {
+    LIST_FOR_EACH (xf, node, &xf_netdev_list) {
         struct xf_netdev_port *port;
 
-        LIST_FOR_EACH (port, struct xf_netdev_port, node, &xf->port_list) {
+        LIST_FOR_EACH (port, node, &xf->port_list) {
             int error;
 
             /* Reset packet contents. */
@@ -1075,9 +1074,9 @@ xf_netdev_wait(void)
 {
     struct xf_netdev *xf;
 
-    LIST_FOR_EACH (xf, struct xf_netdev, node, &xf_netdev_list) {
+    LIST_FOR_EACH (xf, node, &xf_netdev_list) {
         struct xf_netdev_port *port;
-        LIST_FOR_EACH (port, struct xf_netdev_port, node, &xf->port_list) {
+        LIST_FOR_EACH (port, node, &xf->port_list) {
             netdev_recv_wait(port->netdev);
         }
     }
@@ -1099,7 +1098,6 @@ xf_netdev_set_dl_tci(struct ofpbuf *packet,
         veh->veth_tci = (veh->veth_tci & ~a->mask) | a->tci;
     } else {
         /* Insert new 802.1Q header. */
-        struct eth_header *eh = packet->l2;
         struct vlan_eth_header tmp;
         memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
         memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);

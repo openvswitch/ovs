@@ -152,6 +152,7 @@ usage(void)
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
            "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
+           "  queue-stats SWITCH [PORT [QUEUE]]  dump queue stats\n"
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
@@ -467,18 +468,33 @@ do_dump_aggregate(int argc, char *argv[])
 }
 
 static void
-enable_flow_mod_table_id_ext(struct vconn *vconn, uint8_t enable)
+enable_flow_mod_table_id_ext(struct vconn *vconn, bool enable)
 {
-    struct nxt_flow_mod_table_id *flow_mod_table_id;
-    struct ofpbuf *buffer;
+    send_openflow_buffer(vconn, make_nxt_flow_mod_table_id(enable));
+}
 
-    flow_mod_table_id = make_openflow(sizeof *flow_mod_table_id, OFPT_VENDOR, &buffer);
+static void
+do_queue_stats(int argc, char *argv[])
+{
+    struct ofp_queue_stats_request *req;
+    struct ofpbuf *request;
 
-    flow_mod_table_id->vendor = htonl(NX_VENDOR_ID);
-    flow_mod_table_id->subtype = htonl(NXT_FLOW_MOD_TABLE_ID);
-    flow_mod_table_id->set = enable;
+    req = alloc_stats_request(sizeof *req, OFPST_QUEUE, &request);
 
-    send_openflow_buffer(vconn, buffer);
+    if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
+        req->port_no = htons(str_to_port_no(argv[1], argv[2]));
+    } else {
+        req->port_no = htons(OFPP_ALL);
+    }
+    if (argc > 3 && argv[3][0] && strcasecmp(argv[3], "all")) {
+        req->queue_id = htonl(atoi(argv[3]));
+    } else {
+        req->queue_id = htonl(OFPQ_ALL);
+    }
+
+    memset(req->pad, 0, sizeof req->pad);
+
+    dump_stats_transaction(argv[1], request);
 }
 
 static void
@@ -521,10 +537,10 @@ static void
 do_add_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
+    struct ofpbuf *b;
     FILE *file;
-    char line[1024];
+    bool table_id_enabled = false;
     uint8_t table_idx;
-    int table_id_enabled = 0;
 
     file = fopen(argv[2], "r");
     if (file == NULL) {
@@ -532,54 +548,12 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     }
 
     open_vconn(argv[1], &vconn);
-    while (fgets(line, sizeof line, file)) {
-        struct ofpbuf *buffer;
-        struct ofp_flow_mod *ofm;
-        uint16_t priority, idle_timeout, hard_timeout;
-        uint64_t cookie;
-        struct ofp_match match;
-
-        char *comment;
-
-        /* Delete comments. */
-        comment = strchr(line, '#');
-        if (comment) {
-            *comment = '\0';
+    while ((b = parse_ofp_add_flow_file(file, &table_idx)) != NULL) {
+        if ((table_idx != 0xff) != table_id_enabled) {
+            table_id_enabled = table_idx != 0xff;
+            enable_flow_mod_table_id_ext(vconn, table_id_enabled);
         }
-
-        /* Drop empty lines. */
-        if (line[strspn(line, " \t\n")] == '\0') {
-            continue;
-        }
-
-        /* Parse and send.  parse_ofp_str() will expand and reallocate
-         * the data in 'buffer', so we can't keep pointers to across the
-         * parse_ofp_str() call. */
-        make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-        parse_ofp_str(line, &match, buffer, &table_idx, NULL, &priority,
-                      &idle_timeout, &hard_timeout, &cookie);
-        ofm = buffer->data;
-        ofm->match = match;
-        ofm->command = htons(OFPFC_ADD);
-        ofm->cookie = htonll(cookie);
-        ofm->idle_timeout = htons(idle_timeout);
-        ofm->hard_timeout = htons(hard_timeout);
-        ofm->buffer_id = htonl(UINT32_MAX);
-        ofm->priority = htons(priority);
-
-        if (table_idx != 0xff) {
-            if (!table_id_enabled) {
-                enable_flow_mod_table_id_ext(vconn, 1);
-                table_id_enabled = 1;
-            }
-            ofm->command = htons(ntohs(ofm->command) | (table_idx << 8));
-        } else {
-            if (table_id_enabled) {
-                enable_flow_mod_table_id_ext(vconn, 0);
-                table_id_enabled = 0;
-            }
-        }
-        send_openflow_buffer(vconn, buffer);
+        send_openflow_buffer(vconn, b);
     }
     vconn_close(vconn);
     fclose(file);
@@ -914,6 +888,27 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
            count * message_size / (duration / 1000.0));
 }
 
+/* This command is really only useful for testing the flow parser (ofp_parse),
+ * so it is undocumented. */
+static void
+do_parse_flows(int argc OVS_UNUSED, char *argv[])
+{
+    uint8_t table_idx;
+    struct ofpbuf *b;
+    FILE *file;
+
+    file = fopen(argv[1], "r");
+    if (file == NULL) {
+        ovs_fatal(errno, "%s: open", argv[2]);
+    }
+
+    while ((b = parse_ofp_add_flow_file(file, &table_idx)) != NULL) {
+        ofp_print(stdout, b->data, b->size, 0);
+        ofpbuf_delete(b);
+    }
+    fclose(file);
+}
+
 static void
 do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -929,6 +924,7 @@ static const struct command all_commands[] = {
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },
+    { "queue-stats", 1, 3, do_queue_stats },
     { "add-flow", 2, 2, do_add_flow },
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
@@ -939,6 +935,7 @@ static const struct command all_commands[] = {
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
+    { "parse-flows", 1, 1, do_parse_flows },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

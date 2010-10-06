@@ -29,7 +29,6 @@
 #include <linux/udp.h>
 #include <linux/version.h>
 #include <linux/ethtool.h>
-#include <linux/random.h>
 #include <linux/wait.h>
 #include <asm/system.h>
 #include <asm/div64.h>
@@ -40,7 +39,6 @@
 #include <linux/inetdevice.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
-#include <linux/workqueue.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
 #include <linux/compat.h>
@@ -544,40 +542,45 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
 	int stats_counter_off;
-	struct xflow_key key;
-	struct tbl_node *flow_node;
-	struct sw_flow *flow;
 	struct sw_flow_actions *acts;
 	struct loop_counter *loop;
 	int error;
 
 	OVS_CB(skb)->dp_port = p;
 
-	/* Extract flow from 'skb' into 'key'. */
-	error = flow_extract(skb, p ? p->port_no : XFLOWP_NONE, &key);
-	if (unlikely(error)) {
-		kfree_skb(skb);
-		return;
+	if (!OVS_CB(skb)->flow) {
+		struct xflow_key key;
+		struct tbl_node *flow_node;
+		bool is_frag;
+
+		/* Extract flow from 'skb' into 'key'. */
+		error = flow_extract(skb, p ? p->port_no : XFLOWP_NONE, &key, &is_frag);
+		if (unlikely(error)) {
+			kfree_skb(skb);
+			return;
+		}
+
+		if (is_frag && dp->drop_frags) {
+			kfree_skb(skb);
+			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+			goto out;
+		}
+
+		/* Look up flow. */
+		flow_node = tbl_lookup(rcu_dereference(dp->table), &key,
+					flow_hash(&key), flow_cmp);
+		if (unlikely(!flow_node)) {
+			dp_output_control(dp, skb, _XFLOWL_MISS_NR, OVS_CB(skb)->tun_id);
+			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
+			goto out;
+		}
+
+		OVS_CB(skb)->flow = flow_cast(flow_node);
 	}
 
-	if (OVS_CB(skb)->is_frag && dp->drop_frags) {
-		kfree_skb(skb);
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
-		goto out;
-	}
+	flow_used(OVS_CB(skb)->flow, skb);
 
-	/* Look up flow. */
-	flow_node = tbl_lookup(rcu_dereference(dp->table), &key, flow_hash(&key), flow_cmp);
-	if (unlikely(!flow_node)) {
-		dp_output_control(dp, skb, _XFLOWL_MISS_NR, OVS_CB(skb)->tun_id);
-		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
-		goto out;
-	}
-
-	flow = flow_cast(flow_node);
-	flow_used(flow, skb);
-
-	acts = rcu_dereference(flow->sf_acts);
+	acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 
 	/* Check whether we've looped too much. */
 	loop = &get_cpu_var(dp_loop_counters).counters[!!in_interrupt()];
@@ -589,7 +592,8 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	}
 
 	/* Execute actions. */
-	execute_actions(dp, skb, &key, acts->actions, acts->n_actions, GFP_ATOMIC);
+	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
+			acts->n_actions, GFP_ATOMIC);
 	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 
 	/* Check whether sub-actions looped too much. */
@@ -1049,12 +1053,12 @@ static int do_put_flow(struct datapath *dp, struct xflow_flow_put *uf,
 		}
 
 		/* Allocate flow. */
-		error = -ENOMEM;
-		flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
-		if (flow == NULL)
+		flow = flow_alloc();
+		if (IS_ERR(flow)) {
+			error = PTR_ERR(flow);
 			goto error;
+		}
 		flow->key = uf->flow.key;
-		spin_lock_init(&flow->lock);
 		clear_stats(flow);
 
 		/* Obtain actions. */
@@ -1109,7 +1113,8 @@ static int do_put_flow(struct datapath *dp, struct xflow_flow_put *uf,
 error_free_flow_acts:
 	kfree(flow->sf_acts);
 error_free_flow:
-	kmem_cache_free(flow_cache, flow);
+	flow->sf_acts = NULL;
+	flow_put(flow);
 error:
 	return error;
 }
@@ -1317,16 +1322,18 @@ static int do_execute(struct datapath *dp, const struct xflow_execute *execute)
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
 	struct ethhdr *eth;
+	bool is_frag;
 	int err;
 
 	err = -EINVAL;
 	if (execute->length < ETH_HLEN || execute->length > 65535)
 		goto error;
 
-	err = -ENOMEM;
 	actions = flow_actions_alloc(execute->n_actions);
-	if (!actions)
+	if (IS_ERR(actions)) {
+		err = PTR_ERR(actions);
 		goto error;
+	}
 
 	err = -EFAULT;
 	if (copy_from_user(actions->actions, execute->actions,
@@ -1363,7 +1370,7 @@ static int do_execute(struct datapath *dp, const struct xflow_execute *execute)
 	else
 		skb->protocol = htons(ETH_P_802_2);
 
-	err = flow_extract(skb, execute->in_port, &key);
+	err = flow_extract(skb, execute->in_port, &key, &is_frag);
 	if (err)
 		goto error_free_skb;
 

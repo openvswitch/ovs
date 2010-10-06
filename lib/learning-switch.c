@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include "flow.h"
+#include "hmap.h"
 #include "mac-learning.h"
 #include "ofpbuf.h"
 #include "ofp-parse.h"
@@ -33,12 +34,19 @@
 #include "poll-loop.h"
 #include "queue.h"
 #include "rconn.h"
+#include "shash.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"
 #include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(learning_switch)
+
+struct lswitch_port {
+    struct hmap_node hmap_node; /* Hash node for port number. */
+    uint16_t port_no;           /* OpenFlow port number, in host byte order. */
+    uint32_t queue_id;          /* OpenFlow queue number. */
+};
 
 struct lswitch {
     /* If nonnegative, the switch sets up flows that expire after the given
@@ -51,7 +59,11 @@ struct lswitch {
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
     uint32_t wildcards;         /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
-    uint32_t queue;             /* OpenFlow queue to use, or UINT32_MAX. */
+
+    /* Queue distribution. */
+    uint32_t default_queue;     /* Default OpenFlow queue, or UINT32_MAX. */
+    struct hmap queue_numbers;  /* Map from port number to lswitch_port. */
+    struct shash queue_names;   /* Map from port name to lswitch_port. */
 
     /* Number of outgoing queued packets on the rconn. */
     struct rconn_packet_counter *queued;
@@ -63,44 +75,29 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
-static void send_default_flows(struct lswitch *sw, struct rconn *rconn,
-                               FILE *default_flows);
 
 typedef void packet_handler_func(struct lswitch *, struct rconn *, void *);
 static packet_handler_func process_switch_features;
 static packet_handler_func process_packet_in;
 static packet_handler_func process_echo_request;
 
-/* Creates and returns a new learning switch.
- *
- * If 'learn_macs' is true, the new switch will learn the ports on which MAC
- * addresses appear.  Otherwise, the new switch will flood all packets.
- *
- * If 'max_idle' is nonnegative, the new switch will set up flows that expire
- * after the given number of seconds (or never expire, if 'max_idle' is
- * OFP_FLOW_PERMANENT).  Otherwise, the new switch will process every packet.
- *
- * The caller may provide the file stream 'default_flows' that defines
- * default flows that should be pushed when a switch connects.  Each
- * line is a flow entry in the format described for "add-flows" command
- * in the Flow Syntax section of the ovs-ofct(8) man page.  The caller
- * is responsible for closing the stream.
+/* Creates and returns a new learning switch whose configuration is given by
+ * 'cfg'.
  *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
-lswitch_create(struct rconn *rconn, bool learn_macs,
-               bool exact_flows, int max_idle, bool action_normal,
-               FILE *default_flows)
+lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
+    const struct ofpbuf *b;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
-    sw->max_idle = max_idle;
+    sw->max_idle = cfg->max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;
-    sw->ml = learn_macs ? mac_learning_create() : NULL;
-    sw->action_normal = action_normal;
-    if (exact_flows) {
+    sw->ml = cfg->mode == LSW_LEARN ? mac_learning_create() : NULL;
+    sw->action_normal = cfg->mode == LSW_NORMAL;
+    if (cfg->exact_flows) {
         /* Exact match. */
         sw->wildcards = 0;
     } else {
@@ -110,12 +107,28 @@ lswitch_create(struct rconn *rconn, bool learn_macs,
         sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
                          | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
     }
-    sw->queue = UINT32_MAX;
+
+    sw->default_queue = cfg->default_queue;
+    hmap_init(&sw->queue_numbers);
+    shash_init(&sw->queue_names);
+    if (cfg->port_queues) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, cfg->port_queues) {
+            struct lswitch_port *port = xmalloc(sizeof *port);
+            hmap_node_nullify(&port->hmap_node);
+            port->queue_id = (uintptr_t) node->data;
+            shash_add(&sw->queue_names, node->name, port);
+        }
+    }
+
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
-    if (default_flows) {
-        send_default_flows(sw, rconn, default_flows);
+
+    for (b = cfg->default_flows; b; b = b->next) {
+        queue_tx(sw, rconn, ofpbuf_clone(b));
     }
+
     return sw;
 }
 
@@ -124,19 +137,17 @@ void
 lswitch_destroy(struct lswitch *sw)
 {
     if (sw) {
+        struct lswitch_port *node, *next;
+
+        HMAP_FOR_EACH_SAFE (node, next, hmap_node, &sw->queue_numbers) {
+            hmap_remove(&sw->queue_numbers, &node->hmap_node);
+            free(node);
+        }
+        shash_destroy(&sw->queue_names);
         mac_learning_destroy(sw->ml);
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
     }
-}
-
-/* Sets 'queue' as the OpenFlow queue used by packets and flows set up by 'sw'.
- * Specify UINT32_MAX to avoid specifying a particular queue, which is also the
- * default if this function is never called for 'sw'.  */
-void
-lswitch_set_queue(struct lswitch *sw, uint32_t queue)
-{
-    sw->queue = queue;
 }
 
 /* Takes care of necessary 'sw' activity, except for receiving packets (which
@@ -220,10 +231,10 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         }
     }
     if (VLOG_IS_DBG_ENABLED()) {
-        char *p = ofp_to_string(msg->data, msg->size, 2);
+        char *s = ofp_to_string(msg->data, msg->size, 2);
         VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
-                    sw->datapath_id, p);
-        free(p);
+                    sw->datapath_id, s);
+        free(s);
     }
 }
 
@@ -249,53 +260,6 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 }
 
 static void
-send_default_flows(struct lswitch *sw, struct rconn *rconn,
-                   FILE *default_flows)
-{
-    char line[1024];
-
-    while (fgets(line, sizeof line, default_flows)) {
-        struct ofpbuf *b;
-        struct ofp_flow_mod *ofm;
-        uint16_t priority, idle_timeout, hard_timeout;
-        uint64_t cookie;
-        struct ofp_match match;
-
-        char *comment;
-
-        /* Delete comments. */
-        comment = strchr(line, '#');
-        if (comment) {
-            *comment = '\0';
-        }
-
-        /* Drop empty lines. */
-        if (line[strspn(line, " \t\n")] == '\0') {
-            continue;
-        }
-
-        /* Parse and send.  str_to_flow() will expand and reallocate the data
-         * in 'buffer', so we can't keep pointers to across the str_to_flow()
-         * call. */
-        make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &b);
-        parse_ofp_str(line, &match, b,
-                      NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                      &cookie);
-        ofm = b->data;
-        ofm->match = match;
-        ofm->command = htons(OFPFC_ADD);
-        ofm->cookie = htonll(cookie);
-        ofm->idle_timeout = htons(idle_timeout);
-        ofm->hard_timeout = htons(hard_timeout);
-        ofm->buffer_id = htonl(UINT32_MAX);
-        ofm->priority = htons(priority);
-
-        update_openflow_length(b);
-        queue_tx(sw, rconn, b);
-    }
-}
-
-static void
 queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
 {
     int retval = rconn_send_with_limit(rconn, b, sw->queued, 10);
@@ -316,8 +280,28 @@ process_switch_features(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
                         void *osf_)
 {
     struct ofp_switch_features *osf = osf_;
+    size_t n_ports;
+    size_t i;
+
+    if (check_ofp_message_array(&osf->header, OFPT_FEATURES_REPLY,
+                                sizeof *osf, sizeof *osf->ports, &n_ports)) {
+        return;
+    }
 
     sw->datapath_id = ntohll(osf->datapath_id);
+
+    for (i = 0; i < n_ports; i++) {
+        struct ofp_phy_port *opp = &osf->ports[i];
+        struct lswitch_port *lp;
+
+        opp->name[OFP_MAX_PORT_NAME_LEN - 1] = '\0';
+        lp = shash_find_data(&sw->queue_names, (char *) opp->name);
+        if (lp && hmap_node_is_null(&lp->hmap_node)) {
+            lp->port_no = ntohs(opp->port_no);
+            hmap_insert(&sw->queue_numbers, &lp->hmap_node,
+                        hash_int(lp->port_no, 0));
+        }
+    }
 }
 
 static uint16_t
@@ -360,11 +344,27 @@ lswitch_choose_destination(struct lswitch *sw, const flow_t *flow)
     return out_port;
 }
 
+static uint32_t
+get_queue_id(const struct lswitch *sw, uint16_t in_port)
+{
+    const struct lswitch_port *port;
+
+    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_int(in_port, 0),
+                             &sw->queue_numbers) {
+        if (port->port_no == in_port) {
+            return port->queue_id;
+        }
+    }
+
+    return sw->default_queue;
+}
+
 static void
 process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 {
     struct ofp_packet_in *opi = opi_;
     uint16_t in_port = ntohs(opi->in_port);
+    uint32_t queue_id;
     uint16_t out_port;
 
     struct ofp_action_header actions[2];
@@ -392,9 +392,10 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     out_port = lswitch_choose_destination(sw, &flow);
 
     /* Make actions. */
+    queue_id = get_queue_id(sw, in_port);
     if (out_port == OFPP_NONE) {
         actions_len = 0;
-    } else if (sw->queue == UINT32_MAX || out_port >= OFPP_MAX) {
+    } else if (queue_id == UINT32_MAX || out_port >= OFPP_MAX) {
         struct ofp_action_output oao;
 
         memset(&oao, 0, sizeof oao);
@@ -411,7 +412,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
         oae.type = htons(OFPAT_ENQUEUE);
         oae.len = htons(sizeof oae);
         oae.port = htons(out_port);
-        oae.queue_id = htonl(sw->queue);
+        oae.queue_id = htonl(queue_id);
 
         memcpy(actions, &oae, sizeof oae);
         actions_len = sizeof oae;

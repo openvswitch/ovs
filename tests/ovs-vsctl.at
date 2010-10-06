@@ -15,17 +15,17 @@ dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:ANY:emer --db=unix:socket -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket -- command
 ])])
 m4_define([RUN_OVS_VSCTL_ONELINE],
-  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline -- command
 ])])
 
 dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND in a single run of ovs-vsctl.
 m4_define([RUN_OVS_VSCTL_TOGETHER],
-  [ovs-vsctl --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline dnl
+  [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline dnl
 m4_foreach([command], [$@], [ -- command])])
 
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
@@ -702,6 +702,55 @@ AT_CHECK([cat stdout3], [0], [{abc=def}
 AT_CHECK([cat stdout4], [0], [500
 ], [], [OVS_VSCTL_CLEANUP])
 
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([--id option on create, get commands])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br br0],
+                        [add-port br0 eth0],
+                        [add-port br0 eth1])])
+AT_CHECK(
+  [RUN_OVS_VSCTL_TOGETHER(
+    [set bridge br0 mirrors=@m],
+    [--id=@eth0 get port eth0],
+    [--id=@eth1 get port eth1],
+    [--id=@m create mirror name=mymirror select-dst-port=@eth0 select-src-port=@eth0 output-port=@eth1])],
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+
+
+
+<0>
+],
+  [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [RUN_OVS_VSCTL(
+    [list port eth0 eth1],
+    [list mirror],
+    [list bridge br0])],
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [sed -n -e '/uuid/p' -e '/name/p' -e '/mirrors/p' -e '/select/p' -e '/output/p' < stdout | $srcdir/uuidfilt.pl], [0], [dnl
+[_uuid               : <0>
+name                : "eth0"
+_uuid               : <1>
+name                : "eth1"
+_uuid               : <2>
+name                : mymirror
+output_port         : <1>
+output_vlan         : []
+select_all          : false
+select_dst_port     : [<0>]
+select_src_port     : [<0>]
+select_vlan         : []
+_uuid               : <3>
+mirrors             : [<2>]
+name                : "br0"
+]],
+  [], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 

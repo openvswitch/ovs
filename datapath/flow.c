@@ -108,7 +108,10 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 {
 	struct sw_flow_actions *sfa;
 
-	if (n_actions > (PAGE_SIZE - sizeof *sfa) / sizeof(union xflow_action))
+	/* At least DP_MAX_PORTS actions are required to be able to flood a
+	 * packet to every port.  Factor of 2 allows for setting VLAN tags,
+	 * etc. */
+	if (n_actions > 2 * DP_MAX_PORTS)
 		return ERR_PTR(-EINVAL);
 
 	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union xflow_action),
@@ -120,27 +123,36 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 	return sfa;
 }
 
-
-/* Frees 'flow' immediately. */
-static void flow_free(struct sw_flow *flow)
+struct sw_flow *flow_alloc(void)
 {
-	if (unlikely(!flow))
-		return;
-	kfree(flow->sf_acts);
-	kmem_cache_free(flow_cache, flow);
+	struct sw_flow *flow;
+
+	flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
+	if (!flow)
+		return ERR_PTR(-ENOMEM);
+
+	spin_lock_init(&flow->lock);
+	atomic_set(&flow->refcnt, 1);
+	flow->dead = false;
+
+	return flow;
 }
 
 void flow_free_tbl(struct tbl_node *node)
 {
 	struct sw_flow *flow = flow_cast(node);
-	flow_free(flow);
+
+	flow->dead = true;
+	flow_put(flow);
 }
 
 /* RCU callback used by flow_deferred_free. */
 static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
-	flow_free(flow);
+
+	flow->dead = true;
+	flow_put(flow);
 }
 
 /* Schedules 'flow' to be freed after the next RCU grace period.
@@ -148,6 +160,22 @@ static void rcu_free_flow_callback(struct rcu_head *rcu)
 void flow_deferred_free(struct sw_flow *flow)
 {
 	call_rcu(&flow->rcu, rcu_free_flow_callback);
+}
+
+void flow_hold(struct sw_flow *flow)
+{
+	atomic_inc(&flow->refcnt);
+}
+
+void flow_put(struct sw_flow *flow)
+{
+	if (unlikely(!flow))
+		return;
+
+	if (atomic_dec_and_test(&flow->refcnt)) {
+		kfree(flow->sf_acts);
+		kmem_cache_free(flow_cache, flow);
+	}
 }
 
 /* RCU callback used by flow_deferred_free_acts. */
@@ -238,14 +266,15 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
  * %false.
  */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
+int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key,
+		 bool *is_frag)
 {
 	struct ethhdr *eth;
 
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
-	OVS_CB(skb)->is_frag = false;
+	*is_frag = false;
 
 	/*
 	 * We would really like to pull as many bytes as we could possibly
@@ -326,9 +355,9 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 					key->tp_dst = htons(icmp->code);
 				}
 			}
-		} else {
-			OVS_CB(skb)->is_frag = true;
-		}
+		} else
+			*is_frag = true;
+
 	} else if (key->dl_type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
 		struct arp_eth_header *arp;
 
@@ -340,9 +369,8 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 				&& arp->ar_pln == 4) {
 
 			/* We only match on the lower 8 bits of the opcode. */
-			if (ntohs(arp->ar_op) <= 0xff) {
+			if (ntohs(arp->ar_op) <= 0xff)
 				key->nw_proto = ntohs(arp->ar_op);
-			}
 
 			if (key->nw_proto == ARPOP_REQUEST
 					|| key->nw_proto == ARPOP_REPLY) {

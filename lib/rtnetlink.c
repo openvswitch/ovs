@@ -166,8 +166,7 @@ rtnetlink_report_change(const struct nlmsghdr *nlmsg,
     change.master_ifindex = (attrs[IFLA_MASTER]
                              ? nl_attr_get_u32(attrs[IFLA_MASTER]) : 0);
 
-    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
-                   &all_notifiers) {
+    LIST_FOR_EACH (notifier, node, &all_notifiers) {
         notifier->cb(&change, notifier->aux);
     }
 }
@@ -177,8 +176,7 @@ rtnetlink_report_notify_error(void)
 {
     struct rtnetlink_notifier *notifier;
 
-    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
-                   &all_notifiers) {
+    LIST_FOR_EACH (notifier, node, &all_notifiers) {
         notifier->cb(NULL, notifier->aux);
     }
 }
