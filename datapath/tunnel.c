@@ -1266,15 +1266,16 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 
 		if (likely(cache)) {
 			int orig_len = skb->len - cache->len;
+			struct vport *cache_vport = internal_dev_get_vport(rt_dst(rt).dev);
 
 			skb->protocol = htons(ETH_P_IP);
 			iph->tot_len = htons(skb->len - skb_network_offset(skb));
 			ip_send_check(iph);
 
-			if (is_internal_dev(rt_dst(rt).dev)) {
+			if (cache_vport) {
 				OVS_CB(skb)->flow = cache->flow;
 				compute_ip_summed(skb, true);
-				vport_receive(internal_dev_get_vport(rt_dst(rt).dev), skb);
+				vport_receive(cache_vport, skb);
 				sent_len += orig_len;
 			} else {
 				int err;

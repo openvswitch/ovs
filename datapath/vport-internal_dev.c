@@ -329,6 +329,11 @@ int is_internal_vport(const struct vport *vport)
 
 struct vport *internal_dev_get_vport(struct net_device *netdev)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
+	struct internal_dev *internal_dev;
+
+	if (!is_internal_dev(netdev))
+		return NULL;
+	
+	internal_dev = internal_dev_priv(netdev);
 	return rcu_dereference(internal_dev->attached_vport);
 }
