@@ -321,11 +321,10 @@ static const struct ofhooks default_ofhooks;
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 
-static void update_used(struct ofproto *);
+static void ofproto_expire(struct ofproto *);
+
 static void update_stats(struct ofproto *, struct rule *,
                          const struct odp_flow_stats *);
-static void expire_rule(struct cls_rule *, void *ofproto);
-static void active_timeout(struct ofproto *ofproto, struct rule *rule);
 static bool revalidate_rule(struct ofproto *p, struct rule *rule);
 static void revalidate_cb(struct cls_rule *rule_, void *p_);
 
@@ -1153,18 +1152,8 @@ ofproto_run1(struct ofproto *p)
 
     if (time_msec() >= p->next_expiration) {
         COVERAGE_INC(ofproto_expiration);
+        ofproto_expire(p);
         p->next_expiration = time_msec() + 1000;
-        update_used(p);
-
-        classifier_for_each(&p->cls, CLS_INC_ALL, expire_rule, p);
-
-        /* Let the hook know that we're at a stable point: all outstanding data
-         * in existing flows has been accounted to the account_cb.  Thus, the
-         * hook can now reasonably do operations that depend on having accurate
-         * flow volume accounting (currently, that's just bond rebalancing). */
-        if (p->ofhooks->account_checkpoint_cb) {
-            p->ofhooks->account_checkpoint_cb(p->aux);
-        }
     }
 
     if (p->netflow) {
@@ -4192,6 +4181,181 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
     }
 }
 
+/* Flow expiration. */
+
+struct expire_cbdata {
+    struct ofproto *ofproto;
+};
+
+static void ofproto_update_used(struct ofproto *);
+static void rule_expire(struct cls_rule *, void *cbdata);
+
+/* This function is called periodically by ofproto_run().  Its job is to
+ * collect updates for the flows that have been installed into the datapath,
+ * most importantly when they last were used, and then use that information to
+ * expire flows that have not been used recently. */
+static void
+ofproto_expire(struct ofproto *ofproto)
+{
+    struct expire_cbdata cbdata;
+
+    /* Update 'used' for each flow in the datapath. */
+    ofproto_update_used(ofproto);
+
+    /* Expire idle flows. */
+    cbdata.ofproto = ofproto;
+    classifier_for_each(&ofproto->cls, CLS_INC_ALL, rule_expire, &cbdata);
+
+    /* Let the hook know that we're at a stable point: all outstanding data
+     * in existing flows has been accounted to the account_cb.  Thus, the
+     * hook can now reasonably do operations that depend on having accurate
+     * flow volume accounting (currently, that's just bond rebalancing). */
+    if (ofproto->ofhooks->account_checkpoint_cb) {
+        ofproto->ofhooks->account_checkpoint_cb(ofproto->aux);
+    }
+}
+
+/* Update 'used' member of each flow currently installed into the datapath. */
+static void
+ofproto_update_used(struct ofproto *p)
+{
+    struct odp_flow *flows;
+    size_t n_flows;
+    size_t i;
+    int error;
+
+    error = dpif_flow_list_all(p->dpif, &flows, &n_flows);
+    if (error) {
+        return;
+    }
+
+    for (i = 0; i < n_flows; i++) {
+        struct odp_flow *f = &flows[i];
+        struct rule *rule;
+
+        rule = rule_from_cls_rule(
+            classifier_find_rule_exactly(&p->cls, &f->key, 0, UINT16_MAX));
+
+        if (rule && rule->installed) {
+            update_time(p, rule, &f->stats);
+            rule_account(p, rule, f->stats.n_bytes);
+        } else {
+            /* There's a flow in the datapath that we know nothing about.
+             * Delete it. */
+            COVERAGE_INC(ofproto_unexpected_rule);
+            dpif_flow_del(p->dpif, f);
+        }
+
+    }
+    free(flows);
+}
+
+static void
+rule_active_timeout(struct ofproto *ofproto, struct rule *rule)
+{
+    if (ofproto->netflow && !is_controller_rule(rule) &&
+        netflow_active_timeout_expired(ofproto->netflow, &rule->nf_flow)) {
+        struct ofexpired expired;
+        struct odp_flow odp_flow;
+
+        /* Get updated flow stats.
+         *
+         * XXX We could avoid this call entirely if (1) ofproto_update_used()
+         * updated TCP flags and (2) the dpif_flow_list_all() in
+         * ofproto_update_used() zeroed TCP flags. */
+        memset(&odp_flow, 0, sizeof odp_flow);
+        if (rule->installed) {
+            odp_flow.key = rule->cr.flow;
+            odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
+            dpif_flow_get(ofproto->dpif, &odp_flow);
+
+            if (odp_flow.stats.n_packets) {
+                update_time(ofproto, rule, &odp_flow.stats);
+                netflow_flow_update_flags(&rule->nf_flow,
+                                          odp_flow.stats.tcp_flags);
+            }
+        }
+
+        expired.flow = rule->cr.flow;
+        expired.packet_count = rule->packet_count +
+                               odp_flow.stats.n_packets;
+        expired.byte_count = rule->byte_count + odp_flow.stats.n_bytes;
+        expired.used = rule->used;
+
+        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
+
+        /* Schedule us to send the accumulated records once we have
+         * collected all of them. */
+        poll_immediate_wake();
+    }
+}
+
+/* If 'cls_rule' is an OpenFlow rule, that has expired according to OpenFlow
+ * rules, then delete it entirely.
+ *
+ * If 'cls_rule' is a subrule, that has not been used recently, remove it from
+ * the datapath and fold its statistics back into its super-rule.
+ *
+ * (This is a callback function for classifier_for_each().) */
+static void
+rule_expire(struct cls_rule *cls_rule, void *cbdata_)
+{
+    struct expire_cbdata *cbdata = cbdata_;
+    struct ofproto *ofproto = cbdata->ofproto;
+    struct rule *rule = rule_from_cls_rule(cls_rule);
+    long long int hard_expire, idle_expire, expire, now;
+
+    /* Calculate OpenFlow expiration times for 'rule'. */
+    hard_expire = (rule->hard_timeout
+                   ? rule->created + rule->hard_timeout * 1000
+                   : LLONG_MAX);
+    idle_expire = (rule->idle_timeout
+                   && (rule->super || list_is_empty(&rule->list))
+                   ? rule->used + rule->idle_timeout * 1000
+                   : LLONG_MAX);
+    expire = MIN(hard_expire, idle_expire);
+
+    now = time_msec();
+    if (now < expire) {
+        /* 'rule' has not expired according to OpenFlow rules. */
+        if (rule->installed && now >= rule->used + 5000) {
+            /* This rule is idle, so uninstall it from the datapath. */
+            if (rule->super) {
+                rule_remove(ofproto, rule);
+            } else {
+                rule_uninstall(ofproto, rule);
+            }
+        } else if (!rule->cr.wc.wildcards) {
+            /* Send NetFlow active timeout if appropriate. */
+            rule_active_timeout(cbdata->ofproto, rule);
+        }
+    } else {
+        /* 'rule' has expired according to OpenFlow rules. */
+        COVERAGE_INC(ofproto_expired);
+
+        /* Update stats.  (This is a no-op if the rule expired due to an idle
+         * timeout, because that only happens when the rule has no subrules
+         * left.) */
+        if (rule->cr.wc.wildcards) {
+            struct rule *subrule, *next;
+            LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, 
+                                &rule->list) {
+                rule_remove(cbdata->ofproto, subrule);
+            }
+        } else {
+            rule_uninstall(cbdata->ofproto, rule);
+        }
+
+        /* Get rid of the rule. */
+        if (!rule_is_hidden(rule)) {
+            send_flow_removed(cbdata->ofproto, rule, now,
+                              (now >= hard_expire
+                               ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
+        }
+        rule_remove(cbdata->ofproto, rule);
+    }
+}
+
 static void
 revalidate_cb(struct cls_rule *sub_, void *cbdata_)
 {
@@ -4259,19 +4423,6 @@ compose_flow_removed(struct ofproto *p, const struct rule *rule,
 }
 
 static void
-uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
-{
-    assert(rule->installed);
-    assert(!rule->cr.wc.wildcards);
-
-    if (rule->super) {
-        rule_remove(ofproto, rule);
-    } else {
-        rule_uninstall(ofproto, rule);
-    }
-}
-
-static void
 send_flow_removed(struct ofproto *p, struct rule *rule,
                   long long int now, uint8_t reason)
 {
@@ -4300,122 +4451,6 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
     if (prev) {
         queue_tx(buf, prev, prev->reply_counter);
     }
-}
-
-
-static void
-expire_rule(struct cls_rule *cls_rule, void *p_)
-{
-    struct ofproto *p = p_;
-    struct rule *rule = rule_from_cls_rule(cls_rule);
-    long long int hard_expire, idle_expire, expire, now;
-
-    hard_expire = (rule->hard_timeout
-                   ? rule->created + rule->hard_timeout * 1000
-                   : LLONG_MAX);
-    idle_expire = (rule->idle_timeout
-                   && (rule->super || list_is_empty(&rule->list))
-                   ? rule->used + rule->idle_timeout * 1000
-                   : LLONG_MAX);
-    expire = MIN(hard_expire, idle_expire);
-
-    now = time_msec();
-    if (now < expire) {
-        if (rule->installed && now >= rule->used + 5000) {
-            uninstall_idle_flow(p, rule);
-        } else if (!rule->cr.wc.wildcards) {
-            active_timeout(p, rule);
-        }
-
-        return;
-    }
-
-    COVERAGE_INC(ofproto_expired);
-
-    /* Update stats.  This code will be a no-op if the rule expired
-     * due to an idle timeout. */
-    if (rule->cr.wc.wildcards) {
-        struct rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, &rule->list) {
-            rule_remove(p, subrule);
-        }
-    } else {
-        rule_uninstall(p, rule);
-    }
-
-    if (!rule_is_hidden(rule)) {
-        send_flow_removed(p, rule, now,
-                          (now >= hard_expire
-                           ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
-    }
-    rule_remove(p, rule);
-}
-
-static void
-active_timeout(struct ofproto *ofproto, struct rule *rule)
-{
-    if (ofproto->netflow && !is_controller_rule(rule) &&
-        netflow_active_timeout_expired(ofproto->netflow, &rule->nf_flow)) {
-        struct ofexpired expired;
-        struct odp_flow odp_flow;
-
-        /* Get updated flow stats. */
-        memset(&odp_flow, 0, sizeof odp_flow);
-        if (rule->installed) {
-            odp_flow.key = rule->cr.flow;
-            odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
-            dpif_flow_get(ofproto->dpif, &odp_flow);
-
-            if (odp_flow.stats.n_packets) {
-                update_time(ofproto, rule, &odp_flow.stats);
-                netflow_flow_update_flags(&rule->nf_flow,
-                                          odp_flow.stats.tcp_flags);
-            }
-        }
-
-        expired.flow = rule->cr.flow;
-        expired.packet_count = rule->packet_count +
-                               odp_flow.stats.n_packets;
-        expired.byte_count = rule->byte_count + odp_flow.stats.n_bytes;
-        expired.used = rule->used;
-
-        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
-
-        /* Schedule us to send the accumulated records once we have
-         * collected all of them. */
-        poll_immediate_wake();
-    }
-}
-
-static void
-update_used(struct ofproto *p)
-{
-    struct odp_flow *flows;
-    size_t n_flows;
-    size_t i;
-    int error;
-
-    error = dpif_flow_list_all(p->dpif, &flows, &n_flows);
-    if (error) {
-        return;
-    }
-
-    for (i = 0; i < n_flows; i++) {
-        struct odp_flow *f = &flows[i];
-        struct rule *rule;
-
-        rule = rule_from_cls_rule(
-            classifier_find_rule_exactly(&p->cls, &f->key, 0, UINT16_MAX));
-        if (!rule || !rule->installed) {
-            COVERAGE_INC(ofproto_unexpected_rule);
-            dpif_flow_del(p->dpif, f);
-            continue;
-        }
-
-        update_time(p, rule, &f->stats);
-        rule_account(p, rule, f->stats.n_bytes);
-    }
-    free(flows);
 }
 
 /* pinsched callback for sending 'packet' on 'ofconn'. */
