@@ -11,7 +11,6 @@ include $(srcdir)/Modules.mk
 EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
 EXTRA_CFLAGS += -I$(srcdir)/.. 
 EXTRA_CFLAGS += -I$(builddir)/..
-EXTRA_CFLAGS += -I$(top_srcdir)/include
 ifeq '$(BUILDNR)' '0'
 EXTRA_CFLAGS += -DBUILDNR=\"\"
 else
@@ -23,7 +22,7 @@ EXTRA_CFLAGS += -include $(builddir)/kcompat.h
 # These include directories have to go before -I$(KSRC)/include.
 # NOSTDINC_FLAGS just happens to be a variable that goes in the
 # right place, even though it's conceptually incorrect.
-NOSTDINC_FLAGS += -I$(srcdir)/compat-2.6 -I$(srcdir)/compat-2.6/include 
+NOSTDINC_FLAGS += -I$(top_srcdir)/include -I$(srcdir)/compat-2.6 -I$(srcdir)/compat-2.6/include 
 
 obj-m := $(patsubst %,%_mod.o,$(build_modules))
 
