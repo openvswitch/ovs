@@ -3026,17 +3026,6 @@ handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
     return 0;
 }
 
-static void
-count_subrules(struct cls_rule *cls_rule, void *n_subrules_)
-{
-    struct rule *rule = rule_from_cls_rule(cls_rule);
-    int *n_subrules = n_subrules_;
-
-    if (rule->super) {
-        (*n_subrules)++;
-    }
-}
-
 static int
 handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
                            struct ofp_stats_request *request)
@@ -3045,12 +3034,17 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct ofpbuf *msg;
     struct odp_stats dpstats;
     int n_exact, n_subrules, n_wild;
+    struct rule *rule;
 
     msg = start_stats_reply(request, sizeof *ots * 2);
 
     /* Count rules of various kinds. */
     n_subrules = 0;
-    classifier_for_each(&p->cls, CLS_INC_EXACT, count_subrules, &n_subrules);
+    CLASSIFIER_FOR_EACH_EXACT_RULE (rule, struct rule, cr, &p->cls) {
+        if (rule->super) {
+            n_subrules++;
+        }
+    }
     n_exact = classifier_count_exact(&p->cls) - n_subrules;
     n_wild = classifier_count(&p->cls) - classifier_count_exact(&p->cls);
 

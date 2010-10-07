@@ -465,7 +465,10 @@ classifier_for_each_match(const struct classifier *cls,
  * it must not delete (or move) any other rules in 'cls' that are in the same
  * table as the argument rule.  Two rules are in the same table if their
  * cls_rule structs have the same table_idx; as a special case, a rule with
- * wildcards and an exact-match rule will never be in the same table. */
+ * wildcards and an exact-match rule will never be in the same table.
+ *
+ * If 'include' is CLS_INC_EXACT then CLASSIFIER_FOR_EACH_EXACT_RULE(_SAFE) is
+ * probably easier to use. */
 void
 classifier_for_each(const struct classifier *cls, int include,
                     void (*callback)(struct cls_rule *, void *aux),

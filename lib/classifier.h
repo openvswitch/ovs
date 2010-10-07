@@ -168,4 +168,11 @@ struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               uint32_t wildcards,
                                               unsigned int priority);
 
+#define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, STRUCT, MEMBER, CLS) \
+        HMAP_FOR_EACH (RULE, STRUCT, MEMBER.node.hmap, &(CLS)->exact_table)
+
+#define CLASSIFIER_FOR_EACH_EXACT_RULE_SAFE(RULE, NEXT, STRUCT, MEMBER, CLS) \
+        HMAP_FOR_EACH_SAFE (RULE, NEXT, STRUCT, MEMBER.node.hmap, \
+                 &(CLS)->exact_table)
+
 #endif /* classifier.h */
