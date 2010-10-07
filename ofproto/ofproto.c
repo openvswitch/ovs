@@ -4466,6 +4466,10 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
     struct ofconn *prev;
     struct ofpbuf *buf = NULL;
 
+    if (!rule->send_flow_removed) {
+        return;
+    }
+
     /* We limit the maximum number of queued flow expirations it by accounting
      * them under the counter for replies.  That works because preventing
      * OpenFlow requests from being processed also prevents new flows from
@@ -4474,7 +4478,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, node, &p->all_conns) {
-        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)
+        if (rconn_is_connected(ofconn->rconn)
             && ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
                 queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
