@@ -321,7 +321,7 @@ static const struct ofhooks default_ofhooks;
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 
-static void ofproto_expire(struct ofproto *);
+static int ofproto_expire(struct ofproto *);
 
 static void update_stats(struct ofproto *, struct rule *,
                          const struct odp_flow_stats *);
@@ -1151,9 +1151,9 @@ ofproto_run1(struct ofproto *p)
     }
 
     if (time_msec() >= p->next_expiration) {
+        int delay = ofproto_expire(p);
+        p->next_expiration = time_msec() + delay;
         COVERAGE_INC(ofproto_expiration);
-        ofproto_expire(p);
-        p->next_expiration = time_msec() + 1000;
     }
 
     if (p->netflow) {
@@ -4198,16 +4198,20 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
 
 struct expire_cbdata {
     struct ofproto *ofproto;
+    int dp_max_idle;
 };
 
+static int ofproto_dp_max_idle(const struct ofproto *);
 static void ofproto_update_used(struct ofproto *);
 static void rule_expire(struct cls_rule *, void *cbdata);
 
 /* This function is called periodically by ofproto_run().  Its job is to
  * collect updates for the flows that have been installed into the datapath,
  * most importantly when they last were used, and then use that information to
- * expire flows that have not been used recently. */
-static void
+ * expire flows that have not been used recently.
+ *
+ * Returns the number of milliseconds after which it should be called again. */
+static int
 ofproto_expire(struct ofproto *ofproto)
 {
     struct expire_cbdata cbdata;
@@ -4220,6 +4224,7 @@ ofproto_expire(struct ofproto *ofproto)
      * A wildcarded flow is idle only when all of its subrules have expired due
      * to becoming idle, so iterate through the exact-match flows first. */
     cbdata.ofproto = ofproto;
+    cbdata.dp_max_idle = ofproto_dp_max_idle(ofproto);
     classifier_for_each(&ofproto->cls, CLS_INC_EXACT, rule_expire, &cbdata);
     classifier_for_each(&ofproto->cls, CLS_INC_WILD, rule_expire, &cbdata);
 
@@ -4230,6 +4235,8 @@ ofproto_expire(struct ofproto *ofproto)
     if (ofproto->ofhooks->account_checkpoint_cb) {
         ofproto->ofhooks->account_checkpoint_cb(ofproto->aux);
     }
+
+    return MIN(cbdata.dp_max_idle, 1000);
 }
 
 /* Update 'used' member of each flow currently installed into the datapath. */
@@ -4265,6 +4272,96 @@ ofproto_update_used(struct ofproto *p)
 
     }
     free(flows);
+}
+
+/* Calculates and returns the number of milliseconds of idle time after which
+ * flows should expire from the datapath and we should fold their statistics
+ * into their parent rules in userspace. */
+static int
+ofproto_dp_max_idle(const struct ofproto *ofproto)
+{
+    /*
+     * Idle time histogram.
+     *
+     * Most of the time a switch has a relatively small number of flows.  When
+     * this is the case we might as well keep statistics for all of them in
+     * userspace and to cache them in the kernel datapath for performance as
+     * well.
+     *
+     * As the number of flows increases, the memory required to maintain
+     * statistics about them in userspace and in the kernel becomes
+     * significant.  However, with a large number of flows it is likely that
+     * only a few of them are "heavy hitters" that consume a large amount of
+     * bandwidth.  At this point, only heavy hitters are worth caching in the
+     * kernel and maintaining in userspaces; other flows we can discard.
+     *
+     * The technique used to compute the idle time is to build a histogram with
+     * N_BUCKETS bucket whose width is BUCKET_WIDTH msecs each.  Each flow that
+     * is installed in the kernel gets dropped in the appropriate bucket.
+     * After the histogram has been built, we compute the cutoff so that only
+     * the most-recently-used 1% of flows (but at least 1000 flows) are kept
+     * cached.  At least the most-recently-used bucket of flows is kept, so
+     * actually an arbitrary number of flows can be kept in any given
+     * expiration run (though the next run will delete most of those unless
+     * they receive additional data).
+     *
+     * This requires a second pass through the exact-match flows, in addition
+     * to the pass made by ofproto_update_used(), because the former function
+     * never looks at uninstallable flows.
+     */
+    enum { BUCKET_WIDTH = ROUND_UP(100, TIME_UPDATE_INTERVAL) };
+    enum { N_BUCKETS = 5000 / BUCKET_WIDTH };
+    int buckets[N_BUCKETS] = { 0 };
+    int total, bucket;
+    struct rule *rule;
+    long long int now;
+    int i;
+
+    total = classifier_count_exact(&ofproto->cls);
+    if (total <= 1000) {
+        return N_BUCKETS * BUCKET_WIDTH;
+    }
+
+    /* Build histogram. */
+    now = time_msec();
+    CLASSIFIER_FOR_EACH_EXACT_RULE (rule, struct rule, cr, &ofproto->cls) {
+        long long int idle = now - rule->used;
+        int bucket = (idle <= 0 ? 0
+                      : idle >= BUCKET_WIDTH * N_BUCKETS ? N_BUCKETS - 1
+                      : (unsigned int) idle / BUCKET_WIDTH);
+        buckets[bucket]++;
+    }
+
+    /* Find the first bucket whose flows should be expired. */
+    for (bucket = 0; bucket < N_BUCKETS; bucket++) {
+        if (buckets[bucket]) {
+            int subtotal = 0;
+            do {
+                subtotal += buckets[bucket++];
+            } while (bucket < N_BUCKETS && subtotal < MAX(1000, total / 100));
+            break;
+        }
+    }
+
+    if (VLOG_IS_DBG_ENABLED()) {
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_cstr(&s, "keep");
+        for (i = 0; i < N_BUCKETS; i++) {
+            if (i == bucket) {
+                ds_put_cstr(&s, ", drop");
+            }
+            if (buckets[i]) {
+                ds_put_format(&s, " %d:%d", i * BUCKET_WIDTH, buckets[i]);
+            }
+        }
+        VLOG_INFO("%s: %s (msec:count)",
+                  dpif_name(ofproto->dpif), ds_cstr(&s));
+        ds_destroy(&s);
+    }
+
+    return bucket * BUCKET_WIDTH;
 }
 
 static void
@@ -4332,7 +4429,7 @@ rule_expire(struct cls_rule *cls_rule, void *cbdata_)
     if (now < expire) {
         /* 'rule' has not expired according to OpenFlow rules. */
         if (!rule->cr.wc.wildcards) {
-            if (now >= rule->used + 5000) {
+            if (now >= rule->used + cbdata->dp_max_idle) {
                 /* This rule is idle, so drop it to free up resources. */
                 if (rule->super) {
                     /* It's not part of the OpenFlow flow table, so we can
