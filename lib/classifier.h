@@ -171,7 +171,7 @@ struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
 #define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, MEMBER, CLS) \
         HMAP_FOR_EACH (RULE, MEMBER.node.hmap, &(CLS)->exact_table)
 
-#define CLASSIFIER_FOR_EACH_EXACT_RULE_SAFE(RULE, NEXT, CLS) \
+#define CLASSIFIER_FOR_EACH_EXACT_RULE_SAFE(RULE, NEXT, MEMBER, CLS) \
         HMAP_FOR_EACH_SAFE (RULE, NEXT, MEMBER.node.hmap, &(CLS)->exact_table)
 
 #endif /* classifier.h */
