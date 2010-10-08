@@ -825,7 +825,8 @@
         column="type"/> of <code>min-rate</code> are:</p>
       <dl>
         <dt><code>min-rate</code></dt>
-        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.  The
+          floor value is 1500 bytes/s (12,000 bit/s).</dd>
       </dl>
       <p>The key-value pairs defined for <ref table="QoS"/> <ref table="QoS"
         column="type"/> of <code>linux-htb</code> are:</p>
