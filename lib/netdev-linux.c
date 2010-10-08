@@ -2415,13 +2415,13 @@ htb_parse_class_details__(struct netdev *netdev,
     const char *priority_s = shash_find_data(details, "priority");
     int mtu;
 
-    /* min-rate */
+    /* min-rate.  Don't allow a min-rate below 1500 bytes/s. */
     if (!min_rate_s) {
         /* min-rate is required. */
         return EINVAL;
     }
     hc->min_rate = strtoull(min_rate_s, NULL, 10) / 8;
-    hc->min_rate = MAX(hc->min_rate, 0);
+    hc->min_rate = MAX(hc->min_rate, 1500);
     hc->min_rate = MIN(hc->min_rate, htb->max_rate);
 
     /* max-rate */
