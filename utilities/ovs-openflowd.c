@@ -457,11 +457,9 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     /* Set up controllers. */
     s->n_controllers = controllers.n;
     s->controllers = xmalloc(s->n_controllers * sizeof *s->controllers);
-    if (argc > 1) {
-        for (i = 0; i < s->n_controllers; i++) {
-            s->controllers[i] = controller_opts;
-            s->controllers[i].target = controllers.names[i];
-        }
+    for (i = 0; i < s->n_controllers; i++) {
+        s->controllers[i] = controller_opts;
+        s->controllers[i].target = controllers.names[i];
     }
 
     /* Sanity check. */
