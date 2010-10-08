@@ -398,32 +398,6 @@ error:
 	kfree_skb(skb);
 }
 
-/* Never consumes 'skb'.  Returns a port that 'skb' should be sent to, -1 if
- * none.  */
-static int output_group(struct datapath *dp, __u16 group,
-			struct sk_buff *skb, gfp_t gfp)
-{
-	struct dp_port_group *g = rcu_dereference(dp->groups[group]);
-	int prev_port = -1;
-	int i;
-
-	if (!g)
-		return -1;
-	for (i = 0; i < g->n_ports; i++) {
-		struct dp_port *p = rcu_dereference(dp->ports[g->ports[i]]);
-		if (!p || OVS_CB(skb)->dp_port == p)
-			continue;
-		if (prev_port != -1) {
-			struct sk_buff *clone = skb_clone(skb, gfp);
-			if (!clone)
-				return -1;
-			do_output(dp, clone, prev_port);
-		}
-		prev_port = p->port_no;
-	}
-	return prev_port;
-}
-
 static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg,
 			  gfp_t gfp)
 {
@@ -490,11 +464,6 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		switch (a->type) {
 		case ODPAT_OUTPUT:
 			prev_port = a->output.port;
-			break;
-
-		case ODPAT_OUTPUT_GROUP:
-			prev_port = output_group(dp, a->output_group.group,
-						 skb, gfp);
 			break;
 
 		case ODPAT_CONTROLLER:

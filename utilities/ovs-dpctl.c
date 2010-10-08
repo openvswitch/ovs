@@ -127,8 +127,7 @@ usage(void)
            "  show                     show basic info on all datapaths\n"
            "  show DP...               show basic info on each DP\n"
            "  dump-flows DP            display flows in DP\n"
-           "  del-flows DP             delete all flows from DP\n"
-           "  dump-groups DP           display port groups in DP\n",
+           "  del-flows DP             delete all flows from DP\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -354,7 +353,6 @@ show_dpif(struct dpif *dpif)
                stats.n_flows, stats.cur_capacity, stats.max_capacity);
         printf("\tports: cur:%"PRIu32", max:%"PRIu32"\n",
                stats.n_ports, stats.max_ports);
-        printf("\tgroups: max:%"PRIu16"\n", stats.max_groups);
         printf("\tlookups: frags:%llu, hit:%llu, missed:%llu, lost:%llu\n",
                (unsigned long long int) stats.n_frags,
                (unsigned long long int) stats.n_hit,
@@ -493,33 +491,6 @@ do_del_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_dump_groups(int argc OVS_UNUSED, char *argv[])
-{
-    struct odp_stats stats;
-    struct dpif *dpif;
-    unsigned int i;
-
-    run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
-    run(dpif_get_dp_stats(dpif, &stats), "get datapath stats");
-    for (i = 0; i < stats.max_groups; i++) {
-        uint16_t *ports;
-        size_t n_ports;
-
-        if (!dpif_port_group_get(dpif, i, &ports, &n_ports) && n_ports) {
-            size_t j;
-
-            printf("group %u:", i);
-            for (j = 0; j < n_ports; j++) {
-                printf(" %"PRIu16, ports[j]);
-            }
-            printf("\n");
-        }
-        free(ports);
-    }
-    dpif_close(dpif);
-}
-
-static void
 do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
@@ -534,7 +505,6 @@ static const struct command all_commands[] = {
     { "show", 0, INT_MAX, do_show },
     { "dump-flows", 1, 1, do_dump_flows },
     { "del-flows", 1, 1, do_del_flows },
-    { "dump-groups", 1, 1, do_dump_groups },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

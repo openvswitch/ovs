@@ -46,9 +46,6 @@ format_odp_action(struct ds *ds, const union odp_action *a)
     case ODPAT_OUTPUT:
         ds_put_format(ds, "%"PRIu16, a->output.port);
         break;
-    case ODPAT_OUTPUT_GROUP:
-        ds_put_format(ds, "g%"PRIu16, a->output_group.group);
-        break;
     case ODPAT_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
         break;

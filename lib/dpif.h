@@ -73,11 +73,6 @@ int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
 int dpif_port_poll(const struct dpif *, char **devnamep);
 void dpif_port_poll_wait(const struct dpif *);
 
-int dpif_port_group_get(const struct dpif *, uint16_t group,
-                        uint16_t **ports, size_t *n_ports);
-int dpif_port_group_set(struct dpif *, uint16_t group,
-                        const uint16_t ports[], size_t n_ports);
-
 int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, struct odp_flow_put *);
 int dpif_flow_del(struct dpif *, struct odp_flow *);
@@ -88,8 +83,7 @@ int dpif_flow_list(const struct dpif *, struct odp_flow[], size_t n,
 int dpif_flow_list_all(const struct dpif *,
                        struct odp_flow **flowsp, size_t *np);
 
-int dpif_execute(struct dpif *, uint16_t in_port,
-                 const union odp_action[], size_t n_actions,
+int dpif_execute(struct dpif *, const union odp_action[], size_t n_actions,
                  const struct ofpbuf *);
 
 /* Minimum number of bytes of headroom for a packet returned by dpif_recv()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 InMon Corp.
+ * Copyright (c) 2009, 2010 InMon Corp.
  * Copyright (c) 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,8 +35,6 @@ bool ofproto_sflow_is_enabled(const struct ofproto_sflow *);
 void ofproto_sflow_add_port(struct ofproto_sflow *, uint16_t odp_port,
                             const char *netdev_name);
 void ofproto_sflow_del_port(struct ofproto_sflow *, uint16_t odp_port);
-void ofproto_sflow_set_group_sizes(struct ofproto_sflow *,
-                                   size_t n_flood, size_t n_all);
 
 void ofproto_sflow_run(struct ofproto_sflow *);
 void ofproto_sflow_wait(struct ofproto_sflow *);

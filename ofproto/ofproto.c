@@ -336,8 +336,6 @@ static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
 static void handle_openflow(struct ofconn *, struct ofproto *,
                             struct ofpbuf *);
 
-static void refresh_port_groups(struct ofproto *);
-
 static struct ofport *get_port(const struct ofproto *, uint16_t odp_port);
 static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
@@ -886,7 +884,6 @@ ofproto_set_sflow(struct ofproto *ofproto,
             struct ofport *ofport;
 
             os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
-            refresh_port_groups(ofproto);
             HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
                 ofproto_sflow_add_port(os, ofport->odp_port,
                                        netdev_get_name(ofport->netdev));
@@ -1296,8 +1293,7 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
 
     /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
      * error code? */
-    dpif_execute(p->dpif, flow->in_port, odp_actions.actions,
-                 odp_actions.n_actions, packet);
+    dpif_execute(p->dpif, odp_actions.actions, odp_actions.n_actions, packet);
     return 0;
 }
 
@@ -1382,38 +1378,6 @@ reinit_ports(struct ofproto *p)
         update_port(p, devnames.names[i]);
     }
     svec_destroy(&devnames);
-}
-
-static size_t
-refresh_port_group(struct ofproto *p, unsigned int group)
-{
-    uint16_t *ports;
-    size_t n_ports;
-    struct ofport *port;
-
-    assert(group == DP_GROUP_ALL || group == DP_GROUP_FLOOD);
-
-    ports = xmalloc(hmap_count(&p->ports) * sizeof *ports);
-    n_ports = 0;
-    HMAP_FOR_EACH (port, hmap_node, &p->ports) {
-        if (group == DP_GROUP_ALL || !(port->opp.config & OFPPC_NO_FLOOD)) {
-            ports[n_ports++] = port->odp_port;
-        }
-    }
-    dpif_port_group_set(p->dpif, group, ports, n_ports);
-    free(ports);
-
-    return n_ports;
-}
-
-static void
-refresh_port_groups(struct ofproto *p)
-{
-    size_t n_flood = refresh_port_group(p, DP_GROUP_FLOOD);
-    size_t n_all = refresh_port_group(p, DP_GROUP_ALL);
-    if (p->sflow) {
-        ofproto_sflow_set_group_sizes(p->sflow, n_flood, n_all);
-    }
 }
 
 static struct ofport *
@@ -1631,9 +1595,6 @@ update_port(struct ofproto *p, const char *devname)
                       : !new_ofport ? OFPPR_DELETE
                       : OFPPR_MODIFY));
     ofport_free(old_ofport);
-
-    /* Update port groups. */
-    refresh_port_groups(p);
 }
 
 static int
@@ -1659,7 +1620,6 @@ init_ports(struct ofproto *p)
         }
     }
     free(ports);
-    refresh_port_groups(p);
     return 0;
 }
 
@@ -1982,8 +1942,7 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
     } else {
         int error;
 
-        error = dpif_execute(ofproto->dpif, in_port,
-                             actions, n_actions, packet);
+        error = dpif_execute(ofproto->dpif, actions, n_actions, packet);
         ofpbuf_delete(packet);
         return !error;
     }
@@ -2472,17 +2431,6 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static void
-add_output_group_action(struct odp_actions *actions, uint16_t group,
-                        uint16_t *nf_output_iface)
-{
-    odp_actions_add(actions, ODPAT_OUTPUT_GROUP)->output_group.group = group;
-
-    if (group == DP_GROUP_ALL || group == DP_GROUP_FLOOD) {
-        *nf_output_iface = NF_OUT_FLOOD;
-    }
-}
-
-static void
 add_controller_action(struct odp_actions *actions, uint16_t max_len)
 {
     union odp_action *a = odp_actions_add(actions, ODPAT_CONTROLLER);
@@ -2587,6 +2535,21 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 }
 
 static void
+flood_packets(struct ofproto *ofproto, uint16_t odp_in_port, uint32_t mask,
+              uint16_t *nf_output_iface, struct odp_actions *actions)
+{
+    struct ofport *ofport;
+
+    HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
+        uint16_t odp_port = ofport->odp_port;
+        if (odp_port != odp_in_port && !(ofport->opp.config & mask)) {
+            odp_actions_add(actions, ODPAT_OUTPUT)->output.port = odp_port;
+        }
+    }
+    *nf_output_iface = NF_OUT_FLOOD;
+}
+
+static void
 xlate_output_action__(struct action_xlate_ctx *ctx,
                       uint16_t port, uint16_t max_len)
 {
@@ -2612,11 +2575,11 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         }
         break;
     case OFPP_FLOOD:
-        add_output_group_action(ctx->out, DP_GROUP_FLOOD,
-                                &ctx->nf_output_iface);
-        break;
+        flood_packets(ctx->ofproto, ctx->flow.in_port, OFPPC_NO_FLOOD,
+                      &ctx->nf_output_iface, ctx->out);
     case OFPP_ALL:
-        add_output_group_action(ctx->out, DP_GROUP_ALL, &ctx->nf_output_iface);
+        flood_packets(ctx->ofproto, ctx->flow.in_port, 0,
+                      &ctx->nf_output_iface, ctx->out);
         break;
     case OFPP_CONTROLLER:
         add_controller_action(ctx->out, max_len);
@@ -2972,8 +2935,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
 
-    dpif_execute(p->dpif, flow.in_port, actions.actions, actions.n_actions,
-                 &payload);
+    dpif_execute(p->dpif, actions.actions, actions.n_actions, &payload);
     ofpbuf_delete(buffer);
 
     return 0;
@@ -2991,17 +2953,14 @@ update_port_config(struct ofproto *p, struct ofport *port,
             netdev_turn_flags_on(port->netdev, NETDEV_UP, true);
         }
     }
-#define REVALIDATE_BITS (OFPPC_NO_RECV | OFPPC_NO_RECV_STP | OFPPC_NO_FWD)
+#define REVALIDATE_BITS (OFPPC_NO_RECV | OFPPC_NO_RECV_STP |    \
+                         OFPPC_NO_FWD | OFPPC_NO_FLOOD)
     if (mask & REVALIDATE_BITS) {
         COVERAGE_INC(ofproto_costly_flags);
         port->opp.config ^= mask & REVALIDATE_BITS;
         p->need_revalidate = true;
     }
 #undef REVALIDATE_BITS
-    if (mask & OFPPC_NO_FLOOD) {
-        port->opp.config ^= OFPPC_NO_FLOOD;
-        refresh_port_groups(p);
-    }
     if (mask & OFPPC_NO_PACKET_IN) {
         port->opp.config ^= OFPPC_NO_PACKET_IN;
     }
@@ -4175,7 +4134,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
         memset(&action, 0, sizeof(action));
         action.output.type = ODPAT_OUTPUT;
         action.output.port = ODPP_LOCAL;
-        dpif_execute(p->dpif, flow.in_port, &action, 1, &payload);
+        dpif_execute(p->dpif, &action, 1, &payload);
     }
 
     rule = lookup_valid_rule(p, &flow);
@@ -4847,7 +4806,8 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     out_port = mac_learning_lookup_tag(ofproto->ml, flow->dl_dst, 0, tags,
                                        NULL);
     if (out_port < 0) {
-        add_output_group_action(actions, DP_GROUP_FLOOD, nf_output_iface);
+        flood_packets(ofproto, flow->in_port, OFPPC_NO_FLOOD,
+                      nf_output_iface, actions);
     } else if (out_port != flow->in_port) {
         odp_actions_add(actions, ODPAT_OUTPUT)->output.port = out_port;
         *nf_output_iface = out_port;

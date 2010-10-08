@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2009, 2010 InMon Corp.
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -573,12 +573,6 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             n_outputs++;
             break;
 
-        case ODPAT_OUTPUT_GROUP:
-            n_outputs += (a->output_group.group == DP_GROUP_FLOOD ? os->n_flood
-                          : a->output_group.group == DP_GROUP_ALL ? os->n_all
-                          : 0);
-            break;
-
         case ODPAT_SET_VLAN_VID:
             switchElem.flowType.sw.dst_vlan = ntohs(a->vlan_vid.vlan_vid);
             break;
@@ -607,14 +601,6 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     SFLADD_ELEMENT(&fs, &hdrElem);
     SFLADD_ELEMENT(&fs, &switchElem);
     sfl_sampler_writeFlowSample(sampler, &fs);
-}
-
-void
-ofproto_sflow_set_group_sizes(struct ofproto_sflow *os,
-                              size_t n_flood, size_t n_all)
-{
-    os->n_flood = n_flood;
-    os->n_all = n_all;
 }
 
 void

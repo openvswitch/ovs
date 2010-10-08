@@ -106,16 +106,6 @@ discussed in \fBdump\-flows\fR, these entries are
 not OpenFlow flow entries.  By deleting them, the process that set them
 up may be confused about their disappearance.
 .
-.IP "\fBdump\-groups \fIdp\fR"
-Prints to the console the sets of port groups maintained by datapath
-\fIdp\fR.  Ordinarily there are at least 2 port groups in a datapath
-that \fBovs\-openflowd\fR or \fBovs\-vswitch\fR is controlling: group
-0 contains
-all ports except those disabled by STP, and group 1 contains all
-ports.  Additional or different groups might be used in the future.
-.IP
-This command is primarily useful for debugging Open vSwitch.  OpenFlow
-does not have a concept of port groups.
 .SH OPTIONS
 .TP
 \fB\-t\fR, \fB\-\-timeout=\fIsecs\fR

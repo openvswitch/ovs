@@ -31,7 +31,6 @@ struct dp_port;
 #define VLAN_PCP_SHIFT 13
 
 #define DP_MAX_PORTS 1024
-#define DP_MAX_GROUPS 16
 
 #define DP_N_QUEUES 3
 #define DP_MAX_QUEUE_LEN 100
@@ -57,12 +56,6 @@ struct dp_stats_percpu {
 	seqcount_t seqlock;
 };
 
-struct dp_port_group {
-	struct rcu_head rcu;
-	int n_ports;
-	u16 ports[];
-};
-
 /**
  * struct datapath - datapath for flow-based packet switching
  * @mutex: Mutual exclusion for ioctls.
@@ -73,7 +66,6 @@ struct dp_port_group {
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table (RCU protected).
- * @groups: Port groups, used by ODPAT_OUTPUT_GROUP action (RCU protected).
  * @n_ports: Number of ports currently in @ports.
  * @ports: Map from port number to &struct dp_port.  %ODPP_LOCAL port
  * always exists, other ports may be %NULL.
@@ -96,9 +88,6 @@ struct datapath {
 
 	/* Flow table. */
 	struct tbl *table;
-
-	/* Port groups. */
-	struct dp_port_group *groups[DP_MAX_GROUPS];
 
 	/* Switch ports. */
 	unsigned int n_ports;

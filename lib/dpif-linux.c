@@ -357,34 +357,6 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
 }
 
 static int
-dpif_linux_port_group_get(const struct dpif *dpif_, int group,
-                          uint16_t ports[], int n)
-{
-    struct odp_port_group pg;
-    int error;
-
-    assert(n <= UINT16_MAX);
-    pg.group = group;
-    pg.ports = ports;
-    pg.n_ports = n;
-    error = do_ioctl(dpif_, ODP_PORT_GROUP_GET, &pg);
-    return error ? -error : pg.n_ports;
-}
-
-static int
-dpif_linux_port_group_set(struct dpif *dpif_, int group,
-                          const uint16_t ports[], int n)
-{
-    struct odp_port_group pg;
-
-    assert(n <= UINT16_MAX);
-    pg.group = group;
-    pg.ports = (uint16_t *) ports;
-    pg.n_ports = n;
-    return do_ioctl(dpif_, ODP_PORT_GROUP_SET, &pg);
-}
-
-static int
 dpif_linux_flow_get(const struct dpif *dpif_, struct odp_flow flows[], int n)
 {
     struct odp_flowvec fv;
@@ -418,13 +390,12 @@ dpif_linux_flow_list(const struct dpif *dpif_, struct odp_flow flows[], int n)
 }
 
 static int
-dpif_linux_execute(struct dpif *dpif_, uint16_t in_port,
+dpif_linux_execute(struct dpif *dpif_,
                    const union odp_action actions[], int n_actions,
                    const struct ofpbuf *buf)
 {
     struct odp_execute execute;
     memset(&execute, 0, sizeof execute);
-    execute.in_port = in_port;
     execute.actions = (union odp_action *) actions;
     execute.n_actions = n_actions;
     execute.data = buf->data;
@@ -538,8 +509,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_list,
     dpif_linux_port_poll,
     dpif_linux_port_poll_wait,
-    dpif_linux_port_group_get,
-    dpif_linux_port_group_set,
     dpif_linux_flow_get,
     dpif_linux_flow_put,
     dpif_linux_flow_del,

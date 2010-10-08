@@ -183,20 +183,6 @@ struct dpif_class {
      * value other than EAGAIN. */
     void (*port_poll_wait)(const struct dpif *dpif);
 
-    /* Stores in 'ports' the port numbers of up to 'n' ports that belong to
-     * 'group' in 'dpif'.  Returns the number of ports in 'group' (not the
-     * number stored), if successful, otherwise a negative errno value. */
-    int (*port_group_get)(const struct dpif *dpif, int group,
-                          uint16_t ports[], int n);
-
-    /* Changes port group 'group' in 'dpif' to consist of the 'n' ports whose
-     * numbers are given in 'ports'.
-     *
-     * Use the get_stats member function to obtain the number of supported port
-     * groups. */
-    int (*port_group_set)(struct dpif *dpif, int group,
-                          const uint16_t ports[], int n);
-
     /* For each flow 'flow' in the 'n' flows in 'flows':
      *
      * - If a flow matching 'flow->key' exists in 'dpif':
@@ -262,14 +248,8 @@ struct dpif_class {
     int (*flow_list)(const struct dpif *dpif, struct odp_flow flows[], int n);
 
     /* Performs the 'n_actions' actions in 'actions' on the Ethernet frame
-     * specified in 'packet'.
-     *
-     * Pretends that the frame was originally received on the port numbered
-     * 'in_port'.  This affects only ODPAT_OUTPUT_GROUP actions, which will not
-     * send a packet out their input port.  Specify the number of an unused
-     * port (e.g. UINT16_MAX is currently always unused) to avoid this
-     * behavior. */
-    int (*execute)(struct dpif *dpif, uint16_t in_port,
+     * specified in 'packet'. */
+    int (*execute)(struct dpif *dpif,
                    const union odp_action actions[], int n_actions,
                    const struct ofpbuf *packet);
 

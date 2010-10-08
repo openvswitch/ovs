@@ -52,7 +52,6 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev)
 /* Configuration parameters. */
 enum { N_QUEUES = 2 };          /* Number of queues for dpif_recv(). */
 enum { MAX_QUEUE_LEN = 100 };   /* Maximum number of packets per queue. */
-enum { N_GROUPS = 16 };         /* Number of port groups. */
 enum { MAX_PORTS = 256 };       /* Maximum number of ports. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
 
@@ -70,7 +69,6 @@ struct dp_netdev {
     bool drop_frags;            /* Drop all IP fragments, if true. */
     struct ovs_queue queues[N_QUEUES]; /* Messages queued for dpif_recv(). */
     struct hmap flow_table;     /* Flow table. */
-    struct odp_port_group groups[N_GROUPS];
 
     /* Statistics. */
     long long int n_frags;      /* Number of dropped IP fragments. */
@@ -228,11 +226,6 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
         queue_init(&dp->queues[i]);
     }
     hmap_init(&dp->flow_table);
-    for (i = 0; i < N_GROUPS; i++) {
-        dp->groups[i].ports = NULL;
-        dp->groups[i].n_ports = 0;
-        dp->groups[i].group = i;
-    }
     list_init(&dp->port_list);
     error = do_add_port(dp, name, ODP_PORT_INTERNAL, ODPP_LOCAL);
     if (error) {
@@ -294,9 +287,6 @@ dp_netdev_free(struct dp_netdev *dp)
         queue_destroy(&dp->queues[i]);
     }
     hmap_destroy(&dp->flow_table);
-    for (i = 0; i < N_GROUPS; i++) {
-        free(dp->groups[i].ports);
-    }
     dp_netdevs[dp->dp_idx] = NULL;
     list_remove(&dp->node);
     free(dp);
@@ -331,7 +321,6 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct odp_stats *stats)
     stats->max_capacity = MAX_FLOWS;
     stats->n_ports = dp->n_ports;
     stats->max_ports = MAX_PORTS;
-    stats->max_groups = N_GROUPS;
     stats->n_frags = dp->n_frags;
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
@@ -598,62 +587,6 @@ dpif_netdev_port_poll_wait(const struct dpif *dpif_)
     }
 }
 
-static int
-get_port_group(const struct dpif *dpif, int group_no,
-               struct odp_port_group **groupp)
-{
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-
-    if (group_no >= 0 && group_no < N_GROUPS) {
-        *groupp = &dp->groups[group_no];
-        return 0;
-    } else {
-        *groupp = NULL;
-        return EINVAL;
-    }
-}
-
-static int
-dpif_netdev_port_group_get(const struct dpif *dpif, int group_no,
-                           uint16_t ports[], int n)
-{
-    struct odp_port_group *group;
-    int error;
-
-    if (n < 0) {
-        return -EINVAL;
-    }
-
-    error = get_port_group(dpif, group_no, &group);
-    if (!error) {
-        memcpy(ports, group->ports, MIN(n, group->n_ports) * sizeof *ports);
-        return group->n_ports;
-    } else {
-        return -error;
-    }
-}
-
-static int
-dpif_netdev_port_group_set(struct dpif *dpif, int group_no,
-                           const uint16_t ports[], int n)
-{
-    struct odp_port_group *group;
-    int error;
-
-    if (n < 0 || n > MAX_PORTS) {
-        return EINVAL;
-    }
-
-    error = get_port_group(dpif, group_no, &group);
-    if (!error) {
-        free(group->ports);
-        group->ports = xmemdup(ports, n * sizeof *group->ports);
-        group->n_ports = n;
-        group->group = group_no;
-    }
-    return error;
-}
-
 static struct dp_netdev_flow *
 dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
 {
@@ -723,13 +656,6 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
         switch (a->type) {
         case ODPAT_OUTPUT:
             if (a->output.port >= MAX_PORTS) {
-                return EINVAL;
-            }
-            break;
-
-        case ODPAT_OUTPUT_GROUP:
-            *mutates = true;
-            if (a->output_group.group >= N_GROUPS) {
                 return EINVAL;
             }
             break;
@@ -894,7 +820,7 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
 }
 
 static int
-dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
+dpif_netdev_execute(struct dpif *dpif,
                     const union odp_action actions[], int n_actions,
                     const struct ofpbuf *packet)
 {
@@ -926,7 +852,7 @@ dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
          * if we don't. */
         copy = *packet;
     }
-    flow_extract(&copy, 0, in_port, &flow);
+    flow_extract(&copy, 0, -1, &flow);
     error = dp_netdev_execute_actions(dp, &copy, &flow, actions, n_actions);
     if (mutates) {
         ofpbuf_uninit(&copy);
@@ -1229,21 +1155,6 @@ dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
     }
 }
 
-static void
-dp_netdev_output_group(struct dp_netdev *dp, uint16_t group, uint16_t in_port,
-                       struct ofpbuf *packet)
-{
-    struct odp_port_group *g = &dp->groups[group];
-    int i;
-
-    for (i = 0; i < g->n_ports; i++) {
-        uint16_t out_port = g->ports[i];
-        if (out_port != in_port) {
-            dp_netdev_output_port(dp, packet, out_port);
-        }
-    }
-}
-
 static int
 dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
                          int queue_no, int port_no, uint32_t arg)
@@ -1311,11 +1222,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
         switch (a->type) {
         case ODPAT_OUTPUT:
             dp_netdev_output_port(dp, packet, a->output.port);
-            break;
-
-        case ODPAT_OUTPUT_GROUP:
-            dp_netdev_output_group(dp, a->output_group.group, key->in_port,
-                                   packet);
             break;
 
         case ODPAT_CONTROLLER:
@@ -1388,8 +1294,6 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_port_list,
     dpif_netdev_port_poll,
     dpif_netdev_port_poll_wait,
-    dpif_netdev_port_group_get,
-    dpif_netdev_port_group_set,
     dpif_netdev_flow_get,
     dpif_netdev_flow_put,
     dpif_netdev_flow_del,

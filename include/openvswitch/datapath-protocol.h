@@ -79,9 +79,6 @@
 #define ODP_PORT_QUERY          _IOWR('O', 9, struct odp_port)
 #define ODP_PORT_LIST           _IOWR('O', 10, struct odp_portvec)
 
-#define ODP_PORT_GROUP_SET      _IOR('O', 11, struct odp_port_group)
-#define ODP_PORT_GROUP_GET      _IOWR('O', 12, struct odp_port_group)
-
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
 #define ODP_FLOW_LIST           _IOWR('O', 15, struct odp_flowvec)
@@ -112,8 +109,6 @@ struct odp_stats {
     /* Ports. */
     uint32_t n_ports;           /* Current number of ports. */
     uint32_t max_ports;         /* Maximum supported number of ports. */
-    uint16_t max_groups;        /* Maximum number of port groups. */
-    uint16_t reserved;
 
     /* Lookups. */
     uint64_t n_frags;           /* Number of dropped IP fragments. */
@@ -198,12 +193,6 @@ struct odp_portvec {
     uint32_t n_ports;
 };
 
-struct odp_port_group {
-    uint16_t *ports;
-    uint16_t n_ports;           /* Number of ports. */
-    uint16_t group;             /* Group number. */
-};
-
 struct odp_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
     uint64_t n_bytes;           /* Number of matched bytes. */
@@ -266,7 +255,6 @@ struct odp_flowvec {
 
 /* Action types. */
 #define ODPAT_OUTPUT            0    /* Output to switch port. */
-#define ODPAT_OUTPUT_GROUP      1    /* Output to all ports in group. */
 #define ODPAT_CONTROLLER        2    /* Send copy to controller. */
 #define ODPAT_SET_VLAN_VID      3    /* Set the 802.1q VLAN id. */
 #define ODPAT_SET_VLAN_PCP      4    /* Set the 802.1q priority. */
@@ -287,13 +275,6 @@ struct odp_flowvec {
 struct odp_action_output {
     uint16_t type;              /* ODPAT_OUTPUT. */
     uint16_t port;              /* Output port. */
-    uint16_t reserved1;
-    uint16_t reserved2;
-};
-
-struct odp_action_output_group {
-    uint16_t type;              /* ODPAT_OUTPUT_GROUP. */
-    uint16_t group;             /* Group number. */
     uint16_t reserved1;
     uint16_t reserved2;
 };
@@ -366,7 +347,6 @@ struct odp_action_priority {
 union odp_action {
     uint16_t type;
     struct odp_action_output output;
-    struct odp_action_output_group output_group;
     struct odp_action_controller controller;
     struct odp_action_tunnel tunnel;
     struct odp_action_vlan_vid vlan_vid;
@@ -379,10 +359,6 @@ union odp_action {
 };
 
 struct odp_execute {
-    uint16_t in_port;
-    uint16_t reserved1;
-    uint32_t reserved2;
-
     union odp_action *actions;
     uint32_t n_actions;
 

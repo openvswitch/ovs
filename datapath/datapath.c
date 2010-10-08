@@ -325,8 +325,6 @@ static void do_destroy_dp(struct datapath *dp)
 
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_purge(&dp->queues[i]);
-	for (i = 0; i < DP_MAX_GROUPS; i++)
-		kfree(dp->groups[i]);
 	free_percpu(dp->stats_percpu);
 	kobject_put(&dp->ifobj);
 	module_put(THIS_MODULE);
@@ -907,13 +905,23 @@ static int validate_actions(const struct sw_flow_actions *actions)
 	for (i = 0; i < actions->n_actions; i++) {
 		const union odp_action *a = &actions->actions[i];
 		switch (a->type) {
-		case ODPAT_OUTPUT:
-			if (a->output.port >= DP_MAX_PORTS)
-				return -EINVAL;
+		case ODPAT_CONTROLLER:
+		case ODPAT_STRIP_VLAN:
+		case ODPAT_SET_DL_SRC:
+		case ODPAT_SET_DL_DST:
+		case ODPAT_SET_NW_SRC:
+		case ODPAT_SET_NW_DST:
+		case ODPAT_SET_TP_SRC:
+		case ODPAT_SET_TP_DST:
+		case ODPAT_SET_TUNNEL:
+		case ODPAT_SET_PRIORITY:
+		case ODPAT_POP_PRIORITY:
+		case ODPAT_DROP_SPOOFED_ARP:
+			/* No validation needed. */
 			break;
 
-		case ODPAT_OUTPUT_GROUP:
-			if (a->output_group.group >= DP_MAX_GROUPS)
+		case ODPAT_OUTPUT:
+			if (a->output.port >= DP_MAX_PORTS)
 				return -EINVAL;
 			break;
 
@@ -934,9 +942,7 @@ static int validate_actions(const struct sw_flow_actions *actions)
 			break;
 
 		default:
-			if (a->type >= ODPAT_N_ACTIONS)
-				return -EOPNOTSUPP;
-			break;
+			return -EOPNOTSUPP;
 		}
 	}
 
@@ -1352,11 +1358,6 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	if (!skb)
 		goto error_free_actions;
 
-	if (execute->in_port < DP_MAX_PORTS)
-		OVS_CB(skb)->dp_port = dp->ports[execute->in_port];
-	else
-		OVS_CB(skb)->dp_port = NULL;
-
 	err = -EFAULT;
 	if (copy_from_user(skb_put(skb, execute->length), execute->data,
 			   execute->length))
@@ -1373,7 +1374,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	else
 		skb->protocol = htons(ETH_P_802_2);
 
-	err = flow_extract(skb, execute->in_port, &key, &is_frag);
+	err = flow_extract(skb, -1, &key, &is_frag);
 	if (err)
 		goto error_free_skb;
 
@@ -1414,7 +1415,6 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	stats.max_capacity = TBL_MAX_BUCKETS;
 	stats.n_ports = dp->n_ports;
 	stats.max_ports = DP_MAX_PORTS;
-	stats.max_groups = DP_MAX_GROUPS;
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
 	for_each_possible_cpu(i) {
 		const struct dp_stats_percpu *percpu_stats;
@@ -1574,87 +1574,6 @@ static int list_ports(struct datapath *dp, struct odp_portvec __user *upv)
 	return put_user(retval, &upv->n_ports);
 }
 
-/* RCU callback for freeing a dp_port_group */
-static void free_port_group(struct rcu_head *rcu)
-{
-	struct dp_port_group *g = container_of(rcu, struct dp_port_group, rcu);
-	kfree(g);
-}
-
-static int do_set_port_group(struct datapath *dp, u16 __user *ports,
-			     int n_ports, int group)
-{
-	struct dp_port_group *new_group, *old_group;
-	int error;
-
-	error = -EINVAL;
-	if (n_ports > DP_MAX_PORTS || group >= DP_MAX_GROUPS)
-		goto error;
-
-	error = -ENOMEM;
-	new_group = kmalloc(sizeof *new_group + sizeof(u16) * n_ports, GFP_KERNEL);
-	if (!new_group)
-		goto error;
-
-	new_group->n_ports = n_ports;
-	error = -EFAULT;
-	if (copy_from_user(new_group->ports, ports, sizeof(u16) * n_ports))
-		goto error_free;
-
-	old_group = rcu_dereference(dp->groups[group]);
-	rcu_assign_pointer(dp->groups[group], new_group);
-	if (old_group)
-		call_rcu(&old_group->rcu, free_port_group);
-	return 0;
-
-error_free:
-	kfree(new_group);
-error:
-	return error;
-}
-
-static int set_port_group(struct datapath *dp,
-			  const struct odp_port_group __user *upg)
-{
-	struct odp_port_group pg;
-
-	if (copy_from_user(&pg, upg, sizeof pg))
-		return -EFAULT;
-
-	return do_set_port_group(dp, pg.ports, pg.n_ports, pg.group);
-}
-
-static int do_get_port_group(struct datapath *dp,
-			     u16 __user *ports, int n_ports, int group,
-			     u16 __user *n_portsp)
-{
-	struct dp_port_group *g;
-	u16 n_copy;
-
-	if (group >= DP_MAX_GROUPS)
-		return -EINVAL;
-
-	g = dp->groups[group];
-	n_copy = g ? min_t(int, g->n_ports, n_ports) : 0;
-	if (n_copy && copy_to_user(ports, g->ports, n_copy * sizeof(u16)))
-		return -EFAULT;
-
-	if (put_user(g ? g->n_ports : 0, n_portsp))
-		return -EFAULT;
-
-	return 0;
-}
-
-static int get_port_group(struct datapath *dp, struct odp_port_group __user *upg)
-{
-	struct odp_port_group pg;
-
-	if (copy_from_user(&pg, upg, sizeof pg))
-		return -EFAULT;
-
-	return do_get_port_group(dp, pg.ports, pg.n_ports, pg.group, &upg->n_ports);
-}
-
 static int get_listen_mask(const struct file *f)
 {
 	return (long)f->private_data;
@@ -1789,14 +1708,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = list_ports(dp, (struct odp_portvec __user *)argp);
 		break;
 
-	case ODP_PORT_GROUP_SET:
-		err = set_port_group(dp, (struct odp_port_group __user *)argp);
-		break;
-
-	case ODP_PORT_GROUP_GET:
-		err = get_port_group(dp, (struct odp_port_group __user *)argp);
-		break;
-
 	case ODP_FLOW_FLUSH:
 		err = flush_flows(dp);
 		break;
@@ -1854,27 +1765,6 @@ static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __us
 		return retval;
 
 	return put_user(retval, &upv->n_ports);
-}
-
-static int compat_set_port_group(struct datapath *dp, const struct compat_odp_port_group __user *upg)
-{
-	struct compat_odp_port_group pg;
-
-	if (copy_from_user(&pg, upg, sizeof pg))
-		return -EFAULT;
-
-	return do_set_port_group(dp, compat_ptr(pg.ports), pg.n_ports, pg.group);
-}
-
-static int compat_get_port_group(struct datapath *dp, struct compat_odp_port_group __user *upg)
-{
-	struct compat_odp_port_group pg;
-
-	if (copy_from_user(&pg, upg, sizeof pg))
-		return -EFAULT;
-
-	return do_get_port_group(dp, compat_ptr(pg.ports), pg.n_ports,
-				 pg.group, &upg->n_ports);
 }
 
 static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow __user *compat)
@@ -2052,7 +1942,6 @@ static int compat_execute(struct datapath *dp, const struct compat_odp_execute _
 	compat_uptr_t data;
 
 	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_odp_execute)) ||
-	    __get_user(execute.in_port, &uexecute->in_port) ||
 	    __get_user(actions, &uexecute->actions) ||
 	    __get_user(execute.n_actions, &uexecute->n_actions) ||
 	    __get_user(data, &uexecute->data) ||
@@ -2113,14 +2002,6 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	switch (cmd) {
 	case ODP_PORT_LIST32:
 		err = compat_list_ports(dp, compat_ptr(argp));
-		break;
-
-	case ODP_PORT_GROUP_SET32:
-		err = compat_set_port_group(dp, compat_ptr(argp));
-		break;
-
-	case ODP_PORT_GROUP_GET32:
-		err = compat_get_port_group(dp, compat_ptr(argp));
 		break;
 
 	case ODP_FLOW_PUT32:

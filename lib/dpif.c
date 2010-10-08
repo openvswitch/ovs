@@ -625,68 +625,6 @@ dpif_port_poll_wait(const struct dpif *dpif)
     dpif->dpif_class->port_poll_wait(dpif);
 }
 
-/* Retrieves a list of the port numbers in port group 'group' in 'dpif'.
- *
- * On success, returns 0 and points '*ports' to a newly allocated array of
- * integers, each of which is a 'dpif' port number for a port in
- * 'group'.  Stores the number of elements in the array in '*n_ports'.  The
- * caller is responsible for freeing '*ports' by calling free().
- *
- * On failure, returns a positive errno value and sets '*ports' to NULL and
- * '*n_ports' to 0. */
-int
-dpif_port_group_get(const struct dpif *dpif, uint16_t group,
-                    uint16_t **ports, size_t *n_ports)
-{
-    int error;
-
-    *ports = NULL;
-    *n_ports = 0;
-    for (;;) {
-        int retval = dpif->dpif_class->port_group_get(dpif, group,
-                                                      *ports, *n_ports);
-        if (retval < 0) {
-            /* Hard error. */
-            error = -retval;
-            free(*ports);
-            *ports = NULL;
-            *n_ports = 0;
-            break;
-        } else if (retval <= *n_ports) {
-            /* Success. */
-            error = 0;
-            *n_ports = retval;
-            break;
-        } else {
-            /* Soft error: there were more ports than we expected in the
-             * group.  Try again. */
-            free(*ports);
-            *ports = xcalloc(retval, sizeof **ports);
-            *n_ports = retval;
-        }
-    }
-    log_operation(dpif, "port_group_get", error);
-    return error;
-}
-
-/* Updates port group 'group' in 'dpif', making it contain the 'n_ports' ports
- * whose 'dpif' port numbers are given in 'n_ports'.  Returns 0 if
- * successful, otherwise a positive errno value.
- *
- * Behavior is undefined if the values in ports[] are not unique. */
-int
-dpif_port_group_set(struct dpif *dpif, uint16_t group,
-                    const uint16_t ports[], size_t n_ports)
-{
-    int error;
-
-    COVERAGE_INC(dpif_port_group_set);
-
-    error = dpif->dpif_class->port_group_set(dpif, group, ports, n_ports);
-    log_operation(dpif, "port_group_set", error);
-    return error;
-}
-
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
  * positive errno value.  */
 int
@@ -918,14 +856,9 @@ dpif_flow_list_all(const struct dpif *dpif,
 /* Causes 'dpif' to perform the 'n_actions' actions in 'actions' on the
  * Ethernet frame specified in 'packet'.
  *
- * Pretends that the frame was originally received on the port numbered
- * 'in_port'.  This affects only ODPAT_OUTPUT_GROUP actions, which will not
- * send a packet out their input port.  Specify the number of an unused port
- * (e.g. UINT16_MAX is currently always unused) to avoid this behavior.
- *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-dpif_execute(struct dpif *dpif, uint16_t in_port,
+dpif_execute(struct dpif *dpif,
              const union odp_action actions[], size_t n_actions,
              const struct ofpbuf *buf)
 {
@@ -933,8 +866,7 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
 
     COVERAGE_INC(dpif_execute);
     if (n_actions > 0) {
-        error = dpif->dpif_class->execute(dpif, in_port, actions,
-                                          n_actions, buf);
+        error = dpif->dpif_class->execute(dpif, actions, n_actions, buf);
     } else {
         error = 0;
     }

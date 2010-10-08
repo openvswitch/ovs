@@ -35,11 +35,6 @@ struct ofhooks;
 struct ofproto;
 struct svec;
 
-enum {
-    DP_GROUP_FLOOD = 0,
-    DP_GROUP_ALL = 1
-};
-
 struct ofexpired {
     flow_t flow;
     uint64_t packet_count;      /* Packets from subrules. */
