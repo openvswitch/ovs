@@ -2898,7 +2898,7 @@ tc_bytes_to_ticks(unsigned int rate, unsigned int size)
     if (!buffer_hz) {
         read_psched();
     }
-    return ((unsigned long long int) ticks_per_s * size) / rate;
+    return rate ? ((unsigned long long int) ticks_per_s * size) / rate : 0;
 }
 
 /* Returns the number of bytes that need to be reserved for qdisc buffering at
@@ -3244,9 +3244,7 @@ tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
 /* Calculates the proper value of 'buffer' or 'cbuffer' in HTB options given a
  * rate of 'Bps' bytes per second, the specified 'mtu', and a user-requested
  * burst size of 'burst_bytes'.  (If no value was requested, a 'burst_bytes' of
- * 0 is fine.)
- *
- * This */
+ * 0 is fine.) */
 static int
 tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
 {
