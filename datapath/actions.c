@@ -75,15 +75,8 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				       const union odp_action *a, int n_actions,
 				       gfp_t gfp)
 {
-	u16 tci, mask;
-
-	if (a->type == ODPAT_SET_VLAN_VID) {
-		tci = ntohs(a->vlan_vid.vlan_vid);
-		mask = VLAN_VID_MASK;
-	} else {
-		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
-		mask = VLAN_PCP_MASK;
-	}
+	__be16 mask = a->dl_tci.mask;
+	__be16 tci = a->dl_tci.tci;
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
 	if (!skb)
@@ -100,7 +93,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		vh = vlan_eth_hdr(skb);
 		old_tci = vh->h_vlan_TCI;
 
-		vh->h_vlan_TCI = htons((ntohs(vh->h_vlan_TCI) & ~mask) | tci);
+		vh->h_vlan_TCI = (vh->h_vlan_TCI & ~mask) | tci;
 
 		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE) {
 			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
@@ -156,7 +149,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				/* GSO can change the checksum type so update.*/
 				compute_ip_summed(segs, true);
 
-				segs = __vlan_put_tag(segs, tci);
+				segs = __vlan_put_tag(segs, ntohs(tci));
 				err = -ENOMEM;
 				if (segs) {
 					err = execute_actions(dp, segs,
@@ -186,7 +179,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * e.g. vconfig(8)), so call the software-only version
 		 * __vlan_put_tag() directly instead.
 		 */
-		skb = __vlan_put_tag(skb, tci);
+		skb = __vlan_put_tag(skb, ntohs(tci));
 		if (!skb)
 			return ERR_PTR(-ENOMEM);
 
@@ -205,7 +198,6 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb, gfp_t gfp)
 	skb = make_writable(skb, 0, gfp);
 	if (skb)
 		vlan_pull_tag(skb);
-
 	return skb;
 }
 
@@ -478,8 +470,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			OVS_CB(skb)->tun_id = a->tunnel.tun_id;
 			break;
 
-		case ODPAT_SET_VLAN_VID:
-		case ODPAT_SET_VLAN_PCP:
+		case ODPAT_SET_DL_TCI:
 			skb = modify_vlan_tci(dp, skb, key, a, n_actions, gfp);
 			if (IS_ERR(skb))
 				return PTR_ERR(skb);

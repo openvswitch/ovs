@@ -203,12 +203,21 @@ struct odp_flow_stats {
     uint16_t error;             /* Used by ODP_FLOW_GET. */
 };
 
+/*
+ * The datapath protocol adopts the Linux convention for TCI fields: if an
+ * 802.1Q header is present then its TCI value is used verbatim except that the
+ * CFI bit (0x1000) is always set to 1, and all-bits-zero indicates no 802.1Q
+ * header.
+ */
+#define ODP_TCI_PRESENT 0x1000  /* CFI bit */
+
 struct odp_flow_key {
     ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
     ovs_be32 nw_src;            /* IP source address. */
     ovs_be32 nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */
-    ovs_be16 dl_vlan;           /* Input VLAN. */
+    ovs_be16 dl_tci;            /* All zeros if 802.1Q header absent,
+                                  * ODP_TCI_PRESENT set if present. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 tp_src;            /* TCP/UDP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP destination port. */
@@ -216,9 +225,8 @@ struct odp_flow_key {
     uint8_t  dl_dst[6];         /* Ethernet destination address. */
     uint8_t  nw_proto;          /* IP protocol or lower 8 bits of
                                    ARP opcode. */
-    uint8_t  dl_vlan_pcp;       /* Input VLAN priority. */
     uint8_t  nw_tos;            /* IP ToS (DSCP field, 6 bits). */
-    uint8_t  reserved[3];       /* Align to 32-bits...must be zeroed. */
+    uint32_t reserved[1];          /* Reserved for later use. */
 };
 
 /* Flags for ODP_FLOW. */
@@ -248,16 +256,10 @@ struct odp_flowvec {
     uint32_t n_flows;
 };
 
-/* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
- * special conditions.  All ones is used to match that no VLAN id was
- * set. */
-#define ODP_VLAN_NONE      0xffff
-
 /* Action types. */
 #define ODPAT_OUTPUT            0    /* Output to switch port. */
 #define ODPAT_CONTROLLER        2    /* Send copy to controller. */
-#define ODPAT_SET_VLAN_VID      3    /* Set the 802.1q VLAN id. */
-#define ODPAT_SET_VLAN_PCP      4    /* Set the 802.1q priority. */
+#define ODPAT_SET_DL_TCI        3    /* Set the 802.1q VLAN VID and/or PCP. */
 #define ODPAT_STRIP_VLAN        5    /* Strip the 802.1q header. */
 #define ODPAT_SET_DL_SRC        6    /* Ethernet source address. */
 #define ODPAT_SET_DL_DST        7    /* Ethernet destination address. */
@@ -291,21 +293,13 @@ struct odp_action_tunnel {
     ovs_be32 tun_id;            /* Tunnel ID. */
 };
 
-/* Action structure for ODPAT_SET_VLAN_VID. */
-struct odp_action_vlan_vid {
-    uint16_t type;              /* ODPAT_SET_VLAN_VID. */
-    ovs_be16 vlan_vid;          /* VLAN id. */
-    uint16_t reserved1;
-    uint16_t reserved2;
-};
-
-/* Action structure for ODPAT_SET_VLAN_PCP. */
-struct odp_action_vlan_pcp {
-    uint16_t type;              /* ODPAT_SET_VLAN_PCP. */
-    uint8_t vlan_pcp;           /* VLAN priority. */
-    uint8_t reserved1;
-    uint16_t reserved2;
-    uint16_t reserved3;
+/* Action structure for ODPAT_SET_DL_TCI. */
+struct odp_action_dl_tci {
+    uint16_t type;              /* ODPAT_SET_DL_TCI. */
+    ovs_be16 tci;               /* New TCI.  Bits not in mask must be zero. */
+    ovs_be16 mask;              /* 0x0fff to set VID, 0xe000 to set PCP,
+                                 * or 0xefff to set both. */
+    uint16_t reserved;
 };
 
 /* Action structure for ODPAT_SET_DL_SRC/DST. */
@@ -349,8 +343,7 @@ union odp_action {
     struct odp_action_output output;
     struct odp_action_controller controller;
     struct odp_action_tunnel tunnel;
-    struct odp_action_vlan_vid vlan_vid;
-    struct odp_action_vlan_pcp vlan_pcp;
+    struct odp_action_dl_tci dl_tci;
     struct odp_action_dl_addr dl_addr;
     struct odp_action_nw_addr nw_addr;
     struct odp_action_nw_tos nw_tos;
@@ -418,10 +411,5 @@ struct odp_vport_mtu {
  * Ethernet type.
  */
 #define ODP_DL_TYPE_NOT_ETH_TYPE  0x05ff
-
-/* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
- * special conditions.  All ones indicates that no VLAN id was set.
- */
-#define ODP_VLAN_NONE      0xffff
 
 #endif  /* openvswitch/datapath-protocol.h */

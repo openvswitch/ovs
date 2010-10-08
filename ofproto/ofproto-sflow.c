@@ -27,6 +27,7 @@
 #include "netdev.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "sflow_api.h"
 #include "socket-util.h"
@@ -573,12 +574,13 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             n_outputs++;
             break;
 
-        case ODPAT_SET_VLAN_VID:
-            switchElem.flowType.sw.dst_vlan = ntohs(a->vlan_vid.vlan_vid);
-            break;
-
-        case ODPAT_SET_VLAN_PCP:
-            switchElem.flowType.sw.dst_priority = a->vlan_pcp.vlan_pcp;
+        case ODPAT_SET_DL_TCI:
+            if (a->dl_tci.mask & htons(VLAN_VID_MASK)) {
+                switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(a->dl_tci.tci);
+            }
+            if (a->dl_tci.mask & htons(VLAN_PCP_MASK)) {
+                switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(a->dl_tci.tci);
+            }
             break;
 
         default:

@@ -205,8 +205,7 @@ static void parse_vlan(struct sk_buff *skb, struct odp_flow_key *key)
 		return;
 
 	qp = (struct qtag_prefix *) skb->data;
-	key->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
-	key->dl_vlan_pcp = (ntohs(qp->tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+	key->dl_tci = qp->tci | htons(ODP_TCI_PRESENT);
 	__skb_pull(skb, sizeof(struct qtag_prefix));
 }
 
@@ -247,6 +246,8 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  * Ethernet header
  * @in_port: port number on which @skb was received.
  * @key: output flow key
+ * @is_frag: set to 1 if @skb contains an IPv4 fragment, or to 0 if @skb does
+ * not contain an IPv4 packet or if it is not a fragment.
  *
  * The caller must ensure that skb->len >= ETH_HLEN.
  *
@@ -275,7 +276,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 	memset(key, 0, sizeof *key);
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
-	key->dl_vlan = htons(ODP_VLAN_NONE);
 	*is_frag = false;
 
 	/*
