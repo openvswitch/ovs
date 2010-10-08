@@ -40,6 +40,10 @@ str_to_u32(const char *str)
     char *tail;
     uint32_t value;
 
+    if (!str) {
+        ovs_fatal(0, "missing required numeric argument");
+    }
+
     errno = 0;
     value = strtoul(str, &tail, 0);
     if (errno == EINVAL || errno == ERANGE || *tail) {
