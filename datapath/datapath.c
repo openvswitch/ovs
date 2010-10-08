@@ -976,24 +976,15 @@ error:
 	return ERR_PTR(error);
 }
 
-static struct timespec get_time_offset(void)
-{
-	struct timespec now_mono, now_jiffies;
-
-	ktime_get_ts(&now_mono);
-	jiffies_to_timespec(jiffies, &now_jiffies);
-	return timespec_sub(now_mono, now_jiffies);
-}
-
-static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats,
-		      struct timespec time_offset)
+static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats)
 {
 	if (flow->used) {
-		struct timespec flow_ts, used;
+		struct timespec offset_ts, used, now_mono;
 
-		jiffies_to_timespec(flow->used, &flow_ts);
-		set_normalized_timespec(&used, flow_ts.tv_sec + time_offset.tv_sec,
-					flow_ts.tv_nsec + time_offset.tv_nsec);
+		ktime_get_ts(&now_mono);
+		jiffies_to_timespec(jiffies - flow->used, &offset_ts);
+		set_normalized_timespec(&used, now_mono.tv_sec - offset_ts.tv_sec,
+					now_mono.tv_nsec - offset_ts.tv_nsec);
 
 		stats->used_sec = used.tv_sec;
 		stats->used_nsec = used.tv_nsec;
@@ -1108,7 +1099,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 
 		/* Fetch stats, then clear them if necessary. */
 		spin_lock_bh(&flow->lock);
-		get_stats(flow, stats, get_time_offset());
+		get_stats(flow, stats);
 		if (uf->flags & ODPPF_ZERO_STATS)
 			clear_stats(flow);
 		spin_unlock_bh(&flow->lock);
@@ -1146,7 +1137,6 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 }
 
 static int do_answer_query(struct sw_flow *flow, u32 query_flags,
-			   struct timespec time_offset,
 			   struct odp_flow_stats __user *ustats,
 			   union odp_action __user *actions,
 			   u32 __user *n_actionsp)
@@ -1156,7 +1146,7 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	u32 n_actions;
 
 	spin_lock_bh(&flow->lock);
-	get_stats(flow, &stats, time_offset);
+	get_stats(flow, &stats);
 	if (query_flags & ODPFF_ZERO_TCP_FLAGS)
 		flow->tcp_flags = 0;
 
@@ -1180,7 +1170,6 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 }
 
 static int answer_query(struct sw_flow *flow, u32 query_flags,
-			struct timespec time_offset,
 			struct odp_flow __user *ufp)
 {
 	union odp_action *actions;
@@ -1188,7 +1177,7 @@ static int answer_query(struct sw_flow *flow, u32 query_flags,
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(flow, query_flags, time_offset,
+	return do_answer_query(flow, query_flags, 
 			       &ufp->stats, actions, &ufp->n_actions);
 }
 
@@ -1226,7 +1215,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = answer_query(flow, 0, get_time_offset(), ufp);
+	error = answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1234,10 +1223,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct tbl *table = rcu_dereference(dp->table);
-	struct timespec time_offset;
 	u32 i;
-
-	time_offset = get_time_offset();
 
 	for (i = 0; i < flowvec->n_flows; i++) {
 		struct odp_flow __user *ufp = &flowvec->flows[i];
@@ -1252,7 +1238,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow_cast(flow_node), uf.flags, time_offset, ufp);
+			error = answer_query(flow_cast(flow_node), uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1263,7 +1249,6 @@ struct list_flows_cbdata {
 	struct odp_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
-	struct timespec time_offset;
 };
 
 static int list_flow(struct tbl_node *node, void *cbdata_)
@@ -1275,7 +1260,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = answer_query(flow, 0, cbdata->time_offset, ufp);
+	error = answer_query(flow, 0, ufp);
 	if (error)
 		return error;
 
@@ -1295,7 +1280,6 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 	cbdata.uflows = flowvec->flows;
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
-	cbdata.time_offset = get_time_offset();
 
 	error = tbl_foreach(rcu_dereference(dp->table), list_flow, &cbdata);
 	return error ? error : cbdata.listed_flows;
@@ -1801,7 +1785,6 @@ static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __use
 }
 
 static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
-			       struct timespec time_offset,
 			       struct compat_odp_flow __user *ufp)
 {
 	compat_uptr_t actions;
@@ -1809,7 +1792,7 @@ static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(flow, query_flags, time_offset, &ufp->stats,
+	return do_answer_query(flow, query_flags, &ufp->stats,
 			       compat_ptr(actions), &ufp->n_actions);
 }
 
@@ -1826,7 +1809,7 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = compat_answer_query(flow, 0, get_time_offset(), ufp);
+	error = compat_answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1834,10 +1817,7 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
 {
 	struct tbl *table = rcu_dereference(dp->table);
-	struct timespec time_offset;
 	u32 i;
-
-	time_offset = get_time_offset();
 
 	for (i = 0; i < n_flows; i++) {
 		struct compat_odp_flow __user *ufp = &flows[i];
@@ -1853,7 +1833,7 @@ static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
-			error = compat_answer_query(flow_cast(flow_node), uf.flags, time_offset, ufp);
+			error = compat_answer_query(flow_cast(flow_node), uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1864,7 +1844,6 @@ struct compat_list_flows_cbdata {
 	struct compat_odp_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
-	struct timespec time_offset;
 };
 
 static int compat_list_flow(struct tbl_node *node, void *cbdata_)
@@ -1876,7 +1855,7 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = compat_answer_query(flow, 0, cbdata->time_offset, ufp);
+	error = compat_answer_query(flow, 0, ufp);
 	if (error)
 		return error;
 
@@ -1896,7 +1875,6 @@ static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows,
 	cbdata.uflows = flows;
 	cbdata.n_flows = n_flows;
 	cbdata.listed_flows = 0;
-	cbdata.time_offset = get_time_offset();
 
 	error = tbl_foreach(rcu_dereference(dp->table), compat_list_flow, &cbdata);
 	return error ? error : cbdata.listed_flows;
