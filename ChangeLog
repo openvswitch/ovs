@@ -1,4 +1,4 @@
-v1.1.0pre1 - 31 Aug 2010
+v1.0.2 - 08 Oct 2010
 ------------------------
     - OpenFlow 1.0 slicing (QoS) functionality
     - Python bindings for configuration database (no write support)
