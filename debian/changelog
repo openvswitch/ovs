@@ -1,3 +1,8 @@
+openvswitch (1.0.3) unstable; urgency=low
+  * Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 08 Oct 2010 17:16:00 +0000
+
 openvswitch (1.0.2) unstable; urgency=low
 
   * OpenFlow 1.0 slicing (QoS) functionality
