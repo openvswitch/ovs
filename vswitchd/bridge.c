@@ -89,6 +89,7 @@ struct iface {
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
+    const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
 };
 
@@ -252,7 +253,6 @@ static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
-static bool iface_is_internal(const struct bridge *, const char *name);
 static void iface_set_mac(struct iface *);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 
@@ -389,6 +389,15 @@ iface_get_options(const struct ovsrec_interface *if_cfg, struct shash *options)
     }
 }
 
+/* Returns the type of network device that 'iface' should have.  (This is
+ * ordinarily the same type as the interface, but the network devices for
+ * "internal" ports have type "system".) */
+static const char *
+iface_get_netdev_type(const struct iface *iface)
+{
+    return !strcmp(iface->type, "internal") ? "system" : iface->type;
+}
+
 /* Attempt to create the network device for 'iface' through the netdev
  * library. */
 static int
@@ -400,12 +409,7 @@ create_iface_netdev(struct iface *iface)
 
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = iface->cfg->name;
-    if (!strcmp(iface->cfg->type, "internal")) {
-        /* An "internal" config type maps to a netdev "system" type. */
-        netdev_options.type = "system";
-    } else {
-        netdev_options.type = iface->cfg->type;
-    }
+    netdev_options.type = iface_get_netdev_type(iface);
     netdev_options.args = &options;
     netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
 
@@ -431,9 +435,7 @@ reconfigure_iface_netdev(struct iface *iface)
 
     /* Skip reconfiguration if the device has the wrong type. This shouldn't
      * happen, but... */
-    iface_type = (!iface->cfg->type[0] ? NULL
-                  : !strcmp(iface->cfg->type, "internal") ? "system"
-                  : iface->cfg->type);
+    iface_type = iface_get_netdev_type(iface);
     netdev_type = netdev_get_type(iface->netdev);
     if (iface_type && strcmp(netdev_type, iface_type)) {
         VLOG_WARN("%s: attempting change device type from %s to %s",
@@ -492,8 +494,7 @@ set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
 
     /* Set MAC address of internal interfaces other than the local
      * interface. */
-    if (iface->dp_ifidx != ODPP_LOCAL
-        && iface_is_internal(br, iface->name)) {
+    if (iface->dp_ifidx != ODPP_LOCAL && !strcmp(iface->type, "internal")) {
         iface_set_mac(iface);
     }
 
@@ -684,11 +685,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                     reconfigure_iface_netdev(iface);
                 }
             } else {
-                bool internal;
+                bool internal = !strcmp(iface->type, "internal");
                 int error;
 
                 /* Create interface if it doesn't already exist. */
-                internal = iface_is_internal(br, if_name);
                 if (!internal) {
                     error = create_iface_netdev(iface);
                     if (error) {
@@ -3428,8 +3428,15 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
             }
             iface->cfg = if_cfg;
         } else {
-            iface_create(port, if_cfg);
+            iface = iface_create(port, if_cfg);
         }
+
+        /* Determine interface type.  The local port always has type
+         * "internal".  Other ports take their type from the database and
+         * default to "system" if none is specified. */
+        iface->type = (!strcmp(if_cfg->name, port->bridge->name) ? "internal"
+                       : if_cfg->type[0] ? if_cfg->type
+                       : "system");
     }
     shash_destroy(&new_ifaces);
 
@@ -3781,38 +3788,6 @@ iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
         }
     }
     return NULL;
-}
-
-/* Returns true if 'iface' is the name of an "internal" interface on bridge
- * 'br', that is, an interface that is entirely simulated within the datapath.
- * The local port (ODPP_LOCAL) is always an internal interface.  Other local
- * interfaces are created by setting "iface.<iface>.internal = true".
- *
- * In addition, we have a kluge-y feature that creates an internal port with
- * the name of a bonded port if "bonding.<bondname>.fake-iface = true" is set.
- * This feature needs to go away in the long term.  Until then, this is one
- * reason why this function takes a name instead of a struct iface: the fake
- * interfaces created this way do not have a struct iface. */
-static bool
-iface_is_internal(const struct bridge *br, const char *if_name)
-{
-    struct iface *iface;
-    struct port *port;
-
-    if (!strcmp(if_name, br->name)) {
-        return true;
-    }
-
-    iface = iface_lookup(br, if_name);
-    if (iface && !strcmp(iface->cfg->type, "internal")) {
-        return true;
-    }
-
-    port = port_lookup(br, if_name);
-    if (port && port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
-        return true;
-    }
-    return false;
 }
 
 /* Set Ethernet address of 'iface', if one is specified in the configuration
