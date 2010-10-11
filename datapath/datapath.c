@@ -1827,7 +1827,6 @@ static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows
 
 		if (compat_get_flow(&uf, ufp))
 			return -EFAULT;
-		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 		if (!flow_node)
