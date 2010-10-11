@@ -20,11 +20,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+#include "hash.h"
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
 #include "util.h"
 
 struct ds;
+struct flow;
 
 /* The kernel datapaths limits actions to those that fit in a single page of
  * memory, so there is no point in allocating more than that.  */
@@ -78,10 +81,28 @@ odp_port_to_ofp_port(uint16_t odp_port)
     }
 }
 
+void format_odp_flow_key(struct ds *, const struct odp_flow_key *);
 void format_odp_action(struct ds *, const union odp_action *);
 void format_odp_actions(struct ds *, const union odp_action *actions,
                         size_t n_actions);
 void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
 void format_odp_flow(struct ds *, const struct odp_flow *);
+
+void odp_flow_key_from_flow(struct odp_flow_key *, const struct flow *);
+void odp_flow_key_to_flow(const struct odp_flow_key *, struct flow *);
+
+static inline bool
+odp_flow_key_equal(const struct odp_flow_key *a, const struct odp_flow_key *b)
+{
+    return !memcmp(a, b, sizeof *a);
+}
+
+static inline size_t
+odp_flow_key_hash(const struct odp_flow_key *flow, uint32_t basis)
+{
+    BUILD_ASSERT_DECL(!(sizeof *flow % sizeof(uint32_t)));
+    return hash_words((const uint32_t *) flow,
+                      sizeof *flow / sizeof(uint32_t), basis);
+}
 
 #endif /* odp-util.h */

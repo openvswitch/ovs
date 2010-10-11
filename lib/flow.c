@@ -304,8 +304,6 @@ flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
     flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
-    memset(flow->reserved, 0, sizeof flow->reserved);
-
     if (flow_wildcards) {
         *flow_wildcards = wildcards;
     }

@@ -94,7 +94,7 @@ struct dp_netdev_port {
 /* A flow in dp_netdev's 'flow_table'. */
 struct dp_netdev_flow {
     struct hmap_node node;      /* Element in dp_netdev's 'flow_table'. */
-    flow_t key;
+    struct flow key;
 
     /* Statistics. */
     struct timespec used;       /* Last used time. */
@@ -135,7 +135,7 @@ static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, int port_no, uint32_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
-                                     struct ofpbuf *, const flow_t *,
+                                     struct ofpbuf *, struct flow *,
                                      const union odp_action *, int n);
 
 static struct dpif_netdev *
@@ -588,11 +588,10 @@ dpif_netdev_port_poll_wait(const struct dpif *dpif_)
 }
 
 static struct dp_netdev_flow *
-dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
+dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *key)
 {
     struct dp_netdev_flow *flow;
 
-    assert(!key->reserved[0] && !key->reserved[1] && !key->reserved[2]);
     HMAP_FOR_EACH_WITH_HASH (flow, node, flow_hash(key, 0), &dp->flow_table) {
         if (flow_equal(&flow->key, key)) {
             return flow;
@@ -601,12 +600,12 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
     return NULL;
 }
 
+/* The caller must fill in odp_flow->key itself. */
 static void
 answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
                   struct odp_flow *odp_flow)
 {
     if (flow) {
-        odp_flow->key = flow->key;
         odp_flow->stats.n_packets = flow->packet_count;
         odp_flow->stats.n_bytes = flow->byte_count;
         odp_flow->stats.used_sec = flow->used.tv_sec;
@@ -638,7 +637,10 @@ dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
 
     for (i = 0; i < n; i++) {
         struct odp_flow *odp_flow = &flows[i];
-        answer_flow_query(dp_netdev_lookup_flow(dp, &odp_flow->key),
+        struct flow key;
+
+        odp_flow_key_to_flow(&odp_flow->key, &key);
+        answer_flow_query(dp_netdev_lookup_flow(dp, &key),
                           odp_flow->flags, odp_flow);
     }
     return 0;
@@ -732,8 +734,7 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
     int error;
 
     flow = xzalloc(sizeof *flow);
-    flow->key = odp_flow->key;
-    memset(flow->key.reserved, 0, sizeof flow->key.reserved);
+    odp_flow_key_to_flow(&odp_flow->key, &flow->key);
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {
@@ -760,8 +761,10 @@ dpif_netdev_flow_put(struct dpif *dpif, struct odp_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
+    struct flow key;
 
-    flow = dp_netdev_lookup_flow(dp, &put->flow.key);
+    odp_flow_key_to_flow(&put->flow.key, &key);
+    flow = dp_netdev_lookup_flow(dp, &key);
     if (!flow) {
         if (put->flags & ODPPF_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
@@ -791,8 +794,10 @@ dpif_netdev_flow_del(struct dpif *dpif, struct odp_flow *odp_flow)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
+    struct flow key;
 
-    flow = dp_netdev_lookup_flow(dp, &odp_flow->key);
+    odp_flow_key_to_flow(&odp_flow->key, &key);
+    flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         answer_flow_query(flow, 0, odp_flow);
         dp_netdev_free_flow(dp, flow);
@@ -814,7 +819,10 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
         if (i >= n) {
             break;
         }
-        answer_flow_query(flow, 0, &flows[i++]);
+
+        odp_flow_key_from_flow(&flows[i].key, &flow->key);
+        answer_flow_query(flow, 0, &flows[i]);
+        i++;
     }
     return hmap_count(&dp->flow_table);
 }
@@ -827,7 +835,7 @@ dpif_netdev_execute(struct dpif *dpif,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct ofpbuf copy;
     bool mutates;
-    flow_t flow;
+    flow_t key;
     int error;
 
     if (packet->size < ETH_HEADER_LEN || packet->size > UINT16_MAX) {
@@ -852,8 +860,8 @@ dpif_netdev_execute(struct dpif *dpif,
          * if we don't. */
         copy = *packet;
     }
-    flow_extract(&copy, 0, -1, &flow);
-    error = dp_netdev_execute_actions(dp, &copy, &flow, actions, n_actions);
+    flow_extract(&copy, 0, -1, &key);
+    error = dp_netdev_execute_actions(dp, &copy, &key, actions, n_actions);
     if (mutates) {
         ofpbuf_uninit(&copy);
     }
@@ -922,7 +930,7 @@ dpif_netdev_recv_wait(struct dpif *dpif)
 }
 
 static void
-dp_netdev_flow_used(struct dp_netdev_flow *flow, const flow_t *key,
+dp_netdev_flow_used(struct dp_netdev_flow *flow, struct flow *key,
                     const struct ofpbuf *packet)
 {
     time_timespec(&flow->used);
@@ -939,7 +947,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
                      struct ofpbuf *packet)
 {
     struct dp_netdev_flow *flow;
-    flow_t key;
+    struct flow key;
 
     if (packet->size < ETH_HEADER_LEN) {
         return;
@@ -1075,13 +1083,13 @@ dp_netdev_set_dl_dst(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
 }
 
 static bool
-is_ip(const struct ofpbuf *packet, const flow_t *key)
+is_ip(const struct ofpbuf *packet, const struct flow *key)
 {
     return key->dl_type == htons(ETH_TYPE_IP) && packet->l4;
 }
 
 static void
-dp_netdev_set_nw_addr(struct ofpbuf *packet, const flow_t *key,
+dp_netdev_set_nw_addr(struct ofpbuf *packet, struct flow *key,
                       const struct odp_action_nw_addr *a)
 {
     if (is_ip(packet, key)) {
@@ -1107,7 +1115,7 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, const flow_t *key,
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, const flow_t *key,
+dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key,
                      const struct odp_action_nw_tos *a)
 {
     if (is_ip(packet, key)) {
@@ -1124,7 +1132,7 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, const flow_t *key,
 }
 
 static void
-dp_netdev_set_tp_port(struct ofpbuf *packet, const flow_t *key,
+dp_netdev_set_tp_port(struct ofpbuf *packet, struct flow *key,
                       const struct odp_action_tp_port *a)
 {
 	if (is_ip(packet, key)) {
@@ -1186,7 +1194,7 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
  * screwy or truncated header fields or one whose inner and outer Ethernet
  * address differ. */
 static bool
-dp_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct odp_flow_key *key)
+dp_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct flow *key)
 {
     struct arp_eth_header *arp;
     struct eth_header *eth;
@@ -1212,7 +1220,7 @@ dp_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct odp_flow_key *key)
 
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
-                          struct ofpbuf *packet, const flow_t *key,
+                          struct ofpbuf *packet, struct flow *key,
                           const union odp_action *actions, int n_actions)
 {
     int i;
@@ -1232,7 +1240,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
         case ODPAT_SET_VLAN_VID:
             dp_netdev_modify_vlan_tci(packet, ntohs(a->vlan_vid.vlan_vid),
                                       VLAN_VID_MASK);
-            break;
+             break;
 
         case ODPAT_SET_VLAN_PCP:
             dp_netdev_modify_vlan_tci(packet,

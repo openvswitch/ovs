@@ -31,7 +31,30 @@ struct ds;
 struct ofp_match;
 struct ofpbuf;
 
-typedef struct odp_flow_key flow_t;
+typedef struct flow flow_t;
+struct flow {
+    uint32_t tun_id;            /* Encapsulating tunnel ID. */
+    uint32_t nw_src;            /* IP source address. */
+    uint32_t nw_dst;            /* IP destination address. */
+    uint16_t in_port;           /* Input switch port. */
+    uint16_t dl_vlan;           /* Input VLAN. */
+    uint16_t dl_type;           /* Ethernet frame type. */
+    uint16_t tp_src;            /* TCP/UDP source port. */
+    uint16_t tp_dst;            /* TCP/UDP destination port. */
+    uint8_t dl_src[6];          /* Ethernet source address. */
+    uint8_t dl_dst[6];          /* Ethernet destination address. */
+    uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
+    uint8_t dl_vlan_pcp;        /* Input VLAN priority. */
+    uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */
+};
+
+/* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
+ * flow", followed by FLOW_PAD_SIZE bytes of padding. */
+#define FLOW_SIG_SIZE 37
+#define FLOW_PAD_SIZE 3
+BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
+BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port, flow_t *);
 void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
@@ -50,7 +73,7 @@ static inline size_t flow_hash(const flow_t *, uint32_t basis);
 static inline int
 flow_compare(const flow_t *a, const flow_t *b)
 {
-    return memcmp(a, b, sizeof *a);
+    return memcmp(a, b, FLOW_SIG_SIZE);
 }
 
 static inline bool
@@ -62,9 +85,7 @@ flow_equal(const flow_t *a, const flow_t *b)
 static inline size_t
 flow_hash(const flow_t *flow, uint32_t basis)
 {
-    BUILD_ASSERT_DECL(!(sizeof *flow % sizeof(uint32_t)));
-    return hash_words((const uint32_t *) flow,
-                      sizeof *flow / sizeof(uint32_t), basis);
+    return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
 /* Information on wildcards for a flow, as a supplement to flow_t. */

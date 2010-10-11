@@ -1106,7 +1106,8 @@ should_log_flow_message(int error)
 
 static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
-                 const flow_t *flow, const struct odp_flow_stats *stats,
+                 const struct odp_flow_key *flow,
+                 const struct odp_flow_stats *stats,
                  const union odp_action *actions, size_t n_actions)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
@@ -1118,7 +1119,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     if (error) {
         ds_put_format(&ds, "(%s) ", strerror(error));
     }
-    flow_format(&ds, flow);
+    format_odp_flow_key(&ds, flow);
     if (stats) {
         ds_put_cstr(&ds, ", ");
         format_odp_flow_stats(&ds, stats);
