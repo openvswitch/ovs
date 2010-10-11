@@ -1247,6 +1247,42 @@ ofproto_is_alive(const struct ofproto *p)
     return !hmap_is_empty(&p->controllers);
 }
 
+/* Deletes port number 'odp_port' from the datapath for 'ofproto'.
+ *
+ * This is almost the same as calling dpif_port_del() directly on the
+ * datapath, but it also makes 'ofproto' close its open netdev for the port
+ * (if any).  This makes it possible to create a new netdev of a different
+ * type under the same name, which otherwise the netdev library would refuse
+ * to do because of the conflict.  (The netdev would eventually get closed on
+ * the next trip through ofproto_run(), but this interface is more direct.)
+ *
+ * The caller must be prepared for a callback to its port_changed_cb hook
+ * function.
+ *
+ * Returns 0 if successful, otherwise a positive errno. */
+int
+ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
+{
+    struct ofport *ofport = get_port(ofproto, odp_port);
+    const char *name = ofport ? (char *) ofport->opp.name : "<unknown>";
+    int error;
+
+    error = dpif_port_del(ofproto->dpif, odp_port);
+    if (error) {
+        VLOG_ERR("%s: failed to remove port %"PRIu16" (%s) interface (%s)",
+                 dpif_name(ofproto->dpif), odp_port, name, strerror(error));
+    } else if (ofport) {
+        /* 'name' is ofport->opp.name and update_port() is going to destroy
+         * 'ofport'.  Just in case update_port() refers to 'name' after it
+         * destroys 'ofport', make a copy of it around the update_port()
+         * call. */
+        char *devname = xstrdup(name);
+        update_port(ofproto, devname);
+        free(devname);
+    }
+    return error;
+}
+
 int
 ofproto_send_packet(struct ofproto *p, const flow_t *flow,
                     const union ofp_action *actions, size_t n_actions,

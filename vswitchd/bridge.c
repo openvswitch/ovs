@@ -667,38 +667,58 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_init(&cur_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             const char *name = dpif_ports[i].devname;
-            shash_add_once(&cur_ifaces, name, NULL);
+            shash_add_once(&cur_ifaces, name, &dpif_ports[i]);
         }
-        free(dpif_ports);
 
         /* Get the set of interfaces we want on this datapath. */
         bridge_get_all_ifaces(br, &want_ifaces);
 
+        hmap_clear(&br->ifaces);
         SHASH_FOR_EACH (node, &want_ifaces) {
             const char *if_name = node->name;
             struct iface *iface = node->data;
+            bool internal = !iface || !strcmp(iface->type, "internal");
+            struct odp_port *dpif_port = shash_find_data(&cur_ifaces, if_name);
+            int error;
 
-            if (shash_find(&cur_ifaces, if_name)) {
-                /* Already exists on the datapath.  If we have it open,
-                 * reconfigure it; otherwise we'll open it later. */
-                if (iface && iface->netdev) {
-                    reconfigure_iface_netdev(iface);
+            /* If we have a port or a netdev already, and it's not the type we
+             * want, then delete the port (if any) and close the netdev (if
+             * any). */
+            if (internal
+                ? dpif_port && !(dpif_port->flags & ODP_PORT_INTERNAL)
+                : (iface->netdev
+                   && strcmp(iface->type, netdev_get_type(iface->netdev))))
+            {
+                if (dpif_port) {
+                    error = ofproto_port_del(br->ofproto, dpif_port->port);
+                    if (error) {
+                        continue;
+                    }
+                    dpif_port = NULL;
                 }
-            } else {
-                bool internal = !strcmp(iface->type, "internal");
-                int error;
+                if (iface) {
+                    netdev_close(iface->netdev);
+                    iface->netdev = NULL;
+                }
+            }
 
-                /* Create interface if it doesn't already exist. */
-                if (!internal) {
+            /* If it's not an internal port, open (possibly create) the
+             * netdev. */
+            if (!internal) {
+                if (!iface->netdev) {
                     error = create_iface_netdev(iface);
                     if (error) {
                         VLOG_WARN("could not create iface %s: %s", iface->name,
                                   strerror(error));
+                        continue;
                     }
-                    continue;
+                } else {
+                    reconfigure_iface_netdev(iface);
                 }
+            }
 
-                /* Add to datapath. */
+            /* If it's not part of the datapath, add it. */
+            if (!dpif_port) {
                 error = dpif_port_add(br->dpif, if_name,
                                       internal ? ODP_PORT_INTERNAL : 0, NULL);
                 if (error == EFBIG) {
@@ -708,9 +728,25 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 } else if (error) {
                     VLOG_ERR("failed to add %s interface to %s: %s",
                              if_name, dpif_name(br->dpif), strerror(error));
+                    continue;
                 }
             }
+
+            /* If it's an internal port, open the netdev. */
+            if (internal) {
+                if (iface && !iface->netdev) {
+                    error = create_iface_netdev(iface);
+                    if (error) {
+                        VLOG_WARN("could not create iface %s: %s", iface->name,
+                                  strerror(error));
+                        continue;
+                    }
+                }
+            } else {
+                assert(iface->netdev != NULL);
+            }
         }
+        free(dpif_ports);
         shash_destroy(&cur_ifaces);
         shash_destroy(&want_ifaces);
     }

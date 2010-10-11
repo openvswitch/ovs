@@ -99,6 +99,8 @@ int ofproto_run2(struct ofproto *, bool revalidate_all);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
 
+int ofproto_port_del(struct ofproto *, uint16_t odp_port);
+
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
