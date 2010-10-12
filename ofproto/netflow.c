@@ -190,8 +190,8 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
          * traffic.  We try to evenly distribute the packet and byte counters,
          * so that the bytes-per-packet lengths don't look wonky across the
          * records. */
-        while (byte_delta > UINT32_MAX) {
-            uint32_t n_recs = byte_delta >> 32;
+        while (byte_delta) {
+            int n_recs = (byte_delta + UINT32_MAX - 1) / UINT32_MAX;
             uint32_t pkt_count = pkt_delta / n_recs;
             uint32_t byte_count = byte_delta / n_recs;
 
@@ -199,9 +199,6 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
 
             pkt_delta -= pkt_count;
             byte_delta -= byte_count;
-        }
-        if (byte_delta > 0) {
-            gen_netflow_rec(nf, nf_flow, expired, pkt_delta, byte_delta);
         }
     } else {
         /* In 600 seconds, a 10GbE link can theoretically transmit 75 * 10**10
