@@ -75,7 +75,6 @@ format_odp_action(struct ds *ds, const union odp_action *a)
         int vid = vlan_tci_to_vid(a->dl_tci.tci);
         int pcp = vlan_tci_to_pcp(a->dl_tci.tci);
 
-        ds_put_cstr(ds, "set_tci(");
         switch (ntohs(a->dl_tci.mask)) {
         case VLAN_VID_MASK:
             ds_put_format(ds, "set_tci(vlan=%d)", vid);
