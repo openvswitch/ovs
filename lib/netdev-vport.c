@@ -169,6 +169,8 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_vport *netdev_dev = netdev_dev_vport_cast(netdev_dev_);
 
+    netdev_vport_do_ioctl(ODP_VPORT_DEL, 
+                          (char *)netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 
