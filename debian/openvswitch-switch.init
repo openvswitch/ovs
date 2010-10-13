@@ -209,7 +209,7 @@ case "$1" in
             ovsdb-tool -vANY:console:emer \
                 create /etc/openvswitch/conf.db \
                 /usr/share/openvswitch/vswitch.ovsschema
-        else
+        elif ! running ovsdb-server; then
             # Upgrade or downgrade schema and compact database.
             ovsdb-tool -vANY:console:emer \
                 convert /etc/openvswitch/conf.db \
@@ -247,7 +247,7 @@ case "$1" in
         set -- "$@" --bootstrap-ca-cert=db:SSL,ca_cert
         set -- "$@" $OVSDB_SERVER_OPTS
         echo -n "Starting ovsdb-server: "
-        start-stop-daemon --start --quiet \
+        start-stop-daemon --start --quiet --oknodo \
             --pidfile /var/run/openvswitch/ovsdb-server.pid \
             --chdir /var/log/openvswitch/cores              \
             --exec $ovsdb_server -- "$@"
@@ -267,7 +267,7 @@ case "$1" in
         set -- "$@" unix:/var/run/openvswitch/db.sock
         set -- "$@" $OVS_VSWITCHD_OPTS
         echo -n "Starting ovs-vswitchd: "
-        start-stop-daemon --start --quiet \
+        start-stop-daemon --start --quiet --oknodo \
             --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
             --chdir /var/log/openvswitch/cores              \
             --exec $ovs_vswitchd -- "$@"
