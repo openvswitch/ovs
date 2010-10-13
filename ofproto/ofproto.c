@@ -1277,6 +1277,15 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
     return error;
 }
 
+/* Checks if 'ofproto' thinks 'odp_port' should be included in floods.  Returns
+ * true if 'odp_port' exists and should be included, false otherwise. */
+bool
+ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
+{
+    struct ofport *ofport = get_port(ofproto, odp_port);
+    return ofport && !(ofport->opp.config & OFPPC_NO_FLOOD);
+}
+
 int
 ofproto_send_packet(struct ofproto *p, const struct flow *flow,
                     const union ofp_action *actions, size_t n_actions,

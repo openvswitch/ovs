@@ -95,6 +95,7 @@ void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
 
 int ofproto_port_del(struct ofproto *, uint16_t odp_port);
+bool ofproto_port_is_floodable(struct ofproto *, uint16_t odp_port);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);

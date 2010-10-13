@@ -2203,6 +2203,20 @@ port_includes_vlan(const struct port *port, uint16_t vlan)
     return vlan == port->vlan || port_trunks_vlan(port, vlan);
 }
 
+static bool
+port_is_floodable(const struct port *port)
+{
+    int i;
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        if (!ofproto_port_is_floodable(port->bridge->ofproto,
+                                       port->ifaces[i]->dp_ifidx)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static size_t
 compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
              const struct port *in_port, const struct port *out_port,
@@ -2217,7 +2231,9 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
         /* XXX even better, define each VLAN as a datapath port group */
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
-            if (port != in_port && port_includes_vlan(port, vlan)
+            if (port != in_port
+                && port_is_floodable(port)
+                && port_includes_vlan(port, vlan)
                 && !port->is_mirror_output_port
                 && set_dst(dst, flow, in_port, port, tags)) {
                 mirrors |= port->dst_mirrors;
