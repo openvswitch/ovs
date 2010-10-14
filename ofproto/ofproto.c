@@ -2577,6 +2577,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
     case OFPP_FLOOD:
         flood_packets(ctx->ofproto, ctx->flow.in_port, OFPPC_NO_FLOOD,
                       &ctx->nf_output_iface, ctx->out);
+        break;
     case OFPP_ALL:
         flood_packets(ctx->ofproto, ctx->flow.in_port, 0,
                       &ctx->nf_output_iface, ctx->out);
