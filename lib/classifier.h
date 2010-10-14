@@ -123,6 +123,12 @@ struct cls_rule {
     unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
+enum {
+    CLS_INC_EXACT = 1 << 0,     /* Include exact-match flows? */
+    CLS_INC_WILD = 1 << 1,      /* Include flows with wildcards? */
+    CLS_INC_ALL = CLS_INC_EXACT | CLS_INC_WILD
+};
+
 void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
                         unsigned int priority, struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
@@ -140,21 +146,12 @@ struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
 void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
-                                   const struct flow *);
-struct cls_rule *classifier_lookup_wild(const struct classifier *,
-                                        const struct flow *);
-struct cls_rule *classifier_lookup_exact(const struct classifier *,
-                                         const struct flow *);
+                                   const struct flow *, int include);
 bool classifier_rule_overlaps(const struct classifier *, const struct flow *,
                               uint32_t wildcards, unsigned int priority);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
-enum {
-    CLS_INC_EXACT = 1 << 0,     /* Include exact-match flows? */
-    CLS_INC_WILD = 1 << 1,      /* Include flows with wildcards? */
-    CLS_INC_ALL = CLS_INC_EXACT | CLS_INC_WILD
-};
 void classifier_for_each(const struct classifier *, int include,
                          cls_cb_func *, void *aux);
 void classifier_for_each_match(const struct classifier *,

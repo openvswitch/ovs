@@ -212,24 +212,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     cls->n_rules--;
 }
 
-/* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
- * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
- * of equal priority match 'flow', returns one arbitrarily.
- *
- * (When multiple rules of equal priority happen to fall into the same bucket,
- * rules added more recently take priority over rules added less recently, but
- * this is subject to change and should not be depended upon.) */
-struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow)
-{
-    struct cls_rule *rule = classifier_lookup_exact(cls, flow);
-    if (!rule) {
-        rule = classifier_lookup_wild(cls, flow);
-    }
-    return rule;
-}
-
-struct cls_rule *
+static struct cls_rule *
 classifier_lookup_exact(const struct classifier *cls, const struct flow *flow)
 {
     return (!hmap_is_empty(&cls->exact_table)
@@ -237,7 +220,7 @@ classifier_lookup_exact(const struct classifier *cls, const struct flow *flow)
             : NULL);
 }
 
-struct cls_rule *
+static struct cls_rule *
 classifier_lookup_wild(const struct classifier *cls, const struct flow *flow)
 {
     struct cls_rule *best = NULL;
@@ -254,6 +237,31 @@ classifier_lookup_wild(const struct classifier *cls, const struct flow *flow)
         }
     }
     return best;
+}
+
+/* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
+ * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
+ * of equal priority match 'flow', returns one arbitrarily.
+ *
+ * (When multiple rules of equal priority happen to fall into the same bucket,
+ * rules added more recently take priority over rules added less recently, but
+ * this is subject to change and should not be depended upon.) */
+struct cls_rule *
+classifier_lookup(const struct classifier *cls, const struct flow *flow,
+                  int include)
+{
+    if (include & CLS_INC_EXACT) {
+        struct cls_rule *rule = classifier_lookup_exact(cls, flow);
+        if (rule) {
+            return rule;
+        }
+    }
+
+    if (include & CLS_INC_WILD) {
+        return classifier_lookup_wild(cls, flow);
+    }
+
+    return NULL;
 }
 
 struct cls_rule *

@@ -324,22 +324,6 @@ get_value(unsigned int *x, unsigned n_values)
     return rem;
 }
 
-static struct cls_rule *
-lookup_with_include_bits(const struct classifier *cls,
-                         const struct flow *flow, int include)
-{
-    switch (include) {
-    case CLS_INC_WILD:
-        return classifier_lookup_wild(cls, flow);
-    case CLS_INC_EXACT:
-        return classifier_lookup_exact(cls, flow);
-    case CLS_INC_WILD | CLS_INC_EXACT:
-        return classifier_lookup(cls, flow);
-    default:
-        abort();
-    }
-}
-
 static void
 compare_classifiers(struct classifier *cls, struct tcls *tcls)
 {
@@ -373,7 +357,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
 
         for (include = 1; include <= 3; include++) {
-            cr0 = lookup_with_include_bits(cls, &flow, include);
+            cr0 = classifier_lookup(cls, &flow, include);
             cr1 = tcls_lookup(tcls, &flow, include);
             assert((cr0 == NULL) == (cr1 == NULL));
             if (cr0 != NULL) {

@@ -2499,7 +2499,8 @@ static struct rule *
 lookup_valid_rule(struct ofproto *ofproto, const struct flow *flow)
 {
     struct rule *rule;
-    rule = rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow));
+    rule = rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow,
+                                                CLS_INC_ALL));
 
     /* The rule we found might not be valid, since we could be in need of
      * revalidation.  If it is not valid, don't return it. */
@@ -4540,7 +4541,8 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
     COVERAGE_INC(ofproto_revalidate_rule);
     if (rule->super) {
         struct rule *super;
-        super = rule_from_cls_rule(classifier_lookup_wild(&p->cls, flow));
+        super = rule_from_cls_rule(classifier_lookup(&p->cls, flow,
+                                                     CLS_INC_WILD));
         if (!super) {
             rule_remove(p, rule);
             return false;
