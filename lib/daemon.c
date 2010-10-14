@@ -23,6 +23,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "command-line.h"
 #include "fatal-signal.h"
