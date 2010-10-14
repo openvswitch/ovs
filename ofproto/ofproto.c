@@ -2064,7 +2064,11 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
     COVERAGE_INC(ofproto_subrule_create);
     cls_rule_from_flow(flow, 0, (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
                         : rule->cr.priority), &subrule->cr);
-    classifier_insert_exact(&ofproto->cls, &subrule->cr);
+
+    if (classifier_insert(&ofproto->cls, &subrule->cr)) {
+        /* Can't happen,  */
+        NOT_REACHED();
+    }
 
     return subrule;
 }

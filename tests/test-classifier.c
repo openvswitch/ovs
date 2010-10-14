@@ -516,11 +516,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
 
         tcls_rule = tcls_insert(&tcls, rule);
-        if (wc_fields) {
-            assert(!classifier_insert(&cls, &rule->cls_rule));
-        } else {
-            classifier_insert_exact(&cls, &rule->cls_rule);
-        }
+        assert(!classifier_insert(&cls, &rule->cls_rule));
         check_tables(&cls, 1, 1, 1);
         compare_classifiers(&cls, &tcls);
 

@@ -184,18 +184,6 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
     return old;
 }
 
-/* Inserts 'rule' into 'cls'.  Transfers ownership of 'rule' to 'cls'.
- *
- * 'rule' must be an exact-match rule (rule->wc.wildcards must be 0) and 'cls'
- * must not contain any rule with an identical key. */
-void
-classifier_insert_exact(struct classifier *cls, struct cls_rule *rule)
-{
-    hmap_insert(&cls->exact_table, &rule->node.hmap,
-                flow_hash(&rule->flow, 0));
-    cls->n_rules++;
-}
-
 /* Removes 'rule' from 'cls'.  It is caller's responsibility to free 'rule', if
  * this is desirable. */
 void
