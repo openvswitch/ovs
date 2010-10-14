@@ -73,9 +73,9 @@ The main components of this distribution are:
 Open vSwitch also provides an OpenFlow implementation and tools for
 those interested in OpenFlow but not additional Open vSwitch features:
 
-    * ovs-openflowd, a program that implements a simple OpenFlow
-      switch (without the special features provided by ovs-vswitchd)
-      using the same kernel module as ovs-vswitchd.
+    * ovs-openflowd, an alternative to ovs-vswitchd that implements a
+      simple OpenFlow switch, without the special features provided by
+      ovs-vswitchd.
 
     * ovs-controller, a simple OpenFlow controller.
 

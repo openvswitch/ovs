@@ -16,6 +16,9 @@ The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
 flow-based datapath.  \fBovs\-openflowd\fR connects to one or more
 OpenFlow controllers over TCP or SSL.
 .PP
+For a more powerful alternative to \fBovs\-openflowd\fR, see
+\fBovs\-vswitchd\fR(8).  Do not run both daemons at the same time.
+.PP
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
 to relay.  It takes one of the following forms:
 .
