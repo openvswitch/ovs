@@ -130,10 +130,6 @@ void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          struct cls_rule *);
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
-void cls_rule_moved(struct classifier *,
-                    struct cls_rule *old, struct cls_rule *new);
-void cls_rule_replace(struct classifier *, const struct cls_rule *old,
-                      struct cls_rule *new);
 
 void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);

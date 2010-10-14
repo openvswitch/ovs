@@ -103,55 +103,6 @@ cls_rule_print(const struct cls_rule *rule)
     flow_print(stdout, &rule->flow);
     putc('\n', stdout);
 }
-
-/* Adjusts pointers around 'old', which must be in classifier 'cls', to
- * compensate for it having been moved in memory to 'new' (e.g. due to
- * realloc()).
- *
- * This function cannot be realized in all possible flow classifier
- * implementations, so we will probably have to change the interface if we
- * change the implementation.  Shouldn't be a big deal though. */
-void
-cls_rule_moved(struct classifier *cls, struct cls_rule *old,
-               struct cls_rule *new)
-{
-    if (old != new) {
-        if (new->wc.wildcards) {
-            list_moved(&new->node.list);
-        } else {
-            hmap_node_moved(&cls->exact_table,
-                            &old->node.hmap, &new->node.hmap);
-        }
-    }
-}
-
-/* Replaces 'old', which must be in classifier 'cls', by 'new' (e.g. due to
- * realloc()); that is, after calling this function 'new' will be in 'cls' in
- * place of 'old'.
- *
- * 'new' and 'old' must be exactly the same: wildcard the same fields, have the
- * same fixed values for non-wildcarded fields, and have the same priority.
- *
- * The caller takes ownership of 'old' and is thus responsible for freeing it,
- * etc., as necessary.
- *
- * This function cannot be realized in all possible flow classifier
- * implementations, so we will probably have to change the interface if we
- * change the implementation.  Shouldn't be a big deal though. */
-void
-cls_rule_replace(struct classifier *cls, const struct cls_rule *old,
-                 struct cls_rule *new)
-{
-    assert(old != new);
-    assert(old->wc.wildcards == new->wc.wildcards);
-    assert(old->priority == new->priority);
-
-    if (new->wc.wildcards) {
-        list_replace(&new->node.list, &old->node.list);
-    } else {
-        hmap_replace(&cls->exact_table, &old->node.hmap, &new->node.hmap);
-    }
-}
 
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
