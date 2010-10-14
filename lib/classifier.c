@@ -266,31 +266,31 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow,
 
 struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
-                             const struct flow *target, uint32_t wildcards,
-                             unsigned int priority)
+                             const struct cls_rule *target)
 {
     struct cls_bucket *bucket;
     int table_idx;
     uint32_t hash;
 
-    if (!wildcards) {
-        /* Ignores 'priority'. */
-        return search_exact_table(cls, flow_hash(target, 0), target);
+    if (!target->wc.wildcards) {
+        /* Ignores 'target->priority'. */
+        return search_exact_table(cls, flow_hash(&target->flow, 0),
+                                  &target->flow);
     }
 
-    assert(wildcards == (wildcards & OVSFW_ALL));
-    table_idx = table_idx_from_wildcards(wildcards);
-    hash = hash_fields(target, table_idx);
+    assert(target->wc.wildcards == (target->wc.wildcards & OVSFW_ALL));
+    table_idx = table_idx_from_wildcards(target->wc.wildcards);
+    hash = hash_fields(&target->flow, table_idx);
     HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node, hash,
                              &cls->tables[table_idx]) {
-        if (equal_fields(&bucket->fixed, target, table_idx)) {
+        if (equal_fields(&bucket->fixed, &target->flow, table_idx)) {
             struct cls_rule *pos;
             LIST_FOR_EACH (pos, node.list, &bucket->rules) {
-                if (pos->priority < priority) {
+                if (pos->priority < target->priority) {
                     return NULL;
-                } else if (pos->priority == priority &&
-                           pos->wc.wildcards == wildcards &&
-                           flow_equal(target, &pos->flow)) {
+                } else if (pos->priority == target->priority &&
+                           pos->wc.wildcards == target->wc.wildcards &&
+                           flow_equal(&target->flow, &pos->flow)) {
                     return pos;
                 }
             }

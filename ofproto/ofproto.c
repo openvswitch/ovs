@@ -1323,11 +1323,12 @@ void
 ofproto_delete_flow(struct ofproto *ofproto, const struct flow *flow,
                     uint32_t wildcards, unsigned int priority)
 {
+    struct cls_rule target;
     struct rule *rule;
 
+    cls_rule_from_flow(flow, wildcards, priority, &target);
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&ofproto->cls,
-                                                           flow, wildcards,
-                                                           priority));
+                                                           &target));
     if (rule) {
         rule_remove(ofproto, rule);
     }
@@ -3652,14 +3653,11 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 static struct rule *
 find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
 {
-    uint32_t wildcards;
-    struct flow flow;
+    struct cls_rule target;
 
-    flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
-                    &flow, &wildcards);
-    return rule_from_cls_rule(classifier_find_rule_exactly(
-                                  &p->cls, &flow, wildcards,
-                                  ntohs(ofm->priority)));
+    cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
+                        p->tun_id_from_cookie, ofm->cookie, &target);
+    return rule_from_cls_rule(classifier_find_rule_exactly(&p->cls, &target));
 }
 
 static int
@@ -4299,13 +4297,15 @@ ofproto_update_used(struct ofproto *p)
 
     for (i = 0; i < n_flows; i++) {
         struct odp_flow *f = &flows[i];
+        struct cls_rule target;
         struct rule *rule;
         struct flow flow;
 
         odp_flow_key_to_flow(&f->key, &flow);
+        cls_rule_from_flow(&flow, 0, UINT16_MAX, &target);
 
-        rule = rule_from_cls_rule(
-            classifier_find_rule_exactly(&p->cls, &flow, 0, UINT16_MAX));
+        rule = rule_from_cls_rule(classifier_find_rule_exactly(&p->cls,
+                                                               &target));
 
         if (rule && rule->installed) {
             update_time(p, rule, &f->stats);

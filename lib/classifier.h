@@ -158,9 +158,7 @@ void classifier_for_each_match(const struct classifier *,
                                const struct cls_rule *,
                                int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const struct flow *target,
-                                              uint32_t wildcards,
-                                              unsigned int priority);
+                                              const struct cls_rule *);
 
 #define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, MEMBER, CLS) \
         HMAP_FOR_EACH (RULE, MEMBER.node.hmap, &(CLS)->exact_table)
