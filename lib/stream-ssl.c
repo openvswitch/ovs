@@ -988,7 +988,9 @@ do_ssl_init(void)
     SSL_library_init();
     SSL_load_error_strings();
 
-    method = TLSv1_method();
+    /* New OpenSSL changed TLSv1_method() to return a "const" pointer, so the
+     * cast is needed to avoid a warning with those newer versions. */
+    method = (SSL_METHOD *) TLSv1_method();
     if (method == NULL) {
         VLOG_ERR("TLSv1_method: %s", ERR_error_string(ERR_get_error(), NULL));
         return ENOPROTOOPT;
