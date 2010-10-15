@@ -203,8 +203,6 @@ case "$1" in
 
         # Create an empty configuration database if it doesn't exist.
         if test ! -e /etc/openvswitch/conf.db; then
-            install -d -m 755 -o root -g root /etc/openvswitch
-
             # Create configuration database.
             ovsdb-tool -vANY:console:emer \
                 create /etc/openvswitch/conf.db \
