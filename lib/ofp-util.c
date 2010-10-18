@@ -587,7 +587,25 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         return check_output_port(ntohs(a->output.port), max_ports);
 
     case OFPAT_SET_VLAN_VID:
+        error = check_action_exact_len(a, len, 8);
+        if (error) {
+            return error;
+        }
+        if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        }
+        return 0;
+
     case OFPAT_SET_VLAN_PCP:
+        error = check_action_exact_len(a, len, 8);
+        if (error) {
+            return error;
+        }
+        if (a->vlan_vid.vlan_vid & ~7) {
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        }
+        return 0;
+
     case OFPAT_STRIP_VLAN:
     case OFPAT_SET_NW_SRC:
     case OFPAT_SET_NW_DST:

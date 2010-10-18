@@ -258,7 +258,7 @@ struct odp_flowvec {
 /* Action types. */
 #define ODPAT_OUTPUT            0    /* Output to switch port. */
 #define ODPAT_CONTROLLER        2    /* Send copy to controller. */
-#define ODPAT_SET_DL_TCI        3    /* Set the 802.1q VLAN VID and/or PCP. */
+#define ODPAT_SET_DL_TCI        3    /* Set the 802.1q TCI value. */
 #define ODPAT_STRIP_VLAN        5    /* Strip the 802.1q header. */
 #define ODPAT_SET_DL_SRC        6    /* Ethernet source address. */
 #define ODPAT_SET_DL_DST        7    /* Ethernet destination address. */
@@ -295,10 +295,8 @@ struct odp_action_tunnel {
 /* Action structure for ODPAT_SET_DL_TCI. */
 struct odp_action_dl_tci {
     uint16_t type;              /* ODPAT_SET_DL_TCI. */
-    ovs_be16 tci;               /* New TCI.  Bits not in mask must be zero. */
-    ovs_be16 mask;              /* 0x0fff to set VID, 0xe000 to set PCP,
-                                 * or 0xefff to set both. */
-    uint16_t reserved;
+    ovs_be16 tci;               /* New TCI.  CFI bit must be zero. */
+    uint32_t reserved;
 };
 
 /* Action structure for ODPAT_SET_DL_SRC/DST. */

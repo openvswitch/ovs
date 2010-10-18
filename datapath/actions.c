@@ -74,7 +74,6 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				       const struct odp_flow_key *key,
 				       const union odp_action *a, int n_actions)
 {
-	__be16 mask = a->dl_tci.mask;
 	__be16 tci = a->dl_tci.tci;
 
 	skb = make_writable(skb, VLAN_HLEN);
@@ -92,7 +91,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		vh = vlan_eth_hdr(skb);
 		old_tci = vh->h_vlan_TCI;
 
-		vh->h_vlan_TCI = (vh->h_vlan_TCI & ~mask) | tci;
+		vh->h_vlan_TCI = tci;
 
 		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE) {
 			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };

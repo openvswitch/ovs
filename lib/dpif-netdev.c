@@ -667,12 +667,7 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
 
         case ODPAT_SET_DL_TCI:
             *mutates = true;
-            if (a->dl_tci.mask != htons(VLAN_VID_MASK)
-                && a->dl_tci.mask != htons(VLAN_PCP_MASK)
-                && a->dl_tci.mask != htons(VLAN_VID_MASK | VLAN_PCP_MASK)) {
-                return EINVAL;
-            }
-            if (a->dl_tci.tci & ~a->dl_tci.mask){
+            if (a->dl_tci.tci & htons(VLAN_CFI)) {
                 return EINVAL;
             }
             break;
@@ -1011,16 +1006,12 @@ dp_netdev_wait(void)
 }
 
 
-/* Modify the TCI field of 'packet'.  If a VLAN tag is not present, one is
- * added with the TCI field set to 'a->tci'.  If a VLAN tag is present, then
- * 'a->mask' bits are cleared before 'a->tci' is logically OR'd into the TCI
- * field.
- *
- * Note that the function does not ensure that 'a->tci' does not affect bits
- * outside of 'a->mask'.
+/* Modify the TCI field of 'packet'.  If a VLAN tag is present, its TCI field
+ * is replaced by 'tci'.  If a VLAN tag is not present, one is added with the
+ * TCI field set to 'tci'.
  */
 static void
-dp_netdev_set_dl_tci(struct ofpbuf *packet, const struct odp_action_dl_tci *a)
+dp_netdev_set_dl_tci(struct ofpbuf *packet, uint16_t tci)
 {
     struct vlan_eth_header *veh;
     struct eth_header *eh;
@@ -1028,16 +1019,15 @@ dp_netdev_set_dl_tci(struct ofpbuf *packet, const struct odp_action_dl_tci *a)
     eh = packet->l2;
     if (packet->size >= sizeof(struct vlan_eth_header)
         && eh->eth_type == htons(ETH_TYPE_VLAN)) {
-        /* Clear 'mask' bits, but maintain other TCI bits. */
         veh = packet->l2;
-        veh->veth_tci = (veh->veth_tci & ~a->mask) | a->tci;
+        veh->veth_tci = tci;
     } else {
         /* Insert new 802.1Q header. */
         struct vlan_eth_header tmp;
         memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
         memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
         tmp.veth_type = htons(ETH_TYPE_VLAN);
-        tmp.veth_tci = htons(a->tci);
+        tmp.veth_tci = tci;
         tmp.veth_next_type = eh->eth_type;
 
         veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);
@@ -1235,7 +1225,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case ODPAT_SET_DL_TCI:
-            dp_netdev_set_dl_tci(packet, &a->dl_tci);
+            dp_netdev_set_dl_tci(packet, a->dl_tci.tci);
             break;
 
         case ODPAT_STRIP_VLAN:

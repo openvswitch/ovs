@@ -2768,16 +2768,15 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPAT_SET_VLAN_VID:
             oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
-            oa->dl_tci.tci = ia->vlan_vid.vlan_vid & htons(VLAN_VID_MASK);
-            oa->dl_tci.mask = htons(VLAN_VID_MASK);
+            oa->dl_tci.tci = ia->vlan_vid.vlan_vid;
+            oa->dl_tci.tci |= htons(ctx->flow.dl_vlan_pcp << VLAN_PCP_SHIFT);
             ctx->flow.dl_vlan = ia->vlan_vid.vlan_vid;
             break;
 
         case OFPAT_SET_VLAN_PCP:
             oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
-            oa->dl_tci.tci = htons((ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT)
-                                   & VLAN_PCP_MASK);
-            oa->dl_tci.mask = htons(VLAN_PCP_MASK);
+            oa->dl_tci.tci = htons(ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT);
+            oa->dl_tci.tci |= ctx->flow.dl_vlan;
             ctx->flow.dl_vlan_pcp = ia->vlan_pcp.vlan_pcp;
             break;
 

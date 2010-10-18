@@ -71,26 +71,10 @@ format_odp_action(struct ds *ds, const union odp_action *a)
     case ODPAT_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(0x%08"PRIx32")", ntohl(a->tunnel.tun_id));
         break;
-    case ODPAT_SET_DL_TCI: {
-        int vid = vlan_tci_to_vid(a->dl_tci.tci);
-        int pcp = vlan_tci_to_pcp(a->dl_tci.tci);
-
-        switch (ntohs(a->dl_tci.mask)) {
-        case VLAN_VID_MASK:
-            ds_put_format(ds, "set_tci(vlan=%d)", vid);
-            break;
-        case VLAN_PCP_MASK:
-            ds_put_format(ds, "set_tci(pcp=%d)", pcp);
-            break;
-        case VLAN_VID_MASK | VLAN_PCP_MASK:
-            ds_put_format(ds, "set_tci(vlan=%d,pcp=%d)", vid, pcp);
-            break;
-        default:
-            ds_put_format(ds, "set_tci(tci=%04"PRIx16",mask=%04"PRIx16")",
-                          ntohs(a->dl_tci.tci), ntohs(a->dl_tci.mask));
-            break;
-        }
-    }
+    case ODPAT_SET_DL_TCI:
+        ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",
+                      vlan_tci_to_vid(a->dl_tci.tci),
+                      vlan_tci_to_pcp(a->dl_tci.tci));
         break;
     case ODPAT_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");

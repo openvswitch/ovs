@@ -904,7 +904,6 @@ static int validate_actions(const struct sw_flow_actions *actions)
 
 	for (i = 0; i < actions->n_actions; i++) {
 		const union odp_action *a = &actions->actions[i];
-		__be16 mask;
 
 		switch (a->type) {
 		case ODPAT_CONTROLLER:
@@ -928,12 +927,7 @@ static int validate_actions(const struct sw_flow_actions *actions)
 			break;
 
 		case ODPAT_SET_DL_TCI:
-			mask = a->dl_tci.mask;
-			if (mask != htons(VLAN_VID_MASK) &&
-			    mask != htons(VLAN_PCP_MASK) &&
-			    mask != htons(VLAN_VID_MASK | VLAN_PCP_MASK))
-				return -EINVAL;
-			if (a->dl_tci.tci & ~mask)
+			if (a->dl_tci.tci & htons(VLAN_CFI_MASK))
 				return -EINVAL;
 			break;
 

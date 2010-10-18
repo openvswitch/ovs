@@ -567,6 +567,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     n_outputs = 0;
     for (i = 0; i < n_actions; i++) {
         const union odp_action *a = &actions[i];
+        uint16_t tci;
 
         switch (a->type) {
         case ODPAT_OUTPUT:
@@ -575,12 +576,9 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             break;
 
         case ODPAT_SET_DL_TCI:
-            if (a->dl_tci.mask & htons(VLAN_VID_MASK)) {
-                switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(a->dl_tci.tci);
-            }
-            if (a->dl_tci.mask & htons(VLAN_PCP_MASK)) {
-                switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(a->dl_tci.tci);
-            }
+            tci = a->dl_tci.tci;
+            switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
+            switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);
             break;
 
         default:
