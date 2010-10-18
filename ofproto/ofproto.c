@@ -4543,8 +4543,6 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
                   long long int now, uint8_t reason)
 {
     struct ofconn *ofconn;
-    struct ofconn *prev;
-    struct ofpbuf *buf = NULL;
 
     if (!rule->send_flow_removed) {
         return;
@@ -4556,20 +4554,16 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
      * being added (and expiring).  (It also prevents processing OpenFlow
      * requests that would not add new flows, so it is imperfect.) */
 
-    prev = NULL;
     LIST_FOR_EACH (ofconn, node, &p->all_conns) {
-        if (rconn_is_connected(ofconn->rconn)
-            && ofconn_receives_async_msgs(ofconn)) {
-            if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
-            } else {
-                buf = compose_flow_removed(p, rule, now, reason);
-            }
-            prev = ofconn;
+        struct ofpbuf *msg;
+
+        if (!rconn_is_connected(ofconn->rconn)
+            || !ofconn_receives_async_msgs(ofconn)) {
+            continue;
         }
-    }
-    if (prev) {
-        queue_tx(buf, prev, prev->reply_counter);
+
+        msg = compose_flow_removed(p, rule, now, reason);
+        queue_tx(msg, ofconn, ofconn->reply_counter);
     }
 }
 
