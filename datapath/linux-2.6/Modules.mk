@@ -9,6 +9,7 @@ openvswitch_sources += \
 openvswitch_headers += \
 	linux-2.6/compat-2.6/compat26.h \
 	linux-2.6/compat-2.6/include/asm-generic/bug.h \
+	linux-2.6/compat-2.6/include/linux/bottom_half.h \
 	linux-2.6/compat-2.6/include/linux/cpumask.h \
 	linux-2.6/compat-2.6/include/linux/dmi.h \
 	linux-2.6/compat-2.6/include/linux/err.h \
