@@ -66,6 +66,7 @@ path certificate "/etc/racoon/certs";
 
 remote anonymous {
         exchange_mode main;
+        nat_traversal on;
         proposal {
                 encryption_algorithm aes;
                 hash_algorithm sha1;
@@ -307,13 +308,16 @@ def main(argv):
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
             name = rec.name.as_scalar()
-            local_ip = rec.other_config.get("ipsec_local_ip")
-            if rec.type.as_scalar() == "gre" and local_ip:
+            ipsec_cert = rec.other_config.get("ipsec_cert")
+            ipsec_psk = rec.other_config.get("ipsec_psk")
+            is_ipsec = ipsec_cert or ipsec_psk
+
+            if rec.type.as_scalar() == "gre" and is_ipsec:
                 new_interfaces[name] = {
                         "remote_ip": rec.options.get("remote_ip"),
-                        "local_ip": local_ip,
-                        "ipsec_cert": rec.other_config.get("ipsec_cert"),
-                        "ipsec_psk": rec.other_config.get("ipsec_psk") }
+                        "local_ip": rec.options.get("local_ip", "0.0.0.0/0"),
+                        "ipsec_cert": ipsec_cert,
+                        "ipsec_psk": ipsec_psk }
  
         if interfaces != new_interfaces:
             for name, vals in interfaces.items():

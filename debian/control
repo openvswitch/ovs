@@ -45,7 +45,9 @@ Description: Open vSwitch switch implementations
 Package: openvswitch-ipsec
 Architecture: any
 Depends:
- ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, ipsec-tools, racoon,
+ ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, 
+ ipsec-tools (>=0.8~alpha20090903), 
+ racoon (>=0.8~alpha20090903),
  openvswitch-common (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version}),
  python-openvswitch (= ${binary:Version})
