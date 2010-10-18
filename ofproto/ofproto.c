@@ -3954,10 +3954,8 @@ handle_role_request(struct ofproto *ofproto,
     }
     ofconn->role = role;
 
-    reply = make_openflow_xid(sizeof *reply, OFPT_VENDOR, msg->header.xid,
-                              &buf);
-    reply->nxh.vendor = htonl(NX_VENDOR_ID);
-    reply->nxh.subtype = htonl(NXT_ROLE_REPLY);
+    reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, msg->header.xid,
+                           &buf);
     reply->role = htonl(role);
     queue_tx(buf, ofconn, ofconn->reply_counter);
 

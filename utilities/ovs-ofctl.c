@@ -354,9 +354,7 @@ do_status(int argc, char *argv[])
     struct vconn *vconn;
     struct ofpbuf *b;
 
-    request = make_openflow(sizeof *request, OFPT_VENDOR, &b);
-    request->vendor = htonl(NX_VENDOR_ID);
-    request->subtype = htonl(NXT_STATUS_REQUEST);
+    request = make_nxmsg(sizeof *request, NXT_STATUS_REQUEST, &b);
     if (argc > 2) {
         ofpbuf_put(b, argv[2], strlen(argv[2]));
         update_openflow_length(b);
@@ -610,10 +608,8 @@ do_tun_cookie(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *buffer;
     struct vconn *vconn;
 
-    tun_id_cookie = make_openflow(sizeof *tun_id_cookie, OFPT_VENDOR, &buffer);
-
-    tun_id_cookie->vendor = htonl(NX_VENDOR_ID);
-    tun_id_cookie->subtype = htonl(NXT_TUN_ID_FROM_COOKIE);
+    tun_id_cookie = make_nxmsg(sizeof *tun_id_cookie, NXT_TUN_ID_FROM_COOKIE,
+                               &buffer);
     tun_id_cookie->set = !strcmp(argv[2], "true");
 
     open_vconn(argv[1], &vconn);

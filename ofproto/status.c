@@ -77,10 +77,8 @@ switch_status_handle_request(struct switch_status *ss, struct rconn *rconn,
             c->cb(&sr, c->aux);
         }
     }
-    reply = make_openflow_xid(sizeof *reply + sr.output.length,
-                              OFPT_VENDOR, request->header.xid, &b);
-    reply->vendor = htonl(NX_VENDOR_ID);
-    reply->subtype = htonl(NXT_STATUS_REPLY);
+    reply = make_nxmsg_xid(sizeof *reply + sr.output.length,
+                           NXT_STATUS_REPLY, request->header.xid, &b);
     memcpy(reply + 1, sr.output.string, sr.output.length);
     retval = rconn_send(rconn, b, NULL);
     if (retval && retval != EAGAIN) {

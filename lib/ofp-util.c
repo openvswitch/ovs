@@ -59,6 +59,14 @@ make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **bufferp)
     return put_openflow_xid(openflow_len, type, alloc_xid(), *bufferp);
 }
 
+/* Similar to make_openflow() but creates a Nicira vendor extension message
+ * with the specific 'subtype'.  'subtype' should be in host byte order. */
+void *
+make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **bufferp)
+{
+    return make_nxmsg_xid(openflow_len, subtype, alloc_xid(), bufferp);
+}
+
 /* Allocates and stores in '*bufferp' a new ofpbuf with a size of
  * 'openflow_len', starting with an OpenFlow header with the given 'type' and
  * transaction id 'xid'.  Allocated bytes beyond the header, if any, are
@@ -78,6 +86,19 @@ make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
 {
     *bufferp = ofpbuf_new(openflow_len);
     return put_openflow_xid(openflow_len, type, xid, *bufferp);
+}
+
+/* Similar to make_openflow_xid() but creates a Nicira vendor extension message
+ * with the specific 'subtype'.  'subtype' should be in host byte order. */
+void *
+make_nxmsg_xid(size_t openflow_len, uint32_t subtype, uint32_t xid,
+               struct ofpbuf **bufferp)
+{
+    struct nicira_header *nxh = make_openflow_xid(openflow_len, OFPT_VENDOR,
+                                                  xid, bufferp);
+    nxh->vendor = htonl(NX_VENDOR_ID);
+    nxh->subtype = htonl(subtype);
+    return nxh;
 }
 
 /* Appends 'openflow_len' bytes to 'buffer', starting with an OpenFlow header
