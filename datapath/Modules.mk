@@ -16,6 +16,7 @@ openvswitch_sources = \
 	dp_sysfs_dp.c \
 	dp_sysfs_if.c \
 	flow.c \
+	loop_counter.c \
 	table.c \
 	tunnel.c \
 	vport.c \
@@ -32,6 +33,7 @@ openvswitch_headers = \
 	datapath.h \
 	dp_sysfs.h \
 	flow.h \
+	loop_counter.h \
 	odp-compat.h \
 	table.h \
 	tunnel.h \

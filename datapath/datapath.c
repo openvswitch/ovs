@@ -47,6 +47,7 @@
 #include "datapath.h"
 #include "actions.h"
 #include "flow.h"
+#include "loop_counter.h"
 #include "odp-compat.h"
 #include "table.h"
 #include "vport-internal_dev.h"
@@ -68,23 +69,6 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  */
 static struct datapath *dps[ODP_MAX];
 static DEFINE_MUTEX(dp_mutex);
-
-/* We limit the number of times that we pass into dp_process_received_packet()
- * to avoid blowing out the stack in the event that we have a loop. */
-struct loop_counter {
-	int count;		/* Count. */
-	bool looping;		/* Loop detected? */
-};
-
-#define DP_MAX_LOOPS 5
-
-/* We use a separate counter for each CPU for both interrupt and non-interrupt
- * context in order to keep the limit deterministic for a given packet. */
-struct percpu_loop_counters {
-	struct loop_counter counters[2];
-};
-
-static DEFINE_PER_CPU(struct percpu_loop_counters, dp_loop_counters);
 
 static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
 
@@ -526,14 +510,6 @@ out:
 	return err;
 }
 
-static void suppress_loop(struct datapath *dp, struct sw_flow_actions *actions)
-{
-	if (net_ratelimit())
-		pr_warn("%s: flow looped %d times, dropping\n",
-			dp_name(dp), DP_MAX_LOOPS);
-	actions->n_actions = 0;
-}
-
 /* Must be called with rcu_read_lock. */
 void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 {
@@ -581,11 +557,11 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 
 	/* Check whether we've looped too much. */
-	loop = &get_cpu_var(dp_loop_counters).counters[!!in_interrupt()];
-	if (unlikely(++loop->count > DP_MAX_LOOPS))
+	loop = loop_get_counter();
+	if (unlikely(++loop->count > MAX_LOOPS))
 		loop->looping = true;
 	if (unlikely(loop->looping)) {
-		suppress_loop(dp, acts);
+		loop_suppress(dp, acts);
 		goto out_loop;
 	}
 
@@ -596,13 +572,13 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 
 	/* Check whether sub-actions looped too much. */
 	if (unlikely(loop->looping))
-		suppress_loop(dp, acts);
+		loop_suppress(dp, acts);
 
 out_loop:
 	/* Decrement loop counter. */
 	if (!--loop->count)
 		loop->looping = false;
-	put_cpu_var(dp_loop_counters);
+	loop_put_counter();
 
 out:
 	/* Update datapath statistics. */
