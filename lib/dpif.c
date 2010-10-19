@@ -30,6 +30,7 @@
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -1085,9 +1086,13 @@ log_operation(const struct dpif *dpif, const char *operation, int error)
 {
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: %s success", dpif_name(dpif), operation);
-    } else {
+    } else if (is_errno(error)) {
         VLOG_WARN_RL(&error_rl, "%s: %s failed (%s)",
                      dpif_name(dpif), operation, strerror(error));
+    } else {
+        VLOG_WARN_RL(&error_rl, "%s: %s failed (%d/%d)",
+                     dpif_name(dpif), operation,
+                     get_ofp_err_type(error), get_ofp_err_code(error));
     }
 }
 

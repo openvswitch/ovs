@@ -82,12 +82,74 @@ bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
+
+/* OpenFlow errors.
+ *
+ * OpenFlow errors have two 16-bit parts: a "type" and a "code".  A "type" has
+ * a unique meaning.  The "code" values are different for each "type".
+ *
+ * We embed OpenFlow errors in the same space as errno values by shifting
+ * 'type' left 16 bits and adding the 'code'.  An "int" value is thus broken
+ * into a few different ranges:
+ *
+ *      - 0: success.
+ *
+ *      - 1...65535: system errno values.
+ *
+ *        The assumption that system errno values are less than 65536 is true
+ *        on at least Linux, FreeBSD, OpenBSD, and Windows.  RFC 1813 defines
+ *        NFSv3-specific errno codes starting at 10000, another hint that this
+ *        is a reasonable assumption.
+ *
+ *        C and POSIX say that errno values are positive.
+ *
+ *      - 65536...INT_MAX: OpenFlow errors.
+ *
+ *        In OpenFlow, a "type" of 0 is valid, but it corresponds to
+ *        OFPET_HELLO_FAILED.  That's not a general-purpose error: only the
+ *        vconn library would ever care to send it.  So we ignore it.
+ *
+ *      - negative values: not used.
+ */
 
+/* Returns the OpenFlow error with the specified 'type' and 'code' as an
+ * integer. */
 static inline int
 ofp_mkerr(uint16_t type, uint16_t code)
 {
     assert(type > 0 && type <= 0x7fff);
     return (type << 16) | code;
+}
+
+/* Returns true if 'error' is in the range of values used as OpenFlow error
+ * codes as explained above. */
+static inline bool
+is_ofp_error(int error)
+{
+    return error >= 0x10000;
+}
+
+/* Returns true if 'error' appears to be a system errno value. */
+static inline bool
+is_errno(int error)
+{
+    return error < 0x10000;
+}
+
+/* Returns the "type" part of the OpenFlow error code 'error' (which must be in
+ * the format explained above). */
+static inline uint16_t
+get_ofp_err_type(int error)
+{
+    return error >> 16;
+}
+
+/* Returns the "code" part of the OpenFlow error code 'error' (which must be in
+ * the format explained above). */
+static inline uint16_t
+get_ofp_err_code(int error)
+{
+    return error & 0xffff;
 }
 
 #endif /* ofp-util.h */
