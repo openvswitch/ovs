@@ -172,90 +172,13 @@ enum nx_role {
 /* Nicira vendor flow actions. */
 
 enum nx_action_subtype {
-    NXAST_SNAT__OBSOLETE,           /* No longer used. */
-
-    /* Searches the flow table again, using a flow that is slightly modified
-     * from the original lookup:
-     *
-     *    - The 'in_port' member of struct nx_action_resubmit is used as the
-     *      flow's in_port.
-     *
-     *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
-     *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
-     *      values.
-     *
-     * Following the lookup, the original in_port is restored.
-     *
-     * If the modified flow matched in the flow table, then the corresponding
-     * actions are executed.  Afterward, actions following NXAST_RESUBMIT in
-     * the original set of actions, if any, are executed; any changes made to
-     * the packet (e.g. changes to VLAN) by secondary actions persist when
-     * those actions are executed, although the original in_port is restored.
-     *
-     * NXAST_RESUBMIT may be used any number of times within a set of actions.
-     *
-     * NXAST_RESUBMIT may nest to an implementation-defined depth.  Beyond this
-     * implementation-defined depth, further NXAST_RESUBMIT actions are simply
-     * ignored.  (Open vSwitch 1.0.1 and earlier did not support recursion.)
-     */
-    NXAST_RESUBMIT,
-
-    /* Set encapsulating tunnel ID. */
-    NXAST_SET_TUNNEL,
-
-    /* Stops processing further actions, if the packet being processed is an
-     * Ethernet+IPv4 ARP packet for which the source Ethernet address inside
-     * the ARP packet differs from the source Ethernet address in the Ethernet
-     * header.
-     *
-     * This is useful because OpenFlow does not provide a way to match on the
-     * Ethernet addresses inside ARP packets, so there is no other way to drop
-     * spoofed ARPs other than sending every ARP packet to a controller. */
-    NXAST_DROP_SPOOFED_ARP,
-
-    /* Set the queue that should be used when packets are output.  This
-     * is similar to the OpenFlow OFPAT_ENQUEUE action, but does not
-     * take the output port as an argument.  This allows the queue
-     * to be defined before the port is known. */
-    NXAST_SET_QUEUE,
-
-    /* Restore the queue to the value it was before any NXAST_SET_QUEUE
-     * actions were used. */
-    NXAST_POP_QUEUE
+    NXAST_SNAT__OBSOLETE,       /* No longer used. */
+    NXAST_RESUBMIT,             /* struct nx_action_resubmit */
+    NXAST_SET_TUNNEL,           /* struct nx_action_set_tunnel */
+    NXAST_DROP_SPOOFED_ARP,     /* struct nx_action_drop_spoofed_arp */
+    NXAST_SET_QUEUE,            /* struct nx_action_set_queue */
+    NXAST_POP_QUEUE             /* struct nx_action_pop_queue */
 };
-
-/* Action structure for NXAST_RESUBMIT. */
-struct nx_action_resubmit {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_RESUBMIT. */
-    uint16_t in_port;               /* New in_port for checking flow table. */
-    uint8_t pad[4];
-};
-OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
-
-/* Action structure for NXAST_SET_TUNNEL. */
-struct nx_action_set_tunnel {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_SET_TUNNEL. */
-    uint8_t pad[2];
-    uint32_t tun_id;                /* Tunnel ID. */
-};
-OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
-
-/* Action structure for NXAST_SET_QUEUE. */
-struct nx_action_set_queue {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_SET_QUEUE. */
-    uint8_t pad[2];
-    uint32_t queue_id;              /* Where to enqueue packets. */
-};
-OFP_ASSERT(sizeof(struct nx_action_set_queue) == 16);
 
 /* Header for Nicira-defined actions. */
 struct nx_action_header {
@@ -266,6 +189,103 @@ struct nx_action_header {
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
+
+/* Action structure for NXAST_RESUBMIT.
+ *
+ * NXAST_RESUBMIT searches the flow table again, using a flow that is slightly
+ * modified from the original lookup:
+ *
+ *    - The 'in_port' member of struct nx_action_resubmit is used as the flow's
+ *      in_port.
+ *
+ *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
+ *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
+ *      values.
+ *
+ * Following the lookup, the original in_port is restored.
+ *
+ * If the modified flow matched in the flow table, then the corresponding
+ * actions are executed.  Afterward, actions following NXAST_RESUBMIT in the
+ * original set of actions, if any, are executed; any changes made to the
+ * packet (e.g. changes to VLAN) by secondary actions persist when those
+ * actions are executed, although the original in_port is restored.
+ *
+ * NXAST_RESUBMIT may be used any number of times within a set of actions.
+ *
+ * NXAST_RESUBMIT may nest to an implementation-defined depth.  Beyond this
+ * implementation-defined depth, further NXAST_RESUBMIT actions are simply
+ * ignored.  (Open vSwitch 1.0.1 and earlier did not support recursion.)
+ */
+struct nx_action_resubmit {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_RESUBMIT. */
+    uint16_t in_port;               /* New in_port for checking flow table. */
+    uint8_t pad[4];
+};
+OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
+
+/* Action structure for NXAST_SET_TUNNEL.
+ *
+ * Sets the encapsulating tunnel ID. */
+struct nx_action_set_tunnel {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SET_TUNNEL. */
+    uint8_t pad[2];
+    uint32_t tun_id;                /* Tunnel ID. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
+
+/* Action structure for NXAST_DROP_SPOOFED_ARP.
+ *
+ * Stops processing further actions, if the packet being processed is an
+ * Ethernet+IPv4 ARP packet for which the source Ethernet address inside the
+ * ARP packet differs from the source Ethernet address in the Ethernet header.
+ *
+ * This is useful because OpenFlow does not provide a way to match on the
+ * Ethernet addresses inside ARP packets, so there is no other way to drop
+ * spoofed ARPs other than sending every ARP packet to a controller. */
+struct nx_action_drop_spoofed_arp {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_DROP_SPOOFED_ARP. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct nx_action_drop_spoofed_arp) == 16);
+
+/* Action structure for NXAST_SET_QUEUE.
+ *
+ * Set the queue that should be used when packets are output.  This is similar
+ * to the OpenFlow OFPAT_ENQUEUE action, but does not take the output port as
+ * an argument.  This allows the queue to be defined before the port is
+ * known. */
+struct nx_action_set_queue {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SET_QUEUE. */
+    uint8_t pad[2];
+    uint32_t queue_id;              /* Where to enqueue packets. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_queue) == 16);
+
+/* Action structure for NXAST_POP_QUEUE.
+ *
+ * Restores the queue to the value it was before any NXAST_SET_QUEUE actions
+ * were used.  Only the original queue can be restored this way; no stack is
+ * maintained. */
+struct nx_action_pop_queue {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_POP_QUEUE. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
 
 /* Wildcard for tunnel ID. */
 #define NXFW_TUN_ID  (1 << 25)
