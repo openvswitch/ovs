@@ -2865,18 +2865,14 @@ xlate_actions(const union ofp_action *in, size_t n_in,
  * error message code (composed with ofp_mkerr()) for the caller to propagate
  * upward.  Otherwise, returns 0.
  *
- * 'oh' is used to make log messages more informative. */
+ * The log message mentions 'msg_type'. */
 static int
-reject_slave_controller(struct ofconn *ofconn, const struct ofp_header *oh)
+reject_slave_controller(struct ofconn *ofconn, const const char *msg_type)
 {
     if (ofconn->type == OFCONN_PRIMARY && ofconn->role == NX_ROLE_SLAVE) {
         static struct vlog_rate_limit perm_rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        char *type_name;
-
-        type_name = ofp_message_type_to_string(oh->type);
         VLOG_WARN_RL(&perm_rl, "rejecting %s message from slave controller",
-                     type_name);
-        free(type_name);
+                     msg_type);
 
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
     } else {
@@ -2896,7 +2892,7 @@ handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
     uint16_t in_port;
     int error;
 
-    error = reject_slave_controller(ofconn, oh);
+    error = reject_slave_controller(ofconn, "OFPT_PACKET_OUT");
     if (error) {
         return error;
     }
@@ -2963,7 +2959,7 @@ handle_port_mod(struct ofconn *ofconn, struct ofp_header *oh)
     struct ofport *port;
     int error;
 
-    error = reject_slave_controller(ofconn, oh);
+    error = reject_slave_controller(ofconn, "OFPT_PORT_MOD");
     if (error) {
         return error;
     }
@@ -3829,7 +3825,7 @@ handle_flow_mod(struct ofconn *ofconn, struct ofp_flow_mod *ofm)
     size_t n_actions;
     int error;
 
-    error = reject_slave_controller(ofconn, &ofm->header);
+    error = reject_slave_controller(ofconn, "OFPT_FLOW_MOD");
     if (error) {
         return error;
     }
