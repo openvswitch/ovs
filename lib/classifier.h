@@ -147,8 +147,8 @@ void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *, int include);
-bool classifier_rule_overlaps(const struct classifier *, const struct flow *,
-                              uint32_t wildcards, unsigned int priority);
+bool classifier_rule_overlaps(const struct classifier *,
+                              const struct cls_rule *);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 

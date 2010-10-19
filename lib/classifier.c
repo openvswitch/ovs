@@ -299,23 +299,19 @@ classifier_find_rule_exactly(const struct classifier *cls,
     return NULL;
 }
 
-/* Checks if the flow defined by 'target' with 'wildcards' at 'priority'
- * overlaps with any other rule at the same priority in the classifier.
- * Two rules are considered overlapping if a packet could match both. */
+/* Checks if 'target' would overlap any other rule in 'cls'.  Two rules are
+ * considered to overlap if both rules have the same priority and a packet
+ * could match both. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
-                         const struct flow *target, uint32_t wildcards,
-                         unsigned int priority)
+                         const struct cls_rule *target)
 {
-    struct cls_rule target_rule;
     const struct hmap *tbl;
 
-    if (!wildcards) {
-        return search_exact_table(cls, flow_hash(target, 0), target) ?
-            true : false;
+    if (!target->wc.wildcards) {
+        return (search_exact_table(cls, flow_hash(&target->flow, 0),
+                                   &target->flow) != NULL);
     }
-
-    cls_rule_from_flow(target, wildcards, priority, &target_rule);
 
     for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
         struct cls_bucket *bucket;
@@ -324,8 +320,8 @@ classifier_rule_overlaps(const struct classifier *cls,
             struct cls_rule *rule;
 
             LIST_FOR_EACH (rule, node.list, &bucket->rules) {
-                if (rule->priority == priority
-                    && rules_match_2wild(rule, &target_rule, 0)) {
+                if (rule->priority == target->priority
+                    && rules_match_2wild(rule, target, 0)) {
                     return true;
                 }
             }

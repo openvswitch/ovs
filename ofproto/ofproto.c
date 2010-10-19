@@ -3619,13 +3619,11 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     int error;
 
     if (ofm->flags & htons(OFPFF_CHECK_OVERLAP)) {
-        struct flow flow;
-        uint32_t wildcards;
+        struct cls_rule cr;
 
-        flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
-                        &flow, &wildcards);
-        if (classifier_rule_overlaps(&p->cls, &flow, wildcards,
-                                     ntohs(ofm->priority))) {
+        cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
+                            p->tun_id_from_cookie, ofm->cookie, &cr);
+        if (classifier_rule_overlaps(&p->cls, &cr)) {
             return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
         }
     }
