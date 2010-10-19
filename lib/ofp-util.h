@@ -145,12 +145,21 @@ enum ofputil_vendor_codes {
  * the vendor codes can fit. */
 BUILD_ASSERT_DECL(OFPUTIL_N_VENDORS <= 16);
 
+/* These are macro versions of the functions defined below.  The macro versions
+ * are intended for use in contexts where function calls are not allowed,
+ * e.g. static initializers and case labels. */
+#define OFP_MKERR(TYPE, CODE) ((1 << 30) | ((TYPE) << 16) | (CODE))
+#define OFP_MKERR_VENDOR(VENDOR, TYPE, CODE) \
+        ((1 << 30) | ((VENDOR) << 26) | ((TYPE) << 16) | (CODE))
+#define OFP_MKERR_NICIRA(TYPE, CODE) \
+        OFP_MKERR_VENDOR(OFPUTIL_VENDOR_NICIRA, TYPE, CODE)
+
 /* Returns the standard OpenFlow error with the specified 'type' and 'code' as
  * an integer. */
 static inline int
 ofp_mkerr(uint16_t type, uint16_t code)
 {
-    return (1 << 30) | (type << 16) | code;
+    return OFP_MKERR(type, code);
 }
 
 /* Returns the OpenFlow vendor error with the specified 'vendor', 'type', and
@@ -159,7 +168,7 @@ static inline int
 ofp_mkerr_vendor(uint8_t vendor, uint16_t type, uint16_t code)
 {
     assert(vendor < OFPUTIL_N_VENDORS);
-    return (1 << 30) | (vendor << 26) | (type << 16) | code;
+    return OFP_MKERR_VENDOR(vendor, type, code);
 }
 
 /* Returns the OpenFlow vendor error with Nicira as vendor, with the specific
@@ -167,7 +176,7 @@ ofp_mkerr_vendor(uint8_t vendor, uint16_t type, uint16_t code)
 static inline int
 ofp_mkerr_nicira(uint16_t type, uint16_t code)
 {
-    return ofp_mkerr_vendor(OFPUTIL_VENDOR_NICIRA, type, code);
+    return OFP_MKERR_NICIRA(type, code);
 }
 
 /* Returns true if 'error' encodes an OpenFlow standard or vendor extension
