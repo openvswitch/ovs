@@ -1702,12 +1702,25 @@ bridge_reconfigure_remotes(struct bridge *br,
     struct ovsrec_controller **controllers;
     size_t n_controllers;
     bool had_primary;
+    const char *disable_ib_str;
+    bool disable_in_band = false;
 
     struct ofproto_controller *ocs;
     size_t n_ocs;
     size_t i;
 
-    ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
+
+    /* Check if we should disable in-band control on this bridge. */
+    disable_ib_str = bridge_get_other_config(br->cfg, "disable-in-band");
+    if (disable_ib_str && !strcmp(disable_ib_str, "true")) {
+        disable_in_band = true;
+    }
+
+    if (disable_in_band) {
+        ofproto_set_extra_in_band_remotes(br->ofproto, NULL, 0);
+    } else {
+        ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
+    }
     had_primary = ofproto_has_primary_controller(br->ofproto);
 
     n_controllers = bridge_get_controllers(br, &controllers);
@@ -1732,7 +1745,11 @@ bridge_reconfigure_remotes(struct bridge *br,
         }
 
         bridge_configure_local_iface_netdev(br, c);
-        bridge_ofproto_controller_from_ovsrec(c, &ocs[n_ocs++]);
+        bridge_ofproto_controller_from_ovsrec(c, &ocs[n_ocs]);
+        if (disable_in_band) {
+            ocs[n_ocs].band = OFPROTO_OUT_OF_BAND;
+        }
+        n_ocs++;
     }
 
     ofproto_set_controllers(br->ofproto, ocs, n_ocs);

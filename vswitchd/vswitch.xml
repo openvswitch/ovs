@@ -330,6 +330,9 @@
           <dd>Exactly 16 hex
             digits to set the OpenFlow datapath ID to a specific
             value.</dd>
+          <dt><code>disable-in-band</code></dt>
+          <dd>If set to <code>true</code>, disable in-band control on 
+            the bridge regardless of controller and manager settings.</dd>
           <dt><code>hwaddr</code></dt>
           <dd>An Ethernet address in the form
             <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
