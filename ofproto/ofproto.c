@@ -60,7 +60,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ofproto)
+VLOG_DEFINE_THIS_MODULE(ofproto);
 
 #include "sflow_api.h"
 

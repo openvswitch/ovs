@@ -57,7 +57,7 @@
 #include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
 
-VLOG_DEFINE_THIS_MODULE(brcompatd)
+VLOG_DEFINE_THIS_MODULE(brcompatd);
 
 
 /* xxx Just hangs if datapath is rmmod/insmod.  Learn to reconnect? */

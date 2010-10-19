@@ -43,7 +43,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dpif_linux)
+VLOG_DEFINE_THIS_MODULE(dpif_linux);
 
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {

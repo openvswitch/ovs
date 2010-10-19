@@ -38,7 +38,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(vconn)
+VLOG_DEFINE_THIS_MODULE(vconn);
 
 /* State of an active vconn.*/
 enum vconn_state {

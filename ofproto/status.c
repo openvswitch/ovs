@@ -35,7 +35,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(status)
+VLOG_DEFINE_THIS_MODULE(status);
 
 struct status_category {
     struct list node;

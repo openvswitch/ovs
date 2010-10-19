@@ -33,7 +33,7 @@
 #include "stream.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(stream_fd)
+VLOG_DEFINE_THIS_MODULE(stream_fd);
 
 /* Active file descriptor stream. */
 

@@ -28,7 +28,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(collectors)
+VLOG_DEFINE_THIS_MODULE(collectors);
 
 struct collectors {
     int *fds;                     /* Sockets. */

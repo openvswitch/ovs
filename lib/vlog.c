@@ -33,7 +33,7 @@
 #include "unixctl.h"
 #include "util.h"
 
-VLOG_DEFINE_THIS_MODULE(vlog)
+VLOG_DEFINE_THIS_MODULE(vlog);
 
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {

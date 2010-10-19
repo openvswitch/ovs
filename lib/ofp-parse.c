@@ -32,7 +32,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ofp_parse)
+VLOG_DEFINE_THIS_MODULE(ofp_parse);
 
 static uint32_t
 str_to_u32(const char *str)

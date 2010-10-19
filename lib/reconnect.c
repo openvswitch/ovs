@@ -23,7 +23,7 @@
 #include "poll-loop.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(reconnect)
+VLOG_DEFINE_THIS_MODULE(reconnect);
 
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \

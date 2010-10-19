@@ -31,7 +31,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(lockfile)
+VLOG_DEFINE_THIS_MODULE(lockfile);
 
 struct lockfile {
     struct hmap_node hmap_node;

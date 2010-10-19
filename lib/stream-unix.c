@@ -35,7 +35,7 @@
 #include "stream-fd.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(stream_unix)
+VLOG_DEFINE_THIS_MODULE(stream_unix);
 
 /* Active UNIX socket. */
 

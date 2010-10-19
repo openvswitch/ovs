@@ -20,7 +20,7 @@
 #include "backtrace.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(leak_checker)
+VLOG_DEFINE_THIS_MODULE(leak_checker);
 
 #ifndef HAVE_MALLOC_HOOKS
 void

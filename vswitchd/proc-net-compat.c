@@ -33,7 +33,7 @@
 #include "svec.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(proc_net_compat)
+VLOG_DEFINE_THIS_MODULE(proc_net_compat);
 
 /* Netlink socket to bridge compatibility kernel module. */
 static struct nl_sock *brc_sock;

@@ -26,7 +26,7 @@
 #include "ofpbuf.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dhcp)
+VLOG_DEFINE_THIS_MODULE(dhcp);
 
 /* Information about a DHCP argument type. */
 struct arg_type {

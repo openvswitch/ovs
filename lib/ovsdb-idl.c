@@ -36,7 +36,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_idl)
+VLOG_DEFINE_THIS_MODULE(ovsdb_idl);
 
 /* An arc from one idl_row to another.  When row A contains a UUID that
  * references row B, this is represented by an arc from A (the source) to B

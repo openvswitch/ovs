@@ -23,7 +23,7 @@
 #include "compiler.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(backtrace)
+VLOG_DEFINE_THIS_MODULE(backtrace);
 
 static uintptr_t OVS_UNUSED
 get_max_stack(void)

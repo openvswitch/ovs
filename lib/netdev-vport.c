@@ -32,7 +32,7 @@
 #include "socket-util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_vport)
+VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 struct netdev_vport_notifier {
     struct netdev_notifier notifier;

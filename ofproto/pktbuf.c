@@ -26,7 +26,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(pktbuf)
+VLOG_DEFINE_THIS_MODULE(pktbuf);
 
 /* Buffers are identified by a 32-bit opaque ID.  We divide the ID
  * into a buffer number (low bits) and a cookie (high bits).  The buffer number

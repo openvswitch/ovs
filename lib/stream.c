@@ -37,7 +37,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(stream)
+VLOG_DEFINE_THIS_MODULE(stream);
 
 /* State of an active stream.*/
 enum stream_state {

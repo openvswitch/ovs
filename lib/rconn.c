@@ -32,7 +32,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(rconn)
+VLOG_DEFINE_THIS_MODULE(rconn);
 
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \

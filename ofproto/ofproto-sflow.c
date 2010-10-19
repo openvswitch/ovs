@@ -34,7 +34,7 @@
 #include "timeval.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(sflow)
+VLOG_DEFINE_THIS_MODULE(sflow);
 
 struct ofproto_sflow_port {
     struct hmap_node hmap_node; /* In struct ofproto_sflow's "ports" hmap. */

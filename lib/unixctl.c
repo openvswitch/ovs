@@ -42,7 +42,7 @@
 #include <time.h>
 #endif
 
-VLOG_DEFINE_THIS_MODULE(unixctl)
+VLOG_DEFINE_THIS_MODULE(unixctl);
 
 struct unixctl_command {
     unixctl_cb_func *cb;

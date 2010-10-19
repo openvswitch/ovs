@@ -25,7 +25,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(coverage)
+VLOG_DEFINE_THIS_MODULE(coverage);
 
 static unsigned int epoch;
 

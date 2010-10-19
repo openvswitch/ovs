@@ -35,7 +35,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovs_discover)
+VLOG_DEFINE_THIS_MODULE(ovs_discover);
 
 struct iface {
     const char *name;

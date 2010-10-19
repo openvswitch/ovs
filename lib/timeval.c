@@ -29,7 +29,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(timeval)
+VLOG_DEFINE_THIS_MODULE(timeval);
 
 /* The clock to use for measuring time intervals.  This is CLOCK_MONOTONIC by
  * preference, but on systems that don't have a monotonic clock we fall back

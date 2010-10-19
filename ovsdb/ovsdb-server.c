@@ -47,7 +47,7 @@
 #include "unixctl.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_server)
+VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
 #if HAVE_OPENSSL
 /* SSL configuration. */

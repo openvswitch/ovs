@@ -24,7 +24,7 @@
 #include "ofpbuf.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(pcap)
+VLOG_DEFINE_THIS_MODULE(pcap);
 
 struct pcap_hdr {
     uint32_t magic_number;   /* magic number */

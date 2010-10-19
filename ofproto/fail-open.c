@@ -32,7 +32,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(fail_open)
+VLOG_DEFINE_THIS_MODULE(fail_open);
 
 /*
  * Fail-open mode.

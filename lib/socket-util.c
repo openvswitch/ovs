@@ -34,7 +34,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(socket_util)
+VLOG_DEFINE_THIS_MODULE(socket_util);
 
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */

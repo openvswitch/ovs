@@ -31,7 +31,7 @@
 #include "unaligned.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(flow)
+VLOG_DEFINE_THIS_MODULE(flow);
 
 static struct arp_eth_header *
 pull_arp(struct ofpbuf *packet)

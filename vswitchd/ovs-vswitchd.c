@@ -48,7 +48,7 @@
 #include "vlog.h"
 #include "vswitchd/vswitch-idl.h"
 
-VLOG_DEFINE_THIS_MODULE(vswitchd)
+VLOG_DEFINE_THIS_MODULE(vswitchd);
 
 static unixctl_cb_func ovs_vswitchd_exit;
 

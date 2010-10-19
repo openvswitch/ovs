@@ -33,7 +33,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netflow)
+VLOG_DEFINE_THIS_MODULE(netflow);
 
 #define NETFLOW_V5_VERSION 5
 

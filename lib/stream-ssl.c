@@ -45,7 +45,7 @@
 #include "timeval.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(stream_ssl)
+VLOG_DEFINE_THIS_MODULE(stream_ssl);
 
 /* Active SSL. */
 

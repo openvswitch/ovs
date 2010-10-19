@@ -29,7 +29,7 @@
 #include "ofpbuf.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(rtnetlink)
+VLOG_DEFINE_THIS_MODULE(rtnetlink);
 
 /* rtnetlink socket. */
 static struct nl_sock *notify_sock;

@@ -34,7 +34,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(process)
+VLOG_DEFINE_THIS_MODULE(process);
 
 struct process {
     struct list node;

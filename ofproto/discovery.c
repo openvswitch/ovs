@@ -33,7 +33,7 @@
 #include "stream-ssl.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(discovery)
+VLOG_DEFINE_THIS_MODULE(discovery);
 
 struct discovery {
     char *dpif_name;

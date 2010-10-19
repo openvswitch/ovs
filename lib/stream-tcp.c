@@ -32,7 +32,7 @@
 #include "stream-fd.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(stream_tcp)
+VLOG_DEFINE_THIS_MODULE(stream_tcp);
 
 /* Active TCP. */
 

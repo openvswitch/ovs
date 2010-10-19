@@ -40,7 +40,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(learning_switch)
+VLOG_DEFINE_THIS_MODULE(learning_switch);
 
 struct lswitch_port {
     struct hmap_node hmap_node; /* Hash node for port number. */

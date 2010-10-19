@@ -24,7 +24,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(svec)
+VLOG_DEFINE_THIS_MODULE(svec);
 
 void
 svec_init(struct svec *svec)

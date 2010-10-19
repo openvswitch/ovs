@@ -40,7 +40,7 @@ vlog_modules=`
 
 # Get the list of modules defined in some source file.
 src_modules=`
-    git grep -h -E '^[ 	]*VLOG_DEFINE(_THIS)?_MODULE\([_a-zA-Z0-9]+\)[ 	]*$' \
+    git grep -h -E '^[ 	]*VLOG_DEFINE(_THIS)?_MODULE\([_a-zA-Z0-9]+\);[ 	]*$' \
     | sed 's/.*(\([_a-zA-Z0-9]\{1,\}\)).*/\1/' \
     | LC_ALL=C sort -u \
     | xargs echo`

@@ -39,7 +39,7 @@
 #include "valgrind.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dpif)
+VLOG_DEFINE_THIS_MODULE(dpif);
 
 static const struct dpif_class *base_dpif_classes[] = {
 #ifdef HAVE_NETLINK

@@ -41,7 +41,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(controller)
+VLOG_DEFINE_THIS_MODULE(controller);
 
 #define MAX_SWITCHES 16
 #define MAX_LISTENERS 16

@@ -46,7 +46,7 @@
 #include "vconn.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ofctl)
+VLOG_DEFINE_THIS_MODULE(ofctl);
 
 
 #define MOD_PORT_CMD_UP      "up"

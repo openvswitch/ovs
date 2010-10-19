@@ -63,7 +63,7 @@
 #include "svec.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_linux)
+VLOG_DEFINE_THIS_MODULE(netdev_linux);
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */

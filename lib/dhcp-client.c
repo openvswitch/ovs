@@ -37,7 +37,7 @@
 #include "timeval.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dhcp_client)
+VLOG_DEFINE_THIS_MODULE(dhcp_client);
 
 #define DHCLIENT_STATES                         \
     DHCLIENT_STATE(INIT, 1 << 0)                \

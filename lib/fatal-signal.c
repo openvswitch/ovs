@@ -30,7 +30,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(fatal_signal)
+VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };

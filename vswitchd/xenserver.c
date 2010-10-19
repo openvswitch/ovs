@@ -24,7 +24,7 @@
 #include "process.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(xenserver)
+VLOG_DEFINE_THIS_MODULE(xenserver);
 
 static char *
 read_host_uuid(void)

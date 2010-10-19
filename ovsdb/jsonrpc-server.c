@@ -36,7 +36,7 @@
 #include "trigger.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server)
+VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server);
 
 struct ovsdb_jsonrpc_remote;
 struct ovsdb_jsonrpc_session;

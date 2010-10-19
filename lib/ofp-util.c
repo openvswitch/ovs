@@ -25,7 +25,7 @@
 #include "random.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ofp_util)
+VLOG_DEFINE_THIS_MODULE(ofp_util);
 
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */

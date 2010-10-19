@@ -68,7 +68,7 @@
 #include "vlog.h"
 #include "sflow_api.h"
 
-VLOG_DEFINE_THIS_MODULE(bridge)
+VLOG_DEFINE_THIS_MODULE(bridge);
 
 struct dst {
     uint16_t vlan;

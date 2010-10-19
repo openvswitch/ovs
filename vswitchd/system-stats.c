@@ -39,7 +39,7 @@
 #include "timeval.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(system_stats)
+VLOG_DEFINE_THIS_MODULE(system_stats);
 
 /* #ifdefs make it a pain to maintain code: you have to try to build both ways.
  * Thus, this file tries to compile as much of the code as possible regardless

@@ -38,7 +38,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_file)
+VLOG_DEFINE_THIS_MODULE(ovsdb_file);
 
 /* Minimum number of milliseconds between database compactions. */
 #define COMPACT_MIN_MSEC        (10 * 60 * 1000) /* 10 minutes. */

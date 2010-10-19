@@ -33,7 +33,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netlink)
+VLOG_DEFINE_THIS_MODULE(netlink);
 
 /* Linux header file confusion causes this to be undefined. */
 #ifndef SOL_NETLINK

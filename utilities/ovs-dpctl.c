@@ -42,7 +42,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dpctl)
+VLOG_DEFINE_THIS_MODULE(dpctl);
 
 static const struct command all_commands[];
 

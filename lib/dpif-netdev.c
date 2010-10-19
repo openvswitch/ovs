@@ -47,7 +47,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(dpif_netdev)
+VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 
 /* Configuration parameters. */
 enum { N_QUEUES = 2 };          /* Number of queues for dpif_recv(). */

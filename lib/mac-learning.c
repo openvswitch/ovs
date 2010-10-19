@@ -31,7 +31,7 @@
 #include "util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(mac_learning)
+VLOG_DEFINE_THIS_MODULE(mac_learning);
 
 /* Returns the number of seconds since 'e' was last learned. */
 int

@@ -40,7 +40,7 @@
 #include "svec.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev)
+VLOG_DEFINE_THIS_MODULE(netdev);
 
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
 

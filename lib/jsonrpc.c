@@ -34,7 +34,7 @@
 #include "timeval.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(jsonrpc)
+VLOG_DEFINE_THIS_MODULE(jsonrpc);
 
 struct jsonrpc {
     struct stream *stream;

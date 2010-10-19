@@ -24,7 +24,7 @@
 #include "socket-util.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(entropy)
+VLOG_DEFINE_THIS_MODULE(entropy);
 
 static const char urandom[] = "/dev/urandom";
 
