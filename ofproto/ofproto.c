@@ -1298,8 +1298,7 @@ ofproto_send_packet(struct ofproto *p, const struct flow *flow,
 }
 
 void
-ofproto_add_flow(struct ofproto *p, const struct flow *flow,
-                 uint32_t wildcards, unsigned int priority,
+ofproto_add_flow(struct ofproto *p, const struct cls_rule *cls_rule,
                  const union ofp_action *actions, size_t n_actions,
                  int idle_timeout)
 {
@@ -1307,20 +1306,17 @@ ofproto_add_flow(struct ofproto *p, const struct flow *flow,
     rule = rule_create(p, NULL, actions, n_actions,
                        idle_timeout >= 0 ? idle_timeout : 5 /* XXX */,
                        0, 0, false);
-    cls_rule_from_flow(flow, wildcards, priority, &rule->cr);
+    rule->cr = *cls_rule;
     rule_insert(p, rule, NULL, 0);
 }
 
 void
-ofproto_delete_flow(struct ofproto *ofproto, const struct flow *flow,
-                    uint32_t wildcards, unsigned int priority)
+ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
 {
-    struct cls_rule target;
     struct rule *rule;
 
-    cls_rule_from_flow(flow, wildcards, priority, &target);
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&ofproto->cls,
-                                                           &target));
+                                                           target));
     if (rule) {
         rule_remove(ofproto, rule);
     }

@@ -134,6 +134,16 @@ cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
     rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
 }
 
+/* Initializes 'rule' as a "catch-all" rule that matches every packet, with
+ * priority 'priority'. */
+void
+cls_rule_init_catchall(struct cls_rule *rule, unsigned int priority)
+{
+    memset(&rule->flow, 0, sizeof rule->flow);
+    flow_wildcards_init(&rule->wc, OVSFW_ALL);
+    rule->priority = priority;
+}
+
 /* For each bit or field wildcarded in 'rule', sets the corresponding bit or
  * field in 'flow' to all-0-bits.  It is important to maintain this invariant
  * in a clr_rule that might be inserted into a classifier.

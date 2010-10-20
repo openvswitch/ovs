@@ -18,6 +18,7 @@
 #include "fail-open.h"
 #include <inttypes.h>
 #include <stdlib.h>
+#include "classifier.h"
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
@@ -257,14 +258,14 @@ static void
 fail_open_recover(struct fail_open *fo)
 {
     if (fail_open_is_active(fo)) {
-        struct flow flow;
+        struct cls_rule rule;
 
         VLOG_WARN("No longer in fail-open mode");
         fo->last_disconn_secs = 0;
         fo->next_bogus_packet_in = LLONG_MAX;
 
-        memset(&flow, 0, sizeof flow);
-        ofproto_delete_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY);
+        cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
+        ofproto_delete_flow(fo->ofproto, &rule);
     }
 }
 
@@ -283,7 +284,7 @@ fail_open_flushed(struct fail_open *fo)
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
         union ofp_action action;
-        struct flow flow;
+        struct cls_rule rule;
 
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL. */
@@ -291,9 +292,9 @@ fail_open_flushed(struct fail_open *fo)
         action.type = htons(OFPAT_OUTPUT);
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
-        memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY,
-                         &action, 1, 0);
+
+        cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
+        ofproto_add_flow(fo->ofproto, &rule, &action, 1, 0);
     }
 }
 

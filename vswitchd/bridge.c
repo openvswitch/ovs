@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "bitmap.h"
+#include "classifier.h"
 #include "coverage.h"
 #include "dirs.h"
 #include "dpif.h"
@@ -1792,14 +1793,14 @@ bridge_reconfigure_remotes(struct bridge *br,
     if (!n_controllers
         && ofproto_get_fail_mode(br->ofproto) == OFPROTO_FAIL_STANDALONE) {
         union ofp_action action;
-        struct flow flow;
+        struct cls_rule rule;
 
         memset(&action, 0, sizeof action);
         action.type = htons(OFPAT_OUTPUT);
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
-        memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
+        cls_rule_init_catchall(&rule, 0);
+        ofproto_add_flow(br->ofproto, &rule, &action, 1, 0);
     }
 }
 

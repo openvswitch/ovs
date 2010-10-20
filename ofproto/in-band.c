@@ -23,6 +23,7 @@
 #include <net/if.h>
 #include <string.h>
 #include <stdlib.h>
+#include "classifier.h"
 #include "dhcp.h"
 #include "dpif.h"
 #include "flow.h"
@@ -221,12 +222,6 @@ enum {
     /* One set per unique remote (IP,port) pair. */
     IBR_TO_REMOTE_TCP,            /* (h) To remote IP, TCP port. */
     IBR_FROM_REMOTE_TCP           /* (i) From remote IP, TCP port. */
-};
-
-struct in_band_rule {
-    struct flow flow;
-    uint32_t wildcards;
-    unsigned int priority;
 };
 
 /* Track one remote IP and next hop information. */
@@ -459,88 +454,78 @@ in_band_rule_check(struct in_band *in_band, const struct flow *flow,
 }
 
 static void
-init_rule(struct in_band_rule *rule, unsigned int priority)
+set_in_port(struct cls_rule *rule, uint16_t odp_port)
 {
-    rule->wildcards = OVSFW_ALL;
-    rule->priority = priority;
-
-    /* Not strictly necessary but seems cleaner. */
-    memset(&rule->flow, 0, sizeof rule->flow);
-}
-
-static void
-set_in_port(struct in_band_rule *rule, uint16_t odp_port)
-{
-    rule->wildcards &= ~OFPFW_IN_PORT;
+    rule->wc.wildcards &= ~OFPFW_IN_PORT;
     rule->flow.in_port = odp_port;
 }
 
 static void
-set_dl_type(struct in_band_rule *rule, uint16_t dl_type)
+set_dl_type(struct cls_rule *rule, uint16_t dl_type)
 {
-    rule->wildcards &= ~OFPFW_DL_TYPE;
+    rule->wc.wildcards &= ~OFPFW_DL_TYPE;
     rule->flow.dl_type = dl_type;
 }
 
 static void
-set_dl_src(struct in_band_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
+set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 {
-    rule->wildcards &= ~OFPFW_DL_SRC;
+    rule->wc.wildcards &= ~OFPFW_DL_SRC;
     memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
 }
 
 static void
-set_dl_dst(struct in_band_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
+set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    rule->wildcards &= ~OFPFW_DL_DST;
+    rule->wc.wildcards &= ~OFPFW_DL_DST;
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
 static void
-set_tp_src(struct in_band_rule *rule, uint16_t tp_src)
+set_tp_src(struct cls_rule *rule, uint16_t tp_src)
 {
-    rule->wildcards &= ~OFPFW_TP_SRC;
+    rule->wc.wildcards &= ~OFPFW_TP_SRC;
     rule->flow.tp_src = tp_src;
 }
 
 static void
-set_tp_dst(struct in_band_rule *rule, uint16_t tp_dst)
+set_tp_dst(struct cls_rule *rule, uint16_t tp_dst)
 {
-    rule->wildcards &= ~OFPFW_TP_DST;
+    rule->wc.wildcards &= ~OFPFW_TP_DST;
     rule->flow.tp_dst = tp_dst;
 }
 
 static void
-set_nw_proto(struct in_band_rule *rule, uint8_t nw_proto)
+set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
 {
-    rule->wildcards &= ~OFPFW_NW_PROTO;
+    rule->wc.wildcards &= ~OFPFW_NW_PROTO;
     rule->flow.nw_proto = nw_proto;
 }
 
 static void
-set_nw_src(struct in_band_rule *rule, const struct in_addr nw_src)
+set_nw_src(struct cls_rule *rule, const struct in_addr nw_src)
 {
-    rule->wildcards &= ~OFPFW_NW_SRC_MASK;
+    rule->wc.wildcards &= ~OFPFW_NW_SRC_MASK;
     rule->flow.nw_src = nw_src.s_addr;
 }
 
 static void
-set_nw_dst(struct in_band_rule *rule, const struct in_addr nw_dst)
+set_nw_dst(struct cls_rule *rule, const struct in_addr nw_dst)
 {
-    rule->wildcards &= ~OFPFW_NW_DST_MASK;
+    rule->wc.wildcards &= ~OFPFW_NW_DST_MASK;
     rule->flow.nw_dst = nw_dst.s_addr;
 }
 
 static void
 make_rules(struct in_band *ib,
-           void (*cb)(struct in_band *, const struct in_band_rule *))
+           void (*cb)(struct in_band *, const struct cls_rule *))
 {
-    struct in_band_rule rule;
+    struct cls_rule rule;
     size_t i;
 
     if (!eth_addr_is_zero(ib->installed_local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
-        init_rule(&rule, IBR_FROM_LOCAL_DHCP);
+        cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
         set_in_port(&rule, ODPP_LOCAL);
         set_dl_type(&rule, htons(ETH_TYPE_IP));
         set_dl_src(&rule, ib->installed_local_mac);
@@ -550,14 +535,14 @@ make_rules(struct in_band *ib,
         cb(ib, &rule);
 
         /* (b) Allow ARP replies to the local port's MAC address. */
-        init_rule(&rule, IBR_TO_LOCAL_ARP);
+        cls_rule_init_catchall(&rule, IBR_TO_LOCAL_ARP);
         set_dl_type(&rule, htons(ETH_TYPE_ARP));
         set_dl_dst(&rule, ib->installed_local_mac);
         set_nw_proto(&rule, ARP_OP_REPLY);
         cb(ib, &rule);
 
         /* (c) Allow ARP requests from the local port's MAC address.  */
-        init_rule(&rule, IBR_FROM_LOCAL_ARP);
+        cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_ARP);
         set_dl_type(&rule, htons(ETH_TYPE_ARP));
         set_dl_src(&rule, ib->installed_local_mac);
         set_nw_proto(&rule, ARP_OP_REQUEST);
@@ -576,14 +561,14 @@ make_rules(struct in_band *ib,
         }
 
         /* (d) Allow ARP replies to the next hop's MAC address. */
-        init_rule(&rule, IBR_TO_NEXT_HOP_ARP);
+        cls_rule_init_catchall(&rule, IBR_TO_NEXT_HOP_ARP);
         set_dl_type(&rule, htons(ETH_TYPE_ARP));
         set_dl_dst(&rule, remote_mac);
         set_nw_proto(&rule, ARP_OP_REPLY);
         cb(ib, &rule);
 
         /* (e) Allow ARP requests from the next hop's MAC address. */
-        init_rule(&rule, IBR_FROM_NEXT_HOP_ARP);
+        cls_rule_init_catchall(&rule, IBR_FROM_NEXT_HOP_ARP);
         set_dl_type(&rule, htons(ETH_TYPE_ARP));
         set_dl_src(&rule, remote_mac);
         set_nw_proto(&rule, ARP_OP_REQUEST);
@@ -596,7 +581,7 @@ make_rules(struct in_band *ib,
         if (!i || a->sin_addr.s_addr != a[-1].sin_addr.s_addr) {
             /* (f) Allow ARP replies containing the remote's IP address as a
              * target. */
-            init_rule(&rule, IBR_TO_REMOTE_ARP);
+            cls_rule_init_catchall(&rule, IBR_TO_REMOTE_ARP);
             set_dl_type(&rule, htons(ETH_TYPE_ARP));
             set_nw_proto(&rule, ARP_OP_REPLY);
             set_nw_dst(&rule, a->sin_addr);
@@ -604,7 +589,7 @@ make_rules(struct in_band *ib,
 
             /* (g) Allow ARP requests containing the remote's IP address as a
              * source. */
-            init_rule(&rule, IBR_FROM_REMOTE_ARP);
+            cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_ARP);
             set_dl_type(&rule, htons(ETH_TYPE_ARP));
             set_nw_proto(&rule, ARP_OP_REQUEST);
             set_nw_src(&rule, a->sin_addr);
@@ -615,7 +600,7 @@ make_rules(struct in_band *ib,
             || a->sin_addr.s_addr != a[-1].sin_addr.s_addr
             || a->sin_port != a[-1].sin_port) {
             /* (h) Allow TCP traffic to the remote's IP and port. */
-            init_rule(&rule, IBR_TO_REMOTE_TCP);
+            cls_rule_init_catchall(&rule, IBR_TO_REMOTE_TCP);
             set_dl_type(&rule, htons(ETH_TYPE_IP));
             set_nw_proto(&rule, IP_TYPE_TCP);
             set_nw_dst(&rule, a->sin_addr);
@@ -623,7 +608,7 @@ make_rules(struct in_band *ib,
             cb(ib, &rule);
 
             /* (i) Allow TCP traffic from the remote's IP and port. */
-            init_rule(&rule, IBR_FROM_REMOTE_TCP);
+            cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_TCP);
             set_dl_type(&rule, htons(ETH_TYPE_IP));
             set_nw_proto(&rule, IP_TYPE_TCP);
             set_nw_src(&rule, a->sin_addr);
@@ -634,10 +619,9 @@ make_rules(struct in_band *ib,
 }
 
 static void
-drop_rule(struct in_band *ib, const struct in_band_rule *rule)
+drop_rule(struct in_band *ib, const struct cls_rule *rule)
 {
-    ofproto_delete_flow(ib->ofproto, &rule->flow,
-                        rule->wildcards, rule->priority);
+    ofproto_delete_flow(ib->ofproto, rule);
 }
 
 /* Drops from the flow table all of the flows set up by 'ib', then clears out
@@ -662,7 +646,7 @@ drop_rules(struct in_band *ib)
 }
 
 static void
-add_rule(struct in_band *ib, const struct in_band_rule *rule)
+add_rule(struct in_band *ib, const struct cls_rule *rule)
 {
     union ofp_action action;
 
@@ -670,8 +654,7 @@ add_rule(struct in_band *ib, const struct in_band_rule *rule)
     action.output.len = htons(sizeof action);
     action.output.port = htons(OFPP_NORMAL);
     action.output.max_len = htons(0);
-    ofproto_add_flow(ib->ofproto, &rule->flow, rule->wildcards,
-                     rule->priority, &action, 1, 0);
+    ofproto_add_flow(ib->ofproto, rule, &action, 1, 0);
 }
 
 /* Inserts flows into the flow table for the current state of 'ib'. */

@@ -77,6 +77,7 @@ void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
                         unsigned int priority, struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          int flow_format, uint64_t cookie, struct cls_rule *);
+void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
 
 void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 
