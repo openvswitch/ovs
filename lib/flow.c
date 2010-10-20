@@ -348,3 +348,30 @@ flow_print(FILE *stream, const struct flow *flow)
     fputs(s, stream);
     free(s);
 }
+
+/* flow_wildcards functions. */
+
+/* Given the wildcard bit count in bits 'shift' through 'shift + 5' (inclusive)
+ * of 'wildcards', returns a 32-bit bit mask with a 1 in each bit that must
+ * match and a 0 in each bit that is wildcarded.
+ *
+ * The bits in 'wildcards' are in the format used in enum ofp_flow_wildcards: 0
+ * is exact match, 1 ignores the LSB, 2 ignores the 2 least-significant bits,
+ * ..., 32 and higher wildcard the entire field.  This is the *opposite* of the
+ * usual convention where e.g. /24 indicates that 8 bits (not 24 bits) are
+ * wildcarded. */
+ovs_be32
+flow_nw_bits_to_mask(uint32_t wildcards, int shift)
+{
+    wildcards = (wildcards >> shift) & 0x3f;
+    return wildcards < 32 ? htonl(~((1u << wildcards) - 1)) : 0;
+}
+
+void
+flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
+{
+    wc->wildcards = wildcards & OVSFW_ALL;
+    wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
+    wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
+}
+
