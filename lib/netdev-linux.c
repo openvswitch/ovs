@@ -2276,7 +2276,7 @@ htb_setup_qdisc__(struct netdev *netdev)
     memset(&opt, 0, sizeof opt);
     opt.rate2quantum = 10;
     opt.version = 3;
-    opt.defcls = 0;
+    opt.defcls = 1;
 
     opt_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     nl_msg_put_unspec(&request, TCA_HTB_INIT, &opt, sizeof opt);
