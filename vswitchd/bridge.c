@@ -3564,6 +3564,8 @@ port_destroy(struct port *port)
         del = br->ports[port->port_idx] = br->ports[--br->n_ports];
         del->port_idx = port->port_idx;
 
+        VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
+
         netdev_monitor_destroy(port->monitor);
         free(port->ifaces);
         bitmap_free(port->trunks);
