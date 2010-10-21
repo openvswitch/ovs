@@ -56,10 +56,7 @@
 #define ovs_be32 __be32
 #define ovs_be64 __be64
 #else
-#include <stdint.h>
-#define ovs_be16 uint16_t
-#define ovs_be32 uint32_t
-#define ovs_be64 uint64_t
+#include "openvswitch/types.h"
 #endif
 
 #define ODP_MAX 256             /* Maximum number of datapaths. */
