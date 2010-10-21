@@ -496,8 +496,11 @@ A cookie is an opaque identifier that can be associated with the flow.
 flows.
 .
 .PP
-The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBdel\-flows\fR commands
-support an additional optional field:
+The following additional field sets the priority for flows added by
+the \fBadd\-flow\fR and \fBadd\-flows\fR commands.  For
+\fBmod\-flows\fR and \fBdel\-flows\fR when \fB\-\-strict\fR is
+specified, priority must match along with the rest of the flow
+specification.  Other commands ignore the priority value.
 .
 .IP \fBpriority=\fIvalue\fR
 The priority at which a wildcarded entry will match in comparison to
