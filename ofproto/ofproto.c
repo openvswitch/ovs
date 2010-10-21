@@ -3346,6 +3346,8 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     ofp_print_match(results, &match, true);
     if (act_len > 0) {
         ofp_print_actions(results, &rule->actions->header, act_len);
+    } else {
+        ds_put_cstr(results, "drop");
     }
     ds_put_cstr(results, "\n");
 }
