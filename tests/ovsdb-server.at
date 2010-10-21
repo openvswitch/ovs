@@ -204,8 +204,9 @@ AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@
@@ -226,8 +227,9 @@ AT_CHECK([wc -l < db], [0], [4
 dnl And check that the dumped data is the same too:
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
   [test ! -e pid || kill `cat pid`])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@
@@ -251,8 +253,9 @@ AT_CHECK([wc -l < db], [0], [6
 dnl Then check that the dumped data is correct.
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
   [test ! -e pid || kill `cat pid`])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@

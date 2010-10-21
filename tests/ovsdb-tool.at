@@ -106,8 +106,9 @@ AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@
@@ -128,8 +129,9 @@ AT_CHECK([wc -l < db], [0], [4
 dnl And check that the dumped data is the same too:
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@
@@ -169,8 +171,9 @@ AT_CHECK(
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name  number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name  number
 ------------------------------------ ----- ------
 <0> five  5     @&t@
 <1> four  4     @&t@
@@ -191,8 +194,9 @@ AT_CHECK([wc -l < db], [0], [4
 dnl And check that the dumped data is the same except for the removed column:
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                number
 ------------------------------------ ------
 <0> 0     @&t@
 <1> 1     @&t@
@@ -231,8 +235,9 @@ AT_CHECK(
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                number
 ------------------------------------ ------
 <0> 0     @&t@
 <1> 1     @&t@
@@ -253,8 +258,9 @@ AT_CHECK([wc -l < db], [0], [4
 dnl And check that the dumped data is the same except for the added column:
 AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
-  [_uuid                                name number
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+ordinals table
+_uuid                                name number
 ------------------------------------ ---- ------
 <0> ""   0     @&t@
 <1> ""   1     @&t@
