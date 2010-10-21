@@ -173,7 +173,8 @@ the local port network device, and start the DHCP client afterward.
 .SS "OpenFlow Options"
 .TP
 \fB\-\-datapath\-id=\fIdpid\fR
-Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
+Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits
+and may not be all-zero,
 as the datapath ID that the switch will use to identify itself to
 OpenFlow controllers.
 .IP

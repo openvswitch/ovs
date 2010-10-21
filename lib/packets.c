@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,16 @@
 #include <stdlib.h>
 #include "ofpbuf.h"
 
+/* Parses 's' as a 16-digit hexadecimal number representing a datapath ID.  On
+ * success stores the dpid into '*dpidp' and returns true, on failure stores 0
+ * into '*dpidp' and returns false.
+ *
+ * Rejects an all-zeros dpid as invalid. */
 bool
 dpid_from_string(const char *s, uint64_t *dpidp)
 {
     *dpidp = (strlen(s) == 16 && strspn(s, "0123456789abcdefABCDEF") == 16
-              ? strtoll(s, NULL, 16)
+              ? strtoull(s, NULL, 16)
               : 0);
     return *dpidp != 0;
 }

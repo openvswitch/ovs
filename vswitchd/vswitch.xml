@@ -329,7 +329,7 @@
           <dt><code>datapath-id</code></dt>
           <dd>Exactly 16 hex
             digits to set the OpenFlow datapath ID to a specific
-            value.</dd>
+            value.  May not be all-zero.</dd>
           <dt><code>disable-in-band</code></dt>
           <dd>If set to <code>true</code>, disable in-band control on 
             the bridge regardless of controller and manager settings.</dd>
