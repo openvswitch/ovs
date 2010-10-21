@@ -441,6 +441,10 @@ table_print_table__(const struct table *table)
         putchar('\n');
     }
 
+    if (table->caption) {
+        puts(table->caption);
+    }
+
     if (output_headings) {
         for (x = 0; x < table->n_columns; x++) {
             const struct column *column = &table->columns[x];
