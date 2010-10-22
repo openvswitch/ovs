@@ -566,6 +566,7 @@ struct vsctl_iface {
 };
 
 struct vsctl_info {
+    struct vsctl_context *ctx;
     struct shash bridges;
     struct shash ports;
     struct shash ifaces;
@@ -659,11 +660,13 @@ free_info(struct vsctl_info *info)
 }
 
 static void
-get_info(const struct ovsrec_open_vswitch *ovs, struct vsctl_info *info)
+get_info(struct vsctl_context *ctx, struct vsctl_info *info)
 {
+    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
     struct shash bridges, ports;
     size_t i;
 
+    info->ctx = ctx;
     shash_init(&info->bridges);
     shash_init(&info->ports);
     shash_init(&info->ifaces);
@@ -1004,7 +1007,7 @@ cmd_add_br(struct vsctl_context *ctx)
                     ctx->argv[0]);
     }
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     if (may_exist) {
         struct vsctl_bridge *br;
 
@@ -1112,7 +1115,7 @@ cmd_del_br(struct vsctl_context *ctx)
     struct vsctl_bridge *bridge;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], must_exist);
     if (bridge) {
         struct shash_node *node;
@@ -1151,7 +1154,7 @@ cmd_list_br(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct svec bridges;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
 
     svec_init(&bridges);
     SHASH_FOR_EACH (node, &info.bridges) {
@@ -1169,7 +1172,7 @@ cmd_br_exists(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     if (!find_bridge(&info, ctx->argv[1], false)) {
         vsctl_exit(2);
     }
@@ -1223,7 +1226,7 @@ cmd_br_set_external_id(struct vsctl_context *ctx)
     char **keys, **values;
     size_t n;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->br_cfg) {
         set_external_id(bridge->br_cfg->key_external_ids,
@@ -1278,7 +1281,7 @@ cmd_br_get_external_id(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->br_cfg) {
         get_external_id(bridge->br_cfg->key_external_ids,
@@ -1305,7 +1308,7 @@ cmd_list_ports(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct svec ports;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
     svec_init(&ports);
@@ -1335,7 +1338,7 @@ add_port(struct vsctl_context *ctx,
     struct ovsrec_port *port;
     size_t i;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     if (may_exist) {
         struct vsctl_port *vsctl_port;
 
@@ -1455,7 +1458,7 @@ cmd_del_port(struct vsctl_context *ctx)
     struct vsctl_port *port;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     if (!with_iface) {
         port = find_port(&info, ctx->argv[ctx->argc - 1], must_exist);
     } else {
@@ -1504,7 +1507,7 @@ cmd_port_to_br(struct vsctl_context *ctx)
     struct vsctl_port *port;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     port = find_port(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%s\n", port->bridge->name);
     free_info(&info);
@@ -1516,7 +1519,7 @@ cmd_br_to_vlan(struct vsctl_context *ctx)
     struct vsctl_bridge *bridge;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%d\n", bridge->vlan);
     free_info(&info);
@@ -1528,7 +1531,7 @@ cmd_br_to_parent(struct vsctl_context *ctx)
     struct vsctl_bridge *bridge;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->parent) {
         bridge = bridge->parent;
@@ -1545,7 +1548,7 @@ cmd_list_ifaces(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct svec ifaces;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
     svec_init(&ifaces);
@@ -1569,7 +1572,7 @@ cmd_iface_to_br(struct vsctl_context *ctx)
     struct vsctl_iface *iface;
     struct vsctl_info info;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     iface = find_iface(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%s\n", iface->port->bridge->name);
     free_info(&info);
@@ -1583,7 +1586,7 @@ cmd_get_controller(struct vsctl_context *ctx)
     struct svec targets;
     size_t i;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
     /* Print the targets in sorted order for reproducibility. */
@@ -1618,7 +1621,7 @@ cmd_del_controller(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct vsctl_bridge *br;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
 
     if (br->ctrl) {
@@ -1652,7 +1655,7 @@ cmd_set_controller(struct vsctl_context *ctx)
     struct ovsrec_controller **controllers;
     size_t n;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
 
     delete_controllers(br->ctrl, br->n_ctrl);
@@ -1671,7 +1674,7 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct vsctl_bridge *br;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
     if (br->fail_mode && strlen(br->fail_mode)) {
@@ -1687,7 +1690,7 @@ cmd_del_fail_mode(struct vsctl_context *ctx)
     struct vsctl_info info;
     struct vsctl_bridge *br;
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
 
     ovsrec_bridge_set_fail_mode(br->br_cfg, NULL);
@@ -1702,7 +1705,7 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
     struct vsctl_bridge *br;
     const char *fail_mode = ctx->argv[2];
 
-    get_info(ctx->ovs, &info);
+    get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
 
     if (strcmp(fail_mode, "standalone") && strcmp(fail_mode, "secure")) {
