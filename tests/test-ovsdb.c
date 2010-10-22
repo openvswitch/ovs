@@ -1779,9 +1779,36 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
                           "i=%d", atoi(arg1));
             }
             idltest_simple_delete(s);
+        } else if (!strcmp(name, "verify")) {
+            const struct idltest_simple *s;
+
+            if (!arg2 || arg3) {
+                ovs_fatal(0, "\"verify\" command requires 2 arguments");
+            }
+
+            s = idltest_find_simple(idl, atoi(arg1));
+            if (!s) {
+                ovs_fatal(0, "\"verify\" command asks for nonexistent "
+                          "i=%d", atoi(arg1));
+            }
+
+            if (!strcmp(arg2, "i")) {
+                idltest_simple_verify_i(s);
+            } else if (!strcmp(arg2, "b")) {
+                idltest_simple_verify_b(s);
+            } else if (!strcmp(arg2, "s")) {
+                idltest_simple_verify_s(s);
+            } else if (!strcmp(arg2, "u")) {
+                idltest_simple_verify_s(s);
+            } else if (!strcmp(arg2, "r")) {
+                idltest_simple_verify_r(s);
+            } else {
+                ovs_fatal(0, "\"verify\" command asks for unknown column %s",
+                          arg2);
+            }
         } else if (!strcmp(name, "increment")) {
             if (!arg2 || arg3) {
-                ovs_fatal(0, "\"set\" command requires 2 arguments");
+                ovs_fatal(0, "\"increment\" command requires 2 arguments");
             }
             ovsdb_idl_txn_increment(txn, arg1, arg2, NULL);
             increment = true;

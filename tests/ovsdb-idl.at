@@ -165,8 +165,8 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL],
       {"op": "insert",
        "table": "simple",
        "row": {}}]']],
-  [['set 0 b 1, set 1 r 3.5' \
-    'insert 2, delete 1']],
+  [['verify 0 b, verify 1 r, set 0 b 1, set 1 r 3.5' \
+    'insert 2, verify 2 i, verify 1 b, delete 1']],
   [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 000: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[false true] sa=[abc def] ua=[<3> <4>] uuid=<5>
 001: commit, status=success
@@ -176,6 +176,37 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL],
 004: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<6>
 005: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, handling verification failure],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['set 0 b 1' \
+    '+["idltest",
+       {"op": "update",
+        "table": "simple",
+        "where": [["i", "==", 1]],
+        "row": {"r": 5.0}}]' \
+    '+verify 1 r, set 1 r 3' \
+    'verify 1 r, set 1 r 3' \
+    ]],
+  [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+000: i=1 r=2 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+001: commit, status=success
+002: {"error":null,"result":[{"count":1}]}
+003: commit, status=try again
+004: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: i=1 r=5 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+005: commit, status=success
+006: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=3 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+007: done
 ]])
 
 OVSDB_CHECK_IDL([simple idl, increment operation],
