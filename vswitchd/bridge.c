@@ -255,6 +255,7 @@ static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
 static void iface_set_mac(struct iface *);
+static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
@@ -509,6 +510,7 @@ iterate_and_prune_ifaces(struct bridge *br,
             if (cb(br, iface, aux)) {
                 j++;
             } else {
+                iface_set_ofport(iface->cfg, -1);
                 iface_destroy(iface);
             }
         }
@@ -1839,12 +1841,10 @@ bridge_fetch_dp_ifaces(struct bridge *br)
                             hash_int(iface->dp_ifidx, 0));
             }
 
-            if (iface->cfg) {
-                int64_t ofport = (iface->dp_ifidx >= 0
-                                  ? odp_port_to_ofp_port(iface->dp_ifidx)
-                                  : -1);
-                ovsrec_interface_set_ofport(iface->cfg, &ofport, 1);
-            }
+            iface_set_ofport(iface->cfg,
+                             (iface->dp_ifidx >= 0
+                              ? odp_port_to_ofp_port(iface->dp_ifidx)
+                              : -1));
         }
     }
     free(dpif_ports);
@@ -3452,6 +3452,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         if (!shash_add_once(&new_ifaces, if_cfg->name, NULL)) {
             VLOG_WARN("port %s: %s specified twice as port interface",
                       port->name, if_cfg->name);
+            iface_set_ofport(if_cfg, -1);
             continue;
         }
 
@@ -3860,6 +3861,15 @@ iface_set_mac(struct iface *iface)
                          iface->name, strerror(error));
             }
         }
+    }
+}
+
+/* Sets the ofport column of 'if_cfg' to 'ofport'. */
+static void
+iface_set_ofport(const struct ovsrec_interface *if_cfg, int64_t ofport)
+{
+    if (if_cfg) {
+        ovsrec_interface_set_ofport(if_cfg, &ofport, 1);
     }
 }
 
