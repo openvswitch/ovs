@@ -36,7 +36,8 @@
    "Bridge": {
      "columns": {
        "name": {
-         "type": "string"},
+         "type": "string",
+         "mutable": false},
        "datapath_type": {
          "type": "string"},
        "datapath_id": {
@@ -78,7 +79,8 @@
    "Port": {
      "columns": {
        "name": {
-         "type": "string"},
+         "type": "string",
+         "mutable": false},
        "interfaces": {
          "type": {"key": {"type": "uuid",
                           "refTable": "Interface"},
@@ -115,7 +117,8 @@
    "Interface": {
      "columns": {
        "name": {
-         "type": "string"},
+         "type": "string",
+         "mutable": false},
        "type": {
          "type": "string"},
        "options": {
