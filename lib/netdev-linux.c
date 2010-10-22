@@ -2519,7 +2519,6 @@ htb_update_queue__(struct netdev *netdev, unsigned int queue_id,
 static int
 htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 {
-    struct shash details = SHASH_INITIALIZER(&details);
     struct ofpbuf msg;
     struct nl_dump dump;
     struct htb_class hc;
@@ -2532,7 +2531,6 @@ htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 
     /* Get queues. */
     start_queue_dump(netdev, &dump);
-    shash_init(&details);
     while (nl_dump_next(&dump, &msg)) {
         unsigned int queue_id;
 
