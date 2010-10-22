@@ -149,11 +149,14 @@ is represented by <database-schema>, as described below.
 
         "type": <type>                            required
         "ephemeral": <boolean>                    optional
+        "mutable": <boolean>                      optional
 
     The "type" specifies the type of data stored in this column.  If
     "ephemeral" is specified as true, then this column's values are
     not guaranteed to be durable; they may be lost when the database
-    restarts.
+    restarts.  If "mutable" is specified as false, then this column's
+    values may not be modified after they are initially set with the
+    "insert" operation.
 
 <type>
 
