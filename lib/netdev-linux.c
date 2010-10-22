@@ -1360,6 +1360,9 @@ netdev_linux_remove_policing(struct netdev *netdev)
     int error;
 
     tcmsg = tc_make_request(netdev, RTM_DELQDISC, 0, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = tc_make_handle(0xffff, 0);
     tcmsg->tcm_parent = TC_H_INGRESS;
     nl_msg_put_string(&request, TCA_KIND, "ingress");
@@ -1617,16 +1620,20 @@ netdev_linux_get_queue_stats(const struct netdev *netdev,
     return netdev_dev->tc->ops->class_get_stats(netdev, queue_id, stats);
 }
 
-static void
+static bool
 start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
 
     tcmsg = tc_make_request(netdev, RTM_GETTCLASS, 0, &request);
+    if (!tcmsg) {
+        return false;
+    }
     tcmsg->tcm_parent = 0;
     nl_dump_start(dump, rtnl_sock, &request);
     ofpbuf_uninit(&request);
+    return true;
 }
 
 static int
@@ -1684,7 +1691,9 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev,
     }
 
     last_error = 0;
-    start_queue_dump(netdev, &dump);
+    if (!start_queue_dump(netdev, &dump)) {
+        return ENODEV;
+    }
     while (nl_dump_next(&dump, &msg)) {
         error = netdev_dev->tc->ops->class_dump_stats(netdev, &msg, cb, aux);
         if (error) {
@@ -2237,6 +2246,9 @@ htb_setup_qdisc__(struct netdev *netdev)
 
     tcmsg = tc_make_request(netdev, RTM_NEWQDISC,
                             NLM_F_EXCL | NLM_F_CREATE, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = tc_make_handle(1, 0);
     tcmsg->tcm_parent = TC_H_ROOT;
 
@@ -2277,6 +2289,9 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     opt.prio = class->priority;
 
     tcmsg = tc_make_request(netdev, RTM_NEWTCLASS, NLM_F_CREATE, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = handle;
     tcmsg->tcm_parent = parent;
 
@@ -2484,7 +2499,9 @@ htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
     htb = htb_install__(netdev, hc.max_rate);
 
     /* Get queues. */
-    start_queue_dump(netdev, &dump);
+    if (!start_queue_dump(netdev, &dump)) {
+        return ENODEV;
+    }
     shash_init(&details);
     while (nl_dump_next(&dump, &msg)) {
         unsigned int queue_id;
@@ -3044,6 +3061,9 @@ tc_query_class(const struct netdev *netdev,
     int error;
 
     tcmsg = tc_make_request(netdev, RTM_GETTCLASS, NLM_F_ECHO, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = handle;
     tcmsg->tcm_parent = parent;
 
@@ -3067,6 +3087,9 @@ tc_delete_class(const struct netdev *netdev, unsigned int handle)
     int error;
 
     tcmsg = tc_make_request(netdev, RTM_DELTCLASS, 0, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = handle;
     tcmsg->tcm_parent = 0;
 
@@ -3091,6 +3114,9 @@ tc_del_qdisc(struct netdev *netdev)
     int error;
 
     tcmsg = tc_make_request(netdev, RTM_DELQDISC, 0, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = tc_make_handle(1, 0);
     tcmsg->tcm_parent = TC_H_ROOT;
 
@@ -3142,6 +3168,9 @@ tc_query_qdisc(const struct netdev *netdev)
      * We could check for Linux 2.6.35+ and use a more straightforward method
      * there. */
     tcmsg = tc_make_request(netdev, RTM_GETQDISC, NLM_F_ECHO, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
     tcmsg->tcm_handle = tc_make_handle(1, 0);
     tcmsg->tcm_parent = 0;
 
