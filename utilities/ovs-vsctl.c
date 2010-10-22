@@ -539,6 +539,7 @@ struct vsctl_context {
     struct ovsdb_idl_txn *txn;
     struct ovsdb_symbol_table *symtab;
     const struct ovsrec_open_vswitch *ovs;
+    bool verified_ports;
 
     /* A command may set this member to true if some prerequisite is not met
      * and the caller should wait for something to change and then retry. */
@@ -594,6 +595,25 @@ vsctl_context_to_string(const struct vsctl_context *ctx)
     svec_destroy(&words);
 
     return s;
+}
+
+static void
+verify_ports(struct vsctl_context *ctx)
+{
+    if (!ctx->verified_ports) {
+        const struct ovsrec_bridge *bridge;
+        const struct ovsrec_port *port;
+
+        ovsrec_open_vswitch_verify_bridges(ctx->ovs);
+        OVSREC_BRIDGE_FOR_EACH (bridge, ctx->idl) {
+            ovsrec_bridge_verify_ports(bridge);
+        }
+        OVSREC_PORT_FOR_EACH (port, ctx->idl) {
+            ovsrec_port_verify_interfaces(port);
+        }
+
+        ctx->verified_ports = true;
+    }
 }
 
 static struct vsctl_bridge *
@@ -772,6 +792,8 @@ check_conflicts(struct vsctl_info *info, const char *name,
     struct vsctl_iface *iface;
     struct vsctl_port *port;
 
+    verify_ports(info->ctx);
+
     if (shash_find(&info->bridges, name)) {
         vsctl_fatal("%s because a bridge named %s already exists",
                     msg, name);
@@ -799,6 +821,7 @@ find_bridge(struct vsctl_info *info, const char *name, bool must_exist)
     if (must_exist && !br) {
         vsctl_fatal("no bridge named %s", name);
     }
+    ovsrec_open_vswitch_verify_bridges(info->ctx->ovs);
     return br;
 }
 
@@ -822,6 +845,7 @@ find_port(struct vsctl_info *info, const char *name, bool must_exist)
     if (must_exist && !port) {
         vsctl_fatal("no port named %s", name);
     }
+    verify_ports(info->ctx);
     return port;
 }
 
@@ -835,6 +859,7 @@ find_iface(struct vsctl_info *info, const char *name, bool must_exist)
     if (must_exist && !iface) {
         vsctl_fatal("no interface named %s", name);
     }
+    verify_ports(info->ctx);
     return iface;
 }
 
@@ -1234,6 +1259,7 @@ cmd_br_set_external_id(struct vsctl_context *ctx)
                         bridge->br_cfg->n_external_ids,
                         ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
                         &keys, &values, &n);
+        ovsrec_bridge_verify_external_ids(bridge->br_cfg);
         ovsrec_bridge_set_external_ids(bridge->br_cfg, keys, values, n);
     } else {
         char *key = xasprintf("fake-bridge-%s", ctx->argv[2]);
@@ -1243,6 +1269,7 @@ cmd_br_set_external_id(struct vsctl_context *ctx)
                         port->port_cfg->n_external_ids,
                         key, ctx->argc >= 4 ? ctx->argv[3] : NULL,
                         &keys, &values, &n);
+        ovsrec_port_verify_external_ids(port->port_cfg);
         ovsrec_port_set_external_ids(port->port_cfg, keys, values, n);
         free(key);
     }
@@ -1284,6 +1311,7 @@ cmd_br_get_external_id(struct vsctl_context *ctx)
     get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->br_cfg) {
+        ovsrec_bridge_verify_external_ids(bridge->br_cfg);
         get_external_id(bridge->br_cfg->key_external_ids,
                         bridge->br_cfg->value_external_ids,
                         bridge->br_cfg->n_external_ids,
@@ -1291,6 +1319,7 @@ cmd_br_get_external_id(struct vsctl_context *ctx)
                         &ctx->output);
     } else {
         struct vsctl_port *port = shash_find_data(&info.ports, ctx->argv[1]);
+        ovsrec_port_verify_external_ids(port->port_cfg);
         get_external_id(port->port_cfg->key_external_ids,
                         port->port_cfg->value_external_ids,
                         port->port_cfg->n_external_ids,
@@ -1310,6 +1339,7 @@ cmd_list_ports(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
+    ovsrec_bridge_verify_ports(br->br_cfg ? br->br_cfg : br->parent->br_cfg);
 
     svec_init(&ports);
     SHASH_FOR_EACH (node, &info.ports) {
@@ -1550,6 +1580,7 @@ cmd_list_ifaces(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
+    verify_ports(ctx);
 
     svec_init(&ifaces);
     SHASH_FOR_EACH (node, &info.ifaces) {
@@ -1579,6 +1610,19 @@ cmd_iface_to_br(struct vsctl_context *ctx)
 }
 
 static void
+verify_controllers(struct ovsrec_bridge *bridge)
+{
+    if (bridge) {
+        size_t i;
+
+        ovsrec_bridge_verify_controller(bridge);
+        for (i = 0; i < bridge->n_controller; i++) {
+            ovsrec_controller_verify_target(bridge->controller[i]);
+        }
+    }
+}
+
+static void
 cmd_get_controller(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
@@ -1588,6 +1632,7 @@ cmd_get_controller(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
+    verify_controllers(br->br_cfg);
 
     /* Print the targets in sorted order for reproducibility. */
     svec_init(&targets);
@@ -1623,6 +1668,7 @@ cmd_del_controller(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
+    verify_controllers(br->br_cfg);
 
     if (br->ctrl) {
         delete_controllers(br->ctrl, br->n_ctrl);
@@ -1657,6 +1703,7 @@ cmd_set_controller(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
+    verify_controllers(br->br_cfg);
 
     delete_controllers(br->ctrl, br->n_ctrl);
 
@@ -1677,6 +1724,9 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
+    if (br->br_cfg) {
+        ovsrec_bridge_verify_fail_mode(br->br_cfg);
+    }
     if (br->fail_mode && strlen(br->fail_mode)) {
         ds_put_format(&ctx->output, "%s\n", br->fail_mode);
     }
@@ -1722,7 +1772,13 @@ cmd_get_ssl(struct vsctl_context *ctx)
 {
     struct ovsrec_ssl *ssl = ctx->ovs->ssl;
 
+    ovsrec_open_vswitch_verify_ssl(ctx->ovs);
     if (ssl) {
+        ovsrec_ssl_verify_private_key(ssl);
+        ovsrec_ssl_verify_certificate(ssl);
+        ovsrec_ssl_verify_ca_cert(ssl);
+        ovsrec_ssl_verify_bootstrap_ca_cert(ssl);
+
         ds_put_format(&ctx->output, "Private key: %s\n", ssl->private_key);
         ds_put_format(&ctx->output, "Certificate: %s\n", ssl->certificate);
         ds_put_format(&ctx->output, "CA Certificate: %s\n", ssl->ca_cert);
@@ -1737,6 +1793,7 @@ cmd_del_ssl(struct vsctl_context *ctx)
     struct ovsrec_ssl *ssl = ctx->ovs->ssl;
 
     if (ssl) {
+        ovsrec_open_vswitch_verify_ssl(ctx->ovs);
         ovsrec_ssl_delete(ssl);
         ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
     }
@@ -1748,6 +1805,7 @@ cmd_set_ssl(struct vsctl_context *ctx)
     bool bootstrap = shash_find(&ctx->options, "--bootstrap");
     struct ovsrec_ssl *ssl = ctx->ovs->ssl;
 
+    ovsrec_open_vswitch_verify_ssl(ctx->ovs);
     if (ssl) {
         ovsrec_ssl_delete(ssl);
     }
@@ -1932,6 +1990,7 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
     if (id->uuid_column) {
         const struct ovsdb_datum *uuid;
 
+        ovsdb_idl_txn_verify(referrer, id->uuid_column);
         uuid = ovsdb_idl_get(referrer, id->uuid_column,
                              OVSDB_TYPE_UUID, OVSDB_TYPE_VOID);
         if (uuid->n == 1) {
@@ -2237,6 +2296,7 @@ cmd_get(struct vsctl_context *ctx)
                                             &column, &key_string,
                                             NULL, NULL, 0, NULL));
 
+        ovsdb_idl_txn_verify(row, column);
         datum = ovsdb_idl_read(row, column);
         if (key_string) {
             union ovsdb_atom key;
@@ -2429,6 +2489,7 @@ cmd_add(struct vsctl_context *ctx)
                     type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                     column->name, table->class->name, type->n_max);
     }
+    ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
 }
 
@@ -2477,6 +2538,7 @@ cmd_remove(struct vsctl_context *ctx)
                     type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                     column->name, table->class->name, type->n_min);
     }
+    ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
 }
 
@@ -2700,6 +2762,7 @@ vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
     ctx->txn = txn;
     ctx->ovs = ovs;
     ctx->symtab = symtab;
+    ctx->verified_ports = false;
 
     ctx->try_again = false;
 }
