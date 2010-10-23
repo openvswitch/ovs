@@ -2791,7 +2791,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     }
     error = xstrdup(ovsdb_idl_txn_get_error(txn));
     ovsdb_idl_txn_destroy(txn);
-    the_idl_txn = NULL;
+    txn = the_idl_txn = NULL;
 
     unused = ovsdb_symbol_table_find_unused(symtab);
     if (unused) {
@@ -2882,8 +2882,10 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
      * resources and return so that the caller can try again. */
-    ovsdb_idl_txn_abort(txn);
-    ovsdb_idl_txn_destroy(txn);
+    if (txn) {
+        ovsdb_idl_txn_abort(txn);
+        ovsdb_idl_txn_destroy(txn);
+    }
     ovsdb_symbol_table_destroy(symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_destroy(&c->output);
