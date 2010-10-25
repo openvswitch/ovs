@@ -2945,14 +2945,12 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
     flow_extract(&payload, 0, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
     error = xlate_actions((const union ofp_action *) opo->actions, n_actions,
                           &flow, p, &payload, &actions, NULL, NULL, NULL);
-    if (error) {
-        return error;
+    if (!error) {
+        dpif_execute(p->dpif, actions.actions, actions.n_actions, &payload);
     }
-
-    dpif_execute(p->dpif, actions.actions, actions.n_actions, &payload);
     ofpbuf_delete(buffer);
 
-    return 0;
+    return error;
 }
 
 static void
