@@ -78,7 +78,7 @@ const union ofp_action *actions_first(struct actions_iterator *,
                                       size_t n_actions);
 const union ofp_action *actions_next(struct actions_iterator *);
 int validate_actions(const union ofp_action *, size_t n_actions,
-                     int max_ports);
+                     const struct flow *, int max_ports);
 bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);

@@ -612,7 +612,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 
 int
 validate_actions(const union ofp_action *actions, size_t n_actions,
-                 int max_ports)
+                 const struct flow *flow OVS_UNUSED, int max_ports)
 {
     size_t i;
 

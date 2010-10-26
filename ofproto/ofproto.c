@@ -2930,7 +2930,7 @@ handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
     /* Extract flow, check actions. */
     flow_extract(&payload, 0, ofp_port_to_odp_port(ntohs(opo->in_port)),
                  &flow);
-    error = validate_actions(ofp_actions, n_ofp_actions, p->max_ports);
+    error = validate_actions(ofp_actions, n_ofp_actions, &flow, p->max_ports);
     if (error) {
         goto exit;
     }
@@ -4022,7 +4022,8 @@ flow_mod_core(struct ofconn *ofconn, struct flow_mod *fm)
         return error;
     }
 
-    error = validate_actions(fm->actions, fm->n_actions, p->max_ports);
+    error = validate_actions(fm->actions, fm->n_actions,
+                             &fm->cr.flow, p->max_ports);
     if (error) {
         return error;
     }
