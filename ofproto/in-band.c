@@ -454,69 +454,6 @@ in_band_rule_check(struct in_band *in_band, const struct flow *flow,
 }
 
 static void
-set_in_port(struct cls_rule *rule, uint16_t odp_port)
-{
-    rule->wc.wildcards &= ~OFPFW_IN_PORT;
-    rule->flow.in_port = odp_port;
-}
-
-static void
-set_dl_type(struct cls_rule *rule, uint16_t dl_type)
-{
-    rule->wc.wildcards &= ~OFPFW_DL_TYPE;
-    rule->flow.dl_type = dl_type;
-}
-
-static void
-set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
-{
-    rule->wc.wildcards &= ~OFPFW_DL_SRC;
-    memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
-}
-
-static void
-set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
-{
-    rule->wc.wildcards &= ~OFPFW_DL_DST;
-    memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
-}
-
-static void
-set_tp_src(struct cls_rule *rule, uint16_t tp_src)
-{
-    rule->wc.wildcards &= ~OFPFW_TP_SRC;
-    rule->flow.tp_src = tp_src;
-}
-
-static void
-set_tp_dst(struct cls_rule *rule, uint16_t tp_dst)
-{
-    rule->wc.wildcards &= ~OFPFW_TP_DST;
-    rule->flow.tp_dst = tp_dst;
-}
-
-static void
-set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
-{
-    rule->wc.wildcards &= ~OFPFW_NW_PROTO;
-    rule->flow.nw_proto = nw_proto;
-}
-
-static void
-set_nw_src(struct cls_rule *rule, const struct in_addr nw_src)
-{
-    rule->wc.wildcards &= ~OFPFW_NW_SRC_MASK;
-    rule->flow.nw_src = nw_src.s_addr;
-}
-
-static void
-set_nw_dst(struct cls_rule *rule, const struct in_addr nw_dst)
-{
-    rule->wc.wildcards &= ~OFPFW_NW_DST_MASK;
-    rule->flow.nw_dst = nw_dst.s_addr;
-}
-
-static void
 make_rules(struct in_band *ib,
            void (*cb)(struct in_band *, const struct cls_rule *))
 {
@@ -526,26 +463,26 @@ make_rules(struct in_band *ib,
     if (!eth_addr_is_zero(ib->installed_local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
         cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
-        set_in_port(&rule, ODPP_LOCAL);
-        set_dl_type(&rule, htons(ETH_TYPE_IP));
-        set_dl_src(&rule, ib->installed_local_mac);
-        set_nw_proto(&rule, IP_TYPE_UDP);
-        set_tp_src(&rule, htons(DHCP_CLIENT_PORT));
-        set_tp_dst(&rule, htons(DHCP_SERVER_PORT));
+        cls_rule_set_in_port(&rule, ODPP_LOCAL);
+        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
+        cls_rule_set_dl_src(&rule, ib->installed_local_mac);
+        cls_rule_set_nw_proto(&rule, IP_TYPE_UDP);
+        cls_rule_set_tp_src(&rule, htons(DHCP_CLIENT_PORT));
+        cls_rule_set_tp_dst(&rule, htons(DHCP_SERVER_PORT));
         cb(ib, &rule);
 
         /* (b) Allow ARP replies to the local port's MAC address. */
         cls_rule_init_catchall(&rule, IBR_TO_LOCAL_ARP);
-        set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        set_dl_dst(&rule, ib->installed_local_mac);
-        set_nw_proto(&rule, ARP_OP_REPLY);
+        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+        cls_rule_set_dl_dst(&rule, ib->installed_local_mac);
+        cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
         cb(ib, &rule);
 
         /* (c) Allow ARP requests from the local port's MAC address.  */
         cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_ARP);
-        set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        set_dl_src(&rule, ib->installed_local_mac);
-        set_nw_proto(&rule, ARP_OP_REQUEST);
+        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+        cls_rule_set_dl_src(&rule, ib->installed_local_mac);
+        cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
         cb(ib, &rule);
     }
 
@@ -562,16 +499,16 @@ make_rules(struct in_band *ib,
 
         /* (d) Allow ARP replies to the next hop's MAC address. */
         cls_rule_init_catchall(&rule, IBR_TO_NEXT_HOP_ARP);
-        set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        set_dl_dst(&rule, remote_mac);
-        set_nw_proto(&rule, ARP_OP_REPLY);
+        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+        cls_rule_set_dl_dst(&rule, remote_mac);
+        cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
         cb(ib, &rule);
 
         /* (e) Allow ARP requests from the next hop's MAC address. */
         cls_rule_init_catchall(&rule, IBR_FROM_NEXT_HOP_ARP);
-        set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        set_dl_src(&rule, remote_mac);
-        set_nw_proto(&rule, ARP_OP_REQUEST);
+        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+        cls_rule_set_dl_src(&rule, remote_mac);
+        cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
         cb(ib, &rule);
     }
 
@@ -582,17 +519,17 @@ make_rules(struct in_band *ib,
             /* (f) Allow ARP replies containing the remote's IP address as a
              * target. */
             cls_rule_init_catchall(&rule, IBR_TO_REMOTE_ARP);
-            set_dl_type(&rule, htons(ETH_TYPE_ARP));
-            set_nw_proto(&rule, ARP_OP_REPLY);
-            set_nw_dst(&rule, a->sin_addr);
+            cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+            cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
+            cls_rule_set_nw_dst(&rule, a->sin_addr.s_addr);
             cb(ib, &rule);
 
             /* (g) Allow ARP requests containing the remote's IP address as a
              * source. */
             cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_ARP);
-            set_dl_type(&rule, htons(ETH_TYPE_ARP));
-            set_nw_proto(&rule, ARP_OP_REQUEST);
-            set_nw_src(&rule, a->sin_addr);
+            cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
+            cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
+            cls_rule_set_nw_src(&rule, a->sin_addr.s_addr);
             cb(ib, &rule);
         }
 
@@ -601,18 +538,18 @@ make_rules(struct in_band *ib,
             || a->sin_port != a[-1].sin_port) {
             /* (h) Allow TCP traffic to the remote's IP and port. */
             cls_rule_init_catchall(&rule, IBR_TO_REMOTE_TCP);
-            set_dl_type(&rule, htons(ETH_TYPE_IP));
-            set_nw_proto(&rule, IP_TYPE_TCP);
-            set_nw_dst(&rule, a->sin_addr);
-            set_tp_dst(&rule, a->sin_port);
+            cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
+            cls_rule_set_nw_proto(&rule, IP_TYPE_TCP);
+            cls_rule_set_nw_dst(&rule, a->sin_addr.s_addr);
+            cls_rule_set_tp_dst(&rule, a->sin_port);
             cb(ib, &rule);
 
             /* (i) Allow TCP traffic from the remote's IP and port. */
             cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_TCP);
-            set_dl_type(&rule, htons(ETH_TYPE_IP));
-            set_nw_proto(&rule, IP_TYPE_TCP);
-            set_nw_src(&rule, a->sin_addr);
-            set_tp_src(&rule, a->sin_port);
+            cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
+            cls_rule_set_nw_proto(&rule, IP_TYPE_TCP);
+            cls_rule_set_nw_src(&rule, a->sin_addr.s_addr);
+            cls_rule_set_tp_src(&rule, a->sin_port);
             cb(ib, &rule);
         }
     }

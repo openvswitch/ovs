@@ -158,6 +158,69 @@ cls_rule_zero_wildcarded_fields(struct cls_rule *rule)
     zero_wildcards(&rule->flow, &rule->wc);
 }
 
+void
+cls_rule_set_in_port(struct cls_rule *rule, uint16_t odp_port)
+{
+    rule->wc.wildcards &= ~OFPFW_IN_PORT;
+    rule->flow.in_port = odp_port;
+}
+
+void
+cls_rule_set_dl_type(struct cls_rule *rule, ovs_be16 dl_type)
+{
+    rule->wc.wildcards &= ~OFPFW_DL_TYPE;
+    rule->flow.dl_type = dl_type;
+}
+
+void
+cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
+{
+    rule->wc.wildcards &= ~OFPFW_DL_SRC;
+    memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
+}
+
+void
+cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
+{
+    rule->wc.wildcards &= ~OFPFW_DL_DST;
+    memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
+}
+
+void
+cls_rule_set_tp_src(struct cls_rule *rule, ovs_be16 tp_src)
+{
+    rule->wc.wildcards &= ~OFPFW_TP_SRC;
+    rule->flow.tp_src = tp_src;
+}
+
+void
+cls_rule_set_tp_dst(struct cls_rule *rule, ovs_be16 tp_dst)
+{
+    rule->wc.wildcards &= ~OFPFW_TP_DST;
+    rule->flow.tp_dst = tp_dst;
+}
+
+void
+cls_rule_set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
+{
+    rule->wc.wildcards &= ~OFPFW_NW_PROTO;
+    rule->flow.nw_proto = nw_proto;
+}
+
+void
+cls_rule_set_nw_src(struct cls_rule *rule, ovs_be32 nw_src)
+{
+    flow_wildcards_set_nw_src_mask(&rule->wc, htonl(UINT32_MAX));
+    rule->flow.nw_src = nw_src;
+}
+
+void
+cls_rule_set_nw_dst(struct cls_rule *rule, ovs_be32 nw_dst)
+{
+    flow_wildcards_set_nw_dst_mask(&rule->wc, htonl(UINT32_MAX));
+    rule->flow.nw_dst = nw_dst;
+}
+
 /* Converts 'rule' to a string and returns the string.  The caller must free
  * the string (with free()). */
 char *
