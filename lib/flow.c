@@ -88,7 +88,7 @@ parse_vlan(struct ofpbuf *b, struct flow *flow)
     if (b->size >= sizeof(struct qtag_prefix) + sizeof(ovs_be16)) {
         struct qtag_prefix *qp = ofpbuf_pull(b, sizeof *qp);
         flow->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
-        flow->dl_vlan_pcp = (ntohs(qp->tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+        flow->dl_vlan_pcp = vlan_tci_to_pcp(qp->tci);
     }
 }
 
