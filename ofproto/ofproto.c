@@ -1372,6 +1372,8 @@ reinit_ports(struct ofproto *p)
     size_t n_odp_ports;
     size_t i;
 
+    COVERAGE_INC(ofproto_reinit_ports);
+
     svec_init(&devnames);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         svec_add (&devnames, (char *) ofport->opp.name);
