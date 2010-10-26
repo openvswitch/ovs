@@ -38,6 +38,7 @@ static inline size_t hmap_node_hash(const struct hmap_node *node)
 }
 
 #define HMAP_NODE_NULL ((struct hmap_node *) 1)
+#define HMAP_NODE_NULL_INITIALIZER { 0, HMAP_NODE_NULL }
 
 /* Returns true if 'node' has been set to null by hmap_node_nullify() and has
  * not been un-nullified by being inserted into an hmap. */
