@@ -88,26 +88,24 @@ def get_bridge_id(br_name, default=None):
 # same as "xs-vif-uuid".  This may be overridden by defining a
 # "nicira-iface-id" key in the "other_config" field of the VIF
 # record of XAPI.
-def get_iface_id(if_name, default=None):
+def get_iface_id(if_name, xs_vif_uuid):
     if not if_name.startswith("vif"):
-        return default
-
-    domain,device = if_name.strip("vif").split(".")
+        # Treat whatever was passed into 'xs_vif_uuid' as a default
+        # value for non-VIFs.
+        return xs_vif_uuid
 
     if not init_session():
         s_log.warning("Failed to get interface id %s because"
                 " XAPI session could not be initialized" % if_name)
-        return default
+        return xs_vif_uuid
 
-    for n in session.xenapi.VM.get_all():
-        if session.xenapi.VM.get_domid(n) == domain:
-            vifs = session.xenapi.VM.get_VIFs(n)
-            for vif in vifs:
-                rec = session.xenapi.VIF.get_record(vif)
-                if rec['device'] == device:
-                    return rec['other_config'].get('nicira-iface-id', default)
-    return None
-
+    try:
+        vif = session.xenapi.VIF.get_by_uuid(xs_vif_uuid)
+        rec = session.xenapi.VIF.get_record(vif)
+        return rec['other_config'].get('nicira-iface-id', xs_vif_uuid)
+    except XenAPI.Failure:
+        s_log.warning("Could not find XAPI entry for VIF %s" % if_name)
+        return xs_vif_uuid
 
 def set_external_id(table, record, key, value):
     col = 'external-ids:"' + key + '"="' + value + '"'
