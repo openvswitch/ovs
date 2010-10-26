@@ -32,14 +32,14 @@ struct ofp_match;
 struct ofpbuf;
 
 struct flow {
-    uint32_t tun_id;            /* Encapsulating tunnel ID. */
-    uint32_t nw_src;            /* IP source address. */
-    uint32_t nw_dst;            /* IP destination address. */
+    ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
+    ovs_be32 nw_src;            /* IP source address. */
+    ovs_be32 nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */
-    uint16_t dl_vlan;           /* Input VLAN. */
-    uint16_t dl_type;           /* Ethernet frame type. */
-    uint16_t tp_src;            /* TCP/UDP source port. */
-    uint16_t tp_dst;            /* TCP/UDP destination port. */
+    ovs_be16 dl_vlan;           /* Input VLAN. */
+    ovs_be16 dl_type;           /* Ethernet frame type. */
+    ovs_be16 tp_src;            /* TCP/UDP source port. */
+    ovs_be16 tp_dst;            /* TCP/UDP destination port. */
     uint8_t dl_src[6];          /* Ethernet source address. */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
@@ -55,14 +55,14 @@ BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
-int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port,
+int flow_extract(struct ofpbuf *, ovs_be32 tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats);
 void flow_to_match(const struct flow *, uint32_t wildcards, bool tun_id_cookie,
                    struct ofp_match *);
 void flow_from_match(const struct ofp_match *, bool tun_id_from_cookie,
-                     uint64_t cookie, struct flow *, uint32_t *wildcards);
+                     ovs_be64 cookie, struct flow *, uint32_t *wildcards);
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);
@@ -90,9 +90,9 @@ flow_hash(const struct flow *flow, uint32_t basis)
 
 /* Information on wildcards for a flow, as a supplement to struct flow. */
 struct flow_wildcards {
-    uint32_t wildcards;         /* enum ofp_flow_wildcards (in host order). */
-    uint32_t nw_src_mask;       /* 1-bit in each significant nw_src bit. */
-    uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
+    uint32_t wildcards;         /* enum ofp_flow_wildcards. */
+    ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
+    ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
 
 /* Given the wildcard bit count in bits 'shift' through 'shift + 5' (inclusive)
@@ -103,11 +103,8 @@ struct flow_wildcards {
  * is exact match, 1 ignores the LSB, 2 ignores the 2 least-significant bits,
  * ..., 32 and higher wildcard the entire field.  This is the *opposite* of the
  * usual convention where e.g. /24 indicates that 8 bits (not 24 bits) are
- * wildcarded.
- *
- * 'wildcards' is in host byte order.  The return value is in network byte
- * order. */
-static inline uint32_t
+ * wildcarded. */
+static inline ovs_be32
 flow_nw_bits_to_mask(uint32_t wildcards, int shift)
 {
     wildcards = (wildcards >> shift) & 0x3f;

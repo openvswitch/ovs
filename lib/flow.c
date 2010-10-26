@@ -81,24 +81,24 @@ static void
 parse_vlan(struct ofpbuf *b, struct flow *flow)
 {
     struct qtag_prefix {
-        uint16_t eth_type;      /* ETH_TYPE_VLAN */
-        uint16_t tci;
+        ovs_be16 eth_type;      /* ETH_TYPE_VLAN */
+        ovs_be16 tci;
     };
 
-    if (b->size >= sizeof(struct qtag_prefix) + sizeof(uint16_t)) {
+    if (b->size >= sizeof(struct qtag_prefix) + sizeof(ovs_be16)) {
         struct qtag_prefix *qp = ofpbuf_pull(b, sizeof *qp);
         flow->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
         flow->dl_vlan_pcp = (ntohs(qp->tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
     }
 }
 
-static uint16_t
+static ovs_be16
 parse_ethertype(struct ofpbuf *b)
 {
     struct llc_snap_header *llc;
-    uint16_t proto;
+    ovs_be16 proto;
 
-    proto = *(uint16_t *) ofpbuf_pull(b, sizeof proto);
+    proto = *(ovs_be16 *) ofpbuf_pull(b, sizeof proto);
     if (ntohs(proto) >= ODP_DL_TYPE_ETH2_CUTOFF) {
         return proto;
     }
@@ -120,10 +120,8 @@ parse_ethertype(struct ofpbuf *b)
     return llc->snap.snap_type;
 }
 
-/* 'tun_id' is in network byte order, while 'in_port' is in host byte order.
- * These byte orders are the same as they are in struct odp_flow_key.
- *
- * Initializes packet header pointers as follows:
+/* Initializes 'flow' members from 'packet', 'tun_id', and 'in_port.
+ * Initializes 'packet' header pointers as follows:
  *
  *    - packet->l2 to the start of the Ethernet header.
  *
@@ -138,7 +136,7 @@ parse_ethertype(struct ofpbuf *b)
  *      present and has a correct length, and otherwise NULL.
  */
 int
-flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
+flow_extract(struct ofpbuf *packet, ovs_be32 tun_id, uint16_t in_port,
              struct flow *flow)
 {
     struct ofpbuf b = *packet;
@@ -281,7 +279,7 @@ flow_to_match(const struct flow *flow, uint32_t wildcards,
 
 void
 flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
-                uint64_t cookie, struct flow *flow, uint32_t *flow_wildcards)
+                ovs_be64 cookie, struct flow *flow, uint32_t *flow_wildcards)
 {
 	uint32_t wildcards = ntohl(match->wildcards);
 
