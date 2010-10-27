@@ -542,7 +542,7 @@
         <p>Open vSwitch populates this column when the port number becomes
           known.  If the interface is successfully added,
           <ref column="ofport"/> will be set to a number between 1 and 65535
-          (generally either in the range 1 to 65280, exclusive, or 65534, the
+          (generally either in the range 1 to 65279, inclusive, or 65534, the
           port number for the OpenFlow ``local port'').  If the interface
           cannot be added then Open vSwitch sets this column
           to -1.</p>
