@@ -1396,7 +1396,6 @@ make_ofport(const struct odp_port *odp_port)
     enum netdev_flags flags;
     struct ofport *ofport;
     struct netdev *netdev;
-    bool carrier;
     int error;
 
     memset(&netdev_options, 0, sizeof netdev_options);
@@ -1423,8 +1422,7 @@ make_ofport(const struct odp_port *odp_port)
     netdev_get_flags(netdev, &flags);
     ofport->opp.config = flags & NETDEV_UP ? 0 : OFPPC_PORT_DOWN;
 
-    netdev_get_carrier(netdev, &carrier);
-    ofport->opp.state = carrier ? 0 : OFPPS_LINK_DOWN;
+    ofport->opp.state = netdev_get_carrier(netdev) ? 0 : OFPPS_LINK_DOWN;
 
     netdev_get_features(netdev,
                         &ofport->opp.curr, &ofport->opp.advertised,

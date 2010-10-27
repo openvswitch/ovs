@@ -127,7 +127,7 @@ int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
 int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
 
 /* PHY interface. */
-int netdev_get_carrier(const struct netdev *, bool *carrier);
+bool netdev_get_carrier(const struct netdev *);
 int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);

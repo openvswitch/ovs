@@ -114,13 +114,6 @@ netdev_vport_get_mtu(const struct netdev *netdev, int *mtup)
 }
 
 int
-netdev_vport_get_carrier(const struct netdev *netdev OVS_UNUSED, bool *carrier)
-{
-    *carrier = true;
-    return 0;
-}
-
-int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     const char *name = netdev_get_name(netdev);

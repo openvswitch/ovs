@@ -259,7 +259,11 @@ struct netdev_class {
     int (*get_ifindex)(const struct netdev *netdev);
 
     /* Sets 'carrier' to true if carrier is active (link light is on) on
-     * 'netdev'. */
+     * 'netdev'.
+     *
+     * May be null if device does not provide carrier status (will be always
+     * up as long as device is up).
+     */
     int (*get_carrier)(const struct netdev *netdev, bool *carrier);
 
     /* Retrieves current device stats for 'netdev' into 'stats'.

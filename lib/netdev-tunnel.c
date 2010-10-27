@@ -256,7 +256,7 @@ const struct netdev_class netdev_gre_class = {
     netdev_vport_get_etheraddr,
     netdev_vport_get_mtu,
     NULL,                       /* get_ifindex */
-    netdev_vport_get_carrier,
+    NULL,                       /* get_carrier */
     netdev_vport_get_stats,
     netdev_vport_set_stats,
 
@@ -316,7 +316,7 @@ const struct netdev_class netdev_capwap_class = {
     netdev_vport_get_etheraddr,
     netdev_vport_get_mtu,
     NULL,                       /* get_ifindex */
-    netdev_vport_get_carrier,
+    NULL,                       /* get_carrier */
     netdev_vport_get_stats,
     netdev_vport_set_stats,
 

@@ -390,7 +390,7 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         error = netdev_open(&netdev_options, &iface->netdev);
 
         if (iface->netdev) {
-            netdev_get_carrier(iface->netdev, &iface->enabled);
+            iface->enabled = netdev_get_carrier(iface->netdev);
         }
     } else if (iface->netdev) {
         const char *netdev_type = netdev_get_type(iface->netdev);
