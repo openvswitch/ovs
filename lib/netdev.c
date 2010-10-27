@@ -892,19 +892,32 @@ netdev_arp_lookup(const struct netdev *netdev,
     return error;
 }
 
-/* Sets 'carrier' to true if carrier is active (link light is on) on
- * 'netdev'. */
-int
-netdev_get_carrier(const struct netdev *netdev, bool *carrier)
+/* Returns true if carrier is active (link light is on) on 'netdev'. */
+bool
+netdev_get_carrier(const struct netdev *netdev)
 {
-    int error = (netdev_get_dev(netdev)->netdev_class->get_carrier
-                 ? netdev_get_dev(netdev)->netdev_class->get_carrier(netdev,
-                        carrier)
-                 : EOPNOTSUPP);
-    if (error) {
-        *carrier = false;
+    int error;
+    enum netdev_flags flags;
+    bool carrier;
+
+    netdev_get_flags(netdev, &flags);
+    if (!(flags & NETDEV_UP)) {
+        return false;
     }
-    return error;
+
+    if (!netdev_get_dev(netdev)->netdev_class->get_carrier) {
+        return true;
+    }
+
+    error = netdev_get_dev(netdev)->netdev_class->get_carrier(netdev,
+                                                              &carrier);
+    if (error) {
+        VLOG_DBG("%s: failed to get network device carrier status, assuming "
+                 "down: %s", netdev_get_name(netdev), strerror(error));
+        carrier = false;
+    }
+
+    return carrier;
 }
 
 /* Retrieves current device stats for 'netdev'. */

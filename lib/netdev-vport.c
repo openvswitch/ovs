@@ -272,13 +272,6 @@ netdev_vport_get_mtu(const struct netdev *netdev, int *mtup)
     return 0;
 }
 
-static int
-netdev_vport_get_carrier(const struct netdev *netdev OVS_UNUSED, bool *carrier)
-{
-    *carrier = true;
-    return 0;
-}
-
 int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
@@ -613,7 +606,7 @@ parse_patch_config(struct vport_info *port, const struct shash *args)
     netdev_vport_get_etheraddr,                             \
     netdev_vport_get_mtu,                                   \
     NULL,                       /* get_ifindex */           \
-    netdev_vport_get_carrier,                               \
+    NULL,                       /* get_carrier */           \
     netdev_vport_get_stats,                                 \
     netdev_vport_set_stats,                                 \
                                                             \

@@ -182,10 +182,8 @@ sflow_agent_get_counters(void *os_, SFLPoller *poller,
         counters->ifDirection = 0;
     }
     if (!netdev_get_flags(osp->netdev, &flags) && flags & NETDEV_UP) {
-        bool carrier;
-
         counters->ifStatus = 1; /* ifAdminStatus up. */
-        if (!netdev_get_carrier(osp->netdev, &carrier) && carrier) {
+        if (netdev_get_carrier(osp->netdev)) {
             counters->ifStatus |= 2; /* ifOperStatus us. */
         }
     } else {

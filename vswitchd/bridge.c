@@ -420,7 +420,7 @@ create_iface_netdev(struct iface *iface)
     error = netdev_open(&netdev_options, &iface->netdev);
 
     if (iface->netdev) {
-        netdev_get_carrier(iface->netdev, &iface->enabled);
+        iface->enabled = netdev_get_carrier(iface->netdev);
     }
 
     shash_destroy(&options);
@@ -2077,10 +2077,11 @@ bond_run(struct bridge *br)
             /* Track carrier going up and down on interfaces. */
             while (!netdev_monitor_poll(port->monitor, &devname)) {
                 struct iface *iface;
-                bool carrier;
 
                 iface = port_lookup_iface(port, devname);
-                if (iface && !netdev_get_carrier(iface->netdev, &carrier)) {
+                if (iface) {
+                    bool carrier = netdev_get_carrier(iface->netdev);
+
                     bond_link_status_update(iface, carrier);
                     port_update_bond_compat(port);
                 }
