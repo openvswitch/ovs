@@ -367,13 +367,13 @@ monitor_daemon(pid_t daemon_pid)
             ovs_fatal(errno, "waitpid failed");
         } else if (retval == daemon_pid) {
             char *s = process_status_msg(status);
-            free(status_msg);
-            status_msg = xasprintf("%d crashes: pid %lu died, %s",
-                                   ++crashes,
-                                   (unsigned long int) daemon_pid, s);
-            free(s);
-
             if (should_restart(status)) {
+                free(status_msg);
+                status_msg = xasprintf("%d crashes: pid %lu died, %s",
+                                       ++crashes,
+                                       (unsigned long int) daemon_pid, s);
+                free(s);
+
                 if (WCOREDUMP(status)) {
                     /* Disable further core dumps to save disk space. */
                     struct rlimit r;
@@ -407,7 +407,9 @@ monitor_daemon(pid_t daemon_pid)
                     break;
                 }
             } else {
-                VLOG_INFO("%s, exiting", status_msg);
+                VLOG_INFO("pid %lu died, %s, exiting",
+                          (unsigned long int) daemon_pid, s);
+                free(s);
                 exit(0);
             }
         }
