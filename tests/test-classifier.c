@@ -33,6 +33,7 @@
 #include "command-line.h"
 #include "flow.h"
 #include "packets.h"
+#include "unaligned.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -195,14 +196,6 @@ tcls_remove(struct tcls *cls, const struct test_rule *rule)
     NOT_REACHED();
 }
 
-static uint32_t
-read_uint32(const void *p)
-{
-    uint32_t x;
-    memcpy(&x, p, sizeof x);
-    return x;
-}
-
 static bool
 match(const struct cls_rule *wild, const struct flow *fixed)
 {
@@ -220,8 +213,8 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         }
 
         if (wild->wc.wildcards & f->wildcards) {
-            uint32_t test = read_uint32(wild_field);
-            uint32_t ip = read_uint32(fixed_field);
+            uint32_t test = get_unaligned_u32(wild_field);
+            uint32_t ip = get_unaligned_u32(fixed_field);
             int shift = (f_idx == CLS_F_IDX_NW_SRC
                          ? OFPFW_NW_SRC_SHIFT : OFPFW_NW_DST_SHIFT);
             uint32_t mask = flow_nw_bits_to_mask(wild->wc.wildcards, shift);
