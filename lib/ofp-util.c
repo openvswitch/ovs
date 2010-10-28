@@ -711,7 +711,8 @@ actions_next(struct actions_iterator *iter)
 void
 normalize_match(struct ofp_match *m)
 {
-    enum { OFPFW_NW = OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK | OFPFW_NW_PROTO };
+    enum { OFPFW_NW = (OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK | OFPFW_NW_PROTO
+                       | OFPFW_NW_TOS) };
     enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
     uint32_t wc;
 
