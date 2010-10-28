@@ -89,8 +89,7 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
 struct rule {
     struct cls_rule cr;
 
-    uint64_t flow_cookie;       /* Controller-issued identifier.
-                                   (Kept in network-byte order.) */
+    ovs_be64 flow_cookie;       /* Controller-issued identifier. */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
     bool send_flow_removed;     /* Send a flow removed message? */
@@ -155,7 +154,7 @@ rule_is_hidden(const struct rule *rule)
 static struct rule *rule_create(struct ofproto *, struct rule *super,
                                 const union ofp_action *, size_t n_actions,
                                 uint16_t idle_timeout, uint16_t hard_timeout,
-                                uint64_t flow_cookie, bool send_flow_removed);
+                                ovs_be64 flow_cookie, bool send_flow_removed);
 static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
 static struct rule *rule_from_cls_rule(const struct cls_rule *);
@@ -1845,7 +1844,7 @@ static struct rule *
 rule_create(struct ofproto *ofproto, struct rule *super,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout,
-            uint64_t flow_cookie, bool send_flow_removed)
+            ovs_be64 flow_cookie, bool send_flow_removed)
 {
     struct rule *rule = xzalloc(sizeof *rule);
     rule->idle_timeout = idle_timeout;
@@ -1906,7 +1905,7 @@ rule_destroy(struct ofproto *ofproto, struct rule *rule)
 }
 
 static bool
-rule_has_out_port(const struct rule *rule, uint16_t out_port)
+rule_has_out_port(const struct rule *rule, ovs_be16 out_port)
 {
     const union ofp_action *oa;
     struct actions_iterator i;
@@ -3011,7 +3010,7 @@ handle_port_mod(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static struct ofpbuf *
-make_stats_reply(uint32_t xid, uint16_t type, size_t body_len)
+make_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
 {
     struct ofp_stats_reply *osr;
     struct ofpbuf *msg;
@@ -3177,7 +3176,7 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
 struct flow_stats_cbdata {
     struct ofproto *ofproto;
     struct ofconn *ofconn;
-    uint16_t out_port;
+    ovs_be16 out_port;
     struct ofpbuf *msg;
 };
 
@@ -3372,7 +3371,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 
 struct aggregate_stats_cbdata {
     struct ofproto *ofproto;
-    uint16_t out_port;
+    ovs_be16 out_port;
     uint64_t packet_count;
     uint64_t byte_count;
     uint32_t n_flows;
@@ -3799,11 +3798,11 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
 
 struct delete_flows_cbdata {
     struct ofproto *ofproto;
-    uint16_t out_port;
+    ovs_be16 out_port;
 };
 
 static void delete_flows_cb(struct cls_rule *, void *cbdata_);
-static void delete_flow(struct ofproto *, struct rule *, uint16_t out_port);
+static void delete_flow(struct ofproto *, struct rule *, ovs_be16 out_port);
 
 /* Implements OFPFC_DELETE. */
 static void
@@ -3851,7 +3850,7 @@ delete_flows_cb(struct cls_rule *rule_, void *cbdata_)
  * 'out_port' is htons(OFPP_NONE) or if 'rule' actually outputs to the
  * specified 'out_port'. */
 static void
-delete_flow(struct ofproto *p, struct rule *rule, uint16_t out_port)
+delete_flow(struct ofproto *p, struct rule *rule, ovs_be16 out_port)
 {
     if (rule_is_hidden(rule)) {
         return;
