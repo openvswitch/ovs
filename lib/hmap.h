@@ -133,17 +133,17 @@ static inline struct hmap_node *hmap_first_in_bucket(const struct hmap *,
                                                      size_t hash);
 static inline struct hmap_node *hmap_next_in_bucket(const struct hmap_node *);
 
-/* Iteration.
- *
- * The _SAFE version is needed when NODE may be freed.  It is not needed when
- * NODE may be removed from the hash map but its members remain accessible and
- * intact. */
+/* Iteration. */
+
+/* Iterates through every node in HMAP. */
 #define HMAP_FOR_EACH(NODE, MEMBER, HMAP)                               \
     for ((NODE) = OBJECT_CONTAINING(hmap_first(HMAP), NODE, MEMBER);    \
          &(NODE)->MEMBER != NULL;                                       \
          (NODE) = OBJECT_CONTAINING(hmap_next(HMAP, &(NODE)->MEMBER),   \
                                     NODE, MEMBER))
 
+/* Safe when NODE may be freed (not needed when NODE may be removed from the
+ * hash map but its members remain accessible and intact). */
 #define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP)                    \
     for ((NODE) = OBJECT_CONTAINING(hmap_first(HMAP), NODE, MEMBER);    \
          (&(NODE)->MEMBER != NULL                                       \
@@ -151,6 +151,14 @@ static inline struct hmap_node *hmap_next_in_bucket(const struct hmap_node *);
                                        NODE, MEMBER), 1                 \
           : 0);                                                         \
          (NODE) = (NEXT))
+
+/* Continues an iteration from just after NODE. */
+#define HMAP_FOR_EACH_CONTINUE(NODE, MEMBER, HMAP)                      \
+    for ((NODE) = OBJECT_CONTAINING(hmap_next(HMAP, &(NODE)->MEMBER),   \
+                                    NODE, MEMBER);                      \
+         &(NODE)->MEMBER != NULL;                                       \
+         (NODE) = OBJECT_CONTAINING(hmap_next(HMAP, &(NODE)->MEMBER),   \
+                                    NODE, MEMBER))
 
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,
