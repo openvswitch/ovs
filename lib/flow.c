@@ -367,6 +367,8 @@ flow_nw_bits_to_mask(uint32_t wildcards, int shift)
     return wildcards < 32 ? htonl(~((1u << wildcards) - 1)) : 0;
 }
 
+/* Initializes 'wc' from 'wildcards', which may be any combination of the
+ * OFPFW_* and OVSFW_* wildcard bits. */
 void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
@@ -375,3 +377,59 @@ flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
     wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
 }
 
+/* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
+ * wildcard any bits or fields. */
+void
+flow_wildcards_init_exact(struct flow_wildcards *wc)
+{
+    flow_wildcards_init(wc, 0);
+}
+
+static int
+count_ones(ovs_be32 mask)
+{
+#if __GNUC__ >= 4
+    return __builtin_popcount(mask);
+#else
+    int bits;
+
+    for (bits = 0; mask; bits++) {
+        mask &= mask - 1;
+    }
+
+    return bits;
+#endif
+}
+
+static bool
+set_nw_mask(struct flow_wildcards *wc, ovs_be32 mask,
+            ovs_be32 *maskp, int shift)
+{
+    int wcbits = 32 - count_ones(mask);
+    if (flow_nw_bits_to_mask(wcbits, 0) == mask) {
+        wc->wildcards &= ~(0x3f << shift);
+        wc->wildcards |= wcbits << shift;
+        *maskp = mask;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* Sets the IP (or ARP) source wildcard mask to CIDR 'mask' (consisting of N
+ * high-order 1-bit and 32-N low-order 0-bits).  Returns true if successful,
+ * false if 'mask' is not a CIDR mask.  */
+bool
+flow_wildcards_set_nw_src_mask(struct flow_wildcards *wc, ovs_be32 mask)
+{
+    return set_nw_mask(wc, mask, &wc->nw_src_mask, OFPFW_NW_SRC_SHIFT);
+}
+
+/* Sets the IP (or ARP) destination wildcard mask to CIDR 'mask' (consisting of
+ * N high-order 1-bit and 32-N low-order 0-bits).  Returns true if successful,
+ * false if 'mask' is not a CIDR mask.  */
+bool
+flow_wildcards_set_nw_dst_mask(struct flow_wildcards *wc, ovs_be32 mask)
+{
+    return set_nw_mask(wc, mask, &wc->nw_dst_mask, OFPFW_NW_DST_SHIFT);
+}

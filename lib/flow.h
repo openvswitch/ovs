@@ -97,5 +97,9 @@ struct flow_wildcards {
 
 ovs_be32 flow_nw_bits_to_mask(uint32_t wildcards, int shift);
 void flow_wildcards_init(struct flow_wildcards *, uint32_t wildcards);
+void flow_wildcards_init_exact(struct flow_wildcards *);
+
+bool flow_wildcards_set_nw_src_mask(struct flow_wildcards *, ovs_be32);
+bool flow_wildcards_set_nw_dst_mask(struct flow_wildcards *, ovs_be32);
 
 #endif /* flow.h */
