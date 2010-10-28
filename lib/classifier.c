@@ -34,8 +34,6 @@ static struct cls_table *classifier_next_table(const struct classifier *,
                                                const struct cls_table *);
 static void destroy_table(struct classifier *, struct cls_table *);
 
-static bool should_include(const struct cls_table *, int include);
-
 static struct cls_rule *find_match(const struct cls_table *,
                                    const struct flow *);
 static struct cls_rule *find_equal(struct cls_table *, const struct flow *,
@@ -479,24 +477,18 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
 /* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
  * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
- * of equal priority match 'flow', returns one arbitrarily.
- *
- * 'include' is a combination of CLS_INC_* values that specify tables to
- * include in the search. */
+ * of equal priority match 'flow', returns one arbitrarily. */
 struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow,
-                  int include)
+classifier_lookup(const struct classifier *cls, const struct flow *flow)
 {
     struct cls_table *table;
     struct cls_rule *best;
 
     best = NULL;
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
-        if (should_include(table, include)) {
-            struct cls_rule *rule = find_match(table, flow);
-            if (rule && (!best || rule->priority > best->priority)) {
-                best = rule;
-            }
+        struct cls_rule *rule = find_match(table, flow);
+        if (rule && (!best || rule->priority > best->priority)) {
+            best = rule;
         }
     }
     return best;
@@ -600,14 +592,13 @@ classifier_rule_overlaps(const struct classifier *cls,
 void
 classifier_for_each_match(const struct classifier *cls_,
                           const struct cls_rule *target,
-                          int include, cls_cb_func *callback, void *aux)
+                          cls_cb_func *callback, void *aux)
 {
     struct classifier *cls = (struct classifier *) cls_;
     struct cls_table *table, *next_table;
 
     for (table = classifier_first_table(cls); table; table = next_table) {
-        if (should_include(table, include)
-            && !flow_wildcards_has_extra(&table->wc, &target->wc)) {
+        if (!flow_wildcards_has_extra(&table->wc, &target->wc)) {
             /* We have eliminated the "no" case in the truth table above.  Two
              * of the three remaining cases are trivial.  We only need to check
              * the fourth case, where both 'rule' and 'target' require an exact
@@ -637,35 +628,28 @@ classifier_for_each_match(const struct classifier *cls_,
 
 /* 'callback' is allowed to delete the rule that is passed as its argument, but
  * it must not delete (or move) any other rules in 'cls' that have the same
- * wildcards as the argument rule.
- *
- * If 'include' is CLS_INC_EXACT then CLASSIFIER_FOR_EACH_EXACT_RULE is
- * probably easier to use. */
+ * wildcards as the argument rule. */
 void
-classifier_for_each(const struct classifier *cls_, int include,
+classifier_for_each(const struct classifier *cls_,
                     cls_cb_func *callback, void *aux)
 {
     struct classifier *cls = (struct classifier *) cls_;
     struct cls_table *table, *next_table;
 
     for (table = classifier_first_table(cls); table; table = next_table) {
-        if (should_include(table, include)) {
-            struct cls_rule *head, *next_head;
+        struct cls_rule *head, *next_head;
 
-            table->n_refs++;
-            HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
-                struct cls_rule *rule, *next_rule;
+        table->n_refs++;
+        HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
+            struct cls_rule *rule, *next_rule;
 
-                FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
-                    callback(rule, aux);
-                }
+            FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
+                callback(rule, aux);
             }
-            next_table = classifier_next_table(cls, table);
-            if (!--table->n_refs && !table->n_table_rules) {
-                destroy_table(cls, table);
-            }
-        } else {
-            next_table = classifier_next_table(cls, table);
+        }
+        next_table = classifier_next_table(cls, table);
+        if (!--table->n_refs && !table->n_table_rules) {
+            destroy_table(cls, table);
         }
     }
 }
@@ -717,14 +701,6 @@ destroy_table(struct classifier *cls, struct cls_table *table)
     hmap_remove(&cls->tables, &table->hmap_node);
     hmap_destroy(&table->rules);
     free(table);
-}
-
-/* Returns true if 'table' should be included by an operation with the
- * specified 'include' (a combination of CLS_INC_*). */
-static bool
-should_include(const struct cls_table *table, int include)
-{
-    return include & (table->wc.wildcards ? CLS_INC_WILD : CLS_INC_EXACT);
 }
 
 static struct cls_rule *

@@ -1376,7 +1376,7 @@ ofproto_flush_flows(struct ofproto *ofproto)
         facet->installed = false;
         facet_remove(ofproto, facet);
     }
-    classifier_for_each(&ofproto->cls, CLS_INC_ALL, destroy_rule, ofproto);
+    classifier_for_each(&ofproto->cls, destroy_rule, ofproto);
     dpif_flow_flush(ofproto->dpif);
     if (ofproto->in_band) {
         in_band_flushed(ofproto->in_band);
@@ -2585,8 +2585,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
 static struct rule *
 rule_lookup(struct ofproto *ofproto, const struct flow *flow)
 {
-    return rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow,
-                                                CLS_INC_ALL));
+    return rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow));
 }
 
 static void
@@ -3418,10 +3417,10 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     }
 }
 
-static int
-table_id_to_include(uint8_t table_id)
+static bool
+is_valid_table(uint8_t table_id)
 {
-    return table_id == 0 || table_id == 0xff ? CLS_INC_ALL : 0;
+    return table_id == 0 || table_id == 0xff;
 }
 
 static int
@@ -3430,7 +3429,6 @@ handle_flow_stats_request(struct ofconn *ofconn,
 {
     struct ofp_flow_stats_request *fsr;
     struct flow_stats_cbdata cbdata;
-    struct cls_rule target;
 
     if (arg_size != sizeof *fsr) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -3438,13 +3436,17 @@ handle_flow_stats_request(struct ofconn *ofconn,
     fsr = (struct ofp_flow_stats_request *) osr->body;
 
     COVERAGE_INC(ofproto_flows_req);
-    cbdata.ofconn = ofconn;
-    cbdata.out_port = fsr->out_port;
     cbdata.msg = start_ofp_stats_reply(osr, 1024);
-    cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&ofconn->ofproto->cls, &target,
-                              table_id_to_include(fsr->table_id),
-                              flow_stats_cb, &cbdata);
+    if (is_valid_table(fsr->table_id)) {
+        struct cls_rule target;
+
+        cbdata.ofconn = ofconn;
+        cbdata.out_port = fsr->out_port;
+        cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
+        classifier_for_each_match(&ofconn->ofproto->cls, &target,
+                                  flow_stats_cb, &cbdata);
+    }
+
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
     return 0;
 }
@@ -3506,12 +3508,13 @@ handle_nxst_flow(struct ofconn *ofconn, struct ofpbuf *b)
     }
 
     COVERAGE_INC(ofproto_flows_req);
-    cbdata.ofconn = ofconn;
-    cbdata.out_port = nfsr->out_port;
     cbdata.msg = start_nxstats_reply(&nfsr->nsm, 1024);
-    classifier_for_each_match(&ofconn->ofproto->cls, &target,
-                              table_id_to_include(nfsr->table_id),
-                              nx_flow_stats_cb, &cbdata);
+    if (is_valid_table(nfsr->table_id)) {
+        cbdata.ofconn = ofconn;
+        cbdata.out_port = nfsr->out_port;
+        classifier_for_each_match(&ofconn->ofproto->cls, &target,
+                                  nx_flow_stats_cb, &cbdata);
+    }
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
     return 0;
 }
@@ -3565,8 +3568,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     cbdata.results = results;
 
     cls_rule_from_match(&match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
-                              flow_stats_ds_cb, &cbdata);
+    classifier_for_each_match(&p->cls, &target, flow_stats_ds_cb, &cbdata);
 }
 
 struct aggregate_stats_cbdata {
@@ -3603,14 +3605,16 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
     struct aggregate_stats_cbdata cbdata;
 
     COVERAGE_INC(ofproto_agg_request);
-    cbdata.ofproto = ofproto;
-    cbdata.out_port = out_port;
     cbdata.packet_count = 0;
     cbdata.byte_count = 0;
     cbdata.n_flows = 0;
-    classifier_for_each_match(&ofproto->cls, target,
-                              table_id_to_include(table_id),
-                              aggregate_stats_cb, &cbdata);
+    if (is_valid_table(table_id)) {
+        cbdata.ofproto = ofproto;
+        cbdata.out_port = out_port;
+
+        classifier_for_each_match(&ofproto->cls, target,
+                                  aggregate_stats_cb, &cbdata);
+    }
 
     oasr->flow_count = htonl(cbdata.n_flows);
     oasr->packet_count = htonll(cbdata.packet_count);
@@ -3989,7 +3993,7 @@ modify_flows_loose(struct ofconn *ofconn, struct flow_mod *fm)
     cbdata.fm = fm;
     cbdata.match = NULL;
 
-    classifier_for_each_match(&ofconn->ofproto->cls, &fm->cr, CLS_INC_ALL,
+    classifier_for_each_match(&ofconn->ofproto->cls, &fm->cr,
                               modify_flows_cb, &cbdata);
     if (cbdata.match) {
         /* This credits the packet to whichever flow happened to happened to
@@ -4080,8 +4084,7 @@ delete_flows_loose(struct ofproto *p, const struct flow_mod *fm)
     cbdata.ofproto = p;
     cbdata.out_port = htons(fm->out_port);
 
-    classifier_for_each_match(&p->cls, &fm->cr, CLS_INC_ALL,
-                              delete_flows_cb, &cbdata);
+    classifier_for_each_match(&p->cls, &fm->cr, delete_flows_cb, &cbdata);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
@@ -4615,7 +4618,7 @@ ofproto_expire(struct ofproto *ofproto)
 
     /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
     cbdata.ofproto = ofproto;
-    classifier_for_each(&ofproto->cls, CLS_INC_ALL, rule_expire, &cbdata);
+    classifier_for_each(&ofproto->cls, rule_expire, &cbdata);
 
     /* Let the hook know that we're at a stable point: all outstanding data
      * in existing flows has been accounted to the account_cb.  Thus, the

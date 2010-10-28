@@ -67,12 +67,6 @@ struct cls_rule {
     unsigned int priority;      /* Larger numbers are higher priorities. */
 };
 
-enum {
-    CLS_INC_EXACT = 1 << 0,     /* Include exact-match flows? */
-    CLS_INC_WILD = 1 << 1,      /* Include flows with wildcards? */
-    CLS_INC_ALL = CLS_INC_EXACT | CLS_INC_WILD
-};
-
 void cls_rule_init(const struct flow *, const struct flow_wildcards *,
                    unsigned int priority, struct cls_rule *);
 void cls_rule_init_exact(const struct flow *, unsigned int priority,
@@ -115,17 +109,17 @@ struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
 void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
-                                   const struct flow *, int include);
+                                   const struct flow *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
-void classifier_for_each(const struct classifier *, int include,
+void classifier_for_each(const struct classifier *,
                          cls_cb_func *, void *aux);
 void classifier_for_each_match(const struct classifier *,
                                const struct cls_rule *,
-                               int include, cls_cb_func *, void *aux);
+                               cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
 

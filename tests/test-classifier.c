@@ -229,15 +229,13 @@ match(const struct cls_rule *wild, const struct flow *fixed)
 }
 
 static struct cls_rule *
-tcls_lookup(const struct tcls *cls, const struct flow *flow, int include)
+tcls_lookup(const struct tcls *cls, const struct flow *flow)
 {
     size_t i;
 
     for (i = 0; i < cls->n_rules; i++) {
         struct test_rule *pos = cls->rules[i];
-        uint32_t wildcards = pos->cls_rule.wc.wildcards;
-        if (include & (wildcards ? CLS_INC_WILD : CLS_INC_EXACT)
-            && match(&pos->cls_rule, flow)) {
+        if (match(&pos->cls_rule, flow)) {
             return &pos->cls_rule;
         }
     }
@@ -245,17 +243,13 @@ tcls_lookup(const struct tcls *cls, const struct flow *flow, int include)
 }
 
 static void
-tcls_delete_matches(struct tcls *cls,
-                    const struct cls_rule *target,
-                    int include)
+tcls_delete_matches(struct tcls *cls, const struct cls_rule *target)
 {
     size_t i;
 
     for (i = 0; i < cls->n_rules; ) {
         struct test_rule *pos = cls->rules[i];
-        uint32_t wildcards = pos->cls_rule.wc.wildcards;
-        if (include & (wildcards ? CLS_INC_WILD : CLS_INC_EXACT)
-            && !flow_wildcards_has_extra(&pos->cls_rule.wc, &target->wc)
+        if (!flow_wildcards_has_extra(&pos->cls_rule.wc, &target->wc)
             && match(target, &pos->cls_rule.flow)) {
             tcls_remove(cls, pos);
         } else {
@@ -264,20 +258,19 @@ tcls_delete_matches(struct tcls *cls,
     }
 }
 
-static uint32_t nw_src_values[] = { CONSTANT_HTONL(0xc0a80001),
+static ovs_be32 nw_src_values[] = { CONSTANT_HTONL(0xc0a80001),
                                     CONSTANT_HTONL(0xc0a04455) };
-static uint32_t nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
+static ovs_be32 nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
                                     CONSTANT_HTONL(0xc0a04455) };
-static uint32_t tun_id_values[] = { 0, 0xffff0000 };
-static uint16_t in_port_values[] = { CONSTANT_HTONS(1),
-                                     CONSTANT_HTONS(OFPP_LOCAL) };
-static uint16_t dl_vlan_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
+static ovs_be32 tun_id_values[] = { 0, 0xffff0000 };
+static uint16_t in_port_values[] = { 1, ODPP_LOCAL };
+static ovs_be16 dl_vlan_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
 static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
-static uint16_t dl_type_values[]
+static ovs_be16 dl_type_values[]
             = { CONSTANT_HTONS(ETH_TYPE_IP), CONSTANT_HTONS(ETH_TYPE_ARP) };
-static uint16_t tp_src_values[] = { CONSTANT_HTONS(49362),
+static ovs_be16 tp_src_values[] = { CONSTANT_HTONS(49362),
                                     CONSTANT_HTONS(80) };
-static uint16_t tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
+static ovs_be16 tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
 static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
                                       { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
@@ -378,7 +371,6 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         struct cls_rule *cr0, *cr1;
         struct flow flow;
         unsigned int x;
-        int include;
 
         x = rand () % N_FLOW_VALUES;
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
@@ -398,21 +390,19 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
 
-        for (include = 1; include <= 3; include++) {
-            cr0 = classifier_lookup(cls, &flow, include);
-            cr1 = tcls_lookup(tcls, &flow, include);
-            assert((cr0 == NULL) == (cr1 == NULL));
-            if (cr0 != NULL) {
-                const struct test_rule *tr0 = test_rule_from_cls_rule(cr0);
-                const struct test_rule *tr1 = test_rule_from_cls_rule(cr1);
+        cr0 = classifier_lookup(cls, &flow);
+        cr1 = tcls_lookup(tcls, &flow);
+        assert((cr0 == NULL) == (cr1 == NULL));
+        if (cr0 != NULL) {
+            const struct test_rule *tr0 = test_rule_from_cls_rule(cr0);
+            const struct test_rule *tr1 = test_rule_from_cls_rule(cr1);
 
-                assert(flow_equal(&cr0->flow, &cr1->flow));
-                assert(cr0->wc.wildcards == cr1->wc.wildcards);
-                assert(cr0->priority == cr1->priority);
-                /* Skip nw_src_mask and nw_dst_mask, because they are derived
-                 * members whose values are used only for optimization. */
-                assert(tr0->aux == tr1->aux);
-            }
+            assert(flow_equal(&cr0->flow, &cr1->flow));
+            assert(cr0->wc.wildcards == cr1->wc.wildcards);
+            assert(cr0->priority == cr1->priority);
+            /* Skip nw_src_mask and nw_dst_mask, because they are derived
+             * members whose values are used only for optimization. */
+            assert(tr0->aux == tr1->aux);
         }
     }
 }
@@ -427,7 +417,7 @@ free_rule(struct cls_rule *cls_rule, void *cls)
 static void
 destroy_classifier(struct classifier *cls)
 {
-    classifier_for_each(cls, CLS_INC_ALL, free_rule, cls);
+    classifier_for_each(cls, free_rule, cls);
     classifier_destroy(cls);
 }
 
@@ -885,12 +875,8 @@ test_many_rules_in_n_tables(int n_tables)
         while (!classifier_is_empty(&cls)) {
             struct test_rule *rule = xmemdup(tcls.rules[rand() % tcls.n_rules],
                                              sizeof(struct test_rule));
-            int include = rand() % 2 ? CLS_INC_WILD : CLS_INC_EXACT;
-            include |= (rule->cls_rule.wc.wildcards
-                        ? CLS_INC_WILD : CLS_INC_EXACT);
-            classifier_for_each_match(&cls, &rule->cls_rule, include,
-                                      free_rule, &cls);
-            tcls_delete_matches(&tcls, &rule->cls_rule, include);
+            classifier_for_each_match(&cls, &rule->cls_rule, free_rule, &cls);
+            tcls_delete_matches(&tcls, &rule->cls_rule);
             compare_classifiers(&cls, &tcls);
             check_tables(&cls, -1, -1, -1);
             free(rule);
