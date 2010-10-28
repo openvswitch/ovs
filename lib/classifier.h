@@ -44,7 +44,6 @@ struct cls_table {
     struct hmap rules;          /* Contains "struct cls_rule"s. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
     int n_table_rules;          /* Number of rules, including duplicates. */
-    int n_refs;                 /* Reference count used during iteration. */
 };
 
 /* A flow classification rule.
@@ -113,11 +112,6 @@ bool classifier_rule_overlaps(const struct classifier *,
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
-void classifier_for_each(const struct classifier *,
-                         cls_cb_func *, void *aux);
-void classifier_for_each_match(const struct classifier *,
-                               const struct cls_rule *,
-                               cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
 

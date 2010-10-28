@@ -423,7 +423,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
         hmap_replace(&table->rules, &rule->hmap_node, &next->hmap_node);
     }
 
-    if (--table->n_table_rules == 0 && !table->n_refs) {
+    if (--table->n_table_rules == 0) {
         destroy_table(cls, table);
     }
 
@@ -506,107 +506,6 @@ classifier_rule_overlaps(const struct classifier *cls,
     }
 
     return false;
-}
-
-/* Searches 'cls' for rules that exactly match 'target' or are more specific
- * than 'target'.  That is, a given 'rule' matches 'target' if, for every
- * field:
- *
- *   - 'target' and 'rule' specify the same (non-wildcarded) value for the
- *     field, or
- *
- *   - 'target' wildcards the field,
- *
- * but not if:
- *
- *   - 'target' and 'rule' specify different values for the field, or
- *
- *   - 'target' specifies a value for the field but 'rule' wildcards it.
- *
- * Equivalently, the truth table for whether a field matches is:
- *
- *                                     rule
- *
- *                             wildcard    exact
- *                            +---------+---------+
- *                   t   wild |   yes   |   yes   |
- *                   a   card |         |         |
- *                   r        +---------+---------+
- *                   g  exact |    no   |if values|
- *                   e        |         |are equal|
- *                   t        +---------+---------+
- *
- * This is the matching rule used by OpenFlow 1.0 non-strict OFPT_FLOW_MOD
- * commands and by OpenFlow 1.0 aggregate and flow stats.
- *
- * Ignores target->priority.
- *
- * 'callback' is allowed to delete the rule that is passed as its argument, but
- * it must not delete (or move) any other rules in 'cls' that have the same
- * wildcards as the argument rule. */
-void
-classifier_for_each_match(const struct classifier *cls_,
-                          const struct cls_rule *target,
-                          cls_cb_func *callback, void *aux)
-{
-    struct classifier *cls = (struct classifier *) cls_;
-    struct cls_table *table, *next_table;
-
-    for (table = classifier_first_table(cls); table; table = next_table) {
-        if (!flow_wildcards_has_extra(&table->wc, &target->wc)) {
-            /* We have eliminated the "no" case in the truth table above.  Two
-             * of the three remaining cases are trivial.  We only need to check
-             * the fourth case, where both 'rule' and 'target' require an exact
-             * match. */
-            struct cls_rule *head, *next_head;
-
-            table->n_refs++;
-            HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
-                if (flow_equal_except(&head->flow, &target->flow,
-                                      &target->wc)) {
-                    struct cls_rule *rule, *next_rule;
-
-                    FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
-                        callback(rule, aux);
-                    }
-                }
-            }
-            next_table = classifier_next_table(cls, table);
-            if (!--table->n_refs && !table->n_table_rules) {
-                destroy_table(cls, table);
-            }
-        } else {
-            next_table = classifier_next_table(cls, table);
-        }
-    }
-}
-
-/* 'callback' is allowed to delete the rule that is passed as its argument, but
- * it must not delete (or move) any other rules in 'cls' that have the same
- * wildcards as the argument rule. */
-void
-classifier_for_each(const struct classifier *cls_,
-                    cls_cb_func *callback, void *aux)
-{
-    struct classifier *cls = (struct classifier *) cls_;
-    struct cls_table *table, *next_table;
-
-    for (table = classifier_first_table(cls); table; table = next_table) {
-        struct cls_rule *head, *next_head;
-
-        table->n_refs++;
-        HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
-            struct cls_rule *rule, *next_rule;
-
-            FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
-                callback(rule, aux);
-            }
-        }
-        next_table = classifier_next_table(cls, table);
-        if (!--table->n_refs && !table->n_table_rules) {
-            destroy_table(cls, table);
-        }
-    }
 }
 
 /* Iteration. */
