@@ -415,50 +415,6 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
     return 0;
 }
 
-int
-check_ofp_packet_out(const struct ofp_header *oh, struct ofpbuf *data,
-                     int *n_actionsp, int max_ports)
-{
-    const struct ofp_packet_out *opo;
-    unsigned int actions_len, n_actions;
-    size_t extra;
-    int error;
-
-    *n_actionsp = 0;
-    error = check_ofp_message_array(oh, OFPT_PACKET_OUT,
-                                    sizeof *opo, 1, &extra);
-    if (error) {
-        return error;
-    }
-    opo = (const struct ofp_packet_out *) oh;
-
-    actions_len = ntohs(opo->actions_len);
-    if (actions_len > extra) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions "
-                     "but message has room for only %zu bytes",
-                     actions_len, extra);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    if (actions_len % sizeof(union ofp_action)) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions, "
-                     "which is not a multiple of %zu",
-                     actions_len, sizeof(union ofp_action));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    n_actions = actions_len / sizeof(union ofp_action);
-    error = validate_actions((const union ofp_action *) opo->actions,
-                             n_actions, max_ports);
-    if (error) {
-        return error;
-    }
-
-    data->data = (void *) &opo->actions[n_actions];
-    data->size = extra - actions_len;
-    *n_actionsp = n_actions;
-    return 0;
-}
-
 const struct ofp_flow_stats *
 flow_stats_first(struct flow_stats_iterator *iter,
                  const struct ofp_stats_reply *osr)

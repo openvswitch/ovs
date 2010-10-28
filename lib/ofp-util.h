@@ -62,8 +62,6 @@ int check_ofp_message(const struct ofp_header *, uint8_t type, size_t size);
 int check_ofp_message_array(const struct ofp_header *, uint8_t type,
                             size_t size, size_t array_elt_size,
                             size_t *n_array_elts);
-int check_ofp_packet_out(const struct ofp_header *, struct ofpbuf *data,
-                         int *n_actions, int max_ports);
 
 struct flow_stats_iterator {
     const uint8_t *pos, *end;

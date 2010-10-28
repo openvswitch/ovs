@@ -2884,24 +2884,37 @@ handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
     struct ofproto *p = ofconn->ofproto;
     struct ofp_packet_out *opo;
     struct ofpbuf payload, *buffer;
-    struct odp_actions actions;
+    union ofp_action *ofp_actions;
+    struct odp_actions odp_actions;
+    struct ofpbuf request;
     struct flow flow;
-    int n_actions;
+    size_t n_ofp_actions;
     uint16_t in_port;
     int error;
+
+    COVERAGE_INC(ofproto_packet_out);
 
     error = reject_slave_controller(ofconn, "OFPT_PACKET_OUT");
     if (error) {
         return error;
     }
 
-    error = check_ofp_packet_out(oh, &payload, &n_actions, p->max_ports);
+    /* Get ofp_packet_out. */
+    request.data = oh;
+    request.size = ntohs(oh->length);
+    opo = ofpbuf_try_pull(&request, offsetof(struct ofp_packet_out, actions));
+    if (!opo) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    /* Get actions. */
+    error = ofputil_pull_actions(&request, ntohs(opo->actions_len),
+                                 &ofp_actions, &n_ofp_actions);
     if (error) {
         return error;
     }
-    opo = (struct ofp_packet_out *) oh;
 
-    COVERAGE_INC(ofproto_packet_out);
+    /* Get payload. */
     if (opo->buffer_id != htonl(UINT32_MAX)) {
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(opo->buffer_id),
                                 &buffer, &in_port);
@@ -2910,18 +2923,29 @@ handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
         }
         payload = *buffer;
     } else {
+        payload = request;
         buffer = NULL;
     }
 
-    flow_extract(&payload, 0, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
-    error = xlate_actions((const union ofp_action *) opo->actions, n_actions,
-                          &flow, p, &payload, &actions, NULL, NULL, NULL);
-    if (!error) {
-        dpif_execute(p->dpif, actions.actions, actions.n_actions, &payload);
+    /* Extract flow, check actions. */
+    flow_extract(&payload, 0, ofp_port_to_odp_port(ntohs(opo->in_port)),
+                 &flow);
+    error = validate_actions(ofp_actions, n_ofp_actions, p->max_ports);
+    if (error) {
+        goto exit;
     }
-    ofpbuf_delete(buffer);
 
-    return error;
+    /* Send. */
+    error = xlate_actions(ofp_actions, n_ofp_actions, &flow, p, &payload,
+                          &odp_actions, NULL, NULL, NULL);
+    if (!error) {
+        dpif_execute(p->dpif, odp_actions.actions, odp_actions.n_actions,
+                     &payload);
+    }
+
+exit:
+    ofpbuf_delete(buffer);
+    return 0;
 }
 
 static void
