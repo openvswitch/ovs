@@ -394,16 +394,16 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
 }
 
 static void
-free_rule(struct cls_rule *cls_rule, void *cls)
-{
-    classifier_remove(cls, cls_rule);
-    free(test_rule_from_cls_rule(cls_rule));
-}
-
-static void
 destroy_classifier(struct classifier *cls)
 {
-    classifier_for_each(cls, free_rule, cls);
+    struct test_rule *rule, *next_rule;
+    struct cls_cursor cursor;
+
+    cls_cursor_init(&cursor, cls, NULL);
+    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
+        classifier_remove(cls, &rule->cls_rule);
+        free(rule);
+    }
     classifier_destroy(cls);
 }
 
@@ -844,13 +844,22 @@ test_many_rules_in_n_tables(int n_tables)
         }
 
         while (!classifier_is_empty(&cls)) {
-            struct test_rule *rule = xmemdup(tcls.rules[rand() % tcls.n_rules],
-                                             sizeof(struct test_rule));
-            classifier_for_each_match(&cls, &rule->cls_rule, free_rule, &cls);
-            tcls_delete_matches(&tcls, &rule->cls_rule);
+            struct test_rule *rule, *next_rule;
+            struct test_rule *target;
+            struct cls_cursor cursor;
+
+            target = xmemdup(tcls.rules[rand() % tcls.n_rules],
+                             sizeof(struct test_rule));
+
+            cls_cursor_init(&cursor, &cls, &target->cls_rule);
+            CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
+                classifier_remove(&cls, &rule->cls_rule);
+                free(rule);
+            }
+            tcls_delete_matches(&tcls, &target->cls_rule);
             compare_classifiers(&cls, &tcls);
             check_tables(&cls, -1, -1, -1);
-            free(rule);
+            free(target);
         }
 
         destroy_classifier(&cls);

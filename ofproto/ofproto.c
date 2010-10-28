@@ -1369,19 +1369,12 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
     }
 }
 
-static void
-destroy_rule(struct cls_rule *rule_, void *ofproto_)
-{
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct ofproto *ofproto = ofproto_;
-
-    rule_remove(ofproto, rule);
-}
-
 void
 ofproto_flush_flows(struct ofproto *ofproto)
 {
     struct facet *facet, *next_facet;
+    struct rule *rule, *next_rule;
+    struct cls_cursor cursor;
 
     COVERAGE_INC(ofproto_flush);
 
@@ -1393,7 +1386,12 @@ ofproto_flush_flows(struct ofproto *ofproto)
         facet->installed = false;
         facet_remove(ofproto, facet);
     }
-    classifier_for_each(&ofproto->cls, destroy_rule, ofproto);
+
+    cls_cursor_init(&cursor, &ofproto->cls, NULL);
+    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
+        rule_remove(ofproto, rule);
+    }
+
     dpif_flow_flush(ofproto->dpif);
     if (ofproto->in_band) {
         in_band_flushed(ofproto->in_band);
@@ -3336,12 +3334,6 @@ handle_port_stats_request(struct ofconn *ofconn, struct ofp_stats_request *osr,
     return 0;
 }
 
-struct flow_stats_cbdata {
-    struct ofconn *ofconn;
-    ovs_be16 out_port;
-    struct ofpbuf *msg;
-};
-
 /* Obtains statistic counters for 'rule' within 'p' and stores them into
  * '*packet_countp' and '*byte_countp'.  The returned statistics include
  * statistics for all of 'rule''s facets. */
@@ -3400,29 +3392,28 @@ calc_flow_duration(long long int start, ovs_be32 *sec, ovs_be32 *nsec)
 }
 
 static void
-flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
+put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
+                   ovs_be16 out_port, struct ofpbuf **replyp)
 {
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct flow_stats_cbdata *cbdata = cbdata_;
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
     size_t act_len, len;
 
-    if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
+    if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
         return;
     }
 
     act_len = sizeof *rule->actions * rule->n_actions;
     len = offsetof(struct ofp_flow_stats, actions) + act_len;
 
-    query_stats(cbdata->ofconn->ofproto, rule, &packet_count, &byte_count);
+    query_stats(ofconn->ofproto, rule, &packet_count, &byte_count);
 
-    ofs = append_ofp_stats_reply(len, cbdata->ofconn, &cbdata->msg);
+    ofs = append_ofp_stats_reply(len, ofconn, replyp);
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  cbdata->ofconn->flow_format, &ofs->match);
+                  ofconn->flow_format, &ofs->match);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
@@ -3447,7 +3438,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
                           const struct ofp_stats_request *osr, size_t arg_size)
 {
     struct ofp_flow_stats_request *fsr;
-    struct flow_stats_cbdata cbdata;
+    struct ofpbuf *reply;
 
     if (arg_size != sizeof *fsr) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -3455,42 +3446,45 @@ handle_flow_stats_request(struct ofconn *ofconn,
     fsr = (struct ofp_flow_stats_request *) osr->body;
 
     COVERAGE_INC(ofproto_flows_req);
-    cbdata.msg = start_ofp_stats_reply(osr, 1024);
+    reply = start_ofp_stats_reply(osr, 1024);
     if (is_valid_table(fsr->table_id)) {
+        struct cls_cursor cursor;
         struct cls_rule target;
+        struct rule *rule;
 
-        cbdata.ofconn = ofconn;
-        cbdata.out_port = fsr->out_port;
         cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
-        classifier_for_each_match(&ofconn->ofproto->cls, &target,
-                                  flow_stats_cb, &cbdata);
+        cls_cursor_init(&cursor, &ofconn->ofproto->cls, &target);
+        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            put_ofp_flow_stats(ofconn, rule, fsr->out_port, &reply);
+        }
     }
+    queue_tx(reply, ofconn, ofconn->reply_counter);
 
-    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
     return 0;
 }
 
 static void
-nx_flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
+put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
+                  ovs_be16 out_port, struct ofpbuf **replyp)
 {
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct flow_stats_cbdata *cbdata = cbdata_;
     struct nx_flow_stats *nfs;
     uint64_t packet_count, byte_count;
     size_t act_len, start_len;
+    struct ofpbuf *reply;
 
-    if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
+    if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
         return;
     }
 
-    query_stats(cbdata->ofconn->ofproto, rule, &packet_count, &byte_count);
+    query_stats(ofconn->ofproto, rule, &packet_count, &byte_count);
 
     act_len = sizeof *rule->actions * rule->n_actions;
 
-    start_len = cbdata->msg->size;
-    append_nxstats_reply(sizeof *nfs + NXM_MAX_LEN + act_len,
-                         cbdata->ofconn, &cbdata->msg);
-    nfs = ofpbuf_put_uninit(cbdata->msg, sizeof *nfs);
+    start_len = (*replyp)->size;
+    append_nxstats_reply(sizeof *nfs + NXM_MAX_LEN + act_len, ofconn, replyp);
+    reply = *replyp;
+
+    nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
     nfs->table_id = 0;
     nfs->pad = 0;
     calc_flow_duration(rule->created, &nfs->duration_sec, &nfs->duration_nsec);
@@ -3498,22 +3492,22 @@ nx_flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     nfs->priority = htons(rule->cr.priority);
     nfs->idle_timeout = htons(rule->idle_timeout);
     nfs->hard_timeout = htons(rule->hard_timeout);
-    nfs->match_len = htons(nx_put_match(cbdata->msg, &rule->cr));
+    nfs->match_len = htons(nx_put_match(reply, &rule->cr));
     memset(nfs->pad2, 0, sizeof nfs->pad2);
     nfs->packet_count = htonll(packet_count);
     nfs->byte_count = htonll(byte_count);
     if (rule->n_actions > 0) {
-        ofpbuf_put(cbdata->msg, rule->actions, act_len);
+        ofpbuf_put(reply, rule->actions, act_len);
     }
-    nfs->length = htons(cbdata->msg->size - start_len);
+    nfs->length = htons(reply->size - start_len);
 }
 
 static int
 handle_nxst_flow(struct ofconn *ofconn, struct ofpbuf *b)
 {
     struct nx_flow_stats_request *nfsr;
-    struct flow_stats_cbdata cbdata;
     struct cls_rule target;
+    struct ofpbuf *reply;
     int error;
 
     /* Dissect the message. */
@@ -3527,33 +3521,29 @@ handle_nxst_flow(struct ofconn *ofconn, struct ofpbuf *b)
     }
 
     COVERAGE_INC(ofproto_flows_req);
-    cbdata.msg = start_nxstats_reply(&nfsr->nsm, 1024);
+    reply = start_nxstats_reply(&nfsr->nsm, 1024);
     if (is_valid_table(nfsr->table_id)) {
-        cbdata.ofconn = ofconn;
-        cbdata.out_port = nfsr->out_port;
-        classifier_for_each_match(&ofconn->ofproto->cls, &target,
-                                  nx_flow_stats_cb, &cbdata);
+        struct cls_cursor cursor;
+        struct rule *rule;
+
+        cls_cursor_init(&cursor, &ofconn->ofproto->cls, &target);
+        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            put_nx_flow_stats(ofconn, rule, nfsr->out_port, &reply);
+        }
     }
-    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
+    queue_tx(reply, ofconn, ofconn->reply_counter);
+
     return 0;
 }
 
-struct flow_stats_ds_cbdata {
-    struct ofproto *ofproto;
-    struct ds *results;
-};
-
 static void
-flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
+flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 {
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct flow_stats_ds_cbdata *cbdata = cbdata_;
-    struct ds *results = cbdata->results;
     struct ofp_match match;
     uint64_t packet_count, byte_count;
     size_t act_len = sizeof *rule->actions * rule->n_actions;
 
-    query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
+    query_stats(ofproto, rule, &packet_count, &byte_count);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
                   NXFF_OPENFLOW10, &match);
 
@@ -3576,44 +3566,13 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
 void
 ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 {
-    struct ofp_match match;
-    struct cls_rule target;
-    struct flow_stats_ds_cbdata cbdata;
+    struct cls_cursor cursor;
+    struct rule *rule;
 
-    memset(&match, 0, sizeof match);
-    match.wildcards = htonl(OVSFW_ALL);
-
-    cbdata.ofproto = p;
-    cbdata.results = results;
-
-    cls_rule_from_match(&match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&p->cls, &target, flow_stats_ds_cb, &cbdata);
-}
-
-struct aggregate_stats_cbdata {
-    struct ofproto *ofproto;
-    ovs_be16 out_port;
-    uint64_t packet_count;
-    uint64_t byte_count;
-    uint32_t n_flows;
-};
-
-static void
-aggregate_stats_cb(struct cls_rule *rule_, void *cbdata_)
-{
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct aggregate_stats_cbdata *cbdata = cbdata_;
-    uint64_t packet_count, byte_count;
-
-    if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
-        return;
+    cls_cursor_init(&cursor, &p->cls, NULL);
+    CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        flow_stats_ds(p, rule, results);
     }
-
-    query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-
-    cbdata->packet_count += packet_count;
-    cbdata->byte_count += byte_count;
-    cbdata->n_flows++;
 }
 
 static void
@@ -3621,23 +3580,34 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
                       ovs_be16 out_port, uint8_t table_id,
                       struct ofp_aggregate_stats_reply *oasr)
 {
-    struct aggregate_stats_cbdata cbdata;
+    uint64_t total_packets = 0;
+    uint64_t total_bytes = 0;
+    int n_flows = 0;
 
     COVERAGE_INC(ofproto_agg_request);
-    cbdata.packet_count = 0;
-    cbdata.byte_count = 0;
-    cbdata.n_flows = 0;
-    if (is_valid_table(table_id)) {
-        cbdata.ofproto = ofproto;
-        cbdata.out_port = out_port;
 
-        classifier_for_each_match(&ofproto->cls, target,
-                                  aggregate_stats_cb, &cbdata);
+    if (is_valid_table(table_id)) {
+        struct cls_cursor cursor;
+        struct rule *rule;
+
+        cls_cursor_init(&cursor, &ofproto->cls, target);
+        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)) {
+                uint64_t packet_count;
+                uint64_t byte_count;
+
+                query_stats(ofproto, rule, &packet_count, &byte_count);
+
+                total_packets += packet_count;
+                total_bytes += byte_count;
+                n_flows++;
+            }
+        }
     }
 
-    oasr->flow_count = htonl(cbdata.n_flows);
-    oasr->packet_count = htonll(cbdata.packet_count);
-    oasr->byte_count = htonll(cbdata.byte_count);
+    oasr->flow_count = htonl(n_flows);
+    oasr->packet_count = htonll(total_packets);
+    oasr->byte_count = htonll(total_bytes);
     memset(oasr->pad, 0, sizeof oasr->pad);
 }
 
@@ -3996,7 +3966,6 @@ struct modify_flows_cbdata {
 
 static int modify_flow(struct ofproto *, const struct flow_mod *,
                        struct rule *);
-static void modify_flows_cb(struct cls_rule *, void *cbdata_);
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code as
  * encoded by ofp_mkerr() on failure.
@@ -4006,19 +3975,24 @@ static void modify_flows_cb(struct cls_rule *, void *cbdata_);
 static int
 modify_flows_loose(struct ofconn *ofconn, struct flow_mod *fm)
 {
-    struct modify_flows_cbdata cbdata;
+    struct ofproto *p = ofconn->ofproto;
+    struct rule *match = NULL;
+    struct cls_cursor cursor;
+    struct rule *rule;
 
-    cbdata.ofproto = ofconn->ofproto;
-    cbdata.fm = fm;
-    cbdata.match = NULL;
+    cls_cursor_init(&cursor, &p->cls, &fm->cr);
+    CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        if (!rule_is_hidden(rule)) {
+            match = rule;
+            modify_flow(p, fm, rule);
+        }
+    }
 
-    classifier_for_each_match(&ofconn->ofproto->cls, &fm->cr,
-                              modify_flows_cb, &cbdata);
-    if (cbdata.match) {
+    if (match) {
         /* This credits the packet to whichever flow happened to happened to
          * match last.  That's weird.  Maybe we should do a lookup for the
          * flow that actually matches the packet?  Who knows. */
-        send_buffered_packet(ofconn, cbdata.match, fm->buffer_id);
+        send_buffered_packet(ofconn, match, fm->buffer_id);
         return 0;
     } else {
         return add_flow(ofconn, fm);
@@ -4040,19 +4014,6 @@ modify_flow_strict(struct ofconn *ofconn, struct flow_mod *fm)
         return send_buffered_packet(ofconn, rule, fm->buffer_id);
     } else {
         return add_flow(ofconn, fm);
-    }
-}
-
-/* Callback for modify_flows_loose(). */
-static void
-modify_flows_cb(struct cls_rule *rule_, void *cbdata_)
-{
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct modify_flows_cbdata *cbdata = cbdata_;
-
-    if (!rule_is_hidden(rule)) {
-        cbdata->match = rule;
-        modify_flow(cbdata->ofproto, cbdata->fm, rule);
     }
 }
 
@@ -4086,24 +4047,19 @@ modify_flow(struct ofproto *p, const struct flow_mod *fm, struct rule *rule)
 
 /* OFPFC_DELETE implementation. */
 
-struct delete_flows_cbdata {
-    struct ofproto *ofproto;
-    ovs_be16 out_port;
-};
-
-static void delete_flows_cb(struct cls_rule *, void *cbdata_);
 static void delete_flow(struct ofproto *, struct rule *, ovs_be16 out_port);
 
 /* Implements OFPFC_DELETE. */
 static void
 delete_flows_loose(struct ofproto *p, const struct flow_mod *fm)
 {
-    struct delete_flows_cbdata cbdata;
+    struct rule *rule, *next_rule;
+    struct cls_cursor cursor;
 
-    cbdata.ofproto = p;
-    cbdata.out_port = htons(fm->out_port);
-
-    classifier_for_each_match(&p->cls, &fm->cr, delete_flows_cb, &cbdata);
+    cls_cursor_init(&cursor, &p->cls, &fm->cr);
+    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
+        delete_flow(p, rule, htons(fm->out_port));
+    }
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
@@ -4114,16 +4070,6 @@ delete_flow_strict(struct ofproto *p, struct flow_mod *fm)
     if (rule) {
         delete_flow(p, rule, htons(fm->out_port));
     }
-}
-
-/* Callback for delete_flows_loose(). */
-static void
-delete_flows_cb(struct cls_rule *rule_, void *cbdata_)
-{
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct delete_flows_cbdata *cbdata = cbdata_;
-
-    delete_flow(cbdata->ofproto, rule, cbdata->out_port);
 }
 
 /* Implements core of OFPFC_DELETE and OFPFC_DELETE_STRICT where 'rule' has
@@ -4607,14 +4553,9 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
 
 /* Flow expiration. */
 
-struct expire_cbdata {
-    struct ofproto *ofproto;
-    int dp_max_idle;
-};
-
 static int ofproto_dp_max_idle(const struct ofproto *);
 static void ofproto_update_used(struct ofproto *);
-static void rule_expire(struct cls_rule *, void *cbdata);
+static void rule_expire(struct ofproto *, struct rule *);
 static void ofproto_expire_facets(struct ofproto *, int dp_max_idle);
 
 /* This function is called periodically by ofproto_run().  Its job is to
@@ -4626,18 +4567,22 @@ static void ofproto_expire_facets(struct ofproto *, int dp_max_idle);
 static int
 ofproto_expire(struct ofproto *ofproto)
 {
-    struct expire_cbdata cbdata;
+    struct rule *rule, *next_rule;
+    struct cls_cursor cursor;
+    int dp_max_idle;
 
     /* Update 'used' for each flow in the datapath. */
     ofproto_update_used(ofproto);
 
     /* Expire facets that have been idle too long. */
-    cbdata.dp_max_idle = ofproto_dp_max_idle(ofproto);
-    ofproto_expire_facets(ofproto, cbdata.dp_max_idle);
+    dp_max_idle = ofproto_dp_max_idle(ofproto);
+    ofproto_expire_facets(ofproto, dp_max_idle);
 
     /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
-    cbdata.ofproto = ofproto;
-    classifier_for_each(&ofproto->cls, rule_expire, &cbdata);
+    cls_cursor_init(&cursor, &ofproto->cls, NULL);
+    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
+        rule_expire(ofproto, rule);
+    }
 
     /* Let the hook know that we're at a stable point: all outstanding data
      * in existing flows has been accounted to the account_cb.  Thus, the
@@ -4647,7 +4592,7 @@ ofproto_expire(struct ofproto *ofproto)
         ofproto->ofhooks->account_checkpoint_cb(ofproto->aux);
     }
 
-    return MIN(cbdata.dp_max_idle, 1000);
+    return MIN(dp_max_idle, 1000);
 }
 
 /* Update 'used' member of installed facets. */
@@ -4826,15 +4771,11 @@ ofproto_expire_facets(struct ofproto *ofproto, int dp_max_idle)
     }
 }
 
-/* If 'cls_rule' is an OpenFlow rule, that has expired according to OpenFlow
- * rules, then delete it entirely.
- *
- * (This is a callback function for classifier_for_each().) */
+/* If 'rule' is an OpenFlow rule, that has expired according to OpenFlow rules,
+ * then delete it entirely. */
 static void
-rule_expire(struct cls_rule *cls_rule, void *cbdata_)
+rule_expire(struct ofproto *ofproto, struct rule *rule)
 {
-    struct expire_cbdata *cbdata = cbdata_;
-    struct rule *rule = rule_from_cls_rule(cls_rule);
     struct facet *facet, *next_facet;
     long long int now;
     uint8_t reason;
@@ -4856,14 +4797,14 @@ rule_expire(struct cls_rule *cls_rule, void *cbdata_)
     /* Update stats.  (This is a no-op if the rule expired due to an idle
      * timeout, because that only happens when the rule has no facets left.) */
     LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
-        facet_remove(cbdata->ofproto, facet);
+        facet_remove(ofproto, facet);
     }
 
     /* Get rid of the rule. */
     if (!rule_is_hidden(rule)) {
-        rule_send_removed(cbdata->ofproto, rule, reason);
+        rule_send_removed(ofproto, rule, reason);
     }
-    rule_remove(cbdata->ofproto, rule);
+    rule_remove(ofproto, rule);
 }
 
 static struct ofpbuf *

@@ -120,5 +120,36 @@ void classifier_for_each_match(const struct classifier *,
                                cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
+
+/* Iteration. */
+
+struct cls_cursor {
+    const struct classifier *cls;
+    const struct cls_table *table;
+    const struct cls_rule *target;
+};
+
+void cls_cursor_init(struct cls_cursor *, const struct classifier *,
+                     const struct cls_rule *match);
+struct cls_rule *cls_cursor_first(struct cls_cursor *);
+struct cls_rule *cls_cursor_next(struct cls_cursor *, struct cls_rule *);
+
+#define CLS_CURSOR_FOR_EACH(RULE, MEMBER, CURSOR)                       \
+    for ((RULE) = OBJECT_CONTAINING(cls_cursor_first(CURSOR),           \
+                                    RULE, MEMBER);                      \
+         &(RULE)->MEMBER != NULL;                                       \
+         (RULE) = OBJECT_CONTAINING(cls_cursor_next(CURSOR,             \
+                                                    &(RULE)->MEMBER),   \
+                                    RULE, MEMBER))
+
+#define CLS_CURSOR_FOR_EACH_SAFE(RULE, NEXT, MEMBER, CURSOR)            \
+    for ((RULE) = OBJECT_CONTAINING(cls_cursor_first(CURSOR),           \
+                                    RULE, MEMBER);                      \
+         (&(RULE)->MEMBER != NULL                                       \
+          ? ((NEXT) = OBJECT_CONTAINING(cls_cursor_next(CURSOR,         \
+                                                        &(RULE)->MEMBER), \
+                                        RULE, MEMBER), 1)               \
+          : 0);                                                         \
+         (RULE) = (NEXT))
 
 #endif /* classifier.h */

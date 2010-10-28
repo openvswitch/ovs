@@ -609,6 +609,122 @@ classifier_for_each(const struct classifier *cls_,
     }
 }
 
+/* Iteration. */
+
+static bool
+rule_matches(const struct cls_rule *rule, const struct cls_rule *target)
+{
+    return (!target
+            || flow_equal_except(&rule->flow, &target->flow, &target->wc));
+}
+
+static struct cls_rule *
+search_table(const struct cls_table *table, const struct cls_rule *target)
+{
+    if (!target || !flow_wildcards_has_extra(&table->wc, &target->wc)) {
+        struct cls_rule *rule;
+
+        HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
+            if (rule_matches(rule, target)) {
+                return rule;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Initializes 'cursor' for iterating through 'cls' rules that exactly match
+ * 'target' or are more specific than 'target'.  That is, a given 'rule'
+ * matches 'target' if, for every field:
+ *
+ *   - 'target' and 'rule' specify the same (non-wildcarded) value for the
+ *     field, or
+ *
+ *   - 'target' wildcards the field,
+ *
+ * but not if:
+ *
+ *   - 'target' and 'rule' specify different values for the field, or
+ *
+ *   - 'target' specifies a value for the field but 'rule' wildcards it.
+ *
+ * Equivalently, the truth table for whether a field matches is:
+ *
+ *                                     rule
+ *
+ *                             wildcard    exact
+ *                            +---------+---------+
+ *                   t   wild |   yes   |   yes   |
+ *                   a   card |         |         |
+ *                   r        +---------+---------+
+ *                   g  exact |    no   |if values|
+ *                   e        |         |are equal|
+ *                   t        +---------+---------+
+ *
+ * This is the matching rule used by OpenFlow 1.0 non-strict OFPT_FLOW_MOD
+ * commands and by OpenFlow 1.0 aggregate and flow stats.
+ *
+ * Ignores target->priority.
+ *
+ * 'target' may be NULL to iterate over every rule in 'cls'. */
+void
+cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
+                const struct cls_rule *target)
+{
+    cursor->cls = cls;
+    cursor->target = target;
+}
+
+/* Returns the first matching cls_rule in 'cursor''s iteration, or a null
+ * pointer if there are no matches. */
+struct cls_rule *
+cls_cursor_first(struct cls_cursor *cursor)
+{
+    struct cls_table *table;
+
+    for (table = classifier_first_table(cursor->cls); table;
+         table = classifier_next_table(cursor->cls, table)) {
+        struct cls_rule *rule = search_table(table, cursor->target);
+        if (rule) {
+            cursor->table = table;
+            return rule;
+        }
+    }
+
+    return NULL;
+}
+
+/* Returns the next matching cls_rule in 'cursor''s iteration, or a null
+ * pointer if there are no more matches. */
+struct cls_rule *
+cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *rule)
+{
+    const struct cls_table *table;
+    struct cls_rule *next;
+
+    next = next_rule_in_list(rule);
+    if (next) {
+        return next;
+    }
+
+    HMAP_FOR_EACH_CONTINUE (rule, hmap_node, &cursor->table->rules) {
+        if (rule_matches(rule, cursor->target)) {
+            return rule;
+        }
+    }
+
+    for (table = classifier_next_table(cursor->cls, cursor->table); table;
+         table = classifier_next_table(cursor->cls, table)) {
+        rule = search_table(table, cursor->target);
+        if (rule) {
+            cursor->table = table;
+            return rule;
+        }
+    }
+
+    return NULL;
+}
+
 static struct cls_table *
 find_table(const struct classifier *cls, const struct flow_wildcards *wc)
 {
