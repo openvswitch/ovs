@@ -180,8 +180,8 @@ static void facet_install(struct ofproto *, struct facet *, bool zero_stats);
 static void facet_uninstall(struct ofproto *, struct facet *);
 static void facet_flush_stats(struct ofproto *, struct facet *);
 
-static bool facet_make_actions(struct ofproto *, struct facet *,
-                              const struct ofpbuf *packet);
+static void facet_make_actions(struct ofproto *, struct facet *,
+                               const struct ofpbuf *packet);
 static void facet_update_stats(struct ofproto *, struct facet *,
                                const struct odp_flow_stats *);
 
@@ -2156,9 +2156,8 @@ facet_remove(struct ofproto *ofproto, struct facet *facet)
     facet_free(facet);
 }
 
-/* Composes the ODP actions for 'facet' based on its rule's actions.
- * Returns true if the actions changed, false otherwise. */
-static bool
+/* Composes the ODP actions for 'facet' based on its rule's actions. */
+static void
 facet_make_actions(struct ofproto *p, struct facet *facet,
                    const struct ofpbuf *packet)
 {
@@ -2171,15 +2170,12 @@ facet_make_actions(struct ofproto *p, struct facet *facet,
                   &facet->nf_flow.output_iface);
 
     actions_len = a.n_actions * sizeof *a.actions;
-    if (facet->n_actions == a.n_actions
-        && !memcmp(facet->actions, a.actions, actions_len)) {
-        return false;
+    if (facet->n_actions != a.n_actions
+        || memcmp(facet->actions, a.actions, actions_len)) {
+        free(facet->actions);
+        facet->n_actions = a.n_actions;
+        facet->actions = xmemdup(a.actions, actions_len);
     }
-
-    free(facet->actions);
-    facet->n_actions = a.n_actions;
-    facet->actions = xmemdup(a.actions, actions_len);
-    return true;
 }
 
 static int
