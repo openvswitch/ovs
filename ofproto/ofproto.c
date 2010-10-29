@@ -178,7 +178,7 @@ static bool facet_revalidate(struct ofproto *, struct facet *);
 
 static void facet_install(struct ofproto *, struct facet *, bool zero_stats);
 static void facet_uninstall(struct ofproto *, struct facet *);
-static void facet_post_uninstall(struct ofproto *, struct facet *);
+static void facet_flush_stats(struct ofproto *, struct facet *);
 
 static bool facet_make_actions(struct ofproto *, struct facet *,
                               const struct ofpbuf *packet);
@@ -2150,6 +2150,7 @@ static void
 facet_remove(struct ofproto *ofproto, struct facet *facet)
 {
     facet_uninstall(ofproto, facet);
+    facet_flush_stats(ofproto, facet);
     hmap_remove(&ofproto->facets, &facet->hmap_node);
     list_remove(&facet->list_node);
     facet_free(facet);
@@ -2214,41 +2215,6 @@ facet_install(struct ofproto *p, struct facet *facet, bool zero_stats)
     }
 }
 
-/* Recomposes the ODP actions for 'facet' and installs or uninstalls or
- * reinstalls them as necessary. */
-static void
-facet_update_actions(struct ofproto *ofproto, struct facet *facet)
-{
-    bool actions_changed;
-    uint16_t new_out_iface, old_out_iface;
-
-    old_out_iface = facet->nf_flow.output_iface;
-    actions_changed = facet_make_actions(ofproto, facet, NULL);
-
-    if (facet->may_install) {
-        if (facet->installed) {
-            if (actions_changed) {
-                struct odp_flow_put put;
-                facet_put__(ofproto, facet, ODPPF_CREATE | ODPPF_MODIFY
-                                           | ODPPF_ZERO_STATS, &put);
-                facet_update_stats(ofproto, facet, &put.flow.stats);
-
-                /* Temporarily set the old output iface so that NetFlow
-                 * messages have the correct output interface for the old
-                 * stats. */
-                new_out_iface = facet->nf_flow.output_iface;
-                facet->nf_flow.output_iface = old_out_iface;
-                facet_post_uninstall(ofproto, facet);
-                facet->nf_flow.output_iface = new_out_iface;
-            }
-        } else {
-            facet_install(ofproto, facet, true);
-        }
-    } else {
-        facet_uninstall(ofproto, facet);
-    }
-}
-
 /* Ensures that the bytes in 'facet', plus 'extra_bytes', have been passed up
  * to the accounting hook function in the ofhooks structure. */
 static void
@@ -2267,10 +2233,7 @@ facet_account(struct ofproto *ofproto,
     }
 }
 
-/* If 'rule' is installed in the datapath, uninstalls it and updates its
- * rule's statistics.
- *
- * If 'rule' is not installed, this function has no effect. */
+/* If 'rule' is installed in the datapath, uninstalls it. */
 static void
 facet_uninstall(struct ofproto *p, struct facet *facet)
 {
@@ -2285,8 +2248,6 @@ facet_uninstall(struct ofproto *p, struct facet *facet)
             facet_update_stats(p, facet, &odp_flow.stats);
         }
         facet->installed = false;
-
-        facet_post_uninstall(p, facet);
     }
 }
 
@@ -2305,7 +2266,7 @@ facet_is_controller_flow(struct facet *facet)
 /* Folds all of 'facet''s statistics into its rule.  Also updates the
  * accounting ofhook and emits a NetFlow expiration if appropriate.  */
 static void
-facet_post_uninstall(struct ofproto *ofproto, struct facet *facet)
+facet_flush_stats(struct ofproto *ofproto, struct facet *facet)
 {
     facet_account(ofproto, facet, 0);
 
@@ -2381,29 +2342,77 @@ facet_lookup_valid(struct ofproto *ofproto, const struct flow *flow)
  *
  *   - If there is none, destroys 'facet'.
  *
- * Returns true if 'facet' still exists, false if it has been destroyed.
- */
+ * Returns true if 'facet' still exists, false if it has been destroyed. */
 static bool
 facet_revalidate(struct ofproto *ofproto, struct facet *facet)
 {
-    struct rule *rule;
+    struct rule *new_rule;
+    struct odp_actions a;
+    size_t actions_len;
+    uint16_t new_nf_output_iface;
+    bool actions_changed;
 
     COVERAGE_INC(facet_revalidate);
-    rule = rule_lookup(ofproto, &facet->flow);
-    if (!rule) {
+
+    /* Determine the new rule. */
+    new_rule = rule_lookup(ofproto, &facet->flow);
+    if (!new_rule) {
+        /* No new rule, so delete the facet. */
         facet_remove(ofproto, facet);
         return false;
     }
 
-    if (rule != facet->rule) {
-        COVERAGE_INC(facet_changed_rule);
-        list_remove(&facet->list_node);
-        list_push_back(&rule->facets, &facet->list_node);
-        facet->rule = rule;
-        facet->used = rule->created;
+    /* Calculate new ODP actions.
+     *
+     * We are very cautious about actually modifying 'facet' state at this
+     * point, because we might need to, e.g., emit a NetFlow expiration and, if
+     * so, we need to have the old state around to properly compose it. */
+    xlate_actions(new_rule->actions, new_rule->n_actions, &facet->flow,
+                  ofproto, NULL, &a, &facet->tags, &facet->may_install,
+                  &new_nf_output_iface);
+    actions_len = a.n_actions * sizeof *a.actions;
+    actions_changed = (facet->n_actions != a.n_actions
+                       || memcmp(facet->actions, a.actions, actions_len));
+
+    /* If the ODP actions changed or the installability changed, then we need
+     * to talk to the datapath. */
+    if (actions_changed || facet->may_install != facet->installed) {
+        if (facet->may_install) {
+            struct odp_flow_put put;
+
+            memset(&put.flow.stats, 0, sizeof put.flow.stats);
+            odp_flow_key_from_flow(&put.flow.key, &facet->flow);
+            put.flow.actions = a.actions;
+            put.flow.n_actions = a.n_actions;
+            put.flow.flags = 0;
+            put.flags = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS;
+            dpif_flow_put(ofproto->dpif, &put);
+
+            facet_update_stats(ofproto, facet, &put.flow.stats);
+        } else {
+            facet_uninstall(ofproto, facet);
+        }
+
+        /* The datapath flow is gone or has zeroed stats, so push stats out of
+         * 'facet' into 'rule'. */
+        facet_flush_stats(ofproto, facet);
     }
 
-    facet_update_actions(ofproto, facet);
+    /* Update 'facet' now that we've taken care of all the old state. */
+    facet->nf_flow.output_iface = new_nf_output_iface;
+    if (actions_changed) {
+        free(facet->actions);
+        facet->n_actions = a.n_actions;
+        facet->actions = xmemdup(a.actions, actions_len);
+    }
+    if (facet->rule != new_rule) {
+        COVERAGE_INC(facet_changed_rule);
+        list_remove(&facet->list_node);
+        list_push_back(&new_rule->facets, &facet->list_node);
+        facet->rule = new_rule;
+        facet->used = new_rule->created;
+    }
+
     return true;
 }
 
