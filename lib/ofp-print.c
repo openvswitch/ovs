@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#include "byte-order.h"
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
@@ -35,7 +36,6 @@
 #include "packets.h"
 #include "pcap.h"
 #include "util.h"
-#include "xtoxll.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
 static void ofp_print_queue_name(struct ds *string, uint32_t port);

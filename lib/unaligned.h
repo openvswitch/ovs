@@ -18,7 +18,7 @@
 #define UNALIGNED_H 1
 
 #include <stdint.h>
-#include "xtoxll.h"
+#include "byte-order.h"
 
 /* Public API. */
 static inline uint16_t get_unaligned_u16(const uint16_t *);

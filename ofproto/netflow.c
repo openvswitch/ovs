@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "byte-order.h"
 #include "collectors.h"
 #include "flow.h"
 #include "netflow.h"
@@ -31,7 +32,6 @@
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(netflow)
 

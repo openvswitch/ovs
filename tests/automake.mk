@@ -61,6 +61,7 @@ lcov_wrappers = \
 	tests/lcov/ovsdb-server \
 	tests/lcov/ovsdb-tool \
 	tests/lcov/test-aes128 \
+	tests/lcov/test-byte-order \
 	tests/lcov/test-classifier \
 	tests/lcov/test-csum \
 	tests/lcov/test-dhcp-client \
@@ -78,8 +79,7 @@ lcov_wrappers = \
 	tests/lcov/test-timeval \
 	tests/lcov/test-type-props \
 	tests/lcov/test-uuid \
-	tests/lcov/test-vconn \
-	tests/lcov/test-xtoxll
+	tests/lcov/test-vconn
 
 $(lcov_wrappers): tests/lcov-wrapper.in
 	@test -d tests/lcov || mkdir tests/lcov
@@ -110,6 +110,7 @@ valgrind_wrappers = \
 	tests/valgrind/ovsdb-server \
 	tests/valgrind/ovsdb-tool \
 	tests/valgrind/test-aes128 \
+	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-csum \
 	tests/valgrind/test-dhcp-client \
@@ -127,8 +128,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-timeval \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-uuid \
-	tests/valgrind/test-vconn \
-	tests/valgrind/test-xtoxll
+	tests/valgrind/test-vconn
 
 $(valgrind_wrappers): tests/valgrind-wrapper.in
 	@test -d tests/valgrind || mkdir tests/valgrind
@@ -270,9 +270,9 @@ EXTRA_DIST += \
 	tests/testpki-req.pem \
 	tests/testpki-req2.pem
 
-noinst_PROGRAMS += tests/test-xtoxll
-tests_test_xtoxll_SOURCES = tests/test-xtoxll.c
-tests_test_xtoxll_LDADD = lib/libopenvswitch.a
+noinst_PROGRAMS += tests/test-byte-order
+tests_test_byte_order_SOURCES = tests/test-byte-order.c
+tests_test_byte_order_LDADD = lib/libopenvswitch.a
 
 # Python tests.
 EXTRA_DIST += \

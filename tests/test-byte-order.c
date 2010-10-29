@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "xtoxll.h"
+#include "byte-order.h"
 #include <assert.h>
 #include <inttypes.h>
 

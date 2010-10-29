@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
+#include "byte-order.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
@@ -44,7 +45,6 @@
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl)
 

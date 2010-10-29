@@ -35,6 +35,6 @@ AT_CHECK([test-strtok_r], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test byte order conversion])
-AT_KEYWORDS([xtoxll])
-AT_CHECK([test-xtoxll], [0], [ignore])
+AT_KEYWORDS([byte order])
+AT_CHECK([test-byte-order], [0], [ignore])
 AT_CLEANUP

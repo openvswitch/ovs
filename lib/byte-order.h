@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef XTOXLL_H
-#define XTOXLL_H 1
+#ifndef BYTE_ORDER_H
+#define BYTE_ORDER_H 1
 
 #include <arpa/inet.h>
 #include <sys/types.h>
@@ -59,4 +59,4 @@ ntohll(uint64_t n)
          ((((uint64_t) (VALUE)) & UINT64_C(0xff00000000000000)) >> 56))
 #endif
 
-#endif /* xtoxll.h */
+#endif /* byte-order.h */

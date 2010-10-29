@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "byte-order.h"
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "ofp-util.h"
@@ -30,7 +31,6 @@
 #include "socket-util.h"
 #include "vconn.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse)
 

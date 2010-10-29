@@ -18,12 +18,12 @@
 #include "ofp-print.h"
 #include <inttypes.h>
 #include <stdlib.h>
+#include "byte-order.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util)
 

@@ -14,6 +14,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/backtrace.h \
 	lib/bitmap.c \
 	lib/bitmap.h \
+	lib/byte-order.h \
 	lib/byteq.c \
 	lib/byteq.h \
 	lib/classifier.c \
@@ -149,8 +150,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vconn.h \
 	lib/vlog-modules.def \
 	lib/vlog.c \
-	lib/vlog.h \
-	lib/xtoxll.h
+	lib/vlog.h
 nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/coverage-counters.c \
 	lib/dirs.c

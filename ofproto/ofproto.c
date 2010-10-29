@@ -24,6 +24,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "byte-order.h"
 #include "classifier.h"
 #include "coverage.h"
 #include "discovery.h"
@@ -58,7 +59,6 @@
 #include "unixctl.h"
 #include "vconn.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto)
 

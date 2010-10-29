@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include "byte-order.h"
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "hash.h"
@@ -29,7 +30,6 @@
 #include "packets.h"
 #include "unaligned.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(flow)
 

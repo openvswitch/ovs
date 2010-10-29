@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "byte-order.h"
 #include "flow.h"
 #include "hmap.h"
 #include "mac-learning.h"
@@ -38,7 +39,6 @@
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"
-#include "xtoxll.h"
 
 VLOG_DEFINE_THIS_MODULE(learning_switch)
 

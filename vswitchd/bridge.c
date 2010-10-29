@@ -15,6 +15,7 @@
 
 #include <config.h>
 #include "bridge.h"
+#include "byte-order.h"
 #include <assert.h>
 #include <errno.h>
 #include <arpa/inet.h>
@@ -65,7 +66,6 @@
 #include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "vlog.h"
-#include "xtoxll.h"
 #include "sflow_api.h"
 
 VLOG_DEFINE_THIS_MODULE(bridge)

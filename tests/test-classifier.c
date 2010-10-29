@@ -29,10 +29,10 @@
 #include "classifier.h"
 #include <errno.h>
 #include <limits.h>
+#include "byte-order.h"
 #include "command-line.h"
 #include "flow.h"
 #include "packets.h"
-#include "xtoxll.h"
 
 #undef NDEBUG
 #include <assert.h>
