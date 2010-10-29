@@ -1298,15 +1298,21 @@ ofproto_send_packet(struct ofproto *p, const struct flow *flow,
     return 0;
 }
 
+/* Adds a flow to the OpenFlow flow table in 'p' that matches 'cls_rule' and
+ * performs the 'n_actions' actions in 'actions'.  The new flow will not
+ * timeout.
+ *
+ * If cls_rule->priority is in the range of priorities supported by OpenFlow
+ * (0...65535, inclusive) then the flow will be visible to OpenFlow
+ * controllers; otherwise, it will be hidden.
+ *
+ * The caller retains ownership of 'cls_rule' and 'actions'. */
 void
 ofproto_add_flow(struct ofproto *p, const struct cls_rule *cls_rule,
-                 const union ofp_action *actions, size_t n_actions,
-                 int idle_timeout)
+                 const union ofp_action *actions, size_t n_actions)
 {
     struct rule *rule;
-    rule = rule_create(p, NULL, actions, n_actions,
-                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */,
-                       0, 0, false);
+    rule = rule_create(p, NULL, actions, n_actions, 0, 0, 0, false);
     rule->cr = *cls_rule;
     rule_insert(p, rule, NULL, 0);
 }

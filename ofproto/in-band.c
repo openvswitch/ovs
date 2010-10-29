@@ -591,7 +591,7 @@ add_rule(struct in_band *ib, const struct cls_rule *rule)
     action.output.len = htons(sizeof action);
     action.output.port = htons(OFPP_NORMAL);
     action.output.max_len = htons(0);
-    ofproto_add_flow(ib->ofproto, rule, &action, 1, 0);
+    ofproto_add_flow(ib->ofproto, rule, &action, 1);
 }
 
 /* Inserts flows into the flow table for the current state of 'ib'. */

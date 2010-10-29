@@ -1800,7 +1800,7 @@ bridge_reconfigure_remotes(struct bridge *br,
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         cls_rule_init_catchall(&rule, 0);
-        ofproto_add_flow(br->ofproto, &rule, &action, 1, 0);
+        ofproto_add_flow(br->ofproto, &rule, &action, 1);
     }
 }
 

@@ -294,7 +294,7 @@ fail_open_flushed(struct fail_open *fo)
         action.output.port = htons(OFPP_NORMAL);
 
         cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
-        ofproto_add_flow(fo->ofproto, &rule, &action, 1, 0);
+        ofproto_add_flow(fo->ofproto, &rule, &action, 1);
     }
 }
 

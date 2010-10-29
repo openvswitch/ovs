@@ -128,8 +128,7 @@ int ofproto_send_packet(struct ofproto *, const struct flow *,
                         const union ofp_action *, size_t n_actions,
                         const struct ofpbuf *);
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
-                      const union ofp_action *, size_t n_actions,
-                      int idle_timeout);
+                      const union ofp_action *, size_t n_actions);
 void ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
 void ofproto_flush_flows(struct ofproto *);
 
