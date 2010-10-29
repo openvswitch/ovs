@@ -1860,7 +1860,7 @@ rule_create(struct ofproto *ofproto, struct rule *super,
         rule->n_actions = n_actions;
         rule->actions = xmemdup(actions, n_actions * sizeof *actions);
     }
-    netflow_flow_clear(&rule->nf_flow);
+    netflow_flow_init(&rule->nf_flow);
     netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->created);
 
     return rule;

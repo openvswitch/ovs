@@ -283,6 +283,14 @@ netflow_destroy(struct netflow *nf)
     }
 }
 
+/* Initializes a new 'nf_flow' given that the caller has already cleared it to
+ * all-zero-bits. */
+void
+netflow_flow_init(struct netflow_flow *nf_flow OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
+
 void
 netflow_flow_clear(struct netflow_flow *nf_flow)
 {

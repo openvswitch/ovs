@@ -62,6 +62,7 @@ void netflow_expire(struct netflow *, struct netflow_flow *,
                     struct ofexpired *);
 void netflow_run(struct netflow *);
 
+void netflow_flow_init(struct netflow_flow *);
 void netflow_flow_clear(struct netflow_flow *);
 void netflow_flow_update_time(struct netflow *, struct netflow_flow *,
                               long long int used);
