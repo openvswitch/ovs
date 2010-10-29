@@ -2108,7 +2108,6 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
     assert(!rule->cr.wc.wildcards);
 
     super = rule->super ? rule->super : rule;
-    rule->tags = 0;
     xlate_actions(super->actions, super->n_actions, &rule->cr.flow, p,
                   packet, &a, &rule->tags, &rule->may_install,
                   &rule->nf_flow.output_iface);
@@ -2437,7 +2436,7 @@ struct action_xlate_ctx {
 
     /* Output. */
     struct odp_actions *out;    /* Datapath actions. */
-    tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
+    tag_type tags;              /* Tags associated with OFPP_NORMAL actions. */
     bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
@@ -2557,7 +2556,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_NORMAL:
         if (!ctx->ofproto->ofhooks->normal_cb(&ctx->flow, ctx->packet,
-                                              ctx->out, ctx->tags,
+                                              ctx->out, &ctx->tags,
                                               &ctx->nf_output_iface,
                                               ctx->ofproto->aux)) {
             COVERAGE_INC(ofproto_uninstallable);
@@ -2865,8 +2864,8 @@ xlate_actions(const union ofp_action *in, size_t n_in,
               struct odp_actions *out, tag_type *tags, bool *may_set_up_flow,
               uint16_t *nf_output_iface)
 {
-    tag_type no_tags = 0;
     struct action_xlate_ctx ctx;
+
     COVERAGE_INC(ofproto_ofp2odp);
     odp_actions_init(out);
     ctx.flow = *flow;
@@ -2874,7 +2873,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.ofproto = ofproto;
     ctx.packet = packet;
     ctx.out = out;
-    ctx.tags = tags ? tags : &no_tags;
+    ctx.tags = 0;
     ctx.may_set_up_flow = true;
     ctx.nf_output_iface = NF_OUT_DROP;
     do_xlate_actions(in, n_in, &ctx);
@@ -2886,6 +2885,9 @@ xlate_actions(const union ofp_action *in, size_t n_in,
         ctx.may_set_up_flow = false;
     }
 
+    if (tags) {
+        *tags = ctx.tags;
+    }
     if (may_set_up_flow) {
         *may_set_up_flow = ctx.may_set_up_flow;
     }
