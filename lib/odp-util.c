@@ -42,7 +42,8 @@ odp_actions_add(struct odp_actions *actions, uint16_t type)
 void
 format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
 {
-    ds_put_format(ds, "tun_id0x%08x in_port%04x tci(", key->tun_id, key->in_port);
+    ds_put_format(ds, "tun_id0x%08x in_port%d tci(",
+                  key->tun_id, key->in_port);
     if (key->dl_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",
                       vlan_tci_to_vid(key->dl_tci),
