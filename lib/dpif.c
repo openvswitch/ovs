@@ -42,6 +42,18 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif);
 
+COVERAGE_DEFINE(dpif_destroy);
+COVERAGE_DEFINE(dpif_port_add);
+COVERAGE_DEFINE(dpif_port_del);
+COVERAGE_DEFINE(dpif_flow_flush);
+COVERAGE_DEFINE(dpif_flow_get);
+COVERAGE_DEFINE(dpif_flow_put);
+COVERAGE_DEFINE(dpif_flow_del);
+COVERAGE_DEFINE(dpif_flow_query_list);
+COVERAGE_DEFINE(dpif_flow_query_list_n);
+COVERAGE_DEFINE(dpif_execute);
+COVERAGE_DEFINE(dpif_purge);
+
 static const struct dpif_class *base_dpif_classes[] = {
 #ifdef HAVE_NETLINK
     &dpif_linux_class,
@@ -374,6 +386,7 @@ dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
         return 0;
     }
 }
+
 
 /* Destroys the datapath that 'dpif' is connected to, first removing all of its
  * ports.  After calling this function, it does not make sense to pass 'dpif'

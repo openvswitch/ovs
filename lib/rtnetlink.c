@@ -31,6 +31,8 @@
 
 VLOG_DEFINE_THIS_MODULE(rtnetlink);
 
+COVERAGE_DEFINE(rtnetlink_changed);
+
 /* rtnetlink socket. */
 static struct nl_sock *notify_sock;
 

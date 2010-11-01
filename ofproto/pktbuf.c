@@ -28,6 +28,11 @@
 
 VLOG_DEFINE_THIS_MODULE(pktbuf);
 
+COVERAGE_DEFINE(pktbuf_buffer_unknown);
+COVERAGE_DEFINE(pktbuf_null_cookie);
+COVERAGE_DEFINE(pktbuf_retrieved);
+COVERAGE_DEFINE(pktbuf_reuse_error);
+
 /* Buffers are identified by a 32-bit opaque ID.  We divide the ID
  * into a buffer number (low bits) and a cookie (high bits).  The buffer number
  * is an index into an array of buffers.  The cookie distinguishes between

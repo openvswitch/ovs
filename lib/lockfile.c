@@ -33,6 +33,11 @@
 
 VLOG_DEFINE_THIS_MODULE(lockfile);
 
+COVERAGE_DEFINE(lockfile_lock);
+COVERAGE_DEFINE(lockfile_timeout);
+COVERAGE_DEFINE(lockfile_error);
+COVERAGE_DEFINE(lockfile_unlock);
+
 struct lockfile {
     struct hmap_node hmap_node;
     char *name;

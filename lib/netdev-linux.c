@@ -64,6 +64,14 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
+
+COVERAGE_DEFINE(netdev_get_vlan_vid);
+COVERAGE_DEFINE(netdev_set_policing);
+COVERAGE_DEFINE(netdev_arp_lookup);
+COVERAGE_DEFINE(netdev_get_ifindex);
+COVERAGE_DEFINE(netdev_get_hwaddr);
+COVERAGE_DEFINE(netdev_set_hwaddr);
+COVERAGE_DEFINE(netdev_ethtool);
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */

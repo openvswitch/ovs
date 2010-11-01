@@ -34,6 +34,8 @@
 
 VLOG_DEFINE_THIS_MODULE(flow);
 
+COVERAGE_DEFINE(flow_extract);
+
 static struct arp_eth_header *
 pull_arp(struct ofpbuf *packet)
 {

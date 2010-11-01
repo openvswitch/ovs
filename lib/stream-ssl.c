@@ -47,6 +47,9 @@
 
 VLOG_DEFINE_THIS_MODULE(stream_ssl);
 
+COVERAGE_DEFINE(ssl_session);
+COVERAGE_DEFINE(ssl_session_reused);
+
 /* Active SSL. */
 
 enum ssl_state {

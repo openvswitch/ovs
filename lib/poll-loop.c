@@ -32,6 +32,9 @@
 
 VLOG_DEFINE_THIS_MODULE(poll_loop);
 
+COVERAGE_DEFINE(poll_fd_wait);
+COVERAGE_DEFINE(poll_zero_timeout);
+
 /* An event that will wake the following call to poll_block(). */
 struct poll_waiter {
     /* Set when the waiter is created. */

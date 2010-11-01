@@ -33,6 +33,9 @@
 
 VLOG_DEFINE_THIS_MODULE(mac_learning);
 
+COVERAGE_DEFINE(mac_learning_learned);
+COVERAGE_DEFINE(mac_learning_expired);
+
 /* Returns the number of seconds since 'e' was last learned. */
 int
 mac_entry_age(const struct mac_entry *e)

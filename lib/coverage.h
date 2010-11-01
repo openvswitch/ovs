@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,24 +36,30 @@ struct coverage_counter {
     unsigned long long int total; /* Total count over all epochs. */
 };
 
-/* Increments the counter with the given NAME.  Coverage counters need not be
- * declared explicitly, but when you add the first coverage counter to a given
- * file, you must also add that file to COVERAGE_FILES in lib/automake.mk. */
-#define COVERAGE_INC(NAME)                              \
-    do {                                                \
-        extern struct coverage_counter NAME##_count;    \
-        NAME##_count.count++;                           \
-    } while (0)
+/* Defines COUNTER.  There must be exactly one such definition at file scope
+ * within a program. */
+#if USE_LINKER_SECTIONS
+#define COVERAGE_DEFINE(COUNTER)                                        \
+        COVERAGE_DEFINE__(COUNTER);                                     \
+        struct coverage_counter *counter_ptr_##COUNTER                  \
+            __attribute__((section("coverage"))) = &counter_##COUNTER
+#else
+#define COVERAGE_DEFINE(MODULE) \
+        extern struct coverage_counter counter_##MODULE
+#endif
 
-/* Adds AMOUNT to the coverage counter with the given NAME. */
-#define COVERAGE_ADD(NAME, AMOUNT)                      \
-    do {                                                \
-        extern struct coverage_counter NAME##_count;    \
-        NAME##_count.count += AMOUNT;                   \
-    } while (0)
+/* Adds 1 to COUNTER. */
+#define COVERAGE_INC(COUNTER) counter_##COUNTER.count++;
+
+/* Adds AMOUNT to COUNTER. */
+#define COVERAGE_ADD(COUNTER, AMOUNT) counter_##COUNTER.count += (AMOUNT);
 
 void coverage_init(void);
 void coverage_log(enum vlog_level, bool suppress_dups);
 void coverage_clear(void);
+
+/* Implementation detail. */
+#define COVERAGE_DEFINE__(COUNTER)                              \
+        struct coverage_counter counter_##COUNTER = { #COUNTER, 0, 0 }
 
 #endif /* coverage.h */

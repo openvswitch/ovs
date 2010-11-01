@@ -39,6 +39,9 @@
 
 VLOG_DEFINE_THIS_MODULE(stream);
 
+COVERAGE_DEFINE(pstream_open);
+COVERAGE_DEFINE(stream_open);
+
 /* State of an active stream.*/
 enum stream_state {
     SCS_CONNECTING,             /* Underlying stream is not connected. */

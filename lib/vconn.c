@@ -40,6 +40,10 @@
 
 VLOG_DEFINE_THIS_MODULE(vconn);
 
+COVERAGE_DEFINE(vconn_open);
+COVERAGE_DEFINE(vconn_received);
+COVERAGE_DEFINE(vconn_sent);
+
 /* State of an active vconn.*/
 enum vconn_state {
     /* This is the ordinary progression of states. */

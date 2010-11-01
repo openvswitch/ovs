@@ -36,6 +36,11 @@
 
 VLOG_DEFINE_THIS_MODULE(process);
 
+COVERAGE_DEFINE(process_run);
+COVERAGE_DEFINE(process_run_capture);
+COVERAGE_DEFINE(process_sigchld);
+COVERAGE_DEFINE(process_start);
+
 struct process {
     struct list node;
     char *name;

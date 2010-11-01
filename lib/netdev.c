@@ -42,6 +42,11 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 
+COVERAGE_DEFINE(netdev_received);
+COVERAGE_DEFINE(netdev_sent);
+COVERAGE_DEFINE(netdev_add_router);
+COVERAGE_DEFINE(netdev_get_stats);
+
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
 
 /* All created network devices. */

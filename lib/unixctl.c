@@ -43,6 +43,9 @@
 #endif
 
 VLOG_DEFINE_THIS_MODULE(unixctl);
+
+COVERAGE_DEFINE(unixctl_received);
+COVERAGE_DEFINE(unixctl_replied);
 
 struct unixctl_command {
     unixctl_cb_func *cb;

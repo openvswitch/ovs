@@ -72,6 +72,10 @@
 
 VLOG_DEFINE_THIS_MODULE(bridge);
 
+COVERAGE_DEFINE(bridge_flush);
+COVERAGE_DEFINE(bridge_process_flow);
+COVERAGE_DEFINE(bridge_reconfigure);
+
 struct dst {
     uint16_t vlan;
     uint16_t dp_ifidx;

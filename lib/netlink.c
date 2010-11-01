@@ -35,6 +35,12 @@
 
 VLOG_DEFINE_THIS_MODULE(netlink);
 
+COVERAGE_DEFINE(netlink_overflow);
+COVERAGE_DEFINE(netlink_received);
+COVERAGE_DEFINE(netlink_recv_retry);
+COVERAGE_DEFINE(netlink_send);
+COVERAGE_DEFINE(netlink_sent);
+
 /* Linux header file confusion causes this to be undefined. */
 #ifndef SOL_NETLINK
 #define SOL_NETLINK 270

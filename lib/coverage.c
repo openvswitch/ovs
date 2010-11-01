@@ -18,7 +18,6 @@
 #include "coverage.h"
 #include <inttypes.h>
 #include <stdlib.h>
-#include "coverage-counters.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "unixctl.h"
@@ -26,6 +25,25 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(coverage);
+
+/* The coverage counters. */
+#if USE_LINKER_SECTIONS
+extern struct coverage_counter *__start_coverage[];
+extern struct coverage_counter *__stop_coverage[];
+#define coverage_counters __start_coverage
+#define n_coverage_counters  (__stop_coverage - __start_coverage)
+#else  /* !USE_LINKER_SECTIONS */
+#define COVERAGE_COUNTER(NAME) COVERAGE_DEFINE__(NAME);
+#include "coverage.def"
+#undef COVERAGE_COUNTER
+
+struct coverage_counter *coverage_counters[] = {
+#define COVERAGE_COUNTER(NAME) &counter_##NAME,
+#include "coverage.def"
+#undef COVERAGE_COUNTER
+};
+#define n_coverage_counters ARRAY_SIZE(coverage_counters)
+#endif  /* !USE_LINKER_SECTIONS */
 
 static unsigned int epoch;
 
@@ -67,15 +85,15 @@ coverage_hash(void)
     int n_groups, i;
 
     /* Sort coverage counters into groups with equal counts. */
-    c = xmalloc(coverage_n_counters * sizeof *c);
-    for (i = 0; i < coverage_n_counters; i++) {
+    c = xmalloc(n_coverage_counters * sizeof *c);
+    for (i = 0; i < n_coverage_counters; i++) {
         c[i] = coverage_counters[i];
     }
-    qsort(c, coverage_n_counters, sizeof *c, compare_coverage_counters);
+    qsort(c, n_coverage_counters, sizeof *c, compare_coverage_counters);
 
     /* Hash the names in each group along with the rank. */
     n_groups = 0;
-    for (i = 0; i < coverage_n_counters; ) {
+    for (i = 0; i < n_coverage_counters; ) {
         int j;
 
         if (!c[i]->count) {
@@ -83,7 +101,7 @@ coverage_hash(void)
         }
         n_groups++;
         hash = hash_int(i, hash);
-        for (j = i; j < coverage_n_counters; j++) {
+        for (j = i; j < n_coverage_counters; j++) {
             if (c[j]->count != c[i]->count) {
                 break;
             }
@@ -150,13 +168,13 @@ coverage_log(enum vlog_level level, bool suppress_dups)
     n_never_hit = 0;
     VLOG(level, "Event coverage (epoch %u/entire run), hash=%08"PRIx32":",
          epoch, hash);
-    for (i = 0; i < coverage_n_counters; i++) {
+    for (i = 0; i < n_coverage_counters; i++) {
         struct coverage_counter *c = coverage_counters[i];
         if (c->count) {
             coverage_log_counter(level, c);
         }
     }
-    for (i = 0; i < coverage_n_counters; i++) {
+    for (i = 0; i < n_coverage_counters; i++) {
         struct coverage_counter *c = coverage_counters[i];
         if (!c->count) {
             if (c->total) {
@@ -176,7 +194,7 @@ coverage_clear(void)
     size_t i;
 
     epoch++;
-    for (i = 0; i < coverage_n_counters; i++) {
+    for (i = 0; i < n_coverage_counters; i++) {
         struct coverage_counter *c = coverage_counters[i];
         c->total += c->count;
         c->count = 0;

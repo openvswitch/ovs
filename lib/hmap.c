@@ -23,6 +23,11 @@
 #include "random.h"
 #include "util.h"
 
+COVERAGE_DEFINE(hmap_pathological);
+COVERAGE_DEFINE(hmap_expand);
+COVERAGE_DEFINE(hmap_shrink);
+COVERAGE_DEFINE(hmap_reserve);
+
 /* Initializes 'hmap' as an empty hash table. */
 void
 hmap_init(struct hmap *hmap)

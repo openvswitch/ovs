@@ -26,7 +26,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/compiler.h \
 	lib/coverage.c \
 	lib/coverage.h \
-	lib/coverage-counters.h \
 	lib/csum.c \
 	lib/csum.h \
 	lib/daemon.c \
@@ -159,7 +158,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog.c \
 	lib/vlog.h
 nodist_lib_libopenvswitch_a_SOURCES = \
-	lib/coverage-counters.c \
 	lib/dirs.c
 CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
@@ -246,6 +244,7 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 
+if !USE_LINKER_SECTIONS
 # All distributed sources, with names adjust properly for referencing
 # from $(builddir).
 all_sources = \
@@ -257,37 +256,11 @@ all_sources = \
 		fi; \
 	 done`
 
-# All the source files that have coverage counters.
-COVERAGE_FILES = \
-	lib/dpif.c \
-	lib/flow.c \
-	lib/lockfile.c \
-	lib/hmap.c \
-	lib/mac-learning.c \
-	lib/netdev.c \
-	lib/netdev-linux.c \
-	lib/netlink.c \
-	lib/odp-util.c \
-	lib/poll-loop.c \
-	lib/process.c \
-	lib/rconn.c \
-	lib/rtnetlink.c \
-	lib/stream.c \
-	lib/stream-ssl.c \
-	lib/timeval.c \
-	lib/unixctl.c \
-	lib/util.c \
-	lib/vconn.c \
-	ofproto/ofproto.c \
-	ofproto/pktbuf.c \
-	vswitchd/bridge.c \
-	vswitchd/ovs-brcompatd.c
-lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl
-	(cd $(srcdir) && $(PERL) lib/coverage-scan.pl $(COVERAGE_FILES)) > $@.tmp
-	mv $@.tmp $@
-EXTRA_DIST += lib/coverage-scan.pl
+lib/coverage.$(OBJEXT): lib/coverage.def
+lib/coverage.def: $(DIST_SOURCES)
+	sed -n 's|^COVERAGE_DEFINE(\([_a-zA-Z0-9]\{1,\}\)).*$$|COVERAGE_COUNTER(\1)|p' $(all_sources) | LC_ALL=C sort -u > $@
+CLEANFILES += lib/coverage.def
 
-if !USE_LINKER_SECTIONS
 lib/vlog.$(OBJEXT): lib/vlog-modules.def
 lib/vlog-modules.def: $(DIST_SOURCES)
 	sed -n 's|^VLOG_DEFINE_\(THIS_\)\{0,1\}MODULE(\([_a-zA-Z0-9]\{1,\}\)).*$$|VLOG_MODULE(\2)|p' $(all_sources) | LC_ALL=C sort -u > $@

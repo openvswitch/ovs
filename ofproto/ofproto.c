@@ -63,6 +63,37 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
+COVERAGE_DEFINE(odp_overflow);
+COVERAGE_DEFINE(ofproto_add_wc_flow);
+COVERAGE_DEFINE(ofproto_agg_request);
+COVERAGE_DEFINE(ofproto_costly_flags);
+COVERAGE_DEFINE(ofproto_ctlr_action);
+COVERAGE_DEFINE(ofproto_del_wc_flow);
+COVERAGE_DEFINE(ofproto_dp_missed);
+COVERAGE_DEFINE(ofproto_error);
+COVERAGE_DEFINE(ofproto_expiration);
+COVERAGE_DEFINE(ofproto_expired);
+COVERAGE_DEFINE(ofproto_flows_req);
+COVERAGE_DEFINE(ofproto_flush);
+COVERAGE_DEFINE(ofproto_invalidated);
+COVERAGE_DEFINE(ofproto_mod_wc_flow);
+COVERAGE_DEFINE(ofproto_no_packet_in);
+COVERAGE_DEFINE(ofproto_odp_unchanged);
+COVERAGE_DEFINE(ofproto_ofconn_stuck);
+COVERAGE_DEFINE(ofproto_ofp2odp);
+COVERAGE_DEFINE(ofproto_packet_in);
+COVERAGE_DEFINE(ofproto_packet_out);
+COVERAGE_DEFINE(ofproto_queue_req);
+COVERAGE_DEFINE(ofproto_recv_openflow);
+COVERAGE_DEFINE(ofproto_reinit_ports);
+COVERAGE_DEFINE(ofproto_revalidate);
+COVERAGE_DEFINE(ofproto_revalidate_moved);
+COVERAGE_DEFINE(ofproto_revalidate_rule);
+COVERAGE_DEFINE(ofproto_subrule_create);
+COVERAGE_DEFINE(ofproto_unexpected_rule);
+COVERAGE_DEFINE(ofproto_uninstallable);
+COVERAGE_DEFINE(ofproto_update_port);
+
 #include "sflow_api.h"
 
 struct ofport {

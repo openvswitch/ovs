@@ -27,6 +27,8 @@
 
 VLOG_DEFINE_THIS_MODULE(util);
 
+COVERAGE_DEFINE(util_xalloc);
+
 const char *program_name;
 
 void

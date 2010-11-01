@@ -34,6 +34,11 @@
 
 VLOG_DEFINE_THIS_MODULE(rconn);
 
+COVERAGE_DEFINE(rconn_discarded);
+COVERAGE_DEFINE(rconn_overflow);
+COVERAGE_DEFINE(rconn_queued);
+COVERAGE_DEFINE(rconn_sent);
+
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \
     STATE(BACKOFF, 1 << 1)                      \
