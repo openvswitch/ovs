@@ -1059,8 +1059,6 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     static int use_netlink_stats = -1;
     int error;
 
-    COVERAGE_INC(netdev_get_stats);
-
     if (netdev_dev->have_vport_stats ||
         !(netdev_dev->cache_valid & VALID_HAVE_VPORT_STATS)) {
 
@@ -1875,7 +1873,6 @@ netdev_linux_add_router(struct netdev *netdev OVS_UNUSED, struct in_addr router)
     make_in4_sockaddr(&rt.rt_gateway, router);
     make_in4_sockaddr(&rt.rt_genmask, any);
     rt.rt_flags = RTF_UP | RTF_GATEWAY;
-    COVERAGE_INC(netdev_add_router);
     error = ioctl(af_inet_sock, SIOCADDRT, &rt) < 0 ? errno : 0;
     if (error) {
         VLOG_WARN("ioctl(SIOCADDRT): %s", strerror(error));
