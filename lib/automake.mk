@@ -156,7 +156,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vconn-stream.c \
 	lib/vconn.c \
 	lib/vconn.h \
-	lib/vlog-modules.def \
 	lib/vlog.c \
 	lib/vlog.h
 nodist_lib_libopenvswitch_a_SOURCES = \
@@ -247,6 +246,17 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 
+# All distributed sources, with names adjust properly for referencing
+# from $(builddir).
+all_sources = \
+	`for file in $(DIST_SOURCES); do \
+		if test -f $$file; then \
+			echo $$file; \
+		else \
+			echo $(VPATH)/$$file; \
+		fi; \
+	 done`
+
 # All the source files that have coverage counters.
 COVERAGE_FILES = \
 	lib/dpif.c \
@@ -277,8 +287,9 @@ lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl
 	mv $@.tmp $@
 EXTRA_DIST += lib/coverage-scan.pl
 
-ALL_LOCAL += check-vlog-modules
-check-vlog-modules:
-	cd $(srcdir) && build-aux/check-vlog-modules
-.PHONY: check-vlog-modules
-EXTRA_DIST += build-aux/check-vlog-modules
+if !USE_LINKER_SECTIONS
+lib/vlog.$(OBJEXT): lib/vlog-modules.def
+lib/vlog-modules.def: $(DIST_SOURCES)
+	sed -n 's|^VLOG_DEFINE_\(THIS_\)\{0,1\}MODULE(\([_a-zA-Z0-9]\{1,\}\)).*$$|VLOG_MODULE(\2)|p' $(all_sources) | LC_ALL=C sort -u > $@
+CLEANFILES += lib/vlog-modules.def
+endif

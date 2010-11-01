@@ -348,4 +348,6 @@ AC_DEFUN([OVS_CHECK_LINKER_SECTIONS],
                 into sections with user-defined names and the linker
                 automatically defines __start_SECNAME and __stop_SECNAME
                 symbols that designate the start and end of the section.])
-   fi])
+   fi
+   AM_CONDITIONAL(
+     [USE_LINKER_SECTIONS], [test $ovs_cv_use_linker_sections = yes])])
