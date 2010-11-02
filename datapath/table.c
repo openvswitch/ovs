@@ -16,30 +16,6 @@
 #include <asm/pgtable.h>
 
 /**
- * struct tbl - hash table
- * @n_buckets: number of buckets (a power of 2 between %TBL_L1_SIZE and
- * %TBL_MAX_BUCKETS)
- * @buckets: pointer to @n_buckets/%TBL_L1_SIZE pointers to %TBL_L1_SIZE pointers
- * to buckets
- * @rcu: RCU callback structure
- * @obj_destructor: Called on each element when the table is destroyed.
- *
- * The @buckets array is logically an array of pointers to buckets.  It is
- * broken into two levels to avoid the need to kmalloc() any object larger than
- * a single page or to use vmalloc().  @buckets is always nonnull, as is each
- * @buckets[i], but each @buckets[i][j] is nonnull only if the specified hash
- * bucket is nonempty (for 0 <= i < @n_buckets/%TBL_L1_SIZE, 0 <= j <
- * %TBL_L1_SIZE).
- */
-struct tbl {
-	struct rcu_head rcu;
-	unsigned int n_buckets;
-	struct tbl_bucket ***buckets;
-	unsigned int count;
-	void (*obj_destructor)(struct tbl_node *);
-};
-
-/**
  * struct tbl_bucket - single bucket within a hash table
  * @rcu: RCU callback structure
  * @n_objs: number of objects in @objs[] array
