@@ -768,6 +768,7 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
     struct netdev *local_netdev;
     int error;
 
+    *in_bandp = NULL;
     error = dpif_port_get_name(dpif, ODPP_LOCAL,
                                local_name, sizeof local_name);
     if (error) {
