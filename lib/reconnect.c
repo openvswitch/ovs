@@ -95,9 +95,9 @@ reconnect_create(long long int now)
     struct reconnect *fsm = xzalloc(sizeof *fsm);
 
     fsm->name = xstrdup("void");
-    fsm->min_backoff = 1000;
-    fsm->max_backoff = 8000;
-    fsm->probe_interval = 5000;
+    fsm->min_backoff = RECONNECT_DEFAULT_MIN_BACKOFF;
+    fsm->max_backoff = RECONNECT_DEFAULT_MAX_BACKOFF;
+    fsm->probe_interval = RECONNECT_DEFAULT_PROBE_INTERVAL;
     fsm->passive = false;
     fsm->info = VLL_INFO;
 
@@ -157,7 +157,7 @@ reconnect_set_name(struct reconnect *fsm, const char *name)
 }
 
 /* Return the minimum number of milliseconds to back off between consecutive
- * connection attempts.  The default is 1000 ms. */
+ * connection attempts.  The default is RECONNECT_DEFAULT_MIN_BACKOFF. */
 int
 reconnect_get_min_backoff(const struct reconnect *fsm)
 {
@@ -165,7 +165,7 @@ reconnect_get_min_backoff(const struct reconnect *fsm)
 }
 
 /* Return the maximum number of milliseconds to back off between consecutive
- * connection attempts.  The default is 8000 ms. */
+ * connection attempts.  The default is RECONNECT_DEFAULT_MAX_BACKOFF. */
 int
 reconnect_get_max_backoff(const struct reconnect *fsm)
 {
@@ -209,12 +209,16 @@ reconnect_get_max_tries(struct reconnect *fsm)
  * attempts.
  *
  * 'min_backoff' must be at least 1000, and 'max_backoff' must be greater than
- * or equal to 'min_backoff'. */
+ * or equal to 'min_backoff'.
+ *
+ * Pass 0 for 'min_backoff' or 'max_backoff' or both to use the defaults. */
 void
 reconnect_set_backoff(struct reconnect *fsm, int min_backoff, int max_backoff)
 {
     fsm->min_backoff = MAX(min_backoff, 1000);
-    fsm->max_backoff = max_backoff ? MAX(max_backoff, 1000) : 8000;
+    fsm->max_backoff = (max_backoff
+                        ? MAX(max_backoff, 1000)
+                        : RECONNECT_DEFAULT_MAX_BACKOFF);
     if (fsm->min_backoff > fsm->max_backoff) {
         fsm->max_backoff = fsm->min_backoff;
     }
