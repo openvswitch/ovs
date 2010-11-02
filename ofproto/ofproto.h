@@ -106,6 +106,7 @@ void ofproto_set_fail_mode(struct ofproto *, enum ofproto_fail_mode fail_mode);
 void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
+void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,

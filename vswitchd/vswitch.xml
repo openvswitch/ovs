@@ -369,6 +369,14 @@
             <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
             to set the hardware address of the local port and influence the
             datapath ID.</dd>
+          <dt><code>in-band-queue</code></dt>
+          <dd>
+            A queue ID as a nonnegative integer.  This sets the OpenFlow queue
+            ID that will be used by flows set up by in-band control on this
+            bridge.  If unset, or if the port used by an in-band control flow
+            does not have QoS configured, or if the port does not have a queue
+            with the specified ID, the default queue is used instead.
+          </dd>
         </dl>
       </column>
     </group>

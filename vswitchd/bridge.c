@@ -1724,22 +1724,28 @@ bridge_reconfigure_remotes(struct bridge *br,
                            const struct sockaddr_in *managers,
                            size_t n_managers)
 {
+    const char *disable_ib_str, *queue_id_str;
+    bool disable_in_band = false;
+    int queue_id;
+
     struct ovsrec_controller **controllers;
     size_t n_controllers;
     bool had_primary;
-    const char *disable_ib_str;
-    bool disable_in_band = false;
 
     struct ofproto_controller *ocs;
     size_t n_ocs;
     size_t i;
-
 
     /* Check if we should disable in-band control on this bridge. */
     disable_ib_str = bridge_get_other_config(br->cfg, "disable-in-band");
     if (disable_ib_str && !strcmp(disable_ib_str, "true")) {
         disable_in_band = true;
     }
+
+    /* Set OpenFlow queue ID for in-band control. */
+    queue_id_str = bridge_get_other_config(br->cfg, "in-band-queue");
+    queue_id = queue_id_str ? strtol(queue_id_str, NULL, 10) : -1;
+    ofproto_set_in_band_queue(br->ofproto, queue_id);
 
     if (disable_in_band) {
         ofproto_set_extra_in_band_remotes(br->ofproto, NULL, 0);

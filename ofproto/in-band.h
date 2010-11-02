@@ -31,6 +31,7 @@ int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
                    struct in_band **);
 void in_band_destroy(struct in_band *);
 
+void in_band_set_queue(struct in_band *, int queue_id);
 void in_band_set_remotes(struct in_band *,
                          const struct sockaddr_in *, size_t n);
 

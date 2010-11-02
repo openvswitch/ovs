@@ -305,6 +305,7 @@ struct ofproto {
     long long int next_in_band_update;
     struct sockaddr_in *extra_in_band_remotes;
     size_t n_extra_remotes;
+    int in_band_queue;
 
     /* Flow table. */
     struct classifier cls;
@@ -405,10 +406,13 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     /* Initialize submodules. */
     p->switch_status = switch_status_create(p);
-    p->in_band = NULL;
     p->fail_open = NULL;
     p->netflow = NULL;
     p->sflow = NULL;
+
+    /* Initialize in-band control. */
+    p->in_band = NULL;
+    p->in_band_queue = -1;
 
     /* Initialize flow table. */
     classifier_init(&p->cls);
@@ -600,6 +604,7 @@ update_in_band_remotes(struct ofproto *ofproto)
         if (ofproto->in_band) {
             in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
         }
+        in_band_set_queue(ofproto->in_band, ofproto->in_band_queue);
         ofproto->next_in_band_update = time_msec() + 1000;
     } else {
         in_band_destroy(ofproto->in_band);
@@ -774,6 +779,18 @@ ofproto_set_extra_in_band_remotes(struct ofproto *ofproto,
     ofproto->extra_in_band_remotes = xmemdup(extras, n * sizeof *extras);
 
     update_in_band_remotes(ofproto);
+}
+
+/* Sets the OpenFlow queue used by flows set up by in-band control on
+ * 'ofproto' to 'queue_id'.  If 'queue_id' is negative, then in-band control
+ * flows will use the default queue. */
+void
+ofproto_set_in_band_queue(struct ofproto *ofproto, int queue_id)
+{
+    if (queue_id != ofproto->in_band_queue) {
+        ofproto->in_band_queue = queue_id;
+        update_in_band_remotes(ofproto);
+    }
 }
 
 void

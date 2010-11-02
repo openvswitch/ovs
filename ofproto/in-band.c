@@ -235,6 +235,7 @@ struct in_band_remote {
 struct in_band {
     struct ofproto *ofproto;
     struct status_category *ss_cat;
+    int queue_id, prev_queue_id;
 
     /* Remote information. */
     time_t next_remote_refresh; /* Refresh timer. */
@@ -585,13 +586,31 @@ drop_rules(struct in_band *ib)
 static void
 add_rule(struct in_band *ib, const struct cls_rule *rule)
 {
-    union ofp_action action;
+    struct {
+        struct nx_action_set_queue nxsq;
+        struct ofp_action_output oao;
+    } actions;
 
-    action.type = htons(OFPAT_OUTPUT);
-    action.output.len = htons(sizeof action);
-    action.output.port = htons(OFPP_NORMAL);
-    action.output.max_len = htons(0);
-    ofproto_add_flow(ib->ofproto, rule, &action, 1);
+    memset(&actions, 0, sizeof actions);
+
+    actions.oao.type = htons(OFPAT_OUTPUT);
+    actions.oao.len = htons(sizeof actions.oao);
+    actions.oao.port = htons(OFPP_NORMAL);
+    actions.oao.max_len = htons(0);
+
+    if (ib->queue_id < 0) {
+        ofproto_add_flow(ib->ofproto, rule,
+                         (union ofp_action *) &actions.oao, 1);
+    } else {
+        actions.nxsq.type = htons(OFPAT_VENDOR);
+        actions.nxsq.len = htons(sizeof actions.nxsq);
+        actions.nxsq.vendor = htonl(NX_VENDOR_ID);
+        actions.nxsq.subtype = htons(NXAST_SET_QUEUE);
+        actions.nxsq.queue_id = htonl(ib->queue_id);
+
+        ofproto_add_flow(ib->ofproto, rule, (union ofp_action *) &actions,
+                         sizeof actions / sizeof(union ofp_action));
+    }
 }
 
 /* Inserts flows into the flow table for the current state of 'ib'. */
@@ -626,15 +645,17 @@ compare_macs(const void *a, const void *b)
 void
 in_band_run(struct in_band *ib)
 {
+    bool local_change, remote_change, queue_id_change;
     struct in_band_remote *r;
-    bool local_change, remote_change;
 
     local_change = refresh_local(ib);
     remote_change = refresh_remotes(ib);
-    if (!local_change && !remote_change) {
+    queue_id_change = ib->queue_id != ib->prev_queue_id;
+    if (!local_change && !remote_change && !queue_id_change) {
         /* Nothing changed, nothing to do. */
         return;
     }
+    ib->prev_queue_id = ib->queue_id;
 
     /* Drop old rules. */
     drop_rules(ib);
@@ -708,6 +729,7 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
     in_band->ofproto = ofproto;
     in_band->ss_cat = switch_status_register(ss, "in-band",
                                              in_band_status_cb, in_band);
+    in_band->queue_id = in_band->prev_queue_id = -1;
     in_band->next_remote_refresh = TIME_MIN;
     in_band->next_local_refresh = TIME_MIN;
     in_band->local_netdev = local_netdev;
@@ -778,3 +800,13 @@ in_band_set_remotes(struct in_band *ib,
     /* Force refresh in next call to in_band_run(). */
     ib->next_remote_refresh = TIME_MIN;
 }
+
+/* Sets the OpenFlow queue used by flows set up by 'ib' to 'queue_id'.  If
+ * 'queue_id' is negative, 'ib' will not set any queue (which is also the
+ * default). */
+void
+in_band_set_queue(struct in_band *ib, int queue_id)
+{
+    ib->queue_id = queue_id;
+}
+
