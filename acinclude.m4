@@ -108,21 +108,26 @@ dnl
 dnl Greps FILE for REGEX.  If it matches, runs IF-MATCH, otherwise IF-NO-MATCH.
 AC_DEFUN([OVS_GREP_IFELSE], [
   AC_MSG_CHECKING([whether $2 matches in $1])
-  grep '$2' $1 >/dev/null 2>&1
-  status=$?
-  case $status in
-    0) 
-      AC_MSG_RESULT([yes])
-      $3
-      ;;
-    1) 
-      AC_MSG_RESULT([no])
-      $4
-      ;;
-    *) 
-      AC_MSG_ERROR([grep exited with status $status]) 
-      ;;
-  esac
+  if test -f $1; then
+    grep '$2' $1 >/dev/null 2>&1
+    status=$?
+    case $status in
+      0) 
+        AC_MSG_RESULT([yes])
+        $3
+        ;;
+      1) 
+        AC_MSG_RESULT([no])
+        $4
+        ;;
+      *) 
+        AC_MSG_ERROR([grep exited with status $status])
+        ;;
+    esac
+  else
+    AC_MSG_RESULT([file not found])
+    $4
+  fi
 ])
 
 dnl OVS_DEFINE(NAME)
