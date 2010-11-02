@@ -16,7 +16,6 @@ import ovs.json
 
 class Error(Exception):
     def __init__(self, msg, json=None, tag=None):
-        Exception.__init__(self)
         self.msg = msg
         self.json = json
         if tag is None:
@@ -27,8 +26,8 @@ class Error(Exception):
         else:
             self.tag = tag
 
-    def __str__(self):
+        # Compose message.
         syntax = ""
         if self.json is not None:
                 syntax = "syntax \"%s\": " % ovs.json.to_string(self.json)
-        return "%s%s: %s" % (syntax, self.tag, self.msg)
+        Exception.__init__(self, "%s%s: %s" % (syntax, self.tag, self.msg))
