@@ -156,6 +156,9 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   mkdir -p datapath/linux-2.6
   : > datapath/linux-2.6/kcompat.h.new
 
+  OVS_GREP_IFELSE([$KSRC26/arch/x86/include/asm/checksum_32.h], [src_err,],
+                  [OVS_DEFINE([HAVE_CSUM_COPY_DBG])])
+
   OVS_GREP_IFELSE([$KSRC26/include/linux/err.h], [ERR_CAST],
                   [OVS_DEFINE([HAVE_ERR_CAST])])
 
