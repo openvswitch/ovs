@@ -305,11 +305,60 @@ fetch_schema(const char *server, const char *database)
 
 struct column {
     char *heading;
-    int width;
 };
 
+struct cell {
+    /* Literal text. */
+    char *text;
+
+    /* JSON. */
+    struct json *json;
+    const struct ovsdb_type *type;
+};
+
+static const char *
+cell_to_text(const struct cell *cell_)
+{
+    struct cell *cell = (struct cell *) cell_;
+    if (!cell->text) {
+        if (cell->json) {
+            if (data_format == DF_JSON || !cell->type) {
+                cell->text = json_to_string(cell->json, JSSF_SORT);
+            } else if (data_format == DF_STRING) {
+                struct ovsdb_datum datum;
+                struct ovsdb_error *error;
+                struct ds s;
+
+                error = ovsdb_datum_from_json(&datum, cell->type, cell->json,
+                                              NULL);
+                if (!error) {
+                    ds_init(&s);
+                    ovsdb_datum_to_string(&datum, cell->type, &s);
+                    ovsdb_datum_destroy(&datum, cell->type);
+                    cell->text = ds_steal_cstr(&s);
+                } else {
+                    cell->text = json_to_string(cell->json, JSSF_SORT);
+                }
+            } else {
+                NOT_REACHED();
+            }
+        } else {
+            cell->text = xstrdup("");
+        }
+    }
+
+    return cell->text;
+}
+
+static void
+cell_destroy(struct cell *cell)
+{
+    free(cell->text);
+    json_destroy(cell->json);
+}
+
 struct table {
-    char **cells;
+    struct cell *cells;
     struct column *columns;
     size_t n_columns, allocated_columns;
     size_t n_rows, allocated_rows;
@@ -334,7 +383,7 @@ table_destroy(struct table *table)
     free(table->columns);
 
     for (i = 0; i < table->n_columns * table->n_rows; i++) {
-        free(table->cells[i]);
+        cell_destroy(&table->cells[i]);
     }
     free(table->cells);
 
@@ -367,11 +416,10 @@ table_add_column(struct table *table, const char *heading, ...)
 
     va_start(args, heading);
     column->heading = xvasprintf(heading, args);
-    column->width = strlen(column->heading);
     va_end(args);
 }
 
-static char **
+static struct cell *
 table_cell__(const struct table *table, size_t row, size_t column)
 {
     return &table->cells[column + row * table->n_columns];
@@ -390,37 +438,23 @@ table_add_row(struct table *table)
     y = table->n_rows++;
     table->current_column = 0;
     for (x = 0; x < table->n_columns; x++) {
-        *table_cell__(table, y, x) = NULL;
+        struct cell *cell = table_cell__(table, y, x);
+        memset(cell, 0, sizeof *cell);
     }
 }
 
-static void
-table_add_cell_nocopy(struct table *table, char *s)
+static struct cell *
+table_add_cell(struct table *table)
 {
     size_t x, y;
-    int length;
 
     assert(table->n_rows > 0);
     assert(table->current_column < table->n_columns);
 
     x = table->current_column++;
     y = table->n_rows - 1;
-    *table_cell__(table, y, x) = s;
 
-    length = strlen(s);
-    if (length > table->columns[x].width) {
-        table->columns[x].width = length;
-    }
-}
-
-static void
-table_add_cell(struct table *table, const char *format, ...)
-{
-    va_list args;
-
-    va_start(args, format);
-    table_add_cell_nocopy(table, xvasprintf(format, args));
-    va_end(args);
+    return table_cell__(table, y, x);
 }
 
 static void
@@ -435,6 +469,7 @@ table_print_table__(const struct table *table)
 {
     static int n = 0;
     struct ds line = DS_EMPTY_INITIALIZER;
+    int *widths;
     size_t x, y;
 
     if (n++ > 0) {
@@ -445,42 +480,52 @@ table_print_table__(const struct table *table)
         puts(table->caption);
     }
 
+    widths = xmalloc(table->n_columns * sizeof *widths);
+    for (x = 0; x < table->n_columns; x++) {
+        const struct column *column = &table->columns[x];
+
+        widths[x] = strlen(column->heading);
+        for (y = 0; y < table->n_rows; y++) {
+            const char *text = cell_to_text(table_cell__(table, y, x));
+            size_t length = strlen(text);
+
+            if (length > widths[x])
+                widths[x] = length;
+        }
+    }
+
     if (output_headings) {
         for (x = 0; x < table->n_columns; x++) {
             const struct column *column = &table->columns[x];
             if (x) {
                 ds_put_char(&line, ' ');
             }
-            ds_put_format(&line, "%-*s", column->width, column->heading);
+            ds_put_format(&line, "%-*s", widths[x], column->heading);
         }
         table_print_table_line__(&line);
 
         for (x = 0; x < table->n_columns; x++) {
-            const struct column *column = &table->columns[x];
-            int i;
-
             if (x) {
                 ds_put_char(&line, ' ');
             }
-            for (i = 0; i < column->width; i++) {
-                ds_put_char(&line, '-');
-            }
+            ds_put_char_multiple(&line, '-', widths[x]);
         }
         table_print_table_line__(&line);
     }
 
     for (y = 0; y < table->n_rows; y++) {
         for (x = 0; x < table->n_columns; x++) {
-            const char *cell = *table_cell__(table, y, x);
+            const char *text = cell_to_text(table_cell__(table, y, x));
             if (x) {
                 ds_put_char(&line, ' ');
             }
-            ds_put_format(&line, "%-*s", table->columns[x].width, cell);
+            ds_put_format(&line, "%-*s", widths[x], text);
         }
         table_print_table_line__(&line);
     }
 
     ds_destroy(&line);
+    free(widths);
 }
 
 static void
@@ -554,7 +599,7 @@ table_print_html__(const struct table *table)
     for (y = 0; y < table->n_rows; y++) {
         fputs("  <tr>\n", stdout);
         for (x = 0; x < table->n_columns; x++) {
-            const char *content = *table_cell__(table, y, x);
+            const char *content = cell_to_text(table_cell__(table, y, x));
 
             if (!strcmp(table->columns[x].heading, "_uuid")) {
                 fputs("    <td><a name=\"", stdout);
@@ -625,7 +670,7 @@ table_print_csv__(const struct table *table)
             if (x) {
                 putchar(',');
             }
-            table_print_csv_cell__(*table_cell__(table, y, x));
+            table_print_csv_cell__(cell_to_text(table_cell__(table, y, x)));
         }
         putchar('\n');
     }
@@ -702,7 +747,7 @@ do_list_tables(int argc OVS_UNUSED, char *argv[])
         struct ovsdb_table_schema *ts = node->data;
 
         table_add_row(&t);
-        table_add_cell(&t, ts->name);
+        table_add_cell(&t)->text = xstrdup(ts->name);
     }
     ovsdb_schema_destroy(schema);
     table_print(&t);
@@ -731,16 +776,13 @@ do_list_columns(int argc OVS_UNUSED, char *argv[])
 
             SHASH_FOR_EACH (column_node, &ts->columns) {
                 const struct ovsdb_column *column = column_node->data;
-                struct json *type = ovsdb_type_to_json(&column->type);
 
                 table_add_row(&t);
                 if (!table_name) {
-                    table_add_cell(&t, ts->name);
+                    table_add_cell(&t)->text = xstrdup(ts->name);
                 }
-                table_add_cell(&t, column->name);
-                table_add_cell_nocopy(&t, json_to_string(type, JSSF_SORT));
-
-                json_destroy(type);
+                table_add_cell(&t)->text = xstrdup(column->name);
+                table_add_cell(&t)->json = ovsdb_type_to_json(&column->type);
             }
         }
     }
@@ -774,30 +816,6 @@ do_transact(int argc OVS_UNUSED, char *argv[])
     jsonrpc_close(rpc);
 }
 
-static char *
-format_json(const struct json *json, const struct ovsdb_type *type)
-{
-    if (data_format == DF_JSON) {
-        return json_to_string(json, JSSF_SORT);
-    } else if (data_format == DF_STRING) {
-        struct ovsdb_datum datum;
-        struct ovsdb_error *error;
-        struct ds s;
-
-        error = ovsdb_datum_from_json(&datum, type, json, NULL);
-        if (error) {
-            return json_to_string(json, JSSF_SORT);
-        }
-
-        ds_init(&s);
-        ovsdb_datum_to_string(&datum, type, &s);
-        ovsdb_datum_destroy(&datum, type);
-        return ds_steal_cstr(&s);
-    } else {
-        NOT_REACHED();
-    }
-}
-
 static void
 monitor_print_row(struct json *row, const char *type, const char *uuid,
                   const struct ovsdb_column_set *columns, struct table *t)
@@ -813,15 +831,15 @@ monitor_print_row(struct json *row, const char *type, const char *uuid,
     }
 
     table_add_row(t);
-    table_add_cell(t, uuid);
-    table_add_cell(t, type);
+    table_add_cell(t)->text = xstrdup(uuid);
+    table_add_cell(t)->text = xstrdup(type);
     for (i = 0; i < columns->n_columns; i++) {
         const struct ovsdb_column *column = columns->columns[i];
         struct json *value = shash_find_data(json_object(row), column->name);
+        struct cell *cell = table_add_cell(t);
         if (value) {
-            table_add_cell_nocopy(t, format_json(value, &column->type));
-        } else {
-            table_add_cell(t, "");
+            cell->json = json_clone(value);
+            cell->type = &column->type;
         }
     }
 }
@@ -1106,25 +1124,6 @@ swap_rows(size_t a_y, size_t b_y, void *aux_)
     aux->data[b_y] = tmp;
 }
 
-static char *
-format_data(const struct ovsdb_datum *datum, const struct ovsdb_type *type)
-{
-    if (data_format == DF_JSON) {
-        struct json *json = ovsdb_datum_to_json(datum, type);
-        char *s = json_to_string(json, JSSF_SORT);
-        json_destroy(json);
-        return s;
-    } else if (data_format == DF_STRING) {
-        struct ds s;
-
-        ds_init(&s);
-        ovsdb_datum_to_string(datum, type, &s);
-        return ds_steal_cstr(&s);
-    } else {
-        NOT_REACHED();
-    }
-}
-
 static int
 compare_columns(const void *a_, const void *b_)
 {
@@ -1202,8 +1201,9 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
     for (y = 0; y < rows->n; y++) {
         table_add_row(&t);
         for (x = 0; x < n_columns; x++) {
-            table_add_cell_nocopy(&t, format_data(&data[y][x],
-                                                  &columns[x]->type));
+            struct cell *cell = table_add_cell(&t);
+            cell->json = ovsdb_datum_to_json(&data[y][x], &columns[x]->type);
+            cell->type = &columns[x]->type;
         }
     }
     table_print(&t);
