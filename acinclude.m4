@@ -191,8 +191,10 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_warn_if_lro],
                   [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
 
-  OVS_GREP_IFELSE([$KSRC26/include/linux/string.h $KSRC26/include/linux/slab.h],
-                  [kmemdup], [OVS_DEFINE([HAVE_KMEMDUP])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/string.h], [kmemdup],
+                  [OVS_DEFINE([HAVE_KMEMDUP])],
+                  [OVS_GREP_IFELSE([$KSRC26/include/linux/slab.h], [kmemdup],
+                                   [OVS_DEFINE([HAVE_KMEMDUP])])])
 
   OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
                   [OVS_DEFINE([HAVE_BOOL_TYPE])])
