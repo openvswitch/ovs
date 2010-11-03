@@ -50,12 +50,11 @@ vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 
 # vswitch E-R diagram
 if BUILD_ER_DIAGRAMS
-$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in ovsdb/dot2pic \
+                                vswitchd/vswitch.ovsschema
 	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema \
-		| dot -T pic \
-		| sed -e "/^'/d" \
-		      -e '/^box attrs0/d' \
-		      -e 's/linethick = 0;/linethick = 1;/' \
+		| dot -T plain \
+		| $(srcdir)/ovsdb/dot2pic \
 		> $@.tmp
 	mv $@.tmp $@
 else

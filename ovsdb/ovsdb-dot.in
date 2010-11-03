@@ -29,6 +29,7 @@ def schemaToDot(schemaFile):
         print '\tsize="6.5,4";'
         print '\tmargin="0";'
         print "\tnode [shape=box];"
+        print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
         print "\t%s;" % tableName
         for columnName, column in table.columns.iteritems():
             if column.type.value:
