@@ -64,12 +64,6 @@ VLOG_DEFINE_THIS_MODULE(ofproto);
 
 #include "sflow_api.h"
 
-enum {
-    TABLEID_HASH = 0,
-    TABLEID_CLASSIFIER = 1
-};
-
-
 struct ofport {
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
@@ -3074,44 +3068,27 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
 {
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
-    struct odp_stats dpstats;
-    int n_exact, n_subrules, n_wild;
     struct rule *rule;
+    int n_rules;
 
     msg = start_stats_reply(request, sizeof *ots * 2);
 
-    /* Count rules of various kinds. */
-    n_subrules = 0;
+    /* Count rules other than subrules. */
+    n_rules = classifier_count(&p->cls);
     CLASSIFIER_FOR_EACH_EXACT_RULE (rule, cr, &p->cls) {
         if (rule->super) {
-            n_subrules++;
+            n_rules--;
         }
     }
-    n_exact = classifier_count_exact(&p->cls) - n_subrules;
-    n_wild = classifier_count(&p->cls) - classifier_count_exact(&p->cls);
-
-    /* Hash table. */
-    dpif_get_dp_stats(p->dpif, &dpstats);
-    ots = append_stats_reply(sizeof *ots, ofconn, &msg);
-    memset(ots, 0, sizeof *ots);
-    ots->table_id = TABLEID_HASH;
-    strcpy(ots->name, "hash");
-    ots->wildcards = htonl(0);
-    ots->max_entries = htonl(dpstats.max_capacity);
-    ots->active_count = htonl(n_exact);
-    ots->lookup_count = htonll(dpstats.n_frags + dpstats.n_hit +
-                               dpstats.n_missed);
-    ots->matched_count = htonll(dpstats.n_hit); /* XXX */
 
     /* Classifier table. */
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
-    ots->table_id = TABLEID_CLASSIFIER;
     strcpy(ots->name, "classifier");
     ots->wildcards = p->tun_id_from_cookie ? htonl(OVSFW_ALL)
                                            : htonl(OFPFW_ALL);
-    ots->max_entries = htonl(65536);
-    ots->active_count = htonl(n_wild);
+    ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
+    ots->active_count = htonl(n_rules);
     ots->lookup_count = htonll(0);              /* XXX */
     ots->matched_count = htonll(0);             /* XXX */
 
@@ -3263,7 +3240,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
 
     ofs = append_stats_reply(len, cbdata->ofconn, &cbdata->msg);
     ofs->length = htons(len);
-    ofs->table_id = rule->cr.wc.wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
+    ofs->table_id = 0;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
                   cbdata->ofproto->tun_id_from_cookie, &ofs->match);
@@ -3284,10 +3261,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
 static int
 table_id_to_include(uint8_t table_id)
 {
-    return (table_id == TABLEID_HASH ? CLS_INC_EXACT
-            : table_id == TABLEID_CLASSIFIER ? CLS_INC_WILD
-            : table_id == 0xff ? CLS_INC_ALL
-            : 0);
+    return table_id == 0 || table_id == 0xff ? CLS_INC_ALL : 0;
 }
 
 static int
