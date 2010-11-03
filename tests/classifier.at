@@ -5,12 +5,10 @@ m4_foreach(
    [destroy-null],
    [single-rule],
    [rule-replacement],
-   [two-rules-in-one-bucket],
-   [two-rules-in-one-table],
-   [two-rules-in-different-tables],
-   [many-rules-in-one-bucket],
+   [many-rules-in-one-list],
    [many-rules-in-one-table],
-   [many-rules-in-different-tables]],
+   [many-rules-in-two-tables],
+   [many-rules-in-five-tables]],
   [AT_SETUP([flow classifier - m4_bpatsubst(testname, [-], [ ])])
    AT_CHECK([test-classifier testname], [0], [], [])
    AT_CLEANUP])])

@@ -22,36 +22,91 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "packets.h"
 
-const struct cls_field cls_fields[CLS_N_FIELDS + 1] = {
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME)      \
-    { offsetof(struct flow, MEMBER),            \
-      sizeof ((struct flow *)0)->MEMBER,        \
-      WILDCARDS,                                \
-      #NAME },
-    CLS_FIELDS
-#undef CLS_FIELD
-    { sizeof(struct flow), 0, 0, "exact" },
-};
+static struct cls_table *find_table(const struct classifier *,
+                                    const struct flow_wildcards *);
+static struct cls_table *insert_table(struct classifier *,
+                                      const struct flow_wildcards *);
 
-static uint32_t hash_fields(const struct flow *, int table_idx);
-static bool equal_fields(const struct flow *, const struct flow *,
-                         int table_idx);
+static struct cls_table *classifier_first_table(const struct classifier *);
+static struct cls_table *classifier_next_table(const struct classifier *,
+                                               const struct cls_table *);
+static void destroy_table(struct classifier *, struct cls_table *);
 
-static int table_idx_from_wildcards(uint32_t wildcards);
-static struct cls_rule *table_insert(struct hmap *, struct cls_rule *);
-static struct cls_rule *insert_exact_rule(struct classifier *,
-                                          struct cls_rule *);
-static struct cls_bucket *find_bucket(struct hmap *, size_t hash,
-                                      const struct cls_rule *);
-static struct cls_rule *search_table(const struct hmap *table, int field_idx,
-                                     const struct cls_rule *);
-static struct cls_rule *search_exact_table(const struct classifier *,
-                                           size_t hash, const struct flow *);
-static bool rules_match_1wild(const struct cls_rule *fixed,
-                              const struct cls_rule *wild, int field_idx);
-static bool rules_match_2wild(const struct cls_rule *wild1,
-                              const struct cls_rule *wild2, int field_idx);
+static bool should_include(const struct cls_table *, int include);
+
+static struct cls_rule *find_match(const struct cls_table *,
+                                   const struct flow *);
+static struct cls_rule *find_equal(struct cls_table *, const struct flow *,
+                                   uint32_t hash);
+static struct cls_rule *insert_rule(struct cls_table *, struct cls_rule *);
+
+static bool flow_equal_except(const struct flow *, const struct flow *,
+                                const struct flow_wildcards *);
+static void zero_wildcards(struct flow *, const struct flow_wildcards *);
+
+/* Iterates RULE over HEAD and all of the cls_rules on HEAD->list. */
+#define FOR_EACH_RULE_IN_LIST(RULE, HEAD)                               \
+    for ((RULE) = (HEAD); (RULE) != NULL; (RULE) = next_rule_in_list(RULE))
+#define FOR_EACH_RULE_IN_LIST_SAFE(RULE, NEXT, HEAD)                    \
+    for ((RULE) = (HEAD);                                               \
+         (RULE) != NULL && ((NEXT) = next_rule_in_list(RULE), true);    \
+         (RULE) = (NEXT))
+
+static struct cls_rule *next_rule_in_list(struct cls_rule *);
+
+static struct cls_table *
+cls_table_from_hmap_node(const struct hmap_node *node)
+{
+    return node ? CONTAINER_OF(node, struct cls_table, hmap_node) : NULL;
+}
+
+static struct cls_rule *
+cls_rule_from_hmap_node(const struct hmap_node *node)
+{
+    return node ? CONTAINER_OF(node, struct cls_rule, hmap_node) : NULL;
+}
+
+/* Returns the cls_table within 'cls' that has no wildcards, or NULL if there
+ * is none.  */
+struct cls_table *
+classifier_exact_table(const struct classifier *cls)
+{
+    struct flow_wildcards exact_wc;
+    flow_wildcards_init_exact(&exact_wc);
+    return find_table(cls, &exact_wc);
+}
+
+/* Returns the first rule in 'table', or a null pointer if 'table' is NULL. */
+struct cls_rule *
+cls_table_first_rule(const struct cls_table *table)
+{
+    return table ? cls_rule_from_hmap_node(hmap_first(&table->rules)) : NULL;
+}
+
+/* Returns the next rule in 'table' following 'rule', or a null pointer if
+ * 'rule' is the last rule in 'table'. */
+struct cls_rule *
+cls_table_next_rule(const struct cls_table *table, const struct cls_rule *rule)
+{
+    struct cls_rule *next
+        = CONTAINER_OF(rule->list.next, struct cls_rule, hmap_node);
+
+    return (next->priority < rule->priority
+            ? next
+            : cls_rule_from_hmap_node(hmap_next(&table->rules,
+                                                &next->hmap_node)));
+}
+
+static void
+cls_rule_init__(struct cls_rule *rule,
+                const struct flow *flow, uint32_t wildcards)
+{
+    rule->flow = *flow;
+    flow_wildcards_init(&rule->wc, wildcards);
+    cls_rule_zero_wildcards(rule);
+}
 
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'.*/
@@ -59,10 +114,8 @@ void
 cls_rule_from_flow(const struct flow *flow, uint32_t wildcards,
                    unsigned int priority, struct cls_rule *rule)
 {
-    rule->flow = *flow;
-    flow_wildcards_init(&rule->wc, wildcards);
+    cls_rule_init__(rule, flow, wildcards);
     rule->priority = priority;
-    rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
 }
 
 /* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
@@ -74,10 +127,25 @@ cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
                     struct cls_rule *rule)
 {
     uint32_t wildcards;
-    flow_from_match(match, tun_id_from_cookie, cookie, &rule->flow, &wildcards);
-    flow_wildcards_init(&rule->wc, wildcards);
+    struct flow flow;
+
+    flow_from_match(match, tun_id_from_cookie, cookie, &flow, &wildcards);
+    cls_rule_init__(rule, &flow, wildcards);
     rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
-    rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
+}
+
+/* For each bit or field wildcarded in 'rule', sets the corresponding bit or
+ * field in 'flow' to all-0-bits.  It is important to maintain this invariant
+ * in a clr_rule that might be inserted into a classifier.
+ *
+ * It is never necessary to call this function directly for a cls_rule that is
+ * initialized or modified only by cls_rule_*() functions.  It is useful to
+ * restore the invariant in a cls_rule whose 'wc' member is modified by hand.
+ */
+void
+cls_rule_zero_wildcards(struct cls_rule *rule)
+{
+    zero_wildcards(&rule->flow, &rule->wc);
 }
 
 /* Converts 'rule' to a string and returns the string.  The caller must free
@@ -109,13 +177,8 @@ cls_rule_print(const struct cls_rule *rule)
 void
 classifier_init(struct classifier *cls)
 {
-    int i;
-
     cls->n_rules = 0;
-    for (i = 0; i < ARRAY_SIZE(cls->tables); i++) {
-        hmap_init(&cls->tables[i]);
-    }
-    hmap_init(&cls->exact_table);
+    hmap_init(&cls->tables);
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
@@ -124,21 +187,18 @@ void
 classifier_destroy(struct classifier *cls)
 {
     if (cls) {
-        struct cls_bucket *bucket, *next_bucket;
-        struct hmap *tbl;
+        struct cls_table *table, *next_table;
 
-        for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, tbl) {
-                free(bucket);
-            }
-            hmap_destroy(tbl);
+        HMAP_FOR_EACH_SAFE (table, next_table, hmap_node, &cls->tables) {
+            hmap_destroy(&table->rules);
+            hmap_remove(&cls->tables, &table->hmap_node);
+            free(table);
         }
-        hmap_destroy(&cls->exact_table);
+        hmap_destroy(&cls->tables);
     }
 }
 
-/* Returns true if 'cls' does not contain any classification rules, false
- * otherwise. */
+/* Returns true if 'cls' contains no classification rules, false otherwise. */
 bool
 classifier_is_empty(const struct classifier *cls)
 {
@@ -156,10 +216,12 @@ classifier_count(const struct classifier *cls)
 int
 classifier_count_exact(const struct classifier *cls)
 {
-    return hmap_count(&cls->exact_table);
+    struct cls_table *exact_table = classifier_exact_table(cls);
+    return exact_table ? exact_table->n_table_rules : 0;
 }
 
-/* Inserts 'rule' into 'cls'.  Transfers ownership of 'rule' to 'cls'.
+/* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
+ * must not modify or free it.
  *
  * If 'cls' already contains an identical rule (including wildcards, values of
  * fixed fields, and priority), replaces the old rule by 'rule' and returns the
@@ -173,64 +235,68 @@ classifier_count_exact(const struct classifier *cls)
 struct cls_rule *
 classifier_insert(struct classifier *cls, struct cls_rule *rule)
 {
-    struct cls_rule *old;
-    assert((rule->wc.wildcards == 0) == (rule->table_idx == CLS_F_IDX_EXACT));
-    old = (rule->wc.wildcards
-           ? table_insert(&cls->tables[rule->table_idx], rule)
-           : insert_exact_rule(cls, rule));
-    if (!old) {
+    struct cls_rule *old_rule;
+    struct cls_table *table;
+
+    table = find_table(cls, &rule->wc);
+    if (!table) {
+        table = insert_table(cls, &rule->wc);
+    }
+
+    old_rule = insert_rule(table, rule);
+    if (!old_rule) {
+        table->n_table_rules++;
         cls->n_rules++;
     }
-    return old;
+    return old_rule;
 }
 
-/* Removes 'rule' from 'cls'.  It is caller's responsibility to free 'rule', if
- * this is desirable. */
+/* Removes 'rule' from 'cls'.  It is the caller's responsibility to free
+ * 'rule', if this is desirable. */
 void
 classifier_remove(struct classifier *cls, struct cls_rule *rule)
 {
-    if (rule->wc.wildcards) {
-        /* Remove 'rule' from bucket.  If that empties the bucket, remove the
-         * bucket from its table. */
-        struct hmap *table = &cls->tables[rule->table_idx];
-        struct list *rules = list_remove(&rule->node.list);
-        if (list_is_empty(rules)) {
-            /* This code is a little tricky.  list_remove() returns the list
-             * element just after the one removed.  Since the list is now
-             * empty, this will be the address of the 'rules' member of the
-             * bucket that was just emptied, so pointer arithmetic (via
-             * CONTAINER_OF) can find that bucket. */
-            struct cls_bucket *bucket;
-            bucket = CONTAINER_OF(rules, struct cls_bucket, rules);
-            hmap_remove(table, &bucket->hmap_node);
-            free(bucket);
-        }
+    struct cls_rule *head;
+    struct cls_table *table;
+
+    table = find_table(cls, &rule->wc);
+    head = find_equal(table, &rule->flow, rule->hmap_node.hash);
+    if (head != rule) {
+        list_remove(&rule->list);
+    } else if (list_is_empty(&rule->list)) {
+        hmap_remove(&table->rules, &rule->hmap_node);
     } else {
-        /* Remove 'rule' from cls->exact_table. */
-        hmap_remove(&cls->exact_table, &rule->node.hmap);
+        struct cls_rule *next = CONTAINER_OF(rule->list.next,
+                                             struct cls_rule, list);
+
+        list_remove(&rule->list);
+        hmap_replace(&table->rules, &rule->hmap_node, &next->hmap_node);
     }
+
+    if (--table->n_table_rules == 0 && !table->n_refs) {
+        destroy_table(cls, table);
+    }
+
     cls->n_rules--;
 }
 
-static struct cls_rule *
-classifier_lookup_exact(const struct classifier *cls, const struct flow *flow)
+/* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
+ * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
+ * of equal priority match 'flow', returns one arbitrarily.
+ *
+ * 'include' is a combination of CLS_INC_* values that specify tables to
+ * include in the search. */
+struct cls_rule *
+classifier_lookup(const struct classifier *cls, const struct flow *flow,
+                  int include)
 {
-    return (!hmap_is_empty(&cls->exact_table)
-            ? search_exact_table(cls, flow_hash(flow, 0), flow)
-            : NULL);
-}
+    struct cls_table *table;
+    struct cls_rule *best;
 
-static struct cls_rule *
-classifier_lookup_wild(const struct classifier *cls, const struct flow *flow)
-{
-    struct cls_rule *best = NULL;
-    if (cls->n_rules > hmap_count(&cls->exact_table)) {
-        struct cls_rule target;
-        int i;
-
-        cls_rule_from_flow(flow, 0, 0, &target);
-        for (i = 0; i < CLS_N_FIELDS; i++) {
-            struct cls_rule *rule = search_table(&cls->tables[i], i, &target);
+    best = NULL;
+    HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+        if (should_include(table, include)) {
+            struct cls_rule *rule = find_match(table, flow);
             if (rule && (!best || rule->priority > best->priority)) {
                 best = rule;
             }
@@ -239,61 +305,31 @@ classifier_lookup_wild(const struct classifier *cls, const struct flow *flow)
     return best;
 }
 
-/* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
- * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
- * of equal priority match 'flow', returns one arbitrarily.
+/* Finds and returns a rule in 'cls' with exactly the same priority and
+ * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
+ * contain an exact match.
  *
- * (When multiple rules of equal priority happen to fall into the same bucket,
- * rules added more recently take priority over rules added less recently, but
- * this is subject to change and should not be depended upon.) */
-struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow,
-                  int include)
-{
-    if (include & CLS_INC_EXACT) {
-        struct cls_rule *rule = classifier_lookup_exact(cls, flow);
-        if (rule) {
-            return rule;
-        }
-    }
-
-    if (include & CLS_INC_WILD) {
-        return classifier_lookup_wild(cls, flow);
-    }
-
-    return NULL;
-}
-
+ * Priority is ignored for exact-match rules (because OpenFlow 1.0 always
+ * treats exact-match rules as highest priority). */
 struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
 {
-    struct cls_bucket *bucket;
-    int table_idx;
-    uint32_t hash;
+    struct cls_rule *head, *rule;
+    struct cls_table *table;
 
-    if (!target->wc.wildcards) {
-        /* Ignores 'target->priority'. */
-        return search_exact_table(cls, flow_hash(&target->flow, 0),
-                                  &target->flow);
+    table = find_table(cls, &target->wc);
+    if (!table) {
+        return NULL;
     }
 
-    assert(target->wc.wildcards == (target->wc.wildcards & OVSFW_ALL));
-    table_idx = table_idx_from_wildcards(target->wc.wildcards);
-    hash = hash_fields(&target->flow, table_idx);
-    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node, hash,
-                             &cls->tables[table_idx]) {
-        if (equal_fields(&bucket->fixed, &target->flow, table_idx)) {
-            struct cls_rule *pos;
-            LIST_FOR_EACH (pos, node.list, &bucket->rules) {
-                if (pos->priority < target->priority) {
-                    return NULL;
-                } else if (pos->priority == target->priority &&
-                           pos->wc.wildcards == target->wc.wildcards &&
-                           flow_equal(&target->flow, &pos->flow)) {
-                    return pos;
-                }
-            }
+    head = find_equal(table, &target->flow, flow_hash(&target->flow, 0));
+    if (!target->wc.wildcards) {
+        return head;
+    }
+    FOR_EACH_RULE_IN_LIST (rule, head) {
+        if (target->priority >= rule->priority) {
+            return target->priority == rule->priority ? rule : NULL;
         }
     }
     return NULL;
@@ -306,22 +342,19 @@ bool
 classifier_rule_overlaps(const struct classifier *cls,
                          const struct cls_rule *target)
 {
-    const struct hmap *tbl;
+    struct cls_table *table;
 
-    if (!target->wc.wildcards) {
-        return (search_exact_table(cls, flow_hash(&target->flow, 0),
-                                   &target->flow) != NULL);
-    }
+    HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+        struct flow_wildcards wc;
+        struct cls_rule *head;
 
-    for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
-        struct cls_bucket *bucket;
-
-        HMAP_FOR_EACH (bucket, hmap_node, tbl) {
+        flow_wildcards_combine(&wc, &target->wc, &table->wc);
+        HMAP_FOR_EACH (head, hmap_node, &table->rules) {
             struct cls_rule *rule;
 
-            LIST_FOR_EACH (rule, node.list, &bucket->rules) {
+            FOR_EACH_RULE_IN_LIST (rule, head) {
                 if (rule->priority == target->priority
-                    && rules_match_2wild(rule, target, 0)) {
+                    && flow_equal_except(&target->flow, &rule->flow, &wc)) {
                     return true;
                 }
             }
@@ -331,511 +364,312 @@ classifier_rule_overlaps(const struct classifier *cls,
     return false;
 }
 
-/* Ignores target->priority.
+/* Searches 'cls' for rules that exactly match 'target' or are more specific
+ * than 'target'.  That is, a given 'rule' matches 'target' if, for every
+ * field:
+ *
+ *   - 'target' and 'rule' specify the same (non-wildcarded) value for the
+ *     field, or
+ *
+ *   - 'target' wildcards the field,
+ *
+ * but not if:
+ *
+ *   - 'target' and 'rule' specify different values for the field, or
+ *
+ *   - 'target' specifies a value for the field but 'rule' wildcards it.
+ *
+ * Equivalently, the truth table for whether a field matches is:
+ *
+ *                                     rule
+ *
+ *                             wildcard    exact
+ *                            +---------+---------+
+ *                   t   wild |   yes   |   yes   |
+ *                   a   card |         |         |
+ *                   r        +---------+---------+
+ *                   g  exact |    no   |if values|
+ *                   e        |         |are equal|
+ *                   t        +---------+---------+
+ *
+ * This is the matching rule used by OpenFlow 1.0 non-strict OFPT_FLOW_MOD
+ * commands and by OpenFlow 1.0 aggregate and flow stats.
+ *
+ * Ignores target->priority.
  *
  * 'callback' is allowed to delete the rule that is passed as its argument, but
- * it must not delete (or move) any other rules in 'cls' that are in the same
- * table as the argument rule.  Two rules are in the same table if their
- * cls_rule structs have the same table_idx; as a special case, a rule with
- * wildcards and an exact-match rule will never be in the same table. */
+ * it must not delete (or move) any other rules in 'cls' that have the same
+ * wildcards as the argument rule. */
 void
-classifier_for_each_match(const struct classifier *cls,
+classifier_for_each_match(const struct classifier *cls_,
                           const struct cls_rule *target,
                           int include, cls_cb_func *callback, void *aux)
 {
-    if (include & CLS_INC_WILD) {
-        const struct hmap *table;
+    struct classifier *cls = (struct classifier *) cls_;
+    struct cls_table *table, *next_table;
 
-        for (table = &cls->tables[0]; table < &cls->tables[CLS_N_FIELDS];
-             table++) {
-            struct cls_bucket *bucket, *next_bucket;
+    for (table = classifier_first_table(cls); table; table = next_table) {
+        if (should_include(table, include)
+            && !flow_wildcards_has_extra(&table->wc, &target->wc)) {
+            /* We have eliminated the "no" case in the truth table above.  Two
+             * of the three remaining cases are trivial.  We only need to check
+             * the fourth case, where both 'rule' and 'target' require an exact
+             * match. */
+            struct cls_rule *head, *next_head;
 
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, table) {
-                /* XXX there is a bit of room for optimization here based on
-                 * rejecting entire buckets on their fixed fields, but it will
-                 * only be worthwhile for big buckets (which we hope we won't
-                 * get anyway, but...) */
-                struct cls_rule *prev_rule, *rule;
+            table->n_refs++;
+            HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
+                if (flow_equal_except(&head->flow, &target->flow,
+                                      &target->wc)) {
+                    struct cls_rule *rule, *next_rule;
 
-                /* We can't just use LIST_FOR_EACH_SAFE here because, if the
-                 * callback deletes the last rule in the bucket, then the
-                 * bucket itself will be destroyed.  The bucket contains the
-                 * list head so that's a use-after-free error. */
-                prev_rule = NULL;
-                LIST_FOR_EACH (rule, node.list, &bucket->rules) {
-                    if (rules_match_1wild(rule, target, 0)) {
-                        if (prev_rule) {
-                            callback(prev_rule, aux);
-                        }
-                        prev_rule = rule;
+                    FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
+                        callback(rule, aux);
                     }
                 }
-                if (prev_rule) {
-                    callback(prev_rule, aux);
-                }
             }
-        }
-    }
-
-    if (include & CLS_INC_EXACT) {
-        if (target->wc.wildcards) {
-            struct cls_rule *rule, *next_rule;
-
-            HMAP_FOR_EACH_SAFE (rule, next_rule, node.hmap,
-                                &cls->exact_table) {
-                if (rules_match_1wild(rule, target, 0)) {
-                    callback(rule, aux);
-                }
+            next_table = classifier_next_table(cls, table);
+            if (!--table->n_refs && !table->n_table_rules) {
+                destroy_table(cls, table);
             }
         } else {
-            /* Optimization: there can be at most one match in the exact
-             * table. */
-            size_t hash = flow_hash(&target->flow, 0);
-            struct cls_rule *rule = search_exact_table(cls, hash,
-                                                       &target->flow);
-            if (rule) {
-                callback(rule, aux);
-            }
+            next_table = classifier_next_table(cls, table);
         }
     }
 }
 
 /* 'callback' is allowed to delete the rule that is passed as its argument, but
- * it must not delete (or move) any other rules in 'cls' that are in the same
- * table as the argument rule.  Two rules are in the same table if their
- * cls_rule structs have the same table_idx; as a special case, a rule with
- * wildcards and an exact-match rule will never be in the same table.
+ * it must not delete (or move) any other rules in 'cls' that have the same
+ * wildcards as the argument rule.
  *
- * If 'include' is CLS_INC_EXACT then CLASSIFIER_FOR_EACH_EXACT_RULE(_SAFE) is
+ * If 'include' is CLS_INC_EXACT then CLASSIFIER_FOR_EACH_EXACT_RULE is
  * probably easier to use. */
 void
-classifier_for_each(const struct classifier *cls, int include,
-                    void (*callback)(struct cls_rule *, void *aux),
-                    void *aux)
+classifier_for_each(const struct classifier *cls_, int include,
+                    cls_cb_func *callback, void *aux)
 {
-    if (include & CLS_INC_WILD) {
-        const struct hmap *tbl;
+    struct classifier *cls = (struct classifier *) cls_;
+    struct cls_table *table, *next_table;
 
-        for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
-            struct cls_bucket *bucket, *next_bucket;
+    for (table = classifier_first_table(cls); table; table = next_table) {
+        if (should_include(table, include)) {
+            struct cls_rule *head, *next_head;
 
-            HMAP_FOR_EACH_SAFE (bucket, next_bucket, hmap_node, tbl) {
-                struct cls_rule *prev_rule, *rule;
+            table->n_refs++;
+            HMAP_FOR_EACH_SAFE (head, next_head, hmap_node, &table->rules) {
+                struct cls_rule *rule, *next_rule;
 
-                /* We can't just use LIST_FOR_EACH_SAFE here because, if the
-                 * callback deletes the last rule in the bucket, then the
-                 * bucket itself will be destroyed.  The bucket contains the
-                 * list head so that's a use-after-free error. */
-                prev_rule = NULL;
-                LIST_FOR_EACH (rule, node.list, &bucket->rules) {
-                    if (prev_rule) {
-                        callback(prev_rule, aux);
-                    }
-                    prev_rule = rule;
-                }
-                if (prev_rule) {
-                    callback(prev_rule, aux);
+                FOR_EACH_RULE_IN_LIST_SAFE (rule, next_rule, head) {
+                    callback(rule, aux);
                 }
             }
-        }
-    }
-
-    if (include & CLS_INC_EXACT) {
-        struct cls_rule *rule, *next_rule;
-
-        HMAP_FOR_EACH_SAFE (rule, next_rule, node.hmap, &cls->exact_table) {
-            callback(rule, aux);
+            next_table = classifier_next_table(cls, table);
+            if (!--table->n_refs && !table->n_table_rules) {
+                destroy_table(cls, table);
+            }
+        } else {
+            next_table = classifier_next_table(cls, table);
         }
     }
 }
 
-static struct cls_bucket *create_bucket(struct hmap *, size_t hash,
-                                        const struct flow *fixed);
-static struct cls_rule *bucket_insert(struct cls_bucket *, struct cls_rule *);
-
-static inline bool equal_bytes(const void *, const void *, size_t n);
-
-/* Returns a hash computed across the fields in 'flow' whose field indexes
- * (CLS_F_IDX_*) are less than 'table_idx'.  (If 'table_idx' is
- * CLS_F_IDX_EXACT, hashes all the fields in 'flow'). */
-static uint32_t
-hash_fields(const struct flow *flow, int table_idx)
+static struct cls_table *
+find_table(const struct classifier *cls, const struct flow_wildcards *wc)
 {
-    /* I just know I'm going to hell for writing code this way.
-     *
-     * GCC generates pretty good code here, with only a single taken
-     * conditional jump per execution.  Now the question is, would we be better
-     * off marking this function ALWAYS_INLINE and writing a wrapper that
-     * switches on the value of 'table_idx' to get rid of all the conditional
-     * jumps entirely (except for one in the wrapper)?  Honestly I really,
-     * really hope that it doesn't matter in practice.
-     *
-     * We could do better by calculating hashes incrementally, instead of
-     * starting over from the top each time.  But that would be even uglier. */
-    uint32_t a, b, c;
-    uint32_t tmp[3];
-    size_t n;
+    struct cls_table *table;
 
-    a = b = c = 0xdeadbeef + table_idx;
-    n = 0;
-
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME)                      \
-    if (table_idx == CLS_F_IDX_##NAME) {                        \
-        /* Done. */                                             \
-        memset((uint8_t *) tmp + n, 0, sizeof tmp - n);         \
-        goto finish;                                            \
-    } else {                                                    \
-        const size_t size = sizeof flow->MEMBER;                \
-        const uint8_t *p1 = (const uint8_t *) &flow->MEMBER;    \
-        const size_t p1_size = MIN(sizeof tmp - n, size);       \
-        const uint8_t *p2 = p1 + p1_size;                       \
-        const size_t p2_size = size - p1_size;                  \
-                                                                \
-        /* Append to 'tmp' as much data as will fit. */         \
-        memcpy((uint8_t *) tmp + n, p1, p1_size);               \
-        n += p1_size;                                           \
-                                                                \
-        /* If 'tmp' is full, mix. */                            \
-        if (n == sizeof tmp) {                                  \
-            a += tmp[0];                                        \
-            b += tmp[1];                                        \
-            c += tmp[2];                                        \
-            HASH_MIX(a, b, c);                                  \
-            n = 0;                                              \
-        }                                                       \
-                                                                \
-        /* Append to 'tmp' any data that didn't fit. */         \
-        memcpy(tmp, p2, p2_size);                               \
-        n += p2_size;                                           \
-    }
-    CLS_FIELDS
-#undef CLS_FIELD
-
-finish:
-    a += tmp[0];
-    b += tmp[1];
-    c += tmp[2];
-    HASH_FINAL(a, b, c);
-    return c;
-}
-
-/* Compares the fields in 'a' and 'b' whose field indexes (CLS_F_IDX_*) are
- * less than 'table_idx'.  (If 'table_idx' is CLS_F_IDX_EXACT, compares all the
- * fields in 'a' and 'b').
- *
- * Returns true if all the compared fields are equal, false otherwise. */
-static bool
-equal_fields(const struct flow *a, const struct flow *b, int table_idx)
-{
-    /* XXX The generated code could be better here. */
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME)                              \
-    if (table_idx == CLS_F_IDX_##NAME) {                                \
-        return true;                                                    \
-    } else if (!equal_bytes(&a->MEMBER, &b->MEMBER, sizeof a->MEMBER)) { \
-        return false;                                                   \
-    }
-    CLS_FIELDS
-#undef CLS_FIELD
-
-    return true;
-}
-
-static int
-table_idx_from_wildcards(uint32_t wildcards)
-{
-    if (!wildcards) {
-        return CLS_F_IDX_EXACT;
-    }
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME) \
-    if (wildcards & WILDCARDS) {           \
-        return CLS_F_IDX_##NAME;           \
-    }
-    CLS_FIELDS
-#undef CLS_FIELD
-    NOT_REACHED();
-}
-
-/* Inserts 'rule' into 'table'.  Returns the rule, if any, that was displaced
- * in favor of 'rule'. */
-static struct cls_rule *
-table_insert(struct hmap *table, struct cls_rule *rule)
-{
-    struct cls_bucket *bucket;
-    size_t hash;
-
-    hash = hash_fields(&rule->flow, rule->table_idx);
-    bucket = find_bucket(table, hash, rule);
-    if (!bucket) {
-        bucket = create_bucket(table, hash, &rule->flow);
-    }
-
-    return bucket_insert(bucket, rule);
-}
-
-/* Inserts 'rule' into 'bucket', given that 'field' is the first wildcarded
- * field in 'rule'.
- *
- * Returns the rule, if any, that was displaced in favor of 'rule'. */
-static struct cls_rule *
-bucket_insert(struct cls_bucket *bucket, struct cls_rule *rule)
-{
-    struct cls_rule *pos;
-    LIST_FOR_EACH (pos, node.list, &bucket->rules) {
-        if (pos->priority == rule->priority) {
-            if (pos->wc.wildcards == rule->wc.wildcards
-                && rules_match_1wild(pos, rule, rule->table_idx))
-            {
-                list_replace(&rule->node.list, &pos->node.list);
-                return pos;
-            }
-        } else if (pos->priority < rule->priority) {
-            break;
-        }
-    }
-    list_insert(&pos->node.list, &rule->node.list);
-    return NULL;
-}
-
-static struct cls_rule *
-insert_exact_rule(struct classifier *cls, struct cls_rule *rule)
-{
-    struct cls_rule *old_rule;
-    size_t hash;
-
-    hash = flow_hash(&rule->flow, 0);
-    old_rule = search_exact_table(cls, hash, &rule->flow);
-    if (old_rule) {
-        hmap_remove(&cls->exact_table, &old_rule->node.hmap);
-    }
-    hmap_insert(&cls->exact_table, &rule->node.hmap, hash);
-    return old_rule;
-}
-
-/* Returns the bucket in 'table' that has the given 'hash' and the same fields
- * as 'rule->flow' (up to 'rule->table_idx'), or a null pointer if no bucket
- * matches. */
-static struct cls_bucket *
-find_bucket(struct hmap *table, size_t hash, const struct cls_rule *rule)
-{
-    struct cls_bucket *bucket;
-    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node, hash, table) {
-        if (equal_fields(&bucket->fixed, &rule->flow, rule->table_idx)) {
-            return bucket;
+    HMAP_FOR_EACH_IN_BUCKET (table, hmap_node, flow_wildcards_hash(wc),
+                             &cls->tables) {
+        if (flow_wildcards_equal(wc, &table->wc)) {
+            return table;
         }
     }
     return NULL;
 }
 
-/* Creates a bucket and inserts it in 'table' with the given 'hash' and 'fixed'
- * values.  Returns the new bucket. */
-static struct cls_bucket *
-create_bucket(struct hmap *table, size_t hash, const struct flow *fixed)
+static struct cls_table *
+insert_table(struct classifier *cls, const struct flow_wildcards *wc)
 {
-    struct cls_bucket *bucket = xmalloc(sizeof *bucket);
-    list_init(&bucket->rules);
-    bucket->fixed = *fixed;
-    hmap_insert(table, &bucket->hmap_node, hash);
-    return bucket;
+    struct cls_table *table;
+
+    table = xzalloc(sizeof *table);
+    hmap_init(&table->rules);
+    table->wc = *wc;
+    hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc));
+
+    return table;
 }
 
-/* Returns true if the 'n' bytes in 'a' and 'b' are equal, false otherwise. */
-static inline bool ALWAYS_INLINE
-equal_bytes(const void *a, const void *b, size_t n)
+static struct cls_table *
+classifier_first_table(const struct classifier *cls)
 {
-#ifdef __i386__
-    /* For some reason GCC generates stupid code for memcmp() of small
-     * constant integer lengths.  Help it out.
-     *
-     * This function is always inlined, and it is always called with 'n' as a
-     * compile-time constant, so the switch statement gets optimized out and
-     * this whole function just expands to an instruction or two. */
-    switch (n) {
-    case 1:
-        return *(uint8_t *) a == *(uint8_t *) b;
-
-    case 2:
-        return *(uint16_t *) a == *(uint16_t *) b;
-
-    case 4:
-        return *(uint32_t *) a == *(uint32_t *) b;
-
-    case 6:
-        return (*(uint32_t *) a == *(uint32_t *) b
-                && ((uint16_t *) a)[2] == ((uint16_t *) b)[2]);
-
-    default:
-        abort();
-    }
-#else
-    /* I hope GCC is smarter on your platform. */
-    return !memcmp(a, b, n);
-#endif
+    return cls_table_from_hmap_node(hmap_first(&cls->tables));
 }
 
-/* Returns the 32-bit unsigned integer at 'p'. */
-static inline uint32_t
-read_uint32(const void *p)
+static struct cls_table *
+classifier_next_table(const struct classifier *cls,
+                      const struct cls_table *table)
 {
-    /* GCC optimizes this into a single machine instruction on x86. */
-    uint32_t x;
-    memcpy(&x, p, sizeof x);
-    return x;
+    return cls_table_from_hmap_node(hmap_next(&cls->tables,
+                                              &table->hmap_node));
 }
 
-/* Compares the specified field in 'a' and 'b'.  Returns true if the fields are
- * equal, or if the ofp_match wildcard bits in 'wildcards' are set such that
- * non-equal values may be ignored.  'nw_src_mask' and 'nw_dst_mask' must be
- * those that would be set for 'wildcards' by cls_rule_set_masks().
- *
- * The compared field is the one with wildcard bit or bits 'field_wc', offset
- * 'rule_ofs' within cls_rule's "fields" member, and length 'len', in bytes. */
-static inline bool ALWAYS_INLINE
-field_matches(const struct flow *a_, const struct flow *b_,
-              uint32_t wildcards, uint32_t nw_src_mask, uint32_t nw_dst_mask,
-              uint32_t field_wc, int ofs, int len)
+static void
+destroy_table(struct classifier *cls, struct cls_table *table)
 {
-    /* This function is always inlined, and it is always called with 'field_wc'
-     * as a compile-time constant, so the "if" conditionals here generate no
-     * code. */
-    const void *a = (const uint8_t *) a_ + ofs;
-    const void *b = (const uint8_t *) b_ + ofs;
-    if (!(field_wc & (field_wc - 1))) {
-        /* Handle all the single-bit wildcard cases. */
-        return wildcards & field_wc || equal_bytes(a, b, len);
-    } else if (field_wc == OFPFW_NW_SRC_MASK ||
-               field_wc == OFPFW_NW_DST_MASK) {
-        uint32_t a_ip = read_uint32(a);
-        uint32_t b_ip = read_uint32(b);
-        uint32_t mask = (field_wc == OFPFW_NW_SRC_MASK
-                         ? nw_src_mask : nw_dst_mask);
-        return ((a_ip ^ b_ip) & mask) == 0;
-    } else {
-        abort();
-    }
+    hmap_remove(&cls->tables, &table->hmap_node);
+    hmap_destroy(&table->rules);
+    free(table);
 }
 
-/* Returns true if 'a' and 'b' match, ignoring fields for which the wildcards
- * in 'wildcards' are set.  'nw_src_mask' and 'nw_dst_mask' must be those that
- * would be set for 'wildcards' by cls_rule_set_masks().  'field_idx' is the
- * index of the first field to be compared; fields before 'field_idx' are
- * assumed to match.  (Always returns true if 'field_idx' is CLS_N_FIELDS.) */
+/* Returns true if 'table' should be included by an operation with the
+ * specified 'include' (a combination of CLS_INC_*). */
 static bool
-rules_match(const struct cls_rule *a, const struct cls_rule *b,
-            uint32_t wildcards, uint32_t nw_src_mask, uint32_t nw_dst_mask,
-            int field_idx)
+should_include(const struct cls_table *table, int include)
 {
-    /* This is related to Duff's device (see
-     * http://en.wikipedia.org/wiki/Duff's_device).  */
-    switch (field_idx) {
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME)                          \
-        case CLS_F_IDX_##NAME:                                      \
-            if (!field_matches(&a->flow, &b->flow,                  \
-                               wildcards, nw_src_mask, nw_dst_mask, \
-                               WILDCARDS, offsetof(struct flow, MEMBER), \
-                               sizeof a->flow.MEMBER)) {            \
-                return false;                                       \
-            }                                                       \
-        /* Fall though */
-        CLS_FIELDS
-#undef CLS_FIELD
-    }
-    return true;
-}
-
-/* Returns true if 'fixed' and 'wild' match.  All fields in 'fixed' must have
- * fixed values; 'wild' may contain wildcards.
- *
- * 'field_idx' is the index of the first field to be compared; fields before
- * 'field_idx' are assumed to match.  Always returns true if 'field_idx' is
- * CLS_N_FIELDS. */
-static bool
-rules_match_1wild(const struct cls_rule *fixed, const struct cls_rule *wild,
-                  int field_idx)
-{
-    return rules_match(fixed, wild, wild->wc.wildcards, wild->wc.nw_src_mask,
-                       wild->wc.nw_dst_mask, field_idx);
-}
-
-/* Returns true if 'wild1' and 'wild2' match, that is, if their fields
- * are equal modulo wildcards in 'wild1' or 'wild2'.
- *
- * 'field_idx' is the index of the first field to be compared; fields before
- * 'field_idx' are assumed to match.  Always returns true if 'field_idx' is
- * CLS_N_FIELDS. */
-static bool
-rules_match_2wild(const struct cls_rule *wild1, const struct cls_rule *wild2,
-                  int field_idx)
-{
-    return rules_match(wild1, wild2,
-                       wild1->wc.wildcards | wild2->wc.wildcards,
-                       wild1->wc.nw_src_mask & wild2->wc.nw_src_mask,
-                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask,
-                       field_idx);
-}
-
-/* Searches 'bucket' for a rule that matches 'target'.  Returns the
- * highest-priority match, if one is found, or a null pointer if there is no
- * match.
- *
- * 'field_idx' must be the index of the first wildcarded field in 'bucket'. */
-static struct cls_rule *
-search_bucket(struct cls_bucket *bucket, int field_idx,
-              const struct cls_rule *target)
-{
-    struct cls_rule *pos;
-
-    if (!equal_fields(&bucket->fixed, &target->flow, field_idx)) {
-        return NULL;
-    }
-
-    LIST_FOR_EACH (pos, node.list, &bucket->rules) {
-        if (rules_match_1wild(target, pos, field_idx)) {
-            return pos;
-        }
-    }
-    return NULL;
-}
-
-/* Searches 'table' for a rule that matches 'target'.  Returns the
- * highest-priority match, if one is found, or a null pointer if there is no
- * match.
- *
- * 'field_idx' must be the index of the first wildcarded field in 'table'. */
-static struct cls_rule *
-search_table(const struct hmap *table, int field_idx,
-             const struct cls_rule *target)
-{
-    struct cls_bucket *bucket;
-
-    switch (hmap_count(table)) {
-        /* In these special cases there's no need to hash.  */
-    case 0:
-        return NULL;
-    case 1:
-        bucket = CONTAINER_OF(hmap_first(table), struct cls_bucket, hmap_node);
-        return search_bucket(bucket, field_idx, target);
-    }
-
-    HMAP_FOR_EACH_WITH_HASH (bucket, hmap_node,
-                             hash_fields(&target->flow, field_idx), table) {
-        struct cls_rule *rule = search_bucket(bucket, field_idx, target);
-        if (rule) {
-            return rule;
-        }
-    }
-    return NULL;
+    return include & (table->wc.wildcards ? CLS_INC_WILD : CLS_INC_EXACT);
 }
 
 static struct cls_rule *
-search_exact_table(const struct classifier *cls, size_t hash,
-                   const struct flow *target)
+find_match(const struct cls_table *table, const struct flow *flow)
 {
     struct cls_rule *rule;
+    struct flow f;
 
-    HMAP_FOR_EACH_WITH_HASH (rule, node.hmap, hash, &cls->exact_table) {
-        if (flow_equal(&rule->flow, target)) {
+    f = *flow;
+    zero_wildcards(&f, &table->wc);
+    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, flow_hash(&f, 0),
+                             &table->rules) {
+        if (flow_equal(&f, &rule->flow)) {
             return rule;
         }
     }
     return NULL;
+}
+
+static struct cls_rule *
+find_equal(struct cls_table *table, const struct flow *flow, uint32_t hash)
+{
+    struct cls_rule *head;
+
+    HMAP_FOR_EACH_WITH_HASH (head, hmap_node, hash, &table->rules) {
+        if (flow_equal(&head->flow, flow)) {
+            return head;
+        }
+    }
+    return NULL;
+}
+
+static struct cls_rule *
+insert_rule(struct cls_table *table, struct cls_rule *new)
+{
+    struct cls_rule *head;
+
+    new->hmap_node.hash = flow_hash(&new->flow, 0);
+
+    head = find_equal(table, &new->flow, new->hmap_node.hash);
+    if (!head) {
+        hmap_insert(&table->rules, &new->hmap_node, new->hmap_node.hash);
+        list_init(&new->list);
+        return NULL;
+    } else {
+        /* Scan the list for the insertion point that will keep the list in
+         * order of decreasing priority. */
+        struct cls_rule *rule;
+        FOR_EACH_RULE_IN_LIST (rule, head) {
+            if (new->priority >= rule->priority) {
+                if (rule == head) {
+                    /* 'new' is the new highest-priority flow in the list. */
+                    hmap_replace(&table->rules,
+                                 &rule->hmap_node, &new->hmap_node);
+                }
+
+                if (new->priority == rule->priority) {
+                    list_replace(&new->list, &rule->list);
+                    return rule;
+                } else {
+                    list_insert(&rule->list, &new->list);
+                    return NULL;
+                }
+            }
+        }
+
+        /* Insert 'new' at the end of the list. */
+        list_push_back(&head->list, &new->list);
+        return NULL;
+    }
+}
+
+static struct cls_rule *
+next_rule_in_list(struct cls_rule *rule)
+{
+    struct cls_rule *next = OBJECT_CONTAINING(rule->list.next, next, list);
+    return next->priority < rule->priority ? next : NULL;
+}
+
+static bool
+flow_equal_except(const struct flow *a, const struct flow *b,
+                  const struct flow_wildcards *wildcards)
+{
+    const uint32_t wc = wildcards->wildcards;
+
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37);
+
+    return ((wc & NXFW_TUN_ID || a->tun_id == b->tun_id)
+            && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
+            && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
+            && (wc & OFPFW_IN_PORT || a->in_port == b->in_port)
+            && (wc & OFPFW_DL_VLAN || a->dl_vlan == b->dl_vlan)
+            && (wc & OFPFW_DL_TYPE || a->dl_type == b->dl_type)
+            && (wc & OFPFW_TP_SRC || a->tp_src == b->tp_src)
+            && (wc & OFPFW_TP_DST || a->tp_dst == b->tp_dst)
+            && (wc & OFPFW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
+            && (wc & OFPFW_DL_DST || eth_addr_equals(a->dl_dst, b->dl_dst))
+            && (wc & OFPFW_NW_PROTO || a->nw_proto == b->nw_proto)
+            && (wc & OFPFW_DL_VLAN_PCP || a->dl_vlan_pcp == b->dl_vlan_pcp)
+            && (wc & OFPFW_NW_TOS || a->nw_tos == b->nw_tos));
+}
+
+static void
+zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
+{
+    const uint32_t wc = wildcards->wildcards;
+
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37);
+
+    if (wc & NXFW_TUN_ID) {
+        flow->tun_id = 0;
+    }
+    flow->nw_src &= wildcards->nw_src_mask;
+    flow->nw_dst &= wildcards->nw_dst_mask;
+    if (wc & OFPFW_IN_PORT) {
+        flow->in_port = 0;
+    }
+    if (wc & OFPFW_DL_VLAN) {
+        flow->dl_vlan = 0;
+    }
+    if (wc & OFPFW_DL_TYPE) {
+        flow->dl_type = 0;
+    }
+    if (wc & OFPFW_TP_SRC) {
+        flow->tp_src = 0;
+    }
+    if (wc & OFPFW_TP_DST) {
+        flow->tp_dst = 0;
+    }
+    if (wc & OFPFW_DL_SRC) {
+        memset(flow->dl_src, 0, sizeof flow->dl_src);
+    }
+    if (wc & OFPFW_DL_DST) {
+        memset(flow->dl_dst, 0, sizeof flow->dl_dst);
+    }
+    if (wc & OFPFW_NW_PROTO) {
+        flow->nw_proto = 0;
+    }
+    if (wc & OFPFW_DL_VLAN_PCP) {
+        flow->dl_vlan_pcp = 0;
+    }
+    if (wc & OFPFW_NW_TOS) {
+        flow->nw_tos = 0;
+    }
 }

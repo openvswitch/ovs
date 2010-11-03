@@ -19,26 +19,11 @@
 
 /* Flow classifier.
  *
- * This flow classifier assumes that we can arrange the fields in a flow in an
- * order such that the set of wildcarded fields in a rule tend to fall toward
- * the end of the ordering.  That is, if field F is wildcarded, then all the
- * fields after F tend to be wildcarded as well.  If this assumption is
- * violated, then the classifier will still classify flows correctly, but its
- * performance will suffer.
- *
- * The classifier uses a collection of CLS_N_FIELDS hash tables for wildcarded
- * flows.  Each of these tables contains the flows that wildcard a given field
- * and do not wildcard any of the fields that precede F in the ordering.  The
- * key for each hash table is the value of the fields preceding F that are not
- * wildcarded.  All the flows that fall within a table and have the same key
- * are kept as a linked list ordered from highest to lowest priority.
- *
- * The classifier also maintains a separate hash table of exact-match flows.
- *
- * To search the classifier we first search the table of exact-match flows,
- * since exact-match flows always have highest priority.  If there is a match,
- * we're done.  Otherwise, we search each of the CLS_N_FIELDS hash tables in
- * turn, looking for the highest-priority match, and return it (if any).
+ * A classifier is a "struct classifier",
+ *      a hash map from a set of wildcards to a "struct cls_table",
+ *              a hash map from fixed field values to "struct cls_rule",
+ *                      which can contain a list of otherwise identical rules
+ *                      with lower priorities.
  */
 
 #include "flow.h"
@@ -47,80 +32,38 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 
-/* Number of bytes of fields in a rule. */
-#define CLS_N_BYTES 37
-
-/* Fields in a rule.
- *
- * This definition sets the ordering of fields, which is important for
- * performance (see above).  To adjust the ordering, change the order of the
- * lines. */
-#define CLS_FIELDS                                          \
-    /*                           struct flow  all-caps */   \
-    /*        wildcard bit(s)    member name  name     */   \
-    /*        -----------------  -----------  -------- */   \
-    CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
-    CLS_FIELD(NXFW_TUN_ID,       tun_id,      TUN_ID)       \
-    CLS_FIELD(OFPFW_DL_VLAN,     dl_vlan,     DL_VLAN)      \
-    CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
-    CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
-    CLS_FIELD(OFPFW_DL_DST,      dl_dst,      DL_DST)       \
-    CLS_FIELD(OFPFW_DL_TYPE,     dl_type,     DL_TYPE)      \
-    CLS_FIELD(OFPFW_NW_SRC_MASK, nw_src,      NW_SRC)       \
-    CLS_FIELD(OFPFW_NW_DST_MASK, nw_dst,      NW_DST)       \
-    CLS_FIELD(OFPFW_NW_PROTO,    nw_proto,    NW_PROTO)     \
-    CLS_FIELD(OFPFW_NW_TOS,      nw_tos,      NW_TOS)       \
-    CLS_FIELD(OFPFW_TP_SRC,      tp_src,      TP_SRC)       \
-    CLS_FIELD(OFPFW_TP_DST,      tp_dst,      TP_DST)
-
-/* Field indexes.
- *
- * (These are also indexed into struct classifier's 'tables' array.) */
-enum {
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME) CLS_F_IDX_##NAME,
-    CLS_FIELDS
-#undef CLS_FIELD
-    CLS_F_IDX_EXACT,            /* Exact-match table. */
-    CLS_N_FIELDS = CLS_F_IDX_EXACT
-};
-
-/* Field information. */
-struct cls_field {
-    int ofs;                    /* Offset in struct flow. */
-    int len;                    /* Length in bytes. */
-    uint32_t wildcards;         /* OFPFW_* bit or bits for this field. */
-    const char *name;           /* Name (for debugging). */
-};
-extern const struct cls_field cls_fields[CLS_N_FIELDS + 1];
-
 /* A flow classifier. */
 struct classifier {
-    int n_rules;                /* Sum of hmap_count() over tables[]. */
-    struct hmap tables[CLS_N_FIELDS]; /* Contain cls_bucket elements. */
-    struct hmap exact_table;          /* Contain cls_rule elements. */
+    int n_rules;                /* Total number of rules. */
+    struct hmap tables;         /* Contains "struct cls_table"s.  */
 };
 
-/* A group of rules with the same fixed values for initial fields. */
-struct cls_bucket {
-    struct hmap_node hmap_node; /* Within struct classifier 'tables'. */
-    struct list rules;          /* In order from highest to lowest priority. */
-    struct flow fixed;          /* Values for fixed fields. */
+/* A set of rules that all have the same fields wildcarded. */
+struct cls_table {
+    struct hmap_node hmap_node; /* Within struct classifier 'wctables'. */
+    struct hmap rules;          /* Contains "struct cls_rule"s. */
+    struct flow_wildcards wc;   /* Wildcards for fields. */
+    int n_table_rules;          /* Number of rules, including duplicates. */
+    int n_refs;                 /* Reference count used during iteration. */
 };
 
 /* A flow classification rule.
  *
- * Use cls_rule_from_flow() or cls_rule_from_match() to initialize a cls_rule
- * or you will almost certainly not initialize 'table_idx' correctly, with
- * disastrous results! */
+ * Use one of the cls_rule_*() functions to initialize a cls_rule.
+ *
+ * The cls_rule_*() functions below maintain the following important
+ * invariant that the classifier depends on:
+ *
+ *   - If a bit or a field is wildcarded in 'wc', then the corresponding bit or
+ *     field in 'flow' is set to all-0-bits.  (The cls_rule_zero_wildcards()
+ *     function can be used to restore this invariant after adding wildcards.)
+ */
 struct cls_rule {
-    union {
-        struct list list;       /* Within struct cls_bucket 'rules'. */
-        struct hmap_node hmap;  /* Within struct classifier 'exact_table'. */
-    } node;
+    struct hmap_node hmap_node; /* Within struct cls_table 'rules'. */
+    struct list list;           /* List of identical, lower-priority rules. */
     struct flow flow;           /* All field values. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
-    unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
 enum {
@@ -134,6 +77,9 @@ void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          bool tun_id_from_cookie, uint64_t cookie,
                          struct cls_rule *);
+
+void cls_rule_zero_wildcards(struct cls_rule *);
+
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 
@@ -160,10 +106,22 @@ void classifier_for_each_match(const struct classifier *,
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
 
-#define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, MEMBER, CLS) \
-        HMAP_FOR_EACH (RULE, MEMBER.node.hmap, &(CLS)->exact_table)
+/* Iteration shorthands. */
 
-#define CLASSIFIER_FOR_EACH_EXACT_RULE_SAFE(RULE, NEXT, MEMBER, CLS) \
-        HMAP_FOR_EACH_SAFE (RULE, NEXT, MEMBER.node.hmap, &(CLS)->exact_table)
+struct cls_table *classifier_exact_table(const struct classifier *);
+struct cls_rule *cls_table_first_rule(const struct cls_table *);
+struct cls_rule *cls_table_next_rule(const struct cls_table *,
+                                     const struct cls_rule *);
+
+#define CLS_TABLE_FOR_EACH_RULE(RULE, MEMBER, TABLE)                    \
+    for ((RULE) = OBJECT_CONTAINING(cls_table_first_rule(TABLE),        \
+                                    RULE, MEMBER);                      \
+         &(RULE)->MEMBER != NULL;                                       \
+         (RULE) = OBJECT_CONTAINING(cls_table_next_rule(TABLE,          \
+                                                        &(RULE)->MEMBER), \
+                                    RULE, MEMBER))
+
+#define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, MEMBER, CLS)               \
+    CLS_TABLE_FOR_EACH_RULE (RULE, MEMBER, classifier_exact_table(CLS))
 
 #endif /* classifier.h */

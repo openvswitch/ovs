@@ -367,12 +367,31 @@ flow_nw_bits_to_mask(uint32_t wildcards, int shift)
     return wildcards < 32 ? htonl(~((1u << wildcards) - 1)) : 0;
 }
 
+/* Return 'wildcards' in "normal form":
+ *
+ *   - Forces unknown bits to 0.
+ *
+ *   - Forces nw_src and nw_dst masks greater than 32 to exactly 32.
+ */
+static inline uint32_t
+flow_wildcards_normalize(uint32_t wildcards)
+{
+    wildcards &= wildcards & OVSFW_ALL;
+    if (wildcards & (0x20 << OFPFW_NW_SRC_SHIFT)) {
+        wildcards &= ~(0x1f << OFPFW_NW_SRC_SHIFT);
+    }
+    if (wildcards & (0x20 << OFPFW_NW_DST_SHIFT)) {
+        wildcards &= ~(0x1f << OFPFW_NW_DST_SHIFT);
+    }
+    return wildcards;
+}
+
 /* Initializes 'wc' from 'wildcards', which may be any combination of the
  * OFPFW_* and OVSFW_* wildcard bits. */
 void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
-    wc->wildcards = wildcards & OVSFW_ALL;
+    wc->wildcards = flow_wildcards_normalize(wildcards);
     wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
 }
@@ -383,6 +402,62 @@ void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
     flow_wildcards_init(wc, 0);
+}
+
+static inline uint32_t
+combine_nw_bits(uint32_t wb1, uint32_t wb2, int shift)
+{
+    uint32_t sb1 = (wb1 >> shift) & 0x3f;
+    uint32_t sb2 = (wb2 >> shift) & 0x3f;
+    return MAX(sb1, sb2) << shift;
+}
+
+/* Initializes 'dst' as the combination of wildcards in 'src1' and 'src2'.
+ * That is, a bit or a field is wildcarded in 'dst' if it is wildcarded in
+ * 'src1' or 'src2' or both.  */
+void
+flow_wildcards_combine(struct flow_wildcards *dst,
+                       const struct flow_wildcards *src1,
+                       const struct flow_wildcards *src2)
+{
+    uint32_t wb1 = src1->wildcards;
+    uint32_t wb2 = src2->wildcards;
+
+    dst->wildcards = (wb1 | wb2) & ~(OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK);
+    dst->wildcards |= combine_nw_bits(wb1, wb2, OFPFW_NW_SRC_SHIFT);
+    dst->wildcards |= combine_nw_bits(wb1, wb2, OFPFW_NW_DST_SHIFT);
+    dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
+    dst->nw_dst_mask = src1->nw_dst_mask & src2->nw_dst_mask;
+}
+
+/* Returns a hash of the wildcards in 'wc'. */
+uint32_t
+flow_wildcards_hash(const struct flow_wildcards *wc)
+{
+    /* There is no need to include nw_src_mask or nw_dst_mask because they do
+     * not add any information (they can be computed from wc->wildcards).  */
+    return hash_int(wc->wildcards, 0);
+}
+
+/* Returns true if 'a' and 'b' represent the same wildcards, false if they are
+ * different. */
+bool
+flow_wildcards_equal(const struct flow_wildcards *a,
+                     const struct flow_wildcards *b)
+{
+    return a->wildcards == b->wildcards;
+}
+
+/* Returns true if at least one bit or field is wildcarded in 'a' but not in
+ * 'b', false otherwise. */
+bool
+flow_wildcards_has_extra(const struct flow_wildcards *a,
+                         const struct flow_wildcards *b)
+{
+#define OFPFW_NW_MASK (OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK)
+    return ((a->wildcards & ~(b->wildcards | OFPFW_NW_MASK))
+            || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
+            || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask);
 }
 
 static int

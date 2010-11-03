@@ -88,7 +88,23 @@ flow_hash(const struct flow *flow, uint32_t basis)
     return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
-/* Information on wildcards for a flow, as a supplement to struct flow. */
+/* Information on wildcards for a flow, as a supplement to "struct flow".
+ *
+ * The flow_wildcards_*() functions below both depend on and maintain the
+ * following important invariants:
+ *
+ * 1. 'wildcards' is nonzero if and only if at least one bit or field is
+ *    wildcarded.
+ *
+ * 2. Bits in 'wildcards' not included in OVSFW_ALL are set to 0.  (This is a
+ *    corollary to invariant #1.)
+ *
+ * 3. The fields in 'wildcards' masked by OFPFW_NW_SRC_MASK and
+ *    OFPFW_NW_DST_MASK have values between 0 and 32, inclusive.
+ *
+ * 4. The fields masked by OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK correspond
+ *    correctly to the masks in 'nw_src_mask' and 'nw_dst_mask', respectively.
+ */
 struct flow_wildcards {
     uint32_t wildcards;         /* enum ofp_flow_wildcards. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
@@ -101,5 +117,15 @@ void flow_wildcards_init_exact(struct flow_wildcards *);
 
 bool flow_wildcards_set_nw_src_mask(struct flow_wildcards *, ovs_be32);
 bool flow_wildcards_set_nw_dst_mask(struct flow_wildcards *, ovs_be32);
+
+void flow_wildcards_combine(struct flow_wildcards *dst,
+                            const struct flow_wildcards *src1,
+                            const struct flow_wildcards *src2);
+bool flow_wildcards_has_extra(const struct flow_wildcards *,
+                              const struct flow_wildcards *);
+
+uint32_t flow_wildcards_hash(const struct flow_wildcards *);
+bool flow_wildcards_equal(const struct flow_wildcards *,
+                          const struct flow_wildcards *);
 
 #endif /* flow.h */

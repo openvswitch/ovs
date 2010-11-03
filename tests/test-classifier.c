@@ -37,6 +37,53 @@
 #undef NDEBUG
 #include <assert.h>
 
+/* Fields in a rule. */
+#define CLS_FIELDS                                          \
+    /*                           struct flow  all-caps */   \
+    /*        wildcard bit(s)    member name  name     */   \
+    /*        -----------------  -----------  -------- */   \
+    CLS_FIELD(NXFW_TUN_ID,       tun_id,      TUN_ID)       \
+    CLS_FIELD(OFPFW_NW_SRC_MASK, nw_src,      NW_SRC)       \
+    CLS_FIELD(OFPFW_NW_DST_MASK, nw_dst,      NW_DST)       \
+    CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
+    CLS_FIELD(OFPFW_DL_VLAN,     dl_vlan,     DL_VLAN)      \
+    CLS_FIELD(OFPFW_DL_TYPE,     dl_type,     DL_TYPE)      \
+    CLS_FIELD(OFPFW_TP_SRC,      tp_src,      TP_SRC)       \
+    CLS_FIELD(OFPFW_TP_DST,      tp_dst,      TP_DST)       \
+    CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
+    CLS_FIELD(OFPFW_DL_DST,      dl_dst,      DL_DST)       \
+    CLS_FIELD(OFPFW_NW_PROTO,    nw_proto,    NW_PROTO)     \
+    CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
+    CLS_FIELD(OFPFW_NW_TOS,      nw_tos,      NW_TOS)
+
+/* Field indexes.
+ *
+ * (These are also indexed into struct classifier's 'tables' array.) */
+enum {
+#define CLS_FIELD(WILDCARDS, MEMBER, NAME) CLS_F_IDX_##NAME,
+    CLS_FIELDS
+#undef CLS_FIELD
+    CLS_N_FIELDS
+};
+
+/* Field information. */
+struct cls_field {
+    int ofs;                    /* Offset in struct flow. */
+    int len;                    /* Length in bytes. */
+    uint32_t wildcards;         /* OFPFW_* bit or bits for this field. */
+    const char *name;           /* Name (for debugging). */
+};
+
+static const struct cls_field cls_fields[CLS_N_FIELDS] = {
+#define CLS_FIELD(WILDCARDS, MEMBER, NAME)      \
+    { offsetof(struct flow, MEMBER),            \
+      sizeof ((struct flow *)0)->MEMBER,        \
+      WILDCARDS,                                \
+      #NAME },
+    CLS_FIELDS
+#undef CLS_FIELD
+};
+
 struct test_rule {
     int aux;                    /* Auxiliary data. */
     struct cls_rule cls_rule;   /* Classifier rule data. */
@@ -214,6 +261,7 @@ tcls_delete_matches(struct tcls *cls,
         struct test_rule *pos = cls->rules[i];
         uint32_t wildcards = pos->cls_rule.wc.wildcards;
         if (include & (wildcards ? CLS_INC_WILD : CLS_INC_EXACT)
+            && !flow_wildcards_has_extra(&pos->cls_rule.wc, &target->wc)
             && match(target, &pos->cls_rule.flow)) {
             tcls_remove(cls, pos);
         } else {
@@ -391,35 +439,38 @@ destroy_classifier(struct classifier *cls)
 
 static void
 check_tables(const struct classifier *cls,
-             int n_tables, int n_buckets, int n_rules)
+             int n_tables, int n_rules, int n_dups)
 {
+    const struct cls_table *table;
     int found_tables = 0;
-    int found_buckets = 0;
     int found_rules = 0;
-    int i;
+    int found_dups = 0;
 
-    BUILD_ASSERT(CLS_N_FIELDS == ARRAY_SIZE(cls->tables));
-    for (i = 0; i < CLS_N_FIELDS; i++) {
-        const struct cls_bucket *bucket;
-        if (!hmap_is_empty(&cls->tables[i])) {
-            found_tables++;
-        }
-        HMAP_FOR_EACH (bucket, hmap_node, &cls->tables[i]) {
-            found_buckets++;
-            assert(!list_is_empty(&bucket->rules));
-            found_rules += list_size(&bucket->rules);
-        }
-    }
+    HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+        const struct cls_rule *head;
 
-    if (!hmap_is_empty(&cls->exact_table)) {
+        assert(!hmap_is_empty(&table->rules));
+
         found_tables++;
-        found_buckets++;
-        found_rules += hmap_count(&cls->exact_table);
+        HMAP_FOR_EACH (head, hmap_node, &table->rules) {
+            unsigned int prev_priority = UINT_MAX;
+            const struct cls_rule *rule;
+
+            found_rules++;
+            LIST_FOR_EACH (rule, list, &head->list) {
+                assert(rule->priority < prev_priority);
+                prev_priority = rule->priority;
+                found_rules++;
+                found_dups++;
+                assert(classifier_find_rule_exactly(cls, rule) == rule);
+            }
+        }
     }
 
-    assert(n_tables == -1 || found_tables == n_tables);
+    assert(found_tables == hmap_count(&cls->tables));
+    assert(n_tables == -1 || n_tables == hmap_count(&cls->tables));
     assert(n_rules == -1 || found_rules == n_rules);
-    assert(n_buckets == -1 || found_buckets == n_buckets);
+    assert(n_dups == -1 || found_dups == n_dups);
 }
 
 static struct test_rule *
@@ -501,7 +552,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         tcls_rule = tcls_insert(&tcls, rule);
         assert(!classifier_insert(&cls, &rule->cls_rule));
-        check_tables(&cls, 1, 1, 1);
+        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
 
         classifier_remove(&cls, &rule->cls_rule);
@@ -537,7 +588,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
         assert(!classifier_insert(&cls, &rule1->cls_rule));
-        check_tables(&cls, 1, 1, 1);
+        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
 
@@ -546,7 +597,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         assert(test_rule_from_cls_rule(
                    classifier_insert(&cls, &rule2->cls_rule)) == rule1);
         free(rule1);
-        check_tables(&cls, 1, 1, 1);
+        check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
         destroy_classifier(&cls);
@@ -554,354 +605,248 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static int
-table_mask(int table)
+factorial(int n_items)
 {
-    return ((1u << CLS_N_FIELDS) - 1) & ~((1u << table) - 1);
+    int n, i;
+
+    n = 1;
+    for (i = 2; i <= n_items; i++) {
+        n *= i;
+    }
+    return n;
+}
+
+static void
+swap(int *a, int *b)
+{
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+static void
+reverse(int *a, int n)
+{
+    int i;
+
+    for (i = 0; i < n / 2; i++) {
+        int j = n - (i + 1);
+        swap(&a[i], &a[j]);
+    }
+}
+
+static bool
+next_permutation(int *a, int n)
+{
+    int k;
+
+    for (k = n - 2; k >= 0; k--) {
+        if (a[k] < a[k + 1]) {
+            int l;
+
+            for (l = n - 1; ; l--) {
+                if (a[l] > a[k]) {
+                    swap(&a[k], &a[l]);
+                    reverse(a + (k + 1), n - (k + 1));
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/* Tests classification with rules that have the same matching criteria. */
+static void
+test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    enum { N_RULES = 3 };
+    int n_pris;
+
+    for (n_pris = N_RULES; n_pris >= 1; n_pris--) {
+        int ops[N_RULES * 2];
+        int pris[N_RULES];
+        int n_permutations;
+        int i;
+
+        pris[0] = 0;
+        for (i = 1; i < N_RULES; i++) {
+            pris[i] = pris[i - 1] + (n_pris > i);
+        }
+
+        for (i = 0; i < N_RULES * 2; i++) {
+            ops[i] = i / 2;
+        }
+
+        n_permutations = 0;
+        do {
+            struct test_rule *rules[N_RULES];
+            struct test_rule *tcls_rules[N_RULES];
+            int pri_rules[N_RULES];
+            struct classifier cls;
+            struct tcls tcls;
+
+            n_permutations++;
+
+            for (i = 0; i < N_RULES; i++) {
+                rules[i] = make_rule(456, pris[i], 0);
+                tcls_rules[i] = NULL;
+                pri_rules[i] = -1;
+            }
+
+            classifier_init(&cls);
+            tcls_init(&tcls);
+
+            for (i = 0; i < ARRAY_SIZE(ops); i++) {
+                int j = ops[i];
+                int m, n;
+
+                if (!tcls_rules[j]) {
+                    struct test_rule *displaced_rule;
+
+                    tcls_rules[j] = tcls_insert(&tcls, rules[j]);
+                    displaced_rule = test_rule_from_cls_rule(
+                        classifier_insert(&cls, &rules[j]->cls_rule));
+                    if (pri_rules[pris[j]] >= 0) {
+                        int k = pri_rules[pris[j]];
+                        assert(displaced_rule != NULL);
+                        assert(displaced_rule != rules[j]);
+                        assert(pris[j] == displaced_rule->cls_rule.priority);
+                        tcls_rules[k] = NULL;
+                    } else {
+                        assert(displaced_rule == NULL);
+                    }
+                    pri_rules[pris[j]] = j;
+                } else {
+                    classifier_remove(&cls, &rules[j]->cls_rule);
+                    tcls_remove(&tcls, tcls_rules[j]);
+                    tcls_rules[j] = NULL;
+                    pri_rules[pris[j]] = -1;
+                }
+
+                n = 0;
+                for (m = 0; m < N_RULES; m++) {
+                    n += tcls_rules[m] != NULL;
+                }
+                check_tables(&cls, n > 0, n, n - 1);
+
+                compare_classifiers(&cls, &tcls);
+            }
+
+            classifier_destroy(&cls);
+            tcls_destroy(&tcls);
+
+            for (i = 0; i < N_RULES; i++) {
+                free(rules[i]);
+            }
+        } while (next_permutation(ops, ARRAY_SIZE(ops)));
+        assert(n_permutations == (factorial(N_RULES * 2) >> N_RULES));
+    }
 }
 
 static int
-random_wcf_in_table(int table, int seed)
+count_ones(unsigned long int x)
 {
-    int wc_fields = (1u << table) | hash_int(seed, 0);
-    return wc_fields & table_mask(table);
+    int n = 0;
+
+    while (x) {
+        x &= x - 1;
+        n++;
+    }
+
+    return n;
+}
+
+static bool
+array_contains(int *array, int n, int value)
+{
+    int i;
+
+    for (i = 0; i < n; i++) {
+        if (array[i] == value) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /* Tests classification with two rules at a time that fall into the same
- * bucket. */
-static void
-test_two_rules_in_one_bucket(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
-{
-    int table, rel_pri, wcf_pat, value_pat;
-
-    for (table = 0; table <= CLS_N_FIELDS; table++) {
-        for (rel_pri = -1; rel_pri <= +1; rel_pri++) {
-            for (wcf_pat = 0; wcf_pat < 4; wcf_pat++) {
-                int n_value_pats = table == CLS_N_FIELDS - 1 ? 1 : 2;
-                for (value_pat = 0; value_pat < n_value_pats; value_pat++) {
-                    struct test_rule *rule1, *tcls_rule1;
-                    struct test_rule *rule2, *tcls_rule2;
-                    struct test_rule *displaced_rule;
-                    struct classifier cls;
-                    struct tcls tcls;
-                    unsigned int pri1, pri2;
-                    int wcf1, wcf2;
-
-                    if (table != CLS_F_IDX_EXACT) {
-                        /* We can use identical priorities in this test because
-                         * the classifier always chooses the rule added later
-                         * for equal-priority rules that fall into the same
-                         * bucket.  */
-                        pri1 = table * 257 + 50;
-                        pri2 = pri1 + rel_pri;
-
-                        wcf1 = (wcf_pat & 1
-                                ? random_wcf_in_table(table, pri1)
-                                : 1u << table);
-                        wcf2 = (wcf_pat & 2
-                                ? random_wcf_in_table(table, pri2)
-                                : 1u << table);
-                        if (value_pat) {
-                            wcf1 &= ~(1u << (CLS_N_FIELDS - 1));
-                            wcf2 &= ~(1u << (CLS_N_FIELDS - 1));
-                        }
-                    } else {
-                        /* This classifier always puts exact-match rules at
-                         * maximum priority.  */
-                        pri1 = pri2 = UINT_MAX;
-
-                        /* No wildcard fields. */
-                        wcf1 = wcf2 = 0;
-                    }
-
-                    rule1 = make_rule(wcf1, pri1, 0);
-                    rule2 = make_rule(wcf2, pri2,
-                                      value_pat << (CLS_N_FIELDS - 1));
-
-                    classifier_init(&cls);
-                    tcls_init(&tcls);
-
-                    tcls_rule1 = tcls_insert(&tcls, rule1);
-                    tcls_rule2 = tcls_insert(&tcls, rule2);
-                    assert(!classifier_insert(&cls, &rule1->cls_rule));
-                    displaced_rule = test_rule_from_cls_rule(
-                        classifier_insert(&cls, &rule2->cls_rule));
-                    if (wcf1 != wcf2 || pri1 != pri2 || value_pat) {
-                        assert(!displaced_rule);
-
-                        check_tables(&cls, 1, 1, 2);
-                        compare_classifiers(&cls, &tcls);
-
-                        classifier_remove(&cls, &rule1->cls_rule);
-                        tcls_remove(&tcls, tcls_rule1);
-                        check_tables(&cls, 1, 1, 1);
-                        compare_classifiers(&cls, &tcls);
-                    } else {
-                        assert(displaced_rule == rule1);
-                        check_tables(&cls, 1, 1, 1);
-                        compare_classifiers(&cls, &tcls);
-                    }
-                    free(rule1);
-
-                    classifier_remove(&cls, &rule2->cls_rule);
-                    tcls_remove(&tcls, tcls_rule2);
-                    compare_classifiers(&cls, &tcls);
-                    free(rule2);
-
-                    destroy_classifier(&cls);
-                    tcls_destroy(&tcls);
-                }
-            }
-        }
-    }
-}
-
-/* Tests classification with two rules at a time that fall into the same
- * table but different buckets. */
-static void
-test_two_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
-{
-    int table, rel_pri, wcf_pat;
-
-    /* Skip tables 0 and CLS_F_IDX_EXACT because they have one bucket. */
-    for (table = 1; table < CLS_N_FIELDS; table++) {
-        for (rel_pri = -1; rel_pri <= +1; rel_pri++) {
-            for (wcf_pat = 0; wcf_pat < 5; wcf_pat++) {
-                struct test_rule *rule1, *tcls_rule1;
-                struct test_rule *rule2, *tcls_rule2;
-                struct classifier cls;
-                struct tcls tcls;
-                unsigned int pri1, pri2;
-                int wcf1, wcf2;
-                int value_mask, value_pat1, value_pat2;
-                int i;
-
-                /* We can use identical priorities in this test because the
-                 * classifier always chooses the rule added later for
-                 * equal-priority rules that fall into the same table.  */
-                pri1 = table * 257 + 50;
-                pri2 = pri1 + rel_pri;
-
-                if (wcf_pat & 4) {
-                    wcf1 = wcf2 = random_wcf_in_table(table, pri1);
-                } else {
-                    wcf1 = (wcf_pat & 1
-                            ? random_wcf_in_table(table, pri1)
-                            : 1u << table);
-                    wcf2 = (wcf_pat & 2
-                            ? random_wcf_in_table(table, pri2)
-                            : 1u << table);
-                }
-
-                /* Generate value patterns that will put the two rules into
-                 * different buckets. */
-                value_mask = ((1u << table) - 1);
-                value_pat1 = hash_int(pri1, 1) & value_mask;
-                i = 0;
-                do {
-                    value_pat2 = (hash_int(pri2, i++) & value_mask);
-                } while (value_pat1 == value_pat2);
-                rule1 = make_rule(wcf1, pri1, value_pat1);
-                rule2 = make_rule(wcf2, pri2, value_pat2);
-
-                classifier_init(&cls);
-                tcls_init(&tcls);
-
-                tcls_rule1 = tcls_insert(&tcls, rule1);
-                tcls_rule2 = tcls_insert(&tcls, rule2);
-                assert(!classifier_insert(&cls, &rule1->cls_rule));
-                assert(!classifier_insert(&cls, &rule2->cls_rule));
-                check_tables(&cls, 1, 2, 2);
-                compare_classifiers(&cls, &tcls);
-
-                classifier_remove(&cls, &rule1->cls_rule);
-                tcls_remove(&tcls, tcls_rule1);
-                check_tables(&cls, 1, 1, 1);
-                compare_classifiers(&cls, &tcls);
-                free(rule1);
-
-                classifier_remove(&cls, &rule2->cls_rule);
-                tcls_remove(&tcls, tcls_rule2);
-                compare_classifiers(&cls, &tcls);
-                free(rule2);
-
-                classifier_destroy(&cls);
-                tcls_destroy(&tcls);
-            }
-        }
-    }
-}
-
-/* Tests classification with two rules at a time that fall into different
- * tables. */
-static void
-test_two_rules_in_different_tables(int argc OVS_UNUSED,
-                                   char *argv[] OVS_UNUSED)
-{
-    int table1, table2, rel_pri, wcf_pat;
-
-    for (table1 = 0; table1 < CLS_N_FIELDS; table1++) {
-        for (table2 = table1 + 1; table2 <= CLS_N_FIELDS; table2++) {
-            for (rel_pri = 0; rel_pri < 2; rel_pri++) {
-                for (wcf_pat = 0; wcf_pat < 4; wcf_pat++) {
-                    struct test_rule *rule1, *tcls_rule1;
-                    struct test_rule *rule2, *tcls_rule2;
-                    struct classifier cls;
-                    struct tcls tcls;
-                    unsigned int pri1, pri2;
-                    int wcf1, wcf2;
-
-                    /* We must use unique priorities in this test because the
-                     * classifier makes the rule choice undefined for rules of
-                     * equal priority that fall into different tables.  (In
-                     * practice, lower-numbered tables win.)  */
-                    pri1 = table1 * 257 + 50;
-                    pri2 = rel_pri ? pri1 - 1 : pri1 + 1;
-
-                    wcf1 = (wcf_pat & 1
-                            ? random_wcf_in_table(table1, pri1)
-                            : 1u << table1);
-                    wcf2 = (wcf_pat & 2
-                            ? random_wcf_in_table(table2, pri2)
-                            : 1u << table2);
-
-                    if (table2 == CLS_F_IDX_EXACT) {
-                        pri2 = UINT16_MAX;
-                        wcf2 = 0;
-                    }
-
-                    rule1 = make_rule(wcf1, pri1, 0);
-                    rule2 = make_rule(wcf2, pri2, 0);
-
-                    classifier_init(&cls);
-                    tcls_init(&tcls);
-
-                    tcls_rule1 = tcls_insert(&tcls, rule1);
-                    tcls_rule2 = tcls_insert(&tcls, rule2);
-                    assert(!classifier_insert(&cls, &rule1->cls_rule));
-                    assert(!classifier_insert(&cls, &rule2->cls_rule));
-                    check_tables(&cls, 2, 2, 2);
-                    compare_classifiers(&cls, &tcls);
-
-                    classifier_remove(&cls, &rule1->cls_rule);
-                    tcls_remove(&tcls, tcls_rule1);
-                    check_tables(&cls, 1, 1, 1);
-                    compare_classifiers(&cls, &tcls);
-                    free(rule1);
-
-                    classifier_remove(&cls, &rule2->cls_rule);
-                    tcls_remove(&tcls, tcls_rule2);
-                    compare_classifiers(&cls, &tcls);
-                    free(rule2);
-
-                    classifier_destroy(&cls);
-                    tcls_destroy(&tcls);
-                }
-            }
-        }
-    }
-}
-
-/* Tests classification with many rules at a time that fall into the same
- * bucket but have unique priorities (and various wildcards). */
-static void
-test_many_rules_in_one_bucket(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
-{
-    enum { MAX_RULES = 50 };
-    int iteration, table;
-
-    for (iteration = 0; iteration < 3; iteration++) {
-        for (table = 0; table <= CLS_N_FIELDS; table++) {
-            unsigned int priorities[MAX_RULES];
-            struct classifier cls;
-            struct tcls tcls;
-            int i;
-
-            srand(hash_int(table, iteration));
-            for (i = 0; i < MAX_RULES; i++) {
-                priorities[i] = i * 129;
-            }
-            shuffle(priorities, ARRAY_SIZE(priorities));
-
-            classifier_init(&cls);
-            tcls_init(&tcls);
-
-            for (i = 0; i < MAX_RULES; i++) {
-                struct test_rule *rule;
-                unsigned int priority = priorities[i];
-                int wcf;
-
-                wcf = random_wcf_in_table(table, priority);
-                rule = make_rule(wcf, priority,
-                                 table == CLS_F_IDX_EXACT ? i : 1234);
-                tcls_insert(&tcls, rule);
-                assert(!classifier_insert(&cls, &rule->cls_rule));
-                check_tables(&cls, 1, 1, i + 1);
-                compare_classifiers(&cls, &tcls);
-            }
-
-            destroy_classifier(&cls);
-            tcls_destroy(&tcls);
-        }
-    }
-}
-
-/* Tests classification with many rules at a time that fall into the same
- * table but random buckets. */
+ * table but different lists. */
 static void
 test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    enum { MAX_RULES = 50 };
-    int iteration, table;
+    int iteration;
 
-    for (iteration = 0; iteration < 3; iteration++) {
-        for (table = 0; table < CLS_N_FIELDS; table++) {
-            unsigned int priorities[MAX_RULES];
-            struct classifier cls;
-            struct tcls tcls;
-            int i;
+    for (iteration = 0; iteration < 50; iteration++) {
+        enum { N_RULES = 20 };
+        struct test_rule *rules[N_RULES];
+        struct test_rule *tcls_rules[N_RULES];
+        struct classifier cls;
+        struct tcls tcls;
+        int value_pats[N_RULES];
+        int value_mask;
+        int wcf;
+        int i;
 
-            srand(hash_int(table, iteration));
-            for (i = 0; i < MAX_RULES; i++) {
-                priorities[i] = i * 129;
-            }
-            shuffle(priorities, ARRAY_SIZE(priorities));
+        do {
+            wcf = rand() & ((1u << CLS_N_FIELDS) - 1);
+            value_mask = ~wcf & ((1u << CLS_N_FIELDS) - 1);
+        } while ((1 << count_ones(value_mask)) < N_RULES);
 
-            classifier_init(&cls);
-            tcls_init(&tcls);
+        classifier_init(&cls);
+        tcls_init(&tcls);
 
-            for (i = 0; i < MAX_RULES; i++) {
-                struct test_rule *rule;
-                unsigned int priority = priorities[i];
-                int wcf;
+        for (i = 0; i < N_RULES; i++) {
+            unsigned int priority = rand();
 
-                wcf = random_wcf_in_table(table, priority);
-                rule = make_rule(wcf, priority, hash_int(priority, 1));
-                tcls_insert(&tcls, rule);
-                assert(!classifier_insert(&cls, &rule->cls_rule));
-                check_tables(&cls, 1, -1, i + 1);
-                compare_classifiers(&cls, &tcls);
-            }
+            do {
+                value_pats[i] = rand() & value_mask;
+            } while (array_contains(value_pats, i, value_pats[i]));
 
-            destroy_classifier(&cls);
-            tcls_destroy(&tcls);
+            rules[i] = make_rule(wcf, priority, value_pats[i]);
+            tcls_rules[i] = tcls_insert(&tcls, rules[i]);
+            assert(!classifier_insert(&cls, &rules[i]->cls_rule));
+
+            check_tables(&cls, 1, i + 1, 0);
+            compare_classifiers(&cls, &tcls);
         }
+
+        for (i = 0; i < N_RULES; i++) {
+            tcls_remove(&tcls, tcls_rules[i]);
+            classifier_remove(&cls, &rules[i]->cls_rule);
+            free(rules[i]);
+
+            check_tables(&cls, i < N_RULES - 1, N_RULES - (i + 1), 0);
+            compare_classifiers(&cls, &tcls);
+        }
+
+        classifier_destroy(&cls);
+        tcls_destroy(&tcls);
     }
 }
 
-/* Tests classification with many rules at a time that fall into random buckets
- * in random tables. */
+/* Tests classification with many rules at a time that fall into random lists
+ * in 'n' tables. */
 static void
-test_many_rules_in_different_tables(int argc OVS_UNUSED,
-                                    char *argv[] OVS_UNUSED)
+test_many_rules_in_n_tables(int n_tables)
 {
     enum { MAX_RULES = 50 };
+    int wcfs[10];
     int iteration;
+    int i;
+
+    assert(n_tables < 10);
+    for (i = 0; i < n_tables; i++) {
+        do {
+            wcfs[i] = rand() & ((1u << CLS_N_FIELDS) - 1);
+        } while (array_contains(wcfs, i, wcfs[i]));
+    }
 
     for (iteration = 0; iteration < 30; iteration++) {
         unsigned int priorities[MAX_RULES];
         struct classifier cls;
         struct tcls tcls;
-        int i;
 
         srand(iteration);
         for (i = 0; i < MAX_RULES; i++) {
@@ -915,13 +860,12 @@ test_many_rules_in_different_tables(int argc OVS_UNUSED,
         for (i = 0; i < MAX_RULES; i++) {
             struct test_rule *rule;
             unsigned int priority = priorities[i];
-            int table = rand() % (CLS_N_FIELDS + 1);
-            int wcf = random_wcf_in_table(table, rand());
+            int wcf = wcfs[rand() % n_tables];
             int value_pat = rand() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);
             tcls_insert(&tcls, rule);
             assert(!classifier_insert(&cls, &rule->cls_rule));
-            check_tables(&cls, -1, -1, i + 1);
+            check_tables(&cls, -1, i + 1, -1);
             compare_classifiers(&cls, &tcls);
         }
 
@@ -935,6 +879,7 @@ test_many_rules_in_different_tables(int argc OVS_UNUSED,
                                       free_rule, &cls);
             tcls_delete_matches(&tcls, &rule->cls_rule, include);
             compare_classifiers(&cls, &tcls);
+            check_tables(&cls, -1, -1, -1);
             free(rule);
         }
 
@@ -942,26 +887,35 @@ test_many_rules_in_different_tables(int argc OVS_UNUSED,
         tcls_destroy(&tcls);
     }
 }
+
+static void
+test_many_rules_in_two_tables(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    test_many_rules_in_n_tables(2);
+}
+
+static void
+test_many_rules_in_five_tables(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    test_many_rules_in_n_tables(5);
+}
 
 static const struct command commands[] = {
     {"empty", 0, 0, test_empty},
     {"destroy-null", 0, 0, test_destroy_null},
     {"single-rule", 0, 0, test_single_rule},
     {"rule-replacement", 0, 0, test_rule_replacement},
-    {"two-rules-in-one-bucket", 0, 0, test_two_rules_in_one_bucket},
-    {"two-rules-in-one-table", 0, 0, test_two_rules_in_one_table},
-    {"two-rules-in-different-tables", 0, 0,
-     test_two_rules_in_different_tables},
-    {"many-rules-in-one-bucket", 0, 0, test_many_rules_in_one_bucket},
+    {"many-rules-in-one-list", 0, 0, test_many_rules_in_one_list},
     {"many-rules-in-one-table", 0, 0, test_many_rules_in_one_table},
-    {"many-rules-in-different-tables", 0, 0,
-     test_many_rules_in_different_tables},
+    {"many-rules-in-two-tables", 0, 0, test_many_rules_in_two_tables},
+    {"many-rules-in-five-tables", 0, 0, test_many_rules_in_five_tables},
     {NULL, 0, 0, NULL},
 };
 
 int
 main(int argc, char *argv[])
 {
+    set_program_name(argv[0]);
     init_values();
     run_command(argc - 1, argv + 1, commands);
     return 0;
