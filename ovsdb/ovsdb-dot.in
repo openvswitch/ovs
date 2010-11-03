@@ -1,6 +1,8 @@
 #! @PYTHON@
 
 from datetime import date
+import ovs.db.error
+import ovs.db.schema
 import getopt
 import os
 import re
@@ -9,18 +11,18 @@ import sys
 argv0 = sys.argv[0]
 
 def printEdge(tableName, baseType, label):
-    if baseType.refTable:
+    if baseType.ref_table:
         options = {}
         options['label'] = '"%s"' % label
-        if baseType.refType == 'weak':
+        if baseType.ref_type == 'weak':
             options['constraint'] = 'false'
         print "\t%s -> %s [%s];" % (
             tableName,
-            baseType.refTable,
+            baseType.ref_table,
             ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
 
 def schemaToDot(schemaFile):
-    schema = DbSchema.fromJson(ovs.json.from_file(schemaFile))
+    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
 
     print "digraph %s {" % schema.name
     for tableName, table in schema.tables.iteritems():
@@ -73,7 +75,7 @@ if __name__ == "__main__":
 
         schemaToDot(args[0])
         
-    except Error, e:
+    except ovs.db.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
 

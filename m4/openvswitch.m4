@@ -198,7 +198,7 @@ AC_DEFUN([OVS_CHECK_DOT],
     [for dot],
     [ovs_cv_dot],
     [dnl "dot" writes -V output to stderr:
-     if (dot -V) 2>&1 | grep '^dot - [gG]raphviz version' >/dev/null 2>&1; then
+     if (dot -V) 2>&1 | grep '^dot - [[gG]]raphviz version' >/dev/null 2>&1; then
        ovs_cv_dot=yes
      else
        ovs_cv_dot=no
