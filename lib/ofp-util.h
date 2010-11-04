@@ -95,7 +95,7 @@ char *ofp_match_to_literal_string(const struct ofp_match *match);
 #define OFPUTIL_VENDORS                                     \
     /*             vendor name              vendor value */ \
     OFPUTIL_VENDOR(OFPUTIL_VENDOR_OPENFLOW, 0x00000000)     \
-    OFPUTIL_VENDOR(OFPUTIL_VENDOR_NICIRA,   0x00002320)
+    OFPUTIL_VENDOR(OFPUTIL_VENDOR_NICIRA,   NX_VENDOR_ID)
 
 /* OFPUTIL_VENDOR_* definitions. */
 enum ofputil_vendor_codes {
