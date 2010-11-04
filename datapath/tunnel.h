@@ -184,8 +184,7 @@ struct tnl_vport {
 #endif
 };
 
-struct vport *tnl_create(const char *name, const void __user *config,
-			 const struct vport_ops *,
+struct vport *tnl_create(const struct vport_parms *, const struct vport_ops *,
 			 const struct tnl_ops *);
 int tnl_modify(struct vport *, const void __user *config);
 int tnl_destroy(struct vport *);

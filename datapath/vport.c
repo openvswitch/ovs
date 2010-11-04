@@ -179,6 +179,7 @@ void vport_exit(void)
 
 static int do_vport_add(struct odp_vport_add *vport_config)
 {
+	struct vport_parms parms;
 	struct vport *vport;
 	int err = 0;
 
@@ -193,9 +194,12 @@ static int do_vport_add(struct odp_vport_add *vport_config)
 		goto out;
 	}
 
+	parms.name = vport_config->devname;
+	parms.type = vport_config->port_type;
+	parms.config = vport_config->config;
+
 	vport_lock();
-	vport = vport_add(vport_config->devname, vport_config->port_type,
-			  vport_config->config);
+	vport = vport_add(&parms);
 	vport_unlock();
 
 	if (IS_ERR(vport))
@@ -703,15 +707,12 @@ void vport_free(struct vport *vport)
 /**
  *	vport_add - add vport device (for kernel callers)
  *
- * @name: Name of new device.
- * @type: Type of new device (to be matched against types in registered vport
- * ops).
- * @config: Device type specific configuration.  Userspace pointer.
+ * @parms: Information about new vport.
  *
  * Creates a new vport with the specified configuration (which is dependent
  * on device type).  Both RTNL and vport locks must be held.
  */
-struct vport *vport_add(const char *name, const char *type, const void __user *config)
+struct vport *vport_add(const struct vport_parms *parms)
 {
 	struct vport *vport;
 	int err = 0;
@@ -721,8 +722,8 @@ struct vport *vport_add(const char *name, const char *type, const void __user *c
 	ASSERT_VPORT();
 
 	for (i = 0; i < n_vport_types; i++) {
-		if (!strcmp(vport_ops_list[i]->type, type)) {
-			vport = vport_ops_list[i]->create(name, config);
+		if (!strcmp(vport_ops_list[i]->type, parms->type)) {
+			vport = vport_ops_list[i]->create(parms);
 			if (IS_ERR(vport)) {
 				err = PTR_ERR(vport);
 				goto out;

@@ -109,7 +109,7 @@ static int set_config(struct vport *vport, const void __user *uconfig)
 	return 0;
 }
 
-static struct vport *patch_create(const char *name, const void __user *config)
+static struct vport *patch_create(const struct vport_parms *parms)
 {
 	struct vport *vport;
 	struct patch_vport *patch_vport;
@@ -123,9 +123,9 @@ static struct vport *patch_create(const char *name, const void __user *config)
 
 	patch_vport = patch_vport_priv(vport);
 
-	strcpy(patch_vport->name, name);
+	strcpy(patch_vport->name, parms->name);
 
-	err = set_config(vport, config);
+	err = set_config(vport, parms->config);
 	if (err)
 		goto error_free_vport;
 

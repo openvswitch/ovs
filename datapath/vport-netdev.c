@@ -88,7 +88,7 @@ static void netdev_exit(void)
 }
 #endif
 
-static struct vport *netdev_create(const char *name, const void __user *config)
+static struct vport *netdev_create(const struct vport_parms *parms)
 {
 	struct vport *vport;
 	struct netdev_vport *netdev_vport;
@@ -102,7 +102,7 @@ static struct vport *netdev_create(const char *name, const void __user *config)
 
 	netdev_vport = netdev_vport_priv(vport);
 
-	netdev_vport->dev = dev_get_by_name(&init_net, name);
+	netdev_vport->dev = dev_get_by_name(&init_net, parms->name);
 	if (!netdev_vport->dev) {
 		err = -ENODEV;
 		goto error_free_vport;

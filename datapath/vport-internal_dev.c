@@ -187,8 +187,7 @@ static void do_setup(struct net_device *netdev)
 	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
 
-static struct vport *internal_dev_create(const char *name,
-					 const void __user *config)
+static struct vport *internal_dev_create(const struct vport_parms *parms)
 {
 	struct vport *vport;
 	struct netdev_vport *netdev_vport;
@@ -203,7 +202,7 @@ static struct vport *internal_dev_create(const char *name,
 
 	netdev_vport = netdev_vport_priv(vport);
 
-	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev), name, do_setup);
+	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev), parms->name, do_setup);
 	if (!netdev_vport->dev) {
 		err = -ENOMEM;
 		goto error_free_vport;

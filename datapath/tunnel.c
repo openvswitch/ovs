@@ -1344,7 +1344,7 @@ static int set_config(const void __user *uconfig, const struct tnl_ops *tnl_ops,
 	return 0;
 }
 
-struct vport *tnl_create(const char *name, const void __user *config,
+struct vport *tnl_create(const struct vport_parms *parms,
 			 const struct vport_ops *vport_ops,
 			 const struct tnl_ops *tnl_ops)
 {
@@ -1361,7 +1361,7 @@ struct vport *tnl_create(const char *name, const void __user *config,
 
 	tnl_vport = tnl_vport_priv(vport);
 
-	strcpy(tnl_vport->name, name);
+	strcpy(tnl_vport->name, parms->name);
 	tnl_vport->tnl_ops = tnl_ops;
 
 	tnl_vport->mutable = kzalloc(sizeof(struct tnl_mutable_config), GFP_KERNEL);
@@ -1376,7 +1376,7 @@ struct vport *tnl_create(const char *name, const void __user *config,
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
-	err = set_config(config, tnl_ops, NULL, tnl_vport->mutable);
+	err = set_config(parms->config, tnl_ops, NULL, tnl_vport->mutable);
 	if (err)
 		goto error_free_mutable;
 

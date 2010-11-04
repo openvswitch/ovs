@@ -356,13 +356,14 @@ static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_
 
 	vport = vport_locate(odp_port->devname);
 	if (!vport) {
+		struct vport_parms parms;
+
+		parms.name = odp_port->devname;
+		parms.type = odp_port->flags & ODP_PORT_INTERNAL ? "internal" : "netdev";
+		parms.config = NULL;
+
 		vport_lock();
-
-		if (odp_port->flags & ODP_PORT_INTERNAL)
-			vport = vport_add(odp_port->devname, "internal", NULL);
-		else
-			vport = vport_add(odp_port->devname, "netdev", NULL);
-
+		vport = vport_add(&parms);
 		vport_unlock();
 
 		if (IS_ERR(vport))

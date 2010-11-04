@@ -19,6 +19,7 @@
 #include "odp-compat.h"
 
 struct vport;
+struct vport_parms;
 struct dp_port;
 
 /* The following definitions are for users of the vport subsytem: */
@@ -45,7 +46,7 @@ void vport_unlock(void);
 int vport_init(void);
 void vport_exit(void);
 
-struct vport *vport_add(const char *name, const char *type, const void __user *config);
+struct vport *vport_add(const struct vport_parms *);
 int vport_mod(struct vport *, const void __user *config);
 int vport_del(struct vport *);
 
@@ -112,6 +113,20 @@ struct vport {
 #define VPORT_F_TUN_ID		(1 << 3) /* Sets OVS_CB(skb)->tun_id. */
 
 /**
+ * struct vport_parms - parameters for creating a new vport
+ *
+ * @name: New vport's name.
+ * @type: New vport's type.
+ * @config: New vport's configuration, as %NULL or a userspace pointer to an
+ * arbitrary type-specific structure.
+ */
+struct vport_parms {
+	const char *name;
+	const char *type;
+	const void __user *config;
+};
+
+/**
  * struct vport_ops - definition of a type of virtual port
  *
  * @type: Name of port type, such as "netdev" or "internal" to be matched
@@ -122,9 +137,8 @@ struct vport {
  * failure of this function will cause the module to not load.  If the flag is
  * not set and initialzation fails then no vports of this type can be created.
  * @exit: Called at module unload.
- * @create: Create a new vport called 'name' with vport type specific
- * configuration 'config' (which must be copied from userspace before use).  On
- * success must allocate a new vport using vport_alloc().
+ * @create: Create a new vport configured as specified.  On success returns
+ * a new vport allocated with vport_alloc(), otherwise an ERR_PTR() value.
  * @modify: Modify the configuration of an existing vport.  May be null if
  * modification is not supported.
  * @destroy: Destroy and free a vport using vport_free().  Prior to destruction
@@ -164,7 +178,7 @@ struct vport_ops {
 	void (*exit)(void);
 
 	/* Called with RTNL lock. */
-	struct vport *(*create)(const char *name, const void __user *config);
+	struct vport *(*create)(const struct vport_parms *);
 	int (*modify)(struct vport *, const void __user *config);
 	int (*destroy)(struct vport *);
 

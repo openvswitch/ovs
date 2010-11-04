@@ -220,9 +220,9 @@ static const struct tnl_ops capwap_tnl_ops = {
 	.update_header	= capwap_update_header,
 };
 
-static struct vport *capwap_create(const char *name, const void __user *config)
+static struct vport *capwap_create(const struct vport_parms *parms)
 {
-	return tnl_create(name, config, &capwap_vport_ops, &capwap_tnl_ops);
+	return tnl_create(parms, &capwap_vport_ops, &capwap_tnl_ops);
 }
 
 /* Random value.  Irrelevant as long as it's not 0 since we set the handler. */

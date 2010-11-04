@@ -340,9 +340,9 @@ static const struct tnl_ops gre_tnl_ops = {
 	.update_header	= gre_update_header,
 };
 
-static struct vport *gre_create(const char *name, const void __user *config)
+static struct vport *gre_create(const struct vport_parms *parms)
 {
-	return tnl_create(name, config, &gre_vport_ops, &gre_tnl_ops);
+	return tnl_create(parms, &gre_vport_ops, &gre_tnl_ops);
 }
 
 static const struct net_protocol gre_protocol_handlers = {
