@@ -156,6 +156,12 @@ parameters and their corresponding size parameters should be paired.
         ...
     }
 
+Functions that destroy an instance of a dynamically-allocated type
+should accept and ignore a null pointer argument.  Code that calls
+such a function (including the C standard library function free())
+should omit a null-pointer check.  We find that this usually makes
+code easier to read.
+
 
 FUNCTION PROTOTYPES
 
