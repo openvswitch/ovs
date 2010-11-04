@@ -251,6 +251,7 @@ static int
 create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 {
     struct netdev_class *netdev_class;
+    int error;
 
     if (!options->type || strlen(options->type) == 0) {
         /* Default to system. */
@@ -262,8 +263,10 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
         return EAFNOSUPPORT;
     }
 
-    return netdev_class->create(netdev_class, options->name, options->args,
-                                netdev_devp);
+    error = netdev_class->create(netdev_class, options->name, options->args,
+                                 netdev_devp);
+    assert(error || (*netdev_devp)->netdev_class == netdev_class);
+    return error;
 }
 
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
