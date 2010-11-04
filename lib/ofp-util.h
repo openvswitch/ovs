@@ -85,7 +85,12 @@ char *ofp_match_to_literal_string(const struct ofp_match *match);
 
 /* OpenFlow vendors.
  *
- * These functions map vendor */
+ * These functions map OpenFlow 32-bit vendor IDs (as used in struct
+ * ofp_vendor_header) into 4-bit values to embed in an "int".  The 4-bit values
+ * are only used internally in Open vSwitch and never appear on the wire, so
+ * particular codes used are not important.
+ */
+
 /* Vendor error numbers currently used in Open vSwitch. */
 #define OFPUTIL_VENDORS                                     \
     /*             vendor name              vendor value */ \
@@ -106,19 +111,19 @@ enum ofputil_vendor_codes {
  * error codes into a single 31-bit space using the following encoding.
  * (Bit 31 is unused and assumed 0 to avoid negative "int" values.)
  *
- *   31                                                   0
+ *   30                                                   0
  *  +------------------------------------------------------+
  *  |                           0                          |  success
  *  +------------------------------------------------------+
  *
  *   30 29                                                0
  *  +--+---------------------------------------------------+
- *  |0 |                    errno value                    |  errno value
+ *  | 0|                    errno value                    |  errno value
  *  +--+---------------------------------------------------+
  *
  *   30 29   26 25            16 15                       0
  *  +--+-------+----------------+--------------------------+
- *  |1 |   0   |      type      |           code           |  standard OpenFlow
+ *  | 1|   0   |      type      |           code           |  standard OpenFlow
  *  +--+-------+----------------+--------------------------+  error
  *
  *   30 29   26 25            16 15                       0

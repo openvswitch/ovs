@@ -42,7 +42,7 @@
  * vendor-specific details, followed by at least 64 bytes of the failed
  * request.
  *
- * It would be better to have type-specific vendor extension, e.g. so that
+ * It would be better to have a type-specific vendor extension, e.g. so that
  * OFPET_BAD_ACTION could be used with vendor-specific code values.  But
  * OFPET_BAD_ACTION and most other standardized types already specify that
  * their 'data' values are (the start of) the OpenFlow message being replied
