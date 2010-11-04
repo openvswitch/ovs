@@ -123,6 +123,25 @@ Text-based tables with aligned columns.
 HTML tables.
 .IP "\fBcvs\fR"
 Comma-separated values as defined in RFC 4180.
+.IP "\fBjson\fR"
+JSON format as defined in RFC 4627.  The output is a sequence of JSON
+objects, each of which corresponds to one table.  Each JSON object has
+the following members with the noted values:
+.RS
+.IP "\fBcaption\fR"
+The table's caption.  This member is omitted if the table has no
+caption.
+.IP "\fBheadings\fR"
+An array with one element per table column.  Each array element is a
+string giving the corresponding column's heading.
+.IP "\fBdata\fR"
+An array with one element per table row.  Each element is also an
+array with one element per table column.  The elements of this
+second-level array are the cells that constitute the table.  Cells
+that represent OVSDB data or data types are expressed in the format
+described in the OVSDB specification; other cells are simply expressed
+as text strings.
+.RE
 .RE
 .
 .IP "\fB\-d \fIformat\fR"
@@ -135,6 +154,9 @@ The simple format described in \fBovs\-vsctl\fR(8).
 .IP "\fBjson\fR"
 JSON.
 .RE
+.IP
+The \fBjson\fR output format always outputs cells in JSON format,
+ignoring this option.
 .
 .IP "\fB\-\-no\-heading\fR"
 This option suppresses the heading row that otherwise appears in the

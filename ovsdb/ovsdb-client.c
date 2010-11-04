@@ -49,7 +49,8 @@ VLOG_DEFINE_THIS_MODULE(ovsdb_client);
 static enum {
     FMT_TABLE,                  /* Textual table. */
     FMT_HTML,                   /* HTML table. */
-    FMT_CSV                     /* Comma-separated lines. */
+    FMT_CSV,                    /* Comma-separated lines. */
+    FMT_JSON                    /* JSON. */
 } output_format;
 
 /* --no-headings: Whether table output should include headings. */
@@ -119,6 +120,8 @@ parse_options(int argc, char *argv[])
                 output_format = FMT_HTML;
             } else if (!strcmp(optarg, "csv")) {
                 output_format = FMT_CSV;
+            } else if (!strcmp(optarg, "json")) {
+                output_format = FMT_JSON;
             } else {
                 ovs_fatal(0, "unknown output format \"%s\"", optarg);
             }
@@ -196,7 +199,8 @@ usage(void)
     stream_usage("SERVER", true, true, true);
     printf("\nOutput formatting options:\n"
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
-           "                              (\"table\", \"html\", or \"csv\"\n"
+           "                              (\"table\", \"html\", \"csv\", "
+           "or \"json\")\n"
            "  --no-headings               omit table heading row\n"
            "  --pretty                    pretty-print JSON in output");
     daemon_usage();
@@ -677,6 +681,46 @@ table_print_csv__(const struct table *table)
 }
 
 static void
+table_print_json__(const struct table *table)
+{
+    struct json *json, *headings, *data;
+    size_t x, y;
+    char *s;
+
+    json = json_object_create();
+    if (table->caption) {
+        json_object_put_string(json, "caption", table->caption);
+    }
+
+    headings = json_array_create_empty();
+    for (x = 0; x < table->n_columns; x++) {
+        const struct column *column = &table->columns[x];
+        json_array_add(headings, json_string_create(column->heading));
+    }
+    json_object_put(json, "headings", headings);
+
+    data = json_array_create_empty();
+    for (y = 0; y < table->n_rows; y++) {
+        struct json *row = json_array_create_empty();
+        for (x = 0; x < table->n_columns; x++) {
+            const struct cell *cell = table_cell__(table, y, x);
+            if (cell->text) {
+                json_array_add(row, json_string_create(cell->text));
+            } else {
+                json_array_add(row, json_clone(cell->json));
+            }
+        }
+        json_array_add(data, row);
+    }
+    json_object_put(json, "data", data);
+
+    s = json_to_string(json, json_flags);
+    json_destroy(json);
+    puts(s);
+    free(s);
+}
+
+static void
 table_print(const struct table *table)
 {
     switch (output_format) {
@@ -690,6 +734,10 @@ table_print(const struct table *table)
 
     case FMT_CSV:
         table_print_csv__(table);
+        break;
+
+    case FMT_JSON:
+        table_print_json__(table);
         break;
     }
 }
