@@ -211,22 +211,22 @@ struct kobject *netdev_get_kobj(const struct vport *vport)
 int netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	struct rtnl_link_stats64 *netdev_stats, storage;
+	struct rtnl_link_stats64 netdev_stats;
 
-	netdev_stats = dev_get_stats(netdev_vport->dev, &storage);
+	dev_get_stats(netdev_vport->dev, &netdev_stats);
 
-	stats->rx_bytes		= netdev_stats->rx_bytes;
-	stats->rx_packets	= netdev_stats->rx_packets;
-	stats->tx_bytes		= netdev_stats->tx_bytes;
-	stats->tx_packets	= netdev_stats->tx_packets;
-	stats->rx_dropped	= netdev_stats->rx_dropped;
-	stats->rx_errors	= netdev_stats->rx_errors;
-	stats->rx_frame_err	= netdev_stats->rx_frame_errors;
-	stats->rx_over_err	= netdev_stats->rx_over_errors;
-	stats->rx_crc_err	= netdev_stats->rx_crc_errors;
-	stats->tx_dropped	= netdev_stats->tx_dropped;
-	stats->tx_errors	= netdev_stats->tx_errors;
-	stats->collisions	= netdev_stats->collisions;
+	stats->rx_bytes		= netdev_stats.rx_bytes;
+	stats->rx_packets	= netdev_stats.rx_packets;
+	stats->tx_bytes		= netdev_stats.tx_bytes;
+	stats->tx_packets	= netdev_stats.tx_packets;
+	stats->rx_dropped	= netdev_stats.rx_dropped;
+	stats->rx_errors	= netdev_stats.rx_errors;
+	stats->rx_frame_err	= netdev_stats.rx_frame_errors;
+	stats->rx_over_err	= netdev_stats.rx_over_errors;
+	stats->rx_crc_err	= netdev_stats.rx_crc_errors;
+	stats->tx_dropped	= netdev_stats.tx_dropped;
+	stats->tx_errors	= netdev_stats.tx_errors;
+	stats->collisions	= netdev_stats.collisions;
 
 	return 0;
 }
