@@ -904,7 +904,7 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
         oem->code = htons(code);
     } else {
         struct ofp_error_msg *oem;
-        struct nx_vendor_error *ove;
+        struct nx_vendor_error *nve;
         uint32_t vendor_id;
 
         vendor_id = vendor_code_to_id(vendor);
@@ -914,15 +914,15 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
             return NULL;
         }
 
-        oem = make_openflow_xid(len + sizeof *oem + sizeof *ove,
+        oem = make_openflow_xid(len + sizeof *oem + sizeof *nve,
                                 OFPT_ERROR, xid, &buf);
         oem->type = htons(NXET_VENDOR);
         oem->code = htons(NXVC_VENDOR_ERROR);
 
-        ove = ofpbuf_put_uninit(buf, sizeof *ove);
-        ove->vendor = htonl(vendor_id);
-        ove->type = htons(type);
-        ove->code = htons(code);
+        nve = ofpbuf_put_uninit(buf, sizeof *nve);
+        nve->vendor = htonl(vendor_id);
+        nve->type = htons(type);
+        nve->code = htons(code);
     }
 
     if (len) {
