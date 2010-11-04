@@ -845,6 +845,8 @@ vendor_code_to_id(uint8_t code)
 {
     switch (code) {
 #define OFPUTIL_VENDOR(NAME, VENDOR_ID) case NAME: return VENDOR_ID;
+        OFPUTIL_VENDORS
+#undef OFPUTIL_VENDOR
     default:
         return UINT32_MAX;
     }
