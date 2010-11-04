@@ -910,7 +910,7 @@ int vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		spin_lock_bh(&vport->stats_lock);
-		memcpy(&vport->offset_stats, stats, sizeof(struct odp_vport_stats));
+		vport->offset_stats = *stats;
 		spin_unlock_bh(&vport->stats_lock);
 
 		return 0;
@@ -1030,7 +1030,7 @@ int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
 
 		spin_lock_bh(&vport->stats_lock);
 
-		memcpy(stats, &vport->offset_stats, sizeof(struct odp_vport_stats));
+		*stats = vport->offset_stats;
 
 		stats->rx_errors	+= vport->err_stats.rx_errors
 						+ vport->err_stats.rx_frame_err
