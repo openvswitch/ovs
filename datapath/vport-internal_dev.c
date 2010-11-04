@@ -148,11 +148,6 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 	return 0;
 }
 
-static void internal_dev_free(struct net_device *netdev)
-{
-	free_netdev(netdev);
-}
-
 static int internal_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	if (dp_ioctl_hook)
@@ -189,7 +184,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->change_mtu = internal_dev_change_mtu;
 #endif
 
-	netdev->destructor = internal_dev_free;
+	netdev->destructor = free_netdev;
 	SET_ETHTOOL_OPS(netdev, &internal_dev_ethtool_ops);
 	netdev->tx_queue_len = 0;
 
