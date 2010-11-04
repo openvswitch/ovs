@@ -197,10 +197,10 @@ during a port:
       network devices, using Linux kernel calls.  It may be a good
       place to start for full-featured netdev implementations.
 
-    * lib/netdev-gre.c and lib/netdev-patch.c are minimal
-      implementations for "virtual ports" implemented by the Open
-      vSwitch datapath module for the Linux kernel.  They may serve as
-      a model for minimal netdev implementations.
+    * lib/netdev-vport.c provides support for "virtual ports" 
+      implemented by the Open vSwitch datapath module for the Linux
+      kernel.  This may serve as a model for minimal netdev
+      implementations.
 
 Miscellaneous Notes
 -------------------
