@@ -1073,6 +1073,7 @@ cmd_add_br(struct vsctl_context *ctx)
 
         iface = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(iface, br_name);
+        ovsrec_interface_set_type(iface, "internal");
 
         port = ovsrec_port_insert(ctx->txn);
         ovsrec_port_set_name(port, br_name);
