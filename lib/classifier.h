@@ -75,8 +75,7 @@ enum {
 void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
                         unsigned int priority, struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
-                         bool tun_id_from_cookie, uint64_t cookie,
-                         struct cls_rule *);
+                         int flow_format, uint64_t cookie, struct cls_rule *);
 
 void cls_rule_zero_wildcards(struct cls_rule *);
 

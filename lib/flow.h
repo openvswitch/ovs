@@ -59,9 +59,9 @@ int flow_extract(struct ofpbuf *, ovs_be32 tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats);
-void flow_to_match(const struct flow *, uint32_t wildcards, bool tun_id_cookie,
+void flow_to_match(const struct flow *, uint32_t wildcards, int flow_format,
                    struct ofp_match *);
-void flow_from_match(const struct ofp_match *, bool tun_id_from_cookie,
+void flow_from_match(const struct ofp_match *, int flow_format,
                      ovs_be64 cookie, struct flow *, uint32_t *wildcards);
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);

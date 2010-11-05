@@ -118,18 +118,18 @@ cls_rule_from_flow(const struct flow *flow, uint32_t wildcards,
     rule->priority = priority;
 }
 
-/* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
- * 'priority'.  If 'tun_id_from_cookie' is set then the upper 32 bits of
- * 'cookie' are stored in the rule as the tunnel ID. */
+/* Converts the ofp_match in 'match' (with format 'flow_format', one of NXFF_*)
+ * into a cls_rule in 'rule', with the given 'priority'.  'cookie' is used
+ * when 'flow_format' is NXFF_TUN_ID_FROM_COOKIE. */
 void
 cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
-                    bool tun_id_from_cookie, uint64_t cookie,
+                    int flow_format, uint64_t cookie,
                     struct cls_rule *rule)
 {
     uint32_t wildcards;
     struct flow flow;
 
-    flow_from_match(match, tun_id_from_cookie, cookie, &flow, &wildcards);
+    flow_from_match(match, flow_format, cookie, &flow, &wildcards);
     cls_rule_init__(rule, &flow, wildcards);
     rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
 }

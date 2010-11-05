@@ -125,6 +125,11 @@ struct nicira_header {
 };
 OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
+enum {
+    NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
+    NXFF_TUN_ID_FROM_COOKIE = 1  /* Obtain tunnel ID from cookie. */
+};
+
 struct nxt_tun_id_cookie {
     struct ofp_header header;
     uint32_t vendor;            /* NX_VENDOR_ID. */

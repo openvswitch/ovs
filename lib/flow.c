@@ -250,12 +250,12 @@ flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
 }
 
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
- * 'match'. */
+ * 'match'.  'flow_format' should be one of NXFF_*. */
 void
 flow_to_match(const struct flow *flow, uint32_t wildcards,
-              bool tun_id_from_cookie, struct ofp_match *match)
+              int flow_format, struct ofp_match *match)
 {
-    if (!tun_id_from_cookie) {
+    if (flow_format != NXFF_TUN_ID_FROM_COOKIE) {
         wildcards &= OFPFW_ALL;
     }
     match->wildcards = htonl(wildcards);
@@ -278,14 +278,14 @@ flow_to_match(const struct flow *flow, uint32_t wildcards,
 }
 
 void
-flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
+flow_from_match(const struct ofp_match *match, int flow_format,
                 ovs_be64 cookie, struct flow *flow, uint32_t *flow_wildcards)
 {
 	uint32_t wildcards = ntohl(match->wildcards);
 
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
-    if (tun_id_from_cookie && !(wildcards & NXFW_TUN_ID)) {
+    if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(wildcards & NXFW_TUN_ID)) {
         flow->tun_id = htonl(ntohll(cookie) >> 32);
     } else {
         wildcards |= NXFW_TUN_ID;

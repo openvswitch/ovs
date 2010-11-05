@@ -290,7 +290,7 @@ struct ofproto {
     bool need_revalidate;
     long long int next_expiration;
     struct tag_set revalidate_set;
-    bool tun_id_from_cookie;
+    int flow_format;            /* One of NXFF_*. */
 
     /* OpenFlow connections. */
     struct hmap controllers;   /* Controller "struct ofconn"s. */
@@ -398,6 +398,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->need_revalidate = false;
     p->next_expiration = time_msec() + 1000;
     tag_set_init(&p->revalidate_set);
+    p->flow_format = NXFF_OPENFLOW10;
 
     /* Initialize OpenFlow connections. */
     list_init(&p->all_conns);
@@ -3066,8 +3067,8 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     strcpy(ots->name, "classifier");
-    ots->wildcards = p->tun_id_from_cookie ? htonl(OVSFW_ALL)
-                                           : htonl(OFPFW_ALL);
+    ots->wildcards = (p->flow_format == NXFF_OPENFLOW10
+                      ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
     ots->active_count = htonl(n_rules);
     ots->lookup_count = htonll(0);              /* XXX */
@@ -3224,7 +3225,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->table_id = 0;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  cbdata->ofproto->tun_id_from_cookie, &ofs->match);
+                  cbdata->ofproto->flow_format, &ofs->match);
     ofs->duration_sec = htonl(sec);
     ofs->duration_nsec = htonl(msec * 1000000);
     ofs->cookie = rule->flow_cookie;
@@ -3264,7 +3265,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.ofconn = ofconn;
     cbdata.out_port = fsr->out_port;
     cbdata.msg = start_stats_reply(osr, 1024);
-    cls_rule_from_match(&fsr->match, 0, false, 0, &target);
+    cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
     classifier_for_each_match(&p->cls, &target,
                               table_id_to_include(fsr->table_id),
                               flow_stats_cb, &cbdata);
@@ -3294,7 +3295,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  cbdata->ofproto->tun_id_from_cookie, &match);
+                  cbdata->ofproto->flow_format, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -3325,7 +3326,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     cbdata.ofproto = p;
     cbdata.results = results;
 
-    cls_rule_from_match(&match, 0, false, 0, &target);
+    cls_rule_from_match(&match, 0, NXFF_OPENFLOW10, 0, &target);
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               flow_stats_ds_cb, &cbdata);
 }
@@ -3378,7 +3379,7 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.packet_count = 0;
     cbdata.byte_count = 0;
     cbdata.n_flows = 0;
-    cls_rule_from_match(&asr->match, 0, false, 0, &target);
+    cls_rule_from_match(&asr->match, 0, NXFF_OPENFLOW10, 0, &target);
     classifier_for_each_match(&p->cls, &target,
                               table_id_to_include(asr->table_id),
                               aggregate_stats_cb, &cbdata);
@@ -3577,7 +3578,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
         struct cls_rule cr;
 
         cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                            p->tun_id_from_cookie, ofm->cookie, &cr);
+                            p->flow_format, ofm->cookie, &cr);
         if (classifier_rule_overlaps(&p->cls, &cr)) {
             return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
         }
@@ -3588,7 +3589,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
                        ntohs(ofm->hard_timeout),  ofm->cookie,
                        ofm->flags & htons(OFPFF_SEND_FLOW_REM));
     cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                        p->tun_id_from_cookie, ofm->cookie, &rule->cr);
+                        p->flow_format, ofm->cookie, &rule->cr);
 
     error = 0;
     if (ofm->buffer_id != htonl(UINT32_MAX)) {
@@ -3609,7 +3610,7 @@ find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
     struct cls_rule target;
 
     cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                        p->tun_id_from_cookie, ofm->cookie, &target);
+                        p->flow_format, ofm->cookie, &target);
     return rule_from_cls_rule(classifier_find_rule_exactly(&p->cls, &target));
 }
 
@@ -3668,8 +3669,7 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     cbdata.n_actions = n_actions;
     cbdata.match = NULL;
 
-    cls_rule_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
-                        &target);
+    cls_rule_from_match(&ofm->match, 0, p->flow_format, ofm->cookie, &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               modify_flows_cb, &cbdata);
@@ -3770,8 +3770,7 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
     cbdata.ofproto = p;
     cbdata.out_port = ofm->out_port;
 
-    cls_rule_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
-                        &target);
+    cls_rule_from_match(&ofm->match, 0, p->flow_format, ofm->cookie, &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               delete_flows_cb, &cbdata);
@@ -3908,7 +3907,7 @@ handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
         return error;
     }
 
-    p->tun_id_from_cookie = !!msg->set;
+    p->flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
     return 0;
 }
 
@@ -4524,7 +4523,7 @@ compose_flow_removed(struct ofproto *p, const struct rule *rule,
     uint32_t msec = tdiff - (sec * 1000);
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, p->tun_id_from_cookie,
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, p->flow_format,
                   &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
