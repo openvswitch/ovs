@@ -161,8 +161,7 @@ static void rule_install(struct ofproto *, struct rule *,
                          struct rule *displaced_rule);
 static void rule_uninstall(struct ofproto *, struct rule *);
 static void rule_post_uninstall(struct ofproto *, struct rule *);
-static void send_flow_removed(struct ofproto *p, struct rule *rule,
-                              long long int now, uint8_t reason);
+static void send_flow_removed(struct ofproto *, struct rule *, uint8_t reason);
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -3198,6 +3197,14 @@ query_stats(struct ofproto *p, struct rule *rule,
 }
 
 static void
+calc_flow_duration(long long int start, ovs_be32 *sec, ovs_be32 *nsec)
+{
+    long long int msecs = time_msec() - start;
+    *sec = htonl(msecs / 1000);
+    *nsec = htonl((msecs % 1000) * (1000 * 1000));
+}
+
+static void
 flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
 {
     struct rule *rule = rule_from_cls_rule(rule_);
@@ -3205,9 +3212,6 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
     size_t act_len, len;
-    long long int tdiff = time_msec() - rule->created;
-    uint32_t sec = tdiff / 1000;
-    uint32_t msec = tdiff - (sec * 1000);
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
         return;
@@ -3224,8 +3228,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
                   cbdata->ofconn->flow_format, &ofs->match);
-    ofs->duration_sec = htonl(sec);
-    ofs->duration_nsec = htonl(msec * 1000000);
+    calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
@@ -3815,7 +3818,7 @@ delete_flow(struct ofproto *p, struct rule *rule, ovs_be16 out_port)
         return;
     }
 
-    send_flow_removed(p, rule, time_msec(), OFPRR_DELETE);
+    send_flow_removed(p, rule, OFPRR_DELETE);
     rule_remove(p, rule);
 }
 
@@ -4460,7 +4463,7 @@ rule_expire(struct cls_rule *cls_rule, void *cbdata_)
 
         /* Get rid of the rule. */
         if (!rule_is_hidden(rule)) {
-            send_flow_removed(cbdata->ofproto, rule, now,
+            send_flow_removed(cbdata->ofproto, rule,
                               (now >= hard_expire
                                ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
         }
@@ -4512,13 +4515,10 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 
 static struct ofpbuf *
 compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
-                     long long int now, uint8_t reason)
+                     uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
-    long long int tdiff = now - rule->created;
-    uint32_t sec = tdiff / 1000;
-    uint32_t msec = tdiff - (sec * 1000);
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, ofconn->flow_format,
@@ -4526,8 +4526,7 @@ compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;
-    ofr->duration_sec = htonl(sec);
-    ofr->duration_nsec = htonl(msec * 1000000);
+    calc_flow_duration(rule->created, &ofr->duration_sec, &ofr->duration_nsec);
     ofr->idle_timeout = htons(rule->idle_timeout);
     ofr->packet_count = htonll(rule->packet_count);
     ofr->byte_count = htonll(rule->byte_count);
@@ -4536,8 +4535,7 @@ compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
 }
 
 static void
-send_flow_removed(struct ofproto *p, struct rule *rule,
-                  long long int now, uint8_t reason)
+send_flow_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
 {
     struct ofconn *ofconn;
 
@@ -4553,7 +4551,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
             continue;
         }
 
-        msg = compose_flow_removed(ofconn, rule, now, reason);
+        msg = compose_flow_removed(ofconn, rule, reason);
 
         /* Account flow expirations under ofconn->reply_counter, the counter
          * for replies to OpenFlow requests.  That works because preventing
