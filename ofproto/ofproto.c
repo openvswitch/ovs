@@ -3352,38 +3352,50 @@ aggregate_stats_cb(struct cls_rule *rule_, void *cbdata_)
     cbdata->n_flows++;
 }
 
+static void
+query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
+                      uint16_t out_port, uint8_t table_id,
+                      struct ofp_aggregate_stats_reply *oasr)
+{
+    struct aggregate_stats_cbdata cbdata;
+
+    COVERAGE_INC(ofproto_agg_request);
+    cbdata.ofproto = ofproto;
+    cbdata.out_port = out_port;
+    cbdata.packet_count = 0;
+    cbdata.byte_count = 0;
+    cbdata.n_flows = 0;
+    classifier_for_each_match(&ofproto->cls, target,
+                              table_id_to_include(table_id),
+                              aggregate_stats_cb, &cbdata);
+
+    oasr->flow_count = htonl(cbdata.n_flows);
+    oasr->packet_count = htonll(cbdata.packet_count);
+    oasr->byte_count = htonll(cbdata.byte_count);
+    memset(oasr->pad, 0, sizeof oasr->pad);
+}
+
 static int
 handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_request *osr,
                                size_t arg_size)
 {
-    struct ofp_aggregate_stats_request *asr;
+    struct ofp_aggregate_stats_request *request;
     struct ofp_aggregate_stats_reply *reply;
-    struct aggregate_stats_cbdata cbdata;
     struct cls_rule target;
     struct ofpbuf *msg;
 
-    if (arg_size != sizeof *asr) {
+    if (arg_size != sizeof *request) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
-    asr = (struct ofp_aggregate_stats_request *) osr->body;
+    request = (struct ofp_aggregate_stats_request *) osr->body;
 
-    COVERAGE_INC(ofproto_agg_request);
-    cbdata.ofproto = ofconn->ofproto;
-    cbdata.out_port = asr->out_port;
-    cbdata.packet_count = 0;
-    cbdata.byte_count = 0;
-    cbdata.n_flows = 0;
-    cls_rule_from_match(&asr->match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&ofconn->ofproto->cls, &target,
-                              table_id_to_include(asr->table_id),
-                              aggregate_stats_cb, &cbdata);
+    cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0, &target);
 
     msg = start_stats_reply(osr, sizeof *reply);
     reply = append_stats_reply(sizeof *reply, ofconn, &msg);
-    reply->flow_count = htonl(cbdata.n_flows);
-    reply->packet_count = htonll(cbdata.packet_count);
-    reply->byte_count = htonll(cbdata.byte_count);
+    query_aggregate_stats(ofconn->ofproto, &target, request->out_port,
+                          request->table_id, reply);
     queue_tx(msg, ofconn, ofconn->reply_counter);
     return 0;
 }
