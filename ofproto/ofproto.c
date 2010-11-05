@@ -210,6 +210,7 @@ struct ofconn {
     struct list node;           /* In struct ofproto's "all_conns" list. */
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
+    int flow_format;            /* One of NXFF_*. */
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
@@ -290,7 +291,6 @@ struct ofproto {
     bool need_revalidate;
     long long int next_expiration;
     struct tag_set revalidate_set;
-    int flow_format;            /* One of NXFF_*. */
 
     /* OpenFlow connections. */
     struct hmap controllers;   /* Controller "struct ofconn"s. */
@@ -398,7 +398,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->need_revalidate = false;
     p->next_expiration = time_msec() + 1000;
     tag_set_init(&p->revalidate_set);
-    p->flow_format = NXFF_OPENFLOW10;
 
     /* Initialize OpenFlow connections. */
     list_init(&p->all_conns);
@@ -1635,6 +1634,7 @@ ofconn_create(struct ofproto *p, struct rconn *rconn, enum ofconn_type type)
     list_push_back(&p->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->type = type;
+    ofconn->flow_format = NXFF_OPENFLOW10;
     ofconn->role = NX_ROLE_OTHER;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->pktbuf = NULL;
@@ -3067,7 +3067,7 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     strcpy(ots->name, "classifier");
-    ots->wildcards = (p->flow_format == NXFF_OPENFLOW10
+    ots->wildcards = (ofconn->flow_format == NXFF_OPENFLOW10
                       ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
     ots->active_count = htonl(n_rules);
@@ -3225,7 +3225,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->table_id = 0;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  cbdata->ofproto->flow_format, &ofs->match);
+                  cbdata->ofconn->flow_format, &ofs->match);
     ofs->duration_sec = htonl(sec);
     ofs->duration_nsec = htonl(msec * 1000000);
     ofs->cookie = rule->flow_cookie;
@@ -3295,7 +3295,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  cbdata->ofproto->flow_format, &match);
+                  NXFF_OPENFLOW10, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -3578,7 +3578,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
         struct cls_rule cr;
 
         cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                            p->flow_format, ofm->cookie, &cr);
+                            ofconn->flow_format, ofm->cookie, &cr);
         if (classifier_rule_overlaps(&p->cls, &cr)) {
             return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
         }
@@ -3589,7 +3589,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
                        ntohs(ofm->hard_timeout),  ofm->cookie,
                        ofm->flags & htons(OFPFF_SEND_FLOW_REM));
     cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                        p->flow_format, ofm->cookie, &rule->cr);
+                        ofconn->flow_format, ofm->cookie, &rule->cr);
 
     error = 0;
     if (ofm->buffer_id != htonl(UINT32_MAX)) {
@@ -3605,12 +3605,13 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static struct rule *
-find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
+find_flow_strict(struct ofproto *p, struct ofconn *ofconn,
+                 const struct ofp_flow_mod *ofm)
 {
     struct cls_rule target;
 
     cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                        p->flow_format, ofm->cookie, &target);
+                        ofconn->flow_format, ofm->cookie, &target);
     return rule_from_cls_rule(classifier_find_rule_exactly(&p->cls, &target));
 }
 
@@ -3669,7 +3670,8 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     cbdata.n_actions = n_actions;
     cbdata.match = NULL;
 
-    cls_rule_from_match(&ofm->match, 0, p->flow_format, ofm->cookie, &target);
+    cls_rule_from_match(&ofm->match, 0, ofconn->flow_format,
+                        ofm->cookie, &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               modify_flows_cb, &cbdata);
@@ -3693,7 +3695,7 @@ static int
 modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
                    struct ofp_flow_mod *ofm, size_t n_actions)
 {
-    struct rule *rule = find_flow_strict(p, ofm);
+    struct rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule && !rule_is_hidden(rule)) {
         modify_flow(p, ofm, n_actions, rule);
         return send_buffered_packet(p, ofconn, rule, ofm);
@@ -3762,7 +3764,8 @@ static void delete_flow(struct ofproto *, struct rule *, ovs_be16 out_port);
 
 /* Implements OFPFC_DELETE. */
 static void
-delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
+delete_flows_loose(struct ofproto *p, struct ofconn *ofconn,
+                   const struct ofp_flow_mod *ofm)
 {
     struct delete_flows_cbdata cbdata;
     struct cls_rule target;
@@ -3770,7 +3773,8 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
     cbdata.ofproto = p;
     cbdata.out_port = ofm->out_port;
 
-    cls_rule_from_match(&ofm->match, 0, p->flow_format, ofm->cookie, &target);
+    cls_rule_from_match(&ofm->match, 0, ofconn->flow_format,
+                        ofm->cookie, &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               delete_flows_cb, &cbdata);
@@ -3778,9 +3782,10 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
 
 /* Implements OFPFC_DELETE_STRICT. */
 static void
-delete_flow_strict(struct ofproto *p, struct ofp_flow_mod *ofm)
+delete_flow_strict(struct ofproto *p, struct ofconn *ofconn,
+                   struct ofp_flow_mod *ofm)
 {
-    struct rule *rule = find_flow_strict(p, ofm);
+    struct rule *rule = find_flow_strict(p, ofconn, ofm);
     if (rule) {
         delete_flow(p, rule, ofm->out_port);
     }
@@ -3885,11 +3890,11 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return modify_flow_strict(p, ofconn, ofm, n_actions);
 
     case OFPFC_DELETE:
-        delete_flows_loose(p, ofm);
+        delete_flows_loose(p, ofconn, ofm);
         return 0;
 
     case OFPFC_DELETE_STRICT:
-        delete_flow_strict(p, ofm);
+        delete_flow_strict(p, ofconn, ofm);
         return 0;
 
     default:
@@ -3898,7 +3903,7 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
-handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
+handle_tun_id_from_cookie(struct ofconn *ofconn, struct nxt_tun_id_cookie *msg)
 {
     int error;
 
@@ -3907,7 +3912,7 @@ handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
         return error;
     }
 
-    p->flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
+    ofconn->flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
     return 0;
 }
 
@@ -3990,7 +3995,7 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
                                             msg);
 
     case NXT_TUN_ID_FROM_COOKIE:
-        return handle_tun_id_from_cookie(p, msg);
+        return handle_tun_id_from_cookie(ofconn, msg);
 
     case NXT_ROLE_REQUEST:
         return handle_role_request(p, ofconn, msg);
@@ -4513,7 +4518,7 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 }
 
 static struct ofpbuf *
-compose_flow_removed(struct ofproto *p, const struct rule *rule,
+compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
                      long long int now, uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
@@ -4523,7 +4528,7 @@ compose_flow_removed(struct ofproto *p, const struct rule *rule,
     uint32_t msec = tdiff - (sec * 1000);
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, p->flow_format,
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, ofconn->flow_format,
                   &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
@@ -4555,7 +4560,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
             continue;
         }
 
-        msg = compose_flow_removed(p, rule, now, reason);
+        msg = compose_flow_removed(ofconn, rule, now, reason);
 
         /* Account flow expirations under ofconn->reply_counter, the counter
          * for replies to OpenFlow requests.  That works because preventing
