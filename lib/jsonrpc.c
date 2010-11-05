@@ -946,3 +946,16 @@ jsonrpc_session_force_reconnect(struct jsonrpc_session *s)
 {
     reconnect_force_reconnect(s->reconnect, time_msec());
 }
+
+void
+jsonrpc_session_set_max_backoff(struct jsonrpc_session *s, int max_backoff)
+{
+    reconnect_set_backoff(s->reconnect, 0, max_backoff);
+}
+
+void
+jsonrpc_session_set_probe_interval(struct jsonrpc_session *s,
+                                   int probe_interval)
+{
+    reconnect_set_probe_interval(s->reconnect, probe_interval);
+}

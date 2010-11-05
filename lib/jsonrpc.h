@@ -115,4 +115,9 @@ bool jsonrpc_session_is_connected(const struct jsonrpc_session *);
 unsigned int jsonrpc_session_get_seqno(const struct jsonrpc_session *);
 void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
 
+void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
+                                     int max_backofF);
+void jsonrpc_session_set_probe_interval(struct jsonrpc_session *,
+                                        int probe_interval);
+
 #endif /* jsonrpc.h */

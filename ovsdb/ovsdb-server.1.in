@@ -41,11 +41,31 @@ Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
 .
 .IP "\fBdb:\fItable\fB,\fIcolumn\fR"
 Reads additional connection methods from \fIcolumn\fR in all of the
-rows in \fItable\fR within the \fBovsdb\-server\fR database.  The
-\fIcolumn\fR must have type string or set of strings.  The connection
-methods in the column must have one of the forms described above.  As
-the contents of \fIcolumn\fR changes, \fBovsdb\-server\fR also adds
-and drops connection methods accordingly.
+rows in \fItable\fR.  As the contents of \fIcolumn\fR changes,
+\fBovsdb\-server\fR also adds and drops connection methods
+accordingly.
+.IP
+If \fIcolumn\fR's type is string or set of strings, then the
+connection methods are taken directly from the column.  The connection
+methods in the column must have one of the forms described above.
+.IP
+If \fIcolumn\fR's type is UUID or set of UUIDs and references a table,
+then each UUID is looked up in the referenced table to obtain a row.
+The following columns in the row, if present and of the correct type,
+configure a connection method.  Any additional columns are ignored.
+.RS
+.IP "\fBtarget\fR (string)"
+Connection method, in one of the forms described above.  This column
+is mandatory: if it is missing or empty then no connection method can
+be configured.
+.IP "\fBmax_backoff\fR (integer)"
+Maximum number of milliseconds to wait between connection attempts.
+.IP "\fBinactivity_probe\fR (integer)
+Maximum number of milliseconds of idle time on connection to
+client before sending an inactivity probe message.
+.RE
+.IP
+It is an error for \fIcolumn\fR to have another type.
 .RE
 .
 .IP "\fB\-\-run=\fIcommand\fR]"

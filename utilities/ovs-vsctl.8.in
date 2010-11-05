@@ -450,6 +450,9 @@ identified by mirror name.
 .IP "\fBController\fR"
 Configuration for an OpenFlow controller.  A controller attached to a
 particular bridge may be identified by the bridge's name.
+.IP "\fBManager\fR"
+Configuration for an OVSDB connection.  Records may be identified
+by target (e.g. \fBtcp:1.2.3.4\fR).
 .IP "\fBNetFlow\fR"
 A NetFlow configuration attached to a bridge.  Records may be
 identified by bridge name.

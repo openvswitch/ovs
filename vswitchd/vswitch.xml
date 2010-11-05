@@ -16,11 +16,6 @@
         Set of bridges managed by the daemon.
       </column>
 
-      <column name="managers">
-        Remote database clients to which the Open vSwitch's database server
-        should connect or to which it should listen.
-      </column>
-
       <column name="ssl">
         SSL used globally by the daemon.
       </column>
@@ -203,6 +198,42 @@
             </p>
           </dd>
         </dl>
+      </column>
+    </group>
+
+    <group title="Database Configuration">
+      <p>
+        These columns primarily configure the Open vSwitch database
+        (<code>ovsdb-server</code>), not the Open vSwitch switch
+        (<code>ovs-vswitchd</code>).  The OVSDB database also uses the <ref
+        column="ssl"/> settings.
+      </p>
+
+      <p>
+        The Open vSwitch switch does read the database configuration to
+        determine remote IP addresses to which in-band control should apply.
+      </p>
+
+      <column name="manager_options">
+        Database clients to which the Open vSwitch database server should
+        connect or to which it should listen, along with options for how these
+        connection should be configured.  See the <ref table="Manager"/> table
+        for more information.
+      </column>
+
+      <column name="managers">
+        <p>
+          Remote database clients to which the Open vSwitch's database server
+          should connect or to which it should listen.  Adding an OVSDB target
+          to this set is equivalent to adding it to <ref
+          column="manager_options"/> with all of the default options.
+        </p>
+
+        <p>
+          Use of this column is deprecated and may be removed sometime in the
+          future.  New applications should use and set <ref
+          column="manager_options"/> instead.
+        </p>
       </column>
     </group>
   </table>
@@ -1437,6 +1468,145 @@
         The IP address of the gateway to configure on the local port, as a
         string, e.g. <code>192.168.0.1</code>.  Leave this column unset if
         this network has no gateway.
+      </column>
+    </group>
+
+    <group title="Other Features">
+      <column name="external_ids">
+        Key-value pairs for use by external frameworks that integrate with Open
+        vSwitch, rather than by Open vSwitch itself.  System integrators should
+        either use the Open vSwitch development mailing list to coordinate on
+        common key-value definitions, or choose key names that are likely to be
+        unique.  No common key-value pairs are currently defined.
+      </column>
+    </group>
+  </table>
+
+  <table name="Manager" title="OVSDB management connection.">
+    <p>
+      Configuration for a database connection to an Open vSwitch database
+      (OVSDB) client.
+    </p>
+
+    <p>
+      This table primarily configures the Open vSwitch database
+      (<code>ovsdb-server</code>), not the Open vSwitch switch
+      (<code>ovs-vswitchd</code>).  The switch does read the table to determine
+      what connections should be treated as in-band.
+    </p>
+
+    <p>
+      The Open vSwitch database server can initiate and maintain active
+      connections to remote clients.  It can also listen for database
+      connections.
+    </p>
+
+    <group title="Core Features">
+      <column name="target">
+        <p>Connection method for managers.</p>
+        <p>
+          The following connection methods are currently supported:
+        </p>
+        <dl>
+          <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dd>
+            <p>
+              The specified SSL <var>port</var> (default: 6632) on the host at
+              the given <var>ip</var>, which must be expressed as an IP address
+              (not a DNS name).  The <ref table="Open_vSwitch" column="ssl"/>
+              column in the <ref table="Open_vSwitch"/> table must point to a
+              valid SSL configuration when this form is used.
+            </p>
+            <p>
+              SSL support is an optional feature that is not always built as
+              part of Open vSwitch.
+            </p>
+          </dd>
+
+          <dt><code>tcp:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dd>
+            The specified TCP <var>port</var> (default: 6632) on the host at
+            the given <var>ip</var>, which must be expressed as an IP address
+            (not a DNS name).
+          </dd>
+          <dt><code>pssl:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
+          <dd>
+            <p>
+              Listens for SSL connections on the specified TCP <var>port</var>
+              (default: 6632).  If <var>ip</var>, which must be expressed as an
+              IP address (not a DNS name), is specified, then connections are
+              restricted to the specified local IP address.
+            </p>
+            <p>
+              The <ref table="Open_vSwitch" column="ssl"/> column in the <ref
+              table="Open_vSwitch"/> table must point to a valid SSL
+              configuration when this form is used.
+            </p>
+            <p>
+              SSL support is an optional feature that is not always built as
+              part of Open vSwitch.
+            </p>
+          </dd>
+          <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
+          <dd>
+            Listens for connections on the specified TCP <var>port</var>
+            (default: 6632).  If <var>ip</var>, which must be expressed as an
+            IP address (not a DNS name), is specified, then connections are
+            restricted to the specified local IP address.
+          </dd>
+        </dl>
+        <p>When multiple managers are configured, the <ref column="target"/>
+        values must be unique.  Duplicate <ref column="target"/> values yield
+        unspecified results.</p>
+      </column>
+
+      <column name="connection_mode">
+        <p>
+          If it is specified, this setting must be one of the following strings
+          that describes how Open vSwitch contacts this OVSDB client over the
+          network:
+        </p>
+        
+        <dl>
+          <dt><code>in-band</code></dt>
+          <dd>
+            In this mode, this connection's traffic travels over a bridge
+            managed by Open vSwitch.  With this setting, Open vSwitch allows
+            traffic to and from the client regardless of the contents of the
+            OpenFlow flow table.  (Otherwise, Open vSwitch would never be able
+            to connect to the client, because it did not have a flow to enable
+            it.)  This is the most common connection mode because it is not
+            necessary to maintain two independent networks.
+          </dd>
+          <dt><code>out-of-band</code></dt>
+          <dd>
+            In this mode, the client's traffic uses a control network separate
+            from that managed by Open vSwitch, that is, Open vSwitch does not
+            use any of its own network devices to communicate with the client.
+            The control network must be configured separately, before or after
+            <code>ovs-vswitchd</code> is started.
+          </dd>
+        </dl>
+
+        <p>
+          If not specified, the default is implementation-specific.
+        </p>
+      </column>
+    </group>
+
+    <group title="Client Failure Detection and Handling">
+      <column name="max_backoff">
+        Maximum number of milliseconds to wait between connection attempts.
+        Default is implementation-specific.
+      </column>
+
+      <column name="inactivity_probe">
+        Maximum number of milliseconds of idle time on connection to the client
+        before sending an inactivity probe message.  If Open vSwitch does not
+        communicate with the client for the specified number of seconds, it
+        will send a probe.  If a response is not received for the same
+        additional amount of time, Open vSwitch assumes the connection has been
+        broken and attempts to reconnect.  Default is implementation-specific.
       </column>
     </group>
 

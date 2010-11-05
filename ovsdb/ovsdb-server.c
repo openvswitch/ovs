@@ -168,10 +168,10 @@ main(int argc, char *argv[])
 }
 
 static void
-parse_db_string_column(const struct ovsdb *db,
-                       const char *name_,
-                       const struct ovsdb_table **tablep,
-                       const struct ovsdb_column **columnp)
+parse_db_column(const struct ovsdb *db,
+                const char *name_,
+                const struct ovsdb_table **tablep,
+                const struct ovsdb_column **columnp)
 {
     char *name, *table_name, *column_name;
     const struct ovsdb_column *column;
@@ -198,11 +198,26 @@ parse_db_string_column(const struct ovsdb *db,
     }
     free(name);
 
+    *columnp = column;
+    *tablep = table;
+}
+
+static void
+parse_db_string_column(const struct ovsdb *db,
+                       const char *name,
+                       const struct ovsdb_table **tablep,
+                       const struct ovsdb_column **columnp)
+{
+    const struct ovsdb_column *column;
+    const struct ovsdb_table *table;
+
+    parse_db_column(db, name, &table, &column);
+
     if (column->type.key.type != OVSDB_TYPE_STRING
         || column->type.value.type != OVSDB_TYPE_VOID) {
         ovs_fatal(0, "\"%s\": table \"%s\" column \"%s\" is "
                   "not string or set of strings",
-                  name_, table->schema->name, column->name);
+                  name, table->schema->name, column->name);
     }
 
     *columnp = column;
@@ -238,6 +253,99 @@ query_db_string(const struct ovsdb *db, const char *name)
 }
 #endif /* HAVE_OPENSSL */
 
+static struct ovsdb_jsonrpc_options *
+add_remote(struct shash *remotes, const char *target)
+{
+    struct ovsdb_jsonrpc_options *options;
+
+    options = shash_find_data(remotes, target);
+    if (!options) {
+        options = ovsdb_jsonrpc_default_options();
+        shash_add(remotes, target, options);
+    }
+
+    return options;
+}
+
+static const union ovsdb_atom *
+read_column(const struct ovsdb_row *row, const char *column_name,
+            enum ovsdb_atomic_type type)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    const struct ovsdb_table_schema *schema = row->table->schema;
+    const struct ovsdb_column *column;
+    const struct ovsdb_datum *datum;
+
+    column = ovsdb_table_schema_get_column(schema, column_name);
+    if (!column) {
+        VLOG_DBG_RL(&rl, "Table `%s' has no `%s' column",
+                    schema->name, column_name);
+        return false;
+    }
+
+    if (column->type.key.type != type
+        || column->type.value.type != OVSDB_TYPE_VOID
+        || column->type.n_max != 1) {
+        if (!VLOG_DROP_DBG(&rl)) {
+            char *type_name = ovsdb_type_to_english(&column->type);
+            VLOG_DBG("Table `%s' column `%s' has type %s, not expected "
+                     "type %s.", schema->name, column_name, type_name,
+                     ovsdb_atomic_type_to_string(type));
+        }
+        return false;
+    }
+
+    datum = &row->fields[column->index];
+    return datum->n ? datum->keys : NULL;
+}
+
+static bool
+read_integer_column(const struct ovsdb_row *row, const char *column_name,
+                    long long int *integerp)
+{
+    const union ovsdb_atom *atom;
+
+    atom = read_column(row, column_name, OVSDB_TYPE_INTEGER);
+    *integerp = atom ? atom->integer : 0;
+    return atom != NULL;
+}
+
+static bool
+read_string_column(const struct ovsdb_row *row, const char *column_name,
+                   const char **stringp)
+{
+    const union ovsdb_atom *atom;
+
+    atom = read_column(row, column_name, OVSDB_TYPE_STRING);
+    *stringp = atom ? atom->string : 0;
+    return atom != NULL;
+}
+
+/* Adds a remote and options to 'remotes', based on the Manager table row in
+ * 'row'. */
+static void
+add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    struct ovsdb_jsonrpc_options *options;
+    long long int max_backoff, probe_interval;
+    const char *target;
+
+    if (!read_string_column(row, "target", &target) || !target) {
+        VLOG_INFO_RL(&rl, "Table `%s' has missing or invalid `target' column",
+                     row->table->schema->name);
+        return;
+    }
+
+    options = add_remote(remotes, target);
+    if (read_integer_column(row, "max_backoff", &max_backoff)) {
+        options->max_backoff = max_backoff;
+    }
+    if (read_integer_column(row, "probe_interval", &probe_interval)) {
+        options->probe_interval = probe_interval;
+    }
+}
+
 static void
 query_db_remotes(const char *name, const struct ovsdb *db,
                  struct shash *remotes)
@@ -246,15 +354,36 @@ query_db_remotes(const char *name, const struct ovsdb *db,
     const struct ovsdb_table *table;
     const struct ovsdb_row *row;
 
-    parse_db_string_column(db, name, &table, &column);
+    parse_db_column(db, name, &table, &column);
 
-    HMAP_FOR_EACH (row, hmap_node, &table->rows) {
-        const struct ovsdb_datum *datum;
-        size_t i;
+    if (column->type.key.type == OVSDB_TYPE_STRING
+        && column->type.value.type == OVSDB_TYPE_VOID) {
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            const struct ovsdb_datum *datum;
+            size_t i;
 
-        datum = &row->fields[column->index];
-        for (i = 0; i < datum->n; i++) {
-            shash_add_once(remotes, datum->keys[i].string, NULL);
+            datum = &row->fields[column->index];
+            for (i = 0; i < datum->n; i++) {
+                add_remote(remotes, datum->keys[i].string);
+            }
+        }
+    } else if (column->type.key.type == OVSDB_TYPE_UUID
+               && column->type.key.u.uuid.refTable
+               && column->type.value.type == OVSDB_TYPE_VOID) {
+        const struct ovsdb_table *ref_table = column->type.key.u.uuid.refTable;
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            const struct ovsdb_datum *datum;
+            size_t i;
+
+            datum = &row->fields[column->index];
+            for (i = 0; i < datum->n; i++) {
+                const struct ovsdb_row *ref_row;
+
+                ref_row = ovsdb_table_get_row(ref_table, &datum->keys[i].uuid);
+                if (ref_row) {
+                    add_manager_options(remotes, ref_row);
+                }
+            }
         }
     }
 }
@@ -275,7 +404,7 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
         if (!strncmp(name, "db:", 3)) {
             query_db_remotes(name, db, &resolved_remotes);
         } else {
-            shash_add_once(&resolved_remotes, name, NULL);
+            add_remote(&resolved_remotes, name);
         }
     }
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);

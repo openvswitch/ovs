@@ -533,30 +533,52 @@ iterate_and_prune_ifaces(struct bridge *br,
  * should not be and in fact is not directly involved in that.  But
  * ovs-vswitchd needs to make sure that ovsdb-server can reach the managers, so
  * it has to tell in-band control where the managers are to enable that.
+ * (Thus, only managers connected in-band are collected.)
  */
 static void
-collect_managers(const struct ovsrec_open_vswitch *ovs_cfg,
-                 struct sockaddr_in **managersp, size_t *n_managersp)
+collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
+                         struct sockaddr_in **managersp, size_t *n_managersp)
 {
     struct sockaddr_in *managers = NULL;
     size_t n_managers = 0;
+    struct shash targets;
+    size_t i;
 
-    if (ovs_cfg->n_managers > 0) {
-        size_t i;
+    /* Collect all of the potential targets, as the union of the "managers"
+     * column and the "targets" columns of the rows pointed to by
+     * "manager_options", excluding any that are out-of-band. */
+    shash_init(&targets);
+    for (i = 0; i < ovs_cfg->n_managers; i++) {
+        shash_add_once(&targets, ovs_cfg->managers[i], NULL);
+    }
+    for (i = 0; i < ovs_cfg->n_manager_options; i++) {
+        struct ovsrec_manager *m = ovs_cfg->manager_options[i];
 
-        managers = xmalloc(ovs_cfg->n_managers * sizeof *managers);
-        for (i = 0; i < ovs_cfg->n_managers; i++) {
-            const char *name = ovs_cfg->managers[i];
-            struct sockaddr_in *sin = &managers[i];
+        if (m->connection_mode && !strcmp(m->connection_mode, "out-of-band")) {
+            shash_find_and_delete(&targets, m->target);
+        } else {
+            shash_add_once(&targets, m->target, NULL);
+        }
+    }
 
-            if ((!strncmp(name, "tcp:", 4)
-                 && inet_parse_active(name + 4, JSONRPC_TCP_PORT, sin)) ||
-                (!strncmp(name, "ssl:", 4)
-                 && inet_parse_active(name + 4, JSONRPC_SSL_PORT, sin))) {
+    /* Now extract the targets' IP addresses. */
+    if (!shash_is_empty(&targets)) {
+        struct shash_node *node;
+
+        managers = xmalloc(shash_count(&targets) * sizeof *managers);
+        SHASH_FOR_EACH (node, &targets) {
+            const char *target = node->name;
+            struct sockaddr_in *sin = &managers[n_managers];
+
+            if ((!strncmp(target, "tcp:", 4)
+                 && inet_parse_active(target + 4, JSONRPC_TCP_PORT, sin)) ||
+                (!strncmp(target, "ssl:", 4)
+                 && inet_parse_active(target + 4, JSONRPC_SSL_PORT, sin))) {
                 n_managers++;
             }
         }
     }
+    shash_destroy(&targets);
 
     *managersp = managers;
     *n_managersp = n_managers;
@@ -575,7 +597,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     COVERAGE_INC(bridge_reconfigure);
 
-    collect_managers(ovs_cfg, &managers, &n_managers);
+    collect_in_band_managers(ovs_cfg, &managers, &n_managers);
 
     /* Collect old and new bridges. */
     shash_init(&old_br);

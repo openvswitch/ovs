@@ -1852,6 +1852,10 @@ static const struct vsctl_table_class tables[] = {
      {{&ovsrec_table_mirror, &ovsrec_mirror_col_name, NULL},
       {NULL, NULL, NULL}}},
 
+    {&ovsrec_table_manager,
+     {{&ovsrec_table_manager, &ovsrec_manager_col_target, NULL},
+      {NULL, NULL, NULL}}},
+
     {&ovsrec_table_netflow,
      {{&ovsrec_table_bridge,
        &ovsrec_bridge_col_name,
