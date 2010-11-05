@@ -245,7 +245,7 @@ BUILD_ASSERT_DECL(OFPR_ACTION == _ODPL_ACTION_NR);
 static struct ofconn *ofconn_create(struct ofproto *, struct rconn *,
                                     enum ofconn_type);
 static void ofconn_destroy(struct ofconn *);
-static void ofconn_run(struct ofconn *, struct ofproto *);
+static void ofconn_run(struct ofconn *);
 static void ofconn_wait(struct ofconn *);
 static bool ofconn_receives_async_msgs(const struct ofconn *);
 static char *ofconn_make_name(const struct ofproto *, const char *target);
@@ -326,8 +326,7 @@ static void revalidate_cb(struct cls_rule *rule_, void *p_);
 
 static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
 
-static void handle_openflow(struct ofconn *, struct ofproto *,
-                            struct ofpbuf *);
+static void handle_openflow(struct ofconn *, struct ofpbuf *);
 
 static struct ofport *get_port(const struct ofproto *, uint16_t odp_port);
 static void update_port(struct ofproto *, const char *devname);
@@ -1093,7 +1092,7 @@ ofproto_run1(struct ofproto *p)
     }
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &p->all_conns) {
-        ofconn_run(ofconn, p);
+        ofconn_run(ofconn);
     }
 
     /* Fail-open maintenance.  Do this after processing the ofconns since
@@ -1661,8 +1660,9 @@ ofconn_destroy(struct ofconn *ofconn)
 }
 
 static void
-ofconn_run(struct ofconn *ofconn, struct ofproto *p)
+ofconn_run(struct ofconn *ofconn)
 {
+    struct ofproto *p = ofconn->ofproto;
     int iteration;
     size_t i;
 
@@ -1699,7 +1699,7 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
             if (p->fail_open) {
                 fail_open_maybe_recover(p->fail_open);
             }
-            handle_openflow(ofconn, p, of_msg);
+            handle_openflow(ofconn, of_msg);
             ofpbuf_delete(of_msg);
         }
     }
@@ -2330,15 +2330,14 @@ handle_echo_request(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static int
-handle_features_request(struct ofproto *p, struct ofconn *ofconn,
-                        struct ofp_header *oh)
+handle_features_request(struct ofconn *ofconn, struct ofp_header *oh)
 {
     struct ofp_switch_features *osf;
     struct ofpbuf *buf;
     struct ofport *port;
 
     osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, oh->xid, &buf);
-    osf->datapath_id = htonll(p->datapath_id);
+    osf->datapath_id = htonll(ofconn->ofproto->datapath_id);
     osf->n_buffers = htonl(pktbuf_capacity());
     osf->n_tables = 2;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
@@ -2356,7 +2355,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_TP_DST) |
                          (1u << OFPAT_ENQUEUE));
 
-    HMAP_FOR_EACH (port, hmap_node, &p->ports) {
+    HMAP_FOR_EACH (port, hmap_node, &ofconn->ofproto->ports) {
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
     }
 
@@ -2365,8 +2364,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
-handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
-                          struct ofp_header *oh)
+handle_get_config_request(struct ofconn *ofconn, struct ofp_header *oh)
 {
     struct ofpbuf *buf;
     struct ofp_switch_config *osc;
@@ -2374,7 +2372,7 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
     bool drop_frags;
 
     /* Figure out flags. */
-    dpif_get_drop_frags(p->dpif, &drop_frags);
+    dpif_get_drop_frags(ofconn->ofproto->dpif, &drop_frags);
     flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
 
     /* Send reply. */
@@ -2387,8 +2385,7 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
-handle_set_config(struct ofproto *p, struct ofconn *ofconn,
-                  struct ofp_switch_config *osc)
+handle_set_config(struct ofconn *ofconn, struct ofp_switch_config *osc)
 {
     uint16_t flags;
     int error;
@@ -2402,10 +2399,10 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     if (ofconn->type == OFCONN_PRIMARY && ofconn->role != NX_ROLE_SLAVE) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
-            dpif_set_drop_frags(p->dpif, false);
+            dpif_set_drop_frags(ofconn->ofproto->dpif, false);
             break;
         case OFPC_FRAG_DROP:
-            dpif_set_drop_frags(p->dpif, true);
+            dpif_set_drop_frags(ofconn->ofproto->dpif, true);
             break;
         default:
             VLOG_WARN_RL(&rl, "requested bad fragment mode (flags=%"PRIx16")",
@@ -2889,9 +2886,9 @@ reject_slave_controller(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static int
-handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
-                  struct ofp_header *oh)
+handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofp_packet_out *opo;
     struct ofpbuf payload, *buffer;
     struct odp_actions actions;
@@ -2960,9 +2957,9 @@ update_port_config(struct ofproto *p, struct ofport *port,
 }
 
 static int
-handle_port_mod(struct ofproto *p, struct ofconn *ofconn,
-                struct ofp_header *oh)
+handle_port_mod(struct ofconn *ofconn, struct ofp_header *oh)
 {
+    struct ofproto *p = ofconn->ofproto;
     const struct ofp_port_mod *opm;
     struct ofport *port;
     int error;
@@ -3025,9 +3022,10 @@ append_stats_reply(size_t nbytes, struct ofconn *ofconn, struct ofpbuf **msgp)
 }
 
 static int
-handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                           struct ofp_stats_request *request)
+handle_desc_stats_request(struct ofconn *ofconn,
+                          struct ofp_stats_request *request)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofp_desc_stats *ods;
     struct ofpbuf *msg;
 
@@ -3045,9 +3043,10 @@ handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
-handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
+handle_table_stats_request(struct ofconn *ofconn,
                            struct ofp_stats_request *request)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
     struct rule *rule;
@@ -3108,10 +3107,10 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
 }
 
 static int
-handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                          struct ofp_stats_request *osr,
+handle_port_stats_request(struct ofconn *ofconn, struct ofp_stats_request *osr,
                           size_t arg_size)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofp_port_stats_request *psr;
     struct ofp_port_stats *ops;
     struct ofpbuf *msg;
@@ -3139,7 +3138,6 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
 }
 
 struct flow_stats_cbdata {
-    struct ofproto *ofproto;
     struct ofconn *ofconn;
     ovs_be16 out_port;
     struct ofpbuf *msg;
@@ -3218,7 +3216,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     act_len = sizeof *rule->actions * rule->n_actions;
     len = offsetof(struct ofp_flow_stats, actions) + act_len;
 
-    query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
+    query_stats(cbdata->ofconn->ofproto, rule, &packet_count, &byte_count);
 
     ofs = append_stats_reply(len, cbdata->ofconn, &cbdata->msg);
     ofs->length = htons(len);
@@ -3247,9 +3245,8 @@ table_id_to_include(uint8_t table_id)
 }
 
 static int
-handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                          const struct ofp_stats_request *osr,
-                          size_t arg_size)
+handle_flow_stats_request(struct ofconn *ofconn,
+                          const struct ofp_stats_request *osr, size_t arg_size)
 {
     struct ofp_flow_stats_request *fsr;
     struct flow_stats_cbdata cbdata;
@@ -3261,12 +3258,11 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     fsr = (struct ofp_flow_stats_request *) osr->body;
 
     COVERAGE_INC(ofproto_flows_req);
-    cbdata.ofproto = p;
     cbdata.ofconn = ofconn;
     cbdata.out_port = fsr->out_port;
     cbdata.msg = start_stats_reply(osr, 1024);
     cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&p->cls, &target,
+    classifier_for_each_match(&ofconn->ofproto->cls, &target,
                               table_id_to_include(fsr->table_id),
                               flow_stats_cb, &cbdata);
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
@@ -3358,7 +3354,7 @@ aggregate_stats_cb(struct cls_rule *rule_, void *cbdata_)
 }
 
 static int
-handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
+handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_request *osr,
                                size_t arg_size)
 {
@@ -3374,13 +3370,13 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     asr = (struct ofp_aggregate_stats_request *) osr->body;
 
     COVERAGE_INC(ofproto_agg_request);
-    cbdata.ofproto = p;
+    cbdata.ofproto = ofconn->ofproto;
     cbdata.out_port = asr->out_port;
     cbdata.packet_count = 0;
     cbdata.byte_count = 0;
     cbdata.n_flows = 0;
     cls_rule_from_match(&asr->match, 0, NXFF_OPENFLOW10, 0, &target);
-    classifier_for_each_match(&p->cls, &target,
+    classifier_for_each_match(&ofconn->ofproto->cls, &target,
                               table_id_to_include(asr->table_id),
                               aggregate_stats_cb, &cbdata);
 
@@ -3442,10 +3438,11 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
 }
 
 static int
-handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
+handle_queue_stats_request(struct ofconn *ofconn,
                            const struct ofp_stats_request *osr,
                            size_t arg_size)
 {
+    struct ofproto *ofproto = ofconn->ofproto;
     struct ofp_queue_stats_request *qsr;
     struct queue_stats_cbdata cbdata;
     struct ofport *port;
@@ -3483,8 +3480,7 @@ handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 static int
-handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                     struct ofp_header *oh)
+handle_stats_request(struct ofconn *ofconn, struct ofp_header *oh)
 {
     struct ofp_stats_request *osr;
     size_t arg_size;
@@ -3499,22 +3495,22 @@ handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     switch (ntohs(osr->type)) {
     case OFPST_DESC:
-        return handle_desc_stats_request(p, ofconn, osr);
+        return handle_desc_stats_request(ofconn, osr);
 
     case OFPST_FLOW:
-        return handle_flow_stats_request(p, ofconn, osr, arg_size);
+        return handle_flow_stats_request(ofconn, osr, arg_size);
 
     case OFPST_AGGREGATE:
-        return handle_aggregate_stats_request(p, ofconn, osr, arg_size);
+        return handle_aggregate_stats_request(ofconn, osr, arg_size);
 
     case OFPST_TABLE:
-        return handle_table_stats_request(p, ofconn, osr);
+        return handle_table_stats_request(ofconn, osr);
 
     case OFPST_PORT:
-        return handle_port_stats_request(p, ofconn, osr, arg_size);
+        return handle_port_stats_request(ofconn, osr, arg_size);
 
     case OFPST_QUEUE:
-        return handle_queue_stats_request(p, ofconn, osr, arg_size);
+        return handle_queue_stats_request(ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
@@ -3560,15 +3556,16 @@ update_stats(struct ofproto *ofproto, struct rule *rule,
  * in which no matching flow already exists in the flow table.
  *
  * Adds the flow specified by 'ofm', which is followed by 'n_actions'
- * ofp_actions, to 'p''s flow table.  Returns 0 on success or an OpenFlow error
- * code as encoded by ofp_mkerr() on failure.
+ * ofp_actions, to ofconn->ofproto's flow table.  Returns 0 on success or an
+ * OpenFlow error code as encoded by ofp_mkerr() on failure.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static int
-add_flow(struct ofproto *p, struct ofconn *ofconn,
-         const struct ofp_flow_mod *ofm, size_t n_actions)
+add_flow(struct ofconn *ofconn, const struct ofp_flow_mod *ofm,
+         size_t n_actions)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofpbuf *packet;
     struct rule *rule;
     uint16_t in_port;
@@ -3605,9 +3602,9 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static struct rule *
-find_flow_strict(struct ofproto *p, struct ofconn *ofconn,
-                 const struct ofp_flow_mod *ofm)
+find_flow_strict(struct ofconn *ofconn, const struct ofp_flow_mod *ofm)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct cls_rule target;
 
     cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
@@ -3616,7 +3613,7 @@ find_flow_strict(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
-send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
+send_buffered_packet(struct ofconn *ofconn,
                      struct rule *rule, const struct ofp_flow_mod *ofm)
 {
     struct ofpbuf *packet;
@@ -3635,7 +3632,7 @@ send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     flow_extract(packet, 0, in_port, &flow);
-    rule_execute(ofproto, rule, packet, &flow);
+    rule_execute(ofconn->ofproto, rule, packet, &flow);
 
     return 0;
 }
@@ -3659,13 +3656,13 @@ static void modify_flows_cb(struct cls_rule *, void *cbdata_);
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static int
-modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
+modify_flows_loose(struct ofconn *ofconn,
                    const struct ofp_flow_mod *ofm, size_t n_actions)
 {
     struct modify_flows_cbdata cbdata;
     struct cls_rule target;
 
-    cbdata.ofproto = p;
+    cbdata.ofproto = ofconn->ofproto;
     cbdata.ofm = ofm;
     cbdata.n_actions = n_actions;
     cbdata.match = NULL;
@@ -3673,16 +3670,16 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     cls_rule_from_match(&ofm->match, 0, ofconn->flow_format,
                         ofm->cookie, &target);
 
-    classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
+    classifier_for_each_match(&ofconn->ofproto->cls, &target, CLS_INC_ALL,
                               modify_flows_cb, &cbdata);
     if (cbdata.match) {
         /* This credits the packet to whichever flow happened to happened to
          * match last.  That's weird.  Maybe we should do a lookup for the
          * flow that actually matches the packet?  Who knows. */
-        send_buffered_packet(p, ofconn, cbdata.match, ofm);
+        send_buffered_packet(ofconn, cbdata.match, ofm);
         return 0;
     } else {
-        return add_flow(p, ofconn, ofm, n_actions);
+        return add_flow(ofconn, ofm, n_actions);
     }
 }
 
@@ -3692,15 +3689,15 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static int
-modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
-                   struct ofp_flow_mod *ofm, size_t n_actions)
+modify_flow_strict(struct ofconn *ofconn, struct ofp_flow_mod *ofm,
+                   size_t n_actions)
 {
-    struct rule *rule = find_flow_strict(p, ofconn, ofm);
+    struct rule *rule = find_flow_strict(ofconn, ofm);
     if (rule && !rule_is_hidden(rule)) {
-        modify_flow(p, ofm, n_actions, rule);
-        return send_buffered_packet(p, ofconn, rule, ofm);
+        modify_flow(ofconn->ofproto, ofm, n_actions, rule);
+        return send_buffered_packet(ofconn, rule, ofm);
     } else {
-        return add_flow(p, ofconn, ofm, n_actions);
+        return add_flow(ofconn, ofm, n_actions);
     }
 }
 
@@ -3764,30 +3761,28 @@ static void delete_flow(struct ofproto *, struct rule *, ovs_be16 out_port);
 
 /* Implements OFPFC_DELETE. */
 static void
-delete_flows_loose(struct ofproto *p, struct ofconn *ofconn,
-                   const struct ofp_flow_mod *ofm)
+delete_flows_loose(struct ofconn *ofconn, const struct ofp_flow_mod *ofm)
 {
     struct delete_flows_cbdata cbdata;
     struct cls_rule target;
 
-    cbdata.ofproto = p;
+    cbdata.ofproto = ofconn->ofproto;
     cbdata.out_port = ofm->out_port;
 
     cls_rule_from_match(&ofm->match, 0, ofconn->flow_format,
                         ofm->cookie, &target);
 
-    classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
+    classifier_for_each_match(&ofconn->ofproto->cls, &target, CLS_INC_ALL,
                               delete_flows_cb, &cbdata);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
 static void
-delete_flow_strict(struct ofproto *p, struct ofconn *ofconn,
-                   struct ofp_flow_mod *ofm)
+delete_flow_strict(struct ofconn *ofconn, struct ofp_flow_mod *ofm)
 {
-    struct rule *rule = find_flow_strict(p, ofconn, ofm);
+    struct rule *rule = find_flow_strict(ofconn, ofm);
     if (rule) {
-        delete_flow(p, rule, ofm->out_port);
+        delete_flow(ofconn->ofproto, rule, ofm->out_port);
     }
 }
 
@@ -3825,8 +3820,7 @@ delete_flow(struct ofproto *p, struct rule *rule, ovs_be16 out_port)
 }
 
 static int
-handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
-                struct ofp_flow_mod *ofm)
+handle_flow_mod(struct ofconn *ofconn, struct ofp_flow_mod *ofm)
 {
     struct ofp_match orig_match;
     size_t n_actions;
@@ -3874,27 +3868,27 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
     }
 
     error = validate_actions((const union ofp_action *) ofm->actions,
-                             n_actions, p->max_ports);
+                             n_actions, ofconn->ofproto->max_ports);
     if (error) {
         return error;
     }
 
     switch (ntohs(ofm->command)) {
     case OFPFC_ADD:
-        return add_flow(p, ofconn, ofm, n_actions);
+        return add_flow(ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY:
-        return modify_flows_loose(p, ofconn, ofm, n_actions);
+        return modify_flows_loose(ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flow_strict(p, ofconn, ofm, n_actions);
+        return modify_flow_strict(ofconn, ofm, n_actions);
 
     case OFPFC_DELETE:
-        delete_flows_loose(p, ofconn, ofm);
+        delete_flows_loose(ofconn, ofm);
         return 0;
 
     case OFPFC_DELETE_STRICT:
-        delete_flow_strict(p, ofconn, ofm);
+        delete_flow_strict(ofconn, ofm);
         return 0;
 
     default:
@@ -3917,8 +3911,7 @@ handle_tun_id_from_cookie(struct ofconn *ofconn, struct nxt_tun_id_cookie *msg)
 }
 
 static int
-handle_role_request(struct ofproto *ofproto,
-                    struct ofconn *ofconn, struct nicira_header *msg)
+handle_role_request(struct ofconn *ofconn, struct nicira_header *msg)
 {
     struct nx_role_request *nrr;
     struct nx_role_request *reply;
@@ -3950,7 +3943,7 @@ handle_role_request(struct ofproto *ofproto,
     if (role == NX_ROLE_MASTER) {
         struct ofconn *other;
 
-        HMAP_FOR_EACH (other, hmap_node, &ofproto->controllers) {
+        HMAP_FOR_EACH (other, hmap_node, &ofconn->ofproto->controllers) {
             if (other->role == NX_ROLE_MASTER) {
                 other->role = NX_ROLE_SLAVE;
             }
@@ -3967,8 +3960,9 @@ handle_role_request(struct ofproto *ofproto,
 }
 
 static int
-handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
+handle_vendor(struct ofconn *ofconn, void *msg)
 {
+    struct ofproto *p = ofconn->ofproto;
     struct ofp_vendor_header *ovh = msg;
     struct nicira_header *nh;
 
@@ -3998,7 +3992,7 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
         return handle_tun_id_from_cookie(ofconn, msg);
 
     case NXT_ROLE_REQUEST:
-        return handle_role_request(p, ofconn, msg);
+        return handle_role_request(ofconn, msg);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
@@ -4018,8 +4012,7 @@ handle_barrier_request(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static void
-handle_openflow(struct ofconn *ofconn, struct ofproto *p,
-                struct ofpbuf *ofp_msg)
+handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
 {
     struct ofp_header *oh = ofp_msg->data;
     int error;
@@ -4035,35 +4028,35 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
         break;
 
     case OFPT_FEATURES_REQUEST:
-        error = handle_features_request(p, ofconn, oh);
+        error = handle_features_request(ofconn, oh);
         break;
 
     case OFPT_GET_CONFIG_REQUEST:
-        error = handle_get_config_request(p, ofconn, oh);
+        error = handle_get_config_request(ofconn, oh);
         break;
 
     case OFPT_SET_CONFIG:
-        error = handle_set_config(p, ofconn, ofp_msg->data);
+        error = handle_set_config(ofconn, ofp_msg->data);
         break;
 
     case OFPT_PACKET_OUT:
-        error = handle_packet_out(p, ofconn, ofp_msg->data);
+        error = handle_packet_out(ofconn, ofp_msg->data);
         break;
 
     case OFPT_PORT_MOD:
-        error = handle_port_mod(p, ofconn, oh);
+        error = handle_port_mod(ofconn, oh);
         break;
 
     case OFPT_FLOW_MOD:
-        error = handle_flow_mod(p, ofconn, ofp_msg->data);
+        error = handle_flow_mod(ofconn, ofp_msg->data);
         break;
 
     case OFPT_STATS_REQUEST:
-        error = handle_stats_request(p, ofconn, oh);
+        error = handle_stats_request(ofconn, oh);
         break;
 
     case OFPT_VENDOR:
-        error = handle_vendor(p, ofconn, ofp_msg->data);
+        error = handle_vendor(ofconn, ofp_msg->data);
         break;
 
     case OFPT_BARRIER_REQUEST:
