@@ -4548,12 +4548,6 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
         return;
     }
 
-    /* We limit the maximum number of queued flow expirations it by accounting
-     * them under the counter for replies.  That works because preventing
-     * OpenFlow requests from being processed also prevents new flows from
-     * being added (and expiring).  (It also prevents processing OpenFlow
-     * requests that would not add new flows, so it is imperfect.) */
-
     LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         struct ofpbuf *msg;
 
@@ -4563,6 +4557,12 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
         }
 
         msg = compose_flow_removed(p, rule, now, reason);
+
+        /* Account flow expirations under ofconn->reply_counter, the counter
+         * for replies to OpenFlow requests.  That works because preventing
+         * OpenFlow requests from being processed also prevents new flows from
+         * being added (and expiring).  (It also prevents processing OpenFlow
+         * requests that would not add new flows, so it is imperfect.) */
         queue_tx(msg, ofconn, ofconn->reply_counter);
     }
 }
