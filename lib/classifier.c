@@ -186,6 +186,86 @@ cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
+bool
+cls_rule_set_dl_tci(struct cls_rule *rule, ovs_be16 tci)
+{
+    return cls_rule_set_dl_tci_masked(rule, tci, htons(0xffff));
+}
+
+bool
+cls_rule_set_dl_tci_masked(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
+{
+    switch (ntohs(mask)) {
+    case 0xffff:
+        if (tci == htons(0)) {
+            /* Match only packets that have no 802.1Q header. */
+            rule->wc.wildcards &= ~(OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP);
+            rule->flow.dl_vlan = htons(OFP_VLAN_NONE);
+            rule->flow.dl_vlan_pcp = 0;
+            return true;
+        } else if (tci & htons(VLAN_CFI)) {
+            /* Match only packets that have a specific 802.1Q VID and PCP. */
+            rule->wc.wildcards &= ~(OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP);
+            rule->flow.dl_vlan = htons(vlan_tci_to_vid(tci));
+            rule->flow.dl_vlan_pcp = vlan_tci_to_pcp(tci);
+            return true;
+        } else {
+            /* Impossible. */
+            return false;
+        }
+
+    case 0x1fff:
+        if (!(tci & htons(VLAN_CFI))) {
+            return false;
+        } else {
+            /* Match only packets that have a specific 802.1Q VID. */
+            cls_rule_set_dl_vlan(rule, tci & htons(VLAN_VID_MASK));
+            rule->wc.wildcards |= OFPFW_DL_VLAN_PCP;
+            rule->flow.dl_vlan_pcp = 0;
+            return true;
+        }
+
+    case 0xf000:
+        if (!(tci & htons(VLAN_CFI))) {
+            return false;
+        } else {
+            /* Match only packets that have a specific 802.1Q PCP. */
+            cls_rule_set_dl_vlan_pcp(rule, vlan_tci_to_pcp(tci));
+            rule->wc.wildcards |= OFPFW_DL_VLAN;
+            rule->flow.dl_vlan = 0;
+            return true;
+        }
+
+    case 0x0000:
+        /* Match anything. */
+        rule->wc.wildcards |= OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP;
+        rule->flow.dl_vlan = htons(0);
+        rule->flow.dl_vlan_pcp = 0;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+void
+cls_rule_set_dl_vlan(struct cls_rule *rule, ovs_be16 dl_vlan)
+{
+    if (dl_vlan != htons(OFP_VLAN_NONE)) {
+        dl_vlan &= htons(VLAN_VID_MASK);
+    }
+
+    rule->wc.wildcards &= ~OFPFW_DL_VLAN;
+    rule->flow.dl_vlan = dl_vlan;
+}
+
+void
+cls_rule_set_dl_vlan_pcp(struct cls_rule *rule, uint8_t dl_vlan_pcp)
+{
+    rule->wc.wildcards &= ~OFPFW_DL_VLAN_PCP;
+    rule->flow.dl_vlan_pcp = dl_vlan_pcp & 0x07;
+}
+
 void
 cls_rule_set_tp_src(struct cls_rule *rule, ovs_be16 tp_src)
 {
@@ -210,15 +290,57 @@ cls_rule_set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
 void
 cls_rule_set_nw_src(struct cls_rule *rule, ovs_be32 nw_src)
 {
-    flow_wildcards_set_nw_src_mask(&rule->wc, htonl(UINT32_MAX));
-    rule->flow.nw_src = nw_src;
+    cls_rule_set_nw_src_masked(rule, nw_src, htonl(UINT32_MAX));
+}
+
+bool
+cls_rule_set_nw_src_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
+{
+    if (flow_wildcards_set_nw_src_mask(&rule->wc, mask)) {
+        rule->flow.nw_src = ip & mask;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void
 cls_rule_set_nw_dst(struct cls_rule *rule, ovs_be32 nw_dst)
 {
-    flow_wildcards_set_nw_dst_mask(&rule->wc, htonl(UINT32_MAX));
-    rule->flow.nw_dst = nw_dst;
+    cls_rule_set_nw_dst_masked(rule, nw_dst, htonl(UINT32_MAX));
+}
+
+bool
+cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
+{
+    if (flow_wildcards_set_nw_dst_mask(&rule->wc, mask)) {
+        rule->flow.nw_dst = ip & mask;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void
+cls_rule_set_nw_tos(struct cls_rule *rule, uint8_t nw_tos)
+{
+    rule->wc.wildcards &= ~OFPFW_NW_TOS;
+    rule->flow.nw_tos = nw_tos & IP_DSCP_MASK;
+}
+
+void
+cls_rule_set_icmp_type(struct cls_rule *rule, uint8_t icmp_type)
+{
+    rule->wc.wildcards &= ~OFPFW_ICMP_TYPE;
+    rule->flow.icmp_type = htons(icmp_type);
+
+}
+
+void
+cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
+{
+    rule->wc.wildcards &= ~OFPFW_ICMP_CODE;
+    rule->flow.icmp_code = htons(icmp_code);
 }
 
 /* Converts 'rule' to a string and returns the string.  The caller must free

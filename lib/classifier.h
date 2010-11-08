@@ -82,14 +82,24 @@ void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
 void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 
 void cls_rule_set_in_port(struct cls_rule *, uint16_t odp_port);
-void cls_rule_set_dl_type(struct cls_rule *, ovs_be16 dl_type);
+void cls_rule_set_dl_type(struct cls_rule *, ovs_be16);
 void cls_rule_set_dl_src(struct cls_rule *, const uint8_t[6]);
 void cls_rule_set_dl_dst(struct cls_rule *, const uint8_t[6]);
+bool cls_rule_set_dl_tci(struct cls_rule *, ovs_be16 tci);
+bool cls_rule_set_dl_tci_masked(struct cls_rule *,
+                                ovs_be16 tci, ovs_be16 mask);
+void cls_rule_set_dl_vlan(struct cls_rule *, ovs_be16);
+void cls_rule_set_dl_vlan_pcp(struct cls_rule *, uint8_t);
 void cls_rule_set_tp_src(struct cls_rule *, ovs_be16);
 void cls_rule_set_tp_dst(struct cls_rule *, ovs_be16);
 void cls_rule_set_nw_proto(struct cls_rule *, uint8_t);
 void cls_rule_set_nw_src(struct cls_rule *, ovs_be32);
+bool cls_rule_set_nw_src_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
 void cls_rule_set_nw_dst(struct cls_rule *, ovs_be32);
+bool cls_rule_set_nw_dst_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
+void cls_rule_set_nw_tos(struct cls_rule *, uint8_t);
+void cls_rule_set_icmp_type(struct cls_rule *, uint8_t);
+void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
 
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
