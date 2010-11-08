@@ -105,7 +105,7 @@ cls_rule_init__(struct cls_rule *rule,
 {
     rule->flow = *flow;
     flow_wildcards_init(&rule->wc, wildcards);
-    cls_rule_zero_wildcards(rule);
+    cls_rule_zero_wildcarded_fields(rule);
 }
 
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
@@ -143,7 +143,7 @@ cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
  * restore the invariant in a cls_rule whose 'wc' member is modified by hand.
  */
 void
-cls_rule_zero_wildcards(struct cls_rule *rule)
+cls_rule_zero_wildcarded_fields(struct cls_rule *rule)
 {
     zero_wildcards(&rule->flow, &rule->wc);
 }

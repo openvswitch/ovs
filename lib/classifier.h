@@ -55,8 +55,9 @@ struct cls_table {
  * invariant that the classifier depends on:
  *
  *   - If a bit or a field is wildcarded in 'wc', then the corresponding bit or
- *     field in 'flow' is set to all-0-bits.  (The cls_rule_zero_wildcards()
- *     function can be used to restore this invariant after adding wildcards.)
+ *     field in 'flow' is set to all-0-bits.  (The
+ *     cls_rule_zero_wildcarded_fields() function can be used to restore this
+ *     invariant after adding wildcards.)
  */
 struct cls_rule {
     struct hmap_node hmap_node; /* Within struct cls_table 'rules'. */
@@ -77,7 +78,7 @@ void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          int flow_format, uint64_t cookie, struct cls_rule *);
 
-void cls_rule_zero_wildcards(struct cls_rule *);
+void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
