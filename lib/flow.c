@@ -279,18 +279,20 @@ flow_to_match(const struct flow *flow, uint32_t wildcards,
 
 void
 flow_from_match(const struct ofp_match *match, int flow_format,
-                ovs_be64 cookie, struct flow *flow, uint32_t *flow_wildcards)
+                ovs_be64 cookie, struct flow *flow,
+                struct flow_wildcards *wc)
 {
-	uint32_t wildcards = ntohl(match->wildcards);
+    flow_wildcards_init(wc, ntohl(match->wildcards));
+    if (flow_format == NXFF_TUN_ID_FROM_COOKIE
+        && !(wc->wildcards & NXFW_TUN_ID)) {
+        flow->tun_id = htonl(ntohll(cookie) >> 32);
+    } else {
+        wc->wildcards |= NXFW_TUN_ID;
+        flow->tun_id = 0;
+    }
 
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
-    if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(wildcards & NXFW_TUN_ID)) {
-        flow->tun_id = htonl(ntohll(cookie) >> 32);
-    } else {
-        wildcards |= NXFW_TUN_ID;
-        flow->tun_id = 0;
-    }
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
@@ -302,9 +304,6 @@ flow_from_match(const struct ofp_match *match, int flow_format,
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
     flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
-    if (flow_wildcards) {
-        *flow_wildcards = wildcards;
-    }
 }
 
 char *

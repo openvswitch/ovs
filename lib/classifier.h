@@ -73,8 +73,10 @@ enum {
     CLS_INC_ALL = CLS_INC_EXACT | CLS_INC_WILD
 };
 
-void cls_rule_from_flow(const struct flow *, uint32_t wildcards,
-                        unsigned int priority, struct cls_rule *);
+void cls_rule_init(const struct flow *, const struct flow_wildcards *,
+                   unsigned int priority, struct cls_rule *);
+void cls_rule_init_exact(const struct flow *, unsigned int priority,
+                         struct cls_rule *);
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          int flow_format, uint64_t cookie, struct cls_rule *);
 void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);

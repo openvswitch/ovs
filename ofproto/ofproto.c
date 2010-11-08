@@ -2053,8 +2053,9 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
                                        rule->idle_timeout, rule->hard_timeout,
                                        0, false);
     COVERAGE_INC(ofproto_subrule_create);
-    cls_rule_from_flow(flow, 0, (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
-                        : rule->cr.priority), &subrule->cr);
+    cls_rule_init_exact(flow, (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
+                               : rule->cr.priority),
+                        &subrule->cr);
 
     if (classifier_insert(&ofproto->cls, &subrule->cr)) {
         /* Can't happen,  */
@@ -4270,7 +4271,7 @@ ofproto_update_used(struct ofproto *p)
         struct flow flow;
 
         odp_flow_key_to_flow(&f->key, &flow);
-        cls_rule_from_flow(&flow, 0, UINT16_MAX, &target);
+        cls_rule_init_exact(&flow, UINT16_MAX, &target);
 
         rule = rule_from_cls_rule(classifier_find_rule_exactly(&p->cls,
                                                                &target));

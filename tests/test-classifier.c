@@ -477,6 +477,7 @@ static struct test_rule *
 make_rule(int wc_fields, unsigned int priority, int value_pat)
 {
     const struct cls_field *f;
+    struct flow_wildcards wc;
     struct test_rule *rule;
     uint32_t wildcards;
     struct flow flow;
@@ -494,8 +495,9 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     }
 
     rule = xzalloc(sizeof *rule);
-    cls_rule_from_flow(&flow, wildcards, !wildcards ? UINT_MAX : priority,
-                       &rule->cls_rule);
+    flow_wildcards_init(&wc, wildcards);
+    cls_rule_init(&flow, &wc, !wildcards ? UINT_MAX : priority,
+                  &rule->cls_rule);
     return rule;
 }
 

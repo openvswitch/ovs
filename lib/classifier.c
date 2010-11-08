@@ -99,22 +99,27 @@ cls_table_next_rule(const struct cls_table *table, const struct cls_rule *rule)
                                                 &next->hmap_node)));
 }
 
-static void
-cls_rule_init__(struct cls_rule *rule,
-                const struct flow *flow, uint32_t wildcards)
+/* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
+ * 'wildcards' and 'priority'. */
+void
+cls_rule_init(const struct flow *flow, const struct flow_wildcards *wildcards,
+              unsigned int priority, struct cls_rule *rule)
 {
     rule->flow = *flow;
-    flow_wildcards_init(&rule->wc, wildcards);
+    rule->wc = *wildcards;
+    rule->priority = priority;
     cls_rule_zero_wildcarded_fields(rule);
 }
 
-/* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
- * 'wildcards' and 'priority'.*/
+/* Converts the flow in 'flow' into an exact-match cls_rule in 'rule', with the
+ * given 'priority'.  (For OpenFlow 1.0, exact-match rule are always highest
+ * priority, so 'priority' should be at least 65535.) */
 void
-cls_rule_from_flow(const struct flow *flow, uint32_t wildcards,
-                   unsigned int priority, struct cls_rule *rule)
+cls_rule_init_exact(const struct flow *flow,
+                    unsigned int priority, struct cls_rule *rule)
 {
-    cls_rule_init__(rule, flow, wildcards);
+    rule->flow = *flow;
+    flow_wildcards_init_exact(&rule->wc);
     rule->priority = priority;
 }
 
@@ -126,12 +131,9 @@ cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
                     int flow_format, uint64_t cookie,
                     struct cls_rule *rule)
 {
-    uint32_t wildcards;
-    struct flow flow;
-
-    flow_from_match(match, flow_format, cookie, &flow, &wildcards);
-    cls_rule_init__(rule, &flow, wildcards);
-    rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
+    flow_from_match(match, flow_format, cookie, &rule->flow, &rule->wc);
+    rule->priority = !rule->wc.wildcards ? UINT16_MAX : priority;
+    cls_rule_zero_wildcarded_fields(rule);
 }
 
 /* Initializes 'rule' as a "catch-all" rule that matches every packet, with
