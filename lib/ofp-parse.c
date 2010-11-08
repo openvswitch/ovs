@@ -75,14 +75,15 @@ str_to_mac(const char *str, uint8_t mac[6])
     }
 }
 
-static uint32_t
-str_to_ip(const char *str_, uint32_t *ip)
+static void
+str_to_ip(const char *str_, ovs_be32 *ip, ovs_be32 *maskp)
 {
     char *str = xstrdup(str_);
     char *save_ptr = NULL;
     const char *name, *netmask;
     struct in_addr in_addr;
-    int n_wild, retval;
+    ovs_be32 mask;
+    int retval;
 
     name = strtok_r(str, "/", &save_ptr);
     retval = name ? lookup_ip(name, &in_addr) : EINVAL;
@@ -96,38 +97,32 @@ str_to_ip(const char *str_, uint32_t *ip)
         uint8_t o[4];
         if (sscanf(netmask, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8,
                    &o[0], &o[1], &o[2], &o[3]) == 4) {
-            uint32_t nm = (o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3];
-            int i;
-
-            /* Find first 1-bit. */
-            for (i = 0; i < 32; i++) {
-                if (nm & (1u << i)) {
-                    break;
-                }
-            }
-            n_wild = i;
-
-            /* Verify that the rest of the bits are 1-bits. */
-            for (; i < 32; i++) {
-                if (!(nm & (1u << i))) {
-                    ovs_fatal(0, "%s: %s is not a valid netmask",
-                              str, netmask);
-                }
-            }
+            mask = htonl((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]);
         } else {
             int prefix = atoi(netmask);
             if (prefix <= 0 || prefix > 32) {
                 ovs_fatal(0, "%s: network prefix bits not between 1 and 32",
                           str);
+            } else if (prefix == 32) {
+                mask = htonl(UINT32_MAX);
+            } else {
+                mask = htonl(((1u << prefix) - 1) << (32 - prefix));
             }
-            n_wild = 32 - prefix;
         }
     } else {
-        n_wild = 0;
+        mask = htonl(UINT32_MAX);
+    }
+    *ip &= mask;
+
+    if (maskp) {
+        *maskp = mask;
+    } else {
+        if (mask != htonl(UINT32_MAX)) {
+            ovs_fatal(0, "%s: netmask not allowed here", str_);
+        }
     }
 
     free(str);
-    return n_wild;
 }
 
 static void *
@@ -237,11 +232,11 @@ str_to_action(char *str, struct ofpbuf *b)
         } else if (!strcasecmp(act, "mod_nw_src")) {
             struct ofp_action_nw_addr *na;
             na = put_action(b, sizeof *na, OFPAT_SET_NW_SRC);
-            str_to_ip(arg, &na->nw_addr);
+            str_to_ip(arg, &na->nw_addr, NULL);
         } else if (!strcasecmp(act, "mod_nw_dst")) {
             struct ofp_action_nw_addr *na;
             na = put_action(b, sizeof *na, OFPAT_SET_NW_DST);
-            str_to_ip(arg, &na->nw_addr);
+            str_to_ip(arg, &na->nw_addr, NULL);
         } else if (!strcasecmp(act, "mod_tp_src")) {
             struct ofp_action_tp_port *ta;
             ta = put_action(b, sizeof *ta, OFPAT_SET_TP_SRC);
@@ -349,34 +344,42 @@ parse_protocol(const char *name, const struct protocol **p_out)
     return false;
 }
 
+#define FIELDS                                              \
+    FIELD(F_IN_PORT,     "in_port",     OFPFW_IN_PORT)      \
+    FIELD(F_DL_VLAN,     "dl_vlan",     OFPFW_DL_VLAN)      \
+    FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", OFPFW_DL_VLAN_PCP)  \
+    FIELD(F_DL_SRC,      "dl_src",      OFPFW_DL_SRC)       \
+    FIELD(F_DL_DST,      "dl_dst",      OFPFW_DL_DST)       \
+    FIELD(F_DL_TYPE,     "dl_type",     OFPFW_DL_TYPE)      \
+    FIELD(F_NW_SRC,      "nw_src",      0)                  \
+    FIELD(F_NW_DST,      "nw_dst",      0)                  \
+    FIELD(F_NW_PROTO,    "nw_proto",    OFPFW_NW_PROTO)     \
+    FIELD(F_NW_TOS,      "nw_tos",      OFPFW_NW_TOS)       \
+    FIELD(F_TP_SRC,      "tp_src",      OFPFW_TP_SRC)       \
+    FIELD(F_TP_DST,      "tp_dst",      OFPFW_TP_DST)       \
+    FIELD(F_ICMP_TYPE,   "icmp_type",   OFPFW_ICMP_TYPE)    \
+    FIELD(F_ICMP_CODE,   "icmp_code",   OFPFW_ICMP_CODE)
+
+enum field_index {
+#define FIELD(ENUM, NAME, WILDCARD) ENUM,
+    FIELDS
+#undef FIELD
+    N_FIELDS
+};
+
 struct field {
+    enum field_index index;
     const char *name;
     uint32_t wildcard;
-    enum { F_U8, F_U16, F_MAC, F_IP } type;
-    size_t offset, shift;
 };
 
 static bool
-parse_field(const char *name, const struct field **f_out)
+parse_field_name(const char *name, const struct field **f_out)
 {
-#define F_OFS(MEMBER) offsetof(struct ofp_match, MEMBER)
-    static const struct field fields[] = {
-        { "in_port", OFPFW_IN_PORT, F_U16, F_OFS(in_port), 0 },
-        { "dl_vlan", OFPFW_DL_VLAN, F_U16, F_OFS(dl_vlan), 0 },
-        { "dl_vlan_pcp", OFPFW_DL_VLAN_PCP, F_U8, F_OFS(dl_vlan_pcp), 0 },
-        { "dl_src", OFPFW_DL_SRC, F_MAC, F_OFS(dl_src), 0 },
-        { "dl_dst", OFPFW_DL_DST, F_MAC, F_OFS(dl_dst), 0 },
-        { "dl_type", OFPFW_DL_TYPE, F_U16, F_OFS(dl_type), 0 },
-        { "nw_src", OFPFW_NW_SRC_MASK, F_IP,
-          F_OFS(nw_src), OFPFW_NW_SRC_SHIFT },
-        { "nw_dst", OFPFW_NW_DST_MASK, F_IP,
-          F_OFS(nw_dst), OFPFW_NW_DST_SHIFT },
-        { "nw_proto", OFPFW_NW_PROTO, F_U8, F_OFS(nw_proto), 0 },
-        { "nw_tos", OFPFW_NW_TOS, F_U8, F_OFS(nw_tos), 0 },
-        { "tp_src", OFPFW_TP_SRC, F_U16, F_OFS(tp_src), 0 },
-        { "tp_dst", OFPFW_TP_DST, F_U16, F_OFS(tp_dst), 0 },
-        { "icmp_type", OFPFW_ICMP_TYPE, F_U16, F_OFS(icmp_type), 0 },
-        { "icmp_code", OFPFW_ICMP_CODE, F_U16, F_OFS(icmp_code), 0 }
+    static const struct field fields[N_FIELDS] = {
+#define FIELD(ENUM, NAME, WILDCARD) { ENUM, NAME, WILDCARD },
+        FIELDS
+#undef FIELD
     };
     const struct field *f;
 
@@ -390,40 +393,101 @@ parse_field(const char *name, const struct field **f_out)
     return false;
 }
 
-/* Convert 'string' (as described in the Flow Syntax section of the
- * ovs-ofctl man page) into 'match'.  The other arguments are optional
- * and may be NULL if their value is not needed.  If 'actions' is
- * specified, an action must be in 'string' and may be expanded or
- * reallocated. */
-void
-parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
-              uint8_t *table_idx, uint16_t *out_port, uint16_t *priority,
-              uint16_t *idle_timeout, uint16_t *hard_timeout,
-              uint64_t *cookie)
+static void
+parse_field_value(struct cls_rule *rule, enum field_index index,
+                  const char *value)
 {
-    struct ofp_match normalized;
+    uint8_t mac[ETH_ADDR_LEN];
+    ovs_be32 ip, mask;
+    uint16_t port_no;
+
+    switch (index) {
+    case F_IN_PORT:
+        if (!parse_port_name(value, &port_no)) {
+            port_no = atoi(value);
+        }
+        if (port_no == OFPP_LOCAL) {
+            port_no = ODPP_LOCAL;
+        }
+        cls_rule_set_in_port(rule, port_no);
+        break;
+
+    case F_DL_VLAN:
+        cls_rule_set_dl_vlan(rule, htons(str_to_u32(value)));
+        break;
+
+    case F_DL_VLAN_PCP:
+        cls_rule_set_dl_vlan_pcp(rule, str_to_u32(value));
+        break;
+
+    case F_DL_SRC:
+        str_to_mac(value, mac);
+        cls_rule_set_dl_src(rule, mac);
+        break;
+
+    case F_DL_DST:
+        str_to_mac(value, mac);
+        cls_rule_set_dl_dst(rule, mac);
+        break;
+
+    case F_DL_TYPE:
+        cls_rule_set_dl_type(rule, htons(str_to_u32(value)));
+        break;
+
+    case F_NW_SRC:
+        str_to_ip(value, &ip, &mask);
+        cls_rule_set_nw_src_masked(rule, ip, mask);
+        break;
+
+    case F_NW_DST:
+        str_to_ip(value, &ip, &mask);
+        cls_rule_set_nw_dst_masked(rule, ip, mask);
+        break;
+
+    case F_NW_PROTO:
+        cls_rule_set_nw_proto(rule, str_to_u32(value));
+        break;
+
+    case F_NW_TOS:
+        cls_rule_set_nw_tos(rule, str_to_u32(value));
+        break;
+
+    case F_TP_SRC:
+        cls_rule_set_tp_src(rule, htons(str_to_u32(value)));
+        break;
+
+    case F_TP_DST:
+        cls_rule_set_tp_dst(rule, htons(str_to_u32(value)));
+        break;
+
+    case F_ICMP_TYPE:
+        cls_rule_set_icmp_type(rule, str_to_u32(value));
+        break;
+
+    case F_ICMP_CODE:
+        cls_rule_set_icmp_code(rule, str_to_u32(value));
+        break;
+
+    case N_FIELDS:
+        NOT_REACHED();
+    }
+}
+
+/* Convert 'string' (as described in the Flow Syntax section of the ovs-ofctl
+ * man page) into 'pf'.  If 'actions' is specified, an action must be in
+ * 'string' and may be expanded or reallocated. */
+void
+parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
+{
     char *save_ptr = NULL;
     char *name;
-    uint32_t wildcards;
 
-    if (table_idx) {
-        *table_idx = 0xff;
-    }
-    if (out_port) {
-        *out_port = OFPP_NONE;
-    }
-    if (priority) {
-        *priority = OFP_DEFAULT_PRIORITY;
-    }
-    if (idle_timeout) {
-        *idle_timeout = OFP_FLOW_PERMANENT;
-    }
-    if (hard_timeout) {
-        *hard_timeout = OFP_FLOW_PERMANENT;
-    }
-    if (cookie) {
-        *cookie = 0;
-    }
+    cls_rule_init_catchall(&pf->rule, OFP_DEFAULT_PRIORITY);
+    pf->table_idx = 0xff;
+    pf->out_port = OFPP_NONE;
+    pf->idle_timeout = OFP_FLOW_PERMANENT;
+    pf->hard_timeout = OFP_FLOW_PERMANENT;
+    pf->cookie = 0;
     if (actions) {
         char *act_str = strstr(string, "action");
         if (!act_str) {
@@ -440,18 +504,14 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
 
         str_to_action(act_str, actions);
     }
-    memset(match, 0, sizeof *match);
-    wildcards = OFPFW_ALL;
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
         const struct protocol *p;
 
         if (parse_protocol(name, &p)) {
-            wildcards &= ~OFPFW_DL_TYPE;
-            match->dl_type = htons(p->dl_type);
+            cls_rule_set_dl_type(&pf->rule, htons(p->dl_type));
             if (p->nw_proto) {
-                wildcards &= ~OFPFW_NW_PROTO;
-                match->nw_proto = p->nw_proto;
+                cls_rule_set_nw_proto(&pf->rule, p->nw_proto);
             }
         } else {
             const struct field *f;
@@ -462,60 +522,37 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
                 ovs_fatal(0, "field %s missing value", name);
             }
 
-            if (table_idx && !strcmp(name, "table")) {
-                *table_idx = atoi(value);
-            } else if (out_port && !strcmp(name, "out_port")) {
-                *out_port = atoi(value);
-            } else if (priority && !strcmp(name, "priority")) {
-                *priority = atoi(value);
-            } else if (idle_timeout && !strcmp(name, "idle_timeout")) {
-                *idle_timeout = atoi(value);
-            } else if (hard_timeout && !strcmp(name, "hard_timeout")) {
-                *hard_timeout = atoi(value);
-            } else if (cookie && !strcmp(name, "cookie")) {
-                *cookie = str_to_u64(value);
-            } else if (!strcmp(name, "tun_id_wild")) {
-                wildcards |= NXFW_TUN_ID;
-            } else if (parse_field(name, &f)) {
-                void *data = (char *) match + f->offset;
+            if (!strcmp(name, "table")) {
+                pf->table_idx = atoi(value);
+            } else if (!strcmp(name, "out_port")) {
+                pf->out_port = atoi(value);
+            } else if (!strcmp(name, "priority")) {
+                pf->rule.priority = atoi(value);
+            } else if (!strcmp(name, "idle_timeout")) {
+                pf->idle_timeout = atoi(value);
+            } else if (!strcmp(name, "hard_timeout")) {
+                pf->hard_timeout = atoi(value);
+            } else if (!strcmp(name, "cookie")) {
+                pf->cookie = str_to_u64(value);
+            } else if (parse_field_name(name, &f)) {
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
-                    wildcards |= f->wildcard;
-                } else {
-                    uint16_t port_no;
-
-                    wildcards &= ~f->wildcard;
-                    if (f->wildcard == OFPFW_IN_PORT
-                        && parse_port_name(value, &port_no)) {
-                        match->in_port = htons(port_no);
-                    } else if (f->type == F_U8) {
-                        *(uint8_t *) data = str_to_u32(value);
-                    } else if (f->type == F_U16) {
-                        *(uint16_t *) data = htons(str_to_u32(value));
-                    } else if (f->type == F_MAC) {
-                        str_to_mac(value, data);
-                    } else if (f->type == F_IP) {
-                        wildcards |= str_to_ip(value, data) << f->shift;
+                    if (f->wildcard) {
+                        pf->rule.wc.wildcards |= f->wildcard;
+                        cls_rule_zero_wildcarded_fields(&pf->rule);
+                    } else if (f->index == F_NW_SRC) {
+                        cls_rule_set_nw_src_masked(&pf->rule, 0, 0);
+                    } else if (f->index == F_NW_DST) {
+                        cls_rule_set_nw_dst_masked(&pf->rule, 0, 0);
                     } else {
                         NOT_REACHED();
                     }
+                } else {
+                    parse_field_value(&pf->rule, f->index, value);
                 }
             } else {
                 ovs_fatal(0, "unknown keyword %s", name);
             }
         }
-    }
-    match->wildcards = htonl(wildcards);
-
-    normalized = *match;
-    normalize_match(&normalized);
-    if (memcmp(match, &normalized, sizeof normalized)) {
-        char *old = ofp_match_to_literal_string(match);
-        char *new = ofp_match_to_literal_string(&normalized);
-        VLOG_WARN("The specified flow is not in normal form:");
-        VLOG_WARN(" as specified: %s", old);
-        VLOG_WARN("as normalized: %s", new);
-        free(old);
-        free(new);
     }
 }
 
@@ -524,26 +561,25 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
 struct ofpbuf *
 parse_ofp_flow_mod_str(char *string, uint16_t command)
 {
+    struct parsed_flow pf;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
-    uint16_t priority, idle_timeout, hard_timeout;
-    uint64_t cookie;
-    struct ofp_match match;
 
     /* parse_ofp_str() will expand and reallocate the data in 'buffer', so we
      * can't keep pointers to across the parse_ofp_str() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(string, &match, buffer,
-                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                  &cookie);
+    parse_ofp_str(&pf, buffer, string);
+
     ofm = buffer->data;
-    ofm->match = match;
-    ofm->cookie = htonll(cookie);
-    ofm->idle_timeout = htons(idle_timeout);
-    ofm->hard_timeout = htons(hard_timeout);
+    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
+                  &ofm->match);
     ofm->command = htons(command);
+    ofm->cookie = htonll(pf.cookie);
+    ofm->idle_timeout = htons(pf.idle_timeout);
+    ofm->hard_timeout = htons(pf.hard_timeout);
     ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->priority = htons(priority);
+    ofm->out_port = htons(pf.out_port);
+    ofm->priority = htons(pf.rule.priority);
     update_openflow_length(buffer);
 
     return buffer;

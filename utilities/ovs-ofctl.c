@@ -438,14 +438,15 @@ static void
 do_dump_flows(int argc, char *argv[])
 {
     struct ofp_flow_stats_request *req;
-    uint16_t out_port;
+    struct parsed_flow pf;
     struct ofpbuf *request;
 
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
-    parse_ofp_str(argc > 2 ? argv[2] : "", &req->match, NULL,
-                  &req->table_id, &out_port, NULL, NULL, NULL, NULL);
+    parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
+    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
+                  &req->match);
     memset(&req->pad, 0, sizeof req->pad);
-    req->out_port = htons(out_port);
+    req->out_port = htons(pf.out_port);
 
     dump_stats_transaction(argv[1], request);
 }
@@ -455,13 +456,14 @@ do_dump_aggregate(int argc, char *argv[])
 {
     struct ofp_aggregate_stats_request *req;
     struct ofpbuf *request;
-    uint16_t out_port;
+    struct parsed_flow pf;
 
     req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
-    parse_ofp_str(argc > 2 ? argv[2] : "", &req->match, NULL,
-                  &req->table_id, &out_port, NULL, NULL, NULL, NULL);
+    parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
+    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
+                  &req->match);
     memset(&req->pad, 0, sizeof req->pad);
-    req->out_port = htons(out_port);
+    req->out_port = htons(pf.out_port);
 
     dump_stats_transaction(argv[1], request);
 }

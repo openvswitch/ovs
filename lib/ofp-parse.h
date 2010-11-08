@@ -22,14 +22,18 @@
 #include <stdint.h>
 #include <stdio.h>
 
-struct ofp_match;
-struct ofpbuf;
+#include "classifier.h"
 
-void parse_ofp_str(char *string, struct ofp_match *match,
-                   struct ofpbuf *actions, uint8_t *table_idx,
-                   uint16_t *out_port, uint16_t *priority,
-                   uint16_t *idle_timeout, uint16_t *hard_timeout,
-                   uint64_t *cookie);
+struct parsed_flow {
+    struct cls_rule rule;
+    uint8_t table_idx;
+    uint16_t out_port;
+    uint16_t idle_timeout;
+    uint16_t hard_timeout;
+    uint64_t cookie;
+};
+
+void parse_ofp_str(struct parsed_flow *, struct ofpbuf *actions, char *string);
 struct ofpbuf *parse_ofp_flow_mod_str(char *string, uint16_t command);
 struct ofpbuf *parse_ofp_add_flow_file(FILE *);
 
