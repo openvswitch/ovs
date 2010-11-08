@@ -936,3 +936,41 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
 
     return buf;
 }
+
+/* Attempts to pull 'actions_len' bytes from the front of 'b'.  Returns 0 if
+ * successful, otherwise an OpenFlow error.
+ *
+ * If successful, the first action is stored in '*actionsp' and the number of
+ * "union ofp_action" size elements into '*n_actionsp'.  Otherwise NULL and 0
+ * are stored, respectively.
+ *
+ * This function does not check that the actions are valid (the caller should
+ * do so, with validate_actions()).  The caller is also responsible for making
+ * sure that 'b->data' is initially aligned appropriately for "union
+ * ofp_action". */
+int
+ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
+                     union ofp_action **actionsp, size_t *n_actionsp)
+{
+    if (actions_len % ACTION_ALIGNMENT != 0) {
+        VLOG_DBG_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
+                    "is not a multiple of %d", actions_len, ACTION_ALIGNMENT);
+        goto error;
+    }
+
+    *actionsp = ofpbuf_try_pull(b, actions_len);
+    if (*actionsp == NULL) {
+        VLOG_DBG_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
+                    "exceeds remaining message length (%zu)",
+                    actions_len, b->size);
+        goto error;
+    }
+
+    *n_actionsp = actions_len / ACTION_ALIGNMENT;
+    return 0;
+
+error:
+    *actionsp = NULL;
+    *n_actionsp = 0;
+    return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+}

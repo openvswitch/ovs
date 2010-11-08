@@ -85,6 +85,9 @@ bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
+
+int ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
+                         union ofp_action **, size_t *);
 
 /* OpenFlow vendors.
  *
