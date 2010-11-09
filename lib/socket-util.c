@@ -45,6 +45,10 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
 #define LINUX 0
 #endif
 
+#ifndef O_DIRECTORY
+#define O_DIRECTORY 0
+#endif
+
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */
 int
@@ -212,13 +216,75 @@ drain_fd(int fd, size_t n_packets)
 /* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
  * '*un_len' the size of the sockaddr_un. */
 static void
-make_sockaddr_un(const char *name, struct sockaddr_un* un, socklen_t *un_len)
+make_sockaddr_un__(const char *name, struct sockaddr_un *un, socklen_t *un_len)
 {
     un->sun_family = AF_UNIX;
     strncpy(un->sun_path, name, sizeof un->sun_path);
     un->sun_path[sizeof un->sun_path - 1] = '\0';
     *un_len = (offsetof(struct sockaddr_un, sun_path)
                 + strlen (un->sun_path) + 1);
+}
+
+/* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
+ * '*un_len' the size of the sockaddr_un.
+ *
+ * Returns 0 on success, otherwise a positive errno value.  On success,
+ * '*dirfdp' is either -1 or a nonnegative file descriptor that the caller
+ * should close after using '*un' to bind or connect.  On failure, '*dirfdp' is
+ * -1. */
+static int
+make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
+                 int *dirfdp)
+{
+    enum { MAX_UN_LEN = sizeof un->sun_path - 1 };
+
+    *dirfdp = -1;
+    if (strlen(name) > MAX_UN_LEN) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        if (LINUX) {
+            /* 'name' is too long to fit in a sockaddr_un, but we have a
+             * workaround for that on Linux: shorten it by opening a file
+             * descriptor for the directory part of the name and indirecting
+             * through /proc/self/fd/<dirfd>/<basename>. */
+            char *dir, *base;
+            char *short_name;
+            int dirfd;
+
+            dir = dir_name(name);
+            base = base_name(name);
+
+            dirfd = open(dir, O_DIRECTORY | O_RDONLY);
+            if (dirfd < 0) {
+                return errno;
+            }
+
+            short_name = xasprintf("/proc/self/fd/%d/%s", dirfd, base);
+            free(dir);
+            free(base);
+
+            if (strlen(short_name) <= MAX_UN_LEN) {
+                make_sockaddr_un__(short_name, un, un_len);
+                free(short_name);
+                *dirfdp = dirfd;
+                return 0;
+            }
+            free(short_name);
+            close(dirfd);
+
+            VLOG_WARN_RL(&rl, "Unix socket name %s is longer than maximum "
+                         "%d bytes (even shortened)", name, MAX_UN_LEN);
+        } else {
+            /* 'name' is too long and we have no workaround. */
+            VLOG_WARN_RL(&rl, "Unix socket name %s is longer than maximum "
+                         "%d bytes", name, MAX_UN_LEN);
+        }
+
+        return ENAMETOOLONG;
+    } else {
+        make_sockaddr_un__(name, un, un_len);
+        return 0;
+    }
 }
 
 /* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
@@ -247,9 +313,11 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     if (nonblock) {
         int flags = fcntl(fd, F_GETFL, 0);
         if (flags == -1) {
+            error = errno;
             goto error;
         }
         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            error = errno;
             goto error;
         }
     }
@@ -257,13 +325,22 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     if (bind_path) {
         struct sockaddr_un un;
         socklen_t un_len;
-        make_sockaddr_un(bind_path, &un, &un_len);
-        if (unlink(un.sun_path) && errno != ENOENT) {
-            VLOG_WARN("unlinking \"%s\": %s\n", un.sun_path, strerror(errno));
+        int dirfd;
+
+        if (unlink(bind_path) && errno != ENOENT) {
+            VLOG_WARN("unlinking \"%s\": %s\n", bind_path, strerror(errno));
         }
         fatal_signal_add_file_to_unlink(bind_path);
-        if (bind(fd, (struct sockaddr*) &un, un_len)
-            || fchmod(fd, S_IRWXU)) {
+
+        error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd);
+        if (!error && (bind(fd, (struct sockaddr*) &un, un_len)
+                       || fchmod(fd, S_IRWXU))) {
+            error = errno;
+        }
+        if (dirfd >= 0) {
+            close(dirfd);
+        }
+        if (error) {
             goto error;
         }
     }
@@ -271,9 +348,18 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     if (connect_path) {
         struct sockaddr_un un;
         socklen_t un_len;
-        make_sockaddr_un(connect_path, &un, &un_len);
-        if (connect(fd, (struct sockaddr*) &un, un_len)
+        int dirfd;
+
+        error = make_sockaddr_un(connect_path, &un, &un_len, &dirfd);
+        if (!error
+            && connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
+            error = errno;
+        }
+        if (dirfd >= 0) {
+            close(dirfd);
+        }
+        if (error) {
             goto error;
         }
     }
@@ -282,6 +368,7 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     if (passcred) {
         int enable = 1;
         if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable))) {
+            error = errno;
             goto error;
         }
     }
@@ -290,7 +377,9 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     return fd;
 
 error:
-    error = errno == EAGAIN ? EPROTO : errno;
+    if (error == EAGAIN) {
+        error = EPROTO;
+    }
     if (bind_path) {
         fatal_signal_remove_file_to_unlink(bind_path);
     }

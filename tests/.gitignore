@@ -22,6 +22,7 @@
 /test-timeval
 /test-sha1
 /test-type-props
+/test-unix-socket
 /test-uuid
 /test-vconn
 /testsuite

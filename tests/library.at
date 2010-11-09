@@ -38,3 +38,30 @@ AT_SETUP([test byte order conversion])
 AT_KEYWORDS([byte order])
 AT_CHECK([test-byte-order], [0], [ignore])
 AT_CLEANUP
+
+AT_SETUP([test unix socket -- short pathname])
+AT_CHECK([test-unix-socket x])
+AT_CLEANUP
+
+dnl Unix sockets with long names are problematic because the name has to
+dnl go in a fixed-length field in struct sockaddr_un.  Generally the limit
+dnl is about 100 bytes.  On Linux, we work around this by indirecting through
+dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
+dnl for other platforms, so we skip the test there.
+AT_SETUP([test unix socket -- long pathname])
+AT_CHECK([dnl
+    case `uname` in dnl (
+      *[[lL]]inux*)
+        exit 0
+        ;; dnl (
+      *)
+        dnl Magic exit code to tell Autotest to skip this test.
+        exit 77
+        ;;
+    esac
+])
+dnl Linux has a 108 byte limit; this is 150 bytes long.
+mkdir 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+cd 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+AT_CHECK([test-unix-socket ../012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789/socket socket])
+AT_CLEANUP
