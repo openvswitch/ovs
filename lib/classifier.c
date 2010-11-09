@@ -479,7 +479,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
     }
 
     head = find_equal(table, &target->flow, flow_hash(&target->flow, 0));
-    if (!target->wc.wildcards) {
+    if (flow_wildcards_is_exact(&target->wc)) {
         return head;
     }
     FOR_EACH_RULE_IN_LIST (rule, head) {

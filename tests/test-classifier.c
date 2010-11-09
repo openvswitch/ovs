@@ -136,7 +136,8 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
 {
     size_t i;
 
-    assert(rule->cls_rule.wc.wildcards || rule->cls_rule.priority == UINT_MAX);
+    assert(!flow_wildcards_is_exact(&rule->cls_rule.wc)
+           || rule->cls_rule.priority == UINT_MAX);
     for (i = 0; i < tcls->n_rules; i++) {
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
         if (cls_rule_equal(pos, &rule->cls_rule)) {

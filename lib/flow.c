@@ -420,6 +420,14 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
 }
 
+/* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
+ * fields. */
+bool
+flow_wildcards_is_exact(const struct flow_wildcards *wc)
+{
+    return !wc->wildcards;
+}
+
 static inline uint32_t
 combine_nw_bits(uint32_t wb1, uint32_t wb2, int shift)
 {
