@@ -395,6 +395,14 @@ get_cwd(void)
     }
 }
 
+static char *
+all_slashes_name(const char *s)
+{
+    return xstrdup(s[0] == '/' && s[1] == '/' && s[2] != '/' ? "//"
+                   : s[0] == '/' ? "/"
+                   : ".");
+}
+
 /* Returns the directory name portion of 'file_name' as a malloc()'d string,
  * similar to the POSIX dirname() function but thread-safe. */
 char *
@@ -410,15 +418,31 @@ dir_name(const char *file_name)
     while (len > 0 && file_name[len - 1] == '/') {
         len--;
     }
-    if (!len) {
-        return xstrdup((file_name[0] == '/'
-                        && file_name[1] == '/'
-                        && file_name[2] != '/') ? "//"
-                       : file_name[0] == '/' ? "/"
-                       : ".");
-    } else {
-        return xmemdup0(file_name, len);
+    return len ? xmemdup0(file_name, len) : all_slashes_name(file_name);
+}
+
+/* Returns the file name portion of 'file_name' as a malloc()'d string,
+ * similar to the POSIX basename() function but thread-safe. */
+char *
+base_name(const char *file_name)
+{
+    size_t end, start;
+
+    end = strlen(file_name);
+    while (end > 0 && file_name[end - 1] == '/') {
+        end--;
     }
+
+    if (!end) {
+        return all_slashes_name(file_name);
+    }
+
+    start = end;
+    while (start > 0 && file_name[start - 1] != '/') {
+        start--;
+    }
+
+    return xmemdup0(file_name + start, end - start);
 }
 
 /* If 'file_name' starts with '/', returns a copy of 'file_name'.  Otherwise,

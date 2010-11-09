@@ -14,7 +14,7 @@ TESTSUITE_AT = \
 	tests/daemon-py.at \
 	tests/ovs-ofctl.at \
 	tests/vconn.at \
-	tests/dir_name.at \
+	tests/file_name.at \
 	tests/aes128.at \
 	tests/uuid.at \
 	tests/json.at \
@@ -65,7 +65,7 @@ lcov_wrappers = \
 	tests/lcov/test-classifier \
 	tests/lcov/test-csum \
 	tests/lcov/test-dhcp-client \
-	tests/lcov/test-dir_name \
+	tests/lcov/test-file_name \
 	tests/lcov/test-flows \
 	tests/lcov/test-hash \
 	tests/lcov/test-hmap \
@@ -114,7 +114,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-csum \
 	tests/valgrind/test-dhcp-client \
-	tests/valgrind/test-dir_name \
+	tests/valgrind/test-file_name \
 	tests/valgrind/test-flows \
 	tests/valgrind/test-hash \
 	tests/valgrind/test-hmap \
@@ -181,9 +181,9 @@ noinst_PROGRAMS += tests/test-csum
 tests_test_csum_SOURCES = tests/test-csum.c
 tests_test_csum_LDADD = lib/libopenvswitch.a
 
-noinst_PROGRAMS += tests/test-dir_name
-tests_test_dir_name_SOURCES = tests/test-dir_name.c
-tests_test_dir_name_LDADD = lib/libopenvswitch.a
+noinst_PROGRAMS += tests/test-file_name
+tests_test_file_name_SOURCES = tests/test-file_name.c
+tests_test_file_name_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-flows
 tests_test_flows_SOURCES = tests/test-flows.c
