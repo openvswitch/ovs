@@ -118,7 +118,7 @@ static struct vport *netdev_create(const char *name, const void __user *config)
 	/* If we are using the vport stats layer initialize it to the current
 	 * values so we are roughly consistent with the device stats. */
 	if (USE_VPORT_STATS) {
-		struct odp_vport_stats stats;
+		struct rtnl_link_stats64 stats;
 
 		err = netdev_get_stats(vport, &stats);
 		if (!err)
@@ -208,26 +208,10 @@ struct kobject *netdev_get_kobj(const struct vport *vport)
 	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
 }
 
-int netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
+int netdev_get_stats(const struct vport *vport, struct rtnl_link_stats64 *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	struct rtnl_link_stats64 netdev_stats;
-
-	dev_get_stats(netdev_vport->dev, &netdev_stats);
-
-	stats->rx_bytes		= netdev_stats.rx_bytes;
-	stats->rx_packets	= netdev_stats.rx_packets;
-	stats->tx_bytes		= netdev_stats.tx_bytes;
-	stats->tx_packets	= netdev_stats.tx_packets;
-	stats->rx_dropped	= netdev_stats.rx_dropped;
-	stats->rx_errors	= netdev_stats.rx_errors;
-	stats->rx_frame_err	= netdev_stats.rx_frame_errors;
-	stats->rx_over_err	= netdev_stats.rx_over_errors;
-	stats->rx_crc_err	= netdev_stats.rx_crc_errors;
-	stats->tx_dropped	= netdev_stats.tx_dropped;
-	stats->tx_errors	= netdev_stats.tx_errors;
-	stats->collisions	= netdev_stats.collisions;
-
+	dev_get_stats(netdev_vport->dev, stats);
 	return 0;
 }
 

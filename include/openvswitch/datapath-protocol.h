@@ -52,12 +52,16 @@
  * those types when compiling the kernel. */
 #ifdef __KERNEL__
 #include <linux/types.h>
+#include <linux/socket.h>
 #define ovs_be16 __be16
 #define ovs_be32 __be32
 #define ovs_be64 __be64
 #else
 #include "openvswitch/types.h"
+#include <sys/socket.h>
 #endif
+
+#include <linux/if_link.h>
 
 #define ODP_MAX 256             /* Maximum number of datapaths. */
 
@@ -365,24 +369,9 @@ struct odp_vport_mod {
     void *config;
 };
 
-struct odp_vport_stats {
-    uint64_t rx_packets;
-    uint64_t tx_packets;
-    uint64_t rx_bytes;
-    uint64_t tx_bytes;
-    uint64_t rx_dropped;
-    uint64_t tx_dropped;
-    uint64_t rx_errors;
-    uint64_t tx_errors;
-    uint64_t rx_frame_err;
-    uint64_t rx_over_err;
-    uint64_t rx_crc_err;
-    uint64_t collisions;
-};
-
 struct odp_vport_stats_req {
     char devname[16];           /* IFNAMSIZ */
-    struct odp_vport_stats stats;
+    struct rtnl_link_stats64 stats;
 };
 
 struct odp_vport_ether {

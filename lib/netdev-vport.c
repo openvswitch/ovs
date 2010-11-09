@@ -293,19 +293,19 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     stats->tx_errors = ovsr.stats.tx_errors;
     stats->rx_dropped = ovsr.stats.rx_dropped;
     stats->tx_dropped = ovsr.stats.tx_dropped;
-    stats->multicast = UINT64_MAX;
+    stats->multicast = ovsr.stats.multicast;
     stats->collisions = ovsr.stats.collisions;
-    stats->rx_length_errors = UINT64_MAX;
-    stats->rx_over_errors = ovsr.stats.rx_over_err;
-    stats->rx_crc_errors = ovsr.stats.rx_crc_err;
-    stats->rx_frame_errors = ovsr.stats.rx_frame_err;
-    stats->rx_fifo_errors = UINT64_MAX;
-    stats->rx_missed_errors = UINT64_MAX;
-    stats->tx_aborted_errors = UINT64_MAX;
-    stats->tx_carrier_errors = UINT64_MAX;
-    stats->tx_fifo_errors = UINT64_MAX;
-    stats->tx_heartbeat_errors = UINT64_MAX;
-    stats->tx_window_errors = UINT64_MAX;
+    stats->rx_length_errors = ovsr.stats.rx_length_errors;
+    stats->rx_over_errors = ovsr.stats.rx_over_errors;
+    stats->rx_crc_errors = ovsr.stats.rx_crc_errors;
+    stats->rx_frame_errors = ovsr.stats.rx_frame_errors;
+    stats->rx_fifo_errors = ovsr.stats.rx_fifo_errors;
+    stats->rx_missed_errors = ovsr.stats.rx_missed_errors;
+    stats->tx_aborted_errors = ovsr.stats.tx_aborted_errors;
+    stats->tx_carrier_errors = ovsr.stats.tx_carrier_errors;
+    stats->tx_fifo_errors = ovsr.stats.tx_fifo_errors;
+    stats->tx_heartbeat_errors = ovsr.stats.tx_heartbeat_errors;
+    stats->tx_window_errors = ovsr.stats.tx_window_errors;
 
     return 0;
 }
@@ -326,10 +326,19 @@ netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
     ovsr.stats.tx_errors = stats->tx_errors;
     ovsr.stats.rx_dropped = stats->rx_dropped;
     ovsr.stats.tx_dropped = stats->tx_dropped;
+    ovsr.stats.multicast = stats->multicast;
     ovsr.stats.collisions = stats->collisions;
-    ovsr.stats.rx_over_err = stats->rx_over_errors;
-    ovsr.stats.rx_crc_err = stats->rx_crc_errors;
-    ovsr.stats.rx_frame_err = stats->rx_frame_errors;
+    ovsr.stats.rx_length_errors = stats->rx_length_errors;
+    ovsr.stats.rx_over_errors = stats->rx_over_errors;
+    ovsr.stats.rx_crc_errors = stats->rx_crc_errors;
+    ovsr.stats.rx_frame_errors = stats->rx_frame_errors;
+    ovsr.stats.rx_fifo_errors = stats->rx_fifo_errors;
+    ovsr.stats.rx_missed_errors = stats->rx_missed_errors;
+    ovsr.stats.tx_aborted_errors = stats->tx_aborted_errors;
+    ovsr.stats.tx_carrier_errors = stats->tx_carrier_errors;
+    ovsr.stats.tx_fifo_errors = stats->tx_fifo_errors;
+    ovsr.stats.tx_heartbeat_errors = stats->tx_heartbeat_errors;
+    ovsr.stats.tx_window_errors = stats->tx_window_errors;
 
     err = netdev_vport_do_ioctl(ODP_VPORT_STATS_SET, &ovsr);
 

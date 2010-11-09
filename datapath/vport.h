@@ -56,7 +56,7 @@ int vport_detach(struct vport *);
 
 int vport_set_mtu(struct vport *, int mtu);
 int vport_set_addr(struct vport *, const unsigned char *);
-int vport_set_stats(struct vport *, struct odp_vport_stats *);
+int vport_set_stats(struct vport *, struct rtnl_link_stats64 *);
 
 const char *vport_get_name(const struct vport *);
 const char *vport_get_type(const struct vport *);
@@ -64,7 +64,7 @@ const unsigned char *vport_get_addr(const struct vport *);
 
 struct dp_port *vport_get_dp_port(const struct vport *);
 struct kobject *vport_get_kobj(const struct vport *);
-int vport_get_stats(struct vport *, struct odp_vport_stats *);
+int vport_get_stats(struct vport *, struct rtnl_link_stats64 *);
 
 unsigned vport_get_flags(const struct vport *);
 int vport_is_running(const struct vport *);
@@ -107,7 +107,7 @@ struct vport {
 
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
-	struct odp_vport_stats offset_stats;
+	struct rtnl_link_stats64 offset_stats;
 };
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
@@ -177,13 +177,13 @@ struct vport_ops {
 
 	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);
-	int (*set_stats)(const struct vport *, struct odp_vport_stats *);
+	int (*set_stats)(const struct vport *, struct rtnl_link_stats64 *);
 
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);
 	const unsigned char *(*get_addr)(const struct vport *);
 	struct kobject *(*get_kobj)(const struct vport *);
-	int (*get_stats)(const struct vport *, struct odp_vport_stats *);
+	int (*get_stats)(const struct vport *, struct rtnl_link_stats64 *);
 
 	unsigned (*get_dev_flags)(const struct vport *);
 	int (*is_running)(const struct vport *);

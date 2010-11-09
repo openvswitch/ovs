@@ -904,7 +904,7 @@ int vport_set_addr(struct vport *vport, const unsigned char *addr)
  * support setting the stats, in which case the result will always be
  * -EOPNOTSUPP.  RTNL lock must be held.
  */
-int vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_set_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
 	ASSERT_RTNL();
 
@@ -998,10 +998,10 @@ struct kobject *vport_get_kobj(const struct vport *vport)
  *
  * Retrieves transmit, receive, and error stats for the given device.
  */
-int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
-	struct odp_vport_stats dev_stats;
-	struct odp_vport_stats *dev_statsp = NULL;
+	struct rtnl_link_stats64 dev_stats;
+	struct rtnl_link_stats64 *dev_statsp = NULL;
 	int err;
 
 	if (vport->ops->get_stats) {
@@ -1039,22 +1039,37 @@ int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
 		stats->tx_errors	+= vport->err_stats.tx_errors;
 		stats->tx_dropped	+= vport->err_stats.tx_dropped;
 		stats->rx_dropped	+= vport->err_stats.rx_dropped;
-		stats->rx_over_err	+= vport->err_stats.rx_over_err;
-		stats->rx_crc_err	+= vport->err_stats.rx_crc_err;
-		stats->rx_frame_err	+= vport->err_stats.rx_frame_err;
+		stats->rx_over_errors	+= vport->err_stats.rx_over_err;
+		stats->rx_crc_errors	+= vport->err_stats.rx_crc_err;
+		stats->rx_frame_errors	+= vport->err_stats.rx_frame_err;
 		stats->collisions	+= vport->err_stats.collisions;
 
 		spin_unlock_bh(&vport->stats_lock);
 
 		if (dev_statsp) {
-			stats->rx_errors	+= dev_statsp->rx_errors;
-			stats->tx_errors	+= dev_statsp->tx_errors;
-			stats->rx_dropped	+= dev_statsp->rx_dropped;
-			stats->tx_dropped	+= dev_statsp->tx_dropped;
-			stats->rx_over_err	+= dev_statsp->rx_over_err;
-			stats->rx_crc_err	+= dev_statsp->rx_crc_err;
-			stats->rx_frame_err	+= dev_statsp->rx_frame_err;
-			stats->collisions	+= dev_statsp->collisions;
+			stats->rx_packets          += dev_statsp->rx_packets;
+			stats->tx_packets          += dev_statsp->tx_packets;
+			stats->rx_bytes            += dev_statsp->rx_bytes;
+			stats->tx_bytes            += dev_statsp->tx_bytes;
+			stats->rx_errors           += dev_statsp->rx_errors;
+			stats->tx_errors           += dev_statsp->tx_errors;
+			stats->rx_dropped          += dev_statsp->rx_dropped;
+			stats->tx_dropped          += dev_statsp->tx_dropped;
+			stats->multicast           += dev_statsp->multicast;
+			stats->collisions          += dev_statsp->collisions;
+			stats->rx_length_errors    += dev_statsp->rx_length_errors;
+			stats->rx_over_errors      += dev_statsp->rx_over_errors;
+			stats->rx_crc_errors       += dev_statsp->rx_crc_errors;
+			stats->rx_frame_errors     += dev_statsp->rx_frame_errors;
+			stats->rx_fifo_errors      += dev_statsp->rx_fifo_errors;
+			stats->rx_missed_errors    += dev_statsp->rx_missed_errors;
+			stats->tx_aborted_errors   += dev_statsp->tx_aborted_errors;
+			stats->tx_carrier_errors   += dev_statsp->tx_carrier_errors;
+			stats->tx_fifo_errors      += dev_statsp->tx_fifo_errors;
+			stats->tx_heartbeat_errors += dev_statsp->tx_heartbeat_errors;
+			stats->tx_window_errors    += dev_statsp->tx_window_errors;
+			stats->rx_compressed       += dev_statsp->rx_compressed;
+			stats->tx_compressed       += dev_statsp->tx_compressed;
 		}
 
 		for_each_possible_cpu(i) {
