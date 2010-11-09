@@ -282,11 +282,13 @@ tc_destroy(struct tc *tc)
 }
 
 static const struct tc_ops tc_ops_htb;
+static const struct tc_ops tc_ops_hfsc;
 static const struct tc_ops tc_ops_default;
 static const struct tc_ops tc_ops_other;
 
 static const struct tc_ops *tcs[] = {
     &tc_ops_htb,                /* Hierarchy token bucket (see tc-htb(8)). */
+    &tc_ops_hfsc,               /* Hierarchical fair service curve. */
     &tc_ops_default,            /* Default qdisc (see tc-pfifo_fast(8)). */
     &tc_ops_other,              /* Some other qdisc. */
     NULL
@@ -2263,8 +2265,7 @@ htb_install__(struct netdev *netdev, uint64_t max_rate)
 
 /* Create an HTB qdisc.
  *
- * Equivalent to "tc qdisc add dev <dev> root handle 1: htb default
- * 0". */
+ * Equivalent to "tc qdisc add dev <dev> root handle 1: htb default 1". */
 static int
 htb_setup_qdisc__(struct netdev *netdev)
 {
@@ -2695,6 +2696,517 @@ static const struct tc_ops tc_ops_htb = {
     htb_class_delete,
     htb_class_get_stats,
     htb_class_dump_stats
+};
+
+/* "linux-hfsc" traffic control class. */
+
+#define HFSC_N_QUEUES 0xf000
+
+struct hfsc {
+    struct tc tc;
+    uint32_t max_rate;
+};
+
+struct hfsc_class {
+    struct tc_queue tc_queue;
+    uint32_t min_rate;
+    uint32_t max_rate;
+};
+
+static struct hfsc *
+hfsc_get__(const struct netdev *netdev)
+{
+    struct netdev_dev_linux *netdev_dev;
+    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
+    return CONTAINER_OF(netdev_dev->tc, struct hfsc, tc);
+}
+
+static struct hfsc_class *
+hfsc_class_cast__(const struct tc_queue *queue)
+{
+    return CONTAINER_OF(queue, struct hfsc_class, tc_queue);
+}
+
+static struct hfsc *
+hfsc_install__(struct netdev *netdev, uint32_t max_rate)
+{
+    struct netdev_dev_linux * netdev_dev;
+    struct hfsc *hfsc;
+
+    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
+    hfsc = xmalloc(sizeof *hfsc);
+    tc_init(&hfsc->tc, &tc_ops_hfsc);
+    hfsc->max_rate = max_rate;
+    netdev_dev->tc = &hfsc->tc;
+
+    return hfsc;
+}
+
+static void
+hfsc_update_queue__(struct netdev *netdev, unsigned int queue_id,
+                    const struct hfsc_class *hc)
+{
+    size_t hash;
+    struct hfsc *hfsc;
+    struct hfsc_class *hcp;
+    struct tc_queue *queue;
+
+    hfsc = hfsc_get__(netdev);
+    hash = hash_int(queue_id, 0);
+
+    queue = tc_find_queue__(netdev, queue_id, hash);
+    if (queue) {
+        hcp = hfsc_class_cast__(queue);
+    } else {
+        hcp             = xmalloc(sizeof *hcp);
+        queue           = &hcp->tc_queue;
+        queue->queue_id = queue_id;
+        hmap_insert(&hfsc->tc.queues, &queue->hmap_node, hash);
+    }
+
+    hcp->min_rate = hc->min_rate;
+    hcp->max_rate = hc->max_rate;
+}
+
+static int
+hfsc_parse_tca_options__(struct nlattr *nl_options, struct hfsc_class *class)
+{
+    const struct tc_service_curve *rsc, *fsc, *usc;
+    static const struct nl_policy tca_hfsc_policy[] = {
+        [TCA_HFSC_RSC] = {
+            .type      = NL_A_UNSPEC,
+            .optional  = false,
+            .min_len   = sizeof(struct tc_service_curve),
+        },
+        [TCA_HFSC_FSC] = {
+            .type      = NL_A_UNSPEC,
+            .optional  = false,
+            .min_len   = sizeof(struct tc_service_curve),
+        },
+        [TCA_HFSC_USC] = {
+            .type      = NL_A_UNSPEC,
+            .optional  = false,
+            .min_len   = sizeof(struct tc_service_curve),
+        },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(tca_hfsc_policy)];
+
+    if (!nl_parse_nested(nl_options, tca_hfsc_policy,
+                         attrs, ARRAY_SIZE(tca_hfsc_policy))) {
+        VLOG_WARN_RL(&rl, "failed to parse HFSC class options");
+        return EPROTO;
+    }
+
+    rsc = nl_attr_get(attrs[TCA_HFSC_RSC]);
+    fsc = nl_attr_get(attrs[TCA_HFSC_FSC]);
+    usc = nl_attr_get(attrs[TCA_HFSC_USC]);
+
+    if (rsc->m1 != 0 || rsc->d != 0 ||
+        fsc->m1 != 0 || fsc->d != 0 ||
+        usc->m1 != 0 || usc->d != 0) {
+        VLOG_WARN_RL(&rl, "failed to parse HFSC class options. "
+                     "Non-linear service curves are not supported.");
+        return EPROTO;
+    }
+
+    if (rsc->m2 != fsc->m2) {
+        VLOG_WARN_RL(&rl, "failed to parse HFSC class options. "
+                     "Real-time service curves are not supported ");
+        return EPROTO;
+    }
+
+    if (rsc->m2 > usc->m2) {
+        VLOG_WARN_RL(&rl, "failed to parse HFSC class options. "
+                     "Min-rate service curve is greater than "
+                     "the max-rate service curve.");
+        return EPROTO;
+    }
+
+    class->min_rate = fsc->m2;
+    class->max_rate = usc->m2;
+    return 0;
+}
+
+static int
+hfsc_parse_tcmsg__(struct ofpbuf *tcmsg, unsigned int *queue_id,
+                   struct hfsc_class *options,
+                   struct netdev_queue_stats *stats)
+{
+    int error;
+    unsigned int handle;
+    struct nlattr *nl_options;
+
+    error = tc_parse_class(tcmsg, &handle, &nl_options, stats);
+    if (error) {
+        return error;
+    }
+
+    if (queue_id) {
+        unsigned int major, minor;
+
+        major = tc_get_major(handle);
+        minor = tc_get_minor(handle);
+        if (major == 1 && minor > 0 && minor <= HFSC_N_QUEUES) {
+            *queue_id = minor - 1;
+        } else {
+            return EPROTO;
+        }
+    }
+
+    if (options) {
+        error = hfsc_parse_tca_options__(nl_options, options);
+    }
+
+    return error;
+}
+
+static int
+hfsc_query_class__(const struct netdev *netdev, unsigned int handle,
+                   unsigned int parent, struct hfsc_class *options,
+                   struct netdev_queue_stats *stats)
+{
+    int error;
+    struct ofpbuf *reply;
+
+    error = tc_query_class(netdev, handle, parent, &reply);
+    if (error) {
+        return error;
+    }
+
+    error = hfsc_parse_tcmsg__(reply, NULL, options, stats);
+    ofpbuf_delete(reply);
+    return error;
+}
+
+static void
+hfsc_parse_qdisc_details__(struct netdev *netdev, const struct shash *details,
+                           struct hfsc_class *class)
+{
+    uint32_t max_rate;
+    const char *max_rate_s;
+
+    max_rate_s = shash_find_data(details, "max-rate");
+    max_rate   = max_rate_s ? strtoull(max_rate_s, NULL, 10) / 8 : 0;
+
+    if (!max_rate) {
+        uint32_t current;
+
+        netdev_get_features(netdev, &current, NULL, NULL, NULL);
+        max_rate = netdev_features_to_bps(current) / 8;
+    }
+
+    class->min_rate = max_rate;
+    class->max_rate = max_rate;
+}
+
+static int
+hfsc_parse_class_details__(struct netdev *netdev,
+                           const struct shash *details,
+                           struct hfsc_class * class)
+{
+    const struct hfsc *hfsc;
+    uint32_t min_rate, max_rate;
+    const char *min_rate_s, *max_rate_s;
+
+    hfsc       = hfsc_get__(netdev);
+    min_rate_s = shash_find_data(details, "min-rate");
+    max_rate_s = shash_find_data(details, "max-rate");
+
+    if (!min_rate_s) {
+        return EINVAL;
+    }
+
+    min_rate = strtoull(min_rate_s, NULL, 10) / 8;
+    min_rate = MAX(min_rate, 1500);
+    min_rate = MIN(min_rate, hfsc->max_rate);
+
+    max_rate = (max_rate_s
+                ? strtoull(max_rate_s, NULL, 10) / 8
+                : hfsc->max_rate);
+    max_rate = MAX(max_rate, min_rate);
+    max_rate = MIN(max_rate, hfsc->max_rate);
+
+    class->min_rate = min_rate;
+    class->max_rate = max_rate;
+
+    return 0;
+}
+
+/* Create an HFSC qdisc.
+ *
+ * Equivalent to "tc qdisc add dev <dev> root handle 1: hfsc default 1". */
+static int
+hfsc_setup_qdisc__(struct netdev * netdev)
+{
+    struct tcmsg *tcmsg;
+    struct ofpbuf request;
+    struct tc_hfsc_qopt opt;
+
+    tc_del_qdisc(netdev);
+
+    tcmsg = tc_make_request(netdev, RTM_NEWQDISC,
+                            NLM_F_EXCL | NLM_F_CREATE, &request);
+
+    if (!tcmsg) {
+        return ENODEV;
+    }
+
+    tcmsg->tcm_handle = tc_make_handle(1, 0);
+    tcmsg->tcm_parent = TC_H_ROOT;
+
+    memset(&opt, 0, sizeof opt);
+    opt.defcls = 1;
+
+    nl_msg_put_string(&request, TCA_KIND, "hfsc");
+    nl_msg_put_unspec(&request, TCA_OPTIONS, &opt, sizeof opt);
+
+    return tc_transact(&request, NULL);
+}
+
+/* Create an HFSC class.
+ *
+ * Equivalent to "tc class add <dev> parent <parent> classid <handle> hfsc
+ * sc rate <min_rate> ul rate <max_rate>" */
+static int
+hfsc_setup_class__(struct netdev *netdev, unsigned int handle,
+                   unsigned int parent, struct hfsc_class *class)
+{
+    int error;
+    size_t opt_offset;
+    struct tcmsg *tcmsg;
+    struct ofpbuf request;
+    struct tc_service_curve min, max;
+
+    tcmsg = tc_make_request(netdev, RTM_NEWTCLASS, NLM_F_CREATE, &request);
+
+    if (!tcmsg) {
+        return ENODEV;
+    }
+
+    tcmsg->tcm_handle = handle;
+    tcmsg->tcm_parent = parent;
+
+    min.m1 = 0;
+    min.d  = 0;
+    min.m2 = class->min_rate;
+
+    max.m1 = 0;
+    max.d  = 0;
+    max.m2 = class->max_rate;
+
+    nl_msg_put_string(&request, TCA_KIND, "hfsc");
+    opt_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
+    nl_msg_put_unspec(&request, TCA_HFSC_RSC, &min, sizeof min);
+    nl_msg_put_unspec(&request, TCA_HFSC_FSC, &min, sizeof min);
+    nl_msg_put_unspec(&request, TCA_HFSC_USC, &max, sizeof max);
+    nl_msg_end_nested(&request, opt_offset);
+
+    error = tc_transact(&request, NULL);
+    if (error) {
+        VLOG_WARN_RL(&rl, "failed to replace %s class %u:%u, parent %u:%u, "
+                     "min-rate %ubps, max-rate %ubps (%s)",
+                     netdev_get_name(netdev),
+                     tc_get_major(handle), tc_get_minor(handle),
+                     tc_get_major(parent), tc_get_minor(parent),
+                     class->min_rate, class->max_rate, strerror(error));
+    }
+
+    return error;
+}
+
+static int
+hfsc_tc_install(struct netdev *netdev, const struct shash *details)
+{
+    int error;
+    struct hfsc_class class;
+
+    error = hfsc_setup_qdisc__(netdev);
+
+    if (error) {
+        return error;
+    }
+
+    hfsc_parse_qdisc_details__(netdev, details, &class);
+    error = hfsc_setup_class__(netdev, tc_make_handle(1, 0xfffe),
+                               tc_make_handle(1, 0), &class);
+
+    if (error) {
+        return error;
+    }
+
+    hfsc_install__(netdev, class.max_rate);
+    return 0;
+}
+
+static int
+hfsc_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
+{
+    struct ofpbuf msg;
+    struct hfsc *hfsc;
+    struct nl_dump dump;
+    struct hfsc_class hc;
+
+    hc.max_rate = 0;
+    hfsc_query_class__(netdev, tc_make_handle(1, 0xfffe), 0, &hc, NULL);
+    hfsc = hfsc_install__(netdev, hc.max_rate);
+
+    if (!start_queue_dump(netdev, &dump)) {
+        return ENODEV;
+    }
+
+    while (nl_dump_next(&dump, &msg)) {
+        unsigned int queue_id;
+
+        if (!hfsc_parse_tcmsg__(&msg, &queue_id, &hc, NULL)) {
+            hfsc_update_queue__(netdev, queue_id, &hc);
+        }
+    }
+
+    nl_dump_done(&dump);
+    return 0;
+}
+
+static void
+hfsc_tc_destroy(struct tc *tc)
+{
+    struct hfsc *hfsc;
+    struct hfsc_class *hc, *next;
+
+    hfsc = CONTAINER_OF(tc, struct hfsc, tc);
+
+    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &hfsc->tc.queues) {
+        hmap_remove(&hfsc->tc.queues, &hc->tc_queue.hmap_node);
+        free(hc);
+    }
+
+    tc_destroy(tc);
+    free(hfsc);
+}
+
+static int
+hfsc_qdisc_get(const struct netdev *netdev, struct shash *details)
+{
+    const struct hfsc *hfsc;
+    hfsc = hfsc_get__(netdev);
+    shash_add(details, "max-rate", xasprintf("%llu", 8ULL * hfsc->max_rate));
+    return 0;
+}
+
+static int
+hfsc_qdisc_set(struct netdev *netdev, const struct shash *details)
+{
+    int error;
+    struct hfsc_class class;
+
+    hfsc_parse_qdisc_details__(netdev, details, &class);
+    error = hfsc_setup_class__(netdev, tc_make_handle(1, 0xfffe),
+                               tc_make_handle(1, 0), &class);
+
+    if (!error) {
+        hfsc_get__(netdev)->max_rate = class.max_rate;
+    }
+
+    return error;
+}
+
+static int
+hfsc_class_get(const struct netdev *netdev OVS_UNUSED,
+              const struct tc_queue *queue, struct shash *details)
+{
+    const struct hfsc_class *hc;
+
+    hc = hfsc_class_cast__(queue);
+    shash_add(details, "min-rate", xasprintf("%llu", 8ULL * hc->min_rate));
+    if (hc->min_rate != hc->max_rate) {
+        shash_add(details, "max-rate", xasprintf("%llu", 8ULL * hc->max_rate));
+    }
+    return 0;
+}
+
+static int
+hfsc_class_set(struct netdev *netdev, unsigned int queue_id,
+               const struct shash *details)
+{
+    int error;
+    struct hfsc_class class;
+
+    error = hfsc_parse_class_details__(netdev, details, &class);
+    if (error) {
+        return error;
+    }
+
+    error = hfsc_setup_class__(netdev, tc_make_handle(1, queue_id + 1),
+                               tc_make_handle(1, 0xfffe), &class);
+    if (error) {
+        return error;
+    }
+
+    hfsc_update_queue__(netdev, queue_id, &class);
+    return 0;
+}
+
+static int
+hfsc_class_delete(struct netdev *netdev, struct tc_queue *queue)
+{
+    int error;
+    struct hfsc *hfsc;
+    struct hfsc_class *hc;
+
+    hc   = hfsc_class_cast__(queue);
+    hfsc = hfsc_get__(netdev);
+
+    error = tc_delete_class(netdev, tc_make_handle(1, queue->queue_id + 1));
+    if (!error) {
+        hmap_remove(&hfsc->tc.queues, &hc->tc_queue.hmap_node);
+        free(hc);
+    }
+    return error;
+}
+
+static int
+hfsc_class_get_stats(const struct netdev *netdev, const struct tc_queue *queue,
+                     struct netdev_queue_stats *stats)
+{
+    return hfsc_query_class__(netdev, tc_make_handle(1, queue->queue_id + 1),
+                             tc_make_handle(1, 0xfffe), NULL, stats);
+}
+
+static int
+hfsc_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
+                      const struct ofpbuf *nlmsg,
+                      netdev_dump_queue_stats_cb *cb, void *aux)
+{
+    struct netdev_queue_stats stats;
+    unsigned int handle, major, minor;
+    int error;
+
+    error = tc_parse_class(nlmsg, &handle, NULL, &stats);
+    if (error) {
+        return error;
+    }
+
+    major = tc_get_major(handle);
+    minor = tc_get_minor(handle);
+    if (major == 1 && minor > 0 && minor <= HFSC_N_QUEUES) {
+        (*cb)(minor - 1, &stats, aux);
+    }
+    return 0;
+}
+
+static const struct tc_ops tc_ops_hfsc = {
+    "hfsc",                     /* linux_name */
+    "linux-hfsc",               /* ovs_name */
+    HFSC_N_QUEUES,              /* n_queues */
+    hfsc_tc_install,            /* tc_install */
+    hfsc_tc_load,               /* tc_load */
+    hfsc_tc_destroy,            /* tc_destroy */
+    hfsc_qdisc_get,             /* qdisc_get */
+    hfsc_qdisc_set,             /* qdisc_set */
+    hfsc_class_get,             /* class_get */
+    hfsc_class_set,             /* class_set */
+    hfsc_class_delete,          /* class_delete */
+    hfsc_class_get_stats,       /* class_get_stats */
+    hfsc_class_dump_stats       /* class_dump_stats */
 };
 
 /* "linux-default" traffic control class.

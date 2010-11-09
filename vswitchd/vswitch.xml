@@ -1028,6 +1028,14 @@
           for information on how this classifier works and how to configure it.
         </dd>
       </dl>
+      <dl>
+        <dt><code>linux-hfsc</code></dt>
+        <dd>
+          Linux "Hierarchical Fair Service Curve" classifier.
+          See <code>http://linux-ip.net/articles/hfsc.en/</code> for
+          information on how this classifier works.
+        </dd>
+      </dl>
     </column>
 
     <column name="queues">
@@ -1042,8 +1050,8 @@
     <column name="other_config">
       <p>Key-value pairs for configuring QoS features that depend on
         <ref column="type"/>.</p>
-      <p>The <code>linux-htb</code> class supports the following key-value
-        pairs:</p>
+      <p>The <code>linux-htb</code> and <code>linux-hfsc</code> classes support
+          the following key-value pairs:</p>
       <dl>
         <dt><code>max-rate</code></dt>
         <dd>Maximum rate shared by all queued traffic, in bit/s.
@@ -1101,6 +1109,17 @@
           will receive all the excess bandwidth that it can use before
           a queue with a larger value receives any.  Specific priority
           values are unimportant; only relative ordering matters.</dd>
+      </dl>
+      <p>The key-value pairs defined for <ref table="QoS"/> <ref table="QoS"
+        column="type"/> of <code>linux-hfsc</code> are:</p>
+      <dl>
+        <dt><code>min-rate</code></dt>
+        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+        <dt><code>max-rate</code></dt>
+        <dd>Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
+          queue's rate will not be allowed to exceed the specified value, even
+          if excess bandwidth is available.  If unspecified, defaults to no
+          limit.</dd>
       </dl>
     </column>
 
