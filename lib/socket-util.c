@@ -36,6 +36,15 @@
 
 VLOG_DEFINE_THIS_MODULE(socket_util);
 
+/* #ifdefs make it a pain to maintain code: you have to try to build both ways.
+ * Thus, this file compiles all of the code regardless of the target, by
+ * writing "if (LINUX)" instead of "#ifdef __linux__". */
+#ifdef __linux__
+#define LINUX 1
+#else
+#define LINUX 0
+#endif
+
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */
 int
@@ -171,12 +180,7 @@ drain_rcvbuf(int fd)
          *
          * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
          * argument. */
-#ifdef __linux__
-#define BUFFER_SIZE 1
-#else
-#define BUFFER_SIZE 2048
-#endif
-        char buffer[BUFFER_SIZE];
+        char buffer[LINUX ? 1 : 2048];
         ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
                                MSG_TRUNC | MSG_DONTWAIT);
         if (n_bytes <= 0 || n_bytes >= rcvbuf) {
