@@ -307,6 +307,16 @@ cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
     rule->flow.icmp_code = htons(icmp_code);
 }
 
+/* Returns true if 'a' and 'b' have the same priority, wildcard the same
+ * fields, and have the same values for fixed fields, otherwise false. */
+bool
+cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
+{
+    return (a->priority == b->priority
+            && flow_wildcards_equal(&a->wc, &b->wc)
+            && flow_equal(&a->flow, &b->flow));
+}
+
 /* Converts 'rule' to a string and returns the string.  The caller must free
  * the string (with free()). */
 char *

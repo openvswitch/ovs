@@ -96,6 +96,8 @@ void cls_rule_set_nw_tos(struct cls_rule *, uint8_t);
 void cls_rule_set_icmp_type(struct cls_rule *, uint8_t);
 void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
 
+bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
+
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 

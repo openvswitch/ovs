@@ -139,11 +139,8 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
     assert(rule->cls_rule.wc.wildcards || rule->cls_rule.priority == UINT_MAX);
     for (i = 0; i < tcls->n_rules; i++) {
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
-        if (pos->priority == rule->cls_rule.priority
-            && pos->wc.wildcards == rule->cls_rule.wc.wildcards
-            && flow_equal(&pos->flow, &rule->cls_rule.flow)) {
-            /* Exact match.
-             * XXX flow_equal should ignore wildcarded fields */
+        if (cls_rule_equal(pos, &rule->cls_rule)) {
+            /* Exact match. */
             free(tcls->rules[i]);
             tcls->rules[i] = xmemdup(rule, sizeof *rule);
             return tcls->rules[i];
@@ -383,11 +380,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
             const struct test_rule *tr0 = test_rule_from_cls_rule(cr0);
             const struct test_rule *tr1 = test_rule_from_cls_rule(cr1);
 
-            assert(flow_equal(&cr0->flow, &cr1->flow));
-            assert(cr0->wc.wildcards == cr1->wc.wildcards);
-            assert(cr0->priority == cr1->priority);
-            /* Skip nw_src_mask and nw_dst_mask, because they are derived
-             * members whose values are used only for optimization. */
+            assert(cls_rule_equal(cr0, cr1));
             assert(tr0->aux == tr1->aux);
         }
     }
