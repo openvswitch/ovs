@@ -133,12 +133,11 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
     if (verbosity > 0) {
         struct flow flow;
         struct ofpbuf packet;
-        struct ofp_match match;
+
         packet.data = (void *) op->data;
         packet.size = data_len;
         flow_extract(&packet, 0, ntohs(op->in_port), &flow);
-        flow_to_match(&flow, 0, false, &match);
-        ofp_print_match(string, &match, verbosity);
+        flow_format(string, &flow);
         ds_put_char(string, '\n');
     }
     if (verbosity > 1) {
