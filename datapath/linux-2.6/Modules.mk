@@ -4,6 +4,7 @@ openvswitch_sources += \
 	linux-2.6/compat-2.6/genetlink-openvswitch.c \
 	linux-2.6/compat-2.6/ip_output-openvswitch.c \
 	linux-2.6/compat-2.6/kmemdup.c \
+	linux-2.6/compat-2.6/netdevice.c \
 	linux-2.6/compat-2.6/skbuff-openvswitch.c \
 	linux-2.6/compat-2.6/time.c
 openvswitch_headers += \

@@ -77,12 +77,17 @@ extern void unregister_netdevice_many(struct list_head *head);
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
-#ifndef HAVE_DEV_GET_STATS
-static inline const struct net_device_stats *
-dev_get_stats(struct net_device *dev)
-{
-	return dev->get_stats(dev);
-}
+/* Linux 2.6.28 introduced dev_get_stats():
+ * const struct net_device_stats *dev_get_stats(struct net_device *dev);
+ *
+ * Linux 2.6.36 changed dev_get_stats() to:
+ * struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
+ *                                         struct rtnl_link_stats64 *storage);
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+#define dev_get_stats(dev, storage) rpl_dev_get_stats(dev, storage)
+struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
+					struct rtnl_link_stats64 *storage);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
