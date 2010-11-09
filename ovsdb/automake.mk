@@ -94,7 +94,7 @@ DISTCLEANFILES += ovsdb/ovsdb-doc
 OVSDB_DOC = $(run_python) $(srcdir)/ovsdb/ovsdb-doc.in
 
 # ovsdb-dot
-EXTRA_DIST += ovsdb/ovsdb-dot.in
+EXTRA_DIST += ovsdb/ovsdb-dot.in ovsdb/dot2pic
 noinst_SCRIPTS += ovsdb/ovsdb-dot
 DISTCLEANFILES += ovsdb/ovsdb-dot
 OVSDB_DOT = $(run_python) $(srcdir)/ovsdb/ovsdb-dot.in
