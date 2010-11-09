@@ -2,7 +2,6 @@
 *.debhelper.log
 *.substvars
 /control
-/corekeeper
 /copyright
 /files
 /nicira-switch

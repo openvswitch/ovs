@@ -92,13 +92,6 @@ Description: Open vSwitch controller implementation
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
-Package: corekeeper
-Architecture: all
-Depends: tmpreaper, ${misc:Depends}
-Description: Core file centralizer and reaper
- The corekeeper package configures the system to dump all core files to
- /var/log/core.  It also deletes core files older than 7 days.
-
 Package: openvswitch-dbg
 Section: debug
 Architecture: any
