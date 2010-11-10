@@ -474,9 +474,8 @@ global variables.
 
 C DIALECT
 
-  Try to avoid using GCC extensions where possible.
-
-  Some C99 extensions are OK:
+  Some C99 features are OK because they are widely implemented even in
+older compilers:
 
     * Flexible array members (e.g. struct { int foo[]; }).
 
@@ -491,9 +490,8 @@ C DIALECT
       only take on the values 0 or 1, because this behavior can't be
       simulated on C89 compilers.
 
-  Don't use other C99 extensions, and especially:
-
-    * Don't use // comments.
+  Don't use other C99 features that are not widely implemented in
+older compilers:
 
     * Don't use designated initializers (e.g. don't write "struct foo
       foo = {.a = 1};" or "int a[] = {[2] = 5};").
@@ -505,3 +503,10 @@ C DIALECT
 
     * Don't put a trailing comma in an enum declaration (e.g. don't
       write "enum { x = 1, };").
+
+  As a matter of style, avoid // comments.
+
+  Avoid using GCC extensions unless you also add a fallback for
+non-GCC compilers.  You can, however, use GCC extensions and C99
+features in code that compiles only on GNU/Linux (such as
+lib/netdev-linux.c), because GCC is the system compiler there.
