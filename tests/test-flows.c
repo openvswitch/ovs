@@ -70,7 +70,7 @@ main(int argc OVS_UNUSED, char *argv[])
 
         flow_extract(packet, 0, 1, &flow);
         cls_rule_init_exact(&flow, 0, &rule);
-        cls_rule_to_match(&rule, NXFF_OPENFLOW10, &extracted_match);
+        ofputil_cls_rule_to_match(&rule, NXFF_OPENFLOW10, &extracted_match);
 
         if (memcmp(&expected_match, &extracted_match, sizeof expected_match)) {
             char *exp_s = ofp_match_to_string(&expected_match, 2);

@@ -3412,7 +3412,7 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
-    cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match);
+    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
@@ -3451,7 +3451,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         struct cls_rule target;
         struct rule *rule;
 
-        cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
+        ofputil_cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0,
+                                    &target);
         cls_cursor_init(&cursor, &ofconn->ofproto->cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             put_ofp_flow_stats(ofconn, rule, fsr->out_port, &reply);
@@ -3543,7 +3544,7 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     size_t act_len = sizeof *rule->actions * rule->n_actions;
 
     query_stats(ofproto, rule, &packet_count, &byte_count);
-    cls_rule_to_match(&rule->cr, NXFF_OPENFLOW10, &match);
+    ofputil_cls_rule_to_match(&rule->cr, NXFF_OPENFLOW10, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -3624,7 +3625,8 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     }
     request = (struct ofp_aggregate_stats_request *) osr->body;
 
-    cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0, &target);
+    ofputil_cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0,
+                                &target);
 
     msg = start_ofp_stats_reply(osr, sizeof *reply);
     reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
@@ -4183,8 +4185,8 @@ handle_ofpt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
     }
 
     /* Translate the message. */
-    cls_rule_from_match(&ofm->match, ntohs(ofm->priority), ofconn->flow_format,
-                        ofm->cookie, &fm.cr);
+    ofputil_cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
+                                ofconn->flow_format, ofm->cookie, &fm.cr);
     fm.cookie = ofm->cookie;
     fm.command = ntohs(ofm->command);
     fm.idle_timeout = ntohs(ofm->idle_timeout);
@@ -4813,7 +4815,7 @@ compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     struct ofpbuf *buf;
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match);
+    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;

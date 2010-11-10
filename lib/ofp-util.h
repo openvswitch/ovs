@@ -24,6 +24,7 @@
 #include "flow.h"
 #include "openvswitch/types.h"
 
+struct cls_rule;
 struct ofpbuf;
 struct ofp_action_header;
 
@@ -34,6 +35,15 @@ struct ofp_action_header;
  * and from IP bitmasks. */
 ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
 int ofputil_netmask_to_wcbits(ovs_be32 netmask);
+
+/* Work with OpenFlow 1.0 ofp_match. */
+void ofputil_cls_rule_from_match(const struct ofp_match *,
+                                 unsigned int priority, int flow_format,
+                                 uint64_t cookie, struct cls_rule *);
+void ofputil_cls_rule_to_match(const struct cls_rule *, int flow_format,
+                               struct ofp_match *);
+void normalize_match(struct ofp_match *);
+char *ofp_match_to_literal_string(const struct ofp_match *match);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
@@ -89,9 +99,6 @@ const union ofp_action *actions_next(struct actions_iterator *);
 int validate_actions(const union ofp_action *, size_t n_actions,
                      const struct flow *, int max_ports);
 bool action_outputs_to_port(const union ofp_action *, uint16_t port);
-
-void normalize_match(struct ofp_match *);
-char *ofp_match_to_literal_string(const struct ofp_match *match);
 
 int ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
                          union ofp_action **, size_t *);

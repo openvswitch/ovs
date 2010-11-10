@@ -382,20 +382,20 @@ parse_protocol(const char *name, const struct protocol **p_out)
 }
 
 #define FIELDS                                              \
-    FIELD(F_IN_PORT,     "in_port",     OFPFW_IN_PORT)      \
-    FIELD(F_DL_VLAN,     "dl_vlan",     OFPFW_DL_VLAN)      \
-    FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", OFPFW_DL_VLAN_PCP)  \
-    FIELD(F_DL_SRC,      "dl_src",      OFPFW_DL_SRC)       \
-    FIELD(F_DL_DST,      "dl_dst",      OFPFW_DL_DST)       \
-    FIELD(F_DL_TYPE,     "dl_type",     OFPFW_DL_TYPE)      \
+    FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \
+    FIELD(F_DL_VLAN,     "dl_vlan",     FWW_DL_VLAN)        \
+    FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", FWW_DL_VLAN_PCP)    \
+    FIELD(F_DL_SRC,      "dl_src",      FWW_DL_SRC)         \
+    FIELD(F_DL_DST,      "dl_dst",      FWW_DL_DST)         \
+    FIELD(F_DL_TYPE,     "dl_type",     FWW_DL_TYPE)        \
     FIELD(F_NW_SRC,      "nw_src",      0)                  \
     FIELD(F_NW_DST,      "nw_dst",      0)                  \
-    FIELD(F_NW_PROTO,    "nw_proto",    OFPFW_NW_PROTO)     \
-    FIELD(F_NW_TOS,      "nw_tos",      OFPFW_NW_TOS)       \
-    FIELD(F_TP_SRC,      "tp_src",      OFPFW_TP_SRC)       \
-    FIELD(F_TP_DST,      "tp_dst",      OFPFW_TP_DST)       \
-    FIELD(F_ICMP_TYPE,   "icmp_type",   OFPFW_ICMP_TYPE)    \
-    FIELD(F_ICMP_CODE,   "icmp_code",   OFPFW_ICMP_CODE)
+    FIELD(F_NW_PROTO,    "nw_proto",    FWW_NW_PROTO)       \
+    FIELD(F_NW_TOS,      "nw_tos",      FWW_NW_TOS)         \
+    FIELD(F_TP_SRC,      "tp_src",      FWW_TP_SRC)         \
+    FIELD(F_TP_DST,      "tp_dst",      FWW_TP_DST)         \
+    FIELD(F_ICMP_TYPE,   "icmp_type",   FWW_TP_SRC)         \
+    FIELD(F_ICMP_CODE,   "icmp_code",   FWW_TP_DST)
 
 enum field_index {
 #define FIELD(ENUM, NAME, WILDCARD) ENUM,
@@ -407,7 +407,7 @@ enum field_index {
 struct field {
     enum field_index index;
     const char *name;
-    uint32_t wildcard;
+    flow_wildcards_t wildcard;  /* FWW_* bit. */
 };
 
 static bool
@@ -608,7 +608,7 @@ parse_ofp_flow_mod_str(char *string, uint16_t command)
     parse_ofp_str(&pf, buffer, string);
 
     ofm = buffer->data;
-    cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &ofm->match);
+    ofputil_cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &ofm->match);
     ofm->command = htons(command);
     ofm->cookie = htonll(pf.cookie);
     ofm->idle_timeout = htons(pf.idle_timeout);

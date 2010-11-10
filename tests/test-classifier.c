@@ -40,24 +40,23 @@
 #include <assert.h>
 
 /* Fields in a rule. */
-#define CLS_FIELDS                                          \
-    /*                           struct flow  all-caps */   \
-    /*        wildcard bit(s)    member name  name     */   \
-    /*        -----------------  -----------  -------- */   \
-    CLS_FIELD(NXFW_TUN_ID,       tun_id,      TUN_ID)       \
-    CLS_FIELD(OFPFW_NW_SRC_MASK, nw_src,      NW_SRC)       \
-    CLS_FIELD(OFPFW_NW_DST_MASK, nw_dst,      NW_DST)       \
-    CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
-    CLS_FIELD(OFPFW_DL_VLAN,     dl_vlan,     DL_VLAN)      \
-    CLS_FIELD(OFPFW_DL_TYPE,     dl_type,     DL_TYPE)      \
-    CLS_FIELD(OFPFW_TP_SRC,      tp_src,      TP_SRC)       \
-    CLS_FIELD(OFPFW_TP_DST,      tp_dst,      TP_DST)       \
-    CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
-    CLS_FIELD(OFPFW_DL_DST | FWW_ETH_MCAST,                 \
-                                 dl_dst,      DL_DST)       \
-    CLS_FIELD(OFPFW_NW_PROTO,    nw_proto,    NW_PROTO)     \
-    CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
-    CLS_FIELD(OFPFW_NW_TOS,      nw_tos,      NW_TOS)
+#define CLS_FIELDS                                                  \
+    /*                                    struct flow  all-caps */  \
+    /*        FWW_* bit(s)                member name  name     */  \
+    /*        --------------------------  -----------  -------- */  \
+    CLS_FIELD(FWW_TUN_ID,                 tun_id,      TUN_ID)      \
+    CLS_FIELD(0,                          nw_src,      NW_SRC)      \
+    CLS_FIELD(0,                          nw_dst,      NW_DST)      \
+    CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
+    CLS_FIELD(FWW_DL_VLAN,                dl_vlan,     DL_VLAN)     \
+    CLS_FIELD(FWW_DL_TYPE,                dl_type,     DL_TYPE)     \
+    CLS_FIELD(FWW_TP_SRC,                 tp_src,      TP_SRC)      \
+    CLS_FIELD(FWW_TP_DST,                 tp_dst,      TP_DST)      \
+    CLS_FIELD(FWW_DL_SRC,                 dl_src,      DL_SRC)      \
+    CLS_FIELD(FWW_DL_DST | FWW_ETH_MCAST, dl_dst,      DL_DST)      \
+    CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
+    CLS_FIELD(FWW_DL_VLAN_PCP,            dl_vlan_pcp, DL_VLAN_PCP) \
+    CLS_FIELD(FWW_NW_TOS,                 nw_tos,      NW_TOS)
 
 /* Field indexes.
  *
@@ -73,7 +72,7 @@ enum {
 struct cls_field {
     int ofs;                    /* Offset in struct flow. */
     int len;                    /* Length in bytes. */
-    uint32_t wildcards;         /* OFPFW_* bit or bits for this field. */
+    flow_wildcards_t wildcards; /* FWW_* bit or bits for this field. */
     const char *name;           /* Name (for debugging). */
 };
 
@@ -189,30 +188,24 @@ match(const struct cls_rule *wild, const struct flow *fixed)
 
     for (f_idx = 0; f_idx < CLS_N_FIELDS; f_idx++) {
         const struct cls_field *f = &cls_fields[f_idx];
-        void *wild_field = (char *) &wild->flow + f->ofs;
-        void *fixed_field = (char *) fixed + f->ofs;
+        bool eq;
 
-        if ((wild->wc.wildcards & f->wildcards) == f->wildcards ||
-            !memcmp(wild_field, fixed_field, f->len)) {
-            /* Definite match. */
-            continue;
+        if (f->wildcards) {
+            void *wild_field = (char *) &wild->flow + f->ofs;
+            void *fixed_field = (char *) fixed + f->ofs;
+            eq = ((wild->wc.wildcards & f->wildcards) == f->wildcards
+                  || !memcmp(wild_field, fixed_field, f->len));
+        } else if (f_idx == CLS_F_IDX_NW_SRC) {
+            eq = !((fixed->nw_src ^ wild->flow.nw_src) & wild->wc.nw_src_mask);
+        } else if (f_idx == CLS_F_IDX_NW_DST) {
+            eq = !((fixed->nw_dst ^ wild->flow.nw_dst) & wild->wc.nw_dst_mask);
+        } else {
+            NOT_REACHED();
         }
 
-        if (wild->wc.wildcards & f->wildcards) {
-            uint32_t test = get_unaligned_u32(wild_field);
-            uint32_t ip = get_unaligned_u32(fixed_field);
-            uint32_t mask;
-            int shift;
-
-            shift = (f_idx == CLS_F_IDX_NW_SRC
-                     ? OFPFW_NW_SRC_SHIFT : OFPFW_NW_DST_SHIFT);
-            mask = ofputil_wcbits_to_netmask(wild->wc.wildcards >> shift);
-            if (!((test ^ ip) & mask)) {
-                continue;
-            }
+        if (!eq) {
+            return false;
         }
-
-        return false;
     }
     return true;
 }
@@ -456,27 +449,26 @@ static struct test_rule *
 make_rule(int wc_fields, unsigned int priority, int value_pat)
 {
     const struct cls_field *f;
-    struct flow_wildcards wc;
     struct test_rule *rule;
-    uint32_t wildcards;
-    struct flow flow;
-
-    wildcards = 0;
-    memset(&flow, 0, sizeof flow);
-    for (f = &cls_fields[0]; f < &cls_fields[CLS_N_FIELDS]; f++) {
-        int f_idx = f - cls_fields;
-        if (wc_fields & (1u << f_idx)) {
-            wildcards |= f->wildcards;
-        } else {
-            int value_idx = (value_pat & (1u << f_idx)) != 0;
-            memcpy((char *) &flow + f->ofs, values[f_idx][value_idx], f->len);
-        }
-    }
 
     rule = xzalloc(sizeof *rule);
-    flow_wildcards_init(&wc, wildcards);
-    cls_rule_init(&flow, &wc, !wildcards ? UINT_MAX : priority,
-                  &rule->cls_rule);
+    cls_rule_init_catchall(&rule->cls_rule, wc_fields ? priority : UINT_MAX);
+    for (f = &cls_fields[0]; f < &cls_fields[CLS_N_FIELDS]; f++) {
+        int f_idx = f - cls_fields;
+        int value_idx = (value_pat & (1u << f_idx)) != 0;
+        memcpy((char *) &rule->cls_rule.flow + f->ofs,
+               values[f_idx][value_idx], f->len);
+
+        if (f->wildcards) {
+            rule->cls_rule.wc.wildcards &= ~f->wildcards;
+        } else if (f_idx == CLS_F_IDX_NW_SRC) {
+            rule->cls_rule.wc.nw_src_mask = htonl(UINT32_MAX);
+        } else if (f_idx == CLS_F_IDX_NW_DST) {
+            rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
+        } else {
+            NOT_REACHED();
+        }
+    }
     return rule;
 }
 

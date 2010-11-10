@@ -23,6 +23,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "ofp-util.h"
 #include "packets.h"
 
 static struct cls_table *find_table(const struct classifier *,
@@ -92,79 +93,8 @@ void
 cls_rule_init_catchall(struct cls_rule *rule, unsigned int priority)
 {
     memset(&rule->flow, 0, sizeof rule->flow);
-    flow_wildcards_init(&rule->wc, OVSFW_ALL | FWW_ALL);
+    flow_wildcards_init_catchall(&rule->wc);
     rule->priority = priority;
-}
-
-/* Converts the ofp_match in 'match' (with format 'flow_format', one of NXFF_*)
- * into a cls_rule in 'rule', with the given 'priority'.  'cookie' is used
- * when 'flow_format' is NXFF_TUN_ID_FROM_COOKIE. */
-void
-cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
-                    int flow_format, uint64_t cookie,
-                    struct cls_rule *rule)
-{
-    uint32_t wildcards = ntohl(match->wildcards) & OVSFW_ALL;
-
-    rule->priority = !wildcards ? UINT16_MAX : priority;
-
-    rule->flow.tun_id = 0;
-    if (flow_format != NXFF_TUN_ID_FROM_COOKIE) {
-        wildcards |= NXFW_TUN_ID;
-    } else {
-        if (!(wildcards & NXFW_TUN_ID)) {
-            rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
-        }
-    }
-    if (wildcards & OFPFW_DL_DST) {
-        /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
-         * internally to OVS it excludes the multicast bit, which has to be set
-         * separately with FWW_ETH_MCAST. */
-        wildcards |= FWW_ETH_MCAST;
-    }
-    flow_wildcards_init(&rule->wc, wildcards);
-
-    rule->flow.nw_src = match->nw_src;
-    rule->flow.nw_dst = match->nw_dst;
-    rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
-                     : ntohs(match->in_port));
-    rule->flow.dl_vlan = match->dl_vlan;
-    rule->flow.dl_vlan_pcp = match->dl_vlan_pcp;
-    rule->flow.dl_type = match->dl_type;
-    rule->flow.tp_src = match->tp_src;
-    rule->flow.tp_dst = match->tp_dst;
-    memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
-    memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
-    rule->flow.nw_tos = match->nw_tos;
-    rule->flow.nw_proto = match->nw_proto;
-
-    cls_rule_zero_wildcarded_fields(rule);
-}
-
-/* Converts 'rule' into an OpenFlow match structure 'match' with the given flow
- * format 'flow_format' (one of NXFF_*). */
-void
-cls_rule_to_match(const struct cls_rule *rule, int flow_format,
-                  struct ofp_match *match)
-{
-    match->wildcards = htonl(rule->wc.wildcards
-                             & (flow_format == NXFF_TUN_ID_FROM_COOKIE
-                                ? OVSFW_ALL : OFPFW_ALL));
-    match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
-                           : rule->flow.in_port);
-    match->dl_vlan = rule->flow.dl_vlan;
-    match->dl_vlan_pcp = rule->flow.dl_vlan_pcp;
-    memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
-    memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
-    match->dl_type = rule->flow.dl_type;
-    match->nw_src = rule->flow.nw_src;
-    match->nw_dst = rule->flow.nw_dst;
-    match->nw_tos = rule->flow.nw_tos;
-    match->nw_proto = rule->flow.nw_proto;
-    match->tp_src = rule->flow.tp_src;
-    match->tp_dst = rule->flow.tp_dst;
-    memset(match->pad1, '\0', sizeof match->pad1);
-    memset(match->pad2, '\0', sizeof match->pad2);
 }
 
 /* For each bit or field wildcarded in 'rule', sets the corresponding bit or
@@ -184,28 +114,28 @@ cls_rule_zero_wildcarded_fields(struct cls_rule *rule)
 void
 cls_rule_set_in_port(struct cls_rule *rule, uint16_t odp_port)
 {
-    rule->wc.wildcards &= ~OFPFW_IN_PORT;
+    rule->wc.wildcards &= ~FWW_IN_PORT;
     rule->flow.in_port = odp_port;
 }
 
 void
 cls_rule_set_dl_type(struct cls_rule *rule, ovs_be16 dl_type)
 {
-    rule->wc.wildcards &= ~OFPFW_DL_TYPE;
+    rule->wc.wildcards &= ~FWW_DL_TYPE;
     rule->flow.dl_type = dl_type;
 }
 
 void
 cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~OFPFW_DL_SRC;
+    rule->wc.wildcards &= ~FWW_DL_SRC;
     memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
 }
 
 void
 cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
+    rule->wc.wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
@@ -222,13 +152,13 @@ cls_rule_set_dl_tci_masked(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
     case 0xffff:
         if (tci == htons(0)) {
             /* Match only packets that have no 802.1Q header. */
-            rule->wc.wildcards &= ~(OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP);
+            rule->wc.wildcards &= ~(FWW_DL_VLAN | FWW_DL_VLAN_PCP);
             rule->flow.dl_vlan = htons(OFP_VLAN_NONE);
             rule->flow.dl_vlan_pcp = 0;
             return true;
         } else if (tci & htons(VLAN_CFI)) {
             /* Match only packets that have a specific 802.1Q VID and PCP. */
-            rule->wc.wildcards &= ~(OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP);
+            rule->wc.wildcards &= ~(FWW_DL_VLAN | FWW_DL_VLAN_PCP);
             rule->flow.dl_vlan = htons(vlan_tci_to_vid(tci));
             rule->flow.dl_vlan_pcp = vlan_tci_to_pcp(tci);
             return true;
@@ -243,7 +173,7 @@ cls_rule_set_dl_tci_masked(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
         } else {
             /* Match only packets that have a specific 802.1Q VID. */
             cls_rule_set_dl_vlan(rule, tci & htons(VLAN_VID_MASK));
-            rule->wc.wildcards |= OFPFW_DL_VLAN_PCP;
+            rule->wc.wildcards |= FWW_DL_VLAN_PCP;
             rule->flow.dl_vlan_pcp = 0;
             return true;
         }
@@ -254,14 +184,14 @@ cls_rule_set_dl_tci_masked(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
         } else {
             /* Match only packets that have a specific 802.1Q PCP. */
             cls_rule_set_dl_vlan_pcp(rule, vlan_tci_to_pcp(tci));
-            rule->wc.wildcards |= OFPFW_DL_VLAN;
+            rule->wc.wildcards |= FWW_DL_VLAN;
             rule->flow.dl_vlan = 0;
             return true;
         }
 
     case 0x0000:
         /* Match anything. */
-        rule->wc.wildcards |= OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP;
+        rule->wc.wildcards |= FWW_DL_VLAN | FWW_DL_VLAN_PCP;
         rule->flow.dl_vlan = htons(0);
         rule->flow.dl_vlan_pcp = 0;
         return true;
@@ -278,35 +208,35 @@ cls_rule_set_dl_vlan(struct cls_rule *rule, ovs_be16 dl_vlan)
         dl_vlan &= htons(VLAN_VID_MASK);
     }
 
-    rule->wc.wildcards &= ~OFPFW_DL_VLAN;
+    rule->wc.wildcards &= ~FWW_DL_VLAN;
     rule->flow.dl_vlan = dl_vlan;
 }
 
 void
 cls_rule_set_dl_vlan_pcp(struct cls_rule *rule, uint8_t dl_vlan_pcp)
 {
-    rule->wc.wildcards &= ~OFPFW_DL_VLAN_PCP;
+    rule->wc.wildcards &= ~FWW_DL_VLAN_PCP;
     rule->flow.dl_vlan_pcp = dl_vlan_pcp & 0x07;
 }
 
 void
 cls_rule_set_tp_src(struct cls_rule *rule, ovs_be16 tp_src)
 {
-    rule->wc.wildcards &= ~OFPFW_TP_SRC;
+    rule->wc.wildcards &= ~FWW_TP_SRC;
     rule->flow.tp_src = tp_src;
 }
 
 void
 cls_rule_set_tp_dst(struct cls_rule *rule, ovs_be16 tp_dst)
 {
-    rule->wc.wildcards &= ~OFPFW_TP_DST;
+    rule->wc.wildcards &= ~FWW_TP_DST;
     rule->flow.tp_dst = tp_dst;
 }
 
 void
 cls_rule_set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
 {
-    rule->wc.wildcards &= ~OFPFW_NW_PROTO;
+    rule->wc.wildcards &= ~FWW_NW_PROTO;
     rule->flow.nw_proto = nw_proto;
 }
 
@@ -347,14 +277,14 @@ cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 void
 cls_rule_set_nw_tos(struct cls_rule *rule, uint8_t nw_tos)
 {
-    rule->wc.wildcards &= ~OFPFW_NW_TOS;
+    rule->wc.wildcards &= ~FWW_NW_TOS;
     rule->flow.nw_tos = nw_tos & IP_DSCP_MASK;
 }
 
 void
 cls_rule_set_icmp_type(struct cls_rule *rule, uint8_t icmp_type)
 {
-    rule->wc.wildcards &= ~OFPFW_ICMP_TYPE;
+    rule->wc.wildcards &= ~FWW_TP_SRC;
     rule->flow.icmp_type = htons(icmp_type);
 
 }
@@ -362,7 +292,7 @@ cls_rule_set_icmp_type(struct cls_rule *rule, uint8_t icmp_type)
 void
 cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
 {
-    rule->wc.wildcards &= ~OFPFW_ICMP_CODE;
+    rule->wc.wildcards &= ~FWW_TP_DST;
     rule->flow.icmp_code = htons(icmp_code);
 }
 
@@ -835,7 +765,7 @@ static bool
 flow_equal_except(const struct flow *a, const struct flow *b,
                   const struct flow_wildcards *wildcards)
 {
-    const uint32_t wc = wildcards->wildcards;
+    const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + FLOW_N_REGS * 4);
@@ -846,32 +776,33 @@ flow_equal_except(const struct flow *a, const struct flow *b,
         }
     }
 
-    return ((wc & NXFW_TUN_ID || a->tun_id == b->tun_id)
+    return ((wc & FWW_TUN_ID || a->tun_id == b->tun_id)
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
-            && (wc & OFPFW_IN_PORT || a->in_port == b->in_port)
-            && (wc & OFPFW_DL_VLAN || a->dl_vlan == b->dl_vlan)
-            && (wc & OFPFW_DL_TYPE || a->dl_type == b->dl_type)
-            && (wc & OFPFW_TP_SRC || a->tp_src == b->tp_src)
-            && (wc & OFPFW_TP_DST || a->tp_dst == b->tp_dst)
-            && (wc & OFPFW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
-            && (wc & OFPFW_DL_DST
+            && (wc & FWW_IN_PORT || a->in_port == b->in_port)
+            && (wc & FWW_DL_VLAN || a->dl_vlan == b->dl_vlan)
+            && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
+            && (wc & FWW_TP_SRC || a->tp_src == b->tp_src)
+            && (wc & FWW_TP_DST || a->tp_dst == b->tp_dst)
+            && (wc & FWW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
+            && (wc & FWW_DL_DST
                 || (!((a->dl_dst[0] ^ b->dl_dst[0]) & 0xfe)
                     && a->dl_dst[1] == b->dl_dst[1]
                     && a->dl_dst[2] == b->dl_dst[2]
                     && a->dl_dst[3] == b->dl_dst[3]
                     && a->dl_dst[4] == b->dl_dst[4]
                     && a->dl_dst[5] == b->dl_dst[5]))
-            && (wc & FWW_ETH_MCAST || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
-            && (wc & OFPFW_NW_PROTO || a->nw_proto == b->nw_proto)
-            && (wc & OFPFW_DL_VLAN_PCP || a->dl_vlan_pcp == b->dl_vlan_pcp)
-            && (wc & OFPFW_NW_TOS || a->nw_tos == b->nw_tos));
+            && (wc & FWW_ETH_MCAST
+                || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
+            && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
+            && (wc & FWW_DL_VLAN_PCP || a->dl_vlan_pcp == b->dl_vlan_pcp)
+            && (wc & FWW_NW_TOS || a->nw_tos == b->nw_tos));
 }
 
 static void
 zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 {
-    const uint32_t wc = wildcards->wildcards;
+    const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + 4 * FLOW_N_REGS);
@@ -879,43 +810,43 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
     }
-    if (wc & NXFW_TUN_ID) {
+    if (wc & FWW_TUN_ID) {
         flow->tun_id = 0;
     }
     flow->nw_src &= wildcards->nw_src_mask;
     flow->nw_dst &= wildcards->nw_dst_mask;
-    if (wc & OFPFW_IN_PORT) {
+    if (wc & FWW_IN_PORT) {
         flow->in_port = 0;
     }
-    if (wc & OFPFW_DL_VLAN) {
+    if (wc & FWW_DL_VLAN) {
         flow->dl_vlan = 0;
     }
-    if (wc & OFPFW_DL_TYPE) {
+    if (wc & FWW_DL_TYPE) {
         flow->dl_type = 0;
     }
-    if (wc & OFPFW_TP_SRC) {
+    if (wc & FWW_TP_SRC) {
         flow->tp_src = 0;
     }
-    if (wc & OFPFW_TP_DST) {
+    if (wc & FWW_TP_DST) {
         flow->tp_dst = 0;
     }
-    if (wc & OFPFW_DL_SRC) {
+    if (wc & FWW_DL_SRC) {
         memset(flow->dl_src, 0, sizeof flow->dl_src);
     }
-    if (wc & OFPFW_DL_DST) {
+    if (wc & FWW_DL_DST) {
         flow->dl_dst[0] &= 0x01;
         memset(&flow->dl_dst[1], 0, 5);
     }
     if (wc & FWW_ETH_MCAST) {
         flow->dl_dst[0] &= 0xfe;
     }
-    if (wc & OFPFW_NW_PROTO) {
+    if (wc & FWW_NW_PROTO) {
         flow->nw_proto = 0;
     }
-    if (wc & OFPFW_DL_VLAN_PCP) {
+    if (wc & FWW_DL_VLAN_PCP) {
         flow->dl_vlan_pcp = 0;
     }
-    if (wc & OFPFW_NW_TOS) {
+    if (wc & FWW_NW_TOS) {
         flow->nw_tos = 0;
     }
 }

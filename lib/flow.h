@@ -89,60 +89,46 @@ flow_hash(const struct flow *flow, uint32_t basis)
     return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
-/* Open vSwitch internal-only wildcard bits.
+/* Open vSwitch flow wildcard bits.
  *
  * These are used only internally to Open vSwitch, in the 'wildcards' member of
  * struct flow_wildcards.  They never appear in the wire protocol in this
  * form. */
 
-/* Set to 1 if any bits in any of the reg_masks are wildcarded.  This maintains
- * the invariant that 'wildcards' is nonzero if and only if any bits are
- * wildcarded. */
-#define FWW_REGS (1u << 31)
+typedef unsigned int OVS_BITWISE flow_wildcards_t;
 
-/* Set to 1 if bit 0 (the multicast bit) of the flow's dl_dst is wildcarded.
- *
- * (We reinterpret OFPFW_DL_DST as excluding bit 0.  Both OFPFW_DL_DST and
- * FWW_ETH_MCAST have to be set to wildcard the entire Ethernet destination
- * address.) */
-#define FWW_ETH_MCAST (1u << 30)
-
-/* Avoid collisions. */
-#define FWW_ALL (FWW_REGS | FWW_ETH_MCAST)
-BUILD_ASSERT_DECL(!(FWW_ALL & OVSFW_ALL));
+/* Same values and meanings as corresponding OFPFW_* bits. */
+#define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
+#define FWW_DL_VLAN     ((OVS_FORCE flow_wildcards_t) (1 << 1))
+#define FWW_DL_SRC      ((OVS_FORCE flow_wildcards_t) (1 << 2))
+#define FWW_DL_DST      ((OVS_FORCE flow_wildcards_t) (1 << 3))
+                                              /* excluding the multicast bit */
+#define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 4))
+#define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 5))
+#define FWW_TP_SRC      ((OVS_FORCE flow_wildcards_t) (1 << 6))
+#define FWW_TP_DST      ((OVS_FORCE flow_wildcards_t) (1 << 7))
+/* Same meanings as corresponding OFPFW_* bits, but differ in value. */
+#define FWW_DL_VLAN_PCP ((OVS_FORCE flow_wildcards_t) (1 << 8))
+#define FWW_NW_TOS      ((OVS_FORCE flow_wildcards_t) (1 << 9))
+/* No OFPFW_* bits, but they do have corresponding OVSFW_* bits. */
+#define FWW_TUN_ID      ((OVS_FORCE flow_wildcards_t) (1 << 10))
+/* No corresponding OFPFW_* or OVSFW_* bits. */
+#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 11))
+                                                       /* multicast bit only */
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 12)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
- * The flow_wildcards_*() functions below both depend on and maintain the
- * following important invariants:
- *
- * 1. 'wildcards' is nonzero if and only if at least one bit or field is
- *    wildcarded.
- *
- * 2. Bits in 'wildcards' not included in OVSFW_ALL or FWW_ALL are set to 0.
- *    (This is a corollary to invariant #1.)
- *
- * 3. The fields in 'wildcards' masked by OFPFW_NW_SRC_MASK and
- *    OFPFW_NW_DST_MASK have values between 0 and 32, inclusive.
- *
- * 4. The fields masked by OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK correspond
- *    correctly to the masks in 'nw_src_mask' and 'nw_dst_mask', respectively.
- *
- * 5. FWW_REGS is set to 1 in 'wildcards' if and only if at least one bit in
- *    'reg_masks[]' is nonzero.  (This allows wildcarded 'reg_masks[]' to
- *    satisfy invariant #1.)
- *
- * 6. If FWW_REGS is set to 0 in 'wildcards', then the values of all of the
- *    other members can be correctly predicted based on 'wildcards' alone.
- */
+ * Note that the meaning of 1-bits in 'wildcards' is opposite that of 1-bits in
+ * the rest of the members. */
 struct flow_wildcards {
-    uint32_t wildcards;         /* OFPFW_* | OVSFW_* | FWW_*. */
+    flow_wildcards_t wildcards; /* 1-bit in each FWW_* wildcarded field. */
     uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
 
-void flow_wildcards_init(struct flow_wildcards *, uint32_t wildcards);
+void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);
 
 bool flow_wildcards_is_exact(const struct flow_wildcards *);

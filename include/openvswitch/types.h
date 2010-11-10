@@ -21,8 +21,10 @@
 
 #ifdef __CHECKER__
 #define OVS_BITWISE __attribute__((bitwise))
+#define OVS_FORCE __attribute__((force))
 #else
 #define OVS_BITWISE
+#define OVS_FORCE
 #endif
 
 /* The ovs_be<N> types indicate that an object is in big-endian, not

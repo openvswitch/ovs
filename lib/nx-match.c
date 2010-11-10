@@ -55,7 +55,7 @@ struct nxm_field {
     struct hmap_node hmap_node;
     enum nxm_field_index index; /* NFI_* value. */
     uint32_t header;            /* NXM_* value. */
-    uint32_t wildcard;          /* Wildcard bit, if exactly one. */
+    flow_wildcards_t wildcard;  /* FWW_* bit, if exactly one. */
     ovs_be16 dl_type;           /* dl_type prerequisite, if nonzero. */
     uint8_t nw_proto;           /* nw_proto prerequisite, if nonzero. */
     const char *name;           /* "NXM_*" string. */
@@ -143,8 +143,9 @@ nxm_field_bits(uint32_t header)
 static int
 parse_tci(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
 {
-    enum { OFPFW_DL_TCI = OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP };
-    if ((rule->wc.wildcards & OFPFW_DL_TCI) != OFPFW_DL_TCI) {
+    const flow_wildcards_t FWW_DL_TCI = FWW_DL_VLAN | FWW_DL_VLAN_PCP;
+
+    if ((rule->wc.wildcards & FWW_DL_TCI) != FWW_DL_TCI) {
         return NXM_DUP_TYPE;
     } else {
         return cls_rule_set_dl_tci_masked(rule, tci, mask) ? 0 : NXM_INVALID;
@@ -188,29 +189,29 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* Ethernet header. */
     case NFI_NXM_OF_ETH_DST:
-        if ((wc->wildcards & (OFPFW_DL_DST | FWW_ETH_MCAST))
-            != (OFPFW_DL_DST | FWW_ETH_MCAST)) {
+        if ((wc->wildcards & (FWW_DL_DST | FWW_ETH_MCAST))
+            != (FWW_DL_DST | FWW_ETH_MCAST)) {
             return NXM_DUP_TYPE;
         } else {
-            wc->wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
+            wc->wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
             memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
             return 0;
         }
     case NFI_NXM_OF_ETH_DST_W:
-        if ((wc->wildcards & (OFPFW_DL_DST | FWW_ETH_MCAST))
-            != (OFPFW_DL_DST | FWW_ETH_MCAST)) {
+        if ((wc->wildcards & (FWW_DL_DST | FWW_ETH_MCAST))
+            != (FWW_DL_DST | FWW_ETH_MCAST)) {
             return NXM_DUP_TYPE;
         } else if (eth_addr_equals(mask, eth_mcast_1)) {
             wc->wildcards &= ~FWW_ETH_MCAST;
             flow->dl_dst[0] = *(uint8_t *) value & 0x01;
         } else if (eth_addr_equals(mask, eth_mcast_0)) {
-            wc->wildcards &= ~OFPFW_DL_DST;
+            wc->wildcards &= ~FWW_DL_DST;
             memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
             flow->dl_dst[0] &= 0xfe;
         } else if (eth_addr_equals(mask, eth_all_0s)) {
             return 0;
         } else if (eth_addr_equals(mask, eth_all_1s)) {
-            wc->wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
+            wc->wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
             memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
             return 0;
         } else {
@@ -528,10 +529,10 @@ static void
 nxm_put_eth_dst(struct ofpbuf *b,
                 uint32_t wc, const uint8_t value[ETH_ADDR_LEN])
 {
-    switch (wc & (OFPFW_DL_DST | FWW_ETH_MCAST)) {
-    case OFPFW_DL_DST | FWW_ETH_MCAST:
+    switch (wc & (FWW_DL_DST | FWW_ETH_MCAST)) {
+    case FWW_DL_DST | FWW_ETH_MCAST:
         break;
-    case OFPFW_DL_DST:
+    case FWW_DL_DST:
         nxm_put_header(b, NXM_OF_ETH_DST_W);
         ofpbuf_put(b, value, ETH_ADDR_LEN);
         ofpbuf_put(b, eth_mcast_1, ETH_ADDR_LEN);
@@ -550,7 +551,7 @@ nxm_put_eth_dst(struct ofpbuf *b,
 int
 nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 {
-    const uint32_t wc = cr->wc.wildcards;
+    const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
     const size_t start_len = b->size;
     ovs_be16 vid, pcp;
@@ -558,7 +559,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int i;
 
     /* Metadata. */
-    if (!(wc & OFPFW_IN_PORT)) {
+    if (!(wc & FWW_IN_PORT)) {
         uint16_t in_port = flow->in_port;
         if (in_port == ODPP_LOCAL) {
             in_port = OFPP_LOCAL;
@@ -568,24 +569,24 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
     /* Ethernet. */
     nxm_put_eth_dst(b, wc, flow->dl_dst);
-    if (!(wc & OFPFW_DL_SRC)) {
+    if (!(wc & FWW_DL_SRC)) {
         nxm_put_eth(b, NXM_OF_ETH_SRC, flow->dl_src);
     }
-    if (!(wc & OFPFW_DL_TYPE)) {
+    if (!(wc & FWW_DL_TYPE)) {
         nxm_put_16(b, NXM_OF_ETH_TYPE, flow->dl_type);
     }
 
     /* 802.1Q. */
     vid = flow->dl_vlan & htons(VLAN_VID_MASK);
     pcp = htons((flow->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
-    switch (wc & (OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP)) {
-    case OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP:
+    switch (wc & (FWW_DL_VLAN | FWW_DL_VLAN_PCP)) {
+    case FWW_DL_VLAN | FWW_DL_VLAN_PCP:
         break;
-    case OFPFW_DL_VLAN:
+    case FWW_DL_VLAN:
         nxm_put_16w(b, NXM_OF_VLAN_TCI_W, pcp | htons(VLAN_CFI),
                      htons(VLAN_PCP_MASK | VLAN_CFI));
         break;
-    case OFPFW_DL_VLAN_PCP:
+    case FWW_DL_VLAN_PCP:
         if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
             nxm_put_16(b, NXM_OF_VLAN_TCI, 0);
         } else {
@@ -602,51 +603,51 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         break;
     }
 
-    if (!(wc & OFPFW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
-        if (!(wc & OFPFW_NW_TOS)) {
+        if (!(wc & FWW_NW_TOS)) {
             nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & 0xfc);
         }
         nxm_put_32m(b, NXM_OF_IP_SRC, flow->nw_src, cr->wc.nw_src_mask);
         nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
 
-        if (!(wc & OFPFW_NW_PROTO)) {
+        if (!(wc & FWW_NW_PROTO)) {
             nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
             switch (flow->nw_proto) {
                 /* TCP. */
             case IP_TYPE_TCP:
-                if (!(wc & OFPFW_TP_SRC)) {
+                if (!(wc & FWW_TP_SRC)) {
                     nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
                 }
-                if (!(wc & OFPFW_TP_DST)) {
+                if (!(wc & FWW_TP_DST)) {
                     nxm_put_16(b, NXM_OF_TCP_DST, flow->tp_dst);
                 }
                 break;
 
                 /* UDP. */
             case IP_TYPE_UDP:
-                if (!(wc & OFPFW_TP_SRC)) {
+                if (!(wc & FWW_TP_SRC)) {
                     nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
                 }
-                if (!(wc & OFPFW_TP_DST)) {
+                if (!(wc & FWW_TP_DST)) {
                     nxm_put_16(b, NXM_OF_UDP_DST, flow->tp_dst);
                 }
                 break;
 
                 /* ICMP. */
             case IP_TYPE_ICMP:
-                if (!(wc & OFPFW_TP_SRC)) {
+                if (!(wc & FWW_TP_SRC)) {
                     nxm_put_8(b, NXM_OF_ICMP_TYPE, ntohs(flow->tp_src));
                 }
-                if (!(wc & OFPFW_TP_DST)) {
+                if (!(wc & FWW_TP_DST)) {
                     nxm_put_8(b, NXM_OF_ICMP_CODE, ntohs(flow->tp_dst));
                 }
                 break;
             }
         }
-    } else if (!(wc & OFPFW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
-        if (!(wc & OFPFW_NW_PROTO)) {
+        if (!(wc & FWW_NW_PROTO)) {
             nxm_put_16(b, NXM_OF_ARP_OP, htons(flow->nw_proto));
         }
         nxm_put_32m(b, NXM_OF_ARP_SPA, flow->nw_src, cr->wc.nw_src_mask);
@@ -654,7 +655,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     }
 
     /* Tunnel ID. */
-    if (!(wc & NXFW_TUN_ID)) {
+    if (!(wc & FWW_TUN_ID)) {
         nxm_put_64(b, NXM_NX_TUN_ID, htonll(ntohl(flow->tun_id)));
     }
 

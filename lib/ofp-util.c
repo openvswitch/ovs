@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "byte-order.h"
+#include "classifier.h"
 #include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -65,6 +66,144 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 
     return wcbits;
 #endif
+}
+
+/* A list of the FWW_* and OFPFW_ bits that have the same value, meaning, and
+ * name. */
+#define WC_INVARIANT_LIST \
+    WC_INVARIANT_BIT(IN_PORT) \
+    WC_INVARIANT_BIT(DL_VLAN) \
+    WC_INVARIANT_BIT(DL_SRC) \
+    WC_INVARIANT_BIT(DL_DST) \
+    WC_INVARIANT_BIT(DL_TYPE) \
+    WC_INVARIANT_BIT(NW_PROTO) \
+    WC_INVARIANT_BIT(TP_SRC) \
+    WC_INVARIANT_BIT(TP_DST)
+
+/* Verify that all of the invariant bits (as defined on WC_INVARIANT_LIST)
+ * actually have the same names and values. */
+#define WC_INVARIANT_BIT(NAME) BUILD_ASSERT_DECL(FWW_##NAME == OFPFW_##NAME);
+    WC_INVARIANT_LIST
+#undef WC_INVARIANT_BIT
+
+/* WC_INVARIANTS is the invariant bits (as defined on WC_INVARIANT_LIST) all
+ * OR'd together. */
+enum {
+    WC_INVARIANTS = 0
+#define WC_INVARIANT_BIT(NAME) | FWW_##NAME
+    WC_INVARIANT_LIST
+#undef WC_INVARIANT_BIT
+};
+
+/* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
+ * 'priority'.
+ *
+ * 'flow_format' must either NXFF_OPENFLOW10 or NXFF_TUN_ID_FROM_COOKIE.  In
+ * the latter case only, 'flow''s tun_id field will be taken from the high bits
+ * of 'cookie', if 'match''s wildcards do not indicate that tun_id is
+ * wildcarded. */
+void
+ofputil_cls_rule_from_match(const struct ofp_match *match,
+                            unsigned int priority, int flow_format,
+                            uint64_t cookie, struct cls_rule *rule)
+{
+    struct flow_wildcards *wc = &rule->wc;
+    unsigned int ofpfw;
+
+    /* Initialize rule->priority. */
+    ofpfw = ntohl(match->wildcards);
+    ofpfw &= flow_format == NXFF_TUN_ID_FROM_COOKIE ? OVSFW_ALL : OFPFW_ALL;
+    rule->priority = !ofpfw ? UINT16_MAX : priority;
+
+    /* Initialize most of rule->wc. */
+    wc->wildcards = ofpfw & WC_INVARIANTS;
+    if (ofpfw & OFPFW_DL_VLAN_PCP) {
+        wc->wildcards |= FWW_DL_VLAN_PCP;
+    }
+    if (ofpfw & OFPFW_NW_TOS) {
+        wc->wildcards |= FWW_NW_TOS;
+    }
+    memset(wc->reg_masks, 0, sizeof wc->reg_masks);
+    wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
+    wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
+
+    if (!(ofpfw & NXFW_TUN_ID)) {
+        rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
+    } else {
+        wc->wildcards |= FWW_TUN_ID;
+        rule->flow.tun_id = 0;
+    }
+
+    if (ofpfw & OFPFW_DL_DST) {
+        /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
+         * Open vSwitch breaks the Ethernet destination into bits as FWW_DL_DST
+         * and FWW_ETH_MCAST. */
+        wc->wildcards |= FWW_ETH_MCAST;
+    }
+
+    /* Initialize rule->flow. */
+    rule->flow.nw_src = match->nw_src;
+    rule->flow.nw_dst = match->nw_dst;
+    rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
+                     : ntohs(match->in_port));
+    rule->flow.dl_vlan = match->dl_vlan;
+    rule->flow.dl_vlan_pcp = match->dl_vlan_pcp;
+    rule->flow.dl_type = match->dl_type;
+    rule->flow.tp_src = match->tp_src;
+    rule->flow.tp_dst = match->tp_dst;
+    memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
+    memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
+    rule->flow.nw_tos = match->nw_tos;
+    rule->flow.nw_proto = match->nw_proto;
+
+    /* Clean up. */
+    cls_rule_zero_wildcarded_fields(rule);
+}
+
+/* Extract 'flow' with 'wildcards' into the OpenFlow match structure
+ * 'match'.
+ *
+ * 'flow_format' must either NXFF_OPENFLOW10 or NXFF_TUN_ID_FROM_COOKIE.  In
+ * the latter case only, 'match''s NXFW_TUN_ID bit will be filled in; otherwise
+ * it is always set to 0. */
+void
+ofputil_cls_rule_to_match(const struct cls_rule *rule, int flow_format,
+                          struct ofp_match *match)
+{
+    const struct flow_wildcards *wc = &rule->wc;
+    unsigned int ofpfw;
+
+    /* Figure out OpenFlow wildcards. */
+    ofpfw = wc->wildcards & WC_INVARIANTS;
+    ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
+    ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
+    if (wc->wildcards & FWW_DL_VLAN_PCP) {
+        ofpfw |= OFPFW_DL_VLAN_PCP;
+    }
+    if (wc->wildcards & FWW_NW_TOS) {
+        ofpfw |= OFPFW_NW_TOS;
+    }
+    if (flow_format == NXFF_TUN_ID_FROM_COOKIE && wc->wildcards & FWW_TUN_ID) {
+        ofpfw |= NXFW_TUN_ID;
+    }
+
+    /* Compose match structure. */
+    match->wildcards = htonl(ofpfw);
+    match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
+                           : rule->flow.in_port);
+    match->dl_vlan = rule->flow.dl_vlan;
+    match->dl_vlan_pcp = rule->flow.dl_vlan_pcp;
+    memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
+    memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
+    match->dl_type = rule->flow.dl_type;
+    match->nw_src = rule->flow.nw_src;
+    match->nw_dst = rule->flow.nw_dst;
+    match->nw_tos = rule->flow.nw_tos;
+    match->nw_proto = rule->flow.nw_proto;
+    match->tp_src = rule->flow.tp_src;
+    match->tp_dst = rule->flow.tp_dst;
+    memset(match->pad1, '\0', sizeof match->pad1);
+    memset(match->pad2, '\0', sizeof match->pad2);
 }
 
 /* Returns a transaction ID to use for an outgoing OpenFlow message. */
