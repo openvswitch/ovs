@@ -69,6 +69,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/nx-match.c \
+	lib/nx-match.def \
 	lib/nx-match.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
