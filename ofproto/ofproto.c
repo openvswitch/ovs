@@ -3676,7 +3676,7 @@ handle_vendor_stats_request(struct ofconn *ofconn,
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
 
-    if (ntohs(nsm->header.length) < sizeof(struct nicira_stats_msg)) {
+    if (ntohs(osr->header.length) < sizeof(struct nicira_stats_msg)) {
         VLOG_WARN_RL(&rl, "truncated Nicira stats request");
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
