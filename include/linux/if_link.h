@@ -1,9 +1,19 @@
 #ifndef __LINUX_IF_LINK_WRAPPER_H
 #define __LINUX_IF_LINK_WRAPPER_H 1
 
-#include_next <linux/if_link.h>
-
 #include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
+#include_next <linux/if_link.h>
+#else
+/* Before 2.6.19 there was no <linux/if_link.h>.  Instead all of the types now
+ * declared there were in <linux/if.h>.  Unfortunately <linux/if.h> from 2.6.18
+ * conflicts badly enough with <net/if.h> to break the userspace build.  All
+ * we really need from <linux/if_link.h> is struct rtnl_link_stats64, which in
+ * turn only really needs __u64.  */
+#include <linux/types.h>
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 /* The main device statistics structure */
 struct rtnl_link_stats64 {
