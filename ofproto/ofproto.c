@@ -3352,7 +3352,7 @@ aggregate_stats_cb(struct cls_rule *rule_, void *cbdata_)
 
 static void
 query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
-                      uint16_t out_port, uint8_t table_id,
+                      ovs_be16 out_port, uint8_t table_id,
                       struct ofp_aggregate_stats_reply *oasr)
 {
     struct aggregate_stats_cbdata cbdata;
