@@ -24,3 +24,200 @@ flow_mod: ADD: cookie:0x123456789abcdef hard:10 pri:60000 actions=CONTROLLER:655
 flow_mod: ADD: actions=drop
 ])
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl parse-nx-match])
+AT_KEYWORDS([nx-match])
+AT_DATA([nx-match.txt], [dnl
+<any>
+
+# in port
+NXM_OF_IN_PORT(0000)
+NXM_OF_IN_PORT(fffe)
+
+# eth dst
+NXM_OF_ETH_DST(0002e30f80a4)
+
+# eth src
+NXM_OF_ETH_SRC(020898456ddb)
+
+# eth type
+NXM_OF_ETH_TYPE(0800)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IN_PORT(0012)
+
+# vlan tci
+NXM_OF_VLAN_TCI(f009)
+NXM_OF_VLAN_TCI(f009) NXM_OF_VLAN_TCI(f009)
+NXM_OF_VLAN_TCI(0000)           # Packets without 802.1Q header.
+NXM_OF_VLAN_TCI(3123)           # Packets with VID=123, PCP=1.
+NXM_OF_VLAN_TCI(0123)           # Does not make sense.
+NXM_OF_VLAN_TCI_W(1123/1fff)    # Packets with VID=123, any PCP.
+NXM_OF_VLAN_TCI_W(f000/f000)    # Packets with any VID, PCP=7.
+NXM_OF_VLAN_TCI_W(0000/e000)    # No 802.1Q or with VID=0 (not yet supported)
+
+# IP TOS
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_TOS(f0)
+NXM_OF_IP_TOS(f0)
+
+# IP protocol
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(01)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(05)
+NXM_OF_IP_PROTO(05)
+
+# IP source
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_SRC(ac100014)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_SRC_W(C0a80000/FFFF0000)
+NXM_OF_ETH_TYPE(0806) NXM_OF_IP_SRC(ac100014)
+NXM_OF_IP_SRC_W(C0D80000/FFFF0000)
+
+# IP destination
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_DST(ac100014)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_DST_W(C0a80000/FFFF0000)
+NXM_OF_IP_DST(ac100014)
+NXM_OF_ETH_TYPE(0806) NXM_OF_IP_DST_W(C0D80000/FFFF0000)
+
+# TCP source port
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_SRC(4231)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_OF_TCP_SRC(4231)
+
+# TCP destination port
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_DST(4231)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_OF_TCP_DST(4231)
+
+# UDP source port
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_SRC(8732)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_UDP_SRC(7823)
+
+# UDP destination port
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_DST(1782)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(02) NXM_OF_UDP_DST(1293)
+
+# ICMP type
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(01) NXM_OF_ICMP_TYPE(12)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(00) NXM_OF_ICMP_TYPE(10)
+
+# ICMP code
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(01) NXM_OF_ICMP_CODE(12)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(00) NXM_OF_ICMP_CODE(10)
+NXM_OF_ETH_TYPE(0800) NXM_OF_ICMP_CODE(10)
+NXM_OF_ICMP_CODE(00)
+
+# ARP opcode
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_OP(0001)
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_OP(1111)
+NXM_OF_ETH_TYPE(0000) NXM_OF_ARP_OP(0001)
+NXM_OF_ARP_OP(0001)
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_OP(0001) NXM_OF_ARP_OP(0001)
+
+# ARP source
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_SPA(ac100014)
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_SPA_W(C0a81200/FFFFFF00)
+NXM_OF_ETH_TYPE(0800) NXM_OF_ARP_SPA(ac100014)
+NXM_OF_ARP_SPA_W(C0D80000/FFFF0000)
+
+# ARP destination
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_TPA(ac100014)
+NXM_OF_ETH_TYPE(0806) NXM_OF_ARP_TPA_W(C0a81200/FFFFFF00)
+NXM_OF_ETH_TYPE(0800) NXM_OF_ARP_TPA(ac100014)
+NXM_OF_ARP_TPA_W(C0D80000/FFFF0000)
+
+# Tunnel ID.
+NXM_NX_TUN_ID(00000000abcdef01)
+])
+AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [stdout])
+AT_CHECK([cat stdout], [0], [dnl
+<any>
+
+# in port
+NXM_OF_IN_PORT(fffe)
+NXM_OF_IN_PORT(fffe)
+
+# eth dst
+NXM_OF_ETH_DST(0002e30f80a4)
+
+# eth src
+NXM_OF_ETH_SRC(020898456ddb)
+
+# eth type
+NXM_OF_ETH_TYPE(0800)
+NXM_OF_IN_PORT(0012), NXM_OF_ETH_TYPE(0800) 
+
+# vlan tci
+NXM_OF_VLAN_TCI(f009)
+nx_pull_match() returned error 44010105
+NXM_OF_VLAN_TCI(0000)
+NXM_OF_VLAN_TCI(3123)
+nx_pull_match() returned error 44010100
+NXM_OF_VLAN_TCI_W(1123/1fff)
+NXM_OF_VLAN_TCI_W(f000/f000)
+nx_pull_match() returned error 44010100
+
+# IP TOS
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_TOS(f0)
+nx_pull_match() returned error 44010104
+
+# IP protocol
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(05)
+nx_pull_match() returned error 44010104
+
+# IP source
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC(ac100014)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC_W(c0a80000/ffff0000)
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+
+# IP destination
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_DST(ac100014)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_DST_W(c0a80000/ffff0000)
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+
+# TCP source port
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_SRC(4231)
+nx_pull_match() returned error 44010104
+
+# TCP destination port
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(4231)
+nx_pull_match() returned error 44010104
+
+# UDP source port
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_SRC(8732)
+nx_pull_match() returned error 44010104
+
+# UDP destination port
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST(1782)
+nx_pull_match() returned error 44010104
+
+# ICMP type
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01), NXM_OF_ICMP_TYPE(12)
+nx_pull_match() returned error 44010104
+
+# ICMP code
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01), NXM_OF_ICMP_CODE(12)
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+
+# ARP opcode
+NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_OP(0001)
+nx_pull_match() returned error 44010102
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010105
+
+# ARP source
+NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_SPA(ac100014)
+NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_SPA_W(c0a81200/ffffff00)
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+
+# ARP destination
+NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_TPA(ac100014)
+NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_TPA_W(c0a81200/ffffff00)
+nx_pull_match() returned error 44010104
+nx_pull_match() returned error 44010104
+
+# Tunnel ID.
+NXM_NX_TUN_ID(00000000abcdef01)
+])
+AT_CLEANUP

@@ -37,6 +37,7 @@
 #include "mac-learning.h"
 #include "netdev.h"
 #include "netflow.h"
+#include "nx-match.h"
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -3014,6 +3015,42 @@ append_ofp_stats_reply(size_t nbytes, struct ofconn *ofconn,
     return ofpbuf_put_uninit(*msgp, nbytes);
 }
 
+static struct ofpbuf *
+make_nxstats_reply(ovs_be32 xid, ovs_be32 subtype, size_t body_len)
+{
+    struct nicira_stats_msg *nsm;
+    struct ofpbuf *msg;
+
+    msg = ofpbuf_new(MIN(sizeof *nsm + body_len, UINT16_MAX));
+    nsm = put_openflow_xid(sizeof *nsm, OFPT_STATS_REPLY, xid, msg);
+    nsm->type = htons(OFPST_VENDOR);
+    nsm->flags = htons(0);
+    nsm->vendor = htonl(NX_VENDOR_ID);
+    nsm->subtype = htonl(subtype);
+    return msg;
+}
+
+static struct ofpbuf *
+start_nxstats_reply(const struct nicira_stats_msg *request, size_t body_len)
+{
+    return make_nxstats_reply(request->header.xid, request->subtype, body_len);
+}
+
+static void
+append_nxstats_reply(size_t nbytes, struct ofconn *ofconn,
+                     struct ofpbuf **msgp)
+{
+    struct ofpbuf *msg = *msgp;
+    assert(nbytes <= UINT16_MAX - sizeof(struct nicira_stats_msg));
+    if (nbytes + msg->size > UINT16_MAX) {
+        struct nicira_stats_msg *reply = msg->data;
+        reply->flags = htons(OFPSF_REPLY_MORE);
+        *msgp = make_nxstats_reply(reply->header.xid, reply->subtype, nbytes);
+        queue_tx(msg, ofconn, ofconn->reply_counter);
+    }
+    ofpbuf_prealloc_tailroom(*msgp, nbytes);
+}
+
 static int
 handle_desc_stats_request(struct ofconn *ofconn,
                           struct ofp_stats_request *request)
@@ -3266,6 +3303,73 @@ handle_flow_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
+static void
+nx_flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
+{
+    struct rule *rule = rule_from_cls_rule(rule_);
+    struct flow_stats_cbdata *cbdata = cbdata_;
+    struct nx_flow_stats *nfs;
+    uint64_t packet_count, byte_count;
+    size_t act_len, start_len;
+
+    if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
+        return;
+    }
+
+    query_stats(cbdata->ofconn->ofproto, rule, &packet_count, &byte_count);
+
+    act_len = sizeof *rule->actions * rule->n_actions;
+
+    start_len = cbdata->msg->size;
+    append_nxstats_reply(sizeof *nfs + NXM_MAX_LEN + act_len,
+                         cbdata->ofconn, &cbdata->msg);
+    nfs = ofpbuf_put_uninit(cbdata->msg, sizeof *nfs);
+    nfs->table_id = 0;
+    nfs->pad = 0;
+    calc_flow_duration(rule->created, &nfs->duration_sec, &nfs->duration_nsec);
+    nfs->cookie = rule->flow_cookie;
+    nfs->priority = htons(rule->cr.priority);
+    nfs->idle_timeout = htons(rule->idle_timeout);
+    nfs->hard_timeout = htons(rule->hard_timeout);
+    nfs->match_len = htons(nx_put_match(cbdata->msg, &rule->cr));
+    memset(nfs->pad2, 0, sizeof nfs->pad2);
+    nfs->packet_count = htonll(packet_count);
+    nfs->byte_count = htonll(byte_count);
+    if (rule->n_actions > 0) {
+        ofpbuf_put(cbdata->msg, rule->actions, act_len);
+    }
+    nfs->length = htons(cbdata->msg->size - start_len);
+}
+
+static int
+handle_nxst_flow(struct ofconn *ofconn, struct ofpbuf *b)
+{
+    struct nx_flow_stats_request *nfsr;
+    struct flow_stats_cbdata cbdata;
+    struct cls_rule target;
+    int error;
+
+    /* Dissect the message. */
+    nfsr = ofpbuf_try_pull(b, sizeof *nfsr);
+    if (!nfsr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    error = nx_pull_match(b, ntohs(nfsr->match_len), 0, &target);
+    if (error) {
+        return error;
+    }
+
+    COVERAGE_INC(ofproto_flows_req);
+    cbdata.ofconn = ofconn;
+    cbdata.out_port = nfsr->out_port;
+    cbdata.msg = start_nxstats_reply(&nfsr->nsm, 1024);
+    classifier_for_each_match(&ofconn->ofproto->cls, &target,
+                              table_id_to_include(nfsr->table_id),
+                              nx_flow_stats_cb, &cbdata);
+    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
+    return 0;
+}
+
 struct flow_stats_ds_cbdata {
     struct ofproto *ofproto;
     struct ds *results;
@@ -3398,6 +3502,36 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
+static int
+handle_nxst_aggregate(struct ofconn *ofconn, struct ofpbuf *b)
+{
+    struct nx_aggregate_stats_request *request;
+    struct ofp_aggregate_stats_reply *reply;
+    struct cls_rule target;
+    struct ofpbuf *buf;
+    int error;
+
+    /* Dissect the message. */
+    request = ofpbuf_try_pull(b, sizeof *request);
+    if (!request) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    error = nx_pull_match(b, ntohs(request->match_len), 0, &target);
+    if (error) {
+        return error;
+    }
+
+    /* Reply. */
+    COVERAGE_INC(ofproto_flows_req);
+    buf = start_nxstats_reply(&request->nsm, sizeof *reply);
+    reply = ofpbuf_put_uninit(buf, sizeof *reply);
+    query_aggregate_stats(ofconn->ofproto, &target, request->out_port,
+                          request->table_id, reply);
+    queue_tx(buf, ofconn, ofconn->reply_counter);
+
+    return 0;
+}
+
 struct queue_stats_cbdata {
     struct ofconn *ofconn;
     struct ofport *ofport;
@@ -3489,6 +3623,44 @@ handle_queue_stats_request(struct ofconn *ofconn,
 }
 
 static int
+handle_vendor_stats_request(struct ofconn *ofconn,
+                            struct ofp_stats_request *osr, size_t arg_size)
+{
+    struct nicira_stats_msg *nsm;
+    struct ofpbuf b;
+    ovs_be32 vendor;
+
+    if (arg_size < 4) {
+        VLOG_WARN_RL(&rl, "truncated vendor stats request body");
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    memcpy(&vendor, osr->body, sizeof vendor);
+    if (vendor != htonl(NX_VENDOR_ID)) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+    }
+
+    if (ntohs(nsm->header.length) < sizeof(struct nicira_stats_msg)) {
+        VLOG_WARN_RL(&rl, "truncated Nicira stats request");
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    nsm = (struct nicira_stats_msg *) osr;
+    b.data = nsm;
+    b.size = ntohs(nsm->header.length);
+    switch (ntohl(nsm->subtype)) {
+    case NXST_FLOW:
+        return handle_nxst_flow(ofconn, &b);
+
+    case NXST_AGGREGATE:
+        return handle_nxst_aggregate(ofconn, &b);
+
+    default:
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
+    }
+}
+
+static int
 handle_stats_request(struct ofconn *ofconn, struct ofp_header *oh)
 {
     struct ofp_stats_request *osr;
@@ -3522,7 +3694,7 @@ handle_stats_request(struct ofconn *ofconn, struct ofp_header *oh)
         return handle_queue_stats_request(ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+        return handle_vendor_stats_request(ofconn, osr, arg_size);
 
     default:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT);
@@ -3863,7 +4035,7 @@ flow_mod_core(struct ofconn *ofconn, struct flow_mod *fm)
 }
 
 static int
-handle_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
+handle_ofpt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
 {
     struct ofp_match orig_match;
     struct ofp_flow_mod *ofm;
@@ -3913,6 +4085,45 @@ handle_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
     fm.buffer_id = ntohl(ofm->buffer_id);
     fm.out_port = ntohs(ofm->out_port);
     fm.flags = ntohs(ofm->flags);
+
+    /* Execute the command. */
+    return flow_mod_core(ofconn, &fm);
+}
+
+static int
+handle_nxt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
+{
+    struct nx_flow_mod *nfm;
+    struct flow_mod fm;
+    struct ofpbuf b;
+    int error;
+
+    b.data = oh;
+    b.size = ntohs(oh->length);
+
+    /* Dissect the message. */
+    nfm = ofpbuf_try_pull(&b, sizeof *nfm);
+    if (!nfm) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
+                          &fm.cr);
+    if (error) {
+        return error;
+    }
+    error = ofputil_pull_actions(&b, b.size, &fm.actions, &fm.n_actions);
+    if (error) {
+        return error;
+    }
+
+    /* Translate the message. */
+    fm.cookie = nfm->cookie;
+    fm.command = ntohs(nfm->command);
+    fm.idle_timeout = ntohs(nfm->idle_timeout);
+    fm.hard_timeout = ntohs(nfm->hard_timeout);
+    fm.buffer_id = ntohl(nfm->buffer_id);
+    fm.out_port = ntohs(nfm->out_port);
+    fm.flags = ntohs(nfm->flags);
 
     /* Execute the command. */
     return flow_mod_core(ofconn, &fm);
@@ -3982,6 +4193,29 @@ handle_role_request(struct ofconn *ofconn, struct nicira_header *msg)
 }
 
 static int
+handle_nxt_set_flow_format(struct ofconn *ofconn,
+                           struct nxt_set_flow_format *msg)
+{
+    uint32_t format;
+    int error;
+
+    error = check_ofp_message(&msg->header, OFPT_VENDOR, sizeof *msg);
+    if (error) {
+        return error;
+    }
+
+    format = ntohl(msg->format);
+    if (format == NXFF_OPENFLOW10
+        || format == NXFF_TUN_ID_FROM_COOKIE
+        || format == NXFF_NXM) {
+        ofconn->flow_format = format;
+        return 0;
+    } else {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+    }
+}
+
+static int
 handle_vendor(struct ofconn *ofconn, void *msg)
 {
     struct ofproto *p = ofconn->ofproto;
@@ -4015,6 +4249,12 @@ handle_vendor(struct ofconn *ofconn, void *msg)
 
     case NXT_ROLE_REQUEST:
         return handle_role_request(ofconn, msg);
+
+    case NXT_SET_FLOW_FORMAT:
+        return handle_nxt_set_flow_format(ofconn, msg);
+
+    case NXT_FLOW_MOD:
+        return handle_nxt_flow_mod(ofconn, &ovh->header);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
@@ -4070,7 +4310,7 @@ handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
         break;
 
     case OFPT_FLOW_MOD:
-        error = handle_flow_mod(ofconn, ofp_msg->data);
+        error = handle_ofpt_flow_mod(ofconn, ofp_msg->data);
         break;
 
     case OFPT_STATS_REQUEST:
@@ -4533,8 +4773,8 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 }
 
 static struct ofpbuf *
-compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
-                     uint8_t reason)
+compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
+                         uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
@@ -4549,6 +4789,29 @@ compose_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     ofr->idle_timeout = htons(rule->idle_timeout);
     ofr->packet_count = htonll(rule->packet_count);
     ofr->byte_count = htonll(rule->byte_count);
+
+    return buf;
+}
+
+static struct ofpbuf *
+compose_nx_flow_removed(const struct rule *rule, uint8_t reason)
+{
+    struct nx_flow_removed *nfr;
+    struct ofpbuf *buf;
+    int match_len;
+
+    nfr = make_nxmsg(sizeof *nfr, NXT_FLOW_REMOVED, &buf);
+
+    match_len = nx_put_match(buf, &rule->cr);
+
+    nfr->cookie = rule->flow_cookie;
+    nfr->priority = htons(rule->cr.priority);
+    nfr->reason = reason;
+    calc_flow_duration(rule->created, &nfr->duration_sec, &nfr->duration_nsec);
+    nfr->idle_timeout = htons(rule->idle_timeout);
+    nfr->match_len = htons(match_len);
+    nfr->packet_count = htonll(rule->packet_count);
+    nfr->byte_count = htonll(rule->byte_count);
 
     return buf;
 }
@@ -4570,7 +4833,9 @@ send_flow_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
             continue;
         }
 
-        msg = compose_flow_removed(ofconn, rule, reason);
+        msg = (ofconn->flow_format == NXFF_NXM
+               ? compose_nx_flow_removed(rule, reason)
+               : compose_ofp_flow_removed(ofconn, rule, reason));
 
         /* Account flow expirations under ofconn->reply_counter, the counter
          * for replies to OpenFlow requests.  That works because preventing

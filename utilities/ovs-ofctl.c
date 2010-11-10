@@ -27,11 +27,14 @@
 #include <sys/time.h>
 
 #include "byte-order.h"
+#include "classifier.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
 #include "dpif.h"
+#include "dynamic-string.h"
 #include "netlink.h"
+#include "nx-match.h"
 #include "odp-util.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
@@ -855,8 +858,14 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
            count * message_size / (duration / 1000.0));
 }
 
-/* This command is really only useful for testing the flow parser (ofp_parse),
- * so it is undocumented. */
+static void
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    usage();
+}
+
+/* Undocumented commands for unit testing. */
+
 static void
 do_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
@@ -876,9 +885,57 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    usage();
+    struct ds in;
+
+    ds_init(&in);
+    while (!ds_get_line(&in, stdin)) {
+        struct ofpbuf nx_match;
+        struct cls_rule rule;
+        int match_len;
+        int error;
+        char *s;
+
+        /* Delete comments, skip blank lines. */
+        s = ds_cstr(&in);
+        if (*s == '#') {
+            puts(s);
+            continue;
+        }
+        if (strchr(s, '#')) {
+            *strchr(s, '#') = '\0';
+        }
+        if (s[strspn(s, " ")] == '\0') {
+            putchar('\n');
+            continue;
+        }
+
+        /* Convert string to nx_match. */
+        ofpbuf_init(&nx_match, 0);
+        match_len = nx_match_from_string(ds_cstr(&in), &nx_match);
+
+        /* Convert nx_match to cls_rule. */
+        error = nx_pull_match(&nx_match, match_len, 0, &rule);
+        if (!error) {
+            char *out;
+
+            /* Convert cls_rule back to nx_match. */
+            ofpbuf_uninit(&nx_match);
+            ofpbuf_init(&nx_match, 0);
+            match_len = nx_put_match(&nx_match, &rule);
+
+            /* Convert nx_match to string. */
+            out = nx_match_to_string(nx_match.data, match_len);
+            puts(out);
+            free(out);
+        } else {
+            printf("nx_pull_match() returned error %x\n", error);
+        }
+
+        ofpbuf_uninit(&nx_match);
+    }
+    ds_destroy(&in);
 }
 
 static const struct command all_commands[] = {
@@ -901,7 +958,11 @@ static const struct command all_commands[] = {
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
-    { "parse-flows", 1, 1, do_parse_flows },
     { "help", 0, INT_MAX, do_help },
+
+    /* Undocumented commands for testing. */
+    { "parse-flows", 1, 1, do_parse_flows },
+    { "parse-nx-match", 0, 0, do_parse_nx_match },
+
     { NULL, 0, 0, NULL },
 };

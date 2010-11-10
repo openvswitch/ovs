@@ -77,18 +77,56 @@ struct nx_vendor_error {
  * so we're using the existing 'type' values to avoid having to invent new ones
  * that duplicate the current ones' meanings. */
 
+/* Additional "code" values for OFPET_BAD_REQUEST. */
+enum {
+/* Nicira Extended Match (NXM) errors. */
+
+    /* Generic error code used when there is an error in an NXM sent to the
+     * switch.  The switch may use one of the more specific error codes below,
+     * if there is an appropriate one, to simplify debugging, but it is not
+     * required to do so. */
+    NXBRC_NXM_INVALID = 0x100,
+
+    /* The nxm_type, or nxm_type taken in combination with nxm_hasmask or
+     * nxm_length or both, is invalid or not implemented. */
+    NXBRC_NXM_BAD_TYPE = 0x101,
+
+    /* Invalid nxm_value. */
+    NXBRC_NXM_BAD_VALUE = 0x102,
+
+    /* Invalid nxm_mask. */
+    NXBRC_NXM_BAD_MASK = 0x103,
+
+    /* A prerequisite was not met. */
+    NXBRC_NXM_BAD_PREREQ = 0x104,
+
+    /* A given nxm_type was specified more than once. */
+    NXBRC_NXM_DUP_TYPE = 0x105
+};
+
 /* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
 enum {
     /* Generic hardware error. */
     NXFMFC_HARDWARE = 0x100,
 
     /* A nonexistent table ID was specified in the "command" field of struct
-     * ofp_flow_mod, when the nxt_flow_mod_table_id extension is enabled. */
-    NXFMFC_BAD_TABLE_ID
+     * ofp_flow_mod, when the nxt_flow_mod_table_id extension is enabled.
+     * (This extension is not yet implemented on this branch of Open
+     * vSwitch.) */
+    NXFMFC_BAD_TABLE_ID = 0x101
 };
 
 /* Nicira vendor requests and replies. */
 
+/* Header for Nicira vendor requests and replies. */
+struct nicira_header {
+    struct ofp_header header;
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXT_* below. */
+};
+OFP_ASSERT(sizeof(struct nicira_header) == 16);
+
+/* Values for the 'subtype' member of struct nicira_header. */
 enum nicira_type {
     /* Switch status request.  The request body is an ASCII string that
      * specifies a prefix of the key names to include in the output; if it is
@@ -115,21 +153,33 @@ enum nicira_type {
     /* Controller role support.  The request body is struct nx_role_request.
      * The reply echos the request. */
     NXT_ROLE_REQUEST,
-    NXT_ROLE_REPLY
+    NXT_ROLE_REPLY,
+
+    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
+    NXT_SET_FLOW_FORMAT,        /* Set flow format. */
+    NXT_FLOW_MOD,               /* Analogous to OFPT_FLOW_MOD. */
+    NXT_FLOW_REMOVED            /* Analogous to OFPT_FLOW_REMOVED. */
 };
 
-struct nicira_header {
-    struct ofp_header header;
-    uint32_t vendor;            /* NX_VENDOR_ID. */
-    uint32_t subtype;           /* One of NXT_* above. */
+/* Header for Nicira vendor stats request and reply messages. */
+struct nicira_stats_msg {
+    struct ofp_header header;   /* OFPT_STATS_REQUEST or OFPT_STATS_REPLY. */
+    ovs_be16 type;              /* OFPST_VENDOR. */
+    ovs_be16 flags;             /* OFPSF_{REQ,REPLY}_*. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXST_* below. */
+    uint8_t pad[4];             /* Align to 64-bits. */
 };
-OFP_ASSERT(sizeof(struct nicira_header) == 16);
+OFP_ASSERT(sizeof(struct nicira_stats_msg) == 24);
 
-enum {
-    NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
-    NXFF_TUN_ID_FROM_COOKIE = 1  /* Obtain tunnel ID from cookie. */
+/* Values for the 'subtype' member of struct nicira_stats_msg. */
+enum nicira_stats_type {
+    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
+    NXST_FLOW,                  /* Analogous to OFPST_FLOW. */
+    NXST_AGGREGATE              /* Analogous to OFPST_AGGREGATE. */
 };
 
+/* NXT_TUN_ID_FROM_COOKIE request. */
 struct nxt_tun_id_cookie {
     struct ofp_header header;
     uint32_t vendor;            /* NX_VENDOR_ID. */
@@ -292,5 +342,545 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
 
 #define NXFW_ALL NXFW_TUN_ID
 #define OVSFW_ALL (OFPFW_ALL | NXFW_ALL)
+
+/* Flexible flow specifications (aka NXM = Nicira Extended Match).
+ *
+ * OpenFlow 1.0 has "struct ofp_match" for specifying flow matches.  This
+ * structure is fixed-length and hence difficult to extend.  This section
+ * describes a more flexible, variable-length flow match, called "nx_match" for
+ * short, that is also supported by Open vSwitch.  This section also defines a
+ * replacement for each OpenFlow message that includes struct ofp_match.
+ *
+ *
+ * Format
+ * ======
+ *
+ * An nx_match is a sequence of zero or more "nxm_entry"s, which are
+ * type-length-value (TLV) entries, each 5 to 259 (inclusive) bytes long.
+ * "nxm_entry"s are not aligned on or padded to any multibyte boundary.  The
+ * first 4 bytes of an nxm_entry are its "header", followed by the entry's
+ * "body".
+ *
+ * An nxm_entry's header is interpreted as a 32-bit word in network byte order:
+ *
+ * |<-------------------- nxm_type ------------------>|
+ * |                                                  |
+ * |31                              16 15            9| 8 7                0
+ * +----------------------------------+---------------+--+------------------+
+ * |            nxm_vendor            |   nxm_field   |hm|    nxm_length    |
+ * +----------------------------------+---------------+--+------------------+
+ *
+ * The most-significant 23 bits of the header are collectively "nxm_type".
+ * Bits 16...31 are "nxm_vendor", one of the NXM_VENDOR_* values below.  Bits
+ * 9...15 are "nxm_field", which is a vendor-specific value.  nxm_type normally
+ * designates a protocol header, such as the Ethernet type, but it can also
+ * refer to packet metadata, such as the switch port on which a packet arrived.
+ *
+ * Bit 8 is "nxm_hasmask" (labeled "hm" above for space reasons).  The meaning
+ * of this bit is explained later.
+ *
+ * The least-significant 8 bits are "nxm_length", a positive integer.  The
+ * length of the nxm_entry, including the header, is exactly 4 + nxm_length
+ * bytes.
+ *
+ * For a given nxm_vendor, nxm_field, and nxm_hasmask value, nxm_length is a
+ * constant.  It is included only to allow software to minimally parse
+ * "nxm_entry"s of unknown types.  (Similarly, for a given nxm_vendor,
+ * nxm_field, and nxm_length, nxm_hasmask is a constant.)
+ *
+ *
+ * Semantics
+ * =========
+ *
+ * A zero-length nx_match (one with no "nxm_entry"s) matches every packet.
+ *
+ * An nxm_entry places a constraint on the packets matched by the nx_match:
+ *
+ *   - If nxm_hasmask is 0, the nxm_entry's body contains a value for the
+ *     field, called "nxm_value".  The nx_match matches only packets in which
+ *     the field equals nxm_value.
+ *
+ *   - If nxm_hasmask is 1, then the nxm_entry's body contains a value for the
+ *     field (nxm_value), followed by a bitmask of the same length as the
+ *     value, called "nxm_mask".  For each 1-bit in position J in nxm_mask, the
+ *     nx_match matches only packets for which bit J in the given field's value
+ *     matches bit J in nxm_value.  A 0-bit in nxm_mask causes the
+ *     corresponding bits in nxm_value and the field's value to be ignored.
+ *     (The sense of the nxm_mask bits is the opposite of that used by the
+ *     "wildcards" member of struct ofp_match.)
+ *
+ *     When nxm_hasmask is 1, nxm_length is always even.
+ *
+ *     An all-zero-bits nxm_mask is equivalent to omitting the nxm_entry
+ *     entirely.  An all-one-bits nxm_mask is equivalent to specifying 0 for
+ *     nxm_hasmask.
+ *
+ * When there are multiple "nxm_entry"s, all of the constraints must be met.
+ *
+ *
+ * Mask Restrictions
+ * =================
+ *
+ * Masks may be restricted:
+ *
+ *   - Some nxm_types may not support masked wildcards, that is, nxm_hasmask
+ *     must always be 0 when these fields are specified.  For example, the
+ *     field that identifies the port on which a packet was received may not be
+ *     masked.
+ *
+ *   - Some nxm_types that do support masked wildcards may only support certain
+ *     nxm_mask patterns.  For example, fields that have IPv4 address values
+ *     may be restricted to CIDR masks.
+ *
+ * These restrictions should be noted in specifications for individual fields.
+ * A switch may accept an nxm_hasmask or nxm_mask value that the specification
+ * disallows, if the switch correctly implements support for that nxm_hasmask
+ * or nxm_mask value.  A switch must reject an attempt to set up a flow that
+ * contains a nxm_hasmask or nxm_mask value that it does not support.
+ *
+ *
+ * Prerequisite Restrictions
+ * =========================
+ *
+ * The presence of an nxm_entry with a given nxm_type may be restricted based
+ * on the presence of or values of other "nxm_entry"s.  For example:
+ *
+ *   - An nxm_entry for nxm_type=NXM_OF_IP_TOS is allowed only if it is
+ *     preceded by another entry with nxm_type=NXM_OF_ETH_TYPE, nxm_hasmask=0,
+ *     and nxm_value=0x0800.  That is, matching on the IP source address is
+ *     allowed only if the Ethernet type is explicitly set to IP.
+ *
+ *   - An nxm_entry for nxm_type=NXM_OF_TCP_SRC is allowed only if it is preced
+ *     by an entry with nxm_type=NXM_OF_ETH_TYPE, nxm_hasmask=0,
+ *     nxm_value=0x0800 and another with nxm_type=NXM_OF_IP_PROTO,
+ *     nxm_hasmask=0, nxm_value=6, in that order.  That is, matching on the TCP
+ *     source port is allowed only if the Ethernet type is IP and the IP
+ *     protocol is TCP.
+ *
+ * These restrictions should be noted in specifications for individual fields.
+ * A switch may implement relaxed versions of these restrictions.  A switch
+ * must reject an attempt to set up a flow that violates its restrictions.
+ *
+ *
+ * Ordering Restrictions
+ * =====================
+ *
+ * An nxm_entry that has prerequisite restrictions must appear after the
+ * "nxm_entry"s for its prerequisites.  Ordering of "nxm_entry"s within an
+ * nx_match is not otherwise constrained.
+ *
+ * Any given nxm_type may appear in an nx_match at most once.
+ *
+ *
+ * nxm_entry Examples
+ * ==================
+ *
+ * These examples show the format of a single nxm_entry with particular
+ * nxm_hasmask and nxm_length values.  The diagrams are labeled with field
+ * numbers and byte indexes.
+ *
+ *
+ * 8-bit nxm_value, nxm_hasmask=1, nxm_length=1:
+ *
+ *  0          3  4   5
+ * +------------+---+---+
+ * |   header   | v | m |
+ * +------------+---+---+
+ *
+ *
+ * 16-bit nxm_value, nxm_hasmask=0, nxm_length=2:
+ *
+ *  0          3 4    5
+ * +------------+------+
+ * |   header   | value|
+ * +------------+------+
+ *
+ *
+ * 32-bit nxm_value, nxm_hasmask=0, nxm_length=4:
+ *
+ *  0          3 4           7
+ * +------------+-------------+
+ * |   header   |  nxm_value  |
+ * +------------+-------------+
+ *
+ *
+ * 48-bit nxm_value, nxm_hasmask=0, nxm_length=6:
+ *
+ *  0          3 4                9
+ * +------------+------------------+
+ * |   header   |     nxm_value    |
+ * +------------+------------------+
+ *
+ *
+ * 48-bit nxm_value, nxm_hasmask=1, nxm_length=12:
+ *
+ *  0          3 4                9 10              15
+ * +------------+------------------+------------------+
+ * |   header   |     nxm_value    |      nxm_mask    |
+ * +------------+------------------+------------------+
+ *
+ *
+ * Error Reporting
+ * ===============
+ *
+ * A switch should report an error in an nx_match using error type
+ * OFPET_BAD_REQUEST and one of the NXBRC_NXM_* codes.  Ideally the switch
+ * should report a specific error code, if one is assigned for the particular
+ * problem, but NXBRC_NXM_INVALID is also available to report a generic
+ * nx_match error.
+ */
+
+#define NXM_HEADER__(VENDOR, FIELD, HASMASK, LENGTH) \
+    (((VENDOR) << 16) | ((FIELD) << 9) | ((HASMASK) << 8) | (LENGTH))
+#define NXM_HEADER(VENDOR, FIELD, LENGTH) \
+    NXM_HEADER__(VENDOR, FIELD, 0, LENGTH)
+#define NXM_HEADER_W(VENDOR, FIELD, LENGTH) \
+    NXM_HEADER__(VENDOR, FIELD, 1, (LENGTH) * 2)
+#define NXM_VENDOR(HEADER) ((HEADER) >> 16)
+#define NXM_FIELD(HEADER) (((HEADER) >> 9) & 0x7f)
+#define NXM_TYPE(HEADER) (((HEADER) >> 9) & 0x7fffff)
+#define NXM_HASMASK(HEADER) (((HEADER) >> 8) & 1)
+#define NXM_LENGTH(HEADER) ((HEADER) & 0xff)
+
+#define NXM_MAKE_WILD_HEADER(HEADER) \
+        NXM_HEADER_W(NXM_VENDOR(HEADER), NXM_FIELD(HEADER), NXM_LENGTH(HEADER))
+
+/* ## ------------------------------- ## */
+/* ## OpenFlow 1.0-compatible fields. ## */
+/* ## ------------------------------- ## */
+
+/* Physical or virtual port on which the packet was received.
+ *
+ * Prereqs: None.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_IN_PORT    NXM_HEADER  (0x0000,  0, 2)
+
+/* Source or destination address in Ethernet header.
+ *
+ * Prereqs: None.
+ *
+ * Format: 48-bit Ethernet MAC address.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_ETH_DST    NXM_HEADER  (0x0000,  1, 6)
+#define NXM_OF_ETH_SRC    NXM_HEADER  (0x0000,  2, 6)
+
+/* Packet's Ethernet type.
+ *
+ * For an Ethernet II packet this is taken from the Ethernet header.  For an
+ * 802.2 LLC+SNAP header with OUI 00-00-00 this is taken from the SNAP header.
+ * A packet that has neither format has value 0x05ff
+ * (OFP_DL_TYPE_NOT_ETH_TYPE).
+ *
+ * For a packet with an 802.1Q header, this is the type of the encapsulated
+ * frame.
+ *
+ * Prereqs: None.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_ETH_TYPE   NXM_HEADER  (0x0000,  3, 2)
+
+/* 802.1Q TCI.
+ *
+ * For a packet with an 802.1Q header, this is the Tag Control Information
+ * (TCI) field, with the CFI bit forced to 1.  For a packet with no 802.1Q
+ * header, this has value 0.
+ *
+ * Prereqs: None.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Arbitrary masks.
+ *
+ * This field can be used in various ways:
+ *
+ *   - If it is not constrained at all, the nx_match matches packets without
+ *     an 802.1Q header or with an 802.1Q header that has any TCI value.
+ *
+ *   - Testing for an exact match with 0 matches only packets without an
+ *     802.1Q header.
+ *
+ *   - Testing for an exact match with a TCI value with CFI=1 matches packets
+ *     that have an 802.1Q header with a specified VID and PCP.
+ *
+ *   - Testing for an exact match with a nonzero TCI value with CFI=0 does
+ *     not make sense.  The switch may reject this combination.
+ *
+ *   - Testing with a specific VID and CFI=1, with nxm_mask=0x1fff, matches
+ *     packets that have an 802.1Q header with that VID (and any PCP).
+ *
+ *   - Testing with a specific PCP and CFI=1, with nxm_mask=0xf000, matches
+ *     packets that have an 802.1Q header with that PCP (and any VID).
+ *
+ *   - Testing with nxm_value=0, nxm_mask=0xe000 matches packets with no 802.1Q
+ *     header or with an 802.1Q header with a VID of 0.
+ */
+#define NXM_OF_VLAN_TCI   NXM_HEADER  (0x0000,  4, 2)
+#define NXM_OF_VLAN_TCI_W NXM_HEADER_W(0x0000,  4, 2)
+
+/* The "type of service" byte of the IP header, with the ECN bits forced to 0.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *
+ * Format: 8-bit integer with 2 least-significant bits forced to 0.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_IP_TOS     NXM_HEADER  (0x0000,  5, 1)
+
+/* The "protocol" byte in the IP header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *
+ * Format: 8-bit integer.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_IP_PROTO   NXM_HEADER  (0x0000,  6, 1)
+
+/* The source or destination address in the IP header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ *   high-order bits set to 1 and the other 32-N bits set to 0. */
+#define NXM_OF_IP_SRC     NXM_HEADER  (0x0000,  7, 4)
+#define NXM_OF_IP_SRC_W   NXM_HEADER_W(0x0000,  7, 4)
+#define NXM_OF_IP_DST     NXM_HEADER  (0x0000,  8, 4)
+#define NXM_OF_IP_DST_W   NXM_HEADER_W(0x0000,  8, 4)
+
+/* The source or destination port in the TCP header.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *   NXM_OF_IP_PROTO must match 6 exactly.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_TCP_SRC    NXM_HEADER  (0x0000,  9, 2)
+#define NXM_OF_TCP_DST    NXM_HEADER  (0x0000, 10, 2)
+
+/* The source or destination port in the UDP header.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *   NXM_OF_IP_PROTO must match 17 exactly.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_UDP_SRC    NXM_HEADER  (0x0000, 11, 2)
+#define NXM_OF_UDP_DST    NXM_HEADER  (0x0000, 12, 2)
+
+/* The type or code in the ICMP header.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *   NXM_OF_IP_PROTO must match 1 exactly.
+ *
+ * Format: 8-bit integer.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_ICMP_TYPE  NXM_HEADER  (0x0000, 13, 1)
+#define NXM_OF_ICMP_CODE  NXM_HEADER  (0x0000, 14, 1)
+
+/* ARP opcode.
+ *
+ * For an Ethernet+IP ARP packet, the opcode in the ARP header.  Always 0
+ * otherwise.  Only ARP opcodes between 1 and 255 should be specified for
+ * matching.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ *
+ * Format: 16-bit integer in network byte order.
+ *
+ * Masking: Not maskable. */
+#define NXM_OF_ARP_OP     NXM_HEADER  (0x0000, 15, 2)
+
+/* For an Ethernet+IP ARP packet, the source or target protocol address
+ * in the ARP header.  Always 0 otherwise.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ *   high-order bits set to 1 and the other 32-N bits set to 0. */
+#define NXM_OF_ARP_SPA    NXM_HEADER  (0x0000, 16, 4)
+#define NXM_OF_ARP_SPA_W  NXM_HEADER_W(0x0000, 16, 4)
+#define NXM_OF_ARP_TPA    NXM_HEADER  (0x0000, 17, 4)
+#define NXM_OF_ARP_TPA_W  NXM_HEADER_W(0x0000, 17, 4)
+
+/* ## ------------------------ ## */
+/* ## Nicira match extensions. ## */
+/* ## ------------------------ ## */
+
+/* Tunnel ID.
+ *
+ * For a packet received via GRE tunnel including a (32-bit) key, the key is
+ * stored in the low 32-bits and the high bits are zeroed.  For other packets,
+ * the value is 0.
+ *
+ * Prereqs: None.
+ *
+ * Format: 64-bit integer in network byte order.
+ *
+ * Masking: Arbitrary masks. */
+#define NXM_NX_TUN_ID     NXM_HEADER  (0x0001, 16, 8)
+#define NXM_NX_TUN_ID_W   NXM_HEADER_W(0x0001, 16, 8)
+
+/* ## --------------------- ## */
+/* ## Requests and replies. ## */
+/* ## --------------------- ## */
+
+enum {
+    NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
+    NXFF_TUN_ID_FROM_COOKIE = 1, /* OpenFlow 1.0, plus obtain tunnel ID from
+                                  * cookie. */
+    NXFF_NXM = 2                 /* Nicira extended match. */
+};
+
+/* NXT_SET_FLOW_FORMAT request. */
+struct nxt_set_flow_format {
+    struct ofp_header header;
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* NXT_SET_FLOW_FORMAT. */
+    ovs_be32 format;            /* One of NXFF_*. */
+};
+OFP_ASSERT(sizeof(struct nxt_set_flow_format) == 20);
+
+/* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD). */
+struct nx_flow_mod {
+    struct nicira_header nxh;
+    ovs_be64 cookie;              /* Opaque controller-issued identifier. */
+    ovs_be16 command;             /* One of OFPFC_*. */
+    ovs_be16 idle_timeout;        /* Idle time before discarding (seconds). */
+    ovs_be16 hard_timeout;        /* Max time before discarding (seconds). */
+    ovs_be16 priority;            /* Priority level of flow entry. */
+    ovs_be32 buffer_id;           /* Buffered packet to apply to (or -1).
+                                     Not meaningful for OFPFC_DELETE*. */
+    ovs_be16 out_port;            /* For OFPFC_DELETE* commands, require
+                                     matching entries to include this as an
+                                     output port.  A value of OFPP_NONE
+                                     indicates no restriction. */
+    ovs_be16 flags;               /* One of OFPFF_*. */
+    ovs_be16 match_len;           /* Size of nx_match. */
+    uint8_t pad[6];               /* Align to 64-bits. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, then
+     *   - Actions to fill out the remainder of the message length (always a
+     *     multiple of 8).
+     */
+};
+OFP_ASSERT(sizeof(struct nx_flow_mod) == 48);
+
+/* NXT_FLOW_REMOVED (analogous to OFPT_FLOW_REMOVED). */
+struct nx_flow_removed {
+    struct nicira_header nxh;
+    ovs_be64 cookie;          /* Opaque controller-issued identifier. */
+    ovs_be16 priority;        /* Priority level of flow entry. */
+    uint8_t reason;           /* One of OFPRR_*. */
+    uint8_t pad[1];           /* Align to 32-bits. */
+    ovs_be32 duration_sec;    /* Time flow was alive in seconds. */
+    ovs_be32 duration_nsec;   /* Time flow was alive in nanoseconds beyond
+                                 duration_sec. */
+    ovs_be16 idle_timeout;    /* Idle timeout from original flow mod. */
+    ovs_be16 match_len;       /* Size of nx_match. */
+    ovs_be64 packet_count;
+    ovs_be64 byte_count;
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes. */
+};
+OFP_ASSERT(sizeof(struct nx_flow_removed) == 56);
+
+/* Nicira vendor stats request of type NXST_FLOW (analogous to OFPST_FLOW
+ * request). */
+struct nx_flow_stats_request {
+    struct nicira_stats_msg nsm;
+    ovs_be16 out_port;        /* Require matching entries to include this
+                                 as an output port.  A value of OFPP_NONE
+                                 indicates no restriction. */
+    ovs_be16 match_len;       /* Length of nx_match. */
+    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
+                                 or 0xff for all tables. */
+    uint8_t pad[3];           /* Align to 64 bits. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, which must also exactly fill out the length of the
+     *     message.
+     */
+};
+OFP_ASSERT(sizeof(struct nx_flow_stats_request) == 32);
+
+/* Body for Nicira vendor stats reply of type NXST_FLOW (analogous to
+ * OFPST_FLOW reply). */
+struct nx_flow_stats {
+    ovs_be16 length;          /* Length of this entry. */
+    uint8_t table_id;         /* ID of table flow came from. */
+    uint8_t pad;
+    ovs_be32 duration_sec;    /* Time flow has been alive in seconds. */
+    ovs_be32 duration_nsec;   /* Time flow has been alive in nanoseconds
+                                 beyond duration_sec. */
+    ovs_be16 priority;        /* Priority of the entry. Only meaningful
+                                 when this is not an exact-match entry. */
+    ovs_be16 idle_timeout;    /* Number of seconds idle before expiration. */
+    ovs_be16 hard_timeout;    /* Number of seconds before expiration. */
+    ovs_be16 match_len;       /* Length of nx_match. */
+    uint8_t pad2[4];          /* Align to 64 bits. */
+    ovs_be64 cookie;          /* Opaque controller-issued identifier. */
+    ovs_be64 packet_count;    /* Number of packets in flow. */
+    ovs_be64 byte_count;      /* Number of bytes in flow. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, then
+     *   - Actions to fill out the remainder 'length' bytes (always a multiple
+     *     of 8).
+     */
+};
+OFP_ASSERT(sizeof(struct nx_flow_stats) == 48);
+
+/* Nicira vendor stats request of type NXST_AGGREGATE (analogous to
+ * OFPST_AGGREGATE request). */
+struct nx_aggregate_stats_request {
+    struct nicira_stats_msg nsm;
+    ovs_be16 out_port;        /* Require matching entries to include this
+                                 as an output port.  A value of OFPP_NONE
+                                 indicates no restriction. */
+    ovs_be16 match_len;       /* Length of nx_match. */
+    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
+                                 or 0xff for all tables. */
+    uint8_t pad[3];           /* Align to 64 bits. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, which must also exactly fill out the length of the
+     *     message.
+     */
+};
+OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 32);
+
+/* Body for nicira_stats_msg reply of type NXST_AGGREGATE (analogous to
+ * OFPST_AGGREGATE reply).
+ *
+ * ofp_aggregate_stats_reply does not contain an ofp_match structure, so we
+ * reuse it entirely.  (It would be very odd to use OFPST_AGGREGATE to reply to
+ * an NXST_AGGREGATE request, so we don't do that.) */
+struct nx_aggregate_stats_reply {
+    struct nicira_stats_msg nsm;
+    struct ofp_aggregate_stats_reply asr;
+};
+OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
 
 #endif /* openflow/nicira-ext.h */

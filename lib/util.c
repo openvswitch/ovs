@@ -358,9 +358,10 @@ hexit_value(int c)
 
     case 'f': case 'F':
         return 0xf;
-    }
 
-    NOT_REACHED();
+    default:
+        return -1;
+    }
 }
 
 /* Returns the current working directory as a malloc()'d string, or a null

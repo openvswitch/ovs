@@ -1,0 +1,43 @@
+/*                                                                -*- c -*-
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#define DEFINE_FIELD_M(HEADER, WILDCARD, DL_TYPE, NW_PROTO)             \
+        DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO)               \
+        DEFINE_FIELD(HEADER##_W, WILDCARD, DL_TYPE, NW_PROTO)
+
+/*             NXM_ bit      OFPFW_* bit     dl_type       nw_proto      */
+/*             ------------  --------------  -----------   ------------- */
+DEFINE_FIELD  (OF_IN_PORT,   OFPFW_IN_PORT,  0,            0)
+DEFINE_FIELD  (OF_ETH_DST,   OFPFW_DL_DST,   0,            0)
+DEFINE_FIELD  (OF_ETH_SRC,   OFPFW_DL_SRC,   0,            0)
+DEFINE_FIELD  (OF_ETH_TYPE,  OFPFW_DL_TYPE,  0,            0)
+DEFINE_FIELD_M(OF_VLAN_TCI,  0,              0,            0)
+DEFINE_FIELD  (OF_IP_TOS,    OFPFW_NW_TOS,   ETH_TYPE_IP,  0)
+DEFINE_FIELD  (OF_IP_PROTO,  OFPFW_NW_PROTO, ETH_TYPE_IP,  0)
+DEFINE_FIELD_M(OF_IP_SRC,    0,              ETH_TYPE_IP,  0)
+DEFINE_FIELD_M(OF_IP_DST,    0,              ETH_TYPE_IP,  0)
+DEFINE_FIELD  (OF_TCP_SRC,   OFPFW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_TCP)
+DEFINE_FIELD  (OF_TCP_DST,   OFPFW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_TCP)
+DEFINE_FIELD  (OF_UDP_SRC,   OFPFW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_UDP)
+DEFINE_FIELD  (OF_UDP_DST,   OFPFW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_UDP)
+DEFINE_FIELD  (OF_ICMP_TYPE, OFPFW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_ICMP)
+DEFINE_FIELD  (OF_ICMP_CODE, OFPFW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_ICMP)
+DEFINE_FIELD  (OF_ARP_OP,    OFPFW_NW_PROTO, ETH_TYPE_ARP, 0)
+DEFINE_FIELD_M(OF_ARP_SPA,   0,              ETH_TYPE_ARP, 0)
+DEFINE_FIELD_M(OF_ARP_TPA,   0,              ETH_TYPE_ARP, 0)
+DEFINE_FIELD  (NX_TUN_ID,    NXFW_TUN_ID,    0,            0)
+
+#undef DEFINE_FIELD
