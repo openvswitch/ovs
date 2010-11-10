@@ -2981,7 +2981,7 @@ handle_port_mod(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static struct ofpbuf *
-make_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
+make_ofp_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
 {
     struct ofp_stats_reply *osr;
     struct ofpbuf *msg;
@@ -2994,20 +2994,21 @@ make_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
 }
 
 static struct ofpbuf *
-start_stats_reply(const struct ofp_stats_request *request, size_t body_len)
+start_ofp_stats_reply(const struct ofp_stats_request *request, size_t body_len)
 {
-    return make_stats_reply(request->header.xid, request->type, body_len);
+    return make_ofp_stats_reply(request->header.xid, request->type, body_len);
 }
 
 static void *
-append_stats_reply(size_t nbytes, struct ofconn *ofconn, struct ofpbuf **msgp)
+append_ofp_stats_reply(size_t nbytes, struct ofconn *ofconn,
+                       struct ofpbuf **msgp)
 {
     struct ofpbuf *msg = *msgp;
     assert(nbytes <= UINT16_MAX - sizeof(struct ofp_stats_reply));
     if (nbytes + msg->size > UINT16_MAX) {
         struct ofp_stats_reply *reply = msg->data;
         reply->flags = htons(OFPSF_REPLY_MORE);
-        *msgp = make_stats_reply(reply->header.xid, reply->type, nbytes);
+        *msgp = make_ofp_stats_reply(reply->header.xid, reply->type, nbytes);
         queue_tx(msg, ofconn, ofconn->reply_counter);
     }
     return ofpbuf_put_uninit(*msgp, nbytes);
@@ -3021,8 +3022,8 @@ handle_desc_stats_request(struct ofconn *ofconn,
     struct ofp_desc_stats *ods;
     struct ofpbuf *msg;
 
-    msg = start_stats_reply(request, sizeof *ods);
-    ods = append_stats_reply(sizeof *ods, ofconn, &msg);
+    msg = start_ofp_stats_reply(request, sizeof *ods);
+    ods = append_ofp_stats_reply(sizeof *ods, ofconn, &msg);
     memset(ods, 0, sizeof *ods);
     ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
     ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
@@ -3044,7 +3045,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     struct rule *rule;
     int n_rules;
 
-    msg = start_stats_reply(request, sizeof *ots * 2);
+    msg = start_ofp_stats_reply(request, sizeof *ots * 2);
 
     /* Count rules other than subrules. */
     n_rules = classifier_count(&p->cls);
@@ -3055,7 +3056,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     }
 
     /* Classifier table. */
-    ots = append_stats_reply(sizeof *ots, ofconn, &msg);
+    ots = append_ofp_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     strcpy(ots->name, "classifier");
     ots->wildcards = (ofconn->flow_format == NXFF_OPENFLOW10
@@ -3081,7 +3082,7 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
      * netdev_get_stats() will log errors. */
     netdev_get_stats(port->netdev, &stats);
 
-    ops = append_stats_reply(sizeof *ops, ofconn, msgp);
+    ops = append_ofp_stats_reply(sizeof *ops, ofconn, msgp);
     ops->port_no = htons(port->opp.port_no);
     memset(ops->pad, 0, sizeof ops->pad);
     ops->rx_packets = htonll(stats.rx_packets);
@@ -3113,7 +3114,7 @@ handle_port_stats_request(struct ofconn *ofconn, struct ofp_stats_request *osr,
     }
     psr = (struct ofp_port_stats_request *) osr->body;
 
-    msg = start_stats_reply(osr, sizeof *ops * 16);
+    msg = start_ofp_stats_reply(osr, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
         port = get_port(p, ofp_port_to_odp_port(ntohs(psr->port_no)));
         if (port) {
@@ -3215,7 +3216,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
 
     query_stats(cbdata->ofconn->ofproto, rule, &packet_count, &byte_count);
 
-    ofs = append_stats_reply(len, cbdata->ofconn, &cbdata->msg);
+    ofs = append_ofp_stats_reply(len, cbdata->ofconn, &cbdata->msg);
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
@@ -3256,7 +3257,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     COVERAGE_INC(ofproto_flows_req);
     cbdata.ofconn = ofconn;
     cbdata.out_port = fsr->out_port;
-    cbdata.msg = start_stats_reply(osr, 1024);
+    cbdata.msg = start_ofp_stats_reply(osr, 1024);
     cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0, &target);
     classifier_for_each_match(&ofconn->ofproto->cls, &target,
                               table_id_to_include(fsr->table_id),
@@ -3389,8 +3390,8 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 
     cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0, &target);
 
-    msg = start_stats_reply(osr, sizeof *reply);
-    reply = append_stats_reply(sizeof *reply, ofconn, &msg);
+    msg = start_ofp_stats_reply(osr, sizeof *reply);
+    reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
     query_aggregate_stats(ofconn->ofproto, &target, request->out_port,
                           request->table_id, reply);
     queue_tx(msg, ofconn, ofconn->reply_counter);
@@ -3409,7 +3410,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
 {
     struct ofp_queue_stats *reply;
 
-    reply = append_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
+    reply = append_ofp_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
     reply->port_no = htons(cbdata->ofport->opp.port_no);
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
@@ -3465,7 +3466,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
     COVERAGE_INC(ofproto_queue_req);
 
     cbdata.ofconn = ofconn;
-    cbdata.msg = start_stats_reply(osr, 128);
+    cbdata.msg = start_ofp_stats_reply(osr, 128);
 
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
