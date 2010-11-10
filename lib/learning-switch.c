@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include "byte-order.h"
+#include "classifier.h"
 #include "flow.h"
 #include "hmap.h"
 #include "mac-learning.h"
@@ -57,7 +58,7 @@ struct lswitch {
     unsigned long long int datapath_id;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
-    uint32_t wildcards;         /* Wildcards to apply to flows. */
+    struct flow_wildcards wc;   /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
 
     /* Queue distribution. */
@@ -97,15 +98,16 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->last_features_request = time_now() - 1;
     sw->ml = cfg->mode == LSW_LEARN ? mac_learning_create() : NULL;
     sw->action_normal = cfg->mode == LSW_NORMAL;
-    if (cfg->exact_flows) {
-        /* Exact match. */
-        sw->wildcards = 0;
-    } else {
+
+    flow_wildcards_init_exact(&sw->wc);
+    if (!cfg->exact_flows) {
         /* We cannot wildcard all fields.
          * We need in_port to detect moves.
          * We need both SA and DA to do learning. */
-        sw->wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
-                         | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
+        sw->wc.wildcards = (FWW_DL_TYPE | FWW_NW_PROTO
+                            | FWW_TP_SRC | FWW_TP_DST);
+        sw->wc.nw_src_mask = htonl(0);
+        sw->wc.nw_dst_mask = htonl(0);
     }
 
     sw->default_queue = cfg->default_queue;
@@ -423,14 +425,15 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         struct ofpbuf *buffer;
         struct ofp_flow_mod *ofm;
+        struct cls_rule rule;
 
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        buffer = make_add_flow(&flow, ntohl(opi->buffer_id),
+        cls_rule_init(&flow, &sw->wc, 0, &rule);
+        buffer = make_add_flow(&rule, ntohl(opi->buffer_id),
                                sw->max_idle, actions_len);
         ofpbuf_put(buffer, actions, actions_len);
         ofm = buffer->data;
-        ofm->match.wildcards = htonl(sw->wildcards);
         queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */

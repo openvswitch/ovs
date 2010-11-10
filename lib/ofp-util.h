@@ -56,12 +56,12 @@ void *put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *);
 void *put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                        struct ofpbuf *);
 void update_openflow_length(struct ofpbuf *);
-struct ofpbuf *make_flow_mod(uint16_t command, const struct flow *,
+struct ofpbuf *make_flow_mod(uint16_t command, const struct cls_rule *,
                              size_t actions_len);
-struct ofpbuf *make_add_flow(const struct flow *, uint32_t buffer_id,
+struct ofpbuf *make_add_flow(const struct cls_rule *, uint32_t buffer_id,
                              uint16_t max_idle, size_t actions_len);
-struct ofpbuf *make_del_flow(const struct flow *);
-struct ofpbuf *make_add_simple_flow(const struct flow *,
+struct ofpbuf *make_del_flow(const struct cls_rule *);
+struct ofpbuf *make_add_simple_flow(const struct cls_rule *,
                                     uint32_t buffer_id, uint16_t out_port,
                                     uint16_t max_idle);
 struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,

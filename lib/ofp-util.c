@@ -328,7 +328,8 @@ update_openflow_length(struct ofpbuf *buffer)
 }
 
 struct ofpbuf *
-make_flow_mod(uint16_t command, const struct flow *flow, size_t actions_len)
+make_flow_mod(uint16_t command, const struct cls_rule *rule,
+              size_t actions_len)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + actions_len;
@@ -338,29 +339,17 @@ make_flow_mod(uint16_t command, const struct flow *flow, size_t actions_len)
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
     ofm->cookie = 0;
-    ofm->match.wildcards = htonl(0);
-    ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
-                               : flow->in_port);
-    memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
-    memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);
-    ofm->match.dl_vlan = flow->dl_vlan;
-    ofm->match.dl_vlan_pcp = flow->dl_vlan_pcp;
-    ofm->match.dl_type = flow->dl_type;
-    ofm->match.nw_src = flow->nw_src;
-    ofm->match.nw_dst = flow->nw_dst;
-    ofm->match.nw_proto = flow->nw_proto;
-    ofm->match.nw_tos = flow->nw_tos;
-    ofm->match.tp_src = flow->tp_src;
-    ofm->match.tp_dst = flow->tp_dst;
+    ofm->priority = htons(MIN(rule->priority, UINT16_MAX));
+    ofputil_cls_rule_to_match(rule, NXFF_OPENFLOW10, &ofm->match);
     ofm->command = htons(command);
     return out;
 }
 
 struct ofpbuf *
-make_add_flow(const struct flow *flow, uint32_t buffer_id,
+make_add_flow(const struct cls_rule *rule, uint32_t buffer_id,
               uint16_t idle_timeout, size_t actions_len)
 {
-    struct ofpbuf *out = make_flow_mod(OFPFC_ADD, flow, actions_len);
+    struct ofpbuf *out = make_flow_mod(OFPFC_ADD, rule, actions_len);
     struct ofp_flow_mod *ofm = out->data;
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(OFP_FLOW_PERMANENT);
@@ -369,16 +358,16 @@ make_add_flow(const struct flow *flow, uint32_t buffer_id,
 }
 
 struct ofpbuf *
-make_del_flow(const struct flow *flow)
+make_del_flow(const struct cls_rule *rule)
 {
-    struct ofpbuf *out = make_flow_mod(OFPFC_DELETE_STRICT, flow, 0);
+    struct ofpbuf *out = make_flow_mod(OFPFC_DELETE_STRICT, rule, 0);
     struct ofp_flow_mod *ofm = out->data;
     ofm->out_port = htons(OFPP_NONE);
     return out;
 }
 
 struct ofpbuf *
-make_add_simple_flow(const struct flow *flow,
+make_add_simple_flow(const struct cls_rule *rule,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {
@@ -386,14 +375,14 @@ make_add_simple_flow(const struct flow *flow,
         struct ofp_action_output *oao;
         struct ofpbuf *buffer;
 
-        buffer = make_add_flow(flow, buffer_id, idle_timeout, sizeof *oao);
+        buffer = make_add_flow(rule, buffer_id, idle_timeout, sizeof *oao);
         oao = ofpbuf_put_zeros(buffer, sizeof *oao);
         oao->type = htons(OFPAT_OUTPUT);
         oao->len = htons(sizeof *oao);
         oao->port = htons(out_port);
         return buffer;
     } else {
-        return make_add_flow(flow, buffer_id, idle_timeout, 0);
+        return make_add_flow(rule, buffer_id, idle_timeout, 0);
     }
 }
 
