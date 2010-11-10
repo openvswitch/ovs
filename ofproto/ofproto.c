@@ -2670,6 +2670,22 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
 }
 
 static void
+xlate_set_dl_tci(struct action_xlate_ctx *ctx)
+{
+    ovs_be16 dl_vlan = ctx->flow.dl_vlan;
+    uint8_t dl_vlan_pcp = ctx->flow.dl_vlan_pcp;
+
+    if (dl_vlan == htons(OFP_VLAN_NONE)) {
+        odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
+    } else {
+        union odp_action *oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
+        oa->dl_tci.tci = htons(ntohs(dl_vlan & htons(VLAN_VID_MASK))
+                               | (dl_vlan_pcp << VLAN_PCP_SHIFT)
+                               | VLAN_CFI);
+    }
+}
+
+static void
 xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
@@ -2742,23 +2758,19 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_VLAN_VID:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
-            oa->dl_tci.tci = ia->vlan_vid.vlan_vid;
-            oa->dl_tci.tci |= htons(ctx->flow.dl_vlan_pcp << VLAN_PCP_SHIFT);
             ctx->flow.dl_vlan = ia->vlan_vid.vlan_vid;
+            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_SET_VLAN_PCP:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
-            oa->dl_tci.tci = htons(ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT);
-            oa->dl_tci.tci |= ctx->flow.dl_vlan;
             ctx->flow.dl_vlan_pcp = ia->vlan_pcp.vlan_pcp;
+            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_STRIP_VLAN:
-            odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
             ctx->flow.dl_vlan = htons(OFP_VLAN_NONE);
             ctx->flow.dl_vlan_pcp = 0;
+            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_SET_DL_SRC:
