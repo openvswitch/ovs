@@ -30,6 +30,7 @@
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
@@ -294,10 +295,10 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         return -1;
     }
 
-    if ((len % 8) != 0) {
+    if ((len % OFP_ACTION_ALIGN) != 0) {
         ds_put_format(string,
-                "***action %"PRIu16" length not a multiple of 8***\n",
-                type);
+                      "***action %"PRIu16" length not a multiple of %d***\n",
+                      type, OFP_ACTION_ALIGN);
         return -1;
     }
 

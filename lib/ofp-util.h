@@ -26,6 +26,9 @@
 struct ofpbuf;
 struct ofp_action_header;
 
+/* Alignment of ofp_actions. */
+#define OFP_ACTION_ALIGN 8
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);

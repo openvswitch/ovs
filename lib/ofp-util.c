@@ -461,9 +461,6 @@ flow_stats_next(struct flow_stats_iterator *iter)
     return fs;
 }
 
-/* Alignment of ofp_actions. */
-#define ACTION_ALIGNMENT 8
-
 static int
 check_action_exact_len(const union ofp_action *a, unsigned int len,
                        unsigned int required_len)
@@ -637,7 +634,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
     for (i = 0; i < n_actions; ) {
         const union ofp_action *a = &actions[i];
         unsigned int len = ntohs(a->header.len);
-        unsigned int n_slots = len / ACTION_ALIGNMENT;
+        unsigned int n_slots = len / OFP_ACTION_ALIGN;
         unsigned int slots_left = &actions[n_actions] - a;
         int error;
 
@@ -649,9 +646,9 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         } else if (!len) {
             VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-        } else if (len % ACTION_ALIGNMENT) {
+        } else if (len % OFP_ACTION_ALIGN) {
             VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
-                        "of %d", len, ACTION_ALIGNMENT);
+                        "of %d", len, OFP_ACTION_ALIGN);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
 
@@ -696,7 +693,7 @@ actions_next(struct actions_iterator *iter)
     if (iter->pos != iter->end) {
         const union ofp_action *a = iter->pos;
         unsigned int len = ntohs(a->header.len);
-        iter->pos += len / ACTION_ALIGNMENT;
+        iter->pos += len / OFP_ACTION_ALIGN;
         return a;
     } else {
         return NULL;
@@ -926,9 +923,9 @@ int
 ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
                      union ofp_action **actionsp, size_t *n_actionsp)
 {
-    if (actions_len % ACTION_ALIGNMENT != 0) {
+    if (actions_len % OFP_ACTION_ALIGN != 0) {
         VLOG_DBG_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
-                    "is not a multiple of %d", actions_len, ACTION_ALIGNMENT);
+                    "is not a multiple of %d", actions_len, OFP_ACTION_ALIGN);
         goto error;
     }
 
@@ -940,7 +937,7 @@ ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
         goto error;
     }
 
-    *n_actionsp = actions_len / ACTION_ALIGNMENT;
+    *n_actionsp = actions_len / OFP_ACTION_ALIGN;
     return 0;
 
 error:
