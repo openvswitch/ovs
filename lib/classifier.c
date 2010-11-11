@@ -91,7 +91,7 @@ struct cls_rule *
 cls_table_next_rule(const struct cls_table *table, const struct cls_rule *rule)
 {
     struct cls_rule *next
-        = CONTAINER_OF(rule->list.next, struct cls_rule, hmap_node);
+        = CONTAINER_OF(rule->list.next, struct cls_rule, list);
 
     return (next->priority < rule->priority
             ? next
