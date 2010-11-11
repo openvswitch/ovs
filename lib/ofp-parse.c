@@ -519,10 +519,10 @@ parse_ofp_str(char *string, struct ofp_match *match, struct ofpbuf *actions,
     }
 }
 
-/* Parses 'string' as a OFPT_FLOW_MOD with subtype OFPFC_ADD and returns an
- * ofpbuf that contains it. */
+/* Parses 'string' as an OFPT_FLOW_MOD with command 'command' (one of OFPFC_*)
+ * and returns an ofpbuf that contains it. */
 struct ofpbuf *
-parse_ofp_add_flow_str(char *string)
+parse_ofp_flow_mod_str(char *string, uint16_t command)
 {
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
@@ -538,10 +538,10 @@ parse_ofp_add_flow_str(char *string)
                   &cookie);
     ofm = buffer->data;
     ofm->match = match;
-    ofm->command = htons(OFPFC_ADD);
     ofm->cookie = htonll(cookie);
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(hard_timeout);
+    ofm->command = htons(command);
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->priority = htons(priority);
     update_openflow_length(buffer);
@@ -573,7 +573,7 @@ parse_ofp_add_flow_file(FILE *stream)
             continue;
         }
 
-        b = parse_ofp_add_flow_str(line);
+        b = parse_ofp_flow_mod_str(line, OFPFC_ADD);
         break;
     }
     ds_destroy(&s);

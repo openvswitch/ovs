@@ -495,26 +495,8 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
     struct ofpbuf *buffer;
-    struct ofp_flow_mod *ofm;
-    uint16_t priority, idle_timeout, hard_timeout;
-    uint64_t cookie;
-    struct ofp_match match;
 
-    /* Parse and send.  parse_ofp_str() will expand and reallocate the
-     * data in 'buffer', so we can't keep pointers to across the
-     * parse_ofp_str() call. */
-    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(argv[2], &match, buffer,
-                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                  &cookie);
-    ofm = buffer->data;
-    ofm->match = match;
-    ofm->command = htons(OFPFC_ADD);
-    ofm->cookie = htonll(cookie);
-    ofm->idle_timeout = htons(idle_timeout);
-    ofm->hard_timeout = htons(hard_timeout);
-    ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->priority = htons(priority);
+    buffer = parse_ofp_flow_mod_str(argv[2], OFPFC_ADD);
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
@@ -544,33 +526,12 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
 static void
 do_mod_flows(int argc OVS_UNUSED, char *argv[])
 {
-    uint16_t priority, idle_timeout, hard_timeout;
-    uint64_t cookie;
     struct vconn *vconn;
     struct ofpbuf *buffer;
-    struct ofp_flow_mod *ofm;
-    struct ofp_match match;
+    uint16_t command;
 
-    /* Parse and send.  parse_ofp_str() will expand and reallocate the
-     * data in 'buffer', so we can't keep pointers to across the
-     * parse_ofp_str() call. */
-    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(argv[2], &match, buffer,
-                  NULL, NULL, &priority, &idle_timeout, &hard_timeout,
-                  &cookie);
-    ofm = buffer->data;
-    ofm->match = match;
-    if (strict) {
-        ofm->command = htons(OFPFC_MODIFY_STRICT);
-    } else {
-        ofm->command = htons(OFPFC_MODIFY);
-    }
-    ofm->idle_timeout = htons(idle_timeout);
-    ofm->hard_timeout = htons(hard_timeout);
-    ofm->cookie = htonll(cookie);
-    ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->priority = htons(priority);
-
+    command = strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY;
+    buffer = parse_ofp_flow_mod_str(argv[2], command);
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
@@ -579,25 +540,11 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
 static void do_del_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
-    uint16_t priority;
-    uint16_t out_port;
     struct ofpbuf *buffer;
-    struct ofp_flow_mod *ofm;
+    uint16_t command;
 
-    /* Parse and send. */
-    ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL,
-                  &out_port, &priority, NULL, NULL, NULL);
-    if (strict) {
-        ofm->command = htons(OFPFC_DELETE_STRICT);
-    } else {
-        ofm->command = htons(OFPFC_DELETE);
-    }
-    ofm->idle_timeout = htons(0);
-    ofm->hard_timeout = htons(0);
-    ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->out_port = htons(out_port);
-    ofm->priority = htons(priority);
+    command = strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE;
+    buffer = parse_ofp_flow_mod_str(argc > 2 ? argv[2] : "", command);
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
