@@ -60,43 +60,6 @@ cls_table_from_hmap_node(const struct hmap_node *node)
     return node ? CONTAINER_OF(node, struct cls_table, hmap_node) : NULL;
 }
 
-static struct cls_rule *
-cls_rule_from_hmap_node(const struct hmap_node *node)
-{
-    return node ? CONTAINER_OF(node, struct cls_rule, hmap_node) : NULL;
-}
-
-/* Returns the cls_table within 'cls' that has no wildcards, or NULL if there
- * is none.  */
-struct cls_table *
-classifier_exact_table(const struct classifier *cls)
-{
-    struct flow_wildcards exact_wc;
-    flow_wildcards_init_exact(&exact_wc);
-    return find_table(cls, &exact_wc);
-}
-
-/* Returns the first rule in 'table', or a null pointer if 'table' is NULL. */
-struct cls_rule *
-cls_table_first_rule(const struct cls_table *table)
-{
-    return table ? cls_rule_from_hmap_node(hmap_first(&table->rules)) : NULL;
-}
-
-/* Returns the next rule in 'table' following 'rule', or a null pointer if
- * 'rule' is the last rule in 'table'. */
-struct cls_rule *
-cls_table_next_rule(const struct cls_table *table, const struct cls_rule *rule)
-{
-    struct cls_rule *next
-        = CONTAINER_OF(rule->list.next, struct cls_rule, list);
-
-    return (next->priority < rule->priority
-            ? next
-            : cls_rule_from_hmap_node(hmap_next(&table->rules,
-                                                &next->hmap_node)));
-}
-
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'. */
 void
@@ -405,14 +368,6 @@ int
 classifier_count(const struct classifier *cls)
 {
     return cls->n_rules;
-}
-
-/* Returns the number of rules in 'classifier' that have no wildcards. */
-int
-classifier_count_exact(const struct classifier *cls)
-{
-    struct cls_table *exact_table = classifier_exact_table(cls);
-    return exact_table ? exact_table->n_table_rules : 0;
 }
 
 /* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller

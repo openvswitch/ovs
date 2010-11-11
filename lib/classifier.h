@@ -104,9 +104,7 @@ void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
-int classifier_count_exact(const struct classifier *);
 struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
-void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *);
@@ -122,23 +120,5 @@ void classifier_for_each_match(const struct classifier *,
                                cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
-
-/* Iteration shorthands. */
-
-struct cls_table *classifier_exact_table(const struct classifier *);
-struct cls_rule *cls_table_first_rule(const struct cls_table *);
-struct cls_rule *cls_table_next_rule(const struct cls_table *,
-                                     const struct cls_rule *);
-
-#define CLS_TABLE_FOR_EACH_RULE(RULE, MEMBER, TABLE)                    \
-    for ((RULE) = OBJECT_CONTAINING(cls_table_first_rule(TABLE),        \
-                                    RULE, MEMBER);                      \
-         &(RULE)->MEMBER != NULL;                                       \
-         (RULE) = OBJECT_CONTAINING(cls_table_next_rule(TABLE,          \
-                                                        &(RULE)->MEMBER), \
-                                    RULE, MEMBER))
-
-#define CLASSIFIER_FOR_EACH_EXACT_RULE(RULE, MEMBER, CLS)               \
-    CLS_TABLE_FOR_EACH_RULE (RULE, MEMBER, classifier_exact_table(CLS))
 
 #endif /* classifier.h */
