@@ -20,7 +20,10 @@
 #include <stdint.h>
 
 struct cls_rule;
+struct flow;
 struct ofpbuf;
+struct nx_action_reg_load;
+struct nx_action_reg_move;
 
 /* Nicira Extended Match (NXM) flexible flow match helper functions.
  *
@@ -33,6 +36,12 @@ int nx_put_match(struct ofpbuf *, const struct cls_rule *);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);
+
+int nxm_check_reg_move(const struct nx_action_reg_move *, const struct flow *);
+int nxm_check_reg_load(const struct nx_action_reg_load *, const struct flow *);
+
+void nxm_execute_reg_move(const struct nx_action_reg_move *, struct flow *);
+void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);
 
 /* Upper bound on the length of an nx_match.  The longest nx_match (assuming
  * we implement 4 registers) would be:

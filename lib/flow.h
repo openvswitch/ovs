@@ -32,7 +32,11 @@ struct flow_wildcards;
 struct ofp_match;
 struct ofpbuf;
 
+#define FLOW_N_REGS 3
+BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
+
 struct flow {
+    uint32_t regs[FLOW_N_REGS]; /* Registers. */
     ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
     ovs_be32 nw_src;            /* IP source address. */
     ovs_be32 nw_dst;            /* IP destination address. */
@@ -50,7 +54,7 @@ struct flow {
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE 37
+#define FLOW_SIG_SIZE (37 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 3
 BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
@@ -89,6 +93,15 @@ flow_hash(const struct flow *flow, uint32_t basis)
     return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
+/* Set to 1 in the 'wildcards' member of struct flow_wildcards if any bits in
+ * any of the reg_masks are wildcarded.  This maintains the invariant that
+ * 'wildcards' is nonzero if and only if any bits are wildcarded.
+ *
+ * This is used only internally to Open vSwitch--it never appears in the wire
+ * protocol. */
+#define FWW_REGS (1u << 31)
+BUILD_ASSERT_DECL(!(FWW_REGS & OVSFW_ALL)); /* Avoid collisions. */
+
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
  * The flow_wildcards_*() functions below both depend on and maintain the
@@ -97,17 +110,25 @@ flow_hash(const struct flow *flow, uint32_t basis)
  * 1. 'wildcards' is nonzero if and only if at least one bit or field is
  *    wildcarded.
  *
- * 2. Bits in 'wildcards' not included in OVSFW_ALL are set to 0.  (This is a
- *    corollary to invariant #1.)
+ * 2. Bits in 'wildcards' not included in OVSFW_ALL or FWW_REGS are set to 0.
+ *    (This is a corollary to invariant #1.)
  *
  * 3. The fields in 'wildcards' masked by OFPFW_NW_SRC_MASK and
  *    OFPFW_NW_DST_MASK have values between 0 and 32, inclusive.
  *
  * 4. The fields masked by OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK correspond
  *    correctly to the masks in 'nw_src_mask' and 'nw_dst_mask', respectively.
+ *
+ * 5. FWW_REGS is set to 1 in 'wildcards' if and only if at least one bit in
+ *    'reg_masks[]' is nonzero.  (This allows wildcarded 'reg_masks[]' to
+ *    satisfy invariant #1.)
+ *
+ * 6. If FWW_REGS is set to 0 in 'wildcards', then the values of all of the
+ *    other members can be correctly predicted based on 'wildcards' alone.
  */
 struct flow_wildcards {
     uint32_t wildcards;         /* enum ofp_flow_wildcards. */
+    uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
@@ -118,6 +139,8 @@ void flow_wildcards_init_exact(struct flow_wildcards *);
 
 bool flow_wildcards_set_nw_src_mask(struct flow_wildcards *, ovs_be32);
 bool flow_wildcards_set_nw_dst_mask(struct flow_wildcards *, ovs_be32);
+void flow_wildcards_set_reg_mask(struct flow_wildcards *,
+                                 int idx, uint32_t mask);
 
 void flow_wildcards_combine(struct flow_wildcards *dst,
                             const struct flow_wildcards *src1,

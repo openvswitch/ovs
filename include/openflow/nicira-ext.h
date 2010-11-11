@@ -227,7 +227,9 @@ enum nx_action_subtype {
     NXAST_SET_TUNNEL,           /* struct nx_action_set_tunnel */
     NXAST_DROP_SPOOFED_ARP,     /* struct nx_action_drop_spoofed_arp */
     NXAST_SET_QUEUE,            /* struct nx_action_set_queue */
-    NXAST_POP_QUEUE             /* struct nx_action_pop_queue */
+    NXAST_POP_QUEUE,            /* struct nx_action_pop_queue */
+    NXAST_REG_MOVE,             /* struct nx_action_reg_move */
+    NXAST_REG_LOAD,             /* struct nx_action_reg_load */
 };
 
 /* Header for Nicira-defined actions. */
@@ -336,6 +338,109 @@ struct nx_action_pop_queue {
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
+
+/* Action structure for NXAST_REG_MOVE.
+ *
+ * Copies src[src_ofs:src_ofs+n_bits] to dst[dst_ofs:dst_ofs+n_bits], where
+ * a[b:c] denotes the bits within 'a' numbered 'b' through 'c' (not including
+ * bit 'c').  Bit numbering starts at 0 for the least-significant bit, 1 for
+ * the next most significant bit, and so on.
+ *
+ * 'src' and 'dst' are nxm_header values with nxm_hasmask=0.  The following
+ * nxm_header values are potentially acceptable as 'src':
+ *
+ *   - NXM_OF_IN_PORT
+ *   - NXM_OF_ETH_DST
+ *   - NXM_OF_ETH_SRC
+ *   - NXM_OF_ETH_TYPE
+ *   - NXM_OF_VLAN_TCI
+ *   - NXM_OF_IP_TOS
+ *   - NXM_OF_IP_PROTO
+ *   - NXM_OF_IP_SRC
+ *   - NXM_OF_IP_DST
+ *   - NXM_OF_TCP_SRC
+ *   - NXM_OF_TCP_DST
+ *   - NXM_OF_UDP_SRC
+ *   - NXM_OF_UDP_DST
+ *   - NXM_OF_ICMP_TYPE
+ *   - NXM_OF_ICMP_CODE
+ *   - NXM_OF_ARP_OP
+ *   - NXM_OF_ARP_SPA
+ *   - NXM_OF_ARP_TPA
+ *   - NXM_NX_TUN_ID
+ *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *
+ * The following nxm_header values are potentially acceptable as 'dst':
+ *
+ *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *
+ *   - NXM_OF_VLAN_TCI.  Modifying this field's value has side effects on the
+ *     packet's 802.1Q header.  Setting a value with CFI=0 removes the 802.1Q
+ *     header (if any), ignoring the other bits.  Setting a value with CFI=1
+ *     adds or modifies the 802.1Q header appropriately, setting the TCI field
+ *     to the field's new value (with the CFI bit masked out).
+ *
+ *   - NXM_NX_TUN_ID.  Modifying this value modifies the tunnel ID used for the
+ *     packet's next tunnel encapsulation.
+ *
+ * A given nxm_header value may be used as 'src' or 'dst' only on a flow whose
+ * nx_match satisfies its prerequisites.  For example, NXM_OF_IP_TOS may be
+ * used only if the flow's nx_match includes an nxm_entry that specifies
+ * nxm_type=NXM_OF_ETH_TYPE, nxm_hasmask=0, and nxm_value=0x0800.
+ *
+ * The switch will reject actions for which src_ofs+n_bits is greater than the
+ * width of 'src' or dst_ofs+n_bits is greater than the width of 'dst' with
+ * error type OFPET_BAD_ACTION, code OFPBAC_BAD_ARGUMENT.
+ */
+struct nx_action_reg_move {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_REG_MOVE. */
+    ovs_be16 n_bits;                /* Number of bits. */
+    ovs_be16 src_ofs;               /* Starting bit offset in source. */
+    ovs_be16 dst_ofs;               /* Starting bit offset in destination. */
+    ovs_be32 src;                   /* Source register. */
+    ovs_be32 dst;                   /* Destination register. */
+};
+OFP_ASSERT(sizeof(struct nx_action_reg_move) == 24);
+
+/* Action structure for NXAST_REG_LOAD.
+ *
+ * Copies value[0:n_bits] to dst[ofs:ofs+n_bits], where a[b:c] denotes the bits
+ * within 'a' numbered 'b' through 'c' (not including bit 'c').  Bit numbering
+ * starts at 0 for the least-significant bit, 1 for the next most significant
+ * bit, and so on.
+ *
+ * 'dst' must be one of the following:
+ *
+ *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *
+ * The 'ofs' and 'n_bits' fields are combined into a single 'ofs_nbits' field
+ * to avoid enlarging the structure by another 8 bytes.  To allow 'n_bits' to
+ * take a value between 1 and 64 (inclusive) while taking up only 6 bits, it is
+ * also stored as one less than its true value:
+ *
+ *  15                           6 5                0
+ * +------------------------------+------------------+
+ * |              ofs             |    n_bits - 1    |
+ * +------------------------------+------------------+
+ *
+ * The switch will reject actions for which ofs+n_bits is greater than the
+ * width of 'dst', or in which any bits in 'value' with value 2**n_bits or
+ * greater are set to 1, with error type OFPET_BAD_ACTION, code
+ * OFPBAC_BAD_ARGUMENT.
+ */
+struct nx_action_reg_load {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_REG_LOAD. */
+    ovs_be16 ofs_nbits;             /* (ofs << 6) | (n_bits - 1). */
+    ovs_be32 dst;                   /* Destination register. */
+    ovs_be64 value;                 /* Immediate value. */
+};
+OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
 
 /* Wildcard for tunnel ID. */
 #define NXFW_TUN_ID  (1 << 25)
@@ -720,6 +825,31 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
 /* ## ------------------------ ## */
 /* ## Nicira match extensions. ## */
 /* ## ------------------------ ## */
+
+/* Metadata registers.
+ *
+ * Registers initially have value 0.  Actions allow register values to be
+ * manipulated.
+ *
+ * Prereqs: None.
+ *
+ * Format: Array of 32-bit integer registers.  Space is reserved for up to
+ *   NXM_NX_MAX_REGS registers, but switches may implement fewer.
+ *
+ * Masking: Arbitrary masks. */
+#define NXM_NX_MAX_REGS 16
+#define NXM_NX_REG(IDX)   NXM_HEADER  (0x0001, IDX, 4)
+#define NXM_NX_REG_W(IDX) NXM_HEADER_W(0x0001, IDX, 4)
+#define NXM_NX_REG_IDX(HEADER) NXM_FIELD(HEADER)
+#define NXM_IS_NX_REG(HEADER) (!((((HEADER) ^ NXM_NX_REG(0))) & 0xffffe0ff))
+#define NXM_NX_REG0       NXM_HEADER  (0x0001, 0, 4)
+#define NXM_NX_REG0_W     NXM_HEADER_W(0x0001, 0, 4)
+#define NXM_NX_REG1       NXM_HEADER  (0x0001, 1, 4)
+#define NXM_NX_REG1_W     NXM_HEADER_W(0x0001, 1, 4)
+#define NXM_NX_REG2       NXM_HEADER  (0x0001, 2, 4)
+#define NXM_NX_REG2_W     NXM_HEADER_W(0x0001, 2, 4)
+#define NXM_NX_REG3       NXM_HEADER  (0x0001, 3, 4)
+#define NXM_NX_REG3_W     NXM_HEADER_W(0x0001, 3, 4)
 
 /* Tunnel ID.
  *

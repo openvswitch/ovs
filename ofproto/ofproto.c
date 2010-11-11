@@ -2686,6 +2686,20 @@ xlate_set_dl_tci(struct action_xlate_ctx *ctx)
 }
 
 static void
+xlate_reg_move_action(struct action_xlate_ctx *ctx,
+                      const struct nx_action_reg_move *narm)
+{
+    ovs_be16 old_vlan = ctx->flow.dl_vlan;
+    uint8_t old_pcp = ctx->flow.dl_vlan_pcp;
+
+    nxm_execute_reg_move(narm, &ctx->flow);
+
+    if (ctx->flow.dl_vlan != old_vlan || ctx->flow.dl_vlan_pcp != old_pcp) {
+        xlate_set_dl_tci(ctx);
+    }
+}
+
+static void
 xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
@@ -2721,6 +2735,15 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_POP_QUEUE:
         odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
+        break;
+
+    case NXAST_REG_MOVE:
+        xlate_reg_move_action(ctx, (const struct nx_action_reg_move *) nah);
+        break;
+
+    case NXAST_REG_LOAD:
+        nxm_execute_reg_load((const struct nx_action_reg_load *) nah,
+                             &ctx->flow);
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to

@@ -255,9 +255,8 @@ void
 flow_to_match(const struct flow *flow, uint32_t wildcards,
               int flow_format, struct ofp_match *match)
 {
-    if (flow_format != NXFF_TUN_ID_FROM_COOKIE) {
-        wildcards &= OFPFW_ALL;
-    }
+    wildcards &= (flow_format == NXFF_TUN_ID_FROM_COOKIE ? OVSFW_ALL
+                  : OFPFW_ALL);
     match->wildcards = htonl(wildcards);
 
     match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
@@ -282,14 +281,17 @@ flow_from_match(const struct ofp_match *match, int flow_format,
                 ovs_be64 cookie, struct flow *flow,
                 struct flow_wildcards *wc)
 {
-    flow_wildcards_init(wc, ntohl(match->wildcards));
-    if (flow_format == NXFF_TUN_ID_FROM_COOKIE
-        && !(wc->wildcards & NXFW_TUN_ID)) {
-        flow->tun_id = htonl(ntohll(cookie) >> 32);
+    uint32_t wildcards = ntohl(match->wildcards) & OVSFW_ALL;
+
+    flow->tun_id = 0;
+    if (flow_format != NXFF_TUN_ID_FROM_COOKIE) {
+        wildcards |= NXFW_TUN_ID;
     } else {
-        wc->wildcards |= NXFW_TUN_ID;
-        flow->tun_id = 0;
+        if (!(wildcards & NXFW_TUN_ID)) {
+            flow->tun_id = htonl(ntohll(cookie) >> 32);
+        }
     }
+    flow_wildcards_init(wc, wildcards);
 
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
@@ -386,13 +388,19 @@ flow_wildcards_normalize(uint32_t wildcards)
 }
 
 /* Initializes 'wc' from 'wildcards', which may be any combination of the
- * OFPFW_* and OVSFW_* wildcard bits. */
+ * OFPFW_* and OVSFW_* wildcard bits.
+ *
+ * All registers (NXM_NX_REG*) are always completely wildcarded, because
+ * 'wildcards' doesn't have enough bits to give the details on which
+ * particular bits should be wildcarded (if any).  The caller may use
+ * flow_wildcards_set_reg_mask() to update the register wildcard masks. */
 void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
-    wc->wildcards = flow_wildcards_normalize(wildcards);
+    wc->wildcards = flow_wildcards_normalize(wildcards) | FWW_REGS;
     wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
+    memset(wc->reg_masks, 0, sizeof wc->reg_masks);
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -400,7 +408,10 @@ flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
-    flow_wildcards_init(wc, 0);
+    wc->wildcards = 0;
+    wc->nw_src_mask = htonl(UINT32_MAX);
+    wc->nw_dst_mask = htonl(UINT32_MAX);
+    memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
 }
 
 static inline uint32_t
@@ -421,12 +432,16 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 {
     uint32_t wb1 = src1->wildcards;
     uint32_t wb2 = src2->wildcards;
+    int i;
 
     dst->wildcards = (wb1 | wb2) & ~(OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK);
     dst->wildcards |= combine_nw_bits(wb1, wb2, OFPFW_NW_SRC_SHIFT);
     dst->wildcards |= combine_nw_bits(wb1, wb2, OFPFW_NW_DST_SHIFT);
     dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
     dst->nw_dst_mask = src1->nw_dst_mask & src2->nw_dst_mask;
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        dst->reg_masks[i] = src1->reg_masks[i] & src2->reg_masks[i];
+    }
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -435,7 +450,11 @@ flow_wildcards_hash(const struct flow_wildcards *wc)
 {
     /* There is no need to include nw_src_mask or nw_dst_mask because they do
      * not add any information (they can be computed from wc->wildcards).  */
-    return hash_int(wc->wildcards, 0);
+    BUILD_ASSERT_DECL(sizeof wc->wildcards == 4);
+    BUILD_ASSERT_DECL(sizeof wc->reg_masks == 4 * FLOW_N_REGS);
+    BUILD_ASSERT_DECL(offsetof(struct flow_wildcards, wildcards) == 0);
+    BUILD_ASSERT_DECL(offsetof(struct flow_wildcards, reg_masks) == 4);
+    return hash_words((const uint32_t *) wc, 1 + FLOW_N_REGS, 0);
 }
 
 /* Returns true if 'a' and 'b' represent the same wildcards, false if they are
@@ -444,7 +463,19 @@ bool
 flow_wildcards_equal(const struct flow_wildcards *a,
                      const struct flow_wildcards *b)
 {
-    return a->wildcards == b->wildcards;
+    int i;
+
+    if (a->wildcards != b->wildcards) {
+        return false;
+    }
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (a->reg_masks[i] != b->reg_masks[i]) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /* Returns true if at least one bit or field is wildcarded in 'a' but not in
@@ -453,6 +484,14 @@ bool
 flow_wildcards_has_extra(const struct flow_wildcards *a,
                          const struct flow_wildcards *b)
 {
+    int i;
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if ((a->reg_masks[i] & b->reg_masks[i]) != b->reg_masks[i]) {
+            return true;
+        }
+    }
+
 #define OFPFW_NW_MASK (OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK)
     return ((a->wildcards & ~(b->wildcards | OFPFW_NW_MASK))
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
@@ -506,4 +545,27 @@ bool
 flow_wildcards_set_nw_dst_mask(struct flow_wildcards *wc, ovs_be32 mask)
 {
     return set_nw_mask(wc, mask, &wc->nw_dst_mask, OFPFW_NW_DST_SHIFT);
+}
+
+/* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
+ * (A 0-bit indicates a wildcard bit.) */
+void
+flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
+{
+    if (mask != wc->reg_masks[idx]) {
+        wc->reg_masks[idx] = mask;
+        if (mask != UINT32_MAX) {
+            wc->wildcards |= FWW_REGS;
+        } else {
+            int i;
+
+            for (i = 0; i < FLOW_N_REGS; i++) {
+                if (wc->reg_masks[i] != UINT32_MAX) {
+                    wc->wildcards |= FWW_REGS;
+                    return;
+                }
+            }
+            wc->wildcards &= ~FWW_REGS;
+        }
+    }
 }

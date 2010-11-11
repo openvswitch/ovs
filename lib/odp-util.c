@@ -187,6 +187,7 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
 void
 odp_flow_key_to_flow(const struct odp_flow_key *key, struct flow *flow)
 {
+    memset(flow->regs, 0, sizeof flow->regs);
     flow->tun_id = key->tun_id;
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;

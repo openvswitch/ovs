@@ -809,8 +809,15 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                   const struct flow_wildcards *wildcards)
 {
     const uint32_t wc = wildcards->wildcards;
+    int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + FLOW_N_REGS * 4);
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
+            return false;
+        }
+    }
 
     return ((wc & NXFW_TUN_ID || a->tun_id == b->tun_id)
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
@@ -831,9 +838,13 @@ static void
 zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 {
     const uint32_t wc = wildcards->wildcards;
+    int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + 4 * FLOW_N_REGS);
 
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        flow->regs[i] &= wildcards->reg_masks[i];
+    }
     if (wc & NXFW_TUN_ID) {
         flow->tun_id = 0;
     }

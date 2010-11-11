@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "byte-order.h"
+#include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
@@ -527,9 +528,11 @@ check_enqueue_action(const union ofp_action *a, unsigned int len,
 }
 
 static int
-check_nicira_action(const union ofp_action *a, unsigned int len)
+check_nicira_action(const union ofp_action *a, unsigned int len,
+                    const struct flow *flow)
 {
     const struct nx_action_header *nah;
+    int error;
 
     if (len < 16) {
         VLOG_DBG_RL(&bad_ofmsg_rl,
@@ -545,13 +548,28 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
     case NXAST_SET_QUEUE:
     case NXAST_POP_QUEUE:
         return check_action_exact_len(a, len, 16);
+    case NXAST_REG_MOVE:
+        error = check_action_exact_len(a, len,
+                                       sizeof(struct nx_action_reg_move));
+        if (error) {
+            return error;
+        }
+        return nxm_check_reg_move((const struct nx_action_reg_move *) a, flow);
+    case NXAST_REG_LOAD:
+        error = check_action_exact_len(a, len,
+                                       sizeof(struct nx_action_reg_load));
+        if (error) {
+            return error;
+        }
+        return nxm_check_reg_load((const struct nx_action_reg_load *) a, flow);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }
 }
 
 static int
-check_action(const union ofp_action *a, unsigned int len, int max_ports)
+check_action(const union ofp_action *a, unsigned int len,
+             const struct flow *flow, int max_ports)
 {
     int error;
 
@@ -597,7 +615,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 
     case OFPAT_VENDOR:
         return (a->vendor.vendor == htonl(NX_VENDOR_ID)
-                ? check_nicira_action(a, len)
+                ? check_nicira_action(a, len, flow)
                 : ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR));
 
     case OFPAT_ENQUEUE:
@@ -612,7 +630,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 
 int
 validate_actions(const union ofp_action *actions, size_t n_actions,
-                 const struct flow *flow OVS_UNUSED, int max_ports)
+                 const struct flow *flow, int max_ports)
 {
     size_t i;
 
@@ -637,7 +655,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
 
-        error = check_action(a, len, max_ports);
+        error = check_action(a, len, flow, max_ports);
         if (error) {
             return error;
         }

@@ -40,4 +40,18 @@ DEFINE_FIELD_M(OF_ARP_SPA,   0,              ETH_TYPE_ARP, 0)
 DEFINE_FIELD_M(OF_ARP_TPA,   0,              ETH_TYPE_ARP, 0)
 DEFINE_FIELD  (NX_TUN_ID,    NXFW_TUN_ID,    0,            0)
 
+DEFINE_FIELD_M(NX_REG0,      0,              0,            0)
+#if FLOW_N_REGS >= 2
+DEFINE_FIELD_M(NX_REG1,      0,              0,            0)
+#endif
+#if FLOW_N_REGS >= 3
+DEFINE_FIELD_M(NX_REG2,      0,              0,            0)
+#endif
+#if FLOW_N_REGS >= 4
+DEFINE_FIELD_M(NX_REG3,      0,              0,            0)
+#endif
+#if FLOW_N_REGS > 4
+#error
+#endif
+
 #undef DEFINE_FIELD
