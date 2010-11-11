@@ -142,7 +142,7 @@ void
 cls_rule_init_catchall(struct cls_rule *rule, unsigned int priority)
 {
     memset(&rule->flow, 0, sizeof rule->flow);
-    flow_wildcards_init(&rule->wc, OVSFW_ALL);
+    flow_wildcards_init(&rule->wc, OVSFW_ALL | FWW_ALL);
     rule->priority = priority;
 }
 
@@ -184,7 +184,7 @@ cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 void
 cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~OFPFW_DL_DST;
+    rule->wc.wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
@@ -828,7 +828,14 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & OFPFW_TP_SRC || a->tp_src == b->tp_src)
             && (wc & OFPFW_TP_DST || a->tp_dst == b->tp_dst)
             && (wc & OFPFW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
-            && (wc & OFPFW_DL_DST || eth_addr_equals(a->dl_dst, b->dl_dst))
+            && (wc & OFPFW_DL_DST
+                || (!((a->dl_dst[0] ^ b->dl_dst[0]) & 0xfe)
+                    && a->dl_dst[1] == b->dl_dst[1]
+                    && a->dl_dst[2] == b->dl_dst[2]
+                    && a->dl_dst[3] == b->dl_dst[3]
+                    && a->dl_dst[4] == b->dl_dst[4]
+                    && a->dl_dst[5] == b->dl_dst[5]))
+            && (wc & FWW_ETH_MCAST || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
             && (wc & OFPFW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (wc & OFPFW_DL_VLAN_PCP || a->dl_vlan_pcp == b->dl_vlan_pcp)
             && (wc & OFPFW_NW_TOS || a->nw_tos == b->nw_tos));
@@ -869,7 +876,11 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
         memset(flow->dl_src, 0, sizeof flow->dl_src);
     }
     if (wc & OFPFW_DL_DST) {
-        memset(flow->dl_dst, 0, sizeof flow->dl_dst);
+        flow->dl_dst[0] &= 0x01;
+        memset(&flow->dl_dst[1], 0, 5);
+    }
+    if (wc & FWW_ETH_MCAST) {
+        flow->dl_dst[0] &= 0xfe;
     }
     if (wc & OFPFW_NW_PROTO) {
         flow->nw_proto = 0;

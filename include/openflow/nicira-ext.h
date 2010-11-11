@@ -669,8 +669,12 @@ OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
  *
  * Format: 48-bit Ethernet MAC address.
  *
- * Masking: Not maskable. */
+ * Masking: The nxm_mask patterns 01:00:00:00:00:00 and FE:FF:FF:FF:FF:FF must
+ *   be supported for NXM_OF_ETH_DST_W (as well as the trivial patterns that
+ *   are all-0-bits or all-1-bits).  Support for other patterns and for masking
+ *   of NXM_OF_ETH_SRC is optional. */
 #define NXM_OF_ETH_DST    NXM_HEADER  (0x0000,  1, 6)
+#define NXM_OF_ETH_DST_W  NXM_HEADER_W(0x0000,  1, 6)
 #define NXM_OF_ETH_SRC    NXM_HEADER  (0x0000,  2, 6)
 
 /* Packet's Ethernet type.

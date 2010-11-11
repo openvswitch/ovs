@@ -93,14 +93,27 @@ flow_hash(const struct flow *flow, uint32_t basis)
     return hash_bytes(flow, FLOW_SIG_SIZE, basis);
 }
 
-/* Set to 1 in the 'wildcards' member of struct flow_wildcards if any bits in
- * any of the reg_masks are wildcarded.  This maintains the invariant that
- * 'wildcards' is nonzero if and only if any bits are wildcarded.
+/* Open vSwitch internal-only wildcard bits.
  *
- * This is used only internally to Open vSwitch--it never appears in the wire
- * protocol. */
+ * These are used only internally to Open vSwitch, in the 'wildcards' member of
+ * struct flow_wildcards.  They never appear in the wire protocol in this
+ * form. */
+
+/* Set to 1 if any bits in any of the reg_masks are wildcarded.  This maintains
+ * the invariant that 'wildcards' is nonzero if and only if any bits are
+ * wildcarded. */
 #define FWW_REGS (1u << 31)
-BUILD_ASSERT_DECL(!(FWW_REGS & OVSFW_ALL)); /* Avoid collisions. */
+
+/* Set to 1 if bit 0 (the multicast bit) of the flow's dl_dst is wildcarded.
+ *
+ * (We reinterpret OFPFW_DL_DST as excluding bit 0.  Both OFPFW_DL_DST and
+ * FWW_ETH_MCAST have to be set to wildcard the entire Ethernet destination
+ * address.) */
+#define FWW_ETH_MCAST (1u << 30)
+
+/* Avoid collisions. */
+#define FWW_ALL (FWW_REGS | FWW_ETH_MCAST)
+BUILD_ASSERT_DECL(!(FWW_ALL & OVSFW_ALL));
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
@@ -110,7 +123,7 @@ BUILD_ASSERT_DECL(!(FWW_REGS & OVSFW_ALL)); /* Avoid collisions. */
  * 1. 'wildcards' is nonzero if and only if at least one bit or field is
  *    wildcarded.
  *
- * 2. Bits in 'wildcards' not included in OVSFW_ALL or FWW_REGS are set to 0.
+ * 2. Bits in 'wildcards' not included in OVSFW_ALL or FWW_ALL are set to 0.
  *    (This is a corollary to invariant #1.)
  *
  * 3. The fields in 'wildcards' masked by OFPFW_NW_SRC_MASK and
@@ -127,7 +140,7 @@ BUILD_ASSERT_DECL(!(FWW_REGS & OVSFW_ALL)); /* Avoid collisions. */
  *    other members can be correctly predicted based on 'wildcards' alone.
  */
 struct flow_wildcards {
-    uint32_t wildcards;         /* enum ofp_flow_wildcards. */
+    uint32_t wildcards;         /* OFPFW_* | OVSFW_* | FWW_*. */
     uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */

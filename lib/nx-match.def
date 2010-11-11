@@ -21,7 +21,7 @@
 /*             NXM_ bit      OFPFW_* bit     dl_type       nw_proto      */
 /*             ------------  --------------  -----------   ------------- */
 DEFINE_FIELD  (OF_IN_PORT,   OFPFW_IN_PORT,  0,            0)
-DEFINE_FIELD  (OF_ETH_DST,   OFPFW_DL_DST,   0,            0)
+DEFINE_FIELD_M(OF_ETH_DST,   0,              0,            0)
 DEFINE_FIELD  (OF_ETH_SRC,   OFPFW_DL_SRC,   0,            0)
 DEFINE_FIELD  (OF_ETH_TYPE,  OFPFW_DL_TYPE,  0,            0)
 DEFINE_FIELD_M(OF_VLAN_TCI,  0,              0,            0)

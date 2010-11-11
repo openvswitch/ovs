@@ -291,6 +291,12 @@ flow_from_match(const struct ofp_match *match, int flow_format,
             flow->tun_id = htonl(ntohll(cookie) >> 32);
         }
     }
+    if (wildcards & OFPFW_DL_DST) {
+        /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
+         * internally to OVS it excludes the multicast bit, which has to be set
+         * separately with FWW_ETH_MCAST. */
+        wildcards |= FWW_ETH_MCAST;
+    }
     flow_wildcards_init(wc, wildcards);
 
     flow->nw_src = match->nw_src;
@@ -377,7 +383,7 @@ flow_nw_bits_to_mask(uint32_t wildcards, int shift)
 static inline uint32_t
 flow_wildcards_normalize(uint32_t wildcards)
 {
-    wildcards &= wildcards & OVSFW_ALL;
+    wildcards &= wildcards & (OVSFW_ALL | FWW_ALL);
     if (wildcards & (0x20 << OFPFW_NW_SRC_SHIFT)) {
         wildcards &= ~(0x1f << OFPFW_NW_SRC_SHIFT);
     }

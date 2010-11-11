@@ -51,7 +51,8 @@
     CLS_FIELD(OFPFW_TP_SRC,      tp_src,      TP_SRC)       \
     CLS_FIELD(OFPFW_TP_DST,      tp_dst,      TP_DST)       \
     CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
-    CLS_FIELD(OFPFW_DL_DST,      dl_dst,      DL_DST)       \
+    CLS_FIELD(OFPFW_DL_DST | FWW_ETH_MCAST,                 \
+                                 dl_dst,      DL_DST)       \
     CLS_FIELD(OFPFW_NW_PROTO,    nw_proto,    NW_PROTO)     \
     CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
     CLS_FIELD(OFPFW_NW_TOS,      nw_tos,      NW_TOS)

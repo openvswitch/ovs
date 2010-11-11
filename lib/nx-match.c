@@ -72,6 +72,16 @@ static struct nxm_field nxm_fields[N_NXM_FIELDS] = {
 /* Hash table of 'nxm_fields'. */
 static struct hmap all_nxm_fields = HMAP_INITIALIZER(&all_nxm_fields);
 
+/* Possible masks for NXM_OF_ETH_DST_W. */
+static const uint8_t eth_all_0s[ETH_ADDR_LEN]
+    = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const uint8_t eth_all_1s[ETH_ADDR_LEN]
+    = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static const uint8_t eth_mcast_1[ETH_ADDR_LEN]
+    = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const uint8_t eth_mcast_0[ETH_ADDR_LEN]
+    = {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 static void
 nxm_init(void)
 {
@@ -178,8 +188,34 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* Ethernet header. */
     case NFI_NXM_OF_ETH_DST:
-        memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
-        return 0;
+        if ((wc->wildcards & (OFPFW_DL_DST | FWW_ETH_MCAST))
+            != (OFPFW_DL_DST | FWW_ETH_MCAST)) {
+            return NXM_DUP_TYPE;
+        } else {
+            wc->wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
+            memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
+            return 0;
+        }
+    case NFI_NXM_OF_ETH_DST_W:
+        if ((wc->wildcards & (OFPFW_DL_DST | FWW_ETH_MCAST))
+            != (OFPFW_DL_DST | FWW_ETH_MCAST)) {
+            return NXM_DUP_TYPE;
+        } else if (eth_addr_equals(mask, eth_mcast_1)) {
+            wc->wildcards &= ~FWW_ETH_MCAST;
+            flow->dl_dst[0] = *(uint8_t *) value & 0x01;
+        } else if (eth_addr_equals(mask, eth_mcast_0)) {
+            wc->wildcards &= ~OFPFW_DL_DST;
+            memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
+            flow->dl_dst[0] &= 0xfe;
+        } else if (eth_addr_equals(mask, eth_all_0s)) {
+            return 0;
+        } else if (eth_addr_equals(mask, eth_all_1s)) {
+            wc->wildcards &= ~(OFPFW_DL_DST | FWW_ETH_MCAST);
+            memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
+            return 0;
+        } else {
+            return NXM_BAD_MASK;
+        }
     case NFI_NXM_OF_ETH_SRC:
         memcpy(flow->dl_src, value, ETH_ADDR_LEN);
         return 0;
@@ -480,13 +516,35 @@ nxm_put_64(struct ofpbuf *b, uint32_t header, ovs_be64 value)
     ofpbuf_put(b, &value, sizeof value);
 }
 
-
 static void
 nxm_put_eth(struct ofpbuf *b, uint32_t header,
             const uint8_t value[ETH_ADDR_LEN])
 {
     nxm_put_header(b, header);
     ofpbuf_put(b, value, ETH_ADDR_LEN);
+}
+
+static void
+nxm_put_eth_dst(struct ofpbuf *b,
+                uint32_t wc, const uint8_t value[ETH_ADDR_LEN])
+{
+    switch (wc & (OFPFW_DL_DST | FWW_ETH_MCAST)) {
+    case OFPFW_DL_DST | FWW_ETH_MCAST:
+        break;
+    case OFPFW_DL_DST:
+        nxm_put_header(b, NXM_OF_ETH_DST_W);
+        ofpbuf_put(b, value, ETH_ADDR_LEN);
+        ofpbuf_put(b, eth_mcast_1, ETH_ADDR_LEN);
+        break;
+    case FWW_ETH_MCAST:
+        nxm_put_header(b, NXM_OF_ETH_DST_W);
+        ofpbuf_put(b, value, ETH_ADDR_LEN);
+        ofpbuf_put(b, eth_mcast_0, ETH_ADDR_LEN);
+        break;
+    case 0:
+        nxm_put_eth(b, NXM_OF_ETH_DST, value);
+        break;
+    }
 }
 
 int
@@ -509,9 +567,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     }
 
     /* Ethernet. */
-    if (!(wc & OFPFW_DL_DST)) {
-        nxm_put_eth(b, NXM_OF_ETH_DST, flow->dl_dst);
-    }
+    nxm_put_eth_dst(b, wc, flow->dl_dst);
     if (!(wc & OFPFW_DL_SRC)) {
         nxm_put_eth(b, NXM_OF_ETH_SRC, flow->dl_src);
     }
@@ -907,6 +963,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 #error
 #endif
 
+    case NFI_NXM_OF_ETH_DST_W:
     case NFI_NXM_OF_VLAN_TCI_W:
     case NFI_NXM_OF_IP_SRC_W:
     case NFI_NXM_OF_IP_DST_W:
