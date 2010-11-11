@@ -88,7 +88,7 @@ struct rule {
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
     bool send_flow_removed;     /* Send a flow removed message? */
-    long long int used;         /* Last-used time (0 if never used). */
+    long long int used;         /* Time last used; time created if not used. */
     long long int created;      /* Creation time. */
     uint64_t packet_count;      /* Number of packets received. */
     uint64_t byte_count;        /* Number of bytes received. */
@@ -4823,8 +4823,7 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
             rule->super = super;
             rule->hard_timeout = super->hard_timeout;
             rule->idle_timeout = super->idle_timeout;
-            rule->created = super->created;
-            rule->used = 0;
+            rule->created = rule->used = super->created;
         }
     }
 
