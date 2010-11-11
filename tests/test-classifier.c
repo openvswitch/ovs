@@ -442,11 +442,17 @@ check_tables(const struct classifier *cls,
              int n_tables, int n_rules, int n_dups)
 {
     const struct cls_table *table;
+    const struct test_rule *test_rule;
+    struct flow_wildcards exact_wc;
     int found_tables = 0;
     int found_rules = 0;
     int found_dups = 0;
+    int n_exact1 = 0;
+    int n_exact2 = 0;
 
+    flow_wildcards_init_exact(&exact_wc);
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+        bool is_exact = flow_wildcards_equal(&table->wc, &exact_wc);
         const struct cls_rule *head;
 
         assert(!hmap_is_empty(&table->rules));
@@ -457,20 +463,31 @@ check_tables(const struct classifier *cls,
             const struct cls_rule *rule;
 
             found_rules++;
+            if (is_exact) {
+                n_exact1++;
+            }
             LIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
+                if (is_exact) {
+                    n_exact1++;
+                }
                 assert(classifier_find_rule_exactly(cls, rule) == rule);
             }
         }
+    }
+
+    CLASSIFIER_FOR_EACH_EXACT_RULE (test_rule, cls_rule, cls) {
+        n_exact2++;
     }
 
     assert(found_tables == hmap_count(&cls->tables));
     assert(n_tables == -1 || n_tables == hmap_count(&cls->tables));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
+    assert(n_exact1 == n_exact2);
 }
 
 static struct test_rule *
