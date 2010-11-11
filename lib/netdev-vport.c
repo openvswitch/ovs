@@ -124,8 +124,7 @@ netdev_vport_parse_config(const struct netdev_class *netdev_class,
 
 static int
 netdev_vport_create(const struct netdev_class *class, const char *name,
-                    const struct shash *args OVS_UNUSED,
-                    struct netdev_dev **netdev_devp)
+                    const struct shash *args, struct netdev_dev **netdev_devp)
 {
     int err;
     struct odp_vport_add ova;
