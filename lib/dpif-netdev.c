@@ -933,7 +933,7 @@ dp_netdev_run(void)
             error = netdev_recv(port->netdev, &packet);
             if (!error) {
                 dp_netdev_port_input(dp, port, &packet);
-            } else if (error != EAGAIN) {
+            } else if (error != EAGAIN && error != EOPNOTSUPP) {
                 struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
                             netdev_get_name(port->netdev), strerror(error));
