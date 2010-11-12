@@ -57,6 +57,7 @@ struct ofsettings {
     struct ofproto_controller *controllers;
     size_t n_controllers;
     enum ofproto_fail_mode fail_mode;
+    bool run_forever;           /* Continue running even with no controller? */
 
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
@@ -155,7 +156,7 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    while (ofproto_is_alive(ofproto)) {
+    while (s.run_forever || ofproto_is_alive(ofproto)) {
         error = ofproto_run(ofproto);
         if (error) {
             ovs_fatal(error, "unrecoverable datapath error");
@@ -459,12 +460,17 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
 
     /* Figure out controller names. */
+    s->run_forever = false;
     if (!controllers.n) {
         svec_add_nocopy(&controllers, xasprintf("punix:%s/%s.mgmt",
                                                 ovs_rundir(), s->dp_name));
     }
     for (i = 1; i < argc; i++) {
-        svec_add(&controllers, argv[i]);
+        if (!strcmp(argv[i], "none")) {
+            s->run_forever = true;
+        } else {
+            svec_add(&controllers, argv[i]);
+        }
     }
     if (argc < 2) {
         svec_add(&controllers, "discover");

@@ -30,6 +30,11 @@ OpenFlow controller or controllers.  Each takes one of the following
 forms:
 .
 .so lib/vconn-active.man
+.IP "\fBnone\fR"
+Run without actively maintaining a connection to a remote OpenFlow
+controller.  (See the \fB\-\-listen\fR option, under \fBNetworking
+Options\fR below, for another way to make OpenFlow connections to the
+switch.)
 .
 .PP
 When multiple controllers are configured, \fBovs\-openflowd\fR
