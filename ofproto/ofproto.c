@@ -81,88 +81,109 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
                          struct odp_actions *out, tag_type *tags,
                          bool *may_set_up_flow, uint16_t *nf_output_iface);
 
+/* An OpenFlow flow. */
 struct rule {
-    struct cls_rule cr;
-
-    ovs_be64 flow_cookie;       /* Controller-issued identifier. */
-    uint16_t idle_timeout;      /* In seconds from time of last use. */
-    uint16_t hard_timeout;      /* In seconds from time of creation. */
-    bool send_flow_removed;     /* Send a flow removed message? */
     long long int used;         /* Time last used; time created if not used. */
     long long int created;      /* Creation time. */
-    uint64_t packet_count;      /* Number of packets received. */
-    uint64_t byte_count;        /* Number of bytes received. */
-    uint64_t accounted_bytes;   /* Number of bytes passed to account_cb. */
-    tag_type tags;              /* Tags (set only by hooks). */
-    struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
 
-    /* If 'super' is non-NULL, this rule is a subrule, that is, it is an
-     * exact-match rule (having cr.wc.wildcards of 0) generated from the
-     * wildcard rule 'super'.  In this case, 'list' is an element of the
-     * super-rule's list.
+    /* These statistics:
      *
-     * If 'super' is NULL, this rule is a super-rule, and 'list' is the head of
-     * a list of subrules.  A super-rule with no wildcards (where
-     * cr.wc.wildcards is 0) will never have any subrules. */
-    struct rule *super;
-    struct list list;
+     *   - Do include packets and bytes from facets that have been deleted or
+     *     whose own statistics have been folded into the rule.
+     *
+     *   - Do include packets and bytes sent "by hand" that were accounted to
+     *     the rule without any facet being involved (this is a rare corner
+     *     case in rule_execute()).
+     *
+     *   - Do not include packet or bytes that can be obtained from any facet's
+     *     packet_count or byte_count member or that can be obtained from the
+     *     datapath by, e.g., dpif_flow_get() for any facet.
+     */
+    uint64_t packet_count;       /* Number of packets received. */
+    uint64_t byte_count;         /* Number of bytes received. */
 
-    /* OpenFlow actions.
-     *
-     * 'n_actions' is the number of elements in the 'actions' array.  A single
-     * action may take up more more than one element's worth of space.
-     *
-     * A subrule has no actions (it uses the super-rule's actions). */
-    int n_actions;
-    union ofp_action *actions;
+    ovs_be64 flow_cookie;        /* Controller-issued identifier. */
 
-    /* Datapath actions.
-     *
-     * A super-rule with wildcard fields never has ODP actions (since the
-     * datapath only supports exact-match flows). */
-    bool installed;             /* Installed in datapath? */
-    bool may_install;           /* True ordinarily; false if actions must
-                                 * be reassessed for every packet. */
-    int n_odp_actions;
-    union odp_action *odp_actions;
+    struct cls_rule cr;          /* In owning ofproto's classifier. */
+    uint16_t idle_timeout;       /* In seconds from time of last use. */
+    uint16_t hard_timeout;       /* In seconds from time of creation. */
+    bool send_flow_removed;      /* Send a flow removed message? */
+    int n_actions;               /* Number of elements in actions[]. */
+    union ofp_action *actions;   /* OpenFlow actions. */
+    struct list facets;          /* List of "struct facet"s. */
 };
 
-static inline bool
-rule_is_hidden(const struct rule *rule)
-{
-    /* Subrules are merely an implementation detail, so hide them from the
-     * controller. */
-    if (rule->super != NULL) {
-        return true;
-    }
+static struct rule *rule_from_cls_rule(const struct cls_rule *);
+static bool rule_is_hidden(const struct rule *);
 
-    /* Rules with priority higher than UINT16_MAX are set up by ofproto itself
-     * (e.g. by in-band control) and are intentionally hidden from the
-     * controller. */
-    if (rule->cr.priority > UINT16_MAX) {
-        return true;
-    }
-
-    return false;
-}
-
-static struct rule *rule_create(struct ofproto *, struct rule *super,
+static struct rule *rule_create(const struct cls_rule *,
                                 const union ofp_action *, size_t n_actions,
                                 uint16_t idle_timeout, uint16_t hard_timeout,
                                 ovs_be64 flow_cookie, bool send_flow_removed);
-static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
-static struct rule *rule_from_cls_rule(const struct cls_rule *);
+static void rule_free(struct rule *);
+
+static struct rule *rule_lookup(struct ofproto *, const struct flow *);
 static void rule_insert(struct ofproto *, struct rule *,
                         struct ofpbuf *packet, uint16_t in_port);
 static void rule_remove(struct ofproto *, struct rule *);
-static bool rule_make_actions(struct ofproto *, struct rule *,
+
+static void rule_send_removed(struct ofproto *, struct rule *, uint8_t reason);
+
+/* An exact-match instantiation of an OpenFlow flow. */
+struct facet {
+    long long int used;         /* Time last used; time created if not used. */
+
+    /* These statistics:
+     *
+     *   - Do include packets and bytes sent "by hand", e.g. with
+     *     dpif_execute().
+     *
+     *   - Do include packets and bytes that were obtained from the datapath
+     *     when a flow was deleted (e.g. dpif_flow_del()) or when its
+     *     statistics were reset (e.g. dpif_flow_put() with ODPPF_ZERO_STATS).
+     *
+     *   - Do not include any packets or bytes that can currently be obtained
+     *     from the datapath by, e.g., dpif_flow_get().
+     */
+    uint64_t packet_count;       /* Number of packets received. */
+    uint64_t byte_count;         /* Number of bytes received. */
+
+    /* Number of bytes passed to account_cb.  This may include bytes that can
+     * currently obtained from the datapath (thus, it can be greater than
+     * byte_count). */
+    uint64_t accounted_bytes;
+
+    struct hmap_node hmap_node;  /* In owning ofproto's 'facets' hmap. */
+    struct list list_node;       /* In owning rule's 'facets' list. */
+    struct rule *rule;           /* Owning rule. */
+    struct flow flow;            /* Exact-match flow. */
+    bool installed;              /* Installed in datapath? */
+    bool may_install;            /* True ordinarily; false if actions must
+                                  * be reassessed for every packet. */
+    int n_actions;               /* Number of elements in actions[]. */
+    union odp_action *actions;   /* Datapath actions. */
+    tag_type tags;               /* Tags (set only by hooks). */
+    struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
+};
+
+static struct facet *facet_create(struct ofproto *, struct rule *,
+                                  const struct flow *,
+                                  const struct ofpbuf *packet);
+static void facet_remove(struct ofproto *, struct facet *);
+static void facet_free(struct facet *);
+
+static struct facet *facet_lookup_valid(struct ofproto *, const struct flow *);
+static bool facet_revalidate(struct ofproto *, struct facet *);
+
+static void facet_install(struct ofproto *, struct facet *, bool zero_stats);
+static void facet_uninstall(struct ofproto *, struct facet *);
+static void facet_post_uninstall(struct ofproto *, struct facet *);
+
+static bool facet_make_actions(struct ofproto *, struct facet *,
                               const struct ofpbuf *packet);
-static void rule_install(struct ofproto *, struct rule *,
-                         struct rule *displaced_rule);
-static void rule_uninstall(struct ofproto *, struct rule *);
-static void rule_post_uninstall(struct ofproto *, struct rule *);
-static void send_flow_removed(struct ofproto *, struct rule *, uint8_t reason);
+static void facet_update_stats(struct ofproto *, struct facet *,
+                               const struct odp_flow_stats *);
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -288,8 +309,11 @@ struct ofproto {
 
     /* Flow table. */
     struct classifier cls;
-    bool need_revalidate;
     long long int next_expiration;
+
+    /* Facets. */
+    struct hmap facets;
+    bool need_revalidate;
     struct tag_set revalidate_set;
 
     /* OpenFlow connections. */
@@ -318,11 +342,6 @@ static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 
 static int ofproto_expire(struct ofproto *);
-
-static void update_stats(struct ofproto *, struct rule *,
-                         const struct odp_flow_stats *);
-static bool revalidate_rule(struct ofproto *p, struct rule *rule);
-static void revalidate_cb(struct cls_rule *rule_, void *p_);
 
 static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
 
@@ -394,8 +413,11 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     /* Initialize flow table. */
     classifier_init(&p->cls);
-    p->need_revalidate = false;
     p->next_expiration = time_msec() + 1000;
+
+    /* Initialize facet table. */
+    hmap_init(&p->facets);
+    p->need_revalidate = false;
     tag_set_init(&p->revalidate_set);
 
     /* Initialize OpenFlow connections. */
@@ -938,6 +960,7 @@ ofproto_destroy(struct ofproto *p)
 
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);
+    hmap_destroy(&p->facets);
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &p->all_conns) {
         ofconn_destroy(ofconn);
@@ -1151,27 +1174,29 @@ ofproto_run1(struct ofproto *p)
     return 0;
 }
 
-struct revalidate_cbdata {
-    struct ofproto *ofproto;
-    bool revalidate_all;        /* Revalidate all exact-match rules? */
-    bool revalidate_subrules;   /* Revalidate all exact-match subrules? */
-    struct tag_set revalidate_set; /* Set of tags to revalidate. */
-};
-
 int
 ofproto_run2(struct ofproto *p, bool revalidate_all)
 {
-    if (p->need_revalidate || revalidate_all
-        || !tag_set_is_empty(&p->revalidate_set)) {
-        struct revalidate_cbdata cbdata;
-        cbdata.ofproto = p;
-        cbdata.revalidate_all = revalidate_all;
-        cbdata.revalidate_subrules = p->need_revalidate;
-        cbdata.revalidate_set = p->revalidate_set;
-        tag_set_init(&p->revalidate_set);
-        COVERAGE_INC(ofproto_revalidate);
-        classifier_for_each(&p->cls, CLS_INC_EXACT, revalidate_cb, &cbdata);
-        p->need_revalidate = false;
+    /* Figure out what we need to revalidate now, if anything. */
+    struct tag_set revalidate_set = p->revalidate_set;
+    if (p->need_revalidate) {
+        revalidate_all = true;
+    }
+
+    /* Clear the revalidation flags. */
+    tag_set_init(&p->revalidate_set);
+    p->need_revalidate = false;
+
+    /* Now revalidate if there's anything to do. */
+    if (revalidate_all || !tag_set_is_empty(&revalidate_set)) {
+        struct facet *facet, *next;
+
+        HMAP_FOR_EACH_SAFE (facet, next, hmap_node, &p->facets) {
+            if (revalidate_all
+                || tag_set_intersects(&revalidate_set, facet->tags)) {
+                facet_revalidate(p, facet);
+            }
+        }
     }
 
     return 0;
@@ -1312,8 +1337,7 @@ ofproto_add_flow(struct ofproto *p, const struct cls_rule *cls_rule,
                  const union ofp_action *actions, size_t n_actions)
 {
     struct rule *rule;
-    rule = rule_create(p, NULL, actions, n_actions, 0, 0, 0, false);
-    rule->cr = *cls_rule;
+    rule = rule_create(cls_rule, actions, n_actions, 0, 0, 0, false);
     rule_insert(p, rule, NULL, 0);
 }
 
@@ -1335,19 +1359,24 @@ destroy_rule(struct cls_rule *rule_, void *ofproto_)
     struct rule *rule = rule_from_cls_rule(rule_);
     struct ofproto *ofproto = ofproto_;
 
-    /* Mark the flow as not installed, even though it might really be
-     * installed, so that rule_remove() doesn't bother trying to uninstall it.
-     * There is no point in uninstalling it individually since we are about to
-     * blow away all the flows with dpif_flow_flush(). */
-    rule->installed = false;
-
     rule_remove(ofproto, rule);
 }
 
 void
 ofproto_flush_flows(struct ofproto *ofproto)
 {
+    struct facet *facet, *next_facet;
+
     COVERAGE_INC(ofproto_flush);
+
+    HMAP_FOR_EACH_SAFE (facet, next_facet, hmap_node, &ofproto->facets) {
+        /* Mark the facet as not installed so that facet_remove() doesn't
+         * bother trying to uninstall it.  There is no point in uninstalling it
+         * individually since we are about to blow away all the facets with
+         * dpif_flow_flush(). */
+        facet->installed = false;
+        facet_remove(ofproto, facet);
+    }
     classifier_for_each(&ofproto->cls, CLS_INC_ALL, destroy_rule, ofproto);
     dpif_flow_flush(ofproto->dpif);
     if (ofproto->in_band) {
@@ -1836,32 +1865,39 @@ ofservice_lookup(struct ofproto *ofproto, const char *target)
     return NULL;
 }
 
-/* Caller is responsible for initializing the 'cr' member of the returned
- * rule. */
+/* Returns true if 'rule' should be hidden from the controller.
+ *
+ * Rules with priority higher than UINT16_MAX are set up by ofproto itself
+ * (e.g. by in-band control) and are intentionally hidden from the
+ * controller. */
+static bool
+rule_is_hidden(const struct rule *rule)
+{
+    return rule->cr.priority > UINT16_MAX;
+}
+
+/* Creates and returns a new rule initialized as specified.
+ *
+ * The caller is responsible for inserting the rule into the classifier (with
+ * rule_insert()). */
 static struct rule *
-rule_create(struct ofproto *ofproto, struct rule *super,
+rule_create(const struct cls_rule *cls_rule,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout,
             ovs_be64 flow_cookie, bool send_flow_removed)
 {
     struct rule *rule = xzalloc(sizeof *rule);
+    rule->cr = *cls_rule;
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
     rule->flow_cookie = flow_cookie;
     rule->used = rule->created = time_msec();
     rule->send_flow_removed = send_flow_removed;
-    rule->super = super;
-    if (super) {
-        list_push_back(&super->list, &rule->list);
-    } else {
-        list_init(&rule->list);
-    }
+    list_init(&rule->facets);
     if (n_actions > 0) {
         rule->n_actions = n_actions;
         rule->actions = xmemdup(actions, n_actions * sizeof *actions);
     }
-    netflow_flow_init(&rule->nf_flow);
-    netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->created);
 
     return rule;
 }
@@ -1876,32 +1912,26 @@ static void
 rule_free(struct rule *rule)
 {
     free(rule->actions);
-    free(rule->odp_actions);
     free(rule);
 }
 
-/* Destroys 'rule'.  If 'rule' is a subrule, also removes it from its
- * super-rule's list of subrules.  If 'rule' is a super-rule, also iterates
- * through all of its subrules and revalidates them, destroying any that no
- * longer has a super-rule (which is probably all of them).
+/* Destroys 'rule' and iterates through all of its facets and revalidates them,
+ * destroying any that no longer has a rule (which is probably all of them).
  *
- * Before calling this function, the caller must make have removed 'rule' from
- * the classifier.  If 'rule' is an exact-match rule, the caller is also
- * responsible for ensuring that it has been uninstalled from the datapath. */
+ * The caller must have already removed 'rule' from the classifier. */
 static void
 rule_destroy(struct ofproto *ofproto, struct rule *rule)
 {
-    if (!rule->super) {
-        struct rule *subrule, *next;
-        LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
-            revalidate_rule(ofproto, subrule);
-        }
-    } else {
-        list_remove(&rule->list);
+    struct facet *facet, *next_facet;
+    LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
+        facet_revalidate(ofproto, facet);
     }
     rule_free(rule);
 }
 
+/* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
+ * that outputs to 'out_port' (output to OFPP_FLOOD and OFPP_ALL doesn't
+ * count). */
 static bool
 rule_has_out_port(const struct rule *rule, ovs_be16 out_port)
 {
@@ -1954,61 +1984,86 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
     }
 }
 
-/* Executes the actions indicated by 'rule' on 'packet', which is in flow
- * 'flow' and is considered to have arrived on ODP port 'in_port'.  'packet'
- * must have at least sizeof(struct ofp_packet_in) bytes of headroom.
+/* Executes the actions indicated by 'facet' on 'packet' and credits 'facet''s
+ * statistics appropriately.  'packet' must have at least sizeof(struct
+ * ofp_packet_in) bytes of headroom.
  *
- * The flow that 'packet' actually contains does not need to actually match
- * 'rule'; the actions in 'rule' will be applied to it either way.  Likewise,
- * the packet and byte counters for 'rule' will be credited for the packet sent
- * out whether or not the packet actually matches 'rule'.
+ * For correct results, 'packet' must actually be in 'facet''s flow; that is,
+ * applying flow_extract() to 'packet' would yield the same flow as
+ * 'facet->flow'.
  *
- * If 'rule' is an exact-match rule and 'flow' actually equals the rule's flow,
- * the caller must already have accurately composed ODP actions for it given
- * 'packet' using rule_make_actions().  If 'rule' is a wildcard rule, or if
- * 'rule' is an exact-match rule but 'flow' is not the rule's flow, then this
- * function will compose a set of ODP actions based on 'rule''s OpenFlow
- * actions and apply them to 'packet'.
+ * 'facet' must have accurately composed ODP actions; that is, it must not be
+ * in need of revalidation.
  *
  * Takes ownership of 'packet'. */
 static void
-rule_execute(struct ofproto *ofproto, struct rule *rule,
-             struct ofpbuf *packet, const struct flow *flow)
+facet_execute(struct ofproto *ofproto, struct facet *facet,
+              struct ofpbuf *packet)
 {
-    const union odp_action *actions;
     struct odp_flow_stats stats;
-    size_t n_actions;
-    struct odp_actions a;
 
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
-    /* Grab or compose the ODP actions.
-     *
-     * The special case for an exact-match 'rule' where 'flow' is not the
-     * rule's flow is important to avoid, e.g., sending a packet out its input
-     * port simply because the ODP actions were composed for the wrong
-     * scenario. */
-    if (rule->cr.wc.wildcards || !flow_equal(flow, &rule->cr.flow)) {
-        struct rule *super = rule->super ? rule->super : rule;
-        if (xlate_actions(super->actions, super->n_actions, flow, ofproto,
-                          packet, &a, NULL, 0, NULL)) {
-            ofpbuf_delete(packet);
-            return;
-        }
-        actions = a.actions;
-        n_actions = a.n_actions;
-    } else {
-        actions = rule->odp_actions;
-        n_actions = rule->n_odp_actions;
+    flow_extract_stats(&facet->flow, packet, &stats);
+    if (execute_odp_actions(ofproto, facet->flow.in_port,
+                            facet->actions, facet->n_actions, packet)) {
+        facet_update_stats(ofproto, facet, &stats);
+        facet->used = time_msec();
+        netflow_flow_update_time(ofproto->netflow,
+                                 &facet->nf_flow, facet->used);
+    }
+}
+
+/* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
+ * statistics (or the statistics for one of its facets) appropriately.
+ * 'packet' must have at least sizeof(struct ofp_packet_in) bytes of headroom.
+ *
+ * 'packet' doesn't necessarily have to match 'rule'.  'rule' will be credited
+ * with statistics for 'packet' either way.
+ *
+ * Takes ownership of 'packet'. */
+static void
+rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
+             struct ofpbuf *packet)
+{
+    struct facet *facet;
+    struct odp_actions a;
+    struct flow flow;
+    size_t size;
+
+    assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
+
+    flow_extract(packet, 0, in_port, &flow);
+
+    /* First look for a related facet.  If we find one, account it to that. */
+    facet = facet_lookup_valid(ofproto, &flow);
+    if (facet && facet->rule == rule) {
+        facet_execute(ofproto, facet, packet);
+        return;
     }
 
-    /* Execute the ODP actions. */
-    flow_extract_stats(flow, packet, &stats);
-    if (execute_odp_actions(ofproto, flow->in_port,
-                            actions, n_actions, packet)) {
-        update_stats(ofproto, rule, &stats);
+    /* Otherwise, if 'rule' is in fact the correct rule for 'packet', then
+     * create a new facet for it and use that. */
+    if (rule_lookup(ofproto, &flow) == rule) {
+        facet = facet_create(ofproto, rule, &flow, packet);
+        facet_execute(ofproto, facet, packet);
+        facet_install(ofproto, facet, true);
+        return;
+    }
+
+    /* We can't account anything to a facet.  If we were to try, then that
+     * facet would have a non-matching rule, busting our invariants. */
+    if (xlate_actions(rule->actions, rule->n_actions, &flow, ofproto,
+                      packet, &a, NULL, 0, NULL)) {
+        ofpbuf_delete(packet);
+        return;
+    }
+    size = packet->size;
+    if (execute_odp_actions(ofproto, in_port,
+                            a.actions, a.n_actions, packet)) {
         rule->used = time_msec();
-        netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->used);
+        rule->packet_count++;
+        rule->byte_count += size;
     }
 }
 
@@ -2024,270 +2079,332 @@ rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
 {
     struct rule *displaced_rule;
 
-    /* Insert the rule in the classifier. */
     displaced_rule = rule_from_cls_rule(classifier_insert(&p->cls, &rule->cr));
-    if (!rule->cr.wc.wildcards) {
-        rule_make_actions(p, rule, packet);
-    }
-
-    /* Send the packet and credit it to the rule. */
-    if (packet) {
-        struct flow flow;
-        flow_extract(packet, 0, in_port, &flow);
-        rule_execute(p, rule, packet, &flow);
-    }
-
-    /* Install the rule in the datapath only after sending the packet, to
-     * avoid packet reordering.  */
-    if (rule->cr.wc.wildcards) {
-        COVERAGE_INC(ofproto_add_wc_flow);
-        p->need_revalidate = true;
-    } else {
-        rule_install(p, rule, displaced_rule);
-    }
-
-    /* Free the rule that was displaced, if any. */
     if (displaced_rule) {
         rule_destroy(p, displaced_rule);
     }
+    p->need_revalidate = true;
+
+    if (packet) {
+        rule_execute(p, rule, in_port, packet);
+    }
 }
 
-static struct rule *
-rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
-                    const struct flow *flow)
+/* Creates and returns a new facet within 'ofproto' owned by 'rule', given a
+ * 'flow' and an example 'packet' within that flow.
+ *
+ * The caller must already have determined that no facet with an identical
+ * 'flow' exists in 'ofproto' and that 'flow' is the best match for 'rule' in
+ * 'ofproto''s classifier table. */
+static struct facet *
+facet_create(struct ofproto *ofproto, struct rule *rule,
+             const struct flow *flow, const struct ofpbuf *packet)
 {
-    struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
-                                       rule->idle_timeout, rule->hard_timeout,
-                                       0, false);
-    COVERAGE_INC(ofproto_subrule_create);
-    cls_rule_init_exact(flow, (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
-                               : rule->cr.priority),
-                        &subrule->cr);
+    struct facet *facet;
 
-    if (classifier_insert(&ofproto->cls, &subrule->cr)) {
-        /* Can't happen,  */
-        NOT_REACHED();
-    }
+    facet = xzalloc(sizeof *facet);
+    facet->used = time_msec();
+    hmap_insert(&ofproto->facets, &facet->hmap_node, flow_hash(flow, 0));
+    list_push_back(&rule->facets, &facet->list_node);
+    facet->rule = rule;
+    facet->flow = *flow;
+    netflow_flow_init(&facet->nf_flow);
+    netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, facet->used);
 
-    return subrule;
+    facet_make_actions(ofproto, facet, packet);
+
+    return facet;
+}
+
+static void
+facet_free(struct facet *facet)
+{
+    free(facet->actions);
+    free(facet);
 }
 
 /* Remove 'rule' from 'ofproto' and free up the associated memory:
  *
- *   - If 'rule' was installed in the datapath, uninstalls it and updates
- *     'rule''s statistics (or its super-rule's statistics, if it is a
- *     subrule), via rule_uninstall().
- *
  *   - Removes 'rule' from the classifier.
  *
- *   - If 'rule' is a super-rule that has subrules, revalidates (and possibly
- *     uninstalls and destroys) its subrules, via rule_destroy().
+ *   - If 'rule' has facets, revalidates them (and possibly uninstalls and
+ *     destroys them), via rule_destroy().
  */
 static void
 rule_remove(struct ofproto *ofproto, struct rule *rule)
 {
-    if (rule->cr.wc.wildcards) {
-        COVERAGE_INC(ofproto_del_wc_flow);
-        ofproto->need_revalidate = true;
-    } else {
-        rule_uninstall(ofproto, rule);
-    }
+    COVERAGE_INC(ofproto_del_rule);
+    ofproto->need_revalidate = true;
     classifier_remove(&ofproto->cls, &rule->cr);
     rule_destroy(ofproto, rule);
 }
 
-/* Returns true if the actions changed, false otherwise. */
-static bool
-rule_make_actions(struct ofproto *p, struct rule *rule,
-                  const struct ofpbuf *packet)
+/* Remove 'facet' from 'ofproto' and free up the associated memory:
+ *
+ *   - If 'facet' was installed in the datapath, uninstalls it and updates its
+ *     rule's statistics, via facet_uninstall().
+ *
+ *   - Removes 'facet' from its rule and from ofproto->facets.
+ */
+static void
+facet_remove(struct ofproto *ofproto, struct facet *facet)
 {
-    const struct rule *super;
+    facet_uninstall(ofproto, facet);
+    hmap_remove(&ofproto->facets, &facet->hmap_node);
+    list_remove(&facet->list_node);
+    facet_free(facet);
+}
+
+/* Composes the ODP actions for 'facet' based on its rule's actions.
+ * Returns true if the actions changed, false otherwise. */
+static bool
+facet_make_actions(struct ofproto *p, struct facet *facet,
+                   const struct ofpbuf *packet)
+{
+    const struct rule *rule = facet->rule;
     struct odp_actions a;
     size_t actions_len;
 
-    assert(!rule->cr.wc.wildcards);
-
-    super = rule->super ? rule->super : rule;
-    xlate_actions(super->actions, super->n_actions, &rule->cr.flow, p,
-                  packet, &a, &rule->tags, &rule->may_install,
-                  &rule->nf_flow.output_iface);
+    xlate_actions(rule->actions, rule->n_actions, &facet->flow, p,
+                  packet, &a, &facet->tags, &facet->may_install,
+                  &facet->nf_flow.output_iface);
 
     actions_len = a.n_actions * sizeof *a.actions;
-    if (rule->n_odp_actions != a.n_actions
-        || memcmp(rule->odp_actions, a.actions, actions_len)) {
-        COVERAGE_INC(ofproto_odp_unchanged);
-        free(rule->odp_actions);
-        rule->n_odp_actions = a.n_actions;
-        rule->odp_actions = xmemdup(a.actions, actions_len);
-        return true;
-    } else {
+    if (facet->n_actions == a.n_actions
+        && !memcmp(facet->actions, a.actions, actions_len)) {
         return false;
     }
+
+    free(facet->actions);
+    facet->n_actions = a.n_actions;
+    facet->actions = xmemdup(a.actions, actions_len);
+    return true;
 }
 
 static int
-do_put_flow(struct ofproto *ofproto, struct rule *rule, int flags,
+facet_put__(struct ofproto *ofproto, struct facet *facet, int flags,
             struct odp_flow_put *put)
 {
     memset(&put->flow.stats, 0, sizeof put->flow.stats);
-    odp_flow_key_from_flow(&put->flow.key, &rule->cr.flow);
-    put->flow.actions = rule->odp_actions;
-    put->flow.n_actions = rule->n_odp_actions;
+    odp_flow_key_from_flow(&put->flow.key, &facet->flow);
+    put->flow.actions = facet->actions;
+    put->flow.n_actions = facet->n_actions;
     put->flow.flags = 0;
     put->flags = flags;
     return dpif_flow_put(ofproto->dpif, put);
 }
 
+/* If 'facet' is installable, inserts or re-inserts it into 'p''s datapath.  If
+ * 'zero_stats' is true, clears any existing statistics from the datapath for
+ * 'facet'. */
 static void
-rule_install(struct ofproto *p, struct rule *rule, struct rule *displaced_rule)
+facet_install(struct ofproto *p, struct facet *facet, bool zero_stats)
 {
-    assert(!rule->cr.wc.wildcards);
-
-    if (rule->may_install) {
+    if (facet->may_install) {
         struct odp_flow_put put;
-        if (!do_put_flow(p, rule,
-                         ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS,
-                         &put)) {
-            rule->installed = true;
-            if (displaced_rule) {
-                update_stats(p, displaced_rule, &put.flow.stats);
-                rule_post_uninstall(p, displaced_rule);
-            }
+        int flags;
+
+        flags = ODPPF_CREATE | ODPPF_MODIFY;
+        if (zero_stats) {
+            flags |= ODPPF_ZERO_STATS;
         }
-    } else if (displaced_rule) {
-        rule_uninstall(p, displaced_rule);
+        if (!facet_put__(p, facet, flags, &put)) {
+            facet->installed = true;
+        }
     }
 }
 
+/* Recomposes the ODP actions for 'facet' and installs or uninstalls or
+ * reinstalls them as necessary. */
 static void
-rule_reinstall(struct ofproto *ofproto, struct rule *rule)
-{
-    if (rule->installed) {
-        struct odp_flow_put put;
-        COVERAGE_INC(ofproto_dp_missed);
-        do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY, &put);
-    } else {
-        rule_install(ofproto, rule, NULL);
-    }
-}
-
-static void
-rule_update_actions(struct ofproto *ofproto, struct rule *rule)
+facet_update_actions(struct ofproto *ofproto, struct facet *facet)
 {
     bool actions_changed;
     uint16_t new_out_iface, old_out_iface;
 
-    old_out_iface = rule->nf_flow.output_iface;
-    actions_changed = rule_make_actions(ofproto, rule, NULL);
+    old_out_iface = facet->nf_flow.output_iface;
+    actions_changed = facet_make_actions(ofproto, facet, NULL);
 
-    if (rule->may_install) {
-        if (rule->installed) {
+    if (facet->may_install) {
+        if (facet->installed) {
             if (actions_changed) {
                 struct odp_flow_put put;
-                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY
+                facet_put__(ofproto, facet, ODPPF_CREATE | ODPPF_MODIFY
                                            | ODPPF_ZERO_STATS, &put);
-                update_stats(ofproto, rule, &put.flow.stats);
+                facet_update_stats(ofproto, facet, &put.flow.stats);
 
                 /* Temporarily set the old output iface so that NetFlow
                  * messages have the correct output interface for the old
                  * stats. */
-                new_out_iface = rule->nf_flow.output_iface;
-                rule->nf_flow.output_iface = old_out_iface;
-                rule_post_uninstall(ofproto, rule);
-                rule->nf_flow.output_iface = new_out_iface;
+                new_out_iface = facet->nf_flow.output_iface;
+                facet->nf_flow.output_iface = old_out_iface;
+                facet_post_uninstall(ofproto, facet);
+                facet->nf_flow.output_iface = new_out_iface;
             }
         } else {
-            rule_install(ofproto, rule, NULL);
+            facet_install(ofproto, facet, true);
         }
     } else {
-        rule_uninstall(ofproto, rule);
+        facet_uninstall(ofproto, facet);
     }
 }
 
+/* Ensures that the bytes in 'facet', plus 'extra_bytes', have been passed up
+ * to the accounting hook function in the ofhooks structure. */
 static void
-rule_account(struct ofproto *ofproto, struct rule *rule, uint64_t extra_bytes)
+facet_account(struct ofproto *ofproto,
+              struct facet *facet, uint64_t extra_bytes)
 {
-    uint64_t total_bytes = rule->byte_count + extra_bytes;
+    uint64_t total_bytes = facet->byte_count + extra_bytes;
 
     if (ofproto->ofhooks->account_flow_cb
-        && total_bytes > rule->accounted_bytes)
+        && total_bytes > facet->accounted_bytes)
     {
         ofproto->ofhooks->account_flow_cb(
-            &rule->cr.flow, rule->tags, rule->odp_actions, rule->n_odp_actions,
-            total_bytes - rule->accounted_bytes, ofproto->aux);
-        rule->accounted_bytes = total_bytes;
+            &facet->flow, facet->tags, facet->actions, facet->n_actions,
+            total_bytes - facet->accounted_bytes, ofproto->aux);
+        facet->accounted_bytes = total_bytes;
     }
 }
 
-/* 'rule' must be an exact-match rule in 'p'.
- *
- * If 'rule' is installed in the datapath, uninstalls it and updates's
- * statistics.  If 'rule' is a subrule, the statistics that are updated are
- * actually its super-rule's statistics; otherwise 'rule''s own statistics are
- * updated.
+/* If 'rule' is installed in the datapath, uninstalls it and updates its
+ * rule's statistics.
  *
  * If 'rule' is not installed, this function has no effect. */
 static void
-rule_uninstall(struct ofproto *p, struct rule *rule)
+facet_uninstall(struct ofproto *p, struct facet *facet)
 {
-    assert(!rule->cr.wc.wildcards);
-    if (rule->installed) {
+    if (facet->installed) {
         struct odp_flow odp_flow;
 
-        odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
+        odp_flow_key_from_flow(&odp_flow.key, &facet->flow);
         odp_flow.actions = NULL;
         odp_flow.n_actions = 0;
         odp_flow.flags = 0;
         if (!dpif_flow_del(p->dpif, &odp_flow)) {
-            update_stats(p, rule, &odp_flow.stats);
+            facet_update_stats(p, facet, &odp_flow.stats);
         }
-        rule->installed = false;
+        facet->installed = false;
 
-        rule_post_uninstall(p, rule);
+        facet_post_uninstall(p, facet);
     }
 }
 
+/* Returns true if the only action for 'facet' is to send to the controller.
+ * (We don't report NetFlow expiration messages for such facets because they
+ * are just part of the control logic for the network, not real traffic). */
 static bool
-is_controller_rule(struct rule *rule)
+facet_is_controller_flow(struct facet *facet)
 {
-    /* If the only action is send to the controller then don't report
-     * NetFlow expiration messages since it is just part of the control
-     * logic for the network and not real traffic. */
-
-    return (rule
-            && rule->super
-            && rule->super->n_actions == 1
-            && action_outputs_to_port(&rule->super->actions[0],
+    return (facet
+            && facet->rule->n_actions == 1
+            && action_outputs_to_port(&facet->rule->actions[0],
                                       htons(OFPP_CONTROLLER)));
 }
 
+/* Folds all of 'facet''s statistics into its rule.  Also updates the
+ * accounting ofhook and emits a NetFlow expiration if appropriate.  */
 static void
-rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
+facet_post_uninstall(struct ofproto *ofproto, struct facet *facet)
 {
-    struct rule *super = rule->super;
+    facet_account(ofproto, facet, 0);
 
-    rule_account(ofproto, rule, 0);
-
-    if (ofproto->netflow && !is_controller_rule(rule)) {
+    if (ofproto->netflow && !facet_is_controller_flow(facet)) {
         struct ofexpired expired;
-        expired.flow = rule->cr.flow;
-        expired.packet_count = rule->packet_count;
-        expired.byte_count = rule->byte_count;
-        expired.used = rule->used;
-        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
+        expired.flow = facet->flow;
+        expired.packet_count = facet->packet_count;
+        expired.byte_count = facet->byte_count;
+        expired.used = facet->used;
+        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
     }
-    if (super) {
-        super->packet_count += rule->packet_count;
-        super->byte_count += rule->byte_count;
 
-        /* Reset counters to prevent double counting if the rule ever gets
-         * reinstalled. */
-        rule->packet_count = 0;
-        rule->byte_count = 0;
-        rule->accounted_bytes = 0;
+    facet->rule->packet_count += facet->packet_count;
+    facet->rule->byte_count += facet->byte_count;
 
-        netflow_flow_clear(&rule->nf_flow);
+    /* Reset counters to prevent double counting if 'facet' ever gets
+     * reinstalled. */
+    facet->packet_count = 0;
+    facet->byte_count = 0;
+    facet->accounted_bytes = 0;
+
+    netflow_flow_clear(&facet->nf_flow);
+}
+
+/* Searches 'ofproto''s table of facets for one exactly equal to 'flow'.
+ * Returns it if found, otherwise a null pointer.
+ *
+ * The returned facet might need revalidation; use facet_lookup_valid()
+ * instead if that is important. */
+static struct facet *
+facet_find(struct ofproto *ofproto, const struct flow *flow)
+{
+    struct facet *facet;
+
+    HMAP_FOR_EACH_WITH_HASH (facet, hmap_node, flow_hash(flow, 0),
+                             &ofproto->facets) {
+        if (flow_equal(flow, &facet->flow)) {
+            return facet;
+        }
     }
+
+    return NULL;
+}
+
+/* Searches 'ofproto''s table of facets for one exactly equal to 'flow'.
+ * Returns it if found, otherwise a null pointer.
+ *
+ * The returned facet is guaranteed to be valid. */
+static struct facet *
+facet_lookup_valid(struct ofproto *ofproto, const struct flow *flow)
+{
+    struct facet *facet = facet_find(ofproto, flow);
+
+    /* The facet we found might not be valid, since we could be in need of
+     * revalidation.  If it is not valid, don't return it. */
+    if (facet
+        && ofproto->need_revalidate
+        && !facet_revalidate(ofproto, facet)) {
+        COVERAGE_INC(ofproto_invalidated);
+        return NULL;
+    }
+
+    return facet;
+}
+
+/* Re-searches 'ofproto''s classifier for a rule matching 'facet':
+ *
+ *   - If the rule found is different from 'facet''s current rule, moves
+ *     'facet' to the new rule and recompiles its actions.
+ *
+ *   - If the rule found is the same as 'facet''s current rule, leaves 'facet'
+ *     where it is and recompiles its actions anyway.
+ *
+ *   - If there is none, destroys 'facet'.
+ *
+ * Returns true if 'facet' still exists, false if it has been destroyed.
+ */
+static bool
+facet_revalidate(struct ofproto *ofproto, struct facet *facet)
+{
+    struct rule *rule;
+
+    COVERAGE_INC(facet_revalidate);
+    rule = rule_lookup(ofproto, &facet->flow);
+    if (!rule) {
+        facet_remove(ofproto, facet);
+        return false;
+    }
+
+    if (rule != facet->rule) {
+        COVERAGE_INC(facet_changed_rule);
+        list_remove(&facet->list_node);
+        list_push_back(&rule->facets, &facet->list_node);
+        facet->rule = rule;
+        facet->used = rule->created;
+    }
+
+    facet_update_actions(ofproto, facet);
+    return true;
 }
 
 static void
@@ -2472,23 +2589,10 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
 }
 
 static struct rule *
-lookup_valid_rule(struct ofproto *ofproto, const struct flow *flow)
+rule_lookup(struct ofproto *ofproto, const struct flow *flow)
 {
-    struct rule *rule;
-    rule = rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow,
+    return rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow,
                                                 CLS_INC_ALL));
-
-    /* The rule we found might not be valid, since we could be in need of
-     * revalidation.  If it is not valid, don't return it. */
-    if (rule
-        && rule->super
-        && ofproto->need_revalidate
-        && !revalidate_rule(ofproto, rule)) {
-        COVERAGE_INC(ofproto_invalidated);
-        return NULL;
-    }
-
-    return rule;
 }
 
 static void
@@ -2503,14 +2607,10 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
          * have surprising behavior). */
         old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
-        rule = lookup_valid_rule(ctx->ofproto, &ctx->flow);
+        rule = rule_lookup(ctx->ofproto, &ctx->flow);
         ctx->flow.in_port = old_in_port;
 
         if (rule) {
-            if (rule->super) {
-                rule = rule->super;
-            }
-
             ctx->recurse++;
             do_xlate_actions(rule->actions, rule->n_actions, ctx);
             ctx->recurse--;
@@ -3146,18 +3246,8 @@ handle_table_stats_request(struct ofconn *ofconn,
     struct ofproto *p = ofconn->ofproto;
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
-    struct rule *rule;
-    int n_rules;
 
     msg = start_ofp_stats_reply(request, sizeof *ots * 2);
-
-    /* Count rules other than subrules. */
-    n_rules = classifier_count(&p->cls);
-    CLASSIFIER_FOR_EACH_EXACT_RULE (rule, cr, &p->cls) {
-        if (rule->super) {
-            n_rules--;
-        }
-    }
 
     /* Classifier table. */
     ots = append_ofp_stats_reply(sizeof *ots, ofconn, &msg);
@@ -3166,7 +3256,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     ots->wildcards = (ofconn->flow_format == NXFF_OPENFLOW10
                       ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
-    ots->active_count = htonl(n_rules);
+    ots->active_count = htonl(classifier_count(&p->cls));
     ots->lookup_count = htonll(0);              /* XXX */
     ots->matched_count = htonll(0);             /* XXX */
 
@@ -3241,46 +3331,41 @@ struct flow_stats_cbdata {
 };
 
 /* Obtains statistic counters for 'rule' within 'p' and stores them into
- * '*packet_countp' and '*byte_countp'.  If 'rule' is a wildcarded rule, the
- * returned statistic include statistics for all of 'rule''s subrules. */
+ * '*packet_countp' and '*byte_countp'.  The returned statistics include
+ * statistics for all of 'rule''s facets. */
 static void
 query_stats(struct ofproto *p, struct rule *rule,
             uint64_t *packet_countp, uint64_t *byte_countp)
 {
     uint64_t packet_count, byte_count;
-    struct rule *subrule;
+    struct facet *facet;
     struct odp_flow *odp_flows;
     size_t n_odp_flows;
 
     /* Start from historical data for 'rule' itself that are no longer tracked
-     * by the datapath.  This counts, for example, subrules that have
-     * expired. */
+     * by the datapath.  This counts, for example, facets that have expired. */
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
 
-    /* Prepare to ask the datapath for statistics on 'rule', or if it is
-     * wildcarded then on all of its subrules.
+    /* Prepare to ask the datapath for statistics on all of the rule's facets.
      *
      * Also, add any statistics that are not tracked by the datapath for each
-     * subrule.  This includes, for example, statistics for packets that were
+     * facet.  This includes, for example, statistics for packets that were
      * executed "by hand" by ofproto via dpif_execute() but must be accounted
-     * to a flow. */
-    n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
-    odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
-    if (rule->cr.wc.wildcards) {
-        size_t i = 0;
-        LIST_FOR_EACH (subrule, list, &rule->list) {
-            odp_flow_key_from_flow(&odp_flows[i++].key, &subrule->cr.flow);
-            packet_count += subrule->packet_count;
-            byte_count += subrule->byte_count;
-        }
-    } else {
-        odp_flow_key_from_flow(&odp_flows[0].key, &rule->cr.flow);
+     * to a rule. */
+    odp_flows = xzalloc(list_size(&rule->facets) * sizeof *odp_flows);
+    n_odp_flows = 0;
+    LIST_FOR_EACH (facet, list_node, &rule->facets) {
+        struct odp_flow *odp_flow = &odp_flows[n_odp_flows++];
+        odp_flow_key_from_flow(&odp_flow->key, &facet->flow);
+        packet_count += facet->packet_count;
+        byte_count += facet->byte_count;
     }
 
     /* Fetch up-to-date statistics from the datapath and add them in. */
     if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
         size_t i;
+
         for (i = 0; i < n_odp_flows; i++) {
             struct odp_flow *odp_flow = &odp_flows[i];
             packet_count += odp_flow->stats.n_packets;
@@ -3451,11 +3536,6 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     struct ofp_match match;
     uint64_t packet_count, byte_count;
     size_t act_len = sizeof *rule->actions * rule->n_actions;
-
-    /* Don't report on subrules. */
-    if (rule->super != NULL) {
-        return;
-    }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
@@ -3775,28 +3855,34 @@ msec_from_nsec(uint64_t sec, uint32_t nsec)
 }
 
 static void
-update_time(struct ofproto *ofproto, struct rule *rule,
-            const struct odp_flow_stats *stats)
+facet_update_time(struct ofproto *ofproto, struct facet *facet,
+                  const struct odp_flow_stats *stats)
 {
     long long int used = msec_from_nsec(stats->used_sec, stats->used_nsec);
-    if (used > rule->used) {
-        rule->used = used;
-        if (rule->super && used > rule->super->used) {
-            rule->super->used = used;
+    if (used > facet->used) {
+        facet->used = used;
+        if (used > facet->rule->used) {
+            facet->rule->used = used;
         }
-        netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, used);
+        netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, used);
     }
 }
 
+/* Folds the statistics from 'stats' into the counters in 'facet'.
+ *
+ * Because of the meaning of a facet's counters, it only makes sense to do this
+ * if 'stats' are not tracked in the datapath, that is, if 'stats' represents a
+ * packet that was sent by hand or if it represents statistics that have been
+ * cleared out of the datapath. */
 static void
-update_stats(struct ofproto *ofproto, struct rule *rule,
-             const struct odp_flow_stats *stats)
+facet_update_stats(struct ofproto *ofproto, struct facet *facet,
+                   const struct odp_flow_stats *stats)
 {
     if (stats->n_packets) {
-        update_time(ofproto, rule, stats);
-        rule->packet_count += stats->n_packets;
-        rule->byte_count += stats->n_bytes;
-        netflow_flow_update_flags(&rule->nf_flow, stats->tcp_flags);
+        facet_update_time(ofproto, facet, stats);
+        facet->packet_count += stats->n_packets;
+        facet->byte_count += stats->n_bytes;
+        netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
     }
 }
 
@@ -3836,11 +3922,6 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
     }
 
-    rule = rule_create(p, NULL, fm->actions, fm->n_actions,
-                       fm->idle_timeout, fm->hard_timeout, fm->cookie,
-                       fm->flags & OFPFF_SEND_FLOW_REM);
-    rule->cr = fm->cr;
-
     error = 0;
     if (fm->buffer_id != UINT32_MAX) {
         error = pktbuf_retrieve(ofconn->pktbuf, fm->buffer_id,
@@ -3850,6 +3931,9 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
         in_port = UINT16_MAX;
     }
 
+    rule = rule_create(&fm->cr, fm->actions, fm->n_actions,
+                       fm->idle_timeout, fm->hard_timeout, fm->cookie,
+                       fm->flags & OFPFF_SEND_FLOW_REM);
     rule_insert(p, rule, packet, in_port);
     return error;
 }
@@ -3866,7 +3950,6 @@ send_buffered_packet(struct ofconn *ofconn,
 {
     struct ofpbuf *packet;
     uint16_t in_port;
-    struct flow flow;
     int error;
 
     if (buffer_id == UINT32_MAX) {
@@ -3878,8 +3961,7 @@ send_buffered_packet(struct ofconn *ofconn,
         return error;
     }
 
-    flow_extract(packet, 0, in_port, &flow);
-    rule_execute(ofconn->ofproto, rule, packet, &flow);
+    rule_execute(ofconn->ofproto, rule, in_port, packet);
 
     return 0;
 }
@@ -3977,13 +4059,7 @@ modify_flow(struct ofproto *p, const struct flow_mod *fm, struct rule *rule)
     rule->actions = fm->n_actions ? xmemdup(fm->actions, actions_len) : NULL;
     rule->n_actions = fm->n_actions;
 
-    /* Make sure that the datapath gets updated properly. */
-    if (rule->cr.wc.wildcards) {
-        COVERAGE_INC(ofproto_mod_wc_flow);
-        p->need_revalidate = true;
-    } else {
-        rule_update_actions(p, rule);
-    }
+    p->need_revalidate = true;
 
     return 0;
 }
@@ -4050,7 +4126,7 @@ delete_flow(struct ofproto *p, struct rule *rule, ovs_be16 out_port)
         return;
     }
 
-    send_flow_removed(p, rule, OFPRR_DELETE);
+    rule_send_removed(p, rule, OFPRR_DELETE);
     rule_remove(p, rule);
 }
 
@@ -4412,8 +4488,8 @@ static void
 handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 {
     struct odp_msg *msg = packet->data;
-    struct rule *rule;
     struct ofpbuf payload;
+    struct facet *facet;
     struct flow flow;
 
     payload.data = msg + 1;
@@ -4431,41 +4507,37 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
         dpif_execute(p->dpif, &action, 1, &payload);
     }
 
-    rule = lookup_valid_rule(p, &flow);
-    if (!rule) {
-        /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
-        struct ofport *port = get_port(p, msg->port);
-        if (port) {
-            if (port->opp.config & OFPPC_NO_PACKET_IN) {
-                COVERAGE_INC(ofproto_no_packet_in);
-                /* XXX install 'drop' flow entry */
-                ofpbuf_delete(packet);
-                return;
+    facet = facet_lookup_valid(p, &flow);
+    if (!facet) {
+        struct rule *rule = rule_lookup(p, &flow);
+        if (!rule) {
+            /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
+            struct ofport *port = get_port(p, msg->port);
+            if (port) {
+                if (port->opp.config & OFPPC_NO_PACKET_IN) {
+                    COVERAGE_INC(ofproto_no_packet_in);
+                    /* XXX install 'drop' flow entry */
+                    ofpbuf_delete(packet);
+                    return;
+                }
+            } else {
+                VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16,
+                             msg->port);
             }
-        } else {
-            VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, msg->port);
+
+            COVERAGE_INC(ofproto_packet_in);
+            send_packet_in(p, packet);
+            return;
         }
 
-        COVERAGE_INC(ofproto_packet_in);
-        send_packet_in(p, packet);
-        return;
+        facet = facet_create(p, rule, &flow, packet);
+    } else if (!facet->may_install) {
+        /* The facet is not installable, that is, we need to process every
+         * packet, so process the current packet's actions into 'facet'. */
+        facet_make_actions(p, facet, packet);
     }
 
-    if (rule->cr.wc.wildcards) {
-        rule = rule_create_subrule(p, rule, &flow);
-        rule_make_actions(p, rule, packet);
-    } else {
-        if (!rule->may_install) {
-            /* The rule is not installable, that is, we need to process every
-             * packet, so process the current packet and set its actions into
-             * 'subrule'. */
-            rule_make_actions(p, rule, packet);
-        } else {
-            /* XXX revalidate rule if it needs it */
-        }
-    }
-
-    if (rule->super && rule->super->cr.priority == FAIL_OPEN_PRIORITY) {
+    if (facet->rule->cr.priority == FAIL_OPEN_PRIORITY) {
         /*
          * Extra-special case for fail-open mode.
          *
@@ -4481,8 +4553,8 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     }
 
     ofpbuf_pull(packet, sizeof *msg);
-    rule_execute(p, rule, packet, &flow);
-    rule_reinstall(p, rule);
+    facet_execute(p, facet, packet);
+    facet_install(p, facet, false);
 }
 
 static void
@@ -4524,6 +4596,7 @@ struct expire_cbdata {
 static int ofproto_dp_max_idle(const struct ofproto *);
 static void ofproto_update_used(struct ofproto *);
 static void rule_expire(struct cls_rule *, void *cbdata);
+static void ofproto_expire_facets(struct ofproto *, int dp_max_idle);
 
 /* This function is called periodically by ofproto_run().  Its job is to
  * collect updates for the flows that have been installed into the datapath,
@@ -4539,14 +4612,13 @@ ofproto_expire(struct ofproto *ofproto)
     /* Update 'used' for each flow in the datapath. */
     ofproto_update_used(ofproto);
 
-    /* Expire idle flows.
-     *
-     * A wildcarded flow is idle only when all of its subrules have expired due
-     * to becoming idle, so iterate through the exact-match flows first. */
-    cbdata.ofproto = ofproto;
+    /* Expire facets that have been idle too long. */
     cbdata.dp_max_idle = ofproto_dp_max_idle(ofproto);
-    classifier_for_each(&ofproto->cls, CLS_INC_EXACT, rule_expire, &cbdata);
-    classifier_for_each(&ofproto->cls, CLS_INC_WILD, rule_expire, &cbdata);
+    ofproto_expire_facets(ofproto, cbdata.dp_max_idle);
+
+    /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
+    cbdata.ofproto = ofproto;
+    classifier_for_each(&ofproto->cls, CLS_INC_ALL, rule_expire, &cbdata);
 
     /* Let the hook know that we're at a stable point: all outstanding data
      * in existing flows has been accounted to the account_cb.  Thus, the
@@ -4559,7 +4631,7 @@ ofproto_expire(struct ofproto *ofproto)
     return MIN(cbdata.dp_max_idle, 1000);
 }
 
-/* Update 'used' member of each flow currently installed into the datapath. */
+/* Update 'used' member of installed facets. */
 static void
 ofproto_update_used(struct ofproto *p)
 {
@@ -4575,19 +4647,15 @@ ofproto_update_used(struct ofproto *p)
 
     for (i = 0; i < n_flows; i++) {
         struct odp_flow *f = &flows[i];
-        struct cls_rule target;
-        struct rule *rule;
+        struct facet *facet;
         struct flow flow;
 
         odp_flow_key_to_flow(&f->key, &flow);
-        cls_rule_init_exact(&flow, UINT16_MAX, &target);
+        facet = facet_find(p, &flow);
 
-        rule = rule_from_cls_rule(classifier_find_rule_exactly(&p->cls,
-                                                               &target));
-
-        if (rule && rule->installed) {
-            update_time(p, rule, &f->stats);
-            rule_account(p, rule, f->stats.n_bytes);
+        if (facet && facet->installed) {
+            facet_update_time(p, facet, &f->stats);
+            facet_account(p, facet, f->stats.n_bytes);
         } else {
             /* There's a flow in the datapath that we know nothing about.
              * Delete it. */
@@ -4600,7 +4668,7 @@ ofproto_update_used(struct ofproto *p)
 }
 
 /* Calculates and returns the number of milliseconds of idle time after which
- * flows should expire from the datapath and we should fold their statistics
+ * facets should expire from the datapath and we should fold their statistics
  * into their parent rules in userspace. */
 static int
 ofproto_dp_max_idle(const struct ofproto *ofproto)
@@ -4608,49 +4676,49 @@ ofproto_dp_max_idle(const struct ofproto *ofproto)
     /*
      * Idle time histogram.
      *
-     * Most of the time a switch has a relatively small number of flows.  When
+     * Most of the time a switch has a relatively small number of facets.  When
      * this is the case we might as well keep statistics for all of them in
      * userspace and to cache them in the kernel datapath for performance as
      * well.
      *
-     * As the number of flows increases, the memory required to maintain
+     * As the number of facets increases, the memory required to maintain
      * statistics about them in userspace and in the kernel becomes
-     * significant.  However, with a large number of flows it is likely that
+     * significant.  However, with a large number of facets it is likely that
      * only a few of them are "heavy hitters" that consume a large amount of
      * bandwidth.  At this point, only heavy hitters are worth caching in the
-     * kernel and maintaining in userspaces; other flows we can discard.
+     * kernel and maintaining in userspaces; other facets we can discard.
      *
      * The technique used to compute the idle time is to build a histogram with
-     * N_BUCKETS bucket whose width is BUCKET_WIDTH msecs each.  Each flow that
-     * is installed in the kernel gets dropped in the appropriate bucket.
+     * N_BUCKETS buckets whose width is BUCKET_WIDTH msecs each.  Each facet
+     * that is installed in the kernel gets dropped in the appropriate bucket.
      * After the histogram has been built, we compute the cutoff so that only
-     * the most-recently-used 1% of flows (but at least 1000 flows) are kept
-     * cached.  At least the most-recently-used bucket of flows is kept, so
-     * actually an arbitrary number of flows can be kept in any given
+     * the most-recently-used 1% of facets (but at least 1000 flows) are kept
+     * cached.  At least the most-recently-used bucket of facets is kept, so
+     * actually an arbitrary number of facets can be kept in any given
      * expiration run (though the next run will delete most of those unless
      * they receive additional data).
      *
-     * This requires a second pass through the exact-match flows, in addition
-     * to the pass made by ofproto_update_used(), because the former function
-     * never looks at uninstallable flows.
+     * This requires a second pass through the facets, in addition to the pass
+     * made by ofproto_update_used(), because the former function never looks
+     * at uninstallable facets.
      */
     enum { BUCKET_WIDTH = ROUND_UP(100, TIME_UPDATE_INTERVAL) };
     enum { N_BUCKETS = 5000 / BUCKET_WIDTH };
     int buckets[N_BUCKETS] = { 0 };
+    struct facet *facet;
     int total, bucket;
-    struct rule *rule;
     long long int now;
     int i;
 
-    total = classifier_count_exact(&ofproto->cls);
+    total = hmap_count(&ofproto->facets);
     if (total <= 1000) {
         return N_BUCKETS * BUCKET_WIDTH;
     }
 
     /* Build histogram. */
     now = time_msec();
-    CLASSIFIER_FOR_EACH_EXACT_RULE (rule, cr, &ofproto->cls) {
-        long long int idle = now - rule->used;
+    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+        long long int idle = now - facet->used;
         int bucket = (idle <= 0 ? 0
                       : idle >= BUCKET_WIDTH * N_BUCKETS ? N_BUCKETS - 1
                       : (unsigned int) idle / BUCKET_WIDTH);
@@ -4690,10 +4758,10 @@ ofproto_dp_max_idle(const struct ofproto *ofproto)
 }
 
 static void
-rule_active_timeout(struct ofproto *ofproto, struct rule *rule)
+facet_active_timeout(struct ofproto *ofproto, struct facet *facet)
 {
-    if (ofproto->netflow && !is_controller_rule(rule) &&
-        netflow_active_timeout_expired(ofproto->netflow, &rule->nf_flow)) {
+    if (ofproto->netflow && !facet_is_controller_flow(facet) &&
+        netflow_active_timeout_expired(ofproto->netflow, &facet->nf_flow)) {
         struct ofexpired expired;
         struct odp_flow odp_flow;
 
@@ -4703,142 +4771,82 @@ rule_active_timeout(struct ofproto *ofproto, struct rule *rule)
          * updated TCP flags and (2) the dpif_flow_list_all() in
          * ofproto_update_used() zeroed TCP flags. */
         memset(&odp_flow, 0, sizeof odp_flow);
-        if (rule->installed) {
-            odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
+        if (facet->installed) {
+            odp_flow_key_from_flow(&odp_flow.key, &facet->flow);
             odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
             dpif_flow_get(ofproto->dpif, &odp_flow);
 
             if (odp_flow.stats.n_packets) {
-                update_time(ofproto, rule, &odp_flow.stats);
-                netflow_flow_update_flags(&rule->nf_flow,
+                facet_update_time(ofproto, facet, &odp_flow.stats);
+                netflow_flow_update_flags(&facet->nf_flow,
                                           odp_flow.stats.tcp_flags);
             }
         }
 
-        expired.flow = rule->cr.flow;
-        expired.packet_count = rule->packet_count +
+        expired.flow = facet->flow;
+        expired.packet_count = facet->packet_count +
                                odp_flow.stats.n_packets;
-        expired.byte_count = rule->byte_count + odp_flow.stats.n_bytes;
-        expired.used = rule->used;
+        expired.byte_count = facet->byte_count + odp_flow.stats.n_bytes;
+        expired.used = facet->used;
 
-        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
+        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
+    }
+}
+
+static void
+ofproto_expire_facets(struct ofproto *ofproto, int dp_max_idle)
+{
+    long long int cutoff = time_msec() - dp_max_idle;
+    struct facet *facet, *next_facet;
+
+    HMAP_FOR_EACH_SAFE (facet, next_facet, hmap_node, &ofproto->facets) {
+        facet_active_timeout(ofproto, facet);
+        if (facet->used < cutoff) {
+            facet_remove(ofproto, facet);
+        }
     }
 }
 
 /* If 'cls_rule' is an OpenFlow rule, that has expired according to OpenFlow
  * rules, then delete it entirely.
  *
- * If 'cls_rule' is a subrule, that has not been used recently, remove it from
- * the datapath and fold its statistics back into its super-rule.
- *
  * (This is a callback function for classifier_for_each().) */
 static void
 rule_expire(struct cls_rule *cls_rule, void *cbdata_)
 {
     struct expire_cbdata *cbdata = cbdata_;
-    struct ofproto *ofproto = cbdata->ofproto;
     struct rule *rule = rule_from_cls_rule(cls_rule);
-    long long int hard_expire, idle_expire, expire, now;
+    struct facet *facet, *next_facet;
+    long long int now;
+    uint8_t reason;
 
-    /* Calculate OpenFlow expiration times for 'rule'. */
-    hard_expire = (rule->hard_timeout
-                   ? rule->created + rule->hard_timeout * 1000
-                   : LLONG_MAX);
-    idle_expire = (rule->idle_timeout
-                   && (rule->super || list_is_empty(&rule->list))
-                   ? rule->used + rule->idle_timeout * 1000
-                   : LLONG_MAX);
-    expire = MIN(hard_expire, idle_expire);
-
+    /* Has 'rule' expired? */
     now = time_msec();
-    if (now < expire) {
-        /* 'rule' has not expired according to OpenFlow rules. */
-        if (!rule->cr.wc.wildcards) {
-            if (now >= rule->used + cbdata->dp_max_idle) {
-                /* This rule is idle, so drop it to free up resources. */
-                if (rule->super) {
-                    /* It's not part of the OpenFlow flow table, so we can
-                     * delete it entirely and fold its statistics into its
-                     * super-rule. */
-                    rule_remove(ofproto, rule);
-                } else {
-                    /* It is part of the OpenFlow flow table, so we have to
-                     * keep the rule but we can at least uninstall it from the
-                     * datapath. */
-                    rule_uninstall(ofproto, rule);
-                }
-            } else {
-                /* Send NetFlow active timeout if appropriate. */
-                rule_active_timeout(cbdata->ofproto, rule);
-            }
-        }
+    if (rule->hard_timeout
+        && now > rule->created + rule->hard_timeout * 1000) {
+        reason = OFPRR_HARD_TIMEOUT;
+    } else if (rule->idle_timeout && list_is_empty(&rule->facets)
+               && now >rule->used + rule->idle_timeout * 1000) {
+        reason = OFPRR_IDLE_TIMEOUT;
     } else {
-        /* 'rule' has expired according to OpenFlow rules. */
-        COVERAGE_INC(ofproto_expired);
-
-        /* Update stats.  (This is a no-op if the rule expired due to an idle
-         * timeout, because that only happens when the rule has no subrules
-         * left.) */
-        if (rule->cr.wc.wildcards) {
-            struct rule *subrule, *next;
-            LIST_FOR_EACH_SAFE (subrule, next, list, &rule->list) {
-                rule_remove(cbdata->ofproto, subrule);
-            }
-        } else {
-            rule_uninstall(cbdata->ofproto, rule);
-        }
-
-        /* Get rid of the rule. */
-        if (!rule_is_hidden(rule)) {
-            send_flow_removed(cbdata->ofproto, rule,
-                              (now >= hard_expire
-                               ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
-        }
-        rule_remove(cbdata->ofproto, rule);
+        return;
     }
+
+    COVERAGE_INC(ofproto_expired);
+
+    /* Update stats.  (This is a no-op if the rule expired due to an idle
+     * timeout, because that only happens when the rule has no facets left.) */
+    LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
+        facet_remove(cbdata->ofproto, facet);
+    }
+
+    /* Get rid of the rule. */
+    if (!rule_is_hidden(rule)) {
+        rule_send_removed(cbdata->ofproto, rule, reason);
+    }
+    rule_remove(cbdata->ofproto, rule);
 }
 
-static void
-revalidate_cb(struct cls_rule *sub_, void *cbdata_)
-{
-    struct rule *sub = rule_from_cls_rule(sub_);
-    struct revalidate_cbdata *cbdata = cbdata_;
-
-    if (cbdata->revalidate_all
-        || (cbdata->revalidate_subrules && sub->super)
-        || (tag_set_intersects(&cbdata->revalidate_set, sub->tags))) {
-        revalidate_rule(cbdata->ofproto, sub);
-    }
-}
-
-static bool
-revalidate_rule(struct ofproto *p, struct rule *rule)
-{
-    const struct flow *flow = &rule->cr.flow;
-
-    COVERAGE_INC(ofproto_revalidate_rule);
-    if (rule->super) {
-        struct rule *super;
-        super = rule_from_cls_rule(classifier_lookup(&p->cls, flow,
-                                                     CLS_INC_WILD));
-        if (!super) {
-            rule_remove(p, rule);
-            return false;
-        } else if (super != rule->super) {
-            COVERAGE_INC(ofproto_revalidate_moved);
-            list_remove(&rule->list);
-            list_push_back(&super->list, &rule->list);
-            rule->super = super;
-            rule->hard_timeout = super->hard_timeout;
-            rule->idle_timeout = super->idle_timeout;
-            rule->created = rule->used = super->created;
-        }
-    }
-
-    rule_update_actions(p, rule);
-    return true;
-}
-
 static struct ofpbuf *
 compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
                          uint8_t reason)
@@ -4884,7 +4892,7 @@ compose_nx_flow_removed(const struct rule *rule, uint8_t reason)
 }
 
 static void
-send_flow_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
+rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
 {
     struct ofconn *ofconn;
 
