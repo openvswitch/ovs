@@ -50,6 +50,8 @@ VLOG_DEFINE_THIS_MODULE(openflowd);
 
 /* Settings that may be configured by the user. */
 struct ofsettings {
+    const char *unixctl_path;   /* File name for unixctl socket. */
+
     /* Controller configuration. */
     struct ofproto_controller *controllers;
     size_t n_controllers;
@@ -100,7 +102,7 @@ main(int argc, char *argv[])
     daemonize_start();
 
     /* Start listening for ovs-appctl requests. */
-    error = unixctl_server_create(NULL, &unixctl);
+    error = unixctl_server_create(s.unixctl_path, &unixctl);
     if (error) {
         exit(EXIT_FAILURE);
     }
@@ -200,6 +202,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_IN_BAND,
         OPT_NETFLOW,
         OPT_PORTS,
+        OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
@@ -226,6 +229,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"in-band",     no_argument, 0, OPT_IN_BAND},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
         {"ports",       required_argument, 0, OPT_PORTS},
+        {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -252,6 +256,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     controller_opts.update_resolv_conf = true;
     controller_opts.rate_limit = 0;
     controller_opts.burst_limit = 0;
+    s->unixctl_path = NULL;
     s->fail_mode = OFPROTO_FAIL_STANDALONE;
     s->datapath_id = 0;
     s->mfr_desc = NULL;
@@ -390,6 +395,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             svec_split(&s->ports, optarg, ",");
             break;
 
+        case OPT_UNIXCTL:
+            s->unixctl_path = optarg;
+            break;
+
         case 'h':
             usage();
 
@@ -514,6 +523,7 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
+           "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     leak_checker_usage();
