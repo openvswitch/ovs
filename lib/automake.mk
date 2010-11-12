@@ -203,8 +203,7 @@ endif
 EXTRA_DIST += \
 	lib/dh1024.pem \
 	lib/dh2048.pem \
-	lib/dh4096.pem \
-	lib/dhparams.h
+	lib/dh4096.pem
 
 EXTRA_DIST += \
 	lib/common.man \
@@ -225,7 +224,6 @@ EXTRA_DIST += \
 	lib/vlog-unixctl.man \
 	lib/vlog-syn.man \
 	lib/vlog.man
-
 
 lib/dirs.c: Makefile
 	($(ro_c) && \
