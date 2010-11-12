@@ -124,8 +124,7 @@ static void rule_destroy(struct ofproto *, struct rule *);
 static void rule_free(struct rule *);
 
 static struct rule *rule_lookup(struct ofproto *, const struct flow *);
-static void rule_insert(struct ofproto *, struct rule *,
-                        struct ofpbuf *packet, uint16_t in_port);
+static void rule_insert(struct ofproto *, struct rule *);
 static void rule_remove(struct ofproto *, struct rule *);
 
 static void rule_send_removed(struct ofproto *, struct rule *, uint8_t reason);
@@ -1338,7 +1337,7 @@ ofproto_add_flow(struct ofproto *p, const struct cls_rule *cls_rule,
 {
     struct rule *rule;
     rule = rule_create(cls_rule, actions, n_actions, 0, 0, 0, false);
-    rule_insert(p, rule, NULL, 0);
+    rule_insert(p, rule);
 }
 
 void
@@ -2067,15 +2066,9 @@ rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
     }
 }
 
-/* Inserts 'rule' into 'p''s flow table.
- *
- * If 'packet' is nonnull, takes ownership of 'packet', executes 'rule''s
- * actions on it and credits the statistics for sending the packet to 'rule'.
- * 'packet' must have at least sizeof(struct ofp_packet_in) bytes of
- * headroom. */
+/* Inserts 'rule' into 'p''s flow table. */
 static void
-rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
-            uint16_t in_port)
+rule_insert(struct ofproto *p, struct rule *rule)
 {
     struct rule *displaced_rule;
 
@@ -2084,10 +2077,6 @@ rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
         rule_destroy(p, displaced_rule);
     }
     p->need_revalidate = true;
-
-    if (packet) {
-        rule_execute(p, rule, in_port, packet);
-    }
 }
 
 /* Creates and returns a new facet within 'ofproto' owned by 'rule', given a
@@ -3939,7 +3928,10 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
     rule = rule_create(&fm->cr, fm->actions, fm->n_actions,
                        fm->idle_timeout, fm->hard_timeout, fm->cookie,
                        fm->flags & OFPFF_SEND_FLOW_REM);
-    rule_insert(p, rule, packet, in_port);
+    rule_insert(p, rule);
+    if (packet) {
+        rule_execute(p, rule, in_port, packet);
+    }
     return error;
 }
 
