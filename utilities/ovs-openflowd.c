@@ -29,6 +29,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
+#include "dummy.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
@@ -203,6 +204,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_NETFLOW,
         OPT_PORTS,
         OPT_UNIXCTL,
+        OPT_ENABLE_DUMMY,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
@@ -230,6 +232,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"netflow",     required_argument, 0, OPT_NETFLOW},
         {"ports",       required_argument, 0, OPT_PORTS},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
+        {"enable-dummy", no_argument, 0, OPT_ENABLE_DUMMY},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -397,6 +400,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_UNIXCTL:
             s->unixctl_path = optarg;
+            break;
+
+        case OPT_ENABLE_DUMMY:
+            dummy_enable();
             break;
 
         case 'h':
