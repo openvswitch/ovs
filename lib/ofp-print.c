@@ -185,6 +185,22 @@ static void ofp_print_port_name(struct ds *string, uint16_t port)
 }
 
 static void
+print_note(struct ds *string, const struct nx_action_note *nan)
+{
+    size_t len;
+    size_t i;
+
+    ds_put_cstr(string, "note:");
+    len = ntohs(nan->len) - offsetof(struct nx_action_note, note);
+    for (i = 0; i < len; i++) {
+        if (i) {
+            ds_put_char(string, '.');
+        }
+        ds_put_format(string, "%02"PRIx8, nan->note[i]);
+    }
+}
+
+static void
 ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
 {
     switch (ntohs(nah->subtype)) {
@@ -215,6 +231,10 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
 
     case NXAST_POP_QUEUE:
         ds_put_cstr(string, "pop_queue");
+        break;
+
+    case NXAST_NOTE:
+        print_note(string, (const struct nx_action_note *) nah);
         break;
 
     default:

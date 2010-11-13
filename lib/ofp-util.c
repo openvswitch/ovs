@@ -545,6 +545,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     case NXAST_SET_QUEUE:
     case NXAST_POP_QUEUE:
         return check_action_exact_len(a, len, 16);
+
     case NXAST_REG_MOVE:
         error = check_action_exact_len(a, len,
                                        sizeof(struct nx_action_reg_move));
@@ -552,6 +553,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
             return error;
         }
         return nxm_check_reg_move((const struct nx_action_reg_move *) a, flow);
+
     case NXAST_REG_LOAD:
         error = check_action_exact_len(a, len,
                                        sizeof(struct nx_action_reg_load));
@@ -559,6 +561,10 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
             return error;
         }
         return nxm_check_reg_load((const struct nx_action_reg_load *) a, flow);
+
+    case NXAST_NOTE:
+        return 0;
+
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }

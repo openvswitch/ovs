@@ -2859,6 +2859,9 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     case NXAST_REG_LOAD:
         nxm_execute_reg_load((const struct nx_action_reg_load *) nah,
                              &ctx->flow);
+
+    case NXAST_NOTE:
+        /* Nothing to do. */
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to

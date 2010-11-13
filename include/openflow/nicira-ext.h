@@ -230,6 +230,7 @@ enum nx_action_subtype {
     NXAST_POP_QUEUE,            /* struct nx_action_pop_queue */
     NXAST_REG_MOVE,             /* struct nx_action_reg_move */
     NXAST_REG_LOAD,             /* struct nx_action_reg_load */
+    NXAST_NOTE                  /* struct nx_action_note */
 };
 
 /* Header for Nicira-defined actions. */
@@ -441,6 +442,24 @@ struct nx_action_reg_load {
     ovs_be64 value;                 /* Immediate value. */
 };
 OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
+
+/* Action structure for NXAST_NOTE.
+ *
+ * This action has no effect.  It is variable length.  The switch does not
+ * attempt to interpret the user-defined 'note' data in any way.  A controller
+ * can use this action to attach arbitrary metadata to a flow.
+ *
+ * This action might go away in the future.
+ */
+struct nx_action_note {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* A multiple of 8, but at least 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_NOTE. */
+    uint8_t note[6];                /* Start of user-defined data. */
+    /* Possibly followed by additional user-defined data. */
+};
+OFP_ASSERT(sizeof(struct nx_action_note) == 16);
 
 /* Wildcard for tunnel ID. */
 #define NXFW_TUN_ID  (1 << 25)

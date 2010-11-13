@@ -277,6 +277,46 @@ str_to_action(char *str, struct ofpbuf *b)
             nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
             nah->vendor = htonl(NX_VENDOR_ID);
             nah->subtype = htons(NXAST_POP_QUEUE);
+        } else if (!strcasecmp(act, "note")) {
+            size_t start_ofs = b->size;
+            struct nx_action_note *nan;
+            int remainder;
+            size_t len;
+
+            nan = put_action(b, sizeof *nan, OFPAT_VENDOR);
+            nan->vendor = htonl(NX_VENDOR_ID);
+            nan->subtype = htons(NXAST_NOTE);
+
+            b->size -= sizeof nan->note;
+            while (arg && *arg != '\0') {
+                int high, low;
+                uint8_t byte;
+
+                if (*arg == '.') {
+                    arg++;
+                }
+                if (*arg == '\0') {
+                    break;
+                }
+
+                high = hexit_value(*arg++);
+                if (high >= 0) {
+                    low = hexit_value(*arg++);
+                }
+                if (high < 0 || low < 0) {
+                    ovs_fatal(0, "bad hex digit in `note' argument");
+                }
+
+                byte = high * 16 + low;
+                ofpbuf_put(b, &byte, 1);
+            }
+
+            len = b->size - start_ofs;
+            remainder = len % OFP_ACTION_ALIGN;
+            if (remainder) {
+                ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
+            }
+            nan->len = htons(b->size - start_ofs);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

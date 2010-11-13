@@ -479,6 +479,10 @@ OpenFlow implementations do not support queuing at all.
 Restores the queue to the value it was before any \fBset_queue\fR
 actions were applied.
 .
+.IP \fBnote:\fR[\fIhh\fR]...
+Does nothing at all.  Any number of bytes represented as hex digits
+\fIhh\fR may be included.  Pairs of hex digits may be separated by
+periods for readability.
 .RE
 .
 .IP
