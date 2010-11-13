@@ -103,7 +103,7 @@ static uint32_t
 random_next(void)
 {
     seed ^= seed << 13;
-    seed >>= 17;
+    seed ^= seed >> 17;
     seed ^= seed << 5;
 
     return seed;
