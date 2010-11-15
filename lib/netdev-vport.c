@@ -386,8 +386,7 @@ netdev_vport_poll_add(struct netdev *netdev,
     if (!shash_node) {
         list = xmalloc(sizeof *list);
         list_init(list);
-        shash_node = shash_add(&netdev_vport_notifiers,
-			       netdev_get_name(netdev), list);
+        shash_node = shash_add(&netdev_vport_notifiers, poll_name, list);
     } else {
         list = shash_node->data;
     }
