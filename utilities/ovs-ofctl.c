@@ -684,8 +684,6 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
     opm->mask = htonl(0);
     opm->advertise = htonl(0);
 
-    printf("modifying port: %s\n", osf->ports[port_idx].name);
-
     if (!strcasecmp(argv[3], "up")) {
         opm->mask |= htonl(OFPPC_PORT_DOWN);
     } else if (!strcasecmp(argv[3], "down")) {
