@@ -3989,9 +3989,9 @@ modify_flows_loose(struct ofconn *ofconn, struct flow_mod *fm)
     }
 
     if (match) {
-        /* This credits the packet to whichever flow happened to happened to
-         * match last.  That's weird.  Maybe we should do a lookup for the
-         * flow that actually matches the packet?  Who knows. */
+        /* This credits the packet to whichever flow happened to match last.
+         * That's weird.  Maybe we should do a lookup for the flow that
+         * actually matches the packet?  Who knows. */
         send_buffered_packet(ofconn, match, fm->buffer_id);
         return 0;
     } else {
