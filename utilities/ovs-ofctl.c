@@ -51,12 +51,6 @@
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
-
-#define MOD_PORT_CMD_UP      "up"
-#define MOD_PORT_CMD_DOWN    "down"
-#define MOD_PORT_CMD_FLOOD   "flood"
-#define MOD_PORT_CMD_NOFLOOD "noflood"
-
 /* Use strict matching for flow mod commands? */
 static bool strict;
 
@@ -692,17 +686,14 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
 
     printf("modifying port: %s\n", osf->ports[port_idx].name);
 
-    if (!strncasecmp(argv[3], MOD_PORT_CMD_UP, sizeof MOD_PORT_CMD_UP)) {
+    if (!strcasecmp(argv[3], "up")) {
         opm->mask |= htonl(OFPPC_PORT_DOWN);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_DOWN,
-                sizeof MOD_PORT_CMD_DOWN)) {
+    } else if (!strcasecmp(argv[3], "down")) {
         opm->mask |= htonl(OFPPC_PORT_DOWN);
         opm->config |= htonl(OFPPC_PORT_DOWN);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_FLOOD,
-                sizeof MOD_PORT_CMD_FLOOD)) {
+    } else if (!strcasecmp(argv[3], "flood")) {
         opm->mask |= htonl(OFPPC_NO_FLOOD);
-    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_NOFLOOD,
-                sizeof MOD_PORT_CMD_NOFLOOD)) {
+    } else if (!strcasecmp(argv[3], "noflood")) {
         opm->mask |= htonl(OFPPC_NO_FLOOD);
         opm->config |= htonl(OFPPC_NO_FLOOD);
     } else {
