@@ -1621,9 +1621,9 @@ update_port(struct ofproto *p, const char *devname)
         return;
     } else if (old_ofport && new_ofport) {
         /* Most of the 'config' bits are OpenFlow soft state, but
-         * OFPPC_PORT_DOWN is maintained the kernel.  So transfer the OpenFlow
-         * bits from old_ofport.  (make_ofport() only sets OFPPC_PORT_DOWN and
-         * leaves the other bits 0.)  */
+         * OFPPC_PORT_DOWN is maintained by the kernel.  So transfer the
+         * OpenFlow bits from old_ofport.  (make_ofport() only sets
+         * OFPPC_PORT_DOWN and leaves the other bits 0.)  */
         new_ofport->opp.config |= old_ofport->opp.config & ~OFPPC_PORT_DOWN;
 
         if (ofport_equal(old_ofport, new_ofport)) {
