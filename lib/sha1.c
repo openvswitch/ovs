@@ -1,7 +1,7 @@
 /*
  * This file is from the Apache Portable Runtime Library.
  * The full upstream copyright and license statement is included below.
- * Modifications copyright (c) 2009 Nicira Networks.
+ * Modifications copyright (c) 2009, 2010 Nicira Networks.
  */
 
 /* Licensed to the Apache Software Foundation (ASF) under one or more
@@ -301,10 +301,12 @@ sha1_from_hex(uint8_t digest[SHA1_DIGEST_SIZE], const char *hex)
     int i;
 
     for (i = 0; i < SHA1_DIGEST_SIZE; i++) {
-        if (!isxdigit(hex[0]) || !isxdigit(hex[1])) {
+        bool ok;
+
+        digest[i] = hexits_value(hex, 2, &ok);
+        if (!ok) {
             return false;
         }
-        digest[i] = (hexit_value(hex[0]) << 4) | hexit_value(hex[1]);
         hex += 2;
     }
     return true;

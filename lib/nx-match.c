@@ -747,17 +747,15 @@ static const char *
 parse_hex_bytes(struct ofpbuf *b, const char *s, unsigned int n)
 {
     while (n--) {
-        int low, high;
         uint8_t byte;
+        bool ok;
 
         s += strspn(s, " ");
-        low = hexit_value(*s);
-        high = low < 0 ? low : hexit_value(s[1]);
-        if (low < 0 || high < 0) {
+        byte = hexits_value(s, 2, &ok);
+        if (!ok) {
             ovs_fatal(0, "%.2s: hex digits expected", s);
         }
 
-        byte = 16 * low + high;
         ofpbuf_put(b, &byte, 1);
         s += 2;
     }

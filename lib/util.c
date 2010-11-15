@@ -364,6 +364,33 @@ hexit_value(int c)
     }
 }
 
+/* Returns the integer value of the 'n' hexadecimal digits starting at 's', or
+ * UINT_MAX if one of those "digits" is not really a hex digit.  If 'ok' is
+ * nonnull, '*ok' is set to true if the conversion succeeds or to false if a
+ * non-hex digit is detected. */
+unsigned int
+hexits_value(const char *s, size_t n, bool *ok)
+{
+    unsigned int value;
+    size_t i;
+
+    value = 0;
+    for (i = 0; i < n; i++) {
+        int hexit = hexit_value(s[i]);
+        if (hexit < 0) {
+            if (ok) {
+                *ok = false;
+            }
+            return UINT_MAX;
+        }
+        value = (value << 4) + hexit;
+    }
+    if (ok) {
+        *ok = true;
+    }
+    return value;
+}
+
 /* Returns the current working directory as a malloc()'d string, or a null
  * pointer if the current working directory cannot be determined. */
 char *

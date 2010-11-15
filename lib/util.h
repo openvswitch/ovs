@@ -132,6 +132,7 @@ bool str_to_ullong(const char *, int base, unsigned long long *);
 bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
+unsigned int hexits_value(const char *s, size_t n, bool *ok);
 
 char *get_cwd(void);
 char *dir_name(const char *file_name);

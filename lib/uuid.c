@@ -156,23 +156,43 @@ uuid_from_string(struct uuid *uuid, const char *s)
 bool
 uuid_from_string_prefix(struct uuid *uuid, const char *s)
 {
-    static const char template[] = "00000000-1111-1111-2222-222233333333";
-    const char *t;
+    /* 0         1         2         3      */
+    /* 012345678901234567890123456789012345 */
+    /* ------------------------------------ */
+    /* 00000000-1111-1111-2222-222233333333 */
 
-    uuid_zero(uuid);
-    for (t = template; ; t++, s++) {
-        if (*t >= '0' && *t <= '3') {
-            uint32_t *part = &uuid->parts[*t - '0'];
-            if (!isxdigit(*s)) {
-                goto error;
-            }
-            *part = (*part << 4) + hexit_value(*s);
-        } else if (*t == 0) {
-            return true;
-        } else if (*t != *s) {
-            goto error;
-        }
+    bool ok;
+
+    uuid->parts[0] = hexits_value(s, 8, &ok);
+    if (!ok || s[8] != '-') {
+        goto error;
     }
+
+    uuid->parts[1] = hexits_value(s + 9, 4, &ok) << 16;
+    if (!ok || s[13] != '-') {
+        goto error;
+    }
+
+    uuid->parts[1] += hexits_value(s + 14, 4, &ok);
+    if (!ok || s[18] != '-') {
+        goto error;
+    }
+
+    uuid->parts[2] = hexits_value(s + 19, 4, &ok) << 16;
+    if (!ok || s[23] != '-') {
+        goto error;
+    }
+
+    uuid->parts[2] += hexits_value(s + 24, 4, &ok);
+    if (!ok) {
+        goto error;
+    }
+
+    uuid->parts[3] = hexits_value(s + 28, 8, &ok);
+    if (!ok) {
+        goto error;
+    }
+    return true;
 
 error:
     uuid_zero(uuid);

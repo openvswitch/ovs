@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,13 +28,12 @@ hex_to_uint8(const char *input, uint8_t *output, size_t n)
         goto error;
     }
     for (i = 0; i < n; i++) {
-        unsigned char hi = input[i * 2];
-        unsigned char lo = input[i * 2 + 1];
+        bool ok;
 
-        if (!isxdigit(hi) || !isxdigit(lo)) {
+        output[i] = hexits_value(&input[i * 2], 2, &ok);
+        if (!ok) {
             goto error;
         }
-        output[i] = (hexit_value(hi) << 4) + hexit_value(lo);
     }
     return;
 

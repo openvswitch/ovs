@@ -289,8 +289,8 @@ str_to_action(char *str, struct ofpbuf *b)
 
             b->size -= sizeof nan->note;
             while (arg && *arg != '\0') {
-                int high, low;
                 uint8_t byte;
+                bool ok;
 
                 if (*arg == '.') {
                     arg++;
@@ -299,16 +299,13 @@ str_to_action(char *str, struct ofpbuf *b)
                     break;
                 }
 
-                high = hexit_value(*arg++);
-                if (high >= 0) {
-                    low = hexit_value(*arg++);
-                }
-                if (high < 0 || low < 0) {
+                byte = hexits_value(arg, 2, &ok);
+                if (!ok) {
                     ovs_fatal(0, "bad hex digit in `note' argument");
                 }
-
-                byte = high * 16 + low;
                 ofpbuf_put(b, &byte, 1);
+
+                arg += 2;
             }
 
             len = b->size - start_ofs;
