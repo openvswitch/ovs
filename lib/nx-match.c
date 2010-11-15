@@ -151,9 +151,9 @@ parse_nx_reg(const struct nxm_field *f,
     } else {
         flow_wildcards_set_reg_mask(wc, idx,
                                     (NXM_HASMASK(f->header)
-                                     ? ntohl(get_unaligned_u32(maskp))
+                                     ? ntohl(get_unaligned_be32(maskp))
                                      : UINT32_MAX));
-        flow->regs[idx] = ntohl(get_unaligned_u32(value));
+        flow->regs[idx] = ntohl(get_unaligned_be32(value));
         flow->regs[idx] &= wc->reg_masks[idx];
         return 0;
     }
@@ -169,7 +169,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
     switch (f->index) {
         /* Metadata. */
     case NFI_NXM_OF_IN_PORT:
-        flow->in_port = ntohs(get_unaligned_u16(value));
+        flow->in_port = ntohs(get_unaligned_be16(value));
         if (flow->in_port == OFPP_LOCAL) {
             flow->in_port = ODPP_LOCAL;
         }
@@ -209,7 +209,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         memcpy(flow->dl_src, value, ETH_ADDR_LEN);
         return 0;
     case NFI_NXM_OF_ETH_TYPE:
-        flow->dl_type = get_unaligned_u16(value);
+        flow->dl_type = get_unaligned_be16(value);
         return 0;
 
         /* 802.1Q header. */
@@ -217,15 +217,15 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if (wc->vlan_tci_mask) {
             return NXM_DUP_TYPE;
         } else {
-            cls_rule_set_dl_tci(rule, get_unaligned_u16(value));
+            cls_rule_set_dl_tci(rule, get_unaligned_be16(value));
             return 0;
         }
     case NFI_NXM_OF_VLAN_TCI_W:
         if (wc->vlan_tci_mask) {
             return NXM_DUP_TYPE;
         } else {
-            cls_rule_set_dl_tci_masked(rule, get_unaligned_u16(value),
-                                       get_unaligned_u16(mask));
+            cls_rule_set_dl_tci_masked(rule, get_unaligned_be16(value),
+                                       get_unaligned_be16(mask));
             return 0;
         }
 
@@ -247,7 +247,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if (wc->nw_src_mask) {
             return NXM_DUP_TYPE;
         } else {
-            cls_rule_set_nw_src(rule, get_unaligned_u32(value));
+            cls_rule_set_nw_src(rule, get_unaligned_be32(value));
             return 0;
         }
     case NFI_NXM_OF_IP_SRC_W:
@@ -255,8 +255,8 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if (wc->nw_src_mask) {
             return NXM_DUP_TYPE;
         } else {
-            ovs_be32 ip = get_unaligned_u32(value);
-            ovs_be32 netmask = get_unaligned_u32(mask);
+            ovs_be32 ip = get_unaligned_be32(value);
+            ovs_be32 netmask = get_unaligned_be32(mask);
             if (!cls_rule_set_nw_src_masked(rule, ip, netmask)) {
                 return NXM_BAD_MASK;
             }
@@ -267,7 +267,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if (wc->nw_dst_mask) {
             return NXM_DUP_TYPE;
         } else {
-            cls_rule_set_nw_dst(rule, get_unaligned_u32(value));
+            cls_rule_set_nw_dst(rule, get_unaligned_be32(value));
             return 0;
         }
     case NFI_NXM_OF_IP_DST_W:
@@ -275,8 +275,8 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if (wc->nw_dst_mask) {
             return NXM_DUP_TYPE;
         } else {
-            ovs_be32 ip = get_unaligned_u32(value);
-            ovs_be32 netmask = get_unaligned_u32(mask);
+            ovs_be32 ip = get_unaligned_be32(value);
+            ovs_be32 netmask = get_unaligned_be32(mask);
             if (!cls_rule_set_nw_dst_masked(rule, ip, netmask)) {
                 return NXM_BAD_MASK;
             }
@@ -285,18 +285,18 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* TCP header. */
     case NFI_NXM_OF_TCP_SRC:
-        flow->tp_src = get_unaligned_u16(value);
+        flow->tp_src = get_unaligned_be16(value);
         return 0;
     case NFI_NXM_OF_TCP_DST:
-        flow->tp_dst = get_unaligned_u16(value);
+        flow->tp_dst = get_unaligned_be16(value);
         return 0;
 
         /* UDP header. */
     case NFI_NXM_OF_UDP_SRC:
-        flow->tp_src = get_unaligned_u16(value);
+        flow->tp_src = get_unaligned_be16(value);
         return 0;
     case NFI_NXM_OF_UDP_DST:
-        flow->tp_dst = get_unaligned_u16(value);
+        flow->tp_dst = get_unaligned_be16(value);
         return 0;
 
         /* ICMP header. */
@@ -309,16 +309,16 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* ARP header. */
     case NFI_NXM_OF_ARP_OP:
-        if (ntohs(get_unaligned_u16(value)) > 255) {
+        if (ntohs(get_unaligned_be16(value)) > 255) {
             return NXM_BAD_VALUE;
         } else {
-            flow->nw_proto = ntohs(get_unaligned_u16(value));
+            flow->nw_proto = ntohs(get_unaligned_be16(value));
             return 0;
         }
 
         /* Tunnel ID. */
     case NFI_NXM_NX_TUN_ID:
-        flow->tun_id = htonl(ntohll(get_unaligned_u64(value)));
+        flow->tun_id = htonl(ntohll(get_unaligned_be64(value)));
         return 0;
 
         /* Registers. */

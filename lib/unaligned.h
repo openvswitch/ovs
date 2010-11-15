@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include "byte-order.h"
+#include "openvswitch/types.h"
 
 /* Public API. */
 static inline uint16_t get_unaligned_u16(const uint16_t *);
@@ -28,33 +29,44 @@ static inline void put_unaligned_u16(uint16_t *, uint16_t);
 static inline void put_unaligned_u32(uint32_t *, uint32_t);
 static inline void put_unaligned_u64(uint64_t *, uint64_t);
 
+static inline ovs_be16 get_unaligned_be16(const ovs_be16 *);
+static inline ovs_be32 get_unaligned_be32(const ovs_be32 *);
+static inline ovs_be64 get_unaligned_be64(const ovs_be64 *);
+static inline void put_unaligned_be16(ovs_be16 *, ovs_be16);
+static inline void put_unaligned_be32(ovs_be32 *, ovs_be32);
+static inline void put_unaligned_be64(ovs_be64 *, ovs_be64);
+
 #ifdef __GNUC__
 /* GCC implementations. */
-#define GCC_UNALIGNED_ACCESSORS(SIZE)                       \
-struct unaligned_u##SIZE {                                  \
-    uint##SIZE##_t x __attribute__((__packed__));           \
-};                                                          \
-static inline struct unaligned_u##SIZE *                    \
-unaligned_u##SIZE(const uint##SIZE##_t *p)                  \
-{                                                           \
-    return (struct unaligned_u##SIZE *) p;                  \
-}                                                           \
-                                                            \
-static inline uint##SIZE##_t                                \
-get_unaligned_u##SIZE(const uint##SIZE##_t *p)              \
-{                                                           \
-    return unaligned_u##SIZE(p)->x;                         \
-}                                                           \
-                                                            \
-static inline void                                          \
-put_unaligned_u##SIZE(uint##SIZE##_t *p, uint##SIZE##_t x)  \
-{                                                           \
-    unaligned_u##SIZE(p)->x = x;                            \
+#define GCC_UNALIGNED_ACCESSORS(TYPE, ABBREV)   \
+struct unaligned_##ABBREV {                     \
+    TYPE x __attribute__((__packed__));         \
+};                                              \
+static inline struct unaligned_##ABBREV *       \
+unaligned_##ABBREV(const TYPE *p)               \
+{                                               \
+    return (struct unaligned_##ABBREV *) p;     \
+}                                               \
+                                                \
+static inline TYPE                              \
+get_unaligned_##ABBREV(const TYPE *p)           \
+{                                               \
+    return unaligned_##ABBREV(p)->x;            \
+}                                               \
+                                                \
+static inline void                              \
+put_unaligned_##ABBREV(TYPE *p, TYPE x)         \
+{                                               \
+    unaligned_##ABBREV(p)->x = x;               \
 }
 
-GCC_UNALIGNED_ACCESSORS(16);
-GCC_UNALIGNED_ACCESSORS(32);
-GCC_UNALIGNED_ACCESSORS(64);
+GCC_UNALIGNED_ACCESSORS(uint16_t, u16);
+GCC_UNALIGNED_ACCESSORS(uint32_t, u32);
+GCC_UNALIGNED_ACCESSORS(uint64_t, u64);
+
+GCC_UNALIGNED_ACCESSORS(ovs_be16, be16);
+GCC_UNALIGNED_ACCESSORS(ovs_be32, be32);
+GCC_UNALIGNED_ACCESSORS(ovs_be64, be64);
 #else
 /* Generic implementations. */
 
@@ -117,6 +129,16 @@ static inline void put_unaligned_u64(uint64_t *p_, uint64_t x_)
     p[6] = x >> 8;
     p[7] = x;
 }
+
+/* Only sparse cares about the difference between uint<N>_t and ovs_be<N>, and
+ * that takes the GCC branch, so there's no point in working too hard on these
+ * accessors. */
+#define get_unaligned_be16 get_unaligned_u16
+#define get_unaligned_be32 get_unaligned_u32
+#define get_unaligned_be64 get_unaligned_u64
+#define put_unaligned_be16 put_unaligned_u16
+#define put_unaligned_be32 put_unaligned_u32
+#define put_unaligned_be64 put_unaligned_u64
 #endif
 
 #endif /* unaligned.h */
