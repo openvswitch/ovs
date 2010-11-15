@@ -32,12 +32,12 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-/* XXX we should really use consecutive xids to avoid probabilistic
- * failures. */
-static inline uint32_t
+/* Returns a transaction ID to use for an outgoing OpenFlow message. */
+static uint32_t
 alloc_xid(void)
 {
-    return random_uint32();
+    static uint32_t next_xid = 1;
+    return next_xid++;
 }
 
 /* Allocates and stores in '*bufferp' a new ofpbuf with a size of
