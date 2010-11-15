@@ -74,6 +74,7 @@ lcov_wrappers = \
 	tests/lcov/test-list \
 	tests/lcov/test-lockfile \
 	tests/lcov/test-ovsdb \
+	tests/lcov/test-random \
 	tests/lcov/test-reconnect \
 	tests/lcov/test-sha1 \
 	tests/lcov/test-timeval \
@@ -124,6 +125,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-list \
 	tests/valgrind/test-lockfile \
 	tests/valgrind/test-ovsdb \
+	tests/valgrind/test-random \
 	tests/valgrind/test-reconnect \
 	tests/valgrind/test-sha1 \
 	tests/valgrind/test-timeval \
@@ -215,6 +217,10 @@ tests_test_list_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-lockfile
 tests_test_lockfile_SOURCES = tests/test-lockfile.c
 tests_test_lockfile_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-random
+tests_test_random_SOURCES = tests/test-random.c
+tests_test_random_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-unix-socket
 tests_test_unix_socket_SOURCES = tests/test-unix-socket.c
