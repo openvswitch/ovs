@@ -2795,8 +2795,7 @@ xlate_set_dl_tci(struct action_xlate_ctx *ctx)
     } else {
         union odp_action *oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
         oa->dl_tci.tci = htons(ntohs(dl_vlan & htons(VLAN_VID_MASK))
-                               | (dl_vlan_pcp << VLAN_PCP_SHIFT)
-                               | VLAN_CFI);
+                               | (dl_vlan_pcp << VLAN_PCP_SHIFT));
     }
 }
 
