@@ -19,11 +19,7 @@
 #ifndef OPENFLOW_OPENFLOW_H
 #define OPENFLOW_OPENFLOW_H 1
 
-#ifdef __KERNEL__
-#include <linux/types.h>
-#else
 #include <stdint.h>
-#endif
 
 #ifdef SWIG
 #define OFP_ASSERT(EXPR)        /* SWIG can't handle OFP_ASSERT. */
