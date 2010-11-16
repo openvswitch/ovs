@@ -667,7 +667,8 @@ vconn_recv_xid(struct vconn *vconn, uint32_t xid, struct ofpbuf **replyp)
         }
 
         VLOG_DBG_RL(&bad_ofmsg_rl, "%s: received reply with xid %08"PRIx32
-                    " != expected %08"PRIx32, vconn->name, recv_xid, xid);
+                    " != expected %08"PRIx32,
+                    vconn->name, ntohl(recv_xid), ntohl(xid));
         ofpbuf_delete(reply);
     }
 }

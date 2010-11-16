@@ -33,11 +33,11 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Returns a transaction ID to use for an outgoing OpenFlow message. */
-static uint32_t
+static ovs_be32
 alloc_xid(void)
 {
     static uint32_t next_xid = 1;
-    return next_xid++;
+    return htonl(next_xid++);
 }
 
 /* Allocates and stores in '*bufferp' a new ofpbuf with a size of
@@ -82,7 +82,7 @@ make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **bufferp)
  *
  * Returns the header. */
 void *
-make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
+make_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                   struct ofpbuf **bufferp)
 {
     *bufferp = ofpbuf_new(openflow_len);
@@ -92,7 +92,7 @@ make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
 /* Similar to make_openflow_xid() but creates a Nicira vendor extension message
  * with the specific 'subtype'.  'subtype' should be in host byte order. */
 void *
-make_nxmsg_xid(size_t openflow_len, uint32_t subtype, uint32_t xid,
+make_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
                struct ofpbuf **bufferp)
 {
     struct nicira_header *nxh = make_openflow_xid(openflow_len, OFPT_VENDOR,
@@ -127,7 +127,7 @@ put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *buffer)
  *
  * Returns the header. */
 void *
-put_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
+put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                  struct ofpbuf *buffer)
 {
     struct ofp_header *oh;
@@ -308,7 +308,7 @@ make_echo_request(void)
     rq->version = OFP_VERSION;
     rq->type = OFPT_ECHO_REQUEST;
     rq->length = htons(sizeof *rq);
-    rq->xid = 0;
+    rq->xid = htonl(0);
     return out;
 }
 
@@ -852,7 +852,7 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
     uint8_t vendor;
     uint16_t type;
     uint16_t code;
-    uint32_t xid;
+    ovs_be32 xid;
 
     if (!is_ofp_error(error)) {
         /* We format 'error' with strerror() here since it seems likely to be

@@ -1596,7 +1596,7 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         }
     }
 
-    ds_put_format(&string, "%s (xid=0x%"PRIx32"):", pkt->name, oh->xid);
+    ds_put_format(&string, "%s (xid=0x%"PRIx32"):", pkt->name, ntohl(oh->xid));
 
     if (ntohs(oh->length) > len)
         ds_put_format(&string, " (***truncated to %zu bytes from %"PRIu16"***)",

@@ -307,7 +307,7 @@ dump_trivial_transaction(const char *vconn_name, uint8_t request_type)
 static void
 dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
 {
-    uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
+    ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
     struct vconn *vconn;
     bool done = false;
 
@@ -755,7 +755,7 @@ do_ping(int argc, char *argv[])
             ofp_print(stdout, reply, reply->size, 2);
         }
         printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
-               reply->size - sizeof *rpy_hdr, argv[1], rpy_hdr->xid,
+               reply->size - sizeof *rpy_hdr, argv[1], ntohl(rpy_hdr->xid),
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));
         ofpbuf_delete(request);

@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "flow.h"
+#include "openvswitch/types.h"
 
 struct ofpbuf;
 struct ofp_action_header;
@@ -33,11 +34,11 @@ struct ofp_action_header;
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);
 void *make_openflow_xid(size_t openflow_len, uint8_t type,
-                        uint32_t xid, struct ofpbuf **);
-void *make_nxmsg_xid(size_t openflow_len, uint32_t subtype, uint32_t xid,
+                        ovs_be32 xid, struct ofpbuf **);
+void *make_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
                      struct ofpbuf **);
 void *put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *);
-void *put_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
+void *put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                        struct ofpbuf *);
 void update_openflow_length(struct ofpbuf *);
 struct ofpbuf *make_flow_mod(uint16_t command, const struct flow *,
