@@ -1842,7 +1842,7 @@ do_idl(int argc, char *argv[])
 
     idltest_init();
 
-    idl = ovsdb_idl_create(argv[1], &idltest_idl_class);
+    idl = ovsdb_idl_create(argv[1], &idltest_idl_class, true);
     if (argc > 2) {
         struct stream *stream;
 

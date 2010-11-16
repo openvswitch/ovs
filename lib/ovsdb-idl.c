@@ -66,7 +66,7 @@ struct ovsdb_idl {
     const struct ovsdb_idl_class *class;
     struct jsonrpc_session *session;
     struct shash table_by_name;
-    struct ovsdb_idl_table *tables;
+    struct ovsdb_idl_table *tables; /* Contains "struct ovsdb_idl_table *"s.*/
     struct json *monitor_request_id;
     unsigned int last_monitor_request_seqno;
     unsigned int change_seqno;
@@ -140,12 +140,28 @@ static bool ovsdb_idl_txn_process_reply(struct ovsdb_idl *,
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
  * in-memory replica of the remote database whose schema is described by
  * 'class'.  (Ordinarily 'class' is compiled from an OVSDB schema automatically
- * by ovsdb-idlc.) */
+ * by ovsdb-idlc.)
+ *
+ * If 'monitor_everything_by_default' is true, then everything in the remote
+ * database will be replicated by default.  ovsdb_idl_omit() and
+ * ovsdb_idl_omit_alert() may be used to selectively drop some columns from
+ * monitoring.
+ *
+ * If 'monitor_everything_by_default' is false, then no columns or tables will
+ * be replicated by default.  ovsdb_idl_add_column() and ovsdb_idl_add_table()
+ * must be used to choose some columns or tables to replicate.
+ */
 struct ovsdb_idl *
-ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
+ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
+                 bool monitor_everything_by_default)
 {
     struct ovsdb_idl *idl;
+    uint8_t default_mode;
     size_t i;
+
+    default_mode = (monitor_everything_by_default
+                    ? OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT
+                    : 0);
 
     idl = xzalloc(sizeof *idl);
     idl->class = class;
@@ -160,7 +176,8 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
         shash_add_assert(&idl->table_by_name, tc->name, table);
         table->class = tc;
         table->modes = xmalloc(tc->n_columns);
-        memset(table->modes, OVSDB_IDL_MODE_RW, tc->n_columns);
+        memset(table->modes, default_mode, tc->n_columns);
+        table->need_table = false;
         shash_init(&table->columns);
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
@@ -359,22 +376,84 @@ ovsdb_idl_force_reconnect(struct ovsdb_idl *idl)
 {
     jsonrpc_session_force_reconnect(idl->session);
 }
-
-static void
-ovsdb_idl_set_mode(struct ovsdb_idl *idl,
-                   const struct ovsdb_idl_column *column,
-                   enum ovsdb_idl_mode mode)
+
+static unsigned char *
+ovsdb_idl_get_mode(struct ovsdb_idl *idl,
+                   const struct ovsdb_idl_column *column)
 {
     size_t i;
+
+    assert(!idl->change_seqno);
 
     for (i = 0; i < idl->class->n_tables; i++) {
         const struct ovsdb_idl_table *table = &idl->tables[i];
         const struct ovsdb_idl_table_class *tc = table->class;
 
         if (column >= tc->columns && column < &tc->columns[tc->n_columns]) {
-            unsigned char *modep = &table->modes[column - tc->columns];
-            assert(*modep == OVSDB_IDL_MODE_RW || *modep == mode);
-            *modep = mode;
+            return &table->modes[column - tc->columns];
+        }
+    }
+
+    NOT_REACHED();
+}
+
+static void
+add_ref_table(struct ovsdb_idl *idl, const struct ovsdb_base_type *base)
+{
+    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName) {
+        struct ovsdb_idl_table *table;
+
+        table = shash_find_data(&idl->table_by_name,
+                                base->u.uuid.refTableName);
+        if (table) {
+            table->need_table = true;
+        } else {
+            VLOG_WARN("%s IDL class missing referenced table %s",
+                      idl->class->database, base->u.uuid.refTableName);
+        }
+    }
+}
+
+/* Turns on OVSDB_IDL_MONITOR and OVSDB_IDL_ALERT for 'column' in 'idl'.  Also
+ * ensures that any tables referenced by 'column' will be replicated, even if
+ * no columns in that table are selected for replication (see
+ * ovsdb_idl_add_table() for more information).
+ *
+ * This function is only useful if 'monitor_everything_by_default' was false in
+ * the call to ovsdb_idl_create().  This function should be called between
+ * ovsdb_idl_create() and the first call to ovsdb_idl_run().
+ */
+void
+ovsdb_idl_add_column(struct ovsdb_idl *idl,
+                     const struct ovsdb_idl_column *column)
+{
+    *ovsdb_idl_get_mode(idl, column) = OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT;
+    add_ref_table(idl, &column->type.key);
+    add_ref_table(idl, &column->type.value);
+}
+
+/* Ensures that the table with class 'tc' will be replicated on 'idl' even if
+ * no columns are selected for replication.  This can be useful because it
+ * allows 'idl' to keep track of what rows in the table actually exist, which
+ * in turn allows columns that reference the table to have accurate contents.
+ * (The IDL presents the database with references to rows that do not exist
+ * removed.)
+ *
+ * This function is only useful if 'monitor_everything_by_default' was false in
+ * the call to ovsdb_idl_create().  This function should be called between
+ * ovsdb_idl_create() and the first call to ovsdb_idl_run().
+ */
+void
+ovsdb_idl_add_table(struct ovsdb_idl *idl,
+                    const struct ovsdb_idl_table_class *tc)
+{
+    size_t i;
+
+    for (i = 0; i < idl->class->n_tables; i++) {
+        struct ovsdb_idl_table *table = &idl->tables[i];
+
+        if (table->class == tc) {
+            table->need_table = true;
             return;
         }
     }
@@ -382,41 +461,28 @@ ovsdb_idl_set_mode(struct ovsdb_idl *idl,
     NOT_REACHED();
 }
 
-/* By default, 'idl' replicates all of the columns in the remote database, and
- * ovsdb_idl_run() returns true upon a change to any column in the database.
- * Call this function to avoid alerting ovsdb_idl_run()'s caller upon changes
- * to 'column'.
+/* Turns off OVSDB_IDL_ALERT for 'column' in 'idl'.
  *
- * This is useful for columns that a client treats as "write-only", that is, it
- * updates them but doesn't want to get alerted about its own updates.  It also
- * won't be alerted about other clients' updates, so this is suitable only for
- * use by a client that "owns" a particular column.
- *
- * The client must be careful not to retain pointers to data in 'column' across
- * calls to ovsdb_idl_run(), even when that function returns false, because
- * the client is not alerted to changes.
- *
- * This function should be called after ovsdb_idl_create(), but before the
- * first call to ovsdb_idl_run().  For any given column, this function may be
- * called or ovsdb_idl_omit() may be called, but not both. */
+ * This function should be called between ovsdb_idl_create() and the first call
+ * to ovsdb_idl_run().
+ */
 void
-ovsdb_idl_set_write_only(struct ovsdb_idl *idl,
-                         const struct ovsdb_idl_column *column)
+ovsdb_idl_omit_alert(struct ovsdb_idl *idl,
+                     const struct ovsdb_idl_column *column)
 {
-    ovsdb_idl_set_mode(idl, column, OVSDB_IDL_MODE_WO);
+    *ovsdb_idl_get_mode(idl, column) &= ~OVSDB_IDL_ALERT;
 }
 
-/* By default, 'idl' replicates all of the columns in the remote database.
- * Call this function to omit replicating 'column'.  This saves CPU time and
- * bandwidth to the database.
+/* Sets the mode for 'column' in 'idl' to 0.  See the big comment above
+ * OVSDB_IDL_MONITOR for details.
  *
- * This function should be called after ovsdb_idl_create(), but before the
- * first call to ovsdb_idl_run().  For any given column, this function may be
- * called or ovsdb_idl_set_write_only() may be called, but not both. */
+ * This function should be called between ovsdb_idl_create() and the first call
+ * to ovsdb_idl_run().
+ */
 void
 ovsdb_idl_omit(struct ovsdb_idl *idl, const struct ovsdb_idl_column *column)
 {
-    ovsdb_idl_set_mode(idl, column, OVSDB_IDL_MODE_NONE);
+    *ovsdb_idl_get_mode(idl, column) = 0;
 }
 
 static void
@@ -433,16 +499,22 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
         struct json *monitor_request, *columns;
         size_t j;
 
-        monitor_request = json_object_create();
-        columns = json_array_create_empty();
+        columns = table->need_table ? json_array_create_empty() : NULL;
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
-            if (table->modes[j] != OVSDB_IDL_MODE_NONE) {
+            if (table->modes[j] & OVSDB_IDL_MONITOR) {
+                if (!columns) {
+                    columns = json_array_create_empty();
+                }
                 json_array_add(columns, json_string_create(column->name));
             }
         }
-        json_object_put(monitor_request, "columns", columns);
-        json_object_put(monitor_requests, tc->name, monitor_request);
+
+        if (columns) {
+            monitor_request = json_object_create();
+            json_object_put(monitor_request, "columns", columns);
+            json_object_put(monitor_requests, tc->name, monitor_request);
+        }
     }
 
     json_destroy(idl->monitor_request_id);
@@ -642,7 +714,7 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
 
             if (!ovsdb_datum_equals(old, &datum, &column->type)) {
                 ovsdb_datum_swap(old, &datum);
-                if (table->modes[column_idx] == OVSDB_IDL_MODE_RW) {
+                if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
                     changed = true;
                 }
             } else {
@@ -1563,7 +1635,8 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
 
     assert(row->new != NULL);
     assert(column_idx < class->n_columns);
-    assert(row->table->modes[column_idx] != OVSDB_IDL_MODE_NONE);
+    assert(row->old == NULL ||
+           row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
 
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,

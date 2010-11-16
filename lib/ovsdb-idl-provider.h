@@ -52,31 +52,10 @@ struct ovsdb_idl_table_class {
     size_t allocation_size;
 };
 
-enum ovsdb_idl_mode {
-    /* Client reads and may write this column and wants to be alerted upon
-     * updates to it.
-     *
-     * This is the default. */
-    OVSDB_IDL_MODE_RW,
-
-    /* Client may read and write this column, but doesn't care to be alerted
-     * when it is updated.
-     *
-     * This is useful for columns that a client treats as "write-only", that
-     * is, it updates them but doesn't want to get alerted about its own
-     * updates.  It also won't be alerted about other clients' updates, so this
-     * is suitable only for use by a client that "owns" a particular column. */
-    OVSDB_IDL_MODE_WO,
-
-    /* Client won't read or write this column at all.  The IDL code can't
-     * prevent reading the column, but writing will cause assertion
-     * failures. */
-    OVSDB_IDL_MODE_NONE
-};
-
 struct ovsdb_idl_table {
     const struct ovsdb_idl_table_class *class;
-    unsigned char *modes;    /* One of OVSDB_MODE_*, indexed by column. */
+    unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */
+    bool need_table;         /* Monitor table even if no columns? */
     struct shash columns;    /* Contains "const struct ovsdb_idl_column *"s. */
     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
     struct ovsdb_idl *idl;   /* Containing idl. */

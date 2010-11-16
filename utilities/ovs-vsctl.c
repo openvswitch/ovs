@@ -145,7 +145,7 @@ main(int argc, char *argv[])
     }
 
     /* Now execute the commands. */
-    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
+    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class, true);
     for (;;) {
         if (ovsdb_idl_run(idl)) {
             do_vsctl(args, commands, n_commands, idl);

@@ -43,7 +43,8 @@ struct ovsdb_idl_table_class;
 struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
-                                   const struct ovsdb_idl_class *);
+                                   const struct ovsdb_idl_class *,
+                                   bool monitor_everything_by_default);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
 bool ovsdb_idl_run(struct ovsdb_idl *);
@@ -52,10 +53,44 @@ void ovsdb_idl_wait(struct ovsdb_idl *);
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
+
+/* Choosing columns and tables to replicate. */
 
-void ovsdb_idl_set_write_only(struct ovsdb_idl *,
-                              const struct ovsdb_idl_column *);
+/* Modes with which the IDL can monitor a column.
+ *
+ * If no bits are set, the column is not monitored at all.  Its value will
+ * always appear to the client to be the default value for its type.
+ *
+ * If OVSDB_IDL_MONITOR is set, then the column is replicated.  Its value will
+ * reflect the value in the database.  If OVSDB_IDL_ALERT is also set, then
+ * ovsdb_idl_run() will return "true", and the value returned by
+ * ovsdb_idl_get_seqno() will change, when the column's value changes.
+ *
+ * The possible mode combinations are:
+ *
+ *   - 0, for a column that a client doesn't care about.
+ *
+ *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT), for a column that a client wants
+ *     to track and possibly update.
+ *
+ *   - OVSDB_IDL_MONITOR, for columns that a client treats as "write-only",
+ *     that is, it updates them but doesn't want to get alerted about its own
+ *     updates.  It also won't be alerted about other clients' updates, so this
+ *     is suitable only for use by a client that "owns" a particular column.
+ *
+ *   - OVDSB_IDL_ALERT without OVSDB_IDL_MONITOR is not valid.
+ */
+#define OVSDB_IDL_MONITOR (1 << 0) /* Monitor this column? */
+#define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column updated? */
+
+void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+void ovsdb_idl_add_table(struct ovsdb_idl *,
+                         const struct ovsdb_idl_table_class *);
+
 void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+
+/* Reading the database replica. */
 
 const struct ovsdb_idl_row *ovsdb_idl_get_row_for_uuid(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *,
@@ -70,6 +105,8 @@ const struct ovsdb_datum *ovsdb_idl_get(const struct ovsdb_idl_row *,
                                         const struct ovsdb_idl_column *,
                                         enum ovsdb_atomic_type key_type,
                                         enum ovsdb_atomic_type value_type);
+
+/* Transactions. */
 
 enum ovsdb_idl_txn_status {
     TXN_UNCHANGED,              /* Transaction didn't include any changes. */

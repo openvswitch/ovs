@@ -1324,7 +1324,7 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
+    idl = ovsdb_idl_create(remote, &ovsrec_idl_class, true);
 
     for (;;) {
         const struct ovsrec_open_vswitch *ovs;
