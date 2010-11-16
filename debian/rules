@@ -29,6 +29,7 @@ configure-stamp:
 	dh_testdir
 	test -e configure || ./boot.sh
 	test -d _debian || mkdir _debian
+	echo $(DEB_BUILD_OPTIONS)
 	echo $$CC
 	cd _debian && ( \
 		test -e Makefile || \
@@ -120,3 +121,9 @@ binary-arch: install-arch
 
 binary: binary-arch binary-indep
 .PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure
+
+# This GNU make extensions disables parallel builds for the current Makefile
+# but not for sub-Makefiles.  This is appropriate here because build-arch and
+# build-indep both invoke "make" on OVS, which can update some of the same
+# targets in ways that conflict (e.g. both update tests/testsuite).
+.NOTPARALLEL:
