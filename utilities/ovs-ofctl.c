@@ -386,46 +386,67 @@ do_dump_tables(int argc OVS_UNUSED, char *argv[])
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
 
-static uint16_t
-str_to_port_no(const char *vconn_name, const char *str)
+/* Opens a connection to 'vconn_name', fetches the ofp_phy_port structure for
+ * 'port_name' (which may be a port name or number), and copies it into
+ * '*oppp'. */
+static void
+fetch_ofp_phy_port(const char *vconn_name, const char *port_name,
+                   struct ofp_phy_port *oppp)
 {
     struct ofpbuf *request, *reply;
     struct ofp_switch_features *osf;
+    unsigned int port_no;
     struct vconn *vconn;
     int n_ports;
     int port_idx;
-    unsigned int port_no;
 
-
-    /* Check if the argument is a port index.  Otherwise, treat it as
-     * the port name. */
-    if (str_to_uint(str, 10, &port_no)) {
-        return port_no;
+    /* Try to interpret the argument as a port number. */
+    if (!str_to_uint(port_name, 10, &port_no)) {
+        port_no = UINT_MAX;
     }
 
-    /* Send a "Features Request" to resolve the name into a number. */
+    /* Fetch the switch's ofp_switch_features. */
     make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
 
     osf = reply->data;
+    if (reply->size < sizeof *osf) {
+        ovs_fatal(0, "%s: received too-short features reply (only %zu bytes)",
+                  vconn_name, reply->size);
+    }
     n_ports = (reply->size - sizeof *osf) / sizeof *osf->ports;
 
     for (port_idx = 0; port_idx < n_ports; port_idx++) {
-        /* Check argument as an interface name */
-        if (!strncmp((char *)osf->ports[port_idx].name, str,
-                    sizeof osf->ports[0].name)) {
-            break;
+        const struct ofp_phy_port *opp = &osf->ports[port_idx];
+
+        if (port_no != UINT_MAX
+            ? htons(port_no) == opp->port_no
+            : !strncmp((char *) opp->name, port_name, sizeof opp->name)) {
+            *oppp = *opp;
+            ofpbuf_delete(reply);
+            vconn_close(vconn);
+            return;
         }
     }
-    if (port_idx == n_ports) {
-        ovs_fatal(0, "couldn't find monitored port: %s", str);
+    ovs_fatal(0, "%s: couldn't find port `%s'", vconn_name, port_name);
+}
+
+/* Returns the port number corresponding to 'port_name' (which may be a port
+ * name or number) within the switch 'vconn_name'. */
+static uint16_t
+str_to_port_no(const char *vconn_name, const char *port_name)
+{
+    unsigned int port_no;
+
+    if (str_to_uint(port_name, 10, &port_no)) {
+        return port_no;
+    } else {
+        struct ofp_phy_port opp;
+
+        fetch_ofp_phy_port(vconn_name, port_name, &opp);
+        return ntohs(opp.port_no);
     }
-
-    ofpbuf_delete(reply);
-    vconn_close(vconn);
-
-    return ntohs(osf->ports[port_idx].port_no);
 }
 
 static void
@@ -632,54 +653,16 @@ do_probe(int argc OVS_UNUSED, char *argv[])
 static void
 do_mod_port(int argc OVS_UNUSED, char *argv[])
 {
-    struct ofpbuf *request, *reply;
-    struct ofp_switch_features *osf;
     struct ofp_port_mod *opm;
+    struct ofp_phy_port opp;
+    struct ofpbuf *request;
     struct vconn *vconn;
-    char *endptr;
-    int n_ports;
-    int port_idx;
-    int port_no;
 
-
-    /* Check if the argument is a port index.  Otherwise, treat it as
-     * the port name. */
-    port_no = strtol(argv[2], &endptr, 10);
-    if (port_no == 0 && endptr == argv[2]) {
-        port_no = -1;
-    }
-
-    /* Send a "Features Request" to get the information we need in order
-     * to modify the port. */
-    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
-    open_vconn(argv[1], &vconn);
-    run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
-
-    osf = reply->data;
-    n_ports = (reply->size - sizeof *osf) / sizeof *osf->ports;
-
-    for (port_idx = 0; port_idx < n_ports; port_idx++) {
-        if (port_no != -1) {
-            /* Check argument as a port index */
-            if (osf->ports[port_idx].port_no == htons(port_no)) {
-                break;
-            }
-        } else {
-            /* Check argument as an interface name */
-            if (!strncmp((char *)osf->ports[port_idx].name, argv[2],
-                        sizeof osf->ports[0].name)) {
-                break;
-            }
-
-        }
-    }
-    if (port_idx == n_ports) {
-        ovs_fatal(0, "couldn't find monitored port: %s", argv[2]);
-    }
+    fetch_ofp_phy_port(argv[1], argv[2], &opp);
 
     opm = make_openflow(sizeof(struct ofp_port_mod), OFPT_PORT_MOD, &request);
-    opm->port_no = osf->ports[port_idx].port_no;
-    memcpy(opm->hw_addr, osf->ports[port_idx].hw_addr, sizeof opm->hw_addr);
+    opm->port_no = opp.port_no;
+    memcpy(opm->hw_addr, opp.hw_addr, sizeof opm->hw_addr);
     opm->config = htonl(0);
     opm->mask = htonl(0);
     opm->advertise = htonl(0);
@@ -698,9 +681,8 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(0, "unknown mod-port command '%s'", argv[3]);
     }
 
+    open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, request);
-
-    ofpbuf_delete(reply);
     vconn_close(vconn);
 }
 
