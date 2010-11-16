@@ -440,7 +440,7 @@ fetch_ofp_phy_port(const char *vconn_name, const char *port_name,
 
         if (port_no != UINT_MAX
             ? htons(port_no) == opp->port_no
-            : !strncmp((char *) opp->name, port_name, sizeof opp->name)) {
+            : !strncmp(opp->name, port_name, sizeof opp->name)) {
             *oppp = *opp;
             ofpbuf_delete(reply);
             vconn_close(vconn);

@@ -1316,7 +1316,7 @@ int
 ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
 {
     struct ofport *ofport = get_port(ofproto, odp_port);
-    const char *name = ofport ? (char *) ofport->opp.name : "<unknown>";
+    const char *name = ofport ? ofport->opp.name : "<unknown>";
     int error;
 
     error = dpif_port_del(ofproto->dpif, odp_port);
@@ -1439,7 +1439,7 @@ reinit_ports(struct ofproto *p)
 
     svec_init(&devnames);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        svec_add (&devnames, (char *) ofport->opp.name);
+        svec_add (&devnames, ofport->opp.name);
     }
     dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
     for (i = 0; i < n_odp_ports; i++) {
@@ -1521,7 +1521,7 @@ ofport_equal(const struct ofport *a_, const struct ofport *b_)
     BUILD_ASSERT_DECL(sizeof *a == 48); /* Detect ofp_phy_port changes. */
     return (a->port_no == b->port_no
             && !memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr)
-            && !strcmp((char *) a->name, (char *) b->name)
+            && !strcmp(a->name, b->name)
             && a->state == b->state
             && a->config == b->config
             && a->curr == b->curr
@@ -1558,7 +1558,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
-    const char *netdev_name = (const char *) ofport->opp.name;
+    const char *netdev_name = ofport->opp.name;
 
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->odp_port, 0));
@@ -1574,7 +1574,7 @@ ofport_remove(struct ofproto *p, struct ofport *ofport)
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
     hmap_remove(&p->ports, &ofport->hmap_node);
     shash_delete(&p->port_by_name,
-                 shash_find(&p->port_by_name, (char *) ofport->opp.name));
+                 shash_find(&p->port_by_name, ofport->opp.name));
     if (p->sflow) {
         ofproto_sflow_del_port(p->sflow, ofport->odp_port);
     }

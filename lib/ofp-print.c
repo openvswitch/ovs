@@ -565,7 +565,7 @@ static void ofp_print_port_features(struct ds *string, uint32_t features)
 static void
 ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
 {
-    uint8_t name[OFP_MAX_PORT_NAME_LEN];
+    char name[OFP_MAX_PORT_NAME_LEN];
     int j;
 
     memcpy(name, port->name, sizeof name);

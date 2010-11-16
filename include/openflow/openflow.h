@@ -216,7 +216,7 @@ enum ofp_port_features {
 struct ofp_phy_port {
     uint16_t port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
-    uint8_t name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
+    char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
     uint32_t config;        /* Bitmap of OFPPC_* flags. */
     uint32_t state;         /* Bitmap of OFPPS_* flags. */

@@ -297,7 +297,7 @@ process_switch_features(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
         struct lswitch_port *lp;
 
         opp->name[OFP_MAX_PORT_NAME_LEN - 1] = '\0';
-        lp = shash_find_data(&sw->queue_names, (char *) opp->name);
+        lp = shash_find_data(&sw->queue_names, opp->name);
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
             lp->port_no = ntohs(opp->port_no);
             hmap_insert(&sw->queue_numbers, &lp->hmap_node,
