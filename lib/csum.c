@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "csum.h"
+#include "unaligned.h"
 
 /* Returns the IP checksum of the 'n' bytes in 'data'.
  *
@@ -57,8 +58,8 @@ csum_continue(uint32_t partial, const void *data_, size_t n)
 {
     const uint16_t *data = data_;
 
-    for (; n > 1; n -= 2) {
-        partial = csum_add16(partial, *data++);
+    for (; n > 1; n -= 2, data++) {
+        partial = csum_add16(partial, get_unaligned_u16(data));
     }
     if (n) {
         partial += *(uint8_t *) data;

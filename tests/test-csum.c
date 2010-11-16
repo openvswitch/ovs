@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "random.h"
+#include "unaligned.h"
 #include "util.h"
 
 #undef NDEBUG
@@ -149,7 +150,7 @@ main(void)
         /* Test csum_add16(). */
         partial = 0;
         for (i = 0; i < tc->size / 2; i++) {
-            partial = csum_add16(partial, data16[i]);
+            partial = csum_add16(partial, get_unaligned_u16(&data16[i]));
         }
         assert(ntohs(csum_finish(partial)) == tc->csum);
         mark('.');
@@ -157,7 +158,7 @@ main(void)
         /* Test csum_add32(). */
         partial = 0;
         for (i = 0; i < tc->size / 4; i++) {
-            partial = csum_add32(partial, data32[i]);
+            partial = csum_add32(partial, get_unaligned_u32(&data32[i]));
         }
         assert(ntohs(csum_finish(partial)) == tc->csum);
         mark('.');
@@ -166,10 +167,12 @@ main(void)
         partial = 0;
         for (i = 0; i < tc->size / 4; i++) {
             if (i % 2) {
-                partial = csum_add32(partial, data32[i]);
+                partial = csum_add32(partial, get_unaligned_u32(&data32[i]));
             } else {
-                partial = csum_add16(partial, data16[i * 2]);
-                partial = csum_add16(partial, data16[i * 2 + 1]);
+                uint16_t u0 = get_unaligned_u16(&data16[i * 2]);
+                uint16_t u1 = get_unaligned_u16(&data16[i * 2 + 1]);
+                partial = csum_add16(partial, u0);
+                partial = csum_add16(partial, u1);
             }
         }
         assert(ntohs(csum_finish(partial)) == tc->csum);
