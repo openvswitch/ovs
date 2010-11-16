@@ -337,6 +337,24 @@ dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
     dump_stats_transaction(vconn_name, request);
 }
 
+/* Sends 'request', which should be a request that only has a reply if an error
+ * occurs, and waits for it to succeed or fail.  If an error does occur, prints
+ * it and exits with an error. */
+static void
+dump_noreply_transaction(struct vconn *vconn, struct ofpbuf *request)
+{
+    struct ofpbuf *reply;
+
+    update_openflow_length(request);
+    run(vconn_transact_noreply(vconn, request, &reply),
+        "talking to %s", vconn_get_name(vconn));
+    if (reply) {
+        ofp_print(stderr, reply->data, reply->size, 2);
+        exit(1);
+    }
+    ofpbuf_delete(reply);
+}
+
 static void
 do_show(int argc OVS_UNUSED, char *argv[])
 {
@@ -509,12 +527,12 @@ static void
 do_add_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
-    struct ofpbuf *buffer;
+    struct ofpbuf *request;
 
-    buffer = parse_ofp_flow_mod_str(argv[2], OFPFC_ADD);
+    request = parse_ofp_flow_mod_str(argv[2], OFPFC_ADD);
 
     open_vconn(argv[1], &vconn);
-    send_openflow_buffer(vconn, buffer);
+    dump_noreply_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -532,7 +550,7 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
 
     open_vconn(argv[1], &vconn);
     while ((b = parse_ofp_add_flow_file(file)) != NULL) {
-        send_openflow_buffer(vconn, b);
+        dump_noreply_transaction(vconn, b);
     }
     vconn_close(vconn);
     fclose(file);
@@ -548,7 +566,7 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     command = strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY;
     buffer = parse_ofp_flow_mod_str(argv[2], command);
     open_vconn(argv[1], &vconn);
-    send_openflow_buffer(vconn, buffer);
+    dump_noreply_transaction(vconn, buffer);
     vconn_close(vconn);
 }
 
@@ -562,7 +580,7 @@ static void do_del_flows(int argc, char *argv[])
     buffer = parse_ofp_flow_mod_str(argc > 2 ? argv[2] : "", command);
 
     open_vconn(argv[1], &vconn);
-    send_openflow_buffer(vconn, buffer);
+    dump_noreply_transaction(vconn, buffer);
     vconn_close(vconn);
 }
 
@@ -590,7 +608,7 @@ do_monitor(int argc, char *argv[])
 
         osc = make_openflow(sizeof *osc, OFPT_SET_CONFIG, &buf);
         osc->miss_send_len = htons(miss_send_len);
-        send_openflow_buffer(vconn, buf);
+        dump_noreply_transaction(vconn, buf);
     }
     monitor_vconn(vconn);
 }
@@ -666,7 +684,7 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
     }
 
     open_vconn(argv[1], &vconn);
-    send_openflow_buffer(vconn, request);
+    dump_noreply_transaction(vconn, request);
     vconn_close(vconn);
 }
 
