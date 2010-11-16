@@ -567,22 +567,6 @@ static void do_del_flows(int argc, char *argv[])
 }
 
 static void
-do_tun_cookie(int argc OVS_UNUSED, char *argv[])
-{
-    struct nxt_tun_id_cookie *tun_id_cookie;
-    struct ofpbuf *buffer;
-    struct vconn *vconn;
-
-    tun_id_cookie = make_nxmsg(sizeof *tun_id_cookie, NXT_TUN_ID_FROM_COOKIE,
-                               &buffer);
-    tun_id_cookie->set = !strcmp(argv[2], "true");
-
-    open_vconn(argv[1], &vconn);
-    send_openflow_buffer(vconn, buffer);
-    vconn_close(vconn);
-}
-
-static void
 monitor_vconn(struct vconn *vconn)
 {
     for (;;) {
@@ -870,7 +854,6 @@ static const struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
     { "del-flows", 1, 2, do_del_flows },
-    { "tun-cookie", 2, 2, do_tun_cookie },
     { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
     { "probe", 1, 1, do_probe },
