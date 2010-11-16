@@ -149,6 +149,9 @@ main(int argc, char *argv[])
         if (run_process) {
             process_wait(run_process);
         }
+        if (exiting) {
+            poll_immediate_wake();
+        }
         poll_block();
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);

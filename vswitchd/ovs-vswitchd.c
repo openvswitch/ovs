@@ -99,6 +99,9 @@ main(int argc, char *argv[])
         unixctl_server_wait(unixctl);
         dp_wait();
         netdev_wait();
+        if (exiting) {
+            poll_immediate_wake();
+        }
         poll_block();
     }
 
