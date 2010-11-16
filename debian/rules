@@ -44,7 +44,10 @@ build-arch: build-arch-stamp
 build-arch-stamp: configure-stamp 
 	$(MAKE) -C _debian
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	$(MAKE) -C _debian check
+	if $(MAKE) -C _debian check; then :; else \
+		cat _debian/tests/testsuite.log; \
+		exit 1; \
+	fi
 endif
 	touch $@
 
