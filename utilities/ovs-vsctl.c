@@ -3042,6 +3042,9 @@ run_prerequisites(struct vsctl_command *commands, size_t n_commands,
     struct vsctl_command *c;
 
     ovsdb_idl_add_table(idl, &ovsrec_table_open_vswitch);
+    if (wait_for_reload) {
+        ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_cur_cfg);
+    }
     for (c = commands; c < &commands[n_commands]; c++) {
         if (c->syntax->prerequisites) {
             struct vsctl_context ctx;
