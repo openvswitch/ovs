@@ -892,6 +892,11 @@
     </group>
 
     <group title="Other Features">
+
+      <column name="monitor">
+        Connectivity monitor configuration for this interface.
+      </column>
+
       <column name="external_ids">
         Key-value pairs for use by external frameworks that integrate
         with Open vSwitch, rather than by Open vSwitch itself.  System
@@ -1138,6 +1143,98 @@
       common key-value definitions, or choose key names that are likely to be
       unique.  No common key-value pairs are currently defined.
     </column>
+  </table>
+
+  <table name="Monitor" title="Connectivity Monitor configuration">
+    <p>
+      A <ref table="Monitor"/> attaches to an <ref table="Interface"/> to
+      implement 802.1ag Connectivity Fault Management (CFM).  CFM allows a
+      group of Maintenance Points (MPs) called a Maintenance Association (MA)
+      to detect connectivity problems with each other.  MPs within a MA should
+      have complete and exclusive interconnectivity.  This is verified by
+      occasionally broadcasting Continuity Check Messages (CCMs) at a
+      configurable transmission interval.  A <ref table="Monitor"/> is
+      responsible for collecting data about other MPs in its MA and
+      broadcasting CCMs.
+    </p>
+
+    <group title="Monitor Configuration">
+      <column name="mpid">
+        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
+        a Maintenance Association (see <ref column="ma_name"/>).  The MPID is
+        used to identify this <ref table="Monitor"/> to other endpoints in the
+        MA.
+      </column>
+
+      <column name="remote_mps">
+        A set of <ref table="Maintenance_Points"/> which this
+        <ref table="Monitor"/> should have connectivity to.  If this
+        <ref table="Monitor"/> does not have connectivity to any MPs in this
+        set, or has connectivity to any MPs not in this set, a fault is
+        signaled.
+      </column>
+
+      <column name="ma_name">
+        A Maintenance Association (MA) name pairs with a Maintenance Domain
+        (MD) name to uniquely identify a MA.  A MA is a group of endpoints who
+        have complete and exclusive interconnectivity. Defaults to
+        <code>ovs</code> if unset.
+      </column>
+
+      <column name="md_name">
+        A Maintenance Domain name pairs with a Maintenance Association name to
+        uniquely identify a MA. Defaults to <code>ovs</code> if unset.
+      </column>
+
+      <column name="interval">
+        The transmission interval of CCMs in milliseconds.  Three missed CCMs
+        indicate a connectivity fault.  Defaults to 1000ms.
+      </column>
+    </group>
+
+    <group title="Monitor Status">
+      <column name="unexpected_remote_mpids">
+        A set of MPIDs representing MPs to which this <ref table="Monitor"/>
+        has detected connectivity that are not in the
+        <ref column="remote_mps"/> set.  This <ref table="Monitor"/> should not
+        have connectivity to any MPs not listed in <ref column="remote_mps"/>.
+        Thus, if this set is non-empty a fault is indicated.
+      </column>
+
+      <column name="unexpected_remote_maids">
+        A set of MAIDs representing foreign Maintenance Associations (MAs)
+        which this <ref table="Monitor"/> has detected connectivity to. A
+        <ref table="Monitor"/> should not have connectivity to a Maintenance
+        Association other than its own.  Thus, if this set is non-empty a fault
+        is indicated.
+      </column>
+
+      <column name="fault">
+        Indicates a Connectivity Fault caused by a configuration error, a down
+        remote MP, or unexpected connectivity to a remote MAID or remote MP.
+      </column>
+    </group>
+  </table>
+
+  <table name="Maintenance_Point" title="Maintenance Point configuration">
+    <p>
+      A <ref table="Maintenance_Point"/> represents a MP which a
+      <ref table="Monitor"/> has or should have connectivity to.
+    </p>
+
+    <group title="Maintenance_Point Configuration">
+      <column name="mpid">
+        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
+        a Maintenance Association. All MPs within a MA should have a unique
+        MPID.
+      </column>
+    </group>
+
+    <group title="Maintenance_Point Status">
+      <column name="fault">
+        Indicates a connectivity fault.
+      </column>
+    </group>
   </table>
 
   <table name="Mirror" title="Port mirroring (SPAN/RSPAN).">

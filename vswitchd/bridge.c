@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "bitmap.h"
+#include "cfm.h"
 #include "classifier.h"
 #include "coverage.h"
 #include "dirs.h"
@@ -91,6 +92,7 @@ struct iface {
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
     const char *type;           /* Usually same as cfg->type. */
+    struct cfm *cfm;            /* Connectivity Fault Management */
     const struct ovsrec_interface *cfg;
 };
 
@@ -258,6 +260,9 @@ static struct iface *iface_from_dp_ifidx(const struct bridge *,
 static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
+static void iface_update_cfm(struct iface *);
+static void iface_refresh_cfm_stats(struct iface *iface);
+static void iface_send_packet(struct iface *, struct ofpbuf *packet);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
@@ -919,6 +924,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
+    LIST_FOR_EACH (br, node, &all_bridges) {
+        struct iface *iface;
+        HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
+            iface_update_cfm(iface);
+        }
+    }
+
     free(managers);
 }
 
@@ -1138,6 +1150,82 @@ dpid_from_hash(const void *data, size_t n)
 }
 
 static void
+iface_refresh_cfm_stats(struct iface *iface)
+{
+    size_t i;
+    struct cfm *cfm;
+    const struct ovsrec_monitor *mon;
+
+    mon = iface->cfg->monitor;
+    cfm = iface->cfm;
+
+    if (!cfm || !mon) {
+        return;
+    }
+
+    for (i = 0; i < mon->n_remote_mps; i++) {
+        const struct ovsrec_maintenance_point *mp;
+        const struct remote_mp *rmp;
+
+        mp = mon->remote_mps[i];
+        rmp = cfm_get_remote_mp(cfm, mp->mpid);
+
+        ovsrec_maintenance_point_set_fault(mp, &rmp->fault, 1);
+    }
+
+    if (hmap_is_empty(&cfm->x_remote_mps)) {
+        ovsrec_monitor_set_unexpected_remote_mpids(mon, NULL, 0);
+    } else {
+        size_t length;
+        struct remote_mp *rmp;
+        int64_t *x_remote_mps;
+
+        length = hmap_count(&cfm->x_remote_mps);
+        x_remote_mps = xzalloc(length * sizeof *x_remote_mps);
+
+        i = 0;
+        HMAP_FOR_EACH (rmp, node, &cfm->x_remote_mps) {
+            x_remote_mps[i++] = rmp->mpid;
+        }
+
+        ovsrec_monitor_set_unexpected_remote_mpids(mon, x_remote_mps, length);
+        free(x_remote_mps);
+    }
+
+    if (hmap_is_empty(&cfm->x_remote_maids)) {
+        ovsrec_monitor_set_unexpected_remote_maids(mon, NULL, 0);
+    } else {
+        size_t length;
+        char **x_remote_maids;
+        struct remote_maid *rmaid;
+
+        length = hmap_count(&cfm->x_remote_maids);
+        x_remote_maids = xzalloc(length * sizeof *x_remote_maids);
+
+        i = 0;
+        HMAP_FOR_EACH (rmaid, node, &cfm->x_remote_maids) {
+            size_t j;
+
+            x_remote_maids[i] = xzalloc(CCM_MAID_LEN * 2 + 1);
+
+            for (j = 0; j < CCM_MAID_LEN; j++) {
+                 snprintf(&x_remote_maids[i][j * 2], 3, "%02hhx",
+                          rmaid->maid[j]);
+            }
+            i++;
+        }
+        ovsrec_monitor_set_unexpected_remote_maids(mon, x_remote_maids, length);
+
+        for (i = 0; i < length; i++) {
+            free(x_remote_maids[i]);
+        }
+        free(x_remote_maids);
+    }
+
+    ovsrec_monitor_set_fault(mon, &cfm->fault, 1);
+}
+
+static void
 iface_refresh_stats(struct iface *iface)
 {
     struct iface_stat {
@@ -1269,6 +1357,7 @@ bridge_run(void)
                     for (j = 0; j < port->n_ifaces; j++) {
                         struct iface *iface = port->ifaces[j];
                         iface_refresh_stats(iface);
+                        iface_refresh_cfm_stats(iface);
                     }
                 }
             }
@@ -1285,6 +1374,7 @@ void
 bridge_wait(void)
 {
     struct bridge *br;
+    struct iface *iface;
 
     LIST_FOR_EACH (br, node, &all_bridges) {
         ofproto_wait(br->ofproto);
@@ -1294,6 +1384,12 @@ bridge_wait(void)
 
         mac_learning_wait(br->ml);
         bond_wait(br);
+
+        HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
+            if (iface->cfm) {
+                cfm_wait(iface->cfm);
+            }
+        }
     }
     ovsdb_idl_wait(idl);
     poll_timer_wait_until(stats_timer);
@@ -1494,6 +1590,7 @@ static int
 bridge_run_one(struct bridge *br)
 {
     int error;
+    struct iface *iface;
 
     error = ofproto_run1(br->ofproto);
     if (error) {
@@ -1505,6 +1602,21 @@ bridge_run_one(struct bridge *br)
 
     error = ofproto_run2(br->ofproto, br->flush);
     br->flush = false;
+
+    HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
+        struct ofpbuf *packet;
+
+        if (!iface->cfm) {
+            continue;
+        }
+
+        packet = cfm_run(iface->cfm);
+        if (packet) {
+            iface_send_packet(iface, packet);
+            ofpbuf_uninit(packet);
+            free(packet);
+        }
+    }
 
     return error;
 }
@@ -2634,9 +2746,19 @@ bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
                         struct odp_actions *actions, tag_type *tags,
                         uint16_t *nf_output_iface, void *br_)
 {
+    struct iface *iface;
     struct bridge *br = br_;
 
     COVERAGE_INC(bridge_process_flow);
+
+    iface = iface_from_dp_ifidx(br, flow->in_port);
+
+    if (cfm_should_process_flow(flow)) {
+        if (packet && iface->cfm) {
+            cfm_process_heartbeat(iface->cfm, packet);
+        }
+        return false;
+    }
 
     return process_flow(br, flow, packet, actions, tags, nf_output_iface);
 }
@@ -3778,6 +3900,26 @@ port_update_vlan_compat(struct port *port)
 
 /* Interface functions. */
 
+static void
+iface_send_packet(struct iface *iface, struct ofpbuf *packet)
+{
+    struct flow flow;
+    union ofp_action action;
+
+    memset(&action, 0, sizeof action);
+    action.output.type = htons(OFPAT_OUTPUT);
+    action.output.len  = htons(sizeof action);
+    action.output.port = htons(odp_port_to_ofp_port(iface->dp_ifidx));
+
+    flow_extract(packet, 0, ODPP_NONE, &flow);
+
+    if (ofproto_send_packet(iface->port->bridge->ofproto, &flow, &action, 1,
+                            packet)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "interface %s: Failed to send packet.", iface->name);
+    }
+}
+
 static struct iface *
 iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 {
@@ -3838,6 +3980,8 @@ iface_destroy(struct iface *iface)
             bond_choose_active_iface(port);
             bond_send_learning_packets(port);
         }
+
+        cfm_destroy(iface->cfm);
 
         free(iface->name);
         free(iface);
@@ -3973,6 +4117,56 @@ iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
             netdev_set_queue(iface->netdev, queue_id, &details);
             shash_destroy(&details);
         }
+    }
+}
+
+static void
+iface_update_cfm(struct iface *iface)
+{
+    size_t i;
+    struct cfm *cfm;
+    uint16_t *remote_mps;
+    struct ovsrec_monitor *mon;
+    uint8_t ea[ETH_ADDR_LEN], maid[CCM_MAID_LEN];
+
+    mon = iface->cfg->monitor;
+
+    if (!mon) {
+        return;
+    }
+
+    if (netdev_get_etheraddr(iface->netdev, ea)) {
+        VLOG_WARN("interface %s: Failed to get ethernet address. "
+                  "Skipping Monitor.", iface->name);
+        return;
+    }
+
+    if (!cfm_generate_maid(mon->md_name, mon->ma_name, maid)) {
+        VLOG_WARN("interface %s: Failed to generate MAID.", iface->name);
+        return;
+    }
+
+    if (!iface->cfm) {
+        iface->cfm = cfm_create();
+    }
+
+    cfm           = iface->cfm;
+    cfm->mpid     = mon->mpid;
+    cfm->interval = mon->interval ? *mon->interval : 1000;
+
+    memcpy(cfm->eth_src, ea, sizeof cfm->eth_src);
+    memcpy(cfm->maid, maid, sizeof cfm->maid);
+
+    remote_mps = xzalloc(mon->n_remote_mps * sizeof *remote_mps);
+    for(i = 0; i < mon->n_remote_mps; i++) {
+        remote_mps[i] = mon->remote_mps[i]->mpid;
+    }
+    cfm_update_remote_mps(cfm, remote_mps, mon->n_remote_mps);
+    free(remote_mps);
+
+    if (!cfm_configure(iface->cfm)) {
+        cfm_destroy(iface->cfm);
+        iface->cfm = NULL;
     }
 }
 

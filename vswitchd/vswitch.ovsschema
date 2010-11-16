@@ -141,6 +141,11 @@
        "ofport": {
          "type": {"key": "integer", "min": 0, "max": 1},
          "ephemeral": true},
+       "monitor": {
+         "type": {
+           "key": {"type": "uuid", "refTable": "Monitor"},
+           "min": 0,
+           "max": 1}},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "statistics": {
@@ -148,6 +153,62 @@
          "ephemeral": true},
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true}}},
+   "Monitor": {
+     "columns": {
+       "mpid": {
+         "type" : {
+           "key": { "type": "integer", "minInteger": 1, "maxInteger": 8191}}},
+       "md_name": {
+         "type" : {
+           "key": { "type": "string", "minLength": 1, "maxLength": 43},
+           "min": 0,
+           "max": 1}},
+       "ma_name": {
+         "type" : {
+           "key": { "type": "string", "minLength": 1, "maxLength": 43},
+           "min": 0,
+           "max": 1}},
+       "interval": {
+         "type": {
+           "key": { "type": "integer", "minInteger": 100},
+           "min": 0,
+           "max": 1}},
+       "remote_mps": {
+         "type": {
+           "key": { "type": "uuid", "refTable": "Maintenance_Point"},
+           "min": 0,
+           "max": "unlimited"},
+         "ephemeral": true},
+       "unexpected_remote_mpids": {
+         "type": {
+           "key": { "type": "integer"},
+           "min": 0,
+           "max": "unlimited"},
+         "ephemeral": true},
+       "unexpected_remote_maids": {
+         "type": {
+           "key": "string",
+           "min": 0,
+           "max": "unlimited"},
+         "ephemeral": true},
+       "fault": {
+         "type": {
+           "key": { "type": "boolean"},
+           "min": 0,
+           "max": 1},
+         "ephemeral": true}}},
+   "Maintenance_Point": {
+     "columns": {
+       "mpid": {
+         "type" : {
+           "key": { "type": "integer", "minInteger": 1, "maxInteger": 8191}},
+         "mutable": false},
+       "fault": {
+         "type": {
+           "key": { "type": "boolean"},
+           "min": 0,
+           "max": 1},
          "ephemeral": true}}},
    "QoS": {
      "columns": {

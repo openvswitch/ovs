@@ -463,6 +463,11 @@ specifying \fB.\fR as the record name.
 .IP "\fBsFlow\fR"
 An sFlow configuration attached to a bridge.  Records may be
 identified by bridge name.
+.IP "\fBMonitor\fR"
+Connectivity Monitoring attached to an interface.  Records may be
+identified by interface name.
+.IP "\fBMaintenance_Point\fR"
+Maintenance Point managed by a Monitor.
 .PP
 Record names must be specified in full and with correct
 capitalization.  Names of tables and columns are not case-sensitive,
@@ -693,6 +698,21 @@ then delete the QoS record:
 database.  To delete them, use "\fBovs\-vsctl list Queue\fR" to find
 their UUIDs, then "\fBovs\-vsctl destroy Queue \fIuuid1\fR
 \fIuuid2\fR" to destroy each of them.)
+.SS "Connectivity Monitoring"
+.PP
+Create a Monitor which manages a couple of remote Maintenance Points on eth0.
+.IP
+.B "ovs\-vsctl \-\- set Interface eth0 Monitor=@newmon \(rs"
+.IP
+.B "\-\- \-\-id=@newmon create Monitor mpid=1 remote_mps=@mp2,@mp3 \(rs"
+.IP
+.B "\-\- \-\-id=@mp2 create Maintenance_Point mpid=2 \(rs"
+.IP
+.B "\-\- \-\-id=@mp3 create Maintenance_Point mpid=3"
+.PP
+Deconfigure the Monitor record from above:
+.IP
+.B "ovs\-vsctl clear Interface eth0 Monitor"
 .SS "NetFlow"
 .PP
 Configure bridge \fBbr0\fR to send NetFlow records to UDP port 5566 on

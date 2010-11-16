@@ -153,6 +153,7 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
 #define ETH_TYPE_VLAN          0x8100
+#define ETH_TYPE_CFM           0x8902
 
 #define ETH_HEADER_LEN 14
 #define ETH_PAYLOAD_MIN 46
@@ -235,6 +236,23 @@ struct vlan_eth_header {
     uint16_t veth_next_type;
 } __attribute__((packed));
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
+
+/* A 'ccm' represents a Continuity Check Message from the 802.1ag specification.
+ * Continuity Check Messages are broadcast periodically so that hosts can
+ * determine who they have connectivity to. */
+#define CCM_LEN 74
+#define CCM_MAID_LEN 48
+struct ccm {
+    uint8_t  mdlevel_version; /* MD Level and Version */
+    uint8_t  opcode;
+    uint8_t  flags;
+    uint8_t  tlv_offset;
+    uint32_t seq;
+    uint16_t mpid;
+    uint8_t  maid[CCM_MAID_LEN];
+    uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 /* The "(void) (ip)[0]" below has no effect on the value, since it's the first
  * argument of a comma expression, but it makes sure that 'ip' is a pointer.

@@ -18,6 +18,7 @@
 VLOG_MODULE(backtrace)
 VLOG_MODULE(brcompatd)
 VLOG_MODULE(bridge)
+VLOG_MODULE(cfm)
 VLOG_MODULE(collectors)
 VLOG_MODULE(controller)
 VLOG_MODULE(coverage)

@@ -17,6 +17,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/byte-order.h \
 	lib/byteq.c \
 	lib/byteq.h \
+	lib/cfm.c \
+	lib/cfm.h \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/command-line.c \
