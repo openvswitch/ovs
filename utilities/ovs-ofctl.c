@@ -431,7 +431,7 @@ str_to_port_no(const char *vconn_name, const char *str)
     ofpbuf_delete(reply);
     vconn_close(vconn);
 
-    return port_idx;
+    return ntohs(osf->ports[port_idx].port_no);
 }
 
 static void
