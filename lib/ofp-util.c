@@ -103,7 +103,8 @@ enum {
  * wildcarded. */
 void
 ofputil_cls_rule_from_match(const struct ofp_match *match,
-                            unsigned int priority, int flow_format,
+                            unsigned int priority,
+                            enum nx_flow_format flow_format,
                             uint64_t cookie, struct cls_rule *rule)
 {
     struct flow_wildcards *wc = &rule->wc;
@@ -205,7 +206,8 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
  * the latter case only, 'match''s NXFW_TUN_ID bit will be filled in; otherwise
  * it is always set to 0. */
 void
-ofputil_cls_rule_to_match(const struct cls_rule *rule, int flow_format,
+ofputil_cls_rule_to_match(const struct cls_rule *rule,
+                          enum nx_flow_format flow_format,
                           struct ofp_match *match)
 {
     const struct flow_wildcards *wc = &rule->wc;

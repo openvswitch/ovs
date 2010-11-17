@@ -892,7 +892,7 @@ OFP_ASSERT(sizeof(struct nx_action_note) == 16);
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */
 
-enum {
+enum nx_flow_format {
     NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
     NXFF_TUN_ID_FROM_COOKIE = 1, /* OpenFlow 1.0, plus obtain tunnel ID from
                                   * cookie. */
