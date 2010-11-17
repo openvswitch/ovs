@@ -77,20 +77,29 @@ extern const char *program_name;
 
 #define NOT_REACHED() abort()
 
+/* Given a pointer-typed lvalue OBJECT, expands to a pointer type that may be
+ * assigned to OBJECT. */
+#ifdef __GNUC__
+#define OVS_TYPEOF(OBJECT) typeof(OBJECT)
+#else
+#define OVS_TYPEOF(OBJECT) void *
+#endif
+
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
         ((STRUCT *) (void *) ((char *) (POINTER) - offsetof (STRUCT, MEMBER)))
 
 /* Given POINTER, the address of the given MEMBER within an object of the type
- * that that OBJECT points to, returns OBJECT as a "void *" pointer.  OBJECT
- * must be an lvalue.
+ * that that OBJECT points to, returns OBJECT as an assignment-compatible
+ * pointer type (either the correct pointer type or "void *").  OBJECT must be
+ * an lvalue.
  *
  * This is the same as CONTAINER_OF except that it infers the structure type
  * from the type of '*OBJECT'. */
 #define OBJECT_CONTAINING(POINTER, OBJECT, MEMBER)                      \
-        ((void *) ((char *) (POINTER)                                   \
-                   - ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))))
+    ((OVS_TYPEOF(OBJECT)) (void *)                                      \
+     ((char *) (POINTER) - ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))))
 
 #ifdef  __cplusplus
 extern "C" {
