@@ -102,8 +102,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/pcap.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
-	lib/port-array.c \
-	lib/port-array.h \
 	lib/process.c \
 	lib/process.h \
 	lib/random.c \
