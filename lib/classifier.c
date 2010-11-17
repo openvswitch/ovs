@@ -112,6 +112,28 @@ cls_rule_zero_wildcarded_fields(struct cls_rule *rule)
 }
 
 void
+cls_rule_set_reg(struct cls_rule *rule, unsigned int reg_idx, uint32_t value)
+{
+    cls_rule_set_reg_masked(rule, reg_idx, value, UINT32_MAX);
+}
+
+void
+cls_rule_set_reg_masked(struct cls_rule *rule, unsigned int reg_idx,
+                        uint32_t value, uint32_t mask)
+{
+    assert(reg_idx < FLOW_N_REGS);
+    flow_wildcards_set_reg_mask(&rule->wc, reg_idx, mask);
+    rule->flow.regs[reg_idx] = value & mask;
+}
+
+void
+cls_rule_set_tun_id(struct cls_rule *rule, ovs_be32 tun_id)
+{
+    rule->wc.wildcards &= ~FWW_TUN_ID;
+    rule->flow.tun_id = tun_id;
+}
+
+void
 cls_rule_set_in_port(struct cls_rule *rule, uint16_t odp_port)
 {
     rule->wc.wildcards &= ~FWW_IN_PORT;

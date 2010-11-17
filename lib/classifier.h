@@ -74,6 +74,10 @@ void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
 
 void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 
+void cls_rule_set_reg(struct cls_rule *, unsigned int reg_idx, uint32_t value);
+void cls_rule_set_reg_masked(struct cls_rule *, unsigned int reg_idx,
+                             uint32_t value, uint32_t mask);
+void cls_rule_set_tun_id(struct cls_rule *, ovs_be32 tun_id);
 void cls_rule_set_in_port(struct cls_rule *, uint16_t odp_port);
 void cls_rule_set_dl_type(struct cls_rule *, ovs_be16);
 void cls_rule_set_dl_src(struct cls_rule *, const uint8_t[6]);
