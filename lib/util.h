@@ -101,6 +101,14 @@ extern const char *program_name;
     ((OVS_TYPEOF(OBJECT)) (void *)                                      \
      ((char *) (POINTER) - ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))))
 
+/* Given POINTER, the address of the given MEMBER within an object of the type
+ * that that OBJECT points to, assigns the address of the outer object to
+ * OBJECT, which must be an lvalue.
+ *
+ * Evaluates to 1. */
+#define ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER) \
+    ((OBJECT) = OBJECT_CONTAINING(POINTER, OBJECT, MEMBER), 1)
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
