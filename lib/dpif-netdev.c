@@ -238,8 +238,8 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
 }
 
 static int
-dpif_netdev_open(const char *name, const char *type OVS_UNUSED, bool create,
-                 struct dpif **dpifp)
+dpif_netdev_open(const struct dpif_class *class OVS_UNUSED, const char *name,
+                 bool create, struct dpif **dpifp)
 {
     if (create) {
         if (find_dp_netdev(name)) {

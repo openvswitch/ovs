@@ -90,13 +90,14 @@ struct dpif_class {
 
     /* Attempts to open an existing dpif called 'name', if 'create' is false,
      * or to open an existing dpif or create a new one, if 'create' is true.
-     * 'type' corresponds to the 'type' field used in the dpif_class
-     * structure.
      *
-     * If successful, stores a pointer to the new dpif in '*dpifp'.  On failure
-     * there are no requirements on what is stored in '*dpifp'. */
-    int (*open)(const char *name, const char *type, bool create,
-                struct dpif **dpifp);
+     * 'dpif_class' is the class of dpif to open.
+     *
+     * If successful, stores a pointer to the new dpif in '*dpifp', which must
+     * have class 'dpif_class'.  On failure there are no requirements on what
+     * is stored in '*dpifp'. */
+    int (*open)(const struct dpif_class *dpif_class,
+                const char *name, bool create, struct dpif **dpifp);
 
     /* Closes 'dpif' and frees associated memory. */
     void (*close)(struct dpif *dpif);
