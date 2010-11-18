@@ -50,7 +50,7 @@ static const struct dpif_class *base_dpif_classes[] = {
 };
 
 struct registered_dpif_class {
-    struct dpif_class dpif_class;
+    const struct dpif_class *dpif_class;
     int refcount;
 };
 static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
@@ -97,8 +97,8 @@ dp_run(void)
     struct shash_node *node;
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class.run) {
-            registered_class->dpif_class.run();
+        if (registered_class->dpif_class->run) {
+            registered_class->dpif_class->run();
         }
     }
 }
@@ -113,8 +113,8 @@ dp_wait(void)
     struct shash_node *node;
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class.wait) {
-            registered_class->dpif_class.wait();
+        if (registered_class->dpif_class->wait) {
+            registered_class->dpif_class->wait();
         }
     }
 }
@@ -133,8 +133,7 @@ dp_register_provider(const struct dpif_class *new_class)
     }
 
     registered_class = xmalloc(sizeof *registered_class);
-    memcpy(&registered_class->dpif_class, new_class,
-           sizeof registered_class->dpif_class);
+    registered_class->dpif_class = new_class;
     registered_class->refcount = 0;
 
     shash_add(&dpif_classes, new_class->type, registered_class);
@@ -182,7 +181,7 @@ dp_enumerate_types(struct svec *types)
 
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
-        svec_add(types, registered_class->dpif_class.type);
+        svec_add(types, registered_class->dpif_class->type);
     }
 }
 
@@ -208,7 +207,7 @@ dp_enumerate_names(const char *type, struct svec *names)
         return EAFNOSUPPORT;
     }
 
-    dpif_class = &registered_class->dpif_class;
+    dpif_class = registered_class->dpif_class;
     error = dpif_class->enumerate ? dpif_class->enumerate(names) : 0;
 
     if (error) {
@@ -259,7 +258,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
         goto exit;
     }
 
-    error = registered_class->dpif_class.open(name, type, create, &dpif);
+    error = registered_class->dpif_class->open(name, type, create, &dpif);
     if (!error) {
         registered_class->refcount++;
     }
