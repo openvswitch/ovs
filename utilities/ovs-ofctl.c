@@ -197,7 +197,7 @@ static void
 open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     char *vconn_name = xasprintf("unix:%s", name);
-    VLOG_INFO("connecting to %s", vconn_name);
+    VLOG_DBG("connecting to %s", vconn_name);
     run(vconn_open_block(vconn_name, OFP_VERSION, vconnp),
         "connecting to %s", vconn_name);
     free(vconn_name);
@@ -229,7 +229,7 @@ open_vconn__(const char *name, const char *default_suffix,
             "obtaining name of %s", dpif_name);
         dpif_close(dpif);
         if (strcmp(dpif_name, name)) {
-            VLOG_INFO("datapath %s is named %s", name, dpif_name);
+            VLOG_DBG("datapath %s is named %s", name, dpif_name);
         }
 
         socket_name = xasprintf("%s/%s.%s",
