@@ -3236,8 +3236,8 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"br-exists", 1, 1, pre_get_info, cmd_br_exists, NULL, "", RO},
     {"br-to-vlan", 1, 1, pre_get_info, cmd_br_to_vlan, NULL, "", RO},
     {"br-to-parent", 1, 1, pre_get_info, cmd_br_to_parent, NULL, "", RO},
-    {"br-set-external-id", 2, 3, pre_get_info, cmd_br_set_external_id, NULL,
-     "", RW},
+    {"br-set-external-id", 2, 3, pre_cmd_br_set_external_id,
+     cmd_br_set_external_id, NULL, "", RW},
     {"br-get-external-id", 1, 2, pre_cmd_br_get_external_id,
      cmd_br_get_external_id, NULL, "", RO},
 

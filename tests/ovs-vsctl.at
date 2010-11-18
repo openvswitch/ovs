@@ -301,7 +301,7 @@ AT_CLEANUP
 AT_SETUP([external IDs])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
-AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+AT_CHECK([RUN_OVS_VSCTL_ONELINE(
   [add-br a], 
   [add-port a a1],
   [add-bond a bond0 a2 a3],
