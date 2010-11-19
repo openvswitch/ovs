@@ -90,12 +90,8 @@ struct vport_percpu_stats {
 struct vport_err_stats {
 	u64 rx_dropped;
 	u64 rx_errors;
-	u64 rx_frame_err;
-	u64 rx_over_err;
-	u64 rx_crc_err;
 	u64 tx_dropped;
 	u64 tx_errors;
-	u64 collisions;
 };
 
 struct vport {
@@ -200,12 +196,8 @@ struct vport_ops {
 enum vport_err_type {
 	VPORT_E_RX_DROPPED,
 	VPORT_E_RX_ERROR,
-	VPORT_E_RX_FRAME,
-	VPORT_E_RX_OVER,
-	VPORT_E_RX_CRC,
 	VPORT_E_TX_DROPPED,
 	VPORT_E_TX_ERROR,
-	VPORT_E_COLLISION,
 };
 
 struct vport *vport_alloc(int priv_size, const struct vport_ops *);

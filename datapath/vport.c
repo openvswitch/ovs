@@ -1032,17 +1032,10 @@ int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 
 		*stats = vport->offset_stats;
 
-		stats->rx_errors	+= vport->err_stats.rx_errors
-						+ vport->err_stats.rx_frame_err
-						+ vport->err_stats.rx_over_err
-						+ vport->err_stats.rx_crc_err;
+		stats->rx_errors	+= vport->err_stats.rx_errors;
 		stats->tx_errors	+= vport->err_stats.tx_errors;
 		stats->tx_dropped	+= vport->err_stats.tx_dropped;
 		stats->rx_dropped	+= vport->err_stats.rx_dropped;
-		stats->rx_over_errors	+= vport->err_stats.rx_over_err;
-		stats->rx_crc_errors	+= vport->err_stats.rx_crc_err;
-		stats->rx_frame_errors	+= vport->err_stats.rx_frame_err;
-		stats->collisions	+= vport->err_stats.collisions;
 
 		spin_unlock_bh(&vport->stats_lock);
 
@@ -1322,28 +1315,12 @@ void vport_record_error(struct vport *vport, enum vport_err_type err_type)
 			vport->err_stats.rx_errors++;
 			break;
 
-		case VPORT_E_RX_FRAME:
-			vport->err_stats.rx_frame_err++;
-			break;
-
-		case VPORT_E_RX_OVER:
-			vport->err_stats.rx_over_err++;
-			break;
-
-		case VPORT_E_RX_CRC:
-			vport->err_stats.rx_crc_err++;
-			break;
-
 		case VPORT_E_TX_DROPPED:
 			vport->err_stats.tx_dropped++;
 			break;
 
 		case VPORT_E_TX_ERROR:
 			vport->err_stats.tx_errors++;
-			break;
-
-		case VPORT_E_COLLISION:
-			vport->err_stats.collisions++;
 			break;
 		};
 
