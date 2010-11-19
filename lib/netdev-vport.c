@@ -110,7 +110,7 @@ netdev_vport_parse_config(const struct netdev_class *netdev_class,
         info.devname = name;
         info.type = netdev_class->type;
         error = (c->parse_config)(&info, args);
-        *configp = info.config;
+        *configp = error ? NULL : info.config;
         return error;
     } else {
         if (!shash_is_empty(args)) {
