@@ -1100,6 +1100,9 @@ static int send_frags(struct sk_buff *skb,
 
 		skb->next = NULL;
 
+		memset(&IPCB(skb)->opt, 0, sizeof(IPCB(skb)->opt));
+		IPCB(skb)->flags = 0;
+
 		err = ip_local_out(skb);
 		if (likely(net_xmit_eval(err) == 0))
 			sent_len += frag_len;
@@ -1247,10 +1250,6 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 				skb_dst_set(skb, unattached_dst);
 				unattached_dst = NULL;
 			}
-
-
-			memset(&IPCB(skb)->opt, 0, sizeof(IPCB(skb)->opt));
-			IPCB(skb)->flags = 0;
 		}
 		skb_set_transport_header(skb, skb_network_offset(skb) + sizeof(struct iphdr));
 
