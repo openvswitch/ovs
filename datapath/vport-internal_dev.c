@@ -73,13 +73,6 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	struct internal_dev *internal_dev = internal_dev_priv(netdev);
 	struct vport *vport = rcu_dereference(internal_dev->vport);
 
-	/* We need our own clone. */
-	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (unlikely(!skb)) {
-		vport_record_error(vport, VPORT_E_RX_DROPPED);
-		return 0;
-	}
-
 	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, true);
 	OVS_CB(skb)->flow = NULL;
