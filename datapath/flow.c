@@ -264,9 +264,6 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  *      past the IPv4 header, if one is present and of a correct length,
  *      otherwise the same as skb->network_header.  For other key->dl_type
  *      values it is left untouched.
- *
- * Sets OVS_CB(skb)->is_frag to %true if @skb is an IPv4 fragment, otherwise to
- * %false.
  */
 int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 		 bool *is_frag)
