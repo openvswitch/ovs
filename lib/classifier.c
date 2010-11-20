@@ -52,6 +52,7 @@ static void zero_wildcards(struct flow *, const struct flow_wildcards *);
          (RULE) != NULL && ((NEXT) = next_rule_in_list(RULE), true);    \
          (RULE) = (NEXT))
 
+static struct cls_rule *next_rule_in_list__(struct cls_rule *);
 static struct cls_rule *next_rule_in_list(struct cls_rule *);
 
 static struct cls_table *
@@ -601,11 +602,15 @@ cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *rule)
     const struct cls_table *table;
     struct cls_rule *next;
 
-    next = next_rule_in_list(rule);
-    if (next) {
+    next = next_rule_in_list__(rule);
+    if (next->priority < rule->priority) {
         return next;
     }
 
+    /* 'next' is the head of the list, that is, the rule that is included in
+     * the table's hmap.  (This is important when the classifier contains rules
+     * that differ only in priority.) */
+    rule = next;
     HMAP_FOR_EACH_CONTINUE (rule, hmap_node, &cursor->table->rules) {
         if (rule_matches(rule, cursor->target)) {
             return rule;
@@ -744,9 +749,16 @@ insert_rule(struct cls_table *table, struct cls_rule *new)
 }
 
 static struct cls_rule *
-next_rule_in_list(struct cls_rule *rule)
+next_rule_in_list__(struct cls_rule *rule)
 {
     struct cls_rule *next = OBJECT_CONTAINING(rule->list.next, next, list);
+    return next;
+}
+
+static struct cls_rule *
+next_rule_in_list(struct cls_rule *rule)
+{
+    struct cls_rule *next = next_rule_in_list__(rule);
     return next->priority < rule->priority ? next : NULL;
 }
 

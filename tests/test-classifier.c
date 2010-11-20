@@ -413,9 +413,12 @@ check_tables(const struct classifier *cls,
 {
     const struct cls_table *table;
     struct flow_wildcards exact_wc;
+    struct test_rule *test_rule;
+    struct cls_cursor cursor;
     int found_tables = 0;
     int found_rules = 0;
     int found_dups = 0;
+    int found_rules2 = 0;
 
     flow_wildcards_init_exact(&exact_wc);
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
@@ -443,6 +446,12 @@ check_tables(const struct classifier *cls,
     assert(n_tables == -1 || n_tables == hmap_count(&cls->tables));
     assert(n_rules == -1 || found_rules == n_rules);
     assert(n_dups == -1 || found_dups == n_dups);
+
+    cls_cursor_init(&cursor, cls, NULL);
+    CLS_CURSOR_FOR_EACH (test_rule, cls_rule, &cursor) {
+        found_rules2++;
+    }
+    assert(found_rules == found_rules2);
 }
 
 static struct test_rule *
