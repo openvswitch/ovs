@@ -77,7 +77,7 @@
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "flood_vlans": {
          "type": {"key": {"type": "integer",
-                          "minInteger": 0, 
+                          "minInteger": 0,
                           "maxInteger": 4095},
                   "min": 0, "max": 4096}}}},
    "Port": {
@@ -161,7 +161,7 @@
                             "refTable": "Queue"},
                   "min": 0, "max": "unlimited"}},
        "other_config": {
-         "type": {"key": "string", "value": "string", 
+         "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
@@ -169,7 +169,7 @@
    "Queue": {
      "columns": {
        "other_config": {
-         "type": {"key": "string", "value": "string", 
+         "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
@@ -279,7 +279,7 @@
                           "minInteger": 100},
                   "min": 0, "max": 1}},
        "controller_burst_limit": {
-         "type": {"key": {"type": "integer", 
+         "type": {"key": {"type": "integer",
                           "minInteger": 25},
                   "min": 0, "max": 1}},
        "external_ids": {

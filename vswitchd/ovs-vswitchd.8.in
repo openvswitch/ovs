@@ -18,7 +18,7 @@ ovs\-vswitchd \- Open vSwitch daemon
 \fIdatabase\fR
 .
 .SH DESCRIPTION
-A daemon that manages and controls any number of Open vSwitch switches 
+A daemon that manages and controls any number of Open vSwitch switches
 on the local machine.
 .PP
 The mandatory \fIdatabase\fR argument normally takes the form
@@ -37,7 +37,7 @@ configuration to match.
 Upon receipt of a SIGHUP signal, \fBovs\-vswitchd\fR reopens its log
 file, if one was specified on the command line.
 .PP
-\fBovs\-vswitchd\fR switches may be configured with any of the following 
+\fBovs\-vswitchd\fR switches may be configured with any of the following
 features:
 .
 .IP \(bu

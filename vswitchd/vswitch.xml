@@ -314,7 +314,7 @@
           </dl>
         </p>
         <p>If this value is unset, the default is implementation-specific.</p>
-        <p>When more than one controller is configured, 
+        <p>When more than one controller is configured,
           <ref column="fail_mode"/> is considered only when none of the
           configured controllers can be contacted.</p>
       </column>
@@ -343,7 +343,7 @@
         defined key-value pairs are:
         <dl>
           <dt><code>bridge-id</code></dt>
-          <dd>A unique identifier of the bridge.  On Citrix XenServer this 
+          <dd>A unique identifier of the bridge.  On Citrix XenServer this
             will commonly be the same as <code>xs-network-uuids</code>.</dd>
           <dt><code>xs-network-uuids</code></dt>
           <dd>Semicolon-delimited set of universally unique identifier(s) for
@@ -362,7 +362,7 @@
             digits to set the OpenFlow datapath ID to a specific
             value.  May not be all-zero.</dd>
           <dt><code>disable-in-band</code></dt>
-          <dd>If set to <code>true</code>, disable in-band control on 
+          <dd>If set to <code>true</code>, disable in-band control on
             the bridge regardless of controller and manager settings.</dd>
           <dt><code>hwaddr</code></dt>
           <dd>An Ethernet address in the form
@@ -492,7 +492,7 @@
       <column name="qos">
         Quality of Service configuration for this port.
       </column>
-      
+
       <column name="mac">
         The MAC address to use for this port for the purpose of choosing the
         bridge's MAC address.  This column does not necessarily reflect the
@@ -615,7 +615,7 @@
              the same except one has an optional identifier and the other does
              not, the more specific one is matched first.  <code>in_key</code>
              is considered more specific than <code>local_ip</code> if a port
-             defines one and another port defines the other.  The following 
+             defines one and another port defines the other.  The following
              options may be specified in the <ref column="options"/> column:
             <dl>
               <dt><code>remote_ip</code></dt>
@@ -908,7 +908,7 @@
             For Citrix XenServer, this is the value of the <code>MAC</code>
             field in the VIF record for this interface.</dd>
           <dt><code>iface-id</code></dt>
-          <dd>A system-unique identifier for the interface.  On XenServer, 
+          <dd>A system-unique identifier for the interface.  On XenServer,
             this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
         </dl>
         <p>
@@ -947,7 +947,7 @@
             set.</dd>
           <dt><code>ipsec_psk</code></dt>
           <dd>Required key for GRE-over-IPsec interfaces.  Specifies a
-            pre-shared key for authentication that must be identical on 
+            pre-shared key for authentication that must be identical on
             both sides of the tunnel.  Additionally, the
             <code>ipsec_local_ip</code> key must also be set.</dd>
         </dl>
@@ -1237,7 +1237,7 @@
     <p>
       Open vSwitch supports two kinds of OpenFlow controllers:
     </p>
-    
+
     <dl>
       <dt>Primary controllers</dt>
       <dd>
@@ -1593,7 +1593,7 @@
           that describes how Open vSwitch contacts this OVSDB client over the
           network:
         </p>
-        
+
         <dl>
           <dt><code>in-band</code></dt>
           <dd>
