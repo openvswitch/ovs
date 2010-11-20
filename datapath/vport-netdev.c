@@ -264,9 +264,7 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 
 	skb_warn_if_lro(skb);
 
-	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
-	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, false);
 
 	vport_receive(vport, skb);

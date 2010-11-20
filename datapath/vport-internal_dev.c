@@ -73,12 +73,10 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	struct internal_dev *internal_dev = internal_dev_priv(netdev);
 	struct vport *vport = rcu_dereference(internal_dev->vport);
 
-	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, true);
 	OVS_CB(skb)->flow = NULL;
 
 	vport_receive(vport, skb);
-
 	return 0;
 }
 
