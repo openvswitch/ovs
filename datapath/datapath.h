@@ -19,6 +19,8 @@
 #include <linux/seqlock.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
+
+#include "checksum.h"
 #include "flow.h"
 #include "dp_sysfs.h"
 
@@ -100,13 +102,6 @@ struct datapath {
 	unsigned int sflow_probability;
 };
 
-enum csum_type {
-	OVS_CSUM_NONE = 0,
-	OVS_CSUM_UNNECESSARY = 1,
-	OVS_CSUM_COMPLETE = 2,
-	OVS_CSUM_PARTIAL = 3,
-};
-
 /**
  * struct ovs_skb_cb - OVS data in skb CB
  * @vport: The datapath port on which the skb entered the switch.
@@ -119,7 +114,9 @@ enum csum_type {
 struct ovs_skb_cb {
 	struct vport		*vport;
 	struct sw_flow		*flow;
+#ifdef NEED_CSUM_NORMALIZE
 	enum csum_type		ip_summed;
+#endif
 	__be32			tun_id;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
@@ -135,17 +132,5 @@ void set_internal_devs_mtu(const struct datapath *dp);
 
 struct datapath *get_dp(int dp_idx);
 const char *dp_name(const struct datapath *dp);
-
-#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-int vswitch_skb_checksum_setup(struct sk_buff *skb);
-#else
-static inline int vswitch_skb_checksum_setup(struct sk_buff *skb)
-{
-	return 0;
-}
-#endif
-
-void compute_ip_summed(struct sk_buff *skb, bool xmit);
-void forward_ip_summed(struct sk_buff *skb);
 
 #endif /* datapath.h */

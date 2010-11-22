@@ -21,6 +21,7 @@
 #include <net/checksum.h>
 
 #include "actions.h"
+#include "checksum.h"
 #include "datapath.h"
 #include "openvswitch/datapath-protocol.h"
 #include "vport.h"
@@ -56,7 +57,7 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 	if (vh->h_vlan_proto != htons(ETH_P_8021Q) || skb->len < VLAN_ETH_HLEN)
 		return skb;
 
-	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
+	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
@@ -93,7 +94,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 		vh->h_vlan_TCI = tci;
 
-		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE) {
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE) {
 			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
 
 			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
@@ -182,7 +183,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 		/* GSO doesn't fix up the hardware computed checksum so this
 		 * will only be hit in the non-GSO case. */
-		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
 			skb->csum = csum_add(skb->csum, csum_partial(skb->data
 						+ ETH_HLEN, VLAN_HLEN, 0));
 	}
@@ -221,10 +222,10 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 {
 	__be32 diff[] = { ~from, to };
 
-	if (OVS_CB(skb)->ip_summed != OVS_CSUM_PARTIAL) {
+	if (get_ip_summed(skb) != OVS_CSUM_PARTIAL) {
 		*sum = csum_fold(csum_partial((char *)diff, sizeof(diff),
 				~csum_unfold(*sum)));
-		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE && pseudohdr)
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE && pseudohdr)
 			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
 						~skb->csum);
 	} else if (pseudohdr)

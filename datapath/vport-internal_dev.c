@@ -14,6 +14,7 @@
 #include <linux/skbuff.h>
 #include <linux/version.h>
 
+#include "checksum.h"
 #include "datapath.h"
 #include "vport-generic.h"
 #include "vport-internal_dev.h"

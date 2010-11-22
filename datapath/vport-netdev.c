@@ -16,6 +16,7 @@
 
 #include <net/llc.h>
 
+#include "checksum.h"
 #include "datapath.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"

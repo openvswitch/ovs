@@ -29,6 +29,7 @@
 #include <net/xfrm.h>
 
 #include "actions.h"
+#include "checksum.h"
 #include "datapath.h"
 #include "table.h"
 #include "tunnel.h"
