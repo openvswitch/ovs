@@ -70,9 +70,12 @@ void cls_rule_init(const struct flow *, const struct flow_wildcards *,
                    unsigned int priority, struct cls_rule *);
 void cls_rule_init_exact(const struct flow *, unsigned int priority,
                          struct cls_rule *);
+void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
+
 void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
                          int flow_format, uint64_t cookie, struct cls_rule *);
-void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
+void cls_rule_to_match(const struct cls_rule *, int flow_format,
+                       struct ofp_match *);
 
 void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 

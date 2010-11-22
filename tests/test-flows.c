@@ -19,10 +19,12 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include "classifier.h"
 #include "openflow/openflow.h"
 #include "timeval.h"
 #include "ofpbuf.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "pcap.h"
 #include "util.h"
 #include "vlog.h"
@@ -54,6 +56,7 @@ main(int argc OVS_UNUSED, char *argv[])
     while (fread(&expected_match, sizeof expected_match, 1, flows)) {
         struct ofpbuf *packet;
         struct ofp_match extracted_match;
+        struct cls_rule rule;
         struct flow flow;
 
         n++;
@@ -66,7 +69,8 @@ main(int argc OVS_UNUSED, char *argv[])
         }
 
         flow_extract(packet, 0, 1, &flow);
-        flow_to_match(&flow, 0, false, &extracted_match);
+        cls_rule_init_exact(&flow, 0, &rule);
+        cls_rule_to_match(&rule, NXFF_OPENFLOW10, &extracted_match);
 
         if (memcmp(&expected_match, &extracted_match, sizeof expected_match)) {
             char *exp_s = ofp_match_to_string(&expected_match, 2);

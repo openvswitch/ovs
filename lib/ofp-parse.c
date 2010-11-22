@@ -608,8 +608,7 @@ parse_ofp_flow_mod_str(char *string, uint16_t command)
     parse_ofp_str(&pf, buffer, string);
 
     ofm = buffer->data;
-    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
-                  &ofm->match);
+    cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &ofm->match);
     ofm->command = htons(command);
     ofm->cookie = htonll(pf.cookie);
     ofm->idle_timeout = htons(pf.idle_timeout);

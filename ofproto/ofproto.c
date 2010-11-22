@@ -3412,8 +3412,7 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  ofconn->flow_format, &ofs->match);
+    cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
@@ -3544,8 +3543,7 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     size_t act_len = sizeof *rule->actions * rule->n_actions;
 
     query_stats(ofproto, rule, &packet_count, &byte_count);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
-                  NXFF_OPENFLOW10, &match);
+    cls_rule_to_match(&rule->cr, NXFF_OPENFLOW10, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -4815,8 +4813,7 @@ compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     struct ofpbuf *buf;
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, ofconn->flow_format,
-                  &ofr->match);
+    cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;

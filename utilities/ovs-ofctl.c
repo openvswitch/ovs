@@ -443,8 +443,7 @@ do_dump_flows(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
-    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
-                  &req->match);
+    cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &req->match);
     memset(&req->pad, 0, sizeof req->pad);
     req->out_port = htons(pf.out_port);
 
@@ -460,8 +459,7 @@ do_dump_aggregate(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
     parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
-    flow_to_match(&pf.rule.flow, pf.rule.wc.wildcards, NXFF_OPENFLOW10,
-                  &req->match);
+    cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &req->match);
     memset(&req->pad, 0, sizeof req->pad);
     req->out_port = htons(pf.out_port);
 

@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include "byte-order.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
@@ -85,19 +86,6 @@ cls_rule_init_exact(const struct flow *flow,
     rule->priority = priority;
 }
 
-/* Converts the ofp_match in 'match' (with format 'flow_format', one of NXFF_*)
- * into a cls_rule in 'rule', with the given 'priority'.  'cookie' is used
- * when 'flow_format' is NXFF_TUN_ID_FROM_COOKIE. */
-void
-cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
-                    int flow_format, uint64_t cookie,
-                    struct cls_rule *rule)
-{
-    flow_from_match(match, flow_format, cookie, &rule->flow, &rule->wc);
-    rule->priority = !rule->wc.wildcards ? UINT16_MAX : priority;
-    cls_rule_zero_wildcarded_fields(rule);
-}
-
 /* Initializes 'rule' as a "catch-all" rule that matches every packet, with
  * priority 'priority'. */
 void
@@ -106,6 +94,77 @@ cls_rule_init_catchall(struct cls_rule *rule, unsigned int priority)
     memset(&rule->flow, 0, sizeof rule->flow);
     flow_wildcards_init(&rule->wc, OVSFW_ALL | FWW_ALL);
     rule->priority = priority;
+}
+
+/* Converts the ofp_match in 'match' (with format 'flow_format', one of NXFF_*)
+ * into a cls_rule in 'rule', with the given 'priority'.  'cookie' is used
+ * when 'flow_format' is NXFF_TUN_ID_FROM_COOKIE. */
+void
+cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
+                    int flow_format, uint64_t cookie,
+                    struct cls_rule *rule)
+{
+    uint32_t wildcards = ntohl(match->wildcards) & OVSFW_ALL;
+
+    rule->priority = !wildcards ? UINT16_MAX : priority;
+
+    rule->flow.tun_id = 0;
+    if (flow_format != NXFF_TUN_ID_FROM_COOKIE) {
+        wildcards |= NXFW_TUN_ID;
+    } else {
+        if (!(wildcards & NXFW_TUN_ID)) {
+            rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
+        }
+    }
+    if (wildcards & OFPFW_DL_DST) {
+        /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
+         * internally to OVS it excludes the multicast bit, which has to be set
+         * separately with FWW_ETH_MCAST. */
+        wildcards |= FWW_ETH_MCAST;
+    }
+    flow_wildcards_init(&rule->wc, wildcards);
+
+    rule->flow.nw_src = match->nw_src;
+    rule->flow.nw_dst = match->nw_dst;
+    rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
+                     : ntohs(match->in_port));
+    rule->flow.dl_vlan = match->dl_vlan;
+    rule->flow.dl_vlan_pcp = match->dl_vlan_pcp;
+    rule->flow.dl_type = match->dl_type;
+    rule->flow.tp_src = match->tp_src;
+    rule->flow.tp_dst = match->tp_dst;
+    memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
+    memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
+    rule->flow.nw_tos = match->nw_tos;
+    rule->flow.nw_proto = match->nw_proto;
+
+    cls_rule_zero_wildcarded_fields(rule);
+}
+
+/* Converts 'rule' into an OpenFlow match structure 'match' with the given flow
+ * format 'flow_format' (one of NXFF_*). */
+void
+cls_rule_to_match(const struct cls_rule *rule, int flow_format,
+                  struct ofp_match *match)
+{
+    match->wildcards = htonl(rule->wc.wildcards
+                             & (flow_format == NXFF_TUN_ID_FROM_COOKIE
+                                ? OVSFW_ALL : OFPFW_ALL));
+    match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
+                           : rule->flow.in_port);
+    match->dl_vlan = rule->flow.dl_vlan;
+    match->dl_vlan_pcp = rule->flow.dl_vlan_pcp;
+    memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
+    memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
+    match->dl_type = rule->flow.dl_type;
+    match->nw_src = rule->flow.nw_src;
+    match->nw_dst = rule->flow.nw_dst;
+    match->nw_tos = rule->flow.nw_tos;
+    match->nw_proto = rule->flow.nw_proto;
+    match->tp_src = rule->flow.tp_src;
+    match->tp_dst = rule->flow.tp_dst;
+    memset(match->pad1, '\0', sizeof match->pad1);
+    memset(match->pad2, '\0', sizeof match->pad2);
 }
 
 /* For each bit or field wildcarded in 'rule', sets the corresponding bit or
