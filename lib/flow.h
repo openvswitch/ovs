@@ -146,7 +146,6 @@ struct flow_wildcards {
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
 
-ovs_be32 flow_nw_bits_to_mask(uint32_t wildcards, int shift);
 void flow_wildcards_init(struct flow_wildcards *, uint32_t wildcards);
 void flow_wildcards_init_exact(struct flow_wildcards *);
 

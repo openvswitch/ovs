@@ -32,6 +32,7 @@
 #include "byte-order.h"
 #include "command-line.h"
 #include "flow.h"
+#include "ofp-util.h"
 #include "packets.h"
 #include "unaligned.h"
 
@@ -200,9 +201,12 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         if (wild->wc.wildcards & f->wildcards) {
             uint32_t test = get_unaligned_u32(wild_field);
             uint32_t ip = get_unaligned_u32(fixed_field);
-            int shift = (f_idx == CLS_F_IDX_NW_SRC
-                         ? OFPFW_NW_SRC_SHIFT : OFPFW_NW_DST_SHIFT);
-            uint32_t mask = flow_nw_bits_to_mask(wild->wc.wildcards, shift);
+            uint32_t mask;
+            int shift;
+
+            shift = (f_idx == CLS_F_IDX_NW_SRC
+                     ? OFPFW_NW_SRC_SHIFT : OFPFW_NW_DST_SHIFT);
+            mask = ofputil_wcbits_to_netmask(wild->wc.wildcards >> shift);
             if (!((test ^ ip) & mask)) {
                 continue;
             }

@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
+#include "openvswitch/types.h"
 #include "random.h"
 #include "util.h"
 
@@ -245,6 +246,15 @@ BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
         ((uint8_t *) ip)[1],                    \
         ((uint8_t *) ip)[2],                    \
         ((uint8_t *) ip)[3]
+
+/* Returns true if 'netmask' is a CIDR netmask, that is, if it consists of N
+ * high-order 1-bits and 32-N low-order 0-bits. */
+static inline bool
+ip_is_cidr(ovs_be32 netmask)
+{
+    uint32_t x = ~ntohl(netmask);
+    return !(x & (x + 1));
+}
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)

@@ -24,6 +24,7 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "hash.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
@@ -358,22 +359,6 @@ flow_print(FILE *stream, const struct flow *flow)
 
 /* flow_wildcards functions. */
 
-/* Given the wildcard bit count in bits 'shift' through 'shift + 5' (inclusive)
- * of 'wildcards', returns a 32-bit bit mask with a 1 in each bit that must
- * match and a 0 in each bit that is wildcarded.
- *
- * The bits in 'wildcards' are in the format used in enum ofp_flow_wildcards: 0
- * is exact match, 1 ignores the LSB, 2 ignores the 2 least-significant bits,
- * ..., 32 and higher wildcard the entire field.  This is the *opposite* of the
- * usual convention where e.g. /24 indicates that 8 bits (not 24 bits) are
- * wildcarded. */
-ovs_be32
-flow_nw_bits_to_mask(uint32_t wildcards, int shift)
-{
-    wildcards = (wildcards >> shift) & 0x3f;
-    return wildcards < 32 ? htonl(~((1u << wildcards) - 1)) : 0;
-}
-
 /* Return 'wildcards' in "normal form":
  *
  *   - Forces unknown bits to 0.
@@ -404,8 +389,8 @@ void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
     wc->wildcards = flow_wildcards_normalize(wildcards) | FWW_REGS;
-    wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
-    wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
+    wc->nw_src_mask = ofputil_wcbits_to_netmask(wildcards >> OFPFW_NW_SRC_SHIFT);
+    wc->nw_dst_mask = ofputil_wcbits_to_netmask(wildcards >> OFPFW_NW_DST_SHIFT);
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
 }
 
@@ -512,30 +497,13 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask);
 }
 
-static int
-count_ones(ovs_be32 mask)
-{
-#if __GNUC__ >= 4
-    return __builtin_popcount(mask);
-#else
-    int bits;
-
-    for (bits = 0; mask; bits++) {
-        mask &= mask - 1;
-    }
-
-    return bits;
-#endif
-}
-
 static bool
 set_nw_mask(struct flow_wildcards *wc, ovs_be32 mask,
             ovs_be32 *maskp, int shift)
 {
-    int wcbits = 32 - count_ones(mask);
-    if (flow_nw_bits_to_mask(wcbits, 0) == mask) {
+    if (ip_is_cidr(mask)) {
         wc->wildcards &= ~(0x3f << shift);
-        wc->wildcards |= wcbits << shift;
+        wc->wildcards |= ofputil_netmask_to_wcbits(mask) << shift;
         *maskp = mask;
         return true;
     } else {

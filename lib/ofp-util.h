@@ -30,6 +30,11 @@ struct ofp_action_header;
 /* Alignment of ofp_actions. */
 #define OFP_ACTION_ALIGN 8
 
+/* Converting OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK wildcard bit counts to
+ * and from IP bitmasks. */
+ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
+int ofputil_netmask_to_wcbits(ovs_be32 netmask);
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);

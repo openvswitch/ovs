@@ -32,6 +32,41 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+/* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
+ * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
+ * is wildcarded.
+ *
+ * The bits in 'wcbits' are in the format used in enum ofp_flow_wildcards: 0
+ * is exact match, 1 ignores the LSB, 2 ignores the 2 least-significant bits,
+ * ..., 32 and higher wildcard the entire field.  This is the *opposite* of the
+ * usual convention where e.g. /24 indicates that 8 bits (not 24 bits) are
+ * wildcarded. */
+ovs_be32
+ofputil_wcbits_to_netmask(int wcbits)
+{
+    wcbits &= 0x3f;
+    return wcbits < 32 ? htonl(~((1u << wcbits) - 1)) : 0;
+}
+
+/* Given the IP netmask 'netmask', returns the number of bits of the IP address
+ * that it wildcards.  'netmask' must be a CIDR netmask (see ip_is_cidr()). */
+int
+ofputil_netmask_to_wcbits(ovs_be32 netmask)
+{
+    assert(ip_is_cidr(netmask));
+#if __GNUC__ >= 4
+    return netmask == htonl(0) ? 32 : __builtin_ctz(ntohl(netmask));
+#else
+    int wcbits;
+
+    for (wcbits = 32; netmask; wcbits--) {
+        netmask &= netmask - 1;
+    }
+
+    return wcbits;
+#endif
+}
+
 /* Returns a transaction ID to use for an outgoing OpenFlow message. */
 static ovs_be32
 alloc_xid(void)
@@ -747,10 +782,10 @@ normalize_match(struct ofp_match *m)
             m->tp_src = m->tp_dst = 0;
         }
         if (wc & OFPFW_NW_SRC_MASK) {
-            m->nw_src &= flow_nw_bits_to_mask(wc, OFPFW_NW_SRC_SHIFT);
+            m->nw_src &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_SRC_SHIFT);
         }
         if (wc & OFPFW_NW_DST_MASK) {
-            m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
+            m->nw_dst &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_DST_SHIFT);
         }
         if (wc & OFPFW_NW_TOS) {
             m->nw_tos = 0;
@@ -762,10 +797,10 @@ normalize_match(struct ofp_match *m)
             m->nw_proto = 0;
         }
         if (wc & OFPFW_NW_SRC_MASK) {
-            m->nw_src &= flow_nw_bits_to_mask(wc, OFPFW_NW_SRC_SHIFT);
+            m->nw_src &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_SRC_SHIFT);
         }
         if (wc & OFPFW_NW_DST_MASK) {
-            m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
+            m->nw_dst &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_DST_SHIFT);
         }
         m->tp_src = m->tp_dst = m->nw_tos = 0;
     } else {
