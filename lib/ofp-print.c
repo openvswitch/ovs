@@ -314,6 +314,11 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         return -1;
     }
 
+    if (!len) {
+        ds_put_format(string, "***zero-length action***\n");
+        return 8;
+    }
+
     if ((len % OFP_ACTION_ALIGN) != 0) {
         ds_put_format(string,
                       "***action %"PRIu16" length not a multiple of %d***\n",
