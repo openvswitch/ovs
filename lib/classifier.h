@@ -102,6 +102,7 @@ void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
 
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 
+void cls_rule_format(const struct cls_rule *, struct ds *);
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 

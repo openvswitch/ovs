@@ -23,6 +23,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "odp-util.h"
 #include "ofp-util.h"
 #include "packets.h"
 
@@ -321,28 +322,176 @@ cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
             && flow_equal(&a->flow, &b->flow));
 }
 
+static void
+format_ip_netmask(struct ds *s, const char *name, ovs_be32 ip,
+                  ovs_be32 netmask)
+{
+    if (netmask) {
+        ds_put_format(s, "%s="IP_FMT, name, IP_ARGS(&ip));
+        if (netmask != htonl(UINT32_MAX)) {
+            if (ip_is_cidr(netmask)) {
+                int wcbits = ofputil_netmask_to_wcbits(netmask);
+                ds_put_format(s, "/%d", 32 - wcbits);
+            } else {
+                ds_put_format(s, "/"IP_FMT, IP_ARGS(&netmask));
+            }
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+void
+cls_rule_format(const struct cls_rule *rule, struct ds *s)
+{
+    const struct flow_wildcards *wc = &rule->wc;
+    size_t start_len = s->length;
+    flow_wildcards_t w = wc->wildcards;
+    const struct flow *f = &rule->flow;
+    bool skip_type = false;
+    bool skip_proto = false;
+
+    int i;
+
+    if (rule->priority != 32768) {
+        ds_put_format(s, "priority=%d,", rule->priority);
+    }
+
+    if (!(w & FWW_DL_TYPE)) {
+        skip_type = true;
+        if (f->dl_type == htons(ETH_TYPE_IP)) {
+            if (!(w & FWW_NW_PROTO)) {
+                skip_proto = true;
+                if (f->nw_proto == IP_TYPE_ICMP) {
+                    ds_put_cstr(s, "icmp,");
+                } else if (f->nw_proto == IP_TYPE_TCP) {
+                    ds_put_cstr(s, "tcp,");
+                } else if (f->nw_proto == IP_TYPE_UDP) {
+                    ds_put_cstr(s, "udp,");
+                } else {
+                    ds_put_cstr(s, "ip,");
+                    skip_proto = false;
+                }
+            } else {
+                ds_put_cstr(s, "ip,");
+            }
+        } else if (f->dl_type == htons(ETH_TYPE_ARP)) {
+            ds_put_cstr(s, "arp,");
+        } else {
+            skip_type = false;
+        }
+    }
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        switch (wc->reg_masks[i]) {
+        case 0:
+            break;
+        case UINT32_MAX:
+            ds_put_format(s, "reg%d=0x%"PRIx32",", i, f->regs[i]);
+            break;
+        default:
+            ds_put_format(s, "reg%d=0x%"PRIx32"/0x%"PRIx32",",
+                          i, f->regs[i], wc->reg_masks[i]);
+            break;
+        }
+    }
+    if (!(w & FWW_TUN_ID)) {
+        ds_put_format(s, "tun_id=0x%"PRIx32",", ntohl(f->tun_id));
+    }
+    if (!(w & FWW_IN_PORT)) {
+        ds_put_format(s, "in_port=%"PRIu16",",
+                      odp_port_to_ofp_port(f->in_port));
+    }
+    if (wc->vlan_tci_mask) {
+        ovs_be16 vid_mask = wc->vlan_tci_mask & htons(VLAN_VID_MASK);
+        ovs_be16 pcp_mask = wc->vlan_tci_mask & htons(VLAN_PCP_MASK);
+        ovs_be16 cfi = wc->vlan_tci_mask & htons(VLAN_CFI);
+
+        if (cfi && f->vlan_tci & htons(VLAN_CFI)
+            && (!vid_mask || vid_mask == htons(VLAN_VID_MASK))
+            && (!pcp_mask || pcp_mask == htons(VLAN_PCP_MASK))
+            && (vid_mask || pcp_mask)) {
+            if (vid_mask) {
+                ds_put_format(s, "dl_vlan=%"PRIu16",",
+                              vlan_tci_to_vid(f->vlan_tci));
+            }
+            if (pcp_mask) {
+                ds_put_format(s, "dl_vlan_pcp=%d,",
+                              vlan_tci_to_pcp(f->vlan_tci));
+            }
+        } else {
+            ds_put_format(s, "vlan_tci=0x%04"PRIx16"/0x%04"PRIx16",",
+                          ntohs(f->vlan_tci), ntohs(wc->vlan_tci_mask));
+        }
+    }
+    if (!(w & FWW_DL_SRC)) {
+        ds_put_format(s, "dl_src="ETH_ADDR_FMT",", ETH_ADDR_ARGS(f->dl_src));
+    }
+    switch (w & (FWW_DL_DST | FWW_ETH_MCAST)) {
+    case 0:
+        ds_put_format(s, "dl_dst="ETH_ADDR_FMT",", ETH_ADDR_ARGS(f->dl_dst));
+        break;
+    case FWW_DL_DST:
+        ds_put_format(s, "dl_dst="ETH_ADDR_FMT"/01:00:00:00:00:00,",
+                      ETH_ADDR_ARGS(f->dl_dst));
+        break;
+    case FWW_ETH_MCAST:
+        ds_put_format(s, "dl_dst="ETH_ADDR_FMT"/fe:ff:ff:ff:ff:ff,",
+                      ETH_ADDR_ARGS(f->dl_dst));
+        break;
+    case FWW_DL_DST | FWW_ETH_MCAST:
+        break;
+    }
+    if (!skip_type && !(w & FWW_DL_TYPE)) {
+        ds_put_format(s, "dl_type=0x%04"PRIx16",", ntohs(f->dl_type));
+    }
+    format_ip_netmask(s, "nw_src", f->nw_src, wc->nw_src_mask);
+    format_ip_netmask(s, "nw_dst", f->nw_dst, wc->nw_dst_mask);
+    if (!skip_proto && !(w & FWW_NW_PROTO)) {
+        if (f->dl_type == htons(ETH_TYPE_ARP)) {
+            ds_put_format(s, "arp_op=%"PRIu8, f->nw_proto);
+        } else {
+            ds_put_format(s, "nw_proto=%"PRIu8, f->nw_proto);
+        }
+    }
+    if (!(w & FWW_NW_TOS)) {
+        ds_put_format(s, "nw_tos=%"PRIu8",", f->nw_tos);
+    }
+    if (f->nw_proto == IP_TYPE_ICMP) {
+        if (!(w & FWW_TP_SRC)) {
+            ds_put_format(s, "icmp_type=%"PRIu16, ntohs(f->tp_src));
+        }
+        if (!(w & FWW_TP_DST)) {
+            ds_put_format(s, "icmp_code=%"PRIu16, ntohs(f->tp_dst));
+        }
+    } else {
+        if (!(w & FWW_TP_SRC)) {
+            ds_put_format(s, "tp_src=%"PRIu16, ntohs(f->tp_src));
+        }
+        if (!(w & FWW_TP_DST)) {
+            ds_put_format(s, "tp_dst=%"PRIu16, ntohs(f->tp_dst));
+        }
+    }
+
+    if (s->length > start_len && ds_last(s) == ',') {
+        s->length--;
+    }
+}
+
 /* Converts 'rule' to a string and returns the string.  The caller must free
  * the string (with free()). */
 char *
 cls_rule_to_string(const struct cls_rule *rule)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
-    ds_put_format(&s, "wildcards=%x priority=%u ",
-                  rule->wc.wildcards, rule->priority);
-    flow_format(&s, &rule->flow);
-    return ds_cstr(&s);
+    cls_rule_format(rule, &s);
+    return ds_steal_cstr(&s);
 }
 
-/* Prints cls_rule 'rule', for debugging.
- *
- * (The output could be improved and expanded, but this was good enough to
- * debug the classifier.) */
 void
 cls_rule_print(const struct cls_rule *rule)
 {
-    printf("wildcards=%x priority=%u ", rule->wc.wildcards, rule->priority);
-    flow_print(stdout, &rule->flow);
-    putc('\n', stdout);
+    char *s = cls_rule_to_string(rule);
+    puts(s);
+    free(s);
 }
 
 /* Initializes 'cls' as a classifier that initially contains no classification
