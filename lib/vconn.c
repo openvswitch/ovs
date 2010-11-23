@@ -682,6 +682,10 @@ vconn_recv_xid(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp)
  * is stored in '*replyp' for the caller to examine and free.  Otherwise
  * returns a positive errno value, or EOF, and sets '*replyp' to null.
  *
+ * 'request' should be an OpenFlow request that requires a reply.  Otherwise,
+ * if there is no reply, this function can end up blocking forever (or until
+ * the peer drops the connection).
+ *
  * 'request' is always destroyed, regardless of the return value. */
 int
 vconn_transact(struct vconn *vconn, struct ofpbuf *request,
@@ -696,6 +700,79 @@ vconn_transact(struct vconn *vconn, struct ofpbuf *request,
         ofpbuf_delete(request);
     }
     return error ? error : vconn_recv_xid(vconn, send_xid, replyp);
+}
+
+/* Sends 'request' followed by a barrier request to 'vconn', then blocks until
+ * it receives a reply to the barrier.  If successful, stores the reply to
+ * 'request' in '*replyp', if one was received, and otherwise NULL, then
+ * returns 0.  Otherwise returns a positive errno value, or EOF, and sets
+ * '*replyp' to null.
+ *
+ * This function is useful for sending an OpenFlow request that doesn't
+ * ordinarily include a reply but might report an error in special
+ * circumstances.
+ *
+ * 'request' is always destroyed, regardless of the return value. */
+int
+vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
+                       struct ofpbuf **replyp)
+{
+    ovs_be32 request_xid;
+    ovs_be32 barrier_xid;
+    struct ofpbuf *barrier;
+    int error;
+
+    *replyp = NULL;
+
+    /* Send request. */
+    request_xid = ((struct ofp_header *) request->data)->xid;
+    error = vconn_send_block(vconn, request);
+    if (error) {
+        ofpbuf_delete(request);
+        return error;
+    }
+
+    /* Send barrier. */
+    make_openflow(sizeof(struct ofp_header), OFPT_BARRIER_REQUEST, &barrier);
+    barrier_xid = ((struct ofp_header *) barrier->data)->xid;
+    error = vconn_send_block(vconn, barrier);
+    if (error) {
+        ofpbuf_delete(barrier);
+        return error;
+    }
+
+    for (;;) {
+        struct ofpbuf *msg;
+        ovs_be32 msg_xid;
+        int error;
+
+        error = vconn_recv_block(vconn, &msg);
+        if (error) {
+            ofpbuf_delete(*replyp);
+            *replyp = NULL;
+            return error;
+        }
+
+        msg_xid = ((struct ofp_header *) msg->data)->xid;
+        if (msg_xid == request_xid) {
+            if (*replyp) {
+                VLOG_WARN_RL(&bad_ofmsg_rl, "%s: duplicate replies with "
+                             "xid %08"PRIx32, vconn->name, ntohl(msg_xid));
+                ofpbuf_delete(*replyp);
+            }
+            *replyp = msg;
+        } else {
+            ofpbuf_delete(msg);
+            if (msg_xid == barrier_xid) {
+                return 0;
+            } else {
+                VLOG_DBG_RL(&bad_ofmsg_rl, "%s: reply with xid %08"PRIx32
+                            " != expected %08"PRIx32" or %08"PRIx32,
+                            vconn->name, ntohl(msg_xid),
+                            ntohl(request_xid), ntohl(barrier_xid));
+            }
+        }
+    }
 }
 
 void
