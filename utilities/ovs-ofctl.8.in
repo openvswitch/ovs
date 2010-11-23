@@ -357,6 +357,23 @@ When \fBtun_id\fR is specified, \fBovs\-ofctl\fR will automatically
 attempt to negotiate use of one of these extensions, preferring NXM.
 If the switch does not support either extension, then \fBovs\-ofctl\fR
 will report a fatal error.
+.IP "\fBreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in
+register number \fIidx\fR.  The valid range of \fIidx\fR depends on
+the switch.  \fIvalue\fR and \fImask\fR are 32-bit integers, by
+default in decimal (use a \fB0x\fR prefix to specify hexadecimal).
+Arbitrary \fImask\fR values are allowed: a 1-bit in \fImask\fR
+indicates that the corresponding bit in \fIvalue\fR must match
+exactly, and a 0-bit wildcards that bit.
+.IP
+When a packet enters an OpenFlow switch, all of the registers are set
+to 0.  Only explicit Nicira extension actions change register values.
+.IP
+Register matches require support for the NXM (Nicira Extended Match)
+extension to OpenFlow.  When a register match is specified,
+\fBovs\-ofctl\fR will automatically attempt to negotiate use of this
+extension.  If the switch does not support NXM, then \fBovs\-ofctl\fR
+will report a fatal error.
 .
 .PP
 The following shorthand notations are also available:

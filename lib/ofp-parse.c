@@ -18,6 +18,7 @@
 
 #include "ofp-parse.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 
@@ -515,6 +516,24 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     }
 }
 
+static void
+parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
+{
+    uint32_t reg_value, reg_mask;
+
+    if (!strcmp(value, "ANY") || !strcmp(value, "*")) {
+        cls_rule_set_reg_masked(rule, reg_idx, 0, 0);
+    } else if (sscanf(value, "%"SCNi32"/%"SCNi32,
+                      &reg_value, &reg_mask) == 2) {
+        cls_rule_set_reg_masked(rule, reg_idx, reg_value, reg_mask);
+    } else if (sscanf(value, "%"SCNi32, &reg_value)) {
+        cls_rule_set_reg(rule, reg_idx, reg_value);
+    } else {
+        ovs_fatal(0, "register fields must take the form <value> "
+                  "or <value>/<mask>");
+    }
+}
+
 /* Convert 'string' (as described in the Flow Syntax section of the ovs-ofctl
  * man page) into 'pf'.  If 'actions' is specified, an action must be in
  * 'string' and may be expanded or reallocated. */
@@ -595,6 +614,12 @@ parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
                 } else {
                     parse_field_value(&pf->rule, f->index, value);
                 }
+            } else if (!strncmp(name, "reg", 3) && isdigit(name[3])) {
+                unsigned int reg_idx = atoi(name + 3);
+                if (reg_idx >= FLOW_N_REGS) {
+                    ovs_fatal(0, "only %d registers supported", FLOW_N_REGS);
+                }
+                parse_reg_value(&pf->rule, reg_idx, value);
             } else {
                 ovs_fatal(0, "unknown keyword %s", name);
             }
