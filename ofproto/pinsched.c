@@ -21,10 +21,10 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "hmap.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
-#include "port-array.h"
 #include "random.h"
 #include "rconn.h"
 #include "status.h"
@@ -32,6 +32,8 @@
 #include "vconn.h"
 
 struct pinqueue {
+    struct hmap_node node;      /* In struct pinsched's 'queues' hmap. */
+    uint16_t port_no;           /* Port number. */
     struct list packets;        /* Contains "struct ofpbuf"s. */
     int n;                      /* Number of packets in 'packets'. */
 };
@@ -42,9 +44,9 @@ struct pinsched {
     int burst_limit;          /* Maximum token bucket size, in packets. */
 
     /* One queue per physical port. */
-    struct port_array queues;   /* Array of "struct pinqueue *"s. */
+    struct hmap queues;         /* Contains "struct pinqueue"s. */
     int n_queued;               /* Sum over queues[*].n. */
-    unsigned int last_tx_port;  /* Last port checked in round-robin. */
+    struct pinqueue *next_txq;  /* Next pinqueue check in round-robin. */
 
     /* Token bucket.
      *
@@ -67,16 +69,53 @@ struct pinsched {
     struct status_category *ss_cat;
 };
 
+static void
+advance_txq(struct pinsched *ps)
+{
+    struct hmap_node *next;
+
+    next = (ps->next_txq
+            ? hmap_next(&ps->queues, &ps->next_txq->node)
+            : hmap_first(&ps->queues));
+    ps->next_txq = next ? CONTAINER_OF(next, struct pinqueue, node) : NULL;
+}
+
 static struct ofpbuf *
-dequeue_packet(struct pinsched *ps, struct pinqueue *q, unsigned int port_no)
+dequeue_packet(struct pinsched *ps, struct pinqueue *q)
 {
     struct ofpbuf *packet = ofpbuf_from_list(list_pop_front(&q->packets));
-    if (--q->n == 0) {
-        free(q);
-        port_array_delete(&ps->queues, port_no);
-    }
+    q->n--;
     ps->n_queued--;
     return packet;
+}
+
+/* Destroys 'q' and removes it from 'ps''s set of queues.
+ * (The caller must ensure that 'q' is empty.) */
+static void
+pinqueue_destroy(struct pinsched *ps, struct pinqueue *q)
+{
+    hmap_remove(&ps->queues, &q->node);
+    free(q);
+}
+
+static struct pinqueue *
+pinqueue_get(struct pinsched *ps, uint16_t port_no)
+{
+    uint32_t hash = hash_int(port_no, 0);
+    struct pinqueue *q;
+
+    HMAP_FOR_EACH_IN_BUCKET (q, node, hash, &ps->queues) {
+        if (port_no == q->port_no) {
+            return q;
+        }
+    }
+
+    q = xmalloc(sizeof *q);
+    hmap_insert(&ps->queues, &q->node, hash);
+    q->port_no = port_no;
+    list_init(&q->packets);
+    q->n = 0;
+    return q;
 }
 
 /* Drop a packet from the longest queue in 'ps'. */
@@ -85,17 +124,13 @@ drop_packet(struct pinsched *ps)
 {
     struct pinqueue *longest;   /* Queue currently selected as longest. */
     int n_longest;              /* # of queues of same length as 'longest'. */
-    unsigned int longest_port_no;
-    unsigned int port_no;
     struct pinqueue *q;
 
     ps->n_queue_dropped++;
 
-    longest = port_array_first(&ps->queues, &port_no);
-    longest_port_no = port_no;
-    n_longest = 1;
-    while ((q = port_array_next(&ps->queues, &port_no)) != NULL) {
-        if (longest->n < q->n) {
+    longest = NULL;
+    HMAP_FOR_EACH (q, node, &ps->queues) {
+        if (!longest || longest->n < q->n) {
             longest = q;
             n_longest = 1;
         } else if (longest->n == q->n) {
@@ -105,24 +140,36 @@ drop_packet(struct pinsched *ps)
              * distribution (Knuth algorithm 3.4.2R). */
             if (!random_range(n_longest)) {
                 longest = q;
-                longest_port_no = port_no;
             }
         }
     }
 
     /* FIXME: do we want to pop the tail instead? */
-    ofpbuf_delete(dequeue_packet(ps, longest, longest_port_no));
+    ofpbuf_delete(dequeue_packet(ps, longest));
+    if (longest->n == 0) {
+        pinqueue_destroy(ps, longest);
+    }
 }
 
 /* Remove and return the next packet to transmit (in round-robin order). */
 static struct ofpbuf *
 get_tx_packet(struct pinsched *ps)
 {
-    struct pinqueue *q = port_array_next(&ps->queues, &ps->last_tx_port);
-    if (!q) {
-        q = port_array_first(&ps->queues, &ps->last_tx_port);
+    struct ofpbuf *packet;
+    struct pinqueue *q;
+
+    if (!ps->next_txq) {
+        advance_txq(ps);
     }
-    return dequeue_packet(ps, q, ps->last_tx_port);
+
+    q = ps->next_txq;
+    packet = dequeue_packet(ps, q);
+    advance_txq(ps);
+    if (q->n == 0) {
+        pinqueue_destroy(ps, q);
+    }
+
+    return packet;
 }
 
 /* Add tokens to the bucket based on elapsed time. */
@@ -175,13 +222,7 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         if (ps->n_queued >= ps->burst_limit) {
             drop_packet(ps);
         }
-        q = port_array_get(&ps->queues, port_no);
-        if (!q) {
-            q = xmalloc(sizeof *q);
-            list_init(&q->packets);
-            q->n = 0;
-            port_array_set(&ps->queues, port_no, q);
-        }
+        q = pinqueue_get(ps, port_no);
         list_push_back(&q->packets, &packet->list_node);
         q->n++;
         ps->n_queued++;
@@ -236,9 +277,9 @@ pinsched_create(int rate_limit, int burst_limit, struct switch_status *ss)
     struct pinsched *ps;
 
     ps = xzalloc(sizeof *ps);
-    port_array_init(&ps->queues);
+    hmap_init(&ps->queues);
     ps->n_queued = 0;
-    ps->last_tx_port = PORT_ARRAY_SIZE;
+    ps->next_txq = NULL;
     ps->last_fill = time_msec();
     ps->tokens = rate_limit * 100;
     ps->n_txq = 0;
@@ -259,14 +300,14 @@ void
 pinsched_destroy(struct pinsched *ps)
 {
     if (ps) {
-        struct pinqueue *queue;
-        unsigned int port_no;
+        struct pinqueue *q, *next;
 
-        PORT_ARRAY_FOR_EACH (queue, &ps->queues, port_no) {
-            ofpbuf_list_delete(&queue->packets);
-            free(queue);
+        HMAP_FOR_EACH_SAFE (q, next, node, &ps->queues) {
+            hmap_remove(&ps->queues, &q->node);
+            ofpbuf_list_delete(&q->packets);
+            free(q);
         }
-        port_array_destroy(&ps->queues);
+        hmap_destroy(&ps->queues);
         switch_status_unregister(ps->ss_cat);
         free(ps);
     }
