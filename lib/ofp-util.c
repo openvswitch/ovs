@@ -821,11 +821,8 @@ void *
 make_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
                struct ofpbuf **bufferp)
 {
-    struct nicira_header *nxh = make_openflow_xid(openflow_len, OFPT_VENDOR,
-                                                  xid, bufferp);
-    nxh->vendor = htonl(NX_VENDOR_ID);
-    nxh->subtype = htonl(subtype);
-    return nxh;
+    *bufferp = ofpbuf_new(openflow_len);
+    return put_nxmsg_xid(openflow_len, subtype, xid, *bufferp);
 }
 
 /* Appends 'openflow_len' bytes to 'buffer', starting with an OpenFlow header
@@ -870,6 +867,28 @@ put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
     return oh;
 }
 
+/* Similar to put_openflow() but append a Nicira vendor extension message with
+ * the specific 'subtype'.  'subtype' should be in host byte order. */
+void *
+put_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf *buffer)
+{
+    return put_nxmsg_xid(openflow_len, subtype, alloc_xid(), buffer);
+}
+
+/* Similar to put_openflow_xid() but append a Nicira vendor extension message
+ * with the specific 'subtype'.  'subtype' should be in host byte order. */
+void *
+put_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
+              struct ofpbuf *buffer)
+{
+    struct nicira_header *nxh;
+
+    nxh = put_openflow_xid(openflow_len, OFPT_VENDOR, xid, buffer);
+    nxh->vendor = htonl(NX_VENDOR_ID);
+    nxh->subtype = htonl(subtype);
+    return nxh;
+}
+
 /* Updates the 'length' field of the OpenFlow message in 'buffer' to
  * 'buffer->size'. */
 void
@@ -877,6 +896,37 @@ update_openflow_length(struct ofpbuf *buffer)
 {
     struct ofp_header *oh = ofpbuf_at_assert(buffer, 0, sizeof *oh);
     oh->length = htons(buffer->size);
+}
+
+/* Creates an ofp_stats_request with the given 'type' and 'body_len' bytes of
+ * space allocated for the 'body' member.  Returns the first byte of the 'body'
+ * member. */
+void *
+ofputil_make_stats_request(size_t body_len, uint16_t type,
+                           struct ofpbuf **bufferp)
+{
+    struct ofp_stats_request *osr;
+    osr = make_openflow((offsetof(struct ofp_stats_request, body)
+                        + body_len), OFPT_STATS_REQUEST, bufferp);
+    osr->type = htons(type);
+    osr->flags = htons(0);
+    return osr->body;
+}
+
+/* Creates a stats request message with Nicira as vendor and the given
+ * 'subtype', of total length 'openflow_len'.  Returns the message. */
+void *
+ofputil_make_nxstats_request(size_t openflow_len, uint32_t subtype,
+                             struct ofpbuf **bufferp)
+{
+    struct nicira_stats_msg *nsm;
+
+    nsm = make_openflow(openflow_len, OFPT_STATS_REQUEST, bufferp);
+    nsm->type = htons(OFPST_VENDOR);
+    nsm->flags = htons(0);
+    nsm->vendor = htonl(NX_VENDOR_ID);
+    nsm->subtype = htonl(subtype);
+    return nsm;
 }
 
 /* Returns the first byte of the 'body' member of the ofp_stats_request or

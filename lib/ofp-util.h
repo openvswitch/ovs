@@ -115,14 +115,26 @@ char *ofp_match_to_literal_string(const struct ofp_match *match);
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);
+
 void *make_openflow_xid(size_t openflow_len, uint8_t type,
                         ovs_be32 xid, struct ofpbuf **);
 void *make_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
                      struct ofpbuf **);
+
 void *put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *);
 void *put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                        struct ofpbuf *);
+
+void *put_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf *);
+void *put_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
+                    struct ofpbuf *);
+
 void update_openflow_length(struct ofpbuf *);
+
+void *ofputil_make_stats_request(size_t body_len, uint16_t type,
+                                 struct ofpbuf **);
+void *ofputil_make_nxstats_request(size_t openflow_len, uint32_t subtype,
+                                   struct ofpbuf **);
 
 const void *ofputil_stats_body(const struct ofp_header *);
 size_t ofputil_stats_body_len(const struct ofp_header *oh);
