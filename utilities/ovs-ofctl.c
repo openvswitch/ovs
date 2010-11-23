@@ -58,6 +58,9 @@ static bool strict;
  * particular flow format or -1 to let ovs-ofctl choose intelligently. */
 static int preferred_flow_format = -1;
 
+/* -m, --more: Additional verbosity for ofp-print functions. */
+static int verbosity;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
@@ -84,6 +87,7 @@ parse_options(int argc, char *argv[])
         {"timeout", required_argument, 0, 't'},
         {"strict", no_argument, 0, OPT_STRICT},
         {"flow-format", required_argument, 0, 'F'},
+        {"more", no_argument, 0, 'm'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
@@ -117,6 +121,10 @@ parse_options(int argc, char *argv[])
             if (preferred_flow_format < 0) {
                 ovs_fatal(0, "unknown flow format `%s'", optarg);
             }
+            break;
+
+        case 'm':
+            verbosity++;
             break;
 
         case 'h':
@@ -176,6 +184,7 @@ usage(void)
     printf("\nOther options:\n"
            "  --strict                    use strict match for flow commands\n"
            "  -F, --flow-format=FORMAT    force particular flow format\n"
+           "  -m, --more                  be more verbose printing OpenFlow\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
@@ -299,7 +308,7 @@ dump_transaction(const char *vconn_name, struct ofpbuf *request)
     update_openflow_length(request);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
-    ofp_print(stdout, reply->data, reply->size, 1);
+    ofp_print(stdout, reply->data, reply->size, verbosity + 1);
     vconn_close(vconn);
 }
 
@@ -329,7 +338,7 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
         if (send_xid == recv_xid) {
             struct ofp_stats_reply *osr;
 
-            ofp_print(stdout, reply->data, reply->size, 1);
+            ofp_print(stdout, reply->data, reply->size, verbosity + 1);
 
             osr = ofpbuf_at(reply, 0, sizeof *osr);
             done = !osr || !(ntohs(osr->flags) & OFPSF_REPLY_MORE);
@@ -365,7 +374,7 @@ transact_multiple_noreply(struct vconn *vconn, struct list *requests)
     run(vconn_transact_multiple_noreply(vconn, requests, &reply),
         "talking to %s", vconn_get_name(vconn));
     if (reply) {
-        ofp_print(stderr, reply->data, reply->size, 2);
+        ofp_print(stderr, reply->data, reply->size, verbosity + 2);
         exit(1);
     }
     ofpbuf_delete(reply);
@@ -414,7 +423,7 @@ do_status(int argc, char *argv[])
     if (reply->header.type != OFPT_VENDOR
         || reply->vendor != ntohl(NX_VENDOR_ID)
         || reply->subtype != ntohl(NXT_STATUS_REPLY)) {
-        ofp_print(stderr, b->data, b->size, 2);
+        ofp_print(stderr, b->data, b->size, verbosity + 2);
         ovs_fatal(0, "bad reply");
     }
 
@@ -678,7 +687,7 @@ monitor_vconn(struct vconn *vconn)
     for (;;) {
         struct ofpbuf *b;
         run(vconn_recv_block(vconn, &b), "vconn_recv");
-        ofp_print(stderr, b->data, b->size, 2);
+        ofp_print(stderr, b->data, b->size, verbosity + 2);
         ofpbuf_delete(b);
     }
 }
@@ -809,9 +818,9 @@ do_ping(int argc, char *argv[])
             || rpy_hdr->xid != rq_hdr->xid
             || rpy_hdr->type != OFPT_ECHO_REPLY) {
             printf("Reply does not match request.  Request:\n");
-            ofp_print(stdout, request, request->size, 2);
+            ofp_print(stdout, request, request->size, verbosity + 2);
             printf("Reply:\n");
-            ofp_print(stdout, reply, reply->size, 2);
+            ofp_print(stdout, reply, reply->size, verbosity + 2);
         }
         printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
                reply->size - sizeof *rpy_hdr, argv[1], ntohl(rpy_hdr->xid),
@@ -896,7 +905,7 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
         struct ofpbuf *packet, *next;
 
         LIST_FOR_EACH_SAFE (packet, next, list_node, &packets) {
-            ofp_print(stdout, packet->data, packet->size, 0);
+            ofp_print(stdout, packet->data, packet->size, verbosity);
             list_remove(&packet->list_node);
             ofpbuf_delete(packet);
         }

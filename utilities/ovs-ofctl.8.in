@@ -652,6 +652,12 @@ This option, where \fIformat\fR is one of the formats listed in the
 above table, overrides \fBovs\-ofctl\fR's default choice of flow
 format.  If a command cannot work as requested using the requested
 flow format, \fBovs\-ofctl\fR will report a fatal error.
+.
+.IP "\fB\-m\fR"
+.IQ "\fB\-\-more\fR"
+Increases the verbosity of OpenFlow messages printed and logged by
+\fBovs\-ofctl\fR commands.  Specify this option more than once to
+increase verbosity further.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
