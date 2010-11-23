@@ -2168,7 +2168,8 @@ set_dst(struct dst *p, const struct flow *flow,
 {
     p->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
               : in_port->vlan >= 0 ? in_port->vlan
-              : ntohs(flow->dl_vlan));
+              : flow->vlan_tci == 0 ? OFP_VLAN_NONE
+              : vlan_tci_to_vid(flow->vlan_tci));
     return choose_output_iface(out_port, flow->dl_src, &p->dp_ifidx, tags);
 }
 
@@ -2270,8 +2271,14 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
              struct dst dsts[], tag_type *tags, uint16_t *nf_output_iface)
 {
     mirror_mask_t mirrors = in_port->src_mirrors;
+    int flow_vlan;
     struct dst *dst = dsts;
     size_t i;
+
+    flow_vlan = vlan_tci_to_vid(flow->vlan_tci);
+    if (flow_vlan == 0) {
+        flow_vlan = OFP_VLAN_NONE;
+    }
 
     if (out_port == FLOOD_PORT) {
         /* XXX use ODP_FLOOD if no vlans or bonding. */
@@ -2308,7 +2315,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
                     if (port_includes_vlan(port, m->out_vlan)
                         && set_dst(dst, flow, in_port, port, tags))
                     {
-                        int flow_vlan;
 
                         if (port->vlan < 0) {
                             dst->vlan = m->out_vlan;
@@ -2323,10 +2329,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
                          * tagging tags place. This is necessary because
                          * dst->vlan is the final vlan, after removing implicit
                          * tags. */
-                        flow_vlan = ntohs(flow->dl_vlan);
-                        if (flow_vlan == 0) {
-                            flow_vlan = OFP_VLAN_NONE;
-                        }
                         if (port == in_port && dst->vlan == flow_vlan) {
                             /* Don't send out input port on same VLAN. */
                             continue;
@@ -2339,7 +2341,7 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
         mirrors &= mirrors - 1;
     }
 
-    partition_dsts(dsts, dst - dsts, ntohs(flow->dl_vlan));
+    partition_dsts(dsts, dst - dsts, flow_vlan);
     return dst - dsts;
 }
 
@@ -2368,7 +2370,10 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
     n_dsts = compose_dsts(br, flow, vlan, in_port, out_port, dsts, tags,
                           nf_output_iface);
 
-    cur_vlan = ntohs(flow->dl_vlan);
+    cur_vlan = vlan_tci_to_vid(flow->vlan_tci);
+    if (cur_vlan == 0) {
+        cur_vlan = OFP_VLAN_NONE;
+    }
     for (p = dsts; p < &dsts[n_dsts]; p++) {
         union odp_action *a;
         if (p->vlan != cur_vlan) {
@@ -2377,7 +2382,7 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
             } else {
                 a = odp_actions_add(actions, ODPAT_SET_DL_TCI);
                 a->dl_tci.tci = htons(p->vlan & VLAN_VID_MASK);
-                a->dl_tci.tci |= htons(flow->dl_vlan_pcp << VLAN_PCP_SHIFT);
+                a->dl_tci.tci |= flow->vlan_tci & htons(VLAN_PCP_MASK);
             }
             cur_vlan = p->vlan;
         }
@@ -2393,25 +2398,16 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
 static int flow_get_vlan(struct bridge *br, const struct flow *flow,
                          struct port *in_port, bool have_packet)
 {
-    /* Note that dl_vlan of 0 and of OFP_VLAN_NONE both mean that the packet
-     * belongs to VLAN 0, so we should treat both cases identically.  (In the
-     * former case, the packet has an 802.1Q header that specifies VLAN 0,
-     * presumably to allow a priority to be specified.  In the latter case, the
-     * packet does not have any 802.1Q header.) */
-    int vlan = ntohs(flow->dl_vlan);
-    if (vlan == OFP_VLAN_NONE) {
-        vlan = 0;
-    }
+    int vlan = vlan_tci_to_vid(flow->vlan_tci);
     if (in_port->vlan >= 0) {
         if (vlan) {
             /* XXX support double tagging? */
             if (have_packet) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %"PRIu16" tagged "
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
                              "packet received on port %s configured with "
                              "implicit VLAN %"PRIu16,
-                             br->name, ntohs(flow->dl_vlan),
-                             in_port->name, in_port->vlan);
+                             br->name, vlan, in_port->name, in_port->vlan);
             }
             return -1;
         }

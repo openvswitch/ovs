@@ -141,18 +141,6 @@ nxm_field_bits(uint32_t header)
 /* nx_pull_match() and helpers. */
 
 static int
-parse_tci(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
-{
-    const flow_wildcards_t FWW_DL_TCI = FWW_DL_VLAN | FWW_DL_VLAN_PCP;
-
-    if ((rule->wc.wildcards & FWW_DL_TCI) != FWW_DL_TCI) {
-        return NXM_DUP_TYPE;
-    } else {
-        return cls_rule_set_dl_tci_masked(rule, tci, mask) ? 0 : NXM_INVALID;
-    }
-}
-
-static int
 parse_nx_reg(const struct nxm_field *f,
              struct flow *flow, struct flow_wildcards *wc,
              const void *value, const void *maskp)
@@ -226,11 +214,20 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* 802.1Q header. */
     case NFI_NXM_OF_VLAN_TCI:
-        return parse_tci(rule, get_unaligned_u16(value), htons(UINT16_MAX));
-
+        if (wc->vlan_tci_mask) {
+            return NXM_DUP_TYPE;
+        } else {
+            cls_rule_set_dl_tci(rule, get_unaligned_u16(value));
+            return 0;
+        }
     case NFI_NXM_OF_VLAN_TCI_W:
-        return parse_tci(rule, get_unaligned_u16(value),
-                         get_unaligned_u16(mask));
+        if (wc->vlan_tci_mask) {
+            return NXM_DUP_TYPE;
+        } else {
+            cls_rule_set_dl_tci_masked(rule, get_unaligned_u16(value),
+                                       get_unaligned_u16(mask));
+            return 0;
+        }
 
         /* IP header. */
     case NFI_NXM_OF_IP_TOS:
@@ -479,6 +476,23 @@ nxm_put_16w(struct ofpbuf *b, uint32_t header, ovs_be16 value, ovs_be16 mask)
 }
 
 static void
+nxm_put_16m(struct ofpbuf *b, uint32_t header, ovs_be16 value, ovs_be16 mask)
+{
+    switch (mask) {
+    case 0:
+        break;
+
+    case CONSTANT_HTONS(UINT16_MAX):
+        nxm_put_16(b, header, value);
+        break;
+
+    default:
+        nxm_put_16w(b, NXM_MAKE_WILD_HEADER(header), value, mask);
+        break;
+    }
+}
+
+static void
 nxm_put_32(struct ofpbuf *b, uint32_t header, ovs_be32 value)
 {
     nxm_put_header(b, header);
@@ -500,7 +514,7 @@ nxm_put_32m(struct ofpbuf *b, uint32_t header, ovs_be32 value, ovs_be32 mask)
     case 0:
         break;
 
-    case UINT32_MAX:
+    case CONSTANT_HTONL(UINT32_MAX):
         nxm_put_32(b, header, value);
         break;
 
@@ -554,7 +568,6 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
     const size_t start_len = b->size;
-    ovs_be16 vid, pcp;
     int match_len;
     int i;
 
@@ -577,32 +590,9 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     }
 
     /* 802.1Q. */
-    vid = flow->dl_vlan & htons(VLAN_VID_MASK);
-    pcp = htons((flow->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
-    switch (wc & (FWW_DL_VLAN | FWW_DL_VLAN_PCP)) {
-    case FWW_DL_VLAN | FWW_DL_VLAN_PCP:
-        break;
-    case FWW_DL_VLAN:
-        nxm_put_16w(b, NXM_OF_VLAN_TCI_W, pcp | htons(VLAN_CFI),
-                     htons(VLAN_PCP_MASK | VLAN_CFI));
-        break;
-    case FWW_DL_VLAN_PCP:
-        if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
-            nxm_put_16(b, NXM_OF_VLAN_TCI, 0);
-        } else {
-            nxm_put_16w(b, NXM_OF_VLAN_TCI_W, vid | htons(VLAN_CFI),
-                         htons(VLAN_VID_MASK | VLAN_CFI));
-        }
-        break;
-    case 0:
-        if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
-            nxm_put_16(b, NXM_OF_VLAN_TCI, 0);
-        } else {
-            nxm_put_16(b, NXM_OF_VLAN_TCI, vid | pcp | htons(VLAN_CFI));
-        }
-        break;
-    }
+    nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.vlan_tci_mask);
 
+    /* L3. */
     if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
         if (!(wc & FWW_NW_TOS)) {
@@ -902,13 +892,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
         return ntohs(flow->dl_type);
 
     case NFI_NXM_OF_VLAN_TCI:
-        if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
-            return 0;
-        } else {
-            return (ntohs(flow->dl_vlan & htons(VLAN_VID_MASK))
-                    | ((flow->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK)
-                    | VLAN_CFI);
-        }
+        return ntohs(flow->vlan_tci);
 
     case NFI_NXM_OF_IP_TOS:
         return flow->nw_tos;
@@ -1000,9 +984,7 @@ nxm_execute_reg_move(const struct nx_action_reg_move *action,
     if (NXM_IS_NX_REG(dst->header)) {
         flow->regs[NXM_NX_REG_IDX(dst->header)] = new_data;
     } else if (dst->header == NXM_OF_VLAN_TCI) {
-        ovs_be16 vlan_tci = htons(new_data & VLAN_CFI ? new_data : 0);
-        flow->dl_vlan = htons(vlan_tci_to_vid(vlan_tci));
-        flow->dl_vlan_pcp = vlan_tci_to_pcp(vlan_tci);
+        flow->vlan_tci = htons(new_data);
     } else if (dst->header == NXM_NX_TUN_ID) {
         flow->tun_id = htonl(new_data);
     } else {

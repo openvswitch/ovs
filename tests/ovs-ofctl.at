@@ -56,10 +56,10 @@ NXM_OF_VLAN_TCI(f009)
 NXM_OF_VLAN_TCI(f009) NXM_OF_VLAN_TCI(f009)
 NXM_OF_VLAN_TCI(0000)           # Packets without 802.1Q header.
 NXM_OF_VLAN_TCI(3123)           # Packets with VID=123, PCP=1.
-NXM_OF_VLAN_TCI(0123)           # Does not make sense.
+NXM_OF_VLAN_TCI(0123)           # Does not make sense (but supported anyway)
 NXM_OF_VLAN_TCI_W(1123/1fff)    # Packets with VID=123, any PCP.
 NXM_OF_VLAN_TCI_W(f000/f000)    # Packets with any VID, PCP=7.
-NXM_OF_VLAN_TCI_W(0000/e000)    # No 802.1Q or with VID=0 (not yet supported)
+NXM_OF_VLAN_TCI_W(0000/e000)    # No 802.1Q or with VID=0
 
 # IP TOS
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_TOS(f0)
@@ -134,8 +134,7 @@ NXM_NX_TUN_ID(00000000abcdef01)
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 ])
-AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [stdout])
-AT_CHECK([cat stdout], [0], [dnl
+AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl
 <any>
 
 # in port
@@ -162,10 +161,10 @@ NXM_OF_VLAN_TCI(f009)
 nx_pull_match() returned error 44010105
 NXM_OF_VLAN_TCI(0000)
 NXM_OF_VLAN_TCI(3123)
-nx_pull_match() returned error 44010100
+NXM_OF_VLAN_TCI(0123)
 NXM_OF_VLAN_TCI_W(1123/1fff)
 NXM_OF_VLAN_TCI_W(f000/f000)
-nx_pull_match() returned error 44010100
+NXM_OF_VLAN_TCI_W(0000/e000)
 
 # IP TOS
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_TOS(f0)

@@ -167,14 +167,7 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
     key->nw_src = flow->nw_src;
     key->nw_dst = flow->nw_dst;
     key->in_port = flow->in_port;
-    if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
-        key->dl_tci = htons(0);
-    } else {
-        uint16_t vid = flow->dl_vlan & htons(VLAN_VID_MASK);
-        uint16_t pcp = htons((flow->dl_vlan_pcp << VLAN_PCP_SHIFT)
-                             & VLAN_PCP_MASK);
-        key->dl_tci = vid | pcp | htons(ODP_TCI_PRESENT);
-    }
+    key->dl_tci = flow->vlan_tci;
     key->dl_type = flow->dl_type;
     key->tp_src = flow->tp_src;
     key->tp_dst = flow->tp_dst;
@@ -192,13 +185,7 @@ odp_flow_key_to_flow(const struct odp_flow_key *key, struct flow *flow)
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;
     flow->in_port = key->in_port;
-    if (key->dl_tci) {
-        flow->dl_vlan = htons(vlan_tci_to_vid(key->dl_tci));
-        flow->dl_vlan_pcp = vlan_tci_to_pcp(key->dl_tci);
-    } else {
-        flow->dl_vlan = htons(OFP_VLAN_NONE);
-        flow->dl_vlan_pcp = 0;
-    }
+    flow->vlan_tci = key->dl_tci;
     flow->dl_type = key->dl_type;
     flow->tp_src = key->tp_src;
     flow->tp_dst = key->tp_dst;

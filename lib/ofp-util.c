@@ -72,7 +72,6 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
  * name. */
 #define WC_INVARIANT_LIST \
     WC_INVARIANT_BIT(IN_PORT) \
-    WC_INVARIANT_BIT(DL_VLAN) \
     WC_INVARIANT_BIT(DL_SRC) \
     WC_INVARIANT_BIT(DL_DST) \
     WC_INVARIANT_BIT(DL_TYPE) \
@@ -109,6 +108,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
 {
     struct flow_wildcards *wc = &rule->wc;
     unsigned int ofpfw;
+    ovs_be16 vid, pcp;
 
     /* Initialize rule->priority. */
     ofpfw = ntohl(match->wildcards);
@@ -117,9 +117,6 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
 
     /* Initialize most of rule->wc. */
     wc->wildcards = ofpfw & WC_INVARIANTS;
-    if (ofpfw & OFPFW_DL_VLAN_PCP) {
-        wc->wildcards |= FWW_DL_VLAN_PCP;
-    }
     if (ofpfw & OFPFW_NW_TOS) {
         wc->wildcards |= FWW_NW_TOS;
     }
@@ -141,13 +138,11 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
         wc->wildcards |= FWW_ETH_MCAST;
     }
 
-    /* Initialize rule->flow. */
+    /* Initialize most of rule->flow. */
     rule->flow.nw_src = match->nw_src;
     rule->flow.nw_dst = match->nw_dst;
     rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
-    rule->flow.dl_vlan = match->dl_vlan;
-    rule->flow.dl_vlan_pcp = match->dl_vlan_pcp;
     rule->flow.dl_type = match->dl_type;
     rule->flow.tp_src = match->tp_src;
     rule->flow.tp_dst = match->tp_dst;
@@ -155,6 +150,49 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
     rule->flow.nw_tos = match->nw_tos;
     rule->flow.nw_proto = match->nw_proto;
+
+    /* Translate VLANs. */
+    vid = match->dl_vlan & htons(VLAN_VID_MASK);
+    pcp = htons((match->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
+    switch (ofpfw & (OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP)) {
+    case OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP:
+        /* Wildcard everything. */
+        rule->flow.vlan_tci = htons(0);
+        rule->wc.vlan_tci_mask = htons(0);
+        break;
+
+    case OFPFW_DL_VLAN_PCP:
+        if (match->dl_vlan == htons(OFP_VLAN_NONE)) {
+            /* Match only packets without 802.1Q header. */
+            rule->flow.vlan_tci = htons(0);
+            rule->wc.vlan_tci_mask = htons(0xffff);
+        } else {
+            /* Wildcard PCP, specific VID. */
+            rule->flow.vlan_tci = vid | htons(VLAN_CFI);
+            rule->wc.vlan_tci_mask = htons(VLAN_VID_MASK | VLAN_CFI);
+        }
+        break;
+
+    case OFPFW_DL_VLAN:
+        /* Wildcard VID, specific PCP. */
+        rule->flow.vlan_tci = pcp | htons(VLAN_CFI);
+        rule->wc.vlan_tci_mask = htons(VLAN_PCP_MASK | VLAN_CFI);
+        break;
+
+    case 0:
+        if (match->dl_vlan == htons(OFP_VLAN_NONE)) {
+            /* This case is odd, since we can't have a specific PCP without an
+             * 802.1Q header.  However, older versions of OVS treated this as
+             * matching packets withut an 802.1Q header, so we do here too. */
+            rule->flow.vlan_tci = htons(0);
+            rule->wc.vlan_tci_mask = htons(0xffff);
+        } else {
+            /* Specific VID and PCP. */
+            rule->flow.vlan_tci = vid | pcp | htons(VLAN_CFI);
+            rule->wc.vlan_tci_mask = htons(0xffff);
+        }
+        break;
+    }
 
     /* Clean up. */
     cls_rule_zero_wildcarded_fields(rule);
@@ -173,13 +211,10 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, int flow_format,
     const struct flow_wildcards *wc = &rule->wc;
     unsigned int ofpfw;
 
-    /* Figure out OpenFlow wildcards. */
+    /* Figure out most OpenFlow wildcards. */
     ofpfw = wc->wildcards & WC_INVARIANTS;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
-    if (wc->wildcards & FWW_DL_VLAN_PCP) {
-        ofpfw |= OFPFW_DL_VLAN_PCP;
-    }
     if (wc->wildcards & FWW_NW_TOS) {
         ofpfw |= OFPFW_NW_TOS;
     }
@@ -187,12 +222,32 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, int flow_format,
         ofpfw |= NXFW_TUN_ID;
     }
 
-    /* Compose match structure. */
+    /* Translate VLANs. */
+    match->dl_vlan = htons(0);
+    match->dl_vlan_pcp = 0;
+    if (rule->wc.vlan_tci_mask == htons(0)) {
+        ofpfw |= OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP;
+    } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
+               && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
+        match->dl_vlan = htons(OFP_VLAN_NONE);
+    } else {
+        if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+            ofpfw |= OFPFW_DL_VLAN;
+        } else {
+            match->dl_vlan = htons(vlan_tci_to_vid(rule->flow.vlan_tci));
+        }
+
+        if (!(rule->wc.vlan_tci_mask & htons(VLAN_PCP_MASK))) {
+            ofpfw |= OFPFW_DL_VLAN_PCP;
+        } else {
+            match->dl_vlan_pcp = vlan_tci_to_pcp(rule->flow.vlan_tci);
+        }
+    }
+
+    /* Compose most of the match structure. */
     match->wildcards = htonl(ofpfw);
     match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
                            : rule->flow.in_port);
-    match->dl_vlan = rule->flow.dl_vlan;
-    match->dl_vlan_pcp = rule->flow.dl_vlan_pcp;
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
     match->dl_type = rule->flow.dl_type;

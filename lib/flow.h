@@ -41,21 +41,20 @@ struct flow {
     ovs_be32 nw_src;            /* IP source address. */
     ovs_be32 nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */
-    ovs_be16 dl_vlan;           /* Input VLAN. */
+    ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 tp_src;            /* TCP/UDP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP destination port. */
     uint8_t dl_src[6];          /* Ethernet source address. */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
-    uint8_t dl_vlan_pcp;        /* Input VLAN priority. */
     uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */
 };
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (37 + FLOW_N_REGS * 4)
-#define FLOW_PAD_SIZE 3
+#define FLOW_SIG_SIZE (36 + FLOW_N_REGS * 4)
+#define FLOW_PAD_SIZE 0
 BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
@@ -99,7 +98,6 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 
 /* Same values and meanings as corresponding OFPFW_* bits. */
 #define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
-#define FWW_DL_VLAN     ((OVS_FORCE flow_wildcards_t) (1 << 1))
 #define FWW_DL_SRC      ((OVS_FORCE flow_wildcards_t) (1 << 2))
 #define FWW_DL_DST      ((OVS_FORCE flow_wildcards_t) (1 << 3))
                                               /* excluding the multicast bit */
@@ -108,14 +106,14 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 #define FWW_TP_SRC      ((OVS_FORCE flow_wildcards_t) (1 << 6))
 #define FWW_TP_DST      ((OVS_FORCE flow_wildcards_t) (1 << 7))
 /* Same meanings as corresponding OFPFW_* bits, but differ in value. */
-#define FWW_DL_VLAN_PCP ((OVS_FORCE flow_wildcards_t) (1 << 8))
-#define FWW_NW_TOS      ((OVS_FORCE flow_wildcards_t) (1 << 9))
+#define FWW_NW_TOS      ((OVS_FORCE flow_wildcards_t) (1 << 1))
 /* No OFPFW_* bits, but they do have corresponding OVSFW_* bits. */
-#define FWW_TUN_ID      ((OVS_FORCE flow_wildcards_t) (1 << 10))
+#define FWW_TUN_ID      ((OVS_FORCE flow_wildcards_t) (1 << 8))
 /* No corresponding OFPFW_* or OVSFW_* bits. */
-#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 11))
+#define FWW_VLAN_TCI    ((OVS_FORCE flow_wildcards_t) (1 << 9)
+#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 10))
                                                        /* multicast bit only */
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 12)) - 1))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 11)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
@@ -126,6 +124,7 @@ struct flow_wildcards {
     uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
+    ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
 };
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);

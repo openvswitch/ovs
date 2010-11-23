@@ -88,8 +88,7 @@ parse_vlan(struct ofpbuf *b, struct flow *flow)
 
     if (b->size >= sizeof(struct qtag_prefix) + sizeof(ovs_be16)) {
         struct qtag_prefix *qp = ofpbuf_pull(b, sizeof *qp);
-        flow->dl_vlan = qp->tci & htons(VLAN_VID_MASK);
-        flow->dl_vlan_pcp = vlan_tci_to_pcp(qp->tci);
+        flow->vlan_tci = qp->tci | htons(VLAN_CFI);
     }
 }
 
@@ -149,7 +148,6 @@ flow_extract(struct ofpbuf *packet, ovs_be32 tun_id, uint16_t in_port,
     memset(flow, 0, sizeof *flow);
     flow->tun_id = tun_id;
     flow->in_port = in_port;
-    flow->dl_vlan = htons(OFP_VLAN_NONE);
 
     packet->l2 = b.data;
     packet->l3 = NULL;
@@ -165,7 +163,7 @@ flow_extract(struct ofpbuf *packet, ovs_be32 tun_id, uint16_t in_port,
     memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
     memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
 
-    /* dl_type, dl_vlan, dl_vlan_pcp. */
+    /* dl_type, vlan_tci. */
     ofpbuf_pull(&b, ETH_ADDR_LEN * 2);
     if (eth->eth_type == htons(ETH_TYPE_VLAN)) {
         parse_vlan(&b, flow);
@@ -261,18 +259,21 @@ flow_to_string(const struct flow *flow)
 void
 flow_format(struct ds *ds, const struct flow *flow)
 {
-    ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16
-                      ":vlan%"PRIu16":pcp%"PRIu8
-                      " mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT
+    ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16":tci(",
+                  ntohl(flow->tun_id), flow->in_port);
+    if (flow->vlan_tci) {
+        ds_put_format(ds, "vlan%"PRIu16",pcp%d",
+                      vlan_tci_to_vid(flow->vlan_tci),
+                      vlan_tci_to_pcp(flow->vlan_tci));
+    } else {
+        ds_put_char(ds, '0');
+    }
+    ds_put_format(ds, ") mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT
                       " type%04"PRIx16
                       " proto%"PRIu8
                       " tos%"PRIu8
                       " ip"IP_FMT"->"IP_FMT
                       " port%"PRIu16"->%"PRIu16,
-                  ntohl(flow->tun_id),
-                  flow->in_port,
-                  ntohs(flow->dl_vlan),
-                  flow->dl_vlan_pcp,
                   ETH_ADDR_ARGS(flow->dl_src),
                   ETH_ADDR_ARGS(flow->dl_dst),
                   ntohs(flow->dl_type),
@@ -302,6 +303,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->nw_src_mask = htonl(0);
     wc->nw_dst_mask = htonl(0);
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
+    wc->vlan_tci_mask = htons(0);
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -313,6 +315,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->nw_src_mask = htonl(UINT32_MAX);
     wc->nw_dst_mask = htonl(UINT32_MAX);
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
+    wc->vlan_tci_mask = htons(UINT16_MAX);
 }
 
 /* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
@@ -324,7 +327,8 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 
     if (wc->wildcards
         || wc->nw_src_mask != htonl(UINT32_MAX)
-        || wc->nw_dst_mask != htonl(UINT32_MAX)) {
+        || wc->nw_dst_mask != htonl(UINT32_MAX)
+        || wc->vlan_tci_mask != htons(UINT16_MAX)) {
         return false;
     }
 
@@ -353,6 +357,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     for (i = 0; i < FLOW_N_REGS; i++) {
         dst->reg_masks[i] = src1->reg_masks[i] & src2->reg_masks[i];
     }
+    dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -362,7 +367,7 @@ flow_wildcards_hash(const struct flow_wildcards *wc)
     /* If you change struct flow_wildcards and thereby trigger this
      * assertion, please check that the new struct flow_wildcards has no holes
      * in it before you update the assertion. */
-    BUILD_ASSERT_DECL(sizeof *wc == 12 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(sizeof *wc == 16 + FLOW_N_REGS * 4);
     return hash_bytes(wc, sizeof *wc, 0);
 }
 
@@ -376,7 +381,8 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 
     if (a->wildcards != b->wildcards
         || a->nw_src_mask != b->nw_src_mask
-        || a->nw_dst_mask != b->nw_dst_mask) {
+        || a->nw_dst_mask != b->nw_dst_mask
+        || a->vlan_tci_mask != b->vlan_tci_mask) {
         return false;
     }
 
@@ -405,7 +411,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
 
     return (a->wildcards & ~b->wildcards
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
-            || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask);
+            || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
+            || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask);
 }
 
 static bool

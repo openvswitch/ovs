@@ -139,84 +139,77 @@ cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
-bool
+void
 cls_rule_set_dl_tci(struct cls_rule *rule, ovs_be16 tci)
 {
-    return cls_rule_set_dl_tci_masked(rule, tci, htons(0xffff));
+    cls_rule_set_dl_tci_masked(rule, tci, htons(0xffff));
 }
 
-bool
+void
 cls_rule_set_dl_tci_masked(struct cls_rule *rule, ovs_be16 tci, ovs_be16 mask)
 {
-    switch (ntohs(mask)) {
-    case 0xffff:
-        if (tci == htons(0)) {
-            /* Match only packets that have no 802.1Q header. */
-            rule->wc.wildcards &= ~(FWW_DL_VLAN | FWW_DL_VLAN_PCP);
-            rule->flow.dl_vlan = htons(OFP_VLAN_NONE);
-            rule->flow.dl_vlan_pcp = 0;
-            return true;
-        } else if (tci & htons(VLAN_CFI)) {
-            /* Match only packets that have a specific 802.1Q VID and PCP. */
-            rule->wc.wildcards &= ~(FWW_DL_VLAN | FWW_DL_VLAN_PCP);
-            rule->flow.dl_vlan = htons(vlan_tci_to_vid(tci));
-            rule->flow.dl_vlan_pcp = vlan_tci_to_pcp(tci);
-            return true;
-        } else {
-            /* Impossible. */
-            return false;
-        }
+    rule->flow.vlan_tci = tci & mask;
+    rule->wc.vlan_tci_mask = mask;
+}
 
-    case 0x1fff:
-        if (!(tci & htons(VLAN_CFI))) {
-            return false;
-        } else {
-            /* Match only packets that have a specific 802.1Q VID. */
-            cls_rule_set_dl_vlan(rule, tci & htons(VLAN_VID_MASK));
-            rule->wc.wildcards |= FWW_DL_VLAN_PCP;
-            rule->flow.dl_vlan_pcp = 0;
-            return true;
-        }
-
-    case 0xf000:
-        if (!(tci & htons(VLAN_CFI))) {
-            return false;
-        } else {
-            /* Match only packets that have a specific 802.1Q PCP. */
-            cls_rule_set_dl_vlan_pcp(rule, vlan_tci_to_pcp(tci));
-            rule->wc.wildcards |= FWW_DL_VLAN;
-            rule->flow.dl_vlan = 0;
-            return true;
-        }
-
-    case 0x0000:
-        /* Match anything. */
-        rule->wc.wildcards |= FWW_DL_VLAN | FWW_DL_VLAN_PCP;
-        rule->flow.dl_vlan = htons(0);
-        rule->flow.dl_vlan_pcp = 0;
-        return true;
-
-    default:
-        return false;
+/* Modifies 'rule' so that the VLAN VID is wildcarded.  If the PCP is already
+ * wildcarded, then 'rule' will match a packet regardless of whether it has an
+ * 802.1Q header or not. */
+void
+cls_rule_set_any_vid(struct cls_rule *rule)
+{
+    if (rule->wc.vlan_tci_mask & htons(VLAN_PCP_MASK)) {
+        rule->wc.vlan_tci_mask &= ~htons(VLAN_VID_MASK);
+        rule->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
+    } else {
+        cls_rule_set_dl_tci_masked(rule, htons(0), htons(0));
     }
 }
 
+/* Modifies 'rule' depending on 'dl_vlan':
+ *
+ *   - If 'dl_vlan' is htons(OFP_VLAN_NONE), makes 'rule' match only packets
+ *     without an 802.1Q header.
+ *
+ *   - Otherwise, makes 'rule' match only packets with an 802.1Q header whose
+ *     VID equals the low 12 bits of 'dl_vlan'.
+ */
 void
 cls_rule_set_dl_vlan(struct cls_rule *rule, ovs_be16 dl_vlan)
 {
-    if (dl_vlan != htons(OFP_VLAN_NONE)) {
+    if (dl_vlan == htons(OFP_VLAN_NONE)) {
+        cls_rule_set_dl_tci(rule, htons(0));
+    } else {
         dl_vlan &= htons(VLAN_VID_MASK);
+        rule->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
+        rule->flow.vlan_tci |= htons(VLAN_CFI) | dl_vlan;
+        rule->wc.vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
-
-    rule->wc.wildcards &= ~FWW_DL_VLAN;
-    rule->flow.dl_vlan = dl_vlan;
 }
 
+/* Modifies 'rule' so that the VLAN PCP is wildcarded.  If the VID is already
+ * wildcarded, then 'rule' will match a packet regardless of whether it has an
+ * 802.1Q header or not. */
+void
+cls_rule_set_any_pcp(struct cls_rule *rule)
+{
+    if (rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK)) {
+        rule->wc.vlan_tci_mask &= ~htons(VLAN_PCP_MASK);
+        rule->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
+    } else {
+        cls_rule_set_dl_tci_masked(rule, htons(0), htons(0));
+    }
+}
+
+/* Modifies 'rule' so that it matches only packets with an 802.1Q header whose
+ * PCP equals the low 3 bits of 'dl_vlan_pcp'. */
 void
 cls_rule_set_dl_vlan_pcp(struct cls_rule *rule, uint8_t dl_vlan_pcp)
 {
-    rule->wc.wildcards &= ~FWW_DL_VLAN_PCP;
-    rule->flow.dl_vlan_pcp = dl_vlan_pcp & 0x07;
+    dl_vlan_pcp &= 0x07;
+    rule->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
+    rule->flow.vlan_tci |= htons((dl_vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
+    rule->wc.vlan_tci_mask |= htons(VLAN_CFI | VLAN_PCP_MASK);
 }
 
 void
@@ -768,7 +761,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 36 + FLOW_N_REGS * 4);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -780,7 +773,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
             && (wc & FWW_IN_PORT || a->in_port == b->in_port)
-            && (wc & FWW_DL_VLAN || a->dl_vlan == b->dl_vlan)
+            && !((a->vlan_tci ^ b->vlan_tci) & wildcards->vlan_tci_mask)
             && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
             && (wc & FWW_TP_SRC || a->tp_src == b->tp_src)
             && (wc & FWW_TP_DST || a->tp_dst == b->tp_dst)
@@ -795,7 +788,6 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_ETH_MCAST
                 || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
-            && (wc & FWW_DL_VLAN_PCP || a->dl_vlan_pcp == b->dl_vlan_pcp)
             && (wc & FWW_NW_TOS || a->nw_tos == b->nw_tos));
 }
 
@@ -805,7 +797,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 37 + 4 * FLOW_N_REGS);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 36 + 4 * FLOW_N_REGS);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -818,9 +810,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     if (wc & FWW_IN_PORT) {
         flow->in_port = 0;
     }
-    if (wc & FWW_DL_VLAN) {
-        flow->dl_vlan = 0;
-    }
+    flow->vlan_tci &= wildcards->vlan_tci_mask;
     if (wc & FWW_DL_TYPE) {
         flow->dl_type = 0;
     }
@@ -842,9 +832,6 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     }
     if (wc & FWW_NW_PROTO) {
         flow->nw_proto = 0;
-    }
-    if (wc & FWW_DL_VLAN_PCP) {
-        flow->dl_vlan_pcp = 0;
     }
     if (wc & FWW_NW_TOS) {
         flow->nw_tos = 0;

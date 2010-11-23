@@ -48,14 +48,13 @@
     CLS_FIELD(0,                          nw_src,      NW_SRC)      \
     CLS_FIELD(0,                          nw_dst,      NW_DST)      \
     CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
-    CLS_FIELD(FWW_DL_VLAN,                dl_vlan,     DL_VLAN)     \
+    CLS_FIELD(0,                          vlan_tci,    VLAN_TCI)    \
     CLS_FIELD(FWW_DL_TYPE,                dl_type,     DL_TYPE)     \
     CLS_FIELD(FWW_TP_SRC,                 tp_src,      TP_SRC)      \
     CLS_FIELD(FWW_TP_DST,                 tp_dst,      TP_DST)      \
     CLS_FIELD(FWW_DL_SRC,                 dl_src,      DL_SRC)      \
     CLS_FIELD(FWW_DL_DST | FWW_ETH_MCAST, dl_dst,      DL_DST)      \
     CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
-    CLS_FIELD(FWW_DL_VLAN_PCP,            dl_vlan_pcp, DL_VLAN_PCP) \
     CLS_FIELD(FWW_NW_TOS,                 nw_tos,      NW_TOS)
 
 /* Field indexes.
@@ -199,6 +198,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
             eq = !((fixed->nw_src ^ wild->flow.nw_src) & wild->wc.nw_src_mask);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             eq = !((fixed->nw_dst ^ wild->flow.nw_dst) & wild->wc.nw_dst_mask);
+        } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
+            eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
+                   & wild->wc.vlan_tci_mask);
         } else {
             NOT_REACHED();
         }
@@ -246,8 +248,7 @@ static ovs_be32 nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
                                     CONSTANT_HTONL(0xc0a04455) };
 static ovs_be32 tun_id_values[] = { 0, 0xffff0000 };
 static uint16_t in_port_values[] = { 1, ODPP_LOCAL };
-static ovs_be16 dl_vlan_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
-static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
+static ovs_be16 vlan_tci_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
 static ovs_be16 dl_type_values[]
             = { CONSTANT_HTONS(ETH_TYPE_IP), CONSTANT_HTONS(ETH_TYPE_ARP) };
 static ovs_be16 tp_src_values[] = { CONSTANT_HTONS(49362),
@@ -271,11 +272,8 @@ init_values(void)
     values[CLS_F_IDX_IN_PORT][0] = &in_port_values[0];
     values[CLS_F_IDX_IN_PORT][1] = &in_port_values[1];
 
-    values[CLS_F_IDX_DL_VLAN][0] = &dl_vlan_values[0];
-    values[CLS_F_IDX_DL_VLAN][1] = &dl_vlan_values[1];
-
-    values[CLS_F_IDX_DL_VLAN_PCP][0] = &dl_vlan_pcp_values[0];
-    values[CLS_F_IDX_DL_VLAN_PCP][1] = &dl_vlan_pcp_values[1];
+    values[CLS_F_IDX_VLAN_TCI][0] = &vlan_tci_values[0];
+    values[CLS_F_IDX_VLAN_TCI][1] = &vlan_tci_values[1];
 
     values[CLS_F_IDX_DL_SRC][0] = dl_src_values[0];
     values[CLS_F_IDX_DL_SRC][1] = dl_src_values[1];
@@ -309,8 +307,7 @@ init_values(void)
 #define N_NW_DST_VALUES ARRAY_SIZE(nw_dst_values)
 #define N_TUN_ID_VALUES ARRAY_SIZE(tun_id_values)
 #define N_IN_PORT_VALUES ARRAY_SIZE(in_port_values)
-#define N_DL_VLAN_VALUES ARRAY_SIZE(dl_vlan_values)
-#define N_DL_VLAN_PCP_VALUES ARRAY_SIZE(dl_vlan_pcp_values)
+#define N_VLAN_TCI_VALUES ARRAY_SIZE(vlan_tci_values)
 #define N_DL_TYPE_VALUES ARRAY_SIZE(dl_type_values)
 #define N_TP_SRC_VALUES ARRAY_SIZE(tp_src_values)
 #define N_TP_DST_VALUES ARRAY_SIZE(tp_dst_values)
@@ -323,8 +320,7 @@ init_values(void)
                        N_NW_DST_VALUES *        \
                        N_TUN_ID_VALUES *        \
                        N_IN_PORT_VALUES *       \
-                       N_DL_VLAN_VALUES *       \
-                       N_DL_VLAN_PCP_VALUES *   \
+                       N_VLAN_TCI_VALUES *       \
                        N_DL_TYPE_VALUES *       \
                        N_TP_SRC_VALUES *        \
                        N_TP_DST_VALUES *        \
@@ -358,9 +354,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
-        flow.dl_vlan = dl_vlan_values[get_value(&x, N_DL_VLAN_VALUES)];
-        flow.dl_vlan_pcp = dl_vlan_pcp_values[get_value(&x,
-                N_DL_VLAN_PCP_VALUES)];
+        flow.vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow.tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow.tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
@@ -465,6 +459,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.nw_src_mask = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
+        } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
+            rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
         } else {
             NOT_REACHED();
         }

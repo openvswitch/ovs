@@ -554,8 +554,8 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));
     switchElem.tag = SFLFLOW_EX_SWITCH;
-    switchElem.flowType.sw.src_vlan = ntohs(flow.dl_vlan);
-    switchElem.flowType.sw.src_priority = -1; /* XXX */
+    switchElem.flowType.sw.src_vlan = vlan_tci_to_vid(flow.vlan_tci);
+    switchElem.flowType.sw.src_priority = vlan_tci_to_pcp(flow.vlan_tci);
      /* Initialize the output VLAN and priority to be the same as the input,
         but these fields can be overriden below if affected by an action. */
     switchElem.flowType.sw.dst_vlan = switchElem.flowType.sw.src_vlan;

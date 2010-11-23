@@ -2785,15 +2785,12 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
 static void
 xlate_set_dl_tci(struct action_xlate_ctx *ctx)
 {
-    ovs_be16 dl_vlan = ctx->flow.dl_vlan;
-    uint8_t dl_vlan_pcp = ctx->flow.dl_vlan_pcp;
-
-    if (dl_vlan == htons(OFP_VLAN_NONE)) {
+    ovs_be16 tci = ctx->flow.vlan_tci;
+    if (!(tci & htons(VLAN_CFI))) {
         odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
     } else {
         union odp_action *oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
-        oa->dl_tci.tci = htons(ntohs(dl_vlan & htons(VLAN_VID_MASK))
-                               | (dl_vlan_pcp << VLAN_PCP_SHIFT));
+        oa->dl_tci.tci = tci & ~htons(VLAN_CFI);
     }
 }
 
@@ -2801,12 +2798,11 @@ static void
 xlate_reg_move_action(struct action_xlate_ctx *ctx,
                       const struct nx_action_reg_move *narm)
 {
-    ovs_be16 old_vlan = ctx->flow.dl_vlan;
-    uint8_t old_pcp = ctx->flow.dl_vlan_pcp;
+    ovs_be16 old_tci = ctx->flow.vlan_tci;
 
     nxm_execute_reg_move(narm, &ctx->flow);
 
-    if (ctx->flow.dl_vlan != old_vlan || ctx->flow.dl_vlan_pcp != old_pcp) {
+    if (ctx->flow.vlan_tci != old_tci) {
         xlate_set_dl_tci(ctx);
     }
 }
@@ -2896,18 +2892,20 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_VLAN_VID:
-            ctx->flow.dl_vlan = ia->vlan_vid.vlan_vid;
+            ctx->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
+            ctx->flow.vlan_tci |= ia->vlan_vid.vlan_vid | htons(VLAN_CFI);
             xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_SET_VLAN_PCP:
-            ctx->flow.dl_vlan_pcp = ia->vlan_pcp.vlan_pcp;
+            ctx->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
+            ctx->flow.vlan_tci |= htons(
+                (ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
             xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_STRIP_VLAN:
-            ctx->flow.dl_vlan = htons(OFP_VLAN_NONE);
-            ctx->flow.dl_vlan_pcp = 0;
+            ctx->flow.vlan_tci = htons(0);
             xlate_set_dl_tci(ctx);
             break;
 
