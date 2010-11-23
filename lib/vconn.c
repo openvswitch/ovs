@@ -775,6 +775,31 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
     }
 }
 
+/* vconn_transact_noreply() for a list of "struct ofpbuf"s, sent one by one.
+ * All of the requests on 'requests' are always destroyed, regardless of the
+ * return value. */
+int
+vconn_transact_multiple_noreply(struct vconn *vconn, struct list *requests,
+                                struct ofpbuf **replyp)
+{
+    struct ofpbuf *request, *next;
+
+    LIST_FOR_EACH_SAFE (request, next, list_node, requests) {
+        int error;
+
+        list_remove(&request->list_node);
+
+        error = vconn_transact_noreply(vconn, request, replyp);
+        if (error || *replyp) {
+            ofpbuf_list_delete(requests);
+            return error;
+        }
+    }
+
+    *replyp = NULL;
+    return 0;
+}
+
 void
 vconn_wait(struct vconn *vconn, enum vconn_wait_type wait)
 {
