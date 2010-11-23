@@ -761,8 +761,14 @@ OFP_ASSERT(sizeof(struct nx_action_note) == 16);
  *   - Testing with a specific PCP and CFI=1, with nxm_mask=0xf000, matches
  *     packets that have an 802.1Q header with that PCP (and any VID).
  *
- *   - Testing with nxm_value=0, nxm_mask=0xe000 matches packets with no 802.1Q
+ *   - Testing with nxm_value=0, nxm_mask=0x0fff matches packets with no 802.1Q
  *     header or with an 802.1Q header with a VID of 0.
+ *
+ *   - Testing with nxm_value=0, nxm_mask=0xe000 matches packets with no 802.1Q
+ *     header or with an 802.1Q header with a PCP of 0.
+ *
+ *   - Testing with nxm_value=0, nxm_mask=0xefff matches packets with no 802.1Q
+ *     header or with an 802.1Q header with both VID and PCP of 0.
  */
 #define NXM_OF_VLAN_TCI   NXM_HEADER  (0x0000,  4, 2)
 #define NXM_OF_VLAN_TCI_W NXM_HEADER_W(0x0000,  4, 2)
