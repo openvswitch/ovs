@@ -124,7 +124,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
 
-    if (!(ofpfw & NXFW_TUN_ID)) {
+    if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(ofpfw & NXFW_TUN_ID)) {
         rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
     } else {
         wc->wildcards |= FWW_TUN_ID;
