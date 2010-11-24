@@ -332,7 +332,7 @@ error:
 	return 0;
 }
 
-const struct tnl_ops gre_tnl_ops = {
+static const struct tnl_ops gre_tnl_ops = {
 	.tunnel_type	= TNL_T_PROTO_GRE,
 	.ipproto	= IPPROTO_GRE,
 	.hdr_len	= gre_hdr_len,

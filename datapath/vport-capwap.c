@@ -212,7 +212,7 @@ out:
 	return 0;
 }
 
-const struct tnl_ops capwap_tnl_ops = {
+static const struct tnl_ops capwap_tnl_ops = {
 	.tunnel_type	= TNL_T_PROTO_CAPWAP,
 	.ipproto	= IPPROTO_UDP,
 	.hdr_len	= capwap_hdr_len,
