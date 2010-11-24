@@ -43,6 +43,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "queue.h"
+#include "shash.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -61,8 +62,7 @@ enum { DP_NETDEV_HEADROOM = 2 + VLAN_HEADER_LEN };
 
 /* Datapath based on the network device interface from netdev.h. */
 struct dp_netdev {
-    struct list node;
-    int dp_idx;
+    char *name;
     int open_cnt;
     bool destroyed;
 
@@ -116,9 +116,7 @@ struct dpif_netdev {
 };
 
 /* All netdev-based datapaths. */
-static struct dp_netdev *dp_netdevs[256];
-struct list dp_netdev_list = LIST_INITIALIZER(&dp_netdev_list);
-enum { N_DP_NETDEVS = ARRAY_SIZE(dp_netdevs) };
+static struct shash dp_netdevs = SHASH_INITIALIZER(&dp_netdevs);
 
 /* Maximum port MTU seen so far. */
 static int max_mtu = ETH_PAYLOAD_MAX;
@@ -151,75 +149,33 @@ get_dp_netdev(const struct dpif *dpif)
     return dpif_netdev_cast(dpif)->dp;
 }
 
-static int
-name_to_dp_idx(const char *name)
-{
-    if (!strncmp(name, "dp", 2) && isdigit((unsigned char)name[2])) {
-        int dp_idx = atoi(name + 2);
-        if (dp_idx >= 0 && dp_idx < N_DP_NETDEVS) {
-            return dp_idx;
-        }
-    }
-    return -1;
-}
-
-static struct dp_netdev *
-find_dp_netdev(const char *name)
-{
-    int dp_idx;
-    size_t i;
-
-    dp_idx = name_to_dp_idx(name);
-    if (dp_idx >= 0) {
-        return dp_netdevs[dp_idx];
-    }
-
-    for (i = 0; i < N_DP_NETDEVS; i++) {
-        struct dp_netdev *dp = dp_netdevs[i];
-        if (dp) {
-            struct dp_netdev_port *port;
-            if (!get_port_by_name(dp, name, &port)) {
-                return dp;
-            }
-        }
-    }
-    return NULL;
-}
-
 static struct dpif *
 create_dpif_netdev(struct dp_netdev *dp)
 {
+    uint16_t netflow_id = hash_string(dp->name, 0);
     struct dpif_netdev *dpif;
-    char *dpname;
 
     dp->open_cnt++;
 
-    dpname = xasprintf("dp%d", dp->dp_idx);
     dpif = xmalloc(sizeof *dpif);
-    dpif_init(&dpif->dpif, &dpif_netdev_class, dpname, dp->dp_idx, dp->dp_idx);
+    dpif_init(&dpif->dpif, &dpif_netdev_class, dp->name,
+              netflow_id >> 8, netflow_id);
     dpif->dp = dp;
     dpif->listen_mask = 0;
     dpif->dp_serial = dp->serial;
-    free(dpname);
 
     return &dpif->dpif;
 }
 
 static int
-create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
+create_dp_netdev(const char *name, struct dp_netdev **dpp)
 {
     struct dp_netdev *dp;
     int error;
     int i;
 
-    if (dp_netdevs[dp_idx]) {
-        return EBUSY;
-    }
-
-    /* Create datapath. */
-    dp_netdevs[dp_idx] = dp = xzalloc(sizeof *dp);
-    list_push_back(&dp_netdev_list, &dp->node);
-    dp->dp_idx = dp_idx;
+    dp = xzalloc(sizeof *dp);
+    dp->name = xstrdup(name);
     dp->open_cnt = 0;
     dp->drop_frags = false;
     for (i = 0; i < N_QUEUES; i++) {
@@ -230,10 +186,12 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
     error = do_add_port(dp, name, ODP_PORT_INTERNAL, ODPP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
-        return ENODEV;
+        return error;
     }
 
-    *dpifp = create_dpif_netdev(dp);
+    shash_add(&dp_netdevs, name, dp);
+
+    *dpp = dp;
     return 0;
 }
 
@@ -241,35 +199,27 @@ static int
 dpif_netdev_open(const struct dpif_class *class OVS_UNUSED, const char *name,
                  bool create, struct dpif **dpifp)
 {
-    if (create) {
-        if (find_dp_netdev(name)) {
-            return EEXIST;
-        } else {
-            int dp_idx = name_to_dp_idx(name);
-            if (dp_idx >= 0) {
-                return create_dp_netdev(name, dp_idx, dpifp);
-            } else {
-                /* Scan for unused dp_idx number. */
-                for (dp_idx = 0; dp_idx < N_DP_NETDEVS; dp_idx++) {
-                    int error = create_dp_netdev(name, dp_idx, dpifp);
-                    if (error != EBUSY) {
-                        return error;
-                    }
-                }
+    struct dp_netdev *dp;
 
-                /* All datapath numbers in use. */
-                return ENOBUFS;
+    dp = shash_find_data(&dp_netdevs, name);
+    if (!dp) {
+        if (!create) {
+            return ENODEV;
+        } else {
+            int error = create_dp_netdev(name, &dp);
+            if (error) {
+                return error;
             }
+            assert(dp != NULL);
         }
     } else {
-        struct dp_netdev *dp = find_dp_netdev(name);
-        if (dp) {
-            *dpifp = create_dpif_netdev(dp);
-            return 0;
-        } else {
-            return ENODEV;
+        if (create) {
+            return EEXIST;
         }
     }
+
+    *dpifp = create_dpif_netdev(dp);
+    return 0;
 }
 
 static void
@@ -287,8 +237,7 @@ dp_netdev_free(struct dp_netdev *dp)
         queue_destroy(&dp->queues[i]);
     }
     hmap_destroy(&dp->flow_table);
-    dp_netdevs[dp->dp_idx] = NULL;
-    list_remove(&dp->node);
+    free(dp->name);
     free(dp);
 }
 
@@ -298,6 +247,7 @@ dpif_netdev_close(struct dpif *dpif)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     assert(dp->open_cnt > 0);
     if (--dp->open_cnt == 0 && dp->destroyed) {
+        shash_find_and_delete(&dp_netdevs, dp->name);
         dp_netdev_free(dp);
     }
     free(dpif);
@@ -965,11 +915,12 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
 static void
 dp_netdev_run(void)
 {
+    struct shash_node *node;
     struct ofpbuf packet;
-    struct dp_netdev *dp;
 
     ofpbuf_init(&packet, DP_NETDEV_HEADROOM + max_mtu);
-    LIST_FOR_EACH (dp, node, &dp_netdev_list) {
+    SHASH_FOR_EACH (node, &dp_netdevs) {
+        struct dp_netdev *dp = node->data;
         struct dp_netdev_port *port;
 
         LIST_FOR_EACH (port, node, &dp->port_list) {
@@ -995,10 +946,12 @@ dp_netdev_run(void)
 static void
 dp_netdev_wait(void)
 {
-    struct dp_netdev *dp;
+    struct shash_node *node;
 
-    LIST_FOR_EACH (dp, node, &dp_netdev_list) {
+    SHASH_FOR_EACH (node, &dp_netdevs) {
+        struct dp_netdev *dp = node->data;
         struct dp_netdev_port *port;
+
         LIST_FOR_EACH (port, node, &dp->port_list) {
             netdev_recv_wait(port->netdev);
         }
