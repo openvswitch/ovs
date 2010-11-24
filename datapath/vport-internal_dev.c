@@ -181,8 +181,8 @@ static void do_setup(struct net_device *netdev)
 	netdev->tx_queue_len = 0;
 
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
-	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_HIGHDMA
-				| NETIF_F_HW_CSUM | NETIF_F_TSO;
+	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_FRAGLIST |
+				NETIF_F_HIGHDMA | NETIF_F_HW_CSUM | NETIF_F_TSO;
 
 	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
