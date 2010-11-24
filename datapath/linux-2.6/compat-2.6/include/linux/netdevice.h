@@ -110,4 +110,10 @@ static inline void netdev_rx_handler_unregister(struct net_device *dev)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#undef SET_ETHTOOL_OPS
+#define SET_ETHTOOL_OPS(netdev, ops) \
+	( (netdev)->ethtool_ops = (struct ethtool_ops *)(ops) )
+#endif
+
 #endif
