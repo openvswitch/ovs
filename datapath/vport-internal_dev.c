@@ -12,6 +12,7 @@
 #include <linux/ethtool.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
+#include <linux/version.h>
 
 #include "datapath.h"
 #include "vport-generic.h"
@@ -273,7 +274,10 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 		netif_rx(skb);
 	else
 		netif_rx_ni(skb);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 	netdev->last_rx = jiffies;
+#endif
 
 	return len;
 }
