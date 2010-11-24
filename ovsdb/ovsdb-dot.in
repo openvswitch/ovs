@@ -68,14 +68,14 @@ if __name__ == "__main__":
                 print "ovsdb-dot (Open vSwitch) @VERSION@"
             else:
                 sys.exit(0)
-            
+
         if len(args) != 1:
             sys.stderr.write("%s: exactly 1 non-option argument required "
                              "(use --help for help)\n" % argv0)
             sys.exit(1)
 
         schemaToDot(args[0])
-        
+
     except ovs.db.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)

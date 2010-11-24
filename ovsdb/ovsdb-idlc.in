@@ -310,7 +310,7 @@ static void
 {
     /* Nothing to do. */
 }''' % {'s': structName, 'c': columnName}
- 
+
         # First, next functions.
         print '''
 const struct %(s)s *
@@ -566,7 +566,7 @@ if __name__ == "__main__":
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
-            
+
         for key, value in options:
             if key in ['-h', '--help']:
                 usage()
@@ -576,7 +576,7 @@ if __name__ == "__main__":
                 os.chdir(value)
             else:
                 sys.exit(0)
-            
+
         optKeys = [key for key, value in options]
 
         if not args:

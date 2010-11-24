@@ -195,7 +195,7 @@ is represented by <database-schema>, as described below.
         "minInteger": <integer>            optional, integers only
         "maxInteger": <integer>            optional, integers only
         "minReal": <real>                  optional, reals only
-        "maxReal": <real>                  optional, reals only 
+        "maxReal": <real>                  optional, reals only
         "minLength": <integer>             optional, strings only
         "maxLength": <integer>             optional, strings only
         "refTable": <id>                   optional, uuids only
@@ -419,7 +419,7 @@ Response object members:
 
 This JSON-RPC notification instructs the database server to
 immediately complete or cancel the "transact" request whose "id" is
-the same as the notification's "params" value.  
+the same as the notification's "params" value.
 
 If the "transact" request can be completed immediately, then the
 server sends a response in the form described for "transact", above.
@@ -931,7 +931,7 @@ Semantics:
     column specified in "row".
 
     The "_uuid" and "_version" columns of a table may not be directly
-    updated with this operation.  Columns designated read-only in the 
+    updated with this operation.  Columns designated read-only in the
     schema also may not be updated.
 
     The "count" member of the result specifies the number of rows
@@ -1045,7 +1045,7 @@ Semantics:
     restarted later, after a change in the database makes it possible
     for the operation to succeed.  The client will not receive a
     response until the operation permanently succeeds or fails.
-    
+
     If "until" is "!=", the sense of the test is negated.  That is, as
     long as the query on "table" specified by "where" and "columns"
     returns "rows", the transaction will be rolled back and restarted

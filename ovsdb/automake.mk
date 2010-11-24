@@ -59,8 +59,8 @@ DISTCLEANFILES += ovsdb/ovsdb-server.1
 EXTRA_DIST += ovsdb/ovsdb-server.1.in
 
 # ovsdb-idlc
-EXTRA_DIST += ovsdb/SPECS 
-noinst_SCRIPTS += ovsdb/ovsdb-idlc 
+EXTRA_DIST += ovsdb/SPECS
+noinst_SCRIPTS += ovsdb/ovsdb-idlc
 EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.in \
 	ovsdb/ovsdb-idlc.1
