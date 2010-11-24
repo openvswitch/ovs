@@ -265,7 +265,7 @@ static int patch_send(struct vport *vport, struct sk_buff *skb)
 	return skb_len;
 }
 
-struct vport_ops patch_vport_ops = {
+const struct vport_ops patch_vport_ops = {
 	.type		= "patch",
 	.flags		= VPORT_F_GEN_STATS,
 	.init		= patch_init,

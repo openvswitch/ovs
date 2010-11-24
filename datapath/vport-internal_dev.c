@@ -108,7 +108,7 @@ static void internal_dev_getinfo(struct net_device *netdev,
 		sprintf(info->bus_info, "%d.%d", dp_port->dp->dp_idx, dp_port->port_no);
 }
 
-static struct ethtool_ops internal_dev_ethtool_ops = {
+static const struct ethtool_ops internal_dev_ethtool_ops = {
 	.get_drvinfo	= internal_dev_getinfo,
 	.get_link	= ethtool_op_get_link,
 	.get_sg		= ethtool_op_get_sg,
@@ -278,7 +278,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	return len;
 }
 
-struct vport_ops internal_vport_ops = {
+const struct vport_ops internal_vport_ops = {
 	.type		= "internal",
 	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
 	.create		= internal_dev_create,

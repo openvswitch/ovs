@@ -332,7 +332,7 @@ error:
 	return 0;
 }
 
-struct tnl_ops gre_tnl_ops = {
+const struct tnl_ops gre_tnl_ops = {
 	.tunnel_type	= TNL_T_PROTO_GRE,
 	.ipproto	= IPPROTO_GRE,
 	.hdr_len	= gre_hdr_len,
@@ -345,7 +345,7 @@ static struct vport *gre_create(const char *name, const void __user *config)
 	return tnl_create(name, config, &gre_vport_ops, &gre_tnl_ops);
 }
 
-static struct net_protocol gre_protocol_handlers = {
+static const struct net_protocol gre_protocol_handlers = {
 	.handler	=	gre_rcv,
 	.err_handler	=	gre_err,
 };
@@ -366,7 +366,7 @@ static void gre_exit(void)
 	inet_del_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 }
 
-struct vport_ops gre_vport_ops = {
+const struct vport_ops gre_vport_ops = {
 	.type		= "gre",
 	.flags		= VPORT_F_GEN_STATS | VPORT_F_TUN_ID,
 	.init		= gre_init,

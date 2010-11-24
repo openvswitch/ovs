@@ -212,7 +212,7 @@ out:
 	return 0;
 }
 
-struct tnl_ops capwap_tnl_ops = {
+const struct tnl_ops capwap_tnl_ops = {
 	.tunnel_type	= TNL_T_PROTO_CAPWAP,
 	.ipproto	= IPPROTO_UDP,
 	.hdr_len	= capwap_hdr_len,
@@ -644,7 +644,7 @@ static void capwap_frag_expire(unsigned long ifq)
 	inet_frag_put(&fq->ifq, &frag_state);
 }
 
-struct vport_ops capwap_vport_ops = {
+const struct vport_ops capwap_vport_ops = {
 	.type		= "capwap",
 	.flags		= VPORT_F_GEN_STATS,
 	.init		= capwap_init,
