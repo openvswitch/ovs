@@ -20,9 +20,7 @@ def annotateSchema(schemaFile, annotationFile):
     ovs.json.to_stream(schemaJson, sys.stdout)
 
 def constify(cType, const):
-    if (const
-        and cType.endswith('*') and not cType.endswith('**')
-        and (cType.startswith('struct uuid') or cType.startswith('char'))):
+    if (const and cType.endswith('*') and not cType.endswith('**')):
         return 'const %s' % cType
     else:
         return cType
