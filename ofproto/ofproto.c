@@ -4462,6 +4462,11 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     payload.size = msg->length - sizeof *msg;
     flow_extract(&payload, msg->arg, msg->port, &flow);
 
+    packet->l2 = payload.l2;
+    packet->l3 = payload.l3;
+    packet->l4 = payload.l4;
+    packet->l7 = payload.l7;
+
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (in_band_msg_in_hook(p->in_band, &flow, &payload)) {
