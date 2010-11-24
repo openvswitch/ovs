@@ -1515,7 +1515,10 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
         struct ofp_port_status *ops;
         struct ofpbuf *b;
 
-        if (!ofconn_receives_async_msgs(ofconn)) {
+        /* Primary controllers, even slaves, should always get port status
+           updates.  Otherwise obey ofconn_receives_async_msgs(). */
+        if (ofconn->type != OFCONN_PRIMARY
+            && !ofconn_receives_async_msgs(ofconn)) {
             continue;
         }
 

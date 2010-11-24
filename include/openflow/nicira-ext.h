@@ -205,8 +205,8 @@ OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
  *      OpenFlow features.  In particular attempts to modify the flow table
  *      will be rejected with an OFPBRC_EPERM error.
  *
- *      Slave controllers also do not receive asynchronous messages
- *      (OFPT_PACKET_IN, OFPT_FLOW_REMOVED, OFPT_PORT_STATUS).
+ *      Slave controllers do not receive OFPT_PACKET_IN or OFPT_FLOW_REMOVED
+ *      messages, but they do receive OFPT_PORT_STATUS messages.
  */
 struct nx_role_request {
     struct nicira_header nxh;
