@@ -54,7 +54,6 @@
 
 #include "compat.h"
 
-
 int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
 

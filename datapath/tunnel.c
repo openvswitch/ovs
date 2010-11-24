@@ -68,7 +68,7 @@
 #define CACHE_DATA_ALIGN 16
 
 /* Protected by RCU. */
-static struct tbl *port_table;
+static struct tbl *port_table __read_mostly;
 
 static void cache_cleaner(struct work_struct *work);
 DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
@@ -78,10 +78,10 @@ DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
  * synchronization because we could have just as easily read the value before
  * the port change happened.
  */
-static unsigned int key_local_remote_ports;
-static unsigned int key_remote_ports;
-static unsigned int local_remote_ports;
-static unsigned int remote_ports;
+static unsigned int key_local_remote_ports __read_mostly;
+static unsigned int key_remote_ports __read_mostly;
+static unsigned int local_remote_ports __read_mostly;
+static unsigned int remote_ports __read_mostly;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 #define rt_dst(rt) (rt->dst)

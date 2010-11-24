@@ -32,7 +32,7 @@
 #include "compat.h"
 
 struct kmem_cache *flow_cache;
-static unsigned int hash_seed;
+static unsigned int hash_seed __read_mostly;
 
 static inline bool arphdr_ok(struct sk_buff *skb)
 {
