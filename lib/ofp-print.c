@@ -1144,14 +1144,13 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
             break;
         }
 
-        ds_put_format(string, "  cookie=0x%"PRIx64", ", ntohll(fs->cookie));
+        ds_put_format(string, " cookie=0x%"PRIx64", ", ntohll(fs->cookie));
         ds_put_format(string, "duration_sec=%"PRIu32"s, ",
                     ntohl(fs->duration_sec));
         ds_put_format(string, "duration_nsec=%"PRIu32"ns, ",
                     ntohl(fs->duration_nsec));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
-        ds_put_format(string, "priority=%"PRIu16", ",
-                    fs->match.wildcards ? ntohs(fs->priority) : (uint16_t)-1);
+        ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
         ds_put_format(string, "n_packets=%"PRIu64", ",
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
@@ -1164,6 +1163,7 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
                           ntohs(fs->hard_timeout));
         }
         ofp_print_match(string, &fs->match, verbosity);
+        ds_put_char(string, ' ');
         ofp_print_actions(string, fs->actions, length - sizeof *fs);
 
         pos += length;
