@@ -82,6 +82,8 @@ struct ofsettings {
     struct svec netflow;        /* NetFlow targets. */
 };
 
+static unixctl_cb_func ovs_openflowd_exit;
+
 static void parse_options(int argc, char *argv[], struct ofsettings *);
 static void usage(void) NO_RETURN;
 
@@ -94,6 +96,7 @@ main(int argc, char *argv[])
     int error;
     struct dpif *dpif;
     struct netflow_options nf_options;
+    bool exiting;
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -108,6 +111,8 @@ main(int argc, char *argv[])
     if (error) {
         exit(EXIT_FAILURE);
     }
+
+    unixctl_command_register("exit", ovs_openflowd_exit, &exiting);
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
@@ -156,7 +161,8 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    while (s.run_forever || ofproto_is_alive(ofproto)) {
+    exiting = false;
+    while (!exiting && (s.run_forever || ofproto_is_alive(ofproto))) {
         error = ofproto_run(ofproto);
         if (error) {
             ovs_fatal(error, "unrecoverable datapath error");
@@ -169,12 +175,24 @@ main(int argc, char *argv[])
         unixctl_server_wait(unixctl);
         dp_wait();
         netdev_wait();
+        if (exiting) {
+            poll_immediate_wake();
+        }
         poll_block();
     }
 
     dpif_close(dpif);
 
     return 0;
+}
+
+static void
+ovs_openflowd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                   void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, 200, NULL);
 }
 
 /* User interface. */

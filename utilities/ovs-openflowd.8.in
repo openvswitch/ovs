@@ -442,6 +442,10 @@ switching.
 \fBovs\-appctl\fR(8) can send commands to a running
 \fBovs\-openflowd\fR process.  The currently supported commands are
 described below.
+.SS "OVS\-OPENFLOWD COMMANDS"
+These commands are specific to \fBovs\-openflowd\fR.
+.IP "\fBexit\fR"
+Causes \fBovs\-openflowd\fR to gracefully terminate.
 .so lib/vlog-unixctl.man
 .
 .SH "SEE ALSO"
