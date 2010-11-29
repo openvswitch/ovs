@@ -6,3 +6,5 @@ interpreted as relative to \fB@RUNDIR@\fR.  If \fB\-\-unixctl\fR is
 not used at all, the default socket is
 \fB@RUNDIR@/\*(PN.\fIpid\fB.ctl\fR, where \fIpid\fR is \fB\*(PN\fR's
 process ID.
+Specifying \fBnone\fR for \fIsocket\fR disables the control socket
+feature.

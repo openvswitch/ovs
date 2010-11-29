@@ -174,6 +174,9 @@ unixctl_command_reply(struct unixctl_conn *conn,
  *
  *      - NULL, in which case <rundir>/<program>.<pid>.ctl is used.
  *
+ *      - "none", in which case the function will return successfully but
+ *        no socket will actually be created.
+ *
  *      - A name that does not start with '/', in which case it is put in
  *        <rundir>.
  *
@@ -186,12 +189,18 @@ unixctl_command_reply(struct unixctl_conn *conn,
  * "ovs-appctl --target=<program>" will fail.)
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
- * sets '*serverp' to the new unixctl_server, otherwise to NULL. */
+ * sets '*serverp' to the new unixctl_server (or to NULL if 'path' was "none"),
+ * otherwise to NULL. */
 int
 unixctl_server_create(const char *path, struct unixctl_server **serverp)
 {
     struct unixctl_server *server;
     int error;
+
+    if (path && !strcmp(path, "none")) {
+        *serverp = NULL;
+        return 0;
+    }
 
     unixctl_command_register("help", unixctl_help, NULL);
 
@@ -400,6 +409,10 @@ unixctl_server_run(struct unixctl_server *server)
     struct unixctl_conn *conn, *next;
     int i;
 
+    if (!server) {
+        return;
+    }
+
     for (i = 0; i < 10; i++) {
         int fd = accept(server->fd, NULL, NULL);
         if (fd < 0) {
@@ -423,6 +436,10 @@ void
 unixctl_server_wait(struct unixctl_server *server)
 {
     struct unixctl_conn *conn;
+
+    if (!server) {
+        return;
+    }
 
     poll_fd_wait(server->fd, POLLIN);
     LIST_FOR_EACH (conn, node, &server->conns) {

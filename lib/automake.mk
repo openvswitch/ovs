@@ -31,6 +31,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/csum.h \
 	lib/daemon.c \
 	lib/daemon.h \
+	lib/dummy.c \
+	lib/dummy.h \
 	lib/dhcp-client.c \
 	lib/dhcp-client.h \
 	lib/dhcp.c \
@@ -67,6 +69,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/netdev-dummy.c \
 	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \

@@ -32,7 +32,9 @@
 #include <unistd.h>
 
 #include "csum.h"
+#include "dpif.h"
 #include "dpif-provider.h"
+#include "dummy.h"
 #include "flow.h"
 #include "hmap.h"
 #include "list.h"
@@ -62,6 +64,7 @@ enum { DP_NETDEV_HEADROOM = 2 + VLAN_HEADER_LEN };
 
 /* Datapath based on the network device interface from netdev.h. */
 struct dp_netdev {
+    const struct dpif_class *class;
     char *name;
     int open_cnt;
     bool destroyed;
@@ -130,16 +133,20 @@ static void dp_netdev_flow_flush(struct dp_netdev *);
 static int do_add_port(struct dp_netdev *, const char *devname, uint16_t flags,
                        uint16_t port_no);
 static int do_del_port(struct dp_netdev *, uint16_t port_no);
+static int dpif_netdev_open(const struct dpif_class *, const char *name,
+                            bool create, struct dpif **);
 static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, int port_no, uint32_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
                                      struct ofpbuf *, struct flow *,
                                      const union odp_action *, int n);
 
+static struct dpif_class dpif_dummy_class;
+
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
 {
-    dpif_assert_class(dpif, &dpif_netdev_class);
+    assert(dpif->dpif_class->open == dpif_netdev_open);
     return CONTAINER_OF(dpif, struct dpif_netdev, dpif);
 }
 
@@ -158,8 +165,7 @@ create_dpif_netdev(struct dp_netdev *dp)
     dp->open_cnt++;
 
     dpif = xmalloc(sizeof *dpif);
-    dpif_init(&dpif->dpif, &dpif_netdev_class, dp->name,
-              netflow_id >> 8, netflow_id);
+    dpif_init(&dpif->dpif, dp->class, dp->name, netflow_id >> 8, netflow_id);
     dpif->dp = dp;
     dpif->listen_mask = 0;
     dpif->dp_serial = dp->serial;
@@ -168,13 +174,15 @@ create_dpif_netdev(struct dp_netdev *dp)
 }
 
 static int
-create_dp_netdev(const char *name, struct dp_netdev **dpp)
+create_dp_netdev(const char *name, const struct dpif_class *class,
+                 struct dp_netdev **dpp)
 {
     struct dp_netdev *dp;
     int error;
     int i;
 
     dp = xzalloc(sizeof *dp);
+    dp->class = class;
     dp->name = xstrdup(name);
     dp->open_cnt = 0;
     dp->drop_frags = false;
@@ -196,7 +204,7 @@ create_dp_netdev(const char *name, struct dp_netdev **dpp)
 }
 
 static int
-dpif_netdev_open(const struct dpif_class *class OVS_UNUSED, const char *name,
+dpif_netdev_open(const struct dpif_class *class, const char *name,
                  bool create, struct dpif **dpifp)
 {
     struct dp_netdev *dp;
@@ -206,14 +214,16 @@ dpif_netdev_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         if (!create) {
             return ENODEV;
         } else {
-            int error = create_dp_netdev(name, &dp);
+            int error = create_dp_netdev(name, class, &dp);
             if (error) {
                 return error;
             }
             assert(dp != NULL);
         }
     } else {
-        if (create) {
+        if (dp->class != class) {
+            return EINVAL;
+        } else if (create) {
             return EEXIST;
         }
     }
@@ -313,7 +323,9 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = devname;
     netdev_options.ethertype = NETDEV_ETH_TYPE_ANY;
-    if (internal) {
+    if (dp->class == &dpif_dummy_class) {
+        netdev_options.type = "dummy";
+    } else if (internal) {
         netdev_options.type = "tap";
     }
 
@@ -1249,3 +1261,13 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_recv,
     dpif_netdev_recv_wait,
 };
+
+void
+dpif_dummy_register(void)
+{
+    if (!dpif_dummy_class.type) {
+        dpif_dummy_class = dpif_netdev_class;
+        dpif_dummy_class.type = "dummy";
+        dp_register_provider(&dpif_dummy_class);
+    }
+}

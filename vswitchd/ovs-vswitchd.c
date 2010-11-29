@@ -31,6 +31,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dpif.h"
+#include "dummy.h"
 #include "leak-checker.h"
 #include "netdev.h"
 #include "ovsdb-idl.h"
@@ -117,7 +118,8 @@ parse_options(int argc, char *argv[])
         OPT_FAKE_PROC_NET,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
-        OPT_BOOTSTRAP_CA_CERT
+        OPT_BOOTSTRAP_CA_CERT,
+        OPT_ENABLE_DUMMY
     };
     static struct option long_options[] = {
         {"help",        no_argument, 0, 'h'},
@@ -132,6 +134,7 @@ parse_options(int argc, char *argv[])
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
 #endif
+        {"enable-dummy", no_argument, 0, OPT_ENABLE_DUMMY},
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -187,6 +190,10 @@ parse_options(int argc, char *argv[])
             stream_ssl_set_ca_cert_file(optarg, true);
             break;
 #endif
+
+        case OPT_ENABLE_DUMMY:
+            dummy_enable();
+            break;
 
         case '?':
             exit(EXIT_FAILURE);
