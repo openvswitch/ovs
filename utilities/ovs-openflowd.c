@@ -493,8 +493,9 @@ static void
 usage(void)
 {
     printf("%s: an OpenFlow switch implementation.\n"
-           "usage: %s [OPTIONS] DATAPATH [CONTROLLER...]\n"
-           "DATAPATH is a local datapath (e.g. \"dp0\").\n"
+           "usage: %s [OPTIONS] [TYPE@]DATAPATH [CONTROLLER...]\n"
+           "where DATAPATH is a local datapath (e.g. \"dp0\")\n"
+           "optionally with an explicit TYPE (default: \"system\").\n"
            "Each CONTROLLER is an active OpenFlow connection method.  If\n"
            "none is given, ovs-openflowd performs controller discovery.\n",
            program_name, program_name);
