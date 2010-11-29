@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,19 +34,19 @@ struct vconn {
     int error;
     int min_version;
     int version;
-    uint32_t remote_ip;
-    uint16_t remote_port;
-    uint32_t local_ip;
-    uint16_t local_port;
+    ovs_be32 remote_ip;
+    ovs_be16 remote_port;
+    ovs_be32 local_ip;
+    ovs_be16 local_port;
     char *name;
 };
 
 void vconn_init(struct vconn *, struct vconn_class *, int connect_status,
                 const char *name);
-void vconn_set_remote_ip(struct vconn *, uint32_t remote_ip);
-void vconn_set_remote_port(struct vconn *, uint16_t remote_port);
-void vconn_set_local_ip(struct vconn *, uint32_t local_ip);
-void vconn_set_local_port(struct vconn *, uint16_t local_port);
+void vconn_set_remote_ip(struct vconn *, ovs_be32 remote_ip);
+void vconn_set_remote_port(struct vconn *, ovs_be16 remote_port);
+void vconn_set_local_ip(struct vconn *, ovs_be32 local_ip);
+void vconn_set_local_port(struct vconn *, ovs_be16 local_port);
 static inline void vconn_assert_class(const struct vconn *vconn,
                                       const struct vconn_class *class)
 {

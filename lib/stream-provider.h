@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,19 +30,19 @@ struct stream {
     struct stream_class *class;
     int state;
     int error;
-    uint32_t remote_ip;
-    uint16_t remote_port;
-    uint32_t local_ip;
-    uint16_t local_port;
+    ovs_be32 remote_ip;
+    ovs_be16 remote_port;
+    ovs_be32 local_ip;
+    ovs_be16 local_port;
     char *name;
 };
 
 void stream_init(struct stream *, struct stream_class *, int connect_status,
                  const char *name);
-void stream_set_remote_ip(struct stream *, uint32_t remote_ip);
-void stream_set_remote_port(struct stream *, uint16_t remote_port);
-void stream_set_local_ip(struct stream *, uint32_t local_ip);
-void stream_set_local_port(struct stream *, uint16_t local_port);
+void stream_set_remote_ip(struct stream *, ovs_be32 remote_ip);
+void stream_set_remote_port(struct stream *, ovs_be16 remote_port);
+void stream_set_local_ip(struct stream *, ovs_be32 local_ip);
+void stream_set_local_port(struct stream *, ovs_be16 local_port);
 static inline void stream_assert_class(const struct stream *stream,
                                        const struct stream_class *class)
 {

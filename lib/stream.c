@@ -280,7 +280,7 @@ stream_get_name(const struct stream *stream)
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not yet known. */
-uint32_t
+ovs_be32
 stream_get_remote_ip(const struct stream *stream)
 {
     return stream->remote_ip;
@@ -288,7 +288,7 @@ stream_get_remote_ip(const struct stream *stream)
 
 /* Returns the transport port of the peer, or 0 if the connection does not
  * contain a port or if the port is not yet known. */
-uint16_t
+ovs_be16
 stream_get_remote_port(const struct stream *stream)
 {
     return stream->remote_port;
@@ -296,7 +296,7 @@ stream_get_remote_port(const struct stream *stream)
 
 /* Returns the IP address used to connect to the peer, or 0 if the connection
  * is not an IP-based protocol or if its IP address is not yet known. */
-uint32_t
+ovs_be32
 stream_get_local_ip(const struct stream *stream)
 {
     return stream->local_ip;
@@ -304,7 +304,7 @@ stream_get_local_ip(const struct stream *stream)
 
 /* Returns the transport port used to connect to the peer, or 0 if the
  * connection does not contain a port or if the port is not yet known. */
-uint16_t
+ovs_be16
 stream_get_local_port(const struct stream *stream)
 {
     return stream->local_port;
@@ -623,25 +623,25 @@ stream_init(struct stream *stream, struct stream_class *class,
 }
 
 void
-stream_set_remote_ip(struct stream *stream, uint32_t ip)
+stream_set_remote_ip(struct stream *stream, ovs_be32 ip)
 {
     stream->remote_ip = ip;
 }
 
 void
-stream_set_remote_port(struct stream *stream, uint16_t port)
+stream_set_remote_port(struct stream *stream, ovs_be16 port)
 {
     stream->remote_port = port;
 }
 
 void
-stream_set_local_ip(struct stream *stream, uint32_t ip)
+stream_set_local_ip(struct stream *stream, ovs_be32 ip)
 {
     stream->local_ip = ip;
 }
 
 void
-stream_set_local_port(struct stream *stream, uint16_t port)
+stream_set_local_port(struct stream *stream, ovs_be16 port)
 {
     stream->local_port = port;
 }

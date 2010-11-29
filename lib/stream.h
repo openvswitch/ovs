@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/types.h"
 #include "vlog.h"
 
 struct pstream;
@@ -33,10 +34,10 @@ int stream_open(const char *name, struct stream **);
 int stream_open_block(int error, struct stream **);
 void stream_close(struct stream *);
 const char *stream_get_name(const struct stream *);
-uint32_t stream_get_remote_ip(const struct stream *);
-uint16_t stream_get_remote_port(const struct stream *);
-uint32_t stream_get_local_ip(const struct stream *);
-uint16_t stream_get_local_port(const struct stream *);
+ovs_be32 stream_get_remote_ip(const struct stream *);
+ovs_be16 stream_get_remote_port(const struct stream *);
+ovs_be32 stream_get_local_ip(const struct stream *);
+ovs_be16 stream_get_local_port(const struct stream *);
 int stream_connect(struct stream *);
 int stream_recv(struct stream *, void *buffer, size_t n);
 int stream_send(struct stream *, const void *buffer, size_t n);
