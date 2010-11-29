@@ -110,10 +110,9 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 /* No OFPFW_* bits, but they do have corresponding OVSFW_* bits. */
 #define FWW_TUN_ID      ((OVS_FORCE flow_wildcards_t) (1 << 8))
 /* No corresponding OFPFW_* or OVSFW_* bits. */
-#define FWW_VLAN_TCI    ((OVS_FORCE flow_wildcards_t) (1 << 9)
-#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 10))
+#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 9))
                                                        /* multicast bit only */
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 11)) - 1))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 10)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
