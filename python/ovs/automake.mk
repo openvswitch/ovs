@@ -27,10 +27,12 @@ if HAVE_PYTHON
 nobase_pkgdata_DATA = $(ovs_pyfiles)
 ovs-install-data-local:
 	$(MKDIR_P) python/ovs
-	(echo 'PKGDATADIR = """$(pkgdatadir)"""' && \
-	 echo 'RUNDIR = """@RUNDIR@"""' && \
-	 echo 'LOGDIR = """@LOGDIR@"""' && \
-	 echo 'BINDIR = """$(bindir)"""') > python/ovs/dirs.py.tmp
+	(echo "import os" && \
+	 echo 'PKGDATADIR = os.environ.get("OVS_PKGDATADIR", """$(pkgdatadir)""")' && \
+	 echo 'RUNDIR = os.environ.get("OVS_RUNDIR", """@RUNDIR@""")' && \
+	 echo 'LOGDIR = os.environ.get("OVS_LOGDIR", """@LOGDIR@""")' && \
+	 echo 'BINDIR = os.environ.get("OVS_BINDIR", """$(bindir)""")') \
+		> python/ovs/dirs.py.tmp
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs
 	$(INSTALL_DATA) python/ovs/dirs.py.tmp $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
 	rm python/ovs/dirs.py.tmp

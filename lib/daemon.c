@@ -67,8 +67,8 @@ char *
 make_pidfile_name(const char *name)
 {
     return (!name
-            ? xasprintf("%s/%s.pid", ovs_rundir, program_name)
-            : abs_file_name(ovs_rundir, name));
+            ? xasprintf("%s/%s.pid", ovs_rundir(), program_name)
+            : abs_file_name(ovs_rundir(), name));
 }
 
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.
@@ -500,7 +500,7 @@ daemon_usage(void)
         "  --pidfile[=FILE]        create pidfile (default: %s/%s.pid)\n"
         "  --overwrite-pidfile     with --pidfile, start even if already "
                                    "running\n",
-        ovs_rundir, program_name);
+        ovs_rundir(), program_name);
 }
 
 /* Opens and reads a PID from 'pidfile'.  Returns the nonnegative PID if

@@ -208,7 +208,8 @@ endif
 EXTRA_DIST += \
 	lib/dh1024.pem \
 	lib/dh2048.pem \
-	lib/dh4096.pem
+	lib/dh4096.pem \
+	lib/dirs.c.in
 
 EXTRA_DIST += \
 	lib/common.man \
@@ -230,12 +231,14 @@ EXTRA_DIST += \
 	lib/vlog-syn.man \
 	lib/vlog.man
 
-lib/dirs.c: Makefile
-	($(ro_c) && \
-	 echo 'const char ovs_pkgdatadir[] = "$(pkgdatadir)";' && \
-	 echo 'const char ovs_rundir[] = "@RUNDIR@";' && \
-	 echo 'const char ovs_logdir[] = "@LOGDIR@";' && \
-	 echo 'const char ovs_bindir[] = "$(bindir)";') > lib/dirs.c.tmp
+lib/dirs.c: lib/dirs.c.in Makefile
+	($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
+		-e 's,[@]srcdir[@],$(srcdir),g' \
+		-e 's,[@]LOGDIR[@],"$(LOGDIR)",g' \
+		-e 's,[@]RUNDIR[@],"$(RUNDIR)",g' \
+		-e 's,[@]bindir[@],"$(bindir)",g' \
+		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
+	     > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
 
 install-data-local: lib-install-data-local

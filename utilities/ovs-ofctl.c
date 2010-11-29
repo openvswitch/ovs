@@ -217,7 +217,7 @@ open_vconn__(const char *name, const char *default_suffix,
     struct stat s;
     char *bridge_path, *datapath_name, *datapath_type;
 
-    bridge_path = xasprintf("%s/%s.%s", ovs_rundir, name, default_suffix);
+    bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, default_suffix);
     dp_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
@@ -239,7 +239,7 @@ open_vconn__(const char *name, const char *default_suffix,
         }
 
         socket_name = xasprintf("%s/%s.%s",
-                                ovs_rundir, dpif_name, default_suffix);
+                                ovs_rundir(), dpif_name, default_suffix);
         if (stat(socket_name, &s)) {
             ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
                       name, socket_name);

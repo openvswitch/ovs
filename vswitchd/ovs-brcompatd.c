@@ -1413,7 +1413,7 @@ parse_options(int argc, char *argv[])
     };
     char *short_options = long_options_to_short_options(long_options);
 
-    appctl_command = xasprintf("%s/ovs-appctl %%s", ovs_bindir);
+    appctl_command = xasprintf("%s/ovs-appctl %%s", ovs_bindir());
     for (;;) {
         int c;
 

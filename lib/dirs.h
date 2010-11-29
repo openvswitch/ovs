@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 #ifndef DIRS_H
 #define DIRS_H 1
 
-extern const char ovs_pkgdatadir[]; /* /usr/local/share/openvswitch */
-extern const char ovs_rundir[];     /* /usr/local/var/run/openvswitch */
-extern const char ovs_logdir[];     /* /usr/local/var/log/openvswitch */
-extern const char ovs_bindir[];     /* /usr/local/bin */
+const char *ovs_pkgdatadir(void); /* /usr/local/share/openvswitch */
+const char *ovs_rundir(void);     /* /usr/local/var/run/openvswitch */
+const char *ovs_logdir(void);     /* /usr/local/var/log/openvswitch */
+const char *ovs_bindir(void);     /* /usr/local/bin */
 
 #endif /* dirs.h */

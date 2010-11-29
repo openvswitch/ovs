@@ -397,6 +397,6 @@ usage(void)
                                       "running\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",
-           ovs_rundir, program_name);
+           ovs_rundir(), program_name);
     exit(EXIT_SUCCESS);
 }

@@ -175,14 +175,14 @@ connect_to_target(const char *target)
         char *pidfile_name;
         pid_t pid;
 
-        pidfile_name = xasprintf("%s/%s.pid", ovs_rundir, target);
+        pidfile_name = xasprintf("%s/%s.pid", ovs_rundir(), target);
         pid = read_pidfile(pidfile_name);
         if (pid < 0) {
             ovs_fatal(-pid, "cannot read pidfile \"%s\"", pidfile_name);
         }
         free(pidfile_name);
         socket_name = xasprintf("%s/%s.%ld.ctl",
-                                ovs_rundir, target, (long int) pid);
+                                ovs_rundir(), target, (long int) pid);
     } else {
         socket_name = xstrdup(target);
     }

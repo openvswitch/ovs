@@ -291,7 +291,7 @@ vlog_set_log_file(const char *file_name)
     old_log_file_name = log_file_name;
     log_file_name = (file_name
                      ? xstrdup(file_name)
-                     : xasprintf("%s/%s.log", ovs_logdir, program_name));
+                     : xasprintf("%s/%s.log", ovs_logdir(), program_name));
     free(old_log_file_name);
     file_name = NULL;           /* Might have been freed. */
 
@@ -741,5 +741,5 @@ vlog_usage(void)
            "  -v, --verbose           set maximum verbosity level\n"
            "  --log-file[=FILE]       enable logging to specified FILE\n"
            "                          (default: %s/%s.log)\n",
-           ovs_logdir, program_name);
+           ovs_logdir(), program_name);
 }

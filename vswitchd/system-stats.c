@@ -387,9 +387,9 @@ get_process_stats(struct shash *stats)
     struct dirent *de;
     DIR *dir;
 
-    dir = opendir(ovs_rundir);
+    dir = opendir(ovs_rundir());
     if (!dir) {
-        VLOG_ERR_ONCE("%s: open failed (%s)", ovs_rundir, strerror(errno));
+        VLOG_ERR_ONCE("%s: open failed (%s)", ovs_rundir(), strerror(errno));
         return;
     }
 
@@ -411,7 +411,7 @@ get_process_stats(struct shash *stats)
             continue;
         }
 
-        file_name = xasprintf("%s/%s", ovs_rundir, de->d_name);
+        file_name = xasprintf("%s/%s", ovs_rundir(), de->d_name);
         pid = read_pidfile(file_name);
         free(file_name);
         if (pid < 0 || kill(pid, 0)) {

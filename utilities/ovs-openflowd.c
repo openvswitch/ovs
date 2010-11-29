@@ -444,8 +444,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     /* Figure out controller names. */
     if (!controllers.n) {
-        svec_add_nocopy(&controllers,
-                        xasprintf("punix:%s/%s.mgmt", ovs_rundir, s->dp_name));
+        svec_add_nocopy(&controllers, xasprintf("punix:%s/%s.mgmt",
+                                                ovs_rundir(), s->dp_name));
     }
     for (i = 1; i < argc; i++) {
         svec_add(&controllers, argv[i]);

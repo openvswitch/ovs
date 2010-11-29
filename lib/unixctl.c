@@ -208,9 +208,9 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     list_init(&server->conns);
 
     if (path) {
-        server->path = abs_file_name(ovs_rundir, path);
+        server->path = abs_file_name(ovs_rundir(), path);
     } else {
-        server->path = xasprintf("%s/%s.%ld.ctl", ovs_rundir,
+        server->path = xasprintf("%s/%s.%ld.ctl", ovs_rundir(),
                                  program_name, (long int) getpid());
     }
 
@@ -471,7 +471,7 @@ unixctl_server_destroy(struct unixctl_server *server)
 
 /* Connects to a Vlog server socket.  'path' should be the name of a Vlog
  * server socket.  If it does not start with '/', it will be prefixed with
- * ovs_rundir (e.g. /var/run/openvswitch).
+ * the rundir (e.g. /usr/local/var/run/openvswitch).
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*clientp' to the new unixctl_client, otherwise to NULL. */
@@ -485,7 +485,7 @@ unixctl_client_create(const char *path, struct unixctl_client **clientp)
 
     /* Determine location. */
     client = xmalloc(sizeof *client);
-    client->connect_path = abs_file_name(ovs_rundir, path);
+    client->connect_path = abs_file_name(ovs_rundir(), path);
     client->bind_path = xasprintf("/tmp/vlog.%ld.%d",
                                   (long int) getpid(), counter++);
 

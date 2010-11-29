@@ -1735,7 +1735,7 @@ bridge_reconfigure_one(struct bridge *br)
     /* Configure OpenFlow controller connection snooping. */
     svec_init(&snoops);
     svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
-                                       ovs_rundir, br->name));
+                                       ovs_rundir(), br->name));
     svec_init(&old_snoops);
     ofproto_get_snoops(br->ofproto, &old_snoops);
     if (!svec_equal(&snoops, &old_snoops)) {
@@ -1755,7 +1755,7 @@ static void
 bridge_ofproto_controller_for_mgmt(const struct bridge *br,
                                    struct ofproto_controller *oc)
 {
-    oc->target = xasprintf("punix:%s/%s.mgmt", ovs_rundir, br->name);
+    oc->target = xasprintf("punix:%s/%s.mgmt", ovs_rundir(), br->name);
     oc->max_backoff = 0;
     oc->probe_interval = 60;
     oc->band = OFPROTO_OUT_OF_BAND;
