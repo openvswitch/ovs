@@ -45,7 +45,7 @@ TESTSUITE_AT = \
 	tests/ovs-vsctl.at \
 	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
-DISTCLEANFILES += tests/atconfig tests/atlocal $(TESTSUITE)
+DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:tests
 
