@@ -164,15 +164,11 @@ static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 	}
 }
 
-enum lookup_key {
-	LOOKUP_TUNNEL_TYPE	= 0,
-	LOOKUP_SADDR		= 1,
-	LOOKUP_DADDR		= 2,
-	LOOKUP_KEY		= 3,
-};
-
 struct port_lookup_key {
-	u32 vals[4];			/* Contains enum lookup_key keys. */
+	u32 tunnel_type;
+	__be32 saddr;
+	__be32 daddr;
+	__be32 key;
 	const struct tnl_mutable_config *mutable;
 };
 
@@ -187,25 +183,25 @@ static int port_cmp(const struct tbl_node *node, void *target)
 
 	lookup->mutable = rcu_dereference(tnl_vport->mutable);
 
-	return (lookup->mutable->tunnel_type == lookup->vals[LOOKUP_TUNNEL_TYPE]) &&
-	       lookup->mutable->port_config.daddr == lookup->vals[LOOKUP_DADDR] &&
-	       lookup->mutable->port_config.in_key == lookup->vals[LOOKUP_KEY] &&
-	       lookup->mutable->port_config.saddr == lookup->vals[LOOKUP_SADDR];
+	return (lookup->mutable->tunnel_type == lookup->tunnel_type &&
+		lookup->mutable->port_config.daddr == lookup->daddr &&
+		lookup->mutable->port_config.in_key == lookup->key &&
+		lookup->mutable->port_config.saddr == lookup->saddr);
 }
 
-static u32 port_hash(struct port_lookup_key *lookup)
+static u32 port_hash(struct port_lookup_key *k)
 {
-	return jhash2(lookup->vals, ARRAY_SIZE(lookup->vals), 0);
+	return jhash_3words(k->key, k->saddr, k->daddr, k->tunnel_type);
 }
 
 static u32 mutable_hash(const struct tnl_mutable_config *mutable)
 {
 	struct port_lookup_key lookup;
 
-	lookup.vals[LOOKUP_SADDR] = mutable->port_config.saddr;
-	lookup.vals[LOOKUP_DADDR] = mutable->port_config.daddr;
-	lookup.vals[LOOKUP_KEY] = mutable->port_config.in_key;
-	lookup.vals[LOOKUP_TUNNEL_TYPE] = mutable->tunnel_type;
+	lookup.saddr = mutable->port_config.saddr;
+	lookup.daddr = mutable->port_config.daddr;
+	lookup.key = mutable->port_config.in_key;
+	lookup.tunnel_type = mutable->tunnel_type;
 
 	return port_hash(&lookup);
 }
@@ -316,12 +312,12 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be32 key,
 	if (unlikely(!table))
 		return NULL;
 
-	lookup.vals[LOOKUP_SADDR] = saddr;
-	lookup.vals[LOOKUP_DADDR] = daddr;
+	lookup.saddr = saddr;
+	lookup.daddr = daddr;
 
 	if (tunnel_type & TNL_T_KEY_EXACT) {
-		lookup.vals[LOOKUP_KEY] = key;
-		lookup.vals[LOOKUP_TUNNEL_TYPE] = tunnel_type & ~TNL_T_KEY_MATCH;
+		lookup.key = key;
+		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_MATCH;
 
 		if (key_local_remote_ports) {
 			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
@@ -330,19 +326,19 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be32 key,
 		}
 
 		if (key_remote_ports) {
-			lookup.vals[LOOKUP_SADDR] = 0;
+			lookup.saddr = 0;
 
 			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
 			if (tbl_node)
 				goto found;
 
-			lookup.vals[LOOKUP_SADDR] = saddr;
+			lookup.saddr = saddr;
 		}
 	}
 
 	if (tunnel_type & TNL_T_KEY_MATCH) {
-		lookup.vals[LOOKUP_KEY] = 0;
-		lookup.vals[LOOKUP_TUNNEL_TYPE] = tunnel_type & ~TNL_T_KEY_EXACT;
+		lookup.key = 0;
+		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_EXACT;
 
 		if (local_remote_ports) {
 			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
@@ -351,7 +347,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be32 key,
 		}
 
 		if (remote_ports) {
-			lookup.vals[LOOKUP_SADDR] = 0;
+			lookup.saddr = 0;
 
 			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
 			if (tbl_node)
