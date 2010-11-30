@@ -33,7 +33,7 @@
 VLOG_DEFINE_THIS_MODULE(cfm);
 
 #define CCM_OPCODE 1              /* CFM message opcode meaning CCM. */
-#define DEST_ADDR  0x0180C2000030 /* Destination for MD level 0 CCMs. */
+#define DEST_ADDR  UINT64_C(0x0180C2000030) /* MD level 0 CCM destination. */
 
 struct cfm_internal {
     struct cfm cfm;
