@@ -29,6 +29,7 @@
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
+#include "stress.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -259,6 +260,15 @@ nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
     return error;
 }
 
+/* This stress option is useful for testing that OVS properly tolerates
+ * -ENOBUFS on NetLink sockets.  Such errors are unavoidable because they can
+ * occur if the kernel cannot temporarily allocate enough GFP_ATOMIC memory to
+ * reply to a request.  They can also occur if messages arrive on a multicast
+ * channel faster than OVS can process them. */
+STRESS_OPTION(
+    netlink_overflow, "simulate netlink socket receive buffer overflow",
+    5, 1, -1, 100);
+
 /* Tries to receive a netlink message from the kernel on 'sock'.  If
  * successful, stores the received message into '*bufp' and returns 0.  The
  * caller is responsible for destroying the message with ofpbuf_delete().  On
@@ -340,9 +350,16 @@ try_again:
         ofpbuf_delete(buf);
         return EPROTO;
     }
+
+    if (STRESS(netlink_overflow)) {
+        ofpbuf_delete(buf);
+        return ENOBUFS;
+    }
+
     *bufp = buf;
     log_nlmsg(__func__, 0, buf->data, buf->size);
     COVERAGE_INC(netlink_received);
+
     return 0;
 }
 

@@ -39,6 +39,7 @@
 #include "row.h"
 #include "stream-ssl.h"
 #include "stream.h"
+#include "stress.h"
 #include "svec.h"
 #include "table.h"
 #include "timeval.h"
@@ -87,6 +88,7 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    stress_init_command();
     signal(SIGPIPE, SIG_IGN);
     process_init();
 

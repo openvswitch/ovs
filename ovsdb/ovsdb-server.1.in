@@ -119,6 +119,7 @@ This command might be useful for debugging issues with database
 clients.
 .
 .so lib/vlog-unixctl.man
+.so lib/stress-unixctl.man
 .SH "SEE ALSO"
 .
 .BR ovsdb\-tool (1).

@@ -183,6 +183,7 @@ status of \fIslave\fR changes.
 Returns the hash value which would be used for \fImac\fR.
 .
 .so lib/vlog-unixctl.man
+.so lib/stress-unixctl.man
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
 .BR ovs\-brcompatd (8),
