@@ -261,7 +261,7 @@ flow_to_string(const struct flow *flow)
 void
 flow_format(struct ds *ds, const struct flow *flow)
 {
-    ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16":tci(",
+    ds_put_format(ds, "tunnel%#"PRIx32":in_port%04"PRIx16":tci(",
                   ntohl(flow->tun_id), flow->in_port);
     if (flow->vlan_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",

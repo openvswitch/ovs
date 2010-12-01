@@ -42,8 +42,8 @@ odp_actions_add(struct odp_actions *actions, uint16_t type)
 void
 format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
 {
-    ds_put_format(ds, "tun_id0x%08x in_port%d tci(",
-                  key->tun_id, key->in_port);
+    ds_put_format(ds, "tun_id%#"PRIx32" in_port%d tci(",
+                  ntohl(key->tun_id), key->in_port);
     if (key->dl_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",
                       vlan_tci_to_vid(key->dl_tci),
@@ -70,7 +70,7 @@ format_odp_action(struct ds *ds, const union odp_action *a)
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
         break;
     case ODPAT_SET_TUNNEL:
-        ds_put_format(ds, "set_tunnel(0x%08"PRIx32")", ntohl(a->tunnel.tun_id));
+        ds_put_format(ds, "set_tunnel(%#"PRIx32")", ntohl(a->tunnel.tun_id));
         break;
     case ODPAT_SET_DL_TCI:
         ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",

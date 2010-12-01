@@ -213,7 +213,7 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
     case NXAST_SET_TUNNEL: {
         const struct nx_action_set_tunnel *nast =
                                             (struct nx_action_set_tunnel *)nah;
-        ds_put_format(string, "set_tunnel:0x%08"PRIx32, ntohl(nast->tun_id));
+        ds_put_format(string, "set_tunnel:%#"PRIx32, ntohl(nast->tun_id));
         break;
     }
 
