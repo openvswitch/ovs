@@ -21,9 +21,10 @@ my ($scale) = 1;
 print ".PS\n";
 print "linethick = 1;\n";
 while (<>) {
-    if (/graph (\S+) (\S+) (\S+)/) {
-        $scale = $1;
-    } elsif (my ($name, $x, $y, $width, $height, $label, $style, $shape, $color, $fillcolor) = /node (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+)/) {
+    if (/^graph/) {
+        (undef, $scale) = split;
+    } elsif (/^node/) {
+        my (undef, $name, $x, $y, $width, $height, $label, $style, $shape, $color, $fillcolor) = split;
         $x *= $scale;
         $y *= $scale;
         $width *= $scale;
