@@ -1099,9 +1099,7 @@ static int send_frags(struct sk_buff *skb,
 		int frag_len = skb->len - mutable->tunnel_hlen;
 
 		skb->next = NULL;
-
-		memset(&IPCB(skb)->opt, 0, sizeof(IPCB(skb)->opt));
-		IPCB(skb)->flags = 0;
+		memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
 		err = ip_local_out(skb);
 		if (likely(net_xmit_eval(err) == 0))
