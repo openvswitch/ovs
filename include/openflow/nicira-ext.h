@@ -347,8 +347,11 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  * bit 'c').  Bit numbering starts at 0 for the least-significant bit, 1 for
  * the next most significant bit, and so on.
  *
- * 'src' and 'dst' are nxm_header values with nxm_hasmask=0.  The following
- * nxm_header values are potentially acceptable as 'src':
+ * 'src' and 'dst' are nxm_header values with nxm_hasmask=0.  (It doesn't make
+ * sense to use nxm_hasmask=1 because the action does not do any kind of
+ * matching; it uses the actual value of a field.)
+ *
+ * The following nxm_header values are potentially acceptable as 'src':
  *
  *   - NXM_OF_IN_PORT
  *   - NXM_OF_ETH_DST
@@ -413,7 +416,7 @@ OFP_ASSERT(sizeof(struct nx_action_reg_move) == 24);
  * starts at 0 for the least-significant bit, 1 for the next most significant
  * bit, and so on.
  *
- * 'dst' must be one of the following:
+ * 'dst' is an nxm_header with nxm_hasmask=0.  It must be one of the following:
  *
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
