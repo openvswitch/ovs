@@ -1,0 +1,57 @@
+AT_BANNER([ofproto])
+
+m4_define([OFPROTO_START],
+  [OVS_RUNDIR=$PWD; export OVS_RUNDIR
+   OVS_LOGDIR=$PWD; export OVS_LOGDIR
+   trap 'kill `cat ovs-openflowd.pid`' 0
+   AT_CAPTURE_FILE([ovs-openflowd.log])
+   AT_CHECK(
+     [ovs-openflowd --detach --pidfile --enable-dummy --log-file dummy@br0 none --datapath-id=fedcba9876543210 $1],
+     [0], [ignore], [ignore])
+])
+
+m4_define([OFPROTO_STOP],
+  [AT_CHECK([ovs-appctl -t ovs-openflowd exit])
+   trap '' 0])
+
+AT_SETUP([ofproto - echo request])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -vANY:ANY:WARN probe br0])
+OFPROTO_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - feature request, config request])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
+AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+features_reply: ver:0x1, dpid:fedcba9876543210
+n_tables:2, n_buffers:256
+features: capabilities:0x87, actions:0xfff
+ LOCAL(br0): addr:aa:55:aa:55:00:00, config: 0x1, state:0x1
+get_config_reply: miss_send_len=0
+])
+OFPROTO_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - mod-port])
+OFPROTO_START
+for command_config_state in \
+    'up 0 0' \
+    'noflood 0x10 0' \
+    'down 0x11 0x1' \
+    'flood 0x1 0x1'
+do
+    set $command_config_state
+    command=$[1] config=$[2] state=$[3]
+    AT_CHECK([ovs-ofctl -vANY:ANY:WARN mod-port br0 br0 $command])
+    AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
+    AT_CHECK_UNQUOTED([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+features_reply: ver:0x1, dpid:fedcba9876543210
+n_tables:2, n_buffers:256
+features: capabilities:0x87, actions:0xfff
+ LOCAL(br0): addr:aa:55:aa:55:00:00, config: $config, state:$state
+get_config_reply: miss_send_len=0
+])
+done
+OFPROTO_STOP
+AT_CLEANUP
