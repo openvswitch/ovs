@@ -815,7 +815,7 @@ dpif_netdev_execute(struct dpif *dpif,
         /* We need a deep copy of 'packet' since we're going to modify its
          * data. */
         ofpbuf_init(&copy, DP_NETDEV_HEADROOM + packet->size);
-        copy.data = (char*)copy.base + DP_NETDEV_HEADROOM;
+        ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
         ofpbuf_put(&copy, packet->data, packet->size);
     } else {
         /* We still need a shallow copy of 'packet', even though we won't
@@ -951,8 +951,8 @@ dp_netdev_run(void)
             int error;
 
             /* Reset packet contents. */
-            packet.data = (char*)packet.base + DP_NETDEV_HEADROOM;
-            packet.size = 0;
+            ofpbuf_clear(&packet);
+            ofpbuf_reserve(&packet, DP_NETDEV_HEADROOM);
 
             error = netdev_recv(port->netdev, &packet);
             if (!error) {
@@ -1025,8 +1025,7 @@ dp_netdev_strip_vlan(struct ofpbuf *packet)
         memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
         tmp.eth_type = veh->veth_next_type;
 
-        packet->size -= VLAN_HEADER_LEN;
-        packet->data = (char*)packet->data + VLAN_HEADER_LEN;
+        ofpbuf_pull(packet, VLAN_HEADER_LEN);
         packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
         memcpy(packet->data, &tmp, sizeof tmp);
     }
