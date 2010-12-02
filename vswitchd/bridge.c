@@ -395,30 +395,6 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     svec_destroy(&dpif_types);
 }
 
-/* Initializes 'options' and fills it with the options for 'if_cfg'. Merges
- * keys from "options" and "other_config", preferring "options" keys over
- * "other_config" keys. */
-static void
-iface_get_options(const struct ovsrec_interface *if_cfg, struct shash *options)
-{
-    size_t i;
-
-    shash_from_ovs_idl_map(if_cfg->key_options, if_cfg->value_options,
-                           if_cfg->n_options, options);
-
-    for (i = 0; i < if_cfg->n_other_config; i++) {
-        char *key = if_cfg->key_other_config[i];
-        char *value = if_cfg->value_other_config[i];
-
-        if (!shash_find_data(options, key)) {
-            shash_add(options, key, value);
-        } else {
-            VLOG_WARN("%s: ignoring \"other_config\" key %s that conflicts "
-                      "with \"options\" key %s", if_cfg->name, key, key);
-        }
-    }
-}
-
 /* Callback for iterate_and_prune_ifaces(). */
 static bool
 check_iface(struct bridge *br, struct iface *iface, void *aux OVS_UNUSED)
@@ -695,7 +671,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
                 shash_init(&args);
                 if (iface) {
-                    iface_get_options(iface->cfg, &args);
+                    shash_from_ovs_idl_map(iface->cfg->key_options, 
+                                           iface->cfg->value_options,
+                                           iface->cfg->n_options, &args);
                 }
                 error = netdev_open(&options, &netdev);
                 shash_destroy(&args);
@@ -733,7 +711,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 struct shash args;
 
                 shash_init(&args);
-                iface_get_options(iface->cfg, &args);
+                shash_from_ovs_idl_map(iface->cfg->key_options, 
+                                       iface->cfg->value_options,
+                                       iface->cfg->n_options, &args);
                 netdev_reconfigure(iface->netdev, &args);
                 shash_destroy(&args);
             }
