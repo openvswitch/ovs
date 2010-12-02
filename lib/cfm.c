@@ -118,9 +118,7 @@ compose_ccm(struct cfm_internal *cfmi)
     struct ofpbuf *packet;
     struct eth_header *eth;
 
-    packet = xzalloc(sizeof *packet);
-
-    ofpbuf_init(packet, ETH_HEADER_LEN + CCM_LEN + 2);
+    packet = ofpbuf_new(ETH_HEADER_LEN + CCM_LEN + 2);
 
     ofpbuf_reserve(packet, 2);
 
