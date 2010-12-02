@@ -433,7 +433,8 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
 {
     const char *name = netdev_dev_get_name(dev);
     const char *type = netdev_dev_get_type(dev);
-    bool is_gre = !strcmp(type, "gre");
+    bool is_gre = false;
+    bool is_ipsec = false;
     struct tnl_port_config config;
     struct shash_node *node;
     bool ipsec_mech_set = false;
@@ -441,6 +442,18 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
     memset(&config, 0, sizeof config);
     config.flags |= TNL_F_PMTUD;
     config.flags |= TNL_F_HDR_CACHE;
+
+    if (!strcmp(type, "gre")) {
+        is_gre = true;
+    } else if (!strcmp(type, "ipsec_gre")) {
+        is_gre = true;
+        is_ipsec = true;
+
+        config.flags |= TNL_F_IPSEC;
+
+        /* IPsec doesn't work when header caching is enabled. */
+        config.flags &= ~TNL_F_HDR_CACHE;
+    }
 
     SHASH_FOR_EACH (node, args) {
         if (!strcmp(node->name, "remote_ip")) {
@@ -501,8 +514,8 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
             if (!strcmp(node->data, "false")) {
                 config.flags &= ~TNL_F_HDR_CACHE;
             }
-        } else if (!strcmp(node->name, "ipsec_cert")
-                   || !strcmp(node->name, "ipsec_psk")) {
+        } else if ((!strcmp(node->name, "ipsec_cert")
+                   || !strcmp(node->name, "ipsec_psk")) && is_ipsec) {
             ipsec_mech_set = true;
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'",
@@ -510,11 +523,10 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
         }
     }
 
-   /* IPsec doesn't work when header caching is enabled.  Disable it if the
-    * IPsec local IP address and authentication mechanism have been defined. */
-    if (ipsec_mech_set) {
-        VLOG_INFO("%s: header caching disabled due to use of IPsec", name);
-        config.flags &= ~TNL_F_HDR_CACHE;
+    if (is_ipsec && !ipsec_mech_set) {
+        VLOG_WARN("%s: IPsec requires an 'ipsec_cert' or ipsec_psk' argument",
+                  name);
+        return EINVAL;
     }
 
     if (!config.daddr) {
@@ -623,6 +635,7 @@ netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
         { { "gre", VPORT_FUNCTIONS }, parse_tunnel_config },
+        { { "ipsec_gre", VPORT_FUNCTIONS }, parse_tunnel_config },
         { { "capwap", VPORT_FUNCTIONS }, parse_tunnel_config },
         { { "patch", VPORT_FUNCTIONS }, parse_patch_config }
     };

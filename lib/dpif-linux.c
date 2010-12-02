@@ -37,6 +37,7 @@
 #include "netdev.h"
 #include "netdev-vport.h"
 #include "ofpbuf.h"
+#include "openvswitch/tunnel.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
 #include "shash.h"
@@ -227,18 +228,31 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
 }
 
 static void
-translate_vport_type_to_netdev_type(char *type, size_t size)
+translate_vport_type_to_netdev_type(struct odp_port *port)
 {
+    char *type = port->type;
+
     if (!strcmp(type, "netdev")) {
-        ovs_strlcpy(type, "system", size);
+        ovs_strlcpy(type, "system", sizeof port->type);
+    } else if (!strcmp(type, "gre")) {
+        const struct tnl_port_config *config;
+
+        config = (struct tnl_port_config *)port->config;
+        if (config->flags & TNL_F_IPSEC) {
+            ovs_strlcpy(type, "ipsec_gre", sizeof port->type);
+        }
     }
 }
 
 static void
-translate_netdev_type_to_vport_type(char *type, size_t size)
+translate_netdev_type_to_vport_type(struct odp_port *port)
 {
+    char *type = port->type;
+
     if (!strcmp(type, "system")) {
-        ovs_strlcpy(type, "netdev", size);
+        ovs_strlcpy(type, "netdev", sizeof port->type);
+    } else if (!strcmp(type, "ipsec_gre")) {
+        ovs_strlcpy(type, "gre", sizeof port->type);
     }
 }
 
@@ -254,8 +268,8 @@ dpif_linux_port_add(struct dpif *dpif, struct netdev *netdev,
     memset(&port, 0, sizeof port);
     strncpy(port.devname, name, sizeof port.devname);
     strncpy(port.type, type, sizeof port.type);
-    translate_netdev_type_to_vport_type(port.type, sizeof port.type);
     netdev_vport_get_config(netdev, port.config);
+    translate_netdev_type_to_vport_type(&port);
 
     error = do_ioctl(dpif, ODP_VPORT_ATTACH, &port);
     if (!error) {
@@ -277,7 +291,7 @@ dpif_linux_port_query__(const struct dpif *dpif, struct odp_port *port)
 {
     int error = do_ioctl(dpif, ODP_VPORT_QUERY, port);
     if (!error) {
-        translate_vport_type_to_netdev_type(port->type, sizeof port->type);
+        translate_vport_type_to_netdev_type(port);
     }
     return error;
 }
@@ -323,7 +337,7 @@ dpif_linux_port_list(const struct dpif *dpif_, struct odp_port *ports, int n)
     for (i = 0; i < pv.n_ports; i++) {
         struct odp_port *port = &pv.ports[i];
 
-        translate_vport_type_to_netdev_type(port->type, sizeof port->type);
+        translate_vport_type_to_netdev_type(port);
     }
     return pv.n_ports;
 }

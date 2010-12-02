@@ -222,6 +222,7 @@ void
 format_odp_port_type(struct ds *ds, const struct odp_port *p)
 {
     if (!strcmp(p->type, "gre") 
+            || !strcmp(p->type, "ipsec_gre")
             || !strcmp(p->type, "capwap")) {
         const struct tnl_port_config *config;
 

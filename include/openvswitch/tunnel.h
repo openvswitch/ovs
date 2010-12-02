@@ -50,6 +50,7 @@
 #define TNL_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
 #define TNL_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
 #define TNL_F_HDR_CACHE		(1 << 7) /* Enable tunnel header caching. */
+#define TNL_F_IPSEC		(1 << 8) /* Traffic is IPsec encrypted. */
 
 /* This goes in the "config" member of struct odp_port for tunnel vports. */
 struct tnl_port_config {

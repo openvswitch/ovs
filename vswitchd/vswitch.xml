@@ -755,9 +755,100 @@
                 bypass certain components of the IP stack (such as IP tables)
                 and it may be useful to disable it if these features are
                 required or as a debugging measure.  Default is enabled, set to
-                <code>false</code> to disable.  If IPsec is enabled through the
-                <ref column="other_config"/> parameters, header caching will be
-                automatically disabled.</dd>
+                <code>false</code> to disable.</dd>
+            </dl>
+          </dd>
+          <dt><code>ipsec_gre</code></dt>
+          <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation over
+             IPv4 IPsec tunnel.  Each tunnel (including those of type
+             <code>gre</code>) must be uniquely identified by the
+             combination of <code>remote_ip</code> and
+             <code>local_ip</code>.  Note that if two ports are defined
+             that are the same except one has an optional identifier and
+             the other does not, the more specific one is matched first.
+             The following options may be specified in the 
+             <ref column="options"/> column:
+            <dl>
+              <dt><code>remote_ip</code></dt>
+              <dd>Required.  The tunnel endpoint.</dd>
+            </dl>
+            <dl>
+              <dt><code>local_ip</code></dt>
+              <dd>Optional.  The destination IP that received packets must
+                match.  Default is to match all addresses.</dd>
+            </dl>
+            <dl>
+              <dt><code>ipsec_psk</code></dt>
+              <dd>Required.  Specifies a pre-shared key for authentication 
+                that must be identical on both sides of the tunnel.</dd>
+            </dl>
+            <dl>
+              <dt><code>in_key</code></dt>
+              <dd>Optional.  The GRE key that received packets must contain.
+                It may either be a 32-bit number (no key and a key of 0 are
+                treated as equivalent) or the word <code>flow</code>.  If
+                <code>flow</code> is specified then any key will be accepted
+                and the key will be placed in the <code>tun_id</code> field
+                for matching in the flow table.  The ovs-ofctl manual page
+                contains additional information about matching fields in
+                OpenFlow flows.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>out_key</code></dt>
+              <dd>Optional.  The GRE key to be set on outgoing packets.  It may
+                either be a 32-bit number or the word <code>flow</code>.  If
+                <code>flow</code> is specified then the key may be set using
+                the <code>set_tunnel</code> Nicira OpenFlow vendor extension (0
+                is used in the absence of an action).  The ovs-ofctl manual
+                page contains additional information about the Nicira OpenFlow
+                vendor extensions.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>key</code></dt>
+              <dd>Optional.  Shorthand to set <code>in_key</code> and
+                <code>out_key</code> at the same time.</dd>
+            </dl>
+            <dl>
+              <dt><code>tos</code></dt>
+              <dd>Optional.  The value of the ToS bits to be set on the
+                encapsulating packet.  It may also be the word
+                <code>inherit</code>, in which case the ToS will be copied from
+                the inner packet if it is IPv4 or IPv6 (otherwise it will be
+                0).  Note that the ECN fields are always inherited.  Default is
+                0.</dd>
+            </dl>
+            <dl>
+              <dt><code>ttl</code></dt>
+              <dd>Optional.  The TTL to be set on the encapsulating packet.
+                It may also be the word <code>inherit</code>, in which case the
+                TTL will be copied from the inner packet if it is IPv4 or IPv6
+                (otherwise it will be the system default, typically 64).
+                Default is the system default TTL.</dd>
+            </dl>
+            <dl>
+              <dt><code>csum</code></dt>
+              <dd>Optional.  Compute GRE checksums on outgoing packets.
+                Checksums present on incoming packets will be validated
+                regardless of this setting.  Note that GRE checksums
+                impose a significant performance penalty as they cover the
+                entire packet.  As the contents of the packet is typically
+                covered by L3 and L4 checksums, this additional checksum only
+                adds value for the GRE and encapsulated Ethernet headers.
+                Default is disabled, set to <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>pmtud</code></dt>
+              <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
+                ``ICMP destination unreachable - fragmentation'' needed
+                messages will be generated for IPv4 packets with the DF bit set
+                and IPv6 packets above the minimum MTU if the packet size
+                exceeds the path MTU minus the size of the tunnel headers.  It
+                also forces the encapsulating packet DF bit to be set (it is
+                always set if the inner packet implies path MTU discovery).
+                Note that this option causes behavior that is typically
+                reserved for routers and therefore is not entirely in
+                compliance with the IEEE 802.1D specification for bridges.
+                Default is enabled, set to <code>false</code> to disable.</dd>
             </dl>
           </dd>
           <dt><code>capwap</code></dt>
@@ -991,16 +1082,7 @@
 
       <column name="other_config">
         Key-value pairs for rarely used interface features.  Currently,
-        the only key is for configuring GRE-over-IPsec, which is only
-        available through the <code>openvswitch-ipsec</code> package for
-        Debian.  The currently defined key-value pair is:
-        <dl>
-          <dt><code>ipsec_psk</code></dt>
-          <dd>Required key for GRE-over-IPsec interfaces.  Specifies a
-            pre-shared key for authentication that must be identical on
-            both sides of the tunnel.  Additionally, the
-            <ref column="type"/> must be <code>gre</code>.</dd>
-        </dl>
+        there are none defined.
       </column>
 
       <column name="statistics">

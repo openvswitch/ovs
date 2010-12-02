@@ -255,8 +255,7 @@ def monitor_uuid_schema_cb(schema):
     new_tables["Interface"] = keep_table_columns(
         schema, "Interface", {"name": string_type,
                               "type": string_type,
-                              "options": string_map_type,
-                              "other_config": string_map_type})
+                              "options": string_map_type})
     schema.tables = new_tables
 
 def usage():
@@ -308,38 +307,42 @@ def main(argv):
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
             name = rec.name.as_scalar()
-            ipsec_cert = rec.other_config.get("ipsec_cert")
-            ipsec_psk = rec.other_config.get("ipsec_psk")
+            ipsec_cert = rec.options.get("ipsec_cert")
+            ipsec_psk = rec.options.get("ipsec_psk")
             is_ipsec = ipsec_cert or ipsec_psk
 
-            if rec.type.as_scalar() == "gre" and is_ipsec:
-                new_interfaces[name] = {
+            if rec.type.as_scalar() == "ipsec_gre":
+                if ipsec_cert or ipsec_psk:
+                    new_interfaces[name] = {
                         "remote_ip": rec.options.get("remote_ip"),
                         "local_ip": rec.options.get("local_ip", "0.0.0.0/0"),
                         "ipsec_cert": ipsec_cert,
                         "ipsec_psk": ipsec_psk }
+                else:
+                    s_log.warning(
+                        "no ipsec_cert or ipsec_psk defined for %s" % name)
  
         if interfaces != new_interfaces:
             for name, vals in interfaces.items():
                 if name not in new_interfaces.keys():
                     ipsec.ipsec_cert_del(vals["local_ip"], vals["remote_ip"])
             for name, vals in new_interfaces.items():
-                if vals == interfaces.get(name):
-                    s_log.warning(
-                        "configuration changed for %s, need to delete "
-                        "interface first" % name)
+                orig_vals = interfaces.get(name):
+                if orig_vals:
+                    # Configuration for this host already exists.  If
+                    # it has changed, this is an error.
+                    if vals != orig_vals:
+                        s_log.warning(
+                            "configuration changed for %s, need to delete "
+                            "interface first" % name)
                     continue
 
                 if vals["ipsec_cert"]:
                     ipsec.ipsec_cert_update(vals["local_ip"],
                             vals["remote_ip"], vals["ipsec_cert"])
-                elif vals["ipsec_psk"]:
+                else:
                     ipsec.ipsec_psk_update(vals["local_ip"], 
                             vals["remote_ip"], vals["ipsec_psk"])
-                else:
-                    s_log.warning(
-                        "no ipsec_cert or ipsec_psk defined for %s" % name)
-                    continue
 
             interfaces = new_interfaces
  
