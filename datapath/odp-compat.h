@@ -47,10 +47,6 @@ struct compat_odp_flowvec {
 };
 
 struct compat_odp_execute {
-	u16 in_port;
-	u16 reserved1;
-	u32 reserved2;
-
 	compat_uptr_t actions;
 	u32 n_actions;
 
