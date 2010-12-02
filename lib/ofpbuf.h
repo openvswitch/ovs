@@ -43,6 +43,7 @@ struct ofpbuf {
 };
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
+void ofpbuf_use_const(struct ofpbuf *, const void *, size_t);
 
 void ofpbuf_init(struct ofpbuf *, size_t);
 void ofpbuf_uninit(struct ofpbuf *);

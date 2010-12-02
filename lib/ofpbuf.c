@@ -40,6 +40,17 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
     b->private_p = NULL;
 }
 
+/* Initializes 'b' as an ofpbuf whose data starts at 'data' and continues for
+ * 'size' bytes.  This is appropriate for an ofpbuf that will be used to
+ * inspect existing data, without moving it around or reallocating it, and
+ * generally without modifying it at all. */
+void
+ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
+{
+    ofpbuf_use(b, (void *) data, size);
+    b->size = size;
+}
+
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
  * bytes. */
 void

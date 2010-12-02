@@ -882,8 +882,7 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
         struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(buffer);
         size_t len = nlmsghdr->nlmsg_len;
         if (len >= sizeof *nlmsghdr && len <= buffer->size) {
-            msg->data = nlmsghdr;
-            msg->size = len;
+            ofpbuf_use_const(msg, nlmsghdr, len);
             ofpbuf_pull(buffer, len);
             return nlmsghdr;
         }
@@ -979,13 +978,11 @@ nl_attr_get_string(const struct nlattr *nla)
     return nl_attr_get(nla);
 }
 
-/* Initializes 'nested' to the payload of 'nla'.  Doesn't initialize every
- * field in 'nested', but enough to poke around with it in a read-only way. */
+/* Initializes 'nested' to the payload of 'nla'. */
 void
 nl_attr_get_nested(const struct nlattr *nla, struct ofpbuf *nested)
 {
-    nested->data = (void *) nl_attr_get(nla);
-    nested->size = nl_attr_get_size(nla);
+    ofpbuf_use_const(nested, nl_attr_get(nla), nl_attr_get_size(nla));
 }
 
 /* Default minimum and maximum payload sizes for each type of attribute. */
@@ -1324,8 +1321,7 @@ log_nlmsg(const char *function, int error,
         return;
     }
 
-    buffer.data = (void *) message;
-    buffer.size = size;
+    ofpbuf_use_const(&buffer, message, size);
     nlmsg = nlmsg_to_string(&buffer);
     VLOG_DBG_RL(&rl, "%s (%s): %s", function, strerror(error), nlmsg);
     free(nlmsg);

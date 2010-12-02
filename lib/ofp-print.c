@@ -64,8 +64,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len OVS_UNUSED)
     int status;
     int c;
 
-    buf.data = (void *) data;
-    buf.size = len;
+    ofpbuf_use_const(&buf, data, len);
 
     pcap = tmpfile();
     if (!pcap) {
@@ -136,8 +135,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
         struct flow flow;
         struct ofpbuf packet;
 
-        packet.data = (void *) op->data;
-        packet.size = data_len;
+        ofpbuf_use_const(&packet, op->data, data_len);
         flow_extract(&packet, 0, ntohs(op->in_port), &flow);
         flow_format(string, &flow);
         ds_put_char(string, '\n');

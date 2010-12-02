@@ -400,8 +400,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     /* Extract flow data from 'opi' into 'flow'. */
     pkt_ofs = offsetof(struct ofp_packet_in, data);
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
-    pkt.data = (void *) opi->data;
-    pkt.size = pkt_len;
+    ofpbuf_use_const(&pkt, opi->data, pkt_len);
     flow_extract(&pkt, 0, in_port, &flow);
 
     /* Choose output port. */

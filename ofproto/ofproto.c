@@ -3072,8 +3072,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     /* Get ofp_packet_out. */
-    request.data = (void *) oh;
-    request.size = ntohs(oh->length);
+    ofpbuf_use_const(&request, oh, ntohs(oh->length));
     opo = ofpbuf_try_pull(&request, offsetof(struct ofp_packet_out, actions));
     if (!opo) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -3515,8 +3514,7 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf b;
     int error;
 
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     /* Dissect the message. */
     nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
@@ -3651,8 +3649,7 @@ handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     int error;
 
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     /* Dissect the message. */
     request = ofpbuf_try_pull(&b, sizeof *request);
@@ -4288,8 +4285,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     struct facet *facet;
     struct flow flow;
 
-    payload.data = msg + 1;
-    payload.size = msg->length - sizeof *msg;
+    ofpbuf_use_const(&payload, msg + 1, msg->length - sizeof *msg);
     flow_extract(&payload, msg->arg, msg->port, &flow);
 
     packet->l2 = payload.l2;
@@ -4754,8 +4750,9 @@ schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, int max_len,
         buffer_id = UINT32_MAX;
     } else {
         struct ofpbuf payload;
-        payload.data = opi->data;
-        payload.size = packet->size - offsetof(struct ofp_packet_in, data);
+
+        ofpbuf_use_const(&payload, opi->data,
+                         packet->size - offsetof(struct ofp_packet_in, data));
         buffer_id = pktbuf_save(ofconn->pktbuf, &payload, in_port);
     }
 
