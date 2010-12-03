@@ -338,7 +338,6 @@ static int new_vport(struct datapath *dp, struct odp_port *odp_port, int port_no
 {
 	struct vport_parms parms;
 	struct vport *vport;
-	int err;
 
 	parms.name = odp_port->devname;
 	parms.type = odp_port->type;
@@ -352,12 +351,6 @@ static int new_vport(struct datapath *dp, struct odp_port *odp_port, int port_no
 
 	if (IS_ERR(vport))
 		return PTR_ERR(vport);
-
-	err = vport_attach(vport);
-	if (err) {
-		vport_del(vport);
-		return err;
-	}
 
 	rcu_assign_pointer(dp->ports[port_no], vport);
 	list_add_rcu(&vport->node, &dp->port_list);
@@ -426,18 +419,12 @@ int dp_detach_port(struct vport *p)
 	list_del_rcu(&p->node);
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 
-	err = vport_detach(p);
-	if (err)
-		return err;
-
-	/* Then wait until no one is still using it, and destroy it. */
-	synchronize_rcu();
-
+	/* Then destroy it. */
 	vport_lock();
-	vport_del(p);
+	err = vport_del(p);
 	vport_unlock();
 
-	return 0;
+	return err;
 }
 
 static int detach_port(int dp_idx, int port_no)

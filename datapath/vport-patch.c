@@ -39,6 +39,8 @@ struct patch_vport {
 static struct hlist_head *peer_table;
 #define PEER_HASH_BUCKETS 256
 
+static void update_peers(const char *name, struct vport *);
+
 static inline struct patch_vport *patch_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
@@ -130,6 +132,11 @@ static struct vport *patch_create(const struct vport_parms *parms)
      * bottleneck on systems using jumbo frames. */
 	patch_vport->devconf->mtu = 65535;
 
+	hlist_add_head(&patch_vport->hash_node, hash_bucket(patch_vport->peer_name));
+
+	rcu_assign_pointer(patch_vport->peer, vport_locate(patch_vport->peer_name));
+	update_peers(patch_vport->name, vport);
+
 	return vport;
 
 error_free_vport:
@@ -155,6 +162,13 @@ static int patch_destroy(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
+	update_peers(patch_vport->name, NULL);
+	rcu_assign_pointer(patch_vport->peer, NULL);
+
+	hlist_del(&patch_vport->hash_node);
+
+	synchronize_rcu();
+
 	kfree(patch_vport->devconf);
 	vport_free(vport);
 
@@ -170,30 +184,6 @@ static void update_peers(const char *name, struct vport *vport)
 	hlist_for_each_entry(peer_vport, node, bucket, hash_node)
 		if (!strcmp(peer_vport->peer_name, name))
 			rcu_assign_pointer(peer_vport->peer, vport);
-}
-
-static int patch_attach(struct vport *vport)
-{
-	struct patch_vport *patch_vport = patch_vport_priv(vport);
-
-	hlist_add_head(&patch_vport->hash_node, hash_bucket(patch_vport->peer_name));
-
-	rcu_assign_pointer(patch_vport->peer, vport_locate(patch_vport->peer_name));
-	update_peers(patch_vport->name, vport);
-
-	return 0;
-}
-
-static int patch_detach(struct vport *vport)
-{
-	struct patch_vport *patch_vport = patch_vport_priv(vport);
-
-	update_peers(patch_vport->name, NULL);
-	rcu_assign_pointer(patch_vport->peer, NULL);
-
-	hlist_del(&patch_vport->hash_node);
-
-	return 0;
 }
 
 static int patch_set_mtu(struct vport *vport, int mtu)
@@ -270,8 +260,6 @@ const struct vport_ops patch_vport_ops = {
 	.create		= patch_create,
 	.modify		= patch_modify,
 	.destroy	= patch_destroy,
-	.attach		= patch_attach,
-	.detach		= patch_detach,
 	.set_mtu	= patch_set_mtu,
 	.set_addr	= patch_set_addr,
 	.get_name	= patch_get_name,

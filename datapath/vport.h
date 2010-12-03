@@ -44,9 +44,6 @@ int vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
 
-int vport_attach(struct vport *);
-int vport_detach(struct vport *);
-
 int vport_set_mtu(struct vport *, int mtu);
 int vport_set_addr(struct vport *, const unsigned char *);
 int vport_set_stats(struct vport *, struct rtnl_link_stats64 *);
@@ -165,12 +162,7 @@ struct vport_parms {
  * a new vport allocated with vport_alloc(), otherwise an ERR_PTR() value.
  * @modify: Modify the configuration of an existing vport.  May be null if
  * modification is not supported.
- * @destroy: Destroy and free a vport using vport_free().  Prior to destruction
- * @detach will be called followed by synchronize_rcu().
- * @attach: Attach a previously created vport to a datapath.  After attachment
- * packets may be sent and received.  Prior to attachment any packets may be
- * silently discarded.  May be null if not needed.
- * @detach: Detach a vport from a datapath.  May be null if not needed.
+ * @destroy: Detach and destroy a vport.
  * @set_mtu: Set the device's MTU.  May be null if not supported.
  * @set_addr: Set the device's MAC address.  May be null if not supported.
  * @set_stats: Provides stats as an offset to be added to the device stats.
@@ -205,9 +197,6 @@ struct vport_ops {
 	struct vport *(*create)(const struct vport_parms *);
 	int (*modify)(struct vport *, struct odp_port *);
 	int (*destroy)(struct vport *);
-
-	int (*attach)(struct vport *);
-	int (*detach)(struct vport *);
 
 	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);

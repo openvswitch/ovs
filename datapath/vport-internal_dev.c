@@ -20,7 +20,7 @@
 #include "vport-netdev.h"
 
 struct internal_dev {
-	struct vport *attached_vport, *vport;
+	struct vport *vport;
 	struct net_device_stats stats;
 };
 
@@ -99,10 +99,6 @@ static void internal_dev_getinfo(struct net_device *netdev,
 	struct vport *vport = internal_dev_get_vport(netdev);
 
 	strcpy(info->driver, "openvswitch");
-
-	if (!vport)
-		return;
-
 	sprintf(info->bus_info, "%d.%d", vport->dp->dp_idx, vport->port_no);
 }
 
@@ -124,7 +120,7 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 	if (new_mtu < 68)
 		return -EINVAL;
 
-	if (vport && new_mtu > dp_min_mtu(vport->dp))
+	if (new_mtu > dp_min_mtu(vport->dp))
 		return -EINVAL;
 
 	netdev->mtu = new_mtu;
@@ -206,6 +202,9 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 	if (err)
 		goto error_free_netdev;
 
+	dev_set_promiscuity(netdev_vport->dev, 1);
+	netif_start_queue(netdev_vport->dev);
+
 	return vport;
 
 error_free_netdev:
@@ -220,32 +219,13 @@ static int internal_dev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
-	unregister_netdevice(netdev_vport->dev);
-	vport_free(vport);
-
-	return 0;
-}
-
-static int internal_dev_attach(struct vport *vport)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	struct internal_dev *internal_dev = internal_dev_priv(netdev_vport->dev);
-
-	rcu_assign_pointer(internal_dev->attached_vport, internal_dev->vport);
-	dev_set_promiscuity(netdev_vport->dev, 1);
-	netif_start_queue(netdev_vport->dev);
-
-	return 0;
-}
-
-static int internal_dev_detach(struct vport *vport)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	struct internal_dev *internal_dev = internal_dev_priv(netdev_vport->dev);
-
 	netif_stop_queue(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
-	rcu_assign_pointer(internal_dev->attached_vport, NULL);
+
+	synchronize_rcu();
+
+	unregister_netdevice(netdev_vport->dev);
+	vport_free(vport);
 
 	return 0;
 }
@@ -277,8 +257,6 @@ const struct vport_ops internal_vport_ops = {
 	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
-	.attach		= internal_dev_attach,
-	.detach		= internal_dev_detach,
 	.set_mtu	= netdev_set_mtu,
 	.set_addr	= netdev_set_addr,
 	.get_name	= netdev_get_name,
@@ -313,7 +291,7 @@ struct vport *internal_dev_get_vport(struct net_device *netdev)
 
 	if (!is_internal_dev(netdev))
 		return NULL;
-	
+
 	internal_dev = internal_dev_priv(netdev);
-	return rcu_dereference(internal_dev->attached_vport);
+	return rcu_dereference(internal_dev->vport);
 }

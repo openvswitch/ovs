@@ -577,8 +577,9 @@ void vport_free(struct vport *vport)
  *
  * @parms: Information about new vport.
  *
- * Creates a new vport with the specified configuration (which is dependent
- * on device type).  Both RTNL and vport locks must be held.
+ * Creates a new vport with the specified configuration (which is dependent on
+ * device type) and attaches it to a datapath.  Both RTNL and vport locks must
+ * be held.
  */
 struct vport *vport_add(const struct vport_parms *parms)
 {
@@ -633,9 +634,8 @@ int vport_mod(struct vport *vport, struct odp_port *port)
  *
  * @vport: vport to delete.
  *
- * Deletes the specified device.  The device must not be currently attached to
- * a datapath.  It is possible to fail for reasons such as lack of memory.
- * Both RTNL and vport locks must be held.
+ * Detaches @vport from its datapath and destroys it.  It is possible to fail
+ * for reasons such as lack of memory.  Both RTNL and vport locks must be held.
  */
 int vport_del(struct vport *vport)
 {
@@ -645,42 +645,6 @@ int vport_del(struct vport *vport)
 	unregister_vport(vport);
 
 	return vport->ops->destroy(vport);
-}
-
-/**
- *	vport_attach - notify a vport that it has been attached to a datapath
- *
- * @vport: vport to attach.
- *
- * Performs vport-specific actions so that packets may be exchanged.  RTNL lock
- * and the appropriate DP mutex must be held.
- */
-int vport_attach(struct vport *vport)
-{
-	ASSERT_RTNL();
-
-	if (vport->ops->attach)
-		return vport->ops->attach(vport);
-
-	return 0;
-}
-
-/**
- *	vport_detach - detach a vport from a datapath
- *
- * @vport: vport to detach.
- *
- * Performs vport-specific actions before a vport is detached from a datapath.
- * May fail for a variety of reasons, including lack of memory.  RTNL lock and
- * the appropriate DP mutex must be held.
- */
-int vport_detach(struct vport *vport)
-{
-	ASSERT_RTNL();
-
-	if (vport->ops->detach)
-		return vport->ops->detach(vport);
-	return 0;
 }
 
 /**

@@ -125,6 +125,15 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 			vport_set_stats(vport, &stats);
 	}
 
+	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
+					 vport);
+	if (err)
+		goto error_put;
+
+	dev_set_promiscuity(netdev_vport->dev, 1);
+	dev_disable_lro(netdev_vport->dev);
+	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
+
 	return vport;
 
 error_put:
@@ -139,36 +148,14 @@ static int netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
-	dev_put(netdev_vport->dev);
-	vport_free(vport);
-
-	return 0;
-}
-
-static int netdev_attach(struct vport *vport)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	int err;
-
-	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
-					 vport);
-	if (err)
-		return err;
-
-	dev_set_promiscuity(netdev_vport->dev, 1);
-	dev_disable_lro(netdev_vport->dev);
-	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
-
-	return 0;
-}
-
-static int netdev_detach(struct vport *vport)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-
 	netdev_vport->dev->priv_flags &= ~IFF_OVS_DATAPATH;
 	netdev_rx_handler_unregister(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
+
+	synchronize_rcu();
+
+	dev_put(netdev_vport->dev);
+	vport_free(vport);
 
 	return 0;
 }
@@ -307,8 +294,6 @@ const struct vport_ops netdev_vport_ops = {
 	.exit		= netdev_exit,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
-	.attach		= netdev_attach,
-	.detach		= netdev_detach,
 	.set_mtu	= netdev_set_mtu,
 	.set_addr	= netdev_set_addr,
 	.get_name	= netdev_get_name,
