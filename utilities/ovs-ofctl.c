@@ -478,6 +478,7 @@ do_dump_flows(int argc, char *argv[])
     parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
     ofputil_cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &req->match);
     memset(&req->pad, 0, sizeof req->pad);
+    req->table_id = pf.table_idx;
     req->out_port = htons(pf.out_port);
 
     dump_stats_transaction(argv[1], request);
@@ -494,6 +495,7 @@ do_dump_aggregate(int argc, char *argv[])
     parse_ofp_str(&pf, NULL, argc > 2 ? argv[2] : "");
     ofputil_cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &req->match);
     memset(&req->pad, 0, sizeof req->pad);
+    req->table_id = pf.table_idx;
     req->out_port = htons(pf.out_port);
 
     dump_stats_transaction(argv[1], request);
