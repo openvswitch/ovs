@@ -2184,7 +2184,7 @@ const struct netdev_class netdev_linux_class =
         "system",
         netdev_linux_create,
         netdev_linux_enumerate,
-        netdev_vport_set_stats);
+        NULL);                  /* set_stats */
 
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
