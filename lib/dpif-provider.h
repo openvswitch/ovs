@@ -138,10 +138,9 @@ struct dpif_class {
      * meaning is the same as for the get_drop_frags member function. */
     int (*set_drop_frags)(struct dpif *dpif, bool drop_frags);
 
-    /* Creates a new port in 'dpif' connected to network device 'devname'.
-     * 'flags' is a set of ODP_PORT_* flags.  If successful, sets '*port_no'
+    /* Adds 'netdev' as a new port in 'dpif'.  If successful, sets '*port_no'
      * to the new port's port number. */
-    int (*port_add)(struct dpif *dpif, const char *devname, uint16_t flags,
+    int (*port_add)(struct dpif *dpif, struct netdev *netdev,
                     uint16_t *port_no);
 
     /* Removes port numbered 'port_no' from 'dpif'. */

@@ -22,8 +22,6 @@
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
 #define ODP_EXECUTE32		_IOR('O', 18, struct compat_odp_execute)
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
-#define ODP_VPORT_ADD32		_IOR('O', 21, struct compat_odp_vport_add)
-#define ODP_VPORT_MOD32		_IOR('O', 22, struct compat_odp_vport_mod)
 
 struct compat_odp_portvec {
 	compat_uptr_t ports;
@@ -58,17 +56,6 @@ struct compat_odp_execute {
 
 	compat_uptr_t data;
 	u32 length;
-};
-
-struct compat_odp_vport_add {
-	char port_type[VPORT_TYPE_SIZE];
-	char devname[16];	     /* IFNAMSIZ */
-	compat_uptr_t config;
-};
-
-struct compat_odp_vport_mod {
-	char devname[16];	     /* IFNAMSIZ */
-	compat_uptr_t config;
 };
 #endif	/* CONFIG_COMPAT */
 

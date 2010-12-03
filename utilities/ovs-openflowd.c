@@ -128,10 +128,19 @@ main(int argc, char *argv[])
         size_t i;
 
         SVEC_FOR_EACH (i, port, &s.ports) {
-            error = dpif_port_add(dpif, port, 0, NULL);
+            struct netdev *netdev;
+
+            error = netdev_open_default(port, &netdev);
+            if (error) {
+                ovs_fatal(error, "%s: failed to open network device", port);
+            }
+
+            error = dpif_port_add(dpif, netdev, NULL);
             if (error) {
                 ovs_fatal(error, "failed to add %s as a port", port);
             }
+
+            netdev_close(netdev);
         }
     }
 

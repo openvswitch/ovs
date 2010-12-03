@@ -42,21 +42,17 @@ struct netdev_vport_notifier {
 
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
+    uint64_t config[VPORT_CONFIG_SIZE / 8];
 };
 
 struct netdev_vport {
     struct netdev netdev;
 };
 
-struct vport_info {
-    const char *devname;
-    const char *type;
-    void *config;
-};
-
 struct vport_class {
-    const struct netdev_class netdev_class;
-    int (*parse_config)(struct vport_info *port, const struct shash *args);
+    struct netdev_class netdev_class;
+    int (*parse_config)(const struct netdev_dev *, const struct shash *args,
+                        void *config);
 };
 
 static struct shash netdev_vport_notifiers =
@@ -97,70 +93,39 @@ netdev_vport_cast(const struct netdev *netdev)
     return CONTAINER_OF(netdev, struct netdev_vport, netdev);
 }
 
-static int
-netdev_vport_parse_config(const struct netdev_class *netdev_class,
-                          const char *name, const struct shash *args,
-                          void **configp)
+/* If 'netdev' is a vport netdev, copies its kernel configuration into
+ * 'config'.  Otherwise leaves 'config' untouched. */
+void
+netdev_vport_get_config(const struct netdev *netdev, void *config)
 {
-    const struct vport_class *c = vport_class_cast(netdev_class);
-    if (c->parse_config) {
-        struct vport_info info;
-        int error;
+    const struct netdev_dev *dev = netdev_get_dev(netdev);
 
-        info.devname = name;
-        info.type = netdev_class->type;
-        error = (c->parse_config)(&info, args);
-        *configp = error ? NULL : info.config;
-        return error;
-    } else {
-        if (!shash_is_empty(args)) {
-            VLOG_WARN("%s: arguments for %s vports should be empty",
-                      name, netdev_class->type);
-        }
-        *configp = NULL;
-        return 0;
+    if (is_vport_class(netdev_dev_get_class(dev))) {
+        const struct netdev_dev_vport *vport = netdev_dev_vport_cast(dev);
+        memcpy(config, vport->config, VPORT_CONFIG_SIZE);
     }
 }
 
 static int
-netdev_vport_create(const struct netdev_class *class, const char *name,
-                    const struct shash *args, struct netdev_dev **netdev_devp)
+netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
+                    const struct shash *args,
+                    struct netdev_dev **netdev_devp)
 {
-    int err;
-    struct odp_vport_add ova;
-    struct netdev_dev_vport *netdev_dev;
+    const struct vport_class *vport_class = vport_class_cast(netdev_class);
+    struct netdev_dev_vport *dev;
+    int error;
 
-    ovs_strlcpy(ova.port_type, class->type, sizeof ova.port_type);
-    ovs_strlcpy(ova.devname, name, sizeof ova.devname);
-    err = netdev_vport_parse_config(class, name, args, &ova.config);
-    if (err) {
-        goto exit;
+    dev = xmalloc(sizeof *dev);
+    *netdev_devp = &dev->netdev_dev;
+    netdev_dev_init(&dev->netdev_dev, name, netdev_class);
+
+    memset(dev->config, 0, sizeof dev->config);
+    error = vport_class->parse_config(&dev->netdev_dev, args, dev->config);
+
+    if (error) {
+        netdev_dev_uninit(&dev->netdev_dev, true);
     }
-
-    err = netdev_vport_do_ioctl(ODP_VPORT_ADD, &ova);
-
-    if (err == EBUSY) {
-        VLOG_WARN("%s: destroying existing device", name);
-
-        err = netdev_vport_do_ioctl(ODP_VPORT_DEL, ova.devname);
-        if (err) {
-            goto exit;
-        }
-
-        err = netdev_vport_do_ioctl(ODP_VPORT_ADD, &ova);
-    }
-    if (err) {
-        goto exit;
-    }
-
-    netdev_dev = xmalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
-
-    *netdev_devp = &netdev_dev->netdev_dev;
-
-exit:
-    free(ova.config);
-    return err;
+    return error;
 }
 
 static void
@@ -168,8 +133,6 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_vport *netdev_dev = netdev_dev_vport_cast(netdev_dev_);
 
-    netdev_vport_do_ioctl(ODP_VPORT_DEL, 
-                          (char *)netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 
@@ -194,23 +157,29 @@ netdev_vport_close(struct netdev *netdev_)
 }
 
 static int
-netdev_vport_reconfigure(struct netdev_dev *netdev_dev,
+netdev_vport_reconfigure(struct netdev_dev *dev_,
                          const struct shash *args)
 {
-    const char *name = netdev_dev_get_name(netdev_dev);
-    struct odp_vport_mod ovm;
-    int err;
+    const struct netdev_class *netdev_class = netdev_dev_get_class(dev_);
+    const struct vport_class *vport_class = vport_class_cast(netdev_class);
+    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
+    struct odp_port port;
+    int error;
 
-    ovs_strlcpy(ovm.devname, name, sizeof ovm.devname);
-    err = netdev_vport_parse_config(netdev_dev_get_class(netdev_dev), name,
-                                    args, &ovm.config);
-    if (err) {
-        return err;
+    memset(&port, 0, sizeof port);
+    strncpy(port.devname, netdev_dev_get_name(dev_), sizeof port.devname);
+    strncpy(port.type, netdev_dev_get_type(dev_), sizeof port.type);
+    error = vport_class->parse_config(dev_, args, port.config);
+    if (!error && memcmp(port.config, dev->config, sizeof dev->config)) {
+        error = netdev_vport_do_ioctl(ODP_VPORT_MOD, &port);
+        if (!error || error == ENODEV) {
+            /* Either reconfiguration succeeded or this vport is not installed
+             * in the kernel (e.g. it hasn't been added to a dpif yet with
+             * dpif_port_add()). */
+            memcpy(dev->config, port.config, sizeof dev->config);
+        }
     }
-
-    err = netdev_vport_do_ioctl(ODP_VPORT_MOD, &ovm);
-    free(ovm.config);
-    return err;
+    return error;
 }
 
 static int
@@ -458,76 +427,77 @@ netdev_vport_poll_notify(const struct netdev *netdev)
 /* Code specific to individual vport types. */
 
 static int
-parse_tunnel_config(struct vport_info *port, const struct shash *args)
+parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
+                    void *configp)
 {
-    const char *name = port->devname;
-    bool is_gre = !strcmp(port->type, "gre");
-    struct tnl_port_config *config;
+    const char *name = netdev_dev_get_name(dev);
+    const char *type = netdev_dev_get_type(dev);
+    bool is_gre = !strcmp(type, "gre");
+    struct tnl_port_config config;
     struct shash_node *node;
     bool ipsec_ip_set = false;
     bool ipsec_mech_set = false;
 
-    config = port->config = xzalloc(sizeof *config);
-    config->flags |= TNL_F_PMTUD;
-    config->flags |= TNL_F_HDR_CACHE;
+    config.flags |= TNL_F_PMTUD;
+    config.flags |= TNL_F_HDR_CACHE;
 
     SHASH_FOR_EACH (node, args) {
         if (!strcmp(node->name, "remote_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("%s: bad %s 'remote_ip'", name, port->type);
+                VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
             } else {
-                config->daddr = in_addr.s_addr;
+                config.daddr = in_addr.s_addr;
             }
         } else if (!strcmp(node->name, "local_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("%s: bad %s 'local_ip'", name, port->type);
+                VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
-                config->saddr = in_addr.s_addr;
+                config.saddr = in_addr.s_addr;
             }
         } else if (!strcmp(node->name, "key") && is_gre) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= TNL_F_IN_KEY_MATCH;
-                config->flags |= TNL_F_OUT_KEY_ACTION;
+                config.flags |= TNL_F_IN_KEY_MATCH;
+                config.flags |= TNL_F_OUT_KEY_ACTION;
             } else {
-                config->out_key = config->in_key = htonl(atoi(node->data));
+                config.out_key = config.in_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "in_key") && is_gre) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= TNL_F_IN_KEY_MATCH;
+                config.flags |= TNL_F_IN_KEY_MATCH;
             } else {
-                config->in_key = htonl(atoi(node->data));
+                config.in_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "out_key") && is_gre) {
             if (!strcmp(node->data, "flow")) {
-                config->flags |= TNL_F_OUT_KEY_ACTION;
+                config.flags |= TNL_F_OUT_KEY_ACTION;
             } else {
-                config->out_key = htonl(atoi(node->data));
+                config.out_key = htonl(atoi(node->data));
             }
         } else if (!strcmp(node->name, "tos")) {
             if (!strcmp(node->data, "inherit")) {
-                config->flags |= TNL_F_TOS_INHERIT;
+                config.flags |= TNL_F_TOS_INHERIT;
             } else {
-                config->tos = atoi(node->data);
+                config.tos = atoi(node->data);
             }
         } else if (!strcmp(node->name, "ttl")) {
             if (!strcmp(node->data, "inherit")) {
-                config->flags |= TNL_F_TTL_INHERIT;
+                config.flags |= TNL_F_TTL_INHERIT;
             } else {
-                config->ttl = atoi(node->data);
+                config.ttl = atoi(node->data);
             }
         } else if (!strcmp(node->name, "csum") && is_gre) {
             if (!strcmp(node->data, "true")) {
-                config->flags |= TNL_F_CSUM;
+                config.flags |= TNL_F_CSUM;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
-                config->flags &= ~TNL_F_PMTUD;
+                config.flags &= ~TNL_F_PMTUD;
             }
         } else if (!strcmp(node->name, "header_cache")) {
             if (!strcmp(node->data, "false")) {
-                config->flags &= ~TNL_F_HDR_CACHE;
+                config.flags &= ~TNL_F_HDR_CACHE;
             }
         } else if (!strcmp(node->name, "ipsec_local_ip")) {
             ipsec_ip_set = true;
@@ -536,7 +506,7 @@ parse_tunnel_config(struct vport_info *port, const struct shash *args)
             ipsec_mech_set = true;
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'",
-                      name, port->type, node->name);
+                      name, type, node->name);
         }
     }
 
@@ -544,22 +514,25 @@ parse_tunnel_config(struct vport_info *port, const struct shash *args)
     * IPsec local IP address and authentication mechanism have been defined. */
     if (ipsec_ip_set && ipsec_mech_set) {
         VLOG_INFO("%s: header caching disabled due to use of IPsec", name);
-        config->flags &= ~TNL_F_HDR_CACHE;
+        config.flags &= ~TNL_F_HDR_CACHE;
     }
 
-    if (!config->daddr) {
+    if (!config.daddr) {
         VLOG_WARN("%s: %s type requires valid 'remote_ip' argument",
-                  name, port->type);
+                  name, type);
         return EINVAL;
     }
 
+    BUILD_ASSERT(sizeof config <= VPORT_CONFIG_SIZE);
+    memcpy(configp, &config, sizeof config);
     return 0;
 }
 
 static int
-parse_patch_config(struct vport_info *port, const struct shash *args)
+parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
+                   void *configp)
 {
-    const char *name = port->devname;
+    const char *name = netdev_dev_get_name(dev);
     const char *peer;
 
     peer = shash_find_data(args, "peer");
@@ -573,7 +546,7 @@ parse_patch_config(struct vport_info *port, const struct shash *args)
         return EINVAL;
     }
 
-    if (strlen(peer) >= IFNAMSIZ) {
+    if (strlen(peer) >= MIN(IFNAMSIZ, VPORT_CONFIG_SIZE)) {
         VLOG_WARN("%s: patch 'peer' arg too long", name);
         return EINVAL;
     }
@@ -583,7 +556,7 @@ parse_patch_config(struct vport_info *port, const struct shash *args)
         return EINVAL;
     }
 
-    port->config = xstrdup(peer);
+    strncpy(configp, peer, VPORT_CONFIG_SIZE);
 
     return 0;
 }
@@ -645,19 +618,18 @@ parse_patch_config(struct vport_info *port, const struct shash *args)
     netdev_vport_poll_add,                                  \
     netdev_vport_poll_remove,
 
-static const struct vport_class vport_gre_class
-        = { { "gre", VPORT_FUNCTIONS }, parse_tunnel_config };
-
-static const struct vport_class vport_capwap_class
-        = { { "capwap", VPORT_FUNCTIONS }, parse_tunnel_config };
-
-static const struct vport_class vport_patch_class
-        = { { "patch", VPORT_FUNCTIONS }, parse_patch_config };
-
 void
 netdev_vport_register(void)
 {
-    netdev_register_provider(&vport_gre_class.netdev_class);
-    netdev_register_provider(&vport_capwap_class.netdev_class);
-    netdev_register_provider(&vport_patch_class.netdev_class);
+    static const struct vport_class vport_classes[] = {
+        { { "gre", VPORT_FUNCTIONS }, parse_tunnel_config },
+        { { "capwap", VPORT_FUNCTIONS }, parse_tunnel_config },
+        { { "patch", VPORT_FUNCTIONS }, parse_patch_config }
+    };
+
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
+        netdev_register_provider(&vport_classes[i].netdev_class);
+    }
 }

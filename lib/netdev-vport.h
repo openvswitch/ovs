@@ -23,6 +23,9 @@ struct odp_port;
 struct shash;
 
 void netdev_vport_register(void);
+
+void netdev_vport_get_config(const struct netdev *, void *config);
+
 int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);
 int netdev_vport_set_stats(struct netdev *, const struct netdev_stats *);
 

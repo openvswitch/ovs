@@ -75,6 +75,7 @@ netdev_initialize(void)
 
 #ifdef HAVE_NETLINK
         netdev_register_provider(&netdev_linux_class);
+        netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_register();
 #endif
@@ -167,6 +168,13 @@ netdev_unregister_provider(const char *type)
     return 0;
 }
 
+const struct netdev_class *
+netdev_lookup_provider(const char *type)
+{
+    netdev_initialize();
+    return shash_find_data(&netdev_classes, type && type[0] ? type : "system");
+}
+
 /* Clears 'types' and enumerates the types of all currently registered netdev
  * providers into it.  The caller must first initialize the svec. */
 void
@@ -252,28 +260,6 @@ update_device_args(struct netdev_dev *dev, const struct shash *args)
     qsort(dev->args, dev->n_args, sizeof *dev->args, compare_args);
 }
 
-static int
-create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
-{
-    struct netdev_class *netdev_class;
-    int error;
-
-    if (!options->type || strlen(options->type) == 0) {
-        /* Default to system. */
-        options->type = "system";
-    }
-
-    netdev_class = shash_find_data(&netdev_classes, options->type);
-    if (!netdev_class) {
-        return EAFNOSUPPORT;
-    }
-
-    error = netdev_class->create(netdev_class, options->name, options->args,
-                                 netdev_devp);
-    assert(error || (*netdev_devp)->netdev_class == netdev_class);
-    return error;
-}
-
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
  * successful, otherwise a positive errno value.  On success, sets '*netdevp'
  * to the new network device, otherwise to null.
@@ -302,14 +288,20 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
     netdev_dev = shash_find_data(&netdev_dev_shash, options->name);
 
     if (!netdev_dev) {
-        error = create_device(options, &netdev_dev);
+        const struct netdev_class *class;
+
+        class = netdev_lookup_provider(options->type);
+        if (!class) {
+            VLOG_WARN("could not create netdev %s of unknown type %s",
+                      options->name, options->type);
+            return EAFNOSUPPORT;
+        }
+        error = class->create(class, options->name, options->args,
+                              &netdev_dev);
         if (error) {
-            if (error == EAFNOSUPPORT) {
-                VLOG_WARN("could not create netdev %s of unknown type %s",
-                          options->name, options->type);
-            }
             return error;
         }
+        assert(netdev_dev->netdev_class == class);
         update_device_args(netdev_dev, options->args);
 
     } else if (!shash_is_empty(options->args) &&

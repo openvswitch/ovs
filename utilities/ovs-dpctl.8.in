@@ -21,10 +21,8 @@ host's other network devices.  To intercept and process traffic on a
 given network device, use the \fBadd\-if\fR command to explicitly add
 that network device to the datapath.
 .PP
-Do not use \fBovs\-dpctl\fR commands to modify datapaths if
-\fBovs\-vswitchd\fR(8) is in use.  Instead, modify the
-\fBovs\-vswitchd\fR configuration file and send \fBSIGHUP\fR to the
-\fBovs\-vswitchd\fR process.
+If \fBovs\-vswitchd\fR(8) is in use, use \fBovs\-vsctl\fR(8) instead
+of \fBovs\-dpctl\fR.
 .PP
 Most \fBovs\-dpctl\fR commands that work with datapaths take an argument
 that specifies the name of the datapath, in one of the following
@@ -66,10 +64,14 @@ A \fInetdev\fR may be followed by a comma-separated list of options.
 The following options are currently supported:
 .
 .RS
-.IP "\fBinternal\fR"
-Instead of attaching an existing \fInetdev\fR, creates an internal
-port (analogous to the local port) with that name.
+.IP "\fBtype=\fItype\fR"
+Specifies the type of port to add.  The default type is \fBsystem\fR.
+.IP "\fIkey\fB=\fIvalue\fR"
+Adds an arbitrary key-value option to the port's configuration.
 .RE
+.IP
+\fBovs\-vswitchd.conf.db\fR(5) documents the available port types and
+options.
 .
 .TP
 \fBdel\-if \fIdp netdev\fR...

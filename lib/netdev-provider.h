@@ -552,8 +552,10 @@ struct netdev_class {
 
 int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);
+const struct netdev_class *netdev_lookup_provider(const char *type);
 
 extern const struct netdev_class netdev_linux_class;
+extern const struct netdev_class netdev_internal_class;
 extern const struct netdev_class netdev_tap_class;
 
 #ifdef  __cplusplus

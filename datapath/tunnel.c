@@ -1300,15 +1300,14 @@ out:
 	return sent_len;
 }
 
-static int set_config(const void __user *uconfig, const struct tnl_ops *tnl_ops,
+static int set_config(const void *config, const struct tnl_ops *tnl_ops,
 		      const struct vport *cur_vport,
 		      struct tnl_mutable_config *mutable)
 {
 	const struct vport *old_vport;
 	const struct tnl_mutable_config *old_mutable;
 
-	if (copy_from_user(&mutable->port_config, uconfig, sizeof(struct tnl_port_config)))
-		return -EFAULT;
+	mutable->port_config = *(struct tnl_port_config *)config;
 
 	if (mutable->port_config.daddr == 0)
 		return -EINVAL;
@@ -1401,7 +1400,7 @@ error:
 	return ERR_PTR(err);
 }
 
-int tnl_modify(struct vport *vport, const void __user *config)
+int tnl_modify(struct vport *vport, struct odp_port *port)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *mutable;
@@ -1413,7 +1412,7 @@ int tnl_modify(struct vport *vport, const void __user *config)
 		goto error;
 	}
 
-	err = set_config(config, tnl_vport->tnl_ops, vport, mutable);
+	err = set_config(port->config, tnl_vport->tnl_ops, vport, mutable);
 	if (err)
 		goto error_free;
 

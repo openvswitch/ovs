@@ -39,7 +39,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	switch (event) {
 	case NETDEV_UNREGISTER:
 		mutex_lock(&dp->mutex);
-		dp_detach_port(p, 1);
+		dp_detach_port(p);
 		mutex_unlock(&dp->mutex);
 		break;
 

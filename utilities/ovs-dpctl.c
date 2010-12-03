@@ -37,6 +37,7 @@
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "odp-util.h"
+#include "shash.h"
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
@@ -238,45 +239,55 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
     for (i = 2; i < argc; i++) {
         char *save_ptr = NULL;
-        char *devname, *suboptions;
-        int flags = 0;
+        struct netdev_options options;
+        struct netdev *netdev;
+        struct shash args;
+        char *option;
         int error;
 
-        devname = strtok_r(argv[i], ",", &save_ptr);
-        if (!devname) {
+        options.name = strtok_r(argv[i], ",", &save_ptr);
+        options.type = "system";
+        options.args = &args;
+        options.ethertype = NETDEV_ETH_TYPE_NONE;
+
+        if (!options.name) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
             continue;
         }
 
-        suboptions = strtok_r(NULL, "", &save_ptr);
-        if (suboptions) {
-            enum {
-                AP_INTERNAL
-            };
-            static char *options[] = {
-                "internal"
-            };
+        shash_init(&args);
+        while ((option = strtok_r(NULL, "", &save_ptr)) != NULL) {
+            char *save_ptr_2 = NULL;
+            char *key, *value;
 
-            while (*suboptions != '\0') {
-                char *value;
+            key = strtok_r(option, "=", &save_ptr_2);
+            value = strtok_r(NULL, "", &save_ptr_2);
+            if (!value) {
+                value = "";
+            }
 
-                switch (getsubopt(&suboptions, options, &value)) {
-                case AP_INTERNAL:
-                    flags |= ODP_PORT_INTERNAL;
-                    break;
-
-                default:
-                    ovs_error(0, "unknown suboption '%s'", value);
-                    break;
-                }
+            if (!strcmp(key, "type")) {
+                options.type = value;
+            } else if (!shash_add_once(&args, key, value)) {
+                ovs_error(0, "duplicate \"%s\" option", key);
             }
         }
 
-        error = dpif_port_add(dpif, devname, flags, NULL);
+        error = netdev_open(&options, &netdev);
         if (error) {
-            ovs_error(error, "adding %s to %s failed", devname, argv[1]);
-            failure = true;
-        } else if (if_up(devname)) {
+            ovs_error(error, "%s: failed to open network device",
+                      options.name);
+        } else {
+            error = dpif_port_add(dpif, netdev, NULL);
+            if (error) {
+                ovs_error(error, "adding %s to %s failed",
+                          options.name, argv[1]);
+            } else {
+                error = if_up(options.name);
+            }
+            netdev_close(netdev);
+        }
+        if (error) {
             failure = true;
         }
     }
@@ -363,9 +374,11 @@ show_dpif(struct dpif *dpif)
     }
     query_ports(dpif, &ports, &n_ports);
     for (i = 0; i < n_ports; i++) {
-        printf("\tport %u: %s", ports[i].port, ports[i].devname);
-        if (ports[i].flags & ODP_PORT_INTERNAL) {
-            printf(" (internal)");
+        const struct odp_port *p = &ports[i];
+
+        printf("\tport %u: %s", p->port, p->devname);
+        if (strcmp(p->type, "system")) {
+            printf(" (%s)", p->type);
         }
         printf("\n");
     }

@@ -91,7 +91,7 @@ struct dp_netdev_port {
     int port_no;                /* Index into dp_netdev's 'ports'. */
     struct list node;           /* Element in dp_netdev's 'port_list'. */
     struct netdev *netdev;
-    bool internal;              /* Internal port (as ODP_PORT_INTERNAL)? */
+    bool internal;              /* Internal port? */
 };
 
 /* A flow in dp_netdev's 'flow_table'. */
@@ -130,8 +130,8 @@ static int get_port_by_name(struct dp_netdev *, const char *devname,
                             struct dp_netdev_port **portp);
 static void dp_netdev_free(struct dp_netdev *);
 static void dp_netdev_flow_flush(struct dp_netdev *);
-static int do_add_port(struct dp_netdev *, const char *devname, uint16_t flags,
-                       uint16_t port_no);
+static int do_add_port(struct dp_netdev *, const char *devname,
+                       const char *type, uint16_t port_no);
 static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
@@ -191,7 +191,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     }
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
-    error = do_add_port(dp, name, ODP_PORT_INTERNAL, ODPP_LOCAL);
+    error = do_add_port(dp, name, "internal", ODPP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
         return error;
@@ -307,17 +307,25 @@ dpif_netdev_set_drop_frags(struct dpif *dpif, bool drop_frags)
 }
 
 static int
-do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
+do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             uint16_t port_no)
 {
-    bool internal = (flags & ODP_PORT_INTERNAL) != 0;
     struct dp_netdev_port *port;
     struct netdev_options netdev_options;
     struct netdev *netdev;
+    bool internal;
     int mtu;
     int error;
 
     /* XXX reject devices already in some dp_netdev. */
+    if (type[0] == '\0' || !strcmp(type, "system")) {
+        internal = false;
+    } else if (!strcmp(type, "internal")) {
+        internal = true;
+    } else {
+        VLOG_WARN("%s: unsupported port type %s", devname, type);
+        return EINVAL;
+    }
 
     /* Open and validate network device. */
     memset(&netdev_options, 0, sizeof netdev_options);
@@ -361,7 +369,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
 }
 
 static int
-dpif_netdev_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
+dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
                      uint16_t *port_nop)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -370,7 +378,8 @@ dpif_netdev_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
     for (port_no = 0; port_no < MAX_PORTS; port_no++) {
         if (!dp->ports[port_no]) {
             *port_nop = port_no;
-            return do_add_port(dp, devname, flags, port_no);
+            return do_add_port(dp, netdev_get_name(netdev),
+                               netdev_get_type(netdev), port_no);
         }
     }
     return EFBIG;
@@ -450,7 +459,7 @@ answer_port_query(const struct dp_netdev_port *port, struct odp_port *odp_port)
     ovs_strlcpy(odp_port->devname, netdev_get_name(port->netdev),
                 sizeof odp_port->devname);
     odp_port->port = port->port_no;
-    odp_port->flags = port->internal ? ODP_PORT_INTERNAL : 0;
+    strcpy(odp_port->type, port->internal ? "internal" : "system");
 }
 
 static int

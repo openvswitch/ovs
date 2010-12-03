@@ -177,189 +177,36 @@ void vport_exit(void)
 	kfree(dev_table);
 }
 
-static int do_vport_add(struct odp_vport_add *vport_config)
-{
-	struct vport_parms parms;
-	struct vport *vport;
-	int err = 0;
-
-	vport_config->port_type[VPORT_TYPE_SIZE - 1] = '\0';
-	vport_config->devname[IFNAMSIZ - 1] = '\0';
-
-	rtnl_lock();
-
-	vport = vport_locate(vport_config->devname);
-	if (vport) {
-		err = -EBUSY;
-		goto out;
-	}
-
-	parms.name = vport_config->devname;
-	parms.type = vport_config->port_type;
-	parms.config = vport_config->config;
-
-	vport_lock();
-	vport = vport_add(&parms);
-	vport_unlock();
-
-	if (IS_ERR(vport))
-		err = PTR_ERR(vport);
-
-out:
-	rtnl_unlock();
-	return err;
-}
-
-/**
- *	vport_user_add - add vport device (for userspace callers)
- *
- * @uvport_config: New port configuration.
- *
- * Creates a new vport with the specified configuration (which is dependent
- * on device type).  This function is for userspace callers and assumes no
- * locks are held.
- */
-int vport_user_add(const struct odp_vport_add __user *uvport_config)
-{
-	struct odp_vport_add vport_config;
-
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_add)))
-		return -EFAULT;
-
-	return do_vport_add(&vport_config);
-}
-
-#ifdef CONFIG_COMPAT
-int compat_vport_user_add(struct compat_odp_vport_add *ucompat)
-{
-	struct compat_odp_vport_add compat;
-	struct odp_vport_add vport_config;
-
-	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_add)))
-		return -EFAULT;
-
-	memcpy(vport_config.port_type, compat.port_type, VPORT_TYPE_SIZE);
-	memcpy(vport_config.devname, compat.devname, IFNAMSIZ);
-	vport_config.config = compat_ptr(compat.config);
-
-	return do_vport_add(&vport_config);
-}
-#endif
-
-static int do_vport_mod(struct odp_vport_mod *vport_config)
-{
-	struct vport *vport;
-	int err;
-
-	vport_config->devname[IFNAMSIZ - 1] = '\0';
-
-	rtnl_lock();
-
-	vport = vport_locate(vport_config->devname);
-	if (!vport) {
-		err = -ENODEV;
-		goto out;
-	}
-
-	vport_lock();
-	err = vport_mod(vport, vport_config->config);
-	vport_unlock();
-
-out:
-	rtnl_unlock();
-	return err;
-}
-
 /**
  *	vport_user_mod - modify existing vport device (for userspace callers)
  *
- * @uvport_config: New configuration for vport
+ * @uport: New configuration for vport
  *
  * Modifies an existing device with the specified configuration (which is
  * dependent on device type).  This function is for userspace callers and
  * assumes no locks are held.
  */
-int vport_user_mod(const struct odp_vport_mod __user *uvport_config)
+int vport_user_mod(const struct odp_port __user *uport)
 {
-	struct odp_vport_mod vport_config;
-
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_mod)))
-		return -EFAULT;
-
-	return do_vport_mod(&vport_config);
-}
-
-#ifdef CONFIG_COMPAT
-int compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
-{
-	struct compat_odp_vport_mod compat;
-	struct odp_vport_mod vport_config;
-
-	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_mod)))
-		return -EFAULT;
-
-	memcpy(vport_config.devname, compat.devname, IFNAMSIZ);
-	vport_config.config = compat_ptr(compat.config);
-
-	return do_vport_mod(&vport_config);
-}
-#endif
-
-/**
- *	vport_user_del - delete existing vport device (for userspace callers)
- *
- * @udevname: Name of device to delete
- *
- * Deletes the specified device.  Detaches the device from a datapath first
- * if it is attached.  Deleting the device will fail if it does not exist or it
- * is the datapath local port.  It is also possible to fail for less obvious
- * reasons, such as lack of memory.  This function is for userspace callers and
- * assumes no locks are held.
- */
-int vport_user_del(const char __user *udevname)
-{
-	char devname[IFNAMSIZ];
+	struct odp_port port;
 	struct vport *vport;
-	struct dp_port *dp_port;
-	int err = 0;
-	int retval;
+	int err;
 
-	retval = strncpy_from_user(devname, udevname, IFNAMSIZ);
-	if (retval < 0)
+	if (copy_from_user(&port, uport, sizeof(port)))
 		return -EFAULT;
-	else if (retval >= IFNAMSIZ)
-		return -ENAMETOOLONG;
+
+	port.devname[IFNAMSIZ - 1] = '\0';
 
 	rtnl_lock();
 
-	vport = vport_locate(devname);
+	vport = vport_locate(port.devname);
 	if (!vport) {
 		err = -ENODEV;
 		goto out;
 	}
 
-	dp_port = vport_get_dp_port(vport);
-	if (dp_port) {
-		struct datapath *dp = dp_port->dp;
-
-		mutex_lock(&dp->mutex);
-
-		if (!strcmp(dp_name(dp), devname)) {
-			err = -EINVAL;
-			goto dp_port_out;
-		}
-
-		err = dp_detach_port(dp_port, 0);
-
-dp_port_out:
-		mutex_unlock(&dp->mutex);
-
-		if (err)
-			goto out;
-	}
-
 	vport_lock();
-	err = vport_del(vport);
+	err = vport_mod(vport, &port);
 	vport_unlock();
 
 out:
@@ -744,18 +591,18 @@ out:
  *	vport_mod - modify existing vport device (for kernel callers)
  *
  * @vport: vport to modify.
- * @config: Device type specific configuration.  Userspace pointer.
+ * @port: New configuration.
  *
  * Modifies an existing device with the specified configuration (which is
  * dependent on device type).  Both RTNL and vport locks must be held.
  */
-int vport_mod(struct vport *vport, const void __user *config)
+int vport_mod(struct vport *vport, struct odp_port *port)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
 
 	if (vport->ops->modify)
-		return vport->ops->modify(vport, config);
+		return vport->ops->modify(vport, port);
 	else
 		return -EOPNOTSUPP;
 }

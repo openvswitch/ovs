@@ -27,6 +27,7 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofp-print.h"
@@ -443,27 +444,26 @@ dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
     return error;
 }
 
-/* Attempts to add 'devname' as a port on 'dpif', given the combination of
- * ODP_PORT_* flags in 'flags'.  If successful, returns 0 and sets '*port_nop'
- * to the new port's port number (if 'port_nop' is non-null).  On failure,
- * returns a positive errno value and sets '*port_nop' to UINT16_MAX (if
- * 'port_nop' is non-null). */
+/* Attempts to add 'netdev' as a port on 'dpif'.  If successful, returns 0 and
+ * sets '*port_nop' to the new port's port number (if 'port_nop' is non-null).
+ * On failure, returns a positive errno value and sets '*port_nop' to
+ * UINT16_MAX (if 'port_nop' is non-null). */
 int
-dpif_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
-              uint16_t *port_nop)
+dpif_port_add(struct dpif *dpif, struct netdev *netdev, uint16_t *port_nop)
 {
+    const char *netdev_name = netdev_get_name(netdev);
     uint16_t port_no;
     int error;
 
     COVERAGE_INC(dpif_port_add);
 
-    error = dpif->dpif_class->port_add(dpif, devname, flags, &port_no);
+    error = dpif->dpif_class->port_add(dpif, netdev, &port_no);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu16,
-                    dpif_name(dpif), devname, port_no);
+                    dpif_name(dpif), netdev_name, port_no);
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
-                     dpif_name(dpif), devname, strerror(error));
+                     dpif_name(dpif), netdev_name, strerror(error));
         port_no = UINT16_MAX;
     }
     if (port_nop) {

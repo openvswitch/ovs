@@ -83,17 +83,12 @@ static void patch_exit(void)
 	kfree(peer_table);
 }
 
-static int set_config(struct vport *vport, const void __user *uconfig)
+static int set_config(struct vport *vport, const void *config)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	char peer_name[IFNAMSIZ];
-	int retval;
 
-	retval = strncpy_from_user(peer_name, uconfig, IFNAMSIZ);
-	if (retval < 0)
-		return -EFAULT;
-	else if (retval >= IFNAMSIZ)
-		return -ENAMETOOLONG;
+	strlcpy(peer_name, config, IFNAMSIZ);
 
 	if (!strcmp(patch_vport->name, peer_name))
 		return -EINVAL;
@@ -149,9 +144,9 @@ error:
 	return ERR_PTR(err);
 }
 
-static int patch_modify(struct vport *vport, const void __user *config)
+static int patch_modify(struct vport *vport, struct odp_port *port)
 {
-	return set_config(vport, config);
+	return set_config(vport, port->config);
 }
 
 static int patch_destroy(struct vport *vport)

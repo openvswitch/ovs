@@ -495,9 +495,9 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     }
 }
 
-/* Creates the netdev device of 'type' with 'name'. */
+/* Creates system and internal devices. */
 static int
-netdev_linux_create_system(const struct netdev_class *class OVS_UNUSED,
+netdev_linux_create(const struct netdev_class *class,
                            const char *name, const struct shash *args,
                            struct netdev_dev **netdev_devp)
 {
@@ -505,7 +505,8 @@ netdev_linux_create_system(const struct netdev_class *class OVS_UNUSED,
     int error;
 
     if (!shash_is_empty(args)) {
-        VLOG_WARN("%s: arguments for system devices should be empty", name);
+        VLOG_WARN("%s: arguments for %s devices should be empty",
+                  name, class->type);
     }
 
     if (!cache_notifier_refcount) {
@@ -518,7 +519,7 @@ netdev_linux_create_system(const struct netdev_class *class OVS_UNUSED,
     cache_notifier_refcount++;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_linux_class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -629,9 +630,19 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
     netdev->fd = -1;
     netdev_init(&netdev->netdev, netdev_dev_);
 
-    error = netdev_get_flags(&netdev->netdev, &flags);
-    if (error == ENODEV) {
-        goto error;
+    /* Verify that the device really exists, by attempting to read its flags.
+     * (The flags might be cached, in which case this won't actually do an
+     * ioctl.)
+     *
+     * Don't do this for "internal" netdevs, though, because those have to be
+     * created as netdev objects before they exist in the kernel, because
+     * creating them in the kernel happens by passing a netdev object to
+     * dpif_port_add(). */
+    if (netdev_dev_get_class(netdev_dev_) != &netdev_internal_class) {
+        error = netdev_get_flags(&netdev->netdev, &flags);
+        if (error == ENODEV) {
+            goto error;
+        }
     }
 
     if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap") &&
@@ -2107,125 +2118,87 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     }
 }
 
-const struct netdev_class netdev_linux_class = {
-    "system",
+#define NETDEV_LINUX_CLASS(NAME, CREATE, ENUMERATE, SET_STATS)  \
+{                                                               \
+    NAME,                                                       \
+                                                                \
+    netdev_linux_init,                                          \
+    netdev_linux_run,                                           \
+    netdev_linux_wait,                                          \
+                                                                \
+    CREATE,                                                     \
+    netdev_linux_destroy,                                       \
+    NULL,                       /* reconfigure */               \
+                                                                \
+    netdev_linux_open,                                          \
+    netdev_linux_close,                                         \
+                                                                \
+    ENUMERATE,                                                  \
+                                                                \
+    netdev_linux_recv,                                          \
+    netdev_linux_recv_wait,                                     \
+    netdev_linux_drain,                                         \
+                                                                \
+    netdev_linux_send,                                          \
+    netdev_linux_send_wait,                                     \
+                                                                \
+    netdev_linux_set_etheraddr,                                 \
+    netdev_linux_get_etheraddr,                                 \
+    netdev_linux_get_mtu,                                       \
+    netdev_linux_get_ifindex,                                   \
+    netdev_linux_get_carrier,                                   \
+    netdev_linux_get_stats,                                     \
+    SET_STATS,                                                  \
+                                                                \
+    netdev_linux_get_features,                                  \
+    netdev_linux_set_advertisements,                            \
+    netdev_linux_get_vlan_vid,                                  \
+                                                                \
+    netdev_linux_set_policing,                                  \
+    netdev_linux_get_qos_types,                                 \
+    netdev_linux_get_qos_capabilities,                          \
+    netdev_linux_get_qos,                                       \
+    netdev_linux_set_qos,                                       \
+    netdev_linux_get_queue,                                     \
+    netdev_linux_set_queue,                                     \
+    netdev_linux_delete_queue,                                  \
+    netdev_linux_get_queue_stats,                               \
+    netdev_linux_dump_queues,                                   \
+    netdev_linux_dump_queue_stats,                              \
+                                                                \
+    netdev_linux_get_in4,                                       \
+    netdev_linux_set_in4,                                       \
+    netdev_linux_get_in6,                                       \
+    netdev_linux_add_router,                                    \
+    netdev_linux_get_next_hop,                                  \
+    netdev_linux_arp_lookup,                                    \
+                                                                \
+    netdev_linux_update_flags,                                  \
+                                                                \
+    netdev_linux_poll_add,                                      \
+    netdev_linux_poll_remove                                    \
+}
 
-    netdev_linux_init,
-    netdev_linux_run,
-    netdev_linux_wait,
+const struct netdev_class netdev_linux_class =
+    NETDEV_LINUX_CLASS(
+        "system",
+        netdev_linux_create,
+        netdev_linux_enumerate,
+        netdev_vport_set_stats);
 
-    netdev_linux_create_system,
-    netdev_linux_destroy,
-    NULL,                       /* reconfigure */
+const struct netdev_class netdev_tap_class =
+    NETDEV_LINUX_CLASS(
+        "tap",
+        netdev_linux_create_tap,
+        NULL,                   /* enumerate */
+        NULL);                  /* set_stats */
 
-    netdev_linux_open,
-    netdev_linux_close,
-
-    netdev_linux_enumerate,
-
-    netdev_linux_recv,
-    netdev_linux_recv_wait,
-    netdev_linux_drain,
-
-    netdev_linux_send,
-    netdev_linux_send_wait,
-
-    netdev_linux_set_etheraddr,
-    netdev_linux_get_etheraddr,
-    netdev_linux_get_mtu,
-    netdev_linux_get_ifindex,
-    netdev_linux_get_carrier,
-    netdev_linux_get_stats,
-    netdev_vport_set_stats,
-
-    netdev_linux_get_features,
-    netdev_linux_set_advertisements,
-    netdev_linux_get_vlan_vid,
-
-    netdev_linux_set_policing,
-    netdev_linux_get_qos_types,
-    netdev_linux_get_qos_capabilities,
-    netdev_linux_get_qos,
-    netdev_linux_set_qos,
-    netdev_linux_get_queue,
-    netdev_linux_set_queue,
-    netdev_linux_delete_queue,
-    netdev_linux_get_queue_stats,
-    netdev_linux_dump_queues,
-    netdev_linux_dump_queue_stats,
-
-    netdev_linux_get_in4,
-    netdev_linux_set_in4,
-    netdev_linux_get_in6,
-    netdev_linux_add_router,
-    netdev_linux_get_next_hop,
-    netdev_linux_arp_lookup,
-
-    netdev_linux_update_flags,
-
-    netdev_linux_poll_add,
-    netdev_linux_poll_remove,
-};
-
-const struct netdev_class netdev_tap_class = {
-    "tap",
-
-    netdev_linux_init,
-    netdev_linux_run,
-    netdev_linux_wait,
-
-    netdev_linux_create_tap,
-    netdev_linux_destroy,
-    NULL,                       /* reconfigure */
-
-    netdev_linux_open,
-    netdev_linux_close,
-
-    NULL,                       /* enumerate */
-
-    netdev_linux_recv,
-    netdev_linux_recv_wait,
-    netdev_linux_drain,
-
-    netdev_linux_send,
-    netdev_linux_send_wait,
-
-    netdev_linux_set_etheraddr,
-    netdev_linux_get_etheraddr,
-    netdev_linux_get_mtu,
-    netdev_linux_get_ifindex,
-    netdev_linux_get_carrier,
-    netdev_linux_get_stats,
-    NULL,                       /* set_stats */
-
-    netdev_linux_get_features,
-    netdev_linux_set_advertisements,
-    netdev_linux_get_vlan_vid,
-
-    netdev_linux_set_policing,
-    netdev_linux_get_qos_types,
-    netdev_linux_get_qos_capabilities,
-    netdev_linux_get_qos,
-    netdev_linux_set_qos,
-    netdev_linux_get_queue,
-    netdev_linux_set_queue,
-    netdev_linux_delete_queue,
-    netdev_linux_get_queue_stats,
-    netdev_linux_dump_queues,
-    netdev_linux_dump_queue_stats,
-
-    netdev_linux_get_in4,
-    netdev_linux_set_in4,
-    netdev_linux_get_in6,
-    netdev_linux_add_router,
-    netdev_linux_get_next_hop,
-    netdev_linux_arp_lookup,
-
-    netdev_linux_update_flags,
-
-    netdev_linux_poll_add,
-    netdev_linux_poll_remove,
-};
+const struct netdev_class netdev_internal_class =
+    NETDEV_LINUX_CLASS(
+        "internal",
+        netdev_linux_create,
+        NULL,                    /* enumerate */
+        netdev_vport_set_stats);
 
 /* HTB traffic control class. */
 

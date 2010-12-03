@@ -61,6 +61,10 @@
 #include <sys/socket.h>
 #endif
 
+#ifndef __aligned_u64
+#define __aligned_u64 __u64 __attribute__((aligned(8)))
+#endif
+
 #include <linux/if_link.h>
 
 #define ODP_MAX 256             /* Maximum number of datapaths. */
@@ -75,10 +79,10 @@
 #define ODP_GET_LISTEN_MASK     _IOW('O', 5, int)
 #define ODP_SET_LISTEN_MASK     _IOR('O', 6, int)
 
-#define ODP_PORT_ATTACH         _IOR('O', 7, struct odp_port)
-#define ODP_PORT_DETACH         _IOR('O', 8, int)
-#define ODP_PORT_QUERY          _IOWR('O', 9, struct odp_port)
-#define ODP_PORT_LIST           _IOWR('O', 10, struct odp_portvec)
+#define ODP_VPORT_ATTACH        _IOR('O', 7, struct odp_port)
+#define ODP_VPORT_DETACH        _IOR('O', 8, int)
+#define ODP_VPORT_QUERY         _IOWR('O', 9, struct odp_port)
+#define ODP_VPORT_LIST          _IOWR('O', 10, struct odp_portvec)
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
@@ -91,9 +95,7 @@
 #define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
 #define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
 
-#define ODP_VPORT_ADD           _IOR('O', 21, struct odp_vport_add)
-#define ODP_VPORT_MOD           _IOR('O', 22, struct odp_vport_mod)
-#define ODP_VPORT_DEL           _IO('O', 23)
+#define ODP_VPORT_MOD           _IOR('O', 22, struct odp_port)
 #define ODP_VPORT_STATS_GET     _IOWR('O', 24, struct odp_vport_stats_req)
 #define ODP_VPORT_ETHER_GET     _IOWR('O', 25, struct odp_vport_ether)
 #define ODP_VPORT_ETHER_SET     _IOW('O', 26, struct odp_vport_ether)
@@ -181,12 +183,15 @@ struct odp_sflow_sample_header {
     uint32_t n_actions;
 };
 
-#define ODP_PORT_INTERNAL (1 << 0) /* This port is simulated. */
+#define VPORT_TYPE_SIZE     16
+#define VPORT_CONFIG_SIZE     32
 struct odp_port {
     char devname[16];           /* IFNAMSIZ */
+    char type[VPORT_TYPE_SIZE];
     uint16_t port;
-    uint16_t flags;
+    uint16_t reserved1;
     uint32_t reserved2;
+    __aligned_u64 config[VPORT_CONFIG_SIZE / 8]; /* type-specific */
 };
 
 struct odp_portvec {

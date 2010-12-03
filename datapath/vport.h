@@ -24,14 +24,7 @@ struct dp_port;
 
 /* The following definitions are for users of the vport subsytem: */
 
-int vport_user_add(const struct odp_vport_add __user *);
-int vport_user_mod(const struct odp_vport_mod __user *);
-int vport_user_del(const char __user *udevname);
-
-#ifdef CONFIG_COMPAT
-int compat_vport_user_add(struct compat_odp_vport_add __user *);
-int compat_vport_user_mod(struct compat_odp_vport_mod __user *);
-#endif
+int vport_user_mod(const struct odp_port __user *);
 
 int vport_user_stats_get(struct odp_vport_stats_req __user *);
 int vport_user_stats_set(struct odp_vport_stats_req __user *);
@@ -47,7 +40,7 @@ int vport_init(void);
 void vport_exit(void);
 
 struct vport *vport_add(const struct vport_parms *);
-int vport_mod(struct vport *, const void __user *config);
+int vport_mod(struct vport *, struct odp_port *);
 int vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
@@ -117,13 +110,13 @@ struct vport {
  *
  * @name: New vport's name.
  * @type: New vport's type.
- * @config: New vport's configuration, as %NULL or a userspace pointer to an
- * arbitrary type-specific structure.
+ * @config: Kernel copy of 'config' member of &struct odp_port describing
+ * configuration for new port.  Exactly %VPORT_CONFIG_SIZE bytes.
  */
 struct vport_parms {
 	const char *name;
 	const char *type;
-	const void __user *config;
+	const void *config;
 };
 
 /**
@@ -179,7 +172,7 @@ struct vport_ops {
 
 	/* Called with RTNL lock. */
 	struct vport *(*create)(const struct vport_parms *);
-	int (*modify)(struct vport *, const void __user *config);
+	int (*modify)(struct vport *, struct odp_port *);
 	int (*destroy)(struct vport *);
 
 	int (*attach)(struct vport *);

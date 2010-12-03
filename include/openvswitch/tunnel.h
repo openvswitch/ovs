@@ -41,6 +41,7 @@
 #define OPENVSWITCH_TUNNEL_H 1
 
 #include <linux/types.h>
+#include "openvswitch/datapath-protocol.h"
 
 #define TNL_F_CSUM		(1 << 1) /* Checksum packets. */
 #define TNL_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
@@ -50,6 +51,7 @@
 #define TNL_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
 #define TNL_F_HDR_CACHE		(1 << 7) /* Enable tunnel header caching. */
 
+/* This goes in the "config" member of struct odp_port for tunnel vports. */
 struct tnl_port_config {
 	__u32	flags;
 	__be32	saddr;

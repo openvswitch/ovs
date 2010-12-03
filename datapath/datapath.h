@@ -153,7 +153,7 @@ extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct dp_port *, struct sk_buff *);
-int dp_detach_port(struct dp_port *, int may_delete);
+int dp_detach_port(struct dp_port *);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
 int dp_min_mtu(const struct datapath *dp);
 void set_internal_devs_mtu(const struct datapath *dp);

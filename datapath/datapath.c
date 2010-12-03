@@ -252,7 +252,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	/* Set up our datapath device. */
 	BUILD_BUG_ON(sizeof(internal_dev_port.devname) != sizeof(devname));
 	strcpy(internal_dev_port.devname, devname);
-	internal_dev_port.flags = ODP_PORT_INTERNAL;
+	strcpy(internal_dev_port.type, "internal");
 	err = new_dp_port(dp, &internal_dev_port, ODPP_LOCAL);
 	if (err) {
 		if (err == -EBUSY)
@@ -275,7 +275,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	return 0;
 
 err_destroy_local_port:
-	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
+	dp_detach_port(dp->ports[ODPP_LOCAL]);
 err_destroy_table:
 	tbl_destroy(dp->table, NULL);
 err_free_dp:
@@ -296,13 +296,13 @@ static void do_destroy_dp(struct datapath *dp)
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		if (p->port_no != ODPP_LOCAL)
-			dp_detach_port(p, 1);
+			dp_detach_port(p);
 
 	dp_sysfs_del_dp(dp);
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
+	dp_detach_port(dp->ports[ODPP_LOCAL]);
 
 	tbl_destroy(dp->table, flow_free_tbl);
 
@@ -350,25 +350,21 @@ static struct kobj_type brport_ktype = {
 /* Called with RTNL lock and dp_mutex. */
 static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_no)
 {
+	struct vport_parms parms;
 	struct vport *vport;
 	struct dp_port *p;
 	int err;
 
-	vport = vport_locate(odp_port->devname);
-	if (!vport) {
-		struct vport_parms parms;
+	parms.name = odp_port->devname;
+	parms.type = odp_port->type;
+	parms.config = odp_port->config;
 
-		parms.name = odp_port->devname;
-		parms.type = odp_port->flags & ODP_PORT_INTERNAL ? "internal" : "netdev";
-		parms.config = NULL;
+	vport_lock();
+	vport = vport_add(&parms);
+	vport_unlock();
 
-		vport_lock();
-		vport = vport_add(&parms);
-		vport_unlock();
-
-		if (IS_ERR(vport))
-			return PTR_ERR(vport);
-	}
+	if (IS_ERR(vport))
+		return PTR_ERR(vport);
 
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (!p)
@@ -410,6 +406,7 @@ static int attach_port(int dp_idx, struct odp_port __user *portp)
 	if (copy_from_user(&port, portp, sizeof port))
 		goto out;
 	port.devname[IFNAMSIZ - 1] = '\0';
+	port.type[VPORT_TYPE_SIZE - 1] = '\0';
 
 	rtnl_lock();
 	dp = get_dp_locked(dp_idx);
@@ -441,7 +438,7 @@ out:
 	return err;
 }
 
-int dp_detach_port(struct dp_port *p, int may_delete)
+int dp_detach_port(struct dp_port *p)
 {
 	struct vport *vport = p->vport;
 	int err;
@@ -464,15 +461,9 @@ int dp_detach_port(struct dp_port *p, int may_delete)
 	/* Then wait until no one is still using it, and destroy it. */
 	synchronize_rcu();
 
-	if (may_delete) {
-		const char *port_type = vport_get_type(vport);
-
-		if (!strcmp(port_type, "netdev") || !strcmp(port_type, "internal")) {
-			vport_lock();
-			vport_del(vport);
-			vport_unlock();
-		}
-	}
+	vport_lock();
+	vport_del(vport);
+	vport_unlock();
 
 	kobject_put(&p->kobj);
 
@@ -500,7 +491,7 @@ static int detach_port(int dp_idx, int port_no)
 	if (!p)
 		goto out_unlock_dp;
 
-	err = dp_detach_port(p, 1);
+	err = dp_detach_port(p);
 
 out_unlock_dp:
 	mutex_unlock(&dp->mutex);
@@ -1437,10 +1428,10 @@ static int put_port(const struct dp_port *p, struct odp_port __user *uop)
 
 	rcu_read_lock();
 	strncpy(op.devname, vport_get_name(p->vport), sizeof op.devname);
+	strncpy(op.type, vport_get_type(p->vport), sizeof op.type);
 	rcu_read_unlock();
 
 	op.port = p->port_no;
-	op.flags = is_internal_vport(p->vport) ? ODP_PORT_INTERNAL : 0;
 
 	return copy_to_user(uop, &op, sizeof op) ? -EFAULT : 0;
 }
@@ -1553,26 +1544,18 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = destroy_dp(dp_idx);
 		goto exit;
 
-	case ODP_PORT_ATTACH:
+	case ODP_VPORT_ATTACH:
 		err = attach_port(dp_idx, (struct odp_port __user *)argp);
 		goto exit;
 
-	case ODP_PORT_DETACH:
+	case ODP_VPORT_DETACH:
 		err = get_user(port_no, (int __user *)argp);
 		if (!err)
 			err = detach_port(dp_idx, port_no);
 		goto exit;
 
-	case ODP_VPORT_ADD:
-		err = vport_user_add((struct odp_vport_add __user *)argp);
-		goto exit;
-
 	case ODP_VPORT_MOD:
-		err = vport_user_mod((struct odp_vport_mod __user *)argp);
-		goto exit;
-
-	case ODP_VPORT_DEL:
-		err = vport_user_del((char __user *)argp);
+		err = vport_user_mod((struct odp_port __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_STATS_GET:
@@ -1650,11 +1633,11 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			dp->sflow_probability = sflow_probability;
 		break;
 
-	case ODP_PORT_QUERY:
+	case ODP_VPORT_QUERY:
 		err = query_port(dp, (struct odp_port __user *)argp);
 		break;
 
-	case ODP_PORT_LIST:
+	case ODP_VPORT_LIST:
 		err = list_ports(dp, (struct odp_portvec __user *)argp);
 		break;
 
@@ -1910,9 +1893,9 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		return openvswitch_ioctl(f, cmd, argp);
 
 	case ODP_DP_CREATE:
-	case ODP_PORT_ATTACH:
-	case ODP_PORT_DETACH:
-	case ODP_VPORT_DEL:
+	case ODP_VPORT_ATTACH:
+	case ODP_VPORT_DETACH:
+	case ODP_VPORT_MOD:
 	case ODP_VPORT_MTU_SET:
 	case ODP_VPORT_MTU_GET:
 	case ODP_VPORT_ETHER_SET:
@@ -1926,15 +1909,9 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	case ODP_GET_LISTEN_MASK:
 	case ODP_SET_SFLOW_PROBABILITY:
 	case ODP_GET_SFLOW_PROBABILITY:
-	case ODP_PORT_QUERY:
+	case ODP_VPORT_QUERY:
 		/* Ioctls that just need their pointer argument extended. */
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
-
-	case ODP_VPORT_ADD32:
-		return compat_vport_user_add(compat_ptr(argp));
-
-	case ODP_VPORT_MOD32:
-		return compat_vport_user_mod(compat_ptr(argp));
 	}
 
 	dp = get_dp_locked(dp_idx);
@@ -1943,7 +1920,7 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		goto exit;
 
 	switch (cmd) {
-	case ODP_PORT_LIST32:
+	case ODP_VPORT_LIST32:
 		err = compat_list_ports(dp, compat_ptr(argp));
 		break;
 

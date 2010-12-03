@@ -376,10 +376,7 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 
 /* Initializes 'options' and fills it with the options for 'if_cfg'. Merges
  * keys from "options" and "other_config", preferring "options" keys over
- * "other_config" keys.
- *
- * The value strings in '*options' are taken directly from if_cfg, not copied,
- * so the caller should not modify or free them. */
+ * "other_config" keys. */
 static void
 iface_get_options(const struct ovsrec_interface *if_cfg, struct shash *options)
 {
@@ -399,68 +396,6 @@ iface_get_options(const struct ovsrec_interface *if_cfg, struct shash *options)
                       "with \"options\" key %s", if_cfg->name, key, key);
         }
     }
-}
-
-/* Returns the type of network device that 'iface' should have.  (This is
- * ordinarily the same type as the interface, but the network devices for
- * "internal" ports have type "system".) */
-static const char *
-iface_get_netdev_type(const struct iface *iface)
-{
-    return !strcmp(iface->type, "internal") ? "system" : iface->type;
-}
-
-/* Attempt to create the network device for 'iface' through the netdev
- * library. */
-static int
-create_iface_netdev(struct iface *iface)
-{
-    struct netdev_options netdev_options;
-    struct shash options;
-    int error;
-
-    memset(&netdev_options, 0, sizeof netdev_options);
-    netdev_options.name = iface->cfg->name;
-    netdev_options.type = iface_get_netdev_type(iface);
-    netdev_options.args = &options;
-    netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
-
-    iface_get_options(iface->cfg, &options);
-
-    error = netdev_open(&netdev_options, &iface->netdev);
-
-    if (iface->netdev) {
-        iface->enabled = netdev_get_carrier(iface->netdev);
-    }
-
-    shash_destroy(&options);
-
-    return error;
-}
-
-static int
-reconfigure_iface_netdev(struct iface *iface)
-{
-    const char *netdev_type, *iface_type;
-    struct shash options;
-    int error;
-
-    /* Skip reconfiguration if the device has the wrong type. This shouldn't
-     * happen, but... */
-    iface_type = iface_get_netdev_type(iface);
-    netdev_type = netdev_get_type(iface->netdev);
-    if (iface_type && strcmp(netdev_type, iface_type)) {
-        VLOG_WARN("%s: attempting change device type from %s to %s",
-                  iface->cfg->name, netdev_type, iface_type);
-        return EINVAL;
-    }
-
-    /* Reconfigure device. */
-    iface_get_options(iface->cfg, &options);
-    error = netdev_reconfigure(iface->netdev, &options);
-    shash_destroy(&options);
-
-    return error;
 }
 
 /* Callback for iterate_and_prune_ifaces(). */
@@ -701,18 +636,16 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         SHASH_FOR_EACH (node, &want_ifaces) {
             const char *if_name = node->name;
             struct iface *iface = node->data;
-            bool internal = !iface || !strcmp(iface->type, "internal");
             struct odp_port *dpif_port = shash_find_data(&cur_ifaces, if_name);
+            const char *type = iface ? iface->type : "internal";
             int error;
 
             /* If we have a port or a netdev already, and it's not the type we
              * want, then delete the port (if any) and close the netdev (if
              * any). */
-            if (internal
-                ? dpif_port && !(dpif_port->flags & ODP_PORT_INTERNAL)
-                : (iface->netdev
-                   && strcmp(iface->type, netdev_get_type(iface->netdev))))
-            {
+            if ((dpif_port && strcmp(dpif_port->type, type))
+                || (iface && iface->netdev
+                    && strcmp(type, netdev_get_type(iface->netdev)))) {
                 if (dpif_port) {
                     error = ofproto_port_del(br->ofproto, dpif_port->port);
                     if (error) {
@@ -726,48 +659,62 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 }
             }
 
-            /* If it's not an internal port, open (possibly create) the
-             * netdev. */
-            if (!internal) {
-                if (!iface->netdev) {
-                    error = create_iface_netdev(iface);
-                    if (error) {
-                        VLOG_WARN("could not create iface %s: %s", iface->name,
-                                  strerror(error));
-                        continue;
-                    }
-                } else {
-                    reconfigure_iface_netdev(iface);
-                }
-            }
+            /* If the port doesn't exist or we don't have the netdev open,
+             * we need to do more work. */
+            if (!dpif_port || (iface && !iface->netdev)) {
+                struct netdev_options options;
+                struct netdev *netdev;
+                struct shash args;
 
-            /* If it's not part of the datapath, add it. */
-            if (!dpif_port) {
-                error = dpif_port_add(br->dpif, if_name,
-                                      internal ? ODP_PORT_INTERNAL : 0, NULL);
-                if (error == EFBIG) {
-                    VLOG_ERR("ran out of valid port numbers on %s",
-                             dpif_name(br->dpif));
-                    break;
-                } else if (error) {
-                    VLOG_ERR("failed to add %s interface to %s: %s",
-                             if_name, dpif_name(br->dpif), strerror(error));
+                /* First open the network device. */
+                options.name = if_name;
+                options.type = type;
+                options.args = &args;
+                options.ethertype = NETDEV_ETH_TYPE_NONE;
+
+                shash_init(&args);
+                if (iface) {
+                    iface_get_options(iface->cfg, &args);
+                }
+                error = netdev_open(&options, &netdev);
+                shash_destroy(&args);
+
+                if (error) {
+                    VLOG_WARN("could not open network device %s (%s)",
+                              if_name, strerror(error));
                     continue;
                 }
-            }
 
-            /* If it's an internal port, open the netdev. */
-            if (internal) {
-                if (iface && !iface->netdev) {
-                    error = create_iface_netdev(iface);
+                /* Then add the port if we haven't already. */
+                if (!dpif_port) {
+                    error = dpif_port_add(br->dpif, netdev, NULL);
                     if (error) {
-                        VLOG_WARN("could not create iface %s: %s", iface->name,
-                                  strerror(error));
-                        continue;
+                        netdev_close(netdev);
+                        if (error == EFBIG) {
+                            VLOG_ERR("ran out of valid port numbers on %s",
+                                     dpif_name(br->dpif));
+                            break;
+                        } else {
+                            VLOG_ERR("failed to add %s interface to %s: %s",
+                                     if_name, dpif_name(br->dpif),
+                                     strerror(error));
+                            continue;
+                        }
                     }
                 }
-            } else {
-                assert(iface->netdev != NULL);
+
+                /* Update 'iface'. */
+                if (iface) {
+                    iface->netdev = netdev;
+                    iface->enabled = netdev_get_carrier(iface->netdev);
+                }
+            } else if (iface && iface->netdev) {
+                struct shash args;
+
+                shash_init(&args);
+                iface_get_options(iface->cfg, &args);
+                netdev_reconfigure(iface->netdev, &args);
+                shash_destroy(&args);
             }
         }
         free(dpif_ports);
