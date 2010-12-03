@@ -368,7 +368,7 @@ static bool is_spoofed_arp(struct sk_buff *skb, const struct odp_flow_key *key)
 
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
-	struct dp_port *p;
+	struct vport *p;
 
 	if (!skb)
 		goto error;
@@ -377,7 +377,7 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	if (!p)
 		goto error;
 
-	vport_send(p->vport, skb);
+	vport_send(p, skb);
 	return;
 
 error:
@@ -396,7 +396,7 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg)
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 			 const union odp_action *a, int n_actions,
-			 struct dp_port *dp_port)
+			 struct vport *vport)
 {
 	struct odp_sflow_sample_header *hdr;
 	unsigned int actlen = n_actions * sizeof(union odp_action);
@@ -410,7 +410,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	memcpy(__skb_push(nskb, actlen), a, actlen);
 	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
 	hdr->n_actions = n_actions;
-	hdr->sample_pool = atomic_read(&dp_port->sflow_pool);
+	hdr->sample_pool = atomic_read(&vport->sflow_pool);
 	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
 }
 
@@ -428,7 +428,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	int err;
 
 	if (dp->sflow_probability) {
-		struct dp_port *p = OVS_CB(skb)->dp_port;
+		struct vport *p = OVS_CB(skb)->vport;
 		if (p) {
 			atomic_inc(&p->sflow_pool);
 			if (dp->sflow_probability == UINT_MAX ||

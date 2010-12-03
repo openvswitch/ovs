@@ -883,20 +883,15 @@ static struct tnl_cache *build_cache(struct vport *vport,
 #endif
 
 	if (is_internal_dev(rt_dst(rt).dev)) {
-		int err;
-		struct vport *vport;
-		struct dp_port *dp_port;
-		struct sk_buff *skb;
-		bool is_frag;
 		struct odp_flow_key flow_key;
 		struct tbl_node *flow_node;
+		struct vport *vport;
+		struct sk_buff *skb;
+		bool is_frag;
+		int err;
 
 		vport = internal_dev_get_vport(rt_dst(rt).dev);
 		if (!vport)
-			goto done;
-
-		dp_port = vport_get_dp_port(vport);
-		if (!dp_port)
 			goto done;
 
 		skb = alloc_skb(cache->len, GFP_ATOMIC);
@@ -906,13 +901,13 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		__skb_put(skb, cache->len);
 		memcpy(skb->data, get_cached_header(cache), cache->len);
 
-		err = flow_extract(skb, dp_port->port_no, &flow_key, &is_frag);
+		err = flow_extract(skb, vport->port_no, &flow_key, &is_frag);
 
 		kfree_skb(skb);
 		if (err || is_frag)
 			goto done;
 
-		flow_node = tbl_lookup(rcu_dereference(dp_port->dp->table),
+		flow_node = tbl_lookup(rcu_dereference(vport->dp->table),
 				       &flow_key, flow_hash(&flow_key),
 				       flow_cmp);
 		if (flow_node) {
@@ -1352,7 +1347,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	int initial_frag_id;
 	int err;
 
-	vport = vport_alloc(sizeof(struct tnl_vport), vport_ops);
+	vport = vport_alloc(sizeof(struct tnl_vport), vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;

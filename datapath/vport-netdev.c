@@ -94,7 +94,7 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	struct netdev_vport *netdev_vport;
 	int err;
 
-	vport = vport_alloc(sizeof(struct netdev_vport), &netdev_vport_ops);
+	vport = vport_alloc(sizeof(struct netdev_vport), &netdev_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;

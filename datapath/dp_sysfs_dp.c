@@ -46,16 +46,7 @@
 struct datapath *sysfs_get_dp(struct net_device *netdev)
 {
 	struct vport *vport = internal_dev_get_vport(netdev);
-	struct dp_port *dp_port;
-
-	if (!vport)
-		return NULL;
-
-	dp_port = vport_get_dp_port(vport);
-	if (!dp_port)
-		return NULL;
-
-	return dp_port->dp;
+	return vport ? vport->dp : NULL;
 }
 /*
  * Common code for storing bridge parameters.
@@ -359,7 +350,7 @@ static struct attribute_group bridge_group = {
  */
 int dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]->vport);
+	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]);
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -388,7 +379,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 
 int dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]->vport);
+	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]);
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);
@@ -398,6 +389,6 @@ int dp_sysfs_del_dp(struct datapath *dp)
 #else /* !CONFIG_SYSFS */
 int dp_sysfs_add_dp(struct datapath *dp) { return 0; }
 int dp_sysfs_del_dp(struct datapath *dp) { return 0; }
-int dp_sysfs_add_if(struct dp_port *p) { return 0; }
-int dp_sysfs_del_if(struct dp_port *p) { return 0; }
+int dp_sysfs_add_if(struct vport *p) { return 0; }
+int dp_sysfs_del_if(struct vport *p) { return 0; }
 #endif /* !CONFIG_SYSFS */

@@ -47,7 +47,7 @@ static struct hlist_head *dev_table;
  * one of these locks if you don't want the vport to be deleted out from under
  * you.
  *
- * If you get a reference to a vport through a dp_port, it is protected
+ * If you get a reference to a vport through a datapath, it is protected
  * by RCU and you need to hold rcu_read_lock instead when reading.
  *
  * If multiple locks are taken, the hierarchy is:
@@ -497,6 +497,19 @@ static void unregister_vport(struct vport *vport)
 	hlist_del(&vport->hash_node);
 }
 
+static void release_vport(struct kobject *kobj)
+{
+	struct vport *p = container_of(kobj, struct vport, kobj);
+	kfree(p);
+}
+
+static struct kobj_type brport_ktype = {
+#ifdef CONFIG_SYSFS
+	.sysfs_ops = &brport_sysfs_ops,
+#endif
+	.release = release_vport
+};
+
 /**
  *	vport_alloc - allocate and initialize new vport
  *
@@ -508,7 +521,7 @@ static void unregister_vport(struct vport *vport)
  * vport_priv().  vports that are no longer needed should be released with
  * vport_free().
  */
-struct vport *vport_alloc(int priv_size, const struct vport_ops *ops)
+struct vport *vport_alloc(int priv_size, const struct vport_ops *ops, const struct vport_parms *parms)
 {
 	struct vport *vport;
 	size_t alloc_size;
@@ -523,7 +536,15 @@ struct vport *vport_alloc(int priv_size, const struct vport_ops *ops)
 	if (!vport)
 		return ERR_PTR(-ENOMEM);
 
+	vport->dp = parms->dp;
+	vport->port_no = parms->port_no;
+	atomic_set(&vport->sflow_pool, 0);
 	vport->ops = ops;
+
+	/* Initialize kobject for bridge.  This will be added as
+	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */
+	vport->kobj.kset = NULL;
+	kobject_init(&vport->kobj, &brport_ktype);
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		vport->percpu_stats = alloc_percpu(struct vport_percpu_stats);
@@ -548,7 +569,7 @@ void vport_free(struct vport *vport)
 	if (vport->ops->flags & VPORT_F_GEN_STATS)
 		free_percpu(vport->percpu_stats);
 
-	kfree(vport);
+	kobject_put(&vport->kobj);
 }
 
 /**
@@ -620,7 +641,6 @@ int vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
-	BUG_ON(vport_get_dp_port(vport));
 
 	unregister_vport(vport);
 
@@ -628,32 +648,19 @@ int vport_del(struct vport *vport)
 }
 
 /**
- *	vport_attach - attach a vport to a datapath
+ *	vport_attach - notify a vport that it has been attached to a datapath
  *
  * @vport: vport to attach.
- * @dp_port: Datapath port to attach the vport to.
  *
- * Attaches a vport to a specific datapath so that packets may be exchanged.
- * Both ports must be currently unattached.  @dp_port must be successfully
- * attached to a vport before it is connected to a datapath and must not be
- * modified while connected.  RTNL lock and the appropriate DP mutex must be held.
+ * Performs vport-specific actions so that packets may be exchanged.  RTNL lock
+ * and the appropriate DP mutex must be held.
  */
-int vport_attach(struct vport *vport, struct dp_port *dp_port)
+int vport_attach(struct vport *vport)
 {
 	ASSERT_RTNL();
 
-	if (vport_get_dp_port(vport))
-		return -EBUSY;
-
-	if (vport->ops->attach) {
-		int err;
-
-		err = vport->ops->attach(vport);
-		if (err)
-			return err;
-	}
-
-	rcu_assign_pointer(vport->dp_port, dp_port);
+	if (vport->ops->attach)
+		return vport->ops->attach(vport);
 
 	return 0;
 }
@@ -663,25 +670,17 @@ int vport_attach(struct vport *vport, struct dp_port *dp_port)
  *
  * @vport: vport to detach.
  *
- * Detaches a vport from a datapath.  May fail for a variety of reasons,
- * including lack of memory.  RTNL lock and the appropriate DP mutex must be held.
+ * Performs vport-specific actions before a vport is detached from a datapath.
+ * May fail for a variety of reasons, including lack of memory.  RTNL lock and
+ * the appropriate DP mutex must be held.
  */
 int vport_detach(struct vport *vport)
 {
-	struct dp_port *dp_port;
-
 	ASSERT_RTNL();
-
-	dp_port = vport_get_dp_port(vport);
-	if (!dp_port)
-		return -EINVAL;
-
-	rcu_assign_pointer(vport->dp_port, NULL);
 
 	if (vport->ops->detach)
 		return vport->ops->detach(vport);
-	else
-		return 0;
+	return 0;
 }
 
 /**
@@ -706,12 +705,8 @@ int vport_set_mtu(struct vport *vport, int mtu)
 
 		ret = vport->ops->set_mtu(vport, mtu);
 
-		if (!ret && !is_internal_vport(vport)) {
-			struct dp_port *dp_port = vport_get_dp_port(vport);
-
-			if (dp_port)
-				set_internal_devs_mtu(dp_port->dp);
-		}
+		if (!ret && !is_internal_vport(vport))
+			set_internal_devs_mtu(vport->dp);
 
 		return ret;
 	} else
@@ -806,20 +801,6 @@ const char *vport_get_type(const struct vport *vport)
 const unsigned char *vport_get_addr(const struct vport *vport)
 {
 	return vport->ops->get_addr(vport);
-}
-
-/**
- *	vport_get_dp_port - retrieve attached datapath port
- *
- * @vport: vport from which to retrieve the datapath port.
- *
- * Retrieves the attached datapath port or null if not attached.  Either RTNL
- * lock or rcu_read_lock must be held for the entire duration that the datapath
- * port is being accessed.
- */
-struct dp_port *vport_get_dp_port(const struct vport *vport)
-{
-	return rcu_dereference(vport->dp_port);
 }
 
 /**
@@ -990,18 +971,12 @@ unsigned char vport_get_operstate(const struct vport *vport)
  */
 int vport_get_ifindex(const struct vport *vport)
 {
-	const struct dp_port *dp_port;
-
 	if (vport->ops->get_ifindex)
 		return vport->ops->get_ifindex(vport);
 
 	/* If we don't actually have an ifindex, use the local port's.
 	 * Userspace doesn't check it anyways. */
-	dp_port = vport_get_dp_port(vport);
-	if (!dp_port)
-		return -EAGAIN;
-
-	return vport_get_ifindex(dp_port->dp->ports[ODPP_LOCAL]->vport);
+	return vport_get_ifindex(vport->dp->ports[ODPP_LOCAL]);
 }
 
 /**
@@ -1050,15 +1025,6 @@ int vport_get_mtu(const struct vport *vport)
  */
 void vport_receive(struct vport *vport, struct sk_buff *skb)
 {
-	struct dp_port *dp_port = vport_get_dp_port(vport);
-
-	if (!dp_port) {
-		vport_record_error(vport, VPORT_E_RX_DROPPED);
-		kfree_skb(skb);
-
-		return;
-	}
-
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		struct vport_percpu_stats *stats;
 
@@ -1079,7 +1045,7 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 	if (!(vport->ops->flags & VPORT_F_TUN_ID))
 		OVS_CB(skb)->tun_id = 0;
 
-	dp_process_received_packet(dp_port, skb);
+	dp_process_received_packet(vport, skb);
 }
 
 static inline unsigned packet_length(const struct sk_buff *skb)
@@ -1110,8 +1076,7 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
 		if (net_ratelimit())
 			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
-				dp_name(vport_get_dp_port(vport)->dp),
-				packet_length(skb), mtu);
+				dp_name(vport->dp), packet_length(skb), mtu);
 		goto error;
 	}
 

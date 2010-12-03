@@ -19,7 +19,6 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 {
 	struct net_device *dev = ptr;
 	struct vport *vport;
-	struct dp_port *p;
 	struct datapath *dp;
 
 	if (is_internal_dev(dev))
@@ -30,24 +29,20 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	if (!vport)
 		return NOTIFY_DONE;
 
-	p = vport_get_dp_port(vport);
-
-	if (!p)
-		return NOTIFY_DONE;
-	dp = p->dp;
+	dp = vport->dp;
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
 		mutex_lock(&dp->mutex);
-		dp_detach_port(p);
+		dp_detach_port(vport);
 		mutex_unlock(&dp->mutex);
 		break;
 
 	case NETDEV_CHANGENAME:
-		if (p->port_no != ODPP_LOCAL) {
+		if (vport->port_no != ODPP_LOCAL) {
 			mutex_lock(&dp->mutex);
-			dp_sysfs_del_if(p);
-			dp_sysfs_add_if(p);
+			dp_sysfs_del_if(vport);
+			dp_sysfs_add_if(vport);
 			mutex_unlock(&dp->mutex);
 		}
 		break;

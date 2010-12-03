@@ -63,13 +63,13 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * dp_mutex nests inside the RTNL lock: if you need both you must take the RTNL
  * lock first.
  *
- * It is safe to access the datapath and dp_port structures with just
+ * It is safe to access the datapath and vport structures with just
  * dp_mutex.
  */
 static struct datapath *dps[ODP_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
-static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
+static int new_vport(struct datapath *, struct odp_port *, int port_no);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
 struct datapath *get_dp(int dp_idx)
@@ -95,7 +95,7 @@ static struct datapath *get_dp_locked(int dp_idx)
 /* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
-	return vport_get_name(dp->ports[ODPP_LOCAL]->vport);
+	return vport_get_name(dp->ports[ODPP_LOCAL]);
 }
 
 static inline size_t br_nlmsg_size(void)
@@ -110,12 +110,12 @@ static inline size_t br_nlmsg_size(void)
 }
 
 static int dp_fill_ifinfo(struct sk_buff *skb,
-			  const struct dp_port *port,
+			  const struct vport *port,
 			  int event, unsigned int flags)
 {
 	const struct datapath *dp = port->dp;
-	int ifindex = vport_get_ifindex(port->vport);
-	int iflink = vport_get_iflink(port->vport);
+	int ifindex = vport_get_ifindex(port);
+	int iflink = vport_get_iflink(port);
 	struct ifinfomsg *hdr;
 	struct nlmsghdr *nlh;
 
@@ -134,21 +134,20 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr->__ifi_pad = 0;
 	hdr->ifi_type = ARPHRD_ETHER;
 	hdr->ifi_index = ifindex;
-	hdr->ifi_flags = vport_get_flags(port->vport);
+	hdr->ifi_flags = vport_get_flags(port);
 	hdr->ifi_change = 0;
 
-	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port->vport));
-	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[ODPP_LOCAL]->vport));
-	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port->vport));
+	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port));
+	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[ODPP_LOCAL]));
+	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
-		   vport_is_running(port->vport)
-			? vport_get_operstate(port->vport)
+		   vport_is_running(port)
+			? vport_get_operstate(port)
 			: IF_OPER_DOWN);
 #endif
 
-	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN,
-					vport_get_addr(port->vport));
+	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN, vport_get_addr(port));
 
 	if (ifindex != iflink)
 		NLA_PUT_U32(skb, IFLA_LINK,iflink);
@@ -160,7 +159,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static void dp_ifinfo_notify(int event, struct dp_port *port)
+static void dp_ifinfo_notify(int event, struct vport *port)
 {
 	struct sk_buff *skb;
 	int err = -ENOBUFS;
@@ -253,7 +252,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	BUILD_BUG_ON(sizeof(internal_dev_port.devname) != sizeof(devname));
 	strcpy(internal_dev_port.devname, devname);
 	strcpy(internal_dev_port.type, "internal");
-	err = new_dp_port(dp, &internal_dev_port, ODPP_LOCAL);
+	err = new_vport(dp, &internal_dev_port, ODPP_LOCAL);
 	if (err) {
 		if (err == -EBUSY)
 			err = -EEXIST;
@@ -291,7 +290,7 @@ err:
 
 static void do_destroy_dp(struct datapath *dp)
 {
-	struct dp_port *p, *n;
+	struct vport *p, *n;
 	int i;
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
@@ -334,30 +333,18 @@ err_unlock:
 	return err;
 }
 
-static void release_dp_port(struct kobject *kobj)
-{
-	struct dp_port *p = container_of(kobj, struct dp_port, kobj);
-	kfree(p);
-}
-
-static struct kobj_type brport_ktype = {
-#ifdef CONFIG_SYSFS
-	.sysfs_ops = &brport_sysfs_ops,
-#endif
-	.release = release_dp_port
-};
-
 /* Called with RTNL lock and dp_mutex. */
-static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_no)
+static int new_vport(struct datapath *dp, struct odp_port *odp_port, int port_no)
 {
 	struct vport_parms parms;
 	struct vport *vport;
-	struct dp_port *p;
 	int err;
 
 	parms.name = odp_port->devname;
 	parms.type = odp_port->type;
 	parms.config = odp_port->config;
+	parms.dp = dp;
+	parms.port_no = port_no;
 
 	vport_lock();
 	vport = vport_add(&parms);
@@ -366,31 +353,17 @@ static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_
 	if (IS_ERR(vport))
 		return PTR_ERR(vport);
 
-	p = kzalloc(sizeof(*p), GFP_KERNEL);
-	if (!p)
-		return -ENOMEM;
-
-	p->port_no = port_no;
-	p->dp = dp;
-	p->vport = vport;
-	atomic_set(&p->sflow_pool, 0);
-
-	err = vport_attach(vport, p);
+	err = vport_attach(vport);
 	if (err) {
-		kfree(p);
+		vport_del(vport);
 		return err;
 	}
 
-	rcu_assign_pointer(dp->ports[port_no], p);
-	list_add_rcu(&p->node, &dp->port_list);
+	rcu_assign_pointer(dp->ports[port_no], vport);
+	list_add_rcu(&vport->node, &dp->port_list);
 	dp->n_ports++;
 
-	/* Initialize kobject for bridge.  This will be added as
-	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */
-	p->kobj.kset = NULL;
-	kobject_init(&p->kobj, &brport_ktype);
-
-	dp_ifinfo_notify(RTM_NEWLINK, p);
+	dp_ifinfo_notify(RTM_NEWLINK, vport);
 
 	return 0;
 }
@@ -421,7 +394,7 @@ static int attach_port(int dp_idx, struct odp_port __user *portp)
 	goto out_unlock_dp;
 
 got_port_no:
-	err = new_dp_port(dp, &port, port_no);
+	err = new_vport(dp, &port, port_no);
 	if (err)
 		goto out_unlock_dp;
 
@@ -438,9 +411,8 @@ out:
 	return err;
 }
 
-int dp_detach_port(struct dp_port *p)
+int dp_detach_port(struct vport *p)
 {
-	struct vport *vport = p->vport;
 	int err;
 
 	ASSERT_RTNL();
@@ -454,7 +426,7 @@ int dp_detach_port(struct dp_port *p)
 	list_del_rcu(&p->node);
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 
-	err = vport_detach(vport);
+	err = vport_detach(p);
 	if (err)
 		return err;
 
@@ -462,17 +434,15 @@ int dp_detach_port(struct dp_port *p)
 	synchronize_rcu();
 
 	vport_lock();
-	vport_del(vport);
+	vport_del(p);
 	vport_unlock();
-
-	kobject_put(&p->kobj);
 
 	return 0;
 }
 
 static int detach_port(int dp_idx, int port_no)
 {
-	struct dp_port *p;
+	struct vport *p;
 	struct datapath *dp;
 	int err;
 
@@ -502,7 +472,7 @@ out:
 }
 
 /* Must be called with rcu_read_lock. */
-void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
+void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 {
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
@@ -511,7 +481,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct loop_counter *loop;
 	int error;
 
-	OVS_CB(skb)->dp_port = p;
+	OVS_CB(skb)->vport = p;
 
 	if (!OVS_CB(skb)->flow) {
 		struct odp_flow_key key;
@@ -757,8 +727,8 @@ static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue
 	int port_no;
 	int err;
 
-	if (OVS_CB(skb)->dp_port)
-		port_no = OVS_CB(skb)->dp_port->port_no;
+	if (OVS_CB(skb)->vport)
+		port_no = OVS_CB(skb)->vport->port_no;
 	else
 		port_no = ODPP_LOCAL;
 
@@ -1382,7 +1352,7 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 /* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports */
 int dp_min_mtu(const struct datapath *dp)
 {
-	struct dp_port *p;
+	struct vport *p;
 	int mtu = 0;
 
 	ASSERT_RTNL();
@@ -1392,10 +1362,10 @@ int dp_min_mtu(const struct datapath *dp)
 
 		/* Skip any internal ports, since that's what we're trying to
 		 * set. */
-		if (is_internal_vport(p->vport))
+		if (is_internal_vport(p))
 			continue;
 
-		dev_mtu = vport_get_mtu(p->vport);
+		dev_mtu = vport_get_mtu(p);
 		if (!mtu || dev_mtu < mtu)
 			mtu = dev_mtu;
 	}
@@ -1407,7 +1377,7 @@ int dp_min_mtu(const struct datapath *dp)
  * be called with RTNL lock. */
 void set_internal_devs_mtu(const struct datapath *dp)
 {
-	struct dp_port *p;
+	struct vport *p;
 	int mtu;
 
 	ASSERT_RTNL();
@@ -1415,20 +1385,20 @@ void set_internal_devs_mtu(const struct datapath *dp)
 	mtu = dp_min_mtu(dp);
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		if (is_internal_vport(p->vport))
-			vport_set_mtu(p->vport, mtu);
+		if (is_internal_vport(p))
+			vport_set_mtu(p, mtu);
 	}
 }
 
-static int put_port(const struct dp_port *p, struct odp_port __user *uop)
+static int put_port(const struct vport *p, struct odp_port __user *uop)
 {
 	struct odp_port op;
 
 	memset(&op, 0, sizeof op);
 
 	rcu_read_lock();
-	strncpy(op.devname, vport_get_name(p->vport), sizeof op.devname);
-	strncpy(op.type, vport_get_type(p->vport), sizeof op.type);
+	strncpy(op.devname, vport_get_name(p), sizeof op.devname);
+	strncpy(op.type, vport_get_type(p), sizeof op.type);
 	rcu_read_unlock();
 
 	op.port = p->port_no;
@@ -1445,7 +1415,6 @@ static int query_port(struct datapath *dp, struct odp_port __user *uport)
 
 	if (port.devname[0]) {
 		struct vport *vport;
-		struct dp_port *dp_port;
 		int err = 0;
 
 		port.devname[IFNAMSIZ - 1] = '\0';
@@ -1458,14 +1427,12 @@ static int query_port(struct datapath *dp, struct odp_port __user *uport)
 			err = -ENODEV;
 			goto error_unlock;
 		}
-
-		dp_port = vport_get_dp_port(vport);
-		if (!dp_port || dp_port->dp != dp) {
+		if (vport->dp != dp) {
 			err = -ENOENT;
 			goto error_unlock;
 		}
 
-		port.port = dp_port->port_no;
+		port.port = vport->port_no;
 
 error_unlock:
 		rcu_read_unlock();
@@ -1488,7 +1455,7 @@ static int do_list_ports(struct datapath *dp, struct odp_port __user *uports,
 {
 	int idx = 0;
 	if (n_ports) {
-		struct dp_port *p;
+		struct vport *p;
 
 		list_for_each_entry_rcu (p, &dp->port_list, node) {
 			if (put_port(p, &uports[idx]))

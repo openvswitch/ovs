@@ -20,7 +20,6 @@
 
 struct vport;
 struct vport_parms;
-struct dp_port;
 
 /* The following definitions are for users of the vport subsytem: */
 
@@ -45,7 +44,7 @@ int vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
 
-int vport_attach(struct vport *, struct dp_port *);
+int vport_attach(struct vport *);
 int vport_detach(struct vport *);
 
 int vport_set_mtu(struct vport *, int mtu);
@@ -56,7 +55,6 @@ const char *vport_get_name(const struct vport *);
 const char *vport_get_type(const struct vport *);
 const unsigned char *vport_get_addr(const struct vport *);
 
-struct dp_port *vport_get_dp_port(const struct vport *);
 struct kobject *vport_get_kobj(const struct vport *);
 int vport_get_stats(struct vport *, struct rtnl_link_stats64 *);
 
@@ -88,10 +86,37 @@ struct vport_err_stats {
 	u64 tx_errors;
 };
 
+/**
+ * struct vport - one port within a datapath
+ * @port_no: Index into @dp's @ports array.
+ * @dp: Datapath to which this port belongs.
+ * @kobj: Represents /sys/class/net/<devname>/brport.
+ * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
+ * &struct vport.  (We keep this around so that we can delete it if the
+ * device gets renamed.)  Set to the null string when no link exists.
+ * @node: Element in @dp's @port_list.
+ * @sflow_pool: Number of packets that were candidates for sFlow sampling,
+ * regardless of whether they were actually chosen and sent down to userspace.
+ * @hash_node: Element in @dev_table hash table in vport.c.
+ * @ops: Class structure.
+ * @percpu_stats: Points to per-CPU statistics used and maintained by the vport
+ * code if %VPORT_F_GEN_STATS is set to 1 in @ops flags, otherwise unused.
+ * @stats_lock: Protects @err_stats and @offset_stats.
+ * @err_stats: Points to error statistics used and maintained by the vport code
+ * if %VPORT_F_GEN_STATS is set to 1 in @ops flags, otherwise unused.
+ * @offset_stats: Added to actual statistics as a sop to compatibility with
+ * XAPI for Citrix XenServer.  Deprecated.
+ */
 struct vport {
+	u16 port_no;
+	struct datapath	*dp;
+	struct kobject kobj;
+	char linkname[IFNAMSIZ];
+	struct list_head node;
+	atomic_t sflow_pool;
+
 	struct hlist_node hash_node;
 	const struct vport_ops *ops;
-	struct dp_port *dp_port;
 
 	struct vport_percpu_stats *percpu_stats;
 
@@ -112,11 +137,17 @@ struct vport {
  * @type: New vport's type.
  * @config: Kernel copy of 'config' member of &struct odp_port describing
  * configuration for new port.  Exactly %VPORT_CONFIG_SIZE bytes.
+ * @dp: New vport's datapath.
+ * @port_no: New vport's port number.
  */
 struct vport_parms {
 	const char *name;
 	const char *type;
 	const void *config;
+
+	/* For vport_alloc(). */
+	struct datapath *dp;
+	u16 port_no;
 };
 
 /**
@@ -207,7 +238,7 @@ enum vport_err_type {
 	VPORT_E_TX_ERROR,
 };
 
-struct vport *vport_alloc(int priv_size, const struct vport_ops *);
+struct vport *vport_alloc(int priv_size, const struct vport_ops *, const struct vport_parms *);
 void vport_free(struct vport *);
 
 #define VPORT_ALIGN 8

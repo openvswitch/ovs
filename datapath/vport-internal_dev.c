@@ -97,16 +97,13 @@ static void internal_dev_getinfo(struct net_device *netdev,
 				 struct ethtool_drvinfo *info)
 {
 	struct vport *vport = internal_dev_get_vport(netdev);
-	struct dp_port *dp_port;
 
 	strcpy(info->driver, "openvswitch");
 
 	if (!vport)
 		return;
 
-	dp_port = vport_get_dp_port(vport);
-	if (dp_port)
-		sprintf(info->bus_info, "%d.%d", dp_port->dp->dp_idx, dp_port->port_no);
+	sprintf(info->bus_info, "%d.%d", vport->dp->dp_idx, vport->port_no);
 }
 
 static const struct ethtool_ops internal_dev_ethtool_ops = {
@@ -127,14 +124,8 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 	if (new_mtu < 68)
 		return -EINVAL;
 
-	if (vport) {
-		struct dp_port *dp_port = vport_get_dp_port(vport);
-
-		if (dp_port) {
-			if (new_mtu > dp_min_mtu(dp_port->dp))
-				return -EINVAL;
-		}
-	}
+	if (vport && new_mtu > dp_min_mtu(vport->dp))
+		return -EINVAL;
 
 	netdev->mtu = new_mtu;
 	return 0;
@@ -194,7 +185,7 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 	struct internal_dev *internal_dev;
 	int err;
 
-	vport = vport_alloc(sizeof(struct netdev_vport), &internal_vport_ops);
+	vport = vport_alloc(sizeof(struct netdev_vport), &internal_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;

@@ -26,8 +26,8 @@
 
 struct brport_attribute {
 	struct attribute	attr;
-	ssize_t (*show)(struct dp_port *, char *);
-	ssize_t (*store)(struct dp_port *, unsigned long);
+	ssize_t (*show)(struct vport *, char *);
+	ssize_t (*store)(struct vport *, unsigned long);
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
@@ -49,98 +49,98 @@ struct brport_attribute brport_attr_##_name = { 	        \
 };
 #endif
 
-static ssize_t show_path_cost(struct dp_port *p, char *buf)
+static ssize_t show_path_cost(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
-static ssize_t store_path_cost(struct dp_port *p, unsigned long v)
+static ssize_t store_path_cost(struct vport *p, unsigned long v)
 {
 	return 0;
 }
 static BRPORT_ATTR(path_cost, S_IRUGO | S_IWUSR,
 		   show_path_cost, store_path_cost);
 
-static ssize_t show_priority(struct dp_port *p, char *buf)
+static ssize_t show_priority(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
-static ssize_t store_priority(struct dp_port *p, unsigned long v)
+static ssize_t store_priority(struct vport *p, unsigned long v)
 {
 	return 0;
 }
 static BRPORT_ATTR(priority, S_IRUGO | S_IWUSR,
 			 show_priority, store_priority);
 
-static ssize_t show_designated_root(struct dp_port *p, char *buf)
+static ssize_t show_designated_root(struct vport *p, char *buf)
 {
 	return sprintf(buf, "0000.010203040506\n");
 }
 static BRPORT_ATTR(designated_root, S_IRUGO, show_designated_root, NULL);
 
-static ssize_t show_designated_bridge(struct dp_port *p, char *buf)
+static ssize_t show_designated_bridge(struct vport *p, char *buf)
 {
 	return sprintf(buf, "0000.060504030201\n");
 }
 static BRPORT_ATTR(designated_bridge, S_IRUGO, show_designated_bridge, NULL);
 
-static ssize_t show_designated_port(struct dp_port *p, char *buf)
+static ssize_t show_designated_port(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(designated_port, S_IRUGO, show_designated_port, NULL);
 
-static ssize_t show_designated_cost(struct dp_port *p, char *buf)
+static ssize_t show_designated_cost(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(designated_cost, S_IRUGO, show_designated_cost, NULL);
 
-static ssize_t show_port_id(struct dp_port *p, char *buf)
+static ssize_t show_port_id(struct vport *p, char *buf)
 {
 	return sprintf(buf, "0x%x\n", 0);
 }
 static BRPORT_ATTR(port_id, S_IRUGO, show_port_id, NULL);
 
-static ssize_t show_port_no(struct dp_port *p, char *buf)
+static ssize_t show_port_no(struct vport *p, char *buf)
 {
 	return sprintf(buf, "0x%x\n", p->port_no);
 }
 
 static BRPORT_ATTR(port_no, S_IRUGO, show_port_no, NULL);
 
-static ssize_t show_change_ack(struct dp_port *p, char *buf)
+static ssize_t show_change_ack(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(change_ack, S_IRUGO, show_change_ack, NULL);
 
-static ssize_t show_config_pending(struct dp_port *p, char *buf)
+static ssize_t show_config_pending(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(config_pending, S_IRUGO, show_config_pending, NULL);
 
-static ssize_t show_port_state(struct dp_port *p, char *buf)
+static ssize_t show_port_state(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(state, S_IRUGO, show_port_state, NULL);
 
-static ssize_t show_message_age_timer(struct dp_port *p,
+static ssize_t show_message_age_timer(struct vport *p,
 					    char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(message_age_timer, S_IRUGO, show_message_age_timer, NULL);
 
-static ssize_t show_forward_delay_timer(struct dp_port *p,
+static ssize_t show_forward_delay_timer(struct vport *p,
 					    char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(forward_delay_timer, S_IRUGO, show_forward_delay_timer, NULL);
 
-static ssize_t show_hold_timer(struct dp_port *p,
+static ssize_t show_hold_timer(struct vport *p,
 					    char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
@@ -165,14 +165,14 @@ static struct brport_attribute *brport_attrs[] = {
 	NULL
 };
 
-#define to_brport_attr(_at) container_of(_at, struct brport_attribute, attr)
-#define to_brport(obj)	container_of(obj, struct dp_port, kobj)
+#define to_vport_attr(_at) container_of(_at, struct brport_attribute, attr)
+#define to_vport(obj)	container_of(obj, struct vport, kobj)
 
 static ssize_t brport_show(struct kobject * kobj,
 			   struct attribute * attr, char * buf)
 {
-	struct brport_attribute * brport_attr = to_brport_attr(attr);
-	struct dp_port * p = to_brport(kobj);
+	struct brport_attribute * brport_attr = to_vport_attr(attr);
+	struct vport * p = to_vport(kobj);
 
 	return brport_attr->show(p, buf);
 }
@@ -181,7 +181,7 @@ static ssize_t brport_store(struct kobject * kobj,
 			    struct attribute * attr,
 			    const char * buf, size_t count)
 {
-	struct dp_port * p = to_brport(kobj);
+	struct vport * p = to_vport(kobj);
 	ssize_t ret = -EINVAL;
 
 	if (!capable(CAP_NET_ADMIN))
@@ -203,9 +203,9 @@ struct sysfs_ops brport_sysfs_ops = {
  * Creates a brport subdirectory with bridge attributes.
  * Puts symlink in bridge's brport subdirectory
  */
-int dp_sysfs_add_if(struct dp_port *p)
+int dp_sysfs_add_if(struct vport *p)
 {
-	struct kobject *kobj = vport_get_kobj(p->vport);
+	struct kobject *kobj = vport_get_kobj(p);
 	struct datapath *dp = p->dp;
 	struct brport_attribute **a;
 	int err;
@@ -220,7 +220,7 @@ int dp_sysfs_add_if(struct dp_port *p)
 
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
-	err = sysfs_create_link(&p->kobj, vport_get_kobj(dp->ports[ODPP_LOCAL]->vport),
+	err = sysfs_create_link(&p->kobj, vport_get_kobj(dp->ports[ODPP_LOCAL]),
 				SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;
@@ -234,10 +234,10 @@ int dp_sysfs_add_if(struct dp_port *p)
 
 	/* Create symlink from /sys/class/net/<bridgename>/brif/<devname> to
 	 * /sys/class/net/<devname>/brport.  */
-	err = sysfs_create_link(&dp->ifobj, &p->kobj, vport_get_name(p->vport));
+	err = sysfs_create_link(&dp->ifobj, &p->kobj, vport_get_name(p));
 	if (err)
 		goto err_del;
-	strcpy(p->linkname, vport_get_name(p->vport));
+	strcpy(p->linkname, vport_get_name(p));
 
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 
@@ -250,7 +250,7 @@ err:
 	return err;
 }
 
-int dp_sysfs_del_if(struct dp_port *p)
+int dp_sysfs_del_if(struct vport *p)
 {
 	if (p->linkname[0]) {
 		sysfs_remove_link(&p->dp->ifobj, p->linkname);

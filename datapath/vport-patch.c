@@ -95,12 +95,6 @@ static int set_config(struct vport *vport, const void *config)
 
 	strcpy(patch_vport->peer_name, peer_name);
 
-	if (vport_get_dp_port(vport)) {
-		hlist_del(&patch_vport->hash_node);
-		rcu_assign_pointer(patch_vport->peer, vport_locate(patch_vport->peer_name));
-		hlist_add_head(&patch_vport->hash_node, hash_bucket(patch_vport->peer_name));
-	}
-
 	return 0;
 }
 
@@ -110,7 +104,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	struct patch_vport *patch_vport;
 	int err;
 
-	vport = vport_alloc(sizeof(struct patch_vport), &patch_vport_ops);
+	vport = vport_alloc(sizeof(struct patch_vport), &patch_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;
@@ -146,7 +140,15 @@ error:
 
 static int patch_modify(struct vport *vport, struct odp_port *port)
 {
-	return set_config(vport, port->config);
+	int err = set_config(vport, port->config);
+	if (!err) {
+		struct patch_vport *patch_vport = patch_vport_priv(vport);
+
+		hlist_del(&patch_vport->hash_node);
+		rcu_assign_pointer(patch_vport->peer, vport_locate(patch_vport->peer_name));
+		hlist_add_head(&patch_vport->hash_node, hash_bucket(patch_vport->peer_name));
+	}
+	return err;
 }
 
 static int patch_destroy(struct vport *vport)
