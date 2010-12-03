@@ -482,7 +482,12 @@ dpif_port_del(struct dpif *dpif, uint16_t port_no)
     COVERAGE_INC(dpif_port_del);
 
     error = dpif->dpif_class->port_del(dpif, port_no);
-    log_operation(dpif, "port_del", error);
+    if (!error) {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: port_del(%"PRIu16")",
+                    dpif_name(dpif), port_no);
+    } else {
+        log_operation(dpif, "port_del", error);
+    }
     return error;
 }
 
