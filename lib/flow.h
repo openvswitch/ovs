@@ -124,6 +124,7 @@ struct flow_wildcards {
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
     ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
+    uint16_t zero;              /* Padding field set to zero. */
 };
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);

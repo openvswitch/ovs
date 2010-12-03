@@ -306,6 +306,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->nw_dst_mask = htonl(0);
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
     wc->vlan_tci_mask = htons(0);
+    wc->zero = 0;
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -318,6 +319,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->nw_dst_mask = htonl(UINT32_MAX);
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
     wc->vlan_tci_mask = htons(UINT16_MAX);
+    wc->zero = 0;
 }
 
 /* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
