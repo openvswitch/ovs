@@ -157,9 +157,9 @@ progress, whether it is the active slave, the MAC hashes assigned to
 the slave, and the MAC learning table entries that hash to each MAC.
 .IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
 Assigns a given MAC hash to a new slave.  \fIport\fR specifies the
-bond port, \fIhash\fR either the MAC hash to be migrated (as a decimal
-number between 0 and 255) or an Ethernet address to be hashed, and
-\fIslave\fR the new slave to be assigned.
+bond port, \fIhash\fR the MAC hash to be migrated (as a decimal
+number between 0 and 255), and \fIslave\fR the new slave to be
+assigned.
 .IP
 The reassignment is not permanent: rebalancing or fail-over will
 cause the MAC hash to be shifted to a new slave in the usual

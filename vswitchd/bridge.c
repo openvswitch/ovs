@@ -3268,7 +3268,6 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
     char *args = (char *) args_;
     char *save_ptr = NULL;
     char *bond_s, *hash_s, *slave_s;
-    uint8_t mac[ETH_ADDR_LEN];
     struct port *port;
     struct iface *iface;
     struct bond_entry *entry;
@@ -3289,10 +3288,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
         return;
     }
 
-    if (sscanf(hash_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-        == ETH_ADDR_SCAN_COUNT) {
-        hash = bond_hash(mac);
-    } else if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
+    if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
         hash = atoi(hash_s) & BOND_MASK;
     } else {
         unixctl_command_reply(conn, 501, "bad hash");
