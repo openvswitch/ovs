@@ -96,7 +96,7 @@ struct datapath {
 	struct list_head port_list;
 
 	/* Stats. */
-	struct dp_stats_percpu *stats_percpu;
+	struct dp_stats_percpu __percpu *stats_percpu;
 
 	/* sFlow Sampling */
 	unsigned int sflow_probability;

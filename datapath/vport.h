@@ -115,7 +115,7 @@ struct vport {
 	struct hlist_node hash_node;
 	const struct vport_ops *ops;
 
-	struct vport_percpu_stats *percpu_stats;
+	struct vport_percpu_stats __percpu *percpu_stats;
 
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
