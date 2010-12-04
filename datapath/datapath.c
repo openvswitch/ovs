@@ -737,7 +737,9 @@ static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
 		goto error;
 
 	error = -EFAULT;
-	if (copy_from_user(actions->actions, flow->actions, flow->actions_len))
+	if (copy_from_user(actions->actions,
+			   (struct nlattr __user *)flow->actions,
+			   flow->actions_len))
 		goto error_free_actions;
 	error = validate_actions(actions->actions, actions->actions_len);
 	if (error)
@@ -946,9 +948,9 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 static int answer_query(struct sw_flow *flow, u32 query_flags,
 			struct odp_flow __user *ufp)
 {
-	struct nlattr *actions;
+	struct nlattr __user *actions;
 
-	if (get_user(actions, &ufp->actions))
+	if (get_user(actions, (struct nlattr __user * __user *)&ufp->actions))
 		return -EFAULT;
 
 	return do_answer_query(flow, query_flags, 
@@ -1000,7 +1002,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 	u32 i;
 
 	for (i = 0; i < flowvec->n_flows; i++) {
-		struct odp_flow __user *ufp = &flowvec->flows[i];
+		struct odp_flow __user *ufp = (struct odp_flow __user *)&flowvec->flows[i];
 		struct odp_flow uf;
 		struct tbl_node *flow_node;
 		int error;
@@ -1051,7 +1053,7 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 	if (!flowvec->n_flows)
 		return 0;
 
-	cbdata.uflows = flowvec->flows;
+	cbdata.uflows = (struct odp_flow __user *)flowvec->flows;
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
 
@@ -1100,7 +1102,8 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	}
 
 	err = -EFAULT;
-	if (copy_from_user(actions->actions, execute->actions, execute->actions_len))
+	if (copy_from_user(actions->actions,
+	    (struct nlattr __user *)execute->actions, execute->actions_len))
 		goto error_free_actions;
 
 	err = validate_actions(actions->actions, execute->actions_len);
@@ -1113,7 +1116,8 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 		goto error_free_actions;
 
 	err = -EFAULT;
-	if (copy_from_user(skb_put(skb, execute->length), execute->data,
+	if (copy_from_user(skb_put(skb, execute->length),
+			   (const void __user *)execute->data,
 			   execute->length))
 		goto error_free_skb;
 
@@ -1317,7 +1321,8 @@ static int list_ports(struct datapath *dp, struct odp_portvec __user *upv)
 	if (copy_from_user(&pv, upv, sizeof pv))
 		return -EFAULT;
 
-	retval = do_list_ports(dp, pv.ports, pv.n_ports);
+	retval = do_list_ports(dp, (struct odp_port __user *)pv.ports,
+			       pv.n_ports);
 	if (retval < 0)
 		return retval;
 
@@ -1521,7 +1526,7 @@ static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow _
 	    __get_user(flow->flags, &compat->flags))
 		return -EFAULT;
 
-	flow->actions = compat_ptr(actions);
+	flow->actions = (struct nlattr __force *)compat_ptr(actions);
 	return 0;
 }
 
@@ -1576,7 +1581,9 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	return error;
 }
 
-static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+static int compat_query_flows(struct datapath *dp,
+			      struct compat_odp_flow __user *flows,
+			      u32 n_flows)
 {
 	struct tbl *table = rcu_dereference(dp->table);
 	u32 i;
@@ -1625,7 +1632,8 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 	return 0;
 }
 
-static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+static int compat_list_flows(struct datapath *dp,
+			     struct compat_odp_flow __user *flows, u32 n_flows)
 {
 	struct compat_list_flows_cbdata cbdata;
 	int error;
@@ -1643,7 +1651,7 @@ static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows,
 
 static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 				int (*function)(struct datapath *,
-						struct compat_odp_flow *,
+						struct compat_odp_flow __user *,
 						u32 n_flows))
 {
 	struct compat_odp_flowvec __user *uflowvec;
@@ -1683,8 +1691,8 @@ static int compat_execute(struct datapath *dp, const struct compat_odp_execute _
 	    __get_user(execute.length, &uexecute->length))
 		return -EFAULT;
 
-	execute.actions = compat_ptr(actions);
-	execute.data = compat_ptr(data);
+	execute.actions = (struct nlattr __force *)compat_ptr(actions);
+	execute.data = (const void __force *)compat_ptr(data);
 
 	return do_execute(dp, &execute);
 }
@@ -1919,7 +1927,8 @@ success:
 				copy_bytes = csum_start;
 				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
 
-				BUG_ON((char *)csump + sizeof(__sum16) > buf + nbytes);
+				BUG_ON((char __user *)csump + sizeof(__sum16) >
+					buf + nbytes);
 				put_user(csum_fold(csum), csump);
 			}
 		} else
@@ -1927,7 +1936,7 @@ success:
 	}
 
 	if (!retval) {
-		struct iovec __user iov;
+		struct iovec iov;
 
 		iov.iov_base = buf;
 		iov.iov_len = copy_bytes;
