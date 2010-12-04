@@ -365,34 +365,37 @@ found:
 
 static inline void ecn_decapsulate(struct sk_buff *skb)
 {
-	u8 tos = ip_hdr(skb)->tos;
-
-	if (INET_ECN_is_ce(tos)) {
+	/* This is accessing the outer IP header of the tunnel, which we've
+	 * already validated to be OK.  skb->data is currently set to the start
+	 * of the inner Ethernet header, and we've validated ETH_HLEN.
+	 */
+	if (unlikely(INET_ECN_is_ce(ip_hdr(skb)->tos))) {
 		__be16 protocol = skb->protocol;
-		unsigned int nw_header = skb_network_offset(skb);
+
+		skb_set_network_header(skb, ETH_HLEN);
 
 		if (skb->protocol == htons(ETH_P_8021Q)) {
 			if (unlikely(!pskb_may_pull(skb, VLAN_ETH_HLEN)))
 				return;
 
 			protocol = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
-			nw_header += VLAN_HLEN;
+			skb_set_network_header(skb, VLAN_ETH_HLEN);
 		}
 
 		if (protocol == htons(ETH_P_IP)) {
-			if (unlikely(!pskb_may_pull(skb, nw_header
+			if (unlikely(!pskb_may_pull(skb, skb_network_offset(skb)
 			    + sizeof(struct iphdr))))
 				return;
 
-			IP_ECN_set_ce((struct iphdr *)(skb->data + nw_header));
+			IP_ECN_set_ce(ip_hdr(skb));
 		}
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 		else if (protocol == htons(ETH_P_IPV6)) {
-			if (unlikely(!pskb_may_pull(skb, nw_header
+			if (unlikely(!pskb_may_pull(skb, skb_network_offset(skb)
 			    + sizeof(struct ipv6hdr))))
 				return;
 
-			IP6_ECN_set_ce((struct ipv6hdr *)(skb->data + nw_header));
+			IP6_ECN_set_ce(ipv6_hdr(skb));
 		}
 #endif
 	}
@@ -418,7 +421,6 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb)
 	skb_dst_drop(skb);
 	nf_reset(skb);
 	secpath_reset(skb);
-	skb_set_network_header(skb, ETH_HLEN);
 
 	ecn_decapsulate(skb);
 	compute_ip_summed(skb, false);
