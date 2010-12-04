@@ -218,7 +218,7 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 		u8  ssap;  /* Always 0xAA */
 		u8  ctrl;
 		u8  oui[3];
-		u16 ethertype;
+		__be16 ethertype;
 	};
 	struct llc_snap_hdr *llc;
 	__be16 proto;

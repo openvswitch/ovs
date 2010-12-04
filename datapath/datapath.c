@@ -493,7 +493,8 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		flow_node = tbl_lookup(rcu_dereference(dp->table), &key,
 					flow_hash(&key), flow_cmp);
 		if (unlikely(!flow_node)) {
-			dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
+			dp_output_control(dp, skb, _ODPL_MISS_NR,
+					 (__force u64)OVS_CB(skb)->tun_id);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
 			goto out;
 		}

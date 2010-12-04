@@ -54,9 +54,9 @@ static int gre_hdr_len(const struct tnl_port_config *port_config)
 static __be32 be64_get_low32(__be64 x)
 {
 #ifdef __BIG_ENDIAN
-	return x;
+	return (__force __be32)x;
 #else
-	return x >> 32;
+	return (__force __be32)((__force u64)x >> 32);
 #endif
 }
 
@@ -116,9 +116,9 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 static __be64 be32_extend_to_be64(__be32 x)
 {
 #ifdef __BIG_ENDIAN
-	return x;
+	return (__force __be64)x;
 #else
-	return (__be64) x << 32;
+	return (__force __be64)((__force u64)x << 32);
 #endif
 }
 

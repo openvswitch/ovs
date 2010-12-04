@@ -191,8 +191,9 @@ static int port_cmp(const struct tbl_node *node, void *target)
 
 static u32 port_hash(struct port_lookup_key *k)
 {
-	u32 x = jhash_3words(k->saddr, k->daddr, k->tunnel_type, 0);
-	return jhash_2words(k->key >> 32, k->key, x);
+	u32 x = jhash_3words((__force u32)k->saddr, (__force u32)k->daddr,
+			     k->tunnel_type, 0);
+	return jhash_2words((__force u64)k->key >> 32, (__force u32)k->key, x);
 }
 
 static u32 mutable_hash(const struct tnl_mutable_config *mutable)
