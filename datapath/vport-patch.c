@@ -22,6 +22,8 @@ struct device_config {
 };
 
 struct patch_vport {
+	struct rcu_head rcu;
+
 	char name[IFNAMSIZ];
 
 	/* Protected by RTNL lock. */
@@ -158,19 +160,22 @@ static int patch_modify(struct vport *vport, struct odp_port *port)
 	return err;
 }
 
+static void free_port_rcu(struct rcu_head *rcu)
+{
+	struct patch_vport *patch_vport = container_of(rcu,
+						      struct patch_vport, rcu);
+
+	kfree(patch_vport->devconf);
+	vport_free(vport_from_priv(patch_vport));
+}
+
 static int patch_destroy(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
 	update_peers(patch_vport->name, NULL);
-	rcu_assign_pointer(patch_vport->peer, NULL);
-
 	hlist_del(&patch_vport->hash_node);
-
-	synchronize_rcu();
-
-	kfree(patch_vport->devconf);
-	vport_free(vport);
+	call_rcu(&patch_vport->rcu, free_port_rcu);
 
 	return 0;
 }
