@@ -78,7 +78,7 @@ static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
 	for (i = 0; i < n_buckets >> TBL_L1_BITS; i++) {
 		l1[i] = (struct tbl_bucket **)get_zeroed_page(GFP_KERNEL);
 		if (!l1[i]) {
-			free_buckets(l1, i << TBL_L1_BITS, 0);
+			free_buckets(l1, i << TBL_L1_BITS, NULL);
 			return NULL;
 		}
 	}
