@@ -224,14 +224,13 @@ static int brc_get_bridge_info(struct net_device *dev,
 			       struct __bridge_info __user *ub)
 {
 	struct __bridge_info b;
-	u64 id = 0;
-	int i;
 
 	memset(&b, 0, sizeof(struct __bridge_info));
 
-	for (i=0; i<ETH_ALEN; i++)
-		id |= (u64)dev->dev_addr[i] << (8*(ETH_ALEN-1 - i));
-	b.bridge_id = cpu_to_be64(id);
+	/* First two bytes are the priority, which we should skip.  This comes
+	 * from struct bridge_id in br_private.h, which is unavailable to us.
+	 */
+	memcpy((u8 *)&b.bridge_id + 2, dev->dev_addr, ETH_ALEN);
 	b.stp_enabled = 0;
 
 	if (copy_to_user(ub, &b, sizeof(struct __bridge_info)))
