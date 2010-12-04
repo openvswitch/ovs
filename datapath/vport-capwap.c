@@ -237,7 +237,7 @@ static int capwap_init(void)
 		goto error;
 
 	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
+	sin.sin_addr.s_addr = htonl(INADDR_ANY);
 	sin.sin_port = htons(CAPWAP_DST_PORT);
 
 	err = kernel_bind(capwap_rcv_socket, (struct sockaddr *)&sin,
