@@ -72,7 +72,7 @@
 static struct tbl *port_table __read_mostly;
 
 static void cache_cleaner(struct work_struct *work);
-DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
+static DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
 
 /*
  * These are just used as an optimization: they don't require any kind of

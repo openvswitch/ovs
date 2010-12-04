@@ -1838,8 +1838,8 @@ fault:
 	return -EFAULT;
 }
 
-ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
-		      loff_t *ppos)
+static ssize_t openvswitch_read(struct file *f, char __user *buf,
+				size_t nbytes, loff_t *ppos)
 {
 	/* XXX is there sufficient synchronization here? */
 	int listeners = get_listen_mask(f);
@@ -1941,7 +1941,7 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 	return mask;
 }
 
-struct file_operations openvswitch_fops = {
+static struct file_operations openvswitch_fops = {
 	/* XXX .aio_read = openvswitch_aio_read, */
 	.read  = openvswitch_read,
 	.poll  = openvswitch_poll,

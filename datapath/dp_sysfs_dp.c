@@ -43,7 +43,7 @@
 #define DEV_ATTR(NAME) dev_attr_##NAME
 #endif
 
-struct datapath *sysfs_get_dp(struct net_device *netdev)
+static struct datapath *sysfs_get_dp(struct net_device *netdev)
 {
 	struct vport *vport = internal_dev_get_vport(netdev);
 	return vport ? vport->dp : NULL;
