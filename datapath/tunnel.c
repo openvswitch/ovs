@@ -401,17 +401,26 @@ static inline void ecn_decapsulate(struct sk_buff *skb)
 /* Called with rcu_read_lock. */
 void tnl_rcv(struct vport *vport, struct sk_buff *skb)
 {
-	skb->pkt_type = PACKET_HOST;
-	skb->protocol = eth_type_trans(skb, skb->dev);
+	/* Packets received by this function are in the following state:
+	 * - skb->data points to the inner Ethernet header.
+	 * - The inner Ethernet header is in the linear data area.
+	 * - skb->csum does not include the inner Ethernet header.
+	 * - The layer pointers point at the outer headers.
+	 */
+
+	struct ethhdr *eh = (struct ethhdr *)skb->data;
+
+	if (likely(ntohs(eh->h_proto) >= 1536))
+		skb->protocol = eh->h_proto;
+	else
+		skb->protocol = htons(ETH_P_802_2);
 
 	skb_dst_drop(skb);
 	nf_reset(skb);
 	secpath_reset(skb);
-	skb_reset_network_header(skb);
+	skb_set_network_header(skb, ETH_HLEN);
 
 	ecn_decapsulate(skb);
-
-	skb_push(skb, ETH_HLEN);
 	compute_ip_summed(skb, false);
 
 	vport_receive(vport, skb);
