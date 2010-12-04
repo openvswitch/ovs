@@ -179,8 +179,9 @@ updelay (or downdelay).
 .IP
 This setting is not permanent: it persists only until the carrier
 status of \fIslave\fR changes.
-.IP "\fBbond/hash\fR \fImac\fR"
-Returns the hash value which would be used for \fImac\fR.
+.IP "\fBbond/hash\fR \fImac\fR [\fIvlan\fR]"
+Returns the hash value which would be used for \fImac\fR with \fIvlan\fR
+if specified.
 .
 .so lib/vlog-unixctl.man
 .so lib/stress-unixctl.man

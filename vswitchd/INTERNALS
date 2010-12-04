@@ -106,12 +106,13 @@ Bond Packet Output
 ------------------
 
 When a packet is sent out a bond port, the bond slave actually used is
-selected based on the packet's source MAC (see choose_output_iface()).
-In particular, the source MAC is hashed into one of 256 values, and
-that value is looked up in a hash table (the "bond hash") kept in the
-"bond_hash" member of struct port.  The hash table entry identifies a
-bond slave.  If no bond slave has yet been chosen for that hash table
-entry, vswitchd chooses one arbitrarily.
+selected based on the packet's source MAC and VLAN tag (see
+choose_output_iface()).  In particular, the source MAC and VLAN tag
+are hashed into one of 256 values, and that value is looked up in a
+hash table (the "bond hash") kept in the "bond_hash" member of struct
+port.  The hash table entry identifies a bond slave.  If no bond slave
+has yet been chosen for that hash table entry, vswitchd chooses one
+arbitrarily.
 
 Every 10 seconds, vswitchd rebalances the bond slaves (see
 bond_rebalance_port()).  To rebalance, vswitchd examines the

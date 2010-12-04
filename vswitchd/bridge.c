@@ -1945,15 +1945,16 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 /* Bridge packet processing functions. */
 
 static int
-bond_hash(const uint8_t mac[ETH_ADDR_LEN])
+bond_hash(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
 {
-    return hash_bytes(mac, ETH_ADDR_LEN, 0) & BOND_MASK;
+    return hash_bytes(mac, ETH_ADDR_LEN, vlan) & BOND_MASK;
 }
 
 static struct bond_entry *
-lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN])
+lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN],
+                  uint16_t vlan)
 {
-    return &port->bond_hash[bond_hash(mac)];
+    return &port->bond_hash[bond_hash(mac, vlan)];
 }
 
 static int
@@ -1988,7 +1989,7 @@ bond_choose_iface(const struct port *port)
 
 static bool
 choose_output_iface(const struct port *port, const uint8_t *dl_src,
-                    uint16_t *dp_ifidx, tag_type *tags)
+                    uint16_t vlan, uint16_t *dp_ifidx, tag_type *tags)
 {
     struct iface *iface;
 
@@ -1996,7 +1997,7 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
     if (port->n_ifaces == 1) {
         iface = port->ifaces[0];
     } else {
-        struct bond_entry *e = lookup_bond_entry(port, dl_src);
+        struct bond_entry *e = lookup_bond_entry(port, dl_src, vlan);
         if (e->iface_idx < 0 || e->iface_idx >= port->n_ifaces
             || !port->ifaces[e->iface_idx]->enabled) {
             /* XXX select interface properly.  The current interface selection
@@ -2233,7 +2234,8 @@ set_dst(struct dst *p, const struct flow *flow,
               : in_port->vlan >= 0 ? in_port->vlan
               : flow->vlan_tci == 0 ? OFP_VLAN_NONE
               : vlan_tci_to_vid(flow->vlan_tci));
-    return choose_output_iface(out_port, flow->dl_src, &p->dp_ifidx, tags);
+    return choose_output_iface(out_port, flow->dl_src, p->vlan,
+                               &p->dp_ifidx, tags);
 }
 
 static void
@@ -2745,8 +2747,11 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
         if (a->type == ODPAT_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, a->output.port);
             if (out_port && out_port->n_ifaces >= 2) {
+                uint16_t vlan = (flow->vlan_tci
+                                 ? vlan_tci_to_vid(flow->vlan_tci)
+                                 : OFP_VLAN_NONE);
                 struct bond_entry *e = lookup_bond_entry(out_port,
-                                                         flow->dl_src);
+                                                         flow->dl_src, vlan);
                 e->tx_bytes += n_bytes;
             }
         }
@@ -3100,7 +3105,7 @@ bond_send_learning_packets(struct port *port)
         int retval;
 
         if (e->port == port->port_idx
-            || !choose_output_iface(port, e->mac, &dp_ifidx, &tags)) {
+            || !choose_output_iface(port, e->mac, e->vlan, &dp_ifidx, &tags)) {
             continue;
         }
 
@@ -3246,9 +3251,10 @@ bond_unixctl_show(struct unixctl_conn *conn,
             LIST_FOR_EACH (me, lru_node, &port->bridge->ml->lrus) {
                 uint16_t dp_ifidx;
                 tag_type tags = 0;
-                if (bond_hash(me->mac) == hash
+                if (bond_hash(me->mac, me->vlan) == hash
                     && me->port != port->port_idx
-                    && choose_output_iface(port, me->mac, &dp_ifidx, &tags)
+                    && choose_output_iface(port, me->mac, me->vlan,
+                                           &dp_ifidx, &tags)
                     && dp_ifidx == iface->dp_ifidx)
                 {
                     ds_put_format(&ds, "\t\t"ETH_ADDR_FMT"\n",
@@ -3410,16 +3416,32 @@ bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
 }
 
 static void
-bond_unixctl_hash(struct unixctl_conn *conn, const char *args,
+bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
                   void *aux OVS_UNUSED)
 {
+    char *args = (char *) args_;
     uint8_t mac[ETH_ADDR_LEN];
     uint8_t hash;
     char *hash_cstr;
+    unsigned int vlan;
+    char *mac_s, *vlan_s;
+    char *save_ptr = NULL;
 
-    if (sscanf(args, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+    mac_s  = strtok_r(args, " ", &save_ptr);
+    vlan_s = strtok_r(NULL, " ", &save_ptr);
+
+    if (vlan_s) {
+        if (sscanf(vlan_s, "%u", &vlan) != 1) {
+            unixctl_command_reply(conn, 501, "invalid vlan");
+            return;
+        }
+    } else {
+        vlan = OFP_VLAN_NONE;
+    }
+
+    if (sscanf(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
         == ETH_ADDR_SCAN_COUNT) {
-        hash = bond_hash(mac);
+        hash = bond_hash(mac, vlan);
 
         hash_cstr = xasprintf("%u", hash);
         unixctl_command_reply(conn, 200, hash_cstr);

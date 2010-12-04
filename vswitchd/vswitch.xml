@@ -457,11 +457,10 @@
       <p>A port that has more than one interface is a ``bonded port.''
         Bonding allows for load balancing and fail-over.  Open vSwitch
         supports ``source load balancing'' (SLB) bonding, which
-        assigns flows to slaves based on source MAC address, with
-        periodic rebalancing as traffic patterns change.  This form of
-        bonding does not require 802.3ad or other special support from
-        the upstream switch to which the slave devices are
-        connected.</p>
+        assigns flows to slaves based on source MAC address and output VLAN,
+        with periodic rebalancing as traffic patterns change.  This form of
+        bonding does not require 802.3ad or other special support from the
+        upstream switch to which the slave devices are connected.</p>
 
       <p>These columns apply only to bonded ports.  Their values are
         otherwise ignored.</p>
