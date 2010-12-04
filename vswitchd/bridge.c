@@ -3417,20 +3417,20 @@ static void
 bond_unixctl_hash(struct unixctl_conn *conn, const char *args,
                   void *aux OVS_UNUSED)
 {
-	uint8_t mac[ETH_ADDR_LEN];
-	uint8_t hash;
-	char *hash_cstr;
+    uint8_t mac[ETH_ADDR_LEN];
+    uint8_t hash;
+    char *hash_cstr;
 
-	if (sscanf(args, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-	    == ETH_ADDR_SCAN_COUNT) {
-		hash = bond_hash(mac);
+    if (sscanf(args, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+        == ETH_ADDR_SCAN_COUNT) {
+        hash = bond_hash(mac);
 
-		hash_cstr = xasprintf("%u", hash);
-		unixctl_command_reply(conn, 200, hash_cstr);
-		free(hash_cstr);
-	} else {
-		unixctl_command_reply(conn, 501, "invalid mac");
-	}
+        hash_cstr = xasprintf("%u", hash);
+        unixctl_command_reply(conn, 200, hash_cstr);
+        free(hash_cstr);
+    } else {
+        unixctl_command_reply(conn, 501, "invalid mac");
+    }
 }
 
 static void
