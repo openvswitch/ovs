@@ -68,8 +68,7 @@
 
 #define CACHE_DATA_ALIGN 16
 
-/* Protected by RCU. */
-static struct tbl *port_table __read_mostly;
+static struct tbl __rcu *port_table __read_mostly;
 
 static void cache_cleaner(struct work_struct *work);
 static DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);

@@ -34,7 +34,7 @@ struct sw_flow {
 	struct tbl_node tbl_node;
 
 	struct odp_flow_key key;
-	struct sw_flow_actions *sf_acts;
+	struct sw_flow_actions __rcu *sf_acts;
 
 	atomic_t refcnt;
 	bool dead;

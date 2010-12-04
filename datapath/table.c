@@ -161,7 +161,7 @@ void tbl_deferred_destroy(struct tbl *table, void (*destructor)(struct tbl_node 
 	call_rcu(&table->rcu, destroy_table_rcu);
 }
 
-static struct tbl_bucket **find_bucket(struct tbl *table, u32 hash)
+static struct tbl_bucket __rcu **find_bucket(struct tbl *table, u32 hash)
 {
 	unsigned int l1 = (hash & (table->n_buckets - 1)) >> TBL_L1_SHIFT;
 	unsigned int l2 = hash & ((1 << TBL_L2_BITS) - 1);
@@ -197,7 +197,7 @@ static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash
 struct tbl_node *tbl_lookup(struct tbl *table, void *target, u32 hash,
 			    int (*cmp)(const struct tbl_node *, void *))
 {
-	struct tbl_bucket **bucketp = find_bucket(table, hash);
+	struct tbl_bucket __rcu **bucketp = find_bucket(table, hash);
 	struct tbl_bucket *bucket = rcu_dereference(*bucketp);
 	int index;
 
@@ -230,7 +230,7 @@ int tbl_foreach(struct tbl *table,
 {
 	unsigned int i, j, k;
 	for (i = 0; i < table->n_buckets >> TBL_L1_BITS; i++) {
-		struct tbl_bucket **l2 = table->buckets[i];
+		struct tbl_bucket __rcu **l2 = table->buckets[i];
 		for (j = 0; j < TBL_L1_SIZE; j++) {
 			struct tbl_bucket *bucket = rcu_dereference(l2[j]);
 			if (!bucket)
@@ -318,7 +318,7 @@ static void free_bucket_rcu(struct rcu_head *rcu)
  */
 int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
 {
-	struct tbl_bucket **oldp = find_bucket(table, hash);
+	struct tbl_bucket __rcu **oldp = find_bucket(table, hash);
 	struct tbl_bucket *old = rcu_dereference(*oldp);
 	unsigned int n = old ? old->n_objs : 0;
 	struct tbl_bucket *new = bucket_alloc(n + 1);
@@ -356,7 +356,7 @@ int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
  */
 int tbl_remove(struct tbl *table, struct tbl_node *target)
 {
-	struct tbl_bucket **oldp = find_bucket(table, target->hash);
+	struct tbl_bucket __rcu **oldp = find_bucket(table, target->hash);
 	struct tbl_bucket *old = rcu_dereference(*oldp);
 	unsigned int n = old->n_objs;
 	struct tbl_bucket *new;

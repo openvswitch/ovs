@@ -66,7 +66,7 @@ struct dp_stats_percpu {
  * @queues: %DP_N_QUEUES sets of queued packets for userspace to handle.
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
- * @table: Current flow table (RCU protected).
+ * @table: Current flow table.
  * @n_ports: Number of ports currently in @ports.
  * @ports: Map from port number to &struct vport.  %ODPP_LOCAL port
  * always exists, other ports may be %NULL.
@@ -88,11 +88,11 @@ struct datapath {
 	wait_queue_head_t waitqueue;
 
 	/* Flow table. */
-	struct tbl *table;
+	struct tbl __rcu *table;
 
 	/* Switch ports. */
 	unsigned int n_ports;
-	struct vport *ports[DP_MAX_PORTS];
+	struct vport __rcu *ports[DP_MAX_PORTS];
 	struct list_head port_list;
 
 	/* Stats. */

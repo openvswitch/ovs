@@ -161,7 +161,7 @@ struct tnl_vport {
 	char name[IFNAMSIZ];
 	const struct tnl_ops *tnl_ops;
 
-	struct tnl_mutable_config *mutable;	/* Protected by RCU. */
+	struct tnl_mutable_config __rcu *mutable;
 
 	/*
 	 * ID of last fragment sent (for tunnel protocols with direct support
@@ -171,7 +171,7 @@ struct tnl_vport {
 	atomic_t frag_id;
 
 	spinlock_t cache_lock;
-	struct tnl_cache *cache;		/* Protected by RCU/cache_lock. */
+	struct tnl_cache __rcu *cache;		/* Protected by RCU/cache_lock. */
 
 #ifdef NEED_CACHE_TIMEOUT
 	/*

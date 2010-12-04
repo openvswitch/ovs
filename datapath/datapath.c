@@ -67,7 +67,7 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * It is safe to access the datapath and vport structures with just
  * dp_mutex.
  */
-static struct datapath *dps[ODP_MAX];
+static struct datapath __rcu *dps[ODP_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
 static int new_vport(struct datapath *, struct odp_port *, int port_no);

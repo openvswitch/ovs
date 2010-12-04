@@ -34,7 +34,7 @@ struct tbl_node {
 struct tbl {
 	struct rcu_head rcu;
 	unsigned int n_buckets;
-	struct tbl_bucket ***buckets;
+	struct tbl_bucket ** __rcu *buckets;
 	unsigned int count;
 	void (*obj_destructor)(struct tbl_node *);
 };

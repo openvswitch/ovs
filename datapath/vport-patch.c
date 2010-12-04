@@ -30,11 +30,8 @@ struct patch_vport {
 	char peer_name[IFNAMSIZ];
 	struct hlist_node hash_node;
 
-	/* Protected by RCU. */
-	struct vport *peer;
-
-	/* Protected by RCU. */
-	struct device_config *devconf;
+	struct vport __rcu *peer;
+	struct device_config __rcu *devconf;
 };
 
 /* Protected by RTNL lock. */
