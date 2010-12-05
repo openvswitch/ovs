@@ -132,7 +132,7 @@ static void assign_config_rcu(struct vport *vport,
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *old_config;
 
-	old_config = tnl_vport->mutable;
+	old_config = rtnl_dereference(tnl_vport->mutable);
 	rcu_assign_pointer(tnl_vport->mutable, new_config);
 	call_rcu(&old_config->rcu, free_config_rcu);
 }
@@ -210,9 +210,9 @@ static u32 mutable_hash(const struct tnl_mutable_config *mutable)
 
 static void check_table_empty(void)
 {
-	if (tbl_count(port_table) == 0) {
-		struct tbl *old_table = port_table;
+	struct tbl *old_table = rtnl_dereference(port_table);
 
+	if (tbl_count(old_table) == 0) {
 		cancel_delayed_work_sync(&cache_cleaner_wq);
 		rcu_assign_pointer(port_table, NULL);
 		tbl_deferred_destroy(old_table, NULL);
@@ -221,6 +221,7 @@ static void check_table_empty(void)
 
 static int add_port(struct vport *vport)
 {
+	struct tbl *cur_table = rtnl_dereference(port_table);
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	int err;
 
@@ -234,25 +235,25 @@ static int add_port(struct vport *vport)
 		rcu_assign_pointer(port_table, new_table);
 		schedule_cache_cleaner();
 
-	} else if (tbl_count(port_table) > tbl_n_buckets(port_table)) {
-		struct tbl *old_table = port_table;
+	} else if (tbl_count(cur_table) > tbl_n_buckets(cur_table)) {
 		struct tbl *new_table;
 
-		new_table = tbl_expand(old_table);
+		new_table = tbl_expand(cur_table);
 		if (IS_ERR(new_table))
 			return PTR_ERR(new_table);
 
 		rcu_assign_pointer(port_table, new_table);
-		tbl_deferred_destroy(old_table, NULL);
+		tbl_deferred_destroy(cur_table, NULL);
 	}
 
-	err = tbl_insert(port_table, &tnl_vport->tbl_node, mutable_hash(tnl_vport->mutable));
+	err = tbl_insert(rtnl_dereference(port_table), &tnl_vport->tbl_node,
+			 mutable_hash(rtnl_dereference(tnl_vport->mutable)));
 	if (err) {
 		check_table_empty();
 		return err;
 	}
 
-	(*find_port_pool(tnl_vport->mutable))++;
+	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))++;
 
 	return 0;
 }
@@ -260,6 +261,7 @@ static int add_port(struct vport *vport)
 static int move_port(struct vport *vport, struct tnl_mutable_config *new_mutable)
 {
 	int err;
+	struct tbl *cur_table = rtnl_dereference(port_table);
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	u32 hash;
 
@@ -272,21 +274,21 @@ static int move_port(struct vport *vport, struct tnl_mutable_config *new_mutable
 	 * finding tunnels or the possibility of failure.  However, if we do
 	 * find a tunnel it will always be consistent.
 	 */
-	err = tbl_remove(port_table, &tnl_vport->tbl_node);
+	err = tbl_remove(cur_table, &tnl_vport->tbl_node);
 	if (err)
 		return err;
 
-	err = tbl_insert(port_table, &tnl_vport->tbl_node, hash);
+	err = tbl_insert(cur_table, &tnl_vport->tbl_node, hash);
 	if (err) {
-		(*find_port_pool(tnl_vport->mutable))--;
+		(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
 		check_table_empty();
 		return err;
 	}
 
 table_updated:
-	(*find_port_pool(tnl_vport->mutable))--;
+	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
 	assign_config_rcu(vport, new_mutable);
-	(*find_port_pool(tnl_vport->mutable))++;
+	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))++;
 
 	return 0;
 }
@@ -296,12 +298,12 @@ static int del_port(struct vport *vport)
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	int err;
 
-	err = tbl_remove(port_table, &tnl_vport->tbl_node);
+	err = tbl_remove(rtnl_dereference(port_table), &tnl_vport->tbl_node);
 	if (err)
 		return err;
 
 	check_table_empty();
-	(*find_port_pool(tnl_vport->mutable))--;
+	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
 
 	return 0;
 }

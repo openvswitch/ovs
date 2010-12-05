@@ -96,7 +96,7 @@ static struct datapath *get_dp_locked(int dp_idx)
 /* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
-	return vport_get_name(dp->ports[ODPP_LOCAL]);
+	return vport_get_name(rcu_dereference_rtnl(dp->ports[ODPP_LOCAL]));
 }
 
 static inline size_t br_nlmsg_size(void)
@@ -139,7 +139,8 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr->ifi_change = 0;
 
 	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port));
-	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[ODPP_LOCAL]));
+	NLA_PUT_U32(skb, IFLA_MASTER,
+		vport_get_ifindex(rtnl_dereference(dp->ports[ODPP_LOCAL])));
 	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
