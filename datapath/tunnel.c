@@ -99,6 +99,15 @@ static inline struct tnl_vport *tnl_vport_table_cast(const struct tbl_node *node
 	return container_of(node, struct tnl_vport, tbl_node);
 }
 
+/* This is analogous to rtnl_dereference for the tunnel cache.  It checks that
+ * cache_lock is held, so it is only for update side code.
+ */
+static inline struct tnl_cache *cache_dereference(struct tnl_vport *tnl_vport)
+{
+	return rcu_dereference_protected(tnl_vport->cache,
+					 lockdep_is_held(&tnl_vport->cache_lock));
+}
+
 static inline void schedule_cache_cleaner(void)
 {
 	schedule_delayed_work(&cache_cleaner_wq, CACHE_CLEANER_INTERVAL);
@@ -142,7 +151,7 @@ static void assign_cache_rcu(struct vport *vport, struct tnl_cache *new_cache)
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_cache *old_cache;
 
-	old_cache = tnl_vport->cache;
+	old_cache = cache_dereference(tnl_vport);
 	rcu_assign_pointer(tnl_vport->cache, new_cache);
 
 	if (old_cache)
@@ -874,7 +883,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	if (!spin_trylock_bh(&tnl_vport->cache_lock))
 		return NULL;
 
-	cache = tnl_vport->cache;
+	cache = cache_dereference(tnl_vport);
 	if (check_cache_valid(cache, mutable))
 		goto unlock;
 	else
