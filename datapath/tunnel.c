@@ -818,7 +818,7 @@ static void cache_cleaner(struct work_struct *work)
 	schedule_cache_cleaner();
 
 	rcu_read_lock();
-	tbl_foreach(port_table, cache_cleaner_cb, NULL);
+	tbl_foreach(rcu_dereference(port_table), cache_cleaner_cb, NULL);
 	rcu_read_unlock();
 }
 
