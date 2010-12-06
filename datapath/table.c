@@ -319,7 +319,7 @@ static void free_bucket_rcu(struct rcu_head *rcu)
 int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
 {
 	struct tbl_bucket **oldp = find_bucket(table, hash);
-	struct tbl_bucket *old = *rcu_dereference(oldp);
+	struct tbl_bucket *old = rcu_dereference(*oldp);
 	unsigned int n = old ? old->n_objs : 0;
 	struct tbl_bucket *new = bucket_alloc(n + 1);
 
@@ -357,7 +357,7 @@ int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
 int tbl_remove(struct tbl *table, struct tbl_node *target)
 {
 	struct tbl_bucket **oldp = find_bucket(table, target->hash);
-	struct tbl_bucket *old = *rcu_dereference(oldp);
+	struct tbl_bucket *old = rcu_dereference(*oldp);
 	unsigned int n = old->n_objs;
 	struct tbl_bucket *new;
 
