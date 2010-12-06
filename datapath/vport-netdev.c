@@ -279,11 +279,11 @@ struct vport *netdev_get_vport(struct net_device *dev)
 #else
 	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))	
 #endif
-		return (struct vport *)rcu_dereference(dev->rx_handler_data);
+		return (struct vport *)rcu_dereference_rtnl(dev->rx_handler_data);
 	else
 		return NULL;
 #else
-	return (struct vport *)rcu_dereference(dev->br_port);
+	return (struct vport *)rcu_dereference_rtnl(dev->br_port);
 #endif
 }
 

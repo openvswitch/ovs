@@ -9,6 +9,7 @@
 #include <linux/dcache.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/rtnetlink.h>
 
 #include "datapath.h"
 #include "vport.h"
@@ -58,7 +59,7 @@ static void assign_config_rcu(struct vport *vport,
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *old_config;
 
-	old_config = rcu_dereference(patch_vport->devconf);
+	old_config = rtnl_dereference(patch_vport->devconf);
 	rcu_assign_pointer(patch_vport->devconf, new_config);
 	call_rcu(&old_config->rcu, free_config);
 }
@@ -228,13 +229,13 @@ static const char *patch_get_name(const struct vport *vport)
 static const unsigned char *patch_get_addr(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference(patch_vport->devconf)->eth_addr;
+	return rcu_dereference_rtnl(patch_vport->devconf)->eth_addr;
 }
 
 static int patch_get_mtu(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference(patch_vport->devconf)->mtu;
+	return rcu_dereference_rtnl(patch_vport->devconf)->mtu;
 }
 
 static int patch_send(struct vport *vport, struct sk_buff *skb)

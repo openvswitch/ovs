@@ -181,7 +181,7 @@ static int port_cmp(const struct tbl_node *node, void *target)
 	const struct tnl_vport *tnl_vport = tnl_vport_table_cast(node);
 	struct port_lookup_key *lookup = target;
 
-	lookup->mutable = rcu_dereference(tnl_vport->mutable);
+	lookup->mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
 	return (lookup->mutable->tunnel_type == lookup->tunnel_type &&
 		lookup->mutable->port_config.daddr == lookup->daddr &&
@@ -313,7 +313,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    const struct tnl_mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
-	struct tbl *table = rcu_dereference(port_table);
+	struct tbl *table = rcu_dereference_rtnl(port_table);
 	struct tbl_node *tbl_node;
 
 	if (unlikely(!table))
@@ -1511,13 +1511,13 @@ const char *tnl_get_name(const struct vport *vport)
 const unsigned char *tnl_get_addr(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	return rcu_dereference(tnl_vport->mutable)->eth_addr;
+	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
 }
 
 int tnl_get_mtu(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	return rcu_dereference(tnl_vport->mutable)->mtu;
+	return rcu_dereference_rtnl(tnl_vport->mutable)->mtu;
 }
 
 void tnl_free_linked_skbs(struct sk_buff *skb)
