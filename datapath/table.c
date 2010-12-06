@@ -174,7 +174,7 @@ static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash
 	int i;
 
 	for (i = 0; i < bucket->n_objs; i++) {
-		struct tbl_node *obj = rcu_dereference(bucket->objs[i]);
+		struct tbl_node *obj = bucket->objs[i];
 		if (obj->hash == hash && likely(cmp(obj, target)))
 			return i;
 	}
