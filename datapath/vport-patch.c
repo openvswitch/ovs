@@ -130,8 +130,8 @@ static struct vport *patch_create(const struct vport_parms *parms)
 
 	vport_gen_rand_ether_addr(patch_vport->devconf->eth_addr);
 
-    /* Make the default MTU fairly large so that it doesn't become the
-     * bottleneck on systems using jumbo frames. */
+	/* Make the default MTU fairly large so that it doesn't become the
+	 * bottleneck on systems using jumbo frames. */
 	patch_vport->devconf->mtu = 65535;
 
 	hlist_add_head(&patch_vport->hash_node, hash_bucket(patch_vport->peer_name));
