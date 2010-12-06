@@ -49,19 +49,36 @@ vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	mv $@.tmp $@
 
 # vswitch E-R diagram
-if BUILD_ER_DIAGRAMS
-$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in ovsdb/dot2pic \
-                                vswitchd/vswitch.ovsschema
-	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema \
-		| dot -T plain \
-		| $(srcdir)/ovsdb/dot2pic \
-		> $@.tmp
-	mv $@.tmp $@
+#
+# There are two complications here.  First, if "python" or "dot" is not
+# available, then we have to just use the existing diagram.  Second, different
+# "dot" versions produce slightly different output for the same input, but we
+# don't want to gratuitously change vswitch.pic if someone tweaks the schema in
+# some minor way that doesn't affect the table structure.  To avoid that we
+# store a checksum of vswitch.gv in vswitch.pic and only regenerate vswitch.pic
+# if vswitch.gv actually changes.
+$(srcdir)/vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+if HAVE_PYTHON
+	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema > $@
 else
-$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
 	touch $@
 endif
-EXTRA_DIST += vswitchd/vswitch.pic
+$(srcdir)/vswitchd/vswitch.pic: $(srcdir)/vswitchd/vswitch.gv ovsdb/dot2pic
+if HAVE_DOT
+	sum=`cksum < $(srcdir)/vswitchd/vswitch.gv`;			\
+	if grep "$$sum" $@ >/dev/null 2>&1; then			\
+	  echo "vswitch.gv unchanged, not regenerating vswitch.pic";	\
+	  touch $@;							\
+	else								\
+	  echo "regenerating vswitch.pic";				\
+	  (echo ".\\\" Generated from vswitch.gv with cksum \"$$sum\"";	\
+	   dot -T plain < $(srcdir)/vswitchd/vswitch.gv			\
+	    | $(srcdir)/ovsdb/dot2pic) > $@;				\
+	fi
+else
+	touch $@
+endif
+EXTRA_DIST += vswitchd/vswitch.gv vswitchd/vswitch.pic
 
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml

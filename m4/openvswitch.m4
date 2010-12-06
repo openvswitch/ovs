@@ -202,21 +202,8 @@ AC_DEFUN([OVS_CHECK_DOT],
        ovs_cv_dot=yes
      else
        ovs_cv_dot=no
-     fi])])
-
-dnl Check whether to build E-R diagrams.
-AC_DEFUN([OVS_CHECK_ER_DIAGRAMS],
-  [AC_REQUIRE([OVS_CHECK_DOT])
-   AC_REQUIRE([OVS_CHECK_PYTHON])
-   AC_CACHE_CHECK(
-    [whether to build E-R diagrams for database],
-    [ovs_cv_er_diagrams],
-    [if test $ovs_cv_dot != no && test $ovs_cv_python != no; then
-       ovs_cv_er_diagrams=yes
-     else
-       ovs_cv_er_diagrams=no
      fi])
-   AM_CONDITIONAL([BUILD_ER_DIAGRAMS], [test $ovs_cv_er_diagrams = yes])])
+   AM_CONDITIONAL([HAVE_DOT], [test "$ovs_cv_dot" = yes])])
 
 dnl Checks for pyuic4.
 AC_DEFUN([OVS_CHECK_PYUIC4],
