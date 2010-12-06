@@ -31,6 +31,7 @@ struct list {
 #define LIST_INITIALIZER(LIST) { LIST, LIST }
 
 void list_init(struct list *);
+void list_poison(struct list *);
 
 /* List insertion. */
 void list_insert(struct list *, struct list *);

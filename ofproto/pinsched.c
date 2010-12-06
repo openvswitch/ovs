@@ -25,12 +25,16 @@
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "port-array.h"
-#include "queue.h"
 #include "random.h"
 #include "rconn.h"
 #include "status.h"
 #include "timeval.h"
 #include "vconn.h"
+
+struct pinqueue {
+    struct list packets;        /* Contains "struct ofpbuf"s. */
+    int n;                      /* Number of packets in 'packets'. */
+};
 
 struct pinsched {
     /* Client-supplied parameters. */
@@ -38,7 +42,7 @@ struct pinsched {
     int burst_limit;          /* Maximum token bucket size, in packets. */
 
     /* One queue per physical port. */
-    struct port_array queues;   /* Array of "struct ovs_queue *". */
+    struct port_array queues;   /* Array of "struct pinqueue *"s. */
     int n_queued;               /* Sum over queues[*].n. */
     unsigned int last_tx_port;  /* Last port checked in round-robin. */
 
@@ -64,11 +68,10 @@ struct pinsched {
 };
 
 static struct ofpbuf *
-dequeue_packet(struct pinsched *ps, struct ovs_queue *q,
-               unsigned int port_no)
+dequeue_packet(struct pinsched *ps, struct pinqueue *q, unsigned int port_no)
 {
-    struct ofpbuf *packet = queue_pop_head(q);
-    if (!q->n) {
+    struct ofpbuf *packet = ofpbuf_from_list(list_pop_front(&q->packets));
+    if (--q->n == 0) {
         free(q);
         port_array_delete(&ps->queues, port_no);
     }
@@ -80,11 +83,11 @@ dequeue_packet(struct pinsched *ps, struct ovs_queue *q,
 static void
 drop_packet(struct pinsched *ps)
 {
-    struct ovs_queue *longest;  /* Queue currently selected as longest. */
+    struct pinqueue *longest;   /* Queue currently selected as longest. */
     int n_longest;              /* # of queues of same length as 'longest'. */
     unsigned int longest_port_no;
     unsigned int port_no;
-    struct ovs_queue *q;
+    struct pinqueue *q;
 
     ps->n_queue_dropped++;
 
@@ -115,7 +118,7 @@ drop_packet(struct pinsched *ps)
 static struct ofpbuf *
 get_tx_packet(struct pinsched *ps)
 {
-    struct ovs_queue *q = port_array_next(&ps->queues, &ps->last_tx_port);
+    struct pinqueue *q = port_array_next(&ps->queues, &ps->last_tx_port);
     if (!q) {
         q = port_array_first(&ps->queues, &ps->last_tx_port);
     }
@@ -161,7 +164,7 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         cb(packet, aux);
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
-        struct ovs_queue *q;
+        struct pinqueue *q;
 
         /* We are called with a buffer obtained from dpif_recv() that has much
          * more allocated space than actual content most of the time.  Since
@@ -175,10 +178,12 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         q = port_array_get(&ps->queues, port_no);
         if (!q) {
             q = xmalloc(sizeof *q);
-            queue_init(q);
+            list_init(&q->packets);
+            q->n = 0;
             port_array_set(&ps->queues, port_no, q);
         }
-        queue_push_tail(q, packet);
+        list_push_back(&q->packets, &packet->list_node);
+        q->n++;
         ps->n_queued++;
         ps->n_limited++;
     }
@@ -254,11 +259,11 @@ void
 pinsched_destroy(struct pinsched *ps)
 {
     if (ps) {
-        struct ovs_queue *queue;
+        struct pinqueue *queue;
         unsigned int port_no;
 
         PORT_ARRAY_FOR_EACH (queue, &ps->queues, port_no) {
-            queue_destroy(queue);
+            ofpbuf_list_delete(&queue->packets);
             free(queue);
         }
         port_array_destroy(&ps->queues);

@@ -17,7 +17,6 @@
 #ifndef RCONN_H
 #define RCONN_H 1
 
-#include "queue.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>

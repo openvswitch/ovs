@@ -18,6 +18,7 @@
 #define OFPBUF_H 1
 
 #include <stddef.h>
+#include "list.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -37,7 +38,7 @@ struct ofpbuf {
     void *l4;                   /* Transport-level header. */
     void *l7;                   /* Application data. */
 
-    struct ofpbuf *next;        /* Next in a list of ofpbufs. */
+    struct list list_node;      /* Private list element for use by owner. */
     void *private_p;            /* Private pointer for use by owner. */
 };
 
@@ -79,6 +80,12 @@ void *ofpbuf_pull(struct ofpbuf *, size_t);
 void *ofpbuf_try_pull(struct ofpbuf *, size_t);
 
 char *ofpbuf_to_string(const struct ofpbuf *, size_t maxbytes);
+
+static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
+{
+    return CONTAINER_OF(list, struct ofpbuf, list_node);
+}
+void ofpbuf_list_delete(struct list *);
 
 #ifdef  __cplusplus
 }

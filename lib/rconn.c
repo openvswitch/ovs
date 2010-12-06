@@ -74,7 +74,7 @@ struct rconn {
     char *target;               /* vconn name, passed to vconn_open(). */
     bool reliable;
 
-    struct ovs_queue txq;
+    struct list txq;            /* Contains "struct ofpbuf"s. */
 
     int backoff;
     int max_backoff;
@@ -182,7 +182,7 @@ rconn_create(int probe_interval, int max_backoff)
     rc->target = xstrdup("void");
     rc->reliable = false;
 
-    queue_init(&rc->txq);
+    list_init(&rc->txq);
 
     rc->backoff = 0;
     rc->max_backoff = max_backoff ? max_backoff : 8;
@@ -318,7 +318,7 @@ rconn_destroy(struct rconn *rc)
         free(rc->target);
         vconn_close(rc->vconn);
         flush_queue(rc);
-        queue_destroy(&rc->txq);
+        ofpbuf_list_delete(&rc->txq);
         for (i = 0; i < rc->n_monitors; i++) {
             vconn_close(rc->monitors[i]);
         }
@@ -408,16 +408,16 @@ run_CONNECTING(struct rconn *rc)
 static void
 do_tx_work(struct rconn *rc)
 {
-    if (!rc->txq.n) {
+    if (list_is_empty(&rc->txq)) {
         return;
     }
-    while (rc->txq.n > 0) {
+    while (!list_is_empty(&rc->txq)) {
         int error = try_send(rc);
         if (error) {
             break;
         }
     }
-    if (!rc->txq.n) {
+    if (list_is_empty(&rc->txq)) {
         poll_immediate_wake();
     }
 }
@@ -521,7 +521,7 @@ rconn_run_wait(struct rconn *rc)
         poll_timer_wait_until(expires * 1000);
     }
 
-    if ((rc->state & (S_ACTIVE | S_IDLE)) && rc->txq.n) {
+    if ((rc->state & (S_ACTIVE | S_IDLE)) && !list_is_empty(&rc->txq)) {
         vconn_wait(rc->vconn, WAIT_SEND);
     }
 }
@@ -590,13 +590,13 @@ rconn_send(struct rconn *rc, struct ofpbuf *b,
         if (counter) {
             rconn_packet_counter_inc(counter);
         }
-        queue_push_tail(&rc->txq, b);
+        list_push_back(&rc->txq, &b->list_node);
 
         /* If the queue was empty before we added 'b', try to send some
          * packets.  (But if the queue had packets in it, it's because the
          * vconn is backlogged and there's no point in stuffing more into it
          * now.  We'll get back to that in rconn_run().) */
-        if (rc->txq.n == 1) {
+        if (rc->txq.next == &b->list_node) {
             try_send(rc);
         }
         return 0;
@@ -920,11 +920,18 @@ rconn_set_target__(struct rconn *rc, const char *target, const char *name)
 static int
 try_send(struct rconn *rc)
 {
-    int retval = 0;
-    struct ofpbuf *next = rc->txq.head->next;
-    struct rconn_packet_counter *counter = rc->txq.head->private_p;
-    retval = vconn_send(rc->vconn, rc->txq.head);
+    struct ofpbuf *msg = ofpbuf_from_list(rc->txq.next);
+    struct rconn_packet_counter *counter = msg->private_p;
+    int retval;
+
+    /* Eagerly remove 'msg' from the txq.  We can't remove it from the list
+     * after sending, if sending is successful, because it is then owned by the
+     * vconn, which might have freed it already. */
+    list_remove(&msg->list_node);
+
+    retval = vconn_send(rc->vconn, msg);
     if (retval) {
+        list_push_front(&rc->txq, &msg->list_node);
         if (retval != EAGAIN) {
             report_error(rc, retval);
             disconnect(rc, retval);
@@ -936,7 +943,6 @@ try_send(struct rconn *rc)
     if (counter) {
         rconn_packet_counter_dec(counter);
     }
-    queue_advance_head(&rc->txq, next);
     return 0;
 }
 
@@ -1009,11 +1015,11 @@ disconnect(struct rconn *rc, int error)
 static void
 flush_queue(struct rconn *rc)
 {
-    if (!rc->txq.n) {
+    if (list_is_empty(&rc->txq)) {
         return;
     }
-    while (rc->txq.n > 0) {
-        struct ofpbuf *b = queue_pop_head(&rc->txq);
+    while (!list_is_empty(&rc->txq)) {
+        struct ofpbuf *b = ofpbuf_from_list(list_pop_front(&rc->txq));
         struct rconn_packet_counter *counter = b->private_p;
         if (counter) {
             rconn_packet_counter_dec(counter);

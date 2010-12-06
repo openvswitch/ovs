@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,14 @@ void
 list_init(struct list *list)
 {
     list->next = list->prev = list;
+}
+
+/* Initializes 'list' with pointers that will (probably) cause segfaults if
+ * dereferenced and, better yet, show up clearly in a debugger. */
+void
+list_poison(struct list *list)
+{
+    memset(list, 0xcc, sizeof *list);
 }
 
 /* Inserts 'elem' just before 'before'. */

@@ -34,7 +34,6 @@
 #include "ofp-util.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
-#include "queue.h"
 #include "rconn.h"
 #include "shash.h"
 #include "timeval.h"
@@ -89,7 +88,6 @@ static packet_handler_func process_echo_request;
 struct lswitch *
 lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
-    const struct ofpbuf *b;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
@@ -127,10 +125,14 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
 
-    for (b = cfg->default_flows; b; b = b->next) {
-        queue_tx(sw, rconn, ofpbuf_clone(b));
-    }
+    if (cfg->default_flows) {
+        const struct ofpbuf *b;
 
+        LIST_FOR_EACH (b, list_node, cfg->default_flows) {
+            queue_tx(sw, rconn, ofpbuf_clone(b));
+        }
+    }
+    
     return sw;
 }
 

@@ -36,7 +36,7 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
     b->allocated = allocated;
     b->size = 0;
     b->l2 = b->l3 = b->l4 = b->l7 = NULL;
-    b->next = NULL;
+    list_poison(&b->list_node);
     b->private_p = NULL;
 }
 
@@ -343,4 +343,17 @@ ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
                   ofpbuf_headroom(b), ofpbuf_tailroom(b));
     ds_put_hex_dump(&s, b->data, MIN(b->size, maxbytes), 0, false);
     return ds_cstr(&s);
+}
+
+/* Removes each of the "struct ofpbuf"s on 'list' from the list and frees
+ * them.  */
+void
+ofpbuf_list_delete(struct list *list)
+{
+    struct ofpbuf *b, *next;
+
+    LIST_FOR_EACH_SAFE (b, next, list_node, list) {
+        list_remove(&b->list_node);
+        ofpbuf_delete(b);
+    }
 }

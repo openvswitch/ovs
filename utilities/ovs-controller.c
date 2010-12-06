@@ -77,9 +77,9 @@ static uint32_t default_queue = UINT32_MAX;
 /* -Q, --port-queue: map from port name to port number (cast to void *). */
 static struct shash port_queues = SHASH_INITIALIZER(&port_queues);
 
-/* --with-flows: File with flows to send to switch, or null to not load
- * any default flows. */
-static struct ovs_queue default_flows = OVS_QUEUE_INITIALIZER;
+/* --with-flows: Flows to send to switch, or an empty list not to send any
+ * default flows. */
+static struct list default_flows = LIST_INITIALIZER(&default_flows);
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -229,7 +229,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
                 : learn_macs ? LSW_LEARN
                 : LSW_FLOOD);
     cfg.max_idle = set_up_flows ? max_idle : -1;
-    cfg.default_flows = default_flows.head;
+    cfg.default_flows = &default_flows;
     cfg.default_queue = default_queue;
     cfg.port_queues = &port_queues;
     sw->lswitch = lswitch_create(sw->rconn, &cfg);
@@ -269,7 +269,7 @@ read_flow_file(const char *name)
     }
 
     while ((b = parse_ofp_add_flow_file(stream)) != NULL) {
-        queue_push_tail(&default_flows, b);
+        list_push_back(&default_flows, &b->list_node);
     }
 
     fclose(stream);

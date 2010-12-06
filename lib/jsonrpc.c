@@ -28,7 +28,6 @@
 #include "list.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
-#include "queue.h"
 #include "reconnect.h"
 #include "stream.h"
 #include "timeval.h"
@@ -47,7 +46,7 @@ struct jsonrpc {
     struct jsonrpc_msg *received;
 
     /* Output. */
-    struct ovs_queue output;
+    struct list output;         /* Contains "struct ofpbuf"s. */
     size_t backlog;
 };
 
@@ -86,7 +85,7 @@ jsonrpc_open(struct stream *stream)
     rpc->name = xstrdup(stream_get_name(stream));
     rpc->stream = stream;
     byteq_init(&rpc->input);
-    queue_init(&rpc->output);
+    list_init(&rpc->output);
 
     return rpc;
 }
@@ -109,8 +108,8 @@ jsonrpc_run(struct jsonrpc *rpc)
     }
 
     stream_run(rpc->stream);
-    while (!queue_is_empty(&rpc->output)) {
-        struct ofpbuf *buf = rpc->output.head;
+    while (!list_is_empty(&rpc->output)) {
+        struct ofpbuf *buf = ofpbuf_from_list(rpc->output.next);
         int retval;
 
         retval = stream_send(rpc->stream, buf->data, buf->size);
@@ -118,7 +117,8 @@ jsonrpc_run(struct jsonrpc *rpc)
             rpc->backlog -= retval;
             ofpbuf_pull(buf, retval);
             if (!buf->size) {
-                ofpbuf_delete(queue_pop_head(&rpc->output));
+                list_remove(&buf->list_node);
+                ofpbuf_delete(buf);
             }
         } else {
             if (retval != -EAGAIN) {
@@ -136,7 +136,7 @@ jsonrpc_wait(struct jsonrpc *rpc)
 {
     if (!rpc->status) {
         stream_run_wait(rpc->stream);
-        if (!queue_is_empty(&rpc->output)) {
+        if (!list_is_empty(&rpc->output)) {
             stream_send_wait(rpc->stream);
         }
     }
@@ -215,10 +215,10 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
     buf = xmalloc(sizeof *buf);
     ofpbuf_use(buf, s, length);
     buf->size = length;
-    queue_push_tail(&rpc->output, buf);
+    list_push_back(&rpc->output, &buf->list_node);
     rpc->backlog += length;
 
-    if (rpc->output.n == 1) {
+    if (rpc->backlog == length) {
         jsonrpc_run(rpc);
     }
     return rpc->status;
@@ -308,7 +308,7 @@ jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 
     for (;;) {
         jsonrpc_run(rpc);
-        if (queue_is_empty(&rpc->output) || rpc->status) {
+        if (list_is_empty(&rpc->output) || rpc->status) {
             return rpc->status;
         }
         jsonrpc_wait(rpc);
@@ -412,7 +412,7 @@ jsonrpc_cleanup(struct jsonrpc *rpc)
     jsonrpc_msg_destroy(rpc->received);
     rpc->received = NULL;
 
-    queue_clear(&rpc->output);
+    ofpbuf_list_delete(&rpc->output);
     rpc->backlog = 0;
 }
 

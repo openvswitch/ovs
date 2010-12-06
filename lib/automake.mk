@@ -106,8 +106,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/port-array.h \
 	lib/process.c \
 	lib/process.h \
-	lib/queue.c \
-	lib/queue.h \
 	lib/random.c \
 	lib/random.h \
 	lib/rconn.c \

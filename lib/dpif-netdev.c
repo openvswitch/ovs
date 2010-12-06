@@ -44,7 +44,6 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "queue.h"
 #include "shash.h"
 #include "timeval.h"
 #include "util.h"
@@ -70,7 +69,8 @@ struct dp_netdev {
     bool destroyed;
 
     bool drop_frags;            /* Drop all IP fragments, if true. */
-    struct ovs_queue queues[N_QUEUES]; /* Messages queued for dpif_recv(). */
+    struct list queues[N_QUEUES]; /* Contain ofpbufs queued for dpif_recv(). */
+    size_t queue_len[N_QUEUES]; /* Number of packets in each queue. */
     struct hmap flow_table;     /* Flow table. */
 
     /* Statistics. */
@@ -187,7 +187,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->open_cnt = 0;
     dp->drop_frags = false;
     for (i = 0; i < N_QUEUES; i++) {
-        queue_init(&dp->queues[i]);
+        list_init(&dp->queues[i]);
     }
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
@@ -244,7 +244,7 @@ dp_netdev_free(struct dp_netdev *dp)
         do_del_port(dp, port->port_no);
     }
     for (i = 0; i < N_QUEUES; i++) {
-        queue_destroy(&dp->queues[i]);
+        ofpbuf_list_delete(&dp->queues[i]);
     }
     hmap_destroy(&dp->flow_table);
     free(dp->name);
@@ -852,7 +852,7 @@ dpif_netdev_recv_set_mask(struct dpif *dpif, int listen_mask)
     }
 }
 
-static struct ovs_queue *
+static int
 find_nonempty_queue(struct dpif *dpif)
 {
     struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
@@ -861,20 +861,24 @@ find_nonempty_queue(struct dpif *dpif)
     int i;
 
     for (i = 0; i < N_QUEUES; i++) {
-        struct ovs_queue *q = &dp->queues[i];
-        if (q->n && mask & (1u << i)) {
-            return q;
+        struct list *queue = &dp->queues[i];
+        if (!list_is_empty(queue) && mask & (1u << i)) {
+            return i;
         }
     }
-    return NULL;
+    return -1;
 }
 
 static int
 dpif_netdev_recv(struct dpif *dpif, struct ofpbuf **bufp)
 {
-    struct ovs_queue *q = find_nonempty_queue(dpif);
-    if (q) {
-        *bufp = queue_pop_head(q);
+    int queue_idx = find_nonempty_queue(dpif);
+    if (queue_idx >= 0) {
+        struct dp_netdev *dp = get_dp_netdev(dpif);
+
+        *bufp = ofpbuf_from_list(list_pop_front(&dp->queues[queue_idx]));
+        dp->queue_len[queue_idx]--;
+
         return 0;
     } else {
         return EAGAIN;
@@ -884,8 +888,7 @@ dpif_netdev_recv(struct dpif *dpif, struct ofpbuf **bufp)
 static void
 dpif_netdev_recv_wait(struct dpif *dpif)
 {
-    struct ovs_queue *q = find_nonempty_queue(dpif);
-    if (q) {
+    if (find_nonempty_queue(dpif) >= 0) {
         poll_immediate_wake();
     } else {
         /* No messages ready to be received, and dp_wait() will ensure that we
@@ -1128,12 +1131,11 @@ static int
 dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
                          int queue_no, int port_no, uint32_t arg)
 {
-    struct ovs_queue *q = &dp->queues[queue_no];
     struct odp_msg *header;
     struct ofpbuf *msg;
     size_t msg_size;
 
-    if (q->n >= MAX_QUEUE_LEN) {
+    if (dp->queue_len[queue_no] >= MAX_QUEUE_LEN) {
         dp->n_lost++;
         return ENOBUFS;
     }
@@ -1146,7 +1148,8 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
     header->port = port_no;
     header->arg = arg;
     ofpbuf_put(msg, packet->data, packet->size);
-    queue_push_tail(q, msg);
+    list_push_back(&dp->queues[queue_no], &msg->list_node);
+    dp->queue_len[queue_no]++;
 
     return 0;
 }
