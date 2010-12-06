@@ -76,10 +76,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
 
-typedef void packet_handler_func(struct lswitch *, struct rconn *, void *);
-static packet_handler_func process_switch_features;
-static packet_handler_func process_packet_in;
-static packet_handler_func process_echo_request;
+static void process_switch_features(struct lswitch *,
+                                    struct ofp_switch_features *);
+static void process_packet_in(struct lswitch *, struct rconn *,
+                              const struct ofp_packet_in *);
+static void process_echo_request(struct lswitch *, struct rconn *,
+                                 const struct ofp_header *);
 
 /* Creates and returns a new learning switch whose configuration is given by
  * 'cfg'.
@@ -180,38 +182,9 @@ void
 lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
                        const struct ofpbuf *msg)
 {
-    struct processor {
-        uint8_t type;
-        size_t min_size;
-        packet_handler_func *handler;
-    };
-    static const struct processor processors[] = {
-        {
-            OFPT_ECHO_REQUEST,
-            sizeof(struct ofp_header),
-            process_echo_request
-        },
-        {
-            OFPT_FEATURES_REPLY,
-            sizeof(struct ofp_switch_features),
-            process_switch_features
-        },
-        {
-            OFPT_PACKET_IN,
-            offsetof(struct ofp_packet_in, data),
-            process_packet_in
-        },
-        {
-            OFPT_FLOW_REMOVED,
-            sizeof(struct ofp_flow_removed),
-            NULL
-        },
-    };
-    const size_t n_processors = ARRAY_SIZE(processors);
-    const struct processor *p;
-    struct ofp_header *oh;
+    const struct ofp_header *oh = msg->data;
+    const struct ofputil_msg_type *type;
 
-    oh = msg->data;
     if (sw->datapath_id == 0
         && oh->type != OFPT_ECHO_REQUEST
         && oh->type != OFPT_FEATURES_REPLY) {
@@ -219,26 +192,71 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         return;
     }
 
-    for (p = processors; p < &processors[n_processors]; p++) {
-        if (oh->type == p->type) {
-            if (msg->size < p->min_size) {
-                VLOG_WARN_RL(&rl, "%016llx: %s: too short (%zu bytes) for "
-                             "type %"PRIu8" (min %zu)", sw->datapath_id,
-                             rconn_get_name(rconn), msg->size, oh->type,
-                             p->min_size);
-                return;
-            }
-            if (p->handler) {
-                (p->handler)(sw, rconn, msg->data);
-            }
-            return;
+    ofputil_decode_msg_type(oh, &type);
+    switch (ofputil_msg_type_code(type)) {
+    case OFPUTIL_OFPT_ECHO_REQUEST:
+        process_echo_request(sw, rconn, msg->data);
+        break;
+
+    case OFPUTIL_OFPT_FEATURES_REPLY:
+        process_switch_features(sw, msg->data);
+        break;
+
+    case OFPUTIL_OFPT_PACKET_IN:
+        process_packet_in(sw, rconn, msg->data);
+        break;
+
+    case OFPUTIL_OFPT_FLOW_REMOVED:
+        /* Nothing to do. */
+        break;
+
+    case OFPUTIL_INVALID:
+    case OFPUTIL_OFPT_HELLO:
+    case OFPUTIL_OFPT_ERROR:
+    case OFPUTIL_OFPT_ECHO_REPLY:
+    case OFPUTIL_OFPT_FEATURES_REQUEST:
+    case OFPUTIL_OFPT_GET_CONFIG_REQUEST:
+    case OFPUTIL_OFPT_GET_CONFIG_REPLY:
+    case OFPUTIL_OFPT_SET_CONFIG:
+    case OFPUTIL_OFPT_PORT_STATUS:
+    case OFPUTIL_OFPT_PACKET_OUT:
+    case OFPUTIL_OFPT_FLOW_MOD:
+    case OFPUTIL_OFPT_PORT_MOD:
+    case OFPUTIL_OFPT_BARRIER_REQUEST:
+    case OFPUTIL_OFPT_BARRIER_REPLY:
+    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST:
+    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY:
+    case OFPUTIL_OFPST_DESC_REQUEST:
+    case OFPUTIL_OFPST_FLOW_REQUEST:
+    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
+    case OFPUTIL_OFPST_TABLE_REQUEST:
+    case OFPUTIL_OFPST_PORT_REQUEST:
+    case OFPUTIL_OFPST_QUEUE_REQUEST:
+    case OFPUTIL_OFPST_DESC_REPLY:
+    case OFPUTIL_OFPST_FLOW_REPLY:
+    case OFPUTIL_OFPST_QUEUE_REPLY:
+    case OFPUTIL_OFPST_PORT_REPLY:
+    case OFPUTIL_OFPST_TABLE_REPLY:
+    case OFPUTIL_OFPST_AGGREGATE_REPLY:
+    case OFPUTIL_NXT_STATUS_REQUEST:
+    case OFPUTIL_NXT_STATUS_REPLY:
+    case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
+    case OFPUTIL_NXT_ROLE_REQUEST:
+    case OFPUTIL_NXT_ROLE_REPLY:
+    case OFPUTIL_NXT_SET_FLOW_FORMAT:
+    case OFPUTIL_NXT_FLOW_MOD:
+    case OFPUTIL_NXT_FLOW_REMOVED:
+    case OFPUTIL_NXST_FLOW_REQUEST:
+    case OFPUTIL_NXST_AGGREGATE_REQUEST:
+    case OFPUTIL_NXST_FLOW_REPLY:
+    case OFPUTIL_NXST_AGGREGATE_REPLY:
+    default:
+        if (VLOG_IS_DBG_ENABLED()) {
+            char *s = ofp_to_string(msg->data, msg->size, 2);
+            VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
+                        sw->datapath_id, s);
+            free(s);
         }
-    }
-    if (VLOG_IS_DBG_ENABLED()) {
-        char *s = ofp_to_string(msg->data, msg->size, 2);
-        VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
-                    sw->datapath_id, s);
-        free(s);
     }
 }
 
@@ -280,20 +298,14 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
 }
 
 static void
-process_switch_features(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
-                        void *osf_)
+process_switch_features(struct lswitch *sw, struct ofp_switch_features *osf)
 {
-    struct ofp_switch_features *osf = osf_;
     size_t n_ports;
     size_t i;
 
-    if (check_ofp_message_array(&osf->header, OFPT_FEATURES_REPLY,
-                                sizeof *osf, sizeof *osf->ports, &n_ports)) {
-        return;
-    }
-
     sw->datapath_id = ntohll(osf->datapath_id);
 
+    n_ports = (ntohs(osf->header.length) - sizeof *osf) / sizeof *osf->ports;
     for (i = 0; i < n_ports; i++) {
         struct ofp_phy_port *opp = &osf->ports[i];
         struct lswitch_port *lp;
@@ -364,9 +376,9 @@ get_queue_id(const struct lswitch *sw, uint16_t in_port)
 }
 
 static void
-process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
+process_packet_in(struct lswitch *sw, struct rconn *rconn,
+                  const struct ofp_packet_in *opi)
 {
-    struct ofp_packet_in *opi = opi_;
     uint16_t in_port = ntohs(opi->in_port);
     uint32_t queue_id;
     uint16_t out_port;
@@ -388,7 +400,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     /* Extract flow data from 'opi' into 'flow'. */
     pkt_ofs = offsetof(struct ofp_packet_in, data);
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
-    pkt.data = opi->data;
+    pkt.data = (void *) opi->data;
     pkt.size = pkt_len;
     flow_extract(&pkt, 0, in_port, &flow);
 
@@ -456,8 +468,8 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 }
 
 static void
-process_echo_request(struct lswitch *sw, struct rconn *rconn, void *rq_)
+process_echo_request(struct lswitch *sw, struct rconn *rconn,
+                     const struct ofp_header *rq)
 {
-    struct ofp_header *rq = rq_;
     queue_tx(sw, rconn, make_echo_reply(rq));
 }

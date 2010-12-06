@@ -59,8 +59,9 @@ struct status_reply {
 
 int
 switch_status_handle_request(struct switch_status *ss, struct rconn *rconn,
-                             struct nicira_header *request)
+                             const struct ofp_header *oh)
 {
+    const struct nicira_header *request = (const struct nicira_header *) oh;
     struct status_category *c;
     struct nicira_header *reply;
     struct status_reply sr;

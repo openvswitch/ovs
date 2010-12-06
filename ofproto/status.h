@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,16 @@
 
 #include "compiler.h"
 
-struct nicira_header;
-struct rconn;
+struct ofp_header;
 struct ofproto;
+struct rconn;
 struct status_reply;
 
 struct switch_status *switch_status_create(const struct ofproto *);
 void switch_status_destroy(struct switch_status *);
 
 int switch_status_handle_request(struct switch_status *, struct rconn *,
-                                 struct nicira_header *);
+                                 const struct ofp_header *);
 
 typedef void status_cb_func(struct status_reply *, void *aux);
 struct status_category *switch_status_register(struct switch_status *,

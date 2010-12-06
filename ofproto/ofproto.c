@@ -2479,15 +2479,14 @@ hton_ofp_phy_port(struct ofp_phy_port *opp)
 }
 
 static int
-handle_echo_request(struct ofconn *ofconn, struct ofp_header *oh)
+handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofp_header *rq = oh;
-    queue_tx(make_echo_reply(rq), ofconn, ofconn->reply_counter);
+    queue_tx(make_echo_reply(oh), ofconn, ofconn->reply_counter);
     return 0;
 }
 
 static int
-handle_features_request(struct ofconn *ofconn, struct ofp_header *oh)
+handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_switch_features *osf;
     struct ofpbuf *buf;
@@ -2521,7 +2520,7 @@ handle_features_request(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static int
-handle_get_config_request(struct ofconn *ofconn, struct ofp_header *oh)
+handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofpbuf *buf;
     struct ofp_switch_config *osc;
@@ -2542,16 +2541,9 @@ handle_get_config_request(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static int
-handle_set_config(struct ofconn *ofconn, struct ofp_switch_config *osc)
+handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 {
-    uint16_t flags;
-    int error;
-
-    error = check_ofp_message(&osc->header, OFPT_SET_CONFIG, sizeof *osc);
-    if (error) {
-        return error;
-    }
-    flags = ntohs(osc->flags);
+    uint16_t flags = ntohs(osc->flags);
 
     if (ofconn->type == OFCONN_PRIMARY && ofconn->role != NX_ROLE_SLAVE) {
         switch (flags & OFPC_FRAG_MASK) {
@@ -3059,7 +3051,7 @@ reject_slave_controller(struct ofconn *ofconn, const const char *msg_type)
 }
 
 static int
-handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
+handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn->ofproto;
     struct ofp_packet_out *opo;
@@ -3080,7 +3072,7 @@ handle_packet_out(struct ofconn *ofconn, struct ofp_header *oh)
     }
 
     /* Get ofp_packet_out. */
-    request.data = oh;
+    request.data = (void *) oh;
     request.size = ntohs(oh->length);
     opo = ofpbuf_try_pull(&request, offsetof(struct ofp_packet_out, actions));
     if (!opo) {
@@ -3154,10 +3146,10 @@ update_port_config(struct ofproto *p, struct ofport *port,
 }
 
 static int
-handle_port_mod(struct ofconn *ofconn, struct ofp_header *oh)
+handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn->ofproto;
-    const struct ofp_port_mod *opm;
+    const struct ofp_port_mod *opm = (const struct ofp_port_mod *) oh;
     struct ofport *port;
     int error;
 
@@ -3165,11 +3157,6 @@ handle_port_mod(struct ofconn *ofconn, struct ofp_header *oh)
     if (error) {
         return error;
     }
-    error = check_ofp_message(oh, OFPT_PORT_MOD, sizeof *opm);
-    if (error) {
-        return error;
-    }
-    opm = (struct ofp_port_mod *) oh;
 
     port = get_port(p, ofp_port_to_odp_port(ntohs(opm->port_no)));
     if (!port) {
@@ -3199,9 +3186,11 @@ make_ofp_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
 }
 
 static struct ofpbuf *
-start_ofp_stats_reply(const struct ofp_stats_request *request, size_t body_len)
+start_ofp_stats_reply(const struct ofp_header *request, size_t body_len)
 {
-    return make_ofp_stats_reply(request->header.xid, request->type, body_len);
+    const struct ofp_stats_request *osr
+        = (const struct ofp_stats_request *) request;
+    return make_ofp_stats_reply(osr->header.xid, osr->type, body_len);
 }
 
 static void *
@@ -3257,7 +3246,7 @@ append_nxstats_reply(size_t nbytes, struct ofconn *ofconn,
 
 static int
 handle_desc_stats_request(struct ofconn *ofconn,
-                          struct ofp_stats_request *request)
+                          const struct ofp_header *request)
 {
     struct ofproto *p = ofconn->ofproto;
     struct ofp_desc_stats *ods;
@@ -3278,7 +3267,7 @@ handle_desc_stats_request(struct ofconn *ofconn,
 
 static int
 handle_table_stats_request(struct ofconn *ofconn,
-                           struct ofp_stats_request *request)
+                           const struct ofp_header *request)
 {
     struct ofproto *p = ofconn->ofproto;
     struct ofp_table_stats *ots;
@@ -3331,21 +3320,15 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
 }
 
 static int
-handle_port_stats_request(struct ofconn *ofconn, struct ofp_stats_request *osr,
-                          size_t arg_size)
+handle_port_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn->ofproto;
-    struct ofp_port_stats_request *psr;
+    const struct ofp_port_stats_request *psr = ofputil_stats_body(oh);
     struct ofp_port_stats *ops;
     struct ofpbuf *msg;
     struct ofport *port;
 
-    if (arg_size != sizeof *psr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    psr = (struct ofp_port_stats_request *) osr->body;
-
-    msg = start_ofp_stats_reply(osr, sizeof *ops * 16);
+    msg = start_ofp_stats_reply(oh, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
         port = get_port(p, ofp_port_to_odp_port(ntohs(psr->port_no)));
         if (port) {
@@ -3460,19 +3443,13 @@ is_valid_table(uint8_t table_id)
 }
 
 static int
-handle_flow_stats_request(struct ofconn *ofconn,
-                          const struct ofp_stats_request *osr, size_t arg_size)
+handle_flow_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofp_flow_stats_request *fsr;
+    const struct ofp_flow_stats_request *fsr = ofputil_stats_body(oh);
     struct ofpbuf *reply;
 
-    if (arg_size != sizeof *fsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    fsr = (struct ofp_flow_stats_request *) osr->body;
-
     COVERAGE_INC(ofproto_flows_req);
-    reply = start_ofp_stats_reply(osr, 1024);
+    reply = start_ofp_stats_reply(oh, 1024);
     if (is_valid_table(fsr->table_id)) {
         struct cls_cursor cursor;
         struct cls_rule target;
@@ -3530,21 +3507,28 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
 }
 
 static int
-handle_nxst_flow(struct ofconn *ofconn, struct ofpbuf *b)
+handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct nx_flow_stats_request *nfsr;
     struct cls_rule target;
     struct ofpbuf *reply;
+    struct ofpbuf b;
     int error;
 
+    b.data = (void *) oh;
+    b.size = ntohs(oh->length);
+
     /* Dissect the message. */
-    nfsr = ofpbuf_try_pull(b, sizeof *nfsr);
+    nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
     if (!nfsr) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
-    error = nx_pull_match(b, ntohs(nfsr->match_len), 0, &target);
+    error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &target);
     if (error) {
         return error;
+    }
+    if (b.size) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     COVERAGE_INC(ofproto_flows_req);
@@ -3639,23 +3623,17 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
 
 static int
 handle_aggregate_stats_request(struct ofconn *ofconn,
-                               const struct ofp_stats_request *osr,
-                               size_t arg_size)
+                               const struct ofp_header *oh)
 {
-    struct ofp_aggregate_stats_request *request;
+    const struct ofp_aggregate_stats_request *request = ofputil_stats_body(oh);
     struct ofp_aggregate_stats_reply *reply;
     struct cls_rule target;
     struct ofpbuf *msg;
 
-    if (arg_size != sizeof *request) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    request = (struct ofp_aggregate_stats_request *) osr->body;
-
     ofputil_cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0,
                                 &target);
 
-    msg = start_ofp_stats_reply(osr, sizeof *reply);
+    msg = start_ofp_stats_reply(oh, sizeof *reply);
     reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
     query_aggregate_stats(ofconn->ofproto, &target, request->out_port,
                           request->table_id, reply);
@@ -3664,22 +3642,29 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 }
 
 static int
-handle_nxst_aggregate(struct ofconn *ofconn, struct ofpbuf *b)
+handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct nx_aggregate_stats_request *request;
     struct ofp_aggregate_stats_reply *reply;
     struct cls_rule target;
+    struct ofpbuf b;
     struct ofpbuf *buf;
     int error;
 
+    b.data = (void *) oh;
+    b.size = ntohs(oh->length);
+
     /* Dissect the message. */
-    request = ofpbuf_try_pull(b, sizeof *request);
+    request = ofpbuf_try_pull(&b, sizeof *request);
     if (!request) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
-    error = nx_pull_match(b, ntohs(request->match_len), 0, &target);
+    error = nx_pull_match(&b, ntohs(request->match_len), 0, &target);
     if (error) {
         return error;
+    }
+    if (b.size) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     /* Reply. */
@@ -3742,26 +3727,24 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
 }
 
 static int
-handle_queue_stats_request(struct ofconn *ofconn,
-                           const struct ofp_stats_request *osr,
-                           size_t arg_size)
+handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn->ofproto;
-    struct ofp_queue_stats_request *qsr;
+    const struct ofp_queue_stats_request *qsr;
     struct queue_stats_cbdata cbdata;
     struct ofport *port;
     unsigned int port_no;
     uint32_t queue_id;
 
-    if (arg_size != sizeof *qsr) {
+    qsr = ofputil_stats_body(oh);
+    if (!qsr) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
-    qsr = (struct ofp_queue_stats_request *) osr->body;
 
     COVERAGE_INC(ofproto_queue_req);
 
     cbdata.ofconn = ofconn;
-    cbdata.msg = start_ofp_stats_reply(osr, 128);
+    cbdata.msg = start_ofp_stats_reply(oh, 128);
 
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
@@ -3781,85 +3764,6 @@ handle_queue_stats_request(struct ofconn *ofconn,
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
 
     return 0;
-}
-
-static int
-handle_vendor_stats_request(struct ofconn *ofconn,
-                            struct ofp_stats_request *osr, size_t arg_size)
-{
-    struct nicira_stats_msg *nsm;
-    struct ofpbuf b;
-    ovs_be32 vendor;
-
-    if (arg_size < 4) {
-        VLOG_WARN_RL(&rl, "truncated vendor stats request body");
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    memcpy(&vendor, osr->body, sizeof vendor);
-    if (vendor != htonl(NX_VENDOR_ID)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
-    }
-
-    if (ntohs(osr->header.length) < sizeof(struct nicira_stats_msg)) {
-        VLOG_WARN_RL(&rl, "truncated Nicira stats request");
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    nsm = (struct nicira_stats_msg *) osr;
-    b.data = nsm;
-    b.size = ntohs(nsm->header.length);
-    switch (ntohl(nsm->subtype)) {
-    case NXST_FLOW:
-        return handle_nxst_flow(ofconn, &b);
-
-    case NXST_AGGREGATE:
-        return handle_nxst_aggregate(ofconn, &b);
-
-    default:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-    }
-}
-
-static int
-handle_stats_request(struct ofconn *ofconn, struct ofp_header *oh)
-{
-    struct ofp_stats_request *osr;
-    size_t arg_size;
-    int error;
-
-    error = check_ofp_message_array(oh, OFPT_STATS_REQUEST, sizeof *osr,
-                                    1, &arg_size);
-    if (error) {
-        return error;
-    }
-    osr = (struct ofp_stats_request *) oh;
-
-    switch (ntohs(osr->type)) {
-    case OFPST_DESC:
-        return handle_desc_stats_request(ofconn, osr);
-
-    case OFPST_FLOW:
-        return handle_flow_stats_request(ofconn, osr, arg_size);
-
-    case OFPST_AGGREGATE:
-        return handle_aggregate_stats_request(ofconn, osr, arg_size);
-
-    case OFPST_TABLE:
-        return handle_table_stats_request(ofconn, osr);
-
-    case OFPST_PORT:
-        return handle_port_stats_request(ofconn, osr, arg_size);
-
-    case OFPST_QUEUE:
-        return handle_queue_stats_request(ofconn, osr, arg_size);
-
-    case OFPST_VENDOR:
-        return handle_vendor_stats_request(ofconn, osr, arg_size);
-
-    default:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT);
-    }
 }
 
 static long long int
@@ -4171,7 +4075,7 @@ flow_mod_core(struct ofconn *ofconn, struct flow_mod *fm)
 }
 
 static int
-handle_ofpt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
+handle_ofpt_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_match orig_match;
     struct ofp_flow_mod *ofm;
@@ -4179,7 +4083,7 @@ handle_ofpt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
     struct ofpbuf b;
     int error;
 
-    b.data = oh;
+    b.data = (void *) oh;
     b.size = ntohs(oh->length);
 
     /* Dissect the message. */
@@ -4227,14 +4131,14 @@ handle_ofpt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static int
-handle_nxt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
+handle_nxt_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct nx_flow_mod *nfm;
     struct flow_mod fm;
     struct ofpbuf b;
     int error;
 
-    b.data = oh;
+    b.data = (void *) oh;
     b.size = ntohs(oh->length);
 
     /* Dissect the message. */
@@ -4266,33 +4170,22 @@ handle_nxt_flow_mod(struct ofconn *ofconn, struct ofp_header *oh)
 }
 
 static int
-handle_tun_id_from_cookie(struct ofconn *ofconn, struct nxt_tun_id_cookie *msg)
+handle_tun_id_from_cookie(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    int error;
-
-    error = check_ofp_message(&msg->header, OFPT_VENDOR, sizeof *msg);
-    if (error) {
-        return error;
-    }
+    const struct nxt_tun_id_cookie *msg
+        = (const struct nxt_tun_id_cookie *) oh;
 
     ofconn->flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
     return 0;
 }
 
 static int
-handle_role_request(struct ofconn *ofconn, struct nicira_header *msg)
+handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct nx_role_request *nrr;
+    struct nx_role_request *nrr = (struct nx_role_request *) oh;
     struct nx_role_request *reply;
     struct ofpbuf *buf;
     uint32_t role;
-
-    if (ntohs(msg->header.length) != sizeof *nrr) {
-        VLOG_WARN_RL(&rl, "received role request of length %u (expected %zu)",
-                     ntohs(msg->header.length), sizeof *nrr);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    nrr = (struct nx_role_request *) msg;
 
     if (ofconn->type != OFCONN_PRIMARY) {
         VLOG_WARN_RL(&rl, "ignoring role request on non-controller "
@@ -4320,8 +4213,7 @@ handle_role_request(struct ofconn *ofconn, struct nicira_header *msg)
     }
     ofconn->role = role;
 
-    reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, msg->header.xid,
-                           &buf);
+    reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, oh->xid, &buf);
     reply->role = htonl(role);
     queue_tx(buf, ofconn, ofconn->reply_counter);
 
@@ -4329,16 +4221,11 @@ handle_role_request(struct ofconn *ofconn, struct nicira_header *msg)
 }
 
 static int
-handle_nxt_set_flow_format(struct ofconn *ofconn,
-                           struct nxt_set_flow_format *msg)
+handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    const struct nxt_set_flow_format *msg
+        = (const struct nxt_set_flow_format *) oh;
     uint32_t format;
-    int error;
-
-    error = check_ofp_message(&msg->header, OFPT_VENDOR, sizeof *msg);
-    if (error) {
-        return error;
-    }
 
     format = ntohl(msg->format);
     if (format == NXFF_OPENFLOW10
@@ -4352,52 +4239,7 @@ handle_nxt_set_flow_format(struct ofconn *ofconn,
 }
 
 static int
-handle_vendor(struct ofconn *ofconn, void *msg)
-{
-    struct ofproto *p = ofconn->ofproto;
-    struct ofp_vendor_header *ovh = msg;
-    struct nicira_header *nh;
-
-    if (ntohs(ovh->header.length) < sizeof(struct ofp_vendor_header)) {
-        VLOG_WARN_RL(&rl, "received vendor message of length %u "
-                          "(expected at least %zu)",
-                   ntohs(ovh->header.length), sizeof(struct ofp_vendor_header));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    if (ovh->vendor != htonl(NX_VENDOR_ID)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
-    }
-    if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
-        VLOG_WARN_RL(&rl, "received Nicira vendor message of length %u "
-                          "(expected at least %zu)",
-                     ntohs(ovh->header.length), sizeof(struct nicira_header));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    nh = msg;
-    switch (ntohl(nh->subtype)) {
-    case NXT_STATUS_REQUEST:
-        return switch_status_handle_request(p->switch_status, ofconn->rconn,
-                                            msg);
-
-    case NXT_TUN_ID_FROM_COOKIE:
-        return handle_tun_id_from_cookie(ofconn, msg);
-
-    case NXT_ROLE_REQUEST:
-        return handle_role_request(ofconn, msg);
-
-    case NXT_SET_FLOW_FORMAT:
-        return handle_nxt_set_flow_format(ofconn, msg);
-
-    case NXT_FLOW_MOD:
-        return handle_nxt_flow_mod(ofconn, &ovh->header);
-    }
-
-    return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-}
-
-static int
-handle_barrier_request(struct ofconn *ofconn, struct ofp_header *oh)
+handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_header *ob;
     struct ofpbuf *buf;
@@ -4409,71 +4251,135 @@ handle_barrier_request(struct ofconn *ofconn, struct ofp_header *oh)
     return 0;
 }
 
-static void
-handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
+static int
+handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 {
-    struct ofp_header *oh = ofp_msg->data;
+    const struct ofp_header *oh = msg->data;
+    const struct ofputil_msg_type *type;
     int error;
 
-    COVERAGE_INC(ofproto_recv_openflow);
-    switch (oh->type) {
-    case OFPT_ECHO_REQUEST:
-        error = handle_echo_request(ofconn, oh);
-        break;
+    error = ofputil_decode_msg_type(oh, &type);
+    if (error) {
+        return error;
+    }
 
-    case OFPT_ECHO_REPLY:
-        error = 0;
-        break;
+    switch (ofputil_msg_type_code(type)) {
+        /* OpenFlow requests. */
+    case OFPUTIL_OFPT_ECHO_REQUEST:
+        return handle_echo_request(ofconn, oh);
 
-    case OFPT_FEATURES_REQUEST:
-        error = handle_features_request(ofconn, oh);
-        break;
+    case OFPUTIL_OFPT_FEATURES_REQUEST:
+        return handle_features_request(ofconn, oh);
 
-    case OFPT_GET_CONFIG_REQUEST:
-        error = handle_get_config_request(ofconn, oh);
-        break;
+    case OFPUTIL_OFPT_GET_CONFIG_REQUEST:
+        return handle_get_config_request(ofconn, oh);
 
-    case OFPT_SET_CONFIG:
-        error = handle_set_config(ofconn, ofp_msg->data);
-        break;
+    case OFPUTIL_OFPT_SET_CONFIG:
+        return handle_set_config(ofconn, msg->data);
 
-    case OFPT_PACKET_OUT:
-        error = handle_packet_out(ofconn, ofp_msg->data);
-        break;
+    case OFPUTIL_OFPT_PACKET_OUT:
+        return handle_packet_out(ofconn, oh);
 
-    case OFPT_PORT_MOD:
-        error = handle_port_mod(ofconn, oh);
-        break;
+    case OFPUTIL_OFPT_PORT_MOD:
+        return handle_port_mod(ofconn, oh);
 
-    case OFPT_FLOW_MOD:
-        error = handle_ofpt_flow_mod(ofconn, ofp_msg->data);
-        break;
+    case OFPUTIL_OFPT_FLOW_MOD:
+        return handle_ofpt_flow_mod(ofconn, oh);
 
-    case OFPT_STATS_REQUEST:
-        error = handle_stats_request(ofconn, oh);
-        break;
+    case OFPUTIL_OFPT_BARRIER_REQUEST:
+        return handle_barrier_request(ofconn, oh);
 
-    case OFPT_VENDOR:
-        error = handle_vendor(ofconn, ofp_msg->data);
-        break;
+        /* OpenFlow replies. */
+    case OFPUTIL_OFPT_ECHO_REPLY:
+        return 0;
 
-    case OFPT_BARRIER_REQUEST:
-        error = handle_barrier_request(ofconn, oh);
-        break;
+        /* Nicira extension requests. */
+    case OFPUTIL_NXT_STATUS_REQUEST:
+        return switch_status_handle_request(
+            ofconn->ofproto->switch_status, ofconn->rconn, oh);
 
+    case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
+        return handle_tun_id_from_cookie(ofconn, oh);
+
+    case OFPUTIL_NXT_ROLE_REQUEST:
+        return handle_role_request(ofconn, oh);
+
+    case OFPUTIL_NXT_SET_FLOW_FORMAT:
+        return handle_nxt_set_flow_format(ofconn, oh);
+
+    case OFPUTIL_NXT_FLOW_MOD:
+        return handle_nxt_flow_mod(ofconn, oh);
+
+        /* OpenFlow statistics requests. */
+    case OFPUTIL_OFPST_DESC_REQUEST:
+        return handle_desc_stats_request(ofconn, oh);
+
+    case OFPUTIL_OFPST_FLOW_REQUEST:
+        return handle_flow_stats_request(ofconn, oh);
+
+    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
+        return handle_aggregate_stats_request(ofconn, oh);
+
+    case OFPUTIL_OFPST_TABLE_REQUEST:
+        return handle_table_stats_request(ofconn, oh);
+
+    case OFPUTIL_OFPST_PORT_REQUEST:
+        return handle_port_stats_request(ofconn, oh);
+
+    case OFPUTIL_OFPST_QUEUE_REQUEST:
+        return handle_queue_stats_request(ofconn, oh);
+
+        /* Nicira extension statistics requests. */
+    case OFPUTIL_NXST_FLOW_REQUEST:
+        return handle_nxst_flow(ofconn, oh);
+
+    case OFPUTIL_NXST_AGGREGATE_REQUEST:
+        return handle_nxst_aggregate(ofconn, oh);
+
+    case OFPUTIL_INVALID:
+    case OFPUTIL_OFPT_HELLO:
+    case OFPUTIL_OFPT_ERROR:
+    case OFPUTIL_OFPT_FEATURES_REPLY:
+    case OFPUTIL_OFPT_GET_CONFIG_REPLY:
+    case OFPUTIL_OFPT_PACKET_IN:
+    case OFPUTIL_OFPT_FLOW_REMOVED:
+    case OFPUTIL_OFPT_PORT_STATUS:
+    case OFPUTIL_OFPT_BARRIER_REPLY:
+    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST:
+    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY:
+    case OFPUTIL_OFPST_DESC_REPLY:
+    case OFPUTIL_OFPST_FLOW_REPLY:
+    case OFPUTIL_OFPST_QUEUE_REPLY:
+    case OFPUTIL_OFPST_PORT_REPLY:
+    case OFPUTIL_OFPST_TABLE_REPLY:
+    case OFPUTIL_OFPST_AGGREGATE_REPLY:
+    case OFPUTIL_NXT_STATUS_REPLY:
+    case OFPUTIL_NXT_ROLE_REPLY:
+    case OFPUTIL_NXT_FLOW_REMOVED:
+    case OFPUTIL_NXST_FLOW_REPLY:
+    case OFPUTIL_NXST_AGGREGATE_REPLY:
     default:
         if (VLOG_IS_WARN_ENABLED()) {
             char *s = ofp_to_string(oh, ntohs(oh->length), 2);
             VLOG_DBG_RL(&rl, "OpenFlow message ignored: %s", s);
             free(s);
         }
-        error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE);
-        break;
+        if (oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY) {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT);
+        } else {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE);
+        }
     }
+}
 
+static void
+handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
+{
+    int error = handle_openflow__(ofconn, ofp_msg);
     if (error) {
         send_error_oh(ofconn, ofp_msg->data, error);
     }
+    COVERAGE_INC(ofproto_recv_openflow);
 }
 
 static void

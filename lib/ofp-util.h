@@ -21,16 +21,82 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "classifier.h"
 #include "flow.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
 struct cls_rule;
 struct ofpbuf;
-struct ofp_action_header;
 
 /* Alignment of ofp_actions. */
 #define OFP_ACTION_ALIGN 8
+
+/* Basic decoding and length validation of OpenFlow messages. */
+enum ofputil_msg_code {
+    OFPUTIL_INVALID,
+
+    /* OFPT_* messages. */
+    OFPUTIL_OFPT_HELLO,
+    OFPUTIL_OFPT_ERROR,
+    OFPUTIL_OFPT_ECHO_REQUEST,
+    OFPUTIL_OFPT_ECHO_REPLY,
+    OFPUTIL_OFPT_FEATURES_REQUEST,
+    OFPUTIL_OFPT_FEATURES_REPLY,
+    OFPUTIL_OFPT_GET_CONFIG_REQUEST,
+    OFPUTIL_OFPT_GET_CONFIG_REPLY,
+    OFPUTIL_OFPT_SET_CONFIG,
+    OFPUTIL_OFPT_PACKET_IN,
+    OFPUTIL_OFPT_FLOW_REMOVED,
+    OFPUTIL_OFPT_PORT_STATUS,
+    OFPUTIL_OFPT_PACKET_OUT,
+    OFPUTIL_OFPT_FLOW_MOD,
+    OFPUTIL_OFPT_PORT_MOD,
+    OFPUTIL_OFPT_BARRIER_REQUEST,
+    OFPUTIL_OFPT_BARRIER_REPLY,
+    OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST,
+    OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY,
+
+    /* OFPST_* stat requests. */
+    OFPUTIL_OFPST_DESC_REQUEST,
+    OFPUTIL_OFPST_FLOW_REQUEST,
+    OFPUTIL_OFPST_AGGREGATE_REQUEST,
+    OFPUTIL_OFPST_TABLE_REQUEST,
+    OFPUTIL_OFPST_PORT_REQUEST,
+    OFPUTIL_OFPST_QUEUE_REQUEST,
+
+    /* OFPST_* stat replies. */
+    OFPUTIL_OFPST_DESC_REPLY,
+    OFPUTIL_OFPST_FLOW_REPLY,
+    OFPUTIL_OFPST_QUEUE_REPLY,
+    OFPUTIL_OFPST_PORT_REPLY,
+    OFPUTIL_OFPST_TABLE_REPLY,
+    OFPUTIL_OFPST_AGGREGATE_REPLY,
+
+    /* NXT_* messages. */
+    OFPUTIL_NXT_STATUS_REQUEST,
+    OFPUTIL_NXT_STATUS_REPLY,
+    OFPUTIL_NXT_TUN_ID_FROM_COOKIE,
+    OFPUTIL_NXT_ROLE_REQUEST,
+    OFPUTIL_NXT_ROLE_REPLY,
+    OFPUTIL_NXT_SET_FLOW_FORMAT,
+    OFPUTIL_NXT_FLOW_MOD,
+    OFPUTIL_NXT_FLOW_REMOVED,
+
+    /* NXST_* stat requests. */
+    OFPUTIL_NXST_FLOW_REQUEST,
+    OFPUTIL_NXST_AGGREGATE_REQUEST,
+
+    /* NXST_* stat replies. */
+    OFPUTIL_NXST_FLOW_REPLY,
+    OFPUTIL_NXST_AGGREGATE_REPLY
+};
+
+struct ofputil_msg_type;
+int ofputil_decode_msg_type(const struct ofp_header *,
+                            const struct ofputil_msg_type **);
+enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
+const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
 
 /* Converting OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK wildcard bit counts to
  * and from IP bitmasks. */
@@ -57,6 +123,10 @@ void *put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *);
 void *put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
                        struct ofpbuf *);
 void update_openflow_length(struct ofpbuf *);
+
+const void *ofputil_stats_body(const struct ofp_header *);
+size_t ofputil_stats_body_len(const struct ofp_header *oh);
+
 struct ofpbuf *make_flow_mod(uint16_t command, const struct cls_rule *,
                              size_t actions_len);
 struct ofpbuf *make_add_flow(const struct cls_rule *, uint32_t buffer_id,
@@ -78,10 +148,6 @@ struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
                                           uint16_t in_port, uint16_t out_port);
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
-int check_ofp_message(const struct ofp_header *, uint8_t type, size_t size);
-int check_ofp_message_array(const struct ofp_header *, uint8_t type,
-                            size_t size, size_t array_elt_size,
-                            size_t *n_array_elts);
 
 struct flow_stats_iterator {
     const uint8_t *pos, *end;

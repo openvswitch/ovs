@@ -15,15 +15,15 @@ actions=drop
 ])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-flow_mod: tcp,tp_src=123, ADD: actions=FLOOD
-flow_mod: in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0, ADD: actions=drop
-flow_mod: arp,nw_src=192.168.0.1, ADD: actions=drop_spoofed_arp,NORMAL
-flow_mod: udp,dl_vlan_pcp=7, ADD: idle:5 actions=strip_vlan,output:0
-flow_mod: tcp,nw_src=192.168.0.3,tp_dst=80, ADD: actions=set_queue:37,output:1
-flow_mod: udp,nw_src=192.168.0.3,tp_dst=53, ADD: actions=pop_queue,output:1
-flow_mod: ADD: cookie:0x123456789abcdef hard:10 pri:60000 actions=CONTROLLER:65535
-flow_mod: ADD: actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-flow_mod: ADD: actions=drop
+OFPT_FLOW_MOD: tcp,tp_src=123, ADD: actions=FLOOD
+OFPT_FLOW_MOD: in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0, ADD: actions=drop
+OFPT_FLOW_MOD: arp,nw_src=192.168.0.1, ADD: actions=drop_spoofed_arp,NORMAL
+OFPT_FLOW_MOD: udp,dl_vlan_pcp=7, ADD: idle:5 actions=strip_vlan,output:0
+OFPT_FLOW_MOD: tcp,nw_src=192.168.0.3,tp_dst=80, ADD: actions=set_queue:37,output:1
+OFPT_FLOW_MOD: udp,nw_src=192.168.0.3,tp_dst=53, ADD: actions=pop_queue,output:1
+OFPT_FLOW_MOD: ADD: cookie:0x123456789abcdef hard:10 pri:60000 actions=CONTROLLER:65535
+OFPT_FLOW_MOD: ADD: actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
+OFPT_FLOW_MOD: ADD: actions=drop
 ])
 AT_CLEANUP
 

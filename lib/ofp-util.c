@@ -270,7 +270,502 @@ alloc_xid(void)
     static uint32_t next_xid = 1;
     return htonl(next_xid++);
 }
+
+/* Basic parsing of OpenFlow messages. */
 
+struct ofputil_msg_type {
+    enum ofputil_msg_code code; /* OFPUTIL_*. */
+    uint32_t value;             /* OFPT_*, OFPST_*, NXT_*, or NXST_*. */
+    const char *name;           /* e.g. "OFPT_FLOW_REMOVED". */
+    unsigned int min_size;      /* Minimum total message size in bytes. */
+    /* 0 if 'min_size' is the exact size that the message must be.  Otherwise,
+     * the message may exceed 'min_size' by an even multiple of this value. */
+    unsigned int extra_multiple;
+};
+
+struct ofputil_msg_category {
+    const char *name;           /* e.g. "OpenFlow message" */
+    const struct ofputil_msg_type *types;
+    size_t n_types;
+    int missing_error;          /* ofp_mkerr() value for missing type. */
+};
+
+static bool
+ofputil_length_ok(const struct ofputil_msg_category *cat,
+                  const struct ofputil_msg_type *type,
+                  unsigned int size)
+{
+    switch (type->extra_multiple) {
+    case 0:
+        if (size != type->min_size) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+                         "length %u (expected length %u)",
+                         cat->name, type->name, size, type->min_size);
+            return false;
+        }
+        return true;
+
+    case 1:
+        if (size < type->min_size) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+                         "length %u (expected length at least %u bytes)",
+                         cat->name, type->name, size, type->min_size);
+            return false;
+        }
+        return true;
+
+    default:
+        if (size < type->min_size
+            || (size - type->min_size) % type->extra_multiple) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+                         "length %u (must be exactly %u bytes or longer "
+                         "by an integer multiple of %u bytes)",
+                         cat->name, type->name, size,
+                         type->min_size, type->extra_multiple);
+            return false;
+        }
+        return true;
+    }
+}
+
+static int
+ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
+                                uint32_t value, unsigned int size,
+                                const struct ofputil_msg_type **typep)
+{
+    const struct ofputil_msg_type *type;
+
+    for (type = cat->types; type < &cat->types[cat->n_types]; type++) {
+        if (type->value == value) {
+            if (!ofputil_length_ok(cat, type, size)) {
+                return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            }
+            *typep = type;
+            return 0;
+        }
+    }
+
+    VLOG_WARN_RL(&bad_ofmsg_rl, "received %s of unknown type %u",
+                 cat->name, value);
+    return cat->missing_error;
+}
+
+static int
+ofputil_decode_vendor(const struct ofp_header *oh,
+                      const struct ofputil_msg_type **typep)
+{
+    static const struct ofputil_msg_type nxt_messages[] = {
+        { OFPUTIL_NXT_STATUS_REQUEST,
+          NXT_STATUS_REQUEST, "NXT_STATUS_REQUEST",
+          sizeof(struct nicira_header), 1 },
+
+        { OFPUTIL_NXT_STATUS_REPLY,
+          NXT_STATUS_REPLY, "NXT_STATUS_REPLY",
+          sizeof(struct nicira_header), 1 },
+
+        { OFPUTIL_NXT_TUN_ID_FROM_COOKIE,
+          NXT_TUN_ID_FROM_COOKIE, "NXT_TUN_ID_FROM_COOKIE",
+          sizeof(struct nxt_tun_id_cookie), 0 },
+
+        { OFPUTIL_NXT_ROLE_REQUEST,
+          NXT_ROLE_REQUEST, "NXT_ROLE_REQUEST",
+          sizeof(struct nx_role_request), 0 },
+
+        { OFPUTIL_NXT_ROLE_REPLY,
+          NXT_ROLE_REPLY, "NXT_ROLE_REPLY",
+          sizeof(struct nx_role_request), 0 },
+
+        { OFPUTIL_NXT_SET_FLOW_FORMAT,
+          NXT_SET_FLOW_FORMAT, "NXT_SET_FLOW_FORMAT",
+          sizeof(struct nxt_set_flow_format), 0 },
+
+        { OFPUTIL_NXT_FLOW_MOD,
+          NXT_FLOW_MOD, "NXT_FLOW_MOD",
+          sizeof(struct nx_flow_mod), 8 },
+
+        { OFPUTIL_NXT_FLOW_REMOVED,
+          NXT_FLOW_REMOVED, "NXT_FLOW_REMOVED",
+          sizeof(struct nx_flow_removed), 8 },
+    };
+
+    static const struct ofputil_msg_category nxt_category = {
+        "Nicira extension message",
+        nxt_messages, ARRAY_SIZE(nxt_messages),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+    };
+
+    const struct ofp_vendor_header *ovh;
+    const struct nicira_header *nh;
+
+    ovh = (const struct ofp_vendor_header *) oh;
+    if (ovh->vendor != htonl(NX_VENDOR_ID)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor message for unknown "
+                     "vendor %"PRIx32, ntohl(ovh->vendor));
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+    }
+
+    if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "received Nicira vendor message of "
+                     "length %u (expected at least %zu)",
+                     ntohs(ovh->header.length), sizeof(struct nicira_header));
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    nh = (const struct nicira_header *) oh;
+    return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
+                                           ntohs(oh->length), typep);
+}
+
+static int
+check_nxstats_msg(const struct ofp_header *oh)
+{
+    const struct ofp_stats_request *osr;
+    ovs_be32 vendor;
+
+    osr = (const struct ofp_stats_request *) oh;
+
+    memcpy(&vendor, osr->body, sizeof vendor);
+    if (vendor != htonl(NX_VENDOR_ID)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor stats message for "
+                     "unknown vendor %"PRIx32, ntohl(vendor));
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+    }
+
+    if (ntohs(osr->header.length) < sizeof(struct nicira_stats_msg)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "truncated Nicira stats message");
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    return 0;
+}
+
+static int
+ofputil_decode_nxst_request(const struct ofp_header *oh,
+                            const struct ofputil_msg_type **typep)
+{
+    static const struct ofputil_msg_type nxst_requests[] = {
+        { OFPUTIL_NXST_FLOW_REQUEST,
+          NXST_FLOW, "NXST_FLOW request",
+          sizeof(struct nx_flow_stats_request), 8 },
+
+        { OFPUTIL_NXST_AGGREGATE_REQUEST,
+          NXST_AGGREGATE, "NXST_AGGREGATE request",
+          sizeof(struct nx_aggregate_stats_request), 8 },
+    };
+
+    static const struct ofputil_msg_category nxst_request_category = {
+        "Nicira extension statistics",
+        nxst_requests, ARRAY_SIZE(nxst_requests),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+    };
+
+    const struct nicira_stats_msg *nsm;
+    int error;
+
+    error = check_nxstats_msg(oh);
+    if (error) {
+        return error;
+    }
+
+    nsm = (struct nicira_stats_msg *) oh;
+    return ofputil_lookup_openflow_message(&nxst_request_category,
+                                           ntohl(nsm->subtype),
+                                           ntohs(oh->length), typep);
+}
+
+static int
+ofputil_decode_nxst_reply(const struct ofp_header *oh,
+                          const struct ofputil_msg_type **typep)
+{
+    static const struct ofputil_msg_type nxst_replies[] = {
+        { OFPUTIL_NXST_FLOW_REPLY,
+          NXST_FLOW, "NXST_FLOW reply",
+          sizeof(struct nicira_stats_msg), 8 },
+
+        { OFPUTIL_NXST_AGGREGATE_REPLY,
+          NXST_AGGREGATE, "NXST_AGGREGATE reply",
+          sizeof(struct nx_aggregate_stats_reply), 0 },
+    };
+
+    static const struct ofputil_msg_category nxst_reply_category = {
+        "Nicira extension statistics",
+        nxst_replies, ARRAY_SIZE(nxst_replies),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+    };
+
+    const struct nicira_stats_msg *nsm;
+    int error;
+
+    error = check_nxstats_msg(oh);
+    if (error) {
+        return error;
+    }
+
+    nsm = (struct nicira_stats_msg *) oh;
+    return ofputil_lookup_openflow_message(&nxst_reply_category,
+                                           ntohl(nsm->subtype),
+                                           ntohs(oh->length), typep);
+}
+
+static int
+ofputil_decode_ofpst_request(const struct ofp_header *oh,
+                             const struct ofputil_msg_type **typep)
+{
+    enum { OSR_SIZE = sizeof(struct ofp_stats_request) };
+    static const struct ofputil_msg_type ofpst_requests[] = {
+        { OFPUTIL_OFPST_DESC_REQUEST,
+          OFPST_DESC, "OFPST_DESC request",
+          OSR_SIZE, 0 },
+
+        { OFPUTIL_OFPST_FLOW_REQUEST,
+          OFPST_FLOW, "OFPST_FLOW request",
+          OSR_SIZE + sizeof(struct ofp_flow_stats_request), 0 },
+
+        { OFPUTIL_OFPST_AGGREGATE_REQUEST,
+          OFPST_AGGREGATE, "OFPST_AGGREGATE request",
+          OSR_SIZE + sizeof(struct ofp_aggregate_stats_request), 0 },
+
+        { OFPUTIL_OFPST_TABLE_REQUEST,
+          OFPST_TABLE, "OFPST_TABLE request",
+          OSR_SIZE, 0 },
+
+        { OFPUTIL_OFPST_PORT_REQUEST,
+          OFPST_PORT, "OFPST_PORT request",
+          OSR_SIZE + sizeof(struct ofp_port_stats_request), 0 },
+
+        { OFPUTIL_OFPST_QUEUE_REQUEST,
+          OFPST_QUEUE, "OFPST_QUEUE request",
+          OSR_SIZE + sizeof(struct ofp_queue_stats_request), 0 },
+
+        { 0,
+          OFPST_VENDOR, "OFPST_VENDOR request",
+          OSR_SIZE + sizeof(uint32_t), 1 },
+    };
+
+    static const struct ofputil_msg_category ofpst_request_category = {
+        "OpenFlow statistics",
+        ofpst_requests, ARRAY_SIZE(ofpst_requests),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT)
+    };
+
+    const struct ofp_stats_request *osr;
+    int error;
+
+    osr = (const struct ofp_stats_request *) oh;
+    error = ofputil_lookup_openflow_message(&ofpst_request_category,
+                                            ntohs(osr->type),
+                                            ntohs(oh->length), typep);
+    if (!error && osr->type == htons(OFPST_VENDOR)) {
+        error = ofputil_decode_nxst_request(oh, typep);
+    }
+    return error;
+}
+
+static int
+ofputil_decode_ofpst_reply(const struct ofp_header *oh,
+                           const struct ofputil_msg_type **typep)
+{
+    enum { OSR_SIZE = sizeof(struct ofp_stats_reply) };
+    static const struct ofputil_msg_type ofpst_replies[] = {
+        { OFPUTIL_OFPST_DESC_REPLY,
+          OFPST_DESC, "OFPST_DESC reply",
+          OSR_SIZE + sizeof(struct ofp_desc_stats), 0 },
+
+        { OFPUTIL_OFPST_FLOW_REPLY,
+          OFPST_FLOW, "OFPST_FLOW reply",
+          OSR_SIZE, 1 },
+
+        { OFPUTIL_OFPST_AGGREGATE_REPLY,
+          OFPST_AGGREGATE, "OFPST_AGGREGATE reply",
+          OSR_SIZE + sizeof(struct ofp_aggregate_stats_reply), 0 },
+
+        { OFPUTIL_OFPST_TABLE_REPLY,
+          OFPST_TABLE, "OFPST_TABLE reply",
+          OSR_SIZE, sizeof(struct ofp_table_stats) },
+
+        { OFPUTIL_OFPST_PORT_REPLY,
+          OFPST_PORT, "OFPST_PORT reply",
+          OSR_SIZE, sizeof(struct ofp_port_stats) },
+
+        { OFPUTIL_OFPST_QUEUE_REPLY,
+          OFPST_QUEUE, "OFPST_QUEUE reply",
+          OSR_SIZE, sizeof(struct ofp_queue_stats) },
+
+        { 0,
+          OFPST_VENDOR, "OFPST_VENDOR reply",
+          OSR_SIZE + sizeof(uint32_t), 1 },
+    };
+
+    static const struct ofputil_msg_category ofpst_reply_category = {
+        "OpenFlow statistics",
+        ofpst_replies, ARRAY_SIZE(ofpst_replies),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT)
+    };
+
+    const struct ofp_stats_reply *osr = (const struct ofp_stats_reply *) oh;
+    int error;
+
+    error = ofputil_lookup_openflow_message(&ofpst_reply_category,
+                                           ntohs(osr->type),
+                                           ntohs(oh->length), typep);
+    if (!error && osr->type == htons(OFPST_VENDOR)) {
+        error = ofputil_decode_nxst_reply(oh, typep);
+    }
+    return error;
+}
+
+/* Decodes the message type represented by 'oh'.  Returns 0 if successful or
+ * an OpenFlow error code constructed with ofp_mkerr() on failure.  Either
+ * way, stores in '*typep' a type structure that can be inspected with the
+ * ofputil_msg_type_*() functions.
+ *
+ * oh->length must indicate the correct length of the message (and must be at
+ * least sizeof(struct ofp_header)).
+ *
+ * Success indicates that 'oh' is at least as long as the minimum-length
+ * message of its type. */
+int
+ofputil_decode_msg_type(const struct ofp_header *oh,
+                        const struct ofputil_msg_type **typep)
+{
+    static const struct ofputil_msg_type ofpt_messages[] = {
+        { OFPUTIL_OFPT_HELLO,
+          OFPT_HELLO, "OFPT_HELLO",
+          sizeof(struct ofp_hello), 1 },
+
+        { OFPUTIL_OFPT_ERROR,
+          OFPT_ERROR, "OFPT_ERROR",
+          sizeof(struct ofp_error_msg), 1 },
+
+        { OFPUTIL_OFPT_ECHO_REQUEST,
+          OFPT_ECHO_REQUEST, "OFPT_ECHO_REQUEST",
+          sizeof(struct ofp_header), 1 },
+
+        { OFPUTIL_OFPT_ECHO_REPLY,
+          OFPT_ECHO_REPLY, "OFPT_ECHO_REPLY",
+          sizeof(struct ofp_header), 1 },
+
+        { OFPUTIL_OFPT_FEATURES_REQUEST,
+          OFPT_FEATURES_REQUEST, "OFPT_FEATURES_REQUEST",
+          sizeof(struct ofp_header), 0 },
+
+        { OFPUTIL_OFPT_FEATURES_REPLY,
+          OFPT_FEATURES_REPLY, "OFPT_FEATURES_REPLY",
+          sizeof(struct ofp_switch_features), sizeof(struct ofp_phy_port) },
+
+        { OFPUTIL_OFPT_GET_CONFIG_REQUEST,
+          OFPT_GET_CONFIG_REQUEST, "OFPT_GET_CONFIG_REQUEST",
+          sizeof(struct ofp_header), 0 },
+
+        { OFPUTIL_OFPT_GET_CONFIG_REPLY,
+          OFPT_GET_CONFIG_REPLY, "OFPT_GET_CONFIG_REPLY",
+          sizeof(struct ofp_switch_config), 0 },
+
+        { OFPUTIL_OFPT_SET_CONFIG,
+          OFPT_SET_CONFIG, "OFPT_SET_CONFIG",
+          sizeof(struct ofp_switch_config), 0 },
+
+        { OFPUTIL_OFPT_PACKET_IN,
+          OFPT_PACKET_IN, "OFPT_PACKET_IN",
+          offsetof(struct ofp_packet_in, data), 1 },
+
+        { OFPUTIL_OFPT_FLOW_REMOVED,
+          OFPT_FLOW_REMOVED, "OFPT_FLOW_REMOVED",
+          sizeof(struct ofp_flow_removed), 0 },
+
+        { OFPUTIL_OFPT_PORT_STATUS,
+          OFPT_PORT_STATUS, "OFPT_PORT_STATUS",
+          sizeof(struct ofp_port_status), 0 },
+
+        { OFPUTIL_OFPT_PACKET_OUT,
+          OFPT_PACKET_OUT, "OFPT_PACKET_OUT",
+          sizeof(struct ofp_packet_out), 1 },
+
+        { OFPUTIL_OFPT_FLOW_MOD,
+          OFPT_FLOW_MOD, "OFPT_FLOW_MOD",
+          sizeof(struct ofp_flow_mod), 1 },
+
+        { OFPUTIL_OFPT_PORT_MOD,
+          OFPT_PORT_MOD, "OFPT_PORT_MOD",
+          sizeof(struct ofp_port_mod), 0 },
+
+        { 0,
+          OFPT_STATS_REQUEST, "OFPT_STATS_REQUEST",
+          sizeof(struct ofp_stats_request), 1 },
+
+        { 0,
+          OFPT_STATS_REPLY, "OFPT_STATS_REPLY",
+          sizeof(struct ofp_stats_reply), 1 },
+
+        { OFPUTIL_OFPT_BARRIER_REQUEST,
+          OFPT_BARRIER_REQUEST, "OFPT_BARRIER_REQUEST",
+          sizeof(struct ofp_header), 0 },
+
+        { OFPUTIL_OFPT_BARRIER_REPLY,
+          OFPT_BARRIER_REPLY, "OFPT_BARRIER_REPLY",
+          sizeof(struct ofp_header), 0 },
+
+        { 0,
+          OFPT_VENDOR, "OFPT_VENDOR",
+          sizeof(struct ofp_vendor_header), 1 },
+    };
+
+    static const struct ofputil_msg_category ofpt_category = {
+        "OpenFlow message",
+        ofpt_messages, ARRAY_SIZE(ofpt_messages),
+        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE)
+    };
+
+    int error;
+
+    error = ofputil_lookup_openflow_message(&ofpt_category, oh->type,
+                                            ntohs(oh->length), typep);
+    if (!error) {
+        switch (oh->type) {
+        case OFPT_VENDOR:
+            error = ofputil_decode_vendor(oh, typep);
+            break;
+
+        case OFPT_STATS_REQUEST:
+            error = ofputil_decode_ofpst_request(oh, typep);
+            break;
+
+        case OFPT_STATS_REPLY:
+            error = ofputil_decode_ofpst_reply(oh, typep);
+
+        default:
+            break;
+        }
+    }
+    if (error) {
+        static const struct ofputil_msg_type ofputil_invalid_type = {
+            OFPUTIL_INVALID,
+            0, "OFPUTIL_INVALID",
+            0, 0
+        };
+
+        *typep = &ofputil_invalid_type;
+    }
+    return error;
+}
+
+/* Returns an OFPUTIL_* message type code for 'type'. */
+enum ofputil_msg_code
+ofputil_msg_type_code(const struct ofputil_msg_type *type)
+{
+    return type->code;
+}
+
+/* Returns a string representing the message type of 'type'.  The string is the
+ * enumeration constant for the type, e.g. "OFPT_HELLO".  For statistics
+ * messages, the constant is followed by "request" or "reply",
+ * e.g. "OFPST_AGGREGATE reply". */
+const char *
+ofputil_msg_type_name(const struct ofputil_msg_type *type)
+{
+    return type->name;
+}
+
 /* Allocates and stores in '*bufferp' a new ofpbuf with a size of
  * 'openflow_len', starting with an OpenFlow header with the given 'type' and
  * an arbitrary transaction id.  Allocated bytes beyond the header, if any, are
@@ -382,6 +877,24 @@ update_openflow_length(struct ofpbuf *buffer)
 {
     struct ofp_header *oh = ofpbuf_at_assert(buffer, 0, sizeof *oh);
     oh->length = htons(buffer->size);
+}
+
+/* Returns the first byte of the 'body' member of the ofp_stats_request or
+ * ofp_stats_reply in 'oh'. */
+const void *
+ofputil_stats_body(const struct ofp_header *oh)
+{
+    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    return ((const struct ofp_stats_request *) oh)->body;
+}
+
+/* Returns the length of the 'body' member of the ofp_stats_request or
+ * ofp_stats_reply in 'oh'. */
+size_t
+ofputil_stats_body_len(const struct ofp_header *oh)
+{
+    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    return ntohs(oh->length) - sizeof(struct ofp_stats_request);
 }
 
 struct ofpbuf *
@@ -542,98 +1055,6 @@ make_echo_reply(const struct ofp_header *rq)
     struct ofp_header *reply = ofpbuf_put(out, rq, size);
     reply->type = OFPT_ECHO_REPLY;
     return out;
-}
-
-static int
-check_message_type(uint8_t got_type, uint8_t want_type)
-{
-    if (got_type != want_type) {
-        char *want_type_name = ofp_message_type_to_string(want_type);
-        char *got_type_name = ofp_message_type_to_string(got_type);
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "received bad message type %s (expected %s)",
-                     got_type_name, want_type_name);
-        free(want_type_name);
-        free(got_type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE);
-    }
-    return 0;
-}
-
-/* Checks that 'msg' has type 'type' and that it is exactly 'size' bytes long.
- * Returns 0 if the checks pass, otherwise an OpenFlow error code (produced
- * with ofp_mkerr()). */
-int
-check_ofp_message(const struct ofp_header *msg, uint8_t type, size_t size)
-{
-    size_t got_size;
-    int error;
-
-    error = check_message_type(msg->type, type);
-    if (error) {
-        return error;
-    }
-
-    got_size = ntohs(msg->length);
-    if (got_size != size) {
-        char *type_name = ofp_message_type_to_string(type);
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "received %s message of length %zu (expected %zu)",
-                     type_name, got_size, size);
-        free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    return 0;
-}
-
-/* Checks that 'msg' has type 'type' and that 'msg' is 'size' plus a
- * nonnegative integer multiple of 'array_elt_size' bytes long.  Returns 0 if
- * the checks pass, otherwise an OpenFlow error code (produced with
- * ofp_mkerr()).
- *
- * If 'n_array_elts' is nonnull, then '*n_array_elts' is set to the number of
- * 'array_elt_size' blocks in 'msg' past the first 'min_size' bytes, when
- * successful. */
-int
-check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
-                        size_t min_size, size_t array_elt_size,
-                        size_t *n_array_elts)
-{
-    size_t got_size;
-    int error;
-
-    assert(array_elt_size);
-
-    error = check_message_type(msg->type, type);
-    if (error) {
-        return error;
-    }
-
-    got_size = ntohs(msg->length);
-    if (got_size < min_size) {
-        char *type_name = ofp_message_type_to_string(type);
-        VLOG_WARN_RL(&bad_ofmsg_rl, "received %s message of length %zu "
-                     "(expected at least %zu)",
-                     type_name, got_size, min_size);
-        free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    if ((got_size - min_size) % array_elt_size) {
-        char *type_name = ofp_message_type_to_string(type);
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "received %s message of bad length %zu: the "
-                     "excess over %zu (%zu) is not evenly divisible by %zu "
-                     "(remainder is %zu)",
-                     type_name, got_size, min_size, got_size - min_size,
-                     array_elt_size, (got_size - min_size) % array_elt_size);
-        free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    if (n_array_elts) {
-        *n_array_elts = (got_size - min_size) / array_elt_size;
-    }
-    return 0;
 }
 
 const struct ofp_flow_stats *

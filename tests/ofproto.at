@@ -24,11 +24,11 @@ AT_SETUP([ofproto - feature request, config request])
 OFPROTO_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-features_reply: ver:0x1, dpid:fedcba9876543210
+OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: 0x1, state:0x1
-get_config_reply: miss_send_len=0
+OFPT_GET_CONFIG_REPLY: miss_send_len=0
 ])
 OFPROTO_STOP
 AT_CLEANUP
@@ -46,11 +46,11 @@ do
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-features_reply: ver:0x1, dpid:fedcba9876543210
+OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: $config, state:$state
-get_config_reply: miss_send_len=0
+OFPT_GET_CONFIG_REPLY: miss_send_len=0
 ])
 done
 OFPROTO_STOP
