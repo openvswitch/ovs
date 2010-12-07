@@ -18,4 +18,13 @@ static inline __wsum csum_unfold(__sum16 n)
 	csum_and_copy_to_user(src, dst, len, sum, NULL, err_ptr)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
+{
+	__be32 diff[] = { ~from, to };
+
+	sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
+}
+#endif
+
 #endif /* checksum.h */
