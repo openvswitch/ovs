@@ -213,26 +213,6 @@ static struct sk_buff *set_dl_addr(struct sk_buff *skb,
 	return skb;
 }
 
-/* Updates 'sum', which is a field in 'skb''s data, given that a 4-byte field
- * covered by the sum has been changed from 'from' to 'to'.  If set,
- * 'pseudohdr' indicates that the field is in the TCP or UDP pseudo-header.
- * Based on nf_proto_csum_replace4. */
-static void update_csum(__sum16 *sum, struct sk_buff *skb,
-			__be32 from, __be32 to, int pseudohdr)
-{
-	__be32 diff[] = { ~from, to };
-
-	if (get_ip_summed(skb) != OVS_CSUM_PARTIAL) {
-		*sum = csum_fold(csum_partial((char *)diff, sizeof(diff),
-				~csum_unfold(*sum)));
-		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE && pseudohdr)
-			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
-						~skb->csum);
-	} else if (pseudohdr)
-		*sum = ~csum_fold(csum_partial((char *)diff, sizeof(diff),
-				csum_unfold(*sum)));
-}
-
 static bool is_ip(struct sk_buff *skb, const struct odp_flow_key *key)
 {
 	return (key->dl_type == htons(ETH_P_IP) &&
@@ -272,7 +252,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 
 	check = get_l4_checksum(skb, key);
 	if (likely(check))
-		update_csum(check, skb, *nwaddr, a->nw_addr, 1);
+		inet_proto_csum_replace4(check, skb, *nwaddr, a->nw_addr, 1);
 	csum_replace4(&nh->check, *nwaddr, a->nw_addr);
 
 	*nwaddr = a->nw_addr;
@@ -332,7 +312,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 	 */
 	th = udp_hdr(skb);
 	port = a->type == ODPAT_SET_TP_SRC ? &th->source : &th->dest;
-	update_csum(check, skb, *port, a->tp_port, 0);
+	inet_proto_csum_replace2(check, skb, *port, a->tp_port, 0);
 	*port = a->tp_port;
 
 	return skb;

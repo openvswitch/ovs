@@ -12,6 +12,8 @@
 #include <linux/skbuff.h>
 #include <linux/version.h>
 
+#include <net/checksum.h>
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) || \
 	(defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID))
 #define NEED_CSUM_NORMALIZE
@@ -99,5 +101,28 @@ static inline void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start,
 	skb->csum = csum_offset;
 #endif
 }
+
+#if defined(NEED_CSUM_NORMALIZE) || LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+/* This is really compatibility code that belongs in the compat directory.
+ * However, it needs access to our normalized checksum values, so put it here.
+ */
+#define inet_proto_csum_replace4 rpl_inet_proto_csum_replace4
+static inline void inet_proto_csum_replace4(__sum16 *sum, struct sk_buff *skb,
+					    __be32 from, __be32 to,
+					    int pseudohdr)
+{
+	__be32 diff[] = { ~from, to };
+
+	if (get_ip_summed(skb) != OVS_CSUM_PARTIAL) {
+		*sum = csum_fold(csum_partial((char *)diff, sizeof(diff),
+				~csum_unfold(*sum)));
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE && pseudohdr)
+			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
+						~skb->csum);
+	} else if (pseudohdr)
+		*sum = ~csum_fold(csum_partial((char *)diff, sizeof(diff),
+				csum_unfold(*sum)));
+}
+#endif
 
 #endif /* checksum.h */
