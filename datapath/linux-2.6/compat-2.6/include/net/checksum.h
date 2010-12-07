@@ -25,6 +25,10 @@ static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
 
 	sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
 }
+
+#define inet_proto_csum_replace2(sum, skb, from, to, pseudohdr) \
+	inet_proto_csum_replace4(sum, skb, (__force __be32)(from), \
+					   (__force __be32)(to), pseudohdr)
 #endif
 
 #endif /* checksum.h */
