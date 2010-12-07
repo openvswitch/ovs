@@ -887,8 +887,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
     const struct ofputil_msg_type *type;
     struct ofpbuf b;
 
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     ofputil_decode_msg_type(oh, &type);
     if (ofputil_msg_type_code(type) == OFPUTIL_OFPT_FLOW_MOD) {
@@ -1053,8 +1052,7 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
     struct ofpbuf b;
     int error;
 
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
     if (!nfsr) {
@@ -1088,8 +1086,7 @@ ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
     struct ofpbuf b;
     int code;
 
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     ofputil_decode_msg_type(oh, &type);
     code = ofputil_msg_type_code(type);
