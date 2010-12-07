@@ -29,9 +29,7 @@
 struct ds;
 struct flow;
 
-/* The kernel datapaths limits actions to those that fit in a single page of
- * memory, so there is no point in allocating more than that.  */
-enum { MAX_ODP_ACTIONS = 4096 / sizeof(union odp_action) };
+enum { MAX_ODP_ACTIONS = 16384 / sizeof(union odp_action) };
 
 /* odp_actions_add() assumes that MAX_ODP_ACTIONS is a power of 2. */
 BUILD_ASSERT_DECL(IS_POW2(MAX_ODP_ACTIONS));
