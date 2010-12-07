@@ -1463,6 +1463,24 @@ ofp_print_nxt_tun_id_from_cookie(struct ds *string,
 }
 
 static void
+ofp_print_nxt_role_message(struct ds *string,
+                           const struct nx_role_request *nrr)
+{
+    unsigned int role = ntohl(nrr->role);
+
+    ds_put_cstr(string, " role=");
+    if (role == NX_ROLE_OTHER) {
+        ds_put_cstr(string, "other");
+    } else if (role == NX_ROLE_MASTER) {
+        ds_put_cstr(string, "master");
+    } else if (role == NX_ROLE_SLAVE) {
+        ds_put_cstr(string, "slave");
+    } else {
+        ds_put_format(string, "%u", role);
+    }
+}
+
+static void
 ofp_print_nxt_set_flow_format(struct ds *string,
                               const struct nxt_set_flow_format *nsff)
 {
@@ -1621,7 +1639,7 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_NXT_ROLE_REQUEST:
     case OFPUTIL_NXT_ROLE_REPLY:
-        /* XXX */
+        ofp_print_nxt_role_message(string, msg);
         break;
 
     case OFPUTIL_NXT_SET_FLOW_FORMAT:
