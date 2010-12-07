@@ -11,19 +11,68 @@ tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
+tun_id=0x1234,cookie=0x5678,actions=flood
 actions=drop
 ])
-AT_CHECK([ovs-ofctl parse-flows flows.txt], [0], [stdout])
+AT_CHECK([ovs-ofctl parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-OFPT_FLOW_MOD: tcp,tp_src=123, ADD: actions=FLOOD
-OFPT_FLOW_MOD: in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0, ADD: actions=drop
-OFPT_FLOW_MOD: arp,nw_src=192.168.0.1, ADD: actions=drop_spoofed_arp,NORMAL
-OFPT_FLOW_MOD: udp,dl_vlan_pcp=7, ADD: idle:5 actions=strip_vlan,output:0
-OFPT_FLOW_MOD: tcp,nw_src=192.168.0.3,tp_dst=80, ADD: actions=set_queue:37,output:1
-OFPT_FLOW_MOD: udp,nw_src=192.168.0.3,tp_dst=53, ADD: actions=pop_queue,output:1
-OFPT_FLOW_MOD: ADD: cookie:0x123456789abcdef hard:10 pri:60000 actions=CONTROLLER:65535
-OFPT_FLOW_MOD: ADD: actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD: ADD: actions=drop
+OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
+OFPT_FLOW_MOD: ADD in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
+OFPT_FLOW_MOD: ADD arp,nw_src=192.168.0.1 actions=drop_spoofed_arp,NORMAL
+OFPT_FLOW_MOD: ADD udp,dl_vlan_pcp=7 idle:5 actions=strip_vlan,output:0
+OFPT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
+OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
+OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
+OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
+NXT_TUN_ID_FROM_COOKIE: set=1
+OFPT_FLOW_MOD: ADD cookie:0x123400005678 actions=FLOOD
+OFPT_FLOW_MOD: ADD actions=drop
+])
+AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
+normalization changed ofp_match, details:
+ pre: wildcards=  0x3820f8  in_port=65534  dl_src=00:0a:e4:25:6b:b0  dl_dst=00:00:00:00:00:00  dl_vlan=    9  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards=  0x3ffff8  in_port=65534  dl_src=00:0a:e4:25:6b:b0  dl_dst=00:00:00:00:00:00  dl_vlan=    9  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+normalization changed ofp_match, details:
+ pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+normalization changed ofp_match, details:
+ pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+normalization changed ofp_match, details:
+ pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+normalization changed ofp_match, details:
+ pre: wildcards= 0x23820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards= 0x23fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+])
+AT_CLEANUP
+
+AT_SETUP([ovs-ofctl -F nxm parse-flows])
+AT_DATA([flows.txt], [
+# comment
+tcp,tp_src=123,actions=flood
+in_port=LOCAL dl_vlan=9 dl_src=00:0A:E4:25:6B:B0 actions=drop
+arp,nw_src=192.168.0.1 actions=drop_spoofed_arp,NORMAL
+udp dl_vlan_pcp=7 idle_timeout=5 actions=strip_vlan output:0
+tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
+udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
+cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
+actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
+tun_id=0x1234,cookie=0x5678,actions=flood
+actions=drop
+])
+AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
+AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+NXT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
+NXT_FLOW_MOD: ADD in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
+NXT_FLOW_MOD: ADD arp,nw_src=192.168.0.1 actions=drop_spoofed_arp,NORMAL
+NXT_FLOW_MOD: ADD udp,dl_vlan_pcp=7 idle:5 actions=strip_vlan,output:0
+NXT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
+NXT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
+NXT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
+NXT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
+NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
+NXT_FLOW_MOD: ADD actions=drop
 ])
 AT_CLEANUP
 

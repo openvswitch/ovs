@@ -260,7 +260,7 @@ do_switching(struct switch_ *sw)
 static void
 read_flow_file(const char *name)
 {
-    struct ofpbuf *b;
+    enum nx_flow_format flow_format;
     FILE *stream;
 
     stream = fopen(optarg, "r");
@@ -268,8 +268,9 @@ read_flow_file(const char *name)
         ovs_fatal(errno, "%s: open", name);
     }
 
-    while ((b = parse_ofp_add_flow_file(stream)) != NULL) {
-        list_push_back(&default_flows, &b->list_node);
+    flow_format = NXFF_OPENFLOW10;
+    while (parse_ofp_add_flow_file(&default_flows, &flow_format, stream)) {
+        continue;
     }
 
     fclose(stream);

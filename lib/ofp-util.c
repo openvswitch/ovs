@@ -786,6 +786,91 @@ ofputil_flow_format_to_string(enum nx_flow_format flow_format)
     }
 }
 
+int
+ofputil_flow_format_from_string(const char *s)
+{
+    return (!strcmp(s, "openflow10") ? NXFF_OPENFLOW10
+            : !strcmp(s, "tun_id_from_cookie") ? NXFF_TUN_ID_FROM_COOKIE
+            : !strcmp(s, "nxm") ? NXFF_NXM
+            : -1);
+}
+
+static bool
+regs_fully_wildcarded(const struct flow_wildcards *wc)
+{
+    int i;
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (wc->reg_masks[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Returns the minimum nx_flow_format to use for sending 'rule' to a switch
+ * (e.g. to add or remove a flow).  'cookie_support' should be true if the
+ * command to be sent includes a flow cookie (as OFPT_FLOW_MOD does, for
+ * example) or false if the command does not (OFPST_FLOW and OFPST_AGGREGATE do
+ * not, for example).  If 'cookie_support' is true, then 'cookie' should be the
+ * cookie to be sent; otherwise its value is ignored.
+ *
+ * The "best" flow format is chosen on this basis:
+ *
+ *   - It must be capable of expressing the rule.  NXFF_OPENFLOW10 flows can't
+ *     handle tunnel IDs.  NXFF_TUN_ID_FROM_COOKIE flows can't handle registers
+ *     or fixing the Ethernet multicast bit, and can't handle tunnel IDs that
+ *     conflict with the high 32 bits of the cookie or commands that don't
+ *     support cookies.
+ *
+ *   - Otherwise, the chosen format should be as backward compatible as
+ *     possible.  (NXFF_OPENFLOW10 is more backward compatible than
+ *     NXFF_TUN_ID_FROM_COOKIE, which is more backward compatible than
+ *     NXFF_NXM.)
+ */
+enum nx_flow_format
+ofputil_min_flow_format(const struct cls_rule *rule, bool cookie_support,
+                        ovs_be64 cookie)
+{
+    const struct flow_wildcards *wc = &rule->wc;
+    ovs_be32 cookie_hi = htonl(ntohll(cookie) >> 32);
+
+    if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)
+        || !regs_fully_wildcarded(wc)
+        || (!(wc->wildcards & FWW_TUN_ID)
+            && (!cookie_support
+                || (cookie_hi && cookie_hi != rule->flow.tun_id)))) {
+        return NXFF_NXM;
+    } else if (!(wc->wildcards & FWW_TUN_ID)) {
+        return NXFF_TUN_ID_FROM_COOKIE;
+    } else {
+        return NXFF_OPENFLOW10;
+    }
+}
+
+/* Returns an OpenFlow message that can be used to set the flow format to
+ * 'flow_format'.  */
+struct ofpbuf *
+ofputil_make_set_flow_format(enum nx_flow_format flow_format)
+{
+    struct ofpbuf *msg;
+
+    if (flow_format == NXFF_OPENFLOW10
+        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+        struct nxt_tun_id_cookie *tic;
+
+        tic = make_nxmsg(sizeof *tic, NXT_TUN_ID_FROM_COOKIE, &msg);
+        tic->set = flow_format == NXFF_TUN_ID_FROM_COOKIE;
+    } else {
+        struct nxt_set_flow_format *sff;
+
+        sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
+        sff->format = htonl(flow_format);
+    }
+
+    return msg;
+}
+
 /* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh' into an abstract
  * flow_mod in 'fm'.  Returns 0 if successful, otherwise an OpenFlow error
  * code.
@@ -901,7 +986,14 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
         msg = ofpbuf_new(sizeof *ofm + actions_len);
         ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, flow_format, &ofm->match);
-        ofm->cookie = fm->cookie;
+        if (flow_format != NXFF_TUN_ID_FROM_COOKIE
+            || fm->cr.wc.wildcards & FWW_TUN_ID) {
+            ofm->cookie = fm->cookie;
+        } else {
+            uint32_t cookie_lo = ntohll(fm->cookie);
+            uint32_t cookie_hi = ntohl(fm->cr.flow.tun_id);
+            ofm->cookie = htonll(cookie_lo | ((uint64_t) cookie_hi << 32));
+        }
         ofm->command = htons(fm->command);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);

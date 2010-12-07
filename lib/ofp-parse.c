@@ -537,18 +537,24 @@ parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
 /* Convert 'string' (as described in the Flow Syntax section of the ovs-ofctl
  * man page) into 'pf'.  If 'actions' is specified, an action must be in
  * 'string' and may be expanded or reallocated. */
-void
-parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
+static void
+parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
+              struct ofpbuf *actions, char *string)
 {
     char *save_ptr = NULL;
     char *name;
 
-    cls_rule_init_catchall(&pf->rule, OFP_DEFAULT_PRIORITY);
-    pf->table_idx = 0xff;
-    pf->out_port = OFPP_NONE;
-    pf->idle_timeout = OFP_FLOW_PERMANENT;
-    pf->hard_timeout = OFP_FLOW_PERMANENT;
-    pf->cookie = 0;
+    if (table_idx) {
+        *table_idx = 0xff;
+    }
+    cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
+    fm->cookie = htonll(0);
+    fm->command = UINT16_MAX;
+    fm->idle_timeout = OFP_FLOW_PERMANENT;
+    fm->hard_timeout = OFP_FLOW_PERMANENT;
+    fm->buffer_id = UINT32_MAX;
+    fm->out_port = OFPP_NONE;
+    fm->flags = 0;
     if (actions) {
         char *act_str = strstr(string, "action");
         if (!act_str) {
@@ -564,15 +570,20 @@ parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
         act_str++;
 
         str_to_action(act_str, actions);
+        fm->actions = actions->data;
+        fm->n_actions = actions->size / sizeof(union ofp_action);
+    } else {
+        fm->actions = NULL;
+        fm->n_actions = 0;
     }
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
         const struct protocol *p;
 
         if (parse_protocol(name, &p)) {
-            cls_rule_set_dl_type(&pf->rule, htons(p->dl_type));
+            cls_rule_set_dl_type(&fm->cr, htons(p->dl_type));
             if (p->nw_proto) {
-                cls_rule_set_nw_proto(&pf->rule, p->nw_proto);
+                cls_rule_set_nw_proto(&fm->cr, p->nw_proto);
             }
         } else {
             const struct field *f;
@@ -583,43 +594,43 @@ parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
                 ovs_fatal(0, "field %s missing value", name);
             }
 
-            if (!strcmp(name, "table")) {
-                pf->table_idx = atoi(value);
+            if (table_idx && !strcmp(name, "table")) {
+                *table_idx = atoi(value);
             } else if (!strcmp(name, "out_port")) {
-                pf->out_port = atoi(value);
+                fm->out_port = atoi(value);
             } else if (!strcmp(name, "priority")) {
-                pf->rule.priority = atoi(value);
+                fm->cr.priority = atoi(value);
             } else if (!strcmp(name, "idle_timeout")) {
-                pf->idle_timeout = atoi(value);
+                fm->idle_timeout = atoi(value);
             } else if (!strcmp(name, "hard_timeout")) {
-                pf->hard_timeout = atoi(value);
+                fm->hard_timeout = atoi(value);
             } else if (!strcmp(name, "cookie")) {
-                pf->cookie = str_to_u64(value);
+                fm->cookie = htonll(str_to_u64(value));
             } else if (parse_field_name(name, &f)) {
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
                     if (f->wildcard) {
-                        pf->rule.wc.wildcards |= f->wildcard;
-                        cls_rule_zero_wildcarded_fields(&pf->rule);
+                        fm->cr.wc.wildcards |= f->wildcard;
+                        cls_rule_zero_wildcarded_fields(&fm->cr);
                     } else if (f->index == F_NW_SRC) {
-                        cls_rule_set_nw_src_masked(&pf->rule, 0, 0);
+                        cls_rule_set_nw_src_masked(&fm->cr, 0, 0);
                     } else if (f->index == F_NW_DST) {
-                        cls_rule_set_nw_dst_masked(&pf->rule, 0, 0);
+                        cls_rule_set_nw_dst_masked(&fm->cr, 0, 0);
                     } else if (f->index == F_DL_VLAN) {
-                        cls_rule_set_any_vid(&pf->rule);
+                        cls_rule_set_any_vid(&fm->cr);
                     } else if (f->index == F_DL_VLAN_PCP) {
-                        cls_rule_set_any_pcp(&pf->rule);
+                        cls_rule_set_any_pcp(&fm->cr);
                     } else {
                         NOT_REACHED();
                     }
                 } else {
-                    parse_field_value(&pf->rule, f->index, value);
+                    parse_field_value(&fm->cr, f->index, value);
                 }
             } else if (!strncmp(name, "reg", 3) && isdigit(name[3])) {
                 unsigned int reg_idx = atoi(name + 3);
                 if (reg_idx >= FLOW_N_REGS) {
                     ovs_fatal(0, "only %d registers supported", FLOW_N_REGS);
                 }
-                parse_reg_value(&pf->rule, reg_idx, value);
+                parse_reg_value(&fm->cr, reg_idx, value);
             } else {
                 ovs_fatal(0, "unknown keyword %s", name);
             }
@@ -627,42 +638,48 @@ parse_ofp_str(struct parsed_flow *pf, struct ofpbuf *actions, char *string)
     }
 }
 
-/* Parses 'string' as an OFPT_FLOW_MOD with command 'command' (one of OFPFC_*)
- * and returns an ofpbuf that contains it. */
-struct ofpbuf *
-parse_ofp_flow_mod_str(char *string, uint16_t command)
+/* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
+ * (one of OFPFC_*) and appends the parsed OpenFlow message to 'packets'.
+ * '*cur_format' should initially contain the flow format currently configured
+ * on the connection; this function will add a message to change the flow
+ * format and update '*cur_format', if this is necessary to add the parsed
+ * flow. */
+void
+parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
+                       char *string, uint16_t command)
 {
-    struct parsed_flow pf;
-    struct ofpbuf *buffer;
-    struct ofp_flow_mod *ofm;
+    enum nx_flow_format min_format, next_format;
+    struct ofpbuf actions;
+    struct ofpbuf *ofm;
+    struct flow_mod fm;
 
-    /* parse_ofp_str() will expand and reallocate the data in 'buffer', so we
-     * can't keep pointers to across the parse_ofp_str() call. */
-    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    parse_ofp_str(&pf, buffer, string);
+    ofpbuf_init(&actions, 64);
+    parse_ofp_str(&fm, NULL, &actions, string);
+    fm.command = command;
 
-    ofm = buffer->data;
-    ofputil_cls_rule_to_match(&pf.rule, NXFF_OPENFLOW10, &ofm->match);
-    ofm->command = htons(command);
-    ofm->cookie = htonll(pf.cookie);
-    ofm->idle_timeout = htons(pf.idle_timeout);
-    ofm->hard_timeout = htons(pf.hard_timeout);
-    ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->out_port = htons(pf.out_port);
-    ofm->priority = htons(pf.rule.priority);
-    update_openflow_length(buffer);
+    min_format = ofputil_min_flow_format(&fm.cr, true, fm.cookie);
+    next_format = MAX(*cur_format, min_format);
+    if (next_format != *cur_format) {
+        struct ofpbuf *sff = ofputil_make_set_flow_format(next_format);
+        list_push_back(packets, &sff->list_node);
+        *cur_format = next_format;
+    }
 
-    return buffer;
+    ofm = ofputil_encode_flow_mod(&fm, *cur_format);
+    list_push_back(packets, &ofm->list_node);
+
+    ofpbuf_uninit(&actions);
 }
 
-/* Parses an OFPT_FLOW_MOD with subtype OFPFC_ADD from 'stream' and returns an
- * ofpbuf that contains it.  Returns a null pointer if end-of-file is reached
- * before reading a flow. */
-struct ofpbuf *
-parse_ofp_add_flow_file(FILE *stream)
+/* Similar to parse_ofp_flow_mod_str(), except that the string is read from
+ * 'stream' and the command is always OFPFC_ADD.  Returns false if end-of-file
+ * is reached before reading a flow, otherwise true. */
+bool
+parse_ofp_add_flow_file(struct list *packets, enum nx_flow_format *cur,
+                        FILE *stream)
 {
-    struct ofpbuf *b = NULL;
     struct ds s = DS_EMPTY_INITIALIZER;
+    bool ok = false;
 
     while (!ds_get_line(&s, stream)) {
         char *line = ds_cstr(&s);
@@ -679,10 +696,26 @@ parse_ofp_add_flow_file(FILE *stream)
             continue;
         }
 
-        b = parse_ofp_flow_mod_str(line, OFPFC_ADD);
+        parse_ofp_flow_mod_str(packets, cur, line, OFPFC_ADD);
+        ok = true;
         break;
     }
     ds_destroy(&s);
 
-    return b;
+    return ok;
 }
+
+void
+parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
+                                 bool aggregate, char *string)
+{
+    struct flow_mod fm;
+    uint8_t table_id;
+
+    parse_ofp_str(&fm, &table_id, NULL, string);
+    fsr->aggregate = aggregate;
+    fsr->match = fm.cr;
+    fsr->out_port = fm.out_port;
+    fsr->table_id = table_id;
+}
+

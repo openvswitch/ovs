@@ -115,6 +115,12 @@ char *ofp_match_to_literal_string(const struct ofp_match *match);
 /* Flow formats. */
 bool ofputil_flow_format_is_valid(enum nx_flow_format);
 const char *ofputil_flow_format_to_string(enum nx_flow_format);
+int ofputil_flow_format_from_string(const char *);
+enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *,
+                                            bool cookie_support,
+                                            ovs_be64 cookie);
+
+struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
 
 /* Flow format independent flow_mod. */
 struct flow_mod {
