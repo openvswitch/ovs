@@ -1331,6 +1331,22 @@ ofputil_stats_body_len(const struct ofp_header *oh)
     return ntohs(oh->length) - sizeof(struct ofp_stats_request);
 }
 
+/* Returns the first byte of the body of the nicira_stats_msg in 'oh'. */
+const void *
+ofputil_nxstats_body(const struct ofp_header *oh)
+{
+    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    return ((const struct nicira_stats_msg *) oh) + 1;
+}
+
+/* Returns the length of the body of the nicira_stats_msg in 'oh'. */
+size_t
+ofputil_nxstats_body_len(const struct ofp_header *oh)
+{
+    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    return ntohs(oh->length) - sizeof(struct nicira_stats_msg);
+}
+
 struct ofpbuf *
 make_flow_mod(uint16_t command, const struct cls_rule *rule,
               size_t actions_len)

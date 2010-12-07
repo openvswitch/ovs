@@ -180,7 +180,10 @@ void *ofputil_make_nxstats_request(size_t openflow_len, uint32_t subtype,
                                    struct ofpbuf **);
 
 const void *ofputil_stats_body(const struct ofp_header *);
-size_t ofputil_stats_body_len(const struct ofp_header *oh);
+size_t ofputil_stats_body_len(const struct ofp_header *);
+
+const void *ofputil_nxstats_body(const struct ofp_header *);
+size_t ofputil_nxstats_body_len(const struct ofp_header *);
 
 struct ofpbuf *make_flow_mod(uint16_t command, const struct cls_rule *,
                              size_t actions_len);
