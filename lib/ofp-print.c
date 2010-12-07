@@ -1269,13 +1269,25 @@ ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_ofpst_aggregate_reply(struct ds *string, const struct ofp_header *oh)
+ofp_print_ofp_aggregate_stats_reply (
+    struct ds *string, const struct ofp_aggregate_stats_reply *asr)
 {
-    const struct ofp_aggregate_stats_reply *asr = ofputil_stats_body(oh);
-
     ds_put_format(string, " packet_count=%"PRIu64, ntohll(asr->packet_count));
     ds_put_format(string, " byte_count=%"PRIu64, ntohll(asr->byte_count));
     ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
+}
+
+static void
+ofp_print_ofpst_aggregate_reply(struct ds *string, const struct ofp_header *oh)
+{
+    ofp_print_ofp_aggregate_stats_reply(string, ofputil_stats_body(oh));
+}
+
+static void
+ofp_print_nxst_aggregate_reply(struct ds *string,
+                               const struct nx_aggregate_stats_reply *nasr)
+{
+    ofp_print_ofp_aggregate_stats_reply(string, &nasr->asr);
 }
 
 static void print_port_stat(struct ds *string, const char *leader,
@@ -1664,7 +1676,8 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:
-        /* XXX */
+        ofp_print_stats_reply(string, oh);
+        ofp_print_nxst_aggregate_reply(string, oh);
         break;
     }
 }
