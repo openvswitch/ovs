@@ -382,6 +382,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
 }
 
 #define FIELDS                                              \
+    FIELD(F_TUN_ID,      "tun_id",      FWW_TUN_ID)         \
     FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \
     FIELD(F_DL_VLAN,     "dl_vlan",     0)                  \
     FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", 0)                  \
@@ -439,6 +440,10 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     uint16_t port_no;
 
     switch (index) {
+    case F_TUN_ID:
+        cls_rule_set_tun_id(rule, htonl(str_to_u32(value)));
+        break;
+
     case F_IN_PORT:
         if (!parse_port_name(value, &port_no)) {
             port_no = atoi(value);

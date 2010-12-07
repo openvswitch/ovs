@@ -337,6 +337,26 @@ as a decimal number between 0 and 255, inclusive.
 .IP
 When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
+.IP \fBtun_id=\fItunnel\-id\fR
+Matches tunnel identifier \fItunnel\-id\fR.  Only packets that arrive
+over a tunnel that carries a key (e.g. GRE with the RFC 2890 key
+extension) will have a nonzero tunnel ID.
+.IP
+\fBtun_id\fR requires use of one of two Nicira extensions to OpenFlow:
+.RS
+.IP "NXM (Nicira Extended Match)"
+This extension fully supports \fBtun_id\fR. 
+.IP "Tunnel ID from Cookie"
+This extension supports \fBtun_id\fR with two caveats: the top 32 bits
+of the \fBcookie\fR (see below) are used for \fItunnel\-id\fR and thus
+unavailable for other use, and specifying \fBtun_id\fR on
+\fBdump\-flows\fR or \fBdump\-aggregate\fR has no effect.
+.RE
+.IP
+When \fBtun_id\fR is specified, \fBovs\-ofctl\fR will automatically
+attempt to negotiate use of one of these extensions, preferring NXM.
+If the switch does not support either extension, then \fBovs\-ofctl\fR
+will report a fatal error.
 .
 .PP
 The following shorthand notations are also available:
