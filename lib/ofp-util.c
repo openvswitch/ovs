@@ -897,10 +897,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
         int error;
 
         /* Dissect the message. */
-        ofm = ofpbuf_try_pull(&b, sizeof *ofm);
-        if (!ofm) {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-        }
+        ofm = ofpbuf_pull(&b, sizeof *ofm);
         error = ofputil_pull_actions(&b, b.size, &fm->actions, &fm->n_actions);
         if (error) {
             return error;
@@ -940,10 +937,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
         int error;
 
         /* Dissect the message. */
-        nfm = ofpbuf_try_pull(&b, sizeof *nfm);
-        if (!nfm) {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-        }
+        nfm = ofpbuf_pull(&b, sizeof *nfm);
         error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
                               &fm->cr);
         if (error) {
@@ -1054,10 +1048,7 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
-    nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
-    if (!nfsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
+    nfsr = ofpbuf_pull(&b, sizeof *nfsr);
     error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &fsr->match);
     if (error) {
         return error;

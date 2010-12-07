@@ -3073,10 +3073,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     /* Get ofp_packet_out. */
     ofpbuf_use_const(&request, oh, ntohs(oh->length));
-    opo = ofpbuf_try_pull(&request, offsetof(struct ofp_packet_out, actions));
-    if (!opo) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
+    opo = ofpbuf_pull(&request, offsetof(struct ofp_packet_out, actions));
 
     /* Get actions. */
     error = ofputil_pull_actions(&request, ntohs(opo->actions_len),
@@ -3517,10 +3514,7 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     /* Dissect the message. */
-    nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
-    if (!nfsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
+    nfsr = ofpbuf_pull(&b, sizeof *nfsr);
     error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &target);
     if (error) {
         return error;
@@ -3652,10 +3646,7 @@ handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     /* Dissect the message. */
-    request = ofpbuf_try_pull(&b, sizeof *request);
-    if (!request) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
+    request = ofpbuf_pull(&b, sizeof *request);
     error = nx_pull_match(&b, ntohs(request->match_len), 0, &target);
     if (error) {
         return error;
