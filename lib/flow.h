@@ -54,14 +54,17 @@ struct flow {
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */
+    uint8_t arp_sha[6];         /* ARP source hardware address. */
+    uint8_t arp_tha[6];         /* ARP target hardware address. */
+    uint32_t reserved;          /* Reserved for 64-bit packing. */
 };
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (40 + FLOW_N_REGS * 4)
-#define FLOW_PAD_SIZE 0
-BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
+#define FLOW_SIG_SIZE (52 + FLOW_N_REGS * 4)
+#define FLOW_PAD_SIZE 4
+BUILD_ASSERT_DECL(offsetof(struct flow, arp_tha) == FLOW_SIG_SIZE - 6);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->arp_tha) == 6);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
@@ -115,7 +118,9 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 /* No corresponding OFPFW_* or OVSFW_* bits. */
 #define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 8))
                                                        /* multicast bit only */
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 9)) - 1))
+#define FWW_ARP_SHA     ((OVS_FORCE flow_wildcards_t) (1 << 9))
+#define FWW_ARP_THA     ((OVS_FORCE flow_wildcards_t) (1 << 10))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 11)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *

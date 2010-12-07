@@ -124,6 +124,10 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = ofpfw & WC_INVARIANTS;
+
+    /* Wildcard fields that aren't defined by ofp_match or tun_id. */
+    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA);
+
     if (ofpfw & OFPFW_NW_TOS) {
         wc->wildcards |= FWW_NW_TOS;
     }
@@ -856,6 +860,11 @@ is_nxm_required(const struct cls_rule *rule, bool cookie_support,
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
+        return true;
+    }
+
+    /* Only NXM supports matching ARP hardware addresses. */
+    if (!(wc->wildcards & FWW_ARP_SHA) || !(wc->wildcards & FWW_ARP_THA)) {
         return true;
     }
 

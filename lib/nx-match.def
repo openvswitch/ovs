@@ -39,6 +39,8 @@ DEFINE_FIELD  (OF_ARP_OP,    FWW_NW_PROTO, ETH_TYPE_ARP, 0,            false)
 DEFINE_FIELD_M(OF_ARP_SPA,   0,            ETH_TYPE_ARP, 0,            false)
 DEFINE_FIELD_M(OF_ARP_TPA,   0,            ETH_TYPE_ARP, 0,            false)
 DEFINE_FIELD_M(NX_TUN_ID,    0,            0,            0,            true)
+DEFINE_FIELD  (NX_ARP_SHA,   FWW_ARP_SHA,  ETH_TYPE_ARP, 0,            false)
+DEFINE_FIELD  (NX_ARP_THA,   FWW_ARP_THA,  ETH_TYPE_ARP, 0,            false)
 
 DEFINE_FIELD_M(NX_REG0,      0,            0,            0,            true)
 #if FLOW_N_REGS >= 2

@@ -307,9 +307,11 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case ODP_KEY_ATTR_ARP:
         arp_key = nl_attr_get(a);
-        ds_put_format(ds, "arp(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16")",
+        ds_put_format(ds, "arp(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
+                      "sha="ETH_ADDR_FMT",tha="ETH_ADDR_FMT")",
                       IP_ARGS(&arp_key->arp_sip), IP_ARGS(&arp_key->arp_tip),
-                      ntohs(arp_key->arp_op));
+                      ntohs(arp_key->arp_op), ETH_ADDR_ARGS(arp_key->arp_sha),
+                      ETH_ADDR_ARGS(arp_key->arp_tha));
         break;
 
     default:
@@ -416,6 +418,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         arp_key->arp_sip = flow->nw_src;
         arp_key->arp_tip = flow->nw_dst;
         arp_key->arp_op = htons(flow->nw_proto);
+        memcpy(arp_key->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
+        memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
     }
 }
 
@@ -541,6 +545,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                 return EINVAL;
             }
             flow->nw_proto = ntohs(arp_key->arp_op);
+            memcpy(flow->arp_sha, arp_key->arp_sha, ETH_ADDR_LEN);
+            memcpy(flow->arp_tha, arp_key->arp_tha, ETH_ADDR_LEN);
             break;
 
         default:

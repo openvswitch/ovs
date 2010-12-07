@@ -318,6 +318,13 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
             return 0;
         }
 
+    case NFI_NXM_NX_ARP_SHA:
+        memcpy(flow->arp_sha, value, ETH_ADDR_LEN);
+        return 0;
+    case NFI_NXM_NX_ARP_THA:
+        memcpy(flow->arp_tha, value, ETH_ADDR_LEN);
+        return 0;
+
         /* Tunnel ID. */
     case NFI_NXM_NX_TUN_ID:
         if (wc->tun_id_mask) {
@@ -693,6 +700,12 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         }
         nxm_put_32m(b, NXM_OF_ARP_SPA, flow->nw_src, cr->wc.nw_src_mask);
         nxm_put_32m(b, NXM_OF_ARP_TPA, flow->nw_dst, cr->wc.nw_dst_mask);
+        if (!(wc & FWW_ARP_SHA)) {
+            nxm_put_eth(b, NXM_NX_ARP_SHA, flow->arp_sha);
+        }
+        if (!(wc & FWW_ARP_THA)) {
+            nxm_put_eth(b, NXM_NX_ARP_THA, flow->arp_tha);
+        }
     }
 
     /* Tunnel ID. */
@@ -1162,6 +1175,12 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 #error
 #endif
 
+    case NFI_NXM_NX_ARP_SHA:
+        return eth_addr_to_uint64(flow->arp_sha);
+
+    case NFI_NXM_NX_ARP_THA:
+        return eth_addr_to_uint64(flow->arp_tha);
+
     case NFI_NXM_NX_TUN_ID_W:
     case NFI_NXM_OF_ETH_DST_W:
     case NFI_NXM_OF_VLAN_TCI_W:
@@ -1234,6 +1253,8 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_OF_IP_DST_W:
     case NFI_NXM_OF_ARP_SPA_W:
     case NFI_NXM_OF_ARP_TPA_W:
+    case NFI_NXM_NX_ARP_SHA:
+    case NFI_NXM_NX_ARP_THA:
     case N_NXM_FIELDS:
         NOT_REACHED();
     }

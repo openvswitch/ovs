@@ -390,6 +390,8 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 					|| key->nw_proto == ARPOP_REPLY) {
 				memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
 				memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
+				memcpy(key->arp_sha, arp->ar_sha, ETH_ALEN);
+				memcpy(key->arp_tha, arp->ar_tha, ETH_ALEN);
 			}
 		}
 	}
@@ -538,6 +540,8 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 			if (arp_key->arp_op & htons(0xff00))
 				return -EINVAL;
 			swkey->nw_proto = ntohs(arp_key->arp_op);
+			memcpy(swkey->arp_sha, arp_key->arp_sha, ETH_ALEN);
+			memcpy(swkey->arp_tha, arp_key->arp_tha, ETH_ALEN);
 			break;
 
 		default:
@@ -665,6 +669,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		arp_key->arp_sip = swkey->nw_src;
 		arp_key->arp_tip = swkey->nw_dst;
 		arp_key->arp_op = htons(swkey->nw_proto);
+		memcpy(arp_key->arp_sha, swkey->arp_sha, ETH_ALEN);
+		memcpy(arp_key->arp_tha, swkey->arp_tha, ETH_ALEN);
 	}
 
 	return 0;

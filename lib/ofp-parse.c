@@ -491,7 +491,9 @@ parse_protocol(const char *name, const struct protocol **p_out)
     FIELD(F_TP_SRC,      "tp_src",      FWW_TP_SRC)         \
     FIELD(F_TP_DST,      "tp_dst",      FWW_TP_DST)         \
     FIELD(F_ICMP_TYPE,   "icmp_type",   FWW_TP_SRC)         \
-    FIELD(F_ICMP_CODE,   "icmp_code",   FWW_TP_DST)
+    FIELD(F_ICMP_CODE,   "icmp_code",   FWW_TP_DST)         \
+    FIELD(F_ARP_SHA,     "arp_sha",     FWW_ARP_SHA)        \
+    FIELD(F_ARP_THA,     "arp_tha",     FWW_ARP_THA)
 
 enum field_index {
 #define FIELD(ENUM, NAME, WILDCARD) ENUM,
@@ -605,6 +607,16 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
 
     case F_ICMP_CODE:
         cls_rule_set_icmp_code(rule, str_to_u32(value));
+        break;
+
+    case F_ARP_SHA:
+        str_to_mac(value, mac);
+        cls_rule_set_arp_sha(rule, mac);
+        break;
+
+    case F_ARP_THA:
+        str_to_mac(value, mac);
+        cls_rule_set_arp_tha(rule, mac);
         break;
 
     case N_FIELDS:

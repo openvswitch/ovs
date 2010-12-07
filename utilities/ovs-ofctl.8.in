@@ -345,6 +345,12 @@ Extended Match) extension to OpenFlow.  When one of these is specified,
 extension.  If the switch does not support NXM, then \fBovs\-ofctl\fR
 will report a fatal error.
 .
+.IP \fBarp_sha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+.IQ \fBarp_tha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+When \fBdl_type\fR specifies ARP, \fBarp_sha\fR and \fBarp_tha\fR match
+the source and target hardware address, respectively.  An address is
+specified as 6 pairs of hexadecimal digits delimited by colons.
+.
 .IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
 Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
 over a tunnel that carries a key (e.g. GRE with the RFC 2890 key
@@ -506,10 +512,10 @@ Stops processing further actions, if the packet being processed is an
 Ethernet+IPv4 ARP packet for which the source Ethernet address inside
 the ARP packet differs from the source Ethernet address in the
 Ethernet header.
-.
-This is useful because OpenFlow does not provide a way to match on the
-Ethernet addresses inside ARP packets, so there is no other way to
-drop spoofed ARPs other than sending every ARP packet to a controller.
+.IP
+This action is deprecated in favor of defining flows using the
+\fBarp_sha\fR match field described earlier and will likely be removed
+in a future version of Open vSwitch.
 .
 .IP \fBset_queue\fB:\fIqueue\fR
 Sets the queue that should be used to \fIqueue\fR when packets are

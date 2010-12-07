@@ -42,6 +42,8 @@ struct sw_flow_key {
 	u8	dl_dst[ETH_ALEN]; /* Ethernet destination address. */
 	u8	nw_proto;   /* IP protocol or lower 8 bits of ARP opcode. */
 	u8	nw_tos;	    /* IP ToS (DSCP field, 6 bits). */
+	u8	arp_sha[ETH_ALEN]; /* ARP source hardware address. */
+	u8	arp_tha[ETH_ALEN]; /* ARP target hardware address. */
 };
 
 struct sw_flow {

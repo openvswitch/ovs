@@ -312,9 +312,9 @@ OFP_ASSERT(sizeof(struct nx_action_set_tunnel64) == 24);
  * Ethernet+IPv4 ARP packet for which the source Ethernet address inside the
  * ARP packet differs from the source Ethernet address in the Ethernet header.
  *
- * This is useful because OpenFlow does not provide a way to match on the
- * Ethernet addresses inside ARP packets, so there is no other way to drop
- * spoofed ARPs other than sending every ARP packet to a controller. */
+ * (This  action  is  deprecated in  favor of defining flows using the
+ * NXM_NX_ARP_SHA flow match and will likely be removed in a future version
+ * of Open vSwitch.) */
 struct nx_action_drop_spoofed_arp {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
     ovs_be16 len;                   /* Length is 16. */
@@ -386,6 +386,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_OF_ARP_SPA
  *   - NXM_OF_ARP_TPA
  *   - NXM_NX_TUN_ID
+ *   - NXM_NX_ARP_SHA
+ *   - NXM_NX_ARP_THA
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
  * The following nxm_header values are potentially acceptable as 'dst':
@@ -1037,6 +1039,17 @@ enum nx_mp_algorithm {
  * Masking: Arbitrary masks. */
 #define NXM_NX_TUN_ID     NXM_HEADER  (0x0001, 16, 8)
 #define NXM_NX_TUN_ID_W   NXM_HEADER_W(0x0001, 16, 8)
+
+/* For an Ethernet+IP ARP packet, the source or target hardware address
+ * in the ARP header.  Always 0 otherwise.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ *
+ * Format: 48-bit Ethernet MAC address.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_ARP_SHA    NXM_HEADER  (0x0001, 17, 6)
+#define NXM_NX_ARP_THA    NXM_HEADER  (0x0001, 18, 6)
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

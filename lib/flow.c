@@ -224,6 +224,8 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
                 || (flow->nw_proto == ARP_OP_REPLY)) {
                 flow->nw_src = arp->ar_spa;
                 flow->nw_dst = arp->ar_tpa;
+                memcpy(flow->arp_sha, arp->ar_sha, ETH_ADDR_LEN);
+                memcpy(flow->arp_tha, arp->ar_tha, ETH_ADDR_LEN);
             }
         }
     }
@@ -274,17 +276,23 @@ flow_format(struct ds *ds, const struct flow *flow)
                       " type%04"PRIx16
                       " proto%"PRIu8
                       " tos%"PRIu8
-                      " ip"IP_FMT"->"IP_FMT
-                      " port%"PRIu16"->%"PRIu16,
+                      " ip"IP_FMT"->"IP_FMT,
                   ETH_ADDR_ARGS(flow->dl_src),
                   ETH_ADDR_ARGS(flow->dl_dst),
                   ntohs(flow->dl_type),
                   flow->nw_proto,
                   flow->nw_tos,
                   IP_ARGS(&flow->nw_src),
-                  IP_ARGS(&flow->nw_dst),
-                  ntohs(flow->tp_src),
-                  ntohs(flow->tp_dst));
+                  IP_ARGS(&flow->nw_dst));
+    if (flow->tp_src || flow->tp_dst) {
+        ds_put_format(ds, " port%"PRIu16"->%"PRIu16,
+                ntohs(flow->tp_src), ntohs(flow->tp_dst));
+    }
+    if (!eth_addr_is_zero(flow->arp_sha) || !eth_addr_is_zero(flow->arp_tha)) {
+        ds_put_format(ds, " arp_ha"ETH_ADDR_FMT"->"ETH_ADDR_FMT,
+                ETH_ADDR_ARGS(flow->arp_sha),
+                ETH_ADDR_ARGS(flow->arp_tha));
+    }
 }
 
 void

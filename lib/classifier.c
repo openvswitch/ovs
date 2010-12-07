@@ -319,6 +319,20 @@ cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
     rule->flow.icmp_code = htons(icmp_code);
 }
 
+void
+cls_rule_set_arp_sha(struct cls_rule *rule, const uint8_t sha[ETH_ADDR_LEN])
+{
+    rule->wc.wildcards &= ~FWW_ARP_SHA;
+    memcpy(rule->flow.arp_sha, sha, ETH_ADDR_LEN);
+}
+
+void
+cls_rule_set_arp_tha(struct cls_rule *rule, const uint8_t tha[ETH_ADDR_LEN])
+{
+    rule->wc.wildcards &= ~FWW_ARP_THA;
+    memcpy(rule->flow.arp_tha, tha, ETH_ADDR_LEN);
+}
+
 /* Returns true if 'a' and 'b' have the same priority, wildcard the same
  * fields, and have the same values for fixed fields, otherwise false. */
 bool
@@ -465,6 +479,16 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
             ds_put_format(s, "opcode=%"PRIu8",", f->nw_proto);
         } else {
             ds_put_format(s, "nw_proto=%"PRIu8",", f->nw_proto);
+        }
+    }
+    if (f->dl_type == htons(ETH_TYPE_ARP)) {
+        if (!(w & FWW_ARP_SHA)) {
+            ds_put_format(s, "arp_sha="ETH_ADDR_FMT",",
+                    ETH_ADDR_ARGS(f->arp_sha));
+        }
+        if (!(w & FWW_ARP_THA)) {
+            ds_put_format(s, "arp_tha="ETH_ADDR_FMT",",
+                    ETH_ADDR_ARGS(f->arp_tha));
         }
     }
     if (!(w & FWW_NW_TOS)) {
@@ -947,7 +971,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 40 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 52 + FLOW_N_REGS * 4);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -974,7 +998,9 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_ETH_MCAST
                 || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
-            && (wc & FWW_NW_TOS || a->nw_tos == b->nw_tos));
+            && (wc & FWW_NW_TOS || a->nw_tos == b->nw_tos)
+            && (wc & FWW_ARP_SHA || eth_addr_equals(a->arp_sha, b->arp_sha))
+            && (wc & FWW_ARP_THA || eth_addr_equals(a->arp_tha, b->arp_tha)));
 }
 
 static void
@@ -983,7 +1009,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 40 + 4 * FLOW_N_REGS);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 52 + 4 * FLOW_N_REGS);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -1019,5 +1045,11 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     }
     if (wc & FWW_NW_TOS) {
         flow->nw_tos = 0;
+    }
+    if (wc & FWW_ARP_SHA) {
+        memset(flow->arp_sha, 0, sizeof flow->arp_sha);
+    }
+    if (wc & FWW_ARP_THA) {
+        memset(flow->arp_tha, 0, sizeof flow->arp_tha);
     }
 }

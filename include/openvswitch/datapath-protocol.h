@@ -356,6 +356,8 @@ struct odp_key_arp {
 	ovs_be32 arp_sip;
 	ovs_be32 arp_tip;
 	ovs_be16 arp_op;
+	uint8_t  arp_sha[6];
+	uint8_t  arp_tha[6];
 };
 
 /**
