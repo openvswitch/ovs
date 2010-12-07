@@ -117,11 +117,11 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     rule->priority = !ofpfw ? UINT16_MAX : priority;
 
     /* Initialize most of rule->wc. */
+    flow_wildcards_init_catchall(wc);
     wc->wildcards = ofpfw & WC_INVARIANTS;
     if (ofpfw & OFPFW_NW_TOS) {
         wc->wildcards |= FWW_NW_TOS;
     }
-    memset(wc->reg_masks, 0, sizeof wc->reg_masks);
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
 
