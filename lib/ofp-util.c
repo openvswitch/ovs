@@ -756,9 +756,43 @@ ofputil_msg_type_code(const struct ofputil_msg_type *type)
     return type->code;
 }
 
-/* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh', received when the
- * current flow format was 'flow_format', into an abstract flow_mod in 'fm'.
- * Returns 0 if successful, otherwise an OpenFlow error code.
+/* Flow formats. */
+
+bool
+ofputil_flow_format_is_valid(enum nx_flow_format flow_format)
+{
+    switch (flow_format) {
+    case NXFF_OPENFLOW10:
+    case NXFF_TUN_ID_FROM_COOKIE:
+    case NXFF_NXM:
+        return true;
+    }
+
+    return false;
+}
+
+const char *
+ofputil_flow_format_to_string(enum nx_flow_format flow_format)
+{
+    switch (flow_format) {
+    case NXFF_OPENFLOW10:
+        return "openflow10";
+    case NXFF_TUN_ID_FROM_COOKIE:
+        return "tun_id_from_cookie";
+    case NXFF_NXM:
+        return "nxm";
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh' into an abstract
+ * flow_mod in 'fm'.  Returns 0 if successful, otherwise an OpenFlow error
+ * code.
+ *
+ * For OFPT_FLOW_MOD messages, 'flow_format' should be the current flow format
+ * at the time when the message was received.  Otherwise 'flow_format' is
+ * ignored.
  *
  * Does not validate the flow_mod actions. */
 int

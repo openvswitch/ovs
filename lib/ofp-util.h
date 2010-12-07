@@ -112,6 +112,10 @@ void ofputil_cls_rule_to_match(const struct cls_rule *, enum nx_flow_format,
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
 
+/* Flow formats. */
+bool ofputil_flow_format_is_valid(enum nx_flow_format);
+const char *ofputil_flow_format_to_string(enum nx_flow_format);
+
 /* Flow format independent flow_mod. */
 struct flow_mod {
     struct cls_rule cr;
