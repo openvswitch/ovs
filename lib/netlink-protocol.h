@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,24 @@
 
 /* Netlink protocol definitions.
  *
- * These definitions are equivalent to those in the Linux 2.6 kernel headers,
- * without requiring those headers to be available. */
+ * Netlink is a message framing format described in RFC 3549 and used heavily
+ * in Linux to access the network stack.  Open vSwitch uses AF_NETLINK sockets
+ * for this purpose on Linux.  But on all platforms, Open vSwitch uses Netlink
+ * message framing internally for certain purposes.
+ *
+ * This header provides access to the Netlink message framing definitions
+ * regardless of platform.  On Linux, it includes the proper headers directly;
+ * on other platforms it directly defines the structures and macros itself.
+ */
 
 #include <stdint.h>
 #include <sys/socket.h>
 #include "util.h"
 
+#ifdef HAVE_NETLINK
+#include <linux/netlink.h>
+#include <linux/genetlink.h>
+#else
 #define NETLINK_GENERIC         16
 
 struct sockaddr_nl {
@@ -137,5 +148,6 @@ enum {
 };
 
 #define CTRL_ATTR_OP_MAX (__CTRL_ATTR_OP_MAX - 1)
+#endif  /* !HAVE_NETLINK */
 
 #endif /* netlink-protocol.h */
