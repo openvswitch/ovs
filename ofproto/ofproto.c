@@ -3804,19 +3804,6 @@ facet_update_stats(struct ofproto *ofproto, struct facet *facet,
     }
 }
 
-struct flow_mod {
-    struct cls_rule cr;
-    ovs_be64 cookie;
-    uint16_t command;
-    uint16_t idle_timeout;
-    uint16_t hard_timeout;
-    uint32_t buffer_id;
-    uint16_t out_port;
-    uint16_t flags;
-    union ofp_action *actions;
-    size_t n_actions;
-};
-
 /* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
  * in which no matching flow already exists in the flow table.
  *
@@ -4027,9 +4014,10 @@ delete_flow(struct ofproto *p, struct rule *rule, ovs_be16 out_port)
 }
 
 static int
-flow_mod_core(struct ofconn *ofconn, struct flow_mod *fm)
+handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn->ofproto;
+    struct flow_mod fm;
     int error;
 
     error = reject_slave_controller(ofconn, "flow_mod");
@@ -4037,136 +4025,46 @@ flow_mod_core(struct ofconn *ofconn, struct flow_mod *fm)
         return error;
     }
 
-    error = validate_actions(fm->actions, fm->n_actions,
-                             &fm->cr.flow, p->max_ports);
+    error = ofputil_decode_flow_mod(&fm, oh, ofconn->flow_format);
     if (error) {
         return error;
     }
 
-    /* We do not support the emergency flow cache.  It will hopefully
-     * get dropped from OpenFlow in the near future. */
-    if (fm->flags & OFPFF_EMERG) {
+    /* We do not support the emergency flow cache.  It will hopefully get
+     * dropped from OpenFlow in the near future. */
+    if (fm.flags & OFPFF_EMERG) {
         /* There isn't a good fit for an error code, so just state that the
          * flow table is full. */
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
     }
 
-    switch (fm->command) {
+    error = validate_actions(fm.actions, fm.n_actions,
+                             &fm.cr.flow, p->max_ports);
+    if (error) {
+        return error;
+    }
+
+    switch (fm.command) {
     case OFPFC_ADD:
-        return add_flow(ofconn, fm);
+        return add_flow(ofconn, &fm);
 
     case OFPFC_MODIFY:
-        return modify_flows_loose(ofconn, fm);
+        return modify_flows_loose(ofconn, &fm);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flow_strict(ofconn, fm);
+        return modify_flow_strict(ofconn, &fm);
 
     case OFPFC_DELETE:
-        delete_flows_loose(p, fm);
+        delete_flows_loose(p, &fm);
         return 0;
 
     case OFPFC_DELETE_STRICT:
-        delete_flow_strict(p, fm);
+        delete_flow_strict(p, &fm);
         return 0;
 
     default:
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
     }
-}
-
-static int
-handle_ofpt_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
-{
-    struct ofp_match orig_match;
-    struct ofp_flow_mod *ofm;
-    struct flow_mod fm;
-    struct ofpbuf b;
-    int error;
-
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
-
-    /* Dissect the message. */
-    ofm = ofpbuf_try_pull(&b, sizeof *ofm);
-    if (!ofm) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    error = ofputil_pull_actions(&b, b.size, &fm.actions, &fm.n_actions);
-    if (error) {
-        return error;
-    }
-
-    /* Normalize ofm->match.  If normalization actually changes anything, then
-     * log the differences. */
-    ofm->match.pad1[0] = ofm->match.pad2[0] = 0;
-    orig_match = ofm->match;
-    normalize_match(&ofm->match);
-    if (memcmp(&ofm->match, &orig_match, sizeof orig_match)) {
-        static struct vlog_rate_limit normal_rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        if (!VLOG_DROP_INFO(&normal_rl)) {
-            char *old = ofp_match_to_literal_string(&orig_match);
-            char *new = ofp_match_to_literal_string(&ofm->match);
-            VLOG_INFO("%s: normalization changed ofp_match, details:",
-                      rconn_get_name(ofconn->rconn));
-            VLOG_INFO(" pre: %s", old);
-            VLOG_INFO("post: %s", new);
-            free(old);
-            free(new);
-        }
-    }
-
-    /* Translate the message. */
-    ofputil_cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
-                                ofconn->flow_format, ofm->cookie, &fm.cr);
-    fm.cookie = ofm->cookie;
-    fm.command = ntohs(ofm->command);
-    fm.idle_timeout = ntohs(ofm->idle_timeout);
-    fm.hard_timeout = ntohs(ofm->hard_timeout);
-    fm.buffer_id = ntohl(ofm->buffer_id);
-    fm.out_port = ntohs(ofm->out_port);
-    fm.flags = ntohs(ofm->flags);
-
-    /* Execute the command. */
-    return flow_mod_core(ofconn, &fm);
-}
-
-static int
-handle_nxt_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
-{
-    struct nx_flow_mod *nfm;
-    struct flow_mod fm;
-    struct ofpbuf b;
-    int error;
-
-    b.data = (void *) oh;
-    b.size = ntohs(oh->length);
-
-    /* Dissect the message. */
-    nfm = ofpbuf_try_pull(&b, sizeof *nfm);
-    if (!nfm) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-    error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
-                          &fm.cr);
-    if (error) {
-        return error;
-    }
-    error = ofputil_pull_actions(&b, b.size, &fm.actions, &fm.n_actions);
-    if (error) {
-        return error;
-    }
-
-    /* Translate the message. */
-    fm.cookie = nfm->cookie;
-    fm.command = ntohs(nfm->command);
-    fm.idle_timeout = ntohs(nfm->idle_timeout);
-    fm.hard_timeout = ntohs(nfm->hard_timeout);
-    fm.buffer_id = ntohl(nfm->buffer_id);
-    fm.out_port = ntohs(nfm->out_port);
-    fm.flags = ntohs(nfm->flags);
-
-    /* Execute the command. */
-    return flow_mod_core(ofconn, &fm);
 }
 
 static int
@@ -4284,7 +4182,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_port_mod(ofconn, oh);
 
     case OFPUTIL_OFPT_FLOW_MOD:
-        return handle_ofpt_flow_mod(ofconn, oh);
+        return handle_flow_mod(ofconn, oh);
 
     case OFPUTIL_OFPT_BARRIER_REQUEST:
         return handle_barrier_request(ofconn, oh);
@@ -4308,7 +4206,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_nxt_set_flow_format(ofconn, oh);
 
     case OFPUTIL_NXT_FLOW_MOD:
-        return handle_nxt_flow_mod(ofconn, oh);
+        return handle_flow_mod(ofconn, oh);
 
         /* OpenFlow statistics requests. */
     case OFPUTIL_OFPST_DESC_REQUEST:

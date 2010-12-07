@@ -112,6 +112,39 @@ void ofputil_cls_rule_to_match(const struct cls_rule *, enum nx_flow_format,
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
 
+/* Flow format independent flow_mod. */
+struct flow_mod {
+    struct cls_rule cr;
+    ovs_be64 cookie;
+    uint16_t command;
+    uint16_t idle_timeout;
+    uint16_t hard_timeout;
+    uint32_t buffer_id;
+    uint16_t out_port;
+    uint16_t flags;
+    union ofp_action *actions;
+    size_t n_actions;
+};
+
+int ofputil_decode_flow_mod(struct flow_mod *, const struct ofp_header *,
+                            enum nx_flow_format);
+struct ofpbuf *ofputil_encode_flow_mod(const struct flow_mod *,
+                                       enum nx_flow_format);
+
+/* Flow stats or aggregate stats request, independent of flow format. */
+struct flow_stats_request {
+    bool aggregate;             /* Aggregate results? */
+    struct cls_rule match;
+    uint16_t out_port;
+    uint8_t table_id;
+};
+
+int ofputil_decode_flow_stats_request(struct flow_stats_request *,
+                                      const struct ofp_header *,
+                                      enum nx_flow_format);
+struct ofpbuf *ofputil_encode_flow_stats_request(
+    const struct flow_stats_request *, enum nx_flow_format);
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);

@@ -71,4 +71,8 @@ void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);
  */
 #define NXM_MAX_LEN 192
 
+/* This is my guess at the length of a "typical" nx_match, for use in
+ * predicting space requirements. */
+#define NXM_TYPICAL_LEN 64
+
 #endif /* nx-match.h */

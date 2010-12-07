@@ -755,6 +755,276 @@ ofputil_msg_type_code(const struct ofputil_msg_type *type)
 {
     return type->code;
 }
+
+/* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh', received when the
+ * current flow format was 'flow_format', into an abstract flow_mod in 'fm'.
+ * Returns 0 if successful, otherwise an OpenFlow error code.
+ *
+ * Does not validate the flow_mod actions. */
+int
+ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
+                        enum nx_flow_format flow_format)
+{
+    const struct ofputil_msg_type *type;
+    struct ofpbuf b;
+
+    b.data = (void *) oh;
+    b.size = ntohs(oh->length);
+
+    ofputil_decode_msg_type(oh, &type);
+    if (ofputil_msg_type_code(type) == OFPUTIL_OFPT_FLOW_MOD) {
+        /* Standard OpenFlow flow_mod. */
+        struct ofp_match match, orig_match;
+        const struct ofp_flow_mod *ofm;
+        int error;
+
+        /* Dissect the message. */
+        ofm = ofpbuf_try_pull(&b, sizeof *ofm);
+        if (!ofm) {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        }
+        error = ofputil_pull_actions(&b, b.size, &fm->actions, &fm->n_actions);
+        if (error) {
+            return error;
+        }
+
+        /* Normalize ofm->match.  If normalization actually changes anything,
+         * then log the differences. */
+        match = ofm->match;
+        match.pad1[0] = match.pad2[0] = 0;
+        orig_match = match;
+        normalize_match(&match);
+        if (memcmp(&match, &orig_match, sizeof orig_match)) {
+            if (!VLOG_DROP_INFO(&bad_ofmsg_rl)) {
+                char *old = ofp_match_to_literal_string(&orig_match);
+                char *new = ofp_match_to_literal_string(&match);
+                VLOG_INFO("normalization changed ofp_match, details:");
+                VLOG_INFO(" pre: %s", old);
+                VLOG_INFO("post: %s", new);
+                free(old);
+                free(new);
+            }
+        }
+
+        /* Translate the message. */
+        ofputil_cls_rule_from_match(&match, ntohs(ofm->priority), flow_format,
+                                    ofm->cookie, &fm->cr);
+        fm->cookie = ofm->cookie;
+        fm->command = ntohs(ofm->command);
+        fm->idle_timeout = ntohs(ofm->idle_timeout);
+        fm->hard_timeout = ntohs(ofm->hard_timeout);
+        fm->buffer_id = ntohl(ofm->buffer_id);
+        fm->out_port = ntohs(ofm->out_port);
+        fm->flags = ntohs(ofm->flags);
+    } else if (ofputil_msg_type_code(type) == OFPUTIL_NXT_FLOW_MOD) {
+        /* Nicira extended flow_mod. */
+        const struct nx_flow_mod *nfm;
+        int error;
+
+        /* Dissect the message. */
+        nfm = ofpbuf_try_pull(&b, sizeof *nfm);
+        if (!nfm) {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        }
+        error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
+                              &fm->cr);
+        if (error) {
+            return error;
+        }
+        error = ofputil_pull_actions(&b, b.size, &fm->actions, &fm->n_actions);
+        if (error) {
+            return error;
+        }
+
+        /* Translate the message. */
+        fm->cookie = nfm->cookie;
+        fm->command = ntohs(nfm->command);
+        fm->idle_timeout = ntohs(nfm->idle_timeout);
+        fm->hard_timeout = ntohs(nfm->hard_timeout);
+        fm->buffer_id = ntohl(nfm->buffer_id);
+        fm->out_port = ntohs(nfm->out_port);
+        fm->flags = ntohs(nfm->flags);
+    } else {
+        NOT_REACHED();
+    }
+
+    return 0;
+}
+
+/* Converts 'fm' into an OFPT_FLOW_MOD or NXT_FLOW_MOD message according to
+ * 'flow_format' and returns the message. */
+struct ofpbuf *
+ofputil_encode_flow_mod(const struct flow_mod *fm,
+                        enum nx_flow_format flow_format)
+{
+    size_t actions_len = fm->n_actions * sizeof *fm->actions;
+    struct ofpbuf *msg;
+
+    if (flow_format == NXFF_OPENFLOW10
+        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+        struct ofp_flow_mod *ofm;
+
+        msg = ofpbuf_new(sizeof *ofm + actions_len);
+        ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
+        ofputil_cls_rule_to_match(&fm->cr, flow_format, &ofm->match);
+        ofm->cookie = fm->cookie;
+        ofm->command = htons(fm->command);
+        ofm->idle_timeout = htons(fm->idle_timeout);
+        ofm->hard_timeout = htons(fm->hard_timeout);
+        ofm->priority = htons(fm->cr.priority);
+        ofm->buffer_id = htonl(fm->buffer_id);
+        ofm->out_port = htons(fm->out_port);
+        ofm->flags = htons(fm->flags);
+    } else if (flow_format == NXFF_NXM) {
+        struct nx_flow_mod *nfm;
+        int match_len;
+
+        msg = ofpbuf_new(sizeof *nfm + NXM_TYPICAL_LEN + actions_len);
+        put_nxmsg(sizeof *nfm, NXT_FLOW_MOD, msg);
+        match_len = nx_put_match(msg, &fm->cr);
+
+        nfm = msg->data;
+        nfm->cookie = fm->cookie;
+        nfm->command = htons(fm->command);
+        nfm->idle_timeout = htons(fm->idle_timeout);
+        nfm->hard_timeout = htons(fm->hard_timeout);
+        nfm->priority = htons(fm->cr.priority);
+        nfm->buffer_id = htonl(fm->buffer_id);
+        nfm->out_port = htons(fm->out_port);
+        nfm->flags = htons(fm->flags);
+        nfm->match_len = htons(match_len);
+    } else {
+        NOT_REACHED();
+    }
+
+    ofpbuf_put(msg, fm->actions, actions_len);
+    update_openflow_length(msg);
+    return msg;
+}
+
+static int
+ofputil_decode_ofpst_flow_request(struct flow_stats_request *fsr,
+                                  const struct ofp_header *oh,
+                                  enum nx_flow_format flow_format,
+                                  bool aggregate)
+{
+    const struct ofp_flow_stats_request *ofsr = ofputil_stats_body(oh);
+
+    fsr->aggregate = aggregate;
+    ofputil_cls_rule_from_match(&ofsr->match, 0, flow_format, 0, &fsr->match);
+    fsr->out_port = ntohs(ofsr->out_port);
+    fsr->table_id = ofsr->table_id;
+
+    return 0;
+}
+
+static int
+ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
+                                 const struct ofp_header *oh,
+                                 bool aggregate)
+{
+    const struct nx_flow_stats_request *nfsr;
+    struct ofpbuf b;
+    int error;
+
+    b.data = (void *) oh;
+    b.size = ntohs(oh->length);
+
+    nfsr = ofpbuf_try_pull(&b, sizeof *nfsr);
+    if (!nfsr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &fsr->match);
+    if (error) {
+        return error;
+    }
+    if (b.size) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    fsr->aggregate = aggregate;
+    fsr->out_port = ntohs(nfsr->out_port);
+    fsr->table_id = nfsr->table_id;
+
+    return 0;
+}
+
+/* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
+ * message 'oh', received when the current flow format was 'flow_format', into
+ * an abstract flow_stats_request in 'fsr'.  Returns 0 if successful, otherwise
+ * an OpenFlow error code. */
+int
+ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
+                                  const struct ofp_header *oh,
+                                  enum nx_flow_format flow_format)
+{
+    const struct ofputil_msg_type *type;
+    struct ofpbuf b;
+    int code;
+
+    b.data = (void *) oh;
+    b.size = ntohs(oh->length);
+
+    ofputil_decode_msg_type(oh, &type);
+    code = ofputil_msg_type_code(type);
+    switch (code) {
+    case OFPUTIL_OFPST_FLOW_REQUEST:
+        return ofputil_decode_ofpst_flow_request(fsr, oh, flow_format, false);
+
+    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
+        return ofputil_decode_ofpst_flow_request(fsr, oh, flow_format, true);
+
+    case OFPUTIL_NXST_FLOW_REQUEST:
+        return ofputil_decode_nxst_flow_request(fsr, oh, false);
+
+    case OFPUTIL_NXST_AGGREGATE_REQUEST:
+        return ofputil_decode_nxst_flow_request(fsr, oh, true);
+
+    default:
+        /* Hey, the caller lied. */
+        NOT_REACHED();
+    }
+}
+
+/* Converts abstract flow_stats_request 'fsr' into an OFPST_FLOW,
+ * OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE message 'oh' according to
+ * 'flow_format', and returns the message. */
+struct ofpbuf *
+ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
+                                  enum nx_flow_format flow_format)
+{
+    struct ofpbuf *msg;
+
+    if (flow_format == NXFF_OPENFLOW10
+        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+        struct ofp_flow_stats_request *ofsr;
+        int type;
+
+        BUILD_ASSERT_DECL(sizeof(struct ofp_flow_stats_request)
+                          == sizeof(struct ofp_aggregate_stats_request));
+
+        type = fsr->aggregate ? OFPST_AGGREGATE : OFPST_FLOW;
+        ofsr = ofputil_make_stats_request(sizeof *ofsr, type, &msg);
+        ofputil_cls_rule_to_match(&fsr->match, flow_format, &ofsr->match);
+        ofsr->table_id = fsr->table_id;
+        ofsr->out_port = htons(fsr->out_port);
+    } else if (flow_format == NXFF_NXM) {
+        struct nx_flow_stats_request *nfsr;
+        int match_len;
+
+        ofputil_make_nxstats_request(sizeof *nfsr, NXST_FLOW, &msg);
+        match_len = nx_put_match(msg, &fsr->match);
+
+        nfsr = msg->data;
+        nfsr->out_port = htons(fsr->out_port);
+        nfsr->match_len = htons(match_len);
+        nfsr->table_id = fsr->table_id;
+    } else {
+        NOT_REACHED();
+    }
+
+    return msg;
+}
 
 /* Returns a string representing the message type of 'type'.  The string is the
  * enumeration constant for the type, e.g. "OFPT_HELLO".  For statistics
