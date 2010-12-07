@@ -133,6 +133,18 @@ NXM_NX_TUN_ID(00000000abcdef01)
 # Register 0.
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
+
+# Invalid field number.
+01020304(1111/2222)
+
+# Unimplemented registers.
+#
+# This test assumes that at least two registers, but fewer than 16,
+# registers are implemented.
+00010004(12345678)
+00010108(12345678/12345678)
+00011e04(12345678)
+00011f08(12345678/12345678)
 ])
 AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl
 <any>
@@ -238,5 +250,17 @@ NXM_NX_TUN_ID(00000000abcdef01)
 # Register 0.
 NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
+
+# Invalid field number.
+nx_pull_match() returned error 44010101
+
+# Unimplemented registers.
+#
+# This test assumes that at least two registers, but fewer than 16,
+# registers are implemented.
+NXM_NX_REG0(12345678)
+NXM_NX_REG0_W(12345678/12345678)
+nx_pull_match() returned error 44010101
+nx_pull_match() returned error 44010101
 ])
 AT_CLEANUP

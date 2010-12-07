@@ -720,18 +720,28 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
     return ds_steal_cstr(&s);
 }
 
-static const struct nxm_field *
-lookup_nxm_field(const char *name, int name_len)
+static uint32_t
+parse_nxm_field_name(const char *name, int name_len)
 {
     const struct nxm_field *f;
 
+    /* Check whether it's a field name. */
     for (f = nxm_fields; f < &nxm_fields[ARRAY_SIZE(nxm_fields)]; f++) {
         if (!strncmp(f->name, name, name_len) && f->name[name_len] == '\0') {
-            return f;
+            return f->header;
         }
     }
 
-    return NULL;
+    /* Check whether it's a 32-bit field header value as hex.
+     * (This isn't ordinarily useful except for testing error behavior.) */
+    if (name_len == 8) {
+        uint32_t header = hexits_value(name, name_len, NULL);
+        if (header != UINT_MAX) {
+            return header;
+        }
+    }
+
+    return 0;
 }
 
 static const char *
@@ -769,35 +779,38 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
     }
 
     for (s += strspn(s, ", "); *s; s += strspn(s, ", ")) {
-        const struct nxm_field *f;
+        const char *name;
+        uint32_t header;
         int name_len;
 
+        name = s;
         name_len = strcspn(s, "(");
         if (s[name_len] != '(') {
             ovs_fatal(0, "%s: missing ( at end of nx_match", full_s);
         }
 
-        f = lookup_nxm_field(s, name_len);
-        if (!f) {
+        header = parse_nxm_field_name(name, name_len);
+        if (!header) {
             ovs_fatal(0, "%s: unknown field `%.*s'", full_s, name_len, s);
         }
 
         s += name_len + 1;
 
-        nxm_put_header(b, f->header);
-        s = parse_hex_bytes(b, s, nxm_field_bytes(f->header));
-        if (NXM_HASMASK(f->header)) {
+        nxm_put_header(b, header);
+        s = parse_hex_bytes(b, s, nxm_field_bytes(header));
+        if (NXM_HASMASK(header)) {
             s += strspn(s, " ");
             if (*s != '/') {
-                ovs_fatal(0, "%s: missing / in masked field %s",
-                          full_s, f->name);
+                ovs_fatal(0, "%s: missing / in masked field %.*s",
+                          full_s, name_len, name);
             }
-            s = parse_hex_bytes(b, s + 1, nxm_field_bytes(f->header));
+            s = parse_hex_bytes(b, s + 1, nxm_field_bytes(header));
         }
 
         s += strspn(s, " ");
         if (*s != ')') {
-            ovs_fatal(0, "%s: missing ) following field %s", full_s, f->name);
+            ovs_fatal(0, "%s: missing ) following field %.*s",
+                      full_s, name_len, name);
         }
         s++;
     }
