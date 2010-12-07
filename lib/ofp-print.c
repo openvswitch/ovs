@@ -1456,6 +1456,18 @@ ofp_print_echo(struct ds *string, const struct ofp_header *oh, int verbosity)
 }
 
 static void
+ofp_print_nxt_status_message(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpbuf_pull(&b, sizeof *oh);
+    ds_put_char(string, '"');
+    ds_put_printable(string, b.data, b.size);
+    ds_put_char(string, '"');
+}
+
+static void
 ofp_print_nxt_tun_id_from_cookie(struct ds *string,
                                  const struct nxt_tun_id_cookie *ntic)
 {
@@ -1630,7 +1642,7 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_NXT_STATUS_REQUEST:
     case OFPUTIL_NXT_STATUS_REPLY:
-        /* XXX */
+        ofp_print_nxt_status_message(string, oh);
         break;
 
     case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
