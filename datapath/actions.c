@@ -273,7 +273,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	check = get_l4_checksum(skb, key);
 	if (likely(check))
 		update_csum(check, skb, *nwaddr, a->nw_addr, 1);
-	update_csum(&nh->check, skb, *nwaddr, a->nw_addr, 0);
+	csum_replace4(&nh->check, *nwaddr, a->nw_addr);
 
 	*nwaddr = a->nw_addr;
 
@@ -296,8 +296,8 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 
 		/* Set the DSCP bits and preserve the ECN bits. */
 		new = a->nw_tos | (nh->tos & INET_ECN_MASK);
-		update_csum(&nh->check, skb, htons((u16)old),
-			    htons((u16)new), 0);
+		csum_replace4(&nh->check, (__force __be32)old,
+					  (__force __be32)new);
 		*f = new;
 	}
 	return skb;
