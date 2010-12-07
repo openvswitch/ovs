@@ -243,26 +243,50 @@ nl_msg_put_u8(struct ofpbuf *msg, uint16_t type, uint8_t value)
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
 
-/* Appends a Netlink attribute of the given 'type' and the given 16-bit 'value'
- * to 'msg'. */
+/* Appends a Netlink attribute of the given 'type' and the given 16-bit host
+ * byte order 'value' to 'msg'. */
 void
 nl_msg_put_u16(struct ofpbuf *msg, uint16_t type, uint16_t value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
 
-/* Appends a Netlink attribute of the given 'type' and the given 32-bit 'value'
- * to 'msg'. */
+/* Appends a Netlink attribute of the given 'type' and the given 32-bit host
+ * byte order 'value' to 'msg'. */
 void
 nl_msg_put_u32(struct ofpbuf *msg, uint16_t type, uint32_t value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
 
-/* Appends a Netlink attribute of the given 'type' and the given 64-bit 'value'
- * to 'msg'. */
+/* Appends a Netlink attribute of the given 'type' and the given 64-bit host
+ * byte order 'value' to 'msg'. */
 void
 nl_msg_put_u64(struct ofpbuf *msg, uint16_t type, uint64_t value)
+{
+    nl_msg_put_unspec(msg, type, &value, sizeof value);
+}
+
+/* Appends a Netlink attribute of the given 'type' and the given 16-bit network
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_put_be16(struct ofpbuf *msg, uint16_t type, ovs_be16 value)
+{
+    nl_msg_put_unspec(msg, type, &value, sizeof value);
+}
+
+/* Appends a Netlink attribute of the given 'type' and the given 32-bit network
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_put_be32(struct ofpbuf *msg, uint16_t type, ovs_be32 value)
+{
+    nl_msg_put_unspec(msg, type, &value, sizeof value);
+}
+
+/* Appends a Netlink attribute of the given 'type' and the given 64-bit network
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_put_be64(struct ofpbuf *msg, uint16_t type, ovs_be64 value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
@@ -379,7 +403,7 @@ nl_attr_get_u8(const struct nlattr *nla)
     return NL_ATTR_GET_AS(nla, uint8_t);
 }
 
-/* Returns the 16-bit value in 'nla''s payload.
+/* Returns the 16-bit host byte order value in 'nla''s payload.
  *
  * Asserts that 'nla''s payload is at least 2 bytes long. */
 uint16_t
@@ -388,7 +412,7 @@ nl_attr_get_u16(const struct nlattr *nla)
     return NL_ATTR_GET_AS(nla, uint16_t);
 }
 
-/* Returns the 32-bit value in 'nla''s payload.
+/* Returns the 32-bit host byte order value in 'nla''s payload.
  *
  * Asserts that 'nla''s payload is at least 4 bytes long. */
 uint32_t
@@ -397,13 +421,40 @@ nl_attr_get_u32(const struct nlattr *nla)
     return NL_ATTR_GET_AS(nla, uint32_t);
 }
 
-/* Returns the 64-bit value in 'nla''s payload.
+/* Returns the 64-bit host byte order value in 'nla''s payload.
  *
  * Asserts that 'nla''s payload is at least 8 bytes long. */
 uint64_t
 nl_attr_get_u64(const struct nlattr *nla)
 {
     return NL_ATTR_GET_AS(nla, uint64_t);
+}
+
+/* Returns the 16-bit network byte order value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 2 bytes long. */
+ovs_be16
+nl_attr_get_be16(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, ovs_be16);
+}
+
+/* Returns the 32-bit network byte order value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 4 bytes long. */
+ovs_be32
+nl_attr_get_be32(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, ovs_be32);
+}
+
+/* Returns the 64-bit network byte order value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 8 bytes long. */
+ovs_be64
+nl_attr_get_be64(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, ovs_be64);
 }
 
 /* Returns the null-terminated string value in 'nla''s payload.
