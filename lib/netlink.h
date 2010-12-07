@@ -34,6 +34,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "netlink-protocol.h"
+#include "openvswitch/types.h"
 
 struct ofpbuf;
 struct nlattr;
@@ -88,6 +90,36 @@ enum nl_attr_type
     NL_A_NESTED,
     N_NL_ATTR_TYPES
 };
+
+/* Netlink attribute iteration. */
+static inline struct nlattr *
+nl_attr_next(const struct nlattr *nla)
+{
+    return (struct nlattr *) ((uint8_t *) nla + NLA_ALIGN(nla->nla_len));
+}
+
+static inline bool
+nl_attr_is_valid(const struct nlattr *nla, size_t maxlen)
+{
+    return (maxlen >= sizeof *nla
+            && nla->nla_len >= sizeof *nla
+            && NLA_ALIGN(nla->nla_len) <= maxlen);
+}
+
+/* This macro is careful to check for attributes with bad lengths. */
+#define NL_ATTR_FOR_EACH(ITER, LEFT, ATTRS, ATTRS_LEN)                  \
+    for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
+         nl_attr_is_valid(ITER, LEFT);                                  \
+         (LEFT) -= NLA_ALIGN((ITER)->nla_len), (ITER) = nl_attr_next(ITER))
+
+
+/* This macro does not check for attributes with bad lengths.  It should only
+ * be used with messages from trusted sources or with messages that have
+ * already been validates (e.g. with NL_ATTR_FOR_EACH).  */
+#define NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, ATTRS, ATTRS_LEN)           \
+    for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
+         (LEFT) > 0;                                                    \
+         (LEFT) -= NLA_ALIGN((ITER)->nla_len), (ITER) = nl_attr_next(ITER))
 
 /* Netlink attribute parsing. */
 int nl_attr_type(const struct nlattr *);
