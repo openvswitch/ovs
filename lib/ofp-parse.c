@@ -648,13 +648,14 @@ void
 parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
                        char *string, uint16_t command)
 {
+    bool is_del = command == OFPFC_DELETE || command == OFPFC_DELETE_STRICT;
     enum nx_flow_format min_format, next_format;
     struct ofpbuf actions;
     struct ofpbuf *ofm;
     struct flow_mod fm;
 
     ofpbuf_init(&actions, 64);
-    parse_ofp_str(&fm, NULL, &actions, string);
+    parse_ofp_str(&fm, NULL, is_del ? NULL : &actions, string);
     fm.command = command;
 
     min_format = ofputil_min_flow_format(&fm.cr, true, fm.cookie);

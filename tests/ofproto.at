@@ -1,5 +1,8 @@
 AT_BANNER([ofproto])
 
+m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
+m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
+
 m4_define([OFPROTO_START],
   [OVS_RUNDIR=$PWD; export OVS_RUNDIR
    OVS_LOGDIR=$PWD; export OVS_LOGDIR
@@ -23,7 +26,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - feature request, config request])
 OFPROTO_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
-AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
@@ -45,7 +48,7 @@ do
     command=$[1] config=$[2] state=$[3]
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
-    AT_CHECK_UNQUOTED([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+    AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
@@ -53,5 +56,21 @@ features: capabilities:0x87, actions:0xfff
 OFPT_GET_CONFIG_REPLY: miss_send_len=0
 ])
 done
+OFPROTO_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - basic flow_mod commands])
+OFPROTO_START
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=0,actions=1])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
+NXST_FLOW reply: cookie=0x0, duration=?s, table_id=0, priority=32768, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x0, duration=?s, table_id=0, priority=32768, n_packets=0, n_bytes=0, in_port=65534 actions=output:1
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
+])
 OFPROTO_STOP
 AT_CLEANUP

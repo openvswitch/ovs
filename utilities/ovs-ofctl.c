@@ -631,7 +631,8 @@ do_flow_mod__(int argc OVS_UNUSED, char *argv[], uint16_t command)
 
     list_init(&requests);
     flow_format = NXFF_OPENFLOW10;
-    parse_ofp_flow_mod_str(&requests, &flow_format, argv[2], command);
+    parse_ofp_flow_mod_str(&requests, &flow_format, argc > 2 ? argv[2] : "",
+                           command);
 
     open_vconn(argv[1], &vconn);
     transact_multiple_noreply(vconn, &requests);
