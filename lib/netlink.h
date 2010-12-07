@@ -90,6 +90,7 @@ enum nl_attr_type
 };
 
 /* Netlink attribute parsing. */
+int nl_attr_type(const struct nlattr *);
 const void *nl_attr_get(const struct nlattr *);
 size_t nl_attr_get_size(const struct nlattr *);
 const void *nl_attr_get_unspec(const struct nlattr *, size_t size);

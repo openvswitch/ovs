@@ -150,4 +150,11 @@ enum {
 #define CTRL_ATTR_OP_MAX (__CTRL_ATTR_OP_MAX - 1)
 #endif  /* !HAVE_NETLINK */
 
+/* These were introduced all together in 2.6.24. */
+#ifndef NLA_TYPE_MASK
+#define NLA_F_NESTED		(1 << 15)
+#define NLA_F_NET_BYTEORDER	(1 << 14)
+#define NLA_TYPE_MASK		~(NLA_F_NESTED | NLA_F_NET_BYTEORDER)
+#endif
+
 #endif /* netlink-protocol.h */

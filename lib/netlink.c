@@ -358,6 +358,14 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
 
 /* Attributes. */
 
+/* Returns the bits of 'nla->nla_type' that are significant for determining its
+ * type. */
+int
+nl_attr_type(const struct nlattr *nla)
+{
+    return nla->nla_type & NLA_TYPE_MASK;
+}
+
 /* Returns the first byte in the payload of attribute 'nla'. */
 const void *
 nl_attr_get(const struct nlattr *nla)
@@ -539,12 +547,12 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
         if (aligned_len > (char*)tail - (char*)p) {
             VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" aligned data len (%zu) "
                         "> bytes left (%tu)",
-                        offset, nla->nla_type, aligned_len,
+                        offset, nl_attr_type(nla), aligned_len,
                         (char*)tail - (char*)p);
             return false;
         }
 
-        type = nla->nla_type;
+        type = nl_attr_type(nla);
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
             const struct nl_policy *e = &policy[type];
             size_t min_len, max_len;
