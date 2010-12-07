@@ -1102,18 +1102,28 @@ ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_ofpst_flow_request(struct ds *string, const struct ofp_header *oh,
-                             int verbosity)
+ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_flow_stats_request *fsr = ofputil_stats_body(oh);
+    struct flow_stats_request fsr;
+    int error;
 
-    if (fsr->table_id == 0xff) {
-        ds_put_format(string, " table_id=any, ");
-    } else {
-        ds_put_format(string, " table_id=%"PRIu8", ", fsr->table_id);
+    error = ofputil_decode_flow_stats_request(&fsr, oh, NXFF_OPENFLOW10);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
     }
 
-    ofp_print_match(string, &fsr->match, verbosity);
+    if (fsr.table_id != 0xff) {
+        ds_put_format(string, " table_id=%"PRIu8, fsr.table_id);
+    }
+
+    if (fsr.out_port != OFPP_NONE) {
+        ds_put_cstr(string, " out_port=");
+        ofp_print_port_name(string, fsr.out_port);
+    }
+
+    ds_put_char(string, ' ');
+    cls_rule_format(&fsr.match, string);
 }
 
 static void
@@ -1256,21 +1266,6 @@ ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
                           n_actions * sizeof *actions);
         ds_put_char(string, '\n');
      }
-}
-
-static void
-ofp_print_ofpst_aggregate_request(struct ds *string,
-                                  const struct ofp_header *oh, int verbosity)
-{
-    const struct ofp_aggregate_stats_request *asr = ofputil_stats_body(oh);
-
-    if (asr->table_id == 0xff) {
-        ds_put_format(string, " table_id=any, ");
-    } else {
-        ds_put_format(string, " table_id=%"PRIu8", ", asr->table_id);
-    }
-
-    ofp_print_match(string, &asr->match, verbosity);
 }
 
 static void
@@ -1587,13 +1582,11 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPST_FLOW_REQUEST:
-        ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_flow_request(string, oh, verbosity);
-        break;
-
+    case OFPUTIL_NXST_FLOW_REQUEST:
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
+    case OFPUTIL_NXST_AGGREGATE_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_aggregate_request(string, oh, verbosity);
+        ofp_print_flow_stats_request(string, oh);
         break;
 
     case OFPUTIL_OFPST_TABLE_REQUEST:
@@ -1663,8 +1656,6 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_NXT_FLOW_REMOVED:
-    case OFPUTIL_NXST_FLOW_REQUEST:
-    case OFPUTIL_NXST_AGGREGATE_REQUEST:
         /* XXX */
         break;
 
