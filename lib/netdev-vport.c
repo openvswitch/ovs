@@ -438,6 +438,7 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
     bool ipsec_ip_set = false;
     bool ipsec_mech_set = false;
 
+    memset(&config, 0, sizeof config);
     config.flags |= TNL_F_PMTUD;
     config.flags |= TNL_F_HDR_CACHE;
 
