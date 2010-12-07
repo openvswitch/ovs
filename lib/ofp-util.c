@@ -105,7 +105,7 @@ void
 ofputil_cls_rule_from_match(const struct ofp_match *match,
                             unsigned int priority,
                             enum nx_flow_format flow_format,
-                            uint64_t cookie, struct cls_rule *rule)
+                            ovs_be64 cookie, struct cls_rule *rule)
 {
     struct flow_wildcards *wc = &rule->wc;
     unsigned int ofpfw;
