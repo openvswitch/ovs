@@ -5,4 +5,5 @@ _debian/utilities/ovs-kill usr/sbin
 _debian/utilities/ovs-vsctl usr/sbin
 _debian/utilities/ovs-pcap usr/bin
 _debian/utilities/ovs-tcpundump usr/bin
+_debian/utilities/ovs-vlan-test usr/bin
 _debian/vswitchd/ovs-vswitchd usr/sbin

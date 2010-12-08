@@ -1,0 +1,434 @@
+#! @PYTHON@
+#
+# Copyright (c) 2010 Nicira Networks.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import BaseHTTPServer
+import getopt
+import httplib
+import os
+import threading
+import time
+import signal #Causes keyboard interrupts to go to the main thread.
+import socket
+import sys
+
+print_safe_lock = threading.Lock()
+def print_safe(s):
+    print_safe_lock.acquire()
+    print(s)
+    print_safe_lock.release()
+
+def start_thread(target, args):
+    t = threading.Thread(target=target, args=args)
+    t.setDaemon(True)
+    t.start()
+    return t
+
+#Caller is responsible for catching socket.error exceptions.
+def send_packet(key, length, dest_ip, dest_port):
+
+    length -= 20 + 8  #IP and UDP headers.
+
+    packet = str(key)
+    packet += chr(0) * (length - len(packet))
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(packet, (dest_ip, dest_port))
+    sock.close()
+
+#UDP Receiver
+class UDPReceiver:
+    def __init__(self, vlan_ip, vlan_port):
+        self.vlan_ip        = vlan_ip
+        self.vlan_port      = vlan_port
+        self.recv_callbacks = {}
+        self.udp_run        = False
+
+    def recv_packet(self, key, success_callback, timeout_callback):
+
+        event = threading.Event()
+
+        def timeout_cb():
+            timeout_callback()
+            event.set()
+
+        timer = threading.Timer(30, timeout_cb)
+        timer.daemon = True
+
+        def success_cb():
+            timer.cancel()
+            success_callback()
+            event.set()
+
+        # Start the timer first to avoid a timer.cancel() race condition.
+        timer.start()
+        self.recv_callbacks[key] = success_cb
+        return event
+
+    def udp_receiver(self):
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(1)
+
+        try:
+            sock.bind((self.vlan_ip, self.vlan_port))
+        except socket.error, e:
+            print_safe('Failed to bind to %s:%d with error: %s'
+                    % (self.vlan_ip, self.vlan_port, e))
+            os._exit(1) #sys.exit only exits the current thread.
+
+        while self.udp_run:
+
+            try:
+                data, _ = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
+            except socket.error, e:
+                print_safe('Failed to receive from %s:%d with error: %s'
+                    % (self.vlan_ip, self.vlan_port, e))
+                os._exit(1)
+
+            data_str = data.split(chr(0))[0]
+
+            if not data_str.isdigit():
+                continue
+
+            key = int(data_str)
+
+            if key in self.recv_callbacks:
+                self.recv_callbacks[key]()
+                del self.recv_callbacks[key]
+
+    def start(self):
+        self.udp_run = True
+        start_thread(self.udp_receiver, ())
+
+    def stop(self):
+        self.udp_run = False
+
+#Server
+vlan_server = None
+class VlanServer:
+
+    def __init__(self, server_ip, server_port, vlan_ip, vlan_port):
+        global vlan_server
+
+        vlan_server = self
+
+        self.server_ip   = server_ip
+        self.server_port = server_port
+
+        self.recv_response = '%s:%d:' % (vlan_ip, vlan_port)
+
+        self.result      = {}
+        self.result_lock = threading.Lock()
+
+        self._test_id      = 0
+        self._test_id_lock = threading.Lock()
+
+        self.udp_recv = UDPReceiver(vlan_ip, vlan_port)
+
+    def get_test_id(self):
+        self._test_id_lock.acquire()
+
+        self._test_id += 1
+        ret = self._test_id
+
+        self._test_id_lock.release()
+        return ret
+
+    def set_result(self, key, value):
+
+        self.result_lock.acquire()
+
+        if key not in self.result:
+            self.result[key] = value
+
+        self.result_lock.release()
+
+    def recv(self, test_id):
+        self.udp_recv.recv_packet(test_id,
+                lambda : self.set_result(test_id, 'Success'),
+                lambda : self.set_result(test_id, 'Timeout'))
+
+        return self.recv_response + str(test_id)
+
+    def send(self, test_id, data):
+        try:
+            ip, port, size = data.split(':')
+            port = int(port)
+            size = int(size)
+        except ValueError:
+            self.set_result(test_id,
+                    'Server failed to parse send request: %s' % data)
+            return
+
+        def send_thread():
+            send_time = 10
+            for _ in range(send_time * 2):
+                try:
+                    send_packet(test_id, size, ip, port)
+                except socket.error, e:
+                    self.set_result(test_id, 'Failure: ' + str(e))
+                    return
+                time.sleep(.5)
+
+            self.set_result(test_id, 'Success')
+
+        start_thread(send_thread, ())
+
+        return str(test_id)
+
+    def run(self):
+        self.udp_recv.start()
+        try:
+            BaseHTTPServer.HTTPServer((self.server_ip, self.server_port),
+                    VlanServerHandler).serve_forever()
+        except socket.error, e:
+            print_safe('Failed to start control server: %s' % e)
+            self.udp_recv.stop()
+
+        return 1
+
+class VlanServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    def do_GET(self):
+
+        #Guarantee three arguments.
+        path = (self.path.lower().lstrip('/') + '//').split('/')
+
+        resp = 404
+        body = None
+
+        if path[0] == 'start':
+            test_id = vlan_server.get_test_id()
+
+            if path[1] == 'recv':
+                resp = 200
+                body = vlan_server.recv(test_id)
+            elif path[1] == 'send':
+                resp = 200
+                body = vlan_server.send(test_id, path[2])
+        elif (path[0] == 'result'
+                and path[1].isdigit()
+                and int(path[1]) in vlan_server.result):
+            resp = 200
+            body = vlan_server.result[int(path[1])]
+        elif path[0] == 'ping':
+            resp = 200
+            body = 'pong'
+
+        self.send_response(resp)
+        self.end_headers()
+
+        if body:
+            self.wfile.write(body)
+
+#Client
+class VlanClient:
+
+    def __init__(self, server_ip, server_port, vlan_ip, vlan_port):
+        self.server_ip_port = '%s:%d' % (server_ip, server_port)
+        self.vlan_ip_port   = "%s:%d" % (vlan_ip, vlan_port)
+        self.udp_recv       = UDPReceiver(vlan_ip, vlan_port)
+
+    def request(self, resource):
+        conn = httplib.HTTPConnection(self.server_ip_port)
+        conn.request('GET', resource)
+        return conn
+
+    def send(self, size):
+
+        def error_msg(e):
+            print_safe('Send size %d unsuccessful: %s' % (size, e))
+
+        try:
+            conn = self.request('/start/recv')
+            data = conn.getresponse().read()
+        except (socket.error, httplib.HTTPException), e:
+            error_msg(e)
+            return False
+
+        try:
+            ip, port, test_id = data.split(':')
+            port    = int(port)
+            test_id = int(test_id)
+        except ValueError:
+            error_msg("Received invalid response from control server (%s)" %
+                    data)
+            return False
+
+        send_time = 5
+
+        for _ in range(send_time * 4):
+
+            try:
+                send_packet(test_id, size, ip, port)
+                resp = self.request('/result/%d' % test_id).getresponse()
+                data = resp.read()
+            except (socket.error, httplib.HTTPException), e:
+                error_msg(e)
+                return False
+
+            if resp.status == 200 and data == 'Success':
+                print_safe('Send size %d successful' % size)
+                return True
+            elif resp.status == 200:
+                error_msg(data)
+                return False
+
+            time.sleep(.25)
+
+        error_msg('Timeout')
+        return False
+
+    def recv(self, size):
+
+        def error_msg(e):
+            print_safe('Receive size %d unsuccessful: %s' % (size, e))
+
+        resource = '/start/send/%s:%d' % (self.vlan_ip_port, size)
+        try:
+            conn    = self.request(resource)
+            test_id = conn.getresponse().read()
+        except (socket.error, httplib.HTTPException), e:
+            error_msg(e)
+            return False
+
+        if not test_id.isdigit():
+            error_msg('Invalid response %s' % test_id)
+            return False
+
+        success = [False] #Primitive datatypes can't be set from closures.
+
+        def success_cb():
+            success[0] = True
+
+        def failure_cb():
+            success[0] = False
+
+        self.udp_recv.recv_packet(int(test_id), success_cb, failure_cb).wait()
+
+        if success[0]:
+            print_safe('Receive size %d successful' % size)
+        else:
+            error_msg('Timeout')
+
+        return success[0]
+
+    def server_up(self):
+
+        def error_msg(e):
+            print_safe('Failed control server connectivity test: %s' % e)
+
+        try:
+            resp = self.request('/ping').getresponse()
+            data = resp.read()
+        except (socket.error, httplib.HTTPException), e:
+            error_msg(e)
+            return False
+
+        if resp.status != 200:
+            error_msg('Invalid status %d' % resp.status)
+        elif data != 'pong':
+            error_msg('Invalid response %s' % data)
+
+        return True
+
+    def run(self):
+
+        if not self.server_up():
+            return 1
+
+        self.udp_recv.start()
+
+        success = True
+        for size in [50, 500, 1000, 1500]:
+            success = self.send(size) and success
+            success = self.recv(size) and success
+
+        self.udp_recv.stop()
+
+        if success:
+            print_safe('OK')
+            return 0
+
+        return 1
+
+def usage():
+    print_safe("""\
+%(argv0)s: Test vlan connectivity
+usage: %(argv0)s server vlan
+
+The following options are also available:
+  -s, --server                run in server mode
+  -h, --help                  display this help message
+  -V, --version               display version information\
+""" % {'argv0': sys.argv[0]})
+
+def main():
+
+    try:
+        options, args = getopt.gnu_getopt(sys.argv[1:], 'hVs',
+                                          ['help', 'version', 'server'])
+    except getopt.GetoptError, geo:
+        print_safe('%s: %s\n' % (sys.argv[0], geo.msg))
+        return 1
+
+    server = False
+    for key, _ in options:
+        if key in ['-h', '--help']:
+            usage()
+            return 0
+        elif key in ['-V', '--version']:
+            print_safe('ovs-vlan-test (Open vSwitch) @VERSION@')
+            return 0
+        elif key in ['-s', '--server']:
+            server = True
+        else:
+            print_safe('Unexpected option %s. (use --help for help)' % key)
+            return 1
+
+    if len(args) != 2:
+        print_safe('Expecting two arguments. (use --help for help)')
+        return 1
+
+    try:
+        server_ip, server_port = args[0].split(':')
+        server_port = int(server_port)
+    except ValueError:
+        server_ip = args[0]
+        server_port = 80
+
+    try:
+        vlan_ip, vlan_port = args[1].split(':')
+        vlan_port = int(vlan_port)
+    except ValueError:
+        vlan_ip   = args[1]
+        vlan_port = 15213
+
+    if server:
+        return VlanServer(server_ip, server_port, vlan_ip, vlan_port).run()
+    else:
+        return VlanClient(server_ip, server_port, vlan_ip, vlan_port).run()
+
+if __name__ == '__main__':
+    main_ret = main()
+
+    # Python can throw exceptions if threads are running at exit.
+    for th in threading.enumerate():
+        if th != threading.currentThread():
+            th.join()
+
+    sys.exit(main_ret)
