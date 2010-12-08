@@ -298,6 +298,10 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         [OFPAT_SET_TP_DST] = {
             sizeof(struct ofp_action_tp_port),
             sizeof(struct ofp_action_tp_port),
+        },
+        [OFPAT_ENQUEUE] = {
+            sizeof(struct ofp_action_enqueue),
+            sizeof(struct ofp_action_enqueue),
         }
         /* OFPAT_VENDOR is not here, since it would blow up the array size. */
     };
