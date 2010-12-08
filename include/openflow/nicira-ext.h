@@ -20,8 +20,6 @@
 #include "openflow/openflow.h"
 #include "openvswitch/types.h"
 
-#define NICIRA_OUI_STR "002320"
-
 /* The following vendor extensions, proposed by Nicira Networks, are not yet
  * standardized, so they are not included in openflow.h.  Some of them may be
  * suitable for standardization; others we never expect to standardize. */
