@@ -1945,14 +1945,12 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 }
 
 static struct file_operations openvswitch_fops = {
-	/* XXX .aio_read = openvswitch_aio_read, */
 	.read  = openvswitch_read,
 	.poll  = openvswitch_poll,
 	.unlocked_ioctl = openvswitch_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = openvswitch_compat_ioctl,
 #endif
-	/* XXX .fasync = openvswitch_fasync, */
 };
 
 static int major;
