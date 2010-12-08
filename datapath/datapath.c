@@ -94,6 +94,11 @@ static struct datapath *get_dp_locked(int dp_idx)
 	return dp;
 }
 
+static struct tbl *get_table_protected(struct datapath *dp)
+{
+	return rcu_dereference_protected(dp->table, lockdep_is_held(&dp->mutex));
+}
+
 /* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
@@ -643,7 +648,7 @@ err:
 
 static int flush_flows(struct datapath *dp)
 {
-	struct tbl *old_table = rcu_dereference(dp->table);
+	struct tbl *old_table = get_table_protected(dp);
 	struct tbl *new_table;
 
 	new_table = tbl_create(0);
@@ -790,7 +795,7 @@ static void clear_stats(struct sw_flow *flow)
 
 static int expand_table(struct datapath *dp)
 {
-	struct tbl *old_table = rcu_dereference(dp->table);
+	struct tbl *old_table = get_table_protected(dp);
 	struct tbl *new_table;
 
 	new_table = tbl_expand(old_table);
@@ -811,7 +816,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	struct tbl *table;
 	int error;
 
-	table = rcu_dereference(dp->table);
+	table = get_table_protected(dp);
 	flow_node = tbl_lookup(table, &uf->flow.key, flow_hash(&uf->flow.key), flow_cmp);
 	if (!flow_node) {
 		/* No such flow. */
@@ -826,7 +831,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 			error = expand_table(dp);
 			if (error)
 				goto error;
-			table = rcu_dereference(dp->table);
+			table = get_table_protected(dp);
 		}
 
 		/* Allocate flow. */
@@ -962,7 +967,7 @@ static int answer_query(struct sw_flow *flow, u32 query_flags,
 
 static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key)
 {
-	struct tbl *table = rcu_dereference(dp->table);
+	struct tbl *table = get_table_protected(dp);
 	struct tbl_node *flow_node;
 	int error;
 
@@ -1001,7 +1006,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 
 static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
-	struct tbl *table = rcu_dereference(dp->table);
+	struct tbl *table = get_table_protected(dp);
 	u32 i;
 
 	for (i = 0; i < flowvec->n_flows; i++) {
@@ -1060,7 +1065,7 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
 
-	error = tbl_foreach(rcu_dereference(dp->table), list_flow, &cbdata);
+	error = tbl_foreach(get_table_protected(dp), list_flow, &cbdata);
 	return error ? error : cbdata.listed_flows;
 }
 
@@ -1166,7 +1171,7 @@ static int execute_packet(struct datapath *dp, const struct odp_execute __user *
 
 static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 {
-	struct tbl *table = rcu_dereference(dp->table);
+	struct tbl *table = get_table_protected(dp);
 	struct odp_stats stats;
 	int i;
 
@@ -1588,7 +1593,7 @@ static int compat_query_flows(struct datapath *dp,
 			      struct compat_odp_flow __user *flows,
 			      u32 n_flows)
 {
-	struct tbl *table = rcu_dereference(dp->table);
+	struct tbl *table = get_table_protected(dp);
 	u32 i;
 
 	for (i = 0; i < n_flows; i++) {
@@ -1648,7 +1653,7 @@ static int compat_list_flows(struct datapath *dp,
 	cbdata.n_flows = n_flows;
 	cbdata.listed_flows = 0;
 
-	error = tbl_foreach(rcu_dereference(dp->table), compat_list_flow, &cbdata);
+	error = tbl_foreach(get_table_protected(dp), compat_list_flow, &cbdata);
 	return error ? error : cbdata.listed_flows;
 }
 
