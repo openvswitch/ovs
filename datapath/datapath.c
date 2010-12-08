@@ -77,7 +77,8 @@ struct datapath *get_dp(int dp_idx)
 {
 	if (dp_idx < 0 || dp_idx >= ODP_MAX)
 		return NULL;
-	return rcu_dereference(dps[dp_idx]);
+	return rcu_dereference_check(dps[dp_idx], rcu_read_lock_held() ||
+					 lockdep_is_held(&dp_mutex));
 }
 EXPORT_SYMBOL_GPL(get_dp);
 
