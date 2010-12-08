@@ -1069,6 +1069,8 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
         ptrdiff_t bytes_left = body + len - pos;
         size_t length;
 
+        ds_put_char(string, '\n');
+
         if (bytes_left < sizeof *fs) {
             if (bytes_left != 0) {
                 ds_put_format(string, " ***%td leftover bytes at end***",
@@ -1118,7 +1120,6 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
         }
         ofp_print_match(string, &fs->match, verbosity);
         ofp_print_actions(string, fs->actions, length - sizeof *fs);
-        ds_put_char(string, '\n');
 
         pos += length;
      }
