@@ -749,25 +749,6 @@ parse_nxm_field_name(const char *name, int name_len)
 
     return 0;
 }
-
-static const char *
-parse_hex_bytes(struct ofpbuf *b, const char *s, unsigned int n)
-{
-    while (n--) {
-        uint8_t byte;
-        bool ok;
-
-        s += strspn(s, " ");
-        byte = hexits_value(s, 2, &ok);
-        if (!ok) {
-            ovs_fatal(0, "%.2s: hex digits expected", s);
-        }
-
-        ofpbuf_put(b, &byte, 1);
-        s += 2;
-    }
-    return s;
-}
 
 /* nx_match_from_string(). */
 
@@ -788,6 +769,7 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
         const char *name;
         uint32_t header;
         int name_len;
+        size_t n;
 
         name = s;
         name_len = strcspn(s, "(");
@@ -803,14 +785,20 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
         s += name_len + 1;
 
         nxm_put_header(b, header);
-        s = parse_hex_bytes(b, s, nxm_field_bytes(header));
+        s = ofpbuf_put_hex(b, s, &n);
+        if (n != nxm_field_bytes(header)) {
+            ovs_fatal(0, "%.2s: hex digits expected", s);
+        }
         if (NXM_HASMASK(header)) {
             s += strspn(s, " ");
             if (*s != '/') {
                 ovs_fatal(0, "%s: missing / in masked field %.*s",
                           full_s, name_len, name);
             }
-            s = parse_hex_bytes(b, s + 1, nxm_field_bytes(header));
+            s = ofpbuf_put_hex(b, s + 1, &n);
+            if (n != nxm_field_bytes(header)) {
+                ovs_fatal(0, "%.2s: hex digits expected", s);
+            }
         }
 
         s += strspn(s, " ");

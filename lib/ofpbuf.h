@@ -65,6 +65,7 @@ void *ofpbuf_end(const struct ofpbuf *);
 void *ofpbuf_put_uninit(struct ofpbuf *, size_t);
 void *ofpbuf_put_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_put(struct ofpbuf *, const void *, size_t);
+char *ofpbuf_put_hex(struct ofpbuf *, const char *s, size_t *n);
 void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
 void *ofpbuf_push_zeros(struct ofpbuf *, size_t);

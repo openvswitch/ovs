@@ -242,6 +242,33 @@ ofpbuf_put(struct ofpbuf *b, const void *p, size_t size)
     return dst;
 }
 
+/* Parses as many pairs of hex digits as possible (possibly separated by
+ * spaces) from the beginning of 's', appending bytes for their values to 'b'.
+ * Returns the first character of 's' that is not the first of a pair of hex
+ * digits.  If 'n' is nonnull, stores the number of bytes added to 'b' in
+ * '*n'. */
+char *
+ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
+{
+    size_t initial_size = b->size;
+    for (;;) {
+        uint8_t byte;
+        bool ok;
+
+        s += strspn(s, " ");
+        byte = hexits_value(s, 2, &ok);
+        if (!ok) {
+            if (n) {
+                *n = b->size - initial_size;
+            }
+            return (char *) s;
+        }
+
+        ofpbuf_put(b, &byte, 1);
+        s += 2;
+    }
+}
+
 /* Reserves 'size' bytes of headroom so that they can be later allocated with
  * ofpbuf_push_uninit() without reallocating the ofpbuf. */
 void
