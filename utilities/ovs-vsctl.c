@@ -1700,6 +1700,14 @@ verify_controllers(struct ovsrec_bridge *bridge)
 }
 
 static void
+pre_controller(struct vsctl_context *ctx)
+{
+    pre_get_info(ctx);
+
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_controller_col_target);
+}
+
+static void
 cmd_get_controller(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
@@ -3266,10 +3274,10 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"iface-to-br", 1, 1, pre_get_info, cmd_iface_to_br, NULL, "", RO},
 
     /* Controller commands. */
-    {"get-controller", 1, 1, pre_get_info, cmd_get_controller, NULL, "", RO},
-    {"del-controller", 1, 1, pre_get_info, cmd_del_controller, NULL, "", RW},
-    {"set-controller", 1, INT_MAX, pre_get_info, cmd_set_controller, NULL, "",
-     RW},
+    {"get-controller", 1, 1, pre_controller, cmd_get_controller, NULL, "", RO},
+    {"del-controller", 1, 1, pre_controller, cmd_del_controller, NULL, "", RW},
+    {"set-controller", 1, INT_MAX, pre_controller, cmd_set_controller, NULL,
+     "", RW},
     {"get-fail-mode", 1, 1, pre_get_info, cmd_get_fail_mode, NULL, "", RO},
     {"del-fail-mode", 1, 1, pre_get_info, cmd_del_fail_mode, NULL, "", RW},
     {"set-fail-mode", 2, 2, pre_get_info, cmd_set_fail_mode, NULL, "", RW},
