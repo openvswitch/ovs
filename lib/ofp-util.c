@@ -1988,7 +1988,7 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
         oem->type = htons(NXET_VENDOR);
         oem->code = htons(NXVC_VENDOR_ERROR);
 
-        nve = ofpbuf_put_uninit(buf, sizeof *nve);
+        nve = (struct nx_vendor_error *)oem->data;
         nve->vendor = htonl(vendor_id);
         nve->type = htons(type);
         nve->code = htons(code);
