@@ -29,9 +29,6 @@
 struct cls_rule;
 struct ofpbuf;
 
-/* Alignment of ofp_actions. */
-#define OFP_ACTION_ALIGN 8
-
 /* Basic decoding and length validation of OpenFlow messages. */
 enum ofputil_msg_code {
     OFPUTIL_INVALID,
@@ -229,6 +226,10 @@ struct flow_stats_iterator {
 const struct ofp_flow_stats *flow_stats_first(struct flow_stats_iterator *,
                                               const struct ofp_stats_reply *);
 const struct ofp_flow_stats *flow_stats_next(struct flow_stats_iterator *);
+
+/* Actions. */
+
+#define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
 struct actions_iterator {
     const union ofp_action *pos, *end;
@@ -237,6 +238,7 @@ const union ofp_action *actions_first(struct actions_iterator *,
                                       const union ofp_action *,
                                       size_t n_actions);
 const union ofp_action *actions_next(struct actions_iterator *);
+
 int validate_actions(const union ofp_action *, size_t n_actions,
                      const struct flow *, int max_ports);
 bool action_outputs_to_port(const union ofp_action *, uint16_t port);
