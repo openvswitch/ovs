@@ -1693,6 +1693,8 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
     size_t column_idx = column - class->columns;
 
     assert(row->new != NULL);
+    assert(row->old == NULL ||
+           row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
     if (!row->old
         || (row->written && bitmap_is_set(row->written, column_idx))) {
         return;
