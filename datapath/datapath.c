@@ -872,7 +872,9 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		error = PTR_ERR(new_acts);
 		if (IS_ERR(new_acts))
 			goto error;
-		old_acts = rcu_dereference(flow->sf_acts);
+
+		old_acts = rcu_dereference_protected(flow->sf_acts,
+						     lockdep_is_held(&dp->mutex));
 		if (old_acts->actions_len != new_acts->actions_len ||
 		    memcmp(old_acts->actions, new_acts->actions,
 			   old_acts->actions_len)) {
@@ -921,7 +923,8 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 	return 0;
 }
 
-static int do_answer_query(struct sw_flow *flow, u32 query_flags,
+static int do_answer_query(struct datapath *dp, struct sw_flow *flow,
+			   u32 query_flags,
 			   struct odp_flow_stats __user *ustats,
 			   struct nlattr __user *actions,
 			   u32 __user *actions_lenp)
@@ -944,7 +947,8 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	if (!actions_len)
 		return 0;
 
-	sf_acts = rcu_dereference(flow->sf_acts);
+	sf_acts = rcu_dereference_protected(flow->sf_acts,
+					    lockdep_is_held(&dp->mutex));
 	if (put_user(sf_acts->actions_len, actions_lenp) ||
 	    (actions && copy_to_user(actions, sf_acts->actions,
 				     min(sf_acts->actions_len, actions_len))))
@@ -953,15 +957,15 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	return 0;
 }
 
-static int answer_query(struct sw_flow *flow, u32 query_flags,
-			struct odp_flow __user *ufp)
+static int answer_query(struct datapath *dp, struct sw_flow *flow,
+			u32 query_flags, struct odp_flow __user *ufp)
 {
 	struct nlattr __user *actions;
 
 	if (get_user(actions, (struct nlattr __user * __user *)&ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(flow, query_flags, 
+	return do_answer_query(dp, flow, query_flags, 
 			       &ufp->stats, actions, &ufp->actions_len);
 }
 
@@ -999,7 +1003,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = answer_query(flow, 0, ufp);
+	error = answer_query(dp, flow, 0, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1022,7 +1026,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow_cast(flow_node), uf.flags, ufp);
+			error = answer_query(dp, flow_cast(flow_node), uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1030,6 +1034,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 }
 
 struct list_flows_cbdata {
+	struct datapath *dp;
 	struct odp_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
@@ -1044,7 +1049,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = answer_query(flow, 0, ufp);
+	error = answer_query(cbdata->dp, flow, 0, ufp);
 	if (error)
 		return error;
 
@@ -1061,6 +1066,7 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 	if (!flowvec->n_flows)
 		return 0;
 
+	cbdata.dp = dp;
 	cbdata.uflows = (struct odp_flow __user *)flowvec->flows;
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
@@ -1559,7 +1565,8 @@ static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __use
 	return 0;
 }
 
-static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
+static int compat_answer_query(struct datapath *dp, struct sw_flow *flow,
+			       u32 query_flags,
 			       struct compat_odp_flow __user *ufp)
 {
 	compat_uptr_t actions;
@@ -1567,7 +1574,7 @@ static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(flow, query_flags, &ufp->stats,
+	return do_answer_query(dp, flow, query_flags, &ufp->stats,
 			       compat_ptr(actions), &ufp->actions_len);
 }
 
@@ -1584,7 +1591,7 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = compat_answer_query(flow, 0, ufp);
+	error = compat_answer_query(dp, flow, 0, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1609,7 +1616,8 @@ static int compat_query_flows(struct datapath *dp,
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
-			error = compat_answer_query(flow_cast(flow_node), uf.flags, ufp);
+			error = compat_answer_query(dp, flow_cast(flow_node),
+						    uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1617,6 +1625,7 @@ static int compat_query_flows(struct datapath *dp,
 }
 
 struct compat_list_flows_cbdata {
+	struct datapath *dp;
 	struct compat_odp_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
@@ -1631,7 +1640,7 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = compat_answer_query(flow, 0, ufp);
+	error = compat_answer_query(cbdata->dp, flow, 0, ufp);
 	if (error)
 		return error;
 
@@ -1649,6 +1658,7 @@ static int compat_list_flows(struct datapath *dp,
 	if (!n_flows)
 		return 0;
 
+	cbdata.dp = dp;
 	cbdata.uflows = flows;
 	cbdata.n_flows = n_flows;
 	cbdata.listed_flows = 0;
