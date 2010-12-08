@@ -919,6 +919,13 @@ static const struct error_type error_types[] = {
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN),
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BUFFER_EMPTY),
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN),
+    /* Nicira error extensions. */
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_INVALID),
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_TYPE),
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_VALUE),
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_MASK),
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_PREREQ),
+    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_DUP_TYPE),
 
     ERROR_TYPE(OFPET_BAD_ACTION),
     ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE),
@@ -936,6 +943,9 @@ static const struct error_type error_types[] = {
     ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_EPERM),
     ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_EMERG_TIMEOUT),
     ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND),
+    /* Nicira error extenstions. */
+    ERROR_CODE(OFPET_FLOW_MOD_FAILED, NXFMFC_HARDWARE),
+    ERROR_CODE(OFPET_FLOW_MOD_FAILED, NXFMFC_BAD_TABLE_ID),
 
     ERROR_TYPE(OFPET_PORT_MOD_FAILED),
     ERROR_CODE(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT),
@@ -983,12 +993,43 @@ ofp_print_error(struct ds *string, int error)
 }
 
 static void
+ofp_print_nx_error_msg(struct ds *string, const struct ofp_error_msg *oem)
+{
+    size_t len = ntohs(oem->header.length);
+    const struct nx_vendor_error *nve = (struct nx_vendor_error *)oem->data;
+    int vendor = ntohl(nve->vendor);
+    int type = ntohs(nve->type);
+    int code = ntohs(nve->code);
+
+    ds_put_format(string, " vendor:%x type:%d(%s) code:%d(%s) payload:\n",
+                  vendor,
+                  type, lookup_error_type(type),
+                  code, lookup_error_code(type, code));
+
+    ds_put_hex_dump(string, nve + 1, len - sizeof *oem - sizeof *nve,
+                    0, true);
+}
+
+static void
 ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
 {
     size_t len = ntohs(oem->header.length);
     int type = ntohs(oem->type);
     int code = ntohs(oem->code);
     char *s;
+
+
+    if (type == NXET_VENDOR && code == NXVC_VENDOR_ERROR) {
+        if (len < sizeof *oem + sizeof(struct nx_vendor_error)) {
+            ds_put_format(&string,
+                          "(***truncated extended error message is %zu bytes "
+                          "when it should be at least %zu***)\n"
+                          len, sizeof(struct nx_vendor_error));
+            return;
+        }
+
+        return ofp_print_nx_error_msg(string, oem);
+    }
 
     ds_put_format(string, " type:%d(%s) code:%d(%s) payload:\n",
                   type, lookup_error_type(type),
