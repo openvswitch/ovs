@@ -1995,6 +1995,7 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
     }
 
     if (len) {
+        buf->size -= len;
         ofpbuf_put(buf, data, len);
     }
 
