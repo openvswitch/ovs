@@ -65,6 +65,7 @@ main(int argc, char *argv[])
         ovs_fatal(error, "%s: transaction error", target);
     }
     if (code / 100 != 2) {
+        fputs(reply, stderr);
         ovs_error(0, "%s: server returned reply code %03d", target, code);
         exit(2);
     }
