@@ -1841,10 +1841,9 @@ fault:
 static ssize_t openvswitch_read(struct file *f, char __user *buf,
 				size_t nbytes, loff_t *ppos)
 {
-	/* XXX is there sufficient synchronization here? */
 	int listeners = get_listen_mask(f);
 	int dp_idx = iminor(f->f_dentry->d_inode);
-	struct datapath *dp = get_dp(dp_idx);
+	struct datapath *dp = get_dp_locked(dp_idx);
 	struct sk_buff *skb;
 	size_t copy_bytes, tot_copy_bytes;
 	int retval;
@@ -1881,6 +1880,8 @@ static ssize_t openvswitch_read(struct file *f, char __user *buf,
 		}
 	}
 success:
+	mutex_unlock(&dp->mutex);
+
 	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
 
 	retval = 0;
@@ -1918,16 +1919,17 @@ success:
 		retval = tot_copy_bytes;
 
 	kfree_skb(skb);
+	return retval;
 
 error:
+	mutex_unlock(&dp->mutex);
 	return retval;
 }
 
 static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 {
-	/* XXX is there sufficient synchronization here? */
 	int dp_idx = iminor(file->f_dentry->d_inode);
-	struct datapath *dp = get_dp(dp_idx);
+	struct datapath *dp = get_dp_locked(dp_idx);
 	unsigned int mask;
 
 	if (dp) {
@@ -1935,6 +1937,7 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 		poll_wait(file, &dp->waitqueue, wait);
 		if (dp_has_packet_of_interest(dp, get_listen_mask(file)))
 			mask |= POLLIN | POLLRDNORM;
+		mutex_unlock(&dp->mutex);
 	} else {
 		mask = POLLIN | POLLRDNORM | POLLHUP;
 	}
