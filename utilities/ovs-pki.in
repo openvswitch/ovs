@@ -361,7 +361,7 @@ fingerprint() {
     file=$1
     name=${1-$2}
     date=$(date -r $file)
-    if grep -q -e '-BEGIN CERTIFICATE-' "$file"; then
+    if grep -e '-BEGIN CERTIFICATE-' "$file" > /dev/null; then
         fingerprint=$(openssl x509 -noout -in "$file" -fingerprint |
                       sed 's/SHA1 Fingerprint=//' | tr -d ':')
     else

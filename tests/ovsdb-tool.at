@@ -45,7 +45,7 @@ AT_CHECK([[ovsdb-tool transact db '
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
  [[[{"uuid":["uuid","<0>"]},{}]
 ]])
-AT_CHECK([grep -q "add row for 5" db])
+AT_CHECK([grep "add row for 5" db], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool compact])

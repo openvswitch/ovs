@@ -88,7 +88,7 @@ SUFFIXES += .in
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
                 -e 's,[@]ovsdbmonitordir[@],$(ovsdbmonitordir),g' \
             > $@.tmp
-	@if head -n 1 $@.tmp | grep -q '#!'; then \
+	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
 	    echo chmod +x $@.tmp; \
 	    chmod +x $@.tmp; \
 	fi
