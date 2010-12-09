@@ -90,6 +90,8 @@ COVERAGE_DEFINE(ofproto_update_port);
 
 #include "sflow_api.h"
 
+struct rule;
+
 struct ofport {
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
@@ -100,11 +102,42 @@ struct ofport {
 static void ofport_free(struct ofport *);
 static void hton_ofp_phy_port(struct ofp_phy_port *);
 
-static int xlate_actions(const union ofp_action *in, size_t n_in,
-                         const struct flow *, struct ofproto *,
-                         const struct ofpbuf *packet,
-                         struct odp_actions *out, tag_type *tags,
-                         bool *may_set_up_flow, uint16_t *nf_output_iface);
+struct action_xlate_ctx {
+/* action_xlate_ctx_init() initializes these members. */
+
+    /* The ofproto. */
+    struct ofproto *ofproto;
+
+    /* Flow to which the OpenFlow actions apply.  xlate_actions() will modify
+     * this flow when actions change header fields. */
+    struct flow flow;
+
+    /* The packet corresponding to 'flow', or a null pointer if we are
+     * revalidating without a packet to refer to. */
+    const struct ofpbuf *packet;
+
+/* xlate_actions() initializes and uses these members.  The client might want
+ * to look at them after it returns. */
+
+    /* Datapath action set.  This is xlate_actions()'s primary output. */
+    struct odp_actions out;
+
+    tag_type tags;              /* Tags associated with OFPP_NORMAL actions. */
+    bool may_set_up_flow;       /* True ordinarily; false if the actions must
+                                 * be reassessed for every packet. */
+    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
+
+/* xlate_actions() initializes and uses these members, but the client has no
+ * reason to look at them. */
+
+    int recurse;                /* Recursion level, via xlate_table_action. */
+};
+
+static void action_xlate_ctx_init(struct action_xlate_ctx *,
+                                  struct ofproto *, const struct flow *,
+                                  const struct ofpbuf *);
+static int xlate_actions(struct action_xlate_ctx *ctx,
+                         const union ofp_action *in, size_t n_in);
 
 /* An OpenFlow flow. */
 struct rule {
@@ -1349,18 +1382,18 @@ ofproto_send_packet(struct ofproto *p, const struct flow *flow,
                     const union ofp_action *actions, size_t n_actions,
                     const struct ofpbuf *packet)
 {
-    struct odp_actions odp_actions;
+    struct action_xlate_ctx ctx;
     int error;
 
-    error = xlate_actions(actions, n_actions, flow, p, packet, &odp_actions,
-                          NULL, NULL, NULL);
+    action_xlate_ctx_init(&ctx, p, flow, packet);
+    error = xlate_actions(&ctx, actions, n_actions);
     if (error) {
         return error;
     }
 
     /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
      * error code? */
-    dpif_execute(p->dpif, odp_actions.actions, odp_actions.n_actions, packet);
+    dpif_execute(p->dpif, ctx.out.actions, ctx.out.n_actions, packet);
     return 0;
 }
 
@@ -2069,8 +2102,8 @@ static void
 rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
              struct ofpbuf *packet)
 {
+    struct action_xlate_ctx ctx;
     struct facet *facet;
-    struct odp_actions a;
     struct flow flow;
     size_t size;
 
@@ -2096,14 +2129,15 @@ rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
 
     /* We can't account anything to a facet.  If we were to try, then that
      * facet would have a non-matching rule, busting our invariants. */
-    if (xlate_actions(rule->actions, rule->n_actions, &flow, ofproto,
-                      packet, &a, NULL, 0, NULL)) {
+    action_xlate_ctx_init(&ctx, ofproto, &flow, packet);
+    if (xlate_actions(&ctx, rule->actions, rule->n_actions)) {
         ofpbuf_delete(packet);
         return;
     }
+
     size = packet->size;
     if (execute_odp_actions(ofproto, in_port,
-                            a.actions, a.n_actions, packet)) {
+                            ctx.out.actions, ctx.out.n_actions, packet)) {
         rule->used = time_msec();
         rule->packet_count++;
         rule->byte_count += size;
@@ -2195,19 +2229,21 @@ facet_make_actions(struct ofproto *p, struct facet *facet,
                    const struct ofpbuf *packet)
 {
     const struct rule *rule = facet->rule;
-    struct odp_actions a;
+    struct action_xlate_ctx ctx;
     size_t actions_len;
 
-    xlate_actions(rule->actions, rule->n_actions, &facet->flow, p,
-                  packet, &a, &facet->tags, &facet->may_install,
-                  &facet->nf_flow.output_iface);
+    action_xlate_ctx_init(&ctx, p, &facet->flow, packet);
+    xlate_actions(&ctx, rule->actions, rule->n_actions);
+    facet->tags = ctx.tags;
+    facet->may_install = ctx.may_set_up_flow;
+    facet->nf_flow.output_iface = ctx.nf_output_iface;
 
-    actions_len = a.n_actions * sizeof *a.actions;
-    if (facet->n_actions != a.n_actions
-        || memcmp(facet->actions, a.actions, actions_len)) {
+    actions_len = ctx.out.n_actions * sizeof *ctx.out.actions;
+    if (facet->n_actions != ctx.out.n_actions
+        || memcmp(facet->actions, ctx.out.actions, actions_len)) {
         free(facet->actions);
-        facet->n_actions = a.n_actions;
-        facet->actions = xmemdup(a.actions, actions_len);
+        facet->n_actions = ctx.out.n_actions;
+        facet->actions = xmemdup(ctx.out.actions, actions_len);
     }
 }
 
@@ -2375,10 +2411,9 @@ facet_lookup_valid(struct ofproto *ofproto, const struct flow *flow)
 static bool
 facet_revalidate(struct ofproto *ofproto, struct facet *facet)
 {
+    struct action_xlate_ctx ctx;
     struct rule *new_rule;
-    struct odp_actions a;
     size_t actions_len;
-    uint16_t new_nf_output_iface;
     bool actions_changed;
 
     COVERAGE_INC(facet_revalidate);
@@ -2396,12 +2431,12 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
      * We are very cautious about actually modifying 'facet' state at this
      * point, because we might need to, e.g., emit a NetFlow expiration and, if
      * so, we need to have the old state around to properly compose it. */
-    xlate_actions(new_rule->actions, new_rule->n_actions, &facet->flow,
-                  ofproto, NULL, &a, &facet->tags, &facet->may_install,
-                  &new_nf_output_iface);
-    actions_len = a.n_actions * sizeof *a.actions;
-    actions_changed = (facet->n_actions != a.n_actions
-                       || memcmp(facet->actions, a.actions, actions_len));
+    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
+    xlate_actions(&ctx, new_rule->actions, new_rule->n_actions);
+    actions_len = ctx.out.n_actions * sizeof *ctx.out.actions;
+    actions_changed = (facet->n_actions != ctx.out.n_actions
+                       || memcmp(facet->actions, ctx.out.actions,
+                                 actions_len));
 
     /* If the ODP actions changed or the installability changed, then we need
      * to talk to the datapath. */
@@ -2411,8 +2446,8 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
 
             memset(&put.flow.stats, 0, sizeof put.flow.stats);
             odp_flow_key_from_flow(&put.flow.key, &facet->flow);
-            put.flow.actions = a.actions;
-            put.flow.n_actions = a.n_actions;
+            put.flow.actions = ctx.out.actions;
+            put.flow.n_actions = ctx.out.n_actions;
             put.flow.flags = 0;
             put.flags = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS;
             dpif_flow_put(ofproto->dpif, &put);
@@ -2428,11 +2463,13 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
     }
 
     /* Update 'facet' now that we've taken care of all the old state. */
-    facet->nf_flow.output_iface = new_nf_output_iface;
+    facet->tags = ctx.tags;
+    facet->nf_flow.output_iface = ctx.nf_output_iface;
+    facet->may_install = ctx.may_set_up_flow;
     if (actions_changed) {
         free(facet->actions);
-        facet->n_actions = a.n_actions;
-        facet->actions = xmemdup(a.actions, actions_len);
+        facet->n_actions = ctx.out.n_actions;
+        facet->actions = xmemdup(ctx.out.actions, actions_len);
     }
     if (facet->rule != new_rule) {
         COVERAGE_INC(facet_changed_rule);
@@ -2572,23 +2609,6 @@ add_controller_action(struct odp_actions *actions, uint16_t max_len)
     a->controller.arg = max_len;
 }
 
-struct action_xlate_ctx {
-    /* Input. */
-    struct flow flow;           /* Flow to which these actions correspond. */
-    int recurse;                /* Recursion level, via xlate_table_action. */
-    struct ofproto *ofproto;
-    const struct ofpbuf *packet; /* The packet corresponding to 'flow', or a
-                                  * null pointer if we are revalidating
-                                  * without a packet to refer to. */
-
-    /* Output. */
-    struct odp_actions *out;    /* Datapath actions. */
-    tag_type tags;              /* Tags associated with OFPP_NORMAL actions. */
-    bool may_set_up_flow;       /* True ordinarily; false if the actions must
-                                 * be reassessed for every packet. */
-    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
-};
-
 /* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 8
@@ -2614,7 +2634,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
          */
     }
 
-    odp_actions_add(ctx->out, ODPAT_OUTPUT)->output.port = port;
+    odp_actions_add(&ctx->out, ODPAT_OUTPUT)->output.port = port;
     ctx->nf_output_iface = port;
 }
 
@@ -2685,7 +2705,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_NORMAL:
         if (!ctx->ofproto->ofhooks->normal_cb(&ctx->flow, ctx->packet,
-                                              ctx->out, &ctx->tags,
+                                              &ctx->out, &ctx->tags,
                                               &ctx->nf_output_iface,
                                               ctx->ofproto->aux)) {
             COVERAGE_INC(ofproto_uninstallable);
@@ -2694,14 +2714,14 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_FLOOD:
         flood_packets(ctx->ofproto, ctx->flow.in_port, OFPPC_NO_FLOOD,
-                      &ctx->nf_output_iface, ctx->out);
+                      &ctx->nf_output_iface, &ctx->out);
         break;
     case OFPP_ALL:
         flood_packets(ctx->ofproto, ctx->flow.in_port, 0,
-                      &ctx->nf_output_iface, ctx->out);
+                      &ctx->nf_output_iface, &ctx->out);
         break;
     case OFPP_CONTROLLER:
-        add_controller_action(ctx->out, max_len);
+        add_controller_action(&ctx->out, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, ODPP_LOCAL);
@@ -2738,9 +2758,9 @@ xlate_output_action(struct action_xlate_ctx *ctx,
 static void
 remove_pop_action(struct action_xlate_ctx *ctx)
 {
-    size_t n = ctx->out->n_actions;
-    if (n > 0 && ctx->out->actions[n - 1].type == ODPAT_POP_PRIORITY) {
-        ctx->out->n_actions--;
+    size_t n = ctx->out.n_actions;
+    if (n > 0 && ctx->out.actions[n - 1].type == ODPAT_POP_PRIORITY) {
+        ctx->out.n_actions--;
     }
 }
 
@@ -2770,10 +2790,10 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
 
     /* Add ODP actions. */
     remove_pop_action(ctx);
-    odp_actions_add(ctx->out, ODPAT_SET_PRIORITY)->priority.priority
+    odp_actions_add(&ctx->out, ODPAT_SET_PRIORITY)->priority.priority
         = priority;
     add_output_action(ctx, odp_port);
-    odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
+    odp_actions_add(&ctx->out, ODPAT_POP_PRIORITY);
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
@@ -2799,7 +2819,7 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
     }
 
     remove_pop_action(ctx);
-    odp_actions_add(ctx->out, ODPAT_SET_PRIORITY)->priority.priority
+    odp_actions_add(&ctx->out, ODPAT_SET_PRIORITY)->priority.priority
         = priority;
 }
 
@@ -2808,9 +2828,9 @@ xlate_set_dl_tci(struct action_xlate_ctx *ctx)
 {
     ovs_be16 tci = ctx->flow.vlan_tci;
     if (!(tci & htons(VLAN_CFI))) {
-        odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
+        odp_actions_add(&ctx->out, ODPAT_STRIP_VLAN);
     } else {
-        union odp_action *oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
+        union odp_action *oa = odp_actions_add(&ctx->out, ODPAT_SET_DL_TCI);
         oa->dl_tci.tci = tci & ~htons(VLAN_CFI);
     }
 }
@@ -2847,13 +2867,13 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_SET_TUNNEL:
         nast = (const struct nx_action_set_tunnel *) nah;
-        oa = odp_actions_add(ctx->out, ODPAT_SET_TUNNEL);
+        oa = odp_actions_add(&ctx->out, ODPAT_SET_TUNNEL);
         ctx->flow.tun_id = oa->tunnel.tun_id = nast->tun_id;
         break;
 
     case NXAST_DROP_SPOOFED_ARP:
         if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
-            odp_actions_add(ctx->out, ODPAT_DROP_SPOOFED_ARP);
+            odp_actions_add(&ctx->out, ODPAT_DROP_SPOOFED_ARP);
         }
         break;
 
@@ -2863,7 +2883,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         break;
 
     case NXAST_POP_QUEUE:
-        odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
+        odp_actions_add(&ctx->out, ODPAT_POP_PRIORITY);
         break;
 
     case NXAST_REG_MOVE:
@@ -2932,7 +2952,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_DL_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_SRC);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_DL_SRC);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_src,
@@ -2940,7 +2960,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_DL_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_DST);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_DL_DST);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_dst,
@@ -2948,27 +2968,27 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_NW_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_SRC);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_NW_SRC);
             ctx->flow.nw_src = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_DST);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_NW_DST);
             ctx->flow.nw_dst = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_TOS);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_NW_TOS);
             ctx->flow.nw_tos = oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_TP_SRC);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_TP_SRC);
             ctx->flow.tp_src = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_TP_DST);
+            oa = odp_actions_add(&ctx->out, ODPAT_SET_TP_DST);
             ctx->flow.tp_dst = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
@@ -2987,46 +3007,38 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     }
 }
 
-static int
-xlate_actions(const union ofp_action *in, size_t n_in,
-              const struct flow *flow, struct ofproto *ofproto,
-              const struct ofpbuf *packet,
-              struct odp_actions *out, tag_type *tags, bool *may_set_up_flow,
-              uint16_t *nf_output_iface)
+static void
+action_xlate_ctx_init(struct action_xlate_ctx *ctx,
+                      struct ofproto *ofproto, const struct flow *flow,
+                      const struct ofpbuf *packet)
 {
-    struct action_xlate_ctx ctx;
+    ctx->ofproto = ofproto;
+    ctx->flow = *flow;
+    ctx->packet = packet;
+}
 
+static int
+xlate_actions(struct action_xlate_ctx *ctx,
+              const union ofp_action *in, size_t n_in)
+{
     COVERAGE_INC(ofproto_ofp2odp);
-    odp_actions_init(out);
-    ctx.flow = *flow;
-    ctx.recurse = 0;
-    ctx.ofproto = ofproto;
-    ctx.packet = packet;
-    ctx.out = out;
-    ctx.tags = 0;
-    ctx.may_set_up_flow = true;
-    ctx.nf_output_iface = NF_OUT_DROP;
-    do_xlate_actions(in, n_in, &ctx);
-    remove_pop_action(&ctx);
+    odp_actions_init(&ctx->out);
+    ctx->tags = 0;
+    ctx->may_set_up_flow = true;
+    ctx->nf_output_iface = NF_OUT_DROP;
+    ctx->recurse = 0;
+    do_xlate_actions(in, n_in, ctx);
+    remove_pop_action(ctx);
 
     /* Check with in-band control to see if we're allowed to set up this
      * flow. */
-    if (!in_band_rule_check(ofproto->in_band, flow, out)) {
-        ctx.may_set_up_flow = false;
+    if (!in_band_rule_check(ctx->ofproto->in_band, &ctx->flow, &ctx->out)) {
+        ctx->may_set_up_flow = false;
     }
 
-    if (tags) {
-        *tags = ctx.tags;
-    }
-    if (may_set_up_flow) {
-        *may_set_up_flow = ctx.may_set_up_flow;
-    }
-    if (nf_output_iface) {
-        *nf_output_iface = ctx.nf_output_iface;
-    }
-    if (odp_actions_overflow(out)) {
+    if (odp_actions_overflow(&ctx->out)) {
         COVERAGE_INC(odp_overflow);
-        odp_actions_init(out);
+        odp_actions_init(&ctx->out);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_TOO_MANY);
     }
     return 0;
@@ -3058,7 +3070,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofp_packet_out *opo;
     struct ofpbuf payload, *buffer;
     union ofp_action *ofp_actions;
-    struct odp_actions odp_actions;
+    struct action_xlate_ctx ctx;
     struct ofpbuf request;
     struct flow flow;
     size_t n_ofp_actions;
@@ -3105,11 +3117,10 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     /* Send. */
-    error = xlate_actions(ofp_actions, n_ofp_actions, &flow, p, &payload,
-                          &odp_actions, NULL, NULL, NULL);
+    action_xlate_ctx_init(&ctx, p, &flow, &payload);
+    error = xlate_actions(&ctx, ofp_actions, n_ofp_actions);
     if (!error) {
-        dpif_execute(p->dpif, odp_actions.actions, odp_actions.n_actions,
-                     &payload);
+        dpif_execute(p->dpif, ctx.out.actions, ctx.out.n_actions, &payload);
     }
 
 exit:
