@@ -116,6 +116,12 @@ struct action_xlate_ctx {
      * revalidating without a packet to refer to. */
     const struct ofpbuf *packet;
 
+    /* If nonnull, called just before executing a resubmit action.
+     *
+     * This is normally null so the client has to set it manually after
+     * calling action_xlate_ctx_init(). */
+    void (*resubmit_hook)(struct action_xlate_ctx *, const struct rule *);
+
 /* xlate_actions() initializes and uses these members.  The client might want
  * to look at them after it returns. */
 
@@ -392,6 +398,9 @@ struct ofproto {
     struct mac_learning *ml;
 };
 
+/* Map from dpif name to struct ofproto, for use by unixctl commands. */
+static struct shash all_ofprotos = SHASH_INITIALIZER(&all_ofprotos);
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static const struct ofhooks default_ofhooks;
@@ -410,6 +419,8 @@ static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
+static void ofproto_unixctl_init(void);
+
 int
 ofproto_create(const char *datapath, const char *datapath_type,
                const struct ofhooks *ofhooks, void *aux,
@@ -421,6 +432,8 @@ ofproto_create(const char *datapath, const char *datapath_type,
     int error;
 
     *ofprotop = NULL;
+
+    ofproto_unixctl_init();
 
     /* Connect to datapath and start listening for messages. */
     error = dpif_open(datapath, datapath_type, &dpif);
@@ -502,6 +515,8 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
     VLOG_INFO("using datapath ID %016"PRIx64, p->datapath_id);
+
+    shash_add_once(&all_ofprotos, dpif_name(p->dpif), p);
 
     *ofprotop = p;
     return 0;
@@ -1023,6 +1038,8 @@ ofproto_destroy(struct ofproto *p)
     if (!p) {
         return;
     }
+
+    shash_find_and_delete(&all_ofprotos, dpif_name(p->dpif));
 
     /* Destroy fail-open and in-band early, since they touch the classifier. */
     fail_open_destroy(p->fail_open);
@@ -2659,6 +2676,10 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
         rule = rule_lookup(ctx->ofproto, &ctx->flow);
         ctx->flow.in_port = old_in_port;
 
+        if (ctx->resubmit_hook) {
+            ctx->resubmit_hook(ctx, rule);
+        }
+
         if (rule) {
             ctx->recurse++;
             do_xlate_actions(rule->actions, rule->n_actions, ctx);
@@ -3015,6 +3036,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
     ctx->packet = packet;
+    ctx->resubmit_hook = NULL;
 }
 
 static int
@@ -4888,6 +4910,172 @@ pick_fallback_dpid(void)
     uint8_t ea[ETH_ADDR_LEN];
     eth_addr_nicira_random(ea);
     return eth_addr_to_uint64(ea);
+}
+
+static void
+ofproto_unixctl_list(struct unixctl_conn *conn, const char *arg OVS_UNUSED,
+                     void *aux OVS_UNUSED)
+{
+    const struct shash_node *node;
+    struct ds results;
+
+    ds_init(&results);
+    SHASH_FOR_EACH (node, &all_ofprotos) {
+        ds_put_format(&results, "%s\n", node->name);
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&results));
+    ds_destroy(&results);
+}
+
+struct ofproto_trace {
+    struct action_xlate_ctx ctx;
+    struct flow flow;
+    struct ds *result;
+};
+
+static void
+trace_format_rule(struct ds *result, int level, const struct rule *rule)
+{
+    ds_put_char_multiple(result, '\t', level);
+    if (!rule) {
+        ds_put_cstr(result, "No match\n");
+        return;
+    }
+
+    ds_put_format(result, "Rule: cookie=%#"PRIx64" ",
+                  ntohll(rule->flow_cookie));
+    cls_rule_format(&rule->cr, result);
+    ds_put_char(result, '\n');
+
+    ds_put_char_multiple(result, '\t', level);
+    ds_put_cstr(result, "OpenFlow ");
+    ofp_print_actions(result, (const struct ofp_action_header *) rule->actions,
+                      rule->n_actions * sizeof *rule->actions);
+    ds_put_char(result, '\n');
+}
+
+static void
+trace_format_flow(struct ds *result, int level, const char *title,
+                 struct ofproto_trace *trace)
+{
+    ds_put_char_multiple(result, '\t', level);
+    ds_put_format(result, "%s: ", title);
+    if (flow_equal(&trace->ctx.flow, &trace->flow)) {
+        ds_put_cstr(result, "unchanged");
+    } else {
+        flow_format(result, &trace->ctx.flow);
+        trace->flow = trace->ctx.flow;
+    }
+    ds_put_char(result, '\n');
+}
+
+static void
+trace_resubmit(struct action_xlate_ctx *ctx, const struct rule *rule)
+{
+    struct ofproto_trace *trace = CONTAINER_OF(ctx, struct ofproto_trace, ctx);
+    struct ds *result = trace->result;
+
+    ds_put_char(result, '\n');
+    trace_format_flow(result, ctx->recurse + 1, "Resubmitted flow", trace);
+    trace_format_rule(result, ctx->recurse + 1, rule);
+}
+
+static void
+ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
+                      void *aux OVS_UNUSED)
+{
+    char *dpname, *in_port_s, *tun_id_s, *packet_s;
+    char *args = xstrdup(args_);
+    char *save_ptr = NULL;
+    struct ofproto *ofproto;
+    struct ofpbuf packet;
+    struct rule *rule;
+    struct ds result;
+    struct flow flow;
+    uint16_t in_port;
+    ovs_be32 tun_id;
+    char *s;
+
+    ofpbuf_init(&packet, strlen(args) / 2);
+    ds_init(&result);
+
+    dpname = strtok_r(args, " ", &save_ptr);
+    tun_id_s = strtok_r(NULL, " ", &save_ptr);
+    in_port_s = strtok_r(NULL, " ", &save_ptr);
+    packet_s = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
+    if (!dpname || !in_port_s || !packet_s) {
+        unixctl_command_reply(conn, 501, "Bad command syntax");
+        goto exit;
+    }
+
+    ofproto = shash_find_data(&all_ofprotos, dpname);
+    if (!ofproto) {
+        unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
+                              "for help)");
+        goto exit;
+    }
+
+    tun_id = ntohl(strtoul(tun_id_s, NULL, 10));
+    in_port = ofp_port_to_odp_port(atoi(in_port_s));
+
+    packet_s = ofpbuf_put_hex(&packet, packet_s, NULL);
+    packet_s += strspn(packet_s, " ");
+    if (*packet_s != '\0') {
+        unixctl_command_reply(conn, 501, "Trailing garbage in command");
+        goto exit;
+    }
+    if (packet.size < ETH_HEADER_LEN) {
+        unixctl_command_reply(conn, 501, "Packet data too short for Ethernet");
+        goto exit;
+    }
+
+    ds_put_cstr(&result, "Packet: ");
+    s = ofp_packet_to_string(packet.data, packet.size, packet.size);
+    ds_put_cstr(&result, s);
+    free(s);
+
+    flow_extract(&packet, tun_id, in_port, &flow);
+    ds_put_cstr(&result, "Flow: ");
+    flow_format(&result, &flow);
+    ds_put_char(&result, '\n');
+
+    rule = rule_lookup(ofproto, &flow);
+    trace_format_rule(&result, 0, rule);
+    if (rule) {
+        struct ofproto_trace trace;
+
+        trace.result = &result;
+        trace.flow = flow;
+        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, &packet);
+        trace.ctx.resubmit_hook = trace_resubmit;
+        xlate_actions(&trace.ctx, rule->actions, rule->n_actions);
+
+        ds_put_char(&result, '\n');
+        trace_format_flow(&result, 0, "Final flow", &trace);
+        ds_put_cstr(&result, "Datapath actions: ");
+        format_odp_actions(&result,
+                           trace.ctx.out.actions, trace.ctx.out.n_actions);
+    }
+
+    unixctl_command_reply(conn, 200, ds_cstr(&result));
+
+exit:
+    ds_destroy(&result);
+    ofpbuf_uninit(&packet);
+    free(args);
+}
+
+static void
+ofproto_unixctl_init(void)
+{
+    static bool registered;
+    if (registered) {
+        return;
+    }
+    registered = true;
+
+    unixctl_command_register("ofproto/list", ofproto_unixctl_list, NULL);
+    unixctl_command_register("ofproto/trace", ofproto_unixctl_trace, NULL);
 }
 
 static bool

@@ -1,0 +1,26 @@
+.SS "OFPROTO COMMANDS"
+These commands manage the core OpenFlow switch implementation (called
+\fBofproto\fR).
+.IP "\fBofproto/list\fR"
+Lists the names of the running ofproto instances.  These are the names
+that may be used on \fBofproto/trace\fR.
+.IP "\fBofproto/trace \fItun_id in_port packet\fR"
+Traces the path of an imaginary packet through ofproto.  The arguments
+are:
+.RS
+.IP "\fItun_id\fR"
+The tunnel ID on which the packet arrived.  Use
+\fB0\fR if the packet did not arrive through a tunnel.
+.IP "\fIin_port\fR"
+The OpenFlow port on which the packet arrived.  Use \fB65534\fR if the
+packet arrived on \fBOFPP_LOCAL\fR, the local port.
+.IP "\fIpacket\fR"
+A sequence of hex digits specifying the packet's contents.  An
+Ethernet frame is at least 14 bytes long, so there must be at least 28
+hex digits.  Obviously, it is inconvenient to type in the hex digits
+by hand, so the \fBovs\-pcap\fR(1) and \fBovs\-tcpundump\fR(1)
+utilities provide easier ways.
+.RS
+\fB\*(PN\fR will respond with extensive information on how the packet
+would be handled if it were to be received.  The packet will not
+actually be sent.

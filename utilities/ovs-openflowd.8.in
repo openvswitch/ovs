@@ -446,6 +446,7 @@ described below.
 These commands are specific to \fBovs\-openflowd\fR.
 .IP "\fBexit\fR"
 Causes \fBovs\-openflowd\fR to gracefully terminate.
+.so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man
 .
 .SH "SEE ALSO"

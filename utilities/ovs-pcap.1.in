@@ -1,0 +1,26 @@
+.TH ovs\-pcap 1 "December 2010" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+ovs\-pcap \- print packets from a pcap file as hex
+.
+.SH SYNOPSIS
+\fBovs\-pcap\fR \fIfile\fR
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovs\-pcap\fR program reads the pcap \fIfile\fR named on the
+command line and prints each packet's contents as a sequence of hex
+digits on a line of its own.  This format is suitable for use with the
+\fBofproto/trace\fR command supported by \fBovs\-vswitchd\fR(8) and
+\fBovs-openflowd\fR(8).
+.
+.SH "OPTIONS"
+.so lib/common.man
+.
+.SH "SEE ALSO"
+.
+.BR ovs\-vswitchd (8),
+.BR ovs\-openflowd (8),
+.BR ovs\-tcpundump (1),
+.BR tcpdump (8),
+.BR wireshark (8).
