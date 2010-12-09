@@ -1221,6 +1221,8 @@ ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
         int match_len;
         int error;
 
+        ds_put_char(string, '\n');
+
         fs = ofpbuf_try_pull(&b, sizeof *fs);
         if (!fs) {
             ds_put_format(string, " ***%td leftover bytes at end***", b.size);
@@ -1276,7 +1278,6 @@ ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
         ds_put_char(string, ' ');
         ofp_print_actions(string, (const struct ofp_action_header *) actions,
                           n_actions * sizeof *actions);
-        ds_put_char(string, '\n');
      }
 }
 
