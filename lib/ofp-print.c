@@ -1021,9 +1021,9 @@ ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
 
     if (type == NXET_VENDOR && code == NXVC_VENDOR_ERROR) {
         if (len < sizeof *oem + sizeof(struct nx_vendor_error)) {
-            ds_put_format(&string,
+            ds_put_format(string,
                           "(***truncated extended error message is %zu bytes "
-                          "when it should be at least %zu***)\n"
+                          "when it should be at least %zu***)\n",
                           len, sizeof(struct nx_vendor_error));
             return;
         }
