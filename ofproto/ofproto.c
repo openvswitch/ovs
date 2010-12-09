@@ -2836,7 +2836,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_set_tunnel *nast;
     const struct nx_action_set_queue *nasq;
     union odp_action *oa;
-    int subtype = ntohs(nah->subtype);
+    enum nx_action_subtype subtype = ntohs(nah->subtype);
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
     switch (subtype) {
@@ -2881,8 +2881,9 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     /* If you add a new action here that modifies flow data, don't forget to
      * update the flow key in ctx->flow at the same time. */
 
+    case NXAST_SNAT__OBSOLETE:
     default:
-        VLOG_DBG_RL(&rl, "unknown Nicira action type %"PRIu16, subtype);
+        VLOG_DBG_RL(&rl, "unknown Nicira action type %d", (int) subtype);
         break;
     }
 }
@@ -2904,7 +2905,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     }
 
     for (ia = actions_first(&iter, in, n_in); ia; ia = actions_next(&iter)) {
-        uint16_t type = ntohs(ia->type);
+        enum ofp_action_type type = ntohs(ia->type);
         union odp_action *oa;
 
         switch (type) {
@@ -2980,7 +2981,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         default:
-            VLOG_DBG_RL(&rl, "unknown action type %"PRIu16, type);
+            VLOG_DBG_RL(&rl, "unknown action type %d", (int) type);
             break;
         }
     }

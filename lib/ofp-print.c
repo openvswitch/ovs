@@ -37,6 +37,7 @@
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "pcap.h"
+#include "type-props.h"
 #include "util.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
@@ -202,43 +203,74 @@ print_note(struct ds *string, const struct nx_action_note *nan)
 static void
 ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
 {
-    switch (ntohs(nah->subtype)) {
-    case NXAST_RESUBMIT: {
-        const struct nx_action_resubmit *nar = (struct nx_action_resubmit *)nah;
-        ds_put_format(string, "resubmit:");
-        ofp_print_port_name(string, ntohs(nar->in_port));
-        break;
+    uint16_t subtype = ntohs(nah->subtype);
+
+    if (subtype <= TYPE_MAXIMUM(enum nx_action_subtype)) {
+        const struct nx_action_set_tunnel *nast;
+        const struct nx_action_set_queue *nasq;
+        const struct nx_action_resubmit *nar;
+
+        switch ((enum nx_action_subtype) subtype) {
+        case NXAST_RESUBMIT:
+            nar = (struct nx_action_resubmit *)nah;
+            ds_put_format(string, "resubmit:");
+            ofp_print_port_name(string, ntohs(nar->in_port));
+            return;
+
+        case NXAST_SET_TUNNEL:
+            nast = (struct nx_action_set_tunnel *)nah;
+            ds_put_format(string, "set_tunnel:%#"PRIx32, ntohl(nast->tun_id));
+            return;
+
+        case NXAST_DROP_SPOOFED_ARP:
+            ds_put_cstr(string, "drop_spoofed_arp");
+            return;
+
+        case NXAST_SET_QUEUE:
+            nasq = (struct nx_action_set_queue *)nah;
+            ds_put_format(string, "set_queue:%u", ntohl(nasq->queue_id));
+            return;
+
+        case NXAST_POP_QUEUE:
+            ds_put_cstr(string, "pop_queue");
+            return;
+
+        case NXAST_NOTE:
+            print_note(string, (const struct nx_action_note *) nah);
+            return;
+
+        case NXAST_REG_MOVE:
+        case NXAST_REG_LOAD:
+            /* XXX */
+            return;
+
+        case NXAST_SNAT__OBSOLETE:
+        default:
+            break;
+        }
     }
 
-    case NXAST_SET_TUNNEL: {
-        const struct nx_action_set_tunnel *nast =
-                                            (struct nx_action_set_tunnel *)nah;
-        ds_put_format(string, "set_tunnel:%#"PRIx32, ntohl(nast->tun_id));
-        break;
-    }
+    ds_put_format(string, "***unknown Nicira action:%"PRIu16"***", subtype);
+}
 
-    case NXAST_DROP_SPOOFED_ARP:
-        ds_put_cstr(string, "drop_spoofed_arp");
-        break;
-
-    case NXAST_SET_QUEUE: {
-        const struct nx_action_set_queue *nasq =
-                                            (struct nx_action_set_queue *)nah;
-        ds_put_format(string, "set_queue:%u", ntohl(nasq->queue_id));
-        break;
-    }
-
-    case NXAST_POP_QUEUE:
-        ds_put_cstr(string, "pop_queue");
-        break;
-
-    case NXAST_NOTE:
-        print_note(string, (const struct nx_action_note *) nah);
-        break;
-
-    default:
-        ds_put_format(string, "***unknown Nicira action:%d***",
-                      ntohs(nah->subtype));
+static int
+ofp_action_len(enum ofp_action_type type)
+{
+    switch (type) {
+    case OFPAT_OUTPUT: return sizeof(struct ofp_action_output);
+    case OFPAT_SET_VLAN_VID: return sizeof(struct ofp_action_vlan_vid);
+    case OFPAT_SET_VLAN_PCP: return sizeof(struct ofp_action_vlan_pcp);
+    case OFPAT_STRIP_VLAN: return sizeof(struct ofp_action_header);
+    case OFPAT_SET_DL_SRC: return sizeof(struct ofp_action_dl_addr);
+    case OFPAT_SET_DL_DST: return sizeof(struct ofp_action_dl_addr);
+    case OFPAT_SET_NW_SRC: return sizeof(struct ofp_action_nw_addr);
+    case OFPAT_SET_NW_DST: return sizeof(struct ofp_action_nw_addr);
+    case OFPAT_SET_NW_TOS: return sizeof(struct ofp_action_nw_tos);
+    case OFPAT_SET_TP_SRC: return sizeof(struct ofp_action_tp_port);
+    case OFPAT_SET_TP_DST: return sizeof(struct ofp_action_tp_port);
+    case OFPAT_ENQUEUE: return sizeof(struct ofp_action_enqueue);
+    case OFPAT_VENDOR: return -1;
+    default: return -1;
     }
 }
 
@@ -246,65 +278,9 @@ static int
 ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         size_t actions_len)
 {
-    uint16_t type;
+    enum ofp_action_type type;
+    int required_len;
     size_t len;
-
-    struct openflow_action {
-        size_t min_size;
-        size_t max_size;
-    };
-
-    const struct openflow_action of_actions[] = {
-        [OFPAT_OUTPUT] = {
-            sizeof(struct ofp_action_output),
-            sizeof(struct ofp_action_output),
-        },
-        [OFPAT_SET_VLAN_VID] = {
-            sizeof(struct ofp_action_vlan_vid),
-            sizeof(struct ofp_action_vlan_vid),
-        },
-        [OFPAT_SET_VLAN_PCP] = {
-            sizeof(struct ofp_action_vlan_pcp),
-            sizeof(struct ofp_action_vlan_pcp),
-        },
-        [OFPAT_STRIP_VLAN] = {
-            sizeof(struct ofp_action_header),
-            sizeof(struct ofp_action_header),
-        },
-        [OFPAT_SET_DL_SRC] = {
-            sizeof(struct ofp_action_dl_addr),
-            sizeof(struct ofp_action_dl_addr),
-        },
-        [OFPAT_SET_DL_DST] = {
-            sizeof(struct ofp_action_dl_addr),
-            sizeof(struct ofp_action_dl_addr),
-        },
-        [OFPAT_SET_NW_SRC] = {
-            sizeof(struct ofp_action_nw_addr),
-            sizeof(struct ofp_action_nw_addr),
-        },
-        [OFPAT_SET_NW_DST] = {
-            sizeof(struct ofp_action_nw_addr),
-            sizeof(struct ofp_action_nw_addr),
-        },
-        [OFPAT_SET_NW_TOS] = {
-            sizeof(struct ofp_action_nw_tos),
-            sizeof(struct ofp_action_nw_tos),
-        },
-        [OFPAT_SET_TP_SRC] = {
-            sizeof(struct ofp_action_tp_port),
-            sizeof(struct ofp_action_tp_port),
-        },
-        [OFPAT_SET_TP_DST] = {
-            sizeof(struct ofp_action_tp_port),
-            sizeof(struct ofp_action_tp_port),
-        },
-        [OFPAT_ENQUEUE] = {
-            sizeof(struct ofp_action_enqueue),
-            sizeof(struct ofp_action_enqueue),
-        }
-        /* OFPAT_VENDOR is not here, since it would blow up the array size. */
-    };
 
     if (actions_len < sizeof *ah) {
         ds_put_format(string, "***action array too short for next action***\n");
@@ -314,7 +290,7 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
     type = ntohs(ah->type);
     len = ntohs(ah->len);
     if (actions_len < len) {
-        ds_put_format(string, "***truncated action %"PRIu16"***\n", type);
+        ds_put_format(string, "***truncated action %d***\n", (int) type);
         return -1;
     }
 
@@ -325,18 +301,16 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
 
     if ((len % OFP_ACTION_ALIGN) != 0) {
         ds_put_format(string,
-                      "***action %"PRIu16" length not a multiple of %d***\n",
-                      type, OFP_ACTION_ALIGN);
+                      "***action %d length not a multiple of %d***\n",
+                      (int) type, OFP_ACTION_ALIGN);
         return -1;
     }
 
-    if (type < ARRAY_SIZE(of_actions)) {
-        const struct openflow_action *act = &of_actions[type];
-        if ((len < act->min_size) || (len > act->max_size)) {
-            ds_put_format(string,
-                    "***action %"PRIu16" wrong length: %zu***\n", type, len);
-            return -1;
-        }
+    required_len = ofp_action_len(type);
+    if (required_len >= 0 && len != required_len) {
+        ds_put_format(string,
+                      "***action %d wrong length: %zu***\n", (int) type, len);
+        return -1;
     }
 
     switch (type) {
@@ -448,7 +422,7 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
     }
 
     default:
-        ds_put_format(string, "(decoder %"PRIu16" not implemented)", type);
+        ds_put_format(string, "(decoder %d not implemented)", (int) type);
         break;
     }
 

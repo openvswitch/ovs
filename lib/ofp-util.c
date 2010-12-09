@@ -25,6 +25,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
+#include "type-props.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
@@ -1686,6 +1687,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
                     const struct flow *flow)
 {
     const struct nx_action_header *nah;
+    uint16_t subtype;
     int error;
 
     if (len < 16) {
@@ -1695,7 +1697,14 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     }
     nah = (const struct nx_action_header *) a;
 
-    switch (ntohs(nah->subtype)) {
+    subtype = ntohs(nah->subtype);
+    if (subtype > TYPE_MAXIMUM(enum nx_action_subtype)) {
+        /* This is necessary because enum nx_action_subtype is probably an
+         * 8-bit type, so the cast below throws away the top 8 bits. */
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
+    }
+
+    switch ((enum nx_action_subtype) subtype) {
     case NXAST_RESUBMIT:
     case NXAST_SET_TUNNEL:
     case NXAST_DROP_SPOOFED_ARP:
@@ -1722,6 +1731,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     case NXAST_NOTE:
         return 0;
 
+    case NXAST_SNAT__OBSOLETE:
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }
@@ -1731,9 +1741,10 @@ static int
 check_action(const union ofp_action *a, unsigned int len,
              const struct flow *flow, int max_ports)
 {
+    enum ofp_action_type type = ntohs(a->type);
     int error;
 
-    switch (ntohs(a->type)) {
+    switch (type) {
     case OFPAT_OUTPUT:
         error = check_action_exact_len(a, len, 8);
         if (error) {
@@ -1782,8 +1793,7 @@ check_action(const union ofp_action *a, unsigned int len,
         return check_enqueue_action(a, len, max_ports);
 
     default:
-        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
-                ntohs(a->type));
+        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %d", (int) type);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
 }
