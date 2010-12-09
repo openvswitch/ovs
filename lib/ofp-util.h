@@ -105,7 +105,8 @@ void ofputil_cls_rule_from_match(const struct ofp_match *,
                                  unsigned int priority, enum nx_flow_format,
                                  ovs_be64 cookie, struct cls_rule *);
 void ofputil_cls_rule_to_match(const struct cls_rule *, enum nx_flow_format,
-                               struct ofp_match *);
+                               struct ofp_match *,
+                               ovs_be64 cookie_in, ovs_be64 *cookie_out);
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
 

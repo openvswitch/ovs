@@ -3451,9 +3451,9 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
-    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match);
+    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match,
+                              rule->flow_cookie, &ofs->cookie);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
-    ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
     ofs->hard_timeout = htons(rule->hard_timeout);
@@ -4669,8 +4669,8 @@ compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     struct ofpbuf *buf;
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match);
-    ofr->cookie = rule->flow_cookie;
+    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match,
+                              rule->flow_cookie, &ofr->cookie);
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;
     calc_flow_duration(rule->created, &ofr->duration_sec, &ofr->duration_nsec);
