@@ -521,6 +521,29 @@ actions were applied.
 Does nothing at all.  Any number of bytes represented as hex digits
 \fIhh\fR may be included.  Pairs of hex digits may be separated by
 periods for readability.
+.
+.IP "\fBmove:\fIsrc\fB[\fIstart\fB..\fIend\fB]->\fIdst\fB[\fIstart\fB..\fIend\fB]\fR"
+Copies the named bits from field \fIsrc\fR to field \fIdst\fR.
+\fIsrc\fR and \fIdst\fR must be NXM field names as defined in
+\fBnicira\-ext.h\fR, e.g. \fBNXM_OF_UDP_SRC\fR or \fBNXM_NX_REG0\fR.
+Each \fIstart\fR and \fIend\fR pair, which are inclusive, must specify
+the same number of bits and must fit within its respective field.
+Shorthands for \fB[\fIstart\fB..\fIend\fB]\fR exist: use
+\fB[\fIbit\fB]\fR to specify a single bit or \fB[]\fR to specify an
+entire field.
+.IP
+Examples: \fBmove:NXM_NX_REG0[0..5]\->NXM_NX_REG1[26..31]\fR copies the
+six bits numbered 0 through 5, inclusive, in register 0 into bits 26
+through 31, inclusive;
+\fBmove:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]\fR copies the least
+significant 16 bits of register 0 into the VLAN TCI field.
+.
+.IP "\fBload:\fIvalue\fB\->\fIdst\fB[\fIstart\fB..\fIend\fB]"
+Writes \fIvalue\fR to bits \fIstart\fR through \fIend\fR, inclusive,
+in field \fBdst\fR.
+.IP
+Example: \fBload:55\->NXM_NX_REG2[0..5]\fR loads value 55 (bit pattern
+\fB110111\fR) into bits 0 through 5, inclusive, in register 2.
 .RE
 .
 .IP

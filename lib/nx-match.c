@@ -662,6 +662,8 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
 /* nx_match_to_string() and helpers. */
 
+static void format_nxm_field_name(struct ds *, uint32_t header);
+
 char *
 nx_match_to_string(const uint8_t *p, unsigned int match_len)
 {
@@ -678,20 +680,13 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         unsigned int value_len = nxm_field_bytes(header);
         const uint8_t *value = p + 4;
         const uint8_t *mask = value + value_len;
-        const struct nxm_field *f;
         unsigned int i;
 
         if (s.length) {
             ds_put_cstr(&s, ", ");
         }
 
-        f = nxm_field_lookup(header);
-        if (f) {
-            ds_put_cstr(&s, f->name);
-        } else {
-            ds_put_format(&s, "%d:%d", NXM_VENDOR(header), NXM_FIELD(header));
-        }
-
+        format_nxm_field_name(&s, header);
         ds_put_char(&s, '(');
 
         for (i = 0; i < value_len; i++) {
@@ -718,6 +713,17 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
     }
 
     return ds_steal_cstr(&s);
+}
+
+static void
+format_nxm_field_name(struct ds *s, uint32_t header)
+{
+    const struct nxm_field *f = nxm_field_lookup(header);
+    if (f) {
+        ds_put_cstr(s, f->name);
+    } else {
+        ds_put_format(s, "%d:%d", NXM_VENDOR(header), NXM_FIELD(header));
+    }
 }
 
 static uint32_t
@@ -818,6 +824,167 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
     match_len = b->size - start_len;
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
     return match_len;
+}
+
+static const char *
+parse_nxm_field_bits(const char *s, uint32_t *headerp, int *ofsp, int *n_bitsp)
+{
+    const char *full_s = s;
+    const char *name;
+    uint32_t header;
+    int start, end;
+    int name_len;
+    int width;
+
+    name = s;
+    name_len = strcspn(s, "[");
+    if (s[name_len] != '[') {
+        ovs_fatal(0, "%s: missing [ looking for field name", full_s);
+    }
+
+    header = parse_nxm_field_name(name, name_len);
+    if (!header) {
+        ovs_fatal(0, "%s: unknown field `%.*s'", full_s, name_len, s);
+    }
+    width = nxm_field_bits(header);
+
+    s += name_len;
+    if (sscanf(s, "[%d..%d]", &start, &end) == 2) {
+        /* Nothing to do. */
+    } else if (sscanf(s, "[%d]", &start) == 1) {
+        end = start;
+    } else if (!strncmp(s, "[]", 2)) {
+        start = 0;
+        end = width - 1;
+    } else {
+        ovs_fatal(0, "%s: syntax error expecting [] or [<bit>] or "
+                  "[<start>..<end>]", full_s);
+    }
+    s = strchr(s, ']') + 1;
+
+    if (start > end) {
+        ovs_fatal(0, "%s: starting bit %d is after ending bit %d",
+                  full_s, start, end);
+    } else if (start >= width) {
+        ovs_fatal(0, "%s: starting bit %d is not valid because field is only "
+                  "%d bits wide", full_s, start, width);
+    } else if (end >= width){
+        ovs_fatal(0, "%s: ending bit %d is not valid because field is only "
+                  "%d bits wide", full_s, end, width);
+    }
+
+    *headerp = header;
+    *ofsp = start;
+    *n_bitsp = end - start + 1;
+
+    return s;
+}
+
+void
+nxm_parse_reg_move(struct nx_action_reg_move *move, const char *s)
+{
+    const char *full_s = s;
+    uint32_t src, dst;
+    int src_ofs, dst_ofs;
+    int src_n_bits, dst_n_bits;
+
+    s = parse_nxm_field_bits(s, &src, &src_ofs, &src_n_bits);
+    if (strncmp(s, "->", 2)) {
+        ovs_fatal(0, "%s: missing `->' following source", full_s);
+    }
+    s += 2;
+    s = parse_nxm_field_bits(s, &dst, &dst_ofs, &dst_n_bits);
+    if (*s != '\0') {
+        ovs_fatal(0, "%s: trailing garbage following destination", full_s);
+    }
+
+    if (src_n_bits != dst_n_bits) {
+        ovs_fatal(0, "%s: source field is %d bits wide but destination is "
+                  "%d bits wide", full_s, src_n_bits, dst_n_bits);
+    }
+
+    move->type = htons(OFPAT_VENDOR);
+    move->len = htons(sizeof *move);
+    move->vendor = htonl(NX_VENDOR_ID);
+    move->subtype = htons(NXAST_REG_MOVE);
+    move->n_bits = htons(src_n_bits);
+    move->src_ofs = htons(src_ofs);
+    move->dst_ofs = htons(dst_ofs);
+    move->src = htonl(src);
+    move->dst = htonl(dst);
+}
+
+void
+nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
+{
+    const char *full_s = s;
+    uint32_t dst;
+    int ofs, n_bits;
+    uint64_t value;
+
+    value = strtoull(s, (char **) &s, 0);
+    if (strncmp(s, "->", 2)) {
+        ovs_fatal(0, "%s: missing `->' following value", full_s);
+    }
+    s += 2;
+    s = parse_nxm_field_bits(s, &dst, &ofs, &n_bits);
+    if (*s != '\0') {
+        ovs_fatal(0, "%s: trailing garbage following destination", full_s);
+    }
+
+    if (n_bits < 64 && (value >> n_bits) != 0) {
+        ovs_fatal(0, "%s: value %llu does not fit into %d bits",
+                  full_s, value, n_bits);
+    }
+
+    load->type = htons(OFPAT_VENDOR);
+    load->len = htons(sizeof *load);
+    load->vendor = htonl(NX_VENDOR_ID);
+    load->subtype = htons(NXAST_REG_LOAD);
+    load->ofs_nbits = htons((ofs << 6) | (n_bits - 1));
+    load->dst = htonl(dst);
+    load->value = htonll(value);
+}
+
+/* nxm_format_reg_move(), nxm_format_reg_load(). */
+
+static void
+format_nxm_field_bits(struct ds *s, uint32_t header, int ofs, int n_bits)
+{
+    format_nxm_field_name(s, header);
+    if (n_bits != 1) {
+        ds_put_format(s, "[%d..%d]", ofs, ofs + n_bits - 1);
+    } else {
+        ds_put_format(s, "[%d]", ofs);
+    }
+}
+
+void
+nxm_format_reg_move(const struct nx_action_reg_move *move, struct ds *s)
+{
+    int n_bits = ntohs(move->n_bits);
+    int src_ofs = ntohs(move->src_ofs);
+    int dst_ofs = ntohs(move->dst_ofs);
+    uint32_t src = ntohl(move->src);
+    uint32_t dst = ntohl(move->dst);
+
+    ds_put_format(s, "move:");
+    format_nxm_field_bits(s, src, src_ofs, n_bits);
+    ds_put_cstr(s, "->");
+    format_nxm_field_bits(s, dst, dst_ofs, n_bits);
+}
+
+void
+nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
+{
+    uint16_t ofs_nbits = ntohs(load->ofs_nbits);
+    int ofs = ofs_nbits >> 6;
+    int n_bits = (ofs_nbits & 0x3f) + 1;
+    uint32_t dst = ntohl(load->dst);
+    uint64_t value = ntohll(load->value);
+
+    ds_put_format(s, "load:%"PRIu64"->", value);
+    format_nxm_field_bits(s, dst, ofs, n_bits);
 }
 
 /* nxm_check_reg_move(), nxm_check_reg_load(). */

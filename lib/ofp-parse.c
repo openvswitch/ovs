@@ -25,6 +25,7 @@
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "netdev.h"
+#include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -315,6 +316,14 @@ str_to_action(char *str, struct ofpbuf *b)
                 ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
             }
             nan->len = htons(b->size - start_ofs);
+        } else if (!strcasecmp(act, "move")) {
+            struct nx_action_reg_move *move;
+            move = ofpbuf_put_uninit(b, sizeof *move);
+            nxm_parse_reg_move(move, arg);
+        } else if (!strcasecmp(act, "load")) {
+            struct nx_action_reg_load *load;
+            load = ofpbuf_put_uninit(b, sizeof *load);
+            nxm_parse_reg_load(load, arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

@@ -184,6 +184,7 @@ static void ofp_print_port_name(struct ds *string, uint16_t port)
     ds_put_cstr(string, name);
 }
 
+
 static void
 print_note(struct ds *string, const struct nx_action_note *nan)
 {
@@ -200,15 +201,43 @@ print_note(struct ds *string, const struct nx_action_note *nan)
     }
 }
 
+static int
+nx_action_len(enum nx_action_subtype subtype)
+{
+    switch (subtype) {
+    case NXAST_SNAT__OBSOLETE: return -1;
+    case NXAST_RESUBMIT: return sizeof(struct nx_action_resubmit);
+    case NXAST_SET_TUNNEL: return sizeof(struct nx_action_set_tunnel);
+    case NXAST_DROP_SPOOFED_ARP:
+        return sizeof(struct nx_action_drop_spoofed_arp);
+    case NXAST_SET_QUEUE: return sizeof(struct nx_action_set_queue);
+    case NXAST_POP_QUEUE: return sizeof(struct nx_action_pop_queue);
+    case NXAST_REG_MOVE: return sizeof(struct nx_action_reg_move);
+    case NXAST_REG_LOAD: return sizeof(struct nx_action_reg_load);
+    case NXAST_NOTE: return -1;
+    default: return -1;
+    }
+}
+
 static void
 ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
 {
     uint16_t subtype = ntohs(nah->subtype);
+    int required_len = nx_action_len(subtype);
+    int len = ntohs(nah->len);
+
+    if (required_len != -1 && required_len != len) {
+        ds_put_format(string, "***Nicira action %"PRIu16" wrong length: %d***",
+                      subtype, len);
+        return;
+    }
 
     if (subtype <= TYPE_MAXIMUM(enum nx_action_subtype)) {
         const struct nx_action_set_tunnel *nast;
         const struct nx_action_set_queue *nasq;
         const struct nx_action_resubmit *nar;
+        const struct nx_action_reg_move *move;
+        const struct nx_action_reg_load *load;
 
         switch ((enum nx_action_subtype) subtype) {
         case NXAST_RESUBMIT:
@@ -240,8 +269,13 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
             return;
 
         case NXAST_REG_MOVE:
+            move = (const struct nx_action_reg_move *) nah;
+            nxm_format_reg_move(move, string);
+            return;
+
         case NXAST_REG_LOAD:
-            /* XXX */
+            load = (const struct nx_action_reg_load *) nah;
+            nxm_format_reg_load(load, string);
             return;
 
         case NXAST_SNAT__OBSOLETE:
