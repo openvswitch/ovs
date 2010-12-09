@@ -1067,7 +1067,11 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
  * message 'oh', received when the current flow format was 'flow_format', into
  * an abstract flow_stats_request in 'fsr'.  Returns 0 if successful, otherwise
- * an OpenFlow error code. */
+ * an OpenFlow error code.
+ *
+ * For OFPST_FLOW and OFPST_AGGREGATE messages, 'flow_format' should be the
+ * current flow format at the time when the message was received.  Otherwise
+ * 'flow_format' is ignored. */
 int
 ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
                                   const struct ofp_header *oh,
@@ -1138,6 +1142,68 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
     }
 
     return msg;
+}
+
+/* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh', received
+ * when the current flow format was 'flow_format', into an abstract
+ * ofputil_flow_removed in 'fr'.  Returns 0 if successful, otherwise an
+ * OpenFlow error code.
+ *
+ * For OFPT_FLOW_REMOVED messages, 'flow_format' should be the current flow
+ * format at the time when the message was received.  Otherwise 'flow_format'
+ * is ignored. */
+int
+ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
+                            const struct ofp_header *oh,
+                            enum nx_flow_format flow_format)
+{
+    const struct ofputil_msg_type *type;
+    enum ofputil_msg_code code;
+
+    ofputil_decode_msg_type(oh, &type);
+    code = ofputil_msg_type_code(type);
+    if (code == OFPUTIL_OFPT_FLOW_REMOVED) {
+        const struct ofp_flow_removed *ofr;
+
+        ofr = (const struct ofp_flow_removed *) oh;
+        ofputil_cls_rule_from_match(&ofr->match, ntohs(ofr->priority),
+                                    flow_format, ofr->cookie, &fr->rule);
+        fr->cookie = ofr->cookie;
+        fr->reason = ofr->reason;
+        fr->duration_sec = ntohl(ofr->duration_sec);
+        fr->duration_nsec = ntohl(ofr->duration_nsec);
+        fr->idle_timeout = ntohs(ofr->idle_timeout);
+        fr->packet_count = ntohll(ofr->packet_count);
+        fr->byte_count = ntohll(ofr->byte_count);
+    } else if (code == OFPUTIL_NXT_FLOW_REMOVED) {
+        struct nx_flow_removed *nfr;
+        struct ofpbuf b;
+        int error;
+
+        ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+        nfr = ofpbuf_pull(&b, sizeof *nfr);
+        error = nx_pull_match(&b, ntohs(nfr->match_len), ntohs(nfr->priority),
+                              &fr->rule);
+        if (error) {
+            return error;
+        }
+        if (b.size) {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        }
+
+        fr->cookie = nfr->cookie;
+        fr->reason = nfr->reason;
+        fr->duration_sec = ntohl(nfr->duration_sec);
+        fr->duration_nsec = ntohl(nfr->duration_nsec);
+        fr->idle_timeout = ntohs(nfr->idle_timeout);
+        fr->packet_count = ntohll(nfr->packet_count);
+        fr->byte_count = ntohll(nfr->byte_count);
+    } else {
+        NOT_REACHED();
+    }
+
+    return 0;
 }
 
 /* Returns a string representing the message type of 'type'.  The string is the

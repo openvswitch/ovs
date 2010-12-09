@@ -155,6 +155,22 @@ int ofputil_decode_flow_stats_request(struct flow_stats_request *,
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct flow_stats_request *, enum nx_flow_format);
 
+/* Flow removed message, independent of flow format. */
+struct ofputil_flow_removed {
+    struct cls_rule rule;
+    ovs_be64 cookie;
+    uint8_t reason;             /* One of OFPRR_*. */
+    uint32_t duration_sec;
+    uint32_t duration_nsec;
+    uint16_t idle_timeout;
+    uint64_t packet_count;
+    uint64_t byte_count;
+};
+
+int ofputil_decode_flow_removed(struct ofputil_flow_removed *,
+                                const struct ofp_header *,
+                                enum nx_flow_format);
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);

@@ -866,12 +866,21 @@ ofp_print_duration(struct ds *string, unsigned int sec, unsigned int nsec)
 }
 
 static void
-ofp_print_flow_removed(struct ds *string, const struct ofp_flow_removed *ofr,
-                       int verbosity)
+ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
 {
-    ofp_print_match(string, &ofr->match, verbosity);
+    struct ofputil_flow_removed fr;
+    int error;
+
+    error = ofputil_decode_flow_removed(&fr, oh, NXFF_OPENFLOW10);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    cls_rule_format(&fr.rule, string);
+
     ds_put_cstr(string, " reason=");
-    switch (ofr->reason) {
+    switch (fr.reason) {
     case OFPRR_IDLE_TIMEOUT:
         ds_put_cstr(string, "idle");
         break;
@@ -882,22 +891,17 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_flow_removed *ofr,
         ds_put_cstr(string, "delete");
         break;
     default:
-        ds_put_format(string, "**%"PRIu8"**", ofr->reason);
+        ds_put_format(string, "**%"PRIu8"**", fr.reason);
         break;
     }
 
-    if (ofr->cookie != htonll(0)) {
-        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(ofr->cookie));
-    }
-    if (ofr->priority != htons(32768)) {
-        ds_put_format(string, " pri:%"PRIu16, ntohs(ofr->priority));
+    if (fr.cookie != htonll(0)) {
+        ds_put_format(string, " cookie:0x%"PRIx64, ntohll(fr.cookie));
     }
     ds_put_cstr(string, " duration");
-    ofp_print_duration(string,
-                       ntohl(ofr->duration_sec), ntohl(ofr->duration_nsec));
+    ofp_print_duration(string, fr.duration_sec, fr.duration_nsec);
     ds_put_format(string, " idle%"PRIu16" pkts%"PRIu64" bytes%"PRIu64"\n",
-         ntohs(ofr->idle_timeout), ntohll(ofr->packet_count),
-         ntohll(ofr->byte_count));
+         fr.idle_timeout, fr.packet_count, fr.byte_count);
 }
 
 static void
@@ -1561,7 +1565,8 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPT_FLOW_REMOVED:
-        ofp_print_flow_removed(string, msg, verbosity);
+    case OFPUTIL_NXT_FLOW_REMOVED:
+        ofp_print_flow_removed(string, msg);
         break;
 
     case OFPUTIL_OFPT_PORT_STATUS:
@@ -1667,17 +1672,13 @@ ofp_to_string__(const struct ofp_header *oh,
         ofp_print_flow_mod(string, msg, code, verbosity);
         break;
 
-    case OFPUTIL_NXT_FLOW_REMOVED:
-        /* XXX */
-        break;
-
     case OFPUTIL_NXST_FLOW_REPLY:
         ofp_print_nxst_flow_reply(string, oh);
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_nxst_aggregate_reply(string, oh);
+        ofp_print_nxst_aggregate_reply(string, msg);
         break;
     }
 }
