@@ -273,15 +273,15 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 /* Returns null if this device is not attached to a datapath. */
 struct vport *netdev_get_vport(struct net_device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-	/* XXX: The bridge code may have registered the data.
-	 * So check that the handler pointer is the datapath's.
-	 * Once the merge is done and IFF_OVS_DATAPATH stops
-	 * being the same value as IFF_BRIDGE_PORT the check can
-	 * simply be netdev_vport->dev->priv_flags & IFF_OVS_DATAPATH. */
-	if (rcu_dereference(dev->rx_handler) != netdev_frame_hook)
+#ifdef IFF_BRIDGE_PORT
+#if IFF_BRIDGE_PORT != IFF_OVS_DATAPATH
+	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
+#else
+	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))	
+#endif
+		return (struct vport *)rcu_dereference(dev->rx_handler_data);
+	else
 		return NULL;
-	return (struct vport *)rcu_dereference(dev->rx_handler_data);
 #else
 	return (struct vport *)rcu_dereference(dev->br_port);
 #endif
