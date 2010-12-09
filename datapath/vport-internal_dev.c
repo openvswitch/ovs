@@ -219,8 +219,6 @@ static int internal_dev_destroy(struct vport *vport)
 	netif_stop_queue(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
-	synchronize_rcu();
-
 	unregister_netdevice(netdev_vport->dev);
 	vport_free(vport);
 
