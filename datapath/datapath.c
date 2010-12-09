@@ -609,16 +609,12 @@ int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
-		if (nskb) {
-			kfree_skb(skb);
-			skb = nskb;
-			if (unlikely(IS_ERR(skb))) {
-				err = PTR_ERR(skb);
-				goto err;
-			}
-		} else {
-			/* XXX This case might not be possible.  It's hard to
-			 * tell from the skb_gso_segment() code and comment. */
+		
+		kfree_skb(skb);
+		skb = nskb;
+		if (unlikely(IS_ERR(skb))) {
+			err = PTR_ERR(skb);
+			goto err;
 		}
 	}
 
