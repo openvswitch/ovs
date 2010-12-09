@@ -3575,19 +3575,17 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
 static void
 flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 {
-    struct ofp_match match;
     uint64_t packet_count, byte_count;
     size_t act_len = sizeof *rule->actions * rule->n_actions;
 
     query_stats(ofproto, rule, &packet_count, &byte_count);
-    ofputil_cls_rule_to_match(&rule->cr, NXFF_OPENFLOW10, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
     ds_put_format(results, "priority=%u, ", rule->cr.priority);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
-    ofp_print_match(results, &match, true);
+    cls_rule_format(&rule->cr, results);
     if (act_len > 0) {
         ofp_print_actions(results, &rule->actions->header, act_len);
     } else {
