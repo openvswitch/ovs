@@ -1089,7 +1089,7 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key,
         uint8_t new = a->nw_tos | (nh->ip_tos & IP_ECN_MASK);
 
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
-                htons((uint16_t)a->nw_tos));
+                htons((uint16_t) new));
         *field = new;
     }
 }
