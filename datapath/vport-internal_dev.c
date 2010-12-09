@@ -10,7 +10,6 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-#include <linux/rcupdate.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
 
@@ -72,13 +71,10 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-	struct vport *vport = rcu_dereference(internal_dev->vport);
-
 	compute_ip_summed(skb, true);
 	OVS_CB(skb)->flow = NULL;
 
-	vport_receive(vport, skb);
+	vport_receive(internal_dev_priv(netdev)->vport, skb);
 	return 0;
 }
 
@@ -197,7 +193,7 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 	}
 
 	internal_dev = internal_dev_priv(netdev_vport->dev);
-	rcu_assign_pointer(internal_dev->vport, vport);
+	internal_dev->vport = vport;
 
 	err = register_netdevice(netdev_vport->dev);
 	if (err)
@@ -288,11 +284,8 @@ int is_internal_vport(const struct vport *vport)
 
 struct vport *internal_dev_get_vport(struct net_device *netdev)
 {
-	struct internal_dev *internal_dev;
-
 	if (!is_internal_dev(netdev))
 		return NULL;
 
-	internal_dev = internal_dev_priv(netdev);
-	return rcu_dereference(internal_dev->vport);
+	return internal_dev_priv(netdev)->vport;
 }
