@@ -1,6 +1,7 @@
 #ifndef __NET_NETLINK_WRAPPER_H
 #define __NET_NETLINK_WRAPPER_H 1
 
+#include <linux/version.h>
 #include_next <net/netlink.h>
 
 #ifndef HAVE_NLA_NUL_STRING
@@ -36,5 +37,17 @@ static inline __be16 nla_get_be16(struct nlattr *nla)
         return *(__be16 *) nla_data(nla);
 }
 #endif  /* !HAVE_NLA_GET_BE16 */
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+/**
+ * nla_type - attribute type
+ * @nla: netlink attribute
+ */
+static inline int nla_type(const struct nlattr *nla)
+{
+        return nla->nla_type & NLA_TYPE_MASK;
+}
+#endif
 
 #endif /* net/netlink.h */
