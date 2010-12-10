@@ -228,7 +228,8 @@ enum nx_action_subtype {
     NXAST_POP_QUEUE,            /* struct nx_action_pop_queue */
     NXAST_REG_MOVE,             /* struct nx_action_reg_move */
     NXAST_REG_LOAD,             /* struct nx_action_reg_load */
-    NXAST_NOTE                  /* struct nx_action_note */
+    NXAST_NOTE,                 /* struct nx_action_note */
+    NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
 };
 
 /* Header for Nicira-defined actions. */
@@ -279,7 +280,8 @@ OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 
 /* Action structure for NXAST_SET_TUNNEL.
  *
- * Sets the encapsulating tunnel ID. */
+ * Sets the encapsulating tunnel ID to a 32-bit value.  The most-significant 32
+ * bits of the tunnel ID are set to 0. */
 struct nx_action_set_tunnel {
     uint16_t type;                  /* OFPAT_VENDOR. */
     uint16_t len;                   /* Length is 16. */
@@ -289,6 +291,19 @@ struct nx_action_set_tunnel {
     uint32_t tun_id;                /* Tunnel ID. */
 };
 OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
+
+/* Action structure for NXAST_SET_TUNNEL64.
+ *
+ * Sets the encapsulating tunnel ID to a 64-bit value. */
+struct nx_action_set_tunnel64 {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_TUNNEL64. */
+    uint8_t pad[6];
+    ovs_be64 tun_id;                /* Tunnel ID. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_tunnel64) == 24);
 
 /* Action structure for NXAST_DROP_SPOOFED_ARP.
  *

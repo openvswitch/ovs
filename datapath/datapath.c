@@ -544,7 +544,7 @@ out:
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */
 static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
-				 int queue_no, u32 arg)
+				 int queue_no, u64 arg)
 {
 	struct sk_buff *nskb;
 	int port_no;
@@ -569,7 +569,6 @@ static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue
 		header->type = queue_no;
 		header->length = skb->len;
 		header->port = port_no;
-		header->reserved = 0;
 		header->arg = arg;
 		skb_queue_tail(queue, skb);
 
@@ -587,7 +586,7 @@ err_kfree_skbs:
 }
 
 int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
-		      u32 arg)
+		      u64 arg)
 {
 	struct dp_stats_percpu *stats;
 	struct sk_buff_head *queue;
@@ -666,7 +665,7 @@ static int validate_actions(const struct nlattr *actions, u32 actions_len)
         nla_for_each_attr(a, actions, actions_len, rem) {
                 static const u32 action_lens[ODPAT_MAX + 1] = {
                         [ODPAT_OUTPUT] = 4,
-                        [ODPAT_CONTROLLER] = 4,
+                        [ODPAT_CONTROLLER] = 8,
                         [ODPAT_SET_DL_TCI] = 2,
                         [ODPAT_STRIP_VLAN] = 0,
                         [ODPAT_SET_DL_SRC] = ETH_ALEN,
@@ -676,7 +675,7 @@ static int validate_actions(const struct nlattr *actions, u32 actions_len)
                         [ODPAT_SET_NW_TOS] = 1,
                         [ODPAT_SET_TP_SRC] = 2,
                         [ODPAT_SET_TP_DST] = 2,
-                        [ODPAT_SET_TUNNEL] = 4,
+                        [ODPAT_SET_TUNNEL] = 8,
                         [ODPAT_SET_PRIORITY] = 4,
                         [ODPAT_POP_PRIORITY] = 0,
                         [ODPAT_DROP_SPOOFED_ARP] = 0,

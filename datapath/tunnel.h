@@ -196,12 +196,12 @@ int tnl_get_mtu(const struct vport *vport);
 int tnl_send(struct vport *vport, struct sk_buff *skb);
 void tnl_rcv(struct vport *vport, struct sk_buff *skb);
 
-struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be32 key,
+struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    int tunnel_type,
 			    const struct tnl_mutable_config **mutable);
 bool tnl_frag_needed(struct vport *vport,
 		     const struct tnl_mutable_config *mutable,
-		     struct sk_buff *skb, unsigned int mtu, __be32 flow_key);
+		     struct sk_buff *skb, unsigned int mtu, __be64 flow_key);
 void tnl_free_linked_skbs(struct sk_buff *skb);
 
 static inline struct tnl_vport *tnl_vport_priv(const struct vport *vport)

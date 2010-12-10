@@ -127,10 +127,10 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
 
     if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(ofpfw & NXFW_TUN_ID)) {
-        rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
+        rule->flow.tun_id = htonll(ntohll(cookie) >> 32);
     } else {
         wc->wildcards |= FWW_TUN_ID;
-        rule->flow.tun_id = htonl(0);
+        rule->flow.tun_id = htonll(0);
     }
 
     if (ofpfw & OFPFW_DL_DST) {
@@ -233,7 +233,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
             ofpfw |= NXFW_TUN_ID;
         } else {
             uint32_t cookie_lo = ntohll(cookie_in);
-            uint32_t cookie_hi = ntohl(rule->flow.tun_id);
+            uint32_t cookie_hi = ntohll(rule->flow.tun_id);
             cookie_in = htonll(cookie_lo | ((uint64_t) cookie_hi << 32));
         }
     }
@@ -856,7 +856,7 @@ ofputil_min_flow_format(const struct cls_rule *rule, bool cookie_support,
         || !regs_fully_wildcarded(wc)
         || (!(wc->wildcards & FWW_TUN_ID)
             && (!cookie_support
-                || (cookie_hi && cookie_hi != rule->flow.tun_id)))) {
+                || (cookie_hi && cookie_hi != ntohll(rule->flow.tun_id))))) {
         return NXFF_NXM;
     } else if (!(wc->wildcards & FWW_TUN_ID)) {
         return NXFF_TUN_ID_FROM_COOKIE;
@@ -1740,6 +1740,10 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
 
     case NXAST_NOTE:
         return 0;
+
+    case NXAST_SET_TUNNEL64:
+        return check_action_exact_len(a, len,
+                                      sizeof(struct nx_action_set_tunnel64));
 
     case NXAST_SNAT__OBSOLETE:
     default:

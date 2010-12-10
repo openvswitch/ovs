@@ -63,6 +63,8 @@
 
 #ifndef __aligned_u64
 #define __aligned_u64 __u64 __attribute__((aligned(8)))
+#define __aligned_be64 __be64 __attribute__((aligned(8)))
+#define __aligned_le64 __le64 __attribute__((aligned(8)))
 #endif
 
 #include <linux/if_link.h>
@@ -141,10 +143,9 @@ struct odp_stats {
 
 /**
  * struct odp_msg - format of messages read from datapath fd.
- * @type: One of the %_ODPL_* constants.
  * @length: Total length of message, including this header.
+ * @type: One of the %_ODPL_* constants.
  * @port: Port that received the packet embedded in this message.
- * @reserved: Not currently used.  Should be set to 0.
  * @arg: Argument value whose meaning depends on @type.
  *
  * For @type == %_ODPL_MISS_NR, the header is followed by packet data.  The
@@ -161,11 +162,10 @@ struct odp_stats {
  * data.
  */
 struct odp_msg {
-    uint32_t type;
     uint32_t length;
+    uint16_t type;
     uint16_t port;
-    uint16_t reserved;
-    uint32_t arg;
+    __aligned_u64 arg;
 };
 
 /**
@@ -219,7 +219,7 @@ struct odp_flow_stats {
 #define ODP_TCI_PRESENT 0x1000  /* CFI bit */
 
 struct odp_flow_key {
-    ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
+    ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
     ovs_be32 nw_src;            /* IP source address. */
     ovs_be32 nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */

@@ -138,7 +138,7 @@ static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
-                                    int queue_no, int port_no, uint32_t arg);
+                                    int queue_no, int port_no, uint64_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
                                      struct ofpbuf *, struct flow *,
                                      const struct nlattr *actions,
@@ -1140,7 +1140,7 @@ dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
 
 static int
 dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
-                         int queue_no, int port_no, uint32_t arg)
+                         int queue_no, int port_no, uint64_t arg)
 {
     struct odp_msg *header;
     struct ofpbuf *msg;
@@ -1210,7 +1210,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
         case ODPAT_CONTROLLER:
             dp_netdev_output_control(dp, packet, _ODPL_ACTION_NR,
-                                     key->in_port, nl_attr_get_u32(a));
+                                     key->in_port, nl_attr_get_u64(a));
             break;
 
         case ODPAT_SET_DL_TCI:

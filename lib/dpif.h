@@ -90,10 +90,10 @@ int dpif_execute(struct dpif *, const struct nlattr *actions,
 /* Minimum number of bytes of headroom for a packet returned by dpif_recv()
  * member function.  This headroom allows "struct odp_msg" to be replaced by
  * "struct ofp_packet_in" without copying the buffer. */
-#define DPIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
-                               - sizeof(struct odp_msg))
+#define DPIF_RECV_MSG_PADDING \
+        ROUND_UP(sizeof(struct ofp_packet_in) - sizeof(struct odp_msg), 8)
 BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct odp_msg));
-BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 4 == 0);
+BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 8 == 0);
 
 int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
 int dpif_recv_set_mask(struct dpif *, int listen_mask);

@@ -36,8 +36,8 @@ struct ofpbuf;
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 
 struct flow {
+    ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
-    ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
     ovs_be32 nw_src;            /* IP source address. */
     ovs_be32 nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */
@@ -53,13 +53,13 @@ struct flow {
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (36 + FLOW_N_REGS * 4)
+#define FLOW_SIG_SIZE (40 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 0
 BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
-int flow_extract(struct ofpbuf *, ovs_be32 tun_id, uint16_t in_port,
+int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
         struct odp_flow_stats *stats);

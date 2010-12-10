@@ -23,6 +23,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 
+#include "byte-order.h"
 #include "list.h"
 #include "netdev-provider.h"
 #include "openvswitch/datapath-protocol.h"
@@ -462,19 +463,20 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
                 config.flags |= TNL_F_IN_KEY_MATCH;
                 config.flags |= TNL_F_OUT_KEY_ACTION;
             } else {
-                config.out_key = config.in_key = htonl(atoi(node->data));
+                uint64_t key = strtoull(node->data, NULL, 0);
+                config.out_key = config.in_key = htonll(key);
             }
         } else if (!strcmp(node->name, "in_key") && is_gre) {
             if (!strcmp(node->data, "flow")) {
                 config.flags |= TNL_F_IN_KEY_MATCH;
             } else {
-                config.in_key = htonl(atoi(node->data));
+                config.in_key = htonll(strtoull(node->data, NULL, 0));
             }
         } else if (!strcmp(node->name, "out_key") && is_gre) {
             if (!strcmp(node->data, "flow")) {
                 config.flags |= TNL_F_OUT_KEY_ACTION;
             } else {
-                config.out_key = htonl(atoi(node->data));
+                config.out_key = htonll(strtoull(node->data, NULL, 0));
             }
         } else if (!strcmp(node->name, "tos")) {
             if (!strcmp(node->data, "inherit")) {

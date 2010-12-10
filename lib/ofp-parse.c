@@ -257,12 +257,22 @@ str_to_action(char *str, struct ofpbuf *b)
             nar->vendor = htonl(NX_VENDOR_ID);
             nar->subtype = htons(NXAST_RESUBMIT);
             nar->in_port = htons(str_to_u32(arg));
-        } else if (!strcasecmp(act, "set_tunnel")) {
-            struct nx_action_set_tunnel *nast;
-            nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
-            nast->vendor = htonl(NX_VENDOR_ID);
-            nast->subtype = htons(NXAST_SET_TUNNEL);
-            nast->tun_id = htonl(str_to_u32(arg));
+        } else if (!strcasecmp(act, "set_tunnel")
+                   || !strcasecmp(act, "set_tunnel64")) {
+            uint64_t tun_id = str_to_u64(arg);
+            if (!strcasecmp(act, "set_tunnel64") || tun_id > UINT32_MAX) {
+                struct nx_action_set_tunnel64 *nast64;
+                nast64 = put_action(b, sizeof *nast64, OFPAT_VENDOR);
+                nast64->vendor = htonl(NX_VENDOR_ID);
+                nast64->subtype = htons(NXAST_SET_TUNNEL64);
+                nast64->tun_id = htonll(tun_id);
+            } else {
+                struct nx_action_set_tunnel *nast;
+                nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
+                nast->vendor = htonl(NX_VENDOR_ID);
+                nast->subtype = htons(NXAST_SET_TUNNEL);
+                nast->tun_id = htonl(tun_id);
+            }
         } else if (!strcasecmp(act, "drop_spoofed_arp")) {
             struct nx_action_header *nah;
             nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
@@ -451,7 +461,7 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
 
     switch (index) {
     case F_TUN_ID:
-        cls_rule_set_tun_id(rule, htonl(str_to_u32(value)));
+        cls_rule_set_tun_id(rule, htonll(str_to_u64(value)));
         break;
 
     case F_IN_PORT:

@@ -166,11 +166,11 @@ static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 }
 
 struct port_lookup_key {
+	const struct tnl_mutable_config *mutable;
+	__be64 key;
 	u32 tunnel_type;
 	__be32 saddr;
 	__be32 daddr;
-	__be32 key;
-	const struct tnl_mutable_config *mutable;
 };
 
 /*
@@ -192,7 +192,8 @@ static int port_cmp(const struct tbl_node *node, void *target)
 
 static u32 port_hash(struct port_lookup_key *k)
 {
-	return jhash_3words(k->key, k->saddr, k->daddr, k->tunnel_type);
+	u32 x = jhash_3words(k->saddr, k->daddr, k->tunnel_type, 0);
+	return jhash_2words(k->key >> 32, k->key, x);
 }
 
 static u32 mutable_hash(const struct tnl_mutable_config *mutable)
@@ -305,7 +306,7 @@ static int del_port(struct vport *vport)
 	return 0;
 }
 
-struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be32 key,
+struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    int tunnel_type,
 			    const struct tnl_mutable_config **mutable)
 {
@@ -598,7 +599,7 @@ static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
 #endif /* IPv6 */
 
 bool tnl_frag_needed(struct vport *vport, const struct tnl_mutable_config *mutable,
-		     struct sk_buff *skb, unsigned int mtu, __be32 flow_key)
+		     struct sk_buff *skb, unsigned int mtu, __be64 flow_key)
 {
 	unsigned int eth_hdr_len = ETH_HLEN;
 	unsigned int total_length = 0, header_length = 0, payload_length;

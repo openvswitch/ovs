@@ -53,13 +53,13 @@
 
 /* This goes in the "config" member of struct odp_port for tunnel vports. */
 struct tnl_port_config {
-	__u32	flags;
-	__be32	saddr;
-	__be32	daddr;
-	__be32	in_key;
-	__be32	out_key;
-	__u8	tos;
-	__u8	ttl;
+	__aligned_be64	in_key;
+	__aligned_be64	out_key;
+	__u32		flags;
+	__be32		saddr;
+	__be32		daddr;
+	__u8		tos;
+	__u8		ttl;
 };
 
 #endif /* openvswitch/tunnel.h */

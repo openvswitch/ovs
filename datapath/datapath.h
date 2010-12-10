@@ -108,8 +108,8 @@ struct datapath {
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
- * @tun_id: ID (in network byte order) of the tunnel that encapsulated this
- * packet. It is 0 if the packet was not received on a tunnel.
+ * @tun_id: ID of the tunnel that encapsulated this packet.  It is 0 if the
+ * packet was not received on a tunnel.
  */
 struct ovs_skb_cb {
 	struct vport		*vport;
@@ -117,7 +117,7 @@ struct ovs_skb_cb {
 #ifdef NEED_CSUM_NORMALIZE
 	enum csum_type		ip_summed;
 #endif
-	__be32			tun_id;
+	__be64			tun_id;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 
@@ -126,7 +126,7 @@ extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct vport *, struct sk_buff *);
 int dp_detach_port(struct vport *);
-int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
+int dp_output_control(struct datapath *, struct sk_buff *, int, u64 arg);
 int dp_min_mtu(const struct datapath *dp);
 void set_internal_devs_mtu(const struct datapath *dp);
 

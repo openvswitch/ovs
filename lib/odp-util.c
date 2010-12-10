@@ -31,8 +31,8 @@
 void
 format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
 {
-    ds_put_format(ds, "tun_id%#"PRIx32" in_port%d tci(",
-                  ntohl(key->tun_id), key->in_port);
+    ds_put_format(ds, "tun_id%#"PRIx64" in_port%d tci(",
+                  ntohll(key->tun_id), key->in_port);
     if (key->dl_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",
                       vlan_tci_to_vid(key->dl_tci),
@@ -57,7 +57,7 @@ odp_action_len(uint16_t type)
 
     switch ((enum odp_action_type) type) {
     case ODPAT_OUTPUT: return 4;
-    case ODPAT_CONTROLLER: return 4;
+    case ODPAT_CONTROLLER: return 8;
     case ODPAT_SET_DL_TCI: return 2;
     case ODPAT_STRIP_VLAN: return 0;
     case ODPAT_SET_DL_SRC: return ETH_ADDR_LEN;
@@ -67,7 +67,7 @@ odp_action_len(uint16_t type)
     case ODPAT_SET_NW_TOS: return 1;
     case ODPAT_SET_TP_SRC: return 2;
     case ODPAT_SET_TP_DST: return 2;
-    case ODPAT_SET_TUNNEL: return 4;
+    case ODPAT_SET_TUNNEL: return 8;
     case ODPAT_SET_PRIORITY: return 4;
     case ODPAT_POP_PRIORITY: return 0;
     case ODPAT_DROP_SPOOFED_ARP: return 0;
@@ -115,11 +115,11 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
     case ODPAT_CONTROLLER:
-        ds_put_format(ds, "ctl(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_format(ds, "ctl(%"PRIu64")", nl_attr_get_u64(a));
         break;
     case ODPAT_SET_TUNNEL:
-        ds_put_format(ds, "set_tunnel(%#"PRIx32")",
-                      ntohl(nl_attr_get_be32(a)));
+        ds_put_format(ds, "set_tunnel(%#"PRIx64")",
+                      ntohll(nl_attr_get_be64(a)));
         break;
     case ODPAT_SET_DL_TCI:
         ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",

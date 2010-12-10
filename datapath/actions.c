@@ -424,7 +424,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_CONTROLLER:
-			err = output_control(dp, skb, nla_get_u32(a));
+			err = output_control(dp, skb, nla_get_u64(a));
 			if (err) {
 				kfree_skb(skb);
 				return err;
@@ -432,7 +432,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_SET_TUNNEL:
-			OVS_CB(skb)->tun_id = nla_get_be32(a);
+			OVS_CB(skb)->tun_id = nla_get_be64(a);
 			break;
 
 		case ODPAT_SET_DL_TCI:

@@ -318,7 +318,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* Tunnel ID. */
     case NFI_NXM_NX_TUN_ID:
-        flow->tun_id = htonl(ntohll(get_unaligned_be64(value)));
+        flow->tun_id = get_unaligned_be64(value);
         return 0;
 
         /* Registers. */
@@ -646,7 +646,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
     /* Tunnel ID. */
     if (!(wc & FWW_TUN_ID)) {
-        nxm_put_64(b, NXM_NX_TUN_ID, htonll(ntohl(flow->tun_id)));
+        nxm_put_64(b, NXM_NX_TUN_ID, flow->tun_id);
     }
 
     /* Registers. */
@@ -1092,7 +1092,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
         return ntohs(flow->tp_dst) & 0xff;
 
     case NFI_NXM_NX_TUN_ID:
-        return ntohl(flow->tun_id);
+        return ntohll(flow->tun_id);
 
 #define NXM_READ_REGISTER(IDX)                  \
     case NFI_NXM_NX_REG##IDX:                   \
@@ -1154,7 +1154,7 @@ nxm_execute_reg_move(const struct nx_action_reg_move *action,
     } else if (dst->header == NXM_OF_VLAN_TCI) {
         flow->vlan_tci = htons(new_data);
     } else if (dst->header == NXM_NX_TUN_ID) {
-        flow->tun_id = htonl(new_data);
+        flow->tun_id = htonll(new_data);
     } else {
         NOT_REACHED();
     }

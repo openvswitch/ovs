@@ -2053,7 +2053,7 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
                     const struct nlattr *odp_actions, unsigned int actions_len,
                     struct ofpbuf *packet)
 {
-    if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint32_t))
+    if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
         && odp_actions->nla_type == ODPAT_CONTROLLER) {
         /* As an optimization, avoid a round-trip from userspace to kernel to
          * userspace.  This also avoids possibly filling up kernel packet
@@ -2064,8 +2064,7 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
         msg->type = _ODPL_ACTION_NR;
         msg->length = sizeof(struct odp_msg) + packet->size;
         msg->port = in_port;
-        msg->reserved = 0;
-        msg->arg = nl_attr_get_u32(odp_actions);
+        msg->arg = nl_attr_get_u64(odp_actions);
 
         send_packet_in(ofproto, packet);
 
@@ -2734,7 +2733,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
                       &ctx->nf_output_iface, ctx->odp_actions);
         break;
     case OFPP_CONTROLLER:
-        nl_msg_put_u32(ctx->odp_actions, ODPAT_CONTROLLER, max_len);
+        nl_msg_put_u64(ctx->odp_actions, ODPAT_CONTROLLER, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, ODPP_LOCAL);
@@ -2876,6 +2875,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_set_tunnel *nast;
     const struct nx_action_set_queue *nasq;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
+    ovs_be64 tun_id;
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
     switch (subtype) {
@@ -2886,8 +2886,9 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_SET_TUNNEL:
         nast = (const struct nx_action_set_tunnel *) nah;
-        nl_msg_put_be32(ctx->odp_actions, ODPAT_SET_TUNNEL, nast->tun_id);
-        ctx->flow.tun_id = nast->tun_id;
+        tun_id = htonll(ntohl(nast->tun_id));
+        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, tun_id);
+        ctx->flow.tun_id = tun_id;
         break;
 
     case NXAST_DROP_SPOOFED_ARP:
@@ -2915,6 +2916,12 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_NOTE:
         /* Nothing to do. */
+        break;
+
+    case NXAST_SET_TUNNEL64:
+        tun_id = ((const struct nx_action_set_tunnel64 *) nah)->tun_id;
+        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, tun_id);
+        ctx->flow.tun_id = tun_id;
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to

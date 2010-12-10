@@ -495,8 +495,13 @@ addition to any other actions in this flow entry.  Recursive
 \fBresubmit\fR actions are ignored.
 .
 .IP \fBset_tunnel\fB:\fIid\fR
-If outputting to a port that encapsulates the packet in a tunnel and supports
-an identifier (such as GRE), sets the identifier to \fBid\fR.
+.IQ \fBset_tunnel64\fB:\fIid\fR
+If outputting to a port that encapsulates the packet in a tunnel and
+supports an identifier (such as GRE), sets the identifier to \fBid\fR.
+If the \fBset_tunnel\fR form is used and \fIid\fR fits in 32 bits,
+then this uses an action extension that is supported by Open vSwitch
+1.0 and later.  Otherwise, if \fIid\fR is a 64-bit value, it requires
+Open vSwitch 1.1 or later.
 .
 .IP \fBdrop_spoofed_arp\fR
 Stops processing further actions, if the packet being processed is an

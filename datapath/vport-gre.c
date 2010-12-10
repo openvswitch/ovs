@@ -50,6 +50,16 @@ static int gre_hdr_len(const struct tnl_port_config *port_config)
 	return len;
 }
 
+/* Returns the least-significant 32 bits of a __be64. */
+static __be32 be64_get_low32(__be64 x)
+{
+#ifdef __BIG_ENDIAN
+	return x;
+#else
+	return x >> 32;
+#endif
+}
+
 static void gre_build_header(const struct vport *vport,
 			     const struct tnl_mutable_config *mutable,
 			     void *header)
@@ -71,7 +81,7 @@ static void gre_build_header(const struct vport *vport,
 		greh->flags |= GRE_KEY;
 
 	if (mutable->port_config.out_key)
-		*options = mutable->port_config.out_key;
+		*options = be64_get_low32(mutable->port_config.out_key);
 }
 
 static struct sk_buff *gre_update_header(const struct vport *vport,
@@ -84,7 +94,7 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 
 	/* Work backwards over the options so the checksum is last. */
 	if (mutable->port_config.flags & TNL_F_OUT_KEY_ACTION) {
-		*options = OVS_CB(skb)->tun_id;
+		*options = be64_get_low32(OVS_CB(skb)->tun_id);
 		options--;
 	}
 
@@ -102,7 +112,17 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 	return skb;
 }
 
-static int parse_header(struct iphdr *iph, __be16 *flags, __be32 *key)
+/* Zero-extends a __be32 into the least-significant 32 bits of a __be64. */
+static __be64 be32_extend_to_be64(__be32 x)
+{
+#ifdef __BIG_ENDIAN
+	return x;
+#else
+	return (__be64) x << 32;
+#endif
+}
+
+static int parse_header(struct iphdr *iph, __be16 *flags, __be64 *key)
 {
 	/* IP and ICMP protocol handlers check that the IHL is valid. */
 	struct gre_base_hdr *greh = (struct gre_base_hdr *)((u8 *)iph + (iph->ihl << 2));
@@ -127,7 +147,7 @@ static int parse_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 	if (greh->flags & GRE_KEY) {
 		hdr_len += GRE_HEADER_SECTION;
 
-		*key = *options;
+		*key = be32_extend_to_be64(*options);
 		options++;
 	} else
 		*key = 0;
@@ -149,7 +169,7 @@ static void gre_err(struct sk_buff *skb, u32 info)
 
 	struct iphdr *iph;
 	__be16 flags;
-	__be32 key;
+	__be64 key;
 	int tunnel_hdr_len, tot_hdr_len;
 	unsigned int orig_mac_header;
 	unsigned int orig_nw_header;
@@ -293,7 +313,7 @@ static int gre_rcv(struct sk_buff *skb)
 	int hdr_len;
 	struct iphdr *iph;
 	__be16 flags;
-	__be32 key;
+	__be64 key;
 
 	if (unlikely(!pskb_may_pull(skb, sizeof(struct gre_base_hdr) + ETH_HLEN)))
 		goto error;
