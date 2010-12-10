@@ -23,7 +23,7 @@ static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
 {
 	__be32 diff[] = { ~from, to };
 
-	sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
+	*sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
 }
 
 #define inet_proto_csum_replace2(sum, skb, from, to, pseudohdr) \
