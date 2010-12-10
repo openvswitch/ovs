@@ -26,6 +26,7 @@
 
 #include "coverage.h"
 #include "netlink.h"
+#include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "vlog.h"
 

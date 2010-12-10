@@ -72,6 +72,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \
+	lib/netlink.c \
+	lib/netlink.h \
 	lib/nx-match.c \
 	lib/nx-match.def \
 	lib/nx-match.h \
@@ -182,8 +184,8 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
 	lib/netlink-protocol.h \
-	lib/netlink.c \
-	lib/netlink.h \
+	lib/netlink-socket.c \
+	lib/netlink-socket.h \
 	lib/rtnetlink.c \
 	lib/rtnetlink.h
 endif

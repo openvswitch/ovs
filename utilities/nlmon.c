@@ -24,6 +24,7 @@
 #include <stddef.h>
 #include <linux/rtnetlink.h>
 #include "netlink.h"
+#include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "timeval.h"

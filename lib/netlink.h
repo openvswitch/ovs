@@ -17,53 +17,26 @@
 #ifndef NETLINK_H
 #define NETLINK_H 1
 
-/* Netlink interface.
+/* Netlink message helpers.
  *
  * Netlink is a datagram-based network protocol primarily for communication
  * between user processes and the kernel, and mainly on Linux.  Netlink is
  * specified in RFC 3549, "Linux Netlink as an IP Services Protocol".
  *
  * Netlink is not suitable for use in physical networks of heterogeneous
- * machines because host byte order is used throughout. */
+ * machines because host byte order is used throughout.
+ *
+ * This header file defines helper functions for working with Netlink messages.
+ * For Netlink protocol definitions, see netlink-protocol.h.  For
+ * Linux-specific definitions for Netlink sockets, see netlink-socket.h.
+ */
 
 #include <stdbool.h>
-#include <sys/uio.h>
+#include <stddef.h>
 #include <stdint.h>
 
 struct ofpbuf;
-struct nl_sock;
 struct nlattr;
-
-/* Netlink sockets. */
-
-int nl_sock_create(int protocol, int multicast_group,
-                   size_t so_sndbuf, size_t so_rcvbuf,
-                   struct nl_sock **);
-void nl_sock_destroy(struct nl_sock *);
-
-int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
-int nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
-                  bool wait);
-int nl_sock_recv(struct nl_sock *, struct ofpbuf **, bool wait);
-int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
-                     struct ofpbuf **reply);
-
-void nl_sock_wait(const struct nl_sock *, short int events);
-
-/* Table dumping. */
-struct nl_dump {
-    struct nl_sock *sock;       /* Socket being dumped. */
-    uint32_t seq;               /* Expected nlmsg_seq for replies. */
-    struct ofpbuf *buffer;      /* Receive buffer currently being iterated. */
-    int status;                 /* 0=OK, EOF=done, or positive errno value. */
-};
-
-void nl_dump_start(struct nl_dump *, struct nl_sock *,
-                   const struct ofpbuf *request);
-bool nl_dump_next(struct nl_dump *, struct ofpbuf *reply);
-int nl_dump_done(struct nl_dump *);
-
-/* Netlink messages. */
 
 /* Accessing headers and data. */
 struct nlmsghdr *nl_msg_nlmsghdr(const struct ofpbuf *);
@@ -141,9 +114,5 @@ bool nl_policy_parse(const struct ofpbuf *, size_t offset,
                      struct nlattr *[], size_t n_attrs);
 bool nl_parse_nested(const struct nlattr *, const struct nl_policy[],
                      struct nlattr *[], size_t n_attrs);
-
-/* Miscellaneous. */
-
-int nl_lookup_genl_family(const char *name, int *number);
 
 #endif /* netlink.h */

@@ -53,6 +53,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"
+#include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"

@@ -43,6 +43,7 @@
 #include "leak-checker.h"
 #include "netdev.h"
 #include "netlink.h"
+#include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "openvswitch/brcompat-netlink.h"
 #include "ovsdb-idl.h"

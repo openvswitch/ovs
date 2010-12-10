@@ -25,6 +25,7 @@
 #include "dynamic-string.h"
 #include "hash.h"
 #include "netlink-protocol.h"
+#include "netlink-socket.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openvswitch/brcompat-netlink.h"
