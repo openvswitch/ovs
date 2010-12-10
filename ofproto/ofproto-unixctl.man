@@ -4,10 +4,13 @@ These commands manage the core OpenFlow switch implementation (called
 .IP "\fBofproto/list\fR"
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
-.IP "\fBofproto/trace \fItun_id in_port packet\fR"
-Traces the path of an imaginary packet through ofproto.  The arguments
-are:
+.IP "\fBofproto/trace \fIswitch tun_id in_port packet\fR"
+Traces the path of an imaginary packet through \fIswitch\fR.  The
+arguments are:
 .RS
+.IP "\fIswitch\fR"
+The switch on which the packet arrived (one of those listed by
+\fBofproto/list\fR).
 .IP "\fItun_id\fR"
 The tunnel ID on which the packet arrived.  Use
 \fB0\fR if the packet did not arrive through a tunnel.
