@@ -25,6 +25,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <net/if.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -39,6 +40,7 @@
 #include "hmap.h"
 #include "list.h"
 #include "netdev.h"
+#include "netlink.h"
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -106,8 +108,8 @@ struct dp_netdev_flow {
     uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
 
     /* Actions. */
-    union odp_action *actions;
-    unsigned int n_actions;
+    struct nlattr *actions;
+    unsigned int actions_len;
 };
 
 /* Interface to netdev-based datapath. */
@@ -139,7 +141,8 @@ static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, int port_no, uint32_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
                                      struct ofpbuf *, struct flow *,
-                                     const union odp_action *, int n);
+                                     const struct nlattr *actions,
+                                     unsigned int actions_len);
 
 static struct dpif_class dpif_dummy_class;
 
@@ -584,11 +587,10 @@ answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
         odp_flow->stats.tcp_flags = TCP_FLAGS(flow->tcp_ctl);
         odp_flow->stats.reserved = 0;
         odp_flow->stats.error = 0;
-        if (odp_flow->n_actions > 0) {
-            unsigned int n = MIN(odp_flow->n_actions, flow->n_actions);
+        if (odp_flow->actions_len > 0) {
             memcpy(odp_flow->actions, flow->actions,
-                   n * sizeof *odp_flow->actions);
-            odp_flow->n_actions = flow->n_actions;
+                   MIN(odp_flow->actions_len, flow->actions_len));
+            odp_flow->actions_len = flow->actions_len;
         }
 
         if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
@@ -618,34 +620,42 @@ dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
 }
 
 static int
-dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
-                             bool *mutates)
+dpif_netdev_validate_actions(const struct nlattr *actions,
+                             unsigned int actions_len, bool *mutates)
 {
-    unsigned int i;
+    const struct nlattr *a;
+    unsigned int left;
 
     *mutates = false;
-    for (i = 0; i < n_actions; i++) {
-        const union odp_action *a = &actions[i];
-        switch (a->type) {
+    NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
+        uint16_t type = nl_attr_type(a);
+        int len = odp_action_len(type);
+
+        if (len != nl_attr_get_size(a)) {
+            return EINVAL;
+        }
+
+        switch (type) {
         case ODPAT_OUTPUT:
-            if (a->output.port >= MAX_PORTS) {
+            if (nl_attr_get_u32(a) >= MAX_PORTS) {
                 return EINVAL;
             }
             break;
 
         case ODPAT_CONTROLLER:
+        case ODPAT_DROP_SPOOFED_ARP:
             break;
 
         case ODPAT_SET_DL_TCI:
             *mutates = true;
-            if (a->dl_tci.tci & htons(VLAN_CFI)) {
+            if (nl_attr_get_be16(a) & htons(VLAN_CFI)) {
                 return EINVAL;
             }
             break;
 
         case ODPAT_SET_NW_TOS:
             *mutates = true;
-            if (a->nw_tos.nw_tos & IP_ECN_MASK) {
+            if (nl_attr_get_u8(a) & IP_ECN_MASK) {
                 return EINVAL;
             }
             break;
@@ -660,6 +670,9 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
             *mutates = true;
             break;
 
+        case ODPAT_SET_TUNNEL:
+        case ODPAT_SET_PRIORITY:
+        case ODPAT_POP_PRIORITY:
         default:
             return EOPNOTSUPP;
         }
@@ -670,23 +683,18 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
 static int
 set_flow_actions(struct dp_netdev_flow *flow, struct odp_flow *odp_flow)
 {
-    size_t n_bytes;
     bool mutates;
     int error;
 
-    if (odp_flow->n_actions >= 4096 / sizeof *odp_flow->actions) {
-        return EINVAL;
-    }
     error = dpif_netdev_validate_actions(odp_flow->actions,
-                                         odp_flow->n_actions, &mutates);
+                                         odp_flow->actions_len, &mutates);
     if (error) {
         return error;
     }
 
-    n_bytes = odp_flow->n_actions * sizeof *flow->actions;
-    flow->actions = xrealloc(flow->actions, n_bytes);
-    flow->n_actions = odp_flow->n_actions;
-    memcpy(flow->actions, odp_flow->actions, n_bytes);
+    flow->actions = xrealloc(flow->actions, odp_flow->actions_len);
+    flow->actions_len = odp_flow->actions_len;
+    memcpy(flow->actions, odp_flow->actions, odp_flow->actions_len);
     return 0;
 }
 
@@ -793,7 +801,7 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
 
 static int
 dpif_netdev_execute(struct dpif *dpif,
-                    const union odp_action actions[], int n_actions,
+                    const struct nlattr *actions, unsigned int actions_len,
                     const struct ofpbuf *packet)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -806,7 +814,7 @@ dpif_netdev_execute(struct dpif *dpif,
         return EINVAL;
     }
 
-    error = dpif_netdev_validate_actions(actions, n_actions, &mutates);
+    error = dpif_netdev_validate_actions(actions, actions_len, &mutates);
     if (error) {
         return error;
     }
@@ -825,7 +833,7 @@ dpif_netdev_execute(struct dpif *dpif,
         copy = *packet;
     }
     flow_extract(&copy, 0, -1, &key);
-    error = dp_netdev_execute_actions(dp, &copy, &key, actions, n_actions);
+    error = dp_netdev_execute_actions(dp, &copy, &key, actions, actions_len);
     if (mutates) {
         ofpbuf_uninit(&copy);
     }
@@ -928,7 +936,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     if (flow) {
         dp_netdev_flow_used(flow, &key, packet);
         dp_netdev_execute_actions(dp, packet, &key,
-                                  flow->actions, flow->n_actions);
+                                  flow->actions, flow->actions_len);
         dp->n_hit++;
     } else {
         dp->n_missed++;
@@ -1053,40 +1061,41 @@ is_ip(const struct ofpbuf *packet, const struct flow *key)
 
 static void
 dp_netdev_set_nw_addr(struct ofpbuf *packet, struct flow *key,
-                      const struct odp_action_nw_addr *a)
+                      const struct nlattr *a)
 {
     if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
+        ovs_be32 ip = nl_attr_get_be32(a);
+        uint16_t type = nl_attr_type(a);
         uint32_t *field;
 
-        field = a->type == ODPAT_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
+        field = type == ODPAT_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
         if (key->nw_proto == IP_TYPE_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
-            th->tcp_csum = recalc_csum32(th->tcp_csum, *field, a->nw_addr);
+            th->tcp_csum = recalc_csum32(th->tcp_csum, *field, ip);
         } else if (key->nw_proto == IP_TYPE_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             if (uh->udp_csum) {
-                uh->udp_csum = recalc_csum32(uh->udp_csum, *field, a->nw_addr);
+                uh->udp_csum = recalc_csum32(uh->udp_csum, *field, ip);
                 if (!uh->udp_csum) {
                     uh->udp_csum = 0xffff;
                 }
             }
         }
-        nh->ip_csum = recalc_csum32(nh->ip_csum, *field, a->nw_addr);
-        *field = a->nw_addr;
+        nh->ip_csum = recalc_csum32(nh->ip_csum, *field, ip);
+        *field = ip;
     }
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key,
-                     const struct odp_action_nw_tos *a)
+dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key, uint8_t nw_tos)
 {
     if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
         uint8_t *field = &nh->ip_tos;
 
         /* Set the DSCP bits and preserve the ECN bits. */
-        uint8_t new = a->nw_tos | (nh->ip_tos & IP_ECN_MASK);
+        uint8_t new = nw_tos | (nh->ip_tos & IP_ECN_MASK);
 
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t) new));
@@ -1096,20 +1105,23 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key,
 
 static void
 dp_netdev_set_tp_port(struct ofpbuf *packet, struct flow *key,
-                      const struct odp_action_tp_port *a)
+                      const struct nlattr *a)
 {
 	if (is_ip(packet, key)) {
+        uint16_t type = nl_attr_type(a);
+        ovs_be16 port = nl_attr_get_be16(a);
         uint16_t *field;
+
         if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
-            field = a->type == ODPAT_SET_TP_SRC ? &th->tcp_src : &th->tcp_dst;
-            th->tcp_csum = recalc_csum16(th->tcp_csum, *field, a->tp_port);
-            *field = a->tp_port;
+            field = type == ODPAT_SET_TP_SRC ? &th->tcp_src : &th->tcp_dst;
+            th->tcp_csum = recalc_csum16(th->tcp_csum, *field, port);
+            *field = port;
         } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
-            field = a->type == ODPAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
-            uh->udp_csum = recalc_csum16(uh->udp_csum, *field, a->tp_port);
-            *field = a->tp_port;
+            field = type == ODPAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
+            uh->udp_csum = recalc_csum16(uh->udp_csum, *field, port);
+            *field = port;
         } else {
             return;
         }
@@ -1184,24 +1196,25 @@ dp_netdev_is_spoofed_arp(struct ofpbuf *packet, const struct flow *key)
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, struct flow *key,
-                          const union odp_action *actions, int n_actions)
+                          const struct nlattr *actions,
+                          unsigned int actions_len)
 {
-    int i;
-    for (i = 0; i < n_actions; i++) {
-        const union odp_action *a = &actions[i];
+    const struct nlattr *a;
+    unsigned int left;
 
-        switch (a->type) {
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
+        switch (nl_attr_type(a)) {
         case ODPAT_OUTPUT:
-            dp_netdev_output_port(dp, packet, a->output.port);
+            dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;
 
         case ODPAT_CONTROLLER:
             dp_netdev_output_control(dp, packet, _ODPL_ACTION_NR,
-                                     key->in_port, a->controller.arg);
+                                     key->in_port, nl_attr_get_u32(a));
             break;
 
         case ODPAT_SET_DL_TCI:
-            dp_netdev_set_dl_tci(packet, a->dl_tci.tci);
+            dp_netdev_set_dl_tci(packet, nl_attr_get_be16(a));
             break;
 
         case ODPAT_STRIP_VLAN:
@@ -1209,25 +1222,25 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case ODPAT_SET_DL_SRC:
-            dp_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_src(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
             break;
 
         case ODPAT_SET_DL_DST:
-            dp_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_dst(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
             break;
 
         case ODPAT_SET_NW_SRC:
         case ODPAT_SET_NW_DST:
-            dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
+            dp_netdev_set_nw_addr(packet, key, a);
             break;
 
         case ODPAT_SET_NW_TOS:
-            dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
+            dp_netdev_set_nw_tos(packet, key, nl_attr_get_u8(a));
             break;
 
         case ODPAT_SET_TP_SRC:
         case ODPAT_SET_TP_DST:
-            dp_netdev_set_tp_port(packet, key, &a->tp_port);
+            dp_netdev_set_tp_port(packet, key, a);
             break;
 
         case ODPAT_DROP_SPOOFED_ARP:

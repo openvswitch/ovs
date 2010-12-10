@@ -21,7 +21,6 @@
 
 struct dpif;
 struct in_band;
-struct odp_actions;
 struct ofproto;
 struct rconn;
 struct settings;
@@ -41,7 +40,8 @@ void in_band_wait(struct in_band *);
 bool in_band_msg_in_hook(struct in_band *, const struct flow *,
                          const struct ofpbuf *packet);
 bool in_band_rule_check(struct in_band *, const struct flow *,
-                        const struct odp_actions *);
+                        const struct nlattr *odp_actions,
+                        unsigned int actions_len);
 void in_band_flushed(struct in_band *);
 
 #endif /* in-band.h */

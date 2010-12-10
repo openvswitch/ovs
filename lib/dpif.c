@@ -662,13 +662,13 @@ dpif_flow_flush(struct dpif *dpif)
 /* Queries 'dpif' for a flow entry matching 'flow->key'.
  *
  * If a flow matching 'flow->key' exists in 'dpif', stores statistics for the
- * flow into 'flow->stats'.  If 'flow->n_actions' is zero, then 'flow->actions'
- * is ignored.  If 'flow->n_actions' is nonzero, then 'flow->actions' should
- * point to an array of the specified number of actions.  At most that many of
- * the flow's actions will be copied into that array.  'flow->n_actions' will
- * be updated to the number of actions actually present in the flow, which may
- * be greater than the number stored if the flow has more actions than space
- * available in the array.
+ * flow into 'flow->stats'.  If 'flow->actions_len' is zero, then
+ * 'flow->actions' is ignored.  If 'flow->actions_len' is nonzero, then
+ * 'flow->actions' should point to an array of the specified number of bytes.
+ * At most that many bytes of the flow's actions will be copied into that
+ * array.  'flow->actions_len' will be updated to the number of bytes of
+ * actions actually present in the flow, which may be greater than the amount
+ * stored if the flow has more actions than space available in the array.
  *
  * If no flow matching 'flow->key' exists in 'dpif', returns ENOENT.  On other
  * failure, returns a positive errno value. */
@@ -687,7 +687,7 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
     if (error) {
         /* Make the results predictable on error. */
         memset(&flow->stats, 0, sizeof flow->stats);
-        flow->n_actions = 0;
+        flow->actions_len = 0;
     }
     if (should_log_flow_message(error)) {
         log_flow_operation(dpif, "flow_get", error, flow);
@@ -702,13 +702,13 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
  *     Stores 0 into 'flow->stats.error' and stores statistics for the flow
  *     into 'flow->stats'.
  *
- *     If 'flow->n_actions' is zero, then 'flow->actions' is ignored.  If
- *     'flow->n_actions' is nonzero, then 'flow->actions' should point to an
- *     array of the specified number of actions.  At most that many of the
- *     flow's actions will be copied into that array.  'flow->n_actions' will
- *     be updated to the number of actions actually present in the flow, which
- *     may be greater than the number stored if the flow has more actions than
- *     space available in the array.
+ *     If 'flow->actions_len' is zero, then 'flow->actions' is ignored.  If
+ *     'flow->actions_len' is nonzero, then 'flow->actions' should point to an
+ *     array of the specified number of bytes.  At most that amount of flow's
+ *     actions will be copied into that array.  'flow->actions_len' will be
+ *     updated to the number of bytes of actions actually present in the flow,
+ *     which may be greater than the amount stored if the flow's actions are
+ *     longer than the available space.
  *
  * - Flow-specific errors are indicated by a positive errno value in
  *   'flow->stats.error'.  In particular, ENOENT indicates that no flow
@@ -773,8 +773,8 @@ dpif_flow_put(struct dpif *dpif, struct odp_flow_put *put)
 /* Deletes a flow matching 'flow->key' from 'dpif' or returns ENOENT if 'dpif'
  * does not contain such a flow.
  *
- * If successful, updates 'flow->stats', 'flow->n_actions', and 'flow->actions'
- * as described for dpif_flow_get(). */
+ * If successful, updates 'flow->stats', 'flow->actions_len', and
+ * 'flow->actions' as described for dpif_flow_get(). */
 int
 dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
 {
@@ -811,7 +811,7 @@ dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
     } else {
         for (i = 0; i < n; i++) {
             flows[i].actions = NULL;
-            flows[i].n_actions = 0;
+            flows[i].actions_len = 0;
         }
     }
     retval = dpif->dpif_class->flow_list(dpif, flows, n);
@@ -873,20 +873,20 @@ dpif_flow_list_all(const struct dpif *dpif,
     return 0;
 }
 
-/* Causes 'dpif' to perform the 'n_actions' actions in 'actions' on the
- * Ethernet frame specified in 'packet'.
+/* Causes 'dpif' to perform the 'actions_len' bytes of actions in 'actions' on
+ * the Ethernet frame specified in 'packet'.
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_execute(struct dpif *dpif,
-             const union odp_action actions[], size_t n_actions,
+             const struct nlattr *actions, size_t actions_len,
              const struct ofpbuf *buf)
 {
     int error;
 
     COVERAGE_INC(dpif_execute);
-    if (n_actions > 0) {
-        error = dpif->dpif_class->execute(dpif, actions, n_actions, buf);
+    if (actions_len > 0) {
+        error = dpif->dpif_class->execute(dpif, actions, actions_len, buf);
     } else {
         error = 0;
     }
@@ -895,7 +895,7 @@ dpif_execute(struct dpif *dpif,
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet = ofp_packet_to_string(buf->data, buf->size, buf->size);
         ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
-        format_odp_actions(&ds, actions, n_actions);
+        format_odp_actions(&ds, actions, actions_len);
         if (error) {
             ds_put_format(&ds, " failed (%s)", strerror(error));
         }
@@ -1132,7 +1132,7 @@ static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
                  const struct odp_flow_key *flow,
                  const struct odp_flow_stats *stats,
-                 const union odp_action *actions, size_t n_actions)
+                 const struct nlattr *actions, unsigned int actions_len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     ds_put_format(&ds, "%s: ", dpif_name(dpif));
@@ -1148,9 +1148,9 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
         ds_put_cstr(&ds, ", ");
         format_odp_flow_stats(&ds, stats);
     }
-    if (actions || n_actions) {
+    if (actions || actions_len) {
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, n_actions);
+        format_odp_actions(&ds, actions, actions_len);
     }
     vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
@@ -1161,11 +1161,11 @@ log_flow_operation(const struct dpif *dpif, const char *operation, int error,
                    struct odp_flow *flow)
 {
     if (error) {
-        flow->n_actions = 0;
+        flow->actions_len = 0;
     }
     log_flow_message(dpif, error, operation, &flow->key,
                      !error ? &flow->stats : NULL,
-                     flow->actions, flow->n_actions);
+                     flow->actions, flow->actions_len);
 }
 
 static void
@@ -1190,12 +1190,12 @@ log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
     }
     log_flow_message(dpif, error, ds_cstr(&s), &put->flow.key,
                      !error ? &put->flow.stats : NULL,
-                     put->flow.actions, put->flow.n_actions);
+                     put->flow.actions, put->flow.actions_len);
     ds_destroy(&s);
 }
 
 /* There is a tendency to construct odp_flow objects on the stack and to
- * forget to properly initialize their "actions" and "n_actions" members.
+ * forget to properly initialize their "actions" and "actions_len" members.
  * When this happens, we get memory corruption because the kernel
  * writes through the random pointer that is in the "actions" member.
  *
@@ -1208,12 +1208,12 @@ log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
  *        easy-to-identify error later if it is dereferenced, etc.
  *
  *      - Triggering a warning on uninitialized memory from Valgrind if
- *        "actions" or "n_actions" was not initialized.
+ *        "actions" or "actions_len" was not initialized.
  */
 static void
 check_rw_odp_flow(struct odp_flow *flow)
 {
-    if (flow->n_actions) {
+    if (flow->actions_len) {
         memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
     }
 }

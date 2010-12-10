@@ -19,25 +19,14 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include "byte-order.h"
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "netlink.h"
 #include "packets.h"
 #include "timeval.h"
 #include "util.h"
-
-union odp_action *
-odp_actions_add(struct odp_actions *actions, uint16_t type)
-{
-    union odp_action *a;
-    size_t idx;
-
-    idx = actions->n_actions++ & (MAX_ODP_ACTIONS - 1);
-    a = &actions->actions[idx];
-    memset(a, 0, sizeof *a);
-    a->type = type;
-    return a;
-}
 
 void
 format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
@@ -59,54 +48,114 @@ format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
                   ntohs(key->tp_src), ntohs(key->tp_dst));
 }
 
-void
-format_odp_action(struct ds *ds, const union odp_action *a)
+int
+odp_action_len(uint16_t type)
 {
-    switch (a->type) {
+    if (type > ODPAT_MAX) {
+        return -1;
+    }
+
+    switch ((enum odp_action_type) type) {
+    case ODPAT_OUTPUT: return 4;
+    case ODPAT_CONTROLLER: return 4;
+    case ODPAT_SET_DL_TCI: return 2;
+    case ODPAT_STRIP_VLAN: return 0;
+    case ODPAT_SET_DL_SRC: return ETH_ADDR_LEN;
+    case ODPAT_SET_DL_DST: return ETH_ADDR_LEN;
+    case ODPAT_SET_NW_SRC: return 4;
+    case ODPAT_SET_NW_DST: return 4;
+    case ODPAT_SET_NW_TOS: return 1;
+    case ODPAT_SET_TP_SRC: return 2;
+    case ODPAT_SET_TP_DST: return 2;
+    case ODPAT_SET_TUNNEL: return 4;
+    case ODPAT_SET_PRIORITY: return 4;
+    case ODPAT_POP_PRIORITY: return 0;
+    case ODPAT_DROP_SPOOFED_ARP: return 0;
+
+    case ODPAT_UNSPEC:
+    case __ODPAT_MAX:
+        return -1;
+    }
+
+    return -1;
+}
+
+static void
+format_generic_odp_action(struct ds *ds, const struct nlattr *a)
+{
+    ds_put_format(ds, "action%"PRId16, nl_attr_type(a));
+    if (a->nla_len) {
+        const uint8_t *unspec;
+        unsigned int i;
+
+        unspec = nl_attr_get(a);
+        for (i = 0; i < a->nla_len; i++) {
+            ds_put_char(ds, i ? ' ': '(');
+            ds_put_format(ds, "%02x", unspec[i]);
+        }
+        ds_put_char(ds, ')');
+    }
+}
+
+void
+format_odp_action(struct ds *ds, const struct nlattr *a)
+{
+    const uint8_t *eth;
+    ovs_be32 ip;
+
+    if (nl_attr_get_size(a) != odp_action_len(a->nla_len)) {
+        ds_put_format(ds, "***bad action: length is %zu, expected %d*** ",
+                      nl_attr_get_size(a), odp_action_len(a->nla_len));
+        format_generic_odp_action(ds, a);
+        return;
+    }
+
+    switch (nl_attr_type(a)) {
     case ODPAT_OUTPUT:
-        ds_put_format(ds, "%"PRIu16, a->output.port);
+        ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
     case ODPAT_CONTROLLER:
-        ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
+        ds_put_format(ds, "ctl(%"PRIu32")", nl_attr_get_u32(a));
         break;
     case ODPAT_SET_TUNNEL:
-        ds_put_format(ds, "set_tunnel(%#"PRIx32")", ntohl(a->tunnel.tun_id));
+        ds_put_format(ds, "set_tunnel(%#"PRIx32")",
+                      ntohl(nl_attr_get_be32(a)));
         break;
     case ODPAT_SET_DL_TCI:
         ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",
-                      vlan_tci_to_vid(a->dl_tci.tci),
-                      vlan_tci_to_pcp(a->dl_tci.tci));
+                      vlan_tci_to_vid(nl_attr_get_be16(a)),
+                      vlan_tci_to_pcp(nl_attr_get_be16(a)));
         break;
     case ODPAT_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");
         break;
     case ODPAT_SET_DL_SRC:
-        ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")",
-               ETH_ADDR_ARGS(a->dl_addr.dl_addr));
+        eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
+        ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
     case ODPAT_SET_DL_DST:
-        ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")",
-               ETH_ADDR_ARGS(a->dl_addr.dl_addr));
+        eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
+        ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
     case ODPAT_SET_NW_SRC:
-        ds_put_format(ds, "set_nw_src("IP_FMT")",
-                      IP_ARGS(&a->nw_addr.nw_addr));
+        ip = nl_attr_get_be32(a);
+        ds_put_format(ds, "set_nw_src("IP_FMT")", IP_ARGS(&ip));
         break;
     case ODPAT_SET_NW_DST:
-        ds_put_format(ds, "set_nw_dst("IP_FMT")",
-                      IP_ARGS(&a->nw_addr.nw_addr));
+        ip = nl_attr_get_be32(a);
+        ds_put_format(ds, "set_nw_dst("IP_FMT")", IP_ARGS(&ip));
         break;
     case ODPAT_SET_NW_TOS:
-        ds_put_format(ds, "set_nw_tos(%"PRIu8")", a->nw_tos.nw_tos);
+        ds_put_format(ds, "set_nw_tos(%"PRIu8")", nl_attr_get_u8(a));
         break;
     case ODPAT_SET_TP_SRC:
-        ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(a->tp_port.tp_port));
+        ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
     case ODPAT_SET_TP_DST:
-        ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(a->tp_port.tp_port));
+        ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
     case ODPAT_SET_PRIORITY:
-        ds_put_format(ds, "set_priority(0x%"PRIx32")", a->priority.priority);
+        ds_put_format(ds, "set_priority(%#"PRIx32")", nl_attr_get_u32(a));
         break;
     case ODPAT_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
@@ -115,23 +164,29 @@ format_odp_action(struct ds *ds, const union odp_action *a)
         ds_put_cstr(ds, "drop_spoofed_arp");
         break;
     default:
-        ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
+        format_generic_odp_action(ds, a);
         break;
     }
 }
 
 void
-format_odp_actions(struct ds *ds, const union odp_action *actions,
-                   size_t n_actions)
+format_odp_actions(struct ds *ds, const struct nlattr *actions,
+                   unsigned int actions_len)
 {
-    size_t i;
-    for (i = 0; i < n_actions; i++) {
-        if (i) {
-            ds_put_char(ds, ',');
+    if (actions_len) {
+        const struct nlattr *a;
+        unsigned int left;
+
+        NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
+            if (a != actions) {
+                ds_put_char(ds, ',');
+            }
+            format_odp_action(ds, a);
         }
-        format_odp_action(ds, &actions[i]);
-    }
-    if (!n_actions) {
+        if (left) {
+            ds_put_format(ds, " ***%u leftover bytes***", left);
+        }
+    } else {
         ds_put_cstr(ds, "drop");
     }
 }
@@ -157,7 +212,7 @@ format_odp_flow(struct ds *ds, const struct odp_flow *f)
     ds_put_cstr(ds, ", ");
     format_odp_flow_stats(ds, &f->stats);
     ds_put_cstr(ds, ", actions:");
-    format_odp_actions(ds, f->actions, f->n_actions);
+    format_odp_actions(ds, f->actions, f->actions_len);
 }
 
 void

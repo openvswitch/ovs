@@ -20,7 +20,7 @@ void loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
 	if (net_ratelimit())
 		pr_warn("%s: flow looped %d times, dropping\n",
 			dp_name(dp), MAX_LOOPS);
-	actions->n_actions = 0;
+	actions->actions_len = 0;
 }
 
 #ifndef CONFIG_PREEMPT_RT

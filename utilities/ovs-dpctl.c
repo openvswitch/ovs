@@ -478,11 +478,11 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
     ds_init(&ds);
     for (i = 0; i < n_flows; i++) {
         struct odp_flow *f = &flows[i];
-        enum { MAX_ACTIONS = 4096 / sizeof(union odp_action) };
-        union odp_action actions[MAX_ACTIONS];
+        enum { MAX_ACTIONS = 4096 }; /* An arbitrary but large number. */
+        struct nlattr actions[MAX_ACTIONS];
 
         f->actions = actions;
-        f->n_actions = MAX_ACTIONS;
+        f->actions_len = sizeof actions;
         if (!dpif_flow_get(dpif, f)) {
             ds_clear(&ds);
             format_odp_flow(&ds, f);

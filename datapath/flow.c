@@ -104,22 +104,24 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 	spin_unlock_bh(&flow->lock);
 }
 
-struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
+struct sw_flow_actions *flow_actions_alloc(u32 actions_len)
 {
 	struct sw_flow_actions *sfa;
+
+	if (actions_len % NLA_ALIGNTO)
+		return ERR_PTR(-EINVAL);
 
 	/* At least DP_MAX_PORTS actions are required to be able to flood a
 	 * packet to every port.  Factor of 2 allows for setting VLAN tags,
 	 * etc. */
-	if (n_actions > 2 * DP_MAX_PORTS)
+	if (actions_len > 2 * DP_MAX_PORTS * nla_total_size(4))
 		return ERR_PTR(-EINVAL);
 
-	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union odp_action),
-		      GFP_KERNEL);
+	sfa = kmalloc(sizeof *sfa + actions_len, GFP_KERNEL);
 	if (!sfa)
 		return ERR_PTR(-ENOMEM);
 
-	sfa->n_actions = n_actions;
+	sfa->actions_len = actions_len;
 	return sfa;
 }
 

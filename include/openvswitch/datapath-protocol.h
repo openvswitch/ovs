@@ -152,12 +152,12 @@ struct odp_stats {
  * encapsulated this packet. It is 0 if the packet was not received on a tunnel.
  *
  * For @type == %_ODPL_ACTION_NR, the header is followed by packet data.  The
- * @arg member is copied from the &struct odp_action_controller that caused
- * the &struct odp_msg to be composed.
+ * @arg member is copied from the %ODPAT_CONTROLLER action that caused the
+ * &struct odp_msg to be composed.
  *
  * For @type == %_ODPL_SFLOW_NR, the header is followed by &struct
- * odp_sflow_sample_header, then by an array of &union odp_action (the number
- * of which is specified in &struct odp_sflow_sample_header), then by packet
+ * odp_sflow_sample_header, then by a series of Netlink attributes (whose
+ * length is specified in &struct odp_sflow_sample_header), then by packet
  * data.
  */
 struct odp_msg {
@@ -172,15 +172,16 @@ struct odp_msg {
  * struct odp_sflow_sample_header - header added to sFlow sampled packet.
  * @sample_pool: Number of packets that were candidates for sFlow sampling,
  * regardless of whether they were actually chosen and sent down to userspace.
- * @n_actions: Number of "union odp_action"s immediately following this header.
+ * @actions_len: Number of bytes of actions immediately following this header.
  *
  * This header follows &struct odp_msg when that structure's @type is
- * %_ODPL_SFLOW_NR, and it is itself followed by an array of &union odp_action
- * (the number of which is specified in @n_actions) and then by packet data.
+ * %_ODPL_SFLOW_NR, and it is itself followed by a series of Netlink attributes
+ * (the number of bytes of which is specified in @actions_len) and then by
+ * packet data.
  */
 struct odp_sflow_sample_header {
     uint32_t sample_pool;
-    uint32_t n_actions;
+    uint32_t actions_len;
 };
 
 #define VPORT_TYPE_SIZE     16
@@ -240,8 +241,8 @@ struct odp_flow_key {
 struct odp_flow {
     struct odp_flow_stats stats;
     struct odp_flow_key key;
-    union odp_action *actions;
-    uint32_t n_actions;
+    struct nlattr *actions;
+    uint32_t actions_len;
     uint32_t flags;
 };
 
@@ -262,101 +263,31 @@ struct odp_flowvec {
 };
 
 /* Action types. */
-#define ODPAT_OUTPUT            0    /* Output to switch port. */
-#define ODPAT_CONTROLLER        2    /* Send copy to controller. */
-#define ODPAT_SET_DL_TCI        3    /* Set the 802.1q TCI value. */
-#define ODPAT_STRIP_VLAN        5    /* Strip the 802.1q header. */
-#define ODPAT_SET_DL_SRC        6    /* Ethernet source address. */
-#define ODPAT_SET_DL_DST        7    /* Ethernet destination address. */
-#define ODPAT_SET_NW_SRC        8    /* IP source address. */
-#define ODPAT_SET_NW_DST        9    /* IP destination address. */
-#define ODPAT_SET_NW_TOS        10   /* IP ToS/DSCP field (6 bits). */
-#define ODPAT_SET_TP_SRC        11   /* TCP/UDP source port. */
-#define ODPAT_SET_TP_DST        12   /* TCP/UDP destination port. */
-#define ODPAT_SET_TUNNEL        13   /* Set the encapsulating tunnel ID. */
-#define ODPAT_SET_PRIORITY      14   /* Set skb->priority. */
-#define ODPAT_POP_PRIORITY      15   /* Restore original skb->priority. */
-#define ODPAT_DROP_SPOOFED_ARP  16   /* Drop ARPs with spoofed source MAC. */
-#define ODPAT_N_ACTIONS         17
-
-struct odp_action_output {
-    uint16_t type;              /* ODPAT_OUTPUT. */
-    uint16_t port;              /* Output port. */
-    uint16_t reserved1;
-    uint16_t reserved2;
+enum odp_action_type {
+    ODPAT_UNSPEC,
+    ODPAT_OUTPUT,		/* Output to switch port. */
+    ODPAT_CONTROLLER,		/* Send copy to controller. */
+    ODPAT_SET_DL_TCI,		/* Set the 802.1q TCI value. */
+    ODPAT_STRIP_VLAN,		/* Strip the 802.1q header. */
+    ODPAT_SET_DL_SRC,		/* Ethernet source address. */
+    ODPAT_SET_DL_DST,		/* Ethernet destination address. */
+    ODPAT_SET_NW_SRC,		/* IP source address. */
+    ODPAT_SET_NW_DST,		/* IP destination address. */
+    ODPAT_SET_NW_TOS,		/* IP ToS/DSCP field (6 bits). */
+    ODPAT_SET_TP_SRC,		/* TCP/UDP source port. */
+    ODPAT_SET_TP_DST,		/* TCP/UDP destination port. */
+    ODPAT_SET_TUNNEL,		/* Set the encapsulating tunnel ID. */
+    ODPAT_SET_PRIORITY,		/* Set skb->priority. */
+    ODPAT_POP_PRIORITY,		/* Restore original skb->priority. */
+    ODPAT_DROP_SPOOFED_ARP,	/* Drop ARPs with spoofed source MAC. */
+    __ODPAT_MAX
 };
 
-struct odp_action_controller {
-    uint16_t type;              /* ODPAT_OUTPUT_CONTROLLER. */
-    uint16_t reserved;
-    uint32_t arg;               /* Copied to struct odp_msg 'arg' member. */
-};
-
-struct odp_action_tunnel {
-    uint16_t type;              /* ODPAT_SET_TUNNEL. */
-    uint16_t reserved;
-    ovs_be32 tun_id;            /* Tunnel ID. */
-};
-
-/* Action structure for ODPAT_SET_DL_TCI. */
-struct odp_action_dl_tci {
-    uint16_t type;              /* ODPAT_SET_DL_TCI. */
-    ovs_be16 tci;               /* New TCI.  CFI bit must be zero. */
-    uint32_t reserved;
-};
-
-/* Action structure for ODPAT_SET_DL_SRC/DST. */
-struct odp_action_dl_addr {
-    uint16_t type;              /* ODPAT_SET_DL_SRC/DST. */
-    uint8_t dl_addr[6];         /* Ethernet address. */
-};
-
-/* Action structure for ODPAT_SET_NW_SRC/DST. */
-struct odp_action_nw_addr {
-    uint16_t type;              /* ODPAT_SET_TW_SRC/DST. */
-    uint16_t reserved;
-    ovs_be32 nw_addr;           /* IP address. */
-};
-
-struct odp_action_nw_tos {
-    uint16_t type;              /* ODPAT_SET_NW_TOS. */
-    uint8_t nw_tos;             /* IP ToS/DSCP field (6 bits). */
-    uint8_t reserved1;
-    uint16_t reserved2;
-    uint16_t reserved3;
-};
-
-/* Action structure for ODPAT_SET_TP_SRC/DST. */
-struct odp_action_tp_port {
-    uint16_t type;              /* ODPAT_SET_TP_SRC/DST. */
-    ovs_be16 tp_port;           /* TCP/UDP port. */
-    uint16_t reserved1;
-    uint16_t reserved2;
-};
-
-/* Action structure for ODPAT_SET_PRIORITY. */
-struct odp_action_priority {
-    uint16_t type;              /* ODPAT_SET_PRIORITY. */
-    uint16_t reserved;
-    uint32_t priority;          /* skb->priority value. */
-};
-
-union odp_action {
-    uint16_t type;
-    struct odp_action_output output;
-    struct odp_action_controller controller;
-    struct odp_action_tunnel tunnel;
-    struct odp_action_dl_tci dl_tci;
-    struct odp_action_dl_addr dl_addr;
-    struct odp_action_nw_addr nw_addr;
-    struct odp_action_nw_tos nw_tos;
-    struct odp_action_tp_port tp_port;
-    struct odp_action_priority priority;
-};
+#define ODPAT_MAX (__ODPAT_MAX - 1)
 
 struct odp_execute {
-    union odp_action *actions;
-    uint32_t n_actions;
+    struct nlattr *actions;
+    uint32_t actions_len;
 
     const void *data;
     uint32_t length;

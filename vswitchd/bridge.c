@@ -45,6 +45,7 @@
 #include "list.h"
 #include "mac-learning.h"
 #include "netdev.h"
+#include "netlink.h"
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -2424,7 +2425,7 @@ print_dsts(const struct dst *dsts, size_t n)
 static void
 compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
                 const struct port *in_port, const struct port *out_port,
-                tag_type *tags, struct odp_actions *actions,
+                tag_type *tags, struct ofpbuf *actions,
                 uint16_t *nf_output_iface)
 {
     struct dst dsts[DP_MAX_PORTS * (MAX_MIRRORS + 1)];
@@ -2440,19 +2441,18 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
         cur_vlan = OFP_VLAN_NONE;
     }
     for (p = dsts; p < &dsts[n_dsts]; p++) {
-        union odp_action *a;
         if (p->vlan != cur_vlan) {
             if (p->vlan == OFP_VLAN_NONE) {
-                odp_actions_add(actions, ODPAT_STRIP_VLAN);
+                nl_msg_put_flag(actions, ODPAT_STRIP_VLAN);
             } else {
-                a = odp_actions_add(actions, ODPAT_SET_DL_TCI);
-                a->dl_tci.tci = htons(p->vlan & VLAN_VID_MASK);
-                a->dl_tci.tci |= flow->vlan_tci & htons(VLAN_PCP_MASK);
+                ovs_be16 tci;
+                tci = htons(p->vlan & VLAN_VID_MASK);
+                tci |= flow->vlan_tci & htons(VLAN_PCP_MASK);
+                nl_msg_put_be16(actions, ODPAT_SET_DL_TCI, tci);
             }
             cur_vlan = p->vlan;
         }
-        a = odp_actions_add(actions, ODPAT_OUTPUT);
-        a->output.port = p->dp_ifidx;
+        nl_msg_put_u32(actions, ODPAT_OUTPUT, p->dp_ifidx);
     }
 }
 
@@ -2645,7 +2645,7 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
  * not at all, if 'packet' was NULL. */
 static bool
 process_flow(struct bridge *br, const struct flow *flow,
-             const struct ofpbuf *packet, struct odp_actions *actions,
+             const struct ofpbuf *packet, struct ofpbuf *actions,
              tag_type *tags, uint16_t *nf_output_iface)
 {
     struct port *in_port;
@@ -2696,7 +2696,7 @@ done:
 
 static bool
 bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
-                        struct odp_actions *actions, tag_type *tags,
+                        struct ofpbuf *actions, tag_type *tags,
                         uint16_t *nf_output_iface, void *br_)
 {
     struct iface *iface;
@@ -2718,14 +2718,15 @@ bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
 
 static void
 bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
-                              const union odp_action *actions,
-                              size_t n_actions, unsigned long long int n_bytes,
-                              void *br_)
+                              const struct nlattr *actions,
+                              unsigned int actions_len,
+                              unsigned long long int n_bytes, void *br_)
 {
     struct bridge *br = br_;
-    const union odp_action *a;
+    const struct nlattr *a;
     struct port *in_port;
     tag_type dummy = 0;
+    unsigned int left;
     int vlan;
 
     /* Feed information from the active flows back into the learning table to
@@ -2743,9 +2744,9 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
     if (!br->has_bonded_ports) {
         return;
     }
-    for (a = actions; a < &actions[n_actions]; a++) {
-        if (a->type == ODPAT_OUTPUT) {
-            struct port *out_port = port_from_dp_ifidx(br, a->output.port);
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
+        if (nl_attr_type(a) == ODPAT_OUTPUT) {
+            struct port *out_port = port_from_dp_ifidx(br, nl_attr_get_u32(a));
             if (out_port && out_port->n_ifaces >= 2) {
                 uint16_t vlan = (flow->vlan_tci
                                  ? vlan_tci_to_vid(flow->vlan_tci)

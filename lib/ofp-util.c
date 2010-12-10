@@ -130,7 +130,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
         rule->flow.tun_id = htonl(ntohll(cookie) >> 32);
     } else {
         wc->wildcards |= FWW_TUN_ID;
-        rule->flow.tun_id = 0;
+        rule->flow.tun_id = htonl(0);
     }
 
     if (ofpfw & OFPFW_DL_DST) {

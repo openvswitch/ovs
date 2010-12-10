@@ -516,7 +516,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 	/* Execute actions. */
 	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
-			acts->n_actions);
+			acts->actions_len);
 	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 
 	/* Check whether sub-actions looped too much. */
@@ -658,50 +658,76 @@ static int flush_flows(struct datapath *dp)
 	return 0;
 }
 
-static int validate_actions(const struct sw_flow_actions *actions)
+static int validate_actions(const struct nlattr *actions, u32 actions_len)
 {
-	unsigned int i;
+        const struct nlattr *a;
+        int rem;
 
-	for (i = 0; i < actions->n_actions; i++) {
-		const union odp_action *a = &actions->actions[i];
+        nla_for_each_attr(a, actions, actions_len, rem) {
+                static const u32 action_lens[ODPAT_MAX + 1] = {
+                        [ODPAT_OUTPUT] = 4,
+                        [ODPAT_CONTROLLER] = 4,
+                        [ODPAT_SET_DL_TCI] = 2,
+                        [ODPAT_STRIP_VLAN] = 0,
+                        [ODPAT_SET_DL_SRC] = ETH_ALEN,
+                        [ODPAT_SET_DL_DST] = ETH_ALEN,
+                        [ODPAT_SET_NW_SRC] = 4,
+                        [ODPAT_SET_NW_DST] = 4,
+                        [ODPAT_SET_NW_TOS] = 1,
+                        [ODPAT_SET_TP_SRC] = 2,
+                        [ODPAT_SET_TP_DST] = 2,
+                        [ODPAT_SET_TUNNEL] = 4,
+                        [ODPAT_SET_PRIORITY] = 4,
+                        [ODPAT_POP_PRIORITY] = 0,
+                        [ODPAT_DROP_SPOOFED_ARP] = 0,
+                };
+                int type = nla_type(a);
 
-		switch (a->type) {
-		case ODPAT_CONTROLLER:
-		case ODPAT_STRIP_VLAN:
-		case ODPAT_SET_DL_SRC:
-		case ODPAT_SET_DL_DST:
-		case ODPAT_SET_NW_SRC:
-		case ODPAT_SET_NW_DST:
-		case ODPAT_SET_TP_SRC:
-		case ODPAT_SET_TP_DST:
-		case ODPAT_SET_TUNNEL:
-		case ODPAT_SET_PRIORITY:
-		case ODPAT_POP_PRIORITY:
-		case ODPAT_DROP_SPOOFED_ARP:
-			/* No validation needed. */
-			break;
+                if (type > ODPAT_MAX || nla_len(a) != action_lens[type])
+                        return -EINVAL;
 
-		case ODPAT_OUTPUT:
-			if (a->output.port >= DP_MAX_PORTS)
+                switch (type) {
+		case ODPAT_UNSPEC:
+			return -EINVAL;
+
+                case ODPAT_CONTROLLER:
+                case ODPAT_STRIP_VLAN:
+                case ODPAT_SET_DL_SRC:
+                case ODPAT_SET_DL_DST:
+                case ODPAT_SET_NW_SRC:
+                case ODPAT_SET_NW_DST:
+                case ODPAT_SET_TP_SRC:
+                case ODPAT_SET_TP_DST:
+                case ODPAT_SET_TUNNEL:
+                case ODPAT_SET_PRIORITY:
+                case ODPAT_POP_PRIORITY:
+                case ODPAT_DROP_SPOOFED_ARP:
+                        /* No validation needed. */
+                        break;
+
+                case ODPAT_OUTPUT:
+                        if (nla_get_u32(a) >= DP_MAX_PORTS)
+                                return -EINVAL;
+
+                case ODPAT_SET_DL_TCI:
+			if (nla_get_be16(a) & htons(VLAN_CFI_MASK))
 				return -EINVAL;
-			break;
+                        break;
 
-		case ODPAT_SET_DL_TCI:
-			if (a->dl_tci.tci & htons(VLAN_CFI_MASK))
-				return -EINVAL;
-			break;
+                case ODPAT_SET_NW_TOS:
+                        if (nla_get_u8(a) & INET_ECN_MASK)
+                                return -EINVAL;
+                        break;
 
-		case ODPAT_SET_NW_TOS:
-			if (a->nw_tos.nw_tos & INET_ECN_MASK)
-				return -EINVAL;
-			break;
+                default:
+                        return -EOPNOTSUPP;
+                }
+        }
 
-		default:
-			return -EOPNOTSUPP;
-		}
-	}
+        if (rem > 0)
+                return -EINVAL;
 
-	return 0;
+        return 0;
 }
 
 static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
@@ -709,16 +735,15 @@ static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
 	struct sw_flow_actions *actions;
 	int error;
 
-	actions = flow_actions_alloc(flow->n_actions);
+	actions = flow_actions_alloc(flow->actions_len);
 	error = PTR_ERR(actions);
 	if (IS_ERR(actions))
 		goto error;
 
 	error = -EFAULT;
-	if (copy_from_user(actions->actions, flow->actions,
-			   flow->n_actions * sizeof(union odp_action)))
+	if (copy_from_user(actions->actions, flow->actions, flow->actions_len))
 		goto error_free_actions;
-	error = validate_actions(actions);
+	error = validate_actions(actions->actions, actions->actions_len);
 	if (error)
 		goto error_free_actions;
 
@@ -842,9 +867,9 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		if (IS_ERR(new_acts))
 			goto error;
 		old_acts = rcu_dereference(flow->sf_acts);
-		if (old_acts->n_actions != new_acts->n_actions ||
+		if (old_acts->actions_len != new_acts->actions_len ||
 		    memcmp(old_acts->actions, new_acts->actions,
-			   sizeof(union odp_action) * old_acts->n_actions)) {
+			   old_acts->actions_len)) {
 			rcu_assign_pointer(flow->sf_acts, new_acts);
 			flow_deferred_free_acts(old_acts);
 		} else {
@@ -892,12 +917,12 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 
 static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 			   struct odp_flow_stats __user *ustats,
-			   union odp_action __user *actions,
-			   u32 __user *n_actionsp)
+			   struct nlattr __user *actions,
+			   u32 __user *actions_lenp)
 {
 	struct sw_flow_actions *sf_acts;
 	struct odp_flow_stats stats;
-	u32 n_actions;
+	u32 actions_len;
 
 	spin_lock_bh(&flow->lock);
 	get_stats(flow, &stats);
@@ -907,17 +932,16 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	spin_unlock_bh(&flow->lock);
 
 	if (copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
-	    get_user(n_actions, n_actionsp))
+	    get_user(actions_len, actions_lenp))
 		return -EFAULT;
 
-	if (!n_actions)
+	if (!actions_len)
 		return 0;
 
 	sf_acts = rcu_dereference(flow->sf_acts);
-	if (put_user(sf_acts->n_actions, n_actionsp) ||
+	if (put_user(sf_acts->actions_len, actions_lenp) ||
 	    (actions && copy_to_user(actions, sf_acts->actions,
-				     sizeof(union odp_action) *
-				     min(sf_acts->n_actions, n_actions))))
+				     min(sf_acts->actions_len, actions_len))))
 		return -EFAULT;
 
 	return 0;
@@ -926,13 +950,13 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 static int answer_query(struct sw_flow *flow, u32 query_flags,
 			struct odp_flow __user *ufp)
 {
-	union odp_action *actions;
+	struct nlattr *actions;
 
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
 	return do_answer_query(flow, query_flags, 
-			       &ufp->stats, actions, &ufp->n_actions);
+			       &ufp->stats, actions, &ufp->actions_len);
 }
 
 static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key)
@@ -1073,18 +1097,17 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 	if (execute->length < ETH_HLEN || execute->length > 65535)
 		goto error;
 
-	actions = flow_actions_alloc(execute->n_actions);
+	actions = flow_actions_alloc(execute->actions_len);
 	if (IS_ERR(actions)) {
 		err = PTR_ERR(actions);
 		goto error;
 	}
 
 	err = -EFAULT;
-	if (copy_from_user(actions->actions, execute->actions,
-			   execute->n_actions * sizeof *execute->actions))
+	if (copy_from_user(actions->actions, execute->actions, execute->actions_len))
 		goto error_free_actions;
 
-	err = validate_actions(actions);
+	err = validate_actions(actions->actions, execute->actions_len);
 	if (err)
 		goto error_free_actions;
 
@@ -1114,7 +1137,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 		goto error_free_skb;
 
 	rcu_read_lock();
-	err = execute_actions(dp, skb, &key, actions->actions, actions->n_actions);
+	err = execute_actions(dp, skb, &key, actions->actions, actions->actions_len);
 	rcu_read_unlock();
 
 	kfree(actions);
@@ -1498,7 +1521,7 @@ static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow _
 	    __copy_from_user(&flow->stats, &compat->stats, sizeof(struct odp_flow_stats)) ||
 	    __copy_from_user(&flow->key, &compat->key, sizeof(struct odp_flow_key)) ||
 	    __get_user(actions, &compat->actions) ||
-	    __get_user(flow->n_actions, &compat->n_actions) ||
+	    __get_user(flow->actions_len, &compat->actions_len) ||
 	    __get_user(flow->flags, &compat->flags))
 		return -EFAULT;
 
@@ -1536,7 +1559,7 @@ static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
 		return -EFAULT;
 
 	return do_answer_query(flow, query_flags, &ufp->stats,
-			       compat_ptr(actions), &ufp->n_actions);
+			       compat_ptr(actions), &ufp->actions_len);
 }
 
 static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *ufp)
@@ -1659,7 +1682,7 @@ static int compat_execute(struct datapath *dp, const struct compat_odp_execute _
 
 	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_odp_execute)) ||
 	    __get_user(actions, &uexecute->actions) ||
-	    __get_user(execute.n_actions, &uexecute->n_actions) ||
+	    __get_user(execute.actions_len, &uexecute->actions_len) ||
 	    __get_user(data, &uexecute->data) ||
 	    __get_user(execute.length, &uexecute->length))
 		return -EFAULT;

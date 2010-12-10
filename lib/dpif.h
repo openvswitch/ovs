@@ -31,6 +31,7 @@ extern "C" {
 
 struct dpif;
 struct netdev;
+struct nlattr;
 struct ofpbuf;
 struct svec;
 struct dpif_class;
@@ -83,8 +84,8 @@ int dpif_flow_list(const struct dpif *, struct odp_flow[], size_t n,
 int dpif_flow_list_all(const struct dpif *,
                        struct odp_flow **flowsp, size_t *np);
 
-int dpif_execute(struct dpif *, const union odp_action[], size_t n_actions,
-                 const struct ofpbuf *);
+int dpif_execute(struct dpif *, const struct nlattr *actions,
+                 size_t actions_len, const struct ofpbuf *);
 
 /* Minimum number of bytes of headroom for a packet returned by dpif_recv()
  * member function.  This headroom allows "struct odp_msg" to be replaced by

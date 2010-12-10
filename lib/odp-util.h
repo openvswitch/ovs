@@ -29,30 +29,6 @@
 struct ds;
 struct flow;
 
-enum { MAX_ODP_ACTIONS = 16384 / sizeof(union odp_action) };
-
-/* odp_actions_add() assumes that MAX_ODP_ACTIONS is a power of 2. */
-BUILD_ASSERT_DECL(IS_POW2(MAX_ODP_ACTIONS));
-
-struct odp_actions {
-    size_t n_actions;
-    union odp_action actions[MAX_ODP_ACTIONS];
-};
-
-static inline void
-odp_actions_init(struct odp_actions *actions)
-{
-    actions->n_actions = 0;
-}
-
-union odp_action *odp_actions_add(struct odp_actions *actions, uint16_t type);
-
-static inline bool
-odp_actions_overflow(const struct odp_actions *actions)
-{
-    return actions->n_actions > MAX_ODP_ACTIONS;
-}
-
 static inline uint16_t
 ofp_port_to_odp_port(uint16_t ofp_port)
 {
@@ -80,9 +56,10 @@ odp_port_to_ofp_port(uint16_t odp_port)
 }
 
 void format_odp_flow_key(struct ds *, const struct odp_flow_key *);
-void format_odp_action(struct ds *, const union odp_action *);
-void format_odp_actions(struct ds *, const union odp_action *actions,
-                        size_t n_actions);
+int odp_action_len(uint16_t type);
+void format_odp_action(struct ds *, const struct nlattr *);
+void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
+                        size_t actions_len);
 void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
 void format_odp_flow(struct ds *, const struct odp_flow *);
 

@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 struct cls_rule;
-struct odp_actions;
+struct nlattr;
 struct ofhooks;
 struct ofproto;
 struct svec;
@@ -136,10 +136,11 @@ void ofproto_flush_flows(struct ofproto *);
 /* Hooks for ovs-vswitchd. */
 struct ofhooks {
     bool (*normal_cb)(const struct flow *, const struct ofpbuf *packet,
-                      struct odp_actions *, tag_type *,
+                      struct ofpbuf *odp_actions, tag_type *,
                       uint16_t *nf_output_iface, void *aux);
     void (*account_flow_cb)(const struct flow *, tag_type tags,
-                            const union odp_action *, size_t n_actions,
+                            const struct nlattr *odp_actions,
+                            size_t actions_len,
                             unsigned long long int n_bytes, void *aux);
     void (*account_checkpoint_cb)(void *aux);
 };

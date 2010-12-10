@@ -247,11 +247,10 @@ struct dpif_class {
      * 'n' flows).  On failure, returns a negative errno value. */
     int (*flow_list)(const struct dpif *dpif, struct odp_flow flows[], int n);
 
-    /* Performs the 'n_actions' actions in 'actions' on the Ethernet frame
-     * specified in 'packet'. */
-    int (*execute)(struct dpif *dpif,
-                   const union odp_action actions[], int n_actions,
-                   const struct ofpbuf *packet);
+    /* Performs the 'actions_len' bytes of actions in 'actions' on the Ethernet
+     * frame specified in 'packet'. */
+    int (*execute)(struct dpif *dpif, const struct nlattr *actions,
+                   size_t actions_len, const struct ofpbuf *packet);
 
     /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  Each ODPL_* bit
      * set in '*listen_mask' indicates the 'dpif' will receive messages of the

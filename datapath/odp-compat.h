@@ -32,7 +32,7 @@ struct compat_odp_flow {
 	struct odp_flow_stats stats;
 	struct odp_flow_key key;
 	compat_uptr_t actions;
-	u32 n_actions;
+	u32 actions_len;
 	u32 flags;
 };
 
@@ -48,7 +48,7 @@ struct compat_odp_flowvec {
 
 struct compat_odp_execute {
 	compat_uptr_t actions;
-	u32 n_actions;
+	u32 actions_len;
 
 	compat_uptr_t data;
 	u32 length;

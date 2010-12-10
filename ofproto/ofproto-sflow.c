@@ -25,6 +25,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
+#include "netlink.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "packets.h"
@@ -484,41 +485,32 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     SFLFlow_sample_element switchElem;
     SFLSampler *sampler;
     const struct odp_sflow_sample_header *hdr;
-    const union odp_action *actions;
-    struct ofpbuf payload;
-    size_t n_actions, n_outputs;
+    const struct nlattr *actions, *a;
+    unsigned int left;
+    struct ofpbuf b;
+    size_t n_outputs;
     struct flow flow;
-    size_t min_size;
-    size_t i;
 
-    /* Get odp_sflow_sample_header. */
-    min_size = sizeof *msg + sizeof *hdr;
-    if (min_size > msg->length) {
-        VLOG_WARN_RL(&rl, "sFlow packet too small (%"PRIu32" < %zu)",
-                     msg->length, min_size);
+    /* Pull odp_msg header. */
+    ofpbuf_use_const(&b, msg, msg->length);
+    ofpbuf_pull(&b, sizeof *msg);
+
+    /* Pull odp_sflow_sample_header. */
+    hdr = ofpbuf_try_pull(&b, sizeof *hdr);
+    if (!hdr) {
+        VLOG_WARN_RL(&rl, "missing odp_sflow_sample_header");
         return;
     }
-    hdr = (const struct odp_sflow_sample_header *) (msg + 1);
 
-    /* Get actions. */
-    n_actions = hdr->n_actions;
-    if (n_actions > 65536 / sizeof *actions) {
-        VLOG_WARN_RL(&rl, "too many actions in sFlow packet (%zu > %zu)",
-                     65536 / sizeof *actions, n_actions);
+    /* Pull actions. */
+    actions = ofpbuf_try_pull(&b, hdr->actions_len);
+    if (!actions) {
+        VLOG_WARN_RL(&rl, "missing odp actions");
         return;
     }
-    min_size += n_actions * sizeof *actions;
-    if (min_size > msg->length) {
-        VLOG_WARN_RL(&rl, "sFlow packet with %zu actions too small "
-                     "(%"PRIu32" < %zu)",
-                     n_actions, msg->length, min_size);
-        return;
-    }
-    actions = (const union odp_action *) (hdr + 1);
 
-    /* Get packet payload and extract flow. */
-    ofpbuf_use_const(&payload, actions + n_actions, msg->length - min_size);
-    flow_extract(&payload, 0, msg->port, &flow);
+    /* Now only the payload is left. */
+    flow_extract(&b, 0, msg->port, &flow);
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
@@ -543,12 +535,11 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
     /* The frame_length should include the Ethernet FCS (4 bytes),
        but it has already been stripped,  so we need to add 4 here. */
-    header->frame_length = payload.size + 4;
+    header->frame_length = b.size + 4;
     /* Ethernet FCS stripped off. */
     header->stripped = 4;
-    header->header_length = MIN(payload.size,
-                                sampler->sFlowFsMaximumHeaderSize);
-    header->header_bytes = payload.data;
+    header->header_length = MIN(b.size, sampler->sFlowFsMaximumHeaderSize);
+    header->header_bytes = b.data;
 
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));
@@ -562,18 +553,18 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
 
     /* Figure out the output ports. */
     n_outputs = 0;
-    for (i = 0; i < n_actions; i++) {
-        const union odp_action *a = &actions[i];
-        uint16_t tci;
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, hdr->actions_len) {
+        ovs_be16 tci;
 
-        switch (a->type) {
+        switch (nl_attr_type(a)) {
         case ODPAT_OUTPUT:
-            fs.output = ofproto_sflow_odp_port_to_ifindex(os, a->output.port);
+            fs.output = ofproto_sflow_odp_port_to_ifindex(os,
+                                                          nl_attr_get_u32(a));
             n_outputs++;
             break;
 
         case ODPAT_SET_DL_TCI:
-            tci = a->dl_tci.tci;
+            tci = nl_attr_get_be16(a);
             switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
             switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);
             break;

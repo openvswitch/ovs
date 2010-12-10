@@ -28,6 +28,7 @@
 #include "dpif.h"
 #include "flow.h"
 #include "netdev.h"
+#include "netlink.h"
 #include "odp-util.h"
 #include "ofproto.h"
 #include "ofpbuf.h"
@@ -428,7 +429,7 @@ in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
  * allowed to be set up in the datapath. */
 bool
 in_band_rule_check(struct in_band *in_band, const struct flow *flow,
-                   const struct odp_actions *actions)
+                   const struct nlattr *actions, unsigned int actions_len)
 {
     if (!in_band) {
         return true;
@@ -440,11 +441,12 @@ in_band_rule_check(struct in_band *in_band, const struct flow *flow,
             && flow->nw_proto == IP_TYPE_UDP
             && flow->tp_src == htons(DHCP_SERVER_PORT)
             && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
-        int i;
+        const struct nlattr *a;
+        unsigned int left;
 
-        for (i=0; i<actions->n_actions; i++) {
-            if (actions->actions[i].output.type == ODPAT_OUTPUT
-                    && actions->actions[i].output.port == ODPP_LOCAL) {
+        NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
+            if (nl_attr_type(a) == ODPAT_OUTPUT
+                && nl_attr_get_u32(a) == ODPP_LOCAL) {
                 return true;
             }
         }

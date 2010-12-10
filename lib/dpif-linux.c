@@ -392,13 +392,13 @@ dpif_linux_flow_list(const struct dpif *dpif_, struct odp_flow flows[], int n)
 
 static int
 dpif_linux_execute(struct dpif *dpif_,
-                   const union odp_action actions[], int n_actions,
+                   const struct nlattr *actions, unsigned int actions_len,
                    const struct ofpbuf *buf)
 {
     struct odp_execute execute;
     memset(&execute, 0, sizeof execute);
-    execute.actions = (union odp_action *) actions;
-    execute.n_actions = n_actions;
+    execute.actions = (struct nlattr *) actions;
+    execute.actions_len = actions_len;
     execute.data = buf->data;
     execute.length = buf->size;
     return do_ioctl(dpif_, ODP_EXECUTE, &execute);

@@ -24,8 +24,8 @@ struct sk_buff;
 
 struct sw_flow_actions {
 	struct rcu_head rcu;
-	unsigned int n_actions;
-	union odp_action actions[];
+	u32 actions_len;
+	struct nlattr actions[];
 };
 
 struct sw_flow {
@@ -67,7 +67,7 @@ struct sw_flow *flow_alloc(void);
 void flow_deferred_free(struct sw_flow *);
 void flow_free_tbl(struct tbl_node *);
 
-struct sw_flow_actions *flow_actions_alloc(size_t n_actions);
+struct sw_flow_actions *flow_actions_alloc(u32 actions_len);
 void flow_deferred_free_acts(struct sw_flow_actions *);
 
 void flow_hold(struct sw_flow *);

@@ -15,10 +15,9 @@
 struct datapath;
 struct sk_buff;
 struct odp_flow_key;
-union odp_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    const struct odp_flow_key *key,
-		    const union odp_action *, int n_actions);
+		    const struct nlattr *, u32 actions_len);
 
 #endif /* actions.h */
