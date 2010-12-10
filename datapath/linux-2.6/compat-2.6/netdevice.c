@@ -14,11 +14,11 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 {
 	const struct net_device_stats *stats;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 	stats = dev->get_stats(dev);
-#else  /* 2.6.28 <= kernel version < 2.6.36 */
+#else  /* 2.6.28 < kernel version < 2.6.36 */
 	stats = (dev_get_stats)(dev);
-#endif /* 2.6.28 <= kernel version < 2.6.36 */
+#endif /* 2.6.28 < kernel version < 2.6.36 */
 
 	storage->rx_packets = stats->rx_packets;
 	storage->tx_packets = stats->tx_packets;
