@@ -501,6 +501,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		OVS_CB(skb)->flow = flow_cast(flow_node);
 	}
 
+	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 	flow_used(OVS_CB(skb)->flow, skb);
 
 	acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
@@ -511,13 +512,13 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		loop->looping = true;
 	if (unlikely(loop->looping)) {
 		loop_suppress(dp, acts);
+		kfree_skb(skb);
 		goto out_loop;
 	}
 
 	/* Execute actions. */
 	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
 			acts->actions_len);
-	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 
 	/* Check whether sub-actions looped too much. */
 	if (unlikely(loop->looping))
