@@ -10,6 +10,7 @@
 #define FLOW_H 1
 
 #include <linux/kernel.h>
+#include <linux/netlink.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/rcupdate.h>
