@@ -247,7 +247,6 @@ static int add_port(struct vport *vport)
 
 	err = tbl_insert(port_table, &tnl_vport->tbl_node, mutable_hash(tnl_vport->mutable));
 	if (err) {
-		(*find_port_pool(tnl_vport->mutable))--;
 		check_table_empty();
 		return err;
 	}
@@ -278,6 +277,7 @@ static int move_port(struct vport *vport, struct tnl_mutable_config *new_mutable
 
 	err = tbl_insert(port_table, &tnl_vport->tbl_node, hash);
 	if (err) {
+		(*find_port_pool(tnl_vport->mutable))--;
 		check_table_empty();
 		return err;
 	}
