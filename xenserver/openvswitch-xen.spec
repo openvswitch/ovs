@@ -409,6 +409,8 @@ fi
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
+/usr/bin/ovs-pcap
+/usr/bin/ovs-tcpundump
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
 /usr/bin/ovsdb-tool
@@ -422,6 +424,8 @@ fi
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-leaks.8.gz
+/usr/share/man/man1/ovs-pcap.1.gz
+/usr/share/man/man1/ovs-tcpundump.1.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
