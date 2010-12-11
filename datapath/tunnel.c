@@ -1045,7 +1045,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		 */
 		if (skb_headroom(skb) < min_headroom) {
 			skb = check_headroom(skb, min_headroom);
-			if (unlikely(IS_ERR(skb))) {
+			if (IS_ERR(skb)) {
 				err = PTR_ERR(skb);
 				goto error;
 			}
@@ -1053,7 +1053,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 
 		nskb = skb_gso_segment(skb, 0);
 		kfree_skb(skb);
-		if (unlikely(IS_ERR(nskb))) {
+		if (IS_ERR(nskb)) {
 			err = PTR_ERR(nskb);
 			goto error;
 		}
@@ -1061,7 +1061,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		skb = nskb;
 	} else {
 		skb = check_headroom(skb, min_headroom);
-		if (unlikely(IS_ERR(skb))) {
+		if (IS_ERR(skb)) {
 			err = PTR_ERR(skb);
 			goto error;
 		}
@@ -1199,7 +1199,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 
 	/* Offloading */
 	skb = handle_offloads(skb, mutable, rt);
-	if (unlikely(IS_ERR(skb)))
+	if (IS_ERR(skb))
 		goto error;
 
 	/* MTU */

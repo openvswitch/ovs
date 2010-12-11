@@ -138,7 +138,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 			segs = skb_gso_segment(skb, 0);
 			kfree_skb(skb);
-			if (unlikely(IS_ERR(segs)))
+			if (IS_ERR(segs))
 				return ERR_CAST(segs);
 
 			actions_len_left = actions_len;

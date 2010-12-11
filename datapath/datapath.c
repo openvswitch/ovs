@@ -613,7 +613,7 @@ int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 		
 		kfree_skb(skb);
 		skb = nskb;
-		if (unlikely(IS_ERR(skb))) {
+		if (IS_ERR(skb)) {
 			err = PTR_ERR(skb);
 			goto err;
 		}
