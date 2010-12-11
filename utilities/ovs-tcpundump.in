@@ -36,7 +36,7 @@ if __name__ == "__main__":
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                           ['help', 'version'])
-    except getopt.GetoptPcapException, geo:
+    except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
 
