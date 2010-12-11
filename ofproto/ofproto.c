@@ -2250,6 +2250,9 @@ facet_make_actions(struct ofproto *p, struct facet *facet,
 
     action_xlate_ctx_init(&ctx, p, &facet->flow, packet);
     odp_actions = xlate_actions(&ctx, rule->actions, rule->n_actions);
+    facet->tags = ctx.tags;
+    facet->may_install = ctx.may_set_up_flow;
+    facet->nf_flow.output_iface = ctx.nf_output_iface;
 
     if (facet->actions_len != odp_actions->size
         || memcmp(facet->actions, odp_actions->data, odp_actions->size)) {
