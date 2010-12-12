@@ -123,7 +123,7 @@ static void
 drop_packet(struct pinsched *ps)
 {
     struct pinqueue *longest;   /* Queue currently selected as longest. */
-    int n_longest;              /* # of queues of same length as 'longest'. */
+    int n_longest = 0;          /* # of queues of same length as 'longest'. */
     struct pinqueue *q;
 
     ps->n_queue_dropped++;
