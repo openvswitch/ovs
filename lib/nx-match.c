@@ -395,7 +395,7 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
 
     p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
     if (!p) {
-        VLOG_DBG_RL(&rl, "nx_match length %zu, rounded up to a "
+        VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
                     "length %zu)", match_len, b->size);
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -921,7 +921,7 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
     }
 
     if (n_bits < 64 && (value >> n_bits) != 0) {
-        ovs_fatal(0, "%s: value %llu does not fit into %d bits",
+        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %d bits",
                   full_s, value, n_bits);
     }
 
