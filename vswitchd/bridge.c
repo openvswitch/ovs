@@ -2719,7 +2719,7 @@ bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
 static void
 bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
                               const struct nlattr *actions,
-                              unsigned int actions_len,
+                              size_t actions_len,
                               unsigned long long int n_bytes, void *br_)
 {
     struct bridge *br = br_;

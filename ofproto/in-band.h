@@ -41,7 +41,7 @@ bool in_band_msg_in_hook(struct in_band *, const struct flow *,
                          const struct ofpbuf *packet);
 bool in_band_rule_check(struct in_band *, const struct flow *,
                         const struct nlattr *odp_actions,
-                        unsigned int actions_len);
+                        size_t actions_len);
 void in_band_flushed(struct in_band *);
 
 #endif /* in-band.h */

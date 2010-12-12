@@ -171,7 +171,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
 
 void
 format_odp_actions(struct ds *ds, const struct nlattr *actions,
-                   unsigned int actions_len)
+                   size_t actions_len)
 {
     if (actions_len) {
         const struct nlattr *a;

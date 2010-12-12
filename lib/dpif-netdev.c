@@ -109,7 +109,7 @@ struct dp_netdev_flow {
 
     /* Actions. */
     struct nlattr *actions;
-    unsigned int actions_len;
+    size_t actions_len;
 };
 
 /* Interface to netdev-based datapath. */
@@ -142,7 +142,7 @@ static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
 static int dp_netdev_execute_actions(struct dp_netdev *,
                                      struct ofpbuf *, struct flow *,
                                      const struct nlattr *actions,
-                                     unsigned int actions_len);
+                                     size_t actions_len);
 
 static struct dpif_class dpif_dummy_class;
 
@@ -621,7 +621,7 @@ dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
 
 static int
 dpif_netdev_validate_actions(const struct nlattr *actions,
-                             unsigned int actions_len, bool *mutates)
+                             size_t actions_len, bool *mutates)
 {
     const struct nlattr *a;
     unsigned int left;
@@ -801,7 +801,7 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
 
 static int
 dpif_netdev_execute(struct dpif *dpif,
-                    const struct nlattr *actions, unsigned int actions_len,
+                    const struct nlattr *actions, size_t actions_len,
                     const struct ofpbuf *packet)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -1197,7 +1197,7 @@ static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, struct flow *key,
                           const struct nlattr *actions,
-                          unsigned int actions_len)
+                          size_t actions_len)
 {
     const struct nlattr *a;
     unsigned int left;

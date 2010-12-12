@@ -429,7 +429,7 @@ in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
  * allowed to be set up in the datapath. */
 bool
 in_band_rule_check(struct in_band *in_band, const struct flow *flow,
-                   const struct nlattr *actions, unsigned int actions_len)
+                   const struct nlattr *actions, size_t actions_len)
 {
     if (!in_band) {
         return true;

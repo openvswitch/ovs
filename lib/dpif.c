@@ -1132,7 +1132,7 @@ static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
                  const struct odp_flow_key *flow,
                  const struct odp_flow_stats *stats,
-                 const struct nlattr *actions, unsigned int actions_len)
+                 const struct nlattr *actions, size_t actions_len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     ds_put_format(&ds, "%s: ", dpif_name(dpif));

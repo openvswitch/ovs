@@ -225,7 +225,7 @@ struct facet {
     bool installed;              /* Installed in datapath? */
     bool may_install;            /* True ordinarily; false if actions must
                                   * be reassessed for every packet. */
-    unsigned int actions_len;    /* Number of bytes in actions[]. */
+    size_t actions_len;          /* Number of bytes in actions[]. */
     struct nlattr *actions;      /* Datapath actions. */
     tag_type tags;               /* Tags (set only by hooks). */
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
@@ -2050,7 +2050,7 @@ rule_has_out_port(const struct rule *rule, ovs_be16 out_port)
  * Takes ownership of 'packet'. */
 static bool
 execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
-                    const struct nlattr *odp_actions, unsigned int actions_len,
+                    const struct nlattr *odp_actions, size_t actions_len,
                     struct ofpbuf *packet)
 {
     if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
