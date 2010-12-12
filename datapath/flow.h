@@ -59,7 +59,7 @@ struct arp_eth_header
 	unsigned char       ar_sip[4];		/* sender IP address        */
 	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
 	unsigned char       ar_tip[4];		/* target IP address        */
-} __attribute__((packed));
+} __packed;
 
 int flow_init(void);
 void flow_exit(void);
