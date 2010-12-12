@@ -12,6 +12,7 @@
  * we really need from <linux/if_link.h> is struct rtnl_link_stats64, which in
  * turn only really needs __u64.  */
 #include <linux/types.h>
+#include <linux/netlink.h>
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)

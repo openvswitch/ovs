@@ -68,6 +68,7 @@
 #endif
 
 #include <linux/if_link.h>
+#include <linux/netlink.h>
 
 #define ODP_MAX 256             /* Maximum number of datapaths. */
 
