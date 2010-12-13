@@ -2478,8 +2478,6 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
         facet_flush_stats(ofproto, facet);
     }
 
-    ofpbuf_delete(odp_actions);
-
     /* Update 'facet' now that we've taken care of all the old state. */
     facet->tags = ctx.tags;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
@@ -2496,6 +2494,8 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
         facet->rule = new_rule;
         facet->used = new_rule->created;
     }
+
+    ofpbuf_delete(odp_actions);
 
     return true;
 }
