@@ -598,20 +598,22 @@ static void
 netdev_linux_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_linux *netdev_dev = netdev_dev_linux_cast(netdev_dev_);
-    const char *type = netdev_dev_get_type(netdev_dev_);
+    const struct netdev_class *class = netdev_dev_get_class(netdev_dev_);
 
     if (netdev_dev->tc && netdev_dev->tc->ops->tc_destroy) {
         netdev_dev->tc->ops->tc_destroy(netdev_dev->tc);
     }
 
-    if (!strcmp(type, "system")) {
+    if (class == &netdev_linux_class || class == &netdev_internal_class) {
         cache_notifier_refcount--;
 
         if (!cache_notifier_refcount) {
             rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
         }
-    } else if (!strcmp(type, "tap")) {
+    } else if (class == &netdev_tap_class) {
         destroy_tap(netdev_dev);
+    } else {
+        NOT_REACHED();
     }
 
     free(netdev_dev);
