@@ -2943,7 +2943,7 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
 static void
 bond_rebalance_port(struct port *port)
 {
-    struct slave_balance bals[DP_MAX_PORTS];
+    struct slave_balance *bals;
     size_t n_bals;
     struct bond_entry *hashes[BOND_MASK + 1];
     struct slave_balance *b, *from, *to;
@@ -2961,6 +2961,7 @@ bond_rebalance_port(struct port *port)
      * become contiguous in memory, and then we point each 'hashes' members of
      * a slave_balance structure to the start of a contiguous group. */
     n_bals = port->n_ifaces;
+    bals = xmalloc(n_bals * sizeof *bals);
     for (b = bals; b < &bals[n_bals]; b++) {
         b->iface = port->ifaces[b - bals];
         b->tx_bytes = 0;
@@ -2990,7 +2991,7 @@ bond_rebalance_port(struct port *port)
     while (!bals[n_bals - 1].iface->enabled) {
         n_bals--;
         if (!n_bals) {
-            return;
+            goto exit;
         }
     }
 
@@ -3082,6 +3083,9 @@ bond_rebalance_port(struct port *port)
     for (e = &port->bond_hash[0]; e <= &port->bond_hash[BOND_MASK]; e++) {
         e->tx_bytes /= 2;
     }
+
+exit:
+    free(bals);
 }
 
 static void
