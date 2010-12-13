@@ -317,6 +317,17 @@ bridge_init(const char *remote)
     bond_init();
 }
 
+void
+bridge_exit(void)
+{
+    struct bridge *br, *next_br;
+
+    LIST_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
+        bridge_destroy(br);
+    }
+    ovsdb_idl_destroy(idl);
+}
+
 /* Performs configuration that is only necessary once at ovs-vswitchd startup,
  * but for which the ovs-vswitchd configuration 'cfg' is required. */
 static void

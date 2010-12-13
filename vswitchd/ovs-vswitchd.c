@@ -107,6 +107,8 @@ main(int argc, char *argv[])
         }
         poll_block();
     }
+    bridge_exit();
+    unixctl_server_destroy(unixctl);
 
     return 0;
 }

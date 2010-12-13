@@ -16,12 +16,9 @@
 #ifndef VSWITCHD_BRIDGE_H
 #define VSWITCHD_BRIDGE_H 1
 
-#include <stdbool.h>
-#include <stdint.h>
-
-struct svec;
-
 void bridge_init(const char *remote);
+void bridge_exit(void);
+
 void bridge_run(void);
 void bridge_wait(void);
 
