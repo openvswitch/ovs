@@ -173,7 +173,6 @@ struct port {
     bool is_mirror_output_port; /* Does port mirroring send frames here? */
 };
 
-#define DP_MAX_PORTS 255
 struct bridge {
     struct list node;           /* Node in global list of bridges. */
     char *name;                 /* User-specified arbitrary name. */
