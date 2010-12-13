@@ -82,6 +82,16 @@ struct dst {
     uint16_t dp_ifidx;
 };
 
+struct dst_set {
+    struct dst builtin[32];
+    struct dst *dsts;
+    size_t n, allocated;
+};
+
+static void dst_set_init(struct dst_set *);
+static void dst_set_add(struct dst_set *, const struct dst *);
+static void dst_set_free(struct dst_set *);
+
 struct iface {
     /* These members are always valid. */
     struct port *port;          /* Containing port. */
@@ -2227,16 +2237,16 @@ bond_wait(struct bridge *br)
 }
 
 static bool
-set_dst(struct dst *p, const struct flow *flow,
+set_dst(struct dst *dst, const struct flow *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
-    p->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
+    dst->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
               : in_port->vlan >= 0 ? in_port->vlan
               : flow->vlan_tci == 0 ? OFP_VLAN_NONE
               : vlan_tci_to_vid(flow->vlan_tci));
-    return choose_output_iface(out_port, flow->dl_src, p->vlan,
-                               &p->dp_ifidx, tags);
+    return choose_output_iface(out_port, flow->dl_src, dst->vlan,
+                               &dst->dp_ifidx, tags);
 }
 
 static void
@@ -2253,10 +2263,10 @@ swap_dst(struct dst *p, struct dst *q)
  * vlan, but in most cases there are at most two different vlan tags so that's
  * possibly overkill.) */
 static void
-partition_dsts(struct dst *dsts, size_t n_dsts, int vlan)
+partition_dsts(struct dst_set *set, int vlan)
 {
-    struct dst *first = dsts;
-    struct dst *last = dsts + n_dsts;
+    struct dst *first = set->dsts;
+    struct dst *last = set->dsts + set->n;
 
     while (first != last) {
         /* Invariants:
@@ -2291,13 +2301,48 @@ mirror_mask_ffs(mirror_mask_t mask)
     return ffs(mask);
 }
 
+static void
+dst_set_init(struct dst_set *set)
+{
+    set->dsts = set->builtin;
+    set->n = 0;
+    set->allocated = ARRAY_SIZE(set->builtin);
+}
+
+static void
+dst_set_add(struct dst_set *set, const struct dst *dst)
+{
+    if (set->n >= set->allocated) {
+        size_t new_allocated;
+        struct dst *new_dsts;
+
+        new_allocated = set->allocated * 2;
+        new_dsts = xmalloc(new_allocated * sizeof *new_dsts);
+        memcpy(new_dsts, set->dsts, set->n * sizeof *new_dsts);
+
+        dst_set_free(set);
+
+        set->dsts = new_dsts;
+        set->allocated = new_allocated;
+    }
+    set->dsts[set->n++] = *dst;
+}
+
+static void
+dst_set_free(struct dst_set *set)
+{
+    if (set->dsts != set->builtin) {
+        free(set->dsts);
+    }
+}
+
 static bool
-dst_is_duplicate(const struct dst *dsts, size_t n_dsts,
-                 const struct dst *test)
+dst_is_duplicate(const struct dst_set *set, const struct dst *test)
 {
     size_t i;
-    for (i = 0; i < n_dsts; i++) {
-        if (dsts[i].vlan == test->vlan && dsts[i].dp_ifidx == test->dp_ifidx) {
+    for (i = 0; i < set->n; i++) {
+        if (set->dsts[i].vlan == test->vlan
+            && set->dsts[i].dp_ifidx == test->dp_ifidx) {
             return true;
         }
     }
@@ -2331,14 +2376,14 @@ port_is_floodable(const struct port *port)
     return true;
 }
 
-static size_t
+static void
 compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
              const struct port *in_port, const struct port *out_port,
-             struct dst dsts[], tag_type *tags, uint16_t *nf_output_iface)
+             struct dst_set *set, tag_type *tags, uint16_t *nf_output_iface)
 {
     mirror_mask_t mirrors = in_port->src_mirrors;
+    struct dst dst;
     int flow_vlan;
-    struct dst *dst = dsts;
     size_t i;
 
     flow_vlan = vlan_tci_to_vid(flow->vlan_tci);
@@ -2347,45 +2392,42 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
     }
 
     if (out_port == FLOOD_PORT) {
-        /* XXX use ODP_FLOOD if no vlans or bonding. */
-        /* XXX even better, define each VLAN as a datapath port group */
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
             if (port != in_port
                 && port_is_floodable(port)
                 && port_includes_vlan(port, vlan)
                 && !port->is_mirror_output_port
-                && set_dst(dst, flow, in_port, port, tags)) {
+                && set_dst(&dst, flow, in_port, port, tags)) {
                 mirrors |= port->dst_mirrors;
-                dst++;
+                dst_set_add(set, &dst);
             }
         }
         *nf_output_iface = NF_OUT_FLOOD;
-    } else if (out_port && set_dst(dst, flow, in_port, out_port, tags)) {
-        *nf_output_iface = dst->dp_ifidx;
+    } else if (out_port && set_dst(&dst, flow, in_port, out_port, tags)) {
+        dst_set_add(set, &dst);
+        *nf_output_iface = dst.dp_ifidx;
         mirrors |= out_port->dst_mirrors;
-        dst++;
     }
 
     while (mirrors) {
         struct mirror *m = br->mirrors[mirror_mask_ffs(mirrors) - 1];
         if (!m->n_vlans || vlan_is_mirrored(m, vlan)) {
             if (m->out_port) {
-                if (set_dst(dst, flow, in_port, m->out_port, tags)
-                    && !dst_is_duplicate(dsts, dst - dsts, dst)) {
-                    dst++;
+                if (set_dst(&dst, flow, in_port, m->out_port, tags)
+                    && !dst_is_duplicate(set, &dst)) {
+                    dst_set_add(set, &dst);
                 }
             } else {
                 for (i = 0; i < br->n_ports; i++) {
                     struct port *port = br->ports[i];
                     if (port_includes_vlan(port, m->out_vlan)
-                        && set_dst(dst, flow, in_port, port, tags))
+                        && set_dst(&dst, flow, in_port, port, tags))
                     {
-
                         if (port->vlan < 0) {
-                            dst->vlan = m->out_vlan;
+                            dst.vlan = m->out_vlan;
                         }
-                        if (dst_is_duplicate(dsts, dst - dsts, dst)) {
+                        if (dst_is_duplicate(set, &dst)) {
                             continue;
                         }
 
@@ -2395,11 +2437,11 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
                          * tagging tags place. This is necessary because
                          * dst->vlan is the final vlan, after removing implicit
                          * tags. */
-                        if (port == in_port && dst->vlan == flow_vlan) {
+                        if (port == in_port && dst.vlan == flow_vlan) {
                             /* Don't send out input port on same VLAN. */
                             continue;
                         }
-                        dst++;
+                        dst_set_add(set, &dst);
                     }
                 }
             }
@@ -2407,17 +2449,20 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
         mirrors &= mirrors - 1;
     }
 
-    partition_dsts(dsts, dst - dsts, flow_vlan);
-    return dst - dsts;
+    partition_dsts(set, flow_vlan);
 }
 
 static void OVS_UNUSED
-print_dsts(const struct dst *dsts, size_t n)
+print_dsts(const struct dst_set *set)
 {
-    for (; n--; dsts++) {
-        printf(">p%"PRIu16, dsts->dp_ifidx);
-        if (dsts->vlan != OFP_VLAN_NONE) {
-            printf("v%"PRIu16, dsts->vlan);
+    size_t i;
+
+    for (i = 0; i < set->n; i++) {
+        const struct dst *dst = &set->dsts[i];
+
+        printf(">p%"PRIu16, dst->dp_ifidx);
+        if (dst->vlan != OFP_VLAN_NONE) {
+            printf("v%"PRIu16, dst->vlan);
         }
     }
 }
@@ -2428,32 +2473,34 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
                 tag_type *tags, struct ofpbuf *actions,
                 uint16_t *nf_output_iface)
 {
-    struct dst dsts[DP_MAX_PORTS * (MAX_MIRRORS + 1)];
-    size_t n_dsts;
-    const struct dst *p;
+    struct dst_set set;
     uint16_t cur_vlan;
+    size_t i;
 
-    n_dsts = compose_dsts(br, flow, vlan, in_port, out_port, dsts, tags,
-                          nf_output_iface);
+    dst_set_init(&set);
+    compose_dsts(br, flow, vlan, in_port, out_port, &set, tags,
+                 nf_output_iface);
 
     cur_vlan = vlan_tci_to_vid(flow->vlan_tci);
     if (cur_vlan == 0) {
         cur_vlan = OFP_VLAN_NONE;
     }
-    for (p = dsts; p < &dsts[n_dsts]; p++) {
-        if (p->vlan != cur_vlan) {
-            if (p->vlan == OFP_VLAN_NONE) {
+    for (i = 0; i < set.n; i++) {
+        const struct dst *dst = &set.dsts[i];
+        if (dst->vlan != cur_vlan) {
+            if (dst->vlan == OFP_VLAN_NONE) {
                 nl_msg_put_flag(actions, ODPAT_STRIP_VLAN);
             } else {
                 ovs_be16 tci;
-                tci = htons(p->vlan & VLAN_VID_MASK);
+                tci = htons(dst->vlan & VLAN_VID_MASK);
                 tci |= flow->vlan_tci & htons(VLAN_PCP_MASK);
                 nl_msg_put_be16(actions, ODPAT_SET_DL_TCI, tci);
             }
-            cur_vlan = p->vlan;
+            cur_vlan = dst->vlan;
         }
-        nl_msg_put_u32(actions, ODPAT_OUTPUT, p->dp_ifidx);
+        nl_msg_put_u32(actions, ODPAT_OUTPUT, dst->dp_ifidx);
     }
+    dst_set_free(&set);
 }
 
 /* Returns the effective vlan of a packet, taking into account both the
