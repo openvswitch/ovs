@@ -270,8 +270,10 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 
 	dp->drop_frags = 0;
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
-	if (!dp->stats_percpu)
+	if (!dp->stats_percpu) {
+		err = -ENOMEM;
 		goto err_destroy_local_port;
+	}
 
 	rcu_assign_pointer(dps[dp_idx], dp);
 	dp_sysfs_add_dp(dp);
