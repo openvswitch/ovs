@@ -96,26 +96,31 @@ SUFFIXES += .in
 
 # If we're checked out from a Git repository, make sure that every
 # file that is in Git is distributed.
-dist-hook-git:
-	if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then    \
-	  rc=0;								      \
-	  for d in `cd $(srcdir) && git ls-files`; do			      \
-	    if test ! -e $(distdir)/$$d; then				      \
-	      case $$d in # (						      \
-	        .gitignore|*/.gitignore) ;; # (				      \
-		*)							      \
-		   if test $$rc = 0; then				      \
-		     echo "The distribution is missing the following files:"; \
-		     rc=1;						      \
-		   fi;							      \
-	           echo "$$d";						      \
-	           ;;							      \
-	      esac;							      \
-	    fi								      \
-	  done;								      \
-	  exit $$rc;							      \
+ALL_LOCAL += dist-hook-git
+dist-hook-git: distfiles
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then \
+	  (cd datapath && $(MAKE) distfiles);				    \
+	  (cat distfiles; sed 's|^|datapath/|' datapath/distfiles) |	    \
+	    sort -u > all-distfiles;					    \
+	  (cd $(srcdir) && git ls-files) | grep -v '\.gitignore$$' |	    \
+	    sort -u > all-gitfiles;					    \
+	  comm -1 -3 all-distfiles all-gitfiles > missing-distfiles;	    \
+	  if test -s missing-distfiles; then				    \
+	    echo "The distribution is missing the following files:";	    \
+	    cat missing-distfiles;					    \
+	    exit 1;							    \
+	  fi;								    \
 	fi
-DIST_HOOKS += dist-hook-git
+CLEANFILES += all-distfiles all-gitfiles missing-distfiles
+# The following is based on commands for the Automake "distdir" target.
+distfiles: Makefile
+	@srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
+	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's/[].[^$$\\*]/\\\\&/g'`; \
+	list='$(DISTFILES)'; \
+	for file in $$list; do echo $$file; done | \
+	  sed -e "s|^$$srcdirstrip/||;t" \
+	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | sort -u > $@
+CLEANFILES += distfiles
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
