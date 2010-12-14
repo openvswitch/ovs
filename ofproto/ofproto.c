@@ -3258,7 +3258,7 @@ make_nxstats_reply(ovs_be32 xid, ovs_be32 subtype, size_t body_len)
     nsm->type = htons(OFPST_VENDOR);
     nsm->flags = htons(0);
     nsm->vendor = htonl(NX_VENDOR_ID);
-    nsm->subtype = htonl(subtype);
+    nsm->subtype = subtype;
     return msg;
 }
 
