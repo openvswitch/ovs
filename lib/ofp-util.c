@@ -362,7 +362,7 @@ ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
         }
     }
 
-    VLOG_WARN_RL(&bad_ofmsg_rl, "received %s of unknown type %u",
+    VLOG_WARN_RL(&bad_ofmsg_rl, "received %s of unknown type %"PRIu32,
                  cat->name, value);
     return cat->missing_error;
 }
