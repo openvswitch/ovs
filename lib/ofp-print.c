@@ -798,6 +798,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
                    enum ofputil_msg_code code, int verbosity)
 {
     struct flow_mod fm;
+    bool need_priority;
     int error;
 
     error = ofputil_decode_flow_mod(&fm, oh, NXFF_OPENFLOW10);
@@ -830,16 +831,26 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     ds_put_char(s, ' ');
     if (verbosity >= 3 && code == OFPUTIL_OFPT_FLOW_MOD) {
         const struct ofp_flow_mod *ofm = (const struct ofp_flow_mod *) oh;
-
         ofp_print_match(s, &ofm->match, verbosity);
+
+        /* ofp_print_match() doesn't print priority. */
+        need_priority = true;
     } else if (verbosity >= 3 && code == OFPUTIL_NXT_FLOW_MOD) {
         const struct nx_flow_mod *nfm = (const struct nx_flow_mod *) oh;
         const void *nxm = nfm + 1;
-        char *nxm_s = nx_match_to_string(nxm, ntohs(nfm->match_len));
+        char *nxm_s;
+
+        nxm_s = nx_match_to_string(nxm, ntohs(nfm->match_len));
         ds_put_cstr(s, nxm_s);
         free(nxm_s);
+
+        /* nx_match_to_string() doesn't print priority. */
+        need_priority = true;
     } else {
         cls_rule_format(&fm.cr, s);
+
+        /* cls_rule_format() does print priority. */
+        need_priority = false;
     }
 
     if (ds_last(s) != ' ') {
@@ -854,7 +865,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     if (fm.hard_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(s, "hard:%"PRIu16" ", fm.hard_timeout);
     }
-    if (fm.cr.priority != OFP_DEFAULT_PRIORITY && verbosity >= 3) {
+    if (fm.cr.priority != OFP_DEFAULT_PRIORITY && need_priority) {
         ds_put_format(s, "pri:%"PRIu16" ", fm.cr.priority);
     }
     if (fm.buffer_id != UINT32_MAX) {
@@ -1256,7 +1267,6 @@ ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
         ofp_print_duration(string, ntohl(fs->duration_sec),
                            ntohl(fs->duration_nsec));
         ds_put_format(string, ", table_id=%"PRIu8", ", fs->table_id);
-        ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
         ds_put_format(string, "n_packets=%"PRIu64", ",
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
