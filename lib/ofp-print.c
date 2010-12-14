@@ -1036,7 +1036,7 @@ ofp_print_error(struct ds *string, int error)
     if (string->length) {
         ds_put_char(string, ' ');
     }
-    ds_put_format(string, " ***decode error type:%d(%s) code:%d(%s)***",
+    ds_put_format(string, " ***decode error type:%d(%s) code:%d(%s)***\n",
                   type, lookup_error_type(type),
                   code, lookup_error_code(type, code));
 }
@@ -1720,14 +1720,17 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
     struct ds string = DS_EMPTY_INITIALIZER;
     const struct ofp_header *oh = oh_;
 
-    if (len < sizeof(struct ofp_header)) {
-        ds_put_cstr(&string, "OpenFlow packet too short:\n");
+    if (!len) {
+        ds_put_cstr(&string, "OpenFlow message is empty\n");
+    } else if (len < sizeof(struct ofp_header)) {
+        ds_put_format(&string, "OpenFlow packet too short (only %zu bytes):\n",
+                      len);
     } else if (oh->version != OFP_VERSION) {
         ds_put_format(&string, "Bad OpenFlow version %"PRIu8":\n",
                       oh->version);
     } else if (ntohs(oh->length) > len) {
         ds_put_format(&string,
-                      "(***truncated to %zu bytes from %"PRIu16"***)",
+                      "(***truncated to %zu bytes from %"PRIu16"***)\n",
                       len, ntohs(oh->length));
     } else if (ntohs(oh->length) < len) {
         ds_put_format(&string,
