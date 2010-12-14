@@ -471,7 +471,7 @@ ofputil_decode_nxst_request(const struct ofp_header *oh,
     };
 
     static const struct ofputil_msg_category nxst_request_category = {
-        "Nicira extension statistics",
+        "Nicira extension statistics request",
         nxst_requests, ARRAY_SIZE(nxst_requests),
         OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
     };
@@ -505,7 +505,7 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh,
     };
 
     static const struct ofputil_msg_category nxst_reply_category = {
-        "Nicira extension statistics",
+        "Nicira extension statistics reply",
         nxst_replies, ARRAY_SIZE(nxst_replies),
         OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
     };
