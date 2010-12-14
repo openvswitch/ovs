@@ -928,6 +928,7 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
+    ds_put_char(string, ' ');
     cls_rule_format(&fr.rule, string);
 
     ds_put_cstr(string, " reason=");
@@ -1038,6 +1039,7 @@ ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_header *oh)
 {
     const struct ofp_desc_stats *ods = ofputil_stats_body(oh);
 
+    ds_put_char(string, '\n');
     ds_put_format(string, "Manufacturer: %.*s\n",
             (int) sizeof ods->mfr_desc, ods->mfr_desc);
     ds_put_format(string, "Hardware: %.*s\n",
@@ -1259,7 +1261,7 @@ static void
 ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
 {
     const struct ofp_port_stats_request *psr = ofputil_stats_body(oh);
-    ds_put_format(string, "port_no=%"PRIu16, ntohs(psr->port_no));
+    ds_put_format(string, " port_no=%"PRIu16, ntohs(psr->port_no));
 }
 
 static void
@@ -1417,8 +1419,8 @@ ofp_print_nxt_status_message(struct ds *string, const struct ofp_header *oh)
     struct ofpbuf b;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpbuf_pull(&b, sizeof *oh);
-    ds_put_char(string, '"');
+    ofpbuf_pull(&b, sizeof(struct nicira_header));
+    ds_put_cstr(string, " \"");
     ds_put_printable(string, b.data, b.size);
     ds_put_char(string, '"');
 }
