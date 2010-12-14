@@ -663,6 +663,22 @@ ofp_print_switch_config(struct ds *string, const struct ofp_switch_config *osc)
     uint16_t flags;
 
     flags = ntohs(osc->flags);
+
+    ds_put_cstr(string, " frags=");
+    switch (flags & OFPC_FRAG_MASK) {
+    case OFPC_FRAG_NORMAL:
+        ds_put_cstr(string, "normal");
+        flags &= ~OFPC_FRAG_MASK;
+        break;
+    case OFPC_FRAG_DROP:
+        ds_put_cstr(string, "drop");
+        flags &= ~OFPC_FRAG_MASK;
+        break;
+    case OFPC_FRAG_REASM:
+        ds_put_cstr(string, "reassemble");
+        flags &= ~OFPC_FRAG_MASK;
+        break;
+    }
     if (flags) {
         ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
     }

@@ -31,7 +31,7 @@ OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: 0x1, state:0x1
-OFPT_GET_CONFIG_REPLY: miss_send_len=0
+OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 OFPROTO_STOP
 AT_CLEANUP
@@ -53,7 +53,7 @@ OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: $config, state:$state
-OFPT_GET_CONFIG_REPLY: miss_send_len=0
+OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 done
 OFPROTO_STOP
