@@ -1140,8 +1140,10 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
     } else if (flow_format == NXFF_NXM) {
         struct nx_flow_stats_request *nfsr;
         int match_len;
+        int subtype;
 
-        ofputil_make_nxstats_request(sizeof *nfsr, NXST_FLOW, &msg);
+        subtype = fsr->aggregate ? NXST_AGGREGATE : NXST_FLOW;
+        ofputil_make_nxstats_request(sizeof *nfsr, subtype, &msg);
         match_len = nx_put_match(msg, &fsr->match);
 
         nfsr = msg->data;
