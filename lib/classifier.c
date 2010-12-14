@@ -447,9 +447,9 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     format_ip_netmask(s, "nw_dst", f->nw_dst, wc->nw_dst_mask);
     if (!skip_proto && !(w & FWW_NW_PROTO)) {
         if (f->dl_type == htons(ETH_TYPE_ARP)) {
-            ds_put_format(s, "arp_op=%"PRIu8, f->nw_proto);
+            ds_put_format(s, "opcode=%"PRIu8",", f->nw_proto);
         } else {
-            ds_put_format(s, "nw_proto=%"PRIu8, f->nw_proto);
+            ds_put_format(s, "nw_proto=%"PRIu8",", f->nw_proto);
         }
     }
     if (!(w & FWW_NW_TOS)) {
@@ -457,17 +457,17 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     }
     if (f->nw_proto == IP_TYPE_ICMP) {
         if (!(w & FWW_TP_SRC)) {
-            ds_put_format(s, "icmp_type=%"PRIu16, ntohs(f->tp_src));
+            ds_put_format(s, "icmp_type=%"PRIu16",", ntohs(f->tp_src));
         }
         if (!(w & FWW_TP_DST)) {
-            ds_put_format(s, "icmp_code=%"PRIu16, ntohs(f->tp_dst));
+            ds_put_format(s, "icmp_code=%"PRIu16",", ntohs(f->tp_dst));
         }
     } else {
         if (!(w & FWW_TP_SRC)) {
-            ds_put_format(s, "tp_src=%"PRIu16, ntohs(f->tp_src));
+            ds_put_format(s, "tp_src=%"PRIu16",", ntohs(f->tp_src));
         }
         if (!(w & FWW_TP_DST)) {
-            ds_put_format(s, "tp_dst=%"PRIu16, ntohs(f->tp_dst));
+            ds_put_format(s, "tp_dst=%"PRIu16",", ntohs(f->tp_dst));
         }
     }
 
