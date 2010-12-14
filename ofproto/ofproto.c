@@ -4678,7 +4678,7 @@ compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
 
-    ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
+    ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0), &buf);
     ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match,
                               rule->flow_cookie, &ofr->cookie);
     ofr->priority = htons(rule->cr.priority);
@@ -4698,9 +4698,9 @@ compose_nx_flow_removed(const struct rule *rule, uint8_t reason)
     struct ofpbuf *buf;
     int match_len;
 
-    make_nxmsg(sizeof *nfr, NXT_FLOW_REMOVED, &buf);
-
+    make_nxmsg_xid(sizeof *nfr, NXT_FLOW_REMOVED, htonl(0), &buf);
     match_len = nx_put_match(buf, &rule->cr);
+
     nfr = buf->data;
     nfr->cookie = rule->flow_cookie;
     nfr->priority = htons(rule->cr.priority);
