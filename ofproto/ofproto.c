@@ -4698,10 +4698,10 @@ compose_nx_flow_removed(const struct rule *rule, uint8_t reason)
     struct ofpbuf *buf;
     int match_len;
 
-    nfr = make_nxmsg(sizeof *nfr, NXT_FLOW_REMOVED, &buf);
+    make_nxmsg(sizeof *nfr, NXT_FLOW_REMOVED, &buf);
 
     match_len = nx_put_match(buf, &rule->cr);
-
+    nfr = buf->data;
     nfr->cookie = rule->flow_cookie;
     nfr->priority = htons(rule->cr.priority);
     nfr->reason = reason;

@@ -562,6 +562,16 @@ nxm_put_eth_dst(struct ofpbuf *b,
     }
 }
 
+/* Appends to 'b' the nx_match format that expresses 'cr' (except for
+ * 'cr->priority', because priority is not part of nx_match), plus enough
+ * zero bytes to pad the nx_match out to a multiple of 8.
+ *
+ * This function can cause 'b''s data to be reallocated.
+ *
+ * Returns the number of bytes appended to 'b', excluding padding.
+ *
+ * If 'cr' is a catch-all rule that matches every packet, then this function
+ * appends nothing to 'b' and returns 0. */
 int
 nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 {
