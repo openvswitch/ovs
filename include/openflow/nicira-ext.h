@@ -180,8 +180,8 @@ enum nicira_stats_type {
 /* NXT_TUN_ID_FROM_COOKIE request. */
 struct nxt_tun_id_cookie {
     struct ofp_header header;
-    uint32_t vendor;            /* NX_VENDOR_ID. */
-    uint32_t subtype;           /* NXT_TUN_ID_FROM_COOKIE */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* NXT_TUN_ID_FROM_COOKIE */
     uint8_t set;                /* Nonzero to enable, zero to disable. */
     uint8_t pad[7];
 };
@@ -208,7 +208,7 @@ OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
  */
 struct nx_role_request {
     struct nicira_header nxh;
-    uint32_t role;              /* One of NX_ROLE_*. */
+    ovs_be32 role;              /* One of NX_ROLE_*. */
 };
 
 enum nx_role {
@@ -234,10 +234,10 @@ enum nx_action_subtype {
 
 /* Header for Nicira-defined actions. */
 struct nx_action_header {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_*. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_*. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
@@ -269,11 +269,11 @@ OFP_ASSERT(sizeof(struct nx_action_header) == 16);
  * ignored.  (Open vSwitch 1.0.1 and earlier did not support recursion.)
  */
 struct nx_action_resubmit {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_RESUBMIT. */
-    uint16_t in_port;               /* New in_port for checking flow table. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_RESUBMIT. */
+    ovs_be16 in_port;               /* New in_port for checking flow table. */
     uint8_t pad[4];
 };
 OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
@@ -283,12 +283,12 @@ OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
  * Sets the encapsulating tunnel ID to a 32-bit value.  The most-significant 32
  * bits of the tunnel ID are set to 0. */
 struct nx_action_set_tunnel {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_SET_TUNNEL. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_TUNNEL. */
     uint8_t pad[2];
-    uint32_t tun_id;                /* Tunnel ID. */
+    ovs_be32 tun_id;                /* Tunnel ID. */
 };
 OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
 
@@ -315,10 +315,10 @@ OFP_ASSERT(sizeof(struct nx_action_set_tunnel64) == 24);
  * Ethernet addresses inside ARP packets, so there is no other way to drop
  * spoofed ARPs other than sending every ARP packet to a controller. */
 struct nx_action_drop_spoofed_arp {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_DROP_SPOOFED_ARP. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_DROP_SPOOFED_ARP. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_drop_spoofed_arp) == 16);
@@ -330,12 +330,12 @@ OFP_ASSERT(sizeof(struct nx_action_drop_spoofed_arp) == 16);
  * an argument.  This allows the queue to be defined before the port is
  * known. */
 struct nx_action_set_queue {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_SET_QUEUE. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_QUEUE. */
     uint8_t pad[2];
-    uint32_t queue_id;              /* Where to enqueue packets. */
+    ovs_be32 queue_id;              /* Where to enqueue packets. */
 };
 OFP_ASSERT(sizeof(struct nx_action_set_queue) == 16);
 
@@ -345,10 +345,10 @@ OFP_ASSERT(sizeof(struct nx_action_set_queue) == 16);
  * were used.  Only the original queue can be restored this way; no stack is
  * maintained. */
 struct nx_action_pop_queue {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_POP_QUEUE. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_POP_QUEUE. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
@@ -468,10 +468,10 @@ OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
  * This action might go away in the future.
  */
 struct nx_action_note {
-    uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* A multiple of 8, but at least 16. */
-    uint32_t vendor;                /* NX_VENDOR_ID. */
-    uint16_t subtype;               /* NXAST_NOTE. */
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* A multiple of 8, but at least 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_NOTE. */
     uint8_t note[6];                /* Start of user-defined data. */
     /* Possibly followed by additional user-defined data. */
 };
