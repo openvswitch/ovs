@@ -57,11 +57,13 @@ else
     }
 fi
 
-. /etc/xensource-inventory
+test -e /etc/xensource-inventory && . /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
+if test -e /etc/xensource/network.conf; then
+    NETWORK_MODE=$(cat /etc/xensource/network.conf)
+fi
 
-NETWORK_MODE=$(cat /etc/xensource/network.conf)
-case $NETWORK_MODE in
+case ${NETWORK_MODE:=openvswitch} in
     vswitch|openvswitch)
         ;;
     bridge)
