@@ -76,14 +76,19 @@ case ${NETWORK_MODE:=openvswitch} in
 esac
 
 # General config variables in /etc/sysconfig/openvswitch
-if test "$PRODUCT_VERSION" = "5.5.0"; then
-    # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
+if [ -f /etc/xensource-inventory ]; then
+    if test "$PRODUCT_VERSION" = "5.5.0"; then
+        # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
+        : ${ENABLE_BRCOMPAT:=y}
+        : ${ENABLE_FAKE_PROC_NET:=y}
+    else
+        # Later versions don't need them.
+        : ${ENABLE_BRCOMPAT:=n}
+        : ${ENABLE_FAKE_PROC_NET:=n}
+    fi
+else
     : ${ENABLE_BRCOMPAT:=y}
     : ${ENABLE_FAKE_PROC_NET:=y}
-else
-    # Later versions don't need them.
-    : ${ENABLE_BRCOMPAT:=n}
-    : ${ENABLE_FAKE_PROC_NET:=n}
 fi
 : ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
