@@ -407,10 +407,12 @@ function start {
         start_brcompatd
     fi
 
-    # Start daemon to monitor external ids
-    PYTHONPATH=/usr/share/openvswitch/python \
-               /usr/share/openvswitch/scripts/ovs-external-ids \
-               --pidfile --detach $monitor_opt "$VSWITCHD_OVSDB_SERVER"
+    if [ -f /etc/xensource-inventory ]; then
+        # Start daemon to monitor external ids
+        PYTHONPATH=/usr/share/openvswitch/python \
+                   /usr/share/openvswitch/scripts/ovs-external-ids \
+                   --pidfile --detach $monitor_opt "$VSWITCHD_OVSDB_SERVER"
+    fi
 
     touch /var/lock/subsys/openvswitch
 }
