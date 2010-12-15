@@ -1284,6 +1284,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 			struct vport *cache_vport = internal_dev_get_vport(rt_dst(rt).dev);
 
 			skb->protocol = htons(ETH_P_IP);
+			iph = ip_hdr(skb);
 			iph->tot_len = htons(skb->len - skb_network_offset(skb));
 			ip_send_check(iph);
 
