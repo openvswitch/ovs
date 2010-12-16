@@ -123,7 +123,7 @@ nxm_field_lookup(uint32_t header)
 
 /* Returns the width of the data for a field with the given 'header', in
  * bytes. */
-static int
+int
 nxm_field_bytes(uint32_t header)
 {
     unsigned int length = NXM_LENGTH(header);
@@ -132,7 +132,7 @@ nxm_field_bytes(uint32_t header)
 
 /* Returns the width of the data for a field with the given 'header', in
  * bits. */
-static int
+int
 nxm_field_bits(uint32_t header)
 {
     return nxm_field_bytes(header) * 8;
