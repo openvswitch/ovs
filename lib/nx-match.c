@@ -824,8 +824,8 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
     return match_len;
 }
 
-static const char *
-parse_nxm_field_bits(const char *s, uint32_t *headerp, int *ofsp, int *n_bitsp)
+const char *
+nxm_parse_field_bits(const char *s, uint32_t *headerp, int *ofsp, int *n_bitsp)
 {
     const char *full_s = s;
     const char *name;
@@ -886,12 +886,12 @@ nxm_parse_reg_move(struct nx_action_reg_move *move, const char *s)
     int src_ofs, dst_ofs;
     int src_n_bits, dst_n_bits;
 
-    s = parse_nxm_field_bits(s, &src, &src_ofs, &src_n_bits);
+    s = nxm_parse_field_bits(s, &src, &src_ofs, &src_n_bits);
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following source", full_s);
     }
     s += 2;
-    s = parse_nxm_field_bits(s, &dst, &dst_ofs, &dst_n_bits);
+    s = nxm_parse_field_bits(s, &dst, &dst_ofs, &dst_n_bits);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
@@ -925,7 +925,7 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
         ovs_fatal(0, "%s: missing `->' following value", full_s);
     }
     s += 2;
-    s = parse_nxm_field_bits(s, &dst, &ofs, &n_bits);
+    s = nxm_parse_field_bits(s, &dst, &ofs, &n_bits);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
@@ -946,8 +946,8 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
 
-static void
-format_nxm_field_bits(struct ds *s, uint32_t header, int ofs, int n_bits)
+void
+nxm_format_field_bits(struct ds *s, uint32_t header, int ofs, int n_bits)
 {
     format_nxm_field_name(s, header);
     if (ofs == 0 && n_bits == nxm_field_bits(header)) {
@@ -969,9 +969,9 @@ nxm_format_reg_move(const struct nx_action_reg_move *move, struct ds *s)
     uint32_t dst = ntohl(move->dst);
 
     ds_put_format(s, "move:");
-    format_nxm_field_bits(s, src, src_ofs, n_bits);
+    nxm_format_field_bits(s, src, src_ofs, n_bits);
     ds_put_cstr(s, "->");
-    format_nxm_field_bits(s, dst, dst_ofs, n_bits);
+    nxm_format_field_bits(s, dst, dst_ofs, n_bits);
 }
 
 void
@@ -983,7 +983,7 @@ nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
     uint64_t value = ntohll(load->value);
 
     ds_put_format(s, "load:%"PRIu64"->", value);
-    format_nxm_field_bits(s, dst, ofs, n_bits);
+    nxm_format_field_bits(s, dst, ofs, n_bits);
 }
 
 /* nxm_check_reg_move(), nxm_check_reg_load(). */

@@ -56,6 +56,10 @@ void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);
 int nxm_field_bytes(uint32_t header);
 int nxm_field_bits(uint32_t header);
 
+const char *nxm_parse_field_bits(const char *s,
+                                 uint32_t *headerp, int *ofsp, int *n_bitsp);
+void nxm_format_field_bits(struct ds *, uint32_t header, int ofs, int n_bits);
+
 /* Dealing with the 'ofs_nbits' members of struct nx_action_reg_load and struct
  * nx_action_multipath. */
 
