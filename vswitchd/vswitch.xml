@@ -759,15 +759,16 @@
             </dl>
           </dd>
           <dt><code>ipsec_gre</code></dt>
-          <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation over
-             IPv4 IPsec tunnel.  Each tunnel (including those of type
-             <code>gre</code>) must be uniquely identified by the
-             combination of <code>remote_ip</code> and
-             <code>local_ip</code>.  Note that if two ports are defined
-             that are the same except one has an optional identifier and
-             the other does not, the more specific one is matched first.
-             The following options may be specified in the 
-             <ref column="options"/> column:
+          <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation
+            over IPv4 IPsec tunnel.  Each tunnel (including those of type
+            <code>gre</code>) must be uniquely identified by the
+            combination of <code>remote_ip</code> and
+            <code>local_ip</code>.  Note that if two ports are defined
+            that are the same except one has an optional identifier and
+            the other does not, the more specific one is matched first.
+            An authentication method of <code>peer_cert</code> or
+            <code>psk</code> must be defined.  The following options may
+            be specified in the <ref column="options"/> column:
             <dl>
               <dt><code>remote_ip</code></dt>
               <dd>Required.  The tunnel endpoint.</dd>
@@ -778,9 +779,30 @@
                 match.  Default is to match all addresses.</dd>
             </dl>
             <dl>
-              <dt><code>ipsec_psk</code></dt>
-              <dd>Required.  Specifies a pre-shared key for authentication 
-                that must be identical on both sides of the tunnel.</dd>
+              <dt><code>peer_cert</code></dt>
+              <dd>Required for certificate authentication.  A string
+                containing the peer's certificate in PEM format.
+                Additionally the host's certificate must be specified
+                with the <code>certificate</code> option.</dd>
+            </dl>
+            <dl>
+              <dt><code>certificate</code></dt>
+              <dd>Required for certificate authentication.  The name of a
+                PEM file containing a certificate that will be presented
+                to the peer during authentication.</dd>
+            </dl>
+            <dl>
+              <dt><code>private_key</code></dt>
+              <dd>Optional for certificate authentication.  The name of
+                a PEM file containing the private key associated with
+                <code>certificate</code>.  If <code>certificate</code>
+                contains the private key, this option may be omitted.</dd>
+            </dl>
+            <dl>
+              <dt><code>psk</code></dt>
+              <dd>Required for pre-shared key authentication.  Specifies a
+                pre-shared key for authentication that must be identical on
+                both sides of the tunnel.</dd>
             </dl>
             <dl>
               <dt><code>in_key</code></dt>

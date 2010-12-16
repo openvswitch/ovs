@@ -514,19 +514,37 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
             if (!strcmp(node->data, "false")) {
                 config.flags &= ~TNL_F_HDR_CACHE;
             }
-        } else if ((!strcmp(node->name, "ipsec_cert")
-                   || !strcmp(node->name, "ipsec_psk")) && is_ipsec) {
+        } else if (!strcmp(node->name, "peer_cert") && is_ipsec) {
+            if (shash_find(args, "certificate")) {
+                ipsec_mech_set = true;
+            } else {
+                VLOG_WARN("%s: 'peer_cert' requires 'certificate' argument",
+                          name);
+                return EINVAL;
+            }
+        } else if (!strcmp(node->name, "psk") && is_ipsec) {
             ipsec_mech_set = true;
+        } else if (is_ipsec 
+                && (!strcmp(node->name, "certificate")
+                    || !strcmp(node->name, "private_key"))) {
+            /* Ignore options not used by the netdev. */
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'",
                       name, type, node->name);
         }
     }
 
-    if (is_ipsec && !ipsec_mech_set) {
-        VLOG_WARN("%s: IPsec requires an 'ipsec_cert' or ipsec_psk' argument",
-                  name);
-        return EINVAL;
+    if (is_ipsec) {
+        if (shash_find(args, "peer_cert") && shash_find(args, "psk")) {
+            VLOG_WARN("%s: cannot define both 'peer_cert' and 'psk'", name);
+            return EINVAL;
+        }
+
+        if (!ipsec_mech_set) {
+            VLOG_WARN("%s: IPsec requires an 'peer_cert' or psk' argument",
+                      name);
+            return EINVAL;
+        }
     }
 
     if (!config.daddr) {
