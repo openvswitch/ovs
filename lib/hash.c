@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,19 +52,22 @@ hash_words(const uint32_t *p, size_t n, uint32_t basis)
     return c;
 }
 
-/* Returns the hash of the pair of aligned 32-bit words at 'p', starting from
- * 'basis'. */
+/* Returns the hash of 'a', 'b', and 'c'. */
 uint32_t
-hash_2words(const uint32_t *p, uint32_t basis)
+hash_3words(uint32_t a, uint32_t b, uint32_t c)
 {
-    uint32_t a, b, c;
-
-    a = b = c = 0xdeadbeef + (2 << 2) + basis;
-    b += p[1];
-    a += p[0];
+    a += 0xdeadbeef;
+    b += 0xdeadbeef;
+    c += 0xdeadbeef;
     HASH_FINAL(a, b, c);
-
     return c;
+}
+
+/* Returns the hash of 'a' and 'b'. */
+uint32_t
+hash_2words(uint32_t a, uint32_t b)
+{
+    return hash_3words(a, b, 0);
 }
 
 /* Returns the hash of the 'n' bytes at 'p', starting from 'basis'. */
