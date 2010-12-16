@@ -950,10 +950,12 @@ static void
 format_nxm_field_bits(struct ds *s, uint32_t header, int ofs, int n_bits)
 {
     format_nxm_field_name(s, header);
-    if (n_bits != 1) {
-        ds_put_format(s, "[%d..%d]", ofs, ofs + n_bits - 1);
-    } else {
+    if (ofs == 0 && n_bits == nxm_field_bits(header)) {
+        ds_put_cstr(s, "[]");
+    } else if (n_bits == 1) {
         ds_put_format(s, "[%d]", ofs);
+    } else {
+        ds_put_format(s, "[%d..%d]", ofs, ofs + n_bits - 1);
     }
 }
 
