@@ -103,9 +103,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     const uint8_t *eth;
     ovs_be32 ip;
 
-    if (nl_attr_get_size(a) != odp_action_len(a->nla_len)) {
+    if (nl_attr_get_size(a) != odp_action_len(nl_attr_type(a))) {
         ds_put_format(ds, "***bad action: length is %zu, expected %d*** ",
-                      nl_attr_get_size(a), odp_action_len(a->nla_len));
+                      nl_attr_get_size(a), odp_action_len(nl_attr_type(a)));
         format_generic_odp_action(ds, a);
         return;
     }
