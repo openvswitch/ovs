@@ -83,6 +83,7 @@ in_stack(void *p)
 void
 backtrace_capture(struct backtrace *backtrace)
 {
+#ifdef __GNUC__
     void **frame;
     size_t n;
 
@@ -95,4 +96,7 @@ backtrace_capture(struct backtrace *backtrace)
         backtrace->frames[n++] = (uintptr_t) frame[1];
     }
     backtrace->n_frames = n;
+#else
+    backtrace->n_frames = 0;
+#endif
 }
