@@ -1938,6 +1938,8 @@ success:
 			u16 csum_start, csum_offset;
 
 			get_skb_csum_pointers(skb, &csum_start, &csum_offset);
+			csum_start -= skb_headroom(skb);
+
 			BUG_ON(csum_start >= skb_headlen(skb));
 			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
 							    copy_bytes - csum_start, &csum);

@@ -82,10 +82,10 @@ static inline void get_skb_csum_pointers(const struct sk_buff *skb,
 					 u16 *csum_start, u16 *csum_offset)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-	*csum_start = skb->csum_start - skb_headroom(skb);
+	*csum_start = skb->csum_start;
 	*csum_offset = skb->csum_offset;
 #else
-	*csum_start = skb_transport_header(skb) - skb->data;
+	*csum_start = skb_headroom(skb) + skb_transport_offset(skb);
 	*csum_offset = skb->csum;
 #endif
 }
