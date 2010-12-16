@@ -939,7 +939,7 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
     load->len = htons(sizeof *load);
     load->vendor = htonl(NX_VENDOR_ID);
     load->subtype = htons(NXAST_REG_LOAD);
-    load->ofs_nbits = htons((ofs << 6) | (n_bits - 1));
+    load->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
     load->dst = htonl(dst);
     load->value = htonll(value);
 }
@@ -975,9 +975,8 @@ nxm_format_reg_move(const struct nx_action_reg_move *move, struct ds *s)
 void
 nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
 {
-    uint16_t ofs_nbits = ntohs(load->ofs_nbits);
-    int ofs = ofs_nbits >> 6;
-    int n_bits = (ofs_nbits & 0x3f) + 1;
+    int ofs = nxm_decode_ofs(load->ofs_nbits);
+    int n_bits = nxm_decode_n_bits(load->ofs_nbits);
     uint32_t dst = ntohl(load->dst);
     uint64_t value = ntohll(load->value);
 
@@ -1031,8 +1030,8 @@ nxm_check_reg_load(const struct nx_action_reg_load *action,
     const struct nxm_field *dst;
     int ofs, n_bits;
 
-    ofs = ntohs(action->ofs_nbits) >> 6;
-    n_bits = (ntohs(action->ofs_nbits) & 0x3f) + 1;
+    ofs = nxm_decode_ofs(action->ofs_nbits);
+    n_bits = nxm_decode_n_bits(action->ofs_nbits);
     dst = nxm_field_lookup(ntohl(action->dst));
     if (!field_ok(dst, flow, ofs + n_bits)) {
         return BAD_ARGUMENT;
@@ -1175,7 +1174,7 @@ nxm_execute_reg_load(const struct nx_action_reg_load *action,
                      struct flow *flow)
 {
     /* Preparation. */
-    int n_bits = (ntohs(action->ofs_nbits) & 0x3f) + 1;
+    int n_bits = nxm_decode_n_bits(action->ofs_nbits);
     uint32_t mask = n_bits == 32 ? UINT32_MAX : (UINT32_C(1) << n_bits) - 1;
     uint32_t *reg = &flow->regs[NXM_NX_REG_IDX(ntohl(action->dst))];
 
@@ -1183,7 +1182,7 @@ nxm_execute_reg_load(const struct nx_action_reg_load *action,
     uint32_t src_data = ntohll(action->value);
 
     /* Get remaining bits of the destination field. */
-    int dst_ofs = ntohs(action->ofs_nbits) >> 6;
+    int dst_ofs = nxm_decode_ofs(action->ofs_nbits);
     uint32_t dst_data = *reg & ~(mask << dst_ofs);
 
     *reg = dst_data | (src_data << dst_ofs);

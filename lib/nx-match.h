@@ -18,6 +18,9 @@
 #define NX_MATCH_H 1
 
 #include <stdint.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include "openvswitch/types.h"
 
 struct cls_rule;
 struct ds;
@@ -50,6 +53,27 @@ int nxm_check_reg_load(const struct nx_action_reg_load *, const struct flow *);
 void nxm_execute_reg_move(const struct nx_action_reg_move *, struct flow *);
 void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);
 
+/* Dealing with the 'ofs_nbits' members of struct nx_action_reg_load and struct
+ * nx_action_multipath. */
+
+static inline ovs_be16
+nxm_encode_ofs_nbits(int ofs, int n_bits)
+{
+    return htons((ofs << 6) | (n_bits - 1));
+}
+
+static inline int
+nxm_decode_ofs(ovs_be16 ofs_nbits)
+{
+    return ntohs(ofs_nbits) >> 6;
+}
+
+static inline int
+nxm_decode_n_bits(ovs_be16 ofs_nbits)
+{
+    return (ntohs(ofs_nbits) & 0x3f) + 1;
+}
+
 /* Upper bound on the length of an nx_match.  The longest nx_match (assuming
  * we implement 4 registers) would be:
  *
