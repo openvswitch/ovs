@@ -35,6 +35,7 @@
 #include "hmap.h"
 #include "in-band.h"
 #include "mac-learning.h"
+#include "multipath.h"
 #include "netdev.h"
 #include "netflow.h"
 #include "netlink.h"
@@ -2877,6 +2878,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_resubmit *nar;
     const struct nx_action_set_tunnel *nast;
     const struct nx_action_set_queue *nasq;
+    const struct nx_action_multipath *nam;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
     ovs_be64 tun_id;
 
@@ -2925,6 +2927,11 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         tun_id = ((const struct nx_action_set_tunnel64 *) nah)->tun_id;
         nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, tun_id);
         ctx->flow.tun_id = tun_id;
+        break;
+
+    case NXAST_MULTIPATH:
+        nam = (const struct nx_action_multipath *) nah;
+        multipath_execute(nam, &ctx->flow);
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to

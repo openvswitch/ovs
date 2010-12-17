@@ -25,6 +25,7 @@
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "netdev.h"
+#include "multipath.h"
 #include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -194,26 +195,65 @@ parse_port_name(const char *name, uint16_t *port)
 static void
 str_to_action(char *str, struct ofpbuf *b)
 {
-    char *act, *arg;
-    char *saveptr = NULL;
     bool drop = false;
     int n_actions;
+    char *pos;
 
-    for (act = strtok_r(str, ", \t\r\n", &saveptr), n_actions = 0; act;
-         act = strtok_r(NULL, ", \t\r\n", &saveptr), n_actions++)
-    {
+    pos = str;
+    for (;;) {
+        char *act, *arg;
+        size_t actlen;
         uint16_t port;
+
+        pos += strspn(pos, ", \t\r\n");
+        if (*pos == '\0') {
+            break;
+        }
 
         if (drop) {
             ovs_fatal(0, "Drop actions must not be followed by other actions");
         }
 
-        /* Arguments are separated by colons */
-        arg = strchr(act, ':');
-        if (arg) {
-            *arg = '\0';
-            arg++;
+        act = pos;
+        actlen = strcspn(pos, ":(, \t\r\n");
+        if (act[actlen] == ':') {
+            /* The argument can be separated by a colon. */
+            size_t arglen;
+
+            arg = act + actlen + 1;
+            arglen = strcspn(arg, ", \t\r\n");
+            pos = arg + arglen + (arg[arglen] != '\0');
+            arg[arglen] = '\0';
+        } else if (act[actlen] == '(') {
+            /* The argument can be surrounded by balanced parentheses.  The
+             * outermost set of parentheses is removed. */
+            int level = 1;
+            size_t arglen;
+
+            arg = act + actlen + 1;
+            for (arglen = 0; level > 0; arglen++) {
+                switch (arg[arglen]) {
+                case '\0':
+                    ovs_fatal(0, "unbalanced parentheses in argument to %s "
+                              "action", act);
+
+                case '(':
+                    level++;
+                    break;
+
+                case ')':
+                    level--;
+                    break;
+                }
+            }
+            arg[arglen - 1] = '\0';
+            pos = arg + arglen;
+        } else {
+            /* There might be no argument at all. */
+            arg = NULL;
+            pos = act + actlen + (act[actlen] != '\0');
         }
+        act[actlen] = '\0';
 
         if (!strcasecmp(act, "mod_vlan_vid")) {
             struct ofp_action_vlan_vid *va;
@@ -334,6 +374,10 @@ str_to_action(char *str, struct ofpbuf *b)
             struct nx_action_reg_load *load;
             load = ofpbuf_put_uninit(b, sizeof *load);
             nxm_parse_reg_load(load, arg);
+        } else if (!strcasecmp(act, "multipath")) {
+            struct nx_action_multipath *nam;
+            nam = ofpbuf_put_uninit(b, sizeof *nam);
+            multipath_parse(nam, arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

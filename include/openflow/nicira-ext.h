@@ -230,6 +230,7 @@ enum nx_action_subtype {
     NXAST_REG_LOAD,             /* struct nx_action_reg_load */
     NXAST_NOTE,                 /* struct nx_action_note */
     NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
+    NXAST_MULTIPATH             /* struct nx_action_multipath */
 };
 
 /* Header for Nicira-defined actions. */
@@ -476,6 +477,132 @@ struct nx_action_note {
     /* Possibly followed by additional user-defined data. */
 };
 OFP_ASSERT(sizeof(struct nx_action_note) == 16);
+
+/* Action structure for NXAST_MULTIPATH.
+ *
+ * This action performs the following steps in sequence:
+ *
+ *    1. Hashes the fields designated by 'fields', one of NX_MP_FIELDS_*.
+ *       Refer to the definition of "enum nx_mp_fields" for details.
+ *
+ *       The 'basis' value is used as a universal hash parameter, that is,
+ *       different values of 'basis' yield different hash functions.  The
+ *       particular universal hash function used is implementation-defined.
+ *
+ *       The hashed fields' values are drawn from the current state of the
+ *       flow, including all modifications that have been made by actions up to
+ *       this point.
+ *
+ *    2. Applies the multipath link choice algorithm specified by 'algorithm',
+ *       one of NX_MP_ALG_*.  Refer to the definition of "enum nx_mp_algorithm"
+ *       for details.
+ *
+ *       The output of the algorithm is 'link', an unsigned integer less than
+ *       or equal to 'max_link'.
+ *
+ *       Some algorithms use 'arg' as an additional argument.
+ *
+ *    3. Stores 'link' in dst[ofs:ofs+n_bits].  The format and semantics of
+ *       'dst' and 'ofs_nbits' are identical to those for the NXAST_REG_LOAD
+ *       action; refer to the description of that action for details.
+ *
+ * The switch will reject actions that have an unknown 'fields', or an unknown
+ * 'algorithm', or in which ofs+n_bits is greater than the width of 'dst', or
+ * in which 'max_link' is greater than or equal to 2**n_bits, with error type
+ * OFPET_BAD_ACTION, code OFPBAC_BAD_ARGUMENT.
+ */
+struct nx_action_multipath {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* Length is 32. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_MULTIPATH. */
+
+    /* What fields to hash and how. */
+    ovs_be16 fields;            /* One of NX_MP_FIELDS_*. */
+    ovs_be16 basis;             /* Universal hash parameter. */
+    ovs_be16 pad0;
+
+    /* Multipath link choice algorithm to apply to hash value. */
+    ovs_be16 algorithm;         /* One of NX_MP_ALG_*. */
+    ovs_be16 max_link;          /* Number of output links, minus 1. */
+    ovs_be32 arg;               /* Algorithm-specific argument. */
+    ovs_be16 pad1;
+
+    /* Where to store the result. */
+    ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
+    ovs_be32 dst;               /* Destination register. */
+};
+OFP_ASSERT(sizeof(struct nx_action_multipath) == 32);
+
+/* NXAST_MULTIPATH: Fields to hash. */
+enum nx_mp_fields {
+    /* Ethernet source address (NXM_OF_ETH_SRC) only. */
+    NX_MP_FIELDS_ETH_SRC,
+
+    /* L2 through L4, symmetric across src/dst.  Specifically, each of the
+     * following fields, if present, is hashed (slashes separate symmetric
+     * pairs):
+     *
+     *  - NXM_OF_ETH_DST / NXM_OF_ETH_SRC
+     *  - NXM_OF_ETH_TYPE
+     *  - The VID bits from NXM_OF_VLAN_TCI, ignoring PCP and CFI.
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     *  - NXM_OF_UDP_SRC / NXM_OF_UDP_DST
+     */
+    NX_MP_FIELDS_SYMMETRIC_L4
+};
+
+/* NXAST_MULTIPATH: Multipath link choice algorithm to apply.
+ *
+ * In the descriptions below, 'n_links' is max_link + 1. */
+enum nx_mp_algorithm {
+    /* link = hash(flow) % n_links.
+     *
+     * Redistributes all traffic when n_links changes.  O(1) performance.  See
+     * RFC 2992.
+     *
+     * Use UINT16_MAX for max_link to get a raw hash value. */
+    NX_MP_ALG_MODULO_N,
+
+    /* link = hash(flow) / (MAX_HASH / n_links).
+     *
+     * Redistributes between one-quarter and one-half of traffic when n_links
+     * changes.  O(1) performance.  See RFC 2992.
+     */
+    NX_MP_ALG_HASH_THRESHOLD,
+
+    /* for i in [0,n_links):
+     *   weights[i] = hash(flow, i)
+     * link = { i such that weights[i] >= weights[j] for all j != i }
+     *
+     * Redistributes 1/n_links of traffic when n_links changes.  O(n_links)
+     * performance.  If n_links is greater than a threshold (currently 64, but
+     * subject to change), Open vSwitch will substitute another algorithm
+     * automatically.  See RFC 2992. */
+    NX_MP_ALG_HRW,              /* Highest Random Weight. */
+
+    /* i = 0
+     * repeat:
+     *     i = i + 1
+     *     link = hash(flow, i) % arg
+     * while link > max_link
+     *
+     * Redistributes 1/n_links of traffic when n_links changes.  O(1)
+     * performance when arg/max_link is bounded by a constant.
+     *
+     * Redistributes all traffic when arg changes.
+     *
+     * arg must be greater than max_link and for best performance should be no
+     * more than approximately max_link * 2.  If arg is outside the acceptable
+     * range, Open vSwitch will automatically substitute the least power of 2
+     * greater than max_link.
+     *
+     * This algorithm is specific to Open vSwitch.
+     */
+    NX_MP_ALG_ITER_HASH         /* Iterative Hash. */
+};
 
 /* Wildcard for tunnel ID. */
 #define NXFW_TUN_ID  (1 << 25)

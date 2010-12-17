@@ -13,6 +13,7 @@ TESTSUITE_AT = \
 	tests/daemon.at \
 	tests/daemon-py.at \
 	tests/ovs-ofctl.at \
+	tests/multipath.at \
 	tests/vconn.at \
 	tests/file_name.at \
 	tests/aes128.at \
@@ -74,6 +75,7 @@ lcov_wrappers = \
 	tests/lcov/test-jsonrpc \
 	tests/lcov/test-list \
 	tests/lcov/test-lockfile \
+	tests/lcov/test-multipath \
 	tests/lcov/test-ovsdb \
 	tests/lcov/test-random \
 	tests/lcov/test-reconnect \
@@ -125,6 +127,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-jsonrpc \
 	tests/valgrind/test-list \
 	tests/valgrind/test-lockfile \
+	tests/valgrind/test-multipath \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-random \
 	tests/valgrind/test-reconnect \
@@ -218,6 +221,10 @@ tests_test_list_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-lockfile
 tests_test_lockfile_SOURCES = tests/test-lockfile.c
 tests_test_lockfile_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-multipath
+tests_test_multipath_SOURCES = tests/test-multipath.c
+tests_test_multipath_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-random
 tests_test_random_SOURCES = tests/test-random.c

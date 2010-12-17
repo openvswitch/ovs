@@ -549,6 +549,21 @@ in field \fBdst\fR.
 .IP
 Example: \fBload:55\->NXM_NX_REG2[0..5]\fR loads value 55 (bit pattern
 \fB110111\fR) into bits 0 through 5, inclusive, in register 2.
+.
+.IP "\fBmultipath(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIn_links\fB, \fIarg\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
+Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter,
+then the applies multipath link selection \fIalgorithm\fR (with
+parameter \fIarg\fR) to choose one of \fIn_links\fR output links
+numbered 0 through \fIn_links\fR minus 1, and stores the link into
+\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM register as
+described above.
+.IP
+Currently, \fIfields\fR must be either \fBeth_src\fR or
+\fBsymmetric_l4\fR and \fIalgorithm\fR must be one of \fBmodulo_n\fR,
+\fBhash_threshold\fR, \fBhrw\fR, and \fBiter_hash\fR.  Only
+the \fBiter_hash\fR algorithm uses \fIarg\fR.
+.IP
+Refer to \fBnicira\-ext.h\fR for more details.
 .RE
 .
 .IP

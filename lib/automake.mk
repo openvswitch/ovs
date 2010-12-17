@@ -68,6 +68,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/multipath.c \
+	lib/multipath.h \
 	lib/netdev-dummy.c \
 	lib/netdev-provider.h \
 	lib/netdev.c \

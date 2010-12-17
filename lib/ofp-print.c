@@ -30,6 +30,7 @@
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "multipath.h"
 #include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -216,6 +217,7 @@ nx_action_len(enum nx_action_subtype subtype)
     case NXAST_REG_LOAD: return sizeof(struct nx_action_reg_load);
     case NXAST_NOTE: return -1;
     case NXAST_SET_TUNNEL64: return sizeof(struct nx_action_set_tunnel64);
+    case NXAST_MULTIPATH: return sizeof(struct nx_action_multipath);
     default: return -1;
     }
 }
@@ -240,6 +242,7 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         const struct nx_action_resubmit *nar;
         const struct nx_action_reg_move *move;
         const struct nx_action_reg_load *load;
+        const struct nx_action_multipath *nam;
 
         switch ((enum nx_action_subtype) subtype) {
         case NXAST_RESUBMIT:
@@ -281,9 +284,14 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
             return;
 
         case NXAST_SET_TUNNEL64:
-            nast64 = (struct nx_action_set_tunnel64 *) nah;
+            nast64 = (const struct nx_action_set_tunnel64 *) nah;
             ds_put_format(string, "set_tunnel64:%#"PRIx64,
                           ntohll(nast64->tun_id));
+            return;
+
+        case NXAST_MULTIPATH:
+            nam = (const struct nx_action_multipath *) nah;
+            multipath_format(nam, string);
             return;
 
         case NXAST_SNAT__OBSOLETE:

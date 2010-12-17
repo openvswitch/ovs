@@ -1,7 +1,7 @@
 AT_BANNER([ovs-ofctl])
 
 AT_SETUP([ovs-ofctl parse-flows])
-AT_DATA([flows.txt], [
+AT_DATA([flows.txt], [[
 # comment
 tcp,tp_src=123,actions=flood
 in_port=LOCAL dl_vlan=9 dl_src=00:0A:E4:25:6B:B0 actions=drop
@@ -13,11 +13,13 @@ cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
+actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
 actions=drop
-])
-AT_CHECK([ovs-ofctl parse-flows flows.txt], [0], [stdout], [stderr])
-AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
+]])
+AT_CHECK([ovs-ofctl parse-flows flows.txt
+], [0], [stdout], [stderr])
+AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], 
+[[OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD: ADD in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
 OFPT_FLOW_MOD: ADD arp,nw_src=192.168.0.1 actions=drop_spoofed_arp,NORMAL
 OFPT_FLOW_MOD: ADD udp,dl_vlan_pcp=7 idle:5 actions=strip_vlan,output:0
@@ -28,8 +30,9 @@ OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.0
 NXT_TUN_ID_FROM_COOKIE: set=1
 OFPT_FLOW_MOD: ADD cookie:0x123400005678 actions=FLOOD
 OFPT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
+OFPT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
 OFPT_FLOW_MOD: ADD actions=drop
-])
+]])
 AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
 normalization changed ofp_match, details:
  pre: wildcards=  0x3820f8  in_port=65534  dl_src=00:0a:e4:25:6b:b0  dl_dst=00:00:00:00:00:00  dl_vlan=    9  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
