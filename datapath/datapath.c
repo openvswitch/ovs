@@ -817,9 +817,11 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	struct sw_flow *flow;
 	struct tbl *table;
 	int error;
+	u32 hash;
 
+	hash = flow_hash(&uf->flow.key);
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &uf->flow.key, flow_hash(&uf->flow.key), flow_cmp);
+	flow_node = tbl_lookup(table, &uf->flow.key, hash, flow_cmp);
 	if (!flow_node) {
 		/* No such flow. */
 		struct sw_flow_actions *acts;
@@ -853,7 +855,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
-		error = tbl_insert(table, &flow->tbl_node, flow_hash(&flow->key));
+		error = tbl_insert(table, &flow->tbl_node, hash);
 		if (error)
 			goto error_free_flow_acts;
 
