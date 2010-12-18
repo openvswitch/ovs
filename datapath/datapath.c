@@ -1263,6 +1263,7 @@ static int put_port(const struct vport *p, struct odp_port __user *uop)
 	rcu_read_lock();
 	strncpy(op.devname, vport_get_name(p), sizeof op.devname);
 	strncpy(op.type, vport_get_type(p), sizeof op.type);
+	vport_get_config(p, op.config);
 	rcu_read_unlock();
 
 	op.port = p->port_no;

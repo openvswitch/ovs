@@ -398,6 +398,7 @@ const struct vport_ops gre_vport_ops = {
 	.set_addr	= tnl_set_addr,
 	.get_name	= tnl_get_name,
 	.get_addr	= tnl_get_addr,
+	.get_config	= tnl_get_config,
 	.get_dev_flags	= vport_gen_get_dev_flags,
 	.is_running	= vport_gen_is_running,
 	.get_operstate	= vport_gen_get_operstate,

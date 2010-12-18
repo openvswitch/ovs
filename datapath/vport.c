@@ -978,6 +978,22 @@ int vport_get_mtu(const struct vport *vport)
 }
 
 /**
+ *	vport_get_config - retrieve device configuration
+ *
+ * @vport: vport from which to retrieve the configuration.
+ * @config: buffer to store config, which must be at least the length
+ *          of VPORT_CONFIG_SIZE.
+ *
+ * Retrieves the configuration of the given device.  Either RTNL lock or
+ * rcu_read_lock must be held.
+ */
+void vport_get_config(const struct vport *vport, void *config)
+{
+	if (vport->ops->get_config)
+		vport->ops->get_config(vport, config);
+}
+
+/**
  *	vport_receive - pass up received packet to the datapath for processing
  *
  * @vport: vport that received the packet

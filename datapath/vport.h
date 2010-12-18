@@ -63,6 +63,7 @@ int vport_get_ifindex(const struct vport *);
 int vport_get_iflink(const struct vport *);
 
 int vport_get_mtu(const struct vport *);
+void vport_get_config(const struct vport *, void *);
 
 int vport_send(struct vport *, struct sk_buff *);
 
@@ -169,6 +170,7 @@ struct vport_parms {
  * May be null if not supported.
  * @get_name: Get the device's name.
  * @get_addr: Get the device's MAC address.
+ * @get_config: Get the device's configuration.
  * @get_kobj: Get the kobj associated with the device (may return null).
  * @get_stats: Fill in the transmit/receive stats.  May be null if stats are
  * not supported or if generic stats are in use.  If defined and
@@ -205,6 +207,7 @@ struct vport_ops {
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);
 	const unsigned char *(*get_addr)(const struct vport *);
+	void (*get_config)(const struct vport *, void *);
 	struct kobject *(*get_kobj)(const struct vport *);
 	int (*get_stats)(const struct vport *, struct rtnl_link_stats64 *);
 

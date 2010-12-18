@@ -1524,6 +1524,15 @@ const unsigned char *tnl_get_addr(const struct vport *vport)
 	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
 }
 
+void tnl_get_config(const struct vport *vport, void *config)
+{
+	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
+	struct tnl_port_config *port_config;
+	
+	port_config = &rcu_dereference_rtnl(tnl_vport->mutable)->port_config;
+	memcpy(config, port_config, sizeof(*port_config));
+}
+
 int tnl_get_mtu(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);

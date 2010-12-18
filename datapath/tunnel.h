@@ -192,6 +192,7 @@ int tnl_set_mtu(struct vport *vport, int mtu);
 int tnl_set_addr(struct vport *vport, const unsigned char *addr);
 const char *tnl_get_name(const struct vport *vport);
 const unsigned char *tnl_get_addr(const struct vport *vport);
+void tnl_get_config(const struct vport *vport, void *config);
 int tnl_get_mtu(const struct vport *vport);
 int tnl_send(struct vport *vport, struct sk_buff *skb);
 void tnl_rcv(struct vport *vport, struct sk_buff *skb);
