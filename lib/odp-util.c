@@ -24,6 +24,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netlink.h"
+#include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "timeval.h"
 #include "util.h"
@@ -215,6 +216,34 @@ format_odp_flow(struct ds *ds, const struct odp_flow *f)
     format_odp_flow_stats(ds, &f->stats);
     ds_put_cstr(ds, ", actions:");
     format_odp_actions(ds, f->actions, f->actions_len);
+}
+
+void
+format_odp_port_type(struct ds *ds, const struct odp_port *p)
+{
+    if (!strcmp(p->type, "gre") 
+            || !strcmp(p->type, "capwap")) {
+        const struct tnl_port_config *config;
+
+        config = (struct tnl_port_config *)p->config;
+
+        ds_put_format(ds, " (%s: remote_ip="IP_FMT, 
+                p->type, IP_ARGS(&config->daddr));
+
+        if (config->saddr) {
+            ds_put_format(ds, ", local_ip="IP_FMT, IP_ARGS(&config->saddr));
+        }
+
+        if (config->in_key) {
+            ds_put_format(ds, ", in_key=%#"PRIx64, ntohll(config->in_key));
+        }
+
+        ds_put_cstr(ds, ")");
+    } else if (!strcmp(p->type, "patch")) {
+        ds_put_format(ds, " (%s: peer=%s)", p->type, (char *)p->config);
+    } else if (strcmp(p->type, "system")) {
+        ds_put_format(ds, " (%s)", p->type);
+    }
 }
 
 void

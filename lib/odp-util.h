@@ -62,6 +62,7 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
 void format_odp_flow(struct ds *, const struct odp_flow *);
+void format_odp_port_type(struct ds *, const struct odp_port *);
 
 void odp_flow_key_from_flow(struct odp_flow_key *, const struct flow *);
 void odp_flow_key_to_flow(const struct odp_flow_key *, struct flow *);

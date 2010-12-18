@@ -375,12 +375,14 @@ show_dpif(struct dpif *dpif)
     query_ports(dpif, &ports, &n_ports);
     for (i = 0; i < n_ports; i++) {
         const struct odp_port *p = &ports[i];
+        struct ds ds;
 
         printf("\tport %u: %s", p->port, p->devname);
-        if (strcmp(p->type, "system")) {
-            printf(" (%s)", p->type);
-        }
-        printf("\n");
+
+        ds_init(&ds);
+        format_odp_port_type(&ds, p);
+        printf("%s\n", ds_cstr(&ds));
+        ds_destroy(&ds);
     }
     free(ports);
     dpif_close(dpif);
