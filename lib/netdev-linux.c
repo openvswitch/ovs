@@ -59,6 +59,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
+#include "rtnetlink-link.h"
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
@@ -457,17 +458,17 @@ netdev_linux_init(void)
 static void
 netdev_linux_run(void)
 {
-    rtnetlink_notifier_run();
+    rtnetlink_link_notifier_run();
 }
 
 static void
 netdev_linux_wait(void)
 {
-    rtnetlink_notifier_wait();
+    rtnetlink_link_notifier_wait();
 }
 
 static void
-netdev_linux_cache_cb(const struct rtnetlink_change *change,
+netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
                       void *aux OVS_UNUSED)
 {
     struct netdev_dev_linux *dev;
@@ -511,8 +512,8 @@ netdev_linux_create(const struct netdev_class *class,
     }
 
     if (!cache_notifier_refcount) {
-        error = rtnetlink_notifier_register(&netdev_linux_cache_notifier,
-                                            netdev_linux_cache_cb, NULL);
+        error = rtnetlink_link_notifier_register(&netdev_linux_cache_notifier,
+                                                 netdev_linux_cache_cb, NULL);
         if (error) {
             return error;
         }
@@ -608,7 +609,7 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         cache_notifier_refcount--;
 
         if (!cache_notifier_refcount) {
-            rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
+            rtnetlink_link_notifier_unregister(&netdev_linux_cache_notifier);
         }
     } else if (class == &netdev_tap_class) {
         destroy_tap(netdev_dev);
@@ -2049,7 +2050,7 @@ poll_notify(struct list *list)
 }
 
 static void
-netdev_linux_poll_cb(const struct rtnetlink_change *change,
+netdev_linux_poll_cb(const struct rtnetlink_link_change *change,
                      void *aux OVS_UNUSED)
 {
     if (change) {
@@ -2076,8 +2077,9 @@ netdev_linux_poll_add(struct netdev *netdev,
     struct list *list;
 
     if (shash_is_empty(&netdev_linux_notifiers)) {
-        int error = rtnetlink_notifier_register(&netdev_linux_poll_notifier,
-                                                   netdev_linux_poll_cb, NULL);
+        int error;
+        error = rtnetlink_link_notifier_register(&netdev_linux_poll_notifier,
+                                                 netdev_linux_poll_cb, NULL);
         if (error) {
             return error;
         }
@@ -2117,7 +2119,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
 
     /* If that was the last notifier, unregister. */
     if (shash_is_empty(&netdev_linux_notifiers)) {
-        rtnetlink_notifier_unregister(&netdev_linux_poll_notifier);
+        rtnetlink_link_notifier_unregister(&netdev_linux_poll_notifier);
     }
 }
 

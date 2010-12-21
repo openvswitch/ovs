@@ -22,26 +22,22 @@
 
 #include "list.h"
 
-/* A digested version of an rtnetlink message sent down by the kernel to
- * indicate that a network device has been created or destroyed or changed.  */
-struct rtnetlink_change {
-    /* Copied from struct nlmsghdr. */
-    int nlmsg_type;             /* e.g. RTM_NEWLINK, RTM_DELLINK. */
+struct rtnetlink;
+struct nlattr;
+struct ofpbuf;
 
-    /* Copied from struct ifinfomsg. */
-    int ifi_index;              /* Index of network device. */
+/* Function called to report rtnetlink notifications.  'change' describes the
+ * specific change filled out by an rtnetlink_parse_func.  It may be null if
+ * the buffer of change information overflowed, in which case the function must
+ * assume that everything may have changed. 'aux' is as specified in
+ * rtnetlink_notifier_register().
+ */
+typedef void rtnetlink_notify_func(const void *change, void *aux);
 
-    /* Extracted from Netlink attributes. */
-    const char *ifname;         /* Name of network device. */
-    int master_ifindex;         /* Ifindex of datapath master (0 if none). */
-};
-
-/* Function called to report that a netdev has changed.  'change' describes the
- * specific change.  It may be null if the buffer of change information
- * overflowed, in which case the function must assume that every device may
- * have changed.  'aux' is as specified in the call to
- * rtnetlink_notifier_register().  */
-typedef void rtnetlink_notify_func(const struct rtnetlink_change *, void *aux);
+/* Function called to parse incoming rtnetlink notifications.  The 'buf'
+ * message should be parsed into 'change' as specified in rtnetlink_create().
+ */
+typedef bool rtnetlink_parse_func(struct ofpbuf *buf, void *change);
 
 struct rtnetlink_notifier {
     struct list node;
@@ -49,10 +45,14 @@ struct rtnetlink_notifier {
     void *aux;
 };
 
-int rtnetlink_notifier_register(struct rtnetlink_notifier *,
+struct rtnetlink *rtnetlink_create(int multicast_group,
+                                   rtnetlink_parse_func *,
+                                   void *change);
+int rtnetlink_notifier_register(struct rtnetlink *,
+                                struct rtnetlink_notifier *,
                                 rtnetlink_notify_func *, void *aux);
-void rtnetlink_notifier_unregister(struct rtnetlink_notifier *);
-void rtnetlink_notifier_run(void);
-void rtnetlink_notifier_wait(void);
-
+void rtnetlink_notifier_unregister(struct rtnetlink *,
+                                   struct rtnetlink_notifier *);
+void rtnetlink_notifier_run(struct rtnetlink *);
+void rtnetlink_notifier_wait(struct rtnetlink *);
 #endif /* rtnetlink.h */

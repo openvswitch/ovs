@@ -189,7 +189,9 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/netlink-socket.c \
 	lib/netlink-socket.h \
 	lib/rtnetlink.c \
-	lib/rtnetlink.h
+	lib/rtnetlink.h \
+	lib/rtnetlink-link.c \
+	lib/rtnetlink-link.h
 endif
 
 if HAVE_OPENSSL

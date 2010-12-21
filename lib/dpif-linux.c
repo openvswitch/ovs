@@ -40,6 +40,7 @@
 #include "openvswitch/tunnel.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
+#include "rtnetlink-link.h"
 #include "shash.h"
 #include "svec.h"
 #include "util.h"
@@ -72,7 +73,7 @@ static int get_openvswitch_major(void);
 static int create_minor(const char *name, int minor, struct dpif **dpifp);
 static int open_minor(int minor, struct dpif **dpifp);
 static int make_openvswitch_device(int minor, char **fnp);
-static void dpif_linux_port_changed(const struct rtnetlink_change *,
+static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
                                     void *dpif);
 
 static struct dpif_linux *
@@ -177,7 +178,7 @@ static void
 dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    rtnetlink_notifier_unregister(&dpif->port_notifier);
+    rtnetlink_link_notifier_unregister(&dpif->port_notifier);
     shash_destroy(&dpif->changed_ports);
     free(dpif->local_ifname);
     close(dpif->fd);
@@ -367,7 +368,7 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
     if (!shash_is_empty(&dpif->changed_ports) || dpif->change_error) {
         poll_immediate_wake();
     } else {
-        rtnetlink_notifier_wait();
+        rtnetlink_link_notifier_wait();
     }
 }
 
@@ -770,8 +771,9 @@ open_minor(int minor, struct dpif **dpifp)
     fd = open(fn, O_RDONLY | O_NONBLOCK);
     if (fd >= 0) {
         struct dpif_linux *dpif = xmalloc(sizeof *dpif);
-        error = rtnetlink_notifier_register(&dpif->port_notifier,
-                                           dpif_linux_port_changed, dpif);
+        error = rtnetlink_link_notifier_register(&dpif->port_notifier,
+                                                 dpif_linux_port_changed,
+                                                 dpif);
         if (!error) {
             char *name;
 
@@ -799,7 +801,8 @@ open_minor(int minor, struct dpif **dpifp)
 }
 
 static void
-dpif_linux_port_changed(const struct rtnetlink_change *change, void *dpif_)
+dpif_linux_port_changed(const struct rtnetlink_link_change *change,
+                        void *dpif_)
 {
     struct dpif_linux *dpif = dpif_;
 
