@@ -20,6 +20,8 @@ you will need the following software:
     - The GNU C compiler.  We generally test with version 4.1, 4.2, or
       4.3.
 
+    - pkg-config.  We test with version 0.22.
+
     - libssl, from OpenSSL, is optional but recommended if you plan to
       connect the Open vSwitch to an OpenFlow controller.  libssl is
       required to establish confidentiality and authenticity in the
@@ -71,8 +73,6 @@ you will also need the following software:
     - Autoconf version 2.64 or later.
 
     - Automake version 1.10 or later.
-
-    - pkg-config.  We test with version 0.22.
 
     - Python 2.x, for x >= 4.
 
