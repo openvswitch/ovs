@@ -29,7 +29,10 @@
 static struct rtnetlink *rtn = NULL;
 static struct rtnetlink_link_change rtn_change;
 
-static bool
+/* Parses a rtnetlink message 'buf' into 'change'.  If 'buf' is unparseable,
+ * leaves 'change' untouched and returns false.  Otherwise, populates 'change'
+ * and returns true. */
+bool
 rtnetlink_link_parse(struct ofpbuf *buf,
                      struct rtnetlink_link_change *change)
 {

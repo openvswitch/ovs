@@ -17,6 +17,9 @@
 #ifndef RTNETLINK_LINK_H
 #define RTNETLINK_LINK_H 1
 
+#include <stdbool.h>
+
+struct ofpbuf;
 struct rtnetlink_notifier;
 
 /* These functions are Linux specific, so they should be used directly only by
@@ -45,6 +48,8 @@ typedef
 void rtnetlink_link_notify_func(const struct rtnetlink_link_change *change,
                                 void *aux);
 
+bool rtnetlink_link_parse(struct ofpbuf *buf,
+                          struct rtnetlink_link_change *change);
 int rtnetlink_link_notifier_register(struct rtnetlink_notifier *,
                                      rtnetlink_link_notify_func *, void *aux);
 void rtnetlink_link_notifier_unregister(struct rtnetlink_notifier *);

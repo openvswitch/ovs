@@ -1102,6 +1102,14 @@ dpid_from_hash(const void *data, size_t n)
 }
 
 static void
+iface_refresh_tunnel_egress(struct iface *iface)
+{
+    const char *name = netdev_get_tnl_iface(iface->netdev);
+
+    ovsrec_interface_set_tunnel_egress_iface(iface->cfg, name);
+}
+
+static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     size_t i;
@@ -1310,6 +1318,7 @@ bridge_run(void)
                         struct iface *iface = port->ifaces[j];
                         iface_refresh_stats(iface);
                         iface_refresh_cfm_stats(iface);
+                        iface_refresh_tunnel_egress(iface);
                     }
                 }
             }

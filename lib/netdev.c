@@ -769,6 +769,16 @@ netdev_get_next_hop(const struct netdev *netdev,
     return error;
 }
 
+const char *
+netdev_get_tnl_iface(const struct netdev *netdev)
+{
+    struct netdev_dev *dev = netdev_get_dev(netdev);
+
+    return (dev->netdev_class->get_tnl_iface
+            ? dev->netdev_class->get_tnl_iface(netdev)
+            : NULL);
+}
+
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
  * returns 0.  Otherwise, returns a positive errno value and sets '*in6' to
  * all-zero-bits (in6addr_any).

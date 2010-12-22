@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "1.0.0",
- "cksum": "514853437 13985",
+ "version": "1.0.1",
+ "cksum": "665434435 14130",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -147,6 +147,10 @@
        "ingress_policing_burst": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0}}},
+       "tunnel_egress_iface": {
+         "type": {"key": {"type": "string"},
+                  "min": 0, "max": 1},
+         "ephemeral": true},
        "mac": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},

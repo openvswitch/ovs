@@ -20,20 +20,49 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
+#include "hash.h"
+#include "hmap.h"
 #include "list.h"
 #include "netdev-provider.h"
+#include "netlink.h"
+#include "netlink-socket.h"
+#include "ofpbuf.h"
 #include "openvswitch/datapath-protocol.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
+#include "rtnetlink.h"
+#include "rtnetlink-route.h"
+#include "rtnetlink-link.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
+
+static struct hmap name_map;
+static struct hmap route_map;
+static struct rtnetlink_notifier netdev_vport_link_notifier;
+static struct rtnetlink_notifier netdev_vport_route_notifier;
+
+struct route_node {
+    struct hmap_node node;      /* Node in route_map. */
+    int rta_oif;                /* Egress interface index. */
+    uint32_t rta_dst;           /* Destination address in host byte order. */
+    unsigned char rtm_dst_len;  /* Destination address length. */
+};
+
+struct name_node {
+    struct hmap_node node; /* Node in name_map. */
+    uint32_t ifi_index;    /* Kernel interface index. */
+
+    char ifname[IFNAMSIZ]; /* Interface name. */
+};
 
 struct netdev_vport_notifier {
     struct netdev_notifier notifier;
@@ -65,6 +94,12 @@ static int netdev_vport_do_ioctl(int cmd, void *arg);
 static int netdev_vport_create(const struct netdev_class *, const char *,
                                const struct shash *, struct netdev_dev **);
 static void netdev_vport_poll_notify(const struct netdev *);
+
+static void netdev_vport_tnl_iface_init(void);
+static void netdev_vport_route_change(const struct rtnetlink_route_change *,
+                                      void *);
+static void netdev_vport_link_change(const struct rtnetlink_link_change *,
+                                     void *);
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -105,6 +140,13 @@ netdev_vport_get_config(const struct netdev *netdev, void *config)
         const struct netdev_dev_vport *vport = netdev_dev_vport_cast(dev);
         memcpy(config, vport->config, VPORT_CONFIG_SIZE);
     }
+}
+
+static int
+netdev_vport_init(void)
+{
+    netdev_vport_tnl_iface_init();
+    return 0;
 }
 
 static int
@@ -387,6 +429,284 @@ netdev_vport_poll_remove(struct netdev_notifier *notifier_)
 
     free(notifier);
 }
+
+static void
+netdev_vport_run(void)
+{
+    rtnetlink_link_notifier_run();
+    rtnetlink_route_notifier_run();
+}
+
+static void
+netdev_vport_wait(void)
+{
+    rtnetlink_link_notifier_wait();
+    rtnetlink_route_notifier_wait();
+}
+
+/* get_tnl_iface() implementation. */
+
+static struct name_node *
+name_node_lookup(int ifi_index)
+{
+    struct name_node *nn;
+
+    HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifi_index, 0), &name_map) {
+        if (nn->ifi_index == ifi_index) {
+            return nn;
+        }
+    }
+
+    return NULL;
+}
+
+static struct route_node *
+route_node_lookup(int rta_oif, uint32_t rta_dst, unsigned char rtm_dst_len)
+{
+    uint32_t hash;
+    struct route_node *rn;
+
+    hash = hash_3words(rta_oif, rta_dst, rtm_dst_len);
+    HMAP_FOR_EACH_WITH_HASH(rn, node, hash, &route_map) {
+        if (rn->rta_oif     == rn->rta_oif &&
+            rn->rta_dst     == rn->rta_dst &&
+            rn->rtm_dst_len == rn->rtm_dst_len) {
+            return rn;
+        }
+    }
+
+    return NULL;
+}
+
+/* Resets the name or route map depending on the value of 'is_name'.  Clears
+ * the appropriate map, makes an rtnetlink dump request, and calls the change
+ * callback for each reply from the kernel. One should probably use
+ * netdev_vport_reset_routes or netdev_vport_reset_names instead. */
+static int
+netdev_vport_reset_name_else_route(bool is_name)
+{
+    int error;
+    int nlmsg_type;
+    struct nl_dump dump;
+    struct rtgenmsg *rtmsg;
+    struct ofpbuf request, reply;
+    static struct nl_sock *rtnl_sock;
+
+    if (is_name) {
+        struct name_node *nn, *nn_next;
+
+        HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
+            hmap_remove(&name_map, &nn->node);
+            free(nn);
+        }
+    } else {
+        struct route_node *rn, *rn_next;
+
+        HMAP_FOR_EACH_SAFE(rn, rn_next, node, &route_map) {
+            hmap_remove(&route_map, &rn->node);
+            free(rn);
+        }
+    }
+
+    error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
+    if (error) {
+        VLOG_WARN_RL(&rl, "Failed to create NETLINK_ROUTE socket");
+        return error;
+    }
+
+    ofpbuf_init(&request, 0);
+
+    nlmsg_type = is_name ? RTM_GETLINK : RTM_GETROUTE;
+    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, nlmsg_type, NLM_F_REQUEST);
+
+    rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
+    rtmsg->rtgen_family = AF_INET;
+
+    nl_dump_start(&dump, rtnl_sock, &request);
+
+    while (nl_dump_next(&dump, &reply)) {
+        if (is_name) {
+            struct rtnetlink_link_change change;
+
+            if (rtnetlink_link_parse(&reply, &change)) {
+                netdev_vport_link_change(&change, NULL);
+            }
+        } else {
+            struct rtnetlink_route_change change;
+
+            if (rtnetlink_route_parse(&reply, &change)) {
+                netdev_vport_route_change(&change, NULL);
+            }
+        }
+    }
+
+    error = nl_dump_done(&dump);
+    nl_sock_destroy(rtnl_sock);
+
+    return error;
+}
+
+static int
+netdev_vport_reset_routes(void)
+{
+    return netdev_vport_reset_name_else_route(false);
+}
+
+static int
+netdev_vport_reset_names(void)
+{
+    return netdev_vport_reset_name_else_route(true);
+}
+
+static void
+netdev_vport_route_change(const struct rtnetlink_route_change *change,
+                         void *aux OVS_UNUSED)
+{
+
+    if (!change) {
+        netdev_vport_reset_routes();
+    } else if (change->nlmsg_type == RTM_NEWROUTE) {
+        uint32_t hash;
+        struct route_node *rn;
+
+        if (route_node_lookup(change->rta_oif, change->rta_dst,
+                              change->rtm_dst_len)) {
+            return;
+        }
+
+        rn              = xzalloc(sizeof *rn);
+        rn->rta_oif     = change->rta_oif;
+        rn->rta_dst     = change->rta_dst;
+        rn->rtm_dst_len = change->rtm_dst_len;
+
+        hash = hash_3words(rn->rta_oif, rn->rta_dst, rn->rtm_dst_len);
+        hmap_insert(&route_map, &rn->node, hash);
+    } else if (change->nlmsg_type == RTM_DELROUTE) {
+        struct route_node *rn;
+
+        rn = route_node_lookup(change->rta_oif, change->rta_dst,
+                               change->rtm_dst_len);
+
+        if (rn) {
+            hmap_remove(&route_map, &rn->node);
+            free(rn);
+        }
+    } else {
+        VLOG_WARN_RL(&rl, "Received unexpected rtnetlink message type %d",
+                     change->nlmsg_type);
+    }
+}
+
+static void
+netdev_vport_link_change(const struct rtnetlink_link_change *change,
+                         void *aux OVS_UNUSED)
+{
+
+    if (!change) {
+        netdev_vport_reset_names();
+    } else if (change->nlmsg_type == RTM_NEWLINK) {
+        struct name_node *nn;
+
+        if (name_node_lookup(change->ifi_index)) {
+            return;
+        }
+
+        nn            = xzalloc(sizeof *nn);
+        nn->ifi_index = change->ifi_index;
+
+        strncpy(nn->ifname, change->ifname, IFNAMSIZ);
+        nn->ifname[IFNAMSIZ - 1] = '\0';
+
+        hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
+    } else if (change->nlmsg_type == RTM_DELLINK) {
+        struct name_node *nn;
+
+        nn = name_node_lookup(change->ifi_index);
+
+        if (nn) {
+            hmap_remove(&name_map, &nn->node);
+            free(nn);
+        }
+
+        /* Link deletions do not result in all of the RTM_DELROUTE messages one
+         * would expect.  For now, go ahead and reset route_map whenever a link
+         * is deleted. */
+        netdev_vport_reset_routes();
+    } else {
+        VLOG_WARN_RL(&rl, "Received unexpected rtnetlink message type %d",
+                     change->nlmsg_type);
+    }
+}
+
+static void
+netdev_vport_tnl_iface_init(void)
+{
+    static bool tnl_iface_is_init = false;
+
+    if (!tnl_iface_is_init) {
+        hmap_init(&name_map);
+        hmap_init(&route_map);
+
+        rtnetlink_link_notifier_register(&netdev_vport_link_notifier,
+                                          netdev_vport_link_change, NULL);
+
+        rtnetlink_route_notifier_register(&netdev_vport_route_notifier,
+                                          netdev_vport_route_change, NULL);
+
+        netdev_vport_reset_names();
+        netdev_vport_reset_routes();
+        tnl_iface_is_init = true;
+    }
+}
+
+static const char *
+netdev_vport_get_tnl_iface(const struct netdev *netdev)
+{
+    int dst_len;
+    uint32_t route;
+    struct netdev_dev_vport *ndv;
+    struct tnl_port_config *config;
+    struct route_node *rn, *rn_def, *rn_iter;
+
+    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
+    config = (struct tnl_port_config *) ndv->config;
+    route = ntohl(config->daddr);
+
+    dst_len = 0;
+    rn      = NULL;
+    rn_def  = NULL;
+
+    HMAP_FOR_EACH(rn_iter, node, &route_map) {
+        if (rn_iter->rtm_dst_len == 0 && rn_iter->rta_dst == 0) {
+            /* Default route. */
+            rn_def = rn_iter;
+        } else if (rn_iter->rtm_dst_len > dst_len) {
+            uint32_t mask = 0xffffffff << (32 - rn_iter->rtm_dst_len);
+            if ((route & mask) == (rn_iter->rta_dst & mask)) {
+                rn      = rn_iter;
+                dst_len = rn_iter->rtm_dst_len;
+            }
+        }
+    }
+
+    if (!rn) {
+        rn = rn_def;
+    }
+
+    if (rn) {
+        uint32_t hash;
+        struct name_node *nn;
+
+        hash = hash_int(rn->rta_oif, 0);
+        HMAP_FOR_EACH_WITH_HASH(nn, node, hash, &name_map) {
+            if (nn->ifi_index == rn->rta_oif) {
+                return nn->ifname;
+            }
+        }
+    }
+
+    return NULL;
+}
 
 /* Helper functions. */
 
@@ -536,7 +856,7 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
             }
         } else if (!strcmp(node->name, "psk") && is_ipsec) {
             ipsec_mech_set = true;
-        } else if (is_ipsec 
+        } else if (is_ipsec
                 && (!strcmp(node->name, "certificate")
                     || !strcmp(node->name, "private_key")
                     || !strcmp(node->name, "use_ssl_cert"))) {
@@ -604,10 +924,10 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
     return 0;
 }
 
-#define VPORT_FUNCTIONS                                     \
-    NULL,                       /* init */                  \
-    NULL,                       /* run */                   \
-    NULL,                       /* wait */                  \
+#define VPORT_FUNCTIONS(TNL_IFACE)                          \
+    netdev_vport_init,                                      \
+    netdev_vport_run,                                       \
+    netdev_vport_wait,                                      \
                                                             \
     netdev_vport_create,                                    \
     netdev_vport_destroy,                                   \
@@ -654,6 +974,7 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
     NULL,                       /* get_in6 */               \
     NULL,                       /* add_router */            \
     NULL,                       /* get_next_hop */          \
+    TNL_IFACE,                                              \
     NULL,                       /* arp_lookup */            \
                                                             \
     netdev_vport_update_flags,                              \
@@ -665,10 +986,13 @@ void
 netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
-        { { "gre", VPORT_FUNCTIONS }, parse_tunnel_config },
-        { { "ipsec_gre", VPORT_FUNCTIONS }, parse_tunnel_config },
-        { { "capwap", VPORT_FUNCTIONS }, parse_tunnel_config },
-        { { "patch", VPORT_FUNCTIONS }, parse_patch_config }
+        { { "gre", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+            parse_tunnel_config },
+        { { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+            parse_tunnel_config },
+        { { "capwap", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+            parse_tunnel_config },
+        { { "patch", VPORT_FUNCTIONS(NULL) }, parse_patch_config }
     };
 
     int i;

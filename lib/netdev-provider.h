@@ -518,6 +518,17 @@ struct netdev_class {
     int (*get_next_hop)(const struct in_addr *host, struct in_addr *next_hop,
                         char **netdev_name);
 
+    /* Looks up the name of the interface out of which traffic will egress if
+     * 'netdev' is a tunnel.  If unsuccessful, or 'netdev' is not a tunnel,
+     * will return null.  This function does not necessarily return the
+     * physical interface out which traffic will egress.  Instead it returns
+     * the interface which is assigned 'netdev's remote_ip.  This may be an
+     * internal interface such as a bridge port.
+     *
+     * This function may be set to null if 'netdev' is not a tunnel or it is
+     * not supported. */
+    const char *(*get_tnl_iface)(const struct netdev *netdev);
+
     /* Looks up the ARP table entry for 'ip' on 'netdev' and stores the
      * corresponding MAC address in 'mac'.  A return value of ENXIO, in
      * particular, indicates that there is no ARP table entry for 'ip' on
