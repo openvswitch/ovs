@@ -87,7 +87,7 @@
 #define ODP_VPORT_QUERY         _IOWR('O', 9, struct odp_port)
 #define ODP_VPORT_LIST          _IOWR('O', 10, struct odp_portvec)
 
-#define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
+#define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flowvec)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
 #define ODP_FLOW_LIST           _IOWR('O', 15, struct odp_flowvec)
 #define ODP_FLOW_FLUSH          _IO('O', 16)

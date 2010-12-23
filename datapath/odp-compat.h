@@ -16,7 +16,7 @@
 #include <linux/compat.h>
 
 #define ODP_VPORT_LIST32	_IOWR('O', 10, struct compat_odp_portvec)
-#define ODP_FLOW_GET32		_IOWR('O', 13, struct compat_odp_flow)
+#define ODP_FLOW_GET32		_IOWR('O', 13, struct compat_odp_flowvec)
 #define ODP_FLOW_PUT32		_IOWR('O', 14, struct compat_odp_flow)
 #define ODP_FLOW_LIST32		_IOWR('O', 15, struct compat_odp_flowvec)
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
