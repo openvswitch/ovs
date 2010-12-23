@@ -26,6 +26,10 @@
 #include "openvswitch/datapath-protocol.h"
 #include "vport.h"
 
+static int do_execute_actions(struct datapath *, struct sk_buff *,
+			      const struct odp_flow_key *,
+			      const struct nlattr *actions, u32 actions_len);
+
 static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
 {
 	if (skb_cloned(skb)) {
@@ -156,7 +160,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				segs = __vlan_put_tag(segs, ntohs(tci));
 				err = -ENOMEM;
 				if (segs) {
-					err = execute_actions(
+					err = do_execute_actions(
 						dp, segs, key, actions_left,
 						actions_len_left);
 				}
@@ -365,31 +369,10 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg)
 	return dp_output_control(dp, skb, _ODPL_ACTION_NR, arg);
 }
 
-/* Send a copy of this packet up to the sFlow agent, along with extra
- * information about what happened to it. */
-static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 const struct nlattr *a, u32 actions_len,
-			 struct vport *vport)
-{
-	struct odp_sflow_sample_header *hdr;
-	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
-	struct sk_buff *nskb;
-
-	nskb = skb_copy_expand(skb, actions_len + hdrlen, 0, GFP_ATOMIC);
-	if (!nskb)
-		return;
-
-	memcpy(__skb_push(nskb, actions_len), a, actions_len);
-	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
-	hdr->actions_len = actions_len;
-	hdr->sample_pool = atomic_read(&vport->sflow_pool);
-	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
-}
-
 /* Execute a list of actions against 'skb'. */
-int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    const struct odp_flow_key *key,
-		    const struct nlattr *actions, u32 actions_len)
+static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
+			      const struct odp_flow_key *key,
+			      const struct nlattr *actions, u32 actions_len)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -399,18 +382,6 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	u32 priority = skb->priority;
 	const struct nlattr *a;
 	int rem, err;
-
-	if (dp->sflow_probability) {
-		struct vport *p = OVS_CB(skb)->vport;
-		if (p) {
-			atomic_inc(&p->sflow_pool);
-			if (dp->sflow_probability == UINT_MAX ||
-			    net_random() < dp->sflow_probability)
-				sflow_sample(dp, skb, actions, actions_len, p);
-		}
-	}
-
-	OVS_CB(skb)->tun_id = 0;
 
 	for (a = actions, rem = actions_len; rem > 0; a = nla_next(a, &rem)) {
 		if (prev_port != -1) {
@@ -495,4 +466,45 @@ exit:
 	else
 		kfree_skb(skb);
 	return 0;
+}
+
+/* Send a copy of this packet up to the sFlow agent, along with extra
+ * information about what happened to it. */
+static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
+			 const struct nlattr *a, u32 actions_len,
+			 struct vport *vport)
+{
+	struct odp_sflow_sample_header *hdr;
+	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
+	struct sk_buff *nskb;
+
+	nskb = skb_copy_expand(skb, actions_len + hdrlen, 0, GFP_ATOMIC);
+	if (!nskb)
+		return;
+
+	memcpy(__skb_push(nskb, actions_len), a, actions_len);
+	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
+	hdr->actions_len = actions_len;
+	hdr->sample_pool = atomic_read(&vport->sflow_pool);
+	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
+}
+
+/* Execute a list of actions against 'skb'. */
+int execute_actions(struct datapath *dp, struct sk_buff *skb,
+		    const struct odp_flow_key *key,
+		    const struct nlattr *actions, u32 actions_len)
+{
+	if (dp->sflow_probability) {
+		struct vport *p = OVS_CB(skb)->vport;
+		if (p) {
+			atomic_inc(&p->sflow_pool);
+			if (dp->sflow_probability == UINT_MAX ||
+			    net_random() < dp->sflow_probability)
+				sflow_sample(dp, skb, actions, actions_len, p);
+		}
+	}
+
+	OVS_CB(skb)->tun_id = 0;
+
+	return do_execute_actions(dp, skb, key, actions, actions_len);
 }
