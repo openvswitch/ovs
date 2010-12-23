@@ -1645,6 +1645,20 @@ check_action_exact_len(const union ofp_action *a, unsigned int len,
     return 0;
 }
 
+static int
+check_nx_action_exact_len(const struct nx_action_header *a,
+                          unsigned int len, unsigned int required_len)
+{
+    if (len != required_len) {
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "Nicira action %"PRIu16" has invalid length %"PRIu16" "
+                     "(must be %u)\n",
+                     ntohs(a->subtype), ntohs(a->len), required_len);
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+    }
+    return 0;
+}
+
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an ofp_mkerr() return code. */
@@ -1723,19 +1737,19 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     case NXAST_DROP_SPOOFED_ARP:
     case NXAST_SET_QUEUE:
     case NXAST_POP_QUEUE:
-        return check_action_exact_len(a, len, 16);
+        return check_nx_action_exact_len(nah, len, 16);
 
     case NXAST_REG_MOVE:
-        error = check_action_exact_len(a, len,
-                                       sizeof(struct nx_action_reg_move));
+        error = check_nx_action_exact_len(nah, len,
+                                          sizeof(struct nx_action_reg_move));
         if (error) {
             return error;
         }
         return nxm_check_reg_move((const struct nx_action_reg_move *) a, flow);
 
     case NXAST_REG_LOAD:
-        error = check_action_exact_len(a, len,
-                                       sizeof(struct nx_action_reg_load));
+        error = check_nx_action_exact_len(nah, len,
+                                          sizeof(struct nx_action_reg_load));
         if (error) {
             return error;
         }
@@ -1745,12 +1759,12 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
         return 0;
 
     case NXAST_SET_TUNNEL64:
-        return check_action_exact_len(a, len,
-                                      sizeof(struct nx_action_set_tunnel64));
+        return check_nx_action_exact_len(
+            nah, len, sizeof(struct nx_action_set_tunnel64));
 
     case NXAST_MULTIPATH:
-        error = check_action_exact_len(a, len,
-                                       sizeof(struct nx_action_multipath));
+        error = check_nx_action_exact_len(
+            nah, len, sizeof(struct nx_action_multipath));
         if (error) {
             return error;
         }
@@ -1758,6 +1772,9 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
 
     case NXAST_SNAT__OBSOLETE:
     default:
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "unknown Nicira vendor action subtype %"PRIu16,
+                     ntohs(nah->subtype));
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }
 }
