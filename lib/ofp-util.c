@@ -1704,8 +1704,8 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     int error;
 
     if (len < 16) {
-        VLOG_DBG_RL(&bad_ofmsg_rl,
-                    "Nicira vendor action only %u bytes", len);
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "Nicira vendor action only %u bytes", len);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
     }
     nah = (const struct nx_action_header *) a;
@@ -1837,16 +1837,16 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         int error;
 
         if (n_slots > slots_left) {
-            VLOG_DBG_RL(&bad_ofmsg_rl,
-                        "action requires %u slots but only %u remain",
-                        n_slots, slots_left);
+            VLOG_WARN_RL(&bad_ofmsg_rl,
+                         "action requires %u slots but only %u remain",
+                         n_slots, slots_left);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         } else if (!len) {
-            VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
+            VLOG_WARN_RL(&bad_ofmsg_rl, "action has invalid length 0");
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         } else if (len % OFP_ACTION_ALIGN) {
-            VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
-                        "of %d", len, OFP_ACTION_ALIGN);
+            VLOG_WARN_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
+                         "of %d", len, OFP_ACTION_ALIGN);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
 
@@ -2123,16 +2123,16 @@ ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
                      union ofp_action **actionsp, size_t *n_actionsp)
 {
     if (actions_len % OFP_ACTION_ALIGN != 0) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
-                    "is not a multiple of %d", actions_len, OFP_ACTION_ALIGN);
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
+                     "is not a multiple of %d", actions_len, OFP_ACTION_ALIGN);
         goto error;
     }
 
     *actionsp = ofpbuf_try_pull(b, actions_len);
     if (*actionsp == NULL) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
-                    "exceeds remaining message length (%zu)",
-                    actions_len, b->size);
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OpenFlow message actions length %u "
+                     "exceeds remaining message length (%zu)",
+                     actions_len, b->size);
         goto error;
     }
 
