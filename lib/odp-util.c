@@ -83,13 +83,15 @@ odp_action_len(uint16_t type)
 static void
 format_generic_odp_action(struct ds *ds, const struct nlattr *a)
 {
+    size_t len = nl_attr_get_size(a);
+
     ds_put_format(ds, "action%"PRId16, nl_attr_type(a));
-    if (a->nla_len) {
+    if (len) {
         const uint8_t *unspec;
         unsigned int i;
 
         unspec = nl_attr_get(a);
-        for (i = 0; i < a->nla_len; i++) {
+        for (i = 0; i < len; i++) {
             ds_put_char(ds, i ? ' ': '(');
             ds_put_format(ds, "%02x", unspec[i]);
         }
@@ -104,7 +106,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     ovs_be32 ip;
 
     if (nl_attr_get_size(a) != odp_action_len(nl_attr_type(a))) {
-        ds_put_format(ds, "***bad action: length is %zu, expected %d*** ",
+        ds_put_format(ds, "bad length %zu, expected %d for: ",
                       nl_attr_get_size(a), odp_action_len(nl_attr_type(a)));
         format_generic_odp_action(ds, a);
         return;
