@@ -1637,9 +1637,9 @@ check_action_exact_len(const union ofp_action *a, unsigned int len,
                        unsigned int required_len)
 {
     if (len != required_len) {
-        VLOG_DBG_RL(&bad_ofmsg_rl,
-                    "action %u has invalid length %"PRIu16" (must be %u)\n",
-                    a->type, ntohs(a->header.len), required_len);
+        VLOG_WARN_RL(&bad_ofmsg_rl, "action %"PRIu16" has invalid length "
+                     "%"PRIu16" (must be %u)\n",
+                     ntohs(a->type), ntohs(a->header.len), required_len);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
     }
     return 0;
