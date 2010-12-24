@@ -1456,10 +1456,11 @@ error:
 
 static void free_port_rcu(struct rcu_head *rcu)
 {
-	struct tnl_vport *tnl_vport = container_of(rcu, struct tnl_vport, rcu);
+	struct tnl_vport *tnl_vport = container_of(rcu,
+						   struct tnl_vport, rcu);
 
-	free_cache(tnl_vport->cache);
-	kfree(tnl_vport->mutable);
+	free_cache((struct tnl_cache __force *)tnl_vport->cache);
+	kfree((struct tnl_mutable __force *)tnl_vport->mutable);
 	vport_free(tnl_vport_to_vport(tnl_vport));
 }
 

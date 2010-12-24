@@ -175,7 +175,7 @@ void flow_put(struct sw_flow *flow)
 		return;
 
 	if (atomic_dec_and_test(&flow->refcnt)) {
-		kfree(flow->sf_acts);
+		kfree((struct sf_flow_acts __force *)flow->sf_acts);
 		kmem_cache_free(flow_cache, flow);
 	}
 }

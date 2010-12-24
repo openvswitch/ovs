@@ -185,9 +185,9 @@ error:
 static void free_port_rcu(struct rcu_head *rcu)
 {
 	struct patch_vport *patch_vport = container_of(rcu,
-						      struct patch_vport, rcu);
+					  struct patch_vport, rcu);
 
-	kfree(patch_vport->devconf);
+	kfree((struct device_config __force *)patch_vport->devconf);
 	vport_free(vport_from_priv(patch_vport));
 }
 
