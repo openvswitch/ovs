@@ -156,7 +156,8 @@ static int patch_modify(struct vport *vport, struct odp_port *port)
 	struct device_config *devconf;
 	int err;
 
-	devconf = kmemdup(patch_vport->devconf, sizeof(struct device_config), GFP_KERNEL);
+	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
+			  sizeof(struct device_config), GFP_KERNEL);
 	if (!devconf) {
 		err = -ENOMEM;
 		goto error;
@@ -221,7 +222,8 @@ static int patch_set_mtu(struct vport *vport, int mtu)
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *devconf;
 
-	devconf = kmemdup(patch_vport->devconf, sizeof(struct device_config), GFP_KERNEL);
+	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
+			  sizeof(struct device_config), GFP_KERNEL);
 	if (!devconf)
 		return -ENOMEM;
 
@@ -236,7 +238,8 @@ static int patch_set_addr(struct vport *vport, const unsigned char *addr)
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct device_config *devconf;
 
-	devconf = kmemdup(patch_vport->devconf, sizeof(struct device_config), GFP_KERNEL);
+	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
+			  sizeof(struct device_config), GFP_KERNEL);
 	if (!devconf)
 		return -ENOMEM;
 

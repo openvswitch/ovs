@@ -1429,7 +1429,8 @@ int tnl_modify(struct vport *vport, struct odp_port *port)
 	struct tnl_mutable_config *mutable;
 	int err;
 
-	mutable = kmemdup(tnl_vport->mutable, sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
+			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable) {
 		err = -ENOMEM;
 		goto error;
@@ -1468,13 +1469,13 @@ static void free_port_rcu(struct rcu_head *rcu)
 int tnl_destroy(struct vport *vport)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	const struct tnl_mutable_config *old_mutable;
+	const struct tnl_mutable_config *mutable, *old_mutable;
 
-	if (vport == tnl_find_port(tnl_vport->mutable->port_config.saddr,
-	    tnl_vport->mutable->port_config.daddr,
-	    tnl_vport->mutable->port_config.in_key,
-	    tnl_vport->mutable->tunnel_type,
-	    &old_mutable))
+	mutable = rtnl_dereference(tnl_vport->mutable);
+
+	if (vport == tnl_find_port(mutable->port_config.saddr,
+	    mutable->port_config.daddr, mutable->port_config.in_key,
+	    mutable->tunnel_type, &old_mutable))
 		del_port(vport);
 
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
@@ -1487,7 +1488,8 @@ int tnl_set_mtu(struct vport *vport, int mtu)
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *mutable;
 
-	mutable = kmemdup(tnl_vport->mutable, sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
+			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable)
 		return -ENOMEM;
 
@@ -1502,7 +1504,8 @@ int tnl_set_addr(struct vport *vport, const unsigned char *addr)
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *mutable;
 
-	mutable = kmemdup(tnl_vport->mutable, sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
+			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable)
 		return -ENOMEM;
 
