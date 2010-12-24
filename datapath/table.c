@@ -40,17 +40,18 @@ static struct tbl_bucket *bucket_alloc(int n_objs)
 	return kmalloc(bucket_size(n_objs), GFP_KERNEL);
 }
 
-static void free_buckets(struct tbl_bucket ***l1, unsigned int n_buckets,
+static void free_buckets(struct tbl_bucket __rcu ***l1,
+			 unsigned int n_buckets,
 			 void (*free_obj)(struct tbl_node *))
 {
 	unsigned int i;
 
 	for (i = 0; i < n_buckets >> TBL_L1_SHIFT; i++) {
-		struct tbl_bucket **l2 = l1[i];
+		struct tbl_bucket __rcu **l2 = l1[i];
 		unsigned int j;
 
 		for (j = 0; j < TBL_L2_SIZE; j++) {
-			struct tbl_bucket *bucket = l2[j];
+			struct tbl_bucket *bucket = rcu_dereference(l2[j]);
 			if (!bucket)
 				continue;
 
@@ -66,9 +67,9 @@ static void free_buckets(struct tbl_bucket ***l1, unsigned int n_buckets,
 	kfree(l1);
 }
 
-static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
+static struct tbl_bucket __rcu ***alloc_buckets(unsigned int n_buckets)
 {
-	struct tbl_bucket ***l1;
+	struct tbl_bucket __rcu ***l1;
 	unsigned int i;
 
 	l1 = kmalloc((n_buckets >> TBL_L1_SHIFT) * sizeof(struct tbl_bucket **),
@@ -76,7 +77,7 @@ static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
 	if (!l1)
 		return NULL;
 	for (i = 0; i < n_buckets >> TBL_L1_SHIFT; i++) {
-		l1[i] = (struct tbl_bucket **)get_zeroed_page(GFP_KERNEL);
+		l1[i] = (struct tbl_bucket __rcu **)get_zeroed_page(GFP_KERNEL);
 		if (!l1[i]) {
 			free_buckets(l1, i << TBL_L1_SHIFT, NULL);
 			return NULL;
