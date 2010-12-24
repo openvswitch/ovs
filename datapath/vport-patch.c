@@ -106,6 +106,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	struct vport *vport;
 	struct patch_vport *patch_vport;
 	const char *peer_name;
+	struct device_config *devconf;
 	int err;
 
 	vport = vport_alloc(sizeof(struct patch_vport), &patch_vport_ops, parms);
@@ -118,32 +119,33 @@ static struct vport *patch_create(const struct vport_parms *parms)
 
 	strcpy(patch_vport->name, parms->name);
 
-	patch_vport->devconf = kmalloc(sizeof(struct device_config), GFP_KERNEL);
-	if (!patch_vport->devconf) {
+	devconf = kmalloc(sizeof(struct device_config), GFP_KERNEL);
+	if (!devconf) {
 		err = -ENOMEM;
 		goto error_free_vport;
 	}
 
-	err = set_config(vport, parms->config, patch_vport->devconf);
+	err = set_config(vport, parms->config, devconf);
 	if (err)
 		goto error_free_devconf;
 
-	vport_gen_rand_ether_addr(patch_vport->devconf->eth_addr);
+	vport_gen_rand_ether_addr(devconf->eth_addr);
 
 	/* Make the default MTU fairly large so that it doesn't become the
 	 * bottleneck on systems using jumbo frames. */
-	patch_vport->devconf->mtu = 65535;
+	devconf->mtu = 65535;
 
-	peer_name = patch_vport->devconf->peer_name;
+	rcu_assign_pointer(patch_vport->devconf, devconf);
+
+	peer_name = devconf->peer_name;
 	hlist_add_head(&patch_vport->hash_node, hash_bucket(peer_name));
-
 	rcu_assign_pointer(patch_vport->peer, vport_locate(peer_name));
 	update_peers(patch_vport->name, vport);
 
 	return vport;
 
 error_free_devconf:
-	kfree(patch_vport->devconf);
+	kfree(devconf);
 error_free_vport:
 	vport_free(vport);
 error:

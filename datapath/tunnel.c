@@ -1372,6 +1372,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 {
 	struct vport *vport;
 	struct tnl_vport *tnl_vport;
+	struct tnl_mutable_config *mutable;
 	int initial_frag_id;
 	int err;
 
@@ -1386,19 +1387,19 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	strcpy(tnl_vport->name, parms->name);
 	tnl_vport->tnl_ops = tnl_ops;
 
-	tnl_vport->mutable = kzalloc(sizeof(struct tnl_mutable_config), GFP_KERNEL);
-	if (!tnl_vport->mutable) {
+	mutable = kzalloc(sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	if (!mutable) {
 		err = -ENOMEM;
 		goto error_free_vport;
 	}
 
-	vport_gen_rand_ether_addr(tnl_vport->mutable->eth_addr);
-	tnl_vport->mutable->mtu = ETH_DATA_LEN;
+	vport_gen_rand_ether_addr(mutable->eth_addr);
+	mutable->mtu = ETH_DATA_LEN;
 
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
-	err = set_config(parms->config, tnl_ops, NULL, tnl_vport->mutable);
+	err = set_config(parms->config, tnl_ops, NULL, mutable);
 	if (err)
 		goto error_free_mutable;
 
@@ -1406,8 +1407,10 @@ struct vport *tnl_create(const struct vport_parms *parms,
 
 #ifdef NEED_CACHE_TIMEOUT
 	tnl_vport->cache_exp_interval = MAX_CACHE_EXP -
-					(net_random() % (MAX_CACHE_EXP / 2));
+				       (net_random() % (MAX_CACHE_EXP / 2));
 #endif
+
+	rcu_assign_pointer(tnl_vport->mutable, mutable);
 
 	err = add_port(vport);
 	if (err)
@@ -1416,7 +1419,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	return vport;
 
 error_free_mutable:
-	kfree(tnl_vport->mutable);
+	kfree(mutable);
 error_free_vport:
 	vport_free(vport);
 error:
