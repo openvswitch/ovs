@@ -1281,45 +1281,32 @@ static int put_port(const struct vport *p, struct odp_port __user *uop)
 static int query_port(struct datapath *dp, struct odp_port __user *uport)
 {
 	struct odp_port port;
+	struct vport *vport;
 
 	if (copy_from_user(&port, uport, sizeof port))
 		return -EFAULT;
 
 	if (port.devname[0]) {
-		struct vport *vport;
-		int err = 0;
-
 		port.devname[IFNAMSIZ - 1] = '\0';
 
 		vport_lock();
-		rcu_read_lock();
-
 		vport = vport_locate(port.devname);
-		if (!vport) {
-			err = -ENODEV;
-			goto error_unlock;
-		}
-		if (vport->dp != dp) {
-			err = -ENOENT;
-			goto error_unlock;
-		}
-
-		port.port = vport->port_no;
-
-error_unlock:
-		rcu_read_unlock();
 		vport_unlock();
 
-		if (err)
-			return err;
+		if (!vport)
+			return -ENODEV;
+		if (vport->dp != dp)
+			return -ENOENT;
 	} else {
 		if (port.port >= DP_MAX_PORTS)
 			return -EINVAL;
-		if (!dp->ports[port.port])
+
+		vport = get_vport_protected(dp, port.port);
+		if (!vport)
 			return -ENOENT;
 	}
 
-	return put_port(dp->ports[port.port], uport);
+	return put_port(vport, uport);
 }
 
 static int do_list_ports(struct datapath *dp, struct odp_port __user *uports,
