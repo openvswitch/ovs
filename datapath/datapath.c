@@ -823,6 +823,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	struct tbl_node *flow_node;
 	struct sw_flow *flow;
 	struct tbl *table;
+	struct sw_flow_actions *acts = NULL;
 	int error;
 	u32 hash;
 
@@ -831,8 +832,6 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	flow_node = tbl_lookup(table, &uf->flow.key, hash, flow_cmp);
 	if (!flow_node) {
 		/* No such flow. */
-		struct sw_flow_actions *acts;
-
 		error = -ENOENT;
 		if (!(uf->flags & ODPPF_CREATE))
 			goto error;
@@ -906,7 +905,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	return 0;
 
 error_free_flow_acts:
-	kfree(flow->sf_acts);
+	kfree(acts);
 error_free_flow:
 	flow->sf_acts = NULL;
 	flow_put(flow);
