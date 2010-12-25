@@ -94,9 +94,17 @@ static struct datapath *get_dp_locked(int dp_idx)
 	return dp;
 }
 
-static struct tbl *get_table_protected(struct datapath *dp)
+static struct tbl *get_table_protected(const struct datapath *dp)
 {
-	return rcu_dereference_protected(dp->table, lockdep_is_held(&dp->mutex));
+	return rcu_dereference_protected(dp->table,
+					 lockdep_is_held(&dp->mutex));
+}
+
+static struct vport *get_vport_protected(const struct datapath *dp,
+					 u16 port_no)
+{
+	return rcu_dereference_protected(dp->ports[port_no],
+					 lockdep_is_held(&dp->mutex));
 }
 
 /* Must be called with rcu_read_lock or RTNL lock. */
@@ -146,7 +154,7 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 
 	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port));
 	NLA_PUT_U32(skb, IFLA_MASTER,
-		vport_get_ifindex(rtnl_dereference(dp->ports[ODPP_LOCAL])));
+		vport_get_ifindex(get_vport_protected(dp, ODPP_LOCAL)));
 	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
@@ -284,7 +292,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	return 0;
 
 err_destroy_local_port:
-	dp_detach_port(dp->ports[ODPP_LOCAL]);
+	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
 err_destroy_table:
 	tbl_destroy(get_table_protected(dp), NULL);
 err_free_dp:
@@ -311,7 +319,7 @@ static void do_destroy_dp(struct datapath *dp)
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	dp_detach_port(dp->ports[ODPP_LOCAL]);
+	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
 	tbl_destroy(get_table_protected(dp), flow_free_tbl);
 
 	for (i = 0; i < DP_N_QUEUES; i++)
@@ -401,7 +409,7 @@ got_port_no:
 		goto out_unlock_dp;
 
 	set_internal_devs_mtu(dp);
-	dp_sysfs_add_if(dp->ports[port_no]);
+	dp_sysfs_add_if(get_vport_protected(dp, port_no));
 
 	err = put_user(port_no, &portp->port);
 
@@ -452,7 +460,7 @@ static int detach_port(int dp_idx, int port_no)
 	if (!dp)
 		goto out_unlock_rtnl;
 
-	p = dp->ports[port_no];
+	p = get_vport_protected(dp, port_no);
 	err = -ENOENT;
 	if (!p)
 		goto out_unlock_dp;
