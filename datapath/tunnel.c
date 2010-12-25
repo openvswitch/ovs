@@ -1458,10 +1458,7 @@ static void free_port_rcu(struct rcu_head *rcu)
 {
 	struct tnl_vport *tnl_vport = container_of(rcu, struct tnl_vport, rcu);
 
-	spin_lock_bh(&tnl_vport->cache_lock);
 	free_cache(tnl_vport->cache);
-	spin_unlock_bh(&tnl_vport->cache_lock);
-
 	kfree(tnl_vport->mutable);
 	vport_free(tnl_vport_to_vport(tnl_vport));
 }
