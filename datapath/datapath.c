@@ -286,7 +286,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 err_destroy_local_port:
 	dp_detach_port(dp->ports[ODPP_LOCAL]);
 err_destroy_table:
-	tbl_destroy(dp->table, NULL);
+	tbl_destroy(get_table_protected(dp), NULL);
 err_free_dp:
 	kfree(dp);
 err_put_module:
@@ -312,8 +312,7 @@ static void do_destroy_dp(struct datapath *dp)
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
 	dp_detach_port(dp->ports[ODPP_LOCAL]);
-
-	tbl_destroy(dp->table, flow_free_tbl);
+	tbl_destroy(get_table_protected(dp), flow_free_tbl);
 
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_purge(&dp->queues[i]);
