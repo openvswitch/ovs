@@ -1294,12 +1294,12 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 				vport_receive(cache_vport, skb);
 				sent_len += orig_len;
 			} else {
-				int err;
+				int xmit_err;
 
 				skb->dev = rt_dst(rt).dev;
-				err = dev_queue_xmit(skb);
+				xmit_err = dev_queue_xmit(skb);
 
-				if (likely(net_xmit_eval(err) == 0))
+				if (likely(net_xmit_eval(xmit_err) == 0))
 					sent_len += orig_len;
 			}
 		} else
