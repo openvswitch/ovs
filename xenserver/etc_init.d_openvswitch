@@ -298,10 +298,12 @@ EOF
 
 function set_system_ids {
     if [ -f /etc/xensource-inventory ]; then
+        OVS_VERSION=`ovs-vswitchd --version | sed 's/.*) //;1q'`
         action "Configuring Open vSwitch system IDs" true
         $vsctl --no-wait --timeout=5 set Open_vSwitch . \
-            external-ids:system-type="$PRODUCT_BRAND" \
-            external-ids:system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
+            ovs-version="$OVS_VERSION" \
+            system-type="$PRODUCT_BRAND" \
+            system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
             external-ids:system-id="$INSTALLATION_UUID" \
             external-ids:xs-system-uuid="$INSTALLATION_UUID"
     else

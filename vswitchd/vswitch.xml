@@ -28,12 +28,6 @@
         choose key names that are likely to be unique.  The currently
         defined common key-value pairs are:
         <dl>
-          <dt><code>system-type</code></dt>
-          <dd>An identifier for the switch type, such as
-            <code>XenServer</code> or <code>KVM</code>.</dd>
-          <dt><code>system-version</code></dt>
-          <dd>The version of the switch software, such as
-            <code>5.6.0</code> on XenServer.</dd>
           <dt><code>system-id</code></dt>
           <dd>A unique identifier for the Open vSwitch's physical host.
             The form of the identifier depends on the type of the host.
@@ -199,6 +193,45 @@
           </dd>
         </dl>
       </column>
+    </group>
+
+    <group title="Version Reporting">
+      <p>
+	These columns report the types and versions of the hardware and
+	software running Open vSwitch.  We recommend in general that software
+	should test whether specific features are supported instead of relying
+	on version number checks.  These values are primarily intended for
+	reporting to human administrators.
+      </p>
+
+      <column name="ovs_version">
+	The Open vSwitch version number, e.g. <code>1.1.0pre2</code>.
+	If Open vSwitch was configured with a build number, then it is
+	also included, e.g. <code>1.1.0pre2+build4948</code>.
+      </column>
+
+      <column name="system_type">
+        <p>
+	  An identifier for the type of system on top of which Open vSwitch
+	  runs, e.g. <code>XenServer</code> or <code>KVM</code>.
+	</p>
+	<p>
+	  System integrators are responsible for choosing and setting an
+	  appropriate value for this column.
+	</p>
+      </column>
+
+      <column name="system_version">
+        <p>
+	  The version of the system identified by <ref column="system_type"/>,
+	  e.g. <code>5.5.0-24648p</code> on XenServer 5.5.0 build 24648.
+	</p>
+	<p>
+	  System integrators are responsible for choosing and setting an
+	  appropriate value for this column.
+	</p>
+      </column>
+	
     </group>
 
     <group title="Database Configuration">
