@@ -1481,7 +1481,8 @@ ofproto_flush_flows(struct ofproto *ofproto)
 static void
 reinit_ports(struct ofproto *p)
 {
-    struct svec devnames;
+    struct shash_node *node;
+    struct shash devnames;
     struct ofport *ofport;
     struct odp_port *odp_ports;
     size_t n_odp_ports;
@@ -1489,21 +1490,20 @@ reinit_ports(struct ofproto *p)
 
     COVERAGE_INC(ofproto_reinit_ports);
 
-    svec_init(&devnames);
+    shash_init(&devnames);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        svec_add (&devnames, ofport->opp.name);
+        shash_add_once (&devnames, ofport->opp.name, NULL);
     }
     dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
     for (i = 0; i < n_odp_ports; i++) {
-        svec_add (&devnames, odp_ports[i].devname);
+        shash_add_once (&devnames, odp_ports[i].devname, NULL);
     }
     free(odp_ports);
 
-    svec_sort_unique(&devnames);
-    for (i = 0; i < devnames.n; i++) {
-        update_port(p, devnames.names[i]);
+    SHASH_FOR_EACH (node, &devnames) {
+        update_port(p, node->name);
     }
-    svec_destroy(&devnames);
+    shash_destroy(&devnames);
 }
 
 static struct ofport *
