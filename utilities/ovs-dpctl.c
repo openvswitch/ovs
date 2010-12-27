@@ -300,21 +300,15 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
 static bool
 get_port_number(struct dpif *dpif, const char *name, uint16_t *port)
 {
-    struct odp_port *ports;
-    size_t n_ports;
-    size_t i;
+    struct odp_port odp_port;
 
-    query_ports(dpif, &ports, &n_ports);
-    for (i = 0; i < n_ports; i++) {
-        if (!strcmp(name, ports[i].devname)) {
-            *port = ports[i].port;
-            free(ports);
-            return true;
-        }
+    if (!dpif_port_query_by_name(dpif, name, &odp_port)) {
+        *port = odp_port.port;
+        return true;
+    } else {
+        ovs_error(0, "no port named %s", name);
+        return false;
     }
-    free(ports);
-    ovs_error(0, "no port named %s", name);
-    return false;
 }
 
 static void
