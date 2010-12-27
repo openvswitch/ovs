@@ -137,7 +137,7 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * groups configured). */
 		if (skb_is_gso(skb)) {
 			const struct nlattr *actions_left;
-			u32 actions_len_left;
+			int actions_len_left;
 			struct sk_buff *segs;
 
 			segs = skb_gso_segment(skb, 0);
