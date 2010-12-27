@@ -14,6 +14,15 @@ ovsdb\-tool \- Open vSwitch database management utility
 .SH SYNOPSIS
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate\fI db schema\fR
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fIdb \fR[\fItarget\fR]
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert\fI db schema
+\fR[\fItarget\fR]
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-version\fI db\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-version\fI schema\fR
+.br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBquery\fI db transaction\fR
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
@@ -62,6 +71,26 @@ interpreted under \fIschema\fR, with only one exception: data in
 ignored.  Columns that exist in \fIschema\fR but not in \fIdb\fR are
 set to their default values.  All of \fIschema\fR's constraints apply
 in full.
+.
+.IP "\fBdb\-version\fI db\fR"
+Reads \fIdb\fR and prints the version number of the schema embedded
+within the database on stdout.  A schema version number has the form
+\fIx\fB.\fIy\fB.\fIz\fR.  See \fBovs\-vswitchd.conf.db\fR(5) for
+details.
+.IP
+Schema version numbers and Open vSwitch version numbers are
+independent.
+.IP
+If \fIdb\fR was created before schema versioning was introduced, then
+it will not have a version number and this command will print a blank
+line.
+.
+.IP "\fBschema\-version\fI schema\fR"
+Reads \fIschema\fR and prints the schema's version number on stdout.
+.IP
+If \fIschema\fR was created before versioning was introduced, then it
+does not have a version number and this command will print a blank
+line.
 .
 .IP "\fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the

@@ -6,7 +6,8 @@ m4_define([ORDINAL_SCHEMA],
        "ordinals": {
          "columns": {
            "number": {"type": "integer"},
-           "name": {"type": "string"}}}}}]])
+           "name": {"type": "string"}}}},
+     "version": "5.1.3"}]])
 
 m4_define([CONSTRAINT_SCHEMA],
   [[{"name": "constraints",

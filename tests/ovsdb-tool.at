@@ -83,7 +83,7 @@ AT_CHECK(
   [0], [stdout], [ignore])
 dnl Check that all the crap is in fact in the database log.
 AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | test-json --multiple -]], [0],
-  [[{"name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}}}}}
+  [[{"name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}}}},"version":"5.1.3"}
 {"_comment":"add row for zero 0","_date":0,"ordinals":{"<0>":{"name":"zero"}}}
 {"_comment":"delete row for 0","_date":0,"ordinals":{"<0>":null}}
 {"_comment":"add back row for zero 0","_date":0,"ordinals":{"<1>":{"name":"zero"}}}
@@ -268,5 +268,23 @@ _uuid                                name number
 <3> ""   3     @&t@
 <4> ""   4     @&t@
 <5> ""   5     @&t@
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool schema-version])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_CHECK([ovsdb-tool schema-version schema], [0], [5.1.3
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool db-version])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([ovsdb-tool db-version db], [0], [5.1.3
 ])
 AT_CLEANUP

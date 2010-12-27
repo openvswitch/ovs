@@ -182,6 +182,9 @@ usage(void)
            "    list databases available on SERVER\n"
            "\n  get-schema SERVER DATABASE\n"
            "    retrieve schema for DATABASE from SERVER\n"
+           "\n  get-schema-version SERVER DATABASE\n"
+           "    retrieve schema for DATABASE from SERVER and report only its\n"
+           "    version number on stdout\n"
            "\n  list-tables SERVER DATABASE\n"
            "    list tables for DATABASE on SERVER\n"
            "\n  list-columns SERVER DATABASE [TABLE]\n"
@@ -782,6 +785,14 @@ do_get_schema(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+do_get_schema_version(int argc OVS_UNUSED, char *argv[])
+{
+    struct ovsdb_schema *schema = fetch_schema(argv[1], argv[2]);
+    puts(schema->version);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
 do_list_tables(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
@@ -1344,6 +1355,7 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static const struct command all_commands[] = {
     { "list-dbs", 1, 1, do_list_dbs },
     { "get-schema", 2, 2, do_get_schema },
+    { "get-schema-version", 2, 2, do_get_schema_version },
     { "list-tables", 2, 2, do_list_tables },
     { "list-columns", 2, 3, do_list_columns },
     { "transact", 2, 2, do_transact },

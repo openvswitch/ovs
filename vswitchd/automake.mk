@@ -92,3 +92,15 @@ vswitchd/ovs-vswitchd.conf.db.5: \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
 		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
 	mv $@.tmp $@
+
+# Version checking for vswitch.ovsschema.
+ALL_LOCAL += vswitchd/vswitch.ovsschema.stamp
+vswitchd/vswitch.ovsschema.stamp: vswitchd/vswitch.ovsschema
+	@sum=`sed '/cksum/d' $? | cksum`; \
+	expected=`sed -n 's/.*"cksum": "\(.*\)".*/\1/p' $?`; \
+	if test "X$$sum" = "X$$expected"; then \
+	  touch $@; \
+	else \
+	  ln=`sed -n '/"cksum":/=' $?`; \
+	  echo "$?:$$ln: checksum \"$$sum\" does not match (you should probably update the version number and fix the checksum)"; \
+	fi

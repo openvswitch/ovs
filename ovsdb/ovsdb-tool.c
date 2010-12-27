@@ -110,6 +110,8 @@ usage(void)
            "  create DB SCHEMA   create DB with the given SCHEMA\n"
            "  compact DB [DST]   compact DB in-place (or to DST)\n"
            "  convert DB SCHEMA [DST]   convert DB to SCHEMA (to DST)\n"
+           "  db-version DB      report version of schema used by DB\n"
+           "  schema-version SCHEMA  report SCHEMA's schema version\n"
            "  query DB TRNS      execute read-only transaction on DB\n"
            "  transact DB TRNS   execute read/write transaction on DB\n"
            "  show-log DB        prints information about DB's log entries\n",
@@ -237,6 +239,28 @@ do_convert(int argc OVS_UNUSED, char *argv[])
     compact_or_convert(argv[1], argv[3], new_schema,
                        "converted by ovsdb-tool");
     ovsdb_schema_destroy(new_schema);
+}
+
+static void
+do_db_version(int argc OVS_UNUSED, char *argv[])
+{
+    const char *db_file_name = argv[1];
+    struct ovsdb *db;
+
+    check_ovsdb_error(ovsdb_file_open(db_file_name, true, &db, NULL));
+    puts(db->schema->version);
+    ovsdb_destroy(db);
+}
+
+static void
+do_schema_version(int argc OVS_UNUSED, char *argv[])
+{
+    const char *schema_file_name = argv[1];
+    struct ovsdb_schema *schema;
+
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
+    puts(schema->version);
+    ovsdb_schema_destroy(schema);
 }
 
 static void
@@ -410,6 +434,8 @@ static const struct command all_commands[] = {
     { "create", 2, 2, do_create },
     { "compact", 1, 2, do_compact },
     { "convert", 2, 3, do_convert },
+    { "db-version", 1, 1, do_db_version },
+    { "schema-version", 1, 1, do_schema_version },
     { "query", 2, 2, do_query },
     { "transact", 2, 2, do_transact },
     { "show-log", 1, 1, do_show_log },

@@ -33,6 +33,11 @@ values.  Additional notation is presented later.
     <id>s that begin with _ are reserved to the implementation and may
     not be used by the user.
 
+<version>
+
+    A JSON string that contains a version number that matches
+    [0-9]+\.[0-9]+\.[0-9]+
+
 <boolean>
 
     A JSON true or false value.
@@ -102,12 +107,19 @@ is represented by <database-schema>, as described below.
     A JSON object with the following members:
 
         "name": <id>                            required
+        "version": <version>                    required
         "tables": {<id>: <table-schema>, ...}   required
 
     The "name" identifies the database as a whole.  It must be
     provided to most JSON-RPC requests to identify the database being
     operated on.  The value of "tables" is a JSON object whose names
     are table names and whose values are <table-schema>s.
+
+    The "version" reports the version of the database schema.  Because
+    this is a recent addition to the schema format, OVSDB permits it
+    to be omitted, but future versions of OVSDB will require it to be
+    present.  Open vSwitch semantics for "version" are described in
+    ovs-vswitchd.conf.db(5).
 
 <table-schema>
 

@@ -325,6 +325,7 @@ function start {
     # Allow GRE traffic.
     iptables -I INPUT -p gre -j ACCEPT
 
+    schemaver=`$ovsdb_tool schema-version "$VSWITCHD_OVSDB_SCHEMA"`
     if [ ! -e "$OVSDB_SERVER_DB" ]; then
         warning "$OVSDB_SERVER_DB does not exist"
         install -d -m 755 -o root -g root `dirname $OVSDB_SERVER_DB`
@@ -332,12 +333,20 @@ function start {
         action "Creating empty database $OVSDB_SERVER_DB" true
         $ovsdb_tool -vANY:console:emer create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
     else
+        # If schema version changed, then back up the old version.
+        oldver=`$ovsdb_tool db-version "$OVSDB_SERVER_DB"`
+        if test "X$oldver" != "X$schemaver"; then
+            backup=$OVSDB_SERVER_DB.backup$oldver
+            action "Backing up $OVSDB_SERVER_DB in $backup before converting from schema version \"$oldver\" to \"$schemaver\"" true
+            cp "$OVSDB_SERVER_DB" "$backup"
+        fi
+
         # Upgrade or downgrade schema and compact database.
         $ovsdb_tool -vANY:console:emer convert "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
     fi
 
     start_ovsdb_server
-    $vsctl --no-wait --timeout=5 init
+    $vsctl --no-wait --timeout=5 init -- set Open_vSwitch . db-version="$schemaver"
     if [ ! -e /var/run/openvswitch.booted ]; then
         touch /var/run/openvswitch.booted
         for bridge in $($vsctl list-br); do

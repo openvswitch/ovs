@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import sys
 
 from ovs.db import error
@@ -21,8 +22,9 @@ from ovs.db import types
 class DbSchema(object):
     """Schema for an OVSDB database."""
 
-    def __init__(self, name, tables):
+    def __init__(self, name, version, tables):
         self.name = name
+        self.version = version
         self.tables = tables
 
         # Validate that all ref_tables refer to the names of tables
@@ -36,8 +38,15 @@ class DbSchema(object):
     def from_json(json):
         parser = ovs.db.parser.Parser(json, "database schema")
         name = parser.get("name", ['id'])
+        version = parser.get_optional("version", [unicode])
+        parser.get_optional("cksum", [unicode])
         tablesJson = parser.get("tables", [dict])
         parser.finish()
+
+        if (version is not None and
+            not re.match('[0-9]+\.[0-9]+\.[0-9]+$', version)):
+            raise error.Error("schema version \"%s\" not in format x.y.z"
+                              % version)
 
         tables = {}
         for tableName, tableJson in tablesJson.iteritems():
@@ -48,13 +57,16 @@ class DbSchema(object):
                 raise error.Error("name must be a valid id", json)
             tables[tableName] = TableSchema.from_json(tableJson, tableName)
 
-        return DbSchema(name, tables)
+        return DbSchema(name, version, tables)
 
     def to_json(self):
         tables = {}
         for table in self.tables.itervalues():
             tables[table.name] = table.to_json()
-        return {"name": self.name, "tables": tables}
+        json = {"name": self.name, "tables": tables}
+        if self.version:
+            json["version"] = self.version
+        return json
 
     def __check_ref_table(self, column, base, base_name):
         if (base and base.type == types.UuidType and base.ref_table and
@@ -64,8 +76,8 @@ class DbSchema(object):
                               tag="syntax error")
 
 class IdlSchema(DbSchema):
-    def __init__(self, name, tables, idlPrefix, idlHeader):
-        DbSchema.__init__(self, name, tables)
+    def __init__(self, name, version, tables, idlPrefix, idlHeader):
+        DbSchema.__init__(self, name, version, tables)
         self.idlPrefix = idlPrefix
         self.idlHeader = idlHeader
 
@@ -80,7 +92,8 @@ class IdlSchema(DbSchema):
         del subjson["idlHeader"]
         schema = DbSchema.from_json(subjson)
 
-        return IdlSchema(schema.name, schema.tables, idlPrefix, idlHeader)
+        return IdlSchema(schema.name, schema.version, schema.tables,
+                         idlPrefix, idlHeader)
 
 class TableSchema(object):
     def __init__(self, name, columns, mutable=True, max_rows=sys.maxint):

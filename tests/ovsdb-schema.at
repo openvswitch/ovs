@@ -3,6 +3,7 @@ AT_BANNER([OVSDB -- schemas])
 OVSDB_CHECK_POSITIVE_CPY([schema with valid refTables],
   [[parse-schema \
       '{"name": "mydb",
+        "version": "4.2.1",
         "tables": {
           "a": {
             "columns": {
@@ -21,7 +22,19 @@ OVSDB_CHECK_POSITIVE_CPY([schema with valid refTables],
                   "key": {
                     "type": "uuid",
                     "refTable": "a"}}}}}}}']],
-  [[{"name":"mydb","tables":{"a":{"columns":{"map":{"type":{"key":{"refTable":"b","type":"uuid"},"value":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}}}}}]])
+  [[{"name":"mydb","tables":{"a":{"columns":{"map":{"type":{"key":{"refTable":"b","type":"uuid"},"value":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}}}},"version":"4.2.1"}]])
+     
+dnl Schemas without version numbers are accepted for backward
+dnl compatibility, but this is a deprecated feature.
+OVSDB_CHECK_POSITIVE_CPY([schema without version number],
+  [[parse-schema \
+      '{"name": "mydb",
+        "tables": {
+          "x": {
+            "columns": {
+              "y": {
+                "type": "integer"}}}}}']],
+  [{"name":"mydb","tables":{"x":{"columns":{"y":{"type":"integer"}}}}}])
      
 OVSDB_CHECK_NEGATIVE_CPY([schema with invalid refTables],
   [[parse-schema \
@@ -45,3 +58,14 @@ OVSDB_CHECK_NEGATIVE_CPY([schema with invalid refTables],
                     "type": "uuid",
                     "refTable": "a"}}}}}}}']],
   [[syntax error: column map key refers to undefined table c]])
+     
+OVSDB_CHECK_NEGATIVE_CPY([schema with invalid version number],
+  [[parse-schema \
+      '{"name": "mydb",
+        "tables": {
+          "x": {
+            "columns": {
+              "y": {
+                "type": "integer"}}}},
+        "version": "xxx"}']],
+  [[schema version "xxx" not in format x.y.z]])

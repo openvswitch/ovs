@@ -1,5 +1,6 @@
 {
-  "name": "idltest", 
+  "name": "idltest",
+  "version": "1.2.3",
   "tables": {
     "link1": {
       "columns": {

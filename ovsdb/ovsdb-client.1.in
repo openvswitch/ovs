@@ -19,6 +19,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\fI server database\fR
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI server database\fR
+.br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-tables\fI server database\fR
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-columns\fI server database \fR[\fItable\fR]
@@ -60,6 +62,19 @@ be used for \fIdatabase\fR in the following commands.
 .IP "\fBget\-schema\fI server database\fR"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints it in JSON format.
+.
+.IP "\fBget\-schema\-version\fI server database\fR"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints its version number on stdout.  A schema version number has the form
+\fIx\fB.\fIy\fB.\fIz\fR.  See \fBovs\-vswitchd.conf.db\fR(5) for
+details.
+.IP
+Schema version numbers and Open vSwitch version numbers are
+independent.
+.IP
+If \fIdatabase\fR was created before schema versioning was introduced,
+then it will not have a version number and this command will print a
+blank line.
 .
 .IP "\fBlist\-tables\fI server database\fR"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and

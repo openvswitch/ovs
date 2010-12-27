@@ -26,12 +26,13 @@
 #include "transaction.h"
 
 struct ovsdb_schema *
-ovsdb_schema_create(const char *name)
+ovsdb_schema_create(const char *name, const char *version)
 {
     struct ovsdb_schema *schema;
 
     schema = xzalloc(sizeof *schema);
     schema->name = xstrdup(name);
+    schema->version = xstrdup(version);
     shash_init(&schema->tables);
 
     return schema;
@@ -43,7 +44,7 @@ ovsdb_schema_clone(const struct ovsdb_schema *old)
     struct ovsdb_schema *new;
     struct shash_node *node;
 
-    new = ovsdb_schema_create(old->name);
+    new = ovsdb_schema_create(old->name, old->version);
     SHASH_FOR_EACH (node, &old->tables) {
         const struct ovsdb_table_schema *ts = node->data;
 
@@ -51,7 +52,6 @@ ovsdb_schema_clone(const struct ovsdb_schema *old)
     }
     return new;
 }
-
 
 void
 ovsdb_schema_destroy(struct ovsdb_schema *schema)
@@ -67,6 +67,7 @@ ovsdb_schema_destroy(struct ovsdb_schema *schema)
     }
     shash_destroy(&schema->tables);
     free(schema->name);
+    free(schema->version);
     free(schema);
 }
 
@@ -116,26 +117,49 @@ ovsdb_schema_check_ref_table(const struct ovsdb_column *column,
     }
 }
 
+static bool
+is_valid_version(const char *s)
+{
+    int n = -1;
+    sscanf(s, "%*[0-9].%*[0-9].%*[0-9]%n", &n);
+    return n != -1 && s[n] == '\0';
+}
+
 struct ovsdb_error *
 ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
 {
     struct ovsdb_schema *schema;
-    const struct json *name, *tables;
+    const struct json *name, *tables, *version_json;
     struct ovsdb_error *error;
     struct shash_node *node;
     struct ovsdb_parser parser;
+    const char *version;
 
     *schemap = NULL;
 
     ovsdb_parser_init(&parser, json, "database schema");
     name = ovsdb_parser_member(&parser, "name", OP_ID);
+    version_json = ovsdb_parser_member(&parser, "version",
+                                       OP_STRING | OP_OPTIONAL);
+    ovsdb_parser_member(&parser, "cksum", OP_STRING | OP_OPTIONAL);
     tables = ovsdb_parser_member(&parser, "tables", OP_OBJECT);
     error = ovsdb_parser_finish(&parser);
     if (error) {
         return error;
     }
 
-    schema = ovsdb_schema_create(json_string(name));
+    if (version_json) {
+        version = json_string(version_json);
+        if (!is_valid_version(version)) {
+            return ovsdb_syntax_error(json, NULL, "schema version \"%s\" not "
+                                      "in format x.y.z", version);
+        }
+    } else {
+        /* Backward compatibility with old databases. */
+        version = "";
+    }
+
+    schema = ovsdb_schema_create(json_string(name), version);
     SHASH_FOR_EACH (node, json_object(tables)) {
         struct ovsdb_table_schema *table;
 
@@ -190,6 +214,9 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
 
     json = json_object_create();
     json_object_put_string(json, "name", schema->name);
+    if (schema->version[0]) {
+        json_object_put_string(json, "version", schema->version);
+    }
 
     tables = json_object_create();
 

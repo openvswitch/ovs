@@ -210,6 +210,26 @@
 	also included, e.g. <code>1.1.0pre2+build4948</code>.
       </column>
 
+      <column name="db_version">
+	<p>
+          The database schema version number in the form
+          <code><var>major</var>.<var>minor</var>.<var>tweak</var></code>,
+          e.g. <code>1.2.3</code>.  Whenever the database schema is changed in
+          a non-backward compatible way (e.g. deleting a column or a table),
+          <var>major</var> is incremented.  When the database schema is changed
+          in a backward compatible way (e.g. adding a new column),
+          <var>minor</var> is incremented.  When the database schema is changed
+          cosmetically (e.g. reindenting its syntax), <var>tweak</var> is
+          incremented.
+        </p>
+
+        <p>
+          The schema version is part of the database schema, so it can also be
+          retrieved by fetching the schema using the Open vSwitch database
+          protocol.
+        </p>
+      </column>
+
       <column name="system_type">
         <p>
 	  An identifier for the type of system on top of which Open vSwitch

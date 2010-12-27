@@ -1,4 +1,6 @@
 {"name": "Open_vSwitch",
+ "version": "1.0.0",
+ "cksum": "514853437 13985",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -32,6 +34,9 @@
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "ovs_version": {
+         "type": {"key": {"type": "string"},
+                  "min": 0, "max": 1}},
+       "db_version": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "system_type": {
