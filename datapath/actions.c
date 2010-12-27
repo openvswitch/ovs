@@ -150,7 +150,6 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 			do {
 				struct sk_buff *nskb = segs->next;
-				int err;
 
 				segs->next = NULL;
 
