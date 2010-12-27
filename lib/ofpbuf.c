@@ -123,6 +123,9 @@ ofpbuf_new_with_headroom(size_t size, size_t headroom)
     return b;
 }
 
+/* Creates and returns a new ofpbuf that initially contains a copy of the
+ * 'buffer->size' bytes of data starting at 'buffer->data' with no headroom or
+ * tailroom. */
 struct ofpbuf *
 ofpbuf_clone(const struct ofpbuf *buffer)
 {
@@ -134,15 +137,25 @@ ofpbuf_clone(const struct ofpbuf *buffer)
 struct ofpbuf *
 ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
 {
-    struct ofpbuf *b = ofpbuf_new_with_headroom(buffer->size, headroom);
-    ofpbuf_put(b, buffer->data, buffer->size);
-    return b;
+    return ofpbuf_clone_data_with_headroom(buffer->data, buffer->size,
+                                           headroom);
 }
 
+/* Creates and returns a new ofpbuf that initially contains a copy of the
+ * 'size' bytes of data starting at 'data' with no headroom or tailroom. */
 struct ofpbuf *
 ofpbuf_clone_data(const void *data, size_t size)
 {
-    struct ofpbuf *b = ofpbuf_new(size);
+    return ofpbuf_clone_data_with_headroom(data, size, 0);
+}
+
+/* Creates and returns a new ofpbuf that initially contains 'headroom' bytes of
+ * headroom followed by a copy of the 'size' bytes of data starting at
+ * 'data'. */
+struct ofpbuf *
+ofpbuf_clone_data_with_headroom(const void *data, size_t size, size_t headroom)
+{
+    struct ofpbuf *b = ofpbuf_new_with_headroom(size, headroom);
     ofpbuf_put(b, data, size);
     return b;
 }
