@@ -175,47 +175,45 @@ ofpbuf_tailroom(const struct ofpbuf *b)
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
 
-/* Changes 'b->base' to 'new_base' and adjusts all of 'b''s internal pointers
- * to reflect the change. */
 static void
-ofpbuf_rebase__(struct ofpbuf *b, void *new_base)
+ofpbuf_copy__(struct ofpbuf *b, uint8_t *new_base,
+              size_t new_headroom, size_t new_tailroom)
 {
-    if (b->base != new_base) {
-        uintptr_t base_delta = (char*)new_base - (char*)b->base;
-        b->base = new_base;
-        b->data = (char*)b->data + base_delta;
-        if (b->l2) {
-            b->l2 = (char*)b->l2 + base_delta;
-        }
-        if (b->l3) {
-            b->l3 = (char*)b->l3 + base_delta;
-        }
-        if (b->l4) {
-            b->l4 = (char*)b->l4 + base_delta;
-        }
-        if (b->l7) {
-            b->l7 = (char*)b->l7 + base_delta;
-        }
-    }
+    const uint8_t *old_base = b->base;
+    size_t old_headroom = ofpbuf_headroom(b);
+    size_t old_tailroom = ofpbuf_tailroom(b);
+    size_t copy_headroom = MIN(old_headroom, new_headroom);
+    size_t copy_tailroom = MIN(old_tailroom, new_tailroom);
+
+    memcpy(&new_base[new_headroom - copy_headroom],
+           &old_base[old_headroom - copy_headroom],
+           copy_headroom + b->size + copy_tailroom);
 }
 
-/* Reallocates 'b' so that it has exactly 'new_tailroom' bytes of tailroom. */
+/* Reallocates 'b' so that it has exactly 'new_headroom' and 'new_tailroom'
+ * bytes of headroom and tailroom, respectively. */
 static void
-ofpbuf_resize_tailroom__(struct ofpbuf *b, size_t new_tailroom)
+ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
 {
+    void *new_base, *new_data;
     size_t new_allocated;
-    void *new_base;
 
-    new_allocated = ofpbuf_headroom(b) + b->size + new_tailroom;
+    new_allocated = new_headroom + b->size + new_tailroom;
 
     switch (b->source) {
     case OFPBUF_MALLOC:
-        new_base = xrealloc(b->base, new_allocated);
+        if (new_headroom == ofpbuf_headroom(b)) {
+            new_base = xrealloc(b->base, new_allocated);
+        } else {
+            new_base = xmalloc(new_allocated);
+            ofpbuf_copy__(b, new_base, new_headroom, new_tailroom);
+            free(b->base);
+        }
         break;
 
     case OFPBUF_STACK:
         new_base = xmalloc(new_allocated);
-        memcpy(new_base, b->base, MIN(new_allocated, b->allocated));
+        ofpbuf_copy__(b, new_base, new_headroom, new_tailroom);
         b->source = OFPBUF_MALLOC;
         break;
 
@@ -227,7 +225,25 @@ ofpbuf_resize_tailroom__(struct ofpbuf *b, size_t new_tailroom)
     }
 
     b->allocated = new_allocated;
-    ofpbuf_rebase__(b, new_base);
+    b->base = new_base;
+
+    new_data = (char *) new_base + new_headroom;
+    if (b->data != new_data) {
+        uintptr_t data_delta = (char *) new_data - (char *) b->data;
+        b->data = new_data;
+        if (b->l2) {
+            b->l2 = (char *) b->l2 + data_delta;
+        }
+        if (b->l3) {
+            b->l3 = (char *) b->l3 + data_delta;
+        }
+        if (b->l4) {
+            b->l4 = (char *) b->l4 + data_delta;
+        }
+        if (b->l7) {
+            b->l7 = (char *) b->l7 + data_delta;
+        }
+    }
 }
 
 /* Ensures that 'b' has room for at least 'size' bytes at its tail end,
@@ -237,14 +253,19 @@ void
 ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size)
 {
     if (size > ofpbuf_tailroom(b)) {
-        ofpbuf_resize_tailroom__(b, MAX(size, 64));
+        ofpbuf_resize__(b, ofpbuf_headroom(b), MAX(size, 64));
     }
 }
 
+/* Ensures that 'b' has room for at least 'size' bytes at its head,
+ * reallocating and copying its data if necessary.  Its tailroom, if any, is
+ * preserved. */
 void
 ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size)
 {
-    assert(size <= ofpbuf_headroom(b));
+    if (size > ofpbuf_headroom(b)) {
+        ofpbuf_resize__(b, MAX(size, 64), ofpbuf_tailroom(b));
+    }
 }
 
 /* Trims the size of 'b' to fit its actual content, reducing its tailroom to
@@ -255,8 +276,9 @@ ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size)
 void
 ofpbuf_trim(struct ofpbuf *b)
 {
-    if (b->source == OFPBUF_MALLOC && ofpbuf_tailroom(b) > 0) {
-        ofpbuf_resize_tailroom__(b, 0);
+    if (b->source == OFPBUF_MALLOC
+        && (ofpbuf_headroom(b) || ofpbuf_tailroom(b))) {
+        ofpbuf_resize__(b, 0, 0);
     }
 }
 
@@ -332,6 +354,9 @@ ofpbuf_reserve(struct ofpbuf *b, size_t size)
     b->data = (char*)b->data + size;
 }
 
+/* Prefixes 'size' bytes to the head end of 'b', reallocating and copying its
+ * data if necessary.  Returns a pointer to the first byte of the data's
+ * location in the ofpbuf.  The new data is left uninitialized. */
 void *
 ofpbuf_push_uninit(struct ofpbuf *b, size_t size)
 {
@@ -341,9 +366,9 @@ ofpbuf_push_uninit(struct ofpbuf *b, size_t size)
     return b->data;
 }
 
-/* Prefixes 'size' zeroed bytes to the head end of 'b'.  'b' must have at least
- * 'size' bytes of headroom.  Returns a pointer to the first byte of the data's
- * location in the ofpbuf. */
+/* Prefixes 'size' zeroed bytes to the head end of 'b', reallocating and
+ * copying its data if necessary.  Returns a pointer to the first byte of the
+ * data's location in the ofpbuf. */
 void *
 ofpbuf_push_zeros(struct ofpbuf *b, size_t size)
 {
@@ -352,6 +377,9 @@ ofpbuf_push_zeros(struct ofpbuf *b, size_t size)
     return dst;
 }
 
+/* Copies the 'size' bytes starting at 'p' to the head end of 'b', reallocating
+ * and copying its data if necessary.  Returns a pointer to the first byte of
+ * the data's location in the ofpbuf. */
 void *
 ofpbuf_push(struct ofpbuf *b, const void *p, size_t size)
 {
