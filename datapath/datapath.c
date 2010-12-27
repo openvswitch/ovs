@@ -748,7 +748,7 @@ static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
 
 	error = -EFAULT;
 	if (copy_from_user(actions->actions,
-			   (struct nlattr __user *)flow->actions,
+			   (struct nlattr __user __force *)flow->actions,
 			   flow->actions_len))
 		goto error_free_actions;
 	error = validate_actions(actions->actions, actions->actions_len);
@@ -1018,7 +1018,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 	u32 i;
 
 	for (i = 0; i < flowvec->n_flows; i++) {
-		struct odp_flow __user *ufp = (struct odp_flow __user *)&flowvec->flows[i];
+		struct odp_flow __user *ufp = (struct odp_flow __user __force *)&flowvec->flows[i];
 		struct odp_flow uf;
 		struct tbl_node *flow_node;
 		int error;
@@ -1071,7 +1071,7 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 		return 0;
 
 	cbdata.dp = dp;
-	cbdata.uflows = (struct odp_flow __user *)flowvec->flows;
+	cbdata.uflows = (struct odp_flow __user __force*)flowvec->flows;
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
 
@@ -1121,7 +1121,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 
 	err = -EFAULT;
 	if (copy_from_user(actions->actions,
-	    (struct nlattr __user *)execute->actions, execute->actions_len))
+	    (struct nlattr __user __force *)execute->actions, execute->actions_len))
 		goto error_free_actions;
 
 	err = validate_actions(actions->actions, execute->actions_len);
@@ -1135,7 +1135,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 
 	err = -EFAULT;
 	if (copy_from_user(skb_put(skb, execute->length),
-			   (const void __user *)execute->data,
+			   (const void __user __force *)execute->data,
 			   execute->length))
 		goto error_free_skb;
 
@@ -1339,7 +1339,7 @@ static int list_ports(struct datapath *dp, struct odp_portvec __user *upv)
 	if (copy_from_user(&pv, upv, sizeof pv))
 		return -EFAULT;
 
-	retval = do_list_ports(dp, (struct odp_port __user *)pv.ports,
+	retval = do_list_ports(dp, (struct odp_port __user __force *)pv.ports,
 			       pv.n_ports);
 	if (retval < 0)
 		return retval;
