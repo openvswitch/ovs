@@ -360,7 +360,7 @@ error:
 	kfree_skb(skb);
 }
 
-static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg)
 {
 	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
