@@ -218,3 +218,46 @@ hmap_random_node(const struct hmap *hmap)
     }
     return node;
 }
+
+/* Returns the next node in 'hmap' in hash order, or NULL if no nodes remain in
+ * 'hmap'.  Uses '*bucketp' and '*offsetp' to determine where to begin
+ * iteration, and stores new values to pass on the next iteration into them
+ * before returning.
+ *
+ * It's better to use plain HMAP_FOR_EACH and related functions, since they are
+ * faster and better at dealing with hmaps that change during iteration.
+ *
+ * Before beginning iteration, store 0 into '*bucketp' and '*offsetp'.
+ */
+struct hmap_node *
+hmap_at_position(const struct hmap *hmap,
+                 uint32_t *bucketp, uint32_t *offsetp)
+{
+    size_t offset;
+    size_t b_idx;
+
+    offset = *offsetp;
+    for (b_idx = *bucketp; b_idx <= hmap->mask; b_idx++) {
+        struct hmap_node *node;
+        size_t n_idx;
+
+        for (n_idx = 0, node = hmap->buckets[b_idx]; node != NULL;
+             n_idx++, node = node->next) {
+            if (n_idx == offset) {
+                if (node->next) {
+                    *bucketp = node->hash & hmap->mask;
+                    *offsetp = offset + 1;
+                } else {
+                    *bucketp = (node->hash & hmap->mask) + 1;
+                    *offsetp = 0;
+                }
+                return node;
+            }
+        }
+        offset = 0;
+    }
+
+    *bucketp = 0;
+    *offsetp = 0;
+    return NULL;
+}
