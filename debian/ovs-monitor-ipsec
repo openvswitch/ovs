@@ -202,9 +202,9 @@ path certificate "%s";
         if host in self.psk_hosts:
             raise error.Error("host %s already defined for psk" % host)
 
-        if "certificate" not in vals:
+        if vals["certificate"] == None:
             raise error.Error("'certificate' not defined for %s" % host)
-        elif "private_key" not in vals:
+        elif vals["private_key"] == None:
             # Assume the private key is stored in the same PEM file as 
             # the certificate.  We make a copy of "vals" so that we don't
             # modify the original "vals", which would cause the script
@@ -371,6 +371,8 @@ def keep_table_columns(schema, table_name, column_types):
  
 def monitor_uuid_schema_cb(schema):
     string_type = types.Type(types.BaseType(types.StringType))
+    optional_ssl_type = types.Type(types.BaseType(types.UuidType,
+                                                  ref_table='SSL'), None, 0, 1)
     string_map_type = types.Type(types.BaseType(types.StringType),
                                  types.BaseType(types.StringType),
                                  0, sys.maxint)
@@ -380,6 +382,11 @@ def monitor_uuid_schema_cb(schema):
         schema, "Interface", {"name": string_type,
                               "type": string_type,
                               "options": string_map_type})
+    new_tables["Open_vSwitch"] = keep_table_columns(
+        schema, "Open_vSwitch", {"ssl": optional_ssl_type})
+    new_tables["SSL"] = keep_table_columns(
+        schema, "SSL", {"certificate": string_type,
+                        "private_key": string_type})
     schema.tables = new_tables
 
 def usage():
@@ -409,6 +416,15 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
             ipsec.add_entry(vals["local_ip"], vals["remote_ip"], vals)
         except error.Error, msg:
             s_log.warning("skipping ipsec config for %s: %s" % (name, msg))
+
+def get_ssl_cert(data):
+    for ovs_rec in data["Open_vSwitch"].itervalues():
+        if ovs_rec.ssl.as_list():
+            ssl_rec = data["SSL"][ovs_rec.ssl.as_scalar()]
+            return (ssl_rec.certificate.as_scalar(),
+                    ssl_rec.private_key.as_scalar())
+
+    return None
 
 def main(argv):
     try:
@@ -447,30 +463,42 @@ def main(argv):
             idl.wait(poller)
             poller.block()
             continue
+
+        ssl_cert = get_ssl_cert(idl.data)
  
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
             if rec.type.as_scalar() == "ipsec_gre":
                 name = rec.name.as_scalar()
-                peer_cert = rec.options.get("peer_cert")
-                psk = rec.options.get("psk")
-
-                if peer_cert and psk:
-                    s_log.warning("both 'peer_cert' and 'psk' defined for %s" 
-                            % name)
-                    continue
-                elif not peer_cert and not psk: 
-                    s_log.warning("no 'peer_cert' or 'psk' defined for %s" 
-                            % name)
-                    continue
-
-                new_interfaces[name] = {
+                entry = {
                     "remote_ip": rec.options.get("remote_ip"),
                     "local_ip": rec.options.get("local_ip", "0.0.0.0/0"),
                     "certificate": rec.options.get("certificate"),
                     "private_key": rec.options.get("private_key"),
-                    "peer_cert": peer_cert,
-                    "psk": psk }
+                    "use_ssl_cert": rec.options.get("use_ssl_cert"),
+                    "peer_cert": rec.options.get("peer_cert"),
+                    "psk": rec.options.get("psk") }
+
+                if entry["peer_cert"] and entry["psk"]:
+                    s_log.warning("both 'peer_cert' and 'psk' defined for %s" 
+                            % name)
+                    continue
+                elif not entry["peer_cert"] and not entry["psk"]:
+                    s_log.warning("no 'peer_cert' or 'psk' defined for %s" 
+                            % name)
+                    continue
+
+                # The "use_ssl_cert" option is deprecated and will
+                # likely go away in the near future.
+                if entry["use_ssl_cert"] == "true":
+                    if not ssl_cert:
+                        s_log.warning("no valid SSL entry for %s" % name)
+                        continue
+
+                    entry["certificate"] = ssl_cert[0]
+                    entry["private_key"] = ssl_cert[1]
+
+                new_interfaces[name] = entry
  
         if interfaces != new_interfaces:
             update_ipsec(ipsec, interfaces, new_interfaces)

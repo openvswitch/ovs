@@ -518,15 +518,28 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
             if (shash_find(args, "certificate")) {
                 ipsec_mech_set = true;
             } else {
-                VLOG_WARN("%s: 'peer_cert' requires 'certificate' argument",
-                          name);
-                return EINVAL;
+                const char *use_ssl_cert;
+
+                /* If the "use_ssl_cert" is true, then "certificate" and
+                 * "private_key" will be pulled from the SSL table.  The
+                 * use of this option is strongly discouraged, since it
+                 * will like be removed when multiple SSL configurations
+                 * are supported by OVS.
+                 */
+                use_ssl_cert = shash_find_data(args, "use_ssl_cert");
+                if (!use_ssl_cert || strcmp(use_ssl_cert, "true")) {
+                    VLOG_WARN("%s: 'peer_cert' requires 'certificate' argument",
+                              name);
+                    return EINVAL;
+                }
+                ipsec_mech_set = true;
             }
         } else if (!strcmp(node->name, "psk") && is_ipsec) {
             ipsec_mech_set = true;
         } else if (is_ipsec 
                 && (!strcmp(node->name, "certificate")
-                    || !strcmp(node->name, "private_key"))) {
+                    || !strcmp(node->name, "private_key")
+                    || !strcmp(node->name, "use_ssl_cert"))) {
             /* Ignore options not used by the netdev. */
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'",
