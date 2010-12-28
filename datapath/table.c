@@ -45,11 +45,11 @@ static void free_buckets(struct tbl_bucket ***l1, unsigned int n_buckets,
 {
 	unsigned int i;
 
-	for (i = 0; i < n_buckets >> TBL_L1_BITS; i++) {
+	for (i = 0; i < n_buckets >> TBL_L1_SHIFT; i++) {
 		struct tbl_bucket **l2 = l1[i];
 		unsigned int j;
 
-		for (j = 0; j < TBL_L1_SIZE; j++) {
+		for (j = 0; j < TBL_L2_SIZE; j++) {
 			struct tbl_bucket *bucket = l2[j];
 			if (!bucket)
 				continue;
@@ -71,14 +71,14 @@ static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
 	struct tbl_bucket ***l1;
 	unsigned int i;
 
-	l1 = kmalloc((n_buckets >> TBL_L1_BITS) * sizeof(struct tbl_bucket **),
+	l1 = kmalloc((n_buckets >> TBL_L1_SHIFT) * sizeof(struct tbl_bucket **),
 		     GFP_KERNEL);
 	if (!l1)
 		return NULL;
-	for (i = 0; i < n_buckets >> TBL_L1_BITS; i++) {
+	for (i = 0; i < n_buckets >> TBL_L1_SHIFT; i++) {
 		l1[i] = (struct tbl_bucket **)get_zeroed_page(GFP_KERNEL);
 		if (!l1[i]) {
-			free_buckets(l1, i << TBL_L1_BITS, NULL);
+			free_buckets(l1, i << TBL_L1_SHIFT, NULL);
 			return NULL;
 		}
 	}
@@ -225,16 +225,23 @@ struct tbl_node *tbl_lookup(struct tbl *table, void *target, u32 hash,
 int tbl_foreach(struct tbl *table,
 		int (*callback)(struct tbl_node *, void *aux), void *aux)
 {
-	unsigned int i, j, k;
-	for (i = 0; i < table->n_buckets >> TBL_L1_BITS; i++) {
-		struct tbl_bucket __rcu **l2 = table->buckets[i];
-		for (j = 0; j < TBL_L1_SIZE; j++) {
-			struct tbl_bucket *bucket = rcu_dereference(l2[j]);
+	unsigned int n_l1 = table->n_buckets >> TBL_L1_SHIFT;
+	unsigned int l1_idx;
+
+	for (l1_idx = 0; l1_idx < n_l1; l1_idx++) {
+		struct tbl_bucket __rcu **l2 = table->buckets[l1_idx];
+		unsigned int l2_idx;
+
+		for (l2_idx = 0; l2_idx < TBL_L2_SIZE; l2_idx++) {
+			struct tbl_bucket *bucket;
+			unsigned int i;
+
+			bucket = rcu_dereference(l2[l2_idx]);
 			if (!bucket)
 				continue;
 
-			for (k = 0; k < bucket->n_objs; k++) {
-				int error = (*callback)(bucket->objs[k], aux);
+			for (i = 0; i < bucket->n_objs; i++) {
+				int error = (*callback)(bucket->objs[i], aux);
 				if (error)
 					return error;
 			}
