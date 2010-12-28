@@ -252,7 +252,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 
 	/* Allocate table. */
 	err = -ENOMEM;
-	rcu_assign_pointer(dp->table, tbl_create(0));
+	rcu_assign_pointer(dp->table, tbl_create(TBL_MIN_BUCKETS));
 	if (!dp->table)
 		goto err_free_dp;
 
@@ -653,7 +653,7 @@ static int flush_flows(struct datapath *dp)
 	struct tbl *old_table = get_table_protected(dp);
 	struct tbl *new_table;
 
-	new_table = tbl_create(0);
+	new_table = tbl_create(TBL_MIN_BUCKETS);
 	if (!new_table)
 		return -ENOMEM;
 

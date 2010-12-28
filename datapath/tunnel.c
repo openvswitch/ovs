@@ -237,7 +237,7 @@ static int add_port(struct vport *vport)
 	if (!port_table) {
 		struct tbl *new_table;
 
-		new_table = tbl_create(0);
+		new_table = tbl_create(TBL_MIN_BUCKETS);
 		if (!new_table)
 			return -ENOMEM;
 

@@ -47,6 +47,9 @@ struct tbl {
 #define TBL_L1_SIZE (1 << TBL_L1_BITS)
 #define TBL_L1_SHIFT TBL_L2_BITS
 
+/* For 4 kB pages, this is 1,024 on 32-bit or 512 on 64-bit.  */
+#define TBL_MIN_BUCKETS TBL_L2_SIZE
+
 /* For 4 kB pages, this is 1,048,576 on 32-bit or 262,144 on 64-bit. */
 #define TBL_MAX_BUCKETS (TBL_L1_SIZE * TBL_L2_SIZE)
 

@@ -90,15 +90,12 @@ static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
  * @n_buckets: number of buckets in the new table
  *
  * Creates and returns a new hash table, or %NULL if memory cannot be
- * allocated.  @n_buckets must be a power of 2 in the range %TBL_L1_SIZE to
+ * allocated.  @n_buckets must be a power of 2 in the range %TBL_MIN_BUCKETS to
  * %TBL_MAX_BUCKETS.
  */
 struct tbl *tbl_create(unsigned int n_buckets)
 {
 	struct tbl *table;
-
-	if (!n_buckets)
-		n_buckets = TBL_L1_SIZE;
 
 	table = kzalloc(sizeof *table, GFP_KERNEL);
 	if (!table)
@@ -273,7 +270,7 @@ struct tbl *tbl_expand(struct tbl *table)
 	}
 
 	err = -ENOMEM;
-	new_table = tbl_create(n_buckets);
+	new_table = tbl_create(TBL_MIN_BUCKETS);
 	if (!new_table)
 		goto error;
 
