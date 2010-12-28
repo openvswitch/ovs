@@ -79,10 +79,15 @@ int dpif_flow_put(struct dpif *, struct odp_flow_put *);
 int dpif_flow_del(struct dpif *, struct odp_flow *);
 int dpif_flow_get(const struct dpif *, struct odp_flow *);
 int dpif_flow_get_multiple(const struct dpif *, struct odp_flow[], size_t n);
-int dpif_flow_list(const struct dpif *, struct odp_flow[], size_t n,
-                   size_t *n_out);
-int dpif_flow_list_all(const struct dpif *,
-                       struct odp_flow **flowsp, size_t *np);
+
+struct dpif_flow_dump {
+    const struct dpif *dpif;
+    int error;
+    void *state;
+};
+void dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
+bool dpif_flow_dump_next(struct dpif_flow_dump *, struct odp_flow *);
+int dpif_flow_dump_done(struct dpif_flow_dump *);
 
 int dpif_execute(struct dpif *, const struct nlattr *actions,
                  size_t actions_len, const struct ofpbuf *);

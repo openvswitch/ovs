@@ -240,12 +240,33 @@ struct dpif_class {
      * packets. */
     int (*flow_flush)(struct dpif *dpif);
 
-    /* Stores up to 'n' flows in 'dpif' into 'flows', updating their statistics
-     * and actions as described under the flow_get member function.  If
-     * successful, returns the number of flows actually present in 'dpif',
-     * which might be greater than the number stored (if 'dpif' has more than
-     * 'n' flows).  On failure, returns a negative errno value. */
-    int (*flow_list)(const struct dpif *dpif, struct odp_flow flows[], int n);
+    /* Attempts to begin dumping the flows in a dpif.  On success, returns 0
+     * and initializes '*statep' with any data needed for iteration.  On
+     * failure, returns a positive errno value. */
+    int (*flow_dump_start)(const struct dpif *dpif, void **statep);
+
+    /* Attempts to retrieve another flow from 'dpif' for 'state', which was
+     * initialized by a successful call to the 'flow_dump_start' function for
+     * 'dpif'.  On success, stores a new odp_flow into 'flow' and returns 0.
+     * Returns EOF if the end of the flow table has been reached, or a positive
+     * errno value on error.  This function will not be called again once it
+     * returns nonzero once for a given iteration (but the 'flow_dump_done'
+     * function will be called afterward).
+     *
+     * Dumping flow actions is optional.  If the caller does not want to dump
+     * actions it will initialize 'flow->actions' to NULL and
+     * 'flow->actions_len' to 0.  Otherwise, 'flow->actions' points to an array
+     * of struct nlattr and 'flow->actions_len' contains the number of bytes of
+     * Netlink attributes.  The implemention should fill in as many actions as
+     * will fit into the provided array and update 'flow->actions_len' with the
+     * number of bytes required (regardless of whether they fit in the provided
+     * space). */
+    int (*flow_dump_next)(const struct dpif *dpif, void *state,
+                          struct odp_flow *flow);
+
+    /* Releases resources from 'dpif' for 'state', which was initialized by a
+     * successful call to the 'flow_dump_start' function for 'dpif'.  */
+    int (*flow_dump_done)(const struct dpif *dpif, void *state);
 
     /* Performs the 'actions_len' bytes of actions in 'actions' on the Ethernet
      * frame specified in 'packet'. */

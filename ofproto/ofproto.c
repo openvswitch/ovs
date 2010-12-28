@@ -4543,36 +4543,30 @@ ofproto_expire(struct ofproto *ofproto)
 static void
 ofproto_update_used(struct ofproto *p)
 {
-    struct odp_flow *flows;
-    size_t n_flows;
-    size_t i;
-    int error;
+    struct dpif_flow_dump dump;
+    struct odp_flow f;
 
-    error = dpif_flow_list_all(p->dpif, &flows, &n_flows);
-    if (error) {
-        return;
-    }
+    memset(&f, 0, sizeof f);
 
-    for (i = 0; i < n_flows; i++) {
-        struct odp_flow *f = &flows[i];
+    dpif_flow_dump_start(&dump, p->dpif);
+    while (dpif_flow_dump_next(&dump, &f)) {
         struct facet *facet;
         struct flow flow;
 
-        odp_flow_key_to_flow(&f->key, &flow);
+        odp_flow_key_to_flow(&f.key, &flow);
         facet = facet_find(p, &flow);
 
         if (facet && facet->installed) {
-            facet_update_time(p, facet, &f->stats);
-            facet_account(p, facet, f->stats.n_bytes);
+            facet_update_time(p, facet, &f.stats);
+            facet_account(p, facet, f.stats.n_bytes);
         } else {
             /* There's a flow in the datapath that we know nothing about.
              * Delete it. */
             COVERAGE_INC(ofproto_unexpected_rule);
-            dpif_flow_del(p->dpif, f);
+            dpif_flow_del(p->dpif, &f);
         }
-
     }
-    free(flows);
+    dpif_flow_dump_done(&dump);
 }
 
 /* Calculates and returns the number of milliseconds of idle time after which

@@ -62,6 +62,7 @@ int tbl_remove(struct tbl *, struct tbl_node *);
 unsigned int tbl_count(struct tbl *);
 int tbl_foreach(struct tbl *,
 		int (*callback)(struct tbl_node *, void *aux), void *aux);
+struct tbl_node *tbl_next(struct tbl *, u32 *bucketp, u32 *objp);
 
 int tbl_n_buckets(struct tbl *);
 struct tbl *tbl_expand(struct tbl *);

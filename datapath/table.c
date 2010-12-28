@@ -251,6 +251,53 @@ int tbl_foreach(struct tbl *table,
 	return 0;
 }
 
+/**
+ * tbl_next - find next node in hash table
+ * @table: table to iterate
+ * @bucketp: On entry, hash value of bucket to start from.  On exit, updated
+ * to bucket to start from on next call.
+ * @objp: On entry, index to start from within first bucket.  On exit, updated
+ * to index to start from on next call.
+ *
+ * Returns the next node in @table in hash order, or %NULL when no nodes remain
+ * in the hash table.
+ *
+ * On entry, uses the values that @bucketp and @objp reference to determine
+ * where to begin iteration.  Use 0 for both values to begin a new iteration.
+ * On exit, stores the values to pass on the next iteration into @bucketp and
+ * @objp's referents.
+ */
+struct tbl_node *tbl_next(struct tbl *table, u32 *bucketp, u32 *objp)
+{
+	unsigned int n_l1 = table->n_buckets >> TBL_L1_SHIFT;
+	u32 s_l1_idx = *bucketp >> TBL_L1_SHIFT;
+	u32 s_l2_idx = *bucketp & (TBL_L2_SIZE - 1);
+	u32 s_obj = *objp;
+	unsigned int l1_idx;
+
+	for (l1_idx = s_l1_idx; l1_idx < n_l1; l1_idx++) {
+		struct tbl_bucket __rcu **l2 = table->buckets[l1_idx];
+		unsigned int l2_idx;
+
+		for (l2_idx = s_l2_idx; l2_idx < TBL_L2_SIZE; l2_idx++) {
+			struct tbl_bucket *bucket;
+
+			bucket = rcu_dereference(l2[l2_idx]);
+			if (bucket && s_obj < bucket->n_objs) {
+				*bucketp = (l1_idx << TBL_L1_SHIFT) + l2_idx;
+				*objp = s_obj + 1;
+				return bucket->objs[s_obj];
+			}
+
+			s_obj = 0;
+		}
+		s_l2_idx = 0;
+	}
+	*bucketp = 0;
+	*objp = 0;
+	return NULL;
+}
+
 static int insert_table_flow(struct tbl_node *node, void *new_table_)
 {
 	struct tbl *new_table = new_table_;

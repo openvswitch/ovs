@@ -792,85 +792,72 @@ dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
     return error;
 }
 
-/* Stores up to 'n' flows in 'dpif' into 'flows', including their statistics
- * but not including any information about their actions.  If successful,
- * returns 0 and sets '*n_out' to the number of flows actually present in
- * 'dpif', which might be greater than the number stored (if 'dpif' has more
- * than 'n' flows).  On failure, returns a negative errno value and sets
- * '*n_out' to 0. */
-int
-dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
-               size_t *n_out)
+/* Initializes 'dump' to begin dumping the flows in a dpif.
+ *
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling
+ * dpif_flow_dump_done().
+ */
+void
+dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
 {
-    uint32_t i;
-    int retval;
-
-    COVERAGE_INC(dpif_flow_query_list);
-    if (RUNNING_ON_VALGRIND) {
-        memset(flows, 0, n * sizeof *flows);
-    } else {
-        for (i = 0; i < n; i++) {
-            flows[i].actions = NULL;
-            flows[i].actions_len = 0;
-        }
-    }
-    retval = dpif->dpif_class->flow_list(dpif, flows, n);
-    if (retval < 0) {
-        *n_out = 0;
-        VLOG_WARN_RL(&error_rl, "%s: flow list failed (%s)",
-                     dpif_name(dpif), strerror(-retval));
-        return -retval;
-    } else {
-        COVERAGE_ADD(dpif_flow_query_list_n, retval);
-        *n_out = MIN(n, retval);
-        VLOG_DBG_RL(&dpmsg_rl, "%s: listed %zu flows (of %d)",
-                    dpif_name(dpif), *n_out, retval);
-        return 0;
-    }
+    dump->dpif = dpif;
+    dump->error = dpif->dpif_class->flow_dump_start(dpif, &dump->state);
+    log_operation(dpif, "flow_dump_start", dump->error);
 }
 
-/* Retrieves all of the flows in 'dpif'.
+/* Attempts to retrieve another flow from 'dump', which must have been
+ * initialized with dpif_flow_dump_start().  On success, stores a new odp_flow
+ * into 'flow' and returns true.  Failure might indicate an actual error or
+ * merely the end of the flow table.  An error status for the entire dump
+ * operation is provided when it is completed by calling dpif_flow_dump_done().
  *
- * If successful, returns 0 and stores in '*flowsp' a pointer to a newly
- * allocated array of flows, including their statistics but not including any
- * information about their actions, and sets '*np' to the number of flows in
- * '*flowsp'.  The caller is responsible for freeing '*flowsp' by calling
- * free().
- *
- * On failure, returns a positive errno value and sets '*flowsp' to NULL and
- * '*np' to 0. */
-int
-dpif_flow_list_all(const struct dpif *dpif,
-                   struct odp_flow **flowsp, size_t *np)
+ * Dumping flow actions is optional.  To avoid dumping actions initialize
+ * 'flow->actions' to NULL and 'flow->actions_len' to 0.  Otherwise, point
+ * 'flow->actions' to an array of struct nlattr and initialize
+ * 'flow->actions_len' with the number of bytes of Netlink attributes.
+ * dpif_flow_dump_next() will fill in as many actions as will fit into the
+ * provided array and update 'flow->actions_len' with the number of bytes
+ * required (regardless of whether they fit in the provided space). */
+bool
+dpif_flow_dump_next(struct dpif_flow_dump *dump, struct odp_flow *flow)
 {
-    struct odp_stats stats;
-    struct odp_flow *flows;
-    size_t n_flows;
-    int error;
+    const struct dpif *dpif = dump->dpif;
 
-    *flowsp = NULL;
-    *np = 0;
+    check_rw_odp_flow(flow);
 
-    error = dpif_get_dp_stats(dpif, &stats);
-    if (error) {
-        return error;
+    if (dump->error) {
+        return false;
     }
 
-    flows = xmalloc(sizeof *flows * stats.n_flows);
-    error = dpif_flow_list(dpif, flows, stats.n_flows, &n_flows);
-    if (error) {
-        free(flows);
-        return error;
+    dump->error = dpif->dpif_class->flow_dump_next(dpif, dump->state, flow);
+    if (dump->error == EOF) {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
+    } else {
+        if (should_log_flow_message(dump->error)) {
+            log_flow_operation(dpif, "flow_dump_next", dump->error, flow);
+        }
     }
 
-    if (stats.n_flows != n_flows) {
-        VLOG_WARN_RL(&error_rl, "%s: datapath stats reported %"PRIu32" "
-                     "flows but flow listing reported %zu",
-                     dpif_name(dpif), stats.n_flows, n_flows);
+    if (dump->error) {
+        dpif->dpif_class->flow_dump_done(dpif, dump->state);
+        return false;
     }
-    *flowsp = flows;
-    *np = n_flows;
-    return 0;
+    return true;
+}
+
+/* Completes flow table dump operation 'dump', which must have been initialized
+ * with dpif_flow_dump_start().  Returns 0 if the dump operation was
+ * error-free, otherwise a positive errno value describing the problem. */
+int
+dpif_flow_dump_done(struct dpif_flow_dump *dump)
+{
+    const struct dpif *dpif = dump->dpif;
+    if (!dump->error) {
+        dump->error = dpif->dpif_class->flow_dump_done(dpif, dump->state);
+        log_operation(dpif, "flow_dump_done", dump->error);
+    }
+    return dump->error == EOF ? 0 : dump->error;
 }
 
 /* Causes 'dpif' to perform the 'actions_len' bytes of actions in 'actions' on

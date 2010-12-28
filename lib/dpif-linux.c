@@ -394,15 +394,29 @@ dpif_linux_flow_del(struct dpif *dpif_, struct odp_flow *flow)
 }
 
 static int
-dpif_linux_flow_list(const struct dpif *dpif_, struct odp_flow flows[], int n)
+dpif_linux_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    struct odp_flowvec fv;
+    *statep = xzalloc(sizeof(struct odp_flow_dump));
+    return 0;
+}
+
+static int
+dpif_linux_flow_dump_next(const struct dpif *dpif, void *state,
+                          struct odp_flow *flow)
+{
+    struct odp_flow_dump *dump = state;
     int error;
 
-    fv.flows = flows;
-    fv.n_flows = n;
-    error = do_ioctl(dpif_, ODP_FLOW_LIST, &fv);
-    return error ? -error : fv.n_flows;
+    dump->flow = flow;
+    error = do_ioctl(dpif, ODP_FLOW_DUMP, dump);
+    return error ? error : flow->flags & ODPFF_EOF ? EOF : 0;
+}
+
+static int
+dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+{
+    free(state);
+    return 0;
 }
 
 static int
@@ -529,7 +543,9 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_flow_put,
     dpif_linux_flow_del,
     dpif_linux_flow_flush,
-    dpif_linux_flow_list,
+    dpif_linux_flow_dump_start,
+    dpif_linux_flow_dump_next,
+    dpif_linux_flow_dump_done,
     dpif_linux_execute,
     dpif_linux_recv_get_mask,
     dpif_linux_recv_set_mask,

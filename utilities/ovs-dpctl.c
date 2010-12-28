@@ -478,29 +478,32 @@ do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 do_dump_flows(int argc OVS_UNUSED, char *argv[])
 {
-    struct odp_flow *flows;
+    struct dpif_flow_dump dump;
     struct dpif *dpif;
-    size_t n_flows;
     struct ds ds;
-    size_t i;
 
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
-    run(dpif_flow_list_all(dpif, &flows, &n_flows), "listing all flows");
 
     ds_init(&ds);
-    for (i = 0; i < n_flows; i++) {
-        struct odp_flow *f = &flows[i];
+    dpif_flow_dump_start(&dump, dpif);
+    for (;;) {
         enum { MAX_ACTIONS = 4096 }; /* An arbitrary but large number. */
         struct nlattr actions[MAX_ACTIONS];
+        struct odp_flow f;
 
-        f->actions = actions;
-        f->actions_len = sizeof actions;
-        if (!dpif_flow_get(dpif, f)) {
-            ds_clear(&ds);
-            format_odp_flow(&ds, f);
-            printf("%s\n", ds_cstr(&ds));
+        memset(&f, 0, sizeof f);
+        f.actions = actions;
+        f.actions_len = sizeof actions;
+
+        if (!dpif_flow_dump_next(&dump, &f)) {
+            break;
         }
+
+        ds_clear(&ds);
+        format_odp_flow(&ds, &f);
+        printf("%s\n", ds_cstr(&ds));
     }
+    dpif_flow_dump_done(&dump);
     ds_destroy(&ds);
     dpif_close(dpif);
 }

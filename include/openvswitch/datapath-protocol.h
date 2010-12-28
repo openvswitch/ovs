@@ -89,7 +89,7 @@
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flowvec)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
-#define ODP_FLOW_LIST           _IOWR('O', 15, struct odp_flowvec)
+#define ODP_FLOW_DUMP           _IOWR('O', 15, struct odp_flow_dump)
 #define ODP_FLOW_FLUSH          _IO('O', 16)
 #define ODP_FLOW_DEL            _IOWR('O', 17, struct odp_flow)
 
@@ -237,6 +237,7 @@ struct odp_flow_key {
 
 /* Flags for ODP_FLOW. */
 #define ODPFF_ZERO_TCP_FLAGS (1 << 0) /* Zero the TCP flags. */
+#define ODPFF_EOF            (1 << 1) /* ODP_FLOW_DUMP: end of flow table. */
 
 struct odp_flow {
     struct odp_flow_stats stats;
@@ -260,6 +261,21 @@ struct odp_flow_put {
 struct odp_flowvec {
     struct odp_flow *flows;
     uint32_t n_flows;
+};
+
+/* ODP_FLOW_DUMP argument.
+ *
+ * This is used to iterate through the flow table flow-by-flow.  Each
+ * ODP_FLOW_DUMP call either stores a new odp_flow into 'flow' or stores
+ * ODPFF_EOF into flow->flags to indicate that the end of the table has been
+ * reaches, and updates 'state' in-place.
+ *
+ * Before the first call, zero 'state'.  The format of 'state' is otherwise
+ * unspecified.
+ */
+struct odp_flow_dump {
+	struct odp_flow *flow;
+	uint32_t state[2];
 };
 
 /* Action types. */

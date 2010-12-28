@@ -779,24 +779,44 @@ dpif_netdev_flow_del(struct dpif *dpif, struct odp_flow *odp_flow)
     }
 }
 
+struct dp_netdev_flow_state {
+    uint32_t bucket;
+    uint32_t offset;
+};
+
 static int
-dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
+dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
+    *statep = xzalloc(sizeof(struct dp_netdev_flow_state));
+    return 0;
+}
+
+static int
+dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
+                           struct odp_flow *odp_flow)
+{
+    struct dp_netdev_flow_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
-    int i;
+    struct hmap_node *node;
 
-    i = 0;
-    HMAP_FOR_EACH (flow, node, &dp->flow_table) {
-        if (i >= n) {
-            break;
-        }
-
-        odp_flow_key_from_flow(&flows[i].key, &flow->key);
-        answer_flow_query(flow, 0, &flows[i]);
-        i++;
+    node = hmap_at_position(&dp->flow_table, &state->bucket, &state->offset);
+    if (!node) {
+        return EOF;
     }
-    return hmap_count(&dp->flow_table);
+
+    flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
+    odp_flow_key_from_flow(&odp_flow->key, &flow->key);
+    answer_flow_query(flow, 0, odp_flow);
+
+    return 0;
+}
+
+static int
+dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+{
+    free(state);
+    return 0;
 }
 
 static int
@@ -1276,7 +1296,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_put,
     dpif_netdev_flow_del,
     dpif_netdev_flow_flush,
-    dpif_netdev_flow_list,
+    dpif_netdev_flow_dump_start,
+    dpif_netdev_flow_dump_next,
+    dpif_netdev_flow_dump_done,
     dpif_netdev_execute,
     dpif_netdev_recv_get_mask,
     dpif_netdev_recv_set_mask,
