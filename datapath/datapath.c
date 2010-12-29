@@ -1989,6 +1989,7 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 }
 
 static struct file_operations openvswitch_fops = {
+	.owner = THIS_MODULE,
 	.read  = openvswitch_read,
 	.poll  = openvswitch_poll,
 	.unlocked_ioctl = openvswitch_ioctl,
