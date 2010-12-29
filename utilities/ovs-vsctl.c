@@ -3180,7 +3180,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
-        struct shash_node *node;
 
         if (oneline) {
             size_t j;
@@ -3207,10 +3206,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
         ds_destroy(&c->output);
 
-        SHASH_FOR_EACH (node, &c->options) {
-            free(node->data);
-        }
-        shash_destroy(&c->options);
+        smap_destroy(&c->options);
     }
     free(commands);
 

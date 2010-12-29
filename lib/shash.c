@@ -303,3 +303,57 @@ shash_random_node(struct shash *sh)
 {
     return CONTAINER_OF(hmap_random_node(&sh->map), struct shash_node, node);
 }
+
+/* String-to-string maps (smaps). */
+
+/* Frees 'smap', including its keys and string values. */
+void
+smap_destroy(struct shash *smap)
+{
+    shash_destroy_free_data(smap);
+}
+
+/* Returns true if string-to-string maps 'a' and 'b' contain the same keys and
+ * values, false otherwise. */
+bool
+smap_equal(const struct shash *a, const struct shash *b)
+{
+    struct shash_node *a_node;
+
+    if (shash_count(a) != shash_count(b)) {
+        return false;
+    }
+
+    SHASH_FOR_EACH (a_node, a) {
+        uint32_t hash = a_node->node.hash;
+        struct shash_node *b_node = shash_find__(b, a_node->name, hash);
+        if (!b_node || strcmp(a_node->data, b_node->data)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* Initializes 'dst' as a clone of 'src'. */
+void
+smap_clone(struct shash *dst, const struct shash *src)
+{
+    struct shash_node *node;
+
+    shash_init(dst);
+    SHASH_FOR_EACH (node, src) {
+        shash_add_nocopy__(dst, xstrdup(node->name), xstrdup(node->data),
+                           node->node.hash);
+    }
+}
+
+/* Adds 'key' with string 'value' to 'smap', making a copy of each.
+ *
+ * It is the caller's responsibility to avoid duplicate names, if that is
+ * desirable. */
+void
+smap_add(struct shash *smap, const char *key, const char *value)
+{
+    shash_add(smap, key, xstrdup(value));
+}

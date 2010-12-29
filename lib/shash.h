@@ -66,6 +66,12 @@ const struct shash_node **shash_sort(const struct shash *);
 bool shash_equal_keys(const struct shash *, const struct shash *);
 struct shash_node *shash_random_node(struct shash *);
 
+/* Working with "smaps": shashes used as string-to-string maps. */
+void smap_destroy(struct shash *);
+bool smap_equal(const struct shash *, const struct shash *);
+void smap_clone(struct shash *, const struct shash *);
+void smap_add(struct shash *, const char *key, const char *value);
+
 #ifdef  __cplusplus
 }
 #endif
