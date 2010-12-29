@@ -928,20 +928,17 @@ unsigned char vport_get_operstate(const struct vport *vport)
  *
  * @vport: vport from which to retrieve index
  *
- * Retrieves the system interface index of the given device.  Not all
- * devices will have system indexes, in which case the index of the
- * datapath local port is returned.  Returns a negative index on error.
- * Either RTNL lock or rcu_read_lock must be held.
+ * Retrieves the system interface index of the given device or 0 if
+ * the device does not have one (in the case of virtual ports).
+ * Returns a negative index on error. Either RTNL lock or
+ * rcu_read_lock must be held.
  */
 int vport_get_ifindex(const struct vport *vport)
 {
 	if (vport->ops->get_ifindex)
 		return vport->ops->get_ifindex(vport);
-
-	/* If we don't actually have an ifindex, use the local port's.
-	 * Userspace doesn't check it anyways. */
-	return vport_get_ifindex(rcu_dereference_rtnl(vport->dp->
-						ports[ODPP_LOCAL]));
+	else
+		return 0;
 }
 
 /**
