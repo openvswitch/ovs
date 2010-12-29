@@ -94,14 +94,13 @@ static struct datapath *get_dp_locked(int dp_idx)
 	return dp;
 }
 
-static struct tbl *get_table_protected(const struct datapath *dp)
+static struct tbl *get_table_protected(struct datapath *dp)
 {
 	return rcu_dereference_protected(dp->table,
 					 lockdep_is_held(&dp->mutex));
 }
 
-static struct vport *get_vport_protected(const struct datapath *dp,
-					 u16 port_no)
+static struct vport *get_vport_protected(struct datapath *dp, u16 port_no)
 {
 	return rcu_dereference_protected(dp->ports[port_no],
 					 lockdep_is_held(&dp->mutex));
@@ -128,7 +127,7 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 			  const struct vport *port,
 			  int event, unsigned int flags)
 {
-	const struct datapath *dp = port->dp;
+	struct datapath *dp = port->dp;
 	int ifindex = vport_get_ifindex(port);
 	int iflink = vport_get_iflink(port);
 	struct ifinfomsg *hdr;
