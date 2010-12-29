@@ -191,73 +191,11 @@ netdev_enumerate_types(struct svec *types)
     }
 }
 
-/* Compares 'args' to those used to those used by 'dev'.  Returns true
- * if the arguments are the same, false otherwise.  Does not update the
- * values stored in 'dev'. */
-static bool
-compare_device_args(const struct netdev_dev *dev, const struct shash *args)
-{
-    const struct shash_node **new_args;
-    bool result = true;
-    int i;
-
-    if (shash_count(args) != dev->n_args) {
-        return false;
-    }
-
-    new_args = shash_sort(args);
-    for (i = 0; i < dev->n_args; i++) {
-        if (strcmp(dev->args[i].key, new_args[i]->name) ||
-            strcmp(dev->args[i].value, new_args[i]->data)) {
-            result = false;
-            goto finish;
-        }
-    }
-
-finish:
-    free(new_args);
-    return result;
-}
-
-static int
-compare_args(const void *a_, const void *b_)
-{
-    const struct arg *a = a_;
-    const struct arg *b = b_;
-    return strcmp(a->key, b->key);
-}
-
 void
 update_device_args(struct netdev_dev *dev, const struct shash *args)
 {
-    struct shash_node *node;
-    int i;
-
-    if (dev->n_args) {
-        for (i = 0; i < dev->n_args; i++) {
-            free(dev->args[i].key);
-            free(dev->args[i].value);
-        }
-
-        free(dev->args);
-        dev->n_args = 0;
-    }
-
-    if (!args || shash_is_empty(args)) {
-        return;
-    }
-
-    dev->n_args = shash_count(args);
-    dev->args = xmalloc(dev->n_args * sizeof *dev->args);
-
-    i = 0;
-    SHASH_FOR_EACH(node, args) {
-        dev->args[i].key = xstrdup(node->name);
-        dev->args[i].value = xstrdup(node->data);
-        i++;
-    }
-
-    qsort(dev->args, dev->n_args, sizeof *dev->args, compare_args);
+    smap_destroy(&dev->args);
+    smap_clone(&dev->args, args);
 }
 
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
@@ -305,7 +243,7 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         update_device_args(netdev_dev, options->args);
 
     } else if (!shash_is_empty(options->args) &&
-               !compare_device_args(netdev_dev, options->args)) {
+               !smap_equal(&netdev_dev->args, options->args)) {
 
         VLOG_WARN("%s: attempted to open already open netdev with "
                   "different arguments", options->name);
@@ -351,7 +289,7 @@ netdev_reconfigure(struct netdev *netdev, const struct shash *args)
     }
 
     if (netdev_dev->netdev_class->reconfigure) {
-        if (!compare_device_args(netdev_dev, args)) {
+        if (!smap_equal(&netdev_dev->args, args)) {
             update_device_args(netdev_dev, args);
             return netdev_dev->netdev_class->reconfigure(netdev_dev, args);
         }
@@ -1345,6 +1283,7 @@ netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
     netdev_dev->netdev_class = netdev_class;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
+    shash_init(&netdev_dev->args);
 }
 
 /* Undoes the results of initialization.
@@ -1362,7 +1301,7 @@ netdev_dev_uninit(struct netdev_dev *netdev_dev, bool destroy)
     assert(!netdev_dev->ref_cnt);
 
     shash_delete(&netdev_dev_shash, netdev_dev->node);
-    update_device_args(netdev_dev, NULL);
+    smap_destroy(&netdev_dev->args);
 
     if (destroy) {
         netdev_dev->netdev_class->destroy(netdev_dev);

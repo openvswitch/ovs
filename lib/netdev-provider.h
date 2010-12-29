@@ -29,11 +29,6 @@
 extern "C" {
 #endif
 
-struct arg {
-    char *key;
-    char *value;
-};
-
 /* A network device (e.g. an Ethernet device).
  *
  * This structure should be treated as opaque by network device
@@ -44,8 +39,7 @@ struct netdev_dev {
                                                 this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
-    struct arg *args;                   /* Argument list from last config. */
-    int n_args;                         /* Number of arguments in 'args'. */
+    struct shash args;                  /* Argument list from last config. */
 };
 
 void netdev_dev_init(struct netdev_dev *, const char *name,
