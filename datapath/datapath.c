@@ -248,6 +248,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 		goto err_put_module;
 	INIT_LIST_HEAD(&dp->port_list);
 	mutex_init(&dp->mutex);
+	mutex_lock(&dp->mutex);
 	dp->dp_idx = dp_idx;
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_head_init(&dp->queues[i]);
@@ -286,6 +287,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	rcu_assign_pointer(dps[dp_idx], dp);
 	dp_sysfs_add_dp(dp);
 
+	mutex_unlock(&dp->mutex);
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 
@@ -296,6 +298,7 @@ err_destroy_local_port:
 err_destroy_table:
 	tbl_destroy(get_table_protected(dp), NULL);
 err_free_dp:
+	mutex_unlock(&dp->mutex);
 	kfree(dp);
 err_put_module:
 	module_put(THIS_MODULE);
@@ -348,7 +351,7 @@ out:
 	return err;
 }
 
-/* Called with RTNL lock and dp_mutex. */
+/* Called with RTNL lock and dp->mutex. */
 static int new_vport(struct datapath *dp, struct odp_port *odp_port, int port_no)
 {
 	struct vport_parms parms;
