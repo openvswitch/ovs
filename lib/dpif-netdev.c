@@ -1060,7 +1060,7 @@ is_ip(const struct ofpbuf *packet, const struct flow *key)
 }
 
 static void
-dp_netdev_set_nw_addr(struct ofpbuf *packet, struct flow *key,
+dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
                       const struct nlattr *a)
 {
     if (is_ip(packet, key)) {
@@ -1088,7 +1088,8 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, struct flow *key,
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key, uint8_t nw_tos)
+dp_netdev_set_nw_tos(struct ofpbuf *packet, const struct flow *key,
+                     uint8_t nw_tos)
 {
     if (is_ip(packet, key)) {
         struct ip_header *nh = packet->l3;
@@ -1104,7 +1105,7 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, struct flow *key, uint8_t nw_tos)
 }
 
 static void
-dp_netdev_set_tp_port(struct ofpbuf *packet, struct flow *key,
+dp_netdev_set_tp_port(struct ofpbuf *packet, const struct flow *key,
                       const struct nlattr *a)
 {
 	if (is_ip(packet, key)) {
