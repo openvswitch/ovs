@@ -318,8 +318,10 @@ static int destroy_dp(int dp_idx)
 	dp = get_dp(dp_idx);
 	if (!dp) {
 		err = -ENODEV;
-		goto unlock;
+		goto out;
 	}
+
+	mutex_lock(&dp->mutex);
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		if (p->port_no != ODPP_LOCAL)
@@ -336,10 +338,11 @@ static int destroy_dp(int dp_idx)
 		skb_queue_purge(&dp->queues[i]);
 	free_percpu(dp->stats_percpu);
 
+	mutex_unlock(&dp->mutex);
 	kobject_put(&dp->ifobj);
 	module_put(THIS_MODULE);
 
-unlock:
+out:
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 	return err;
