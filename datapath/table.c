@@ -51,7 +51,7 @@ static void free_buckets(struct tbl_bucket __rcu ***l1,
 		unsigned int j;
 
 		for (j = 0; j < TBL_L2_SIZE; j++) {
-			struct tbl_bucket *bucket = rcu_dereference(l2[j]);
+			struct tbl_bucket *bucket = (struct tbl_bucket __force *)l2[j];
 			if (!bucket)
 				continue;
 
