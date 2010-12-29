@@ -93,10 +93,7 @@ static int internal_dev_stop(struct net_device *netdev)
 static void internal_dev_getinfo(struct net_device *netdev,
 				 struct ethtool_drvinfo *info)
 {
-	struct vport *vport = internal_dev_get_vport(netdev);
-
 	strcpy(info->driver, "openvswitch");
-	sprintf(info->bus_info, "%d.%d", vport->dp->dp_idx, vport->port_no);
 }
 
 static const struct ethtool_ops internal_dev_ethtool_ops = {

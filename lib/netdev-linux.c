@@ -47,6 +47,7 @@
 #include <unistd.h>
 
 #include "coverage.h"
+#include "dpif-linux.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -1105,22 +1106,8 @@ netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
         const char *type = netdev_dev_get_type(&netdev_dev->netdev_dev);
 
         netdev_dev->is_tap = !strcmp(type, "tap");
-        netdev_dev->is_internal = false;
-        if (!netdev_dev->is_tap) {
-            struct ethtool_drvinfo drvinfo;
-            int error;
-
-            memset(&drvinfo, 0, sizeof drvinfo);
-            error = netdev_linux_do_ethtool(name,
-                                            (struct ethtool_cmd *)&drvinfo,
-                                            ETHTOOL_GDRVINFO,
-                                            "ETHTOOL_GDRVINFO");
-
-            if (!error && !strcmp(drvinfo.driver, "openvswitch")) {
-                netdev_dev->is_internal = true;
-            }
-        }
-
+        netdev_dev->is_internal = (!netdev_dev->is_tap
+                                   && dpif_linux_is_internal_device(name));
         netdev_dev->cache_valid |= VALID_IS_PSEUDO;
     }
 }

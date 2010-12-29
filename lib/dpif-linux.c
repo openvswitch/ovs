@@ -15,7 +15,8 @@
  */
 
 #include <config.h>
-#include "dpif.h"
+
+#include "dpif-linux.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -69,6 +70,7 @@ struct dpif_linux {
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
 static int do_ioctl(const struct dpif *, int cmd, const void *arg);
+static int lookup_internal_device(const char *name, int *dp_idx, int *port_no);
 static int lookup_minor(const char *name, int *minor);
 static int finish_open(struct dpif *, const char *local_ifname);
 static int get_openvswitch_major(void);
@@ -638,60 +640,74 @@ do_ioctl(const struct dpif *dpif_, int cmd, const void *arg)
 }
 
 static int
+lookup_internal_device(const char *name, int *dp_idx, int *port_no)
+{
+    struct odp_port odp_port;
+    static int dp0_fd = -1;
+
+    if (dp0_fd < 0) {
+        int error;
+        char *fn;
+
+        error = make_openvswitch_device(0, &fn);
+        if (error) {
+            return error;
+        }
+
+        dp0_fd = open(fn, O_RDONLY | O_NONBLOCK);
+        if (dp0_fd < 0) {
+            VLOG_WARN_RL(&error_rl, "%s: open failed (%s)",
+                         fn, strerror(errno));
+            free(fn);
+            return errno;
+        }
+        free(fn);
+    }
+
+    memset(&odp_port, 0, sizeof odp_port);
+    strncpy(odp_port.devname, name, sizeof odp_port.devname);
+    if (ioctl(dp0_fd, ODP_VPORT_QUERY, &odp_port)) {
+        if (errno != ENODEV) {
+            VLOG_WARN_RL(&error_rl, "%s: vport query failed (%s)",
+                         name, strerror(errno));
+        }
+        return errno;
+    } else if (!strcmp(odp_port.type, "internal")) {
+        *dp_idx = odp_port.dp_idx;
+        *port_no = odp_port.port;
+        return 0;
+    } else {
+        return EINVAL;
+    }
+}
+
+static int
 lookup_minor(const char *name, int *minorp)
 {
-    struct ethtool_drvinfo drvinfo;
     int minor, port_no;
-    struct ifreq ifr;
     int error;
-    int sock;
 
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        VLOG_WARN("socket(AF_INET) failed: %s", strerror(errno));
-        error = errno;
-        goto error;
-    }
-
-    memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    ifr.ifr_data = (caddr_t) &drvinfo;
-
-    memset(&drvinfo, 0, sizeof drvinfo);
-    drvinfo.cmd = ETHTOOL_GDRVINFO;
-    if (ioctl(sock, SIOCETHTOOL, &ifr)) {
-        VLOG_WARN("ioctl(SIOCETHTOOL) failed: %s", strerror(errno));
-        error = errno;
-        goto error_close_sock;
-    }
-
-    if (strcmp(drvinfo.driver, "openvswitch")) {
-        VLOG_WARN("%s is not an openvswitch device", name);
-        error = EOPNOTSUPP;
-        goto error_close_sock;
-    }
-
-    if (sscanf(drvinfo.bus_info, "%d.%d", &minor, &port_no) != 2) {
-        VLOG_WARN("%s ethtool bus_info has unexpected format", name);
-        error = EPROTOTYPE;
-        goto error_close_sock;
+    error = lookup_internal_device(name, &minor, &port_no);
+    if (error) {
+        return error;
     } else if (port_no != ODPP_LOCAL) {
         /* This is an Open vSwitch device but not the local port.  We
          * intentionally support only using the name of the local port as the
          * name of a datapath; otherwise, it would be too difficult to
          * enumerate all the names of a datapath. */
-        error = EOPNOTSUPP;
-        goto error_close_sock;
+        return EOPNOTSUPP;
+    } else {
+        *minorp = minor;
+        return 0;
     }
+}
 
-    *minorp = minor;
-    close(sock);
-    return 0;
+bool
+dpif_linux_is_internal_device(const char *name)
+{
+    int minor, port_no;
 
-error_close_sock:
-    close(sock);
-error:
-    return error;
+    return !lookup_internal_device(name, &minor, &port_no);
 }
 
 static int
