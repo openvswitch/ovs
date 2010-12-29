@@ -42,8 +42,8 @@ where:
     appears as the name of a directory in /lib/modules inside the VM.
     It always ends in "xen".
 
-Two RPMs will be output into /usr/src/redhat/RPMS, whose names begin
-with "openvswitch" and "openvswitch-debuginfo".
+Two RPMs will be output into /usr/src/redhat/RPMS/i386, whose names
+begin with "openvswitch" and "openvswitch-debuginfo".
 
 Installing Open vSwitch for XenServer
 -------------------------------------
