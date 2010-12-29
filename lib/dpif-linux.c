@@ -309,12 +309,20 @@ dpif_linux_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
 }
 
 static int
-dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
+dpif_linux_port_query_by_name(const struct dpif *dpif_, const char *devname,
                               struct odp_port *port)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
     memset(port, 0, sizeof *port);
     strncpy(port->devname, devname, sizeof port->devname);
-    return dpif_linux_port_query__(dpif, port);
+    error = dpif_linux_port_query__(dpif_, port);
+    if (!error && port->dp_idx != dpif->minor) {
+        /* A vport named 'devname' exists but in some other datapath.  */
+        error = ENOENT;
+    }
+    return error;
 }
 
 static int

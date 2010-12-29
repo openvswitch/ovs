@@ -182,7 +182,7 @@ struct odp_port {
     char devname[16];           /* IFNAMSIZ */
     char type[VPORT_TYPE_SIZE];
     uint16_t port;
-    uint16_t reserved1;
+    uint16_t dp_idx;
     uint32_t reserved2;
     __aligned_u64 config[VPORT_CONFIG_SIZE / 8]; /* type-specific */
 };

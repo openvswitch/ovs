@@ -1349,52 +1349,58 @@ void set_internal_devs_mtu(const struct datapath *dp)
 	}
 }
 
-static int put_port(const struct vport *p, struct odp_port __user *uop)
+static void compose_odp_port(const struct vport *vport, struct odp_port *odp_port)
 {
-	struct odp_port op;
-
-	memset(&op, 0, sizeof(op));
-
 	rcu_read_lock();
-	strncpy(op.devname, vport_get_name(p), sizeof(op.devname));
-	strncpy(op.type, vport_get_type(p), sizeof(op.type));
-	vport_get_config(p, op.config);
+	strncpy(odp_port->devname, vport_get_name(vport), sizeof(odp_port->devname));
+	strncpy(odp_port->type, vport_get_type(vport), sizeof(odp_port->type));
+	vport_get_config(vport, odp_port->config);
+	odp_port->port = vport->port_no;
+	odp_port->dp_idx = vport->dp->dp_idx;
 	rcu_read_unlock();
-
-	op.port = p->port_no;
-
-	return copy_to_user(uop, &op, sizeof(op)) ? -EFAULT : 0;
 }
 
-static int query_port(struct datapath *dp, struct odp_port __user *uport)
+static int query_port(int dp_idx, struct odp_port __user *uport)
 {
 	struct odp_port port;
-	struct vport *vport;
 
 	if (copy_from_user(&port, uport, sizeof(port)))
 		return -EFAULT;
 
 	if (port.devname[0]) {
+		struct vport *vport;
+
 		port.devname[IFNAMSIZ - 1] = '\0';
 
 		vport_lock();
 		vport = vport_locate(port.devname);
+		if (vport)
+			compose_odp_port(vport, &port);
 		vport_unlock();
 
 		if (!vport)
 			return -ENODEV;
-		if (vport->dp != dp)
-			return -ENOENT;
 	} else {
+		struct vport *vport;
+		struct datapath *dp;
+
 		if (port.port >= DP_MAX_PORTS)
 			return -EINVAL;
 
+		dp = get_dp_locked(dp_idx);
+		if (!dp)
+			return -ENODEV;
+
 		vport = get_vport_protected(dp, port.port);
+		if (vport)
+			compose_odp_port(vport, &port);
+		mutex_unlock(&dp->mutex);
+
 		if (!vport)
 			return -ENOENT;
 	}
 
-	return put_port(vport, uport);
+	return copy_to_user(uport, &port, sizeof(struct odp_port));
 }
 
 static int do_dump_port(struct datapath *dp, struct odp_vport_dump *dump)
@@ -1403,8 +1409,12 @@ static int do_dump_port(struct datapath *dp, struct odp_vport_dump *dump)
 
 	for (port_no = dump->port_no; port_no < DP_MAX_PORTS; port_no++) {
 		struct vport *vport = get_vport_protected(dp, port_no);
-		if (vport)
-			return put_port(vport, (struct odp_port __force __user*)dump->port);
+		if (vport) {
+			struct odp_port odp_port;
+
+			compose_odp_port(vport, &odp_port);
+			return copy_to_user((struct odp_port __force __user*)dump->port, &odp_port, sizeof(struct odp_port));
+		}
 	}
 
 	return put_user('\0', (char __force __user*)&dump->port->devname[0]);
@@ -1457,6 +1467,10 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = get_user(port_no, (int __user *)argp);
 		if (!err)
 			err = detach_port(dp_idx, port_no);
+		goto exit;
+
+	case ODP_VPORT_QUERY:
+		err = query_port(dp_idx, (struct odp_port __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_MOD:
@@ -1536,10 +1550,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = get_user(sflow_probability, (unsigned int __user *)argp);
 		if (!err)
 			dp->sflow_probability = sflow_probability;
-		break;
-
-	case ODP_VPORT_QUERY:
-		err = query_port(dp, (struct odp_port __user *)argp);
 		break;
 
 	case ODP_VPORT_DUMP:
