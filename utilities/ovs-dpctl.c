@@ -351,14 +351,41 @@ show_dpif(struct dpif *dpif)
                stats.max_miss_queue, stats.max_action_queue);
     }
     DPIF_PORT_FOR_EACH (&odp_port, &dump, dpif) {
-        struct ds ds;
-
         printf("\tport %u: %s", odp_port.port, odp_port.devname);
 
-        ds_init(&ds);
-        format_odp_port_type(&ds, &odp_port);
-        printf("%s\n", ds_cstr(&ds));
-        ds_destroy(&ds);
+        if (strcmp(odp_port.type, "system")) {
+            struct netdev_options netdev_options;
+            struct netdev *netdev;
+            int error;
+
+            printf (" (%s", odp_port.type);
+
+            netdev_options.name = odp_port.devname;
+            netdev_options.type = odp_port.type;
+            netdev_options.args = NULL;
+            netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
+            error = netdev_open(&netdev_options, &netdev);
+            if (!error) {
+                const struct shash_node **nodes;
+                const struct shash *config;
+                size_t i;
+
+                config = netdev_get_config(netdev);
+                nodes = shash_sort(config);
+                for (i = 0; i < shash_count(config); i++) {
+                    const struct shash_node *node = nodes[i];
+                    printf("%c %s=%s", i ? ',' : ':',
+                           node->name, (char *) node->data);
+                }
+                free(nodes);
+
+                netdev_close(netdev);
+            } else {
+                printf(": open failed (%s)", strerror(error));
+            }
+            putchar(')');
+        }
+        putchar('\n');
     }
     dpif_close(dpif);
 }

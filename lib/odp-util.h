@@ -62,7 +62,6 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
 void format_odp_flow(struct ds *, const struct odp_flow *);
-void format_odp_port_type(struct ds *, const struct odp_port *);
 
 /* By my calculations currently the longest valid nlattr-formatted flow key is
  * 80 bytes long, so this leaves some safety margin.
