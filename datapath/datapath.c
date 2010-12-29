@@ -306,10 +306,20 @@ err:
 	return err;
 }
 
-static void do_destroy_dp(struct datapath *dp)
+static int destroy_dp(int dp_idx)
 {
+	struct datapath *dp;
+	int err = 0;
 	struct vport *p, *n;
 	int i;
+
+	rtnl_lock();
+	mutex_lock(&dp_mutex);
+	dp = get_dp(dp_idx);
+	if (!dp) {
+		err = -ENODEV;
+		goto unlock;
+	}
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		if (p->port_no != ODPP_LOCAL)
@@ -325,26 +335,11 @@ static void do_destroy_dp(struct datapath *dp)
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_purge(&dp->queues[i]);
 	free_percpu(dp->stats_percpu);
+
 	kobject_put(&dp->ifobj);
 	module_put(THIS_MODULE);
-}
 
-static int destroy_dp(int dp_idx)
-{
-	struct datapath *dp;
-	int err;
-
-	rtnl_lock();
-	mutex_lock(&dp_mutex);
-	dp = get_dp(dp_idx);
-	err = -ENODEV;
-	if (!dp)
-		goto err_unlock;
-
-	do_destroy_dp(dp);
-	err = 0;
-
-err_unlock:
+unlock:
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 	return err;
