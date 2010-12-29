@@ -99,6 +99,7 @@ hash_symmetric_l4(const struct flow *flow, uint16_t basis)
 
     int i;
 
+    memset(&fields, 0, sizeof fields);
     for (i = 0; i < ETH_ADDR_LEN; i++) {
         fields.eth_addr[i] = flow->dl_src[i] ^ flow->dl_dst[i];
     }
