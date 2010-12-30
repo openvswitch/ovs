@@ -1,0 +1,76 @@
+                     Design Decisions In Open vSwitch
+                     ================================
+
+This document describes design decisions that went into implementing
+Open vSwitch.  While we believe these to be reasonable decisions, it is
+impossible to predict how Open vSwitch will be used in all environments.
+Understanding assumptions made by Open vSwitch is critical to a
+successful deployment.  The end of this document contains contact
+information that can be used to let us know how we can make Open vSwitch
+more generally useful.
+
+
+IPv6
+====
+
+Open vSwitch supports stateless handling of IPv6 packets.  Flows can be
+written to support matching TCP, UDP, and ICMPv6 headers within an IPv6
+packet.
+
+IPv6 was not designed to interact well with middle-boxes.  This,
+combined with Open vSwitch's stateless nature, have affected the
+processing of IPv6 traffic, which is detailed below.
+
+Extension Headers
+-----------------
+
+The base IPv6 header is incredibly simple with the intention of only
+containing information relevant for routing packets between two
+endpoints.  IPv6 relies heavily on the use of extension headers to
+provide any other functionality.  Unfortunately, the extension headers
+were designed in such a way that it is impossible to move to the next
+header (including the layer-4 payload) unless the current header is
+understood.
+
+Open vSwitch will process the following extension headers and continue
+to the next header:
+
+    * Fragment (see the next section)
+    * AH (Authentication Header)
+    * Hop-by-Hop Options
+    * Routing
+    * Destination Options
+
+When a header is encountered that is not in that list, it is considered
+"terminal".  A terminal header's IPv6 protocol value is stored in
+"nw_proto" for matching purposes.  If a terminal header is TCP, UDP, or
+ICMPv6, the packet will be further processed in an attempt to extract
+layer-4 information.
+
+Fragments
+---------
+
+IPv6 requires that every link in the internet have an MTU of 1280 octets
+or greater (RFC 2460).  As such, a terminal header (as described above in
+"Extension Headers") in the first fragment should generally be
+reachable.  In this case, the terminal header's IPv6 protocol type is
+stored in the "nw_proto" field for matching purposes.  If a terminal
+header cannot be found in the first fragment (one with a fragment offset
+of zero), the "nw_proto" field is set to 0.  Subsequent fragments (those
+with a non-zero fragment offset) have the "nw_proto" field set to the
+IPv6 protocol type for fragments (44).
+
+Jumbograms
+----------
+
+An IPv6 jumbogram (RFC 2675) is a packet containing a payload longer
+than 65,535 octets.  A jumbogram is only relevant in subnets with a link
+MTU greater than 65,575 octets, and are not required to be supported on
+nodes that do not connect to link with such large MTUs.  Currently, Open
+vSwitch doesn't process jumbograms.
+
+
+Suggestions
+===========
+
+Suggestions to improve Open vSwitch are welcome at discuss@openvswitch.org.

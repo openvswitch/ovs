@@ -157,6 +157,46 @@ error:
     ovs_fatal(0, "%s: bad syntax for tunnel id", str);
 }
 
+static void
+str_to_ipv6(const char *str_, struct in6_addr *addrp, struct in6_addr *maskp)
+{
+    char *str = xstrdup(str_);
+    char *save_ptr = NULL;
+    const char *name, *netmask;
+    struct in6_addr addr, mask;
+    int retval;
+
+    name = strtok_r(str, "/", &save_ptr);
+    retval = name ? lookup_ipv6(name, &addr) : EINVAL;
+    if (retval) {
+        ovs_fatal(0, "%s: could not convert to IPv6 address", str);
+    }
+
+    netmask = strtok_r(NULL, "/", &save_ptr);
+    if (netmask) {
+        int prefix = atoi(netmask);
+        if (prefix <= 0 || prefix > 128) {
+            ovs_fatal(0, "%s: network prefix bits not between 1 and 128",
+                      str);
+        } else {
+            mask = ipv6_create_mask(prefix);
+        }
+    } else {
+        mask = in6addr_exact;
+    }
+    *addrp = ipv6_addr_bitand(&addr, &mask);
+
+    if (maskp) {
+        *maskp = mask;
+    } else {
+        if (!ipv6_mask_is_exact(&mask)) {
+            ovs_fatal(0, "%s: netmask not allowed here", str_);
+        }
+    }
+
+    free(str);
+}
+
 static void *
 put_action(struct ofpbuf *b, size_t size, uint16_t type)
 {
@@ -463,6 +503,11 @@ parse_protocol(const char *name, const struct protocol **p_out)
         { "icmp", ETH_TYPE_IP, IPPROTO_ICMP },
         { "tcp", ETH_TYPE_IP, IPPROTO_TCP },
         { "udp", ETH_TYPE_IP, IPPROTO_UDP },
+        { "ipv6", ETH_TYPE_IPV6, 0 },
+        { "ip6", ETH_TYPE_IPV6, 0 },
+        { "icmp6", ETH_TYPE_IPV6, IPPROTO_ICMPV6 },
+        { "tcp6", ETH_TYPE_IPV6, IPPROTO_TCP },
+        { "udp6", ETH_TYPE_IPV6, IPPROTO_UDP },
     };
     const struct protocol *p;
 
@@ -493,7 +538,9 @@ parse_protocol(const char *name, const struct protocol **p_out)
     FIELD(F_ICMP_TYPE,   "icmp_type",   FWW_TP_SRC)         \
     FIELD(F_ICMP_CODE,   "icmp_code",   FWW_TP_DST)         \
     FIELD(F_ARP_SHA,     "arp_sha",     FWW_ARP_SHA)        \
-    FIELD(F_ARP_THA,     "arp_tha",     FWW_ARP_THA)
+    FIELD(F_ARP_THA,     "arp_tha",     FWW_ARP_THA)        \
+    FIELD(F_IPV6_SRC,    "ipv6_src",    0)                  \
+    FIELD(F_IPV6_DST,    "ipv6_dst",    0)
 
 enum field_index {
 #define FIELD(ENUM, NAME, WILDCARD) ENUM,
@@ -535,6 +582,7 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     uint8_t mac[ETH_ADDR_LEN];
     ovs_be64 tun_id, tun_mask;
     ovs_be32 ip, mask;
+    struct in6_addr ipv6, ipv6_mask;
     uint16_t port_no;
 
     switch (index) {
@@ -617,6 +665,16 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     case F_ARP_THA:
         str_to_mac(value, mac);
         cls_rule_set_arp_tha(rule, mac);
+        break;
+
+    case F_IPV6_SRC:
+        str_to_ipv6(value, &ipv6, &ipv6_mask);
+        cls_rule_set_ipv6_src_masked(rule, &ipv6, &ipv6_mask);
+        break;
+
+    case F_IPV6_DST:
+        str_to_ipv6(value, &ipv6, &ipv6_mask);
+        cls_rule_set_ipv6_dst_masked(rule, &ipv6, &ipv6_mask);
         break;
 
     case N_FIELDS:
@@ -723,6 +781,12 @@ parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
                         cls_rule_set_nw_src_masked(&fm->cr, 0, 0);
                     } else if (f->index == F_NW_DST) {
                         cls_rule_set_nw_dst_masked(&fm->cr, 0, 0);
+                    } else if (f->index == F_IPV6_SRC) {
+                        cls_rule_set_ipv6_src_masked(&fm->cr,
+                                &in6addr_any, &in6addr_any);
+                    } else if (f->index == F_IPV6_DST) {
+                        cls_rule_set_ipv6_dst_masked(&fm->cr,
+                                &in6addr_any, &in6addr_any);
                     } else if (f->index == F_DL_VLAN) {
                         cls_rule_set_any_vid(&fm->cr);
                     } else if (f->index == F_DL_VLAN_PCP) {

@@ -31,8 +31,16 @@ struct sw_flow_actions {
 
 struct sw_flow_key {
 	__be64	tun_id;     /* Encapsulating tunnel ID. */
-	__be32	nw_src;	    /* IP source address. */
-	__be32	nw_dst;	    /* IP destination address. */
+	union {
+		struct {
+			__be32	ipv4_src;	 /* IPv4 source address. */
+			__be32	ipv4_dst;	 /* IPv4 destination address. */
+		};
+		struct {
+			__be32	ipv6_src[4]; /* IPv6 source address. */
+			__be32	ipv6_dst[4]; /* IPv6 source address. */
+		};
+	};
 	u16	in_port;    /* Input switch port. */
 	__be16	dl_tci;	    /* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
 	__be16	dl_type;    /* Ethernet frame type. */

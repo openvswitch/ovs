@@ -31,6 +31,7 @@ CLEAN_LOCAL =
 DISTCLEANFILES =
 EXTRA_DIST = \
 	CodingStyle \
+	DESIGN \
 	INSTALL.KVM \
 	INSTALL.Linux \
 	INSTALL.OpenFlow \

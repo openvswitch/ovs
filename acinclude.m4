@@ -184,6 +184,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow_head])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
                   [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/icmpv6.h], [icmp6_hdr],
+                  [OVS_DEFINE([HAVE_ICMP6_HDR])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_warn_if_lro],
                   [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
 

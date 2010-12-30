@@ -28,6 +28,7 @@
 #include "util.h"
 
 struct ofpbuf;
+struct ds;
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
@@ -153,6 +154,7 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
 #define ETH_TYPE_VLAN          0x8100
+#define ETH_TYPE_IPV6          0x86dd
 #define ETH_TYPE_CFM           0x8902
 
 /* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
@@ -370,5 +372,35 @@ struct arp_eth_header {
     uint32_t ar_tpa;           /* Target protocol address. */
 } __attribute__((packed));
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
+
+extern const struct in6_addr in6addr_exact;
+#define IN6ADDR_EXACT_INIT { { { 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff, \
+                                 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff } } }
+
+static inline bool ipv6_addr_equals(const struct in6_addr *a,
+                                    const struct in6_addr *b)
+{
+#ifdef IN6_ARE_ADDR_EQUAL
+    return IN6_ARE_ADDR_EQUAL(a, b);
+#else
+    return !memcmp(a, b, sizeof(*a));
+#endif
+}
+
+static inline bool ipv6_mask_is_any(const struct in6_addr *mask) {
+    return ipv6_addr_equals(mask, &in6addr_any);
+}
+
+static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
+    return ipv6_addr_equals(mask, &in6addr_exact);
+}
+
+void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
+void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
+struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
+                                 const struct in6_addr *mask);
+struct in6_addr ipv6_create_mask(int mask);
+int ipv6_count_cidr_bits(const struct in6_addr *netmask);
+bool ipv6_is_cidr(const struct in6_addr *netmask);
 
 #endif /* packets.h */

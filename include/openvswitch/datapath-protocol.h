@@ -311,9 +311,11 @@ enum odp_key_type {
 	ODP_KEY_ATTR_8021Q,     /* struct odp_key_8021q */
 	ODP_KEY_ATTR_ETHERTYPE,	/* 16-bit Ethernet type */
 	ODP_KEY_ATTR_IPV4,      /* struct odp_key_ipv4 */
+	ODP_KEY_ATTR_IPV6,      /* struct odp_key_ipv6 */
 	ODP_KEY_ATTR_TCP,       /* struct odp_key_tcp */
 	ODP_KEY_ATTR_UDP,       /* struct odp_key_udp */
 	ODP_KEY_ATTR_ICMP,      /* struct odp_key_icmp */
+	ODP_KEY_ATTR_ICMPV6,    /* struct odp_key_icmpv6 */
 	ODP_KEY_ATTR_ARP,       /* struct odp_key_arp */
 	__ODP_KEY_ATTR_MAX
 };
@@ -337,6 +339,13 @@ struct odp_key_ipv4 {
 	uint8_t  ipv4_tos;
 };
 
+struct odp_key_ipv6 {
+	ovs_be32 ipv6_src[4];
+	ovs_be32 ipv6_dst[4];
+	uint8_t  ipv6_proto;
+	uint8_t  ipv6_tos;
+};
+
 struct odp_key_tcp {
 	ovs_be16 tcp_src;
 	ovs_be16 tcp_dst;
@@ -350,6 +359,11 @@ struct odp_key_udp {
 struct odp_key_icmp {
 	uint8_t icmp_type;
 	uint8_t icmp_code;
+};
+
+struct odp_key_icmpv6 {
+	uint8_t icmpv6_type;
+	uint8_t icmpv6_code;
 };
 
 struct odp_key_arp {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <arpa/inet.h>
 #include <config.h>
 #include "odp-util.h"
 #include <errno.h>
@@ -194,9 +195,11 @@ odp_flow_key_attr_len(uint16_t type)
     case ODP_KEY_ATTR_8021Q: return sizeof(struct odp_key_8021q);
     case ODP_KEY_ATTR_ETHERTYPE: return 2;
     case ODP_KEY_ATTR_IPV4: return sizeof(struct odp_key_ipv4);
+    case ODP_KEY_ATTR_IPV6: return sizeof(struct odp_key_ipv6);
     case ODP_KEY_ATTR_TCP: return sizeof(struct odp_key_tcp);
     case ODP_KEY_ATTR_UDP: return sizeof(struct odp_key_udp);
     case ODP_KEY_ATTR_ICMP: return sizeof(struct odp_key_icmp);
+    case ODP_KEY_ATTR_ICMPV6: return sizeof(struct odp_key_icmpv6);
     case ODP_KEY_ATTR_ARP: return sizeof(struct odp_key_arp);
 
     case ODP_KEY_ATTR_UNSPEC:
@@ -233,9 +236,11 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct odp_key_ethernet *eth_key;
     const struct odp_key_8021q *q_key;
     const struct odp_key_ipv4 *ipv4_key;
+    const struct odp_key_ipv6 *ipv6_key;
     const struct odp_key_tcp *tcp_key;
     const struct odp_key_udp *udp_key;
     const struct odp_key_icmp *icmp_key;
+    const struct odp_key_icmpv6 *icmpv6_key;
     const struct odp_key_arp *arp_key;
 
     if (nl_attr_get_size(a) != odp_flow_key_attr_len(nl_attr_type(a))) {
@@ -287,6 +292,20 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
                       ipv4_key->ipv4_proto, ipv4_key->ipv4_tos);
         break;
 
+    case ODP_KEY_ATTR_IPV6: {
+        char src_str[INET6_ADDRSTRLEN];
+        char dst_str[INET6_ADDRSTRLEN];
+
+        ipv6_key = nl_attr_get(a);
+        inet_ntop(AF_INET6, ipv6_key->ipv6_src, src_str, sizeof src_str);
+        inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
+
+        ds_put_format(ds, "ipv6(src=%s,dst=%s,proto=%"PRId8",tos=%"PRIu8")",
+                      src_str, dst_str, ipv6_key->ipv6_proto,
+                      ipv6_key->ipv6_tos);
+        break;
+    }
+
     case ODP_KEY_ATTR_TCP:
         tcp_key = nl_attr_get(a);
         ds_put_format(ds, "tcp(src=%"PRIu16",dst=%"PRIu16")",
@@ -303,6 +322,12 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         icmp_key = nl_attr_get(a);
         ds_put_format(ds, "icmp(type=%"PRIu8",code=%"PRIu8")",
                       icmp_key->icmp_type, icmp_key->icmp_code);
+        break;
+
+    case ODP_KEY_ATTR_ICMPV6:
+        icmpv6_key = nl_attr_get(a);
+        ds_put_format(ds, "icmpv6(type=%"PRIu8",code=%"PRIu8")",
+                      icmpv6_key->icmpv6_type, icmpv6_key->icmpv6_code);
         break;
 
     case ODP_KEY_ATTR_ARP:
@@ -387,6 +412,29 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv4_key->ipv4_dst = flow->nw_dst;
         ipv4_key->ipv4_proto = flow->nw_proto;
         ipv4_key->ipv4_tos = flow->nw_tos;
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        struct odp_key_ipv6 *ipv6_key;
+
+        ipv6_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_IPV6,
+                                            sizeof *ipv6_key);
+        memcpy(ipv6_key->ipv6_src, &flow->ipv6_src, sizeof ipv6_key->ipv6_src);
+        memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
+        ipv6_key->ipv6_proto = flow->nw_proto;
+        ipv6_key->ipv6_tos = flow->nw_tos;
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+        struct odp_key_arp *arp_key;
+
+        arp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ARP,
+                                           sizeof *arp_key);
+        arp_key->arp_sip = flow->nw_src;
+        arp_key->arp_tip = flow->nw_dst;
+        arp_key->arp_op = htons(flow->nw_proto);
+        memcpy(arp_key->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
+        memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+    }
+    
+    if (flow->dl_type == htons(ETH_TYPE_IP)
+            || flow->dl_type == htons(ETH_TYPE_IPV6)) {
 
         if (flow->nw_proto == IPPROTO_TCP) {
             struct odp_key_tcp *tcp_key;
@@ -402,24 +450,23 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
                                                sizeof *udp_key);
             udp_key->udp_src = flow->tp_src;
             udp_key->udp_dst = flow->tp_dst;
-        } else if (flow->nw_proto == IPPROTO_ICMP) {
+        } else if (flow->dl_type == htons(ETH_TYPE_IP)
+                && flow->nw_proto == IPPROTO_ICMP) {
             struct odp_key_icmp *icmp_key;
 
             icmp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ICMP,
                                                 sizeof *icmp_key);
             icmp_key->icmp_type = ntohs(flow->tp_src);
             icmp_key->icmp_code = ntohs(flow->tp_dst);
-        }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-        struct odp_key_arp *arp_key;
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)
+                && flow->nw_proto == IPPROTO_ICMPV6) {
+            struct odp_key_icmpv6 *icmpv6_key;
 
-        arp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ARP,
-                                           sizeof *arp_key);
-        arp_key->arp_sip = flow->nw_src;
-        arp_key->arp_tip = flow->nw_dst;
-        arp_key->arp_op = htons(flow->nw_proto);
-        memcpy(arp_key->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
-        memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+            icmpv6_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ICMPV6,
+                                                  sizeof *icmpv6_key);
+            icmpv6_key->icmpv6_type = ntohs(flow->tp_src);
+            icmpv6_key->icmpv6_code = ntohs(flow->tp_dst);
+        }
     }
 }
 
@@ -441,9 +488,11 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         const struct odp_key_ethernet *eth_key;
         const struct odp_key_8021q *q_key;
         const struct odp_key_ipv4 *ipv4_key;
+        const struct odp_key_ipv6 *ipv6_key;
         const struct odp_key_tcp *tcp_key;
         const struct odp_key_udp *udp_key;
         const struct odp_key_icmp *icmp_key;
+        const struct odp_key_icmpv6 *icmpv6_key;
         const struct odp_key_arp *arp_key;
 
         uint16_t type = nl_attr_type(nla);
@@ -507,7 +556,22 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             }
             break;
 
+        case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_IPV6):
+            if (flow->dl_type != htons(ETH_TYPE_IPV6)) {
+                return EINVAL;
+            }
+            ipv6_key = nl_attr_get(nla);
+            memcpy(&flow->ipv6_src, ipv6_key->ipv6_src, sizeof flow->ipv6_src);
+            memcpy(&flow->ipv6_dst, ipv6_key->ipv6_dst, sizeof flow->ipv6_dst);
+            flow->nw_proto = ipv6_key->ipv6_proto;
+            flow->nw_tos = ipv6_key->ipv6_tos;
+            if (flow->nw_tos & IP_ECN_MASK) {
+                return EINVAL;
+            }
+            break;
+
         case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_TCP):
+        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_TCP):
             if (flow->nw_proto != IPPROTO_TCP) {
                 return EINVAL;
             }
@@ -517,6 +581,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_UDP):
+        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_UDP):
             if (flow->nw_proto != IPPROTO_UDP) {
                 return EINVAL;
             }
@@ -532,6 +597,15 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             icmp_key = nl_attr_get(nla);
             flow->tp_src = htons(icmp_key->icmp_type);
             flow->tp_dst = htons(icmp_key->icmp_code);
+            break;
+
+        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_ICMPV6):
+            if (flow->nw_proto != IPPROTO_ICMPV6) {
+                return EINVAL;
+            }
+            icmpv6_key = nl_attr_get(nla);
+            flow->tp_src = htons(icmpv6_key->icmpv6_type);
+            flow->tp_dst = htons(icmpv6_key->icmpv6_code);
             break;
 
         case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_ARP):
@@ -577,6 +651,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
     case ODP_KEY_ATTR_ETHERTYPE:
         if (flow->dl_type == htons(ETH_TYPE_IP)
+            || flow->dl_type == htons(ETH_TYPE_IPV6)
             || flow->dl_type == htons(ETH_TYPE_ARP)) {
             return EINVAL;
         }
@@ -590,9 +665,18 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
         return 0;
 
+    case ODP_KEY_ATTR_IPV6:
+        if (flow->nw_proto == IPPROTO_TCP
+            || flow->nw_proto == IPPROTO_UDP
+            || flow->nw_proto == IPPROTO_ICMPV6) {
+            return EINVAL;
+        }
+        return 0;
+
     case ODP_KEY_ATTR_TCP:
     case ODP_KEY_ATTR_UDP:
     case ODP_KEY_ATTR_ICMP:
+    case ODP_KEY_ATTR_ICMPV6:
     case ODP_KEY_ATTR_ARP:
         return 0;
 

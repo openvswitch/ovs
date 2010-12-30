@@ -299,24 +299,31 @@ or 0x0806, the values of \fBnw_src\fR and \fBnw_dst\fR are ignored
 .IP \fBnw_proto=\fIproto\fR
 When \fBip\fR or \fBdl_type=0x0800\fR is specified, matches IP
 protocol type \fIproto\fR, which is specified as a decimal number
-between 0 and 255, inclusive (e.g. 6 to match TCP packets).
+between 0 and 255, inclusive (e.g. 1 to match ICMP packets or 6 to match
+TCP packets).
+.IP
+When \fBipv6\fR or \fBdl_type=0x86dd\fR is specified, matches IPv6
+header type \fIproto\fR, which is specified as a decimal number between
+0 and 255, inclusive (e.g. 58 to match ICMPv6 packets or 6 to match
+TCP).  The header type is the terminal header as described in the
+\fBDESIGN\fR document.
 .IP
 When \fBarp\fR or \fBdl_type=0x0806\fR is specified, matches the lower
 8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as
 0.
 .IP
-When \fBdl_type\fR is wildcarded or set to a value other than 0x0800
-or 0x0806, the value of \fBnw_proto\fR is ignored (see \fBFlow
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
+0x0806, or 0x86dd, the value of \fBnw_proto\fR is ignored (see \fBFlow
 Syntax\fR above).
 .
 .IP \fBnw_tos=\fItos\fR
-Matches IP ToS/DSCP field \fItos\fR, which is specified as a decimal 
-number between 0 and 255, inclusive.  Note that the two lower reserved
-bits are ignored for matching purposes.
+Matches IP ToS/DSCP or IPv6 traffic class field \fItos\fR, which is
+specified as a decimal number between 0 and 255, inclusive.  Note that
+the two lower reserved bits are ignored for matching purposes.
 .IP
-The value of \fBnw_tos\fR is ignored unless \fBdl_type=0x0800\fR,
-\fBip\fR, \fBicmp\fR, \fBtcp\fR, or \fBudp\fR is also specified (see
-\fBFlow Syntax\fR above).
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
+0x0806, or 0x86dd, the value of \fBnw_tos\fR is ignored (see \fBFlow
+Syntax\fR above).
 .
 .IP \fBtp_src=\fIport\fR
 .IQ \fBtp_dst=\fIport\fR
@@ -331,12 +338,30 @@ these settings are ignored (see \fBFlow Syntax\fR above).
 .
 .IP \fBicmp_type=\fItype\fR
 .IQ \fBicmp_code=\fIcode\fR
-When \fBdl_type\fR and \fBnw_proto\fR specify ICMP, \fItype\fR matches
-the ICMP type and \fIcode\fR matches the ICMP code.  Each is specified
-as a decimal number between 0 and 255, inclusive.
+When \fBdl_type\fR and \fBnw_proto\fR specify ICMP or ICMPv6, \fItype\fR
+matches the ICMP type and \fIcode\fR matches the ICMP code.  Each is
+specified as a decimal number between 0 and 255, inclusive.
 .IP
 When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
+.
+.PP
+The following shorthand notations are also available:
+.
+.IP \fBip\fR
+Same as \fBdl_type=0x0800\fR.
+.
+.IP \fBicmp\fR
+Same as \fBdl_type=0x0800,nw_proto=1\fR.
+.
+.IP \fBtcp\fR
+Same as \fBdl_type=0x0800,nw_proto=6\fR.
+.
+.IP \fBudp\fR
+Same as \fBdl_type=0x0800,nw_proto=17\fR.
+.
+.IP \fBarp\fR
+Same as \fBdl_type=0x0806\fR.
 .
 .PP
 The following field assignments require support for the NXM (Nicira
@@ -350,6 +375,18 @@ will report a fatal error.
 When \fBdl_type\fR specifies ARP, \fBarp_sha\fR and \fBarp_tha\fR match
 the source and target hardware address, respectively.  An address is
 specified as 6 pairs of hexadecimal digits delimited by colons.
+.
+.IP \fBipv6_src=\fIipv6\fR[\fB/\fInetmask\fR]
+.IQ \fBipv6_dst=\fIipv6\fR[\fB/\fInetmask\fR]
+When \fBdl_type\fR is 0x86dd (possibly via shorthand, e.g., \fBipv6\fR
+or \fBtcp6\fR), matches IPv6 source (or destination) address \fIipv6\fR,
+which may be specified as defined in RFC 2373.  The preferred format is 
+\fIx\fB:\fIx\fB:\fIx\fB:\fIx\fB:\fIx\fB:\fIx\fB:\fIx\fB:\fIx\fR, where
+\fIx\fR are the hexadecimal values of the eight 16-bit pieces of the
+address.  A single instance of \fB::\fR may be used to indicate multiple
+groups of 16-bits of zeros.  The optional \fInetmask\fR allows
+restricting a match to an IPv6 address prefix.  A netmask is specified
+as a CIDR block (e.g. \fB2001:db8:3c4d:1::/64\fR).
 .
 .IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
 Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
@@ -381,22 +418,21 @@ When a packet enters an OpenFlow switch, all of the registers are set
 to 0.  Only explicit Nicira extension actions change register values.
 .
 .PP
-The following shorthand notations are also available:
+Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
+support for NXM.  The following shorthand notations are available for
+IPv6-related flows:
 .
-.IP \fBip\fR
-Same as \fBdl_type=0x0800\fR.
+.IP \fBipv6\fR
+Same as \fBdl_type=0x86dd\fR.
 .
-.IP \fBicmp\fR
-Same as \fBdl_type=0x0800,nw_proto=1\fR.
+.IP \fBtcp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=6\fR.
 .
-.IP \fBtcp\fR
-Same as \fBdl_type=0x0800,nw_proto=6\fR.
+.IP \fBudp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=17\fR.
 .
-.IP \fBudp\fR
-Same as \fBdl_type=0x0800,nw_proto=17\fR.
-.
-.IP \fBarp\fR
-Same as \fBdl_type=0x0806\fR.
+.IP \fBicmp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=58\fR.
 .
 .PP
 The \fBadd\-flow\fR and \fBadd\-flows\fR commands require an additional

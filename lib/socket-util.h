@@ -24,6 +24,7 @@
 int set_nonblocking(int fd);
 int get_max_fds(void);
 int lookup_ip(const char *host_name, struct in_addr *address);
+int lookup_ipv6(const char *host_name, struct in6_addr *address);
 int get_socket_error(int sock);
 int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);

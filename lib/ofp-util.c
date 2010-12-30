@@ -868,6 +868,12 @@ is_nxm_required(const struct cls_rule *rule, bool cookie_support,
         return true;
     }
 
+    /* Only NXM supports matching IPv6 traffic. */
+    if (!(wc->wildcards & FWW_DL_TYPE)
+            && (rule->flow.dl_type == htons(ETH_TYPE_IPV6))) {
+        return true;
+    }
+
     /* Only NXM supports matching registers. */
     if (!regs_fully_wildcarded(wc)) {
         return true;
@@ -2041,6 +2047,9 @@ normalize_match(struct ofp_match *m)
             m->nw_dst &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_DST_SHIFT);
         }
         m->tp_src = m->tp_dst = m->nw_tos = 0;
+    } else if (m->dl_type == htons(ETH_TYPE_IPV6)) {
+        /* Don't normalize IPv6 traffic, since OpenFlow doesn't have a
+         * way to express it. */
     } else {
         /* Network and transport layer fields will always be extracted as
          * zeros, so we can do an exact-match on those values. */

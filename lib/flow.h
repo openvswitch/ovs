@@ -43,8 +43,8 @@ BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 struct flow {
     ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
-    ovs_be32 nw_src;            /* IP source address. */
-    ovs_be32 nw_dst;            /* IP destination address. */
+    ovs_be32 nw_src;            /* IPv4 source address. */
+    ovs_be32 nw_dst;            /* IPv4 destination address. */
     uint16_t in_port;           /* Input switch port. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
@@ -56,15 +56,17 @@ struct flow {
     uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */
     uint8_t arp_sha[6];         /* ARP source hardware address. */
     uint8_t arp_tha[6];         /* ARP target hardware address. */
+    struct in6_addr ipv6_src;   /* IPv6 source address. */
+    struct in6_addr ipv6_dst;   /* IPv6 destination address. */
     uint32_t reserved;          /* Reserved for 64-bit packing. */
 };
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (52 + FLOW_N_REGS * 4)
+#define FLOW_SIG_SIZE (84 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 4
-BUILD_ASSERT_DECL(offsetof(struct flow, arp_tha) == FLOW_SIG_SIZE - 6);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->arp_tha) == 6);
+BUILD_ASSERT_DECL(offsetof(struct flow, ipv6_dst) == FLOW_SIG_SIZE - 16);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->ipv6_dst) == 16);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
@@ -132,6 +134,8 @@ struct flow_wildcards {
     uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
+    struct in6_addr ipv6_src_mask; /* 1-bit in each signficant ipv6_src bit. */
+    struct in6_addr ipv6_dst_mask; /* 1-bit in each signficant ipv6_dst bit. */
     ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
     uint16_t zero;              /* Padding field set to zero. */
 };
@@ -143,6 +147,10 @@ bool flow_wildcards_is_exact(const struct flow_wildcards *);
 
 bool flow_wildcards_set_nw_src_mask(struct flow_wildcards *, ovs_be32);
 bool flow_wildcards_set_nw_dst_mask(struct flow_wildcards *, ovs_be32);
+bool flow_wildcards_set_ipv6_src_mask(struct flow_wildcards *,
+                                      const struct in6_addr *);
+bool flow_wildcards_set_ipv6_dst_mask(struct flow_wildcards *,
+                                      const struct in6_addr *);
 void flow_wildcards_set_reg_mask(struct flow_wildcards *,
                                  int idx, uint32_t mask);
 

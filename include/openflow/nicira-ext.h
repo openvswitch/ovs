@@ -388,6 +388,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_NX_TUN_ID
  *   - NXM_NX_ARP_SHA
  *   - NXM_NX_ARP_THA
+ *   - NXM_NX_ICMPV6_TYPE
+ *   - NXM_NX_ICMPV6_CODE
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
  * The following nxm_header values are potentially acceptable as 'dst':
@@ -904,7 +906,7 @@ enum nx_mp_algorithm {
 
 /* The "type of service" byte of the IP header, with the ECN bits forced to 0.
  *
- * Prereqs: NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ * Prereqs: NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
  *
  * Format: 8-bit integer with 2 least-significant bits forced to 0.
  *
@@ -913,7 +915,7 @@ enum nx_mp_algorithm {
 
 /* The "protocol" byte in the IP header.
  *
- * Prereqs: NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ * Prereqs: NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
  *
  * Format: 8-bit integer.
  *
@@ -936,7 +938,7 @@ enum nx_mp_algorithm {
 /* The source or destination port in the TCP header.
  *
  * Prereqs:
- *   NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *   NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
  *   NXM_OF_IP_PROTO must match 6 exactly.
  *
  * Format: 16-bit integer in network byte order.
@@ -948,7 +950,7 @@ enum nx_mp_algorithm {
 /* The source or destination port in the UDP header.
  *
  * Prereqs:
- *   NXM_OF_ETH_TYPE must match 0x0800 exactly.
+ *   NXM_OF_ETH_TYPE must match either 0x0800 or 0x86dd.
  *   NXM_OF_IP_PROTO must match 17 exactly.
  *
  * Format: 16-bit integer in network byte order.
@@ -1050,6 +1052,32 @@ enum nx_mp_algorithm {
  * Masking: Not maskable. */
 #define NXM_NX_ARP_SHA    NXM_HEADER  (0x0001, 17, 6)
 #define NXM_NX_ARP_THA    NXM_HEADER  (0x0001, 18, 6)
+
+/* The source or destination address in the IPv6 header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *
+ * Format: 128-bit IPv6 address.
+ *
+ * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ *   high-order bits set to 1 and the other 128-N bits set to 0. */
+#define NXM_NX_IPV6_SRC    NXM_HEADER  (0x0001, 19, 16)
+#define NXM_NX_IPV6_SRC_W  NXM_HEADER_W(0x0001, 19, 16)
+#define NXM_NX_IPV6_DST    NXM_HEADER  (0x0001, 20, 16)
+#define NXM_NX_IPV6_DST_W  NXM_HEADER_W(0x0001, 20, 16)
+
+/* The type or code in the ICMPv6 header.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *   NXM_OF_IP_PROTO must match 58 exactly.
+ *
+ * Format: 8-bit integer.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_ICMPV6_TYPE NXM_HEADER  (0x0001, 21, 1)
+#define NXM_NX_ICMPV6_CODE NXM_HEADER  (0x0001, 22, 1)
+
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

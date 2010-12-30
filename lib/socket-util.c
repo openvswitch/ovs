@@ -121,6 +121,20 @@ lookup_ip(const char *host_name, struct in_addr *addr)
     return 0;
 }
 
+/* Translates 'host_name', which must be a string representation of an IPv6
+ * address, into a numeric IPv6 address in '*addr'.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+lookup_ipv6(const char *host_name, struct in6_addr *addr)
+{
+    if (inet_pton(AF_INET6, host_name, addr) != 1) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "\"%s\" is not a valid IPv6 address", host_name);
+        return ENOENT;
+    }
+    return 0;
+}
+
 /* Returns the error condition associated with socket 'fd' and resets the
  * socket's error status. */
 int
