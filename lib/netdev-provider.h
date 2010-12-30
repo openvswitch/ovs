@@ -43,6 +43,7 @@ struct netdev_dev {
 };
 
 void netdev_dev_init(struct netdev_dev *, const char *name,
+                     const struct shash *args,
                      const struct netdev_class *);
 void netdev_dev_uninit(struct netdev_dev *, bool destroy);
 const char *netdev_dev_get_type(const struct netdev_dev *);
@@ -137,12 +138,12 @@ struct netdev_class {
      * called. */
     void (*destroy)(struct netdev_dev *netdev_dev);
 
-    /* Reconfigures the device 'netdev_dev' with 'args'.
+    /* Changes the device 'netdev_dev''s configuration to 'args'.
      *
      * If this netdev class does not support reconfiguring a netdev
      * device, this may be a null pointer.
      */
-    int (*reconfigure)(struct netdev_dev *netdev_dev, const struct shash *args);
+    int (*set_config)(struct netdev_dev *netdev_dev, const struct shash *args);
 
     /* Attempts to open a network device.  On success, sets 'netdevp'
      * to the new network device.

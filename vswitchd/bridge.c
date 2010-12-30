@@ -733,7 +733,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 shash_from_ovs_idl_map(iface->cfg->key_options,
                                        iface->cfg->value_options,
                                        iface->cfg->n_options, &args);
-                netdev_reconfigure(iface->netdev, &args);
+                netdev_set_config(iface->netdev, &args);
                 shash_destroy(&args);
             }
         }

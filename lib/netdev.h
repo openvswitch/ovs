@@ -98,13 +98,16 @@ void netdev_enumerate_types(struct svec *types);
 /* Open and close. */
 int netdev_open(struct netdev_options *, struct netdev **);
 int netdev_open_default(const char *name, struct netdev **);
-int netdev_reconfigure(struct netdev *, const struct shash *args);
 void netdev_close(struct netdev *);
 
 bool netdev_exists(const char *name);
 bool netdev_is_open(const char *name);
 
 int netdev_enumerate(struct svec *);
+
+/* Options. */
+int netdev_set_config(struct netdev *, const struct shash *args);
+const struct shash *netdev_get_config(const struct netdev *);
 
 /* Basic properties. */
 const char *netdev_get_name(const struct netdev *);

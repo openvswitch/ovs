@@ -76,14 +76,14 @@ netdev_dummy_cast(const struct netdev *netdev)
 
 static int
 netdev_dummy_create(const struct netdev_class *class, const char *name,
-                    const struct shash *args OVS_UNUSED,
+                    const struct shash *args,
                     struct netdev_dev **netdev_devp)
 {
     static unsigned int n = 0xaa550000;
     struct netdev_dev_dummy *netdev_dev;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, args, class);
     netdev_dev->hwaddr[0] = 0xaa;
     netdev_dev->hwaddr[1] = 0x55;
     netdev_dev->hwaddr[2] = n >> 24;

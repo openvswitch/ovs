@@ -523,7 +523,7 @@ netdev_linux_create(const struct netdev_class *class,
     cache_notifier_refcount++;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, args, class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -577,7 +577,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         goto error;
     }
 
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_tap_class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, args, &netdev_tap_class);
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 
@@ -2201,7 +2201,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
                                                                 \
     CREATE,                                                     \
     netdev_linux_destroy,                                       \
-    NULL,                       /* reconfigure */               \
+    NULL,                       /* set_config */                \
                                                                 \
     netdev_linux_open,                                          \
     netdev_linux_close,                                         \

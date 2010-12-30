@@ -240,7 +240,6 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
             return error;
         }
         assert(netdev_dev->netdev_class == class);
-        update_device_args(netdev_dev, options->args);
 
     } else if (!shash_is_empty(options->args) &&
                !smap_equal(&netdev_dev->args, options->args)) {
@@ -279,7 +278,7 @@ netdev_open_default(const char *name, struct netdev **netdevp)
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
  * or NULL if none are needed. */
 int
-netdev_reconfigure(struct netdev *netdev, const struct shash *args)
+netdev_set_config(struct netdev *netdev, const struct shash *args)
 {
     struct shash empty_args = SHASH_INITIALIZER(&empty_args);
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
@@ -288,17 +287,29 @@ netdev_reconfigure(struct netdev *netdev, const struct shash *args)
         args = &empty_args;
     }
 
-    if (netdev_dev->netdev_class->reconfigure) {
+    if (netdev_dev->netdev_class->set_config) {
         if (!smap_equal(&netdev_dev->args, args)) {
             update_device_args(netdev_dev, args);
-            return netdev_dev->netdev_class->reconfigure(netdev_dev, args);
+            return netdev_dev->netdev_class->set_config(netdev_dev, args);
         }
     } else if (!shash_is_empty(args)) {
-        VLOG_WARN("%s: arguments provided to device that does not have a "
-                  "reconfigure function", netdev_get_name(netdev));
+        VLOG_WARN("%s: arguments provided to device whose configuration "
+                  "cannot be changed", netdev_get_name(netdev));
     }
 
     return 0;
+}
+
+/* Returns the current configuration for 'netdev'.  This is either the
+ * configuration passed to netdev_open() or netdev_set_config(), or it is a
+ * configuration retrieved from the device itself if no configuration was
+ * passed to those functions.
+ *
+ * 'netdev' retains ownership of the returned configuration. */
+const struct shash *
+netdev_get_config(const struct netdev *netdev)
+{
+    return &netdev_get_dev(netdev)->args;
 }
 
 /* Closes and destroys 'netdev'. */
@@ -1267,14 +1278,21 @@ exit:
     return netdev;
 }
 
-/* Initializes 'netdev_dev' as a netdev device named 'name' of the
- * specified 'netdev_class'.
+/* Initializes 'netdev_dev' as a netdev device named 'name' of the specified
+ * 'netdev_class'.  This function is ordinarily called from a netdev provider's
+ * 'create' function.
+ *
+ * 'args' should be the arguments that were passed to the netdev provider's
+ * 'create'.  If an empty set of arguments was passed, and 'name' is the name
+ * of a network device that existed before the 'create' call, then 'args' may
+ * instead be the configuration for that existing device.
  *
  * This function adds 'netdev_dev' to a netdev-owned shash, so it is
  * very important that 'netdev_dev' only be freed after calling
  * the refcount drops to zero.  */
 void
 netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
+                const struct shash *args,
                 const struct netdev_class *netdev_class)
 {
     assert(!shash_find(&netdev_dev_shash, name));
@@ -1283,7 +1301,7 @@ netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
     netdev_dev->netdev_class = netdev_class;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
-    shash_init(&netdev_dev->args);
+    smap_clone(&netdev_dev->args, args);
 }
 
 /* Undoes the results of initialization.

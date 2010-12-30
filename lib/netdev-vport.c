@@ -72,8 +72,10 @@ struct netdev_vport {
 
 struct vport_class {
     struct netdev_class netdev_class;
-    int (*parse_config)(const struct netdev_dev *, const struct shash *args,
-                        void *config);
+    int (*parse_config)(const char *name, const char *type,
+                        const struct shash *args, void *config);
+    int (*unparse_config)(const char *name, const char *type,
+                          const void *config, struct shash *args);
 };
 
 static struct shash netdev_vport_notifiers =
@@ -146,19 +148,58 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
                     struct netdev_dev **netdev_devp)
 {
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
-    struct netdev_dev_vport *dev;
+    uint64_t config[VPORT_CONFIG_SIZE / 8];
+    struct shash fetched_args;
     int error;
 
-    dev = xmalloc(sizeof *dev);
-    *netdev_devp = &dev->netdev_dev;
-    netdev_dev_init(&dev->netdev_dev, name, netdev_class);
+    memset(config, 0, sizeof config);
+    shash_init(&fetched_args);
 
-    memset(dev->config, 0, sizeof dev->config);
-    error = vport_class->parse_config(&dev->netdev_dev, args, dev->config);
+    if (!shash_is_empty(args)) {
+        /* Parse the provided configuration. */
+        error = vport_class->parse_config(name, netdev_class->type,
+                                          args, config);
+    } else {
+        /* Fetch an existing configuration from the kernel.
+         *
+         * This case could be ambiguous with initializing a new vport with an
+         * empty configuration, but none of the existing vport classes accept
+         * an empty configuration. */
+        struct odp_port odp_port;
 
-    if (error) {
-        netdev_dev_uninit(&dev->netdev_dev, true);
+        memset(&odp_port, 0, sizeof odp_port);
+        strncpy(odp_port.devname, name, sizeof odp_port.devname);
+        error = netdev_vport_do_ioctl(ODP_VPORT_QUERY, &odp_port);
+        if (!error) {
+            /* XXX verify correct type */
+            memcpy(config, odp_port.config, sizeof config);
+            error = vport_class->unparse_config(name, netdev_class->type,
+                                                odp_port.config,
+                                                &fetched_args);
+            if (error) {
+                VLOG_ERR_RL(&rl, "%s: failed to parse kernel config (%s)",
+                            name, strerror(error));
+            }
+        } else {
+            VLOG_ERR_RL(&rl, "%s: vport query failed (%s)",
+                        name, strerror(error));
+        }
     }
+
+    if (!error) {
+        struct netdev_dev_vport *dev;
+
+        dev = xmalloc(sizeof *dev);
+        netdev_dev_init(&dev->netdev_dev, name,
+                        shash_is_empty(&fetched_args) ? args : &fetched_args,
+                        netdev_class);
+        memcpy(dev->config, config, sizeof dev->config);
+
+        *netdev_devp = &dev->netdev_dev;
+    }
+
+    shash_destroy(&fetched_args);
+
     return error;
 }
 
@@ -192,8 +233,7 @@ netdev_vport_close(struct netdev *netdev_)
 }
 
 static int
-netdev_vport_reconfigure(struct netdev_dev *dev_,
-                         const struct shash *args)
+netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
 {
     const struct netdev_class *netdev_class = netdev_dev_get_class(dev_);
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
@@ -204,7 +244,9 @@ netdev_vport_reconfigure(struct netdev_dev *dev_,
     memset(&port, 0, sizeof port);
     strncpy(port.devname, netdev_dev_get_name(dev_), sizeof port.devname);
     strncpy(port.type, netdev_dev_get_type(dev_), sizeof port.type);
-    error = vport_class->parse_config(dev_, args, port.config);
+    error = vport_class->parse_config(netdev_dev_get_name(dev_),
+                                      netdev_dev_get_type(dev_),
+                                      args, port.config);
     if (!error && memcmp(port.config, dev->config, sizeof dev->config)) {
         error = netdev_vport_do_ioctl(ODP_VPORT_MOD, &port);
         if (!error || error == ENODEV) {
@@ -633,11 +675,9 @@ netdev_vport_poll_notify(const struct netdev *netdev)
 /* Code specific to individual vport types. */
 
 static int
-parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
-                    void *configp)
+parse_tunnel_config(const char *name, const char *type,
+                    const struct shash *args, void *configp)
 {
-    const char *name = netdev_dev_get_name(dev);
-    const char *type = netdev_dev_get_type(dev);
     bool is_gre = false;
     bool is_ipsec = false;
     struct tnl_port_config config;
@@ -777,10 +817,63 @@ parse_tunnel_config(const struct netdev_dev *dev, const struct shash *args,
 }
 
 static int
-parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
-                   void *configp)
+unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
+                      const void *config_, struct shash *args)
 {
-    const char *name = netdev_dev_get_name(dev);
+    const struct tnl_port_config *config = config_;
+
+    if (!(config->flags & TNL_F_HDR_CACHE) == !(config->flags & TNL_F_IPSEC)) {
+        smap_add(args, "header_cache",
+                 config->flags & TNL_F_HDR_CACHE ? "true" : "false");
+    }
+    shash_add(args, "remote_ip", xasprintf(IP_FMT, IP_ARGS(&config->daddr)));
+    if (config->saddr) {
+        shash_add(args, "local_ip",
+                  xasprintf(IP_FMT, IP_ARGS(&config->saddr)));
+    }
+
+    if ((config->flags & (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION))
+                      == (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION)) {
+        smap_add(args, "key", "flow");
+    } else if (config->in_key && config->in_key == config->out_key) {
+        shash_add(args, "key",
+                  xasprintf("%"PRIu64, ntohll(config->in_key)));
+    } else {
+        if (config->flags & TNL_F_IN_KEY_MATCH) {
+            smap_add(args, "in_key", "flow");
+        } else if (config->in_key) {
+            shash_add(args, "in_key",
+                      xasprintf("%"PRIu64, ntohll(config->in_key)));
+        }
+
+        if (config->flags & TNL_F_OUT_KEY_ACTION) {
+            smap_add(args, "out_key", "flow");
+        } else if (config->out_key) {
+            shash_add(args, "out_key",
+                      xasprintf("%"PRIu64, ntohll(config->out_key)));
+        }
+    }
+
+    if (config->flags & TNL_F_TTL_INHERIT) {
+        smap_add(args, "tos", "inherit");
+    } else if (config->ttl) {
+        shash_add(args, "tos", xasprintf("%"PRIu8, config->ttl));
+    }
+
+    if (config->flags & TNL_F_CSUM) {
+        smap_add(args, "csum", "true");
+    }
+    if (!(config->flags & TNL_F_PMTUD)) {
+        smap_add(args, "pmtud", "false");
+    }
+
+    return 0;
+}
+
+static int
+parse_patch_config(const char *name, const char *type OVS_UNUSED,
+                   const struct shash *args, void *configp)
+{
     const char *peer;
 
     peer = shash_find_data(args, "peer");
@@ -808,6 +901,20 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
 
     return 0;
 }
+
+static int
+unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
+                     const void *config_, struct shash *args)
+{
+    char peer[IFNAMSIZ];
+
+    ovs_strlcpy(peer, config_, MIN(sizeof peer, VPORT_CONFIG_SIZE));
+    if (peer[0]) {
+        smap_add(args, "peer", peer);
+    }
+
+    return 0;
+}
 
 #define VPORT_FUNCTIONS(GET_STATUS)                         \
     netdev_vport_init,                                      \
@@ -816,7 +923,7 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
                                                             \
     netdev_vport_create,                                    \
     netdev_vport_destroy,                                   \
-    netdev_vport_reconfigure,                               \
+    netdev_vport_set_config,                                \
                                                             \
     netdev_vport_open,                                      \
     netdev_vport_close,                                     \
@@ -873,12 +980,13 @@ netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
         { { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
-            parse_tunnel_config },
+          parse_tunnel_config, unparse_tunnel_config },
         { { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
-            parse_tunnel_config },
+          parse_tunnel_config, unparse_tunnel_config },
         { { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
-            parse_tunnel_config },
-        { { "patch", VPORT_FUNCTIONS(NULL) }, parse_patch_config }
+          parse_tunnel_config, unparse_tunnel_config },
+        { { "patch", VPORT_FUNCTIONS(NULL) },
+          parse_patch_config, unparse_patch_config }
     };
 
     int i;
