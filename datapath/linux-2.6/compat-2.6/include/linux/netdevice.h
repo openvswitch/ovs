@@ -137,4 +137,8 @@ static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifind
 }
 #endif
 
+#ifndef NETIF_F_FSO
+#define NETIF_F_FSO 0
+#endif
+
 #endif
