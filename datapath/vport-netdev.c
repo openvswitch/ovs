@@ -22,6 +22,14 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#include <linux/module.h>
+
+static int vlan_tso __read_mostly = 0;
+module_param(vlan_tso, int, 0644);
+MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
+#endif
+
 /* If the native device stats aren't 64 bit use the vport stats tracking instead. */
 #define USE_VPORT_STATS (sizeof(((struct net_device_stats *)0)->rx_bytes) < sizeof(u64))
 
@@ -269,6 +277,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 	if (vlan_tx_tag_present(skb)) {
 		int err;
+		int features = skb->dev->features & skb->dev->vlan_features;
 
 		err = vswitch_skb_checksum_setup(skb);
 		if (unlikely(err)) {
@@ -276,10 +285,27 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 			return 0;
 		}
 
-		if (skb_is_gso(skb)) {
+		if (!vlan_tso)
+			features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |
+				      NETIF_F_UFO | NETIF_F_FSO);
+
+		if (skb_is_gso(skb) &&
+		    (!skb_gso_ok(skb, features) ||
+		     unlikely(skb->ip_summed != CHECKSUM_PARTIAL))) {
 			struct sk_buff *nskb;
 
-			nskb = skb_gso_segment(skb, 0);
+			nskb = skb_gso_segment(skb, features);
+			if (!nskb) {
+				if (unlikely(skb_cloned(skb) &&
+				    pskb_expand_head(skb, 0, 0, GFP_ATOMIC))) {
+					kfree_skb(skb);
+					return 0;
+				}
+
+				skb_shinfo(skb)->gso_type &= ~SKB_GSO_DODGY;
+				goto tag;
+			}
+
 			kfree_skb(skb);
 			skb = nskb;
 			if (IS_ERR(skb))
@@ -301,12 +327,13 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 			} while (skb);
 
 			return len;
-		} else {
-			skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
-			if (unlikely(!skb))
-				return 0;
-			vlan_set_tci(skb, 0);
 		}
+
+tag:
+		skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+		if (unlikely(!skb))
+			return 0;
+		vlan_set_tci(skb, 0);
 	}
 #endif
 
