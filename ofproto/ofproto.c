@@ -2623,7 +2623,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 
 /* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
  * flow translation. */
-#define MAX_RESUBMIT_RECURSION 8
+#define MAX_RESUBMIT_RECURSION 16
 
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
