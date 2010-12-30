@@ -483,6 +483,14 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		nskb = skb->next;
 		skb->next = NULL;
 
+		if (vlan_tx_tag_present(skb)) {
+			skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+			if (unlikely(!skb)) {
+				err = -ENOMEM;
+				goto err_kfree_skbs;
+			}
+		}
+
 		len = sizeof(struct odp_header);
 		len += nla_total_size(skb->len);
 		len += nla_total_size(FLOW_BUFSIZE);

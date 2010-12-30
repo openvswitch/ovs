@@ -6,6 +6,7 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#include <linux/if_vlan.h>
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -230,8 +231,13 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	struct net_device *netdev = netdev_vport_priv(vport)->dev;
 	int len;
 
-	skb->dev = netdev;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+	if (unlikely(vlan_deaccel_tag(skb)))
+		return 0;
+#endif
+
 	len = skb->len;
+	skb->dev = netdev;
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
 

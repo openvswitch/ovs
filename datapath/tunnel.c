@@ -33,6 +33,7 @@
 #include "datapath.h"
 #include "table.h"
 #include "tunnel.h"
+#include "vlan.h"
 #include "vport.h"
 #include "vport-generic.h"
 #include "vport-internal_dev.h"
@@ -439,6 +440,7 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb)
 
 	ecn_decapsulate(skb);
 	compute_ip_summed(skb, false);
+	vlan_set_tci(skb, 0);
 
 	vport_receive(vport, skb);
 }
@@ -682,7 +684,8 @@ bool tnl_frag_needed(struct vport *vport, const struct tnl_mutable_config *mutab
 
 		vh->h_vlan_TCI = vlan_eth_hdr(skb)->h_vlan_TCI;
 		vh->h_vlan_encapsulated_proto = skb->protocol;
-	}
+	} else
+		vlan_set_tci(nskb, vlan_get_tci(skb));
 	skb_reset_mac_header(nskb);
 
 	/* Protocol */
@@ -720,17 +723,27 @@ static bool check_mtu(struct sk_buff *skb,
 	int mtu = 0;
 	unsigned int packet_length = skb->len - ETH_HLEN;
 
-	if (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
+	/* Allow for one level of tagging in the packet length. */
+	if (!vlan_tx_tag_present(skb) &&
+	    eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
 		packet_length -= VLAN_HLEN;
 
 	if (pmtud) {
+		int vlan_header = 0;
+
 		frag_off = htons(IP_DF);
+
+		/* The tag needs to go in packet regardless of where it
+		 * currently is, so subtract it from the MTU.
+		 */
+		if (vlan_tx_tag_present(skb) ||
+		    eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
+			vlan_header = VLAN_HLEN;
 
 		mtu = dst_mtu(&rt_dst(rt))
 			- ETH_HLEN
 			- mutable->tunnel_hlen
-			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ?
-				VLAN_HLEN : 0);
+			- vlan_header;
 	}
 
 	if (skb->protocol == htons(ETH_P_IP)) {
@@ -1041,27 +1054,17 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		goto error_free;
 
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
-			+ mutable->tunnel_hlen;
+			+ mutable->tunnel_hlen
+			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
+
+	skb = check_headroom(skb, min_headroom);
+	if (IS_ERR(skb)) {
+		err = PTR_ERR(skb);
+		goto error;
+	}
 
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb;
-
-		/*
-		 * If we are doing GSO on a pskb it is better to make sure that
-		 * the headroom is correct now.  We will only have to copy the
-		 * portion in the linear data area and GSO will preserve
-		 * headroom when it creates the segments.  This is particularly
-		 * beneficial on Xen where we get a lot of GSO pskbs.
-		 * Conversely, we avoid copying if it is just to get our own
-		 * writable clone because GSO will do the copy for us.
-		 */
-		if (skb_headroom(skb) < min_headroom) {
-			skb = check_headroom(skb, min_headroom);
-			if (IS_ERR(skb)) {
-				err = PTR_ERR(skb);
-				goto error;
-			}
-		}
 
 		nskb = skb_gso_segment(skb, 0);
 		kfree_skb(skb);
@@ -1071,32 +1074,23 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		}
 
 		skb = nskb;
-	} else {
-		skb = check_headroom(skb, min_headroom);
-		if (IS_ERR(skb)) {
-			err = PTR_ERR(skb);
-			goto error;
-		}
-
-		if (skb->ip_summed == CHECKSUM_PARTIAL) {
-			/*
-			 * Pages aren't locked and could change at any time.
-			 * If this happens after we compute the checksum, the
-			 * checksum will be wrong.  We linearize now to avoid
-			 * this problem.
-			 */
-			if (unlikely(need_linearize(skb))) {
-				err = __skb_linearize(skb);
-				if (unlikely(err))
-					goto error_free;
-			}
-
-			err = skb_checksum_help(skb);
+	} else if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		/* Pages aren't locked and could change at any time.
+		 * If this happens after we compute the checksum, the
+		 * checksum will be wrong.  We linearize now to avoid
+		 * this problem.
+		 */
+		if (unlikely(need_linearize(skb))) {
+			err = __skb_linearize(skb);
 			if (unlikely(err))
 				goto error_free;
-		} else if (skb->ip_summed == CHECKSUM_COMPLETE)
-			skb->ip_summed = CHECKSUM_NONE;
-	}
+		}
+
+		err = skb_checksum_help(skb);
+		if (unlikely(err))
+			goto error_free;
+	} else if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->ip_summed = CHECKSUM_NONE;
 
 	return skb;
 
@@ -1159,7 +1153,8 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	u8 tos;
 
 	/* Validate the protocol headers before we try to use them. */
-	if (skb->protocol == htons(ETH_P_8021Q)) {
+	if (skb->protocol == htons(ETH_P_8021Q) &&
+	    !vlan_tx_tag_present(skb)) {
 		if (unlikely(!pskb_may_pull(skb, VLAN_ETH_HLEN)))
 			goto error_free;
 
@@ -1249,6 +1244,9 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 		struct iphdr *iph;
 		struct sk_buff *next_skb = skb->next;
 		skb->next = NULL;
+
+		if (unlikely(vlan_deaccel_tag(skb)))
+			goto next;
 
 		if (likely(cache)) {
 			skb_push(skb, cache->len);

@@ -261,10 +261,56 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 static int netdev_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	int len = skb->len;
+	int len;
 
 	skb->dev = netdev_vport->dev;
 	forward_ip_summed(skb);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+	if (vlan_tx_tag_present(skb)) {
+		int err;
+
+		err = vswitch_skb_checksum_setup(skb);
+		if (unlikely(err)) {
+			kfree_skb(skb);
+			return 0;
+		}
+
+		if (skb_is_gso(skb)) {
+			struct sk_buff *nskb;
+
+			nskb = skb_gso_segment(skb, 0);
+			kfree_skb(skb);
+			skb = nskb;
+			if (IS_ERR(skb))
+				return 0;
+
+			len = 0;
+			do {
+				nskb = skb->next;
+				skb->next = NULL;
+
+				skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+				if (likely(skb)) {
+					len += skb->len;
+					vlan_set_tci(skb, 0);
+					dev_queue_xmit(skb);
+				}
+
+				skb = nskb;
+			} while (skb);
+
+			return len;
+		} else {
+			skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+			if (unlikely(!skb))
+				return 0;
+			vlan_set_tci(skb, 0);
+		}
+	}
+#endif
+
+	len = skb->len;
 	dev_queue_xmit(skb);
 
 	return len;

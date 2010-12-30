@@ -34,6 +34,8 @@
 #include <net/ipv6.h>
 #include <net/ndisc.h>
 
+#include "vlan.h"
+
 static struct kmem_cache *flow_cache;
 static unsigned int hash_seed __read_mostly;
 
@@ -449,8 +451,12 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 
 	/* dl_type, dl_vlan, dl_vlan_pcp. */
 	__skb_pull(skb, 2 * ETH_ALEN);
-	if (eth->h_proto == htons(ETH_P_8021Q))
+
+	if (vlan_tx_tag_present(skb))
+		key->dl_tci = htons(vlan_get_tci(skb));
+	else if (eth->h_proto == htons(ETH_P_8021Q))
 		parse_vlan(skb, key);
+
 	key->dl_type = parse_ethertype(skb);
 	skb_reset_network_header(skb);
 	__skb_push(skb, skb->data - (unsigned char *)eth);

@@ -24,6 +24,7 @@
 #include "checksum.h"
 #include "datapath.h"
 #include "openvswitch/datapath-protocol.h"
+#include "vlan.h"
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *, struct sk_buff *,
@@ -52,20 +53,28 @@ static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
 	return NULL;
 }
 
-static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
+static struct sk_buff *strip_vlan(struct sk_buff *skb)
 {
-	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 	struct ethhdr *eh;
 
-	/* Verify we were given a vlan packet */
-	if (vh->h_vlan_proto != htons(ETH_P_8021Q) || skb->len < VLAN_ETH_HLEN)
+	if (vlan_tx_tag_present(skb)) {
+		vlan_set_tci(skb, 0);
 		return skb;
+	}
+
+	if (unlikely(vlan_eth_hdr(skb)->h_vlan_proto != htons(ETH_P_8021Q) ||
+	    skb->len < VLAN_ETH_HLEN))
+		return skb;
+
+	skb = make_writable(skb, 0);
+	if (unlikely(!skb))
+		return NULL;
 
 	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
-	memmove(skb->data + VLAN_HLEN, skb->data, 2 * VLAN_ETH_ALEN);
+	memmove(skb->data + VLAN_HLEN, skb->data, 2 * ETH_ALEN);
 
 	eh = (struct ethhdr *)skb_pull(skb, VLAN_HLEN);
 
@@ -80,130 +89,29 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				       const struct nlattr *a, u32 actions_len)
 {
 	__be16 tci = nla_get_be16(a);
+	struct vlan_ethhdr *vh;
+	__be16 old_tci;
 
-	skb = make_writable(skb, VLAN_HLEN);
-	if (!skb)
-		return ERR_PTR(-ENOMEM);
+	if (vlan_tx_tag_present(skb) || skb->protocol != htons(ETH_P_8021Q))
+		return __vlan_hwaccel_put_tag(skb, ntohs(tci));
 
-	if (skb->protocol == htons(ETH_P_8021Q)) {
-		/* Modify vlan id, but maintain other TCI values */
-		struct vlan_ethhdr *vh;
-		__be16 old_tci;
+	skb = make_writable(skb, 0);
+	if (unlikely(!skb))
+		return NULL;
 
-		if (skb->len < VLAN_ETH_HLEN)
-			return skb;
+	if (unlikely(skb->len < VLAN_ETH_HLEN))
+		return skb;
 
-		vh = vlan_eth_hdr(skb);
-		old_tci = vh->h_vlan_TCI;
+	vh = vlan_eth_hdr(skb);
 
-		vh->h_vlan_TCI = tci;
+	old_tci = vh->h_vlan_TCI;
+	vh->h_vlan_TCI = tci;
 
-		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE) {
-			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
-
-			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
-						~skb->csum);
-		}
-	} else {
-		int err;
-
-		/* Add vlan header */
-
-		/* Set up checksumming pointers for checksum-deferred packets
-		 * on Xen.  Otherwise, dev_queue_xmit() will try to do this
-		 * when we send the packet out on the wire, and it will fail at
-		 * that point because skb_checksum_setup() will not look inside
-		 * an 802.1Q header. */
-		err = vswitch_skb_checksum_setup(skb);
-		if (unlikely(err)) {
-			kfree_skb(skb);
-			return ERR_PTR(err);
-		}
-
-		/* GSO is not implemented for packets with an 802.1Q header, so
-		 * we have to do segmentation before we add that header.
-		 *
-		 * GSO does work with hardware-accelerated VLAN tagging, but we
-		 * can't use hardware-accelerated VLAN tagging since it
-		 * requires the device to have a VLAN group configured (with
-		 * e.g. vconfig(8)) and we don't do that.
-		 *
-		 * Having to do this here may be a performance loss, since we
-		 * can't take advantage of TSO hardware support, although it
-		 * does not make a measurable network performance difference
-		 * for 1G Ethernet.  Fixing that would require patching the
-		 * kernel (either to add GSO support to the VLAN protocol or to
-		 * support hardware-accelerated VLAN tagging without VLAN
-		 * groups configured). */
-		if (skb_is_gso(skb)) {
-			const struct nlattr *actions_left;
-			int actions_len_left;
-			struct sk_buff *segs;
-
-			segs = skb_gso_segment(skb, 0);
-			kfree_skb(skb);
-			if (IS_ERR(segs))
-				return ERR_CAST(segs);
-
-			actions_len_left = actions_len;
-			actions_left = nla_next(a, &actions_len_left);
-
-			do {
-				struct sk_buff *nskb = segs->next;
-
-				segs->next = NULL;
-
-				/* GSO can change the checksum type so update.*/
-				compute_ip_summed(segs, true);
-
-				segs = __vlan_put_tag(segs, ntohs(tci));
-				err = -ENOMEM;
-				if (segs) {
-					err = do_execute_actions(
-						dp, segs, key, actions_left,
-						actions_len_left);
-				}
-
-				if (unlikely(err)) {
-					while ((segs = nskb)) {
-						nskb = segs->next;
-						segs->next = NULL;
-						kfree_skb(segs);
-					}
-					return ERR_PTR(err);
-				}
-
-				segs = nskb;
-			} while (segs->next);
-
-			skb = segs;
-			compute_ip_summed(skb, true);
-		}
-
-		/* The hardware-accelerated version of vlan_put_tag() works
-		 * only for a device that has a VLAN group configured (with
-		 * e.g. vconfig(8)), so call the software-only version
-		 * __vlan_put_tag() directly instead.
-		 */
-		skb = __vlan_put_tag(skb, ntohs(tci));
-		if (!skb)
-			return ERR_PTR(-ENOMEM);
-
-		/* GSO doesn't fix up the hardware computed checksum so this
-		 * will only be hit in the non-GSO case. */
-		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
-			skb->csum = csum_add(skb->csum, csum_partial(skb->data
-						+ ETH_HLEN, VLAN_HLEN, 0));
+	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE) {
+		__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
+		skb->csum = ~csum_partial((char *)diff, sizeof(diff), ~skb->csum);
 	}
 
-	return skb;
-}
-
-static struct sk_buff *strip_vlan(struct sk_buff *skb)
-{
-	skb = make_writable(skb, 0);
-	if (skb)
-		vlan_pull_tag(skb);
 	return skb;
 }
 
@@ -417,8 +325,6 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case ODP_ACTION_ATTR_SET_DL_TCI:
 			skb = modify_vlan_tci(dp, skb, key, a, rem);
-			if (IS_ERR(skb))
-				return PTR_ERR(skb);
 			break;
 
 		case ODP_ACTION_ATTR_STRIP_VLAN:

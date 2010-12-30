@@ -43,4 +43,18 @@ u16 vlan_tx_tag_get(struct sk_buff *skb);
 #define __vlan_hwaccel_put_tag rpl__vlan_hwaccel_put_tag
 struct sk_buff *__vlan_hwaccel_put_tag(struct sk_buff *skb, u16 vlan_tci);
 #endif /* NEED_VLAN_FIELD */
+
+static inline int vlan_deaccel_tag(struct sk_buff *skb)
+{
+	if (!vlan_tx_tag_present(skb))
+		return 0;
+
+	skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+	if (unlikely(!skb))
+		return -ENOMEM;
+
+	vlan_set_tci(skb, 0);
+	return 0;
+}
+
 #endif /* vlan.h */
