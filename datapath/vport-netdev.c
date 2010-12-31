@@ -18,6 +18,7 @@
 
 #include "checksum.h"
 #include "datapath.h"
+#include "vlan.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
@@ -252,6 +253,7 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 
 	skb_push(skb, ETH_HLEN);
 	compute_ip_summed(skb, false);
+	vlan_copy_skb_tci(skb);
 
 	vport_receive(vport, skb);
 }

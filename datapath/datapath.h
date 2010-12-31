@@ -22,6 +22,7 @@
 #include "checksum.h"
 #include "flow.h"
 #include "dp_sysfs.h"
+#include "vlan.h"
 
 struct vport;
 
@@ -104,6 +105,8 @@ struct datapath {
  * kernel versions.
  * @tun_id: ID of the tunnel that encapsulated this packet.  It is 0 if the
  * packet was not received on a tunnel.
+ * @vlan_tci: Provides a substitute for the skb->vlan_tci field on kernels
+ * before 2.6.27.
  */
 struct ovs_skb_cb {
 	struct vport		*vport;
@@ -112,6 +115,9 @@ struct ovs_skb_cb {
 	enum csum_type		ip_summed;
 #endif
 	__be64			tun_id;
+#ifdef NEED_VLAN_FIELD
+	u16			vlan_tci;
+#endif
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 

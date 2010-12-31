@@ -15,6 +15,7 @@
 
 #include "checksum.h"
 #include "datapath.h"
+#include "vlan.h"
 #include "vport-generic.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
@@ -72,6 +73,7 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	compute_ip_summed(skb, true);
+	vlan_copy_skb_tci(skb);
 	OVS_CB(skb)->flow = NULL;
 
 	vport_receive(internal_dev_priv(netdev)->vport, skb);

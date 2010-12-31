@@ -20,6 +20,7 @@ openvswitch_sources = \
 	loop_counter.c \
 	table.c \
 	tunnel.c \
+	vlan.c \
 	vport.c \
 	vport-capwap.c \
 	vport-generic.c \
@@ -37,6 +38,7 @@ openvswitch_headers = \
 	loop_counter.h \
 	table.h \
 	tunnel.h \
+	vlan.h \
 	vport.h \
 	vport-generic.h \
 	vport-internal_dev.h \
