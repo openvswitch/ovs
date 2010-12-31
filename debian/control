@@ -60,7 +60,7 @@ Description: Open vSwitch GRE-over-IPsec support
 Package: openvswitch-pki
 Architecture: all
 Depends:
- ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (>= ${source:Version}),
+ ${misc:Depends}, openvswitch-common (>= ${source:Version}),
  openvswitch-common (<< ${source:Version}.1~)
 Description: A dependency package for the Open vSwitch public key infrastructure
  openvswitch-pki provides PKI (public key infrastructure) support for
@@ -71,7 +71,9 @@ Description: A dependency package for the Open vSwitch public key infrastructure
 
 Package: openvswitch-pki-server
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${binary:Version}), apache2
+Depends:
+ ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${binary:Version}),
+ apache2
 Description: Open vSwitch public key infrastructure (HTTP server support)
  openvswitch-pki-server provides HTTP access to the Open vSwitch PKI (public
  key infrastructure) maintained on the local machine by the
