@@ -1291,7 +1291,7 @@ stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
         for (i = 0; i < n_certs; i++) {
             /* SSL_CTX_add_client_CA makes a copy of the relevant data. */
             if (SSL_CTX_add_client_CA(ctx, certs[i]) != 1) {
-                VLOG_ERR("failed to add client certificate %d from %s: %s",
+                VLOG_ERR("failed to add client certificate %zu from %s: %s",
                          i, file_name,
                          ERR_error_string(ERR_get_error(), NULL));
             } else {
