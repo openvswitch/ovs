@@ -200,6 +200,7 @@ str_to_action(char *str, struct ofpbuf *b)
     char *pos;
 
     pos = str;
+    n_actions = 0;
     for (;;) {
         char *act, *arg;
         size_t actlen;
@@ -414,6 +415,7 @@ str_to_action(char *str, struct ofpbuf *b)
         } else {
             ovs_fatal(0, "Unknown action: %s", act);
         }
+        n_actions++;
     }
 }
 
