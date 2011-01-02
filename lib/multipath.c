@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include "multipath.h"
+#include <arpa/inet.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -268,7 +269,10 @@ multipath_format(const struct nx_action_multipath *mp, struct ds *s)
 {
     const char *fields, *algorithm;
 
-    switch ((enum nx_mp_fields) ntohs(mp->fields)) {
+    uint16_t mp_fields    = ntohs(mp->fields);
+    uint16_t mp_algorithm = ntohs(mp->algorithm);
+
+    switch ((enum nx_mp_fields) mp_fields) {
     case NX_MP_FIELDS_ETH_SRC:
         fields = "eth_src";
         break;
@@ -279,7 +283,7 @@ multipath_format(const struct nx_action_multipath *mp, struct ds *s)
         fields = "<unknown>";
     }
 
-    switch ((enum nx_mp_algorithm) ntohs(mp->algorithm)) {
+    switch ((enum nx_mp_algorithm) mp_algorithm) {
     case NX_MP_ALG_MODULO_N:
         algorithm = "modulo_n";
         break;
