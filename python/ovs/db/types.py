@@ -358,7 +358,7 @@ class BaseType(object):
         elif self.type == StringType:
             if self.min_length is not None:
                 stmts.append('%s.u.string.minLen = %d;' % (var, self.min_length))            
-            if self.max_length is not None:
+            if self.max_length != sys.maxint:
                 stmts.append('%s.u.string.maxLen = %d;' % (var, self.max_length))
         elif self.type == UuidType:
             if self.ref_table is not None:
