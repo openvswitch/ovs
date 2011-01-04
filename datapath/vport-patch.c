@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -15,7 +15,7 @@
 #include "vport.h"
 #include "vport-generic.h"
 
-struct device_config {
+struct patch_config {
 	struct rcu_head rcu;
 
 	char peer_name[IFNAMSIZ];
@@ -32,7 +32,7 @@ struct patch_vport {
 	struct hlist_node hash_node;
 
 	struct vport __rcu *peer;
-	struct device_config __rcu *devconf;
+	struct patch_config __rcu *patchconf;
 };
 
 /* Protected by RTNL lock. */
@@ -49,18 +49,18 @@ static inline struct patch_vport *patch_vport_priv(const struct vport *vport)
 /* RCU callback. */
 static void free_config(struct rcu_head *rcu)
 {
-	struct device_config *c = container_of(rcu, struct device_config, rcu);
+	struct patch_config *c = container_of(rcu, struct patch_config, rcu);
 	kfree(c);
 }
 
 static void assign_config_rcu(struct vport *vport,
-			      struct device_config *new_config)
+			      struct patch_config *new_config)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct device_config *old_config;
+	struct patch_config *old_config;
 
-	old_config = rtnl_dereference(patch_vport->devconf);
-	rcu_assign_pointer(patch_vport->devconf, new_config);
+	old_config = rtnl_dereference(patch_vport->patchconf);
+	rcu_assign_pointer(patch_vport->patchconf, new_config);
 	call_rcu(&old_config->rcu, free_config);
 }
 
@@ -86,7 +86,7 @@ static void patch_exit(void)
 }
 
 static int set_config(struct vport *vport, const void *config, 
-			struct device_config *devconf)
+			struct patch_config *patchconf)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	char peer_name[IFNAMSIZ];
@@ -96,7 +96,7 @@ static int set_config(struct vport *vport, const void *config,
 	if (!strcmp(patch_vport->name, peer_name))
 		return -EINVAL;
 
-	strcpy(devconf->peer_name, peer_name);
+	strcpy(patchconf->peer_name, peer_name);
 
 	return 0;
 }
@@ -106,7 +106,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	struct vport *vport;
 	struct patch_vport *patch_vport;
 	const char *peer_name;
-	struct device_config *devconf;
+	struct patch_config *patchconf;
 	int err;
 
 	vport = vport_alloc(sizeof(struct patch_vport), &patch_vport_ops, parms);
@@ -119,33 +119,33 @@ static struct vport *patch_create(const struct vport_parms *parms)
 
 	strcpy(patch_vport->name, parms->name);
 
-	devconf = kmalloc(sizeof(struct device_config), GFP_KERNEL);
-	if (!devconf) {
+	patchconf = kmalloc(sizeof(struct patch_config), GFP_KERNEL);
+	if (!patchconf) {
 		err = -ENOMEM;
 		goto error_free_vport;
 	}
 
-	err = set_config(vport, parms->config, devconf);
+	err = set_config(vport, parms->config, patchconf);
 	if (err)
-		goto error_free_devconf;
+		goto error_free_patchconf;
 
-	vport_gen_rand_ether_addr(devconf->eth_addr);
+	vport_gen_rand_ether_addr(patchconf->eth_addr);
 
 	/* Make the default MTU fairly large so that it doesn't become the
 	 * bottleneck on systems using jumbo frames. */
-	devconf->mtu = 65535;
+	patchconf->mtu = 65535;
 
-	rcu_assign_pointer(patch_vport->devconf, devconf);
+	rcu_assign_pointer(patch_vport->patchconf, patchconf);
 
-	peer_name = devconf->peer_name;
+	peer_name = patchconf->peer_name;
 	hlist_add_head(&patch_vport->hash_node, hash_bucket(peer_name));
 	rcu_assign_pointer(patch_vport->peer, vport_locate(peer_name));
 	update_peers(patch_vport->name, vport);
 
 	return vport;
 
-error_free_devconf:
-	kfree(devconf);
+error_free_patchconf:
+	kfree(patchconf);
 error_free_vport:
 	vport_free(vport);
 error:
@@ -155,31 +155,31 @@ error:
 static int patch_modify(struct vport *vport, struct odp_port *port)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct device_config *devconf;
+	struct patch_config *patchconf;
 	int err;
 
-	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
-			  sizeof(struct device_config), GFP_KERNEL);
-	if (!devconf) {
+	patchconf = kmemdup(rtnl_dereference(patch_vport->patchconf),
+			  sizeof(struct patch_config), GFP_KERNEL);
+	if (!patchconf) {
 		err = -ENOMEM;
 		goto error;
 	}
 
-	err = set_config(vport, port->config, devconf);
+	err = set_config(vport, port->config, patchconf);
 	if (err)
 		goto error_free;
 
-	assign_config_rcu(vport, devconf);
+	assign_config_rcu(vport, patchconf);
 	
 	hlist_del(&patch_vport->hash_node);
 
-	rcu_assign_pointer(patch_vport->peer, vport_locate(devconf->peer_name));
-	hlist_add_head(&patch_vport->hash_node, hash_bucket(devconf->peer_name));
+	rcu_assign_pointer(patch_vport->peer, vport_locate(patchconf->peer_name));
+	hlist_add_head(&patch_vport->hash_node, hash_bucket(patchconf->peer_name));
 
 	return 0;
 
 error_free:
-	kfree(devconf);
+	kfree(patchconf);
 error:
 	return err;
 }
@@ -189,7 +189,7 @@ static void free_port_rcu(struct rcu_head *rcu)
 	struct patch_vport *patch_vport = container_of(rcu,
 					  struct patch_vport, rcu);
 
-	kfree((struct device_config __force *)patch_vport->devconf);
+	kfree((struct patch_config __force *)patch_vport->patchconf);
 	vport_free(vport_from_priv(patch_vport));
 }
 
@@ -213,7 +213,7 @@ static void update_peers(const char *name, struct vport *vport)
 	hlist_for_each_entry(peer_vport, node, bucket, hash_node) {
 		const char *peer_name;
 
-		peer_name = rtnl_dereference(peer_vport->devconf)->peer_name;
+		peer_name = rtnl_dereference(peer_vport->patchconf)->peer_name;
 		if (!strcmp(peer_name, name))
 			rcu_assign_pointer(peer_vport->peer, vport);
 	}
@@ -222,15 +222,15 @@ static void update_peers(const char *name, struct vport *vport)
 static int patch_set_mtu(struct vport *vport, int mtu)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct device_config *devconf;
+	struct patch_config *patchconf;
 
-	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
-			  sizeof(struct device_config), GFP_KERNEL);
-	if (!devconf)
+	patchconf = kmemdup(rtnl_dereference(patch_vport->patchconf),
+			  sizeof(struct patch_config), GFP_KERNEL);
+	if (!patchconf)
 		return -ENOMEM;
 
-	devconf->mtu = mtu;
-	assign_config_rcu(vport, devconf);
+	patchconf->mtu = mtu;
+	assign_config_rcu(vport, patchconf);
 
 	return 0;
 }
@@ -238,15 +238,15 @@ static int patch_set_mtu(struct vport *vport, int mtu)
 static int patch_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct device_config *devconf;
+	struct patch_config *patchconf;
 
-	devconf = kmemdup(rtnl_dereference(patch_vport->devconf),
-			  sizeof(struct device_config), GFP_KERNEL);
-	if (!devconf)
+	patchconf = kmemdup(rtnl_dereference(patch_vport->patchconf),
+			  sizeof(struct patch_config), GFP_KERNEL);
+	if (!patchconf)
 		return -ENOMEM;
 
-	memcpy(devconf->eth_addr, addr, ETH_ALEN);
-	assign_config_rcu(vport, devconf);
+	memcpy(patchconf->eth_addr, addr, ETH_ALEN);
+	assign_config_rcu(vport, patchconf);
 
 	return 0;
 }
@@ -261,7 +261,7 @@ static const char *patch_get_name(const struct vport *vport)
 static const unsigned char *patch_get_addr(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference_rtnl(patch_vport->devconf)->eth_addr;
+	return rcu_dereference_rtnl(patch_vport->patchconf)->eth_addr;
 }
 
 static void patch_get_config(const struct vport *vport, void *config)
@@ -269,14 +269,14 @@ static void patch_get_config(const struct vport *vport, void *config)
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
 	const char *peer_name;
 
-	peer_name = rcu_dereference_rtnl(patch_vport->devconf)->peer_name;
+	peer_name = rcu_dereference_rtnl(patch_vport->patchconf)->peer_name;
 	strlcpy(config, peer_name, VPORT_CONFIG_SIZE);
 }
 
 static int patch_get_mtu(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference_rtnl(patch_vport->devconf)->mtu;
+	return rcu_dereference_rtnl(patch_vport->patchconf)->mtu;
 }
 
 static int patch_send(struct vport *vport, struct sk_buff *skb)
