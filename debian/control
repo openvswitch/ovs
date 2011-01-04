@@ -69,20 +69,6 @@ Description: A dependency package for the Open vSwitch public key infrastructure
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
-Package: openvswitch-pki-server
-Architecture: all
-Depends:
- ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${binary:Version}),
- apache2
-Description: Open vSwitch public key infrastructure (HTTP server support)
- openvswitch-pki-server provides HTTP access to the Open vSwitch PKI (public
- key infrastructure) maintained on the local machine by the
- openvswitch-pki package.  This HTTP access is needed for secure and
- convenient OpenFlow switch setup using the ovs-switch-setup program
- in the openvswitch-switch package.
- .
- Open vSwitch is a full-featured software-based Ethernet switch.
-
 Package: openvswitch-controller
 Architecture: linux-any
 Depends:

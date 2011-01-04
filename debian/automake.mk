@@ -24,10 +24,6 @@ EXTRA_DIST += \
 	debian/openvswitch-ipsec.dirs \
 	debian/openvswitch-ipsec.init \
 	debian/openvswitch-ipsec.install \
-	debian/openvswitch-pki-server.apache2 \
-	debian/openvswitch-pki-server.dirs \
-	debian/openvswitch-pki-server.install \
-	debian/openvswitch-pki-server.postinst \
 	debian/openvswitch-pki.postinst \
 	debian/openvswitch-switch.README.Debian \
 	debian/openvswitch-switch.dirs \
