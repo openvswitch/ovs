@@ -11,7 +11,7 @@ static inline int VERIFY_NUL_STRING(struct nlattr *attr)
 {
 	return (!attr || (nla_len(attr)
 			  && memchr(nla_data(attr), '\0', nla_len(attr)))
-		? 0 : EINVAL);
+		? 0 : -EINVAL);
 }
 #else
 static inline int VERIFY_NUL_STRING(struct nlattr *attr)
