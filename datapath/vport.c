@@ -795,7 +795,7 @@ int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
 	struct rtnl_link_stats64 dev_stats;
 	struct rtnl_link_stats64 *dev_statsp = NULL;
-	int err;
+	int err = 0;
 
 	if (vport->ops->get_stats) {
 		if (vport->ops->flags & VPORT_F_GEN_STATS)
@@ -871,10 +871,7 @@ int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 			stats->tx_bytes		+= local_stats.tx_bytes;
 			stats->tx_packets	+= local_stats.tx_packets;
 		}
-
-		err = 0;
-	} else
-		err = -EOPNOTSUPP;
+	}
 
 out:
 	return err;
