@@ -343,7 +343,17 @@ function set_system_ids {
             external-ids:system-id="$INSTALLATION_UUID" \
             external-ids:xs-system-uuid="$INSTALLATION_UUID"
     else
-        action "Configuring Open vSwitch system IDs" false
+	if test -f /etc/openvswitch/install_uuid.conf; then
+            . /etc/openvswitch/install_uuid.conf
+	elif INSTALLATION_UUID=`uuidgen`; then
+	    echo "INSTALLATION_UUID=$INSTALLATION_UUID" > /etc/openvswitch/install_uuid.conf
+	else
+	    log_failure_msg "missing uuidgen, could not generate system UUID"
+	    return
+        fi
+        $vsctl --no-wait --timeout=5 set Open_vSwitch . \
+            external-ids:system-id="$INSTALLATION_UUID"
+        action "Configuring Open vSwitch system IDs" true
     fi
 }
 
