@@ -338,9 +338,6 @@ show_dpif(struct dpif *dpif)
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
-        printf("\tflows: cur:%"PRIu32", soft-max:%"PRIu32", "
-               "hard-max:%"PRIu32"\n",
-               stats.n_flows, stats.cur_capacity, stats.max_capacity);
         printf("\tports: cur:%"PRIu32", max:%"PRIu32"\n",
                stats.n_ports, stats.max_ports);
         printf("\tlookups: frags:%llu, hit:%llu, missed:%llu, lost:%llu\n",

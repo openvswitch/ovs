@@ -297,9 +297,6 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct odp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     memset(stats, 0, sizeof *stats);
-    stats->n_flows = hmap_count(&dp->flow_table);
-    stats->cur_capacity = hmap_capacity(&dp->flow_table);
-    stats->max_capacity = MAX_FLOWS;
     stats->n_ports = dp->n_ports;
     stats->max_ports = MAX_PORTS;
     stats->n_frags = dp->n_frags;

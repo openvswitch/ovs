@@ -99,13 +99,7 @@
 #define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
 #define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
 
-
 struct odp_stats {
-    /* Flows. */
-    uint32_t n_flows;           /* Number of flows in flow table. */
-    uint32_t cur_capacity;      /* Current flow table capacity. */
-    uint32_t max_capacity;      /* Maximum expansion of flow table capacity. */
-
     /* Ports. */
     uint32_t n_ports;           /* Current number of ports. */
     uint32_t max_ports;         /* Maximum supported number of ports. */

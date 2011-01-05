@@ -1199,13 +1199,9 @@ static int execute_packet(struct datapath *dp, const struct odp_execute __user *
 
 static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 {
-	struct tbl *table = get_table_protected(dp);
 	struct odp_stats stats;
 	int i;
 
-	stats.n_flows = tbl_count(table);
-	stats.cur_capacity = tbl_n_buckets(table);
-	stats.max_capacity = TBL_MAX_BUCKETS;
 	stats.n_ports = dp->n_ports;
 	stats.max_ports = DP_MAX_PORTS;
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
