@@ -27,8 +27,35 @@
 # Short-Description: Open vSwitch switch
 ### END INIT INFO
 
+# source function library
+if [ -f /etc/init.d/functions ]; then
+    . /etc/init.d/functions
+elif [ -f /etc/rc.d/init.d/functions ]; then
+    . /etc/rc.d/init.d/functions
+elif [ -f /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+else
+    echo "$0: missing LSB shell function library" >&2
+    exit 1
+fi
 
-. /etc/init.d/functions
+if type action >/dev/null 2>&1; then
+    :
+else
+    # SUSE lacks action
+    action() {
+       STRING=$1
+       shift
+       "$@"
+       rc=$?
+       if [ $rc -eq 0 ] ; then
+	       log_success_msg $"$STRING "
+       else
+	       log_failure_msg $"$STRING "
+       fi
+       return $rc
+    }
+fi
 
 . /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
