@@ -833,10 +833,6 @@ int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 		spin_unlock_bh(&vport->stats_lock);
 
 		if (dev_statsp) {
-			stats->rx_packets          += dev_statsp->rx_packets;
-			stats->tx_packets          += dev_statsp->tx_packets;
-			stats->rx_bytes            += dev_statsp->rx_bytes;
-			stats->tx_bytes            += dev_statsp->tx_bytes;
 			stats->rx_errors           += dev_statsp->rx_errors;
 			stats->tx_errors           += dev_statsp->tx_errors;
 			stats->rx_dropped          += dev_statsp->rx_dropped;
