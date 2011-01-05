@@ -320,7 +320,7 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* get_in6 */
     NULL,                       /* add_router */
     NULL,                       /* get_next_hop */
-    NULL,                       /* get_tnl_iface */
+    NULL,                       /* get_status */
     NULL,                       /* arp_lookup */
 
     netdev_dummy_update_flags,

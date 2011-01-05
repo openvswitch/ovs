@@ -769,14 +769,19 @@ netdev_get_next_hop(const struct netdev *netdev,
     return error;
 }
 
-const char *
-netdev_get_tnl_iface(const struct netdev *netdev)
+/* Populates 'sh' with status information.
+ *
+ * Populates 'sh' with 'netdev' specific status information.  This information
+ * may be used to populate the status column of the Interface table as defined
+ * in ovs-vswitchd.conf.db(5). */
+int
+netdev_get_status(const struct netdev *netdev, struct shash *sh)
 {
     struct netdev_dev *dev = netdev_get_dev(netdev);
 
-    return (dev->netdev_class->get_tnl_iface
-            ? dev->netdev_class->get_tnl_iface(netdev)
-            : NULL);
+    return (dev->netdev_class->get_status
+            ? dev->netdev_class->get_status(netdev, sh)
+            : EOPNOTSUPP);
 }
 
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and

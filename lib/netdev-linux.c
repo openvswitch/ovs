@@ -2176,7 +2176,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     netdev_linux_get_in6,                                       \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
-    NULL,                       /* get_tnl_iface */             \
+    NULL,                       /* get_status */                \
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \

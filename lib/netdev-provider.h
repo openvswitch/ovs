@@ -518,16 +518,19 @@ struct netdev_class {
     int (*get_next_hop)(const struct in_addr *host, struct in_addr *next_hop,
                         char **netdev_name);
 
-    /* Looks up the name of the interface out of which traffic will egress if
-     * 'netdev' is a tunnel.  If unsuccessful, or 'netdev' is not a tunnel,
-     * will return null.  This function does not necessarily return the
-     * physical interface out which traffic will egress.  Instead it returns
-     * the interface which is assigned 'netdev's remote_ip.  This may be an
-     * internal interface such as a bridge port.
+    /* Retrieves the status of the device.
      *
-     * This function may be set to null if 'netdev' is not a tunnel or it is
-     * not supported. */
-    const char *(*get_tnl_iface)(const struct netdev *netdev);
+     * Populates 'sh' with key-value pairs representing the status of the
+     * device.  A device's status is a set of key-value string pairs
+     * representing netdev type specific information.  For more information see
+     * ovs-vswitchd.conf.db(5).
+     *
+     * The data of 'sh' are heap allocated strings which the caller is
+     * responsible for deallocating.
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP
+     * anyhow. */
+    int (*get_status)(const struct netdev *netdev, struct shash *sh);
 
     /* Looks up the ARP table entry for 'ip' on 'netdev' and stores the
      * corresponding MAC address in 'mac'.  A return value of ENXIO, in

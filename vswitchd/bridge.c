@@ -288,6 +288,9 @@ static void iface_send_packet(struct iface *, struct ofpbuf *packet);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
+static void shash_to_ovs_idl_map(struct shash *,
+                                 char ***keys, char ***values, size_t *n);
+
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -1110,11 +1113,26 @@ dpid_from_hash(const void *data, size_t n)
 }
 
 static void
-iface_refresh_tunnel_egress(struct iface *iface)
+iface_refresh_status(struct iface *iface)
 {
-    const char *name = netdev_get_tnl_iface(iface->netdev);
+    struct shash sh;
 
-    ovsrec_interface_set_tunnel_egress_iface(iface->cfg, name);
+    shash_init(&sh);
+
+    if (!netdev_get_status(iface->netdev, &sh)) {
+        size_t n;
+        char **keys, **values;
+
+        shash_to_ovs_idl_map(&sh, &keys, &values, &n);
+        ovsrec_interface_set_status(iface->cfg, keys, values, n);
+
+        free(keys);
+        free(values);
+    } else {
+        ovsrec_interface_set_status(iface->cfg, NULL, NULL, 0);
+    }
+
+    shash_destroy_free_data(&sh);
 }
 
 static void
@@ -1326,7 +1344,7 @@ bridge_run(void)
                         struct iface *iface = port->ifaces[j];
                         iface_refresh_stats(iface);
                         iface_refresh_cfm_stats(iface);
-                        iface_refresh_tunnel_egress(iface);
+                        iface_refresh_status(iface);
                     }
                 }
             }
@@ -4150,6 +4168,38 @@ shash_from_ovs_idl_map(char **keys, char **values, size_t n,
     for (i = 0; i < n; i++) {
         shash_add(shash, keys[i], values[i]);
     }
+}
+
+/* Creates 'keys' and 'values' arrays from 'shash'.
+ *
+ * Sets 'keys' and 'values' to heap allocated arrays representing the key-value
+ * pairs in 'shash'.  The caller takes ownership of 'keys' and 'values'.  They
+ * are populated with with strings taken directly from 'shash' and thus have
+ * the same ownership of the key-value pairs in shash.
+ */
+static void
+shash_to_ovs_idl_map(struct shash *shash,
+                     char ***keys, char ***values, size_t *n)
+{
+    size_t i, count;
+    char **k, **v;
+    struct shash_node *sn;
+
+    count = shash_count(shash);
+
+    k = xmalloc(count * sizeof *k);
+    v = xmalloc(count * sizeof *v);
+
+    i = 0;
+    SHASH_FOR_EACH(sn, shash) {
+        k[i] = sn->name;
+        v[i] = sn->data;
+        i++;
+    }
+
+    *n      = count;
+    *keys   = k;
+    *values = v;
 }
 
 struct iface_delete_queues_cbdata {

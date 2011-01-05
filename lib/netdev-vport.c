@@ -100,6 +100,7 @@ static void netdev_vport_route_change(const struct rtnetlink_route_change *,
                                       void *);
 static void netdev_vport_link_change(const struct rtnetlink_link_change *,
                                      void *);
+static const char *netdev_vport_get_tnl_iface(const struct netdev *netdev);
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -362,6 +363,18 @@ netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
     }
 
     return err;
+}
+
+static int
+netdev_vport_get_status(const struct netdev *netdev, struct shash *sh)
+{
+    const char *iface = netdev_vport_get_tnl_iface(netdev);
+
+    if (iface) {
+        shash_add(sh, "tunnel_egress_iface", xstrdup(iface));
+    }
+
+    return 0;
 }
 
 static int
@@ -924,7 +937,7 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
     return 0;
 }
 
-#define VPORT_FUNCTIONS(TNL_IFACE)                          \
+#define VPORT_FUNCTIONS(GET_STATUS)                         \
     netdev_vport_init,                                      \
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
@@ -974,7 +987,7 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
     NULL,                       /* get_in6 */               \
     NULL,                       /* add_router */            \
     NULL,                       /* get_next_hop */          \
-    TNL_IFACE,                                              \
+    GET_STATUS,                                             \
     NULL,                       /* arp_lookup */            \
                                                             \
     netdev_vport_update_flags,                              \
@@ -986,11 +999,11 @@ void
 netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
-        { { "gre", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+        { { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
             parse_tunnel_config },
-        { { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+        { { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
             parse_tunnel_config },
-        { { "capwap", VPORT_FUNCTIONS(netdev_vport_get_tnl_iface) },
+        { { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
             parse_tunnel_config },
         { { "patch", VPORT_FUNCTIONS(NULL) }, parse_patch_config }
     };

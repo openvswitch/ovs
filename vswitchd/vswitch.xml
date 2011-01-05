@@ -978,12 +978,20 @@
           Key-value pairs that report port status.  Supported status
           values are <code>type</code>-dependent.
         </p>
-        <p>The only currently defined key-value pair is:</p>
+        <p>The currently defined key-value pairs are:</p>
         <dl>
           <dt><code>source_ip</code></dt>
           <dd>The source IP address used for an IPv4 tunnel end-point,
             such as <code>gre</code> or <code>capwap</code>.  Not
             supported by all implementations.</dd>
+        </dl>
+        <dl>
+            <dt><code>tunnel_egress_iface</code></dt>
+            <dd>Egress interface for tunnels.  Currently only relevant for GRE
+                and CAPWAP tunnels.  On Linux systems, this column will show
+                the name of the interface which is responsible for routing
+                traffic destined for the configured <code>remote_ip</code>.
+                This could be an internal interface such as a bridge port.</dd>
         </dl>
       </column>
     </group>
@@ -1108,14 +1116,6 @@
           <dt><code>xs-vm-uuid</code></dt>
           <dd>The VM to which this interface belongs.</dd>
         </dl>
-      </column>
-
-      <column name="tunnel_egress_iface">
-        Egress interface for tunnels.  Currently only relevant for GRE and
-        CAPWAP tunnels.  On Linux systems, this column will show the name of
-        the interface which is responsible for routing traffic destined for the
-        configured <code>remote_ip</code>.  This could be an internal interface
-        such as a bridge port.
       </column>
 
       <column name="other_config">
