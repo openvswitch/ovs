@@ -402,21 +402,37 @@ do_show(int argc, char *argv[])
             }
         }
     } else {
-        unsigned int i;
-        for (i = 0; i < ODP_MAX; i++) {
-            char name[128];
-            struct dpif *dpif;
-            int error;
+        struct svec types;
+        const char *type;
+        size_t i;
 
-            sprintf(name, "dp%u", i);
-            error = parsed_dpif_open(name, false, &dpif);
-            if (!error) {
-                show_dpif(dpif);
-            } else if (error != ENODEV) {
-                ovs_error(error, "opening datapath %s failed", name);
+        svec_init(&types);
+        dp_enumerate_types(&types);
+        SVEC_FOR_EACH (i, type, &types) {
+            struct svec names;
+            const char *name;
+            size_t j;
+
+            svec_init(&names);
+            if (dp_enumerate_names(type, &names)) {
                 failure = true;
+                continue;
             }
+            SVEC_FOR_EACH (j, name, &names) {
+                struct dpif *dpif;
+                int error;
+
+                error = dpif_open(name, type, &dpif);
+                if (!error) {
+                    show_dpif(dpif);
+                } else {
+                    ovs_error(error, "opening datapath %s failed", name);
+                    failure = true;
+                }
+            }
+            svec_destroy(&names);
         }
+        svec_destroy(&types);
     }
     if (failure) {
         exit(EXIT_FAILURE);
