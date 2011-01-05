@@ -18,6 +18,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+### BEGIN INIT INFO
+# Provides:      openvswitch-xapi-update
+# Required-Start: $network $remote_fs
+# Required-Stop: $network
+# Default-Start:  3 5
+# Default-Stop:
+# Short-Description:    openvswitch-xapi-update
+# Description:          reconfigures Open vSwitch based on XAPI configuration
+### END INIT INFO
 
 . /etc/init.d/functions
 
