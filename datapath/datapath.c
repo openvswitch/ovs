@@ -308,12 +308,24 @@ err:
 	return err;
 }
 
+static void destroy_dp_rcu(struct rcu_head *rcu)
+{
+	struct datapath *dp = container_of(rcu, struct datapath, rcu);
+	int i;
+
+	for (i = 0; i < DP_N_QUEUES; i++)
+		skb_queue_purge(&dp->queues[i]);
+
+	tbl_destroy((struct tbl __force *)dp->table, flow_free_tbl);
+	free_percpu(dp->stats_percpu);
+	kobject_put(&dp->ifobj);
+}
+
 static int destroy_dp(int dp_idx)
 {
 	struct datapath *dp;
 	int err = 0;
 	struct vport *p, *n;
-	int i;
 
 	rtnl_lock();
 	mutex_lock(&dp_mutex);
@@ -330,18 +342,11 @@ static int destroy_dp(int dp_idx)
 			dp_detach_port(p);
 
 	dp_sysfs_del_dp(dp);
-
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
-
 	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
-	tbl_destroy(get_table_protected(dp), flow_free_tbl);
-
-	for (i = 0; i < DP_N_QUEUES; i++)
-		skb_queue_purge(&dp->queues[i]);
-	free_percpu(dp->stats_percpu);
 
 	mutex_unlock(&dp->mutex);
-	kobject_put(&dp->ifobj);
+	call_rcu(&dp->rcu, destroy_dp_rcu);
 	module_put(THIS_MODULE);
 
 out:

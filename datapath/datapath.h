@@ -59,6 +59,7 @@ struct dp_stats_percpu {
 
 /**
  * struct datapath - datapath for flow-based packet switching
+ * @rcu: RCU callback head for deferred destruction.
  * @mutex: Mutual exclusion for ioctls.
  * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
  * @ifobj: Represents /sys/class/net/<devname>/brif.
@@ -77,6 +78,7 @@ struct dp_stats_percpu {
  * sampling a given packet.
  */
 struct datapath {
+	struct rcu_head rcu;
 	struct mutex mutex;
 	int dp_idx;
 	struct kobject ifobj;
