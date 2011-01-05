@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -345,8 +345,6 @@ show_dpif(struct dpif *dpif)
                (unsigned long long int) stats.n_hit,
                (unsigned long long int) stats.n_missed,
                (unsigned long long int) stats.n_lost);
-        printf("\tqueues: max-miss:%"PRIu16", max-action:%"PRIu16"\n",
-               stats.max_miss_queue, stats.max_action_queue);
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);

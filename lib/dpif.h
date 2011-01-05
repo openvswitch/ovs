@@ -153,7 +153,7 @@ int dpif_recv_set_mask(struct dpif *, int listen_mask);
 int dpif_get_sflow_probability(const struct dpif *, uint32_t *probability);
 int dpif_set_sflow_probability(struct dpif *, uint32_t probability);
 int dpif_recv(struct dpif *, struct dpif_upcall *);
-int dpif_recv_purge(struct dpif *);
+void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);
 
 void dpif_get_netflow_ids(const struct dpif *,

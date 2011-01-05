@@ -109,11 +109,6 @@ struct odp_stats {
     uint64_t n_hit;             /* Number of flow table matches. */
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
-
-    /* Queues. */
-    uint16_t max_miss_queue;    /* Max length of ODPL_MISS queue. */
-    uint16_t max_action_queue;  /* Max length of ODPL_ACTION queue. */
-    uint16_t max_sflow_queue;   /* Max length of ODPL_SFLOW queue. */
 };
 
 /* Logical ports. */

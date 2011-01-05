@@ -246,27 +246,32 @@ dpif_netdev_open(const struct dpif_class *class, const char *name,
 }
 
 static void
-dp_netdev_free(struct dp_netdev *dp)
+dp_netdev_purge_queues(struct dp_netdev *dp)
 {
     int i;
 
+    for (i = 0; i < N_QUEUES; i++) {
+        struct dp_netdev_queue *q = &dp->queues[i];
+
+        while (q->tail != q->head) {
+            struct dpif_upcall *upcall = q->upcalls[q->tail++ & QUEUE_MASK];
+
+            ofpbuf_delete(upcall->packet);
+            free(upcall);
+        }
+    }
+}
+
+static void
+dp_netdev_free(struct dp_netdev *dp)
+{
     dp_netdev_flow_flush(dp);
     while (dp->n_ports > 0) {
         struct dp_netdev_port *port = CONTAINER_OF(
             dp->port_list.next, struct dp_netdev_port, node);
         do_del_port(dp, port->port_no);
     }
-    for (i = 0; i < N_QUEUES; i++) {
-        struct dp_netdev_queue *q = &dp->queues[i];
-        unsigned int j;
-
-        for (j = q->tail; j != q->head; j++) {
-            struct dpif_upcall *upcall = q->upcalls[j & QUEUE_MASK];
-
-            ofpbuf_delete(upcall->packet);
-            free(upcall);
-        }
-    }
+    dp_netdev_purge_queues(dp);
     hmap_destroy(&dp->flow_table);
     free(dp->name);
     free(dp);
@@ -303,8 +308,6 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct odp_stats *stats)
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
     stats->n_lost = dp->n_lost;
-    stats->max_miss_queue = MAX_QUEUE_LEN;
-    stats->max_action_queue = MAX_QUEUE_LEN;
     return 0;
 }
 
@@ -1011,6 +1014,13 @@ dpif_netdev_recv_wait(struct dpif *dpif)
          * wake up to queue new messages, so there is nothing to do. */
     }
 }
+
+static void
+dpif_netdev_recv_purge(struct dpif *dpif)
+{
+    struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
+    dp_netdev_purge_queues(dpif_netdev->dp);
+}
 
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *flow, struct flow *key,
@@ -1403,6 +1413,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* queue_to_priority */
     dpif_netdev_recv,
     dpif_netdev_recv_wait,
+    dpif_netdev_recv_purge,
 };
 
 void

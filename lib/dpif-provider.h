@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -348,6 +348,10 @@ struct dpif_class {
     /* Arranges for the poll loop to wake up when 'dpif' has a message queued
      * to be received with the recv member function. */
     void (*recv_wait)(struct dpif *dpif);
+
+    /* Throws away any queued upcalls that 'dpif' currently has ready to
+     * return. */
+    void (*recv_purge)(struct dpif *dpif);
 };
 
 extern const struct dpif_class dpif_linux_class;

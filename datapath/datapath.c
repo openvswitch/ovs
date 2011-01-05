@@ -1222,8 +1222,6 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 		stats.n_missed += local_stats.n_missed;
 		stats.n_lost += local_stats.n_lost;
 	}
-	stats.max_miss_queue = DP_MAX_QUEUE_LEN;
-	stats.max_action_queue = DP_MAX_QUEUE_LEN;
 	return copy_to_user(statsp, &stats, sizeof(stats)) ? -EFAULT : 0;
 }
 

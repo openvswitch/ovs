@@ -1030,30 +1030,14 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
 }
 
 /* Discards all messages that would otherwise be received by dpif_recv() on
- * 'dpif'.  Returns 0 if successful, otherwise a positive errno value. */
-int
+ * 'dpif'. */
+void
 dpif_recv_purge(struct dpif *dpif)
 {
-    struct odp_stats stats;
-    unsigned int i;
-    int error;
-
     COVERAGE_INC(dpif_purge);
-
-    error = dpif_get_dp_stats(dpif, &stats);
-    if (error) {
-        return error;
+    if (dpif->dpif_class->recv_purge) {
+        dpif->dpif_class->recv_purge(dpif);
     }
-
-    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue + stats.max_sflow_queue; i++) {
-        struct dpif_upcall upcall;
-        error = dpif_recv(dpif, &upcall);
-        if (error) {
-            return error == EAGAIN ? 0 : error;
-        }
-        ofpbuf_delete(upcall.packet);
-    }
-    return 0;
 }
 
 /* Arranges for the poll loop to wake up when 'dpif' has a message queued to be

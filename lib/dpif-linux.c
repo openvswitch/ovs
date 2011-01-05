@@ -645,6 +645,26 @@ dpif_linux_recv_wait(struct dpif *dpif_)
     poll_fd_wait(dpif->fd, POLLIN);
 }
 
+static void
+dpif_linux_recv_purge(struct dpif *dpif_)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int i;
+
+    /* This is somewhat bogus because it assumes that the following macros have
+     * fixed values, but it's going to go away later.  */
+#define DP_N_QUEUES 3
+#define DP_MAX_QUEUE_LEN 100
+    for (i = 0; i < DP_N_QUEUES * DP_MAX_QUEUE_LEN; i++) {
+        /* Reading even 1 byte discards a whole datagram and saves time. */
+        char buffer;
+
+        if (read(dpif->fd, &buffer, 1) != 1) {
+            break;
+        }
+    }
+}
+
 const struct dpif_class dpif_linux_class = {
     "system",
     NULL,
@@ -681,6 +701,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_queue_to_priority,
     dpif_linux_recv,
     dpif_linux_recv_wait,
+    dpif_linux_recv_purge,
 };
 
 static int get_openvswitch_major(void);
