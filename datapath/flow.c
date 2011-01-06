@@ -333,7 +333,8 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 		key->nw_proto = nh->protocol;
 
 		/* Transport layer. */
-		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET))) {
+		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET)) &&
+		    !(skb_shinfo(skb)->gso_type & SKB_GSO_UDP)) {
 			if (key->nw_proto == IPPROTO_TCP) {
 				if (tcphdr_ok(skb)) {
 					struct tcphdr *tcp = tcp_hdr(skb);
