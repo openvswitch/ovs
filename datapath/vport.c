@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -783,6 +783,17 @@ struct kobject *vport_get_kobj(const struct vport *vport)
 		return NULL;
 }
 
+static int vport_call_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
+{
+	int err;
+
+	rcu_read_lock();
+	err = vport->ops->get_stats(vport, stats);
+	rcu_read_unlock();
+
+	return err;
+}
+
 /**
  *	vport_get_stats - retrieve device stats (for kernel callers)
  *
@@ -793,88 +804,77 @@ struct kobject *vport_get_kobj(const struct vport *vport)
  */
 int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
-	struct rtnl_link_stats64 dev_stats;
-	struct rtnl_link_stats64 *dev_statsp = NULL;
-	int err = 0;
+	int i;
+
+	if (!(vport->ops->flags & VPORT_F_GEN_STATS))
+		return vport_call_get_stats(vport, stats);
+
+	/* We potentially have 3 sources of stats that need to be
+	 * combined: those we have collected (split into err_stats and
+	 * percpu_stats), offset_stats from set_stats(), and device
+	 * error stats from get_stats() (for errors that happen
+	 * downstream and therefore aren't reported through our
+	 * vport_record_error() function). */
+
+	spin_lock_bh(&vport->stats_lock);
+
+	*stats = vport->offset_stats;
+
+	stats->rx_errors	+= vport->err_stats.rx_errors;
+	stats->tx_errors	+= vport->err_stats.tx_errors;
+	stats->tx_dropped	+= vport->err_stats.tx_dropped;
+	stats->rx_dropped	+= vport->err_stats.rx_dropped;
+
+	spin_unlock_bh(&vport->stats_lock);
 
 	if (vport->ops->get_stats) {
-		if (vport->ops->flags & VPORT_F_GEN_STATS)
-			dev_statsp = &dev_stats;
-		else
-			dev_statsp = stats;
+		struct rtnl_link_stats64 dev_stats;
+		int err;
 
-		rcu_read_lock();
-		err = vport->ops->get_stats(vport, dev_statsp);
-		rcu_read_unlock();
-
+		err = vport_call_get_stats(vport, &dev_stats);
 		if (err)
-			goto out;
+			return err;
+
+		stats->rx_errors           += dev_stats.rx_errors;
+		stats->tx_errors           += dev_stats.tx_errors;
+		stats->rx_dropped          += dev_stats.rx_dropped;
+		stats->tx_dropped          += dev_stats.tx_dropped;
+		stats->multicast           += dev_stats.multicast;
+		stats->collisions          += dev_stats.collisions;
+		stats->rx_length_errors    += dev_stats.rx_length_errors;
+		stats->rx_over_errors      += dev_stats.rx_over_errors;
+		stats->rx_crc_errors       += dev_stats.rx_crc_errors;
+		stats->rx_frame_errors     += dev_stats.rx_frame_errors;
+		stats->rx_fifo_errors      += dev_stats.rx_fifo_errors;
+		stats->rx_missed_errors    += dev_stats.rx_missed_errors;
+		stats->tx_aborted_errors   += dev_stats.tx_aborted_errors;
+		stats->tx_carrier_errors   += dev_stats.tx_carrier_errors;
+		stats->tx_fifo_errors      += dev_stats.tx_fifo_errors;
+		stats->tx_heartbeat_errors += dev_stats.tx_heartbeat_errors;
+		stats->tx_window_errors    += dev_stats.tx_window_errors;
+		stats->rx_compressed       += dev_stats.rx_compressed;
+		stats->tx_compressed       += dev_stats.tx_compressed;
 	}
 
-	if (vport->ops->flags & VPORT_F_GEN_STATS) {
-		int i;
+	for_each_possible_cpu(i) {
+		const struct vport_percpu_stats *percpu_stats;
+		struct vport_percpu_stats local_stats;
+		unsigned seqcount;
 
-		/* We potentially have 3 sources of stats that need to be
-		 * combined: those we have collected (split into err_stats and
-		 * percpu_stats), offset_stats from set_stats(), and device
-		 * error stats from get_stats() (for errors that happen
-		 * downstream and therefore aren't reported through our
-		 * vport_record_error() function). */
+		percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
 
-		spin_lock_bh(&vport->stats_lock);
+		do {
+			seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+			local_stats = *percpu_stats;
+		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
 
-		*stats = vport->offset_stats;
-
-		stats->rx_errors	+= vport->err_stats.rx_errors;
-		stats->tx_errors	+= vport->err_stats.tx_errors;
-		stats->tx_dropped	+= vport->err_stats.tx_dropped;
-		stats->rx_dropped	+= vport->err_stats.rx_dropped;
-
-		spin_unlock_bh(&vport->stats_lock);
-
-		if (dev_statsp) {
-			stats->rx_errors           += dev_statsp->rx_errors;
-			stats->tx_errors           += dev_statsp->tx_errors;
-			stats->rx_dropped          += dev_statsp->rx_dropped;
-			stats->tx_dropped          += dev_statsp->tx_dropped;
-			stats->multicast           += dev_statsp->multicast;
-			stats->collisions          += dev_statsp->collisions;
-			stats->rx_length_errors    += dev_statsp->rx_length_errors;
-			stats->rx_over_errors      += dev_statsp->rx_over_errors;
-			stats->rx_crc_errors       += dev_statsp->rx_crc_errors;
-			stats->rx_frame_errors     += dev_statsp->rx_frame_errors;
-			stats->rx_fifo_errors      += dev_statsp->rx_fifo_errors;
-			stats->rx_missed_errors    += dev_statsp->rx_missed_errors;
-			stats->tx_aborted_errors   += dev_statsp->tx_aborted_errors;
-			stats->tx_carrier_errors   += dev_statsp->tx_carrier_errors;
-			stats->tx_fifo_errors      += dev_statsp->tx_fifo_errors;
-			stats->tx_heartbeat_errors += dev_statsp->tx_heartbeat_errors;
-			stats->tx_window_errors    += dev_statsp->tx_window_errors;
-			stats->rx_compressed       += dev_statsp->rx_compressed;
-			stats->tx_compressed       += dev_statsp->tx_compressed;
-		}
-
-		for_each_possible_cpu(i) {
-			const struct vport_percpu_stats *percpu_stats;
-			struct vport_percpu_stats local_stats;
-			unsigned seqcount;
-
-			percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
-
-			do {
-				seqcount = read_seqcount_begin(&percpu_stats->seqlock);
-				local_stats = *percpu_stats;
-			} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
-
-			stats->rx_bytes		+= local_stats.rx_bytes;
-			stats->rx_packets	+= local_stats.rx_packets;
-			stats->tx_bytes		+= local_stats.tx_bytes;
-			stats->tx_packets	+= local_stats.tx_packets;
-		}
+		stats->rx_bytes		+= local_stats.rx_bytes;
+		stats->rx_packets	+= local_stats.rx_packets;
+		stats->tx_bytes		+= local_stats.tx_bytes;
+		stats->tx_packets	+= local_stats.tx_packets;
 	}
 
-out:
-	return err;
+	return 0;
 }
 
 /**
