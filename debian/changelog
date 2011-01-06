@@ -1,19 +1,60 @@
-openvswitch (1.1.0pre2) unstable; urgency=low
+openvswitch (1.1.0~pre2.g1.bbe8d06e-1) unstable; urgency=low
 
-  * Bug fixes
+  * Git snaptshot
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 13 Sep 2010 21:50:00 +0000
+ -- Simon Horman <horms@debian.org>  Thu, 06 Jan 2011 11:11:55 +0900
 
-openvswitch (1.1.0pre1) unstable; urgency=low
+openvswitch (1.1.0~pre2-5) unstable; urgency=low
 
-  * OpenFlow 1.0 slicing (QoS) functionality
-  * Python bindings for configuration database (no write support)
-  * Performance and scalability improvements
-  * Bug fixes
+  * Open vSwitch only works on Linux so set
+    the Architecture of binary packages to linux-any accordingly
+
+ -- Simon Horman <horms@debian.org>  Tue, 23 Nov 2010 07:55:19 +0900
+
+openvswitch (1.1.0~pre2-4) unstable; urgency=low
+
+  * Add procps to Build-Depends
+    (closes: #602891)
+
+ -- Simon Horman <horms@debian.org>  Tue, 16 Nov 2010 06:46:17 +0900
+
+openvswitch (1.1.0~pre2-3) unstable; urgency=low
+
+  * Remove the corekeeper package as it isn't strongly related
+    to Open vSwitch. It has subsequently been broken off into
+    a separate source repository and may be uploaded as its
+    own debian source package.
+    http://openvswitch.org/cgi-bin/gitweb.cgi?p=corekeeper;a=summary
+    (closes: #602946)
+  * Avoid the use of long socket names.
+    (closes: #602891, closes: #602911)
+
+ -- Simon Horman <horms@debian.org>  Thu, 11 Nov 2010 06:35:05 +0900
+
+openvswitch (1.1.0~pre2-2) unstable; urgency=low
+
+  * Clarify licensing of files in xenserver/
+
+ -- Simon Horman <horms@debian.org>  Thu, 23 Sep 2010 10:56:18 +0900
+
+openvswitch (1.1.0~pre2-1) unstable; urgency=low
+
+  * New upstream version
+    - Bug fixes
+
+ -- Simon Horman <horms@debian.org>  Wed, 15 Sep 2010 18:28:59 +0900
+
+openvswitch (1.1.0~pre1-1) unstable; urgency=low
+
+  * New upstream version
+    - OpenFlow 1.0 slicing (QoS) functionality
+    - Python bindings for configuration database (no write support)
+    - Performance and scalability improvements
+    - Bug fixes
 
  -- Open vSwitch team <dev@openvswitch.org>  Tue, 31 Aug 2010 23:20:00 +0000
 
-openvswitch (1.0.1) unstable; urgency=low
+openvswitch (1.0.1-1) unstable; urgency=low
 
   * New upstream version.
 
