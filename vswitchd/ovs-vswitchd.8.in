@@ -139,12 +139,12 @@ since it is not allowed to modify or override them.
 .SS "BOND COMMANDS"
 These commands manage bonded ports on an Open vSwitch's bridges.  To
 understand some of these commands, it is important to understand a
-detail of the bonding implementation called ``MAC hashing.''  Instead
-of directly assigning Ethernet source addresses to slaves, the bonding
-implementation computes a function that maps an 48-bit Ethernet source
-addresses into an 8-bit value (a ``MAC hash'' value).  All of the
-Ethernet addresses that map to a single 8-bit value are then assigned
-to a single slave.
+detail of the bonding implementation called ``source load balancing''
+(SLB).  Instead of directly assigning Ethernet source addresses to
+slaves, the bonding implementation computes a function that maps an
+48-bit Ethernet source addresses into an 8-bit value (a ``MAC hash''
+value).  All of the Ethernet addresses that map to a single 8-bit
+value are then assigned to a single slave.
 .IP "\fBbond/list\fR"
 Lists all of the bonds, and their slaves, on each bridge.
 .
@@ -156,10 +156,10 @@ the time to completion of an updelay or downdelay if one is in
 progress, whether it is the active slave, the MAC hashes assigned to
 the slave, and the MAC learning table entries that hash to each MAC.
 .IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
-Assigns a given MAC hash to a new slave.  \fIport\fR specifies the
-bond port, \fIhash\fR the MAC hash to be migrated (as a decimal
-number between 0 and 255), and \fIslave\fR the new slave to be
-assigned.
+Only valid for SLB bonds.  Assigns a given MAC hash to a new slave.
+\fIport\fR specifies the bond port, \fIhash\fR the MAC hash to be
+migrated (as a decimal number between 0 and 255), and \fIslave\fR the
+new slave to be assigned.
 .IP
 The reassignment is not permanent: rebalancing or fail-over will
 cause the MAC hash to be shifted to a new slave in the usual

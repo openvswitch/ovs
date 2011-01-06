@@ -507,16 +507,24 @@
     </group>
 
     <group title="Bonding Configuration">
-      <p>A port that has more than one interface is a ``bonded port.''
-        Bonding allows for load balancing and fail-over.  Open vSwitch
-        supports ``source load balancing'' (SLB) bonding, which
-        assigns flows to slaves based on source MAC address and output VLAN,
-        with periodic rebalancing as traffic patterns change.  This form of
-        bonding does not require 802.3ad or other special support from the
-        upstream switch to which the slave devices are connected.</p>
+      <p>A port that has more than one interface is a ``bonded port.'' Bonding
+        allows for load balancing and fail-over.  Open vSwitch supports
+        ``source load balancing'' (SLB) and "active backup" bonding.  SLB
+        bonding assigns flows to slaves based on source MAC address and output
+        VLAN, with periodic rebalancing as traffic patterns change.  Active
+        backup bonding assigns all flows to one slave, failing over to a backup
+        slave when the active slave is disabled.  Neither form of bonding
+        require 802.3ad or other special support from the upstream switch to
+        which the slave devices are connected.</p>
 
       <p>These columns apply only to bonded ports.  Their values are
         otherwise ignored.</p>
+
+      <column name="bond_type">
+        <p>The type of bonding used for a bonded port.  Currently supported
+          values are <code>slb</code> and <code>active-backup</code>.  Defaults
+          to SLB if unset.</p>
+      </column>
 
       <column name="bond_updelay">
         <p>For a bonded port, the number of milliseconds for which carrier must
@@ -583,7 +591,7 @@
           <dd>An Ethernet address in the form
             <code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code>.</dd>
           <dt><code>bond-rebalance-interval</code></dt>
-          <dd>For a bonded port, the number of milliseconds between
+          <dd>For an SLB bonded port, the number of milliseconds between
             successive attempts to rebalance the bond, that is, to
             move source MACs and their flows from one interface on
             the bond to another in an attempt to keep usage of each
