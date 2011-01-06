@@ -671,7 +671,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
                 shash_init(&args);
                 if (iface) {
-                    shash_from_ovs_idl_map(iface->cfg->key_options, 
+                    shash_from_ovs_idl_map(iface->cfg->key_options,
                                            iface->cfg->value_options,
                                            iface->cfg->n_options, &args);
                 }
@@ -711,7 +711,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 struct shash args;
 
                 shash_init(&args);
-                shash_from_ovs_idl_map(iface->cfg->key_options, 
+                shash_from_ovs_idl_map(iface->cfg->key_options,
                                        iface->cfg->value_options,
                                        iface->cfg->n_options, &args);
                 netdev_reconfigure(iface->netdev, &args);

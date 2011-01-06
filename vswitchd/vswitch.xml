@@ -197,21 +197,21 @@
 
     <group title="Version Reporting">
       <p>
-	These columns report the types and versions of the hardware and
-	software running Open vSwitch.  We recommend in general that software
-	should test whether specific features are supported instead of relying
-	on version number checks.  These values are primarily intended for
-	reporting to human administrators.
+        These columns report the types and versions of the hardware and
+        software running Open vSwitch.  We recommend in general that software
+        should test whether specific features are supported instead of relying
+        on version number checks.  These values are primarily intended for
+        reporting to human administrators.
       </p>
 
       <column name="ovs_version">
-	The Open vSwitch version number, e.g. <code>1.1.0pre2</code>.
-	If Open vSwitch was configured with a build number, then it is
-	also included, e.g. <code>1.1.0pre2+build4948</code>.
+        The Open vSwitch version number, e.g. <code>1.1.0pre2</code>.
+        If Open vSwitch was configured with a build number, then it is
+        also included, e.g. <code>1.1.0pre2+build4948</code>.
       </column>
 
       <column name="db_version">
-	<p>
+        <p>
           The database schema version number in the form
           <code><var>major</var>.<var>minor</var>.<var>tweak</var></code>,
           e.g. <code>1.2.3</code>.  Whenever the database schema is changed in
@@ -232,26 +232,26 @@
 
       <column name="system_type">
         <p>
-	  An identifier for the type of system on top of which Open vSwitch
-	  runs, e.g. <code>XenServer</code> or <code>KVM</code>.
-	</p>
-	<p>
-	  System integrators are responsible for choosing and setting an
-	  appropriate value for this column.
-	</p>
+          An identifier for the type of system on top of which Open vSwitch
+          runs, e.g. <code>XenServer</code> or <code>KVM</code>.
+        </p>
+        <p>
+          System integrators are responsible for choosing and setting an
+          appropriate value for this column.
+        </p>
       </column>
 
       <column name="system_version">
         <p>
-	  The version of the system identified by <ref column="system_type"/>,
-	  e.g. <code>5.5.0-24648p</code> on XenServer 5.5.0 build 24648.
-	</p>
-	<p>
-	  System integrators are responsible for choosing and setting an
-	  appropriate value for this column.
-	</p>
+          The version of the system identified by <ref column="system_type"/>,
+          e.g. <code>5.5.0-24648p</code> on XenServer 5.5.0 build 24648.
+        </p>
+        <p>
+          System integrators are responsible for choosing and setting an
+          appropriate value for this column.
+        </p>
       </column>
-	
+
     </group>
 
     <group title="Database Configuration">
