@@ -85,8 +85,8 @@ static void patch_exit(void)
 	kfree(peer_table);
 }
 
-static int set_config(struct vport *vport, const void *config, 
-			struct patch_config *patchconf)
+static int patch_set_config(struct vport *vport, const void *config, 
+			    struct patch_config *patchconf)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	char peer_name[IFNAMSIZ];
@@ -125,7 +125,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 		goto error_free_vport;
 	}
 
-	err = set_config(vport, parms->config, patchconf);
+	err = patch_set_config(vport, parms->config, patchconf);
 	if (err)
 		goto error_free_patchconf;
 
@@ -165,7 +165,7 @@ static int patch_modify(struct vport *vport, struct odp_port *port)
 		goto error;
 	}
 
-	err = set_config(vport, port->config, patchconf);
+	err = patch_set_config(vport, port->config, patchconf);
 	if (err)
 		goto error_free;
 

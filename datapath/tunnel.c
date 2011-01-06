@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -1323,9 +1323,9 @@ out:
 	return sent_len;
 }
 
-static int set_config(const void *config, const struct tnl_ops *tnl_ops,
-		      const struct vport *cur_vport,
-		      struct tnl_mutable_config *mutable)
+static int tnl_set_config(const void *config, const struct tnl_ops *tnl_ops,
+			  const struct vport *cur_vport,
+			  struct tnl_mutable_config *mutable)
 {
 	const struct vport *old_vport;
 	const struct tnl_mutable_config *old_mutable;
@@ -1399,7 +1399,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
-	err = set_config(parms->config, tnl_ops, NULL, mutable);
+	err = tnl_set_config(parms->config, tnl_ops, NULL, mutable);
 	if (err)
 		goto error_free_mutable;
 
@@ -1439,7 +1439,7 @@ int tnl_modify(struct vport *vport, struct odp_port *port)
 		goto error;
 	}
 
-	err = set_config(port->config, tnl_vport->tnl_ops, vport, mutable);
+	err = tnl_set_config(port->config, tnl_vport->tnl_ops, vport, mutable);
 	if (err)
 		goto error_free;
 
