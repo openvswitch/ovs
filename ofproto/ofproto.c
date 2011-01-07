@@ -2499,8 +2499,8 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
 
     /* If the ODP actions changed or the installability changed, then we need
      * to talk to the datapath. */
-    if (actions_changed || facet->may_install != facet->installed) {
-        if (facet->may_install) {
+    if (actions_changed || ctx.may_set_up_flow != facet->installed) {
+        if (ctx.may_set_up_flow) {
             uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
             struct dpif_flow_stats stats;
             struct ofpbuf key;
