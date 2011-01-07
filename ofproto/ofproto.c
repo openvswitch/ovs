@@ -2308,17 +2308,24 @@ facet_make_actions(struct ofproto *p, struct facet *facet,
 
 static int
 facet_put__(struct ofproto *ofproto, struct facet *facet,
-            enum dpif_flow_put_flags flags)
+            const struct nlattr *actions, size_t actions_len,
+            struct dpif_flow_stats *stats)
 {
     uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+    enum dpif_flow_put_flags flags;
     struct ofpbuf key;
+
+    flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
+    if (stats) {
+        flags |= DPIF_FP_ZERO_STATS;
+    }
 
     ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &facet->flow);
     assert(key.base == keybuf);
 
     return dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
-                         facet->actions, facet->actions_len, NULL);
+                         actions, actions_len, stats);
 }
 
 /* If 'facet' is installable, inserts or re-inserts it into 'p''s datapath.  If
@@ -2327,14 +2334,12 @@ facet_put__(struct ofproto *ofproto, struct facet *facet,
 static void
 facet_install(struct ofproto *p, struct facet *facet, bool zero_stats)
 {
-    if (facet->may_install) {
-        enum dpif_flow_put_flags flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
-        if (zero_stats) {
-            flags |= DPIF_FP_ZERO_STATS;
-        }
-        if (!facet_put__(p, facet, flags)) {
-            facet->installed = true;
-        }
+    struct dpif_flow_stats stats;
+
+    if (facet->may_install
+        && !facet_put__(p, facet, facet->actions, facet->actions_len,
+                        zero_stats ? &stats : NULL)) {
+        facet->installed = true;
     }
 }
 
@@ -2501,18 +2506,10 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
      * to talk to the datapath. */
     if (actions_changed || ctx.may_set_up_flow != facet->installed) {
         if (ctx.may_set_up_flow) {
-            uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
             struct dpif_flow_stats stats;
-            struct ofpbuf key;
 
-            ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
-            odp_flow_key_from_flow(&key, &facet->flow);
-
-            dpif_flow_put(ofproto->dpif,
-                          DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_ZERO_STATS,
-                          key.data, key.size,
-                          odp_actions->data, odp_actions->size, &stats);
-
+            facet_put__(ofproto, facet,
+                        odp_actions->data, odp_actions->size, &stats);
             facet_update_stats(ofproto, facet, &stats);
         } else {
             facet_uninstall(ofproto, facet);
