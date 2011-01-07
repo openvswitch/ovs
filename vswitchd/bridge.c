@@ -3984,6 +3984,10 @@ iface_destroy(struct iface *iface)
         bool del_active = port->active_iface == iface->port_ifidx;
         struct iface *del;
 
+        if (port->monitor) {
+            netdev_monitor_remove(port->monitor, iface->netdev);
+        }
+
         shash_find_and_delete_assert(&br->iface_by_name, iface->name);
 
         if (iface->dp_ifidx >= 0) {
