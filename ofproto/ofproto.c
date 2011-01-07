@@ -4644,36 +4644,18 @@ facet_active_timeout(struct ofproto *ofproto, struct facet *facet)
         netflow_active_timeout_expired(ofproto->netflow, &facet->nf_flow)) {
         struct ofexpired expired;
 
+        if (facet->installed) {
+            struct dpif_flow_stats stats;
+
+            facet_put__(ofproto, facet, facet->actions, facet->actions_len,
+                        &stats);
+            facet_update_stats(ofproto, facet, &stats);
+        }
+
         expired.flow = facet->flow;
         expired.packet_count = facet->packet_count;
         expired.byte_count = facet->byte_count;
         expired.used = facet->used;
-
-        /* Get updated flow stats.
-         *
-         * XXX We could avoid this call entirely if (1) ofproto_update_used()
-         * updated TCP flags and (2) the dpif_flow_list_all() in
-         * ofproto_update_used() zeroed TCP flags. */
-        if (facet->installed) {
-            uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-            struct dpif_flow_stats stats;
-            struct ofpbuf key;
-
-            ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
-            odp_flow_key_from_flow(&key, &facet->flow);
-
-            if (!dpif_flow_get(ofproto->dpif, ODPFF_ZERO_TCP_FLAGS,
-                               key.data, key.size, NULL, &stats)) {
-                expired.packet_count += stats.n_packets;
-                expired.byte_count += stats.n_bytes;
-                if (stats.n_packets) {
-                    facet_update_time(ofproto, facet, &stats);
-                    netflow_flow_update_flags(&facet->nf_flow,
-                                              stats.tcp_flags);
-                }
-            }
-        }
-
         netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
     }
 }
