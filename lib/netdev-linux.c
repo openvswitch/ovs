@@ -25,6 +25,7 @@
 #include <linux/ip.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/mii.h>
 #include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
@@ -1004,6 +1005,49 @@ exit:
         close(fd);
     }
     free(fn);
+    return error;
+}
+
+static int
+netdev_linux_get_miimon(const struct netdev *netdev_, bool *miimon)
+{
+    int error;
+    struct ifreq ifr;
+    const char *name = netdev_get_name(netdev_);
+
+    *miimon = false;
+    memset(&ifr, 0, sizeof ifr);
+
+    error = netdev_linux_do_ioctl(name, &ifr, SIOCGMIIPHY, "SIOCGMIIPHY");
+    if (!error) {
+        struct mii_ioctl_data *data = (struct mii_ioctl_data *)&ifr.ifr_data;
+
+        /* data->phy_id is filled out by previous SIOCGMIIPHY ioctl call. */
+        data->reg_num = MII_BMSR;
+        error = netdev_linux_do_ioctl(name, &ifr, SIOCGMIIREG, "SIOCGMIIREG");
+
+        if (!error) {
+            *miimon = !!(data->val_out & BMSR_LSTATUS);
+        } else {
+            VLOG_WARN_RL(&rl, "%s: failed to query MII", name);
+        }
+    } else {
+        struct ethtool_cmd ecmd;
+        struct ethtool_value *eval = (struct ethtool_value *) &ecmd;
+
+        VLOG_DBG_RL(&rl, "%s: failed to query MII, falling back to ethtool",
+                    name);
+
+        memset(&ecmd, 0, sizeof ecmd);
+        error = netdev_linux_do_ethtool(name, &ecmd, ETHTOOL_GLINK,
+                                        "ETHTOOL_GLINK");
+        if (!error) {
+            *miimon = !!eval->data;
+        } else {
+            VLOG_WARN_RL(&rl, "%s: ethtool link status failed", name);
+        }
+    }
+
     return error;
 }
 
@@ -2152,6 +2196,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     netdev_linux_get_mtu,                                       \
     netdev_linux_get_ifindex,                                   \
     netdev_linux_get_carrier,                                   \
+    netdev_linux_get_miimon,                                    \
     netdev_linux_get_stats,                                     \
     SET_STATS,                                                  \
                                                                 \

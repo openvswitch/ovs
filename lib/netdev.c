@@ -935,6 +935,34 @@ netdev_get_carrier(const struct netdev *netdev)
     return carrier;
 }
 
+/* Returns true if 'netdev' is up according to its MII. */
+bool
+netdev_get_miimon(const struct netdev *netdev)
+{
+    int error;
+    enum netdev_flags flags;
+    bool miimon;
+
+    netdev_get_flags(netdev, &flags);
+    if (!(flags & NETDEV_UP)) {
+        return false;
+    }
+
+    if (!netdev_get_dev(netdev)->netdev_class->get_miimon) {
+        return true;
+    }
+
+    error = netdev_get_dev(netdev)->netdev_class->get_miimon(netdev, &miimon);
+
+    if (error) {
+        VLOG_DBG("%s: failed to get network device MII status, assuming "
+                 "down: %s", netdev_get_name(netdev), strerror(error));
+        miimon = false;
+    }
+
+    return miimon;
+}
+
 /* Retrieves current device stats for 'netdev'. */
 int
 netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)

@@ -963,6 +963,7 @@ parse_patch_config(const struct netdev_dev *dev, const struct shash *args,
     netdev_vport_get_mtu,                                   \
     NULL,                       /* get_ifindex */           \
     NULL,                       /* get_carrier */           \
+    NULL,                       /* get_miimon */            \
     netdev_vport_get_stats,                                 \
     netdev_vport_set_stats,                                 \
                                                             \

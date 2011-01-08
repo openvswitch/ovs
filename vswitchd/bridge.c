@@ -167,6 +167,9 @@ struct port {
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
+    bool miimon;                /* Use miimon instead of carrier? */
+    long long int bond_miimon_interval; /* Miimon status refresh interval. */
+    long long int bond_miimon_next_update; /* Time of next miimon update. */
     long long int bond_next_fake_iface_update; /* Time of next update. */
     struct netdev_monitor *monitor; /* Tracks carrier up/down status. */
 
@@ -2073,8 +2076,8 @@ bond_link_status_update(struct iface *iface, bool carrier)
         /* Nothing to do. */
         return;
     }
-    VLOG_INFO_RL(&rl, "interface %s: carrier %s",
-                 iface->name, carrier ? "detected" : "dropped");
+    VLOG_INFO_RL(&rl, "interface %s: link state %s",
+                 iface->name, carrier ? "up" : "down");
     if (carrier == iface->enabled) {
         iface->delay_expires = LLONG_MAX;
         VLOG_INFO_RL(&rl, "interface %s: will not be %s",
@@ -2212,18 +2215,36 @@ bond_run(struct bridge *br)
         if (port->n_ifaces >= 2) {
             char *devname;
 
-            /* Track carrier going up and down on interfaces. */
-            while (!netdev_monitor_poll(port->monitor, &devname)) {
-                struct iface *iface;
+            if (port->monitor) {
+                assert(!port->miimon);
 
-                iface = port_lookup_iface(port, devname);
-                if (iface) {
-                    bool carrier = netdev_get_carrier(iface->netdev);
+                /* Track carrier going up and down on interfaces. */
+                while (!netdev_monitor_poll(port->monitor, &devname)) {
+                    struct iface *iface;
 
-                    bond_link_status_update(iface, carrier);
-                    port_update_bond_compat(port);
+                    iface = port_lookup_iface(port, devname);
+                    if (iface) {
+                        bool up = netdev_get_carrier(iface->netdev);
+
+                        bond_link_status_update(iface, up);
+                        port_update_bond_compat(port);
+                    }
+                    free(devname);
                 }
-                free(devname);
+            } else {
+                assert(port->miimon);
+
+                if (time_msec() >= port->bond_miimon_next_update) {
+                    for (j = 0; j < port->n_ifaces; j++) {
+                        struct iface *iface = port->ifaces[j];
+                        bool up = netdev_get_miimon(iface->netdev);
+
+                        bond_link_status_update(iface, up);
+                        port_update_bond_compat(port);
+                    }
+                    port->bond_miimon_next_update = time_msec() +
+                        port->bond_miimon_interval;
+                }
             }
 
             for (j = 0; j < port->n_ifaces; j++) {
@@ -2257,7 +2278,15 @@ bond_wait(struct bridge *br)
         if (port->n_ifaces < 2) {
             continue;
         }
-        netdev_monitor_poll_wait(port->monitor);
+
+        if (port->monitor) {
+            netdev_monitor_poll_wait(port->monitor);
+        }
+
+        if (port->miimon) {
+            poll_timer_wait_until(port->bond_miimon_next_update);
+        }
+
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
             if (iface->delay_expires != LLONG_MAX) {
@@ -3324,6 +3353,8 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
     ds_put_format(&ds, "bond_mode: %s\n",
                   bond_mode_to_string(port->bond_mode));
+    ds_put_format(&ds, "bond-detect-mode: %s\n",
+                  port->miimon ? "miimon" : "carrier");
     ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
 
@@ -3655,8 +3686,9 @@ port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
 static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
+    const char *detect_mode;
     struct shash new_ifaces;
-    long long int next_rebalance;
+    long long int next_rebalance, miimon_next_update;
     unsigned long *trunks;
     int vlan;
     size_t i;
@@ -3680,6 +3712,29 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     next_rebalance = time_msec() + port->bond_rebalance_interval;
     if (port->bond_next_rebalance > next_rebalance) {
         port->bond_next_rebalance = next_rebalance;
+    }
+
+    detect_mode = get_port_other_config(cfg, "bond-detect-mode",
+                                        "carrier");
+
+    if (!strcmp(detect_mode, "carrier")) {
+        port->miimon = false;
+    } else if (!strcmp(detect_mode, "miimon")) {
+        port->miimon = true;
+    } else {
+        port->miimon = false;
+        VLOG_WARN("port %s: unsupported bond-detect-mode %s, defaulting to "
+                  "carrier", port->name, detect_mode);
+    }
+
+    port->bond_miimon_interval = atoi(
+        get_port_other_config(cfg, "bond-miimon-interval", "200"));
+    if (port->bond_miimon_interval < 100) {
+        port->bond_miimon_interval = 100;
+    }
+    miimon_next_update = time_msec() + port->bond_miimon_interval;
+    if (port->bond_miimon_next_update > miimon_next_update) {
+        port->bond_miimon_next_update = miimon_next_update;
     }
 
     if (!port->cfg->bond_mode ||
@@ -3888,9 +3943,11 @@ port_update_bonding(struct port *port)
         port->bond_compat_is_stale = true;
         port->bond_fake_iface = port->cfg->bond_fake_iface;
 
-        port->monitor = netdev_monitor_create();
-        for (i = 0; i < port->n_ifaces; i++) {
-            netdev_monitor_add(port->monitor, port->ifaces[i]->netdev);
+        if (!port->miimon) {
+            port->monitor = netdev_monitor_create();
+            for (i = 0; i < port->n_ifaces; i++) {
+                netdev_monitor_add(port->monitor, port->ifaces[i]->netdev);
+            }
         }
     }
 }

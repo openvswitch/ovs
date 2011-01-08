@@ -597,6 +597,16 @@
             the bond to another in an attempt to keep usage of each
             interface roughly equal.  The default is 10000 (10
             seconds), and the minimum is 1000 (1 second).</dd>
+          <dt><code>bond-detect-mode</code></dt>
+          <dd> Sets the method used to detect link failures in a bonded port.
+            Options are <code>carrier</code> and <code>miimon</code>. Defaults
+            to <code>carrier</code> which uses each interface's carrier to detect
+            failures.  When set to <code>miimon</code>, will check for failures
+            by polling each interface's MII. </dd>
+          <dt><code>bond-miimon-interval</code></dt>
+          <dd> The number of milliseconds between successive attempts to
+            poll each interface's MII.  Only relevant on ports which use
+            <code>miimon</code> to detect failures. </dd>
         </dl>
       </column>
     </group>

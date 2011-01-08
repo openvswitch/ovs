@@ -266,6 +266,14 @@ struct netdev_class {
      */
     int (*get_carrier)(const struct netdev *netdev, bool *carrier);
 
+    /* Sets 'miimon' to true if 'netdev' is up according to its MII.  If
+     * 'netdev' does not support MII, may fall back to another method or return
+     * EOPNOTSUPP.
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP.
+     */
+    int (*get_miimon)(const struct netdev *netdev, bool *miimon);
+
     /* Retrieves current device stats for 'netdev' into 'stats'.
      *
      * A network device that supports some statistics but not others, it should
