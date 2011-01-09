@@ -296,7 +296,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		bool is_frag;
 
 		/* Extract flow from 'skb' into 'key'. */
-		error = flow_extract(skb, p ? p->port_no : ODPP_NONE, &key, &is_frag);
+		error = flow_extract(skb, p->port_no, &key, &is_frag);
 		if (unlikely(error)) {
 			kfree_skb(skb);
 			return;

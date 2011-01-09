@@ -30,6 +30,8 @@ struct ds;
 struct flow;
 struct ofpbuf;
 
+#define ODPP_NONE ((uint16_t) -1)
+
 static inline uint16_t
 ofp_port_to_odp_port(uint16_t ofp_port)
 {
