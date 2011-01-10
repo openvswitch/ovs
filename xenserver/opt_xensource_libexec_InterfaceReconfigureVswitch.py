@@ -171,6 +171,12 @@ def datapath_configure_bond(pif,slaves):
                 argv += ['bond_%s=%d' % (name, value)]
             except ValueError:
                 log("bridge %s has invalid %s '%s'" % (bridge, name, value))
+        elif name == "mode":
+
+            if val in ['balance-slb', 'active-backup']:
+                argv += ['bond_%s=%s' % (name, val)]
+            else:
+                log("bridge %s has invalid %s '%s'" % (bridge, name, val))
         else:
             # Pass other bond options into other_config.
             argv += ["other-config:%s=%s" % (vsctl_escape("bond-%s" % name),
