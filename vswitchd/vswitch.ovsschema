@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "1.0.3",
- "cksum": "2654345387 14137",
+ "version": "1.0.4",
+ "cksum": "1999497811 14145",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -120,9 +120,9 @@
        "mac": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
-       "bond_type": {
+       "bond_mode": {
          "type": {"key": {"type": "string",
-           "enum": ["set", ["slb", "active-backup"]]},
+           "enum": ["set", ["balance-slb", "active-backup"]]},
          "min": 0, "max": 1}},
        "bond_updelay": {
          "type": "integer"},

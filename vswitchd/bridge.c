@@ -118,9 +118,9 @@ struct bond_entry {
     tag_type iface_tag;         /* Tag associated with iface_idx. */
 };
 
-enum bond_type {
-    BT_SLB, /* Source Load Balance (Default). */
-    BT_AB   /* Active Backup. */
+enum bond_mode {
+    BM_SLB, /* Source Load Balance (Default). */
+    BM_AB   /* Active Backup. */
 };
 
 #define MAX_MIRRORS 32
@@ -160,7 +160,7 @@ struct port {
     size_t n_ifaces, allocated_ifaces;
 
     /* Bonding info. */
-    enum bond_type bond_type;   /* Type of the bond. BT_SLB is the default. */
+    enum bond_mode bond_mode;   /* Type of the bond. BM_SLB is the default. */
     int active_iface;           /* Ifidx on which bcasts accepted, or -1. */
     tag_type active_iface_tag;  /* Tag for bcast flows. */
     tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
@@ -1990,7 +1990,7 @@ static struct bond_entry *
 lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN],
                   uint16_t vlan)
 {
-    assert(port->bond_type == BT_SLB);
+    assert(port->bond_mode == BM_SLB);
     return &port->bond_hash[bond_hash(mac, vlan)];
 }
 
@@ -2033,13 +2033,13 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
     assert(port->n_ifaces);
     if (port->n_ifaces == 1) {
         iface = port->ifaces[0];
-    } else if (port->bond_type == BT_AB) {
+    } else if (port->bond_mode == BM_AB) {
         if (port->active_iface < 0) {
             *tags |= port->no_ifaces_tag;
             return false;
         }
         iface = port->ifaces[port->active_iface];
-    } else if (port->bond_type == BT_SLB){
+    } else if (port->bond_mode == BM_SLB){
         struct bond_entry *e = lookup_bond_entry(port, dl_src, vlan);
         if (e->iface_idx < 0 || e->iface_idx >= port->n_ifaces
             || !port->ifaces[e->iface_idx]->enabled) {
@@ -2829,7 +2829,7 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
         if (nl_attr_type(a) == ODPAT_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, nl_attr_get_u32(a));
             if (out_port && out_port->n_ifaces >= 2 &&
-                out_port->bond_type == BT_SLB) {
+                out_port->bond_mode == BM_SLB) {
                 uint16_t vlan = (flow->vlan_tci
                                  ? vlan_tci_to_vid(flow->vlan_tci)
                                  : OFP_VLAN_NONE);
@@ -2855,7 +2855,7 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
     now = time_msec();
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
-        if (port->n_ifaces > 1 && port->bond_type == BT_SLB
+        if (port->n_ifaces > 1 && port->bond_mode == BM_SLB
             && now >= port->bond_next_rebalance) {
             port->bond_next_rebalance = now + port->bond_rebalance_interval;
             bond_rebalance_port(port);
@@ -2884,13 +2884,13 @@ struct slave_balance {
 };
 
 static const char *
-bond_type_to_string(enum bond_type bt) {
-    static char *bt_slb = "slb";
-    static char *bt_ab  = "active-backup";
+bond_mode_to_string(enum bond_mode bm) {
+    static char *bm_slb = "balance-slb";
+    static char *bm_ab  = "active-backup";
 
-    switch (bt) {
-    case BT_SLB: return bt_slb;
-    case BT_AB:  return bt_ab;
+    switch (bm) {
+    case BM_SLB: return bm_slb;
+    case BM_AB:  return bm_ab;
     }
 
     NOT_REACHED();
@@ -3005,7 +3005,7 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
     struct port *port = from->iface->port;
     uint64_t delta = hash->tx_bytes;
 
-    assert(port->bond_type == BT_SLB);
+    assert(port->bond_mode == BM_SLB);
 
     VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %td) "
               "from %s to %s (now carrying %"PRIu64"kB and "
@@ -3049,7 +3049,7 @@ bond_rebalance_port(struct port *port)
     struct bond_entry *e;
     size_t i;
 
-    assert(port->bond_type == BT_SLB);
+    assert(port->bond_mode == BM_SLB);
 
     /* Sets up 'bals' to describe each of the port's interfaces, sorted in
      * descending order of tx_bytes, so that bals[0] represents the most
@@ -3274,7 +3274,7 @@ bond_unixctl_list(struct unixctl_conn *conn,
                 size_t j;
 
                 ds_put_format(&ds, "%s\t%s\t%s\t", br->name, port->name,
-                              bond_type_to_string(port->bond_type));
+                              bond_mode_to_string(port->bond_mode));
                 for (j = 0; j < port->n_ifaces; j++) {
                     const struct iface *iface = port->ifaces[j];
                     if (j) {
@@ -3322,12 +3322,12 @@ bond_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    ds_put_format(&ds, "bond_type: %s\n",
-                  bond_type_to_string(port->bond_type));
+    ds_put_format(&ds, "bond_mode: %s\n",
+                  bond_mode_to_string(port->bond_mode));
     ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
 
-    if (port->bond_type == BT_SLB) {
+    if (port->bond_mode == BM_SLB) {
         ds_put_format(&ds, "next rebalance: %lld ms\n",
                       port->bond_next_rebalance - time_msec());
     }
@@ -3348,7 +3348,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
                           iface->delay_expires - time_msec());
         }
 
-        if (port->bond_type != BT_SLB) {
+        if (port->bond_mode != BM_SLB) {
             continue;
         }
 
@@ -3411,7 +3411,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
         return;
     }
 
-    if (port->bond_type != BT_SLB) {
+    if (port->bond_mode != BM_SLB) {
         unixctl_command_reply(conn, 501, "not an SLB bond");
         return;
     }
@@ -3682,16 +3682,16 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         port->bond_next_rebalance = next_rebalance;
     }
 
-    if (!port->cfg->bond_type ||
-        !strcmp(port->cfg->bond_type, bond_type_to_string(BT_SLB))) {
-        port->bond_type = BT_SLB;
-    } else if (!strcmp(port->cfg->bond_type, bond_type_to_string(BT_AB))) {
-        port->bond_type = BT_AB;
+    if (!port->cfg->bond_mode ||
+        !strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_SLB))) {
+        port->bond_mode = BM_SLB;
+    } else if (!strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_AB))) {
+        port->bond_mode = BM_AB;
     } else {
-        port->bond_type = BT_SLB;
-        VLOG_WARN("port %s: unknown bond_type %s, defaulting to %s",
-                  port->name, port->cfg->bond_type,
-                  bond_type_to_string(port->bond_type));
+        port->bond_mode = BM_SLB;
+        VLOG_WARN("port %s: unknown bond_mode %s, defaulting to %s",
+                  port->name, port->cfg->bond_mode,
+                  bond_mode_to_string(port->bond_mode));
     }
 
     /* Add new interfaces and update 'cfg' member of existing ones. */
@@ -3866,7 +3866,7 @@ port_update_bonding(struct port *port)
     } else {
         size_t i;
 
-        if (port->bond_type == BT_SLB && !port->bond_hash) {
+        if (port->bond_mode == BM_SLB && !port->bond_hash) {
             port->bond_hash = xcalloc(BOND_MASK + 1, sizeof *port->bond_hash);
             for (i = 0; i <= BOND_MASK; i++) {
                 struct bond_entry *e = &port->bond_hash[i];
@@ -3881,7 +3881,7 @@ port_update_bonding(struct port *port)
             if (port->cfg->bond_fake_iface) {
                 port->bond_next_fake_iface_update = time_msec();
             }
-        } else if (port->bond_type != BT_SLB) {
+        } else if (port->bond_mode != BM_SLB) {
             free(port->bond_hash);
             port->bond_hash = NULL;
         }
@@ -3902,7 +3902,7 @@ port_update_bond_compat(struct port *port)
     struct compat_bond bond;
     size_t i;
 
-    if (port->n_ifaces < 2 || port->bond_type != BT_SLB) {
+    if (port->n_ifaces < 2 || port->bond_mode != BM_SLB) {
         proc_net_compat_update_bond(port->name, NULL);
         return;
     }

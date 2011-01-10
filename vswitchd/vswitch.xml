@@ -520,10 +520,10 @@
       <p>These columns apply only to bonded ports.  Their values are
         otherwise ignored.</p>
 
-      <column name="bond_type">
+      <column name="bond_mode">
         <p>The type of bonding used for a bonded port.  Currently supported
-          values are <code>slb</code> and <code>active-backup</code>.  Defaults
-          to SLB if unset.</p>
+          values are <code>balance-slb</code> and <code>active-backup</code>.
+          Defaults to SLB if unset.</p>
       </column>
 
       <column name="bond_updelay">
