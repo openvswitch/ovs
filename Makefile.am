@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2007, 2008, 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -27,6 +27,7 @@ endif
 ALL_LOCAL =
 BUILT_SOURCES =
 CLEANFILES =
+CLEAN_LOCAL =
 DISTCLEANFILES =
 EXTRA_DIST = \
 	CodingStyle \
@@ -60,6 +61,7 @@ noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =
 SUFFIXES =
+check_DATA =
 
 # This ensures that files added to EXTRA_DIST are always distributed,
 # even if they are inside an Automake if...endif conditional block that is
@@ -124,7 +126,8 @@ CLEANFILES += distfiles
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
-.PHONY: $(DIST_HOOKS)
+clean-local: $(CLEAN_LOCAL)
+.PHONY: $(DIST_HOOKS) $(CLEAN_LOCAL)
 
 include lib/automake.mk
 include ofproto/automake.mk

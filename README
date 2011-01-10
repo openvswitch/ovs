@@ -104,7 +104,7 @@ INSTALL.KVM.
 To install Open vSwitch without using a kernel module, read
 INSTALL.userspace.
 
-To learn set up SSL support for Open vSwitch, read INSTALL.SSL.
+To learn how to set up SSL support for Open vSwitch, read INSTALL.SSL.
 
 Each Open vSwitch userspace program is accompanied by a manpage.  Many
 of the manpages are customized to your configuration as part of the

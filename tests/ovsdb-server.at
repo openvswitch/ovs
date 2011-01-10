@@ -106,7 +106,7 @@ AT_KEYWORDS([ovsdb server positive ssl $5])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 AT_SKIP_IF([test "x$RANDOM" = x])
 SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
-PKIDIR=$abs_top_srcdir/tests
+PKIDIR=$abs_top_builddir/tests
 AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
 \\]"])
 AT_DATA([schema],
@@ -299,7 +299,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_DATA([schema], [$2
 ])
    SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
-   PKIDIR=$abs_top_srcdir/tests
+   PKIDIR=$abs_top_builddir/tests
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 

@@ -281,14 +281,6 @@ tests_test_uuid_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-vconn
 tests_test_vconn_SOURCES = tests/test-vconn.c
 tests_test_vconn_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
-EXTRA_DIST += \
-	tests/testpki-cacert.pem \
-	tests/testpki-cert.pem \
-	tests/testpki-cert2.pem \
-	tests/testpki-privkey.pem \
-	tests/testpki-privkey2.pem \
-	tests/testpki-req.pem \
-	tests/testpki-req2.pem
 
 noinst_PROGRAMS += tests/test-byte-order
 tests_test_byte_order_SOURCES = tests/test-byte-order.c
@@ -301,3 +293,39 @@ EXTRA_DIST += \
 	tests/test-jsonrpc.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py
+
+if HAVE_OPENSSL
+TESTPKI_FILES = \
+	tests/testpki-cacert.pem \
+	tests/testpki-cert.pem \
+	tests/testpki-privkey.pem \
+	tests/testpki-req.pem \
+	tests/testpki-cert2.pem \
+	tests/testpki-privkey2.pem \
+	tests/testpki-req2.pem
+check_DATA += $(TESTPKI_FILES)
+CLEANFILES += $(TESTPKI_FILES)
+
+tests/testpki-cacert.pem: tests/pki/stamp; cp tests/pki/switchca/cacert.pem $@
+tests/testpki-cert.pem: tests/pki/stamp; cp tests/pki/test-cert.pem $@
+tests/testpki-req.pem: tests/pki/stamp; cp tests/pki/test-req.pem $@
+tests/testpki-privkey.pem: tests/pki/stamp; cp tests/pki/test-privkey.pem $@
+tests/testpki-cert2.pem: tests/pki/stamp; cp tests/pki/test2-cert.pem $@
+tests/testpki-req2.pem: tests/pki/stamp; cp tests/pki/test2-req.pem $@
+tests/testpki-privkey2.pem: tests/pki/stamp; cp tests/pki/test2-privkey.pem $@
+
+OVS_PKI = $(SHELL) $(srcdir)/utilities/ovs-pki.in --dir=tests/pki --log=tests/ovs-pki.log
+tests/pki/stamp:
+	rm -f tests/pki/stamp
+	rm -rf tests/pki
+	$(OVS_PKI) init
+	$(OVS_PKI) req+sign tests/pki/test
+	$(OVS_PKI) req+sign tests/pki/test2
+	: > tests/pki/stamp
+CLEANFILES += tests/ovs-pki.log
+
+CLEAN_LOCAL += clean-pki
+clean-pki:
+	rm -f tests/pki/stamp
+	rm -rf tests/pki
+endif
