@@ -15,7 +15,7 @@
 #include "openvswitch/datapath-protocol.h"
 #include <linux/compat.h>
 
-#define ODP_VPORT_LIST32	_IOWR('O', 10, struct compat_odp_portvec)
+#define ODP_VPORT_DUMP32	_IOWR('O', 10, struct compat_odp_vport_dump)
 #define ODP_FLOW_GET32		_IOWR('O', 13, struct compat_odp_flowvec)
 #define ODP_FLOW_PUT32		_IOWR('O', 14, struct compat_odp_flow)
 #define ODP_FLOW_DUMP32		_IOWR('O', 15, struct compat_odp_flow_dump)
@@ -23,9 +23,9 @@
 #define ODP_EXECUTE32		_IOR('O', 18, struct compat_odp_execute)
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
 
-struct compat_odp_portvec {
-	compat_uptr_t ports;
-	u32 n_ports;
+struct compat_odp_vport_dump {
+	compat_uptr_t port;
+	u32 port_no;
 };
 
 struct compat_odp_flow {

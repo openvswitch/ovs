@@ -539,23 +539,41 @@ dpif_netdev_flow_flush(struct dpif *dpif)
     return 0;
 }
 
-static int
-dpif_netdev_port_list(const struct dpif *dpif, struct odp_port *ports, int n)
-{
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct dp_netdev_port *port;
-    int i;
+struct dp_netdev_port_state {
+    uint32_t port_no;
+};
 
-    i = 0;
-    LIST_FOR_EACH (port, node, &dp->port_list) {
-        struct odp_port *odp_port = &ports[i];
-        if (i >= n) {
-            break;
+static int
+dpif_netdev_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
+{
+    *statep = xzalloc(sizeof(struct dp_netdev_port_state));
+    return 0;
+}
+
+static int
+dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
+                           struct odp_port *odp_port)
+{
+    struct dp_netdev_port_state *state = state_;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    uint32_t port_no;
+
+    for (port_no = state->port_no; port_no < MAX_PORTS; port_no++) {
+        struct dp_netdev_port *port = dp->ports[port_no];
+        if (port) {
+            answer_port_query(port, odp_port);
+            state->port_no = port_no + 1;
+            return 0;
         }
-        answer_port_query(port, odp_port);
-        i++;
     }
-    return dp->n_ports;
+    return EOF;
+}
+
+static int
+dpif_netdev_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+{
+    free(state);
+    return 0;
 }
 
 static int
@@ -1362,7 +1380,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_port_del,
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
-    dpif_netdev_port_list,
+    dpif_netdev_port_dump_start,
+    dpif_netdev_port_dump_next,
+    dpif_netdev_port_dump_done,
     dpif_netdev_port_poll,
     dpif_netdev_port_poll_wait,
     dpif_netdev_flow_get,

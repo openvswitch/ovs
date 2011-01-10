@@ -85,7 +85,7 @@
 #define ODP_VPORT_ATTACH        _IOR('O', 7, struct odp_port)
 #define ODP_VPORT_DETACH        _IOR('O', 8, int)
 #define ODP_VPORT_QUERY         _IOWR('O', 9, struct odp_port)
-#define ODP_VPORT_LIST          _IOWR('O', 10, struct odp_portvec)
+#define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport_dump)
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flowvec)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
@@ -187,9 +187,19 @@ struct odp_port {
     __aligned_u64 config[VPORT_CONFIG_SIZE / 8]; /* type-specific */
 };
 
-struct odp_portvec {
-    struct odp_port *ports;
-    uint32_t n_ports;
+/**
+ * struct odp_vport_dump - ODP_VPORT_DUMP argument.
+ * @port: Points to port structure to fill in.
+ * @port_no: Minimum port number of interest.
+ *
+ * Used to iterate through vports one at a time.  The kernel fills in @port
+ * with the information for the configured port with the smallest port number
+ * greater than or equal to @port_no.  If there is no such port, it sets
+ * @port->devname to the empty string.
+ */
+struct odp_vport_dump {
+    struct odp_port *port;
+    uint32_t port_no;
 };
 
 struct odp_flow_stats {

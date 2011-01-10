@@ -153,11 +153,24 @@ struct dpif_class {
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
                               struct odp_port *port);
 
-    /* Stores in 'ports' information about up to 'n' ports attached to 'dpif',
-     * in no particular order.  Returns the number of ports attached to 'dpif'
-     * (not the number stored), if successful, otherwise a negative errno
-     * value. */
-    int (*port_list)(const struct dpif *dpif, struct odp_port *ports, int n);
+    /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
+     * and initializes '*statep' with any data needed for iteration.  On
+     * failure, returns a positive errno value. */
+    int (*port_dump_start)(const struct dpif *dpif, void **statep);
+
+    /* Attempts to retrieve another port from 'dpif' for 'state', which was
+     * initialized by a successful call to the 'port_dump_start' function for
+     * 'dpif'.  On success, stores a new odp_port into 'port' and returns 0.
+     * Returns EOF if the end of the port table has been reached, or a positive
+     * errno value on error.  This function will not be called again once it
+     * returns nonzero once for a given iteration (but the 'port_dump_done'
+     * function will be called afterward). */
+    int (*port_dump_next)(const struct dpif *dpif, void *state,
+                          struct odp_port *port);
+
+    /* Releases resources from 'dpif' for 'state', which was initialized by a
+     * successful call to the 'port_dump_start' function for 'dpif'.  */
+    int (*port_dump_done)(const struct dpif *dpif, void *state);
 
     /* Polls for changes in the set of ports in 'dpif'.  If the set of ports in
      * 'dpif' has changed, then this function should do one of the

@@ -1536,12 +1536,11 @@ ofproto_flush_flows(struct ofproto *ofproto)
 static void
 reinit_ports(struct ofproto *p)
 {
+    struct dpif_port_dump dump;
     struct shash_node *node;
     struct shash devnames;
     struct ofport *ofport;
-    struct odp_port *odp_ports;
-    size_t n_odp_ports;
-    size_t i;
+    struct odp_port odp_port;
 
     COVERAGE_INC(ofproto_reinit_ports);
 
@@ -1549,11 +1548,9 @@ reinit_ports(struct ofproto *p)
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         shash_add_once (&devnames, ofport->opp.name, NULL);
     }
-    dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
-    for (i = 0; i < n_odp_ports; i++) {
-        shash_add_once (&devnames, odp_ports[i].devname, NULL);
+    DPIF_PORT_FOR_EACH (&odp_port, &dump, p->dpif) {
+        shash_add_once (&devnames, odp_port.devname, NULL);
     }
-    free(odp_ports);
 
     SHASH_FOR_EACH (node, &devnames) {
         update_port(p, node->name);
@@ -1783,26 +1780,18 @@ update_port(struct ofproto *p, const char *devname)
 static int
 init_ports(struct ofproto *p)
 {
-    struct odp_port *ports;
-    size_t n_ports;
-    size_t i;
-    int error;
+    struct dpif_port_dump dump;
+    struct odp_port odp_port;
 
-    error = dpif_port_list(p->dpif, &ports, &n_ports);
-    if (error) {
-        return error;
-    }
-
-    for (i = 0; i < n_ports; i++) {
-        const struct odp_port *odp_port = &ports[i];
-        if (!ofport_conflicts(p, odp_port)) {
-            struct ofport *ofport = make_ofport(odp_port);
+    DPIF_PORT_FOR_EACH (&odp_port, &dump, p->dpif) {
+        if (!ofport_conflicts(p, &odp_port)) {
+            struct ofport *ofport = make_ofport(&odp_port);
             if (ofport) {
                 ofport_install(p, ofport);
             }
         }
     }
-    free(ports);
+
     return 0;
 }
 

@@ -556,60 +556,62 @@ dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
     return error;
 }
 
-/* Obtains a list of all the ports in 'dpif'.
+/* Initializes 'dump' to begin dumping the ports in a dpif.
  *
- * If successful, returns 0 and sets '*portsp' to point to an array of
- * appropriately initialized port structures and '*n_portsp' to the number of
- * ports in the array.  The caller is responsible for freeing '*portp' by
- * calling free().
- *
- * On failure, returns a positive errno value and sets '*portsp' to NULL and
- * '*n_portsp' to 0. */
-int
-dpif_port_list(const struct dpif *dpif,
-               struct odp_port **portsp, size_t *n_portsp)
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling
+ * dpif_port_dump_done().
+ */
+void
+dpif_port_dump_start(struct dpif_port_dump *dump, const struct dpif *dpif)
 {
-    struct odp_port *ports;
-    size_t n_ports = 0;
-    int error;
+    dump->dpif = dpif;
+    dump->error = dpif->dpif_class->port_dump_start(dpif, &dump->state);
+    log_operation(dpif, "port_dump_start", dump->error);
+}
 
-    for (;;) {
-        struct odp_stats stats;
-        int retval;
+/* Attempts to retrieve another port from 'dump', which must have been
+ * initialized with dpif_port_dump_start().  On success, stores a new odp_port
+ * into 'port' and returns true.  On failure, returns false.
+ *
+ * Failure might indicate an actual error or merely that the last port has been
+ * dumped.  An error status for the entire dump operation is provided when it
+ * is completed by calling dpif_port_dump_done(). */
+bool
+dpif_port_dump_next(struct dpif_port_dump *dump, struct odp_port *port)
+{
+    const struct dpif *dpif = dump->dpif;
 
-        error = dpif_get_dp_stats(dpif, &stats);
-        if (error) {
-            goto exit;
-        }
-
-        ports = xcalloc(stats.n_ports, sizeof *ports);
-        retval = dpif->dpif_class->port_list(dpif, ports, stats.n_ports);
-        if (retval < 0) {
-            /* Hard error. */
-            error = -retval;
-            free(ports);
-            goto exit;
-        } else if (retval <= stats.n_ports) {
-            /* Success. */
-            error = 0;
-            n_ports = retval;
-            goto exit;
-        } else {
-            /* Soft error: port count increased behind our back.  Try again. */
-            free(ports);
-        }
+    if (dump->error) {
+        return false;
     }
 
-exit:
-    if (error) {
-        *portsp = NULL;
-        *n_portsp = 0;
+    dump->error = dpif->dpif_class->port_dump_next(dpif, dump->state, port);
+    if (dump->error == EOF) {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all ports", dpif_name(dpif));
     } else {
-        *portsp = ports;
-        *n_portsp = n_ports;
+        log_operation(dpif, "port_dump_next", dump->error);
     }
-    log_operation(dpif, "port_list", error);
-    return error;
+
+    if (dump->error) {
+        dpif->dpif_class->port_dump_done(dpif, dump->state);
+        return false;
+    }
+    return true;
+}
+
+/* Completes port table dump operation 'dump', which must have been initialized
+ * with dpif_port_dump_start().  Returns 0 if the dump operation was
+ * error-free, otherwise a positive errno value describing the problem. */
+int
+dpif_port_dump_done(struct dpif_port_dump *dump)
+{
+    const struct dpif *dpif = dump->dpif;
+    if (!dump->error) {
+        dump->error = dpif->dpif_class->port_dump_done(dpif, dump->state);
+        log_operation(dpif, "port_dump_done", dump->error);
+    }
+    return dump->error == EOF ? 0 : dump->error;
 }
 
 /* Polls for changes in the set of ports in 'dpif'.  If the set of ports in

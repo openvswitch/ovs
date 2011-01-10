@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -606,38 +606,40 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions. */
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct odp_port *dpif_ports;
-        size_t n_dpif_ports;
+        struct dpif_port_dump dump;
         struct shash want_ifaces;
+        struct odp_port odp_port;
 
-        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         bridge_get_all_ifaces(br, &want_ifaces);
-        for (i = 0; i < n_dpif_ports; i++) {
-            const struct odp_port *p = &dpif_ports[i];
-            if (!shash_find(&want_ifaces, p->devname)
-                && strcmp(p->devname, br->name)) {
-                int retval = dpif_port_del(br->dpif, p->port);
+        DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
+            if (!shash_find(&want_ifaces, odp_port.devname)
+                && strcmp(odp_port.devname, br->name)) {
+                int retval = dpif_port_del(br->dpif, odp_port.port);
                 if (retval) {
                     VLOG_ERR("failed to remove %s interface from %s: %s",
-                             p->devname, dpif_name(br->dpif),
+                             odp_port.devname, dpif_name(br->dpif),
                              strerror(retval));
                 }
             }
         }
         shash_destroy(&want_ifaces);
-        free(dpif_ports);
     }
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct odp_port *dpif_ports;
-        size_t n_dpif_ports;
+        struct dpif_port {
+            char *type;         /* Network device type, e.g. "system". */
+            uint32_t port_no;   /* Port number within datapath. */
+        };
         struct shash cur_ifaces, want_ifaces;
+        struct dpif_port_dump dump;
+        struct odp_port odp_port;
 
         /* Get the set of interfaces currently in this datapath. */
-        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         shash_init(&cur_ifaces);
-        for (i = 0; i < n_dpif_ports; i++) {
-            const char *name = dpif_ports[i].devname;
-            shash_add_once(&cur_ifaces, name, &dpif_ports[i]);
+        DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
+            struct dpif_port *port_info = xmalloc(sizeof *port_info);
+            port_info->port_no = odp_port.port;
+            port_info->type = xstrdup(odp_port.type);
+            shash_add(&cur_ifaces, odp_port.devname, port_info);
         }
 
         /* Get the set of interfaces we want on this datapath. */
@@ -647,9 +649,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         SHASH_FOR_EACH (node, &want_ifaces) {
             const char *if_name = node->name;
             struct iface *iface = node->data;
-            struct odp_port *dpif_port = shash_find_data(&cur_ifaces, if_name);
-            const char *type = iface ? iface->type : "internal";
+            struct dpif_port *dpif_port;
+            const char *type;
             int error;
+
+            type = iface ? iface->type : "internal";
+            dpif_port = shash_find_data(&cur_ifaces, if_name);
 
             /* If we have a port or a netdev already, and it's not the type we
              * want, then delete the port (if any) and close the netdev (if
@@ -658,7 +663,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 || (iface && iface->netdev
                     && strcmp(type, netdev_get_type(iface->netdev)))) {
                 if (dpif_port) {
-                    error = ofproto_port_del(br->ofproto, dpif_port->port);
+                    error = ofproto_port_del(br->ofproto, dpif_port->port_no);
                     if (error) {
                         continue;
                     }
@@ -732,9 +737,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 shash_destroy(&args);
             }
         }
-        free(dpif_ports);
-        shash_destroy(&cur_ifaces);
         shash_destroy(&want_ifaces);
+
+        SHASH_FOR_EACH (node, &cur_ifaces) {
+            struct dpif_port *port_info = node->data;
+            free(port_info->type);
+            free(port_info);
+        }
+        shash_destroy(&cur_ifaces);
     }
     sflow_bridge_number = 0;
     LIST_FOR_EACH (br, node, &all_bridges) {
@@ -2030,8 +2040,8 @@ bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 static void
 bridge_fetch_dp_ifaces(struct bridge *br)
 {
-    struct odp_port *dpif_ports;
-    size_t n_dpif_ports;
+    struct dpif_port_dump dump;
+    struct odp_port odp_port;
     size_t i, j;
 
     /* Reset all interface numbers. */
@@ -2044,19 +2054,17 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     hmap_clear(&br->ifaces);
 
-    dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
-    for (i = 0; i < n_dpif_ports; i++) {
-        struct odp_port *p = &dpif_ports[i];
-        struct iface *iface = iface_lookup(br, p->devname);
+    DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
+        struct iface *iface = iface_lookup(br, odp_port.devname);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
                 VLOG_WARN("%s reported interface %s twice",
-                          dpif_name(br->dpif), p->devname);
-            } else if (iface_from_dp_ifidx(br, p->port)) {
+                          dpif_name(br->dpif), odp_port.devname);
+            } else if (iface_from_dp_ifidx(br, odp_port.port)) {
                 VLOG_WARN("%s reported interface %"PRIu16" twice",
-                          dpif_name(br->dpif), p->port);
+                          dpif_name(br->dpif), odp_port.port);
             } else {
-                iface->dp_ifidx = p->port;
+                iface->dp_ifidx = odp_port.port;
                 hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
                             hash_int(iface->dp_ifidx, 0));
             }
@@ -2067,7 +2075,6 @@ bridge_fetch_dp_ifaces(struct bridge *br)
                               : -1));
         }
     }
-    free(dpif_ports);
 }
 
 /* Bridge packet processing functions. */

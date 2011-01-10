@@ -214,21 +214,6 @@ do_del_dp(int argc OVS_UNUSED, char *argv[])
     dpif_close(dpif);
 }
 
-static int
-compare_ports(const void *a_, const void *b_)
-{
-    const struct odp_port *a = a_;
-    const struct odp_port *b = b_;
-    return a->port < b->port ? -1 : a->port > b->port;
-}
-
-static void
-query_ports(struct dpif *dpif, struct odp_port **ports, size_t *n_ports)
-{
-    run(dpif_port_list(dpif, ports, n_ports), "listing ports");
-    qsort(*ports, *n_ports, sizeof **ports, compare_ports);
-}
-
 static void
 do_add_if(int argc OVS_UNUSED, char *argv[])
 {
@@ -346,10 +331,9 @@ do_del_if(int argc OVS_UNUSED, char *argv[])
 static void
 show_dpif(struct dpif *dpif)
 {
-    struct odp_port *ports;
+    struct dpif_port_dump dump;
+    struct odp_port odp_port;
     struct odp_stats stats;
-    size_t n_ports;
-    size_t i;
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
@@ -366,19 +350,16 @@ show_dpif(struct dpif *dpif)
         printf("\tqueues: max-miss:%"PRIu16", max-action:%"PRIu16"\n",
                stats.max_miss_queue, stats.max_action_queue);
     }
-    query_ports(dpif, &ports, &n_ports);
-    for (i = 0; i < n_ports; i++) {
-        const struct odp_port *p = &ports[i];
+    DPIF_PORT_FOR_EACH (&odp_port, &dump, dpif) {
         struct ds ds;
 
-        printf("\tport %u: %s", p->port, p->devname);
+        printf("\tport %u: %s", odp_port.port, odp_port.devname);
 
         ds_init(&ds);
-        format_odp_port_type(&ds, p);
+        format_odp_port_type(&ds, &odp_port);
         printf("%s\n", ds_cstr(&ds));
         ds_destroy(&ds);
     }
-    free(ports);
     dpif_close(dpif);
 }
 

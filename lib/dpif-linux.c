@@ -324,25 +324,37 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 }
 
 static int
-dpif_linux_port_list(const struct dpif *dpif_, struct odp_port *ports, int n)
+dpif_linux_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    struct odp_portvec pv;
-    unsigned int i;
+    *statep = xzalloc(sizeof(struct odp_vport_dump));
+    return 0;
+}
+
+static int
+dpif_linux_port_dump_next(const struct dpif *dpif, void *state,
+                          struct odp_port *port)
+{
+    struct odp_vport_dump *dump = state;
     int error;
 
-    pv.ports = ports;
-    pv.n_ports = n;
-    error = do_ioctl(dpif_, ODP_VPORT_LIST, &pv);
+    dump->port = port;
+    error = do_ioctl(dpif, ODP_VPORT_DUMP, dump);
     if (error) {
-        return -error;
-    }
-
-    for (i = 0; i < pv.n_ports; i++) {
-        struct odp_port *port = &pv.ports[i];
-
+        return error;
+    } else if (port->devname[0] == '\0') {
+        return EOF;
+    } else {
+        dump->port_no = port->port + 1;
         translate_vport_type_to_netdev_type(port);
+        return 0;
     }
-    return pv.n_ports;
+}
+
+static int
+dpif_linux_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+{
+    free(state);
+    return 0;
 }
 
 static int
@@ -585,7 +597,9 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_del,
     dpif_linux_port_query_by_number,
     dpif_linux_port_query_by_name,
-    dpif_linux_port_list,
+    dpif_linux_port_dump_start,
+    dpif_linux_port_dump_next,
+    dpif_linux_port_dump_done,
     dpif_linux_port_poll,
     dpif_linux_port_poll_wait,
     dpif_linux_flow_get,

@@ -69,7 +69,28 @@ int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct odp_port *);
 int dpif_port_get_name(struct dpif *, uint16_t port_no,
                        char *name, size_t name_size);
-int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
+
+struct dpif_port_dump {
+    const struct dpif *dpif;
+    int error;
+    void *state;
+};
+void dpif_port_dump_start(struct dpif_port_dump *, const struct dpif *);
+bool dpif_port_dump_next(struct dpif_port_dump *, struct odp_port *);
+int dpif_port_dump_done(struct dpif_port_dump *);
+
+/* Iterates through each ODP_PORT in DPIF, using DUMP as state.
+ *
+ * Arguments all have pointer type.
+ *
+ * If you break out of the loop, then you need to free the dump structure by
+ * hand using dpif_port_dump_done(). */
+#define DPIF_PORT_FOR_EACH(ODP_PORT, DUMP, DPIF)    \
+    for (dpif_port_dump_start(DUMP, DPIF);          \
+         (dpif_port_dump_next(DUMP, ODP_PORT)       \
+          ? true                                    \
+          : (dpif_port_dump_done(DUMP), false));    \
+        )
 
 int dpif_port_poll(const struct dpif *, char **devnamep);
 void dpif_port_poll_wait(const struct dpif *);

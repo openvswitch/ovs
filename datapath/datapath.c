@@ -1397,37 +1397,27 @@ static int query_port(struct datapath *dp, struct odp_port __user *uport)
 	return put_port(vport, uport);
 }
 
-static int do_list_ports(struct datapath *dp, struct odp_port __user *uports,
-			 int n_ports)
+static int do_dump_port(struct datapath *dp, struct odp_vport_dump *dump)
 {
-	int idx = 0;
-	if (n_ports) {
-		struct vport *p;
+	u32 port_no;
 
-		list_for_each_entry_rcu (p, &dp->port_list, node) {
-			if (put_port(p, &uports[idx]))
-				return -EFAULT;
-			if (idx++ >= n_ports)
-				break;
-		}
+	for (port_no = dump->port_no; port_no < DP_MAX_PORTS; port_no++) {
+		struct vport *vport = get_vport_protected(dp, port_no);
+		if (vport)
+			return put_port(vport, (struct odp_port __force __user*)dump->port);
 	}
-	return idx;
+
+	return put_user('\0', (char __force __user*)&dump->port->devname[0]);
 }
 
-static int list_ports(struct datapath *dp, struct odp_portvec __user *upv)
+static int dump_port(struct datapath *dp, struct odp_vport_dump __user *udump)
 {
-	struct odp_portvec pv;
-	int retval;
+	struct odp_vport_dump dump;
 
-	if (copy_from_user(&pv, upv, sizeof(pv)))
+	if (copy_from_user(&dump, udump, sizeof(dump)))
 		return -EFAULT;
 
-	retval = do_list_ports(dp, (struct odp_port __user __force *)pv.ports,
-			       pv.n_ports);
-	if (retval < 0)
-		return retval;
-
-	return put_user(retval, &upv->n_ports);
+	return do_dump_port(dp, &dump);
 }
 
 static int get_listen_mask(const struct file *f)
@@ -1552,8 +1542,8 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = query_port(dp, (struct odp_port __user *)argp);
 		break;
 
-	case ODP_VPORT_LIST:
-		err = list_ports(dp, (struct odp_portvec __user *)argp);
+	case ODP_VPORT_DUMP:
+		err = dump_port(dp, (struct odp_vport_dump __user *)argp);
 		break;
 
 	case ODP_FLOW_FLUSH:
@@ -1600,19 +1590,18 @@ static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
 }
 
 #ifdef CONFIG_COMPAT
-static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __user *upv)
+static int compat_dump_port(struct datapath *dp, struct compat_odp_vport_dump __user *compat)
 {
-	struct compat_odp_portvec pv;
-	int retval;
+	struct odp_vport_dump dump;
+	compat_uptr_t port;
 
-	if (copy_from_user(&pv, upv, sizeof(pv)))
+	if (!access_ok(VERIFY_READ, compat, sizeof(struct compat_odp_vport_dump)) ||
+	    __get_user(port, &compat->port) ||
+	    __get_user(dump.port_no, &compat->port_no))
 		return -EFAULT;
 
-	retval = do_list_ports(dp, compat_ptr(pv.ports), pv.n_ports);
-	if (retval < 0)
-		return retval;
-
-	return put_user(retval, &upv->n_ports);
+	dump.port = (struct odp_port __force *)compat_ptr(port);
+	return do_dump_port(dp, &dump);
 }
 
 static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow __user *compat)
@@ -1839,8 +1828,8 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		goto exit;
 
 	switch (cmd) {
-	case ODP_VPORT_LIST32:
-		err = compat_list_ports(dp, compat_ptr(argp));
+	case ODP_VPORT_DUMP32:
+		err = compat_dump_port(dp, compat_ptr(argp));
 		break;
 
 	case ODP_FLOW_PUT32:
