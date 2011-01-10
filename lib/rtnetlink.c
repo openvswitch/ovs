@@ -89,13 +89,20 @@ rtnetlink_notifier_register(struct rtnetlink *rtn,
                             rtnetlink_notify_func *cb, void *aux)
 {
     if (!rtn->notify_sock) {
-        int error = nl_sock_create(NETLINK_ROUTE, rtn->multicast_group, 0, 0,
-                                   &rtn->notify_sock);
+        struct nl_sock *sock;
+        int error;
+
+        error = nl_sock_create(NETLINK_ROUTE, &sock);
+        if (!error) {
+            error = nl_sock_join_mcgroup(sock, rtn->multicast_group);
+        }
         if (error) {
+            nl_sock_destroy(sock);
             VLOG_WARN("could not create rtnetlink socket: %s",
                       strerror(error));
             return error;
         }
+        rtn->notify_sock = sock;
     } else {
         /* Catch up on notification work so that the new notifier won't
          * receive any stale notifications. */

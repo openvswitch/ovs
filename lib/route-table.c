@@ -182,7 +182,7 @@ route_table_reset(void)
     route_map_clear();
     route_table_valid = true;
 
-    error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
+    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to reset routing table, "
                      "cannot create RTNETLINK_ROUTE socket");

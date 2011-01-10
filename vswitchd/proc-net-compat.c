@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ proc_net_compat_init(void)
             return retval;
         }
 
-        retval = nl_sock_create(NETLINK_GENERIC, 0, 0, 0, &brc_sock);
+        retval = nl_sock_create(NETLINK_GENERIC, &brc_sock);
         if (retval) {
             return retval;
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,9 +45,14 @@ main(int argc OVS_UNUSED, char *argv[])
     set_program_name(argv[0]);
     vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_DBG);
 
-    error = nl_sock_create(NETLINK_ROUTE, RTNLGRP_LINK, 0, 0, &sock);
+    error = nl_sock_create(NETLINK_ROUTE, &sock);
     if (error) {
         ovs_fatal(error, "could not create rtnetlink socket");
+    }
+
+    error = nl_sock_join_mcgroup(sock, RTNLGRP_LINK);
+    if (error) {
+        ovs_fatal(error, "could not join RTNLGRP_LINK multicast group");
     }
 
     for (;;) {

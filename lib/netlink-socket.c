@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,18 +65,9 @@ static void free_pid(uint32_t);
 
 /* Creates a new netlink socket for the given netlink 'protocol'
  * (NETLINK_ROUTE, NETLINK_GENERIC, ...).  Returns 0 and sets '*sockp' to the
- * new socket if successful, otherwise returns a positive errno value.
- *
- * If 'multicast_group' is nonzero, the new socket subscribes to the specified
- * netlink multicast group.  (A netlink socket may listen to an arbitrary
- * number of multicast groups, but so far we only need one at a time.)
- *
- * Nonzero 'so_sndbuf' or 'so_rcvbuf' override the kernel default send or
- * receive buffer size, respectively.
- */
+ * new socket if successful, otherwise returns a positive errno value.  */
 int
-nl_sock_create(int protocol, int multicast_group,
-               size_t so_sndbuf, size_t so_rcvbuf, struct nl_sock **sockp)
+nl_sock_create(int protocol, struct nl_sock **sockp)
 {
     struct nl_sock *sock;
     struct sockaddr_nl local, remote;
@@ -99,29 +90,10 @@ nl_sock_create(int protocol, int multicast_group,
         goto error;
     }
 
-    if (so_sndbuf != 0
-        && setsockopt(sock->fd, SOL_SOCKET, SO_SNDBUF,
-                      &so_sndbuf, sizeof so_sndbuf) < 0) {
-        VLOG_ERR("setsockopt(SO_SNDBUF,%zu): %s", so_sndbuf, strerror(errno));
-        goto error_free_pid;
-    }
-
-    if (so_rcvbuf != 0
-        && setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUF,
-                      &so_rcvbuf, sizeof so_rcvbuf) < 0) {
-        VLOG_ERR("setsockopt(SO_RCVBUF,%zu): %s", so_rcvbuf, strerror(errno));
-        goto error_free_pid;
-    }
-
     /* Bind local address as our selected pid. */
     memset(&local, 0, sizeof local);
     local.nl_family = AF_NETLINK;
     local.nl_pid = sock->pid;
-    if (multicast_group > 0 && multicast_group <= 32) {
-        /* This method of joining multicast groups is supported by old kernels,
-         * but it only allows 32 multicast groups per protocol. */
-        local.nl_groups |= 1ul << (multicast_group - 1);
-    }
     if (bind(sock->fd, (struct sockaddr *) &local, sizeof local) < 0) {
         VLOG_ERR("bind(%"PRIu32"): %s", sock->pid, strerror(errno));
         goto error_free_pid;
@@ -133,23 +105,6 @@ nl_sock_create(int protocol, int multicast_group,
     remote.nl_pid = 0;
     if (connect(sock->fd, (struct sockaddr *) &remote, sizeof remote) < 0) {
         VLOG_ERR("connect(0): %s", strerror(errno));
-        goto error_free_pid;
-    }
-
-    /* Older kernel headers failed to define this macro.  We want our programs
-     * to support the newer kernel features even if compiled with older
-     * headers, so define it ourselves in such a case. */
-#ifndef NETLINK_ADD_MEMBERSHIP
-#define NETLINK_ADD_MEMBERSHIP 1
-#endif
-
-    /* This method of joining multicast groups is only supported by newish
-     * kernels, but it allows for an arbitrary number of multicast groups. */
-    if (multicast_group > 32
-        && setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
-                      &multicast_group, sizeof multicast_group) < 0) {
-        VLOG_ERR("setsockopt(NETLINK_ADD_MEMBERSHIP,%d): %s",
-                 multicast_group, strerror(errno));
         goto error_free_pid;
     }
 
@@ -181,6 +136,47 @@ nl_sock_destroy(struct nl_sock *sock)
         free_pid(sock->pid);
         free(sock);
     }
+}
+
+/* Tries to add 'sock' as a listener for 'multicast_group'.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Multicast group numbers are always positive.
+ *
+ * It is not an error to attempt to join a multicast group to which a socket
+ * already belongs. */
+int
+nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
+{
+    if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
+                   &multicast_group, sizeof multicast_group) < 0) {
+        VLOG_WARN("could not join multicast group %u (%s)",
+                  multicast_group, strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
+/* Tries to make 'sock' stop listening to 'multicast_group'.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Multicast group numbers are always positive.
+ *
+ * It is not an error to attempt to leave a multicast group to which a socket
+ * does not belong.
+ *
+ * On success, reading from 'sock' will still return any messages that were
+ * received on 'multicast_group' before the group was left. */
+int
+nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
+{
+    if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
+                   &multicast_group, sizeof multicast_group) < 0) {
+        VLOG_WARN("could not leave multicast group %u (%s)",
+                  multicast_group, strerror(errno));
+        return errno;
+    }
+    return 0;
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
@@ -608,7 +604,7 @@ static int do_lookup_genl_family(const char *name)
     struct nlattr *attrs[ARRAY_SIZE(family_policy)];
     int retval;
 
-    retval = nl_sock_create(NETLINK_GENERIC, 0, 0, 0, &sock);
+    retval = nl_sock_create(NETLINK_GENERIC, &sock);
     if (retval) {
         return -retval;
     }

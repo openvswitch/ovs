@@ -111,7 +111,7 @@ lookup_brc_multicast_group(int *multicast_group)
     struct nlattr *attrs[ARRAY_SIZE(brc_multicast_policy)];
     int retval;
 
-    retval = nl_sock_create(NETLINK_GENERIC, 0, 0, 0, &sock);
+    retval = nl_sock_create(NETLINK_GENERIC, &sock);
     if (retval) {
         return retval;
     }
@@ -156,12 +156,17 @@ brc_open(struct nl_sock **sock)
         return retval;
     }
 
-    retval = nl_sock_create(NETLINK_GENERIC, multicast_group, 0, 0, sock);
+    retval = nl_sock_create(NETLINK_GENERIC, sock);
     if (retval) {
         return retval;
     }
 
-    return 0;
+    retval = nl_sock_join_mcgroup(*sock, multicast_group);
+    if (retval) {
+        nl_sock_destroy(*sock);
+        *sock = NULL;
+    }
+    return retval;
 }
 
 static const struct nl_policy brc_dp_policy[] = {
@@ -1318,8 +1323,16 @@ main(int argc, char *argv[])
     }
 
     if (prune_timeout) {
-        if (nl_sock_create(NETLINK_ROUTE, RTNLGRP_LINK, 0, 0, &rtnl_sock)) {
-            ovs_fatal(0, "could not create rtnetlink socket");
+        int error;
+
+        error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
+        if (error) {
+            ovs_fatal(error, "could not create rtnetlink socket");
+        }
+
+        error = nl_sock_join_mcgroup(rtnl_sock, RTNLGRP_LINK);
+        if (error) {
+            ovs_fatal(error, "could not join RTNLGRP_LINK multicast group");
         }
     }
 

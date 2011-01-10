@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,10 +86,6 @@ struct nlmsgerr
 };
 BUILD_ASSERT_DECL(sizeof(struct nlmsgerr) == 20);
 
-#define NETLINK_ADD_MEMBERSHIP  1
-#define NETLINK_DROP_MEMBERSHIP 2
-#define NETLINK_PKTINFO         3
-
 struct genlmsghdr {
     uint8_t cmd;
     uint8_t version;
@@ -155,6 +151,13 @@ enum {
 #define NLA_F_NESTED		(1 << 15)
 #define NLA_F_NET_BYTEORDER	(1 << 14)
 #define NLA_TYPE_MASK		~(NLA_F_NESTED | NLA_F_NET_BYTEORDER)
+#endif
+
+/* These were introduced all together in 2.6.14.  (We want our programs to
+ * support the newer kernel features even if compiled with older headers.) */
+#ifndef NETLINK_ADD_MEMBERSHIP
+#define NETLINK_ADD_MEMBERSHIP 1
+#define NETLINK_DROP_MEMBERSHIP 2
 #endif
 
 #endif /* netlink-protocol.h */

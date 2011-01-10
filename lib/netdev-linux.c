@@ -446,7 +446,7 @@ netdev_linux_init(void)
 
         /* Create rtnetlink socket. */
         if (!status) {
-            status = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
+            status = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
             if (status) {
                 VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
                             strerror(status));

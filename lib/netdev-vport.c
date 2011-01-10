@@ -489,7 +489,7 @@ netdev_vport_reset_names(void)
         free(nn);
     }
 
-    error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
+    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
     if (error) {
         VLOG_WARN_RL(&rl, "Failed to create NETLINK_ROUTE socket");
         return error;
