@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "hash.h"
+#include "hmap.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
@@ -91,6 +93,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     }
     sock->protocol = protocol;
     sock->any_groups = false;
+    sock->dump = NULL;
 
     retval = alloc_pid(&sock->pid);
     if (retval) {
@@ -705,9 +708,60 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 
 /* Miscellaneous.  */
 
+struct genl_family {
+    struct hmap_node hmap_node;
+    uint16_t id;
+    char *name;
+};
+
+static struct hmap genl_families = HMAP_INITIALIZER(&genl_families);
+
 static const struct nl_policy family_policy[CTRL_ATTR_MAX + 1] = {
     [CTRL_ATTR_FAMILY_ID] = {.type = NL_A_U16},
 };
+
+static struct genl_family *
+find_genl_family_by_id(uint16_t id)
+{
+    struct genl_family *family;
+
+    HMAP_FOR_EACH_IN_BUCKET (family, hmap_node, hash_int(id, 0),
+                             &genl_families) {
+        if (family->id == id) {
+            return family;
+        }
+    }
+    return NULL;
+}
+
+static void
+define_genl_family(uint16_t id, const char *name)
+{
+    struct genl_family *family = find_genl_family_by_id(id);
+
+    if (family) {
+        if (!strcmp(family->name, name)) {
+            return;
+        }
+        free(family->name);
+    } else {
+        family = xmalloc(sizeof *family);
+        family->id = id;
+        hmap_insert(&genl_families, &family->hmap_node, hash_int(id, 0));
+    }
+    family->name = xstrdup(name);
+}
+
+static const char *
+genl_family_to_name(uint16_t id)
+{
+    if (id == GENL_ID_CTRL) {
+        return "control";
+    } else {
+        struct genl_family *family = find_genl_family_by_id(id);
+        return family ? family->name : "unknown";
+    }
+}
 
 static int do_lookup_genl_family(const char *name)
 {
@@ -742,9 +796,12 @@ static int do_lookup_genl_family(const char *name)
     retval = nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]);
     if (retval == 0) {
         retval = -EPROTO;
+    } else {
+        define_genl_family(retval, name);
     }
     nl_sock_destroy(sock);
     ofpbuf_delete(reply);
+
     return retval;
 }
 
@@ -811,7 +868,7 @@ free_pid(uint32_t pid)
 }
 
 static void
-nlmsghdr_to_string(const struct nlmsghdr *h, struct ds *ds)
+nlmsghdr_to_string(const struct nlmsghdr *h, int protocol, struct ds *ds)
 {
     struct nlmsg_flag {
         unsigned int bits;
@@ -842,6 +899,8 @@ nlmsghdr_to_string(const struct nlmsghdr *h, struct ds *ds)
         ds_put_cstr(ds, "(overrun)");
     } else if (h->nlmsg_type < NLMSG_MIN_TYPE) {
         ds_put_cstr(ds, "(reserved)");
+    } else if (protocol == NETLINK_GENERIC) {
+        ds_put_format(ds, "(%s)", genl_family_to_name(h->nlmsg_type));
     } else {
         ds_put_cstr(ds, "(family-defined)");
     }
@@ -868,7 +927,7 @@ nlmsg_to_string(const struct ofpbuf *buffer, int protocol)
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct nlmsghdr *h = ofpbuf_at(buffer, 0, NLMSG_HDRLEN);
     if (h) {
-        nlmsghdr_to_string(h, &ds);
+        nlmsghdr_to_string(h, protocol, &ds);
         if (h->nlmsg_type == NLMSG_ERROR) {
             const struct nlmsgerr *e;
             e = ofpbuf_at(buffer, NLMSG_HDRLEN,
@@ -879,7 +938,7 @@ nlmsg_to_string(const struct ofpbuf *buffer, int protocol)
                     ds_put_format(&ds, "(%s)", strerror(-e->error));
                 }
                 ds_put_cstr(&ds, ", in-reply-to(");
-                nlmsghdr_to_string(&e->msg, &ds);
+                nlmsghdr_to_string(&e->msg, protocol, &ds);
                 ds_put_cstr(&ds, "))");
             } else {
                 ds_put_cstr(&ds, " error(truncated)");
