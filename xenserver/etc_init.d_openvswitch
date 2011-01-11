@@ -20,8 +20,8 @@
 # limitations under the License.
 ### BEGIN INIT INFO
 # Provides:          openvswitch-switch
-# Required-Start:    $network $named $remote_fs $syslog
-# Required-Stop:     $remote_fs
+# Required-Start:
+# Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Open vSwitch switch
