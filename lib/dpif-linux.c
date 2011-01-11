@@ -122,7 +122,7 @@ struct dpif_linux {
 
     /* Used by dpif_linux_get_all_names(). */
     char *local_ifname;
-    int minor;
+    int dp_idx;
 
     /* Change notification. */
     int local_ifindex;          /* Ifindex of local port. */
@@ -191,7 +191,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     struct dpif_linux_vport vport_request, vport;
     struct dpif_linux_dp dp_request, dp;
     struct ofpbuf *buf;
-    int minor;
+    int dp_idx;
     int error;
 
     error = dpif_linux_init();
@@ -199,14 +199,14 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         return error;
     }
 
-    minor = !strncmp(name, "dp", 2)
-            && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
+    dp_idx = (!strncmp(name, "dp", 2)
+              && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1);
 
     /* Create or look up datapath. */
     dpif_linux_dp_init(&dp_request);
     dp_request.cmd = create ? ODP_DP_CMD_NEW : ODP_DP_CMD_GET;
-    dp_request.dp_idx = minor;
-    dp_request.name = minor < 0 ? name : NULL;
+    dp_request.dp_idx = dp_idx;
+    dp_request.name = dp_idx < 0 ? name : NULL;
     error = dpif_linux_dp_transact(&dp_request, &dp, &buf);
     if (error) {
         return error;
@@ -218,7 +218,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     vport_request.cmd = ODP_VPORT_CMD_GET;
     vport_request.dp_idx = dp.dp_idx;
     vport_request.port_no = ODPP_LOCAL;
-    vport_request.name = minor < 0 ? name : NULL;
+    vport_request.name = dp_idx < 0 ? name : NULL;
     error = dpif_linux_vport_transact(&vport_request, &vport, &buf);
     if (error) {
         return error;
@@ -263,7 +263,7 @@ open_dpif(const struct dpif_linux_dp *dp,
     dpif->listen_mask = 0;
     dpif->local_ifname = xstrdup(local_vport->name);
     dpif->local_ifindex = local_vport->ifindex;
-    dpif->minor = dp_idx;
+    dpif->dp_idx = dp_idx;
     shash_init(&dpif->changed_ports);
     dpif->change_error = false;
     *dpifp = &dpif->dpif;
@@ -290,7 +290,7 @@ dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    svec_add_nocopy(all_names, xasprintf("dp%d", dpif->minor));
+    svec_add_nocopy(all_names, xasprintf("dp%d", dpif->dp_idx));
     svec_add(all_names, dpif->local_ifname);
     return 0;
 }
@@ -303,7 +303,7 @@ dpif_linux_destroy(struct dpif *dpif_)
 
     dpif_linux_dp_init(&dp);
     dp.cmd = ODP_DP_CMD_DEL;
-    dp.dp_idx = dpif->minor;
+    dp.dp_idx = dpif->dp_idx;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
@@ -345,7 +345,7 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
 
     dpif_linux_dp_init(&dp);
     dp.cmd = ODP_DP_CMD_SET;
-    dp.dp_idx = dpif->minor;
+    dp.dp_idx = dpif->dp_idx;
     dp.ipv4_frags = drop_frags ? ODP_DP_FRAG_DROP : ODP_DP_FRAG_ZERO;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
@@ -364,7 +364,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 
     dpif_linux_vport_init(&request);
     request.cmd = ODP_VPORT_CMD_NEW;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
     request.type = netdev_vport_get_vport_type(netdev);
     if (request.type == ODP_VPORT_TYPE_UNSPEC) {
         VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
@@ -397,7 +397,7 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
 
     dpif_linux_vport_init(&vport);
     vport.cmd = ODP_VPORT_CMD_DEL;
-    vport.dp_idx = dpif->minor;
+    vport.dp_idx = dpif->dp_idx;
     vport.port_no = port_no;
     return dpif_linux_vport_transact(&vport, NULL, NULL);
 }
@@ -413,7 +413,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
 
     dpif_linux_vport_init(&request);
     request.cmd = ODP_VPORT_CMD_GET;
-    request.dp_idx = dpif_linux_cast(dpif)->minor;
+    request.dp_idx = dpif_linux_cast(dpif)->dp_idx;
     request.port_no = port_no;
     request.name = port_name;
 
@@ -457,7 +457,7 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 
     dpif_linux_flow_init(&flow);
     flow.cmd = ODP_FLOW_CMD_DEL;
-    flow.dp_idx = dpif->minor;
+    flow.dp_idx = dpif->dp_idx;
     return dpif_linux_flow_transact(&flow, NULL, NULL);
 }
 
@@ -477,7 +477,7 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
 
     dpif_linux_vport_init(&request);
     request.cmd = ODP_DP_CMD_GET;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
 
     buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(&request, buf);
@@ -561,7 +561,7 @@ dpif_linux_flow_get(const struct dpif *dpif_,
 
     dpif_linux_flow_init(&request);
     request.cmd = ODP_FLOW_CMD_GET;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
     request.key = key;
     request.key_len = key_len;
     error = dpif_linux_flow_transact(&request, &reply, &buf);
@@ -593,7 +593,7 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
 
     dpif_linux_flow_init(&request);
     request.cmd = flags & DPIF_FP_CREATE ? ODP_FLOW_CMD_NEW : ODP_FLOW_CMD_SET;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
     request.key = key;
     request.key_len = key_len;
     request.actions = actions;
@@ -624,7 +624,7 @@ dpif_linux_flow_del(struct dpif *dpif_,
 
     dpif_linux_flow_init(&request);
     request.cmd = ODP_FLOW_CMD_DEL;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
     request.key = key;
     request.key_len = key_len;
     error = dpif_linux_flow_transact(&request,
@@ -655,7 +655,7 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 
     dpif_linux_flow_init(&request);
     request.cmd = ODP_DP_CMD_GET;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
 
     buf = ofpbuf_new(1024);
     dpif_linux_flow_to_ofpbuf(&request, buf);
@@ -722,7 +722,7 @@ dpif_linux_execute(struct dpif *dpif_,
                           ODP_PACKET_CMD_EXECUTE, 1);
 
     execute = ofpbuf_put_uninit(buf, sizeof *execute);
-    execute->dp_idx = dpif->minor;
+    execute->dp_idx = dpif->dp_idx;
 
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, packet->data, packet->size);
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_ACTIONS, actions, actions_len);
@@ -810,7 +810,7 @@ dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
 
     dpif_linux_dp_init(&dp);
     dp.cmd = ODP_DP_CMD_SET;
-    dp.dp_idx = dpif->minor;
+    dp.dp_idx = dpif->dp_idx;
     dp.sampling = &probability;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
@@ -917,7 +917,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
 
         error = parse_odp_packet(buf, upcall, &dp_idx);
         if (!error
-            && dp_idx == dpif->minor
+            && dp_idx == dpif->dp_idx
             && dpif->listen_mask & (1u << upcall->type)) {
             return 0;
         }
@@ -1427,7 +1427,7 @@ dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
 
     dpif_linux_dp_init(&request);
     request.cmd = ODP_DP_CMD_GET;
-    request.dp_idx = dpif->minor;
+    request.dp_idx = dpif->dp_idx;
 
     return dpif_linux_dp_transact(&request, reply, bufp);
 }
