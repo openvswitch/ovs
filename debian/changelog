@@ -1,3 +1,11 @@
+openvswitch (1.1.0~pre2.g2.ea763e0e-1) unstable; urgency=low
+
+  * Git snapshot, including
+    - tests: Fix Y2011 bug in testsuite
+      (closes: #609506)
+
+ -- Simon Horman <horms@debian.org>  Wed, 12 Jan 2011 08:34:35 +0900
+
 openvswitch (1.1.0~pre2.g1.bbe8d06e-1) unstable; urgency=low
 
   * Git snaptshot
