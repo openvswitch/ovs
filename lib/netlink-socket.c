@@ -464,7 +464,7 @@ recv:
     }
     nlmsghdr = nl_msg_nlmsghdr(reply);
     if (seq != nlmsghdr->nlmsg_seq) {
-        VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
+        VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
                     nl_msg_nlmsghdr(reply)->nlmsg_seq, seq);
         ofpbuf_delete(reply);
         goto recv;
@@ -603,7 +603,7 @@ nl_dump_recv(struct nl_dump *dump, struct ofpbuf **bufferp)
 
     nlmsghdr = nl_msg_nlmsghdr(buffer);
     if (dump->seq != nlmsghdr->nlmsg_seq) {
-        VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
+        VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
                     nlmsghdr->nlmsg_seq, dump->seq);
         return EAGAIN;
     }
