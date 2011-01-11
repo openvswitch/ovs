@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -187,6 +187,9 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
             format_odp_action(ds, a);
         }
         if (left) {
+            if (left == actions_len) {
+                ds_put_cstr(ds, "<empty>");
+            }
             ds_put_format(ds, " ***%u leftover bytes***", left);
         }
     } else {
