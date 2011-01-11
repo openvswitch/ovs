@@ -582,6 +582,9 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
                 assert(n_required > 0);
                 --n_required;
             }
+            if (attrs[type]) {
+                VLOG_DBG_RL(&rl, "%zu: duplicate attr %"PRIu16, offset, type);
+            }
             attrs[type] = nla;
         } else {
             /* Skip attribute type that we don't care about. */
