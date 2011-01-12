@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -982,7 +982,7 @@ nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
     uint32_t dst = ntohl(load->dst);
     uint64_t value = ntohll(load->value);
 
-    ds_put_format(s, "load:%"PRIu64"->", value);
+    ds_put_format(s, "load:%#"PRIx64"->", value);
     nxm_format_field_bits(s, dst, ofs, n_bits);
 }
 

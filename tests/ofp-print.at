@@ -672,7 +672,7 @@ ff ff ff ff ff ff 00 00 00 14 00 00 00 00 00 00 \
 00 00 00 7b 00 00 00 00 ff ff 00 18 00 00 23 20 \
 00 07 00 1f 00 01 00 04 00 00 00 00 00 00 00 05 \
 " 2], [0], [dnl
-NXT_FLOW_MOD (xid=0x2): ADD reg0=0x7b,tun_id=0x1c8 actions=load:5->NXM_NX_REG0[[0..31]]
+NXT_FLOW_MOD (xid=0x2): ADD reg0=0x7b,tun_id=0x1c8 actions=load:0x5->NXM_NX_REG0[[]]
 ])
 AT_CLEANUP
 
@@ -687,7 +687,7 @@ ff ff ff ff ff ff 00 00 00 14 00 00 00 00 00 00 \
 00 00 00 7b 00 00 00 00 ff ff 00 18 00 00 23 20 \
 00 07 00 1f 00 01 00 04 00 00 00 00 00 00 00 05 \
 " 3], [0], [dnl
-NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007b) actions=load:5->NXM_NX_REG0[[0..31]]
+NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007b) actions=load:0x5->NXM_NX_REG0[[]]
 ])
 AT_CLEANUP
 
@@ -863,7 +863,7 @@ ff ff 00 18 00 00 23 20 00 07 00 1f 00 01 00 04 \
  cookie=0x0, duration=5.624s, table_id=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=1,vlan_tci=0x0000/0xffff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2530 actions=output:3
  cookie=0x0, duration=0.08s, table_id=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=1,vlan_tci=0x0000/0xffff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2536 actions=output:3
  cookie=0x0, duration=1.96s, table_id=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000/0xffff,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2534,tp_dst=0 actions=output:1
- cookie=0x0, duration=228.78s, table_id=0, n_packets=0, n_bytes=0, reg0=0x7b,tun_id=0x1c8 actions=load:5->NXM_NX_REG0[0..31]
+ cookie=0x0, duration=228.78s, table_id=0, n_packets=0, n_bytes=0, reg0=0x7b,tun_id=0x1c8 actions=load:0x5->NXM_NX_REG0[]
 ]])
 AT_CLEANUP
 
