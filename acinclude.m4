@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -200,6 +200,7 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [NLA_NUL_STRING])
   OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16])
+  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_find_nested])
 
   OVS_CHECK_LOG2_H
 

@@ -111,4 +111,21 @@ static inline int nla_type(const struct nlattr *nla)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+#define nla_parse_nested(tb, maxtype, nla, policy) \
+	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), policy)
+#endif
+
+#ifndef nla_for_each_nested
+#define nla_for_each_nested(pos, nla, rem) \
+	nla_for_each_attr(pos, nla_data(nla), nla_len(nla), rem)
+#endif
+
+#ifndef HAVE_NLA_FIND_NESTED
+static inline struct nlattr *nla_find_nested(struct nlattr *nla, int attrtype)
+{
+	return nla_find(nla_data(nla), nla_len(nla), attrtype);
+}
+#endif
+
 #endif /* net/netlink.h */
