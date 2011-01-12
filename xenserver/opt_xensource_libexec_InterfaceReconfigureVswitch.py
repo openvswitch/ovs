@@ -171,6 +171,22 @@ def datapath_configure_bond(pif,slaves):
                 argv += ['bond_%s=%d' % (name, value)]
             except ValueError:
                 log("bridge %s has invalid %s '%s'" % (bridge, name, value))
+        elif name in ['miimon', 'use_carrier']:
+            try:
+                value = int(val)
+                if value < 0:
+                    raise ValueError
+
+                if name == 'use_carrier':
+                    if value:
+                        value = "carrier"
+                    else:
+                        value = "miimon"
+                    argv += ["other-config:bond-detect-mode=%s" % value]
+                else:
+                    argv += ["other-config:bond-miimon-interval=%d" % value]
+            except ValueError:
+                log("bridge %s has invalid %s '%s'" % (bridge, name, value))
         elif name == "mode":
 
             if val in ['balance-slb', 'active-backup']:
