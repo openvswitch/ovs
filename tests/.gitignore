@@ -6,6 +6,7 @@
 /idltest.h
 /idltest.ovsidl
 /test-aes128
+/test-byte-order
 /test-classifier
 /test-csum
 /test-dhcp-client
@@ -17,8 +18,11 @@
 /test-jsonrpc
 /test-list
 /test-lockfile
+/test-multipath
 /test-ovsdb
+/test-random
 /test-reconnect
+/test-strtok_r
 /test-timeval
 /test-sha1
 /test-type-props

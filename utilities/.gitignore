@@ -18,8 +18,14 @@
 /ovs-openflowd
 /ovs-openflowd.8
 /ovs-parse-leaks
+/ovs-pcap
+/ovs-pcap.1
 /ovs-pki
 /ovs-pki-cgi
 /ovs-pki.8
+/ovs-tcpundump
+/ovs-tcpundump.1
+/ovs-vlan-test
+/ovs-vlan-test.8
 /ovs-vsctl
 /ovs-vsctl.8

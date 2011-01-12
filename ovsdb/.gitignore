@@ -1,5 +1,7 @@
 /ovsdb-client
 /ovsdb-client.1
+/ovsdb-doc
+/ovsdb-dot
 /ovsdb-idlc
 /ovsdb-server
 /ovsdb-server.1

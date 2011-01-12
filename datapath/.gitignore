@@ -4,4 +4,4 @@
 *.ko
 *.mod.c
 Module.symvers
-
+/distfiles

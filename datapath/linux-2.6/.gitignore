@@ -8,6 +8,7 @@
 /brc_sysfs_dp.c
 /brc_sysfs_if.c
 /brcompat.c
+/checksum.c
 /dev-openvswitch.c
 /dp_sysfs_dp.c
 /dp_sysfs_if.c
@@ -21,7 +22,9 @@
 /kcompat.h
 /kmemdup.c
 /linux-2.6
+/loop_counter.c
 /modules.order
+/netdevice.c
 /random32.c
 /skbuff-openvswitch.c
 /table.c
