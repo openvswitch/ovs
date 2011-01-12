@@ -9,7 +9,7 @@ static inline void skb_dst_drop(struct sk_buff *skb)
 {
 	if (skb->dst)
 		dst_release(skb_dst(skb));
-	skb->dst = 0UL;
+	skb->dst = NULL;
 }
 
 #endif
