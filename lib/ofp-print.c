@@ -953,158 +953,52 @@ ofp_print_port_mod(struct ds *string, const struct ofp_port_mod *opm)
     }
 }
 
-struct error_type {
-    int type;
-    int code;
-    const char *name;
-};
-
-static const struct error_type error_types[] = {
-#define ERROR_TYPE(TYPE) {TYPE, -1, #TYPE}
-#define ERROR_CODE(TYPE, CODE) {TYPE, CODE, #CODE}
-    ERROR_TYPE(OFPET_HELLO_FAILED),
-    ERROR_CODE(OFPET_HELLO_FAILED, OFPHFC_INCOMPATIBLE),
-    ERROR_CODE(OFPET_HELLO_FAILED, OFPHFC_EPERM),
-
-    ERROR_TYPE(OFPET_BAD_REQUEST),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_VERSION),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_EPERM),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BUFFER_EMPTY),
-    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN),
-    /* Nicira error extensions. */
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_INVALID),
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_TYPE),
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_VALUE),
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_MASK),
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_PREREQ),
-    ERROR_CODE(OFPET_BAD_REQUEST, NXBRC_NXM_DUP_TYPE),
-
-    ERROR_TYPE(OFPET_BAD_ACTION),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_LEN),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_EPERM),
-    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_TOO_MANY),
-
-    ERROR_TYPE(OFPET_FLOW_MOD_FAILED),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_EPERM),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_EMERG_TIMEOUT),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND),
-    /* Nicira error extenstions. */
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, NXFMFC_HARDWARE),
-    ERROR_CODE(OFPET_FLOW_MOD_FAILED, NXFMFC_BAD_TABLE_ID),
-
-    ERROR_TYPE(OFPET_PORT_MOD_FAILED),
-    ERROR_CODE(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT),
-    ERROR_CODE(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_HW_ADDR)
-};
-#define N_ERROR_TYPES ARRAY_SIZE(error_types)
-
-static const char *
-lookup_error_type(int type)
-{
-    const struct error_type *t;
-
-    for (t = error_types; t < &error_types[N_ERROR_TYPES]; t++) {
-        if (t->type == type && t->code == -1) {
-            return t->name;
-        }
-    }
-    return "?";
-}
-
-static const char *
-lookup_error_code(int type, int code)
-{
-    const struct error_type *t;
-
-    for (t = error_types; t < &error_types[N_ERROR_TYPES]; t++) {
-        if (t->type == type && t->code == code) {
-            return t->name;
-        }
-    }
-    return "?";
-}
-
 static void
 ofp_print_error(struct ds *string, int error)
 {
-    int type = get_ofp_err_type(error);
-    int code = get_ofp_err_code(error);
     if (string->length) {
         ds_put_char(string, ' ');
     }
-    ds_put_format(string, " ***decode error type:%d(%s) code:%d(%s)***\n",
-                  type, lookup_error_type(type),
-                  code, lookup_error_code(type, code));
-}
-
-static void
-ofp_print_nx_error_msg(struct ds *string, const struct ofp_error_msg *oem)
-{
-    size_t len = ntohs(oem->header.length);
-    const struct nx_vendor_error *nve = (struct nx_vendor_error *)oem->data;
-    int vendor = ntohl(nve->vendor);
-    int type = ntohs(nve->type);
-    int code = ntohs(nve->code);
-
-    ds_put_format(string, " vendor:%x type:%d(%s) code:%d(%s) payload:\n",
-                  vendor,
-                  type, lookup_error_type(type),
-                  code, lookup_error_code(type, code));
-
-    ds_put_hex_dump(string, nve + 1, len - sizeof *oem - sizeof *nve,
-                    0, true);
+    ds_put_cstr(string, "***decode error: ");
+    ofputil_format_error(string, error);
+    ds_put_cstr(string, "***\n");
 }
 
 static void
 ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
 {
     size_t len = ntohs(oem->header.length);
-    int type = ntohs(oem->type);
-    int code = ntohs(oem->code);
+    size_t payload_ofs, payload_len;
+    const void *payload;
+    int error;
     char *s;
 
-
-    if (type == NXET_VENDOR && code == NXVC_VENDOR_ERROR) {
-        if (len < sizeof *oem + sizeof(struct nx_vendor_error)) {
-            ds_put_format(string,
-                          "(***truncated extended error message is %zu bytes "
-                          "when it should be at least %zu***)\n",
-                          len, sizeof(struct nx_vendor_error));
-            return;
-        }
-
-        return ofp_print_nx_error_msg(string, oem);
+    error = ofputil_decode_error_msg(&oem->header, &payload_ofs);
+    if (!is_ofp_error(error)) {
+        ofp_print_error(string, error);
+        ds_put_hex_dump(string, oem->data, len - sizeof *oem, 0, true);
+        return;
     }
 
-    ds_put_format(string, " type:%d(%s) code:%d(%s) payload:\n",
-                  type, lookup_error_type(type),
-                  code, lookup_error_code(type, code));
+    ds_put_char(string, ' ');
+    ofputil_format_error(string, error);
+    ds_put_char(string, '\n');
 
-    switch (type) {
+    payload = (const uint8_t *) oem + payload_ofs;
+    payload_len = len - payload_ofs;
+    switch (get_ofp_err_type(error)) {
     case OFPET_HELLO_FAILED:
-        ds_put_printable(string, (char *) oem->data, len - sizeof *oem);
+        ds_put_printable(string, payload, payload_len);
         break;
 
     case OFPET_BAD_REQUEST:
-        s = ofp_to_string(oem->data, len - sizeof *oem, 1);
+        s = ofp_to_string(payload, payload_len, 1);
         ds_put_cstr(string, s);
         free(s);
         break;
 
     default:
-        ds_put_hex_dump(string, oem->data, len - sizeof *oem, 0, true);
+        ds_put_hex_dump(string, payload, payload_len, 0, true);
         break;
     }
 }
@@ -1569,6 +1463,9 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPT_HELLO:
+        ds_put_char(string, '\n');
+        ds_put_hex_dump(string, oh + 1, ntohs(oh->length) - sizeof *oh,
+                        0, true);
         break;
 
     case OFPUTIL_OFPT_ERROR:

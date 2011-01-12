@@ -384,6 +384,11 @@ get_ofp_err_code(int error)
     return error & 0xffff;
 }
 
-struct ofpbuf *make_ofp_error_msg(int error, const struct ofp_header *);
+struct ofpbuf *ofputil_encode_error_msg(int error, const struct ofp_header *);
+int ofputil_decode_error_msg(const struct ofp_header *, size_t *payload_ofs);
+
+/* String versions of errors. */
+void ofputil_format_error(struct ds *, int error);
+char *ofputil_error_to_string(int error);
 
 #endif /* ofp-util.h */

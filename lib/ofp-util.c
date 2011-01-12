@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 
 #include <config.h>
 #include "ofp-print.h"
+#include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include "byte-order.h"
 #include "classifier.h"
+#include "dynamic-string.h"
 #include "multipath.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
@@ -2043,6 +2046,18 @@ vendor_code_to_id(uint8_t code)
     }
 }
 
+static int
+vendor_id_to_code(uint32_t id)
+{
+    switch (id) {
+#define OFPUTIL_VENDOR(NAME, VENDOR_ID) case VENDOR_ID: return NAME;
+        OFPUTIL_VENDORS
+#undef OFPUTIL_VENDOR
+    default:
+        return -1;
+    }
+}
+
 /* Creates and returns an OpenFlow message of type OFPT_ERROR with the error
  * information taken from 'error', whose encoding must be as described in the
  * large comment in ofp-util.h.  If 'oh' is nonnull, then the error will use
@@ -2051,7 +2066,7 @@ vendor_code_to_id(uint8_t code)
  *
  * Returns NULL if 'error' is not an OpenFlow error code. */
 struct ofpbuf *
-make_ofp_error_msg(int error, const struct ofp_header *oh)
+ofputil_encode_error_msg(int error, const struct ofp_header *oh)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -2122,6 +2137,102 @@ make_ofp_error_msg(int error, const struct ofp_header *oh)
     }
 
     return buf;
+}
+
+/* Decodes 'oh', which should be an OpenFlow OFPT_ERROR message, and returns an
+ * Open vSwitch internal error code in the format described in the large
+ * comment in ofp-util.h.
+ *
+ * If 'payload_ofs' is nonnull, on success '*payload_ofs' is set to the offset
+ * to the payload starting from 'oh' and on failure it is set to 0. */
+int
+ofputil_decode_error_msg(const struct ofp_header *oh, size_t *payload_ofs)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+    const struct ofp_error_msg *oem;
+    uint16_t type, code;
+    struct ofpbuf b;
+    int vendor;
+
+    if (payload_ofs) {
+        *payload_ofs = 0;
+    }
+    if (oh->type != OFPT_ERROR) {
+        return EPROTO;
+    }
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    oem = ofpbuf_try_pull(&b, sizeof *oem);
+    if (!oem) {
+        return EPROTO;
+    }
+
+    type = ntohs(oem->type);
+    code = ntohs(oem->code);
+    if (type == NXET_VENDOR && code == NXVC_VENDOR_ERROR) {
+        const struct nx_vendor_error *nve = ofpbuf_try_pull(&b, sizeof *nve);
+        if (!nve) {
+            return EPROTO;
+        }
+
+        vendor = vendor_id_to_code(ntohl(nve->vendor));
+        if (vendor < 0) {
+            VLOG_WARN_RL(&rl, "error contains unknown vendor ID %#"PRIx32,
+                         ntohl(nve->vendor));
+            return EPROTO;
+        }
+        type = ntohs(nve->type);
+        code = ntohs(nve->code);
+    } else {
+        vendor = OFPUTIL_VENDOR_OPENFLOW;
+    }
+
+    if (type >= 1024) {
+        VLOG_WARN_RL(&rl, "error contains type %"PRIu16" greater than "
+                     "supported maximum value 1023", type);
+        return EPROTO;
+    }
+
+    if (payload_ofs) {
+        *payload_ofs = (uint8_t *) b.data - (uint8_t *) oh;
+    }
+    return ofp_mkerr_vendor(vendor, type, code);
+}
+
+void
+ofputil_format_error(struct ds *s, int error)
+{
+    if (is_errno(error)) {
+        ds_put_cstr(s, strerror(error));
+    } else {
+        uint16_t type = get_ofp_err_type(error);
+        uint16_t code = get_ofp_err_code(error);
+        const char *type_s = ofp_error_type_to_string(type);
+        const char *code_s = ofp_error_code_to_string(type, code);
+
+        ds_put_format(s, "type ");
+        if (type_s) {
+            ds_put_cstr(s, type_s);
+        } else {
+            ds_put_format(s, "%"PRIu16, type);
+        }
+
+        ds_put_cstr(s, ", code ");
+        if (code_s) {
+            ds_put_cstr(s, code_s);
+        } else {
+            ds_put_format(s, "%"PRIu16, code);
+        }
+    }
+}
+
+char *
+ofputil_error_to_string(int error)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+    ofputil_format_error(&s, error);
+    return ds_steal_cstr(&s);
 }
 
 /* Attempts to pull 'actions_len' bytes from the front of 'b'.  Returns 0 if

@@ -81,6 +81,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/nx-match.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
+	lib/ofp-errors.c \
+	lib/ofp-errors.h \
 	lib/ofp-parse.c \
 	lib/ofp-parse.h \
 	lib/ofp-print.c \
@@ -244,6 +246,14 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
 	     > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
+
+$(srcdir)/lib/ofp-errors.c: \
+	include/openflow/openflow.h include/openflow/nicira-ext.h \
+	build-aux/extract-ofp-errors
+	cd $(srcdir)/include && \
+	$(PYTHON) ../build-aux/extract-ofp-errors \
+		openflow/openflow.h openflow/nicira-ext.h > ../lib/ofp-errors.c
+EXTRA_DIST += build-aux/extract-ofp-errors
 
 install-data-local: lib-install-data-local
 lib-install-data-local:

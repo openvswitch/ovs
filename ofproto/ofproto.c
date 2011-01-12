@@ -2515,7 +2515,7 @@ static void
 send_error_oh(const struct ofconn *ofconn, const struct ofp_header *oh,
               int error)
 {
-    struct ofpbuf *buf = make_ofp_error_msg(error, oh);
+    struct ofpbuf *buf = ofputil_encode_error_msg(error, oh);
     if (buf) {
         COVERAGE_INC(ofproto_error);
         queue_tx(buf, ofconn, ofconn->reply_counter);

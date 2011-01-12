@@ -1,0 +1,225 @@
+#! /usr/bin/python
+
+import sys
+import os.path
+import re
+
+macros = {}
+
+token = None
+line = ""
+idRe = "[a-zA-Z_][a-zA-Z_0-9]*"
+tokenRe = "#?" + idRe + "|[0-9]+|."
+inComment = False
+inDirective = False
+def getToken():
+    global token
+    global line
+    global inComment
+    global inDirective
+    while True:
+        line = line.lstrip()
+        if line != "":
+            if line.startswith("/*"):
+                inComment = True
+                line = line[2:]
+            elif inComment:
+                commentEnd = line.find("*/")
+                if commentEnd < 0:
+                    line = ""
+                else:
+                    inComment = False
+                    line = line[commentEnd + 2:]
+            else:
+                match = re.match(tokenRe, line)
+                token = match.group(0)
+                line = line[len(token):]
+                if token.startswith('#'):
+                    inDirective = True
+                elif token in macros and not inDirective:
+                    line = macros[token] + line
+                    continue
+                return True
+        elif inDirective:
+            token = "$"
+            inDirective = False
+            return True
+        else:
+            global lineNumber
+            line = inputFile.readline()
+            lineNumber += 1
+            while line.endswith("\\\n"):
+                line = line[:-2] + inputFile.readline()
+                lineNumber += 1
+            if line == "":
+                if token == None:
+                    fatal("unexpected end of input")
+                token = None
+                return False
+
+def fatal(msg):
+    sys.stderr.write("%s:%d: error at \"%s\": %s\n" % (fileName, lineNumber, token, msg))
+    sys.exit(1)
+
+def skipDirective():
+    getToken()
+    while token != '$':
+        getToken()
+
+def isId(s):
+    return re.match(idRe + "$", s) != None
+
+def forceId():
+    if not isId(token):
+        fatal("identifier expected")
+
+def forceInteger():
+    if not re.match('[0-9]+$', token):
+        fatal("integer expected")
+
+def match(t):
+    if token == t:
+        getToken()
+        return True
+    else:
+        return False
+
+def forceMatch(t):
+    if not match(t):
+        fatal("%s expected" % t)
+
+def parseTaggedName():
+    assert token in ('struct', 'union')
+    name = token
+    getToken()
+    forceId()
+    name = "%s %s" % (name, token)
+    getToken()
+    return name
+
+def print_enum(tag, constants, storage_class):
+    print """
+%(storage_class)sconst char *
+%(tag)s_to_string(uint16_t value)
+{
+    switch (value) {\
+""" % {"tag": tag,
+       "bufferlen": len(tag) + 32,
+       "storage_class": storage_class}
+    for constant in constants:
+        print "    case %s: return \"%s\";" % (constant, constant)
+    print """\
+    }
+    return NULL;
+}\
+""" % {"tag": tag}
+
+def usage():
+    argv0 = os.path.basename(sys.argv[0])
+    print '''\
+%(argv0)s, for extracting OpenFlow error codes from header files
+usage: %(argv0)s FILE [FILE...]
+
+This program reads the header files specified on the command line and
+outputs a C source file for translating OpenFlow error codes into
+strings, for use as lib/ofp-errors.c in the Open vSwitch source tree.
+
+This program is specialized for reading include/openflow/openflow.h
+and include/openflow/nicira-ext.h.  It will not work on arbitrary
+header files without extensions.''' % {"argv0": argv0}
+    sys.exit(0)
+
+def extract_ofp_errors(filenames):
+    error_types = {}
+
+    global fileName
+    for fileName in filenames:
+        global inputFile
+        global lineNumber
+        inputFile = open(fileName)
+        lineNumber = 0
+        while getToken():
+            if token in ("#ifdef", "#ifndef", "#include",
+                         "#endif", "#elif", "#else", '#define'):
+                skipDirective()
+            elif match('enum'):
+                forceId()
+                enum_tag = token
+                getToken()
+
+                forceMatch("{")
+
+                constants = []
+                while isId(token):
+                    constants.append(token)
+                    getToken()
+                    if match('='):
+                        while token != ',' and token != '}':
+                            getToken()
+                    match(',')
+
+                forceMatch('}')
+
+                if enum_tag == "ofp_error_type":
+                    error_types = {}
+                    for error_type in constants:
+                        error_types[error_type] = []
+                elif enum_tag == 'nx_vendor_code':
+                    pass
+                elif enum_tag.endswith('_code'):
+                    error_type = 'OFPET_%s' % '_'.join(enum_tag.split('_')[1:-1]).upper()
+                    if error_type not in error_types:
+                        fatal("enum %s looks like an error code enumeration but %s is unknown" % (enum_tag, error_type))
+                    error_types[error_type] += constants
+            elif token in ('struct', 'union'):
+                getToken()
+                forceId()
+                getToken()
+                forceMatch('{')
+                while not match('}'):
+                    getToken()
+            elif match('OFP_ASSERT') or match('BOOST_STATIC_ASSERT'):
+                while token != ';':
+                    getToken()
+            else:
+                fatal("parse error")
+        inputFile.close()
+
+    print "/* -*- buffer-read-only: t -*- */"
+    print "#include <config.h>"
+    print '#include "ofp-errors.h"'
+    print "#include <inttypes.h>"
+    print "#include <stdio.h>"
+    for fileName in sys.argv[1:]:
+        print '#include "%s"' % fileName
+    print '#include "type-props.h"'
+
+    for error_type, constants in sorted(error_types.items()):
+        tag = 'ofp_%s_code' % re.sub('^OFPET_', '', error_type).lower()
+        print_enum(tag, constants, "static ")
+    print_enum("ofp_error_type", error_types.keys(), "")
+    print """
+const char *
+ofp_error_code_to_string(uint16_t type, uint16_t code)
+{
+    switch (type) {\
+"""
+    for error_type in error_types:
+        tag = 'ofp_%s_code' % re.sub('^OFPET_', '', error_type).lower()
+        print "    case %s:" % error_type
+        print "        return %s_to_string(code);" % tag
+    print """\
+    }
+    return NULL;
+}\
+"""
+
+if __name__ == '__main__':
+    if '--help' in sys.argv:
+        usage()
+    elif len(sys.argv) < 2:
+        sys.stderr.write("at least one non-option argument required; "
+                         "use --help for help\n")
+        sys.exit(1)
+    else:
+        extract_ofp_errors(sys.argv[1:])

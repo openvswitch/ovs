@@ -76,7 +76,7 @@ struct nx_vendor_error {
  * that duplicate the current ones' meanings. */
 
 /* Additional "code" values for OFPET_BAD_REQUEST. */
-enum {
+enum nx_bad_request_code {
 /* Nicira Extended Match (NXM) errors. */
 
     /* Generic error code used when there is an error in an NXM sent to the
@@ -103,7 +103,7 @@ enum {
 };
 
 /* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
-enum {
+enum nx_flow_mod_failed_code {
     /* Generic hardware error. */
     NXFMFC_HARDWARE = 0x100,
 
