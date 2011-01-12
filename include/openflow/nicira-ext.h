@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@
  *
  * This extension attempts to address the problem by adding a generic "error
  * vendor extension".  The extension works as follows: use NXET_VENDOR as type
- * and NXVC_VENDOR_CODE as code, followed by struct nx_vendor_error with
+ * and NXVC_VENDOR_ERROR as code, followed by struct nx_vendor_error with
  * vendor-specific details, followed by at least 64 bytes of the failed
  * request.
  *
