@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,10 @@
 # limitations under the License.
 
 import os
+import os.path
 import sys
 
-_argv0 = sys.argv[0]
-PROGRAM_NAME = _argv0[_argv0.rfind('/') + 1:]
+PROGRAM_NAME = os.path.basename(sys.argv[0])
 
 def abs_file_name(dir, file_name):
     """If 'file_name' starts with '/', returns a copy of 'file_name'.

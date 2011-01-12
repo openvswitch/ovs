@@ -1,5 +1,6 @@
 #! /usr/bin/python
 
+import os.path
 import sys
 import re
 
@@ -193,10 +194,7 @@ def checkStructs():
         sys.exit(1)
 
     if '--help' in sys.argv:
-        argv0 = sys.argv[0]
-        slash = argv0.rfind('/')
-        if slash:
-            argv0 = argv0[slash + 1:]
+        argv0 = os.path.basename(sys.argv[0])
         print '''\
 %(argv0)s, for checking struct and struct member alignment
 usage: %(argv0)s HEADER [HEADER]...
