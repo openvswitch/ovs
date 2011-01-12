@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ int
 lookup_ip(const char *host_name, struct in_addr *addr)
 {
     if (!inet_aton(host_name, addr)) {
-        struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
         return ENOENT;
     }
@@ -129,7 +129,7 @@ get_socket_error(int fd)
     int error;
     socklen_t len = sizeof(error);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
-        struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 10);
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 10);
         error = errno;
         VLOG_ERR_RL(&rl, "getsockopt(SO_ERROR): %s", strerror(error));
     }

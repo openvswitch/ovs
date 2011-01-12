@@ -124,6 +124,17 @@ distfiles: Makefile
 	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | sort -u > $@
 CLEANFILES += distfiles
 
+# Check that "struct vlog_ratelimit" is always declared "static".
+ALL_LOCAL += rate-limit-check
+rate-limit-check:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	    git --no-pager grep -n -E '^[ 	]+struct vlog_rate_limit.*=' $(srcdir); \
+         then \
+	    echo "See above for list of violations of the rule that "; \
+	    echo "'struct vlog_rate_limit' must always be 'static'"; \
+	    exit 1; \
+	 fi
+
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
 clean-local: $(CLEAN_LOCAL)

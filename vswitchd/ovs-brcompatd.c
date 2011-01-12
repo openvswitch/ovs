@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -917,7 +917,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
         if (sscanf(line, "%d %d "ETH_ADDR_SCAN_FMT" %d",
                    &port, &vlan, ETH_ADDR_SCAN_ARGS(mac), &age)
             != 2 + ETH_ADDR_SCAN_COUNT + 1) {
-            struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_INFO_RL(&rl, "fdb/show output has invalid format: %s", line);
             continue;
         }

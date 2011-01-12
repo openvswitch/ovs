@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2681,7 +2681,7 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
             ctx->recurse--;
         }
     } else {
-        struct vlog_rate_limit recurse_rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        static struct vlog_rate_limit recurse_rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
         VLOG_ERR_RL(&recurse_rl, "NXAST_RESUBMIT recursed over %d times",
                     MAX_RESUBMIT_RECURSION);
