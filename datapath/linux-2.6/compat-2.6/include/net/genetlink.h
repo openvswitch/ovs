@@ -114,4 +114,9 @@ static inline struct sk_buff *genlmsg_new(size_t payload, gfp_t flags)
 }
 #endif /* linux kernel < 2.6.20 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+int genl_register_family_with_ops(struct genl_family *family,
+	struct genl_ops *ops, size_t n_ops);
+#endif
+
 #endif /* genetlink.h */
