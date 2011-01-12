@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -884,6 +884,8 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 /* Undocumented commands for unit testing. */
 
+/* "parse-flows FILENAME": reads the named file as a sequence of flows (like
+ * add-flows) and prints each of the flows back to stdout.  */
 static void
 do_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
@@ -914,6 +916,9 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
     fclose(file);
 }
 
+/* "parse-nx-match": reads a series of nx_match specifications as strings from
+ * stdin, does some internal fussing with them, and then prints them back as
+ * strings on stdout. */
 static void
 do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -968,6 +973,22 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     ds_destroy(&in);
 }
 
+/* "ofp-print HEXSTRING [VERBOSITY]": Converts the hex digits in HEXSTRING into
+ * binary data, interpreting them as an OpenFlow message, and prints the
+ * OpenFlow message on stdout, at VERBOSITY (level 2 by default).  */
+static void
+do_ofp_print(int argc, char *argv[])
+{
+    struct ofpbuf packet;
+
+    ofpbuf_init(&packet, strlen(argv[1]) / 2);
+    if (ofpbuf_put_hex(&packet, argv[1], NULL)[0] != '\0') {
+        ovs_fatal(0, "trailing garbage following hex bytes");
+    }
+    ofp_print(stdout, packet.data, packet.size, argc > 2 ? atoi(argv[2]) : 2);
+    ofpbuf_uninit(&packet);
+}
+
 static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
     { "status", 1, 2, do_status },
@@ -992,6 +1013,7 @@ static const struct command all_commands[] = {
     /* Undocumented commands for testing. */
     { "parse-flows", 1, 1, do_parse_flows },
     { "parse-nx-match", 0, 0, do_parse_nx_match },
+    { "ofp-print", 1, 2, do_ofp_print },
 
     { NULL, 0, 0, NULL },
 };

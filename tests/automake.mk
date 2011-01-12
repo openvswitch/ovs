@@ -12,6 +12,7 @@ TESTSUITE_AT = \
 	tests/check-structs.at \
 	tests/daemon.at \
 	tests/daemon-py.at \
+	tests/ofp-print.at \
 	tests/ovs-ofctl.at \
 	tests/multipath.at \
 	tests/vconn.at \
