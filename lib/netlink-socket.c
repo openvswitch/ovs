@@ -28,6 +28,7 @@
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
+#include "socket-util.h"
 #include "stress.h"
 #include "vlog.h"
 
@@ -444,6 +445,13 @@ recv:
         ofpbuf_delete(reply);
     }
     return 0;
+}
+
+/* Drain all the messages currently in 'sock''s receive queue. */
+int
+nl_sock_drain(struct nl_sock *sock)
+{
+    return drain_rcvbuf(sock->fd);
 }
 
 /* Starts a Netlink "dump" operation, by sending 'request' to the kernel via

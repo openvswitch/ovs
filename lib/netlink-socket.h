@@ -58,6 +58,8 @@ int nl_sock_recv(struct nl_sock *, struct ofpbuf **, bool wait);
 int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
                      struct ofpbuf **reply);
 
+int nl_sock_drain(struct nl_sock *);
+
 void nl_sock_wait(const struct nl_sock *, short int events);
 
 /* Table dumping. */
