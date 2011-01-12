@@ -79,4 +79,4 @@ int uuid_compare_3way(const struct uuid *, const struct uuid *);
 bool uuid_from_string(struct uuid *, const char *);
 bool uuid_from_string_prefix(struct uuid *, const char *);
 
-#endif /* vswitchd/cfgdb.h */
+#endif /* uuid.h */
