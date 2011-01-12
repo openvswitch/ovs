@@ -116,4 +116,11 @@ static inline void netdev_rx_handler_unregister(struct net_device *dev)
 	( (netdev)->ethtool_ops = (struct ethtool_ops *)(ops) )
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#define dev_get_by_name(net, name) dev_get_by_name(name)
+#define dev_get_by_index(net, ifindex) dev_get_by_index(ifindex)
+#define __dev_get_by_name(net, name) __dev_get_by_name(name)
+#define __dev_get_by_index(net, ifindex) __dev_get_by_index(ifindex)
+#endif
+
 #endif

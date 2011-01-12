@@ -8,7 +8,6 @@ openvswitch_sources += \
 	linux-2.6/compat-2.6/skbuff-openvswitch.c \
 	linux-2.6/compat-2.6/time.c
 openvswitch_headers += \
-	linux-2.6/compat-2.6/compat26.h \
 	linux-2.6/compat-2.6/include/asm-generic/bug.h \
 	linux-2.6/compat-2.6/include/linux/bottom_half.h \
 	linux-2.6/compat-2.6/include/linux/compiler.h \

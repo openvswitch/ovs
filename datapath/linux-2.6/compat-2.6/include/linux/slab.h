@@ -7,4 +7,8 @@
 extern void *kmemdup(const void *src, size_t len, gfp_t gfp);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+#define kmem_cache_create(n, s, a, f, c) kmem_cache_create(n, s, a, f, c, NULL)
+#endif
+
 #endif

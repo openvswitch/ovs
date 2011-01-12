@@ -38,4 +38,8 @@
 #define pr_warn pr_warning
 #endif
 
+#if defined(CONFIG_PREEMPT) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+#error "CONFIG_PREEMPT is broken before 2.6.21--see commit 4498121ca3, \"[NET]: Handle disabled preemption in gfp_any()\""
+#endif
+
 #endif /* linux/kernel.h */

@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -28,8 +28,6 @@
 #include <linux/icmp.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
-
-#include "compat.h"
 
 static struct kmem_cache *flow_cache;
 static unsigned int hash_seed __read_mostly;

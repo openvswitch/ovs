@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -20,8 +20,6 @@
 #include "datapath.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
-
-#include "compat.h"
 
 /* If the native device stats aren't 64 bit use the vport stats tracking instead. */
 #define USE_VPORT_STATS (sizeof(((struct net_device_stats *)0)->rx_bytes) < sizeof(u64))

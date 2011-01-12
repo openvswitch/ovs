@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -17,7 +17,6 @@
 #include <linux/rtnetlink.h>
 #include <net/genetlink.h>
 
-#include "compat.h"
 #include "openvswitch/brcompat-netlink.h"
 #include "brc_procfs.h"
 #include "datapath.h"

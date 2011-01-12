@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -52,8 +52,6 @@
 #include "odp-compat.h"
 #include "table.h"
 #include "vport-internal_dev.h"
-
-#include "compat.h"
 
 int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
