@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@
 #include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "rtnetlink.h"
-#include "rtnetlink-route.h"
+#include "route-table.h"
 #include "rtnetlink-link.h"
 #include "shash.h"
 #include "socket-util.h"
@@ -46,16 +46,7 @@
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 static struct hmap name_map;
-static struct hmap route_map;
 static struct rtnetlink_notifier netdev_vport_link_notifier;
-static struct rtnetlink_notifier netdev_vport_route_notifier;
-
-struct route_node {
-    struct hmap_node node;      /* Node in route_map. */
-    int rta_oif;                /* Egress interface index. */
-    uint32_t rta_dst;           /* Destination address in host byte order. */
-    unsigned char rtm_dst_len;  /* Destination address length. */
-};
 
 struct name_node {
     struct hmap_node node; /* Node in name_map. */
@@ -96,8 +87,6 @@ static int netdev_vport_create(const struct netdev_class *, const char *,
 static void netdev_vport_poll_notify(const struct netdev *);
 
 static void netdev_vport_tnl_iface_init(void);
-static void netdev_vport_route_change(const struct rtnetlink_route_change *,
-                                      void *);
 static void netdev_vport_link_change(const struct rtnetlink_link_change *,
                                      void *);
 static const char *netdev_vport_get_tnl_iface(const struct netdev *netdev);
@@ -147,6 +136,7 @@ static int
 netdev_vport_init(void)
 {
     netdev_vport_tnl_iface_init();
+    route_table_register();
     return 0;
 }
 
@@ -177,6 +167,7 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_vport *netdev_dev = netdev_dev_vport_cast(netdev_dev_);
 
+    route_table_unregister();
     free(netdev_dev);
 }
 
@@ -447,14 +438,14 @@ static void
 netdev_vport_run(void)
 {
     rtnetlink_link_notifier_run();
-    rtnetlink_route_notifier_run();
+    route_table_run();
 }
 
 static void
 netdev_vport_wait(void)
 {
     rtnetlink_link_notifier_wait();
-    rtnetlink_route_notifier_wait();
+    route_table_wait();
 }
 
 /* get_tnl_iface() implementation. */
@@ -473,52 +464,20 @@ name_node_lookup(int ifi_index)
     return NULL;
 }
 
-static struct route_node *
-route_node_lookup(int rta_oif, uint32_t rta_dst, unsigned char rtm_dst_len)
-{
-    uint32_t hash;
-    struct route_node *rn;
-
-    hash = hash_3words(rta_oif, rta_dst, rtm_dst_len);
-    HMAP_FOR_EACH_WITH_HASH(rn, node, hash, &route_map) {
-        if (rn->rta_oif     == rn->rta_oif &&
-            rn->rta_dst     == rn->rta_dst &&
-            rn->rtm_dst_len == rn->rtm_dst_len) {
-            return rn;
-        }
-    }
-
-    return NULL;
-}
-
-/* Resets the name or route map depending on the value of 'is_name'.  Clears
- * the appropriate map, makes an rtnetlink dump request, and calls the change
- * callback for each reply from the kernel. One should probably use
- * netdev_vport_reset_routes or netdev_vport_reset_names instead. */
+/* Queries the kernel for fresh data to populate the name map with. */
 static int
-netdev_vport_reset_name_else_route(bool is_name)
+netdev_vport_reset_names(void)
 {
     int error;
-    int nlmsg_type;
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
     struct ofpbuf request, reply;
     static struct nl_sock *rtnl_sock;
+    struct name_node *nn, *nn_next;
 
-    if (is_name) {
-        struct name_node *nn, *nn_next;
-
-        HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
-            hmap_remove(&name_map, &nn->node);
-            free(nn);
-        }
-    } else {
-        struct route_node *rn, *rn_next;
-
-        HMAP_FOR_EACH_SAFE(rn, rn_next, node, &route_map) {
-            hmap_remove(&route_map, &rn->node);
-            free(rn);
-        }
+    HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
+        hmap_remove(&name_map, &nn->node);
+        free(nn);
     }
 
     error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
@@ -529,8 +488,7 @@ netdev_vport_reset_name_else_route(bool is_name)
 
     ofpbuf_init(&request, 0);
 
-    nlmsg_type = is_name ? RTM_GETLINK : RTM_GETROUTE;
-    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, nlmsg_type, NLM_F_REQUEST);
+    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, RTM_GETLINK, NLM_F_REQUEST);
 
     rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
     rtmsg->rtgen_family = AF_INET;
@@ -538,18 +496,10 @@ netdev_vport_reset_name_else_route(bool is_name)
     nl_dump_start(&dump, rtnl_sock, &request);
 
     while (nl_dump_next(&dump, &reply)) {
-        if (is_name) {
-            struct rtnetlink_link_change change;
+        struct rtnetlink_link_change change;
 
-            if (rtnetlink_link_parse(&reply, &change)) {
-                netdev_vport_link_change(&change, NULL);
-            }
-        } else {
-            struct rtnetlink_route_change change;
-
-            if (rtnetlink_route_parse(&reply, &change)) {
-                netdev_vport_route_change(&change, NULL);
-            }
+        if (rtnetlink_link_parse(&reply, &change)) {
+            netdev_vport_link_change(&change, NULL);
         }
     }
 
@@ -557,57 +507,6 @@ netdev_vport_reset_name_else_route(bool is_name)
     nl_sock_destroy(rtnl_sock);
 
     return error;
-}
-
-static int
-netdev_vport_reset_routes(void)
-{
-    return netdev_vport_reset_name_else_route(false);
-}
-
-static int
-netdev_vport_reset_names(void)
-{
-    return netdev_vport_reset_name_else_route(true);
-}
-
-static void
-netdev_vport_route_change(const struct rtnetlink_route_change *change,
-                         void *aux OVS_UNUSED)
-{
-
-    if (!change) {
-        netdev_vport_reset_routes();
-    } else if (change->nlmsg_type == RTM_NEWROUTE) {
-        uint32_t hash;
-        struct route_node *rn;
-
-        if (route_node_lookup(change->rta_oif, change->rta_dst,
-                              change->rtm_dst_len)) {
-            return;
-        }
-
-        rn              = xzalloc(sizeof *rn);
-        rn->rta_oif     = change->rta_oif;
-        rn->rta_dst     = change->rta_dst;
-        rn->rtm_dst_len = change->rtm_dst_len;
-
-        hash = hash_3words(rn->rta_oif, rn->rta_dst, rn->rtm_dst_len);
-        hmap_insert(&route_map, &rn->node, hash);
-    } else if (change->nlmsg_type == RTM_DELROUTE) {
-        struct route_node *rn;
-
-        rn = route_node_lookup(change->rta_oif, change->rta_dst,
-                               change->rtm_dst_len);
-
-        if (rn) {
-            hmap_remove(&route_map, &rn->node);
-            free(rn);
-        }
-    } else {
-        VLOG_WARN_RL(&rl, "Received unexpected rtnetlink message type %d",
-                     change->nlmsg_type);
-    }
 }
 
 static void
@@ -641,10 +540,6 @@ netdev_vport_link_change(const struct rtnetlink_link_change *change,
             free(nn);
         }
 
-        /* Link deletions do not result in all of the RTM_DELROUTE messages one
-         * would expect.  For now, go ahead and reset route_map whenever a link
-         * is deleted. */
-        netdev_vport_reset_routes();
     } else {
         VLOG_WARN_RL(&rl, "Received unexpected rtnetlink message type %d",
                      change->nlmsg_type);
@@ -658,16 +553,11 @@ netdev_vport_tnl_iface_init(void)
 
     if (!tnl_iface_is_init) {
         hmap_init(&name_map);
-        hmap_init(&route_map);
 
         rtnetlink_link_notifier_register(&netdev_vport_link_notifier,
-                                          netdev_vport_link_change, NULL);
-
-        rtnetlink_route_notifier_register(&netdev_vport_route_notifier,
-                                          netdev_vport_route_change, NULL);
+                                         netdev_vport_link_change, NULL);
 
         netdev_vport_reset_names();
-        netdev_vport_reset_routes();
         tnl_iface_is_init = true;
     }
 }
@@ -675,44 +565,19 @@ netdev_vport_tnl_iface_init(void)
 static const char *
 netdev_vport_get_tnl_iface(const struct netdev *netdev)
 {
-    int dst_len;
+    int ifindex;
     uint32_t route;
     struct netdev_dev_vport *ndv;
     struct tnl_port_config *config;
-    struct route_node *rn, *rn_def, *rn_iter;
 
     ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
     config = (struct tnl_port_config *) ndv->config;
-    route = ntohl(config->daddr);
+    route = config->daddr;
 
-    dst_len = 0;
-    rn      = NULL;
-    rn_def  = NULL;
-
-    HMAP_FOR_EACH(rn_iter, node, &route_map) {
-        if (rn_iter->rtm_dst_len == 0 && rn_iter->rta_dst == 0) {
-            /* Default route. */
-            rn_def = rn_iter;
-        } else if (rn_iter->rtm_dst_len > dst_len) {
-            uint32_t mask = 0xffffffff << (32 - rn_iter->rtm_dst_len);
-            if ((route & mask) == (rn_iter->rta_dst & mask)) {
-                rn      = rn_iter;
-                dst_len = rn_iter->rtm_dst_len;
-            }
-        }
-    }
-
-    if (!rn) {
-        rn = rn_def;
-    }
-
-    if (rn) {
-        uint32_t hash;
+    if (route_table_get_ifindex(route, &ifindex)) {
         struct name_node *nn;
-
-        hash = hash_int(rn->rta_oif, 0);
-        HMAP_FOR_EACH_WITH_HASH(nn, node, hash, &name_map) {
-            if (nn->ifi_index == rn->rta_oif) {
+        HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifindex, 0), &name_map) {
+            if (nn->ifi_index == ifindex) {
                 return nn->ifname;
             }
         }

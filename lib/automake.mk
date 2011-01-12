@@ -194,8 +194,8 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/rtnetlink.h \
 	lib/rtnetlink-link.c \
 	lib/rtnetlink-link.h \
-	lib/rtnetlink-route.c \
-	lib/rtnetlink-route.h
+	lib/route-table.c \
+	lib/route-table.h
 endif
 
 if HAVE_OPENSSL
