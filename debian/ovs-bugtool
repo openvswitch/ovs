@@ -98,6 +98,7 @@ OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch'
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
 OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
 OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
+COLLECTD_LOGS_DIR = '/var/lib/collectd/rrd'
 VAR_LOG_DIR = '/var/log/'
 X11_LOGS_DIR = VAR_LOG_DIR
 X11_LOGS_RE = re.compile(r'.*/Xorg\..*$')
@@ -181,6 +182,7 @@ CAP_XML_ELEMENT = 'capability'
 
 CAP_BLOBS                = 'blobs'
 CAP_BOOT_LOADER          = 'boot-loader'
+CAP_COLLECTD_LOGS        = 'collectd-logs'
 CAP_DISK_INFO            = 'disk-info'
 CAP_FIRSTBOOT            = 'firstboot'
 CAP_HARDWARE_INFO        = 'hardware-info'
@@ -219,6 +221,8 @@ def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
 
 cap(CAP_BLOBS,               PII_NO,                    max_size=5*MB)
 cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
+    max_time=5)
+cap(CAP_COLLECTD_LOGS,       PII_MAYBE,                 max_size=50*MB,
     max_time=5)
 cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=25*KB,
     max_time=20)
@@ -448,6 +452,7 @@ exclude those logs from the archive.
     cmd_output(CAP_BOOT_LOADER, [LS, '-lR', '/boot'])
     cmd_output(CAP_BOOT_LOADER, [MD5SUM, BOOT_KERNEL, BOOT_INITRD], label='vmlinuz-initrd.md5sum')
 
+    tree_output(CAP_COLLECTD_LOGS, COLLECTD_LOGS_DIR)
     cmd_output(CAP_DISK_INFO, [FDISK, '-l'])
     file_output(CAP_DISK_INFO, [PROC_PARTITIONS, PROC_MOUNTS])
     file_output(CAP_DISK_INFO, [FSTAB])
