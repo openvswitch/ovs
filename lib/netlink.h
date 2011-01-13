@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ nl_attr_is_valid(const struct nlattr *nla, size_t maxlen)
 
 /* This macro does not check for attributes with bad lengths.  It should only
  * be used with messages from trusted sources or with messages that have
- * already been validates (e.g. with NL_ATTR_FOR_EACH).  */
+ * already been validated (e.g. with NL_ATTR_FOR_EACH).  */
 #define NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, ATTRS, ATTRS_LEN)           \
     for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
          (LEFT) > 0;                                                    \
@@ -153,5 +153,9 @@ bool nl_policy_parse(const struct ofpbuf *, size_t offset,
                      struct nlattr *[], size_t n_attrs);
 bool nl_parse_nested(const struct nlattr *, const struct nl_policy[],
                      struct nlattr *[], size_t n_attrs);
+
+const struct nlattr *nl_attr_find(const struct ofpbuf *, size_t hdr_len,
+                                  uint16_t type);
+const struct nlattr *nl_attr_find_nested(const struct nlattr *, uint16_t type);
 
 #endif /* netlink.h */

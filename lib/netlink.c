@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -607,4 +607,40 @@ nl_parse_nested(const struct nlattr *nla, const struct nl_policy policy[],
 
     nl_attr_get_nested(nla, &buf);
     return nl_policy_parse(&buf, 0, policy, attrs, n_attrs);
+}
+
+static const struct nlattr *
+nl_attr_find__(const struct nlattr *attrs, size_t size, uint16_t type)
+{
+    const struct nlattr *nla;
+    size_t left;
+
+    NL_ATTR_FOR_EACH (nla, left, attrs, size) {
+        if (nl_attr_type (nla) == type) {
+            return nla;
+        }
+    }
+    return NULL;
+}
+
+/* Returns the first Netlink attribute within 'buf' with the specified 'type',
+ * skipping a header of 'hdr_len' bytes at the beginning of 'buf'.
+ *
+ * This function does not validate the attribute's length. */
+const struct nlattr *
+nl_attr_find(const struct ofpbuf *buf, size_t hdr_len, uint16_t type)
+{
+    const uint8_t *start = (const uint8_t *) buf->data + hdr_len;
+    return nl_attr_find__((const struct nlattr *) start, buf->size - hdr_len,
+                          type);
+}
+
+/* Returns the first Netlink attribute within 'nla' with the specified
+ * 'type'.
+ *
+ * This function does not validate the attribute's length. */
+const struct nlattr *
+nl_attr_find_nested(const struct nlattr *nla, uint16_t type)
+{
+    return nl_attr_find__(nl_attr_get(nla), nl_attr_get_size(nla), type);
 }
