@@ -264,6 +264,7 @@ unwrap_json(const struct json *json, const char *name,
         || (name && strcmp(json->u.array.elems[0]->u.string, name))
         || json->u.array.elems[1]->type != value_type)
     {
+        *value = NULL;
         return ovsdb_syntax_error(json, NULL, "expected [\"%s\", <%s>]", name,
                                   json_type_to_string(value_type));
     }
