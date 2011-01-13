@@ -48,6 +48,7 @@ struct rtnetlink_notifier {
 struct rtnetlink *rtnetlink_create(int multicast_group,
                                    rtnetlink_parse_func *,
                                    void *change);
+void rtnetlink_destroy(struct rtnetlink *rtn);
 int rtnetlink_notifier_register(struct rtnetlink *,
                                 struct rtnetlink_notifier *,
                                 rtnetlink_notify_func *, void *aux);

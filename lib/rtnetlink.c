@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdlib.h>
 
 #include "coverage.h"
 #include "netlink.h"
@@ -61,6 +62,17 @@ rtnetlink_create(int multicast_group, rtnetlink_parse_func *parse,
 
     list_init(&rtn->all_notifiers);
     return rtn;
+}
+
+/* Destroys 'rtn' by freeing any memory it has reserved and closing any sockets
+ * it has opened. */
+void
+rtnetlink_destroy(struct rtnetlink *rtn)
+{
+    if (rtn) {
+        nl_sock_destroy(rtn->notify_sock);
+        free(rtn);
+    }
 }
 
 /* Registers 'cb' to be called with auxiliary data 'aux' with change
