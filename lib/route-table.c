@@ -62,9 +62,12 @@ static unsigned int register_count = 0;
 static struct rtnetlink *rtn = NULL;
 static struct route_table_msg rtmsg;
 static struct rtnetlink_notifier notifier;
+
+static bool route_table_valid = false;
 static struct hmap route_map;
 
 static int route_table_reset(void);
+static void route_table_handle_msg(const struct route_table_msg *);
 static bool route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
 static struct route_node *route_node_lookup(const struct route_data *);
@@ -85,6 +88,10 @@ route_table_get_ifindex(ovs_be32 ip_, int *ifindex)
     uint32_t ip = ntohl(ip_);
 
     *ifindex = 0;
+
+    if (!route_table_valid) {
+        route_table_reset();
+    }
 
     rn = route_node_lookup_by_ip(ip);
 
@@ -173,6 +180,7 @@ route_table_reset(void)
     static struct nl_sock *rtnl_sock;
 
     route_map_clear();
+    route_table_valid = true;
 
     error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
     if (error) {
@@ -194,7 +202,7 @@ route_table_reset(void)
         struct route_table_msg msg;
 
         if (route_table_parse(&reply, &msg)) {
-            route_table_change(&msg, NULL);
+            route_table_handle_msg(&msg);
         }
     }
 
@@ -260,35 +268,23 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 }
 
 static void
-route_table_change(const struct route_table_msg *change, void *aux OVS_UNUSED)
+route_table_change(const struct route_table_msg *change OVS_UNUSED,
+                   void *aux OVS_UNUSED)
 {
-    if (!change) {
-        VLOG_DBG_RL(&rl, "received NULL change message");
-        route_table_reset();
-    } else if (!change->relevant) {
-        VLOG_DBG_RL(&rl, "ignoring irrelevant change message");
-    } else if (change->nlmsg_type == RTM_NEWROUTE) {
-        if (!route_node_lookup(&change->rd)) {
-            struct route_node *rn;
+    route_table_valid = false;
+}
 
-            rn = xzalloc(sizeof *rn);
-            memcpy(&rn->rd, &change->rd, sizeof change->rd);
-
-            hmap_insert(&route_map, &rn->node, hash_route_data(&rn->rd));
-        } else {
-            VLOG_DBG_RL(&rl, "skipping insertion of duplicate route entry");
-        }
-    } else if (change->nlmsg_type == RTM_DELROUTE) {
+static void
+route_table_handle_msg(const struct route_table_msg *change)
+{
+    if (change->relevant && change->nlmsg_type == RTM_NEWROUTE &&
+        !route_node_lookup(&change->rd)) {
         struct route_node *rn;
 
-        rn = route_node_lookup(&change->rd);
+        rn = xzalloc(sizeof *rn);
+        memcpy(&rn->rd, &change->rd, sizeof change->rd);
 
-        if (rn) {
-            hmap_remove(&route_map, &rn->node);
-            free(rn);
-        } else {
-            VLOG_DBG_RL(&rl, "skipping deletion of non-existent route entry");
-        }
+        hmap_insert(&route_map, &rn->node, hash_route_data(&rn->rd));
     }
 }
 
