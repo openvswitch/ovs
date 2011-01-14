@@ -166,16 +166,12 @@ function hup_monitor_external_ids {
     fi
 }
 
-function dp_list {
-    "$dpctl" show | grep '^dp[0-9]\+:' | cut -d':' -f 1
-}
-
 function turn_on_corefiles {
     ulimit -Sc 67108864
 }
 
 function remove_all_dp {
-    for dp in $(dp_list); do
+    for dp in $($dpctl dump-dps); do
         action "Removing datapath: $dp" "$dpctl" del-dp "$dp"
     done
 }
