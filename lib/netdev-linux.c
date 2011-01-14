@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1009,31 +1009,45 @@ exit:
 }
 
 static int
-netdev_linux_get_miimon(const struct netdev *netdev_, bool *miimon)
+netdev_linux_do_miimon(const struct netdev *netdev, int cmd,
+                       const char *cmd_name, struct mii_ioctl_data *data)
 {
-    int error;
     struct ifreq ifr;
-    const char *name = netdev_get_name(netdev_);
+    int error;
+
+    memset(&ifr, 0, sizeof ifr);
+    memcpy(&ifr.ifr_data, data, sizeof *data);
+    error = netdev_linux_do_ioctl(netdev_get_name(netdev),
+                                  &ifr, cmd, cmd_name);
+    memcpy(data, &ifr.ifr_data, sizeof *data);
+
+    return error;
+}
+
+static int
+netdev_linux_get_miimon(const struct netdev *netdev, bool *miimon)
+{
+    const char *name = netdev_get_name(netdev);
+    struct mii_ioctl_data data;
+    int error;
 
     *miimon = false;
-    memset(&ifr, 0, sizeof ifr);
 
-    error = netdev_linux_do_ioctl(name, &ifr, SIOCGMIIPHY, "SIOCGMIIPHY");
+    memset(&data, 0, sizeof data);
+    error = netdev_linux_do_miimon(netdev, SIOCGMIIPHY, "SIOCGMIIPHY", &data);
     if (!error) {
-        struct mii_ioctl_data *data = (struct mii_ioctl_data *)&ifr.ifr_data;
-
-        /* data->phy_id is filled out by previous SIOCGMIIPHY ioctl call. */
-        data->reg_num = MII_BMSR;
-        error = netdev_linux_do_ioctl(name, &ifr, SIOCGMIIREG, "SIOCGMIIREG");
+        /* data.phy_id is filled out by previous SIOCGMIIPHY miimon call. */
+        data.reg_num = MII_BMSR;
+        error = netdev_linux_do_miimon(netdev, SIOCGMIIREG, "SIOCGMIIREG",
+                                       &data);
 
         if (!error) {
-            *miimon = !!(data->val_out & BMSR_LSTATUS);
+            *miimon = !!(data.val_out & BMSR_LSTATUS);
         } else {
             VLOG_WARN_RL(&rl, "%s: failed to query MII", name);
         }
     } else {
         struct ethtool_cmd ecmd;
-        struct ethtool_value *eval = (struct ethtool_value *) &ecmd;
 
         VLOG_DBG_RL(&rl, "%s: failed to query MII, falling back to ethtool",
                     name);
@@ -1042,7 +1056,10 @@ netdev_linux_get_miimon(const struct netdev *netdev_, bool *miimon)
         error = netdev_linux_do_ethtool(name, &ecmd, ETHTOOL_GLINK,
                                         "ETHTOOL_GLINK");
         if (!error) {
-            *miimon = !!eval->data;
+            struct ethtool_value eval;
+
+            memcpy(&eval, &ecmd, sizeof eval);
+            *miimon = !!eval.data;
         } else {
             VLOG_WARN_RL(&rl, "%s: ethtool link status failed", name);
         }
