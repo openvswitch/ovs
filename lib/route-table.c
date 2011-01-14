@@ -46,6 +46,7 @@ struct route_data {
 /* A digested version of a route message sent down by the kernel to indicate
  * that a route has changed. */
 struct route_table_msg {
+    bool relevant;        /* Should this message be processed? */
     int nlmsg_type;       /* e.g. RTM_NEWROUTE, RTM_DELROUTE. */
     struct route_data rd; /* Data parsed from this message. */
 };
@@ -232,6 +233,16 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         }
 
         memset(change, 0, sizeof *change);
+        change->relevant = true;
+
+        if (rtm->rtm_scope == RT_SCOPE_NOWHERE) {
+            change->relevant = false;
+        }
+
+        if (rtm->rtm_type != RTN_UNICAST &&
+            rtm->rtm_type != RTN_LOCAL) {
+            change->relevant = false;
+        }
 
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->rd.rtm_dst_len = rtm->rtm_dst_len;
@@ -254,6 +265,8 @@ route_table_change(const struct route_table_msg *change, void *aux OVS_UNUSED)
     if (!change) {
         VLOG_DBG_RL(&rl, "received NULL change message");
         route_table_reset();
+    } else if (!change->relevant) {
+        VLOG_DBG_RL(&rl, "ignoring irrelevant change message");
     } else if (change->nlmsg_type == RTM_NEWROUTE) {
         if (!route_node_lookup(&change->rd)) {
             struct route_node *rn;
