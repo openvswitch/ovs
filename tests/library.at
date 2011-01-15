@@ -22,6 +22,10 @@ AT_SETUP([test linked lists])
 AT_CHECK([test-list], [0], [ignore])
 AT_CLEANUP
 
+AT_SETUP([test packet library])
+AT_CHECK([test-packets])
+AT_CLEANUP
+
 AT_SETUP([test SHA-1])
 AT_CHECK([test-sha1], [0], [ignore])
 AT_CLEANUP

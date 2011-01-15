@@ -20,6 +20,7 @@
 /test-lockfile
 /test-multipath
 /test-ovsdb
+/test-packets
 /test-random
 /test-reconnect
 /test-strtok_r
