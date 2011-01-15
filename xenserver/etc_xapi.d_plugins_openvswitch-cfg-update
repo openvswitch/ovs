@@ -4,7 +4,7 @@
 # ovs-vswitchd configuration that are managed in the xapi database when 
 # integrated with Citrix management tools.
 
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ def update(session, args):
             controller = pool["other_config"]["vSwitchController"]
     except KeyError, e:
         controller = ""
+    ret_str = ""
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
         delete_cacert()
@@ -72,7 +73,7 @@ def update(session, args):
         except:
             pass
         removeControllerCfg()
-        return "Successfully removed controller config"
+        ret_str += "Successfully removed controller config.  "
     elif controller != currentController:
         delete_cacert()
         try:
@@ -80,7 +81,39 @@ def update(session, args):
         except:
             pass
         setControllerCfg(controller)
-        return "Successfully set controller to " + controller
+        ret_str += "Successfully set controller to %s.  " % controller
+
+    try:
+        fail_mode = pool["other_config"]["vswitch-controller-fail-mode"]
+    except KeyError, e:
+        fail_mode = None
+
+    if fail_mode != 'secure':
+        fail_mode = 'standalone'
+
+    fail_mode_changed = False
+    for (p, rec) in session.xenapi.PIF.get_all_records().items():
+        try:
+            network = session.xenapi.network.get_record(rec['network'])
+            bridge = network['bridge']
+        except Exception, e:
+            syslog.syslog("%s: failed to get bridge name (%s)" %
+                    (script, str(e)))
+            continue
+
+        bridge_fail_mode = vswitchCfgQuery(["get", "Bridge",
+            bridge, "fail_mode"]).strip('[]"')
+
+        if bridge_fail_mode != fail_mode:
+            vswitchCfgMod(['--', 'set', 'Bridge', bridge,
+                "fail_mode=%s" % fail_mode])
+            fail_mode_changed = True
+
+    if fail_mode_changed:
+        ret_str += "Set fail_mode to %s.  " % fail_mode
+
+    if ret_str != '':
+        return ret_str
     else:
         return "No change to configuration"
 
