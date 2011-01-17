@@ -131,7 +131,7 @@ int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
 int dpif_flow_del(struct dpif *,
                   const struct nlattr *key, size_t key_len,
                   struct dpif_flow_stats *);
-int dpif_flow_get(const struct dpif *, int flags,
+int dpif_flow_get(const struct dpif *,
                   const struct nlattr *key, size_t key_len,
                   struct ofpbuf **actionsp, struct dpif_flow_stats *);
 

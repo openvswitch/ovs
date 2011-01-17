@@ -470,7 +470,7 @@ odp_flow_stats_to_dpif_flow_stats(const struct odp_flow_stats *ofs,
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_, int flags,
+dpif_linux_flow_get(const struct dpif *dpif_,
                     const struct nlattr *key, size_t key_len,
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
@@ -486,7 +486,6 @@ dpif_linux_flow_get(const struct dpif *dpif_, int flags,
         odp_flow.actions = actions->base;
         odp_flow.actions_len = actions->allocated;
     }
-    odp_flow.flags = flags;
 
     error = do_ioctl(dpif_, ODP_FLOW_GET, &odp_flow);
     if (!error) {
@@ -519,7 +518,6 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     put.flow.key_len = key_len;
     put.flow.actions = (struct nlattr *) actions;
     put.flow.actions_len = actions_len;
-    put.flow.flags = 0;
     put.flags = 0;
     if (flags & DPIF_FP_CREATE) {
         put.flags |= ODPPF_CREATE;
@@ -594,7 +592,7 @@ dpif_linux_flow_dump_next(const struct dpif *dpif, void *state_,
 
     error = do_ioctl(dpif, ODP_FLOW_DUMP, &state->dump);
     if (!error) {
-        if (state->flow.flags & ODPFF_EOF) {
+        if (!state->flow.key_len) {
             return EOF;
         }
         if (key) {

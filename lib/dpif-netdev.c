@@ -656,7 +656,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 }
 
 static int
-dpif_netdev_flow_get(const struct dpif *dpif, int flags,
+dpif_netdev_flow_get(const struct dpif *dpif,
                      const struct nlattr *nl_key, size_t nl_key_len,
                      struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
@@ -680,9 +680,6 @@ dpif_netdev_flow_get(const struct dpif *dpif, int flags,
     }
     if (actionsp) {
         *actionsp = ofpbuf_clone_data(flow->actions, flow->actions_len);
-    }
-    if (flags & ODPFF_ZERO_TCP_FLAGS) {
-        flow->tcp_ctl = 0;
     }
     return 0;
 }

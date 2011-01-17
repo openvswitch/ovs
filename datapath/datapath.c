@@ -927,7 +927,6 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 }
 
 static int do_answer_query(struct datapath *dp, struct sw_flow *flow,
-			   u32 query_flags,
 			   struct odp_flow_stats __user *ustats,
 			   struct nlattr __user *actions,
 			   u32 __user *actions_lenp)
@@ -938,9 +937,6 @@ static int do_answer_query(struct datapath *dp, struct sw_flow *flow,
 
 	spin_lock_bh(&flow->lock);
 	get_stats(flow, &stats);
-	if (query_flags & ODPFF_ZERO_TCP_FLAGS)
-		flow->tcp_flags = 0;
-
 	spin_unlock_bh(&flow->lock);
 
 	if (copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
@@ -961,15 +957,14 @@ static int do_answer_query(struct datapath *dp, struct sw_flow *flow,
 }
 
 static int answer_query(struct datapath *dp, struct sw_flow *flow,
-			u32 query_flags, struct odp_flow __user *ufp)
+			struct odp_flow __user *ufp)
 {
 	struct nlattr __user *actions;
 
 	if (get_user(actions, (struct nlattr __user * __user *)&ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(dp, flow, query_flags, 
-			       &ufp->stats, actions, &ufp->actions_len);
+	return do_answer_query(dp, flow, &ufp->stats, actions, &ufp->actions_len);
 }
 
 static struct sw_flow *do_del_flow(struct datapath *dp, const struct nlattr __user *key, u32 key_len)
@@ -1011,7 +1006,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = answer_query(dp, flow, 0, ufp);
+	error = answer_query(dp, flow, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1034,7 +1029,7 @@ static int query_flow(struct datapath *dp, struct odp_flow __user *uflow)
 	flow_node = tbl_lookup(table, &flow.key, flow_hash(&key), flow_cmp);
 	if (!flow_node)
 		return -ENOENT;
-	return answer_query(dp, flow_cast(flow_node), flow.flags, uflow);
+	return answer_query(dp, flow_cast(flow_node), uflow);
 }
 
 static struct sw_flow *do_dump_flow(struct datapath *dp, u32 __user *state)
@@ -1069,10 +1064,9 @@ static int dump_flow(struct datapath *dp, struct odp_flow_dump __user *udumpp)
 		return -EFAULT;
 
 	if (!flow)
-		return put_user(ODPFF_EOF, &uflowp->flags);
+		return put_user(0, &uflowp->key_len);
 
-	if (put_user(0, &uflowp->flags) ||
-	    get_user(ukey, (struct nlattr __user * __user*)&uflowp->key) ||
+	if (get_user(ukey, (struct nlattr __user * __user*)&uflowp->key) ||
 	    get_user(key_len, &uflowp->key_len))
 		return -EFAULT;
 
@@ -1082,7 +1076,7 @@ static int dump_flow(struct datapath *dp, struct odp_flow_dump __user *udumpp)
 	if (put_user(key_len, &uflowp->key_len))
 		return -EFAULT;
 
-	return answer_query(dp, flow, 0, uflowp);
+	return answer_query(dp, flow, uflowp);
 }
 
 static int do_execute(struct datapath *dp, const struct odp_execute *execute)
@@ -1778,8 +1772,7 @@ static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow _
 	    __get_user(key, &compat->key) ||
 	    __get_user(flow->key_len, &compat->key_len) ||
 	    __get_user(actions, &compat->actions) ||
-	    __get_user(flow->actions_len, &compat->actions_len) ||
-	    __get_user(flow->flags, &compat->flags))
+	    __get_user(flow->actions_len, &compat->actions_len))
 		return -EFAULT;
 
 	flow->key = (struct nlattr __force *)compat_ptr(key);
@@ -1809,7 +1802,6 @@ static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __use
 }
 
 static int compat_answer_query(struct datapath *dp, struct sw_flow *flow,
-			       u32 query_flags,
 			       struct compat_odp_flow __user *ufp)
 {
 	compat_uptr_t actions;
@@ -1817,7 +1809,7 @@ static int compat_answer_query(struct datapath *dp, struct sw_flow *flow,
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
-	return do_answer_query(dp, flow, query_flags, &ufp->stats,
+	return do_answer_query(dp, flow, &ufp->stats,
 			       compat_ptr(actions), &ufp->actions_len);
 }
 
@@ -1834,7 +1826,7 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
-	error = compat_answer_query(dp, flow, 0, ufp);
+	error = compat_answer_query(dp, flow, ufp);
 	flow_deferred_free(flow);
 	return error;
 }
@@ -1857,7 +1849,7 @@ static int compat_query_flow(struct datapath *dp, struct compat_odp_flow __user 
 	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
 	if (!flow_node)
 		return -ENOENT;
-	return compat_answer_query(dp, flow_cast(flow_node), flow.flags, uflow);
+	return compat_answer_query(dp, flow_cast(flow_node), uflow);
 }
 
 static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __user *udumpp)
@@ -1877,10 +1869,9 @@ static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __u
 	uflowp = compat_ptr(compat_ufp);
 
 	if (!flow)
-		return put_user(ODPFF_EOF, &uflowp->flags);
+		return put_user(0, &uflowp->key_len);
 
-	if (put_user(0, &uflowp->flags) ||
-	    get_user(ukey, &uflowp->key) ||
+	if (get_user(ukey, &uflowp->key) ||
 	    get_user(key_len, &uflowp->key_len))
 		return -EFAULT;
 
@@ -1890,7 +1881,7 @@ static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __u
 	if (put_user(key_len, &uflowp->key_len))
 		return -EFAULT;
 
-	return compat_answer_query(dp, flow, 0, uflowp);
+	return compat_answer_query(dp, flow, uflowp);
 }
 
 static int compat_execute(struct datapath *dp, const struct compat_odp_execute __user *uexecute)

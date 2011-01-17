@@ -731,7 +731,7 @@ dpif_flow_flush(struct dpif *dpif)
  * If 'stats' is nonnull, then on success it will be updated with the flow's
  * statistics. */
 int
-dpif_flow_get(const struct dpif *dpif, int flags,
+dpif_flow_get(const struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
               struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
@@ -739,8 +739,7 @@ dpif_flow_get(const struct dpif *dpif, int flags,
 
     COVERAGE_INC(dpif_flow_get);
 
-    error = dpif->dpif_class->flow_get(dpif, flags, key, key_len, actionsp,
-                                       stats);
+    error = dpif->dpif_class->flow_get(dpif, key, key_len, actionsp, stats);
     if (error) {
         if (actionsp) {
             *actionsp = NULL;

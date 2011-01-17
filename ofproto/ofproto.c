@@ -3479,7 +3479,7 @@ query_stats(struct ofproto *p, struct rule *rule,
 
         ofpbuf_clear(&key);
         odp_flow_key_from_flow(&key, &facet->flow);
-        dpif_flow_get(p->dpif, 0, key.data, key.size, NULL, &stats);
+        dpif_flow_get(p->dpif, key.data, key.size, NULL, &stats);
 
         packet_count += stats.n_packets + facet->packet_count;
         byte_count += stats.n_bytes + facet->byte_count;

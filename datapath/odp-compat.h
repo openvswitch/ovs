@@ -28,7 +28,6 @@ struct compat_odp_flow {
 	u32 key_len;
 	compat_uptr_t actions;
 	u32 actions_len;
-	u32 flags;
 };
 
 struct compat_odp_flow_put {

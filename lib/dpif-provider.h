@@ -221,7 +221,7 @@ struct dpif_class {
      *
      * If 'stats' is nonnull, then on success it must be updated with the
      * flow's statistics. */
-    int (*flow_get)(const struct dpif *dpif, int flags,
+    int (*flow_get)(const struct dpif *dpif,
                     const struct nlattr *key, size_t key_len,
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats);
 

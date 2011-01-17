@@ -271,17 +271,12 @@ struct odp_key_arp {
 	ovs_be16 arp_op;
 };
 
-/* Flags for ODP_FLOW. */
-#define ODPFF_ZERO_TCP_FLAGS (1 << 0) /* Zero the TCP flags. */
-#define ODPFF_EOF            (1 << 1) /* ODP_FLOW_DUMP: end of flow table. */
-
 struct odp_flow {
     struct odp_flow_stats stats;
     struct nlattr *key;
     uint32_t key_len;
     struct nlattr *actions;
     uint32_t actions_len;
-    uint32_t flags;
 };
 
 /* Flags for ODP_FLOW_PUT. */
@@ -298,9 +293,9 @@ struct odp_flow_put {
 /* ODP_FLOW_DUMP argument.
  *
  * This is used to iterate through the flow table flow-by-flow.  Each
- * ODP_FLOW_DUMP call either stores a new odp_flow into 'flow' or stores
- * ODPFF_EOF into flow->flags to indicate that the end of the table has been
- * reaches, and updates 'state' in-place.
+ * ODP_FLOW_DUMP call either stores a new odp_flow into 'flow' or stores 0 into
+ * flow->key_len to indicate that the end of the table has been reached, and
+ * updates 'state' in-place.
  *
  * Before the first call, zero 'state'.  The format of 'state' is otherwise
  * unspecified.
