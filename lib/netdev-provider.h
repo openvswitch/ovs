@@ -295,7 +295,7 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP.
      */
-    int (*get_features)(struct netdev *netdev,
+    int (*get_features)(const struct netdev *netdev,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
 

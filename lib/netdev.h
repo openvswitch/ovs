@@ -127,7 +127,7 @@ int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
 /* PHY interface. */
 bool netdev_get_carrier(const struct netdev *);
 bool netdev_get_miimon(const struct netdev *);
-int netdev_get_features(struct netdev *,
+int netdev_get_features(const struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
 uint64_t netdev_features_to_bps(uint32_t features);

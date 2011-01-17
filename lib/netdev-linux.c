@@ -1201,7 +1201,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
  * successful, otherwise a positive errno value. */
 static int
-netdev_linux_get_features(struct netdev *netdev,
+netdev_linux_get_features(const struct netdev *netdev,
                           uint32_t *current, uint32_t *advertised,
                           uint32_t *supported, uint32_t *peer)
 {

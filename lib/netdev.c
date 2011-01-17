@@ -618,11 +618,11 @@ netdev_get_ifindex(const struct netdev *netdev)
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_get_features(struct netdev *netdev,
+netdev_get_features(const struct netdev *netdev,
                     uint32_t *current, uint32_t *advertised,
                     uint32_t *supported, uint32_t *peer)
 {
-    int (*get_features)(struct netdev *netdev,
+    int (*get_features)(const struct netdev *netdev,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
     uint32_t dummy[4];
