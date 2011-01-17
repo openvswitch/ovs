@@ -1120,6 +1120,13 @@ iface_refresh_status(struct iface *iface)
 {
     struct shash sh;
 
+    enum netdev_flags flags;
+    uint32_t current;
+    int64_t bps;
+    int mtu;
+    int64_t mtu_64;
+    int error;
+
     shash_init(&sh);
 
     if (!netdev_get_status(iface->netdev, &sh)) {
@@ -1136,6 +1143,42 @@ iface_refresh_status(struct iface *iface)
     }
 
     shash_destroy_free_data(&sh);
+
+    error = netdev_get_flags(iface->netdev, &flags);
+    if (!error) {
+        ovsrec_interface_set_admin_state(iface->cfg, flags & NETDEV_UP ? "up" : "down");
+    }
+    else {
+        ovsrec_interface_set_admin_state(iface->cfg, NULL);
+    }
+
+    error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
+    if (!error) {
+        ovsrec_interface_set_duplex(iface->cfg,
+                                    netdev_features_is_full_duplex(current)
+                                    ? "full" : "half");
+        /* warning: uint64_t -> int64_t conversion */
+        bps = netdev_features_to_bps(current);
+        ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
+    }
+    else {
+        ovsrec_interface_set_duplex(iface->cfg, NULL);
+        ovsrec_interface_set_link_speed(iface->cfg, NULL, 0);
+    }
+
+
+    ovsrec_interface_set_link_state(iface->cfg,
+                                    netdev_get_carrier(iface->netdev)
+                                    ? "up" : "down");
+
+    error = netdev_get_mtu(iface->netdev, &mtu);
+    if (!error) {
+        mtu_64 = mtu;
+        ovsrec_interface_set_mtu(iface->cfg, &mtu_64, 1);
+    }
+    else {
+        ovsrec_interface_set_mtu(iface->cfg, NULL, 0);
+    }
 }
 
 static void

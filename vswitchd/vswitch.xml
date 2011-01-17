@@ -982,18 +982,77 @@
         Configuration options whose interpretation varies based on
         <ref column="type"/>.
       </column>
+    </group>
+
+    <group title="Interface Status">
+      <p>
+        Status information about interfaces attached to bridges, updated every
+        5 seconds.  Not all interfaces have all of these properties; virtual
+        interfaces don't have a link speed, for example.  Non-applicable
+        columns will have empty values.
+      </p>
+      <column name="admin_state">
+        <p>
+          The administrative state of the physical network link.
+        </p>
+      </column>
+
+      <column name="link_state">
+        <p>
+          The observed state of the physical network link;
+          i.e. whether a carrier is detected by the interface.
+        </p>
+      </column>
+
+      <column name="link_speed">
+        <p>
+          The negotiated speed of the physical network link.
+          Valid values are positive integers greater than 0.
+        </p>
+      </column>
+
+      <column name="duplex">
+        <p>
+          The duplex mode of the physical network link.
+        </p>
+      </column>
+
+      <column name="mtu">
+        <p>
+          The MTU (maximum transmission unit); i.e. the largest
+          amount of data that can fit into a single Ethernet frame.
+          The standard Ethernet MTU is 1500 bytes.  Some physical media
+          and many kinds of virtual interfaces can be configured with
+          higher MTUs.
+        </p>
+      </column>
 
       <column name="status">
         <p>
           Key-value pairs that report port status.  Supported status
-          values are <code>type</code>-dependent.
+          values are <code>type</code>-dependent; some interfaces may not have
+          a valid <code>driver_name</code>, for example.
         </p>
         <p>The currently defined key-value pairs are:</p>
         <dl>
+          <dt><code>driver_name</code></dt>
+          <dd>The name of the device driver controlling the network
+            adapter.</dd>
+        </dl>
+        <dl>
+          <dt><code>driver_version</code></dt>
+          <dd>The version string of the device driver controlling the
+            network adapter.</dd>
+        </dl>
+        <dl>
+          <dt><code>firmware_version</code></dt>
+          <dd>The version string of the network adapter's firmware, if
+            available.</dd>
+        </dl>
+        <dl>
           <dt><code>source_ip</code></dt>
           <dd>The source IP address used for an IPv4 tunnel end-point,
-            such as <code>gre</code> or <code>capwap</code>.  Not
-            supported by all implementations.</dd>
+            such as <code>gre</code> or <code>capwap</code>.</dd>
         </dl>
         <dl>
             <dt><code>tunnel_egress_iface</code></dt>

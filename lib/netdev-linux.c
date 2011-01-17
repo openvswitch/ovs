@@ -2025,6 +2025,26 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
     return ENXIO;
 }
 
+static int
+netdev_linux_get_status(const struct netdev *netdev, struct shash *sh)
+{
+    struct ethtool_drvinfo drvinfo;
+    int error;
+
+    memset(&drvinfo, 0, sizeof drvinfo);
+    error = netdev_linux_do_ethtool(netdev_get_name(netdev),
+                                    (struct ethtool_cmd *)&drvinfo,
+                                    ETHTOOL_GDRVINFO,
+                                    "ETHTOOL_GDRVINFO");
+    if (!error) {
+        shash_add(sh, "driver_name", xstrdup(drvinfo.driver));
+        shash_add(sh, "driver_version", xstrdup(drvinfo.version));
+        shash_add(sh, "firmware_version", xstrdup(drvinfo.fw_version));
+    }
+
+    return error;
+}
+
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
  * successfully retrieved, it stores the corresponding MAC address in 'mac' and
  * returns 0.  Otherwise, it returns a positive errno value; in particular,
@@ -2238,7 +2258,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     netdev_linux_get_in6,                                       \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
-    NULL,                       /* get_status */                \
+    netdev_linux_get_status,                                    \
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
