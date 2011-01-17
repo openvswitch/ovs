@@ -723,10 +723,7 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
     COVERAGE_INC(dpif_flow_get);
 
     check_rw_flow_actions(flow);
-    error = dpif->dpif_class->flow_get(dpif, flow, 1);
-    if (!error) {
-        error = flow->stats.error;
-    }
+    error = dpif->dpif_class->flow_get(dpif, flow);
     if (error) {
         /* Make the results predictable on error. */
         memset(&flow->stats, 0, sizeof flow->stats);
@@ -735,51 +732,6 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
     if (should_log_flow_message(error)) {
         log_flow_operation(dpif, "flow_get", error, flow);
     }
-    return error;
-}
-
-/* For each flow 'flow' in the 'n' flows in 'flows':
- *
- * - If a flow matching 'flow->key' exists in 'dpif':
- *
- *     Stores 0 into 'flow->stats.error' and stores statistics for the flow
- *     into 'flow->stats'.
- *
- *     If 'flow->actions_len' is zero, then 'flow->actions' is ignored.  If
- *     'flow->actions_len' is nonzero, then 'flow->actions' should point to an
- *     array of the specified number of bytes.  At most that amount of flow's
- *     actions will be copied into that array.  'flow->actions_len' will be
- *     updated to the number of bytes of actions actually present in the flow,
- *     which may be greater than the amount stored if the flow's actions are
- *     longer than the available space.
- *
- * - Flow-specific errors are indicated by a positive errno value in
- *   'flow->stats.error'.  In particular, ENOENT indicates that no flow
- *   matching 'flow->key' exists in 'dpif'.  When an error value is stored, the
- *   contents of 'flow->key' are preserved but other members of 'flow' should
- *   be treated as indeterminate.
- *
- * Returns 0 if all 'n' flows in 'flows' were updated (whether they were
- * individually successful or not is indicated by 'flow->stats.error',
- * however).  Returns a positive errno value if an error that prevented this
- * update occurred, in which the caller must not depend on any elements in
- * 'flows' being updated or not updated.
- */
-int
-dpif_flow_get_multiple(const struct dpif *dpif,
-                       struct odp_flow flows[], size_t n)
-{
-    int error;
-    size_t i;
-
-    COVERAGE_ADD(dpif_flow_get, n);
-
-    for (i = 0; i < n; i++) {
-        check_rw_flow_actions(&flows[i]);
-    }
-
-    error = dpif->dpif_class->flow_get(dpif, flows, n);
-    log_operation(dpif, "flow_get_multiple", error);
     return error;
 }
 

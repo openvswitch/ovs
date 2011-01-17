@@ -207,34 +207,21 @@ struct dpif_class {
      * value other than EAGAIN. */
     void (*port_poll_wait)(const struct dpif *dpif);
 
-    /* For each flow 'flow' in the 'n' flows in 'flows':
+    /* Queries 'dpif' for a flow entry matching 'flow->key'.
      *
-     * - If a flow matching 'flow->key' exists in 'dpif':
+     * If a flow matching 'flow->key' exists in 'dpif', stores statistics for
+     * the flow into 'flow->stats'.  If 'flow->actions_len' is zero, then
+     * 'flow->actions' is ignored.  If 'flow->actions_len' is nonzero, then
+     * 'flow->actions' should point to an array of the specified number of
+     * bytes.  At most that many bytes of the flow's actions will be copied
+     * into that array.  'flow->actions_len' will be updated to the number of
+     * bytes of actions actually present in the flow, which may be greater than
+     * the amount stored if the flow has more actions than space available in
+     * the array.
      *
-     *     Stores 0 into 'flow->stats.error' and stores statistics for the flow
-     *     into 'flow->stats'.
-     *
-     *     If 'flow->n_actions' is zero, then 'flow->actions' is ignored.  If
-     *     'flow->n_actions' is nonzero, then 'flow->actions' should point to
-     *     an array of the specified number of actions.  At most that many of
-     *     the flow's actions will be copied into that array.
-     *     'flow->n_actions' will be updated to the number of actions actually
-     *     present in the flow, which may be greater than the number stored if
-     *     the flow has more actions than space available in the array.
-     *
-     * - Flow-specific errors are indicated by a positive errno value in
-     *   'flow->stats.error'.  In particular, ENOENT indicates that no flow
-     *   matching 'flow->key' exists in 'dpif'.  When an error value is stored,
-     *   the contents of 'flow->key' are preserved but other members of 'flow'
-     *   should be treated as indeterminate.
-     *
-     * Returns 0 if all 'n' flows in 'flows' were updated (whether they were
-     * individually successful or not is indicated by 'flow->stats.error',
-     * however).  Returns a positive errno value if an error that prevented
-     * this update occurred, in which the caller must not depend on any
-     * elements in 'flows' being updated or not updated.
-     */
-    int (*flow_get)(const struct dpif *dpif, struct odp_flow flows[], int n);
+     * If no flow matching 'flow->key' exists in 'dpif', returns ENOENT.  On
+     * other failure, returns a positive errno value. */
+    int (*flow_get)(const struct dpif *dpif, struct odp_flow *flow);
 
     /* Adds or modifies a flow in 'dpif' as specified in 'put':
      *

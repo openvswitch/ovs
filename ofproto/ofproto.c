@@ -3487,9 +3487,7 @@ query_stats(struct ofproto *p, struct rule *rule,
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
 
-    /* Ask the datapath for statistics on all of the rule's facets.  (We could
-     * batch up statistics requests using dpif_flow_get_multiple(), but that is
-     * not yet implemented.)
+    /* Ask the datapath for statistics on all of the rule's facets.
      *
      * Also, add any statistics that are not tracked by the datapath for each
      * facet.  This includes, for example, statistics for packets that were

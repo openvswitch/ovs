@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -15,7 +15,7 @@
 #include "openvswitch/datapath-protocol.h"
 #include <linux/compat.h>
 
-#define ODP_FLOW_GET32		_IOWR('O', 13, struct compat_odp_flowvec)
+#define ODP_FLOW_GET32		_IOWR('O', 13, struct compat_odp_flow)
 #define ODP_FLOW_PUT32		_IOWR('O', 14, struct compat_odp_flow)
 #define ODP_FLOW_DUMP32		_IOWR('O', 15, struct compat_odp_flow_dump)
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
@@ -39,11 +39,6 @@ struct compat_odp_flow_put {
 struct compat_odp_flow_dump {
 	compat_uptr_t flow;
 	uint32_t state[2];
-};
-
-struct compat_odp_flowvec {
-	compat_uptr_t flows;
-	u32 n_flows;
 };
 
 struct compat_odp_execute {

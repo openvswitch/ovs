@@ -459,12 +459,9 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_, struct odp_flow flows[], int n)
+dpif_linux_flow_get(const struct dpif *dpif_, struct odp_flow *flow)
 {
-    struct odp_flowvec fv;
-    fv.flows = flows;
-    fv.n_flows = n;
-    return do_ioctl(dpif_, ODP_FLOW_GET, &fv);
+    return do_ioctl(dpif_, ODP_FLOW_GET, flow);
 }
 
 static int

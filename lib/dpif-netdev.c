@@ -625,26 +625,20 @@ static void
 answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
                   struct odp_flow *odp_flow)
 {
-    if (flow) {
-        odp_flow->stats.n_packets = flow->packet_count;
-        odp_flow->stats.n_bytes = flow->byte_count;
-        odp_flow->stats.used_sec = flow->used.tv_sec;
-        odp_flow->stats.used_nsec = flow->used.tv_nsec;
-        odp_flow->stats.tcp_flags = TCP_FLAGS(flow->tcp_ctl);
-        odp_flow->stats.reserved = 0;
-        odp_flow->stats.error = 0;
-        if (odp_flow->actions_len > 0) {
-            memcpy(odp_flow->actions, flow->actions,
-                   MIN(odp_flow->actions_len, flow->actions_len));
-            odp_flow->actions_len = flow->actions_len;
-        }
+    odp_flow->stats.n_packets = flow->packet_count;
+    odp_flow->stats.n_bytes = flow->byte_count;
+    odp_flow->stats.used_sec = flow->used.tv_sec;
+    odp_flow->stats.used_nsec = flow->used.tv_nsec;
+    odp_flow->stats.tcp_flags = TCP_FLAGS(flow->tcp_ctl);
+    odp_flow->stats.reserved = 0;
+    if (odp_flow->actions_len > 0) {
+        memcpy(odp_flow->actions, flow->actions,
+               MIN(odp_flow->actions_len, flow->actions_len));
+        odp_flow->actions_len = flow->actions_len;
+    }
 
-        if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
-            flow->tcp_ctl = 0;
-        }
-
-    } else {
-        odp_flow->stats.error = ENOENT;
+    if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+        flow->tcp_ctl = 0;
     }
 }
 
@@ -675,25 +669,25 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 }
 
 static int
-dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
+dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow *odp_flow)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    int i;
+    struct dp_netdev_flow *flow;
+    struct flow key;
+    int error;
 
-    for (i = 0; i < n; i++) {
-        struct odp_flow *odp_flow = &flows[i];
-        struct flow key;
-        int error;
-
-        error = dpif_netdev_flow_from_nlattrs(odp_flow->key, odp_flow->key_len,
-                                              &key);
-        if (error) {
-            return error;
-        }
-
-        answer_flow_query(dp_netdev_lookup_flow(dp, &key),
-                          odp_flow->flags, odp_flow);
+    error = dpif_netdev_flow_from_nlattrs(odp_flow->key, odp_flow->key_len,
+                                          &key);
+    if (error) {
+        return error;
     }
+
+    flow = dp_netdev_lookup_flow(dp, &key);
+    if (!flow) {
+        return ENOENT;
+    }
+
+    answer_flow_query(flow, odp_flow->flags, odp_flow);
     return 0;
 }
 

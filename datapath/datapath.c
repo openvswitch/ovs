@@ -779,7 +779,6 @@ static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats)
 	stats->n_bytes = flow->byte_count;
 	stats->reserved = 0;
 	stats->tcp_flags = flow->tcp_flags;
-	stats->error = 0;
 }
 
 static void clear_stats(struct sw_flow *flow)
@@ -1017,55 +1016,25 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	return error;
 }
 
-static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
+static int query_flow(struct datapath *dp, struct odp_flow __user *uflow)
 {
 	struct tbl *table = get_table_protected(dp);
-	u32 i;
+	struct tbl_node *flow_node;
+	struct sw_flow_key key;
+	struct odp_flow flow;
+	int error;
 
-	for (i = 0; i < flowvec->n_flows; i++) {
-		struct odp_flow __user *ufp = (struct odp_flow __user __force *)&flowvec->flows[i];
-		struct sw_flow_key key;
-		struct odp_flow uf;
-		struct tbl_node *flow_node;
-		int error;
-
-		if (copy_from_user(&uf, ufp, sizeof(uf)))
-			return -EFAULT;
-
-		error = flow_copy_from_user(&key, (const struct nlattr __force __user *)uf.key, uf.key_len);
-		if (error)
-			return error;
-
-		flow_node = tbl_lookup(table, &uf.key, flow_hash(&key), flow_cmp);
-		if (!flow_node)
-			error = put_user(ENOENT, &ufp->stats.error);
-		else
-			error = answer_query(dp, flow_cast(flow_node), uf.flags, ufp);
-		if (error)
-			return -EFAULT;
-	}
-	return flowvec->n_flows;
-}
-
-static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
-			    int (*function)(struct datapath *,
-					    const struct odp_flowvec *))
-{
-	struct odp_flowvec __user *uflowvec;
-	struct odp_flowvec flowvec;
-	int retval;
-
-	uflowvec = (struct odp_flowvec __user *)argp;
-	if (copy_from_user(&flowvec, uflowvec, sizeof(flowvec)))
+	if (copy_from_user(&flow, uflow, sizeof(flow)))
 		return -EFAULT;
 
-	if (flowvec.n_flows > INT_MAX / sizeof(struct odp_flow))
-		return -EINVAL;
+	error = flow_copy_from_user(&key, (const struct nlattr __force __user *)flow.key, flow.key_len);
+	if (error)
+		return error;
 
-	retval = function(dp, &flowvec);
-	return (retval < 0 ? retval
-		: retval == flowvec.n_flows ? 0
-		: put_user(retval, &uflowvec->n_flows));
+	flow_node = tbl_lookup(table, &flow.key, flow_hash(&key), flow_cmp);
+	if (!flow_node)
+		return -ENOENT;
+	return answer_query(dp, flow_cast(flow_node), flow.flags, uflow);
 }
 
 static struct sw_flow *do_dump_flow(struct datapath *dp, u32 __user *state)
@@ -1769,7 +1738,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_FLOW_GET:
-		err = do_flowvec_ioctl(dp, argp, do_query_flows);
+		err = query_flow(dp, (struct odp_flow __user *)argp);
 		break;
 
 	case ODP_FLOW_DUMP:
@@ -1870,37 +1839,25 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	return error;
 }
 
-static int compat_query_flows(struct datapath *dp,
-			      struct compat_odp_flow __user *flows,
-			      u32 n_flows)
+static int compat_query_flow(struct datapath *dp, struct compat_odp_flow __user *uflow)
 {
 	struct tbl *table = get_table_protected(dp);
-	u32 i;
+	struct tbl_node *flow_node;
+	struct sw_flow_key key;
+	struct odp_flow flow;
+	int error;
 
-	for (i = 0; i < n_flows; i++) {
-		struct compat_odp_flow __user *ufp = &flows[i];
-		struct odp_flow uf;
-		struct tbl_node *flow_node;
-		struct sw_flow_key key;
-		int error;
+	if (compat_get_flow(&flow, uflow))
+		return -EFAULT;
 
-		if (compat_get_flow(&uf, ufp))
-			return -EFAULT;
+	error = flow_copy_from_user(&key, (const struct nlattr __force __user *)flow.key, flow.key_len);
+	if (error)
+		return error;
 
-		error = flow_copy_from_user(&key, (const struct nlattr __force __user *) uf.key, uf.key_len);
-		if (error)
-			return error;
-
-		flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
-		if (!flow_node)
-			error = put_user(ENOENT, &ufp->stats.error);
-		else
-			error = compat_answer_query(dp, flow_cast(flow_node),
-						    uf.flags, ufp);
-		if (error)
-			return -EFAULT;
-	}
-	return n_flows;
+	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
+	if (!flow_node)
+		return -ENOENT;
+	return compat_answer_query(dp, flow_cast(flow_node), flow.flags, uflow);
 }
 
 static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __user *udumpp)
@@ -1934,35 +1891,6 @@ static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __u
 		return -EFAULT;
 
 	return compat_answer_query(dp, flow, 0, uflowp);
-}
-
-static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
-				int (*function)(struct datapath *,
-						struct compat_odp_flow __user *,
-						u32 n_flows))
-{
-	struct compat_odp_flowvec __user *uflowvec;
-	struct compat_odp_flow __user *flows;
-	struct compat_odp_flowvec flowvec;
-	int retval;
-
-	uflowvec = compat_ptr(argp);
-	if (!access_ok(VERIFY_WRITE, uflowvec, sizeof(*uflowvec)) ||
-	    copy_from_user(&flowvec, uflowvec, sizeof(flowvec)))
-		return -EFAULT;
-
-	if (flowvec.n_flows > INT_MAX / sizeof(struct compat_odp_flow))
-		return -EINVAL;
-
-	flows = compat_ptr(flowvec.flows);
-	if (!access_ok(VERIFY_WRITE, flows,
-		       flowvec.n_flows * sizeof(struct compat_odp_flow)))
-		return -EFAULT;
-
-	retval = function(dp, flows, flowvec.n_flows);
-	return (retval < 0 ? retval
-		: retval == flowvec.n_flows ? 0
-		: put_user(retval, &uflowvec->n_flows));
 }
 
 static int compat_execute(struct datapath *dp, const struct compat_odp_execute __user *uexecute)
@@ -2028,7 +1956,7 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		break;
 
 	case ODP_FLOW_GET32:
-		err = compat_flowvec_ioctl(dp, argp, compat_query_flows);
+		err = compat_query_flow(dp, compat_ptr(argp));
 		break;
 
 	case ODP_FLOW_DUMP32:

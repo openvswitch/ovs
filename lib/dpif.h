@@ -111,7 +111,6 @@ int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, struct odp_flow_put *);
 int dpif_flow_del(struct dpif *, struct odp_flow *);
 int dpif_flow_get(const struct dpif *, struct odp_flow *);
-int dpif_flow_get_multiple(const struct dpif *, struct odp_flow[], size_t n);
 
 struct dpif_flow_dump {
     const struct dpif *dpif;

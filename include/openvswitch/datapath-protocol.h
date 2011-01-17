@@ -88,7 +88,7 @@
 #define ODP_VPORT_SET           _IOR('O', 22, struct odp_vport)
 #define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport)
 
-#define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flowvec)
+#define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
 #define ODP_FLOW_DUMP           _IOWR('O', 15, struct odp_flow_dump)
 #define ODP_FLOW_FLUSH          _IO('O', 16)
@@ -214,7 +214,6 @@ struct odp_flow_stats {
     uint32_t used_nsec;
     uint8_t  tcp_flags;
     uint8_t  reserved;
-    uint16_t error;             /* Used by ODP_FLOW_GET. */
 };
 
 enum odp_key_type {
@@ -294,11 +293,6 @@ struct odp_flow {
 struct odp_flow_put {
     struct odp_flow flow;
     uint32_t flags;
-};
-
-struct odp_flowvec {
-    struct odp_flow *flows;
-    uint32_t n_flows;
 };
 
 /* ODP_FLOW_DUMP argument.
