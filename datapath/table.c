@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -98,7 +98,7 @@ struct tbl *tbl_create(unsigned int n_buckets)
 {
 	struct tbl *table;
 
-	table = kzalloc(sizeof *table, GFP_KERNEL);
+	table = kzalloc(sizeof(*table), GFP_KERNEL);
 	if (!table)
 		goto err;
 

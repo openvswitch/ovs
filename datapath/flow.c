@@ -115,7 +115,7 @@ struct sw_flow_actions *flow_actions_alloc(u32 actions_len)
 	if (actions_len > 2 * DP_MAX_PORTS * nla_total_size(4))
 		return ERR_PTR(-EINVAL);
 
-	sfa = kmalloc(sizeof *sfa + actions_len, GFP_KERNEL);
+	sfa = kmalloc(sizeof(*sfa) + actions_len, GFP_KERNEL);
 	if (!sfa)
 		return ERR_PTR(-ENOMEM);
 
@@ -270,7 +270,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 {
 	struct ethhdr *eth;
 
-	memset(key, 0, sizeof *key);
+	memset(key, 0, sizeof(*key));
 	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
 	*is_frag = false;
@@ -384,7 +384,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 
 u32 flow_hash(const struct odp_flow_key *key)
 {
-	return jhash2((u32*)key, sizeof *key / sizeof(u32), hash_seed);
+	return jhash2((u32*)key, sizeof(*key) / sizeof(u32), hash_seed);
 }
 
 int flow_cmp(const struct tbl_node *node, void *key2_)
@@ -404,7 +404,7 @@ int flow_init(void)
 	if (flow_cache == NULL)
 		return -ENOMEM;
 
-	get_random_bytes(&hash_seed, sizeof hash_seed);
+	get_random_bytes(&hash_seed, sizeof(hash_seed));
 
 	return 0;
 }

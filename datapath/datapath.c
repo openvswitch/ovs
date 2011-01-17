@@ -223,7 +223,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 			goto err;
 		}
 	} else {
-		snprintf(devname, sizeof devname, "of%d", dp_idx);
+		snprintf(devname, sizeof(devname), "of%d", dp_idx);
 	}
 
 	rtnl_lock();
@@ -240,7 +240,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 		goto err_put_module;
 
 	err = -ENOMEM;
-	dp = kzalloc(sizeof *dp, GFP_KERNEL);
+	dp = kzalloc(sizeof(*dp), GFP_KERNEL);
 	if (dp == NULL)
 		goto err_put_module;
 	INIT_LIST_HEAD(&dp->port_list);
@@ -389,7 +389,7 @@ static int attach_port(int dp_idx, struct odp_port __user *portp)
 	int err;
 
 	err = -EFAULT;
-	if (copy_from_user(&port, portp, sizeof port))
+	if (copy_from_user(&port, portp, sizeof(port)))
 		goto out;
 	port.devname[IFNAMSIZ - 1] = '\0';
 	port.type[VPORT_TYPE_SIZE - 1] = '\0';
@@ -582,11 +582,11 @@ static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue
 		nskb = skb->next;
 		skb->next = NULL;
 
-		err = skb_cow(skb, sizeof *header);
+		err = skb_cow(skb, sizeof(*header));
 		if (err)
 			goto err_kfree_skbs;
 
-		header = (struct odp_msg*)__skb_push(skb, sizeof *header);
+		header = (struct odp_msg*)__skb_push(skb, sizeof(*header));
 		header->type = queue_no;
 		header->length = skb->len;
 		header->port = port_no;
@@ -1009,7 +1009,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	struct odp_flow uf;
 	int error;
 
-	if (copy_from_user(&uf, ufp, sizeof uf))
+	if (copy_from_user(&uf, ufp, sizeof(uf)))
 		return -EFAULT;
 
 	flow = do_del_flow(dp, &uf.key);
@@ -1032,7 +1032,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 		struct tbl_node *flow_node;
 		int error;
 
-		if (copy_from_user(&uf, ufp, sizeof uf))
+		if (copy_from_user(&uf, ufp, sizeof(uf)))
 			return -EFAULT;
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
@@ -1060,7 +1060,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 	struct odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
 
-	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
+	if (copy_to_user(&ufp->key, &flow->key, sizeof(flow->key)))
 		return -EFAULT;
 	error = answer_query(cbdata->dp, flow, 0, ufp);
 	if (error)
@@ -1097,7 +1097,7 @@ static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 	int retval;
 
 	uflowvec = (struct odp_flowvec __user *)argp;
-	if (copy_from_user(&flowvec, uflowvec, sizeof flowvec))
+	if (copy_from_user(&flowvec, uflowvec, sizeof(flowvec)))
 		return -EFAULT;
 
 	if (flowvec.n_flows > INT_MAX / sizeof(struct odp_flow))
@@ -1182,7 +1182,7 @@ static int execute_packet(struct datapath *dp, const struct odp_execute __user *
 {
 	struct odp_execute execute;
 
-	if (copy_from_user(&execute, executep, sizeof execute))
+	if (copy_from_user(&execute, executep, sizeof(execute)))
 		return -EFAULT;
 
 	return do_execute(dp, &execute);
@@ -1219,7 +1219,7 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	}
 	stats.max_miss_queue = DP_MAX_QUEUE_LEN;
 	stats.max_action_queue = DP_MAX_QUEUE_LEN;
-	return copy_to_user(statsp, &stats, sizeof stats) ? -EFAULT : 0;
+	return copy_to_user(statsp, &stats, sizeof(stats)) ? -EFAULT : 0;
 }
 
 /* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports */
@@ -1267,17 +1267,17 @@ static int put_port(const struct vport *p, struct odp_port __user *uop)
 {
 	struct odp_port op;
 
-	memset(&op, 0, sizeof op);
+	memset(&op, 0, sizeof(op));
 
 	rcu_read_lock();
-	strncpy(op.devname, vport_get_name(p), sizeof op.devname);
-	strncpy(op.type, vport_get_type(p), sizeof op.type);
+	strncpy(op.devname, vport_get_name(p), sizeof(op.devname));
+	strncpy(op.type, vport_get_type(p), sizeof(op.type));
 	vport_get_config(p, op.config);
 	rcu_read_unlock();
 
 	op.port = p->port_no;
 
-	return copy_to_user(uop, &op, sizeof op) ? -EFAULT : 0;
+	return copy_to_user(uop, &op, sizeof(op)) ? -EFAULT : 0;
 }
 
 static int query_port(struct datapath *dp, struct odp_port __user *uport)
@@ -1285,7 +1285,7 @@ static int query_port(struct datapath *dp, struct odp_port __user *uport)
 	struct odp_port port;
 	struct vport *vport;
 
-	if (copy_from_user(&port, uport, sizeof port))
+	if (copy_from_user(&port, uport, sizeof(port)))
 		return -EFAULT;
 
 	if (port.devname[0]) {
@@ -1333,7 +1333,7 @@ static int list_ports(struct datapath *dp, struct odp_portvec __user *upv)
 	struct odp_portvec pv;
 	int retval;
 
-	if (copy_from_user(&pv, upv, sizeof pv))
+	if (copy_from_user(&pv, upv, sizeof(pv)))
 		return -EFAULT;
 
 	retval = do_list_ports(dp, (struct odp_port __user __force *)pv.ports,
@@ -1519,7 +1519,7 @@ static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __us
 	struct compat_odp_portvec pv;
 	int retval;
 
-	if (copy_from_user(&pv, upv, sizeof pv))
+	if (copy_from_user(&pv, upv, sizeof(pv)))
 		return -EFAULT;
 
 	retval = do_list_ports(dp, compat_ptr(pv.ports), pv.n_ports);
@@ -1639,7 +1639,7 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 	struct compat_odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
 
-	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
+	if (copy_to_user(&ufp->key, &flow->key, sizeof(flow->key)))
 		return -EFAULT;
 	error = compat_answer_query(cbdata->dp, flow, 0, ufp);
 	if (error)
@@ -1679,8 +1679,8 @@ static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 	int retval;
 
 	uflowvec = compat_ptr(argp);
-	if (!access_ok(VERIFY_WRITE, uflowvec, sizeof *uflowvec) ||
-	    copy_from_user(&flowvec, uflowvec, sizeof flowvec))
+	if (!access_ok(VERIFY_WRITE, uflowvec, sizeof(*uflowvec)) ||
+	    copy_from_user(&flowvec, uflowvec, sizeof(flowvec)))
 		return -EFAULT;
 
 	if (flowvec.n_flows > INT_MAX / sizeof(struct compat_odp_flow))

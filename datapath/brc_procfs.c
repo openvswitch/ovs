@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -171,7 +171,7 @@ static void kill_proc_dir(const char *dir_name,
 		if (!e)
 			break;
 
-		if (e->namelen >= sizeof name) {
+		if (e->namelen >= sizeof(name)) {
 			/* Can't happen: we prevent adding names this long by
 			 * limiting the BRC_GENL_A_PROC_NAME string to
 			 * BRC_NAME_LEN_MAX bytes.  */
