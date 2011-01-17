@@ -245,9 +245,10 @@ def _map_to_xml(xml, parent, tag, val, attrs):
     e = xml.createElement(tag)
     parent.appendChild(e)
     for n,v in val.items():
-        if not n in attrs:
-            raise Error("Unknown other-config attribute: %s" % n)
-        _str_to_xml(xml, e, n, v)
+        if n in attrs:
+            _str_to_xml(xml, e, n, v)
+        else:
+            log("Unknown other-config attribute: %s" % n)
 
 def _map_from_xml(n, attrs):
     ret = {}
