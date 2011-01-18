@@ -10,12 +10,6 @@
 
 #include <linux/genetlink.h>
 
-/*----------------------------------------------------------------------------
- * In 2.6.23, registering of multicast groups was added.  Our compatability
- * layer just supports registering a single group, since that's all we
- * need.
- */
-
 /**
  * struct genl_multicast_group - generic netlink multicast group
  * @name: name of the multicast group, names are per-family

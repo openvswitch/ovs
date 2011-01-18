@@ -51,7 +51,8 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/net/ip.h \
 	linux-2.6/compat-2.6/include/net/netlink.h \
 	linux-2.6/compat-2.6/include/net/protocol.h \
-	linux-2.6/compat-2.6/include/net/route.h
+	linux-2.6/compat-2.6/include/net/route.h \
+	linux-2.6/compat-2.6/genetlink.inc
 
 both_modules += brcompat
 brcompat_sources = \
