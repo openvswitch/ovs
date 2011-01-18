@@ -51,7 +51,7 @@ COVERAGE_DEFINE(netlink_sent);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 600);
 
 static void log_nlmsg(const char *function, int error,
-                      const void *message, size_t size);
+                      const void *message, size_t size, int protocol);
 
 /* Netlink sockets. */
 
@@ -59,6 +59,7 @@ struct nl_sock
 {
     int fd;
     uint32_t pid;
+    int protocol;
 };
 
 static int alloc_pid(uint32_t *);
@@ -85,6 +86,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         VLOG_ERR("fcntl: %s", strerror(errno));
         goto error;
     }
+    sock->protocol = protocol;
 
     retval = alloc_pid(&sock->pid);
     if (retval) {
@@ -200,7 +202,7 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
         retval = send(sock->fd, msg->data, msg->size, wait ? 0 : MSG_DONTWAIT);
         error = retval < 0 ? errno : 0;
     } while (error == EINTR);
-    log_nlmsg(__func__, error, msg->data, msg->size);
+    log_nlmsg(__func__, error, msg->data, msg->size, sock->protocol);
     if (!error) {
         COVERAGE_INC(netlink_sent);
     }
@@ -231,7 +233,8 @@ nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
         error = retval < 0 ? errno : 0;
     } while (error == EINTR);
     if (error != EAGAIN) {
-        log_nlmsg(__func__, error, iov[0].iov_base, iov[0].iov_len);
+        log_nlmsg(__func__, error, iov[0].iov_base, iov[0].iov_len,
+                  sock->protocol);
         if (!error) {
             COVERAGE_INC(netlink_sent);
         }
@@ -336,7 +339,7 @@ try_again:
     }
 
     *bufp = buf;
-    log_nlmsg(__func__, 0, buf->data, buf->size);
+    log_nlmsg(__func__, 0, buf->data, buf->size, sock->protocol);
     COVERAGE_INC(netlink_received);
 
     return 0;
@@ -476,7 +479,8 @@ nl_sock_drain(struct nl_sock *sock)
  *
  * The caller is responsible for destroying 'request'.  The caller must not
  * close 'sock' before it completes the dump operation (by calling
- * nl_dump_done()).
+ * nl_dump_done()) or before nl_dump_next() returns false, whichever comes
+ * first.
  */
 void
 nl_dump_start(struct nl_dump *dump,
@@ -759,7 +763,7 @@ nlmsghdr_to_string(const struct nlmsghdr *h, struct ds *ds)
 }
 
 static char *
-nlmsg_to_string(const struct ofpbuf *buffer)
+nlmsg_to_string(const struct ofpbuf *buffer, int protocol)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct nlmsghdr *h = ofpbuf_at(buffer, 0, NLMSG_HDRLEN);
@@ -791,6 +795,12 @@ nlmsg_to_string(const struct ofpbuf *buffer)
             } else {
                 ds_put_cstr(&ds, " done(truncated)");
             }
+        } else if (protocol == NETLINK_GENERIC) {
+            struct genlmsghdr *genl = nl_msg_genlmsghdr(buffer);
+            if (genl) {
+                ds_put_format(&ds, ",genl(cmd=%"PRIu8",version=%"PRIu8")",
+                              genl->cmd, genl->version);
+            }
         }
     } else {
         ds_put_cstr(&ds, "nl(truncated)");
@@ -800,7 +810,7 @@ nlmsg_to_string(const struct ofpbuf *buffer)
 
 static void
 log_nlmsg(const char *function, int error,
-          const void *message, size_t size)
+          const void *message, size_t size, int protocol)
 {
     struct ofpbuf buffer;
     char *nlmsg;
@@ -810,7 +820,7 @@ log_nlmsg(const char *function, int error,
     }
 
     ofpbuf_use_const(&buffer, message, size);
-    nlmsg = nlmsg_to_string(&buffer);
+    nlmsg = nlmsg_to_string(&buffer, protocol);
     VLOG_DBG_RL(&rl, "%s (%s): %s", function, strerror(error), nlmsg);
     free(nlmsg);
 }
