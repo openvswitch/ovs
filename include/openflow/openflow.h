@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #ifndef OPENFLOW_OPENFLOW_H
 #define OPENFLOW_OPENFLOW_H 1
 
-#include <stdint.h>
+#include "openvswitch/types.h"
 
 #ifdef SWIG
 #define OFP_ASSERT(EXPR)        /* SWIG can't handle OFP_ASSERT. */
@@ -792,9 +792,9 @@ struct ofp_flow_stats {
     uint16_t idle_timeout;    /* Number of seconds idle before expiration. */
     uint16_t hard_timeout;    /* Number of seconds before expiration. */
     uint8_t pad2[6];          /* Align to 64 bits. */
-    uint64_t cookie;          /* Opaque controller-issued identifier. */
-    uint64_t packet_count;    /* Number of packets in flow. */
-    uint64_t byte_count;      /* Number of bytes in flow. */
+    ovs_32aligned_be64 cookie;       /* Opaque controller-issued identifier. */
+    ovs_32aligned_be64 packet_count; /* Number of packets in flow. */
+    ovs_32aligned_be64 byte_count;   /* Number of bytes in flow. */
     struct ofp_action_header actions[0]; /* Actions. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
@@ -813,8 +813,8 @@ OFP_ASSERT(sizeof(struct ofp_aggregate_stats_request) == 44);
 
 /* Body of reply to OFPST_AGGREGATE request. */
 struct ofp_aggregate_stats_reply {
-    uint64_t packet_count;    /* Number of packets in flows. */
-    uint64_t byte_count;      /* Number of bytes in flows. */
+    ovs_32aligned_be64 packet_count; /* Number of packets in flows. */
+    ovs_32aligned_be64 byte_count;   /* Number of bytes in flows. */
     uint32_t flow_count;      /* Number of flows. */
     uint8_t pad[4];           /* Align to 64 bits. */
 };
@@ -830,8 +830,8 @@ struct ofp_table_stats {
                                 supported by the table. */
     uint32_t max_entries;    /* Max number of entries supported. */
     uint32_t active_count;   /* Number of active entries. */
-    uint64_t lookup_count;   /* Number of packets looked up in table. */
-    uint64_t matched_count;  /* Number of packets that hit table. */
+    ovs_32aligned_be64 lookup_count;  /* # of packets looked up in table. */
+    ovs_32aligned_be64 matched_count; /* Number of packets that hit table. */
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
@@ -849,21 +849,22 @@ OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 8);
 struct ofp_port_stats {
     uint16_t port_no;
     uint8_t pad[6];          /* Align to 64-bits. */
-    uint64_t rx_packets;     /* Number of received packets. */
-    uint64_t tx_packets;     /* Number of transmitted packets. */
-    uint64_t rx_bytes;       /* Number of received bytes. */
-    uint64_t tx_bytes;       /* Number of transmitted bytes. */
-    uint64_t rx_dropped;     /* Number of packets dropped by RX. */
-    uint64_t tx_dropped;     /* Number of packets dropped by TX. */
-    uint64_t rx_errors;      /* Number of receive errors.  This is a super-set
-                                of receive errors and should be great than or
-                                equal to the sum of all rx_*_err values. */
-    uint64_t tx_errors;      /* Number of transmit errors.  This is a super-set
-                                of transmit errors. */
-    uint64_t rx_frame_err;   /* Number of frame alignment errors. */
-    uint64_t rx_over_err;    /* Number of packets with RX overrun. */
-    uint64_t rx_crc_err;     /* Number of CRC errors. */
-    uint64_t collisions;     /* Number of collisions. */
+    ovs_32aligned_be64 rx_packets;     /* Number of received packets. */
+    ovs_32aligned_be64 tx_packets;     /* Number of transmitted packets. */
+    ovs_32aligned_be64 rx_bytes;       /* Number of received bytes. */
+    ovs_32aligned_be64 tx_bytes;       /* Number of transmitted bytes. */
+    ovs_32aligned_be64 rx_dropped;     /* Number of packets dropped by RX. */
+    ovs_32aligned_be64 tx_dropped;     /* Number of packets dropped by TX. */
+    ovs_32aligned_be64 rx_errors; /* Number of receive errors.  This is a
+                                     super-set of receive errors and should be
+                                     great than or equal to the sum of all
+                                     rx_*_err values. */
+    ovs_32aligned_be64 tx_errors; /* Number of transmit errors.  This is a
+                                     super-set of transmit errors. */
+    ovs_32aligned_be64 rx_frame_err; /* Number of frame alignment errors. */
+    ovs_32aligned_be64 rx_over_err;  /* Number of packets with RX overrun. */
+    ovs_32aligned_be64 rx_crc_err;   /* Number of CRC errors. */
+    ovs_32aligned_be64 collisions;   /* Number of collisions. */
 };
 OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 
@@ -884,9 +885,9 @@ struct ofp_queue_stats {
     uint16_t port_no;
     uint8_t pad[2];          /* Align to 32-bits. */
     uint32_t queue_id;       /* Queue id. */
-    uint64_t tx_bytes;       /* Number of transmitted bytes. */
-    uint64_t tx_packets;     /* Number of transmitted packets. */
-    uint64_t tx_errors;      /* Number of packets dropped due to overrun. */
+    ovs_32aligned_be64 tx_bytes;   /* Number of transmitted bytes. */
+    ovs_32aligned_be64 tx_packets; /* Number of transmitted packets. */
+    ovs_32aligned_be64 tx_errors;  /* # of packets dropped due to overrun. */
 };
 OFP_ASSERT(sizeof(struct ofp_queue_stats) == 32);
 

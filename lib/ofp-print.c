@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@
 #include "packets.h"
 #include "pcap.h"
 #include "type-props.h"
+#include "unaligned.h"
 #include "util.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
@@ -1120,14 +1121,15 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
         }
 
         ds_put_format(string, " cookie=0x%"PRIx64", duration=",
-                      ntohll(fs->cookie));
+                      ntohll(get_32aligned_be64(&fs->cookie)));
         ofp_print_duration(string, ntohl(fs->duration_sec),
                            ntohl(fs->duration_nsec));
         ds_put_format(string, ", table_id=%"PRIu8", ", fs->table_id);
         ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
         ds_put_format(string, "n_packets=%"PRIu64", ",
-                    ntohll(fs->packet_count));
-        ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
+                      ntohll(get_32aligned_be64(&fs->packet_count)));
+        ds_put_format(string, "n_bytes=%"PRIu64", ",
+                      ntohll(get_32aligned_be64(&fs->byte_count)));
         if (fs->idle_timeout != htons(OFP_FLOW_PERMANENT)) {
             ds_put_format(string, "idle_timeout=%"PRIu16",",
                           ntohs(fs->idle_timeout));
@@ -1223,8 +1225,10 @@ static void
 ofp_print_ofp_aggregate_stats_reply (
     struct ds *string, const struct ofp_aggregate_stats_reply *asr)
 {
-    ds_put_format(string, " packet_count=%"PRIu64, ntohll(asr->packet_count));
-    ds_put_format(string, " byte_count=%"PRIu64, ntohll(asr->byte_count));
+    ds_put_format(string, " packet_count=%"PRIu64,
+                  ntohll(get_32aligned_be64(&asr->packet_count)));
+    ds_put_format(string, " byte_count=%"PRIu64,
+                  ntohll(get_32aligned_be64(&asr->byte_count)));
     ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
 }
 
@@ -1242,10 +1246,12 @@ ofp_print_nxst_aggregate_reply(struct ds *string,
 }
 
 static void print_port_stat(struct ds *string, const char *leader,
-                            uint64_t stat, int more)
+                            const ovs_32aligned_be64 *statp, int more)
 {
+    uint64_t stat = ntohll(get_32aligned_be64(statp));
+
     ds_put_cstr(string, leader);
-    if (stat != -1) {
+    if (stat != UINT64_MAX) {
         ds_put_format(string, "%"PRIu64, stat);
     } else {
         ds_put_char(string, '?');
@@ -1279,20 +1285,20 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, "  port %2"PRIu16": ", ntohs(ps->port_no));
 
         ds_put_cstr(string, "rx ");
-        print_port_stat(string, "pkts=", ntohll(ps->rx_packets), 1);
-        print_port_stat(string, "bytes=", ntohll(ps->rx_bytes), 1);
-        print_port_stat(string, "drop=", ntohll(ps->rx_dropped), 1);
-        print_port_stat(string, "errs=", ntohll(ps->rx_errors), 1);
-        print_port_stat(string, "frame=", ntohll(ps->rx_frame_err), 1);
-        print_port_stat(string, "over=", ntohll(ps->rx_over_err), 1);
-        print_port_stat(string, "crc=", ntohll(ps->rx_crc_err), 0);
+        print_port_stat(string, "pkts=", &ps->rx_packets, 1);
+        print_port_stat(string, "bytes=", &ps->rx_bytes, 1);
+        print_port_stat(string, "drop=", &ps->rx_dropped, 1);
+        print_port_stat(string, "errs=", &ps->rx_errors, 1);
+        print_port_stat(string, "frame=", &ps->rx_frame_err, 1);
+        print_port_stat(string, "over=", &ps->rx_over_err, 1);
+        print_port_stat(string, "crc=", &ps->rx_crc_err, 0);
 
         ds_put_cstr(string, "           tx ");
-        print_port_stat(string, "pkts=", ntohll(ps->tx_packets), 1);
-        print_port_stat(string, "bytes=", ntohll(ps->tx_bytes), 1);
-        print_port_stat(string, "drop=", ntohll(ps->tx_dropped), 1);
-        print_port_stat(string, "errs=", ntohll(ps->tx_errors), 1);
-        print_port_stat(string, "coll=", ntohll(ps->collisions), 0);
+        print_port_stat(string, "pkts=", &ps->tx_packets, 1);
+        print_port_stat(string, "bytes=", &ps->tx_bytes, 1);
+        print_port_stat(string, "drop=", &ps->tx_dropped, 1);
+        print_port_stat(string, "errs=", &ps->tx_errors, 1);
+        print_port_stat(string, "coll=", &ps->collisions, 0);
     }
 }
 
@@ -1318,9 +1324,9 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, "active=%"PRIu32"\n", ntohl(ts->active_count));
         ds_put_cstr(string, "               ");
         ds_put_format(string, "lookup=%"PRIu64", ",
-                    ntohll(ts->lookup_count));
+                      ntohll(get_32aligned_be64(&ts->lookup_count)));
         ds_put_format(string, "matched=%"PRIu64"\n",
-                    ntohll(ts->matched_count));
+                      ntohll(get_32aligned_be64(&ts->matched_count)));
      }
 }
 
@@ -1364,9 +1370,9 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
         ofp_print_queue_name(string, ntohl(qs->queue_id));
         ds_put_cstr(string, ": ");
 
-        print_port_stat(string, "bytes=", ntohll(qs->tx_bytes), 1);
-        print_port_stat(string, "pkts=", ntohll(qs->tx_packets), 1);
-        print_port_stat(string, "errors=", ntohll(qs->tx_errors), 0);
+        print_port_stat(string, "bytes=", &qs->tx_bytes, 1);
+        print_port_stat(string, "pkts=", &qs->tx_packets, 1);
+        print_port_stat(string, "errors=", &qs->tx_errors, 0);
     }
 }
 

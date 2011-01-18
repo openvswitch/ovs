@@ -59,6 +59,7 @@
 #include "svec.h"
 #include "tag.h"
 #include "timeval.h"
+#include "unaligned.h"
 #include "unixctl.h"
 #include "vconn.h"
 #include "vlog.h"
@@ -3383,8 +3384,8 @@ handle_table_stats_request(struct ofconn *ofconn,
                       ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
     ots->active_count = htonl(classifier_count(&p->cls));
-    ots->lookup_count = htonll(0);              /* XXX */
-    ots->matched_count = htonll(0);             /* XXX */
+    put_32aligned_be64(&ots->lookup_count, htonll(0));  /* XXX */
+    put_32aligned_be64(&ots->matched_count, htonll(0)); /* XXX */
 
     queue_tx(msg, ofconn, ofconn->reply_counter);
     return 0;
@@ -3405,18 +3406,18 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
     ops = append_ofp_stats_reply(sizeof *ops, ofconn, msgp);
     ops->port_no = htons(port->opp.port_no);
     memset(ops->pad, 0, sizeof ops->pad);
-    ops->rx_packets = htonll(stats.rx_packets);
-    ops->tx_packets = htonll(stats.tx_packets);
-    ops->rx_bytes = htonll(stats.rx_bytes);
-    ops->tx_bytes = htonll(stats.tx_bytes);
-    ops->rx_dropped = htonll(stats.rx_dropped);
-    ops->tx_dropped = htonll(stats.tx_dropped);
-    ops->rx_errors = htonll(stats.rx_errors);
-    ops->tx_errors = htonll(stats.tx_errors);
-    ops->rx_frame_err = htonll(stats.rx_frame_errors);
-    ops->rx_over_err = htonll(stats.rx_over_errors);
-    ops->rx_crc_err = htonll(stats.rx_crc_errors);
-    ops->collisions = htonll(stats.collisions);
+    put_32aligned_be64(&ops->rx_packets, htonll(stats.rx_packets));
+    put_32aligned_be64(&ops->tx_packets, htonll(stats.tx_packets));
+    put_32aligned_be64(&ops->rx_bytes, htonll(stats.rx_bytes));
+    put_32aligned_be64(&ops->tx_bytes, htonll(stats.tx_bytes));
+    put_32aligned_be64(&ops->rx_dropped, htonll(stats.rx_dropped));
+    put_32aligned_be64(&ops->tx_dropped, htonll(stats.tx_dropped));
+    put_32aligned_be64(&ops->rx_errors, htonll(stats.rx_errors));
+    put_32aligned_be64(&ops->tx_errors, htonll(stats.tx_errors));
+    put_32aligned_be64(&ops->rx_frame_err, htonll(stats.rx_frame_errors));
+    put_32aligned_be64(&ops->rx_over_err, htonll(stats.rx_over_errors));
+    put_32aligned_be64(&ops->rx_crc_err, htonll(stats.rx_crc_errors));
+    put_32aligned_be64(&ops->collisions, htonll(stats.collisions));
 }
 
 static int
@@ -3498,6 +3499,7 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
 {
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
+    ovs_be64 cookie;
     size_t act_len, len;
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
@@ -3514,14 +3516,15 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->table_id = 0;
     ofs->pad = 0;
     ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match,
-                              rule->flow_cookie, &ofs->cookie);
+                              rule->flow_cookie, &cookie);
+    put_32aligned_be64(&ofs->cookie, cookie);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
     ofs->hard_timeout = htons(rule->hard_timeout);
     memset(ofs->pad2, 0, sizeof ofs->pad2);
-    ofs->packet_count = htonll(packet_count);
-    ofs->byte_count = htonll(byte_count);
+    put_32aligned_be64(&ofs->packet_count, htonll(packet_count));
+    put_32aligned_be64(&ofs->byte_count, htonll(byte_count));
     if (rule->n_actions > 0) {
         memcpy(ofs->actions, rule->actions, act_len);
     }
@@ -3701,8 +3704,8 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
     }
 
     oasr->flow_count = htonl(n_flows);
-    oasr->packet_count = htonll(total_packets);
-    oasr->byte_count = htonll(total_bytes);
+    put_32aligned_be64(&oasr->packet_count, htonll(total_packets));
+    put_32aligned_be64(&oasr->byte_count, htonll(total_bytes));
     memset(oasr->pad, 0, sizeof oasr->pad);
 }
 
@@ -3775,9 +3778,9 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
     reply->port_no = htons(cbdata->ofport->opp.port_no);
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
-    reply->tx_bytes = htonll(stats->tx_bytes);
-    reply->tx_packets = htonll(stats->tx_packets);
-    reply->tx_errors = htonll(stats->tx_errors);
+    put_32aligned_be64(&reply->tx_bytes, htonll(stats->tx_bytes));
+    put_32aligned_be64(&reply->tx_packets, htonll(stats->tx_packets));
+    put_32aligned_be64(&reply->tx_errors, htonll(stats->tx_errors));
 }
 
 static void
