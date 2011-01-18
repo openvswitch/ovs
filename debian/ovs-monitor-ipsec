@@ -116,6 +116,9 @@ path certificate "%s";
         self.psk_hosts = {}
         self.cert_hosts = {}
 
+        if not os.path.isdir(self.cert_dir):
+            os.mkdir(self.cert_dir)
+
         # Clean out stale peer certs from previous runs
         for ovs_cert in glob.glob("%s/ovs-*.pem" % self.cert_dir):
             try:
