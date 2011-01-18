@@ -25,6 +25,7 @@
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
 #include "timeval.h"
+#include "unaligned.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink);
@@ -435,7 +436,8 @@ nl_attr_get_u32(const struct nlattr *nla)
 uint64_t
 nl_attr_get_u64(const struct nlattr *nla)
 {
-    return NL_ATTR_GET_AS(nla, uint64_t);
+    const ovs_32aligned_u64 *x = nl_attr_get_unspec(nla, sizeof *x);
+    return get_32aligned_u64(x);
 }
 
 /* Returns the 16-bit network byte order value in 'nla''s payload.
@@ -462,7 +464,8 @@ nl_attr_get_be32(const struct nlattr *nla)
 ovs_be64
 nl_attr_get_be64(const struct nlattr *nla)
 {
-    return NL_ATTR_GET_AS(nla, ovs_be64);
+    const ovs_32aligned_be64 *x = nl_attr_get_unspec(nla, sizeof *x);
+    return get_32aligned_be64(x);
 }
 
 /* Returns the null-terminated string value in 'nla''s payload.
