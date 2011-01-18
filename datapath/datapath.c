@@ -724,6 +724,7 @@ static int validate_actions(const struct nlattr *actions, u32 actions_len)
                 case ODPAT_OUTPUT:
                         if (nla_get_u32(a) >= DP_MAX_PORTS)
                                 return -EINVAL;
+			break;
 
                 case ODPAT_SET_DL_TCI:
 			if (nla_get_be16(a) & htons(VLAN_CFI_MASK))
