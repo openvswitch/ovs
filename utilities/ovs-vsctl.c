@@ -981,6 +981,7 @@ pre_cmd_emer_reset(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_mirrors);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_netflow);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_sflow);
@@ -1018,6 +1019,7 @@ cmd_emer_reset(struct vsctl_context *ctx)
         char *hw_val = NULL;
 
         ovsrec_bridge_set_controller(br, NULL, 0);
+        ovsrec_bridge_set_fail_mode(br, NULL);
         ovsrec_bridge_set_mirrors(br, NULL, 0);
         ovsrec_bridge_set_netflow(br, NULL);
         ovsrec_bridge_set_sflow(br, NULL);
