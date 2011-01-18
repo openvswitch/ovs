@@ -676,75 +676,75 @@ static int flush_flows(struct datapath *dp)
 
 static int validate_actions(const struct nlattr *actions, u32 actions_len)
 {
-        const struct nlattr *a;
-        int rem;
+	const struct nlattr *a;
+	int rem;
 
-        nla_for_each_attr(a, actions, actions_len, rem) {
-                static const u32 action_lens[ODPAT_MAX + 1] = {
-                        [ODPAT_OUTPUT] = 4,
-                        [ODPAT_CONTROLLER] = 8,
-                        [ODPAT_SET_DL_TCI] = 2,
-                        [ODPAT_STRIP_VLAN] = 0,
-                        [ODPAT_SET_DL_SRC] = ETH_ALEN,
-                        [ODPAT_SET_DL_DST] = ETH_ALEN,
-                        [ODPAT_SET_NW_SRC] = 4,
-                        [ODPAT_SET_NW_DST] = 4,
-                        [ODPAT_SET_NW_TOS] = 1,
-                        [ODPAT_SET_TP_SRC] = 2,
-                        [ODPAT_SET_TP_DST] = 2,
-                        [ODPAT_SET_TUNNEL] = 8,
-                        [ODPAT_SET_PRIORITY] = 4,
-                        [ODPAT_POP_PRIORITY] = 0,
-                        [ODPAT_DROP_SPOOFED_ARP] = 0,
-                };
-                int type = nla_type(a);
+	nla_for_each_attr(a, actions, actions_len, rem) {
+		static const u32 action_lens[ODPAT_MAX + 1] = {
+			[ODPAT_OUTPUT] = 4,
+			[ODPAT_CONTROLLER] = 8,
+			[ODPAT_SET_DL_TCI] = 2,
+			[ODPAT_STRIP_VLAN] = 0,
+			[ODPAT_SET_DL_SRC] = ETH_ALEN,
+			[ODPAT_SET_DL_DST] = ETH_ALEN,
+			[ODPAT_SET_NW_SRC] = 4,
+			[ODPAT_SET_NW_DST] = 4,
+			[ODPAT_SET_NW_TOS] = 1,
+			[ODPAT_SET_TP_SRC] = 2,
+			[ODPAT_SET_TP_DST] = 2,
+			[ODPAT_SET_TUNNEL] = 8,
+			[ODPAT_SET_PRIORITY] = 4,
+			[ODPAT_POP_PRIORITY] = 0,
+			[ODPAT_DROP_SPOOFED_ARP] = 0,
+		};
+		int type = nla_type(a);
 
-                if (type > ODPAT_MAX || nla_len(a) != action_lens[type])
-                        return -EINVAL;
+		if (type > ODPAT_MAX || nla_len(a) != action_lens[type])
+			return -EINVAL;
 
-                switch (type) {
+		switch (type) {
 		case ODPAT_UNSPEC:
 			return -EINVAL;
 
-                case ODPAT_CONTROLLER:
-                case ODPAT_STRIP_VLAN:
-                case ODPAT_SET_DL_SRC:
-                case ODPAT_SET_DL_DST:
-                case ODPAT_SET_NW_SRC:
-                case ODPAT_SET_NW_DST:
-                case ODPAT_SET_TP_SRC:
-                case ODPAT_SET_TP_DST:
-                case ODPAT_SET_TUNNEL:
-                case ODPAT_SET_PRIORITY:
-                case ODPAT_POP_PRIORITY:
-                case ODPAT_DROP_SPOOFED_ARP:
-                        /* No validation needed. */
-                        break;
-
-                case ODPAT_OUTPUT:
-                        if (nla_get_u32(a) >= DP_MAX_PORTS)
-                                return -EINVAL;
+		case ODPAT_CONTROLLER:
+		case ODPAT_STRIP_VLAN:
+		case ODPAT_SET_DL_SRC:
+		case ODPAT_SET_DL_DST:
+		case ODPAT_SET_NW_SRC:
+		case ODPAT_SET_NW_DST:
+		case ODPAT_SET_TP_SRC:
+		case ODPAT_SET_TP_DST:
+		case ODPAT_SET_TUNNEL:
+		case ODPAT_SET_PRIORITY:
+		case ODPAT_POP_PRIORITY:
+		case ODPAT_DROP_SPOOFED_ARP:
+			/* No validation needed. */
 			break;
 
-                case ODPAT_SET_DL_TCI:
+		case ODPAT_OUTPUT:
+			if (nla_get_u32(a) >= DP_MAX_PORTS)
+				return -EINVAL;
+			break;
+
+		case ODPAT_SET_DL_TCI:
 			if (nla_get_be16(a) & htons(VLAN_CFI_MASK))
 				return -EINVAL;
-                        break;
+			break;
 
-                case ODPAT_SET_NW_TOS:
-                        if (nla_get_u8(a) & INET_ECN_MASK)
-                                return -EINVAL;
-                        break;
+		case ODPAT_SET_NW_TOS:
+			if (nla_get_u8(a) & INET_ECN_MASK)
+				return -EINVAL;
+			break;
 
-                default:
-                        return -EOPNOTSUPP;
-                }
-        }
+		default:
+			return -EOPNOTSUPP;
+		}
+	}
 
-        if (rem > 0)
-                return -EINVAL;
+	if (rem > 0)
+		return -EINVAL;
 
-        return 0;
+	return 0;
 }
 
 static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
