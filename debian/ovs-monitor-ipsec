@@ -317,9 +317,9 @@ class IPsec:
         self.call_setkey("spdflush;")
 
     def spd_add(self, local_ip, remote_ip):
-        cmds = ("spdadd %s %s gre -P out ipsec esp/transport//default;\n" %
+        cmds = ("spdadd %s %s gre -P out ipsec esp/transport//require;\n" %
                     (local_ip, remote_ip))
-        cmds += ("spdadd %s %s gre -P in ipsec esp/transport//default;" %
+        cmds += ("spdadd %s %s gre -P in ipsec esp/transport//require;" %
                     (remote_ip, local_ip))
         self.call_setkey(cmds)
 
