@@ -170,7 +170,7 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 struct eth_header {
     uint8_t eth_dst[ETH_ADDR_LEN];
     uint8_t eth_src[ETH_ADDR_LEN];
-    uint16_t eth_type;
+    ovs_be16 eth_type;
 } __attribute__((packed));
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 
@@ -191,7 +191,7 @@ BUILD_ASSERT_DECL(LLC_HEADER_LEN == sizeof(struct llc_header));
 #define SNAP_HEADER_LEN 5
 struct snap_header {
     uint8_t snap_org[3];
-    uint16_t snap_type;
+    ovs_be16 snap_type;
 } __attribute__((packed));
 BUILD_ASSERT_DECL(SNAP_HEADER_LEN == sizeof(struct snap_header));
 
@@ -213,7 +213,7 @@ BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 /* Given the vlan_tci field from an 802.1Q header, in network byte order,
  * returns the VLAN ID in host byte order. */
 static inline uint16_t
-vlan_tci_to_vid(uint16_t vlan_tci)
+vlan_tci_to_vid(ovs_be16 vlan_tci)
 {
     return (ntohs(vlan_tci) & VLAN_VID_MASK) >> VLAN_VID_SHIFT;
 }
@@ -221,15 +221,15 @@ vlan_tci_to_vid(uint16_t vlan_tci)
 /* Given the vlan_tci field from an 802.1Q header, in network byte order,
  * returns the priority code point (PCP) in host byte order. */
 static inline int
-vlan_tci_to_pcp(uint16_t vlan_tci)
+vlan_tci_to_pcp(ovs_be16 vlan_tci)
 {
     return (ntohs(vlan_tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
 }
 
 #define VLAN_HEADER_LEN 4
 struct vlan_header {
-    uint16_t vlan_tci;          /* Lowest 12 bits are VLAN ID. */
-    uint16_t vlan_next_type;
+    ovs_be16 vlan_tci;          /* Lowest 12 bits are VLAN ID. */
+    ovs_be16 vlan_next_type;
 };
 BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 
@@ -237,9 +237,9 @@ BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 struct vlan_eth_header {
     uint8_t veth_dst[ETH_ADDR_LEN];
     uint8_t veth_src[ETH_ADDR_LEN];
-    uint16_t veth_type;         /* Always htons(ETH_TYPE_VLAN). */
-    uint16_t veth_tci;          /* Lowest 12 bits are VLAN ID. */
-    uint16_t veth_next_type;
+    ovs_be16 veth_type;         /* Always htons(ETH_TYPE_VLAN). */
+    ovs_be16 veth_tci;          /* Lowest 12 bits are VLAN ID. */
+    ovs_be16 veth_next_type;
 } __attribute__((packed));
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
@@ -253,8 +253,8 @@ struct ccm {
     uint8_t  opcode;
     uint8_t  flags;
     uint8_t  tlv_offset;
-    uint32_t seq;
-    uint16_t mpid;
+    ovs_be32 seq;
+    ovs_be16 mpid;
     uint8_t  maid[CCM_MAID_LEN];
     uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
 } __attribute__((packed));
@@ -300,14 +300,14 @@ ip_is_cidr(ovs_be32 netmask)
 struct ip_header {
     uint8_t ip_ihl_ver;
     uint8_t ip_tos;
-    uint16_t ip_tot_len;
-    uint16_t ip_id;
-    uint16_t ip_frag_off;
+    ovs_be16 ip_tot_len;
+    ovs_be16 ip_id;
+    ovs_be16 ip_frag_off;
     uint8_t ip_ttl;
     uint8_t ip_proto;
-    uint16_t ip_csum;
-    uint32_t ip_src;
-    uint32_t ip_dst;
+    ovs_be16 ip_csum;
+    ovs_be32 ip_src;
+    ovs_be32 ip_dst;
 };
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 
@@ -315,16 +315,16 @@ BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 struct icmp_header {
     uint8_t icmp_type;
     uint8_t icmp_code;
-    uint16_t icmp_csum;
+    ovs_be16 icmp_csum;
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
 #define UDP_HEADER_LEN 8
 struct udp_header {
-    uint16_t udp_src;
-    uint16_t udp_dst;
-    uint16_t udp_len;
-    uint16_t udp_csum;
+    ovs_be16 udp_src;
+    ovs_be16 udp_dst;
+    ovs_be16 udp_len;
+    ovs_be16 udp_csum;
 };
 BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 
@@ -340,14 +340,14 @@ BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 
 #define TCP_HEADER_LEN 20
 struct tcp_header {
-    uint16_t tcp_src;
-    uint16_t tcp_dst;
-    uint32_t tcp_seq;
-    uint32_t tcp_ack;
-    uint16_t tcp_ctl;
-    uint16_t tcp_winsz;
-    uint16_t tcp_csum;
-    uint16_t tcp_urg;
+    ovs_be16 tcp_src;
+    ovs_be16 tcp_dst;
+    ovs_be32 tcp_seq;
+    ovs_be32 tcp_ack;
+    ovs_be16 tcp_ctl;
+    ovs_be16 tcp_winsz;
+    ovs_be16 tcp_csum;
+    ovs_be16 tcp_urg;
 };
 BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 
@@ -359,17 +359,17 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define ARP_ETH_HEADER_LEN 28
 struct arp_eth_header {
     /* Generic members. */
-    uint16_t ar_hrd;           /* Hardware type. */
-    uint16_t ar_pro;           /* Protocol type. */
+    ovs_be16 ar_hrd;           /* Hardware type. */
+    ovs_be16 ar_pro;           /* Protocol type. */
     uint8_t ar_hln;            /* Hardware address length. */
     uint8_t ar_pln;            /* Protocol address length. */
-    uint16_t ar_op;            /* Opcode. */
+    ovs_be16 ar_op;            /* Opcode. */
 
     /* Ethernet+IPv4 specific members. */
     uint8_t ar_sha[ETH_ADDR_LEN]; /* Sender hardware address. */
-    uint32_t ar_spa;           /* Sender protocol address. */
+    ovs_be32 ar_spa;           /* Sender protocol address. */
     uint8_t ar_tha[ETH_ADDR_LEN]; /* Target hardware address. */
-    uint32_t ar_tpa;           /* Target protocol address. */
+    ovs_be32 ar_tpa;           /* Target protocol address. */
 } __attribute__((packed));
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
