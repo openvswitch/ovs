@@ -3355,6 +3355,12 @@ bond_unixctl_show(struct unixctl_conn *conn,
                   bond_mode_to_string(port->bond_mode));
     ds_put_format(&ds, "bond-detect-mode: %s\n",
                   port->miimon ? "miimon" : "carrier");
+
+    if (port->miimon) {
+        ds_put_format(&ds, "bond-miimon-interval: %lld\n",
+                      port->bond_miimon_interval);
+    }
+
     ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
 
