@@ -2863,11 +2863,15 @@ xlate_reg_move_action(struct action_xlate_ctx *ctx,
                       const struct nx_action_reg_move *narm)
 {
     ovs_be16 old_tci = ctx->flow.vlan_tci;
+    ovs_be64 old_tun = ctx->flow.tun_id;
 
     nxm_execute_reg_move(narm, &ctx->flow);
 
     if (ctx->flow.vlan_tci != old_tci) {
         xlate_set_dl_tci(ctx);
+    }
+    if (ctx->flow.tun_id != old_tun) {
+        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, ctx->flow.tun_id);
     }
 }
 
