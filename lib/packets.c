@@ -203,3 +203,59 @@ ipv6_is_cidr(const struct in6_addr *netmask)
 
     return true;
 }
+
+/* Fills 'b' with a LACP packet whose source address is 'eth_src', LACP actor
+ * information is 'actor', and LACP partner information is 'partner'. */
+void
+compose_lacp_packet(struct ofpbuf *b, struct lacp_info *actor,
+                    struct lacp_info *partner,
+                    const uint8_t eth_src[ETH_ADDR_LEN])
+{
+    struct eth_header *eth;
+    struct lacp_pdu *pdu;
+
+    ofpbuf_clear(b);
+
+    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + LACP_PDU_LEN);
+    eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
+    pdu = ofpbuf_put_zeros(b, LACP_PDU_LEN);
+
+    memcpy(eth->eth_dst, eth_addr_lacp, ETH_ADDR_LEN);
+    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    eth->eth_type = htons(ETH_TYPE_LACP);
+
+    pdu->subtype = 1;
+    pdu->version = 1;
+
+    pdu->actor_type = 1;
+    pdu->actor_len = 20;
+    pdu->actor = *actor;
+
+    pdu->partner_type = 2;
+    pdu->partner_len = 20;
+    pdu->partner = *partner;
+
+    pdu->collector_type = 3;
+    pdu->collector_len = 16;
+    pdu->collector_delay = htons(UINT16_MAX);
+}
+
+/* Parses 'b' which represents a packet containing a LACP PDU.  This function
+ * returns NULL if 'b' is malformed, or does not represent a LACP PDU format
+ * supported by OVS.  Otherwise, it returns a pointer to the lacp_pdu contained
+ * within 'b'. */
+const struct lacp_pdu *
+parse_lacp_packet(const struct ofpbuf *b)
+{
+    const struct lacp_pdu *pdu;
+
+    pdu = ofpbuf_at(b, (uint8_t *)b->l3 - (uint8_t *)b->data, LACP_PDU_LEN);
+
+    if (pdu && pdu->subtype == 1
+        && pdu->actor_type == 1 && pdu->actor_len == 20
+        && pdu->partner_type == 2 && pdu->partner_len == 20) {
+        return pdu;
+    } else {
+        return NULL;
+    }
+}

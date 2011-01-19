@@ -40,6 +40,9 @@ static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
 static const uint8_t eth_addr_stp[ETH_ADDR_LEN] OVS_UNUSED
     = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x01 };
 
+static const uint8_t eth_addr_lacp[ETH_ADDR_LEN] OVS_UNUSED
+    = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x02 };
+
 static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
 {
     return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
@@ -161,6 +164,7 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 #define ETH_TYPE_VLAN          0x8100
 #define ETH_TYPE_IPV6          0x86dd
 #define ETH_TYPE_CFM           0x8902
+#define ETH_TYPE_LACP          0x8809
 
 /* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
  * lengths. */
@@ -407,5 +411,59 @@ struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
+
+/* Masks for lacp_info state member. */
+#define LACP_STATE_ACT  0x01 /* Activity. Active or passive? */
+#define LACP_STATE_TIME 0x02 /* Timeout. Short or long timeout? */
+#define LACP_STATE_AGG  0x04 /* Aggregation. Is the link is bondable? */
+#define LACP_STATE_SYNC 0x08 /* Synchronization. Is the link in up to date? */
+#define LACP_STATE_COL  0x10 /* Collecting. Is the link receiving frames? */
+#define LACP_STATE_DIST 0x20 /* Distributing. Is the link sending frames? */
+#define LACP_STATE_DEF  0x40 /* Defaulted. Using default partner info? */
+#define LACP_STATE_EXP  0x80 /* Expired. Using expired partner info? */
+
+#define LACP_FAST_TIME_TX 1000  /* Fast transmission rate. */
+#define LACP_SLOW_TIME_TX 30000 /* Slow transmission rate. */
+#define LACP_FAST_TIME_RX (LACP_FAST_TIME_TX * 3) /* Fast receive rate. */
+#define LACP_SLOW_TIME_RX (LACP_SLOW_TIME_TX * 3) /* Slow receive rate. */
+
+#define LACP_INFO_LEN 15
+struct lacp_info {
+    ovs_be16 sys_priority;       /* System priority. */
+    uint8_t sysid[ETH_ADDR_LEN]; /* System ID. */
+    ovs_be16 key;                /* Operational key. */
+    ovs_be16 port_priority;      /* Port priority. */
+    ovs_be16 portid;             /* Port ID. */
+    uint8_t state;               /* State mask.  See LACP_STATE macros. */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(LACP_INFO_LEN == sizeof(struct lacp_info));
+
+#define LACP_PDU_LEN 110
+struct lacp_pdu {
+    uint8_t subtype;          /* Always 1. */
+    uint8_t version;          /* Always 1. */
+
+    uint8_t actor_type;       /* Always 1. */
+    uint8_t actor_len;        /* Always 20. */
+    struct lacp_info actor;   /* LACP actor information. */
+    uint8_t z1[3];            /* Reserved.  Always 0. */
+
+    uint8_t partner_type;     /* Always 2. */
+    uint8_t partner_len;      /* Always 20. */
+    struct lacp_info partner; /* LACP partner information. */
+    uint8_t z2[3];            /* Reserved.  Always 0. */
+
+    uint8_t collector_type;   /* Always 3. */
+    uint8_t collector_len;    /* Always 16. */
+    ovs_be16 collector_delay; /* Maximum collector delay. Set to UINT16_MAX. */
+    uint8_t z3[64];           /* Combination of several fields.  Always 0. */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
+
+void compose_lacp_packet(struct ofpbuf *, struct lacp_info *actor,
+                         struct lacp_info *partner,
+                         const uint8_t eth_src[ETH_ADDR_LEN]);
+
+const struct lacp_pdu *parse_lacp_packet(const struct ofpbuf *);
 
 #endif /* packets.h */

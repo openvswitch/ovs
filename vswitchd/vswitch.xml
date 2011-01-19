@@ -546,6 +546,18 @@
         name of the port.  Use only for compatibility with legacy software that
         requires this.
       </column>
+
+      <column name="lacp">
+        <p>Configures LACP on this port.  LACP allows directly connected
+          switches to negotiate which links may be bonded.  LACP may be enabled
+          on non-bonded ports for the benefit of any switches they may be
+          connected to.  <code>active</code> ports are allowed to initiate LACP
+          negotiations.  <code>passive</code> ports are allowed to participate
+          in LACP negotiations initiated by a remote switch, but not allowed to
+          initiate such negotiations themselves. If unset Open vSwitch will
+          choose a reasonable default. </p>
+      </column>
+
     </group>
 
     <group title="Other Features">
@@ -607,6 +619,11 @@
           <dd> The number of milliseconds between successive attempts to
             poll each interface's MII.  Only relevant on ports which use
             <code>miimon</code> to detect failures. </dd>
+          <dt><code>lacp-system-priority</code></dt>
+          <dd> The LACP system priority of this <ref table="Port"/>.  In
+            LACP negotiations, link status decisions are made by the system
+            with the numerically lower priority.  Must be a number between 1
+            and 65535.</dd>
         </dl>
       </column>
     </group>
@@ -1194,8 +1211,14 @@
       </column>
 
       <column name="other_config">
-        Key-value pairs for rarely used interface features.  Currently,
-        there are none defined.
+        Key-value pairs for rarely used interface features.
+        <dl>
+          <dt><code>lacp-port-priority</code></dt>
+          <dd> The LACP port priority of this <ref table="Interface"/>.  In
+            LACP negotiations <ref table="Interface"/>s with numerically lower
+            priorities are preferred for aggregation.  Must be a number between
+            1 and 65535.</dd>
+        </dl>
       </column>
 
       <column name="statistics">
