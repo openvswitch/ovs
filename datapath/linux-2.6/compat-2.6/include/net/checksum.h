@@ -18,14 +18,16 @@ static inline __wsum csum_unfold(__sum16 n)
 	csum_and_copy_to_user(src, dst, len, sum, NULL, err_ptr)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+#ifndef HAVE_CSUM_REPLACE4
 static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
 {
 	__be32 diff[] = { ~from, to };
 
 	*sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
 }
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 #define inet_proto_csum_replace2(sum, skb, from, to, pseudohdr) \
 	inet_proto_csum_replace4(sum, skb, (__force __be32)(from), \
 					   (__force __be32)(to), pseudohdr)

@@ -195,6 +195,7 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [__wsum],
                   [OVS_DEFINE([HAVE_CSUM_TYPES])])
 
+  OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_replace4])
   OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_unfold])
 
   OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [NLA_NUL_STRING])
