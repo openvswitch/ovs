@@ -1062,6 +1062,12 @@
                 traffic destined for the configured <code>remote_ip</code>.
                 This could be an internal interface such as a bridge port.</dd>
         </dl>
+        <dl>
+            <dt><code>tunnel_egress_iface_carrier</code></dt>
+            <dd>Whether a carrier is detected on <ref
+            column="tunnel_egress_iface"/>.  Valid values are <code>down</code>
+            and <code>up</code>.</dd>
+        </dl>
       </column>
     </group>
 

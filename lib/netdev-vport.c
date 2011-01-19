@@ -362,7 +362,16 @@ netdev_vport_get_status(const struct netdev *netdev, struct shash *sh)
     const char *iface = netdev_vport_get_tnl_iface(netdev);
 
     if (iface) {
+        struct netdev *egress_netdev;
+
         shash_add(sh, "tunnel_egress_iface", xstrdup(iface));
+
+        if (!netdev_open_default(iface, &egress_netdev)) {
+            shash_add(sh, "tunnel_egress_iface_carrier",
+                      xstrdup(netdev_get_carrier(egress_netdev)
+                              ? "up" : "down"));
+            netdev_close(egress_netdev);
+        }
     }
 
     return 0;
