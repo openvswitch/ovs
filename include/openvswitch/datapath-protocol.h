@@ -272,6 +272,7 @@ struct odp_key_arp {
 };
 
 struct odp_flow {
+    uint32_t dp_idx;
     struct odp_flow_stats stats;
     struct nlattr *key;
     uint32_t key_len;
@@ -301,6 +302,7 @@ struct odp_flow_put {
  * unspecified.
  */
 struct odp_flow_dump {
+	uint32_t dp_idx;
 	struct odp_flow *flow;
 	uint32_t state[2];
 };
@@ -329,6 +331,8 @@ enum odp_action_type {
 #define ODPAT_MAX (__ODPAT_MAX - 1)
 
 struct odp_execute {
+    uint32_t dp_idx;
+
     struct nlattr *actions;
     uint32_t actions_len;
 

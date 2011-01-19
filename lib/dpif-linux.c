@@ -377,7 +377,8 @@ dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 static int
 dpif_linux_flow_flush(struct dpif *dpif_)
 {
-    return do_ioctl(dpif_, ODP_FLOW_FLUSH, NULL);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    return ioctl(dpif->fd, ODP_FLOW_FLUSH, dpif->minor) ? errno : 0;
 }
 
 struct dpif_linux_port_state {
@@ -474,11 +475,13 @@ dpif_linux_flow_get(const struct dpif *dpif_,
                     const struct nlattr *key, size_t key_len,
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct ofpbuf *actions = NULL;
     struct odp_flow odp_flow;
     int error;
 
     memset(&odp_flow, 0, sizeof odp_flow);
+    odp_flow.dp_idx = dpif->minor;
     odp_flow.key = (struct nlattr *) key;
     odp_flow.key_len = key_len;
     if (actionsp) {
@@ -510,10 +513,12 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
                     const struct nlattr *actions, size_t actions_len,
                     struct dpif_flow_stats *stats)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct odp_flow_put put;
     int error;
 
     memset(&put, 0, sizeof put);
+    put.flow.dp_idx = dpif->minor;
     put.flow.key = (struct nlattr *) key;
     put.flow.key_len = key_len;
     put.flow.actions = (struct nlattr *) actions;
@@ -540,10 +545,12 @@ dpif_linux_flow_del(struct dpif *dpif_,
                     const struct nlattr *key, size_t key_len,
                     struct dpif_flow_stats *stats)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct odp_flow odp_flow;
     int error;
 
     memset(&odp_flow, 0, sizeof odp_flow);
+    odp_flow.dp_idx = dpif->minor;
     odp_flow.key = (struct nlattr *) key;
     odp_flow.key_len = key_len;
     error = do_ioctl(dpif_, ODP_FLOW_DEL, &odp_flow);
@@ -562,11 +569,13 @@ struct dpif_linux_flow_state {
 };
 
 static int
-dpif_linux_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
+dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow_state *state;
 
     *statep = state = xmalloc(sizeof *state);
+    state->dump.dp_idx = dpif->minor;
     state->dump.state[0] = 0;
     state->dump.state[1] = 0;
     state->dump.flow = &state->flow;
@@ -624,8 +633,11 @@ dpif_linux_execute(struct dpif *dpif_,
                    const struct nlattr *actions, size_t actions_len,
                    const struct ofpbuf *buf)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct odp_execute execute;
+
     memset(&execute, 0, sizeof execute);
+    execute.dp_idx = dpif->minor;
     execute.actions = (struct nlattr *) actions;
     execute.actions_len = actions_len;
     execute.data = buf->data;

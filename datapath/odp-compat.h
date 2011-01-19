@@ -23,6 +23,7 @@
 #define ODP_FLOW_DEL32		_IOWR('O', 17, struct compat_odp_flow)
 
 struct compat_odp_flow {
+	uint32_t dp_idx;
 	struct odp_flow_stats stats;
 	compat_uptr_t key;
 	u32 key_len;
@@ -36,11 +37,14 @@ struct compat_odp_flow_put {
 };
 
 struct compat_odp_flow_dump {
+	uint32_t dp_idx;
 	compat_uptr_t flow;
 	uint32_t state[2];
 };
 
 struct compat_odp_execute {
+	uint32_t dp_idx;
+
 	compat_uptr_t actions;
 	u32 actions_len;
 
