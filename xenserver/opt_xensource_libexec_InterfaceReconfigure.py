@@ -659,7 +659,8 @@ class DatabaseCache(object):
             return None
 
     def get_pool_record(self):
-        return self.__pools.values()[0]
+        if len(self.__pools) > 0:
+            return self.__pools.values()[0]
 
 #
 #

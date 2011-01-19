@@ -332,7 +332,11 @@ def configure_datapath(pif):
                    'other-config:hwaddr=%s' % vsctl_escape(db().get_pif_record(pif)['MAC'])]
 
     pool = db().get_pool_record()
-    fail_mode = pool['other_config']['vswitch-controller-fail-mode']
+
+    if pool:
+        fail_mode = pool['other_config']['vswitch-controller-fail-mode']
+    else:
+        fail_mode = 'standalone'
 
     if fail_mode in ['standalone', 'secure']:
         vsctl_argv += ['--', 'set', 'Bridge', bridge, 'fail_mode=%s' % fail_mode]
