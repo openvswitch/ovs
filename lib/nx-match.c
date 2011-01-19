@@ -46,7 +46,8 @@ enum {
 /* For each NXM_* field, define NFI_NXM_* as consecutive integers starting from
  * zero. */
 enum nxm_field_index {
-#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO) NFI_NXM_##HEADER,
+#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO, WRITABLE) \
+        NFI_NXM_##HEADER,
 #include "nx-match.def"
     N_NXM_FIELDS
 };
@@ -59,13 +60,14 @@ struct nxm_field {
     ovs_be16 dl_type;           /* dl_type prerequisite, if nonzero. */
     uint8_t nw_proto;           /* nw_proto prerequisite, if nonzero. */
     const char *name;           /* "NXM_*" string. */
+    bool writable;              /* Writable with NXAST_REG_{MOVE,LOAD}? */
 };
 
 /* All the known fields. */
 static struct nxm_field nxm_fields[N_NXM_FIELDS] = {
-#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO) \
+#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO, WRITABLE)     \
     { HMAP_NODE_NULL_INITIALIZER, NFI_NXM_##HEADER, NXM_##HEADER, WILDCARD, \
-      CONSTANT_HTONS(DL_TYPE), NW_PROTO, "NXM_" #HEADER },
+      CONSTANT_HTONS(DL_TYPE), NW_PROTO, "NXM_" #HEADER, WRITABLE },
 #include "nx-match.def"
 };
 
@@ -97,7 +99,7 @@ nxm_init(void)
         /* Verify that the header values are unique (duplicate "case" values
          * cause a compile error). */
         switch (0) {
-#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO) \
+#define DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO, WRITABLE)  \
         case NXM_##HEADER: break;
 #include "nx-match.def"
         }
@@ -1016,9 +1018,7 @@ nxm_check_reg_move(const struct nx_action_reg_move *action,
         return BAD_ARGUMENT;
     }
 
-    if (!NXM_IS_NX_REG(dst->header)
-        && dst->header != NXM_OF_VLAN_TCI
-        && dst->header != NXM_NX_TUN_ID) {
+    if (!dst->writable) {
         return BAD_ARGUMENT;
     }
 
@@ -1045,7 +1045,7 @@ nxm_check_reg_load(const struct nx_action_reg_load *action,
         return BAD_ARGUMENT;
     }
 
-    if (!NXM_IS_NX_REG(dst->header)) {
+    if (!dst->writable) {
         return BAD_ARGUMENT;
     }
 
@@ -1138,6 +1138,68 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     NOT_REACHED();
 }
 
+static void
+nxm_write_field(const struct nxm_field *dst, struct flow *flow,
+                uint64_t new_value)
+{
+    switch (dst->index) {
+    case NFI_NXM_OF_VLAN_TCI:
+        flow->vlan_tci = htons(new_value);
+        break;
+
+    case NFI_NXM_NX_TUN_ID:
+        flow->tun_id = htonll(new_value);
+        break;
+
+#define NXM_WRITE_REGISTER(IDX)                 \
+    case NFI_NXM_NX_REG##IDX:                   \
+        flow->regs[IDX] = new_value;            \
+        break;                                  \
+    case NFI_NXM_NX_REG##IDX##_W:               \
+        NOT_REACHED();
+
+    NXM_WRITE_REGISTER(0);
+#if FLOW_N_REGS >= 2
+    NXM_WRITE_REGISTER(1);
+#endif
+#if FLOW_N_REGS >= 3
+    NXM_WRITE_REGISTER(2);
+#endif
+#if FLOW_N_REGS >= 4
+    NXM_WRITE_REGISTER(3);
+#endif
+#if FLOW_N_REGS > 4
+#error
+#endif
+
+    case NFI_NXM_OF_IN_PORT:
+    case NFI_NXM_OF_ETH_DST:
+    case NFI_NXM_OF_ETH_SRC:
+    case NFI_NXM_OF_ETH_TYPE:
+    case NFI_NXM_OF_IP_TOS:
+    case NFI_NXM_OF_IP_PROTO:
+    case NFI_NXM_OF_ARP_OP:
+    case NFI_NXM_OF_IP_SRC:
+    case NFI_NXM_OF_ARP_SPA:
+    case NFI_NXM_OF_IP_DST:
+    case NFI_NXM_OF_ARP_TPA:
+    case NFI_NXM_OF_TCP_SRC:
+    case NFI_NXM_OF_UDP_SRC:
+    case NFI_NXM_OF_TCP_DST:
+    case NFI_NXM_OF_UDP_DST:
+    case NFI_NXM_OF_ICMP_TYPE:
+    case NFI_NXM_OF_ICMP_CODE:
+    case NFI_NXM_OF_ETH_DST_W:
+    case NFI_NXM_OF_VLAN_TCI_W:
+    case NFI_NXM_OF_IP_SRC_W:
+    case NFI_NXM_OF_IP_DST_W:
+    case NFI_NXM_OF_ARP_SPA_W:
+    case NFI_NXM_OF_ARP_TPA_W:
+    case N_NXM_FIELDS:
+        NOT_REACHED();
+    }
+}
+
 void
 nxm_execute_reg_move(const struct nx_action_reg_move *action,
                      struct flow *flow)
@@ -1159,16 +1221,7 @@ nxm_execute_reg_move(const struct nx_action_reg_move *action,
     /* Get the final value. */
     uint64_t new_data = dst_data | ((src_data >> src_ofs) << dst_ofs);
 
-    /* Store the result. */
-    if (NXM_IS_NX_REG(dst->header)) {
-        flow->regs[NXM_NX_REG_IDX(dst->header)] = new_data;
-    } else if (dst->header == NXM_OF_VLAN_TCI) {
-        flow->vlan_tci = htons(new_data);
-    } else if (dst->header == NXM_NX_TUN_ID) {
-        flow->tun_id = htonll(new_data);
-    } else {
-        NOT_REACHED();
-    }
+    nxm_write_field(dst, flow, new_data);
 }
 
 void
@@ -1177,15 +1230,18 @@ nxm_execute_reg_load(const struct nx_action_reg_load *action,
 {
     /* Preparation. */
     int n_bits = nxm_decode_n_bits(action->ofs_nbits);
-    uint32_t mask = n_bits == 32 ? UINT32_MAX : (UINT32_C(1) << n_bits) - 1;
-    uint32_t *reg = &flow->regs[NXM_NX_REG_IDX(ntohl(action->dst))];
+    uint64_t mask = n_bits == 64 ? UINT64_MAX : (UINT64_C(1) << n_bits) - 1;
 
     /* Get source data. */
-    uint32_t src_data = ntohll(action->value);
+    uint64_t src_data = ntohll(action->value);
 
     /* Get remaining bits of the destination field. */
+    const struct nxm_field *dst = nxm_field_lookup(ntohl(action->dst));
     int dst_ofs = nxm_decode_ofs(action->ofs_nbits);
-    uint32_t dst_data = *reg & ~(mask << dst_ofs);
+    uint64_t dst_data = nxm_read_field(dst, flow) & ~(mask << dst_ofs);
 
-    *reg = dst_data | (src_data << dst_ofs);
+    /* Get the final value. */
+    uint64_t new_data = dst_data | (src_data << dst_ofs);
+
+    nxm_write_field(dst, flow, new_data);
 }

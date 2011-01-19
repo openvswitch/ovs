@@ -1,5 +1,5 @@
 /*                                                                -*- c -*-
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,41 +14,41 @@
  * limitations under the License.
  */
 
-#define DEFINE_FIELD_M(HEADER, WILDCARD, DL_TYPE, NW_PROTO)             \
-        DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO)               \
-        DEFINE_FIELD(HEADER##_W, WILDCARD, DL_TYPE, NW_PROTO)
+#define DEFINE_FIELD_M(HEADER, WILDCARD, DL_TYPE, NW_PROTO, WRITABLE)   \
+    DEFINE_FIELD(HEADER, WILDCARD, DL_TYPE, NW_PROTO, WRITABLE)         \
+    DEFINE_FIELD(HEADER##_W, WILDCARD, DL_TYPE, NW_PROTO, false)
 
-/*             NXM_ suffix   FWW_* bit     dl_type       nw_proto      */
-/*             ------------  ------------  -----------   ------------- */
-DEFINE_FIELD  (OF_IN_PORT,   FWW_IN_PORT,  0,            0)
-DEFINE_FIELD_M(OF_ETH_DST,   0,            0,            0)
-DEFINE_FIELD  (OF_ETH_SRC,   FWW_DL_SRC,   0,            0)
-DEFINE_FIELD  (OF_ETH_TYPE,  FWW_DL_TYPE,  0,            0)
-DEFINE_FIELD_M(OF_VLAN_TCI,  0,            0,            0)
-DEFINE_FIELD  (OF_IP_TOS,    FWW_NW_TOS,   ETH_TYPE_IP,  0)
-DEFINE_FIELD  (OF_IP_PROTO,  FWW_NW_PROTO, ETH_TYPE_IP,  0)
-DEFINE_FIELD_M(OF_IP_SRC,    0,            ETH_TYPE_IP,  0)
-DEFINE_FIELD_M(OF_IP_DST,    0,            ETH_TYPE_IP,  0)
-DEFINE_FIELD  (OF_TCP_SRC,   FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_TCP)
-DEFINE_FIELD  (OF_TCP_DST,   FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_TCP)
-DEFINE_FIELD  (OF_UDP_SRC,   FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_UDP)
-DEFINE_FIELD  (OF_UDP_DST,   FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_UDP)
-DEFINE_FIELD  (OF_ICMP_TYPE, FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_ICMP)
-DEFINE_FIELD  (OF_ICMP_CODE, FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_ICMP)
-DEFINE_FIELD  (OF_ARP_OP,    FWW_NW_PROTO, ETH_TYPE_ARP, 0)
-DEFINE_FIELD_M(OF_ARP_SPA,   0,            ETH_TYPE_ARP, 0)
-DEFINE_FIELD_M(OF_ARP_TPA,   0,            ETH_TYPE_ARP, 0)
-DEFINE_FIELD  (NX_TUN_ID,    FWW_TUN_ID,   0,            0)
+/*             NXM_ suffix   FWW_* bit     dl_type       nw_proto      rw? */
+/*             ------------  ------------  -----------   ------------- --- */
+DEFINE_FIELD  (OF_IN_PORT,   FWW_IN_PORT,  0,            0,            false)
+DEFINE_FIELD_M(OF_ETH_DST,   0,            0,            0,            false)
+DEFINE_FIELD  (OF_ETH_SRC,   FWW_DL_SRC,   0,            0,            false)
+DEFINE_FIELD  (OF_ETH_TYPE,  FWW_DL_TYPE,  0,            0,            false)
+DEFINE_FIELD_M(OF_VLAN_TCI,  0,            0,            0,            true)
+DEFINE_FIELD  (OF_IP_TOS,    FWW_NW_TOS,   ETH_TYPE_IP,  0,            false)
+DEFINE_FIELD  (OF_IP_PROTO,  FWW_NW_PROTO, ETH_TYPE_IP,  0,            false)
+DEFINE_FIELD_M(OF_IP_SRC,    0,            ETH_TYPE_IP,  0,            false)
+DEFINE_FIELD_M(OF_IP_DST,    0,            ETH_TYPE_IP,  0,            false)
+DEFINE_FIELD  (OF_TCP_SRC,   FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_TCP,  false)
+DEFINE_FIELD  (OF_TCP_DST,   FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_TCP,  false)
+DEFINE_FIELD  (OF_UDP_SRC,   FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_UDP,  false)
+DEFINE_FIELD  (OF_UDP_DST,   FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_UDP,  false)
+DEFINE_FIELD  (OF_ICMP_TYPE, FWW_TP_SRC,   ETH_TYPE_IP,  IP_TYPE_ICMP, false)
+DEFINE_FIELD  (OF_ICMP_CODE, FWW_TP_DST,   ETH_TYPE_IP,  IP_TYPE_ICMP, false)
+DEFINE_FIELD  (OF_ARP_OP,    FWW_NW_PROTO, ETH_TYPE_ARP, 0,            false)
+DEFINE_FIELD_M(OF_ARP_SPA,   0,            ETH_TYPE_ARP, 0,            false)
+DEFINE_FIELD_M(OF_ARP_TPA,   0,            ETH_TYPE_ARP, 0,            false)
+DEFINE_FIELD  (NX_TUN_ID,    FWW_TUN_ID,   0,            0,            true)
 
-DEFINE_FIELD_M(NX_REG0,      0,            0,            0)
+DEFINE_FIELD_M(NX_REG0,      0,            0,            0,            true)
 #if FLOW_N_REGS >= 2
-DEFINE_FIELD_M(NX_REG1,      0,            0,            0)
+DEFINE_FIELD_M(NX_REG1,      0,            0,            0,            true)
 #endif
 #if FLOW_N_REGS >= 3
-DEFINE_FIELD_M(NX_REG2,      0,            0,            0)
+DEFINE_FIELD_M(NX_REG2,      0,            0,            0,            true)
 #endif
 #if FLOW_N_REGS >= 4
-DEFINE_FIELD_M(NX_REG3,      0,            0,            0)
+DEFINE_FIELD_M(NX_REG3,      0,            0,            0,            true)
 #endif
 #if FLOW_N_REGS > 4
 #error

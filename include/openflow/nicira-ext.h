@@ -430,9 +430,9 @@ OFP_ASSERT(sizeof(struct nx_action_reg_move) == 24);
  * starts at 0 for the least-significant bit, 1 for the next most significant
  * bit, and so on.
  *
- * 'dst' is an nxm_header with nxm_hasmask=0.  It must be one of the following:
- *
- *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ * 'dst' is an nxm_header with nxm_hasmask=0.  See the documentation for
+ * NXAST_REG_MOVE, above, for the permitted fields and for the side effects of
+ * loading them.
  *
  * The 'ofs' and 'n_bits' fields are combined into a single 'ofs_nbits' field
  * to avoid enlarging the structure by another 8 bytes.  To allow 'n_bits' to

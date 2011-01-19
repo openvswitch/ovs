@@ -2858,19 +2858,27 @@ xlate_set_dl_tci(struct action_xlate_ctx *ctx)
     }
 }
 
+struct xlate_reg_state {
+    ovs_be16 vlan_tci;
+    ovs_be64 tun_id;
+};
+
 static void
-xlate_reg_move_action(struct action_xlate_ctx *ctx,
-                      const struct nx_action_reg_move *narm)
+save_reg_state(const struct action_xlate_ctx *ctx,
+               struct xlate_reg_state *state)
 {
-    ovs_be16 old_tci = ctx->flow.vlan_tci;
-    ovs_be64 old_tun = ctx->flow.tun_id;
+    state->vlan_tci = ctx->flow.vlan_tci;
+    state->tun_id = ctx->flow.tun_id;
+}
 
-    nxm_execute_reg_move(narm, &ctx->flow);
-
-    if (ctx->flow.vlan_tci != old_tci) {
+static void
+update_reg_state(struct action_xlate_ctx *ctx,
+                 const struct xlate_reg_state *state)
+{
+    if (ctx->flow.vlan_tci != state->vlan_tci) {
         xlate_set_dl_tci(ctx);
     }
-    if (ctx->flow.tun_id != old_tun) {
+    if (ctx->flow.tun_id != state->tun_id) {
         nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, ctx->flow.tun_id);
     }
 }
@@ -2884,6 +2892,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_set_queue *nasq;
     const struct nx_action_multipath *nam;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
+    struct xlate_reg_state state;
     ovs_be64 tun_id;
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -2916,12 +2925,18 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         break;
 
     case NXAST_REG_MOVE:
-        xlate_reg_move_action(ctx, (const struct nx_action_reg_move *) nah);
+        save_reg_state(ctx, &state);
+        nxm_execute_reg_move((const struct nx_action_reg_move *) nah,
+                             &ctx->flow);
+        update_reg_state(ctx, &state);
         break;
 
     case NXAST_REG_LOAD:
+        save_reg_state(ctx, &state);
         nxm_execute_reg_load((const struct nx_action_reg_load *) nah,
                              &ctx->flow);
+        update_reg_state(ctx, &state);
+        break;
 
     case NXAST_NOTE:
         /* Nothing to do. */
