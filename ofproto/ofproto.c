@@ -5026,7 +5026,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     struct ds result;
     struct flow flow;
     uint16_t in_port;
-    ovs_be32 tun_id;
+    ovs_be64 tun_id;
     char *s;
 
     ofpbuf_init(&packet, strlen(args) / 2);
@@ -5048,7 +5048,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         goto exit;
     }
 
-    tun_id = ntohl(strtoul(tun_id_s, NULL, 10));
+    tun_id = htonll(strtoull(tun_id_s, NULL, 10));
     in_port = ofp_port_to_odp_port(atoi(in_port_s));
 
     packet_s = ofpbuf_put_hex(&packet, packet_s, NULL);
