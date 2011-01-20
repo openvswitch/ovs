@@ -334,7 +334,7 @@ def configure_datapath(pif):
     pool = db().get_pool_record()
 
     if pool:
-        fail_mode = pool['other_config']['vswitch-controller-fail-mode']
+        fail_mode = pool['other_config'].get('vswitch-controller-fail-mode')
     else:
         fail_mode = 'standalone'
 
