@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,18 +107,17 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 #define FWW_TP_DST      ((OVS_FORCE flow_wildcards_t) (1 << 7))
 /* Same meanings as corresponding OFPFW_* bits, but differ in value. */
 #define FWW_NW_TOS      ((OVS_FORCE flow_wildcards_t) (1 << 1))
-/* No OFPFW_* bits, but they do have corresponding OVSFW_* bits. */
-#define FWW_TUN_ID      ((OVS_FORCE flow_wildcards_t) (1 << 8))
 /* No corresponding OFPFW_* or OVSFW_* bits. */
-#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 9))
+#define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 8))
                                                        /* multicast bit only */
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 10)) - 1))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 9)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
  * Note that the meaning of 1-bits in 'wildcards' is opposite that of 1-bits in
  * the rest of the members. */
 struct flow_wildcards {
+    ovs_be64 tun_id_mask;       /* 1-bit in each significant tun_id bit. */
     flow_wildcards_t wildcards; /* 1-bit in each FWW_* wildcarded field. */
     uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
     ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */

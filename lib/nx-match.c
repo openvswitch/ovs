@@ -320,8 +320,21 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
 
         /* Tunnel ID. */
     case NFI_NXM_NX_TUN_ID:
-        flow->tun_id = get_unaligned_be64(value);
-        return 0;
+        if (wc->tun_id_mask) {
+            return NXM_DUP_TYPE;
+        } else {
+            cls_rule_set_tun_id(rule, get_unaligned_be64(value));
+            return 0;
+        }
+    case NFI_NXM_NX_TUN_ID_W:
+        if (wc->tun_id_mask) {
+            return NXM_DUP_TYPE;
+        } else {
+            ovs_be64 tun_id = get_unaligned_be64(value);
+            ovs_be64 tun_mask = get_unaligned_be64(mask);
+            cls_rule_set_tun_id_masked(rule, tun_id, tun_mask);
+            return 0;
+        }
 
         /* Registers. */
     case NFI_NXM_NX_REG0:
@@ -534,6 +547,31 @@ nxm_put_64(struct ofpbuf *b, uint32_t header, ovs_be64 value)
 }
 
 static void
+nxm_put_64w(struct ofpbuf *b, uint32_t header, ovs_be64 value, ovs_be64 mask)
+{
+    nxm_put_header(b, header);
+    ofpbuf_put(b, &value, sizeof value);
+    ofpbuf_put(b, &mask, sizeof mask);
+}
+
+static void
+nxm_put_64m(struct ofpbuf *b, uint32_t header, ovs_be64 value, ovs_be64 mask)
+{
+    switch (mask) {
+    case 0:
+        break;
+
+    case CONSTANT_HTONLL(UINT64_MAX):
+        nxm_put_64(b, header, value);
+        break;
+
+    default:
+        nxm_put_64w(b, NXM_MAKE_WILD_HEADER(header), value, mask);
+        break;
+    }
+}
+
+static void
 nxm_put_eth(struct ofpbuf *b, uint32_t header,
             const uint8_t value[ETH_ADDR_LEN])
 {
@@ -657,9 +695,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     }
 
     /* Tunnel ID. */
-    if (!(wc & FWW_TUN_ID)) {
-        nxm_put_64(b, NXM_NX_TUN_ID, flow->tun_id);
-    }
+    nxm_put_64m(b, NXM_NX_TUN_ID, flow->tun_id, cr->wc.tun_id_mask);
 
     /* Registers. */
     for (i = 0; i < FLOW_N_REGS; i++) {
@@ -1125,6 +1161,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 #error
 #endif
 
+    case NFI_NXM_NX_TUN_ID_W:
     case NFI_NXM_OF_ETH_DST_W:
     case NFI_NXM_OF_VLAN_TCI_W:
     case NFI_NXM_OF_IP_SRC_W:
@@ -1189,6 +1226,7 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_OF_UDP_DST:
     case NFI_NXM_OF_ICMP_TYPE:
     case NFI_NXM_OF_ICMP_CODE:
+    case NFI_NXM_NX_TUN_ID_W:
     case NFI_NXM_OF_ETH_DST_W:
     case NFI_NXM_OF_VLAN_TCI_W:
     case NFI_NXM_OF_IP_SRC_W:

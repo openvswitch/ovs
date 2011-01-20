@@ -132,9 +132,6 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
 
     if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(ofpfw & NXFW_TUN_ID)) {
         rule->flow.tun_id = htonll(ntohll(cookie) >> 32);
-    } else {
-        wc->wildcards |= FWW_TUN_ID;
-        rule->flow.tun_id = htonll(0);
     }
 
     if (ofpfw & OFPFW_DL_DST) {
@@ -233,7 +230,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
 
     /* Tunnel ID. */
     if (flow_format == NXFF_TUN_ID_FROM_COOKIE) {
-        if (wc->wildcards & FWW_TUN_ID) {
+        if (wc->tun_id_mask == htonll(0)) {
             ofpfw |= NXFW_TUN_ID;
         } else {
             uint32_t cookie_lo = ntohll(cookie_in);
@@ -829,6 +826,47 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     return true;
 }
 
+static inline bool
+is_nxm_required(const struct cls_rule *rule, bool cookie_support,
+                ovs_be64 cookie)
+{
+    const struct flow_wildcards *wc = &rule->wc;
+    ovs_be32 cookie_hi;
+
+    /* Only NXM supports separately wildcards the Ethernet multicast bit. */
+    if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
+        return true;
+    }
+
+    /* Only NXM supports matching registers. */
+    if (!regs_fully_wildcarded(wc)) {
+        return true;
+    }
+
+    switch (wc->tun_id_mask) {
+    case CONSTANT_HTONLL(0):
+        /* Other formats can fully wildcard tun_id. */
+        break;
+
+    case CONSTANT_HTONLL(UINT64_MAX):
+        /* Only NXM supports matching tunnel ID, unless there is a cookie and
+         * the top 32 bits of the cookie are the desired tunnel ID value. */
+        cookie_hi = htonl(ntohll(cookie) >> 32);
+        if (!cookie_support
+            || (cookie_hi && cookie_hi != ntohll(rule->flow.tun_id))) {
+            return true;
+        }
+        break;
+
+    default:
+        /* Only NXM supports partial matches on tunnel ID. */
+        return true;
+    }
+
+    /* Other formats can express this rule. */
+    return false;
+}
+
 /* Returns the minimum nx_flow_format to use for sending 'rule' to a switch
  * (e.g. to add or remove a flow).  'cookie_support' should be true if the
  * command to be sent includes a flow cookie (as OFPT_FLOW_MOD does, for
@@ -853,16 +891,9 @@ enum nx_flow_format
 ofputil_min_flow_format(const struct cls_rule *rule, bool cookie_support,
                         ovs_be64 cookie)
 {
-    const struct flow_wildcards *wc = &rule->wc;
-    ovs_be32 cookie_hi = htonl(ntohll(cookie) >> 32);
-
-    if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)
-        || !regs_fully_wildcarded(wc)
-        || (!(wc->wildcards & FWW_TUN_ID)
-            && (!cookie_support
-                || (cookie_hi && cookie_hi != ntohll(rule->flow.tun_id))))) {
+    if (is_nxm_required(rule, cookie_support, cookie)) {
         return NXFF_NXM;
-    } else if (!(wc->wildcards & FWW_TUN_ID)) {
+    } else if (rule->wc.tun_id_mask != htonll(0)) {
         return NXFF_TUN_ID_FROM_COOKIE;
     } else {
         return NXFF_OPENFLOW10;

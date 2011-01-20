@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,6 +126,35 @@ str_to_ip(const char *str_, ovs_be32 *ip, ovs_be32 *maskp)
     }
 
     free(str);
+}
+
+static void
+str_to_tun_id(const char *str, ovs_be64 *tun_idp, ovs_be64 *maskp)
+{
+    uint64_t tun_id, mask;
+    char *tail;
+
+    errno = 0;
+    tun_id = strtoull(str, &tail, 0);
+    if (errno || (*tail != '\0' && *tail != '/')) {
+        goto error;
+    }
+
+    if (*tail == '/') {
+        mask = strtoull(tail + 1, &tail, 0);
+        if (errno || *tail != '\0') {
+            goto error;
+        }
+    } else {
+        mask = UINT64_MAX;
+    }
+
+    *tun_idp = htonll(tun_id);
+    *maskp = htonll(mask);
+    return;
+
+error:
+    ovs_fatal(0, "%s: bad syntax for tunnel id", str);
 }
 
 static void *
@@ -448,7 +477,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
 }
 
 #define FIELDS                                              \
-    FIELD(F_TUN_ID,      "tun_id",      FWW_TUN_ID)         \
+    FIELD(F_TUN_ID,      "tun_id",      0)                  \
     FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \
     FIELD(F_DL_VLAN,     "dl_vlan",     0)                  \
     FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", 0)                  \
@@ -502,12 +531,14 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
                   const char *value)
 {
     uint8_t mac[ETH_ADDR_LEN];
+    ovs_be64 tun_id, tun_mask;
     ovs_be32 ip, mask;
     uint16_t port_no;
 
     switch (index) {
     case F_TUN_ID:
-        cls_rule_set_tun_id(rule, htonll(str_to_u64(value)));
+        str_to_tun_id(value, &tun_id, &tun_mask);
+        cls_rule_set_tun_id_masked(rule, tun_id, tun_mask);
         break;
 
     case F_IN_PORT:

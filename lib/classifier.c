@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,8 +130,15 @@ cls_rule_set_reg_masked(struct cls_rule *rule, unsigned int reg_idx,
 void
 cls_rule_set_tun_id(struct cls_rule *rule, ovs_be64 tun_id)
 {
-    rule->wc.wildcards &= ~FWW_TUN_ID;
-    rule->flow.tun_id = tun_id;
+    cls_rule_set_tun_id_masked(rule, tun_id, htonll(UINT64_MAX));
+}
+
+void
+cls_rule_set_tun_id_masked(struct cls_rule *rule,
+                           ovs_be64 tun_id, ovs_be64 mask)
+{
+    rule->wc.tun_id_mask = mask;
+    rule->flow.tun_id = tun_id & mask;
 }
 
 void
@@ -393,8 +400,16 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
             break;
         }
     }
-    if (!(w & FWW_TUN_ID)) {
-        ds_put_format(s, "tun_id=0x%"PRIx64",", ntohll(f->tun_id));
+    switch (wc->tun_id_mask) {
+    case 0:
+        break;
+    case CONSTANT_HTONLL(UINT64_MAX):
+        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(f->tun_id));
+        break;
+    default:
+        ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
+                      ntohll(f->tun_id), ntohll(wc->tun_id_mask));
+        break;
     }
     if (!(w & FWW_IN_PORT)) {
         ds_put_format(s, "in_port=%"PRIu16",",
@@ -940,7 +955,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
         }
     }
 
-    return ((wc & FWW_TUN_ID || a->tun_id == b->tun_id)
+    return (!((a->tun_id ^ b->tun_id) & wildcards->tun_id_mask)
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
             && (wc & FWW_IN_PORT || a->in_port == b->in_port)
@@ -973,9 +988,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
     }
-    if (wc & FWW_TUN_ID) {
-        flow->tun_id = 0;
-    }
+    flow->tun_id &= wildcards->tun_id_mask;
     flow->nw_src &= wildcards->nw_src_mask;
     flow->nw_dst &= wildcards->nw_dst_mask;
     if (wc & FWW_IN_PORT) {

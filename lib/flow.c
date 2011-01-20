@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -302,6 +302,7 @@ void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
     wc->wildcards = FWW_ALL;
+    wc->tun_id_mask = htonll(0);
     wc->nw_src_mask = htonl(0);
     wc->nw_dst_mask = htonl(0);
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
@@ -315,6 +316,7 @@ void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
     wc->wildcards = 0;
+    wc->tun_id_mask = htonll(UINT64_MAX);
     wc->nw_src_mask = htonl(UINT32_MAX);
     wc->nw_dst_mask = htonl(UINT32_MAX);
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
@@ -330,6 +332,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
     int i;
 
     if (wc->wildcards
+        || wc->tun_id_mask != htonll(UINT64_MAX)
         || wc->nw_src_mask != htonl(UINT32_MAX)
         || wc->nw_dst_mask != htonl(UINT32_MAX)
         || wc->vlan_tci_mask != htons(UINT16_MAX)) {
@@ -356,6 +359,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     int i;
 
     dst->wildcards = src1->wildcards | src2->wildcards;
+    dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
     dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
     dst->nw_dst_mask = src1->nw_dst_mask & src2->nw_dst_mask;
     for (i = 0; i < FLOW_N_REGS; i++) {
@@ -371,7 +375,7 @@ flow_wildcards_hash(const struct flow_wildcards *wc)
     /* If you change struct flow_wildcards and thereby trigger this
      * assertion, please check that the new struct flow_wildcards has no holes
      * in it before you update the assertion. */
-    BUILD_ASSERT_DECL(sizeof *wc == 16 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(sizeof *wc == 24 + FLOW_N_REGS * 4);
     return hash_bytes(wc, sizeof *wc, 0);
 }
 
@@ -384,6 +388,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
     int i;
 
     if (a->wildcards != b->wildcards
+        || a->tun_id_mask != b->tun_id_mask
         || a->nw_src_mask != b->nw_src_mask
         || a->nw_dst_mask != b->nw_dst_mask
         || a->vlan_tci_mask != b->vlan_tci_mask) {
@@ -414,6 +419,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
     }
 
     return (a->wildcards & ~b->wildcards
+            || (a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask);

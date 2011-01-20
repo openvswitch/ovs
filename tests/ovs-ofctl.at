@@ -15,6 +15,7 @@ tun_id=0x1234,cookie=0x5678,actions=flood
 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
 actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
 actions=drop
+tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt
 ], [0], [stdout], [stderr])
@@ -32,6 +33,8 @@ OFPT_FLOW_MOD: ADD cookie:0x123400005678 actions=FLOOD
 OFPT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
 OFPT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
 OFPT_FLOW_MOD: ADD actions=drop
+NXT_SET_FLOW_FORMAT: format=nxm
+NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ]])
 AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
 normalization changed ofp_match, details:
@@ -65,6 +68,7 @@ cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=drop
+tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
@@ -78,6 +82,7 @@ NXT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTRO
 NXT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD actions=drop
+NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ])
 AT_CLEANUP
 
@@ -214,6 +219,7 @@ NXM_OF_ARP_TPA_W(C0D80000/FFFF0000)
 
 # Tunnel ID.
 NXM_NX_TUN_ID(00000000abcdef01)
+NXM_NX_TUN_ID_W(84200000abcdef01/84200000FFFFFFFF)
 
 # Register 0.
 NXM_NX_REG0(acebdf56)
@@ -331,6 +337,7 @@ nx_pull_match() returned error 44010104
 
 # Tunnel ID.
 NXM_NX_TUN_ID(00000000abcdef01)
+NXM_NX_TUN_ID_W(84200000abcdef01/84200000ffffffff)
 
 # Register 0.
 NXM_NX_REG0(acebdf56)

@@ -337,20 +337,25 @@ as a decimal number between 0 and 255, inclusive.
 .IP
 When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
-.IP \fBtun_id=\fItunnel\-id\fR
-Matches tunnel identifier \fItunnel\-id\fR.  Only packets that arrive
+.IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
+Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
 over a tunnel that carries a key (e.g. GRE with the RFC 2890 key
-extension) will have a nonzero tunnel ID.
+extension) will have a nonzero tunnel ID.  If \fImask\fR is omitted,
+\fItunnel-id\fR is the exact tunnel ID to match; \fImask\fR is
+specified, then a 1-bit in \fImask\fR indicates that the corresponding
+bit in \fItunnel-id\fR must match exactly, and a 0-bit wildcards that
+bit.
 .IP
 \fBtun_id\fR requires use of one of two Nicira extensions to OpenFlow:
 .RS
 .IP "NXM (Nicira Extended Match)"
 This extension fully supports \fBtun_id\fR. 
 .IP "Tunnel ID from Cookie"
-This extension supports \fBtun_id\fR with two caveats: the top 32 bits
-of the \fBcookie\fR (see below) are used for \fItunnel\-id\fR and thus
-unavailable for other use, and specifying \fBtun_id\fR on
-\fBdump\-flows\fR or \fBdump\-aggregate\fR has no effect.
+This extension supports \fBtun_id\fR with three caveats: the top 32 bits
+of the \fBcookie\fR (see below) are used for \fItunnel-id\fR and thus
+unavailable for other use, specifying \fBtun_id\fR on
+\fBdump\-flows\fR or \fBdump\-aggregate\fR has no effect, and
+\fImask\fR is not supported.
 .RE
 .IP
 When \fBtun_id\fR is specified, \fBovs\-ofctl\fR will automatically

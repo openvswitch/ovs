@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@
     /*                                    struct flow  all-caps */  \
     /*        FWW_* bit(s)                member name  name     */  \
     /*        --------------------------  -----------  -------- */  \
-    CLS_FIELD(FWW_TUN_ID,                 tun_id,      TUN_ID)      \
+    CLS_FIELD(0,                          tun_id,      TUN_ID)      \
     CLS_FIELD(0,                          nw_src,      NW_SRC)      \
     CLS_FIELD(0,                          nw_dst,      NW_DST)      \
     CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
@@ -201,6 +201,8 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
                    & wild->wc.vlan_tci_mask);
+        } else if (f_idx == CLS_F_IDX_TUN_ID) {
+            eq = !((fixed->tun_id ^ wild->flow.tun_id) & wild->wc.tun_id_mask);
         } else {
             NOT_REACHED();
         }
@@ -463,6 +465,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
+        } else if (f_idx == CLS_F_IDX_TUN_ID) {
+            rule->cls_rule.wc.tun_id_mask = htonll(UINT64_MAX);
         } else {
             NOT_REACHED();
         }
