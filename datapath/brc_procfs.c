@@ -81,13 +81,6 @@ static struct proc_dir_entry *brc_open_dir(const char *dir_name,
 	return *dirp;
 }
 
-/* Maximum length of the BRC_GENL_A_PROC_DIR and BRC_GENL_A_PROC_NAME strings.
- * If we could depend on supporting NLA_NUL_STRING and the .len member in
- * Generic Netlink policy, then we could just put this in brc_genl_policy (and
- * simplify brc_genl_set_proc() below too), but upstream 2.6.18 does not have
- * either. */
-#define BRC_NAME_LEN_MAX 32
-
 int brc_genl_set_proc(struct sk_buff *skb, struct genl_info *info)
 {
 	struct proc_dir_entry *dir, *entry;
@@ -95,18 +88,15 @@ int brc_genl_set_proc(struct sk_buff *skb, struct genl_info *info)
 	char *data;
 
 	if (!info->attrs[BRC_GENL_A_PROC_DIR] ||
-	    VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_DIR]) ||
+	    VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_DIR], BRC_NAME_LEN_MAX) ||
 	    !info->attrs[BRC_GENL_A_PROC_NAME] ||
-	    VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_NAME]) ||
+	    VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_NAME], BRC_NAME_LEN_MAX) ||
 	    (info->attrs[BRC_GENL_A_PROC_DATA] &&
-	     VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_DATA])))
+	     VERIFY_NUL_STRING(info->attrs[BRC_GENL_A_PROC_DATA], INT_MAX)))
 		return -EINVAL;
 
 	dir_name = nla_data(info->attrs[BRC_GENL_A_PROC_DIR]);
 	name = nla_data(info->attrs[BRC_GENL_A_PROC_NAME]);
-	if (strlen(dir_name) > BRC_NAME_LEN_MAX ||
-	    strlen(name) > BRC_NAME_LEN_MAX)
-		return -EINVAL;
 
 	if (!strcmp(dir_name, "net/vlan"))
 		dir = brc_open_dir("vlan", proc_net, &proc_vlan_dir);

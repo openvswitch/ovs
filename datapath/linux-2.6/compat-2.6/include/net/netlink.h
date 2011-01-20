@@ -5,16 +5,25 @@
 #include_next <net/netlink.h>
 
 #ifndef HAVE_NLA_NUL_STRING
-#define NLA_NUL_STRING NLA_STRING
-
-static inline int VERIFY_NUL_STRING(struct nlattr *attr)
+static inline int VERIFY_NUL_STRING(struct nlattr *attr, int maxlen)
 {
-	return (!attr || (nla_len(attr)
-			  && memchr(nla_data(attr), '\0', nla_len(attr)))
-		? 0 : -EINVAL);
+	char *s;
+	int len;
+	if (!attr)
+		return 0;
+
+	len = nla_len(attr);
+	if (len >= maxlen)
+		return -EINVAL;
+
+	s = nla_data(attr);
+	if (s[len - 1] != '\0')
+		return -EINVAL;
+
+	return 0;
 }
 #else
-static inline int VERIFY_NUL_STRING(struct nlattr *attr)
+static inline int VERIFY_NUL_STRING(struct nlattr *attr, int maxlen)
 {
 	return 0;
 }

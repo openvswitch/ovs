@@ -408,9 +408,13 @@ static struct genl_ops brc_genl_ops_query_dp = {
 static struct nla_policy brc_genl_policy[BRC_GENL_A_MAX + 1] = {
 	[BRC_GENL_A_ERR_CODE] = { .type = NLA_U32 },
 
-	[BRC_GENL_A_PROC_DIR] = { .type = NLA_NUL_STRING },
-	[BRC_GENL_A_PROC_NAME] = { .type = NLA_NUL_STRING },
+#ifdef HAVE_NLA_NUL_STRING
+	[BRC_GENL_A_PROC_DIR] = { .type = NLA_NUL_STRING,
+				  .len = BRC_NAME_LEN_MAX },
+	[BRC_GENL_A_PROC_NAME] = { .type = NLA_NUL_STRING,
+				  .len = BRC_NAME_LEN_MAX },
 	[BRC_GENL_A_PROC_DATA] = { .type = NLA_NUL_STRING },
+#endif
 
 	[BRC_GENL_A_FDB_DATA] = { .type = NLA_UNSPEC },
 };
