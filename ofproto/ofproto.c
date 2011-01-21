@@ -3549,8 +3549,8 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
 
     act_len = sizeof *rule->actions * rule->n_actions;
 
-    start_len = (*replyp)->size;
     append_nxstats_reply(sizeof *nfs + NXM_MAX_LEN + act_len, ofconn, replyp);
+    start_len = (*replyp)->size;
     reply = *replyp;
 
     nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
