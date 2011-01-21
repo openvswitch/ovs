@@ -136,26 +136,6 @@ error:
 	return err;
 }
 
-static void vport_del_all(void)
-{
-	int i;
-
-	rtnl_lock();
-	vport_lock();
-
-	for (i = 0; i < VPORT_HASH_BUCKETS; i++) {
-		struct hlist_head *bucket = &dev_table[i];
-		struct vport *vport;
-		struct hlist_node *node, *next;
-
-		hlist_for_each_entry_safe(vport, node, next, bucket, hash_node)
-			vport_del(vport);
-	}
-
-	vport_unlock();
-	rtnl_unlock();
-}
-
 /**
  *	vport_exit - shutdown vport subsystem
  *
@@ -165,8 +145,6 @@ static void vport_del_all(void)
 void vport_exit(void)
 {
 	int i;
-
-	vport_del_all();
 
 	for (i = 0; i < n_vport_types; i++) {
 		if (vport_ops_list[i]->exit)
