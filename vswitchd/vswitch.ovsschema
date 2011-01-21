@@ -1,5 +1,5 @@
 {"name": "Open_vSwitch",
- "version": "1.0.6",
+ "version": "99.99.99",
  "cksum": "2256400918 14940",
  "tables": {
    "Open_vSwitch": {
@@ -384,7 +384,18 @@
                   "min": 0, "max": 1}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
-                  "min": 0, "max": "unlimited"}}}},
+                  "min": 0, "max": "unlimited"}},
+       "is_connected": {
+         "type": "boolean",
+         "ephemeral": true},
+       "role": {
+         "type": {"key": {"type": "string",
+                          "enum": ["set", ["other", "master", "slave"]]},
+                  "min": 0, "max": 1},
+         "ephemeral": true},
+       "status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true}}},
    "Manager": {
      "columns": {
        "target": {

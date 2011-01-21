@@ -1318,6 +1318,42 @@ refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
                         &datum);
 }
 
+static inline const char *
+nx_role_to_str(enum nx_role role)
+{
+    switch (role) {
+    case NX_ROLE_OTHER:
+        return "other";
+    case NX_ROLE_MASTER:
+        return "master";
+    case NX_ROLE_SLAVE:
+        return "slave";
+    default:
+        return "*** INVALID ROLE ***";
+    }
+}
+
+static void
+bridge_refresh_controller_status(const struct bridge *br)
+{
+    struct shash info;
+    const struct ovsrec_controller *cfg;
+
+    ofproto_get_ofproto_controller_info(br->ofproto, &info);
+
+    OVSREC_CONTROLLER_FOR_EACH(cfg, idl) {
+        struct ofproto_controller_info *cinfo = shash_find_data(&info, cfg->target);
+
+        ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
+        ovsrec_controller_set_role(cfg, nx_role_to_str(cinfo->role));
+        ovsrec_controller_set_status(cfg, (char **) cinfo->pairs.keys,
+                                     (char **) cinfo->pairs.values,
+                                     cinfo->pairs.n);
+    }
+
+    ofproto_free_ofproto_controller_info(&info);
+}
+
 void
 bridge_run(void)
 {
@@ -1393,6 +1429,7 @@ bridge_run(void)
                         iface_refresh_status(iface);
                     }
                 }
+                bridge_refresh_controller_status(br);
             }
             refresh_system_stats(cfg);
             ovsdb_idl_txn_commit(txn);

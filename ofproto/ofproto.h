@@ -34,7 +34,18 @@ struct cls_rule;
 struct nlattr;
 struct ofhooks;
 struct ofproto;
+struct shash;
 struct svec;
+
+struct ofproto_controller_info {
+    bool is_connected;
+    enum nx_role role;
+    struct {
+        const char *keys[3];
+        const char *values[3];
+        size_t n;
+    } pairs;
+};
 
 struct ofexpired {
     struct flow flow;
@@ -146,6 +157,9 @@ struct ofhooks {
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
 struct tag_set *ofproto_get_revalidate_set(struct ofproto *);
+
+void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
+void ofproto_free_ofproto_controller_info(struct shash *);
 
 #ifdef  __cplusplus
 }

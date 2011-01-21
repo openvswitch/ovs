@@ -1354,6 +1354,60 @@ ofproto_is_alive(const struct ofproto *p)
     return !hmap_is_empty(&p->controllers);
 }
 
+void
+ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
+                                    struct shash *info)
+{
+    const struct ofconn *ofconn;
+
+    shash_init(info);
+
+    HMAP_FOR_EACH (ofconn, hmap_node, &ofproto->controllers) {
+        const struct rconn *rconn = ofconn->rconn;
+        const int last_error = rconn_get_last_error(rconn);
+        struct ofproto_controller_info *cinfo = xmalloc(sizeof *cinfo);
+
+        shash_add(info, rconn_get_target(rconn), cinfo);
+
+        cinfo->is_connected = rconn_is_connected(rconn);
+        cinfo->role = ofconn->role;
+
+        cinfo->pairs.n = 0;
+
+        if (last_error == EOF) {
+            cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
+            cinfo->pairs.values[cinfo->pairs.n++] = xstrdup("End of file");
+        } else if (last_error > 0) {
+            cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
+            cinfo->pairs.values[cinfo->pairs.n++] =
+                xstrdup(strerror(last_error));
+        }
+
+        cinfo->pairs.keys[cinfo->pairs.n] = "state";
+        cinfo->pairs.values[cinfo->pairs.n++] =
+            xstrdup(rconn_get_state(rconn));
+
+        cinfo->pairs.keys[cinfo->pairs.n] = "time_in_state";
+        cinfo->pairs.values[cinfo->pairs.n++] =
+            xasprintf("%u", rconn_get_state_elapsed(rconn));
+    }
+}
+
+void
+ofproto_free_ofproto_controller_info(struct shash *info)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, info) {
+        struct ofproto_controller_info *cinfo = node->data;
+        while (cinfo->pairs.n) {
+            free((char *) cinfo->pairs.values[--cinfo->pairs.n]);
+        }
+        free(cinfo);
+    }
+    shash_destroy(info);
+}
+
 /* Deletes port number 'odp_port' from the datapath for 'ofproto'.
  *
  * This is almost the same as calling dpif_port_del() directly on the
