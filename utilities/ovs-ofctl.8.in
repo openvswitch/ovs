@@ -314,7 +314,7 @@ Matches IP ToS/DSCP field \fItos\fR, which is specified as a decimal
 number between 0 and 255, inclusive.  Note that the two lower reserved
 bits are ignored for matching purposes.
 .IP
-The value of \fBnw_proto\fR is ignored unless \fBdl_type=0x0800\fR,
+The value of \fBnw_tos\fR is ignored unless \fBdl_type=0x0800\fR,
 \fBip\fR, \fBicmp\fR, \fBtcp\fR, or \fBudp\fR is also specified (see
 \fBFlow Syntax\fR above).
 .
