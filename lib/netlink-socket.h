@@ -46,6 +46,7 @@ struct nl_sock;
 
 /* Netlink sockets. */
 int nl_sock_create(int protocol, struct nl_sock **);
+int nl_sock_clone(const struct nl_sock *, struct nl_sock **);
 void nl_sock_destroy(struct nl_sock *);
 
 int nl_sock_join_mcgroup(struct nl_sock *, unsigned int multicast_group);

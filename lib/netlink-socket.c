@@ -60,10 +60,13 @@ struct nl_sock
     int fd;
     uint32_t pid;
     int protocol;
+    bool any_groups;
+    struct nl_dump *dump;
 };
 
 static int alloc_pid(uint32_t *);
 static void free_pid(uint32_t);
+static int nl_sock_cow__(struct nl_sock *);
 
 /* Creates a new netlink socket for the given netlink 'protocol'
  * (NETLINK_ROUTE, NETLINK_GENERIC, ...).  Returns 0 and sets '*sockp' to the
@@ -87,6 +90,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         goto error;
     }
     sock->protocol = protocol;
+    sock->any_groups = false;
 
     retval = alloc_pid(&sock->pid);
     if (retval) {
@@ -130,14 +134,27 @@ error:
     return retval;
 }
 
+/* Creates a new netlink socket for the same protocol as 'src'.  Returns 0 and
+ * sets '*sockp' to the new socket if successful, otherwise returns a positive
+ * errno value.  */
+int
+nl_sock_clone(const struct nl_sock *src, struct nl_sock **sockp)
+{
+    return nl_sock_create(src->protocol, sockp);
+}
+
 /* Destroys netlink socket 'sock'. */
 void
 nl_sock_destroy(struct nl_sock *sock)
 {
     if (sock) {
-        close(sock->fd);
-        free_pid(sock->pid);
-        free(sock);
+        if (sock->dump) {
+            sock->dump = NULL;
+        } else {
+            close(sock->fd);
+            free_pid(sock->pid);
+            free(sock);
+        }
     }
 }
 
@@ -151,12 +168,17 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
+    int error = nl_sock_cow__(sock);
+    if (error) {
+        return error;
+    }
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not join multicast group %u (%s)",
                   multicast_group, strerror(errno));
         return errno;
     }
+    sock->any_groups = true;
     return 0;
 }
 
@@ -173,6 +195,7 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 int
 nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
+    assert(!sock->dump);
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not leave multicast group %u (%s)",
@@ -182,15 +205,8 @@ nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     return 0;
 }
 
-/* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, and
- * nlmsg_pid will be set to 'sock''s pid, before the message is sent.
- *
- * Returns 0 if successful, otherwise a positive errno value.  If
- * 'wait' is true, then the send will wait until buffer space is ready;
- * otherwise, returns EAGAIN if the 'sock' send buffer is full. */
-int
-nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
+static int
+nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 {
     struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(msg);
     int error;
@@ -207,6 +223,23 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
         COVERAGE_INC(netlink_sent);
     }
     return error;
+}
+
+/* Tries to send 'msg', which must contain a Netlink message, to the kernel on
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, and
+ * nlmsg_pid will be set to 'sock''s pid, before the message is sent.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  If
+ * 'wait' is true, then the send will wait until buffer space is ready;
+ * otherwise, returns EAGAIN if the 'sock' send buffer is full. */
+int
+nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
+{
+    int error = nl_sock_cow__(sock);
+    if (error) {
+        return error;
+    }
+    return nl_sock_send__(sock, msg, wait);
 }
 
 /* Tries to send the 'n_iov' chunks of data in 'iov' to the kernel on 'sock' as
@@ -251,16 +284,8 @@ STRESS_OPTION(
     netlink_overflow, "simulate netlink socket receive buffer overflow",
     5, 1, -1, 100);
 
-/* Tries to receive a netlink message from the kernel on 'sock'.  If
- * successful, stores the received message into '*bufp' and returns 0.  The
- * caller is responsible for destroying the message with ofpbuf_delete().  On
- * failure, returns a positive errno value and stores a null pointer into
- * '*bufp'.
- *
- * If 'wait' is true, nl_sock_recv waits for a message to be ready; otherwise,
- * returns EAGAIN if the 'sock' receive buffer is empty. */
-int
-nl_sock_recv(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
+static int
+nl_sock_recv__(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
 {
     uint8_t tmp;
     ssize_t bufsize = 2048;
@@ -343,6 +368,24 @@ try_again:
     COVERAGE_INC(netlink_received);
 
     return 0;
+}
+
+/* Tries to receive a netlink message from the kernel on 'sock'.  If
+ * successful, stores the received message into '*bufp' and returns 0.  The
+ * caller is responsible for destroying the message with ofpbuf_delete().  On
+ * failure, returns a positive errno value and stores a null pointer into
+ * '*bufp'.
+ *
+ * If 'wait' is true, nl_sock_recv waits for a message to be ready; otherwise,
+ * returns EAGAIN if the 'sock' receive buffer is empty. */
+int
+nl_sock_recv(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
+{
+    int error = nl_sock_cow__(sock);
+    if (error) {
+        return error;
+    }
+    return nl_sock_recv__(sock, bufp, wait);
 }
 
 /* Sends 'request' to the kernel via 'sock' and waits for a response.  If
@@ -454,7 +497,45 @@ recv:
 int
 nl_sock_drain(struct nl_sock *sock)
 {
+    int error = nl_sock_cow__(sock);
+    if (error) {
+        return error;
+    }
     return drain_rcvbuf(sock->fd);
+}
+
+/* The client is attempting some operation on 'sock'.  If 'sock' has an ongoing
+ * dump operation, then replace 'sock''s fd with a new socket and hand 'sock''s
+ * old fd over to the dump. */
+static int
+nl_sock_cow__(struct nl_sock *sock)
+{
+    struct nl_sock *copy;
+    uint32_t tmp_pid;
+    int tmp_fd;
+    int error;
+
+    if (!sock->dump) {
+        return 0;
+    }
+
+    error = nl_sock_clone(sock, &copy);
+    if (error) {
+        return error;
+    }
+
+    tmp_fd = sock->fd;
+    sock->fd = copy->fd;
+    copy->fd = tmp_fd;
+
+    tmp_pid = sock->pid;
+    sock->pid = copy->pid;
+    copy->pid = tmp_pid;
+
+    sock->dump->sock = copy;
+    sock->dump = NULL;
+
+    return 0;
 }
 
 /* Starts a Netlink "dump" operation, by sending 'request' to the kernel via
@@ -464,23 +545,23 @@ nl_sock_drain(struct nl_sock *sock)
  * be set to 'sock''s pid, before the message is sent.  NLM_F_DUMP and
  * NLM_F_ACK will be set in nlmsg_flags.
  *
- * The properties of Netlink make dump operations reliable as long as all of
- * the following are true:
+ * This Netlink socket library is designed to ensure that the dump is reliable
+ * and that it will not interfere with other operations on 'sock', including
+ * destroying or sending and receiving messages on 'sock'.  One corner case is
+ * not handled:
  *
- *   - At most a single dump is in progress at a time on a given nl_sock.
- *
- *   - The nl_sock is not subscribed to any multicast groups.
- *
- *   - The nl_sock is not used to send any other messages before the dump
- *     operation is complete.
+ *   - If 'sock' has been used to send a request (e.g. with nl_sock_send())
+ *     whose response has not yet been received (e.g. with nl_sock_recv()).
+ *     This is unusual: usually nl_sock_transact() is used to send a message
+ *     and receive its reply all in one go.
  *
  * This function provides no status indication.  An error status for the entire
  * dump operation is provided when it is completed by calling nl_dump_done().
  *
- * The caller is responsible for destroying 'request'.  The caller must not
- * close 'sock' before it completes the dump operation (by calling
- * nl_dump_done()) or before nl_dump_next() returns false, whichever comes
- * first.
+ * The caller is responsible for destroying 'request'.
+ *
+ * The new 'dump' is independent of 'sock'.  'sock' and 'dump' may be destroyed
+ * in either order.
  */
 void
 nl_dump_start(struct nl_dump *dump,
@@ -489,9 +570,21 @@ nl_dump_start(struct nl_dump *dump,
     struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(request);
     nlmsghdr->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
     dump->seq = nlmsghdr->nlmsg_seq;
-    dump->sock = sock;
-    dump->status = nl_sock_send(sock, request, true);
     dump->buffer = NULL;
+    if (sock->any_groups || sock->dump) {
+        /* 'sock' might belong to some multicast group, or it already has an
+         * onoging dump.  Clone the socket to avoid possibly intermixing
+         * multicast messages or previous dump results with our results. */
+        dump->status = nl_sock_clone(sock, &dump->sock);
+        if (dump->status) {
+            return;
+        }
+    } else {
+        sock->dump = dump;
+        dump->sock = sock;
+        dump->status = 0;
+    }
+    dump->status = nl_sock_send__(sock, request, true);
 }
 
 /* Helper function for nl_dump_next(). */
@@ -502,7 +595,7 @@ nl_dump_recv(struct nl_dump *dump, struct ofpbuf **bufferp)
     struct ofpbuf *buffer;
     int retval;
 
-    retval = nl_sock_recv(dump->sock, bufferp, true);
+    retval = nl_sock_recv__(dump->sock, bufferp, true);
     if (retval) {
         return retval == EINTR ? EAGAIN : retval;
     }
@@ -591,6 +684,13 @@ nl_dump_done(struct nl_dump *dump)
         }
     }
 
+    if (dump->sock) {
+        if (dump->sock->dump) {
+            dump->sock->dump = NULL;
+        } else {
+            nl_sock_destroy(dump->sock);
+        }
+    }
     ofpbuf_delete(dump->buffer);
     return dump->status == EOF ? 0 : dump->status;
 }

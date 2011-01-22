@@ -511,11 +511,9 @@ netdev_vport_reset_names(void)
             netdev_vport_link_change(&change, NULL);
         }
     }
-
-    error = nl_dump_done(&dump);
     nl_sock_destroy(rtnl_sock);
 
-    return error;
+    return nl_dump_done(&dump);
 }
 
 static void
