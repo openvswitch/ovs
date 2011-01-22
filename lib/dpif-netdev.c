@@ -1412,7 +1412,6 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* enumerate */
     dpif_netdev_open,
     dpif_netdev_close,
-    NULL,                       /* get_all_names */
     dpif_netdev_destroy,
     dpif_netdev_get_stats,
     dpif_netdev_get_drop_frags,

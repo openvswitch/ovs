@@ -54,7 +54,6 @@ void dpif_close(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
 const char *dpif_base_name(const struct dpif *);
-int dpif_get_all_names(const struct dpif *, struct svec *);
 
 int dpif_delete(struct dpif *);
 

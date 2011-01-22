@@ -102,23 +102,6 @@ struct dpif_class {
     /* Closes 'dpif' and frees associated memory. */
     void (*close)(struct dpif *dpif);
 
-    /* Enumerates all names that may be used to open 'dpif' into 'all_names'.
-     * The Linux datapath, for example, supports opening a datapath both by
-     * number, e.g. "dp0", and by the name of the datapath's local port.  For
-     * some datapaths, this might be an infinite set (e.g. in a file name,
-     * slashes may be duplicated any number of times), in which case only the
-     * names most likely to be used should be enumerated.
-     *
-     * The caller has already initialized 'all_names' and might already have
-     * added some names to it.  This function should not disturb any existing
-     * names in 'all_names'.
-     *
-     * If a datapath class does not support multiple names for a datapath, this
-     * function may be a null pointer.
-     *
-     * This is used by the vswitch at startup, */
-    int (*get_all_names)(const struct dpif *dpif, struct svec *all_names);
-
     /* Attempts to destroy the dpif underlying 'dpif'.
      *
      * If successful, 'dpif' will not be used again except as an argument for

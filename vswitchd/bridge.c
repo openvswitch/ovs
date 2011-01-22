@@ -373,34 +373,22 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     svec_init(&dpif_types);
     dp_enumerate_types(&dpif_types);
     for (i = 0; i < dpif_types.n; i++) {
-        struct dpif *dpif;
-        int retval;
         size_t j;
 
         dp_enumerate_names(dpif_types.names[i], &dpif_names);
 
-        /* For each dpif... */
+        /* Delete each dpif whose name is not in 'bridge_names'. */
         for (j = 0; j < dpif_names.n; j++) {
-            retval = dpif_open(dpif_names.names[j], dpif_types.names[i], &dpif);
-            if (!retval) {
-                struct svec all_names;
-                size_t k;
+            if (!svec_contains(&bridge_names, dpif_names.names[j])) {
+                struct dpif *dpif;
+                int retval;
 
-                /* ...check whether any of its names is in 'bridge_names'. */
-                svec_init(&all_names);
-                dpif_get_all_names(dpif, &all_names);
-                for (k = 0; k < all_names.n; k++) {
-                    if (svec_contains(&bridge_names, all_names.names[k])) {
-                        goto found;
-                    }
+                retval = dpif_open(dpif_names.names[j], dpif_types.names[i],
+                                   &dpif);
+                if (!retval) {
+                    dpif_delete(dpif);
+                    dpif_close(dpif);
                 }
-
-                /* No.  Delete the dpif. */
-                dpif_delete(dpif);
-
-            found:
-                svec_destroy(&all_names);
-                dpif_close(dpif);
             }
         }
     }

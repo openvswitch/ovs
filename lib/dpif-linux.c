@@ -912,7 +912,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_enumerate,
     dpif_linux_open,
     dpif_linux_close,
-    NULL,                       /* get_all_names */
     dpif_linux_destroy,
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,

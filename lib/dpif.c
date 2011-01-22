@@ -363,33 +363,6 @@ dpif_base_name(const struct dpif *dpif)
     return dpif->base_name;
 }
 
-/* Enumerates all names that may be used to open 'dpif' into 'all_names'.  The
- * Linux datapath, for example, supports opening a datapath both by number,
- * e.g. "dp0", and by the name of the datapath's local port.  For some
- * datapaths, this might be an infinite set (e.g. in a file name, slashes may
- * be duplicated any number of times), in which case only the names most likely
- * to be used will be enumerated.
- *
- * The caller must already have initialized 'all_names'.  Any existing names in
- * 'all_names' will not be disturbed. */
-int
-dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
-{
-    if (dpif->dpif_class->get_all_names) {
-        int error = dpif->dpif_class->get_all_names(dpif, all_names);
-        if (error) {
-            VLOG_WARN_RL(&error_rl,
-                         "failed to retrieve names for datpath %s: %s",
-                         dpif_name(dpif), strerror(error));
-        }
-        return error;
-    } else {
-        svec_add(all_names, dpif_base_name(dpif));
-        return 0;
-    }
-}
-
-
 /* Destroys the datapath that 'dpif' is connected to, first removing all of its
  * ports.  After calling this function, it does not make sense to pass 'dpif'
  * to any functions other than dpif_name() or dpif_close(). */
