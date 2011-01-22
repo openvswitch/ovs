@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,7 +195,10 @@ multipath_algorithm(uint32_t hash, enum nx_mp_algorithm algorithm,
         return hash % n_links;
 
     case NX_MP_ALG_HASH_THRESHOLD:
-        return hash / (UINT32_MAX / n_links);
+        if (n_links == 1) {
+            return 0;
+        }
+        return hash / (UINT32_MAX / n_links + 1);
 
     case NX_MP_ALG_HRW:
         return (n_links <= 64
