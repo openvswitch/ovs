@@ -19,10 +19,12 @@ OpenFlow controllers over TCP or SSL.
 For a more powerful alternative to \fBovs\-openflowd\fR, see
 \fBovs\-vswitchd\fR(8).  Do not run both daemons at the same time.
 .PP
-The mandatory \fIdatapath\fR argument argument specifies the local datapath
-to relay.  It takes one of the following forms:
-.
-.so lib/dpif.man
+The mandatory \fIdatapath\fR argument argument specifies the local
+datapath to relay.  It takes the form [\fItype\fB@\fR]\fIname\fR,
+where \fIname\fR is the network device associated with the datapath's
+local port.  If \fItype\fR is given, it specifies the datapath
+provider of \fIname\fR, otherwise the default provider \fBsystem\fR is
+assumed.
 .
 .PP
 The optional \fIcontroller\fR arguments specify how to connect to the

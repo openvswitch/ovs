@@ -24,24 +24,19 @@ that network device to the datapath.
 If \fBovs\-vswitchd\fR(8) is in use, use \fBovs\-vsctl\fR(8) instead
 of \fBovs\-dpctl\fR.
 .PP
-Most \fBovs\-dpctl\fR commands that work with datapaths take an argument
-that specifies the name of the datapath, in one of the following
-forms:
-.so lib/dpif.man
+Most \fBovs\-dpctl\fR commands that work with datapaths take an
+argument that specifies the name of the datapath.  Datapath names take
+the form [\fItype\fB@\fR]\fIname\fR, where \fIname\fR is the network
+device associated with the datapath's local port.  If \fItype\fR is
+given, it specifies the datapath provider of \fIname\fR, otherwise the
+default provider \fBsystem\fR is assumed.
 .PP
 The following commands manage datapaths.
 .
 .TP
 \fBadd\-dp \fIdp\fR [\fInetdev\fR...]
-Creates datapath \fIdp\fR.  The name of the new datapath's local port
-depends on how \fIdp\fR is specified: if it takes the form
-\fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; otherwise,
-the local port's name will be \fIdp\fR.
-.IP
-This will fail if the host already has 256 datapaths, if a network
-device with the same name as the new datapath's local port already
-exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR
-and a datapath numbered \fIN\fR already exists.
+Creates datapath \fIdp\fR, with a local port also named \fIdp\fR.
+This will fail if a network device \fIdp\fR already exists.
 .IP
 If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the datapath.
 .

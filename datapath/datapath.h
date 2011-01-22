@@ -56,7 +56,8 @@ struct dp_stats_percpu {
 /**
  * struct datapath - datapath for flow-based packet switching
  * @rcu: RCU callback head for deferred destruction.
- * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
+ * @dp_ifindex: ifindex of local port.
+ * @list_node: Element in global 'dps' list.
  * @ifobj: Represents /sys/class/net/<devname>/brif.  Protected by RTNL.
  * @drop_frags: Drop all IP fragments if nonzero.
  * @n_flows: Number of flows currently in flow table.
@@ -75,7 +76,8 @@ struct dp_stats_percpu {
  */
 struct datapath {
 	struct rcu_head rcu;
-	int dp_idx;
+	int dp_ifindex;
+	struct list_head list_node;
 	struct kobject ifobj;
 
 	int drop_frags;

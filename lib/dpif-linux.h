@@ -28,7 +28,7 @@ struct dpif_linux_vport {
     uint8_t cmd;
 
     /* odp_vport header. */
-    uint32_t dp_idx;
+    int dp_ifindex;
     uint32_t port_no;                      /* UINT32_MAX if unknown. */
     enum odp_vport_type type;
 

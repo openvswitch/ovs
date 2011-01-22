@@ -73,20 +73,29 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * each other.
  */
 
-/* Protected by genl_mutex. */
-static struct datapath __rcu *dps[256];
+/* Global list of datapaths to enable dumping them all out.
+ * Protected by genl_mutex.
+ */
+static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
-struct datapath *get_dp(int dp_idx)
+struct datapath *get_dp(int dp_ifindex)
 {
-	if (dp_idx < 0 || dp_idx >= ARRAY_SIZE(dps))
-		return NULL;
+	struct datapath *dp = NULL;
+	struct net_device *dev;
 
-	return rcu_dereference_check(dps[dp_idx], rcu_read_lock_held() ||
-					 lockdep_rtnl_is_held() ||
-					 lockdep_genl_is_held());
+	rcu_read_lock();
+	dev = dev_get_by_index_rcu(&init_net, dp_ifindex);
+	if (dev) {
+		struct vport *vport = internal_dev_get_vport(dev);
+		if (vport)
+			dp = vport->dp;
+	}
+	rcu_read_unlock();
+
+	return dp;
 }
 EXPORT_SYMBOL_GPL(get_dp);
 
@@ -362,7 +371,7 @@ static struct genl_family dp_packet_genl_family;
 static int packet_mc_group(struct datapath *dp, u8 cmd)
 {
 	BUILD_BUG_ON_NOT_POWER_OF_2(PACKET_N_MC_GROUPS);
-	return jhash_2words(dp->dp_idx, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
+	return jhash_2words(dp->dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
 }
 
 /* Send each packet in the 'skb' list to userspace for 'dp' as directed by
@@ -409,7 +418,7 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		}
 
 		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family, 0, upcall_info->cmd);
-		upcall->dp_idx = dp->dp_idx;
+		upcall->dp_ifindex = dp->dp_ifindex;
 
 		nla = nla_nest_start(user_skb, ODP_PACKET_ATTR_KEY);
 		flow_to_nlattrs(upcall_info->key, user_skb);
@@ -533,13 +542,13 @@ err:
 }
 
 /* Called with genl_mutex. */
-static int flush_flows(int dp_idx)
+static int flush_flows(int dp_ifindex)
 {
 	struct tbl *old_table;
 	struct tbl *new_table;
 	struct datapath *dp;
 
-	dp = get_dp(dp_idx);
+	dp = get_dp(dp_ifindex);
 	if (!dp)
 		return -ENODEV;
 
@@ -694,7 +703,7 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 		goto exit;
 
 	rcu_read_lock();
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	err = -ENODEV;
 	if (dp)
 		err = execute_actions(dp, packet, &key,
@@ -826,7 +835,7 @@ static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (!odp_header)
 		return -EMSGSIZE;
 
-	odp_header->dp_idx = dp->dp_idx;
+	odp_header->dp_ifindex = dp->dp_ifindex;
 
 	nla = nla_nest_start(skb, ODP_FLOW_ATTR_KEY);
 	if (!nla)
@@ -941,7 +950,7 @@ static int odp_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		goto error;
 	}
 
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	error = -ENODEV;
 	if (!dp)
 		goto error;
@@ -1065,7 +1074,7 @@ static int odp_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		return err;
 
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	if (!dp)
 		return -ENODEV;
 
@@ -1095,12 +1104,12 @@ static int odp_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	int err;
 
 	if (!a[ODP_FLOW_ATTR_KEY])
-		return flush_flows(odp_header->dp_idx);
+		return flush_flows(odp_header->dp_ifindex);
 	err = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
 	if (err)
 		return err;
 
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	if (!dp)
  		return -ENODEV;
 
@@ -1136,7 +1145,7 @@ static int odp_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	struct odp_header *odp_header = genlmsg_data(nlmsg_data(cb->nlh));
 	struct datapath *dp;
 
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	if (!dp)
 		return -ENODEV;
 
@@ -1219,7 +1228,7 @@ static int odp_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 	if (!odp_header)
 		goto error;
 
-	odp_header->dp_idx = dp->dp_idx;
+	odp_header->dp_ifindex = dp->dp_ifindex;
 
 	rcu_read_lock();
 	err = nla_put_string(skb, ODP_DP_ATTR_NAME, dp_name(dp));
@@ -1287,24 +1296,19 @@ static int odp_dp_cmd_validate(struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 /* Called with genl_mutex and optionally with RTNL lock also. */
 static struct datapath *lookup_datapath(struct odp_header *odp_header, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 {
-	if (!a[ODP_DP_ATTR_NAME]) {
-		struct datapath *dp = get_dp(odp_header->dp_idx);
-		if (!dp)
-			return ERR_PTR(-ENODEV);
-		return dp;
-	} else {
+	struct datapath *dp;
+
+	if (!a[ODP_DP_ATTR_NAME])
+		dp = get_dp(odp_header->dp_ifindex);
+	else {
 		struct vport *vport;
-		int dp_idx;
 
 		rcu_read_lock();
 		vport = vport_locate(nla_data(a[ODP_DP_ATTR_NAME]));
-		dp_idx = vport && vport->port_no == ODPP_LOCAL ? vport->dp->dp_idx : -1;
+		dp = vport && vport->port_no == ODPP_LOCAL ? vport->dp : NULL;
 		rcu_read_unlock();
-
-		if (dp_idx < 0)
-			return ERR_PTR(-ENODEV);
-		return vport->dp;
 	}
+	return dp ? dp : ERR_PTR(-ENODEV);
 }
 
 /* Called with genl_mutex. */
@@ -1319,12 +1323,10 @@ static void change_datapath(struct datapath *dp, struct nlattr *a[ODP_DP_ATTR_MA
 static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr **a = info->attrs;
-	struct odp_header *odp_header = info->userhdr;
 	struct vport_parms parms;
 	struct sk_buff *reply;
 	struct datapath *dp;
 	struct vport *vport;
-	int dp_idx;
 	int err;
 
 	err = -EINVAL;
@@ -1340,28 +1342,11 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (!try_module_get(THIS_MODULE))
 		goto err_unlock_rtnl;
 
-	dp_idx = odp_header->dp_idx;
-	if (dp_idx < 0) {
-		err = -EFBIG;
-		for (dp_idx = 0; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
-			if (get_dp(dp_idx))
-				continue;
-			err = 0;
-			break;
-		}
-	} else if (dp_idx < ARRAY_SIZE(dps))
-		err = get_dp(dp_idx) ? -EBUSY : 0;
-	else
-		err = -EINVAL;
-	if (err)
-		goto err_put_module;
-
 	err = -ENOMEM;
 	dp = kzalloc(sizeof(*dp), GFP_KERNEL);
 	if (dp == NULL)
 		goto err_put_module;
 	INIT_LIST_HEAD(&dp->port_list);
-	dp->dp_idx = dp_idx;
 
 	/* Initialize kobject for bridge.  This will be added as
 	 * /sys/class/net/<devname>/brif later, if sysfs is enabled. */
@@ -1388,6 +1373,7 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 
 		goto err_destroy_table;
 	}
+	dp->dp_ifindex = vport_get_ifindex(vport);
 
 	dp->drop_frags = 0;
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
@@ -1403,7 +1389,7 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(reply))
 		goto err_destroy_local_port;
 
-	rcu_assign_pointer(dps[dp_idx], dp);
+	list_add_tail(&dp->list_node, &dps);
 	dp_sysfs_add_dp(dp);
 
 	rtnl_unlock();
@@ -1453,7 +1439,7 @@ static int odp_dp_cmd_del(struct sk_buff *skb, struct genl_info *info)
 			dp_detach_port(vport);
 
 	dp_sysfs_del_dp(dp);
-	rcu_assign_pointer(dps[dp->dp_idx], NULL);
+	list_del(&dp->list_node);
 	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
 
 	call_rcu(&dp->rcu, destroy_dp_rcu);
@@ -1521,19 +1507,22 @@ static int odp_dp_cmd_get(struct sk_buff *skb, struct genl_info *info)
 
 static int odp_dp_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 {
-	u32 dp_idx;
+	struct datapath *dp;
+	int skip = cb->args[0];
+	int i = 0;
 
-	for (dp_idx = cb->args[0]; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
-		struct datapath *dp = get_dp(dp_idx);
-		if (!dp)
+	list_for_each_entry (dp, &dps, list_node) {
+		if (i < skip)
 			continue;
 		if (odp_dp_cmd_fill_info(dp, skb, NETLINK_CB(cb->skb).pid,
 					 cb->nlh->nlmsg_seq, NLM_F_MULTI,
 					 ODP_DP_CMD_NEW) < 0)
 			break;
+		i++;
 	}
 
-	cb->args[0] = dp_idx;
+	cb->args[0] = i;
+
 	return skb->len;
 }
 
@@ -1602,7 +1591,7 @@ static int odp_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	if (!odp_header)
 		return -EMSGSIZE;
 
-	odp_header->dp_idx = vport->dp->dp_idx;
+	odp_header->dp_ifindex = vport->dp->dp_ifindex;
 
 	NLA_PUT_U32(skb, ODP_VPORT_ATTR_PORT_NO, vport->port_no);
 	NLA_PUT_U32(skb, ODP_VPORT_ATTR_TYPE, vport_get_type(vport));
@@ -1681,7 +1670,7 @@ static struct vport *lookup_vport(struct odp_header *odp_header,
 		if (port_no >= DP_MAX_PORTS)
 			return ERR_PTR(-EFBIG);
 
-		dp = get_dp(odp_header->dp_idx);
+		dp = get_dp(odp_header->dp_ifindex);
 		if (!dp)
 			return ERR_PTR(-ENODEV);
 
@@ -1726,7 +1715,7 @@ static int odp_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		goto exit;
 
 	rtnl_lock();
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	err = -ENODEV;
 	if (!dp)
 		goto exit_unlock;
@@ -1908,7 +1897,7 @@ static int odp_vport_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	u32 port_no;
 	int retval;
 
-	dp = get_dp(odp_header->dp_idx);
+	dp = get_dp(odp_header->dp_ifindex);
 	if (!dp)
 		return -ENODEV;
 

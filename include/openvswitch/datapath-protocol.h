@@ -70,7 +70,7 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 
-/* Datapaths. */
+/* datapaths. */
 
 #define ODP_DATAPATH_FAMILY  "odp_datapath"
 #define ODP_DATAPATH_MCGROUP "odp_datapath"
@@ -85,22 +85,23 @@ enum odp_datapath_cmd {
 
 /**
  * struct odp_header - header for ODP Generic Netlink messages.
- * @dp_idx: Number of datapath to which the packet belongs.
+ * @dp_ifindex: ifindex of local port for datapath (0 to make a request not
+ * specific to a datapath).
  *
  * Attributes following the header are specific to a particular ODP Generic
  * Netlink family, but all of the ODP families use this header.
  */
 struct odp_header {
-	uint32_t dp_idx;
+	int dp_ifindex;
 };
 
 /**
  * enum odp_datapath_attr - attributes for %ODP_DP_* commands.
  * @ODP_DP_ATTR_NAME: Name of the network device that serves as the "local
- * port".  This is the name of the network device whose dp_idx is given in the
- * &struct odp_header.  Always present in notifications.  Required in
- * %ODP_DP_NEW requests.  May be used as an alternative to specifying dp_idx on
- * other requests (with a dp_idx of %UINT32_MAX).
+ * port".  This is the name of the network device whose dp_ifindex is given in
+ * the &struct odp_header.  Always present in notifications.  Required in
+ * %ODP_DP_NEW requests.  May be used as an alternative to specifying
+ * dp_ifindex in other requests (with a dp_ifindex of 0).
  * @ODP_DP_ATTR_STATS: Statistics about packets that have passed through the
  * datapath.  Always present in notifications.
  * @ODP_DP_ATTR_IPV4_FRAGS: One of %ODP_DP_FRAG_*.  Always present in
@@ -120,7 +121,7 @@ struct odp_header {
  */
 enum odp_datapath_attr {
 	ODP_DP_ATTR_UNSPEC,
-	ODP_DP_ATTR_NAME,       /* name of dp_ifidx netdev */
+	ODP_DP_ATTR_NAME,       /* name of dp_ifindex netdev */
 	ODP_DP_ATTR_STATS,      /* struct odp_stats */
 	ODP_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum odp_frag_handling */
 	ODP_DP_ATTR_SAMPLING,   /* 32-bit fraction of packets to sample. */

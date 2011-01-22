@@ -185,7 +185,7 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
     }
 
     VLOG_WARN_RL(&rl, "dp%d: port `%s' has unsupported type %u",
-                 vport->dp_idx, vport->name, (unsigned int) vport->type);
+                 vport->dp_ifindex, vport->name, (unsigned int) vport->type);
     return "unknown";
 }
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -222,7 +222,6 @@ EXTRA_DIST += \
 	lib/common-syn.man \
 	lib/daemon.man \
 	lib/daemon-syn.man \
-	lib/dpif.man \
 	lib/leak-checker.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-bootstrap-syn.man \

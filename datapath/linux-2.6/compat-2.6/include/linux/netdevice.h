@@ -121,6 +121,20 @@ static inline void netdev_rx_handler_unregister(struct net_device *dev)
 #define dev_get_by_index(net, ifindex) dev_get_by_index(ifindex)
 #define __dev_get_by_name(net, name) __dev_get_by_name(name)
 #define __dev_get_by_index(net, ifindex) __dev_get_by_index(ifindex)
+#define dev_get_by_index_rcu(net, ifindex) dev_get_by_index_rcu(ifindex)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifindex)
+{
+	struct net_device *dev;
+
+	read_lock(&dev_base_lock);
+	dev = __dev_get_by_index(net, ifindex);
+	read_unlock(&dev_base_lock);
+
+	return dev;
+}
 #endif
 
 #endif
