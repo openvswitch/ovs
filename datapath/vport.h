@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -166,8 +166,6 @@ struct vport_parms {
  * @destroy: Detach and destroy a vport.
  * @set_mtu: Set the device's MTU.  May be null if not supported.
  * @set_addr: Set the device's MAC address.  May be null if not supported.
- * @set_stats: Provides stats as an offset to be added to the device stats.
- * May be null if not supported.
  * @get_name: Get the device's name.
  * @get_addr: Get the device's MAC address.
  * @get_config: Get the device's configuration.
@@ -202,7 +200,6 @@ struct vport_ops {
 
 	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);
-	int (*set_stats)(const struct vport *, struct rtnl_link_stats64 *);
 
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);

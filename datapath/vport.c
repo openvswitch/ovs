@@ -699,9 +699,7 @@ int vport_set_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 		spin_unlock_bh(&vport->stats_lock);
 
 		return 0;
-	} else if (vport->ops->set_stats)
-		return vport->ops->set_stats(vport, stats);
-	else
+	} else
 		return -EOPNOTSUPP;
 }
 
