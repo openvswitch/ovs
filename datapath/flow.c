@@ -8,6 +8,7 @@
 
 #include "flow.h"
 #include "datapath.h"
+#include <asm/uaccess.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
@@ -193,7 +194,7 @@ void flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
 	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
 }
 
-static void parse_vlan(struct sk_buff *skb, struct odp_flow_key *key)
+static void parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 {
 	struct qtag_prefix {
 		__be16 eth_type; /* ETH_P_8021Q */
@@ -205,7 +206,7 @@ static void parse_vlan(struct sk_buff *skb, struct odp_flow_key *key)
 		return;
 
 	qp = (struct qtag_prefix *) skb->data;
-	key->dl_tci = qp->tci | htons(ODP_TCI_PRESENT);
+	key->dl_tci = qp->tci | htons(VLAN_TAG_PRESENT);
 	__skb_pull(skb, sizeof(struct qtag_prefix));
 }
 
@@ -224,17 +225,17 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	proto = *(__be16 *) skb->data;
 	__skb_pull(skb, sizeof(__be16));
 
-	if (ntohs(proto) >= ODP_DL_TYPE_ETH2_CUTOFF)
+	if (ntohs(proto) >= 1536)
 		return proto;
 
 	if (unlikely(skb->len < sizeof(struct llc_snap_hdr)))
-		return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+		return htons(ETH_P_802_2);
 
 	llc = (struct llc_snap_hdr *) skb->data;
 	if (llc->dsap != LLC_SAP_SNAP ||
 	    llc->ssap != LLC_SAP_SNAP ||
 	    (llc->oui[0] | llc->oui[1] | llc->oui[2]) != 0)
-		return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+		return htons(ETH_P_802_2);
 
 	__skb_pull(skb, sizeof(struct llc_snap_hdr));
 	return llc->ethertype;
@@ -265,7 +266,7 @@ static __be16 parse_ethertype(struct sk_buff *skb)
  *      otherwise the same as skb->network_header.  For other key->dl_type
  *      values it is left untouched.
  */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
+int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 		 bool *is_frag)
 {
 	struct ethhdr *eth;
@@ -382,17 +383,293 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key,
 	return 0;
 }
 
-u32 flow_hash(const struct odp_flow_key *key)
+u32 flow_hash(const struct sw_flow_key *key)
 {
 	return jhash2((u32*)key, sizeof(*key) / sizeof(u32), hash_seed);
 }
 
 int flow_cmp(const struct tbl_node *node, void *key2_)
 {
-	const struct odp_flow_key *key1 = &flow_cast(node)->key;
-	const struct odp_flow_key *key2 = key2_;
+	const struct sw_flow_key *key1 = &flow_cast(node)->key;
+	const struct sw_flow_key *key2 = key2_;
 
-	return !memcmp(key1, key2, sizeof(struct odp_flow_key));
+	return !memcmp(key1, key2, sizeof(struct sw_flow_key));
+}
+
+/**
+ * flow_from_nlattrs - parses Netlink attributes into a flow key.
+ * @swkey: receives the extracted flow key.
+ * @key: start of %ODP_KEY_ATTR_* Netlink attribute sequence.
+ * @key_len: number of bytes in @key.
+ *
+ * This state machine accepts the following forms, with [] for optional
+ * elements and | for alternatives:
+ *
+ * [tun_id] in_port ethernet [8021q] [ethertype [IP [TCP|UDP|ICMP] | ARP]
+ */
+static int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *key, u32 key_len)
+{
+	const struct nlattr *nla;
+	u16 prev_type;
+	int rem;
+
+	memset(swkey, 0, sizeof(*swkey));
+	swkey->dl_type = htons(ETH_P_802_2);
+
+	prev_type = ODP_KEY_ATTR_UNSPEC;
+	nla_for_each_attr(nla, key, key_len, rem) {
+		static const u32 key_lens[ODP_KEY_ATTR_MAX + 1] = {
+			[ODP_KEY_ATTR_TUN_ID] = 8,
+			[ODP_KEY_ATTR_IN_PORT] = 4,
+			[ODP_KEY_ATTR_ETHERNET] = sizeof(struct odp_key_ethernet),
+			[ODP_KEY_ATTR_8021Q] = sizeof(struct odp_key_8021q),
+			[ODP_KEY_ATTR_ETHERTYPE] = 2,
+			[ODP_KEY_ATTR_IPV4] = sizeof(struct odp_key_ipv4),
+			[ODP_KEY_ATTR_TCP] = sizeof(struct odp_key_tcp),
+			[ODP_KEY_ATTR_UDP] = sizeof(struct odp_key_udp),
+			[ODP_KEY_ATTR_ICMP] = sizeof(struct odp_key_icmp),
+			[ODP_KEY_ATTR_ARP] = sizeof(struct odp_key_arp),
+		};
+
+		const struct odp_key_ethernet *eth_key;
+		const struct odp_key_8021q *q_key;
+		const struct odp_key_ipv4 *ipv4_key;
+		const struct odp_key_tcp *tcp_key;
+		const struct odp_key_udp *udp_key;
+		const struct odp_key_icmp *icmp_key;
+		const struct odp_key_arp *arp_key;
+
+                int type = nla_type(nla);
+
+                if (type > ODP_KEY_ATTR_MAX || nla_len(nla) != key_lens[type])
+                        return -EINVAL;
+
+#define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
+		switch (TRANSITION(prev_type, type)) {
+		case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_TUN_ID):
+			swkey->tun_id = nla_get_be64(nla);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_IN_PORT):
+		case TRANSITION(ODP_KEY_ATTR_TUN_ID, ODP_KEY_ATTR_IN_PORT):
+			if (nla_get_u32(nla) >= DP_MAX_PORTS)
+				return -EINVAL;
+			swkey->in_port = nla_get_u32(nla);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_IN_PORT, ODP_KEY_ATTR_ETHERNET):
+			eth_key = nla_data(nla);
+			memcpy(swkey->dl_src, eth_key->eth_src, ETH_ALEN);
+			memcpy(swkey->dl_dst, eth_key->eth_dst, ETH_ALEN);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_ETHERNET, ODP_KEY_ATTR_8021Q):
+			q_key = nla_data(nla);
+			/* Only standard 0x8100 VLANs currently supported. */
+			if (q_key->q_tpid != htons(ETH_P_8021Q))
+				return -EINVAL;
+			if (q_key->q_tci & htons(VLAN_TAG_PRESENT))
+				return -EINVAL;
+			swkey->dl_tci = q_key->q_tci | htons(VLAN_TAG_PRESENT);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_8021Q, ODP_KEY_ATTR_ETHERTYPE):
+		case TRANSITION(ODP_KEY_ATTR_ETHERNET, ODP_KEY_ATTR_ETHERTYPE):
+			swkey->dl_type = nla_get_be16(nla);
+			if (ntohs(swkey->dl_type) < 1536)
+				return -EINVAL;
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_IPV4):
+			if (swkey->dl_type != htons(ETH_P_IP))
+				return -EINVAL;
+			ipv4_key = nla_data(nla);
+			swkey->nw_src = ipv4_key->ipv4_src;
+			swkey->nw_dst = ipv4_key->ipv4_dst;
+			swkey->nw_proto = ipv4_key->ipv4_proto;
+			swkey->nw_tos = ipv4_key->ipv4_tos;
+			if (swkey->nw_tos & INET_ECN_MASK)
+				return -EINVAL;
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_TCP):
+			if (swkey->nw_proto != IPPROTO_TCP)
+				return -EINVAL;
+			tcp_key = nla_data(nla);
+			swkey->tp_src = tcp_key->tcp_src;
+			swkey->tp_dst = tcp_key->tcp_dst;
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_UDP):
+			if (swkey->nw_proto != IPPROTO_UDP)
+				return -EINVAL;
+			udp_key = nla_data(nla);
+			swkey->tp_src = udp_key->udp_src;
+			swkey->tp_dst = udp_key->udp_dst;
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_ICMP):
+			if (swkey->nw_proto != IPPROTO_ICMP)
+				return -EINVAL;
+			icmp_key = nla_data(nla);
+			swkey->tp_src = htons(icmp_key->icmp_type);
+			swkey->tp_dst = htons(icmp_key->icmp_code);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_ARP):
+			if (swkey->dl_type != htons(ETH_P_ARP))
+				return -EINVAL;
+			arp_key = nla_data(nla);
+			swkey->nw_src = arp_key->arp_sip;
+			swkey->nw_dst = arp_key->arp_tip;
+			if (arp_key->arp_op & htons(0xff00))
+				return -EINVAL;
+			swkey->nw_proto = ntohs(arp_key->arp_op);
+			break;
+
+		default:
+			return -EINVAL;
+		}
+
+		prev_type = type;
+	}
+	if (rem)
+		return -EINVAL;
+
+	switch (prev_type) {
+	case ODP_KEY_ATTR_UNSPEC:
+		return -EINVAL;
+
+	case ODP_KEY_ATTR_TUN_ID:
+	case ODP_KEY_ATTR_IN_PORT:
+		return -EINVAL;
+
+	case ODP_KEY_ATTR_ETHERNET:
+	case ODP_KEY_ATTR_8021Q:
+		return 0;
+
+	case ODP_KEY_ATTR_ETHERTYPE:
+		if (swkey->dl_type == htons(ETH_P_IP) ||
+		    swkey->dl_type == htons(ETH_P_ARP))
+			return -EINVAL;
+		return 0;
+
+	case ODP_KEY_ATTR_IPV4:
+		if (swkey->nw_proto == IPPROTO_TCP ||
+		    swkey->nw_proto == IPPROTO_UDP ||
+		    swkey->nw_proto == IPPROTO_ICMP)
+			return -EINVAL;
+		return 0;
+
+	case ODP_KEY_ATTR_TCP:
+	case ODP_KEY_ATTR_UDP:
+	case ODP_KEY_ATTR_ICMP:
+	case ODP_KEY_ATTR_ARP:
+		return 0;
+	}
+
+	WARN_ON_ONCE(1);
+	return -EINVAL;
+}
+
+static u32 flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
+{
+	struct odp_key_ethernet *eth_key;
+
+	if (skb_tailroom(skb) < FLOW_BUFSIZE)
+		return -EMSGSIZE;
+
+	if (swkey->tun_id != cpu_to_be64(0))
+		nla_put_be64(skb, ODP_KEY_ATTR_TUN_ID, swkey->tun_id);
+
+	nla_put_u32(skb, ODP_KEY_ATTR_IN_PORT, swkey->in_port);
+
+	eth_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ETHERNET, sizeof(*eth_key)));
+	memcpy(eth_key->eth_src, swkey->dl_src, ETH_ALEN);
+	memcpy(eth_key->eth_dst, swkey->dl_dst, ETH_ALEN);
+
+	if (swkey->dl_tci != htons(0)) {
+		struct odp_key_8021q *q_key;
+
+		q_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_8021Q, sizeof(*q_key)));
+		q_key->q_tpid = htons(ETH_P_8021Q);
+		q_key->q_tci = swkey->dl_tci & ~htons(VLAN_TAG_PRESENT);
+	}
+
+	if (swkey->dl_type == htons(ETH_P_802_2))
+		goto exit;
+
+	nla_put_be16(skb, ODP_KEY_ATTR_ETHERTYPE, swkey->dl_type);
+
+	if (swkey->dl_type == htons(ETH_P_IP)) {
+		struct odp_key_ipv4 *ipv4_key;
+
+		ipv4_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_IPV4, sizeof(*ipv4_key)));
+		ipv4_key->ipv4_src = swkey->nw_src;
+		ipv4_key->ipv4_dst = swkey->nw_dst;
+		ipv4_key->ipv4_proto = swkey->nw_proto;
+		ipv4_key->ipv4_tos = swkey->nw_tos;
+
+		if (swkey->nw_proto == IPPROTO_TCP) {
+			struct odp_key_tcp *tcp_key;
+
+			tcp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_TCP, sizeof(*tcp_key)));
+			tcp_key->tcp_src = swkey->tp_src;
+			tcp_key->tcp_dst = swkey->tp_dst;
+		} else if (swkey->nw_proto == IPPROTO_UDP) {
+			struct odp_key_udp *udp_key;
+
+			udp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_UDP, sizeof(*udp_key)));
+			udp_key->udp_src = swkey->tp_src;
+			udp_key->udp_dst = swkey->tp_dst;
+		} else if (swkey->nw_proto == IPPROTO_ICMP) {
+			struct odp_key_icmp *icmp_key;
+
+			icmp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ICMP, sizeof(*icmp_key)));
+			icmp_key->icmp_type = ntohs(swkey->tp_src);
+			icmp_key->icmp_code = ntohs(swkey->tp_dst);
+		}
+	} else if (swkey->dl_type == htons(ETH_P_ARP)) {
+		struct odp_key_arp *arp_key;
+
+		arp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ARP, sizeof(*arp_key)));
+		arp_key->arp_sip = swkey->nw_src;
+		arp_key->arp_tip = swkey->nw_dst;
+		arp_key->arp_op = htons(swkey->nw_proto);
+	}
+
+exit:
+	return skb->len;
+}
+
+int flow_copy_from_user(struct sw_flow_key *swkey, const struct nlattr __user *ukey, u32 ukey_len)
+{
+	char key[FLOW_BUFSIZE] __aligned(NLA_ALIGNTO);
+
+	if (ukey_len > FLOW_BUFSIZE || ukey_len % NLA_ALIGNTO)
+		return -EINVAL;
+
+	if (copy_from_user(key, ukey, ukey_len))
+		return -EFAULT;
+
+	return flow_from_nlattrs(swkey, (const struct nlattr *)key, ukey_len);
+}
+
+int flow_copy_to_user(struct nlattr __user *ukey, const struct sw_flow_key *swkey, u32 ukey_len)
+{
+	struct sk_buff *skb;
+	int retval;
+
+	skb = alloc_skb(FLOW_BUFSIZE, GFP_KERNEL);
+	if (!skb)
+		return -ENOMEM;
+
+	retval = flow_to_nlattrs(swkey, skb);
+	if (copy_to_user(ukey, skb->data, min(skb->len, ukey_len)))
+		retval = -EFAULT;
+	kfree_skb(skb);
+
+	return retval;
 }
 
 /* Initializes the flow module.

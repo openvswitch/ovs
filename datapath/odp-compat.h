@@ -30,7 +30,8 @@ struct compat_odp_portvec {
 
 struct compat_odp_flow {
 	struct odp_flow_stats stats;
-	struct odp_flow_key key;
+	compat_uptr_t key;
+	u32 key_len;
 	compat_uptr_t actions;
 	u32 actions_len;
 	u32 flags;

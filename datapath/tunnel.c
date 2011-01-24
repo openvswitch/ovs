@@ -910,7 +910,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 #endif
 
 	if (is_internal_dev(rt_dst(rt).dev)) {
-		struct odp_flow_key flow_key;
+		struct sw_flow_key flow_key;
 		struct tbl_node *flow_node;
 		struct vport *dst_vport;
 		struct sk_buff *skb;

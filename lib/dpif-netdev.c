@@ -36,6 +36,7 @@
 #include "dpif.h"
 #include "dpif-provider.h"
 #include "dummy.h"
+#include "dynamic-string.h"
 #include "flow.h"
 #include "hmap.h"
 #include "list.h"
@@ -603,6 +604,32 @@ answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
 }
 
 static int
+dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
+                              struct flow *flow)
+{
+    if (odp_flow_key_to_flow(key, key_len, flow)) {
+        /* This should not happen: it indicates that odp_flow_key_from_flow()
+         * and odp_flow_key_to_flow() disagree on the acceptable form of a
+         * flow.  Log the problem as an error, with enough details to enable
+         * debugging. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        if (!VLOG_DROP_ERR(&rl)) {
+            struct ds s;
+
+            ds_init(&s);
+            odp_flow_key_format(key, key_len, &s);
+            VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
+            ds_destroy(&s);
+        }
+
+        return EINVAL;
+    }
+
+    return 0;
+}
+
+static int
 dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -611,8 +638,14 @@ dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
     for (i = 0; i < n; i++) {
         struct odp_flow *odp_flow = &flows[i];
         struct flow key;
+        int error;
 
-        odp_flow_key_to_flow(&odp_flow->key, &key);
+        error = dpif_netdev_flow_from_nlattrs(odp_flow->key, odp_flow->key_len,
+                                              &key);
+        if (error) {
+            return error;
+        }
+
         answer_flow_query(dp_netdev_lookup_flow(dp, &key),
                           odp_flow->flags, odp_flow);
     }
@@ -699,14 +732,14 @@ set_flow_actions(struct dp_netdev_flow *flow, struct odp_flow *odp_flow)
 }
 
 static int
-add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
+add_flow(struct dpif *dpif, const struct flow *key, struct odp_flow *odp_flow)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     int error;
 
     flow = xzalloc(sizeof *flow);
-    odp_flow_key_to_flow(&odp_flow->key, &flow->key);
+    flow->key = *key;
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {
@@ -734,13 +767,19 @@ dpif_netdev_flow_put(struct dpif *dpif, struct odp_flow_put *put)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     struct flow key;
+    int error;
 
-    odp_flow_key_to_flow(&put->flow.key, &key);
+    error = dpif_netdev_flow_from_nlattrs(put->flow.key, put->flow.key_len,
+                                          &key);
+    if (error) {
+        return error;
+    }
+
     flow = dp_netdev_lookup_flow(dp, &key);
     if (!flow) {
         if (put->flags & ODPPF_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
-                return add_flow(dpif, &put->flow);
+                return add_flow(dpif, &key, &put->flow);
             } else {
                 return EFBIG;
             }
@@ -767,8 +806,14 @@ dpif_netdev_flow_del(struct dpif *dpif, struct odp_flow *odp_flow)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     struct flow key;
+    int error;
 
-    odp_flow_key_to_flow(&odp_flow->key, &key);
+    error = dpif_netdev_flow_from_nlattrs(odp_flow->key, odp_flow->key_len,
+                                          &key);
+    if (error) {
+        return error;
+    }
+
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         answer_flow_query(flow, 0, odp_flow);
@@ -799,6 +844,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     struct hmap_node *node;
+    struct ofpbuf key;
 
     node = hmap_at_position(&dp->flow_table, &state->bucket, &state->offset);
     if (!node) {
@@ -806,7 +852,12 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
     }
 
     flow = CONTAINER_OF(node, struct dp_netdev_flow, node);
-    odp_flow_key_from_flow(&odp_flow->key, &flow->key);
+
+    ofpbuf_use_stack(&key, odp_flow->key, odp_flow->key_len);
+    odp_flow_key_from_flow(&key, &flow->key);
+    odp_flow->key_len = key.size;
+    ofpbuf_uninit(&key);
+
     answer_flow_query(flow, 0, odp_flow);
 
     return 0;

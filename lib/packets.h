@@ -155,6 +155,10 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 #define ETH_TYPE_VLAN          0x8100
 #define ETH_TYPE_CFM           0x8902
 
+/* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
+ * lengths. */
+#define ETH_TYPE_MIN           0x600
+
 #define ETH_HEADER_LEN 14
 #define ETH_PAYLOAD_MIN 46
 #define ETH_PAYLOAD_MAX 1500

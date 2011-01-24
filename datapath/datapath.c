@@ -41,6 +41,7 @@
 #include <linux/rculist.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
+#include <net/genetlink.h>
 #include <linux/compat.h>
 
 #include "openvswitch/datapath-protocol.h"
@@ -491,7 +492,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	OVS_CB(skb)->vport = p;
 
 	if (!OVS_CB(skb)->flow) {
-		struct odp_flow_key key;
+		struct sw_flow_key key;
 		struct tbl_node *flow_node;
 		bool is_frag;
 
@@ -825,15 +826,21 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		       struct odp_flow_stats *stats)
 {
 	struct tbl_node *flow_node;
+	struct sw_flow_key key;
 	struct sw_flow *flow;
 	struct tbl *table;
 	struct sw_flow_actions *acts = NULL;
 	int error;
 	u32 hash;
 
-	hash = flow_hash(&uf->flow.key);
+	error = flow_copy_from_user(&key, (const struct nlattr __force __user *)uf->flow.key,
+				    uf->flow.key_len);
+	if (error)
+		return error;
+
+	hash = flow_hash(&key);
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &uf->flow.key, hash, flow_cmp);
+	flow_node = tbl_lookup(table, &key, hash, flow_cmp);
 	if (!flow_node) {
 		/* No such flow. */
 		error = -ENOENT;
@@ -854,7 +861,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 			error = PTR_ERR(flow);
 			goto error;
 		}
-		flow->key = uf->flow.key;
+		flow->key = key;
 		clear_stats(flow);
 
 		/* Obtain actions. */
@@ -983,13 +990,18 @@ static int answer_query(struct datapath *dp, struct sw_flow *flow,
 			       &ufp->stats, actions, &ufp->actions_len);
 }
 
-static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key)
+static struct sw_flow *do_del_flow(struct datapath *dp, const struct nlattr __user *key, u32 key_len)
 {
 	struct tbl *table = get_table_protected(dp);
 	struct tbl_node *flow_node;
+	struct sw_flow_key swkey;
 	int error;
 
-	flow_node = tbl_lookup(table, key, flow_hash(key), flow_cmp);
+	error = flow_copy_from_user(&swkey, key, key_len);
+	if (error)
+		return ERR_PTR(error);
+
+	flow_node = tbl_lookup(table, &swkey, flow_hash(&swkey), flow_cmp);
 	if (!flow_node)
 		return ERR_PTR(-ENOENT);
 
@@ -1013,7 +1025,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	if (copy_from_user(&uf, ufp, sizeof(uf)))
 		return -EFAULT;
 
-	flow = do_del_flow(dp, &uf.key);
+	flow = do_del_flow(dp, (const struct nlattr __force __user *)uf.key, uf.key_len);
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
@@ -1029,6 +1041,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 
 	for (i = 0; i < flowvec->n_flows; i++) {
 		struct odp_flow __user *ufp = (struct odp_flow __user __force *)&flowvec->flows[i];
+		struct sw_flow_key key;
 		struct odp_flow uf;
 		struct tbl_node *flow_node;
 		int error;
@@ -1036,7 +1049,11 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 		if (copy_from_user(&uf, ufp, sizeof(uf)))
 			return -EFAULT;
 
-		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
+		error = flow_copy_from_user(&key, (const struct nlattr __force __user *)uf.key, uf.key_len);
+		if (error)
+			return error;
+
+		flow_node = tbl_lookup(table, &uf.key, flow_hash(&key), flow_cmp);
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
@@ -1088,7 +1105,9 @@ static struct sw_flow *do_dump_flow(struct datapath *dp, u32 __user *state)
 static int dump_flow(struct datapath *dp, struct odp_flow_dump __user *udumpp)
 {
 	struct odp_flow __user *uflowp;
+	struct nlattr __user *ukey;
 	struct sw_flow *flow;
+	u32 key_len;
 
 	flow = do_dump_flow(dp, udumpp->state);
 	if (IS_ERR(flow))
@@ -1100,15 +1119,23 @@ static int dump_flow(struct datapath *dp, struct odp_flow_dump __user *udumpp)
 	if (!flow)
 		return put_user(ODPFF_EOF, &uflowp->flags);
 
-	if (copy_to_user(&uflowp->key, &flow->key, sizeof(struct odp_flow_key)) ||
-	    put_user(0, &uflowp->flags))
+	if (put_user(0, &uflowp->flags) ||
+	    get_user(ukey, (struct nlattr __user * __user*)&uflowp->key) ||
+	    get_user(key_len, &uflowp->key_len))
 		return -EFAULT;
+
+	key_len = flow_copy_to_user(ukey, &flow->key, key_len);
+	if (key_len < 0)
+		return key_len;
+	if (put_user(key_len, &uflowp->key_len))
+		return -EFAULT;
+
 	return answer_query(dp, flow, 0, uflowp);
 }
 
 static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 {
-	struct odp_flow_key key;
+	struct sw_flow_key key;
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
 	struct ethhdr *eth;
@@ -1528,16 +1555,18 @@ static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __us
 
 static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow __user *compat)
 {
-	compat_uptr_t actions;
+	compat_uptr_t key, actions;
 
 	if (!access_ok(VERIFY_READ, compat, sizeof(struct compat_odp_flow)) ||
 	    __copy_from_user(&flow->stats, &compat->stats, sizeof(struct odp_flow_stats)) ||
-	    __copy_from_user(&flow->key, &compat->key, sizeof(struct odp_flow_key)) ||
+	    __get_user(key, &compat->key) ||
+	    __get_user(flow->key_len, &compat->key_len) ||
 	    __get_user(actions, &compat->actions) ||
 	    __get_user(flow->actions_len, &compat->actions_len) ||
 	    __get_user(flow->flags, &compat->flags))
 		return -EFAULT;
 
+	flow->key = (struct nlattr __force *)compat_ptr(key);
 	flow->actions = (struct nlattr __force *)compat_ptr(actions);
 	return 0;
 }
@@ -1585,7 +1614,7 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	if (compat_get_flow(&uf, ufp))
 		return -EFAULT;
 
-	flow = do_del_flow(dp, &uf.key);
+	flow = do_del_flow(dp, (const struct nlattr __force __user *)uf.key, uf.key_len);
 	if (IS_ERR(flow))
 		return PTR_ERR(flow);
 
@@ -1605,12 +1634,17 @@ static int compat_query_flows(struct datapath *dp,
 		struct compat_odp_flow __user *ufp = &flows[i];
 		struct odp_flow uf;
 		struct tbl_node *flow_node;
+		struct sw_flow_key key;
 		int error;
 
 		if (compat_get_flow(&uf, ufp))
 			return -EFAULT;
 
-		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
+		error = flow_copy_from_user(&key, (const struct nlattr __force __user *) uf.key, uf.key_len);
+		if (error)
+			return error;
+
+		flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
 		if (!flow_node)
 			error = put_user(ENOENT, &ufp->stats.error);
 		else
@@ -1627,6 +1661,8 @@ static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __u
 	struct compat_odp_flow __user *uflowp;
 	compat_uptr_t compat_ufp;
 	struct sw_flow *flow;
+	compat_uptr_t ukey;
+	u32 key_len;
 
 	flow = do_dump_flow(dp, udumpp->state);
 	if (IS_ERR(flow))
@@ -1639,9 +1675,17 @@ static int compat_dump_flow(struct datapath *dp, struct compat_odp_flow_dump __u
 	if (!flow)
 		return put_user(ODPFF_EOF, &uflowp->flags);
 
-	if (copy_to_user(&uflowp->key, &flow->key, sizeof(struct odp_flow_key)) ||
-	    put_user(0, &uflowp->flags))
+	if (put_user(0, &uflowp->flags) ||
+	    get_user(ukey, &uflowp->key) ||
+	    get_user(key_len, &uflowp->key_len))
 		return -EFAULT;
+
+	key_len = flow_copy_to_user(compat_ptr(ukey), &flow->key, key_len);
+	if (key_len < 0)
+		return key_len;
+	if (put_user(key_len, &uflowp->key_len))
+		return -EFAULT;
+
 	return compat_answer_query(dp, flow, 0, uflowp);
 }
 

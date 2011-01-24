@@ -101,12 +101,12 @@ parse_ethertype(struct ofpbuf *b)
     ovs_be16 proto;
 
     proto = *(ovs_be16 *) ofpbuf_pull(b, sizeof proto);
-    if (ntohs(proto) >= ODP_DL_TYPE_ETH2_CUTOFF) {
+    if (ntohs(proto) >= ETH_TYPE_MIN) {
         return proto;
     }
 
     if (b->size < sizeof *llc) {
-        return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+        return htons(FLOW_DL_TYPE_NONE);
     }
 
     llc = b->data;
@@ -115,7 +115,7 @@ parse_ethertype(struct ofpbuf *b)
         || llc->llc.llc_cntl != LLC_CNTL_SNAP
         || memcmp(llc->snap.snap_org, SNAP_ORG_ETHERNET,
                   sizeof llc->snap.snap_org)) {
-        return htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+        return htons(FLOW_DL_TYPE_NONE);
     }
 
     ofpbuf_pull(b, sizeof *llc);

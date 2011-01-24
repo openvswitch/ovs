@@ -83,7 +83,8 @@ static void log_flow_operation(const struct dpif *, const char *operation,
 static void log_flow_put(struct dpif *, int error,
                          const struct odp_flow_put *);
 static bool should_log_flow_message(int error);
-static void check_rw_odp_flow(struct odp_flow *);
+static void check_rw_flow_actions(struct odp_flow *);
+static void check_rw_flow_key(struct odp_flow *);
 
 static void
 dp_initialize(void)
@@ -679,7 +680,7 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
 
     COVERAGE_INC(dpif_flow_get);
 
-    check_rw_odp_flow(flow);
+    check_rw_flow_actions(flow);
     error = dpif->dpif_class->flow_get(dpif, flow, 1);
     if (!error) {
         error = flow->stats.error;
@@ -732,7 +733,7 @@ dpif_flow_get_multiple(const struct dpif *dpif,
     COVERAGE_ADD(dpif_flow_get, n);
 
     for (i = 0; i < n; i++) {
-        check_rw_odp_flow(&flows[i]);
+        check_rw_flow_actions(&flows[i]);
     }
 
     error = dpif->dpif_class->flow_get(dpif, flows, n);
@@ -782,7 +783,7 @@ dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
 
     COVERAGE_INC(dpif_flow_del);
 
-    check_rw_odp_flow(flow);
+    check_rw_flow_actions(flow);
     memset(&flow->stats, 0, sizeof flow->stats);
 
     error = dpif->dpif_class->flow_del(dpif, flow);
@@ -824,7 +825,8 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump, struct odp_flow *flow)
 {
     const struct dpif *dpif = dump->dpif;
 
-    check_rw_odp_flow(flow);
+    check_rw_flow_actions(flow);
+    check_rw_flow_key(flow);
 
     if (dump->error) {
         return false;
@@ -834,6 +836,9 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump, struct odp_flow *flow)
     if (dump->error == EOF) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
     } else {
+        if (dump->error) {
+            flow->key_len = 0;
+        }
         if (should_log_flow_message(dump->error)) {
             log_flow_operation(dpif, "flow_dump_next", dump->error, flow);
         }
@@ -1117,7 +1122,7 @@ should_log_flow_message(int error)
 
 static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
-                 const struct odp_flow_key *flow,
+                 const struct nlattr *key, size_t key_len,
                  const struct odp_flow_stats *stats,
                  const struct nlattr *actions, size_t actions_len)
 {
@@ -1130,7 +1135,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     if (error) {
         ds_put_format(&ds, "(%s) ", strerror(error));
     }
-    format_odp_flow_key(&ds, flow);
+    odp_flow_key_format(key, key_len, &ds);
     if (stats) {
         ds_put_cstr(&ds, ", ");
         format_odp_flow_stats(&ds, stats);
@@ -1148,10 +1153,11 @@ log_flow_operation(const struct dpif *dpif, const char *operation, int error,
                    struct odp_flow *flow)
 {
     if (error) {
+        flow->key_len = 0;
         flow->actions_len = 0;
     }
-    log_flow_message(dpif, error, operation, &flow->key,
-                     !error ? &flow->stats : NULL,
+    log_flow_message(dpif, error, operation,
+                     flow->key, flow->key_len, !error ? &flow->stats : NULL,
                      flow->actions, flow->actions_len);
 }
 
@@ -1175,7 +1181,8 @@ log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
     if (put->flags & ~ODPPF_ALL) {
         ds_put_format(&s, "[%x]", put->flags & ~ODPPF_ALL);
     }
-    log_flow_message(dpif, error, ds_cstr(&s), &put->flow.key,
+    log_flow_message(dpif, error, ds_cstr(&s),
+                     put->flow.key, put->flow.key_len,
                      !error ? &put->flow.stats : NULL,
                      put->flow.actions, put->flow.actions_len);
     ds_destroy(&s);
@@ -1198,9 +1205,18 @@ log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
  *        "actions" or "actions_len" was not initialized.
  */
 static void
-check_rw_odp_flow(struct odp_flow *flow)
+check_rw_flow_actions(struct odp_flow *flow)
 {
     if (flow->actions_len) {
         memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
+    }
+}
+
+/* Same as check_rw_flow_actions() but for flow->key. */
+static void
+check_rw_flow_key(struct odp_flow *flow)
+{
+    if (flow->key_len) {
+        memset(&flow->key[0], 0xcc, sizeof flow->key[0]);
     }
 }

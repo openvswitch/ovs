@@ -25,6 +25,16 @@ static inline int VERIFY_NUL_STRING(struct nlattr *attr)
         NLA_PUT_TYPE(skb, __be16, attrtype, value)
 #endif  /* !NLA_PUT_BE16 */
 
+#ifndef NLA_PUT_BE32
+#define NLA_PUT_BE32(skb, attrtype, value) \
+        NLA_PUT_TYPE(skb, __be32, attrtype, value)
+#endif  /* !NLA_PUT_BE32 */
+
+#ifndef NLA_PUT_BE64
+#define NLA_PUT_BE64(skb, attrtype, value) \
+        NLA_PUT_TYPE(skb, __be64, attrtype, value)
+#endif  /* !NLA_PUT_BE64 */
+
 #ifndef HAVE_NLA_GET_BE16
 /**
  * nla_get_be16 - return payload of __be16 attribute
@@ -91,5 +101,42 @@ static inline int nla_type(const struct nlattr *nla)
         return nla->nla_type & NLA_TYPE_MASK;
 }
 #endif
+
+/* The following nla_put_be{16,32,64} functions are not in any version of Linux
+ * (although NLA_PUT_BE{16,32,64} are), so we will probably want to add them
+ * as part of the patch series when we submit Open vSwitch upstream. */
+
+/**
+ * nla_put_be16 - Add a be16 netlink attribute to a socket buffer
+ * @skb: socket buffer to add attribute to
+ * @attrtype: attribute type
+ * @value: numeric value
+ */
+static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be16), &value);
+}
+
+/**
+ * nla_put_be32 - Add a be32 netlink attribute to a socket buffer
+ * @skb: socket buffer to add attribute to
+ * @attrtype: attribute type
+ * @value: numeric value
+ */
+static inline int nla_put_be32(struct sk_buff *skb, int attrtype, __be32 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be32), &value);
+}
+
+/**
+ * nla_put_64 - Add a be64 netlink attribute to a socket buffer
+ * @skb: socket buffer to add attribute to
+ * @attrtype: attribute type
+ * @value: numeric value
+ */
+static inline int nla_put_be64(struct sk_buff *skb, int attrtype, __be64 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be64), &value);
+}
 
 #endif /* net/netlink.h */

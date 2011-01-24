@@ -210,29 +210,59 @@ struct odp_flow_stats {
     uint16_t error;             /* Used by ODP_FLOW_GET. */
 };
 
-/*
- * The datapath protocol adopts the Linux convention for TCI fields: if an
- * 802.1Q header is present then its TCI value is used verbatim except that the
- * CFI bit (0x1000) is always set to 1, and all-bits-zero indicates no 802.1Q
- * header.
- */
-#define ODP_TCI_PRESENT 0x1000  /* CFI bit */
+enum odp_key_type {
+	ODP_KEY_ATTR_UNSPEC,
+	ODP_KEY_ATTR_TUN_ID,    /* 64-bit tunnel ID */
+	ODP_KEY_ATTR_IN_PORT,   /* 32-bit ODP port number */
+	ODP_KEY_ATTR_ETHERNET,  /* struct odp_key_ethernet */
+	ODP_KEY_ATTR_8021Q,     /* struct odp_key_8021q */
+	ODP_KEY_ATTR_ETHERTYPE,	/* 16-bit Ethernet type */
+	ODP_KEY_ATTR_IPV4,      /* struct odp_key_ipv4 */
+	ODP_KEY_ATTR_TCP,       /* struct odp_key_tcp */
+	ODP_KEY_ATTR_UDP,       /* struct odp_key_udp */
+	ODP_KEY_ATTR_ICMP,      /* struct odp_key_icmp */
+	ODP_KEY_ATTR_ARP,       /* struct odp_key_arp */
+	__ODP_KEY_ATTR_MAX
+};
 
-struct odp_flow_key {
-    ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
-    ovs_be32 nw_src;            /* IP source address. */
-    ovs_be32 nw_dst;            /* IP destination address. */
-    uint16_t in_port;           /* Input switch port. */
-    ovs_be16 dl_tci;            /* All zeros if 802.1Q header absent,
-                                  * ODP_TCI_PRESENT set if present. */
-    ovs_be16 dl_type;           /* Ethernet frame type. */
-    ovs_be16 tp_src;            /* TCP/UDP source port. */
-    ovs_be16 tp_dst;            /* TCP/UDP destination port. */
-    uint8_t  dl_src[6];         /* Ethernet source address. */
-    uint8_t  dl_dst[6];         /* Ethernet destination address. */
-    uint8_t  nw_proto;          /* IP protocol or lower 8 bits of
-                                   ARP opcode. */
-    uint8_t  nw_tos;            /* IP ToS (DSCP field, 6 bits). */
+#define ODP_KEY_ATTR_MAX (__ODP_KEY_ATTR_MAX - 1)
+
+struct odp_key_ethernet {
+	uint8_t	 eth_src[6];
+	uint8_t	 eth_dst[6];
+};
+
+struct odp_key_8021q {
+	ovs_be16 q_tpid;
+	ovs_be16 q_tci;
+};
+
+struct odp_key_ipv4 {
+	ovs_be32 ipv4_src;
+	ovs_be32 ipv4_dst;
+	uint8_t  ipv4_proto;
+	uint8_t  ipv4_tos;
+};
+
+struct odp_key_tcp {
+	ovs_be16 tcp_src;
+	ovs_be16 tcp_dst;
+};
+
+struct odp_key_udp {
+	ovs_be16 udp_src;
+	ovs_be16 udp_dst;
+};
+
+struct odp_key_icmp {
+	uint8_t icmp_type;
+	uint8_t icmp_code;
+};
+
+struct odp_key_arp {
+	ovs_be32 arp_sip;
+	ovs_be32 arp_tip;
+	ovs_be16 arp_op;
 };
 
 /* Flags for ODP_FLOW. */
@@ -241,7 +271,8 @@ struct odp_flow_key {
 
 struct odp_flow {
     struct odp_flow_stats stats;
-    struct odp_flow_key key;
+    struct nlattr *key;
+    uint32_t key_len;
     struct nlattr *actions;
     uint32_t actions_len;
     uint32_t flags;
@@ -287,8 +318,8 @@ enum odp_action_type {
     ODPAT_STRIP_VLAN,		/* Strip the 802.1q header. */
     ODPAT_SET_DL_SRC,		/* Ethernet source address. */
     ODPAT_SET_DL_DST,		/* Ethernet destination address. */
-    ODPAT_SET_NW_SRC,		/* IP source address. */
-    ODPAT_SET_NW_DST,		/* IP destination address. */
+    ODPAT_SET_NW_SRC,		/* IPv4 source address. */
+    ODPAT_SET_NW_DST,		/* IPv4 destination address. */
     ODPAT_SET_NW_TOS,		/* IP ToS/DSCP field (6 bits). */
     ODPAT_SET_TP_SRC,		/* TCP/UDP source port. */
     ODPAT_SET_TP_DST,		/* TCP/UDP destination port. */
@@ -335,16 +366,5 @@ struct odp_vport_mtu {
     char devname[16];           /* IFNAMSIZ */
     uint16_t mtu;
 };
-
-/* Values below this cutoff are 802.3 packets and the two bytes
- * following MAC addresses are used as a frame length.  Otherwise, the
- * two bytes are used as the Ethernet type.
- */
-#define ODP_DL_TYPE_ETH2_CUTOFF   0x0600
-
-/* Value of dl_type to indicate that the frame does not include an
- * Ethernet type.
- */
-#define ODP_DL_TYPE_NOT_ETH_TYPE  0x05ff
 
 #endif  /* openvswitch/datapath-protocol.h */

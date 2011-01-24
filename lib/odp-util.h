@@ -28,6 +28,7 @@
 
 struct ds;
 struct flow;
+struct ofpbuf;
 
 static inline uint16_t
 ofp_port_to_odp_port(uint16_t ofp_port)
@@ -55,7 +56,6 @@ odp_port_to_ofp_port(uint16_t odp_port)
     }
 }
 
-void format_odp_flow_key(struct ds *, const struct odp_flow_key *);
 int odp_action_len(uint16_t type);
 void format_odp_action(struct ds *, const struct nlattr *);
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
@@ -64,21 +64,19 @@ void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
 void format_odp_flow(struct ds *, const struct odp_flow *);
 void format_odp_port_type(struct ds *, const struct odp_port *);
 
-void odp_flow_key_from_flow(struct odp_flow_key *, const struct flow *);
-void odp_flow_key_to_flow(const struct odp_flow_key *, struct flow *);
+/* By my calculations currently the longest valid nlattr-formatted flow key is
+ * 80 bytes long, so this leaves some safety margin.
+ *
+ * We allocate temporary on-stack buffers for flow keys as arrays of uint32_t
+ * to ensure proper 32-bit alignment for Netlink attributes.  (An array of
+ * "struct nlattr" might not, in theory, be sufficiently aligned because it
+ * only contains 16-bit types.) */
+#define ODPUTIL_FLOW_KEY_BYTES 96
+#define ODPUTIL_FLOW_KEY_U32S DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)
 
-static inline bool
-odp_flow_key_equal(const struct odp_flow_key *a, const struct odp_flow_key *b)
-{
-    return !memcmp(a, b, sizeof *a);
-}
+void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 
-static inline size_t
-odp_flow_key_hash(const struct odp_flow_key *flow, uint32_t basis)
-{
-    BUILD_ASSERT_DECL(!(sizeof *flow % sizeof(uint32_t)));
-    return hash_words((const uint32_t *) flow,
-                      sizeof *flow / sizeof(uint32_t), basis);
-}
+void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);
+int odp_flow_key_to_flow(const struct nlattr *, size_t, struct flow *);
 
 #endif /* odp-util.h */

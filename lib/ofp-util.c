@@ -146,7 +146,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     rule->flow.nw_dst = match->nw_dst;
     rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
-    rule->flow.dl_type = match->dl_type;
+    rule->flow.dl_type = ofputil_dl_type_from_openflow(match->dl_type);
     rule->flow.tp_src = match->tp_src;
     rule->flow.tp_dst = match->tp_dst;
     memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
@@ -270,7 +270,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
                            : rule->flow.in_port);
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
-    match->dl_type = rule->flow.dl_type;
+    match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
     match->nw_src = rule->flow.nw_src;
     match->nw_dst = rule->flow.nw_dst;
     match->nw_tos = rule->flow.nw_tos;
@@ -279,6 +279,27 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
     match->tp_dst = rule->flow.tp_dst;
     memset(match->pad1, '\0', sizeof match->pad1);
     memset(match->pad2, '\0', sizeof match->pad2);
+}
+
+/* Given a 'dl_type' value in the format used in struct flow, returns the
+ * corresponding 'dl_type' value for use in an OpenFlow ofp_match structure. */
+ovs_be16
+ofputil_dl_type_to_openflow(ovs_be16 flow_dl_type)
+{
+    return (flow_dl_type == htons(FLOW_DL_TYPE_NONE)
+            ? htons(OFP_DL_TYPE_NOT_ETH_TYPE)
+            : flow_dl_type);
+}
+
+/* Given a 'dl_type' value in the format used in an OpenFlow ofp_match
+ * structure, returns the corresponding 'dl_type' value for use in struct
+ * flow. */
+ovs_be16
+ofputil_dl_type_from_openflow(ovs_be16 ofp_dl_type)
+{
+    return (ofp_dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)
+            ? htons(FLOW_DL_TYPE_NONE)
+            : ofp_dl_type);
 }
 
 /* Returns a transaction ID to use for an outgoing OpenFlow message. */

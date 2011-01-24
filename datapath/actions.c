@@ -27,7 +27,7 @@
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *, struct sk_buff *,
-			      const struct odp_flow_key *,
+			      const struct sw_flow_key *,
 			      const struct nlattr *actions, u32 actions_len);
 
 static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
@@ -76,7 +76,7 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 }
 
 static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-				       const struct odp_flow_key *key,
+				       const struct sw_flow_key *key,
 				       const struct nlattr *a, u32 actions_len)
 {
 	__be16 tci = nla_get_be16(a);
@@ -207,13 +207,13 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb)
 	return skb;
 }
 
-static bool is_ip(struct sk_buff *skb, const struct odp_flow_key *key)
+static bool is_ip(struct sk_buff *skb, const struct sw_flow_key *key)
 {
 	return (key->dl_type == htons(ETH_P_IP) &&
 		skb->transport_header > skb->network_header);
 }
 
-static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct odp_flow_key *key)
+static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct sw_flow_key *key)
 {
 	int transport_len = skb->len - skb_transport_offset(skb);
 	if (key->nw_proto == IPPROTO_TCP) {
@@ -227,7 +227,7 @@ static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct odp_flow_key *
 }
 
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
-				   const struct odp_flow_key *key,
+				   const struct sw_flow_key *key,
 				   const struct nlattr *a)
 {
 	__be32 new_nwaddr = nla_get_be32(a);
@@ -256,7 +256,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 }
 
 static struct sk_buff *set_nw_tos(struct sk_buff *skb,
-				  const struct odp_flow_key *key,
+				  const struct sw_flow_key *key,
 				  u8 nw_tos)
 {
 	if (unlikely(!is_ip(skb, key)))
@@ -279,7 +279,7 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 }
 
 static struct sk_buff *set_tp_port(struct sk_buff *skb,
-				   const struct odp_flow_key *key,
+				   const struct sw_flow_key *key,
 				   const struct nlattr *a)
 {
 	struct udphdr *th;
@@ -324,7 +324,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
  * or truncated header fields or one whose inner and outer Ethernet address
  * differ.
  */
-static bool is_spoofed_arp(struct sk_buff *skb, const struct odp_flow_key *key)
+static bool is_spoofed_arp(struct sk_buff *skb, const struct sw_flow_key *key)
 {
 	struct arp_eth_header *arp;
 
@@ -370,7 +370,7 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg)
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			      const struct odp_flow_key *key,
+			      const struct sw_flow_key *key,
 			      const struct nlattr *actions, u32 actions_len)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
@@ -490,7 +490,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    const struct odp_flow_key *key,
+		    const struct sw_flow_key *key,
 		    const struct nlattr *actions, u32 actions_len)
 {
 	if (dp->sflow_probability) {

@@ -2323,8 +2323,16 @@ static int
 facet_put__(struct ofproto *ofproto, struct facet *facet, int flags,
             struct odp_flow_put *put)
 {
+    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+    struct ofpbuf key;
+
+    ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, &facet->flow);
+    assert(key.base == keybuf);
+
     memset(&put->flow.stats, 0, sizeof put->flow.stats);
-    odp_flow_key_from_flow(&put->flow.key, &facet->flow);
+    put->flow.key = key.data;
+    put->flow.key_len = key.size;
     put->flow.actions = facet->actions;
     put->flow.actions_len = facet->actions_len;
     put->flow.flags = 0;
@@ -2375,9 +2383,16 @@ static void
 facet_uninstall(struct ofproto *p, struct facet *facet)
 {
     if (facet->installed) {
+        uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
         struct odp_flow odp_flow;
+        struct ofpbuf key;
 
-        odp_flow_key_from_flow(&odp_flow.key, &facet->flow);
+        ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+        odp_flow_key_from_flow(&key, &facet->flow);
+        assert(key.base == keybuf);
+
+        odp_flow.key = key.data;
+        odp_flow.key_len = key.size;
         odp_flow.actions = NULL;
         odp_flow.actions_len = 0;
         odp_flow.flags = 0;
@@ -2513,10 +2528,16 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
      * to talk to the datapath. */
     if (actions_changed || facet->may_install != facet->installed) {
         if (facet->may_install) {
+            uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
             struct odp_flow_put put;
+            struct ofpbuf key;
+
+            ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+            odp_flow_key_from_flow(&key, &facet->flow);
 
             memset(&put.flow.stats, 0, sizeof put.flow.stats);
-            odp_flow_key_from_flow(&put.flow.key, &facet->flow);
+            put.flow.key = key.data;
+            put.flow.key_len = key.size;
             put.flow.actions = odp_actions->data;
             put.flow.actions_len = odp_actions->size;
             put.flow.flags = 0;
@@ -3470,42 +3491,44 @@ static void
 query_stats(struct ofproto *p, struct rule *rule,
             uint64_t *packet_countp, uint64_t *byte_countp)
 {
+    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
     uint64_t packet_count, byte_count;
     struct facet *facet;
-    struct odp_flow *odp_flows;
-    size_t n_odp_flows;
+    struct ofpbuf key;
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * by the datapath.  This counts, for example, facets that have expired. */
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
 
-    /* Prepare to ask the datapath for statistics on all of the rule's facets.
+    /* Ask the datapath for statistics on all of the rule's facets.  (We could
+     * batch up statistics requests using dpif_flow_get_multiple(), but that is
+     * not yet implemented.)
      *
      * Also, add any statistics that are not tracked by the datapath for each
      * facet.  This includes, for example, statistics for packets that were
      * executed "by hand" by ofproto via dpif_execute() but must be accounted
      * to a rule. */
-    odp_flows = xzalloc(list_size(&rule->facets) * sizeof *odp_flows);
-    n_odp_flows = 0;
+    ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
     LIST_FOR_EACH (facet, list_node, &rule->facets) {
-        struct odp_flow *odp_flow = &odp_flows[n_odp_flows++];
-        odp_flow_key_from_flow(&odp_flow->key, &facet->flow);
+        struct odp_flow odp_flow;
+
+        ofpbuf_clear(&key);
+        odp_flow_key_from_flow(&key, &facet->flow);
+
+        odp_flow.key = key.data;
+        odp_flow.key_len = key.size;
+        odp_flow.actions = NULL;
+        odp_flow.actions_len = 0;
+        odp_flow.flags = 0;
+        if (!dpif_flow_get(p->dpif, &odp_flow)) {
+            packet_count += odp_flow.stats.n_packets;
+            byte_count += odp_flow.stats.n_bytes;
+        }
+
         packet_count += facet->packet_count;
         byte_count += facet->byte_count;
     }
-
-    /* Fetch up-to-date statistics from the datapath and add them in. */
-    if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
-        size_t i;
-
-        for (i = 0; i < n_odp_flows; i++) {
-            struct odp_flow *odp_flow = &odp_flows[i];
-            packet_count += odp_flow->stats.n_packets;
-            byte_count += odp_flow->stats.n_bytes;
-        }
-    }
-    free(odp_flows);
 
     /* Return the stats to the caller. */
     *packet_countp = packet_count;
@@ -4544,16 +4567,36 @@ static void
 ofproto_update_used(struct ofproto *p)
 {
     struct dpif_flow_dump dump;
-    struct odp_flow f;
-
-    memset(&f, 0, sizeof f);
 
     dpif_flow_dump_start(&dump, p->dpif);
-    while (dpif_flow_dump_next(&dump, &f)) {
+    for (;;) {
+        uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
         struct facet *facet;
+        struct odp_flow f;
         struct flow flow;
 
-        odp_flow_key_to_flow(&f.key, &flow);
+        memset(&f, 0, sizeof f);
+        f.key = (struct nlattr *) keybuf;
+        f.key_len = sizeof keybuf;
+        if (!dpif_flow_dump_next(&dump, &f)) {
+            break;
+        }
+
+        if (f.key_len > sizeof keybuf) {
+            VLOG_WARN_RL(&rl, "ODP flow key overflowed buffer");
+            continue;
+        }
+        if (odp_flow_key_to_flow(f.key, f.key_len, &flow)) {
+            struct ds s;
+
+            ds_init(&s);
+            odp_flow_key_format(f.key, f.key_len, &s);
+            VLOG_WARN_RL(&rl, "failed to convert ODP flow key to flow: %s",
+                         ds_cstr(&s));
+            ds_destroy(&s);
+
+            continue;
+        }
         facet = facet_find(p, &flow);
 
         if (facet && facet->installed) {
@@ -4674,7 +4717,14 @@ facet_active_timeout(struct ofproto *ofproto, struct facet *facet)
          * ofproto_update_used() zeroed TCP flags. */
         memset(&odp_flow, 0, sizeof odp_flow);
         if (facet->installed) {
-            odp_flow_key_from_flow(&odp_flow.key, &facet->flow);
+            uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+            struct ofpbuf key;
+
+            ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+            odp_flow_key_from_flow(&key, &facet->flow);
+
+            odp_flow.key = key.data;
+            odp_flow.key_len = key.size;
             odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
             dpif_flow_get(ofproto->dpif, &odp_flow);
 

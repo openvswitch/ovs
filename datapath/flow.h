@@ -29,11 +29,26 @@ struct sw_flow_actions {
 	struct nlattr actions[];
 };
 
+struct sw_flow_key {
+	__be64	tun_id;     /* Encapsulating tunnel ID. */
+	__be32	nw_src;	    /* IP source address. */
+	__be32	nw_dst;	    /* IP destination address. */
+	u16	in_port;    /* Input switch port. */
+	__be16	dl_tci;	    /* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
+	__be16	dl_type;    /* Ethernet frame type. */
+	__be16	tp_src;	    /* TCP/UDP source port. */
+	__be16	tp_dst;	    /* TCP/UDP destination port. */
+	u8	dl_src[ETH_ALEN]; /* Ethernet source address. */
+	u8	dl_dst[ETH_ALEN]; /* Ethernet destination address. */
+	u8	nw_proto;   /* IP protocol or lower 8 bits of ARP opcode. */
+	u8	nw_tos;	    /* IP ToS (DSCP field, 6 bits). */
+};
+
 struct sw_flow {
 	struct rcu_head rcu;
 	struct tbl_node tbl_node;
 
-	struct odp_flow_key key;
+	struct sw_flow_key key;
 	struct sw_flow_actions __rcu *sf_acts;
 
 	atomic_t refcnt;
@@ -74,11 +89,19 @@ void flow_deferred_free_acts(struct sw_flow_actions *);
 void flow_hold(struct sw_flow *);
 void flow_put(struct sw_flow *);
 
-int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *, bool *is_frag);
+int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *, bool *is_frag);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
-u32 flow_hash(const struct odp_flow_key *key);
+u32 flow_hash(const struct sw_flow_key *);
 int flow_cmp(const struct tbl_node *, void *target);
+
+/* By my calculations currently the longest valid nlattr-formatted flow key is
+ * 80 bytes long, so this leaves some safety margin.
+ */
+#define FLOW_BUFSIZE 96
+
+int flow_copy_from_user(struct sw_flow_key *, const struct nlattr __user *ukey, u32 key_len);
+int flow_copy_to_user(struct nlattr __user *ukey, const struct sw_flow_key *, u32 key_len);
 
 static inline struct sw_flow *flow_cast(const struct tbl_node *node)
 {

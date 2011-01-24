@@ -488,12 +488,15 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
     dpif_flow_dump_start(&dump, dpif);
     for (;;) {
         enum { MAX_ACTIONS = 4096 }; /* An arbitrary but large number. */
-        struct nlattr actions[MAX_ACTIONS];
+        uint32_t actions[MAX_ACTIONS * sizeof(struct nlattr) / 4];
+        uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
         struct odp_flow f;
 
         memset(&f, 0, sizeof f);
-        f.actions = actions;
+        f.actions = (struct nlattr *) actions;
         f.actions_len = sizeof actions;
+        f.key = (struct nlattr *) keybuf;
+        f.key_len = sizeof keybuf;
 
         if (!dpif_flow_dump_next(&dump, &f)) {
             break;

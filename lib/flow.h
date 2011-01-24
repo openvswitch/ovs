@@ -35,6 +35,10 @@ struct ofpbuf;
 #define FLOW_N_REGS 4
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 
+/* Used for struct flow's dl_type member for frames that have no Ethernet
+ * type, that is, pure 802.2 frames. */
+#define FLOW_DL_TYPE_NONE 0x5ff
+
 struct flow {
     ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */

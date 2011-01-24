@@ -211,7 +211,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         memcpy(flow->dl_src, value, ETH_ADDR_LEN);
         return 0;
     case NFI_NXM_OF_ETH_TYPE:
-        flow->dl_type = get_unaligned_be16(value);
+        flow->dl_type = ofputil_dl_type_from_openflow(get_unaligned_be16(value));
         return 0;
 
         /* 802.1Q header. */
@@ -636,7 +636,8 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         nxm_put_eth(b, NXM_OF_ETH_SRC, flow->dl_src);
     }
     if (!(wc & FWW_DL_TYPE)) {
-        nxm_put_16(b, NXM_OF_ETH_TYPE, flow->dl_type);
+        nxm_put_16(b, NXM_OF_ETH_TYPE,
+                   ofputil_dl_type_to_openflow(flow->dl_type));
     }
 
     /* 802.1Q. */
@@ -1104,7 +1105,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
         return eth_addr_to_uint64(flow->dl_src);
 
     case NFI_NXM_OF_ETH_TYPE:
-        return ntohs(flow->dl_type);
+        return ntohs(ofputil_dl_type_to_openflow(flow->dl_type));
 
     case NFI_NXM_OF_VLAN_TCI:
         return ntohs(flow->vlan_tci);

@@ -110,6 +110,10 @@ void ofputil_cls_rule_to_match(const struct cls_rule *, enum nx_flow_format,
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
 
+/* dl_type translation between OpenFlow and 'struct flow' format. */
+ovs_be16 ofputil_dl_type_to_openflow(ovs_be16 flow_dl_type);
+ovs_be16 ofputil_dl_type_from_openflow(ovs_be16 ofp_dl_type);
+
 /* Flow formats. */
 bool ofputil_flow_format_is_valid(enum nx_flow_format);
 const char *ofputil_flow_format_to_string(enum nx_flow_format);
