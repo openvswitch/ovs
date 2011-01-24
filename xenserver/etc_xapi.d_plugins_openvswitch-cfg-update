@@ -92,15 +92,8 @@ def update(session, args):
         fail_mode = 'standalone'
 
     fail_mode_changed = False
-    for (p, rec) in session.xenapi.PIF.get_all_records().items():
-        try:
-            network = session.xenapi.network.get_record(rec['network'])
-            bridge = network['bridge']
-        except Exception, e:
-            syslog.syslog("%s: failed to get bridge name (%s)" %
-                    (script, str(e)))
-            continue
-
+    for bridge in vswitchCfgQuery(['list-br']).split():
+        bridge = vswitchCfgQuery(['br-to-parent', bridge])
         bridge_fail_mode = vswitchCfgQuery(["get", "Bridge",
             bridge, "fail_mode"]).strip('[]"')
 
