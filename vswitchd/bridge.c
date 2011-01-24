@@ -608,16 +608,16 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, node, &all_bridges) {
         struct dpif_port_dump dump;
         struct shash want_ifaces;
-        struct odp_port odp_port;
+        struct dpif_port dpif_port;
 
         bridge_get_all_ifaces(br, &want_ifaces);
-        DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
-            if (!shash_find(&want_ifaces, odp_port.devname)
-                && strcmp(odp_port.devname, br->name)) {
-                int retval = dpif_port_del(br->dpif, odp_port.port);
+        DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
+            if (!shash_find(&want_ifaces, dpif_port.name)
+                && strcmp(dpif_port.name, br->name)) {
+                int retval = dpif_port_del(br->dpif, dpif_port.port_no);
                 if (retval) {
                     VLOG_ERR("failed to remove %s interface from %s: %s",
-                             odp_port.devname, dpif_name(br->dpif),
+                             dpif_port.name, dpif_name(br->dpif),
                              strerror(retval));
                 }
             }
@@ -625,21 +625,16 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_destroy(&want_ifaces);
     }
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct dpif_port {
-            char *type;         /* Network device type, e.g. "system". */
-            uint32_t port_no;   /* Port number within datapath. */
-        };
         struct shash cur_ifaces, want_ifaces;
         struct dpif_port_dump dump;
-        struct odp_port odp_port;
+        struct dpif_port dpif_port;
 
         /* Get the set of interfaces currently in this datapath. */
         shash_init(&cur_ifaces);
-        DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
+        DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
             struct dpif_port *port_info = xmalloc(sizeof *port_info);
-            port_info->port_no = odp_port.port;
-            port_info->type = xstrdup(odp_port.type);
-            shash_add(&cur_ifaces, odp_port.devname, port_info);
+            dpif_port_clone(port_info, &dpif_port);
+            shash_add(&cur_ifaces, dpif_port.name, port_info);
         }
 
         /* Get the set of interfaces we want on this datapath. */
@@ -741,7 +736,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         SHASH_FOR_EACH (node, &cur_ifaces) {
             struct dpif_port *port_info = node->data;
-            free(port_info->type);
+            dpif_port_destroy(port_info);
             free(port_info);
         }
         shash_destroy(&cur_ifaces);
@@ -2041,7 +2036,7 @@ static void
 bridge_fetch_dp_ifaces(struct bridge *br)
 {
     struct dpif_port_dump dump;
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
     size_t i, j;
 
     /* Reset all interface numbers. */
@@ -2054,17 +2049,17 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     hmap_clear(&br->ifaces);
 
-    DPIF_PORT_FOR_EACH (&odp_port, &dump, br->dpif) {
-        struct iface *iface = iface_lookup(br, odp_port.devname);
+    DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
+        struct iface *iface = iface_lookup(br, dpif_port.name);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
                 VLOG_WARN("%s reported interface %s twice",
-                          dpif_name(br->dpif), odp_port.devname);
-            } else if (iface_from_dp_ifidx(br, odp_port.port)) {
+                          dpif_name(br->dpif), dpif_port.name);
+            } else if (iface_from_dp_ifidx(br, dpif_port.port_no)) {
                 VLOG_WARN("%s reported interface %"PRIu16" twice",
-                          dpif_name(br->dpif), odp_port.port);
+                          dpif_name(br->dpif), dpif_port.port_no);
             } else {
-                iface->dp_ifidx = odp_port.port;
+                iface->dp_ifidx = dpif_port.port_no;
                 hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
                             hash_int(iface->dp_ifidx, 0));
             }

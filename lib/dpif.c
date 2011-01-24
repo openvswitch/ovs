@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -492,17 +492,41 @@ dpif_port_del(struct dpif *dpif, uint16_t port_no)
     return error;
 }
 
+/* Makes a deep copy of 'src' into 'dst'. */
+void
+dpif_port_clone(struct dpif_port *dst, const struct dpif_port *src)
+{
+    dst->name = xstrdup(src->name);
+    dst->type = xstrdup(src->type);
+    dst->port_no = src->port_no;
+}
+
+/* Frees memory allocated to members of 'dpif_port'.
+ *
+ * Do not call this function on a dpif_port obtained from
+ * dpif_port_dump_next(): that function retains ownership of the data in the
+ * dpif_port. */
+void
+dpif_port_destroy(struct dpif_port *dpif_port)
+{
+    free(dpif_port->name);
+    free(dpif_port->type);
+}
+
 /* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and
  * initializes '*port' appropriately; on failure, returns a positive errno
- * value. */
+ * value.
+ *
+ * The caller owns the data in 'port' and must free it with
+ * dpif_port_destroy() when it is no longer needed. */
 int
 dpif_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
-                          struct odp_port *port)
+                          struct dpif_port *port)
 {
     int error = dpif->dpif_class->port_query_by_number(dpif, port_no, port);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: port %"PRIu16" is device %s",
-                    dpif_name(dpif), port_no, port->devname);
+                    dpif_name(dpif), port_no, port->name);
     } else {
         memset(port, 0, sizeof *port);
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu16": %s",
@@ -513,15 +537,18 @@ dpif_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
 
 /* Looks up port named 'devname' in 'dpif'.  On success, returns 0 and
  * initializes '*port' appropriately; on failure, returns a positive errno
- * value. */
+ * value.
+ *
+ * The caller owns the data in 'port' and must free it with
+ * dpif_port_destroy() when it is no longer needed. */
 int
 dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
-                        struct odp_port *port)
+                        struct dpif_port *port)
 {
     int error = dpif->dpif_class->port_query_by_name(dpif, devname, port);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: device %s is on port %"PRIu16,
-                    dpif_name(dpif), devname, port->port);
+                    dpif_name(dpif), devname, port->port_no);
     } else {
         memset(port, 0, sizeof *port);
 
@@ -542,14 +569,15 @@ int
 dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
                    char *name, size_t name_size)
 {
-    struct odp_port port;
+    struct dpif_port port;
     int error;
 
     assert(name_size > 0);
 
     error = dpif_port_query_by_number(dpif, port_no, &port);
     if (!error) {
-        ovs_strlcpy(name, port.devname, name_size);
+        ovs_strlcpy(name, port.name, name_size);
+        dpif_port_destroy(&port);
     } else {
         *name = '\0';
     }
@@ -571,14 +599,18 @@ dpif_port_dump_start(struct dpif_port_dump *dump, const struct dpif *dpif)
 }
 
 /* Attempts to retrieve another port from 'dump', which must have been
- * initialized with dpif_port_dump_start().  On success, stores a new odp_port
+ * initialized with dpif_port_dump_start().  On success, stores a new dpif_port
  * into 'port' and returns true.  On failure, returns false.
  *
  * Failure might indicate an actual error or merely that the last port has been
  * dumped.  An error status for the entire dump operation is provided when it
- * is completed by calling dpif_port_dump_done(). */
+ * is completed by calling dpif_port_dump_done().
+ *
+ * The dpif owns the data stored in 'port'.  It will remain valid until at
+ * least the next time 'dump' is passed to dpif_port_dump_next() or
+ * dpif_port_dump_done(). */
 bool
-dpif_port_dump_next(struct dpif_port_dump *dump, struct odp_port *port)
+dpif_port_dump_next(struct dpif_port_dump *dump, struct dpif_port *port)
 {
     const struct dpif *dpif = dump->dpif;
 

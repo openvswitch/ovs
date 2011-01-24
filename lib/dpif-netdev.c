@@ -474,18 +474,17 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
 }
 
 static void
-answer_port_query(const struct dp_netdev_port *port, struct odp_port *odp_port)
+answer_port_query(const struct dp_netdev_port *port,
+                  struct dpif_port *dpif_port)
 {
-    memset(odp_port, 0, sizeof *odp_port);
-    ovs_strlcpy(odp_port->devname, netdev_get_name(port->netdev),
-                sizeof odp_port->devname);
-    odp_port->port = port->port_no;
-    strcpy(odp_port->type, port->internal ? "internal" : "system");
+    dpif_port->name = xstrdup(netdev_get_name(port->netdev));
+    dpif_port->type = xstrdup(port->internal ? "internal" : "system");
+    dpif_port->port_no = port->port_no;
 }
 
 static int
 dpif_netdev_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
-                                 struct odp_port *odp_port)
+                                 struct dpif_port *dpif_port)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_port *port;
@@ -493,14 +492,14 @@ dpif_netdev_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
 
     error = get_port_by_number(dp, port_no, &port);
     if (!error) {
-        answer_port_query(port, odp_port);
+        answer_port_query(port, dpif_port);
     }
     return error;
 }
 
 static int
 dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
-                               struct odp_port *odp_port)
+                               struct dpif_port *dpif_port)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_port *port;
@@ -508,7 +507,7 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
 
     error = get_port_by_name(dp, devname, &port);
     if (!error) {
-        answer_port_query(port, odp_port);
+        answer_port_query(port, dpif_port);
     }
     return error;
 }
@@ -541,6 +540,7 @@ dpif_netdev_flow_flush(struct dpif *dpif)
 
 struct dp_netdev_port_state {
     uint32_t port_no;
+    char *name;
 };
 
 static int
@@ -552,7 +552,7 @@ dpif_netdev_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 
 static int
 dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
-                           struct odp_port *odp_port)
+                           struct dpif_port *dpif_port)
 {
     struct dp_netdev_port_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -561,7 +561,11 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
     for (port_no = state->port_no; port_no < MAX_PORTS; port_no++) {
         struct dp_netdev_port *port = dp->ports[port_no];
         if (port) {
-            answer_port_query(port, odp_port);
+            free(state->name);
+            state->name = xstrdup(netdev_get_name(port->netdev));
+            dpif_port->name = state->name;
+            dpif_port->type = port->internal ? "internal" : "system";
+            dpif_port->port_no = port->port_no;
             state->port_no = port_no + 1;
             return 0;
         }
@@ -570,8 +574,10 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
 }
 
 static int
-dpif_netdev_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+dpif_netdev_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
+    struct dp_netdev_port_state *state = state_;
+    free(state->name);
     free(state);
     return 0;
 }

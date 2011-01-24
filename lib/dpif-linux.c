@@ -292,39 +292,43 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no_)
 }
 
 static int
-dpif_linux_port_query__(const struct dpif *dpif, struct odp_port *port)
+dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
+                        const char *port_name, struct dpif_port *dpif_port)
 {
-    int error = do_ioctl(dpif, ODP_VPORT_QUERY, port);
-    if (!error) {
-        translate_vport_type_to_netdev_type(port);
+    struct odp_port odp_port;
+    int error;
+
+    memset(&odp_port, 0, sizeof odp_port);
+    odp_port.port = port_no;
+    strncpy(odp_port.devname, port_name, sizeof odp_port.devname);
+
+    error = do_ioctl(dpif, ODP_VPORT_QUERY, &odp_port);
+    if (error) {
+        return error;
+    } else if (odp_port.dp_idx != dpif_linux_cast(dpif)->minor) {
+        /* A vport named 'port_name' exists but in some other datapath.  */
+        return ENOENT;
+    } else {
+        translate_vport_type_to_netdev_type(&odp_port);
+        dpif_port->name = xstrdup(odp_port.devname);
+        dpif_port->type = xstrdup(odp_port.type);
+        dpif_port->port_no = odp_port.port;
+        return 0;
     }
-    return error;
 }
 
 static int
 dpif_linux_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
-                                struct odp_port *port)
+                                struct dpif_port *dpif_port)
 {
-    memset(port, 0, sizeof *port);
-    port->port = port_no;
-    return dpif_linux_port_query__(dpif, port);
+    return dpif_linux_port_query__(dpif, port_no, "", dpif_port);
 }
 
 static int
-dpif_linux_port_query_by_name(const struct dpif *dpif_, const char *devname,
-                              struct odp_port *port)
+dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
+                              struct dpif_port *dpif_port)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int error;
-
-    memset(port, 0, sizeof *port);
-    strncpy(port->devname, devname, sizeof port->devname);
-    error = dpif_linux_port_query__(dpif_, port);
-    if (!error && port->dp_idx != dpif->minor) {
-        /* A vport named 'devname' exists but in some other datapath.  */
-        error = ENOENT;
-    }
-    return error;
+    return dpif_linux_port_query__(dpif, 0, devname, dpif_port);
 }
 
 static int
@@ -336,26 +340,31 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 static int
 dpif_linux_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    *statep = xzalloc(sizeof(struct odp_vport_dump));
+    *statep = xzalloc(sizeof(struct odp_port));
     return 0;
 }
 
 static int
 dpif_linux_port_dump_next(const struct dpif *dpif, void *state,
-                          struct odp_port *port)
+                          struct dpif_port *dpif_port)
 {
-    struct odp_vport_dump *dump = state;
+    struct odp_port *odp_port = state;
+    struct odp_vport_dump dump;
     int error;
 
-    dump->port = port;
-    error = do_ioctl(dpif, ODP_VPORT_DUMP, dump);
+    dump.port = odp_port;
+    dump.port_no = odp_port->port;
+    error = do_ioctl(dpif, ODP_VPORT_DUMP, &dump);
     if (error) {
         return error;
-    } else if (port->devname[0] == '\0') {
+    } else if (odp_port->devname[0] == '\0') {
         return EOF;
     } else {
-        dump->port_no = port->port + 1;
-        translate_vport_type_to_netdev_type(port);
+        translate_vport_type_to_netdev_type(odp_port);
+        dpif_port->name = odp_port->devname;
+        dpif_port->type = odp_port->type;
+        dpif_port->port_no = odp_port->port;
+        odp_port->port++;
         return 0;
     }
 }

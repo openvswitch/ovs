@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,10 +63,21 @@ int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
 int dpif_port_add(struct dpif *, struct netdev *, uint16_t *port_nop);
 int dpif_port_del(struct dpif *, uint16_t port_no);
+
+/* A port within a datapath.
+ *
+ * 'name' and 'type' are suitable for passing to netdev_open(). */
+struct dpif_port {
+    char *name;                 /* Network device name, e.g. "eth0". */
+    char *type;                 /* Network device type, e.g. "system". */
+    uint32_t port_no;           /* Port number within datapath. */
+};
+void dpif_port_clone(struct dpif_port *, const struct dpif_port *);
+void dpif_port_destroy(struct dpif_port *);
 int dpif_port_query_by_number(const struct dpif *, uint16_t port_no,
-                              struct odp_port *);
+                              struct dpif_port *);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
-                            struct odp_port *);
+                            struct dpif_port *);
 int dpif_port_get_name(struct dpif *, uint16_t port_no,
                        char *name, size_t name_size);
 
@@ -76,18 +87,18 @@ struct dpif_port_dump {
     void *state;
 };
 void dpif_port_dump_start(struct dpif_port_dump *, const struct dpif *);
-bool dpif_port_dump_next(struct dpif_port_dump *, struct odp_port *);
+bool dpif_port_dump_next(struct dpif_port_dump *, struct dpif_port *);
 int dpif_port_dump_done(struct dpif_port_dump *);
 
-/* Iterates through each ODP_PORT in DPIF, using DUMP as state.
+/* Iterates through each DPIF_PORT in DPIF, using DUMP as state.
  *
  * Arguments all have pointer type.
  *
  * If you break out of the loop, then you need to free the dump structure by
  * hand using dpif_port_dump_done(). */
-#define DPIF_PORT_FOR_EACH(ODP_PORT, DUMP, DPIF)    \
+#define DPIF_PORT_FOR_EACH(DPIF_PORT, DUMP, DPIF)   \
     for (dpif_port_dump_start(DUMP, DPIF);          \
-         (dpif_port_dump_next(DUMP, ODP_PORT)       \
+         (dpif_port_dump_next(DUMP, DPIF_PORT)      \
           ? true                                    \
           : (dpif_port_dump_done(DUMP), false));    \
         )

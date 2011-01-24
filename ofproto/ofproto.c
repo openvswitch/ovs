@@ -1540,7 +1540,7 @@ reinit_ports(struct ofproto *p)
     struct shash_node *node;
     struct shash devnames;
     struct ofport *ofport;
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
 
     COVERAGE_INC(ofproto_reinit_ports);
 
@@ -1548,8 +1548,8 @@ reinit_ports(struct ofproto *p)
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         shash_add_once (&devnames, ofport->opp.name, NULL);
     }
-    DPIF_PORT_FOR_EACH (&odp_port, &dump, p->dpif) {
-        shash_add_once (&devnames, odp_port.devname, NULL);
+    DPIF_PORT_FOR_EACH (&dpif_port, &dump, p->dpif) {
+        shash_add_once (&devnames, dpif_port.name, NULL);
     }
 
     SHASH_FOR_EACH (node, &devnames) {
@@ -1559,7 +1559,7 @@ reinit_ports(struct ofproto *p)
 }
 
 static struct ofport *
-make_ofport(const struct odp_port *odp_port)
+make_ofport(const struct dpif_port *dpif_port)
 {
     struct netdev_options netdev_options;
     enum netdev_flags flags;
@@ -1568,27 +1568,25 @@ make_ofport(const struct odp_port *odp_port)
     int error;
 
     memset(&netdev_options, 0, sizeof netdev_options);
-    netdev_options.name = odp_port->devname;
-    netdev_options.type = odp_port->type;
+    netdev_options.name = dpif_port->name;
+    netdev_options.type = dpif_port->type;
     netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
 
     error = netdev_open(&netdev_options, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",
-                     odp_port->devname, odp_port->port,
-                     odp_port->devname, strerror(error));
+                     dpif_port->name, dpif_port->port_no,
+                     dpif_port->name, strerror(error));
         return NULL;
     }
 
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
-    ofport->odp_port = odp_port->port;
-    ofport->opp.port_no = odp_port_to_ofp_port(odp_port->port);
+    ofport->odp_port = dpif_port->port_no;
+    ofport->opp.port_no = odp_port_to_ofp_port(dpif_port->port_no);
     netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
-    memcpy(ofport->opp.name, odp_port->devname,
-           MIN(sizeof ofport->opp.name, sizeof odp_port->devname));
-    ofport->opp.name[sizeof ofport->opp.name - 1] = '\0';
+    ovs_strlcpy(ofport->opp.name, dpif_port->name, sizeof ofport->opp.name);
 
     netdev_get_flags(netdev, &flags);
     ofport->opp.config = flags & NETDEV_UP ? 0 : OFPPC_PORT_DOWN;
@@ -1602,15 +1600,15 @@ make_ofport(const struct odp_port *odp_port)
 }
 
 static bool
-ofport_conflicts(const struct ofproto *p, const struct odp_port *odp_port)
+ofport_conflicts(const struct ofproto *p, const struct dpif_port *dpif_port)
 {
-    if (get_port(p, odp_port->port)) {
+    if (get_port(p, dpif_port->port_no)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate port %"PRIu16" in datapath",
-                     odp_port->port);
+                     dpif_port->port_no);
         return true;
-    } else if (shash_find(&p->port_by_name, odp_port->devname)) {
+    } else if (shash_find(&p->port_by_name, dpif_port->name)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate device %s in datapath",
-                     odp_port->devname);
+                     dpif_port->name);
         return true;
     } else {
         return false;
@@ -1711,7 +1709,7 @@ get_port(const struct ofproto *ofproto, uint16_t odp_port)
 static void
 update_port(struct ofproto *p, const char *devname)
 {
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
     struct ofport *old_ofport;
     struct ofport *new_ofport;
     int error;
@@ -1719,7 +1717,7 @@ update_port(struct ofproto *p, const char *devname)
     COVERAGE_INC(ofproto_update_port);
 
     /* Query the datapath for port information. */
-    error = dpif_port_query_by_name(p->dpif, devname, &odp_port);
+    error = dpif_port_query_by_name(p->dpif, devname, &dpif_port);
 
     /* Find the old ofport. */
     old_ofport = shash_find_data(&p->port_by_name, devname);
@@ -1735,20 +1733,20 @@ update_port(struct ofproto *p, const char *devname)
              * reliably but more portably by comparing the old port's MAC
              * against the new port's MAC.  However, this code isn't that smart
              * and always sends an OFPPR_MODIFY (XXX). */
-            old_ofport = get_port(p, odp_port.port);
+            old_ofport = get_port(p, dpif_port.port_no);
         }
     } else if (error != ENOENT && error != ENODEV) {
         VLOG_WARN_RL(&rl, "dpif_port_query_by_name returned unexpected error "
                      "%s", strerror(error));
-        return;
+        goto exit;
     }
 
     /* Create a new ofport. */
-    new_ofport = !error ? make_ofport(&odp_port) : NULL;
+    new_ofport = !error ? make_ofport(&dpif_port) : NULL;
 
     /* Eliminate a few pathological cases. */
     if (!old_ofport && !new_ofport) {
-        return;
+        goto exit;
     } else if (old_ofport && new_ofport) {
         /* Most of the 'config' bits are OpenFlow soft state, but
          * OFPPC_PORT_DOWN is maintained by the kernel.  So transfer the
@@ -1759,7 +1757,7 @@ update_port(struct ofproto *p, const char *devname)
         if (ofport_equal(old_ofport, new_ofport)) {
             /* False alarm--no change. */
             ofport_free(new_ofport);
-            return;
+            goto exit;
         }
     }
 
@@ -1775,17 +1773,20 @@ update_port(struct ofproto *p, const char *devname)
                       : !new_ofport ? OFPPR_DELETE
                       : OFPPR_MODIFY));
     ofport_free(old_ofport);
+
+exit:
+    dpif_port_destroy(&dpif_port);
 }
 
 static int
 init_ports(struct ofproto *p)
 {
     struct dpif_port_dump dump;
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
 
-    DPIF_PORT_FOR_EACH (&odp_port, &dump, p->dpif) {
-        if (!ofport_conflicts(p, &odp_port)) {
-            struct ofport *ofport = make_ofport(&odp_port);
+    DPIF_PORT_FOR_EACH (&dpif_port, &dump, p->dpif) {
+        if (!ofport_conflicts(p, &dpif_port)) {
+            struct ofport *ofport = make_ofport(&dpif_port);
             if (ofport) {
                 ofport_install(p, ofport);
             }

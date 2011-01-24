@@ -147,11 +147,14 @@ struct dpif_class {
     int (*port_del)(struct dpif *dpif, uint16_t port_no);
 
     /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.  Stores
-     * information about the port into '*port' if successful. */
+     * information about the port into '*port' if successful.
+     *
+     * The caller takes ownership of data in 'port' and must free it with
+     * dpif_port_destroy() when it is no longer needed. */
     int (*port_query_by_number)(const struct dpif *dpif, uint16_t port_no,
-                                struct odp_port *port);
+                                struct dpif_port *port);
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
-                              struct odp_port *port);
+                              struct dpif_port *port);
 
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On
@@ -160,13 +163,17 @@ struct dpif_class {
 
     /* Attempts to retrieve another port from 'dpif' for 'state', which was
      * initialized by a successful call to the 'port_dump_start' function for
-     * 'dpif'.  On success, stores a new odp_port into 'port' and returns 0.
+     * 'dpif'.  On success, stores a new dpif_port into 'port' and returns 0.
      * Returns EOF if the end of the port table has been reached, or a positive
      * errno value on error.  This function will not be called again once it
      * returns nonzero once for a given iteration (but the 'port_dump_done'
-     * function will be called afterward). */
+     * function will be called afterward).
+     *
+     * The dpif provider retains ownership of the data stored in 'port'.  It
+     * must remain valid until at least the next call to 'port_dump_next' or
+     * 'port_dump_done' for 'state'. */
     int (*port_dump_next)(const struct dpif *dpif, void *state,
-                          struct odp_port *port);
+                          struct dpif_port *port);
 
     /* Releases resources from 'dpif' for 'state', which was initialized by a
      * successful call to the 'port_dump_start' function for 'dpif'.  */

@@ -285,10 +285,11 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
 static bool
 get_port_number(struct dpif *dpif, const char *name, uint16_t *port)
 {
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
 
-    if (!dpif_port_query_by_name(dpif, name, &odp_port)) {
-        *port = odp_port.port;
+    if (!dpif_port_query_by_name(dpif, name, &dpif_port)) {
+        *port = dpif_port.port_no;
+        dpif_port_destroy(&dpif_port);
         return true;
     } else {
         ovs_error(0, "no port named %s", name);
@@ -332,7 +333,7 @@ static void
 show_dpif(struct dpif *dpif)
 {
     struct dpif_port_dump dump;
-    struct odp_port odp_port;
+    struct dpif_port dpif_port;
     struct odp_stats stats;
 
     printf("%s:\n", dpif_name(dpif));
@@ -350,18 +351,18 @@ show_dpif(struct dpif *dpif)
         printf("\tqueues: max-miss:%"PRIu16", max-action:%"PRIu16"\n",
                stats.max_miss_queue, stats.max_action_queue);
     }
-    DPIF_PORT_FOR_EACH (&odp_port, &dump, dpif) {
-        printf("\tport %u: %s", odp_port.port, odp_port.devname);
+    DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
+        printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);
 
-        if (strcmp(odp_port.type, "system")) {
+        if (strcmp(dpif_port.type, "system")) {
             struct netdev_options netdev_options;
             struct netdev *netdev;
             int error;
 
-            printf (" (%s", odp_port.type);
+            printf (" (%s", dpif_port.type);
 
-            netdev_options.name = odp_port.devname;
-            netdev_options.type = odp_port.type;
+            netdev_options.name = dpif_port.name;
+            netdev_options.type = dpif_port.type;
             netdev_options.args = NULL;
             netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
             error = netdev_open(&netdev_options, &netdev);
