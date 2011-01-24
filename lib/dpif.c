@@ -741,7 +741,7 @@ dpif_flow_get(const struct dpif *dpif,
 /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
  * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
  * 'key'.  The associated actions are specified by the Netlink attributes with
- * types ODPAT_* in the 'actions_len' bytes starting at 'actions'.
+ * types ODP_ACTION_ATTR_* in the 'actions_len' bytes starting at 'actions'.
  *
  * - If the flow's key does not exist in 'dpif', then the flow will be added if
  *   'flags' includes DPIF_FP_CREATE.  Otherwise the operation will fail with
@@ -845,9 +845,9 @@ dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
  * On success, if 'key' and 'key_len' are nonnull then '*key' and '*key_len'
  * will be set to Netlink attributes with types ODP_KEY_ATTR_* representing the
  * dumped flow's key.  If 'actions' and 'actions_len' are nonnull then they are
- * set to Netlink attributes with types ODPAT_* representing the dumped flow's
- * actions.  If 'stats' is nonnull then it will be set to the dumped flow's
- * statistics.
+ * set to Netlink attributes with types ODP_ACTION_ATTR_* representing the
+ * dumped flow's actions.  If 'stats' is nonnull then it will be set to the
+ * dumped flow's statistics.
  *
  * All of the returned data is owned by 'dpif', not by the caller, and the
  * caller must not modify or free it.  'dpif' guarantees that it remains
@@ -1087,9 +1087,9 @@ dpif_get_netflow_ids(const struct dpif *dpif,
 }
 
 /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a priority
- * value for use in the ODPAT_SET_PRIORITY action.  On success, returns 0 and
- * stores the priority into '*priority'.  On failure, returns a positive errno
- * value and stores 0 into '*priority'. */
+ * value for use in the ODP_ACTION_ATTR_SET_PRIORITY action.  On success,
+ * returns 0 and stores the priority into '*priority'.  On failure, returns a
+ * positive errno value and stores 0 into '*priority'. */
 int
 dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
                        uint32_t *priority)

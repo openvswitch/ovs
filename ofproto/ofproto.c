@@ -138,7 +138,7 @@ struct action_xlate_ctx {
 
     int recurse;                /* Recursion level, via xlate_table_action. */
     int last_pop_priority;      /* Offset in 'odp_actions' just past most
-                                 * recently added ODPAT_SET_PRIORITY. */
+                                 * recent ODP_ACTION_ATTR_SET_PRIORITY. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -2088,7 +2088,7 @@ execute_odp_actions(struct ofproto *ofproto, const struct flow *flow,
                     struct ofpbuf *packet)
 {
     if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
-        && odp_actions->nla_type == ODPAT_CONTROLLER) {
+        && odp_actions->nla_type == ODP_ACTION_ATTR_CONTROLLER) {
         /* As an optimization, avoid a round-trip from userspace to kernel to
          * userspace.  This also avoids possibly filling up kernel packet
          * buffers along the way. */
@@ -2682,7 +2682,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
          */
     }
 
-    nl_msg_put_u32(ctx->odp_actions, ODPAT_OUTPUT, port);
+    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_OUTPUT, port);
     ctx->nf_output_iface = port;
 }
 
@@ -2733,7 +2733,7 @@ flood_packets(struct ofproto *ofproto, uint16_t odp_in_port, uint32_t mask,
     HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
         uint16_t odp_port = ofport->odp_port;
         if (odp_port != odp_in_port && !(ofport->opp.config & mask)) {
-            nl_msg_put_u32(odp_actions, ODPAT_OUTPUT, odp_port);
+            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, odp_port);
         }
     }
     *nf_output_iface = NF_OUT_FLOOD;
@@ -2773,7 +2773,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
                       &ctx->nf_output_iface, ctx->odp_actions);
         break;
     case OFPP_CONTROLLER:
-        nl_msg_put_u64(ctx->odp_actions, ODPAT_CONTROLLER, max_len);
+        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_CONTROLLER, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, ODPP_LOCAL);
@@ -2820,7 +2820,7 @@ static void
 add_pop_action(struct action_xlate_ctx *ctx)
 {
     if (ctx->odp_actions->size != ctx->last_pop_priority) {
-        nl_msg_put_flag(ctx->odp_actions, ODPAT_POP_PRIORITY);
+        nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_POP_PRIORITY);
         ctx->last_pop_priority = ctx->odp_actions->size;
     }
 }
@@ -2851,7 +2851,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
 
     /* Add ODP actions. */
     remove_pop_action(ctx);
-    nl_msg_put_u32(ctx->odp_actions, ODPAT_SET_PRIORITY, priority);
+    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
     add_output_action(ctx, odp_port);
     add_pop_action(ctx);
 
@@ -2879,7 +2879,7 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
     }
 
     remove_pop_action(ctx);
-    nl_msg_put_u32(ctx->odp_actions, ODPAT_SET_PRIORITY, priority);
+    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
 }
 
 static void
@@ -2887,9 +2887,9 @@ xlate_set_dl_tci(struct action_xlate_ctx *ctx)
 {
     ovs_be16 tci = ctx->flow.vlan_tci;
     if (!(tci & htons(VLAN_CFI))) {
-        nl_msg_put_flag(ctx->odp_actions, ODPAT_STRIP_VLAN);
+        nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
     } else {
-        nl_msg_put_be16(ctx->odp_actions, ODPAT_SET_DL_TCI,
+        nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
                         tci & ~htons(VLAN_CFI));
     }
 }
@@ -2915,7 +2915,8 @@ update_reg_state(struct action_xlate_ctx *ctx,
         xlate_set_dl_tci(ctx);
     }
     if (ctx->flow.tun_id != state->tun_id) {
-        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, ctx->flow.tun_id);
+        nl_msg_put_be64(ctx->odp_actions,
+                        ODP_ACTION_ATTR_SET_TUNNEL, ctx->flow.tun_id);
     }
 }
 
@@ -2941,13 +2942,14 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     case NXAST_SET_TUNNEL:
         nast = (const struct nx_action_set_tunnel *) nah;
         tun_id = htonll(ntohl(nast->tun_id));
-        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, tun_id);
+        nl_msg_put_be64(ctx->odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, tun_id);
         ctx->flow.tun_id = tun_id;
         break;
 
     case NXAST_DROP_SPOOFED_ARP:
         if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
-            nl_msg_put_flag(ctx->odp_actions, ODPAT_DROP_SPOOFED_ARP);
+            nl_msg_put_flag(ctx->odp_actions,
+                            ODP_ACTION_ATTR_DROP_SPOOFED_ARP);
         }
         break;
 
@@ -2980,7 +2982,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_SET_TUNNEL64:
         tun_id = ((const struct nx_action_set_tunnel64 *) nah)->tun_id;
-        nl_msg_put_be64(ctx->odp_actions, ODPAT_SET_TUNNEL, tun_id);
+        nl_msg_put_be64(ctx->odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, tun_id);
         ctx->flow.tun_id = tun_id;
         break;
 
@@ -3044,44 +3046,44 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPAT_SET_DL_SRC:
             oada = ((struct ofp_action_dl_addr *) ia);
-            nl_msg_put_unspec(ctx->odp_actions, ODPAT_SET_DL_SRC,
+            nl_msg_put_unspec(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_SRC,
                               oada->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_src, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_DL_DST:
             oada = ((struct ofp_action_dl_addr *) ia);
-            nl_msg_put_unspec(ctx->odp_actions, ODPAT_SET_DL_DST,
+            nl_msg_put_unspec(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_DST,
                               oada->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_dst, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_NW_SRC:
-            nl_msg_put_be32(ctx->odp_actions, ODPAT_SET_NW_SRC,
+            nl_msg_put_be32(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_SRC,
                             ia->nw_addr.nw_addr);
             ctx->flow.nw_src = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
-            nl_msg_put_be32(ctx->odp_actions, ODPAT_SET_NW_DST,
+            nl_msg_put_be32(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_DST,
                             ia->nw_addr.nw_addr);
             ctx->flow.nw_dst = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
-            nl_msg_put_u8(ctx->odp_actions, ODPAT_SET_NW_TOS,
+            nl_msg_put_u8(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_TOS,
                           ia->nw_tos.nw_tos);
             ctx->flow.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
-            nl_msg_put_be16(ctx->odp_actions, ODPAT_SET_TP_SRC,
+            nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_TP_SRC,
                             ia->tp_port.tp_port);
             ctx->flow.tp_src = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
-            nl_msg_put_be16(ctx->odp_actions, ODPAT_SET_TP_DST,
+            nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_TP_DST,
                             ia->tp_port.tp_port);
             ctx->flow.tp_dst = ia->tp_port.tp_port;
             break;
@@ -4374,7 +4376,7 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
         struct ofpbuf odp_actions;
 
         ofpbuf_init(&odp_actions, 32);
-        nl_msg_put_u32(&odp_actions, ODPAT_OUTPUT, ODPP_LOCAL);
+        nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, ODPP_LOCAL);
         dpif_execute(p->dpif, odp_actions.data, odp_actions.size,
                      upcall->packet);
         ofpbuf_uninit(&odp_actions);
@@ -5112,7 +5114,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
         flood_packets(ofproto, flow->in_port, OFPPC_NO_FLOOD,
                       nf_output_iface, odp_actions);
     } else if (out_port != flow->in_port) {
-        nl_msg_put_u32(odp_actions, ODPAT_OUTPUT, out_port);
+        nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, out_port);
         *nf_output_iface = out_port;
     } else {
         /* Drop. */

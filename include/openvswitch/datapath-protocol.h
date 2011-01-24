@@ -161,7 +161,7 @@ enum odp_packet_cmd {
 
         /* Kernel-to-user notifications. */
         ODP_PACKET_CMD_MISS,    /* Flow table miss. */
-        ODP_PACKET_CMD_ACTION,  /* ODPAT_CONTROLLER action. */
+        ODP_PACKET_CMD_ACTION,  /* ODP_ACTION_ATTR_CONTROLLER action. */
         ODP_PACKET_CMD_SAMPLE,  /* Sampled packet. */
 
         /* User commands. */
@@ -173,18 +173,20 @@ enum odp_packet_cmd {
  * @ODP_PACKET_ATTR_PACKET: Present for all notifications.  Contains the entire
  * packet as received, from the start of the Ethernet header onward.  For
  * %ODP_PACKET_CMD_ACTION, %ODP_PACKET_ATTR_PACKET reflects changes made by
- * actions preceding %ODPAT_CONTROLLER, but %ODP_PACKET_ATTR_KEY is the flow
- * key extracted from the packet as originally received.
+ * actions preceding %ODP_ACTION_ATTR_CONTROLLER, but %ODP_PACKET_ATTR_KEY is
+ * the flow key extracted from the packet as originally received.
  * @ODP_PACKET_ATTR_KEY: Present for all notifications.  Contains the flow key
  * extracted from the packet as nested %ODP_KEY_ATTR_* attributes.  This allows
  * userspace to adapt its flow setup strategy by comparing its notion of the
  * flow key against the kernel's.
  * @ODP_PACKET_ATTR_USERDATA: Present for an %ODP_PACKET_CMD_ACTION
- * notification if the %ODPAT_CONTROLLER action's argument was nonzero.
+ * notification if the %ODP_ACTION_ATTR_CONTROLLER, action's argument was
+ * nonzero.
  * @ODP_PACKET_ATTR_SAMPLE_POOL: Present for %ODP_PACKET_CMD_SAMPLE.  Contains
  * the number of packets processed so far that were candidates for sampling.
  * @ODP_PACKET_ATTR_ACTIONS: Present for %ODP_PACKET_CMD_SAMPLE.  Contains a
- * copy of the actions applied to the packet, as nested %ODPAT_* attributes.
+ * copy of the actions applied to the packet, as nested %ODP_ACTION_ATTR_*
+ * attributes.
  *
  * These attributes follow the &struct odp_header within the Generic Netlink
  * payload for %ODP_PACKET_* commands.
@@ -193,9 +195,9 @@ enum odp_packet_attr {
 	ODP_PACKET_ATTR_UNSPEC,
 	ODP_PACKET_ATTR_PACKET,      /* Packet data. */
 	ODP_PACKET_ATTR_KEY,         /* Nested ODP_KEY_ATTR_* attributes. */
-	ODP_PACKET_ATTR_USERDATA,    /* 64-bit data from ODPAT_CONTROLLER. */
+	ODP_PACKET_ATTR_USERDATA,    /* u64 ODP_ACTION_ATTR_CONTROLLER arg. */
 	ODP_PACKET_ATTR_SAMPLE_POOL, /* # sampling candidate packets so far. */
-	ODP_PACKET_ATTR_ACTIONS,     /* Nested ODPAT_* attributes. */
+	ODP_PACKET_ATTR_ACTIONS,     /* Nested ODP_ACTION_ATTR_* attributes. */
 	__ODP_PACKET_ATTR_MAX
 };
 
@@ -385,7 +387,7 @@ struct odp_key_arp {
 enum odp_flow_attr {
 	ODP_FLOW_ATTR_UNSPEC,
 	ODP_FLOW_ATTR_KEY,       /* Sequence of ODP_KEY_ATTR_* attributes. */
-	ODP_FLOW_ATTR_ACTIONS,   /* Sequence of nested ODPAT_* attributes. */
+	ODP_FLOW_ATTR_ACTIONS,   /* Nested ODP_ACTION_ATTR_* attributes. */
 	ODP_FLOW_ATTR_STATS,     /* struct odp_flow_stats. */
 	ODP_FLOW_ATTR_TCP_FLAGS, /* 8-bit OR'd TCP flags. */
 	ODP_FLOW_ATTR_USED,      /* u64 msecs last used in monotonic time. */
@@ -397,25 +399,25 @@ enum odp_flow_attr {
 
 /* Action types. */
 enum odp_action_type {
-    ODPAT_UNSPEC,
-    ODPAT_OUTPUT,		/* Output to switch port. */
-    ODPAT_CONTROLLER,		/* Send copy to controller. */
-    ODPAT_SET_DL_TCI,		/* Set the 802.1q TCI value. */
-    ODPAT_STRIP_VLAN,		/* Strip the 802.1q header. */
-    ODPAT_SET_DL_SRC,		/* Ethernet source address. */
-    ODPAT_SET_DL_DST,		/* Ethernet destination address. */
-    ODPAT_SET_NW_SRC,		/* IPv4 source address. */
-    ODPAT_SET_NW_DST,		/* IPv4 destination address. */
-    ODPAT_SET_NW_TOS,		/* IP ToS/DSCP field (6 bits). */
-    ODPAT_SET_TP_SRC,		/* TCP/UDP source port. */
-    ODPAT_SET_TP_DST,		/* TCP/UDP destination port. */
-    ODPAT_SET_TUNNEL,		/* Set the encapsulating tunnel ID. */
-    ODPAT_SET_PRIORITY,		/* Set skb->priority. */
-    ODPAT_POP_PRIORITY,		/* Restore original skb->priority. */
-    ODPAT_DROP_SPOOFED_ARP,	/* Drop ARPs with spoofed source MAC. */
-    __ODPAT_MAX
+	ODP_ACTION_ATTR_UNSPEC,
+	ODP_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
+	ODP_ACTION_ATTR_CONTROLLER,   /* Send copy to controller. */
+	ODP_ACTION_ATTR_SET_DL_TCI,   /* Set the 802.1q TCI value. */
+	ODP_ACTION_ATTR_STRIP_VLAN,   /* Strip the 802.1q header. */
+	ODP_ACTION_ATTR_SET_DL_SRC,   /* Ethernet source address. */
+	ODP_ACTION_ATTR_SET_DL_DST,   /* Ethernet destination address. */
+	ODP_ACTION_ATTR_SET_NW_SRC,   /* IPv4 source address. */
+	ODP_ACTION_ATTR_SET_NW_DST,   /* IPv4 destination address. */
+	ODP_ACTION_ATTR_SET_NW_TOS,   /* IP ToS/DSCP field (6 bits). */
+	ODP_ACTION_ATTR_SET_TP_SRC,   /* TCP/UDP source port. */
+	ODP_ACTION_ATTR_SET_TP_DST,   /* TCP/UDP destination port. */
+	ODP_ACTION_ATTR_SET_TUNNEL,   /* Set the encapsulating tunnel ID. */
+	ODP_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
+	ODP_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
+	ODP_ACTION_ATTR_DROP_SPOOFED_ARP, /* Drop ARPs with spoofed source MAC. */
+	__ODP_ACTION_ATTR_MAX
 };
 
-#define ODPAT_MAX (__ODPAT_MAX - 1)
+#define ODP_ACTION_ATTR_MAX (__ODP_ACTION_ATTR_MAX - 1)
 
 #endif  /* openvswitch/datapath-protocol.h */

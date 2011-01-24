@@ -33,29 +33,29 @@
 int
 odp_action_len(uint16_t type)
 {
-    if (type > ODPAT_MAX) {
+    if (type > ODP_ACTION_ATTR_MAX) {
         return -1;
     }
 
     switch ((enum odp_action_type) type) {
-    case ODPAT_OUTPUT: return 4;
-    case ODPAT_CONTROLLER: return 8;
-    case ODPAT_SET_DL_TCI: return 2;
-    case ODPAT_STRIP_VLAN: return 0;
-    case ODPAT_SET_DL_SRC: return ETH_ADDR_LEN;
-    case ODPAT_SET_DL_DST: return ETH_ADDR_LEN;
-    case ODPAT_SET_NW_SRC: return 4;
-    case ODPAT_SET_NW_DST: return 4;
-    case ODPAT_SET_NW_TOS: return 1;
-    case ODPAT_SET_TP_SRC: return 2;
-    case ODPAT_SET_TP_DST: return 2;
-    case ODPAT_SET_TUNNEL: return 8;
-    case ODPAT_SET_PRIORITY: return 4;
-    case ODPAT_POP_PRIORITY: return 0;
-    case ODPAT_DROP_SPOOFED_ARP: return 0;
+    case ODP_ACTION_ATTR_OUTPUT: return 4;
+    case ODP_ACTION_ATTR_CONTROLLER: return 8;
+    case ODP_ACTION_ATTR_SET_DL_TCI: return 2;
+    case ODP_ACTION_ATTR_STRIP_VLAN: return 0;
+    case ODP_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
+    case ODP_ACTION_ATTR_SET_DL_DST: return ETH_ADDR_LEN;
+    case ODP_ACTION_ATTR_SET_NW_SRC: return 4;
+    case ODP_ACTION_ATTR_SET_NW_DST: return 4;
+    case ODP_ACTION_ATTR_SET_NW_TOS: return 1;
+    case ODP_ACTION_ATTR_SET_TP_SRC: return 2;
+    case ODP_ACTION_ATTR_SET_TP_DST: return 2;
+    case ODP_ACTION_ATTR_SET_TUNNEL: return 8;
+    case ODP_ACTION_ATTR_SET_PRIORITY: return 4;
+    case ODP_ACTION_ATTR_POP_PRIORITY: return 0;
+    case ODP_ACTION_ATTR_DROP_SPOOFED_ARP: return 0;
 
-    case ODPAT_UNSPEC:
-    case __ODPAT_MAX:
+    case ODP_ACTION_ATTR_UNSPEC:
+    case __ODP_ACTION_ATTR_MAX:
         return -1;
     }
 
@@ -95,56 +95,56 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     }
 
     switch (nl_attr_type(a)) {
-    case ODPAT_OUTPUT:
+    case ODP_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
-    case ODPAT_CONTROLLER:
+    case ODP_ACTION_ATTR_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu64")", nl_attr_get_u64(a));
         break;
-    case ODPAT_SET_TUNNEL:
+    case ODP_ACTION_ATTR_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",
                       ntohll(nl_attr_get_be64(a)));
         break;
-    case ODPAT_SET_DL_TCI:
+    case ODP_ACTION_ATTR_SET_DL_TCI:
         ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",
                       vlan_tci_to_vid(nl_attr_get_be16(a)),
                       vlan_tci_to_pcp(nl_attr_get_be16(a)));
         break;
-    case ODPAT_STRIP_VLAN:
+    case ODP_ACTION_ATTR_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");
         break;
-    case ODPAT_SET_DL_SRC:
+    case ODP_ACTION_ATTR_SET_DL_SRC:
         eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
         ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
-    case ODPAT_SET_DL_DST:
+    case ODP_ACTION_ATTR_SET_DL_DST:
         eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
         ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
-    case ODPAT_SET_NW_SRC:
+    case ODP_ACTION_ATTR_SET_NW_SRC:
         ip = nl_attr_get_be32(a);
         ds_put_format(ds, "set_nw_src("IP_FMT")", IP_ARGS(&ip));
         break;
-    case ODPAT_SET_NW_DST:
+    case ODP_ACTION_ATTR_SET_NW_DST:
         ip = nl_attr_get_be32(a);
         ds_put_format(ds, "set_nw_dst("IP_FMT")", IP_ARGS(&ip));
         break;
-    case ODPAT_SET_NW_TOS:
+    case ODP_ACTION_ATTR_SET_NW_TOS:
         ds_put_format(ds, "set_nw_tos(%"PRIu8")", nl_attr_get_u8(a));
         break;
-    case ODPAT_SET_TP_SRC:
+    case ODP_ACTION_ATTR_SET_TP_SRC:
         ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
-    case ODPAT_SET_TP_DST:
+    case ODP_ACTION_ATTR_SET_TP_DST:
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
-    case ODPAT_SET_PRIORITY:
+    case ODP_ACTION_ATTR_SET_PRIORITY:
         ds_put_format(ds, "set_priority(%#"PRIx32")", nl_attr_get_u32(a));
         break;
-    case ODPAT_POP_PRIORITY:
+    case ODP_ACTION_ATTR_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
         break;
-    case ODPAT_DROP_SPOOFED_ARP:
+    case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
         ds_put_cstr(ds, "drop_spoofed_arp");
         break;
     default:

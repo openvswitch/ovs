@@ -243,7 +243,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		return NULL;
 
 	nh = ip_hdr(skb);
-	nwaddr = nla_type(a) == ODPAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
+	nwaddr = nla_type(a) == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
 
 	check = get_l4_checksum(skb, key);
 	if (likely(check))
@@ -306,7 +306,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 	 * supports those protocols.
 	 */
 	th = udp_hdr(skb);
-	port = nla_type(a) == ODPAT_SET_TP_SRC ? &th->source : &th->dest;
+	port = nla_type(a) == ODP_ACTION_ATTR_SET_TP_SRC ? &th->source : &th->dest;
 	inet_proto_csum_replace2(check, skb, *port, nla_get_be16(a), 0);
 	*port = nla_get_be16(a);
 
@@ -399,11 +399,11 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		}
 
 		switch (nla_type(a)) {
-		case ODPAT_OUTPUT:
+		case ODP_ACTION_ATTR_OUTPUT:
 			prev_port = nla_get_u32(a);
 			break;
 
-		case ODPAT_CONTROLLER:
+		case ODP_ACTION_ATTR_CONTROLLER:
 			err = output_control(dp, skb, nla_get_u64(a), key);
 			if (err) {
 				kfree_skb(skb);
@@ -411,57 +411,57 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			}
 			break;
 
-		case ODPAT_SET_TUNNEL:
+		case ODP_ACTION_ATTR_SET_TUNNEL:
 			OVS_CB(skb)->tun_id = nla_get_be64(a);
 			break;
 
-		case ODPAT_SET_DL_TCI:
+		case ODP_ACTION_ATTR_SET_DL_TCI:
 			skb = modify_vlan_tci(dp, skb, key, a, rem);
 			if (IS_ERR(skb))
 				return PTR_ERR(skb);
 			break;
 
-		case ODPAT_STRIP_VLAN:
+		case ODP_ACTION_ATTR_STRIP_VLAN:
 			skb = strip_vlan(skb);
 			break;
 
-		case ODPAT_SET_DL_SRC:
+		case ODP_ACTION_ATTR_SET_DL_SRC:
 			skb = make_writable(skb, 0);
 			if (!skb)
 				return -ENOMEM;
 			memcpy(eth_hdr(skb)->h_source, nla_data(a), ETH_ALEN);
 			break;
 
-		case ODPAT_SET_DL_DST:
+		case ODP_ACTION_ATTR_SET_DL_DST:
 			skb = make_writable(skb, 0);
 			if (!skb)
 				return -ENOMEM;
 			memcpy(eth_hdr(skb)->h_dest, nla_data(a), ETH_ALEN);
 			break;
 
-		case ODPAT_SET_NW_SRC:
-		case ODPAT_SET_NW_DST:
+		case ODP_ACTION_ATTR_SET_NW_SRC:
+		case ODP_ACTION_ATTR_SET_NW_DST:
 			skb = set_nw_addr(skb, key, a);
 			break;
 
-		case ODPAT_SET_NW_TOS:
+		case ODP_ACTION_ATTR_SET_NW_TOS:
 			skb = set_nw_tos(skb, key, nla_get_u8(a));
 			break;
 
-		case ODPAT_SET_TP_SRC:
-		case ODPAT_SET_TP_DST:
+		case ODP_ACTION_ATTR_SET_TP_SRC:
+		case ODP_ACTION_ATTR_SET_TP_DST:
 			skb = set_tp_port(skb, key, a);
 			break;
 
-		case ODPAT_SET_PRIORITY:
+		case ODP_ACTION_ATTR_SET_PRIORITY:
 			skb->priority = nla_get_u32(a);
 			break;
 
-		case ODPAT_POP_PRIORITY:
+		case ODP_ACTION_ATTR_POP_PRIORITY:
 			skb->priority = priority;
 			break;
 
-		case ODPAT_DROP_SPOOFED_ARP:
+		case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
 			if (unlikely(is_spoofed_arp(skb, key)))
 				goto exit;
 			break;

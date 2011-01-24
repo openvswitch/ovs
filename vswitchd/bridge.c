@@ -2631,16 +2631,16 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
         const struct dst *dst = &set.dsts[i];
         if (dst->vlan != cur_vlan) {
             if (dst->vlan == OFP_VLAN_NONE) {
-                nl_msg_put_flag(actions, ODPAT_STRIP_VLAN);
+                nl_msg_put_flag(actions, ODP_ACTION_ATTR_STRIP_VLAN);
             } else {
                 ovs_be16 tci;
                 tci = htons(dst->vlan & VLAN_VID_MASK);
                 tci |= flow->vlan_tci & htons(VLAN_PCP_MASK);
-                nl_msg_put_be16(actions, ODPAT_SET_DL_TCI, tci);
+                nl_msg_put_be16(actions, ODP_ACTION_ATTR_SET_DL_TCI, tci);
             }
             cur_vlan = dst->vlan;
         }
-        nl_msg_put_u32(actions, ODPAT_OUTPUT, dst->dp_ifidx);
+        nl_msg_put_u32(actions, ODP_ACTION_ATTR_OUTPUT, dst->dp_ifidx);
     }
     dst_set_free(&set);
 }
@@ -2934,7 +2934,7 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
         return;
     }
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-        if (nl_attr_type(a) == ODPAT_OUTPUT) {
+        if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, nl_attr_get_u32(a));
             if (out_port && out_port->n_ifaces >= 2 &&
                 out_port->bond_mode == BM_SLB) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -445,7 +445,7 @@ in_band_rule_check(struct in_band *in_band, const struct flow *flow,
         unsigned int left;
 
         NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-            if (nl_attr_type(a) == ODPAT_OUTPUT
+            if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT
                 && nl_attr_get_u32(a) == ODPP_LOCAL) {
                 return true;
             }

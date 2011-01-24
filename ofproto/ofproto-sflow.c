@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -536,13 +536,13 @@ ofproto_sflow_received(struct ofproto_sflow *os,
         ovs_be16 tci;
 
         switch (nl_attr_type(a)) {
-        case ODPAT_OUTPUT:
+        case ODP_ACTION_ATTR_OUTPUT:
             fs.output = ofproto_sflow_odp_port_to_ifindex(os,
                                                           nl_attr_get_u32(a));
             n_outputs++;
             break;
 
-        case ODPAT_SET_DL_TCI:
+        case ODP_ACTION_ATTR_SET_DL_TCI:
             tci = nl_attr_get_be16(a);
             switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
             switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);
