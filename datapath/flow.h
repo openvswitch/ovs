@@ -100,6 +100,7 @@ int flow_cmp(const struct tbl_node *, void *target);
  */
 #define FLOW_BUFSIZE 96
 
+u32 flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int flow_copy_from_user(struct sw_flow_key *, const struct nlattr __user *ukey, u32 key_len);
 int flow_copy_to_user(struct nlattr __user *ukey, const struct sw_flow_key *, u32 key_len);
 

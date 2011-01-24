@@ -92,19 +92,35 @@ int dpif_flow_dump_done(struct dpif_flow_dump *);
 int dpif_execute(struct dpif *, const struct nlattr *actions,
                  size_t actions_len, const struct ofpbuf *);
 
-/* Minimum number of bytes of headroom for a packet returned by dpif_recv()
- * member function.  This headroom allows "struct odp_msg" to be replaced by
- * "struct ofp_packet_in" without copying the buffer. */
-#define DPIF_RECV_MSG_PADDING \
-        ROUND_UP(sizeof(struct ofp_packet_in) - sizeof(struct odp_msg), 8)
-BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct odp_msg));
-BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 8 == 0);
+/* A packet passed up from the datapath to userspace.
+ *
+ * If 'key' or 'actions' is nonnull, then it points into data owned by
+ * 'packet', so their memory cannot be freed separately.  (This is hardly a
+ * great way to do things but it works out OK for the dpif providers and
+ * clients that exist so far.)
+ */
+struct dpif_upcall {
+    uint32_t type;              /* One of _ODPL_*_NR. */
+
+    /* All types. */
+    struct ofpbuf *packet;      /* Packet data. */
+    struct nlattr *key;         /* Flow key. */
+    size_t key_len;             /* Length of 'key' in bytes. */
+
+    /* _ODPL_ACTION_NR only. */
+    uint64_t userdata;          /* Argument to ODPAT_CONTROLLER. */
+
+    /* _ODPL_SFLOW_NR only. */
+    uint32_t sample_pool;       /* # of sampling candidate packets so far. */
+    struct nlattr *actions;     /* Associated flow actions. */
+    size_t actions_len;
+};
 
 int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
 int dpif_recv_set_mask(struct dpif *, int listen_mask);
 int dpif_get_sflow_probability(const struct dpif *, uint32_t *probability);
 int dpif_set_sflow_probability(struct dpif *, uint32_t probability);
-int dpif_recv(struct dpif *, struct ofpbuf **);
+int dpif_recv(struct dpif *, struct dpif_upcall *);
 int dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);
 

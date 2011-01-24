@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,10 @@
 #include "dpif-provider.h"
 #include "netdev.h"
 #include "netdev-vport.h"
+#include "netlink.h"
 #include "ofpbuf.h"
 #include "openvswitch/tunnel.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
 #include "rtnetlink-link.h"
@@ -471,14 +473,61 @@ dpif_linux_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
 }
 
 static int
-dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
+parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall)
+{
+    static const struct nl_policy odp_packet_policy[] = {
+        /* Always present. */
+        [ODP_PACKET_ATTR_TYPE] = { .type = NL_A_U32 },
+        [ODP_PACKET_ATTR_PACKET] = { .type = NL_A_UNSPEC,
+                                     .min_len = ETH_HEADER_LEN },
+        [ODP_PACKET_ATTR_KEY] = { .type = NL_A_NESTED },
+
+        /* _ODPL_ACTION_NR only. */
+        [ODP_PACKET_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
+
+        /* _ODPL_SFLOW_NR only. */
+        [ODP_PACKET_ATTR_SAMPLE_POOL] = { .type = NL_A_U32, .optional = true },
+        [ODP_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
+    };
+
+    struct odp_packet *odp_packet = buf->data;
+    struct nlattr *a[ARRAY_SIZE(odp_packet_policy)];
+
+    if (!nl_policy_parse(buf, sizeof *odp_packet, odp_packet_policy,
+                         a, ARRAY_SIZE(odp_packet_policy))) {
+        return EINVAL;
+    }
+
+    memset(upcall, 0, sizeof *upcall);
+    upcall->type = nl_attr_get_u32(a[ODP_PACKET_ATTR_TYPE]);
+    upcall->packet = buf;
+    upcall->packet->data = (void *) nl_attr_get(a[ODP_PACKET_ATTR_PACKET]);
+    upcall->packet->size = nl_attr_get_size(a[ODP_PACKET_ATTR_PACKET]);
+    upcall->key = (void *) nl_attr_get(a[ODP_PACKET_ATTR_KEY]);
+    upcall->key_len = nl_attr_get_size(a[ODP_PACKET_ATTR_KEY]);
+    upcall->userdata = (a[ODP_PACKET_ATTR_USERDATA]
+                        ? nl_attr_get_u64(a[ODP_PACKET_ATTR_USERDATA])
+                        : 0);
+    upcall->sample_pool = (a[ODP_PACKET_ATTR_SAMPLE_POOL]
+                        ? nl_attr_get_u32(a[ODP_PACKET_ATTR_SAMPLE_POOL])
+                           : 0);
+    if (a[ODP_PACKET_ATTR_ACTIONS]) {
+        upcall->actions = (void *) nl_attr_get(a[ODP_PACKET_ATTR_ACTIONS]);
+        upcall->actions_len = nl_attr_get_size(a[ODP_PACKET_ATTR_ACTIONS]);
+    }
+
+    return 0;
+}
+
+static int
+dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct ofpbuf *buf;
     int retval;
     int error;
 
-    buf = ofpbuf_new_with_headroom(65536, DPIF_RECV_MSG_PADDING);
+    buf = ofpbuf_new(65536);
     retval = read(dpif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
     if (retval < 0) {
         error = errno;
@@ -486,30 +535,30 @@ dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
             VLOG_WARN_RL(&error_rl, "%s: read failed: %s",
                          dpif_name(dpif_), strerror(error));
         }
-    } else if (retval >= sizeof(struct odp_msg)) {
-        struct odp_msg *msg = buf->data;
-        if (msg->length <= retval) {
-            buf->size += retval;
-            *bufp = buf;
-            return 0;
+    } else if (retval >= sizeof(struct odp_packet)) {
+        struct odp_packet *odp_packet = buf->data;
+        buf->size += retval;
+
+        if (odp_packet->len <= retval) {
+            error = parse_odp_packet(buf, upcall);
         } else {
             VLOG_WARN_RL(&error_rl, "%s: discarding message truncated "
                          "from %"PRIu32" bytes to %d",
-                         dpif_name(dpif_), msg->length, retval);
+                         dpif_name(dpif_), odp_packet->len, retval);
             error = ERANGE;
         }
     } else if (!retval) {
         VLOG_WARN_RL(&error_rl, "%s: unexpected end of file", dpif_name(dpif_));
         error = EPROTO;
     } else {
-        VLOG_WARN_RL(&error_rl,
-                     "%s: discarding too-short message (%d bytes)",
+        VLOG_WARN_RL(&error_rl, "%s: discarding too-short message (%d bytes)",
                      dpif_name(dpif_), retval);
         error = ERANGE;
     }
 
-    *bufp = NULL;
-    ofpbuf_delete(buf);
+    if (error) {
+        ofpbuf_delete(buf);
+    }
     return error;
 }
 

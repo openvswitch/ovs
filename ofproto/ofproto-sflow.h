@@ -22,7 +22,8 @@
 #include "svec.h"
 
 struct dpif;
-struct odp_msg;
+struct dpif_upcall;
+struct flow;
 struct ofproto_sflow_options;
 
 struct ofproto_sflow *ofproto_sflow_create(struct dpif *);
@@ -39,6 +40,7 @@ void ofproto_sflow_del_port(struct ofproto_sflow *, uint16_t odp_port);
 void ofproto_sflow_run(struct ofproto_sflow *);
 void ofproto_sflow_wait(struct ofproto_sflow *);
 
-void ofproto_sflow_received(struct ofproto_sflow *, struct odp_msg *);
+void ofproto_sflow_received(struct ofproto_sflow *,
+                            const struct dpif_upcall *, const struct flow *);
 
 #endif /* ofproto/ofproto-sflow.h */

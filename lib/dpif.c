@@ -959,39 +959,38 @@ dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
     return error;
 }
 
-/* Attempts to receive a message from 'dpif'.  If successful, stores the
- * message into '*packetp'.  The message, if one is received, will begin with
- * 'struct odp_msg' as a header, and will have at least DPIF_RECV_MSG_PADDING
- * bytes of headroom.  Only messages of the types selected with
- * dpif_set_listen_mask() will ordinarily be received (but if a message type is
+/* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
+ * '*upcall'.  Only upcalls of the types selected with the set_listen_mask
+ * member function will ordinarily be received (but if a message type is
  * enabled and then later disabled, some stragglers might pop up).
  *
+ * The caller takes ownership of the data that 'upcall' points to.
+ * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned by
+ * 'upcall->packet', so their memory cannot be freed separately.  (This is
+ * hardly a great way to do things but it works out OK for the dpif providers
+ * and clients that exist so far.)
+ *
  * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
- * if no message is immediately available. */
+ * if no upcall is immediately available. */
 int
-dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
+dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
 {
-    int error = dpif->dpif_class->recv(dpif, packetp);
-    if (!error) {
-        struct ofpbuf *buf = *packetp;
+    int error = dpif->dpif_class->recv(dpif, upcall);
+    if (!error && !VLOG_DROP_DBG(&dpmsg_rl)) {
+        struct flow flow;
+        char *s;
 
-        assert(ofpbuf_headroom(buf) >= DPIF_RECV_MSG_PADDING);
-        if (VLOG_IS_DBG_ENABLED()) {
-            struct odp_msg *msg = buf->data;
-            void *payload = msg + 1;
-            size_t payload_len = buf->size - sizeof *msg;
-            char *s = ofp_packet_to_string(payload, payload_len, payload_len);
-            VLOG_DBG_RL(&dpmsg_rl, "%s: received %s message of length "
-                        "%zu on port %"PRIu16": %s", dpif_name(dpif),
-                        (msg->type == _ODPL_MISS_NR ? "miss"
-                         : msg->type == _ODPL_ACTION_NR ? "action"
-                         : msg->type == _ODPL_SFLOW_NR ? "sFlow"
-                         : "<unknown>"),
-                        payload_len, msg->port, s);
-            free(s);
-        }
-    } else {
-        *packetp = NULL;
+        s = ofp_packet_to_string(upcall->packet->data,
+                                 upcall->packet->size, upcall->packet->size);
+        odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+
+        VLOG_DBG("%s: %s upcall on port %"PRIu16": %s", dpif_name(dpif),
+                 (upcall->type == _ODPL_MISS_NR ? "miss"
+                  : upcall->type == _ODPL_ACTION_NR ? "action"
+                  : upcall->type == _ODPL_SFLOW_NR ? "sFlow"
+                  : "<unknown>"),
+                 flow.in_port, s);
+        free(s);
     }
     return error;
 }
@@ -1013,12 +1012,12 @@ dpif_recv_purge(struct dpif *dpif)
     }
 
     for (i = 0; i < stats.max_miss_queue + stats.max_action_queue + stats.max_sflow_queue; i++) {
-        struct ofpbuf *buf;
-        error = dpif_recv(dpif, &buf);
+        struct dpif_upcall upcall;
+        error = dpif_recv(dpif, &upcall);
         if (error) {
             return error == EAGAIN ? 0 : error;
         }
-        ofpbuf_delete(buf);
+        ofpbuf_delete(upcall.packet);
     }
     return 0;
 }

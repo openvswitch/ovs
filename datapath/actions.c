@@ -360,12 +360,22 @@ error:
 	kfree_skb(skb);
 }
 
-static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg,
+			  const struct sw_flow_key *key)
 {
+	struct dp_upcall_info upcall;
+
 	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
 		return -ENOMEM;
-	return dp_output_control(dp, skb, _ODPL_ACTION_NR, arg);
+
+	upcall.type = _ODPL_ACTION_NR;
+	upcall.key = key;
+	upcall.userdata = arg;
+	upcall.sample_pool = 0;
+	upcall.actions = NULL;
+	upcall.actions_len = 0;
+	return dp_upcall(dp, skb, &upcall);
 }
 
 /* Execute a list of actions against 'skb'. */
@@ -394,7 +404,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_CONTROLLER:
-			err = output_control(dp, skb, nla_get_u64(a));
+			err = output_control(dp, skb, nla_get_u64(a), key);
 			if (err) {
 				kfree_skb(skb);
 				return err;
@@ -467,25 +477,32 @@ exit:
 	return 0;
 }
 
-/* Send a copy of this packet up to the sFlow agent, along with extra
- * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 const struct nlattr *a, u32 actions_len,
-			 struct vport *vport)
+			 const struct sw_flow_key *key,
+			 const struct nlattr *a, u32 actions_len)
 {
-	struct odp_sflow_sample_header *hdr;
-	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
 	struct sk_buff *nskb;
+	struct vport *p = OVS_CB(skb)->vport;
+	struct dp_upcall_info upcall;
 
-	nskb = skb_copy_expand(skb, actions_len + hdrlen, 0, GFP_ATOMIC);
-	if (!nskb)
+	if (unlikely(!p))
 		return;
 
-	memcpy(__skb_push(nskb, actions_len), a, actions_len);
-	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
-	hdr->actions_len = actions_len;
-	hdr->sample_pool = atomic_read(&vport->sflow_pool);
-	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
+	atomic_inc(&p->sflow_pool);
+	if (net_random() >= dp->sflow_probability)
+		return;
+
+	nskb = skb_clone(skb, GFP_ATOMIC);
+	if (unlikely(!nskb))
+		return;
+
+	upcall.type = _ODPL_SFLOW_NR;
+	upcall.key = key;
+	upcall.userdata = 0;
+	upcall.sample_pool = atomic_read(&p->sflow_pool);
+	upcall.actions = a;
+	upcall.actions_len = actions_len;
+	dp_upcall(dp, nskb, &upcall);
 }
 
 /* Execute a list of actions against 'skb'. */
@@ -493,15 +510,8 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    const struct sw_flow_key *key,
 		    const struct nlattr *actions, u32 actions_len)
 {
-	if (dp->sflow_probability) {
-		struct vport *p = OVS_CB(skb)->vport;
-		if (p) {
-			atomic_inc(&p->sflow_pool);
-			if (dp->sflow_probability == UINT_MAX ||
-			    net_random() < dp->sflow_probability)
-				sflow_sample(dp, skb, actions, actions_len, p);
-		}
-	}
+	if (dp->sflow_probability)
+		sflow_sample(dp, skb, key, actions, actions_len);
 
 	OVS_CB(skb)->tun_id = 0;
 

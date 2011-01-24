@@ -308,16 +308,22 @@ struct dpif_class {
     int (*queue_to_priority)(const struct dpif *dpif, uint32_t queue_id,
                              uint32_t *priority);
 
-    /* Attempts to receive a message from 'dpif'.  If successful, stores the
-     * message into '*packetp'.  The message, if one is received, must begin
-     * with 'struct odp_msg' as a header, and must have at least
-     * DPIF_RECV_MSG_PADDING bytes of headroom (allocated using
-     * e.g. ofpbuf_reserve()).  Only messages of the types selected with the
-     * set_listen_mask member function should be received.
+    /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
+     * '*upcall'.  Only upcalls of the types selected with the set_listen_mask
+     * member function should be received.
      *
-     * This function must not block.  If no message is ready to be received
-     * when it is called, it should return EAGAIN without blocking. */
-    int (*recv)(struct dpif *dpif, struct ofpbuf **packetp);
+     * The caller takes ownership of the data that 'upcall' points to.
+     * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned
+     * by 'upcall->packet', so their memory cannot be freed separately.  (This
+     * is hardly a great way to do things but it works out OK for the dpif
+     * providers that exist so far.)
+     *
+     * For greatest efficiency, 'upcall->packet' should have at least
+     * offsetof(struct ofp_packet_in, data) bytes of headroom.
+     *
+     * This function must not block.  If no upcall is pending when it is
+     * called, it should return EAGAIN without blocking. */
+    int (*recv)(struct dpif *dpif, struct dpif_upcall *upcall);
 
     /* Arranges for the poll loop to wake up when 'dpif' has a message queued
      * to be received with the recv member function. */

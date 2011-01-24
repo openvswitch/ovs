@@ -513,8 +513,15 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		flow_node = tbl_lookup(rcu_dereference(dp->table), &key,
 					flow_hash(&key), flow_cmp);
 		if (unlikely(!flow_node)) {
-			dp_output_control(dp, skb, _ODPL_MISS_NR,
-					 (__force u64)OVS_CB(skb)->tun_id);
+			struct dp_upcall_info upcall;
+
+			upcall.type = _ODPL_MISS_NR;
+			upcall.key = &key;
+			upcall.userdata = 0;
+			upcall.sample_pool = 0;
+			upcall.actions = NULL;
+			upcall.actions_len = 0;
+			dp_upcall(dp, skb, &upcall);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
 			goto out;
 		}
@@ -563,10 +570,26 @@ out:
 	local_bh_enable();
 }
 
+static void copy_and_csum_skb(struct sk_buff *skb, void *to)
+{
+	u16 csum_start, csum_offset;
+	__wsum csum;
+
+	get_skb_csum_pointers(skb, &csum_start, &csum_offset);
+	csum_start -= skb_headroom(skb);
+	BUG_ON(csum_start >= skb_headlen(skb));
+
+	skb_copy_bits(skb, 0, to, csum_start);
+
+	csum = skb_copy_and_csum_bits(skb, csum_start, to + csum_start,
+				      skb->len - csum_start, 0);
+	*(__sum16 *)(to + csum_start + csum_offset) = csum_fold(csum);
+}
+
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */
-static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
-				 int queue_no, u64 arg)
+static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
+				 const struct dp_upcall_info *upcall_info)
 {
 	struct sk_buff *nskb;
 	int port_no;
@@ -578,22 +601,61 @@ static int queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue
 		port_no = ODPP_LOCAL;
 
 	do {
-		struct odp_msg *header;
+		struct odp_packet *upcall;
+		struct sk_buff *user_skb; /* to be queued to userspace */
+		struct nlattr *nla;
+		unsigned int len;
 
 		nskb = skb->next;
 		skb->next = NULL;
 
-		err = skb_cow(skb, sizeof(*header));
-		if (err)
+		len = sizeof(struct odp_packet);
+		len += nla_total_size(4); /* ODP_PACKET_ATTR_TYPE. */
+		len += nla_total_size(skb->len);
+		len += nla_total_size(FLOW_BUFSIZE);
+		if (upcall_info->userdata)
+			len += nla_total_size(8);
+		if (upcall_info->sample_pool)
+			len += nla_total_size(4);
+		if (upcall_info->actions_len)
+			len += nla_total_size(upcall_info->actions_len);
+
+		user_skb = alloc_skb(len, GFP_ATOMIC);
+		if (!user_skb)
 			goto err_kfree_skbs;
 
-		header = (struct odp_msg*)__skb_push(skb, sizeof(*header));
-		header->type = queue_no;
-		header->length = skb->len;
-		header->port = port_no;
-		header->arg = arg;
-		skb_queue_tail(queue, skb);
+		upcall = (struct odp_packet *)__skb_put(user_skb, sizeof(*upcall));
+		upcall->dp_idx = dp->dp_idx;
 
+		nla_put_u32(user_skb, ODP_PACKET_ATTR_TYPE, upcall_info->type);
+
+		nla = nla_nest_start(user_skb, ODP_PACKET_ATTR_KEY);
+		flow_to_nlattrs(upcall_info->key, user_skb);
+		nla_nest_end(user_skb, nla);
+
+		if (upcall_info->userdata)
+			nla_put_u64(user_skb, ODP_PACKET_ATTR_USERDATA, upcall_info->userdata);
+		if (upcall_info->sample_pool)
+			nla_put_u32(user_skb, ODP_PACKET_ATTR_SAMPLE_POOL, upcall_info->sample_pool);
+		if (upcall_info->actions_len) {
+			const struct nlattr *actions = upcall_info->actions;
+			u32 actions_len = upcall_info->actions_len;
+
+			nla = nla_nest_start(user_skb, ODP_PACKET_ATTR_ACTIONS);
+			memcpy(__skb_put(user_skb, actions_len), actions, actions_len);
+			nla_nest_end(user_skb, nla);
+		}
+
+		nla = __nla_reserve(user_skb, ODP_PACKET_ATTR_PACKET, skb->len);
+		if (skb->ip_summed == CHECKSUM_PARTIAL)
+			copy_and_csum_skb(skb, nla_data(nla));
+		else
+			skb_copy_bits(skb, 0, nla_data(nla), skb->len);
+
+		upcall->len = user_skb->len;
+		skb_queue_tail(&dp->queues[upcall_info->type], user_skb);
+
+		kfree_skb(skb);
 		skb = nskb;
 	} while (skb);
 	return 0;
@@ -607,16 +669,16 @@ err_kfree_skbs:
 	return err;
 }
 
-int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
-		      u64 arg)
+int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
 {
 	struct dp_stats_percpu *stats;
 	struct sk_buff_head *queue;
 	int err;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	BUG_ON(queue_no != _ODPL_MISS_NR && queue_no != _ODPL_ACTION_NR && queue_no != _ODPL_SFLOW_NR);
-	queue = &dp->queues[queue_no];
+	BUG_ON(upcall_info->type >= DP_N_QUEUES);
+
+	queue = &dp->queues[upcall_info->type];
 	err = -ENOBUFS;
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
 		goto err_kfree_skb;
@@ -640,7 +702,7 @@ int dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 		}
 	}
 
-	err = queue_control_packets(skb, queue, queue_no, arg);
+	err = queue_control_packets(dp, skb, upcall_info);
 	wake_up_interruptible(&dp->waitqueue);
 	return err;
 
@@ -1811,100 +1873,6 @@ exit:
 }
 #endif
 
-/* Unfortunately this function is not exported so this is a verbatim copy
- * from net/core/datagram.c in 2.6.30. */
-static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
-				      u8 __user *to, int len,
-				      __wsum *csump)
-{
-	int start = skb_headlen(skb);
-	int pos = 0;
-	int i, copy = start - offset;
-
-	/* Copy header. */
-	if (copy > 0) {
-		int err = 0;
-		if (copy > len)
-			copy = len;
-		*csump = csum_and_copy_to_user(skb->data + offset, to, copy,
-					       *csump, &err);
-		if (err)
-			goto fault;
-		if ((len -= copy) == 0)
-			return 0;
-		offset += copy;
-		to += copy;
-		pos = copy;
-	}
-
-	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
-		int end;
-
-		WARN_ON(start > offset + len);
-
-		end = start + skb_shinfo(skb)->frags[i].size;
-		if ((copy = end - offset) > 0) {
-			__wsum csum2;
-			int err = 0;
-			u8  *vaddr;
-			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
-			struct page *page = frag->page;
-
-			if (copy > len)
-				copy = len;
-			vaddr = kmap(page);
-			csum2 = csum_and_copy_to_user(vaddr +
-							frag->page_offset +
-							offset - start,
-						      to, copy, 0, &err);
-			kunmap(page);
-			if (err)
-				goto fault;
-			*csump = csum_block_add(*csump, csum2, pos);
-			if (!(len -= copy))
-				return 0;
-			offset += copy;
-			to += copy;
-			pos += copy;
-		}
-		start = end;
-	}
-
-	if (skb_shinfo(skb)->frag_list) {
-		struct sk_buff *list = skb_shinfo(skb)->frag_list;
-
-		for (; list; list=list->next) {
-			int end;
-
-			WARN_ON(start > offset + len);
-
-			end = start + list->len;
-			if ((copy = end - offset) > 0) {
-				__wsum csum2 = 0;
-				if (copy > len)
-					copy = len;
-				if (skb_copy_and_csum_datagram(list,
-							       offset - start,
-							       to, copy,
-							       &csum2))
-					goto fault;
-				*csump = csum_block_add(*csump, csum2, pos);
-				if ((len -= copy) == 0)
-					return 0;
-				offset += copy;
-				to += copy;
-				pos += copy;
-			}
-			start = end;
-		}
-	}
-	if (!len)
-		return 0;
-
-fault:
-	return -EFAULT;
-}
-
 static ssize_t openvswitch_read(struct file *f, char __user *buf,
 				size_t nbytes, loff_t *ppos)
 {
@@ -1912,7 +1880,7 @@ static ssize_t openvswitch_read(struct file *f, char __user *buf,
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp_locked(dp_idx);
 	struct sk_buff *skb;
-	size_t copy_bytes, tot_copy_bytes;
+	struct iovec iov;
 	int retval;
 
 	if (!dp)
@@ -1949,44 +1917,11 @@ static ssize_t openvswitch_read(struct file *f, char __user *buf,
 success:
 	mutex_unlock(&dp->mutex);
 
-	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
-
-	retval = 0;
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		if (copy_bytes == skb->len) {
-			__wsum csum = 0;
-			u16 csum_start, csum_offset;
-
-			get_skb_csum_pointers(skb, &csum_start, &csum_offset);
-			csum_start -= skb_headroom(skb);
-
-			BUG_ON(csum_start >= skb_headlen(skb));
-			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
-							    copy_bytes - csum_start, &csum);
-			if (!retval) {
-				__sum16 __user *csump;
-
-				copy_bytes = csum_start;
-				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
-
-				BUG_ON((char __user *)csump + sizeof(__sum16) >
-					buf + nbytes);
-				put_user(csum_fold(csum), csump);
-			}
-		} else
-			retval = skb_checksum_help(skb);
-	}
-
-	if (!retval) {
-		struct iovec iov;
-
-		iov.iov_base = buf;
-		iov.iov_len = copy_bytes;
-		retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
-	}
-
+	iov.iov_base = buf;
+	iov.iov_len = min_t(size_t, skb->len, nbytes);
+	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
 	if (!retval)
-		retval = tot_copy_bytes;
+		retval = skb->len;
 
 	kfree_skb(skb);
 	return retval;

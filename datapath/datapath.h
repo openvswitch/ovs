@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -123,12 +123,30 @@ struct ovs_skb_cb {
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 
+/**
+ * struct dp_upcall - metadata to include with a packet to send to userspace
+ * @type: One of %_ODPL_*_NR.
+ * @key: Becomes %ODP_PACKET_ATTR_KEY.  Must be nonnull.
+ * @userdata: Becomes %ODP_PACKET_ATTR_USERDATA if nonzero.
+ * @sample_pool: Becomes %ODP_PACKET_ATTR_SAMPLE_POOL if nonzero.
+ * @actions: Becomes %ODP_PACKET_ATTR_ACTIONS if nonnull.
+ * @actions_len: Number of bytes in @actions.
+*/
+struct dp_upcall_info {
+	u32 type;
+	const struct sw_flow_key *key;
+	u64 userdata;
+	u32 sample_pool;
+	const struct nlattr *actions;
+	u32 actions_len;
+};
+
 extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct vport *, struct sk_buff *);
 int dp_detach_port(struct vport *);
-int dp_output_control(struct datapath *, struct sk_buff *, int, u64 arg);
+int dp_upcall(struct datapath *, struct sk_buff *, const struct dp_upcall_info *);
 int dp_min_mtu(const struct datapath *dp);
 void set_internal_devs_mtu(const struct datapath *dp);
 

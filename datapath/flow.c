@@ -572,7 +572,7 @@ static int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *key
 	return -EINVAL;
 }
 
-static u32 flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
+u32 flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 {
 	struct odp_key_ethernet *eth_key;
 

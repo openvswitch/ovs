@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -141,47 +141,39 @@ struct odp_stats {
 #define ODPL_SFLOW      (1 << _ODPL_SFLOW_NR)
 #define ODPL_ALL        (ODPL_MISS | ODPL_ACTION | ODPL_SFLOW)
 
-/**
- * struct odp_msg - format of messages read from datapath fd.
- * @length: Total length of message, including this header.
- * @type: One of the %_ODPL_* constants.
- * @port: Port that received the packet embedded in this message.
- * @arg: Argument value whose meaning depends on @type.
- *
- * For @type == %_ODPL_MISS_NR, the header is followed by packet data.  The
- * @arg member is the ID (in network byte order) of the tunnel that
- * encapsulated this packet. It is 0 if the packet was not received on a tunnel.
- *
- * For @type == %_ODPL_ACTION_NR, the header is followed by packet data.  The
- * @arg member is copied from the %ODPAT_CONTROLLER action that caused the
- * &struct odp_msg to be composed.
- *
- * For @type == %_ODPL_SFLOW_NR, the header is followed by &struct
- * odp_sflow_sample_header, then by a series of Netlink attributes (whose
- * length is specified in &struct odp_sflow_sample_header), then by packet
- * data.
- */
-struct odp_msg {
-    uint32_t length;
-    uint16_t type;
-    uint16_t port;
-    __aligned_u64 arg;
+enum odp_packet_type {
+	ODP_PACKET_ATTR_UNSPEC,
+	ODP_PACKET_ATTR_TYPE,	     /* 32-bit enum, one of _ODP_*_NR. */
+	ODP_PACKET_ATTR_PACKET,      /* Packet data. */
+	ODP_PACKET_ATTR_KEY,         /* Nested ODP_KEY_ATTR_* attributes. */
+	ODP_PACKET_ATTR_USERDATA,    /* 64-bit data from ODPAT_CONTROLLER. */
+	ODP_PACKET_ATTR_SAMPLE_POOL, /* # sampling candidate packets so far. */
+	ODP_PACKET_ATTR_ACTIONS,     /* Nested ODPAT_* attributes. */
+	__ODP_PACKET_ATTR_MAX
 };
 
+#define ODP_PACKET_ATTR_MAX (__ODP_PACKET_ATTR_MAX - 1)
+
 /**
- * struct odp_sflow_sample_header - header added to sFlow sampled packet.
- * @sample_pool: Number of packets that were candidates for sFlow sampling,
- * regardless of whether they were actually chosen and sent down to userspace.
- * @actions_len: Number of bytes of actions immediately following this header.
+ * struct odp_packet - header for packets passed up between kernel and
+ * userspace.
+ * @dp_idx: Number of datapath to which the packet belongs.
+ * @len: Length of complete message, including this header.
  *
- * This header follows &struct odp_msg when that structure's @type is
- * %_ODPL_SFLOW_NR, and it is itself followed by a series of Netlink attributes
- * (the number of bytes of which is specified in @actions_len) and then by
- * packet data.
+ * The header is followed by a sequence of Netlink attributes.  The
+ * %ODP_PACKET_ATTR_TYPE, %ODP_PACKET_ATTR_PACKET, and %ODP_PACKET_ATTR_KEY
+ * attributes are always present.  When @type == %_ODPL_ACTION_NR, the
+ * %ODP_PACKET_ATTR_USERDATA attribute is included if it would be nonzero.
+ * When @type == %_ODPL_SFLOW_NR, the %ODP_PACKET_ATTR_SAMPLE_POOL and
+ * %ODP_PACKET_ATTR_ACTIONS attributes are included.
+ *
+ * For @type of %_ODPL_ACTION_NR, %ODP_PACKET_ATTR_PACKET reflects changes made
+ * by actions preceding %ODPAT_CONTROLLER, but %ODP_PACKET_ATTR_KEY is the flow
+ * key extracted from the packet as originally received.
  */
-struct odp_sflow_sample_header {
-    uint32_t sample_pool;
-    uint32_t actions_len;
+struct odp_packet {
+	uint32_t dp_idx;
+	uint32_t len;
 };
 
 #define VPORT_TYPE_SIZE     16

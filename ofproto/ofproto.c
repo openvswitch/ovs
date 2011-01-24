@@ -340,8 +340,9 @@ static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
 
-static void send_packet_in(struct ofproto *, struct ofpbuf *odp_msg);
-static void do_send_packet_in(struct ofpbuf *odp_msg, void *ofconn);
+static void send_packet_in(struct ofproto *, struct dpif_upcall *,
+                           const struct flow *, bool clone);
+static void do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn);
 
 struct ofproto {
     /* Settings. */
@@ -412,7 +413,7 @@ static uint64_t pick_fallback_dpid(void);
 
 static int ofproto_expire(struct ofproto *);
 
-static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
+static void handle_upcall(struct ofproto *, struct dpif_upcall *);
 
 static void handle_openflow(struct ofconn *, struct ofpbuf *);
 
@@ -1173,9 +1174,9 @@ ofproto_run1(struct ofproto *p)
     }
 
     for (i = 0; i < 50; i++) {
-        struct ofpbuf *buf;
+        struct dpif_upcall packet;
 
-        error = dpif_recv(p->dpif, &buf);
+        error = dpif_recv(p->dpif, &packet);
         if (error) {
             if (error == ENODEV) {
                 /* Someone destroyed the datapath behind our back.  The caller
@@ -1189,7 +1190,7 @@ ofproto_run1(struct ofproto *p)
             break;
         }
 
-        handle_odp_msg(p, buf);
+        handle_upcall(p, &packet);
     }
 
     while ((error = dpif_port_poll(p->dpif, &devname)) != EAGAIN) {
@@ -2104,7 +2105,7 @@ rule_has_out_port(const struct rule *rule, ovs_be16 out_port)
  *
  * Takes ownership of 'packet'. */
 static bool
-execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
+execute_odp_actions(struct ofproto *ofproto, const struct flow *flow,
                     const struct nlattr *odp_actions, size_t actions_len,
                     struct ofpbuf *packet)
 {
@@ -2113,15 +2114,18 @@ execute_odp_actions(struct ofproto *ofproto, uint16_t in_port,
         /* As an optimization, avoid a round-trip from userspace to kernel to
          * userspace.  This also avoids possibly filling up kernel packet
          * buffers along the way. */
-        struct odp_msg *msg;
+        struct dpif_upcall upcall;
 
-        msg = ofpbuf_push_uninit(packet, sizeof *msg);
-        msg->type = _ODPL_ACTION_NR;
-        msg->length = sizeof(struct odp_msg) + packet->size;
-        msg->port = in_port;
-        msg->arg = nl_attr_get_u64(odp_actions);
+        upcall.type = _ODPL_ACTION_NR;
+        upcall.packet = packet;
+        upcall.key = NULL;
+        upcall.key_len = 0;
+        upcall.userdata = nl_attr_get_u64(odp_actions);
+        upcall.sample_pool = 0;
+        upcall.actions = NULL;
+        upcall.actions_len = 0;
 
-        send_packet_in(ofproto, packet);
+        send_packet_in(ofproto, &upcall, flow, false);
 
         return true;
     } else {
@@ -2154,7 +2158,7 @@ facet_execute(struct ofproto *ofproto, struct facet *facet,
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
     flow_extract_stats(&facet->flow, packet, &stats);
-    if (execute_odp_actions(ofproto, facet->flow.in_port,
+    if (execute_odp_actions(ofproto, &facet->flow,
                             facet->actions, facet->actions_len, packet)) {
         facet_update_stats(ofproto, facet, &stats);
         facet->used = time_msec();
@@ -2206,7 +2210,7 @@ rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
     action_xlate_ctx_init(&ctx, ofproto, &flow, packet);
     odp_actions = xlate_actions(&ctx, rule->actions, rule->n_actions);
     size = packet->size;
-    if (execute_odp_actions(ofproto, in_port, odp_actions->data,
+    if (execute_odp_actions(ofproto, &flow, odp_actions->data,
                             odp_actions->size, packet)) {
         rule->used = time_msec();
         rule->packet_count++;
@@ -4413,29 +4417,26 @@ handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
 }
 
 static void
-handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
+handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
 {
-    struct odp_msg *msg = packet->data;
-    struct ofpbuf payload;
     struct facet *facet;
     struct flow flow;
 
-    ofpbuf_use_const(&payload, msg + 1, msg->length - sizeof *msg);
-    flow_extract(&payload, msg->arg, msg->port, &flow);
+    /* Obtain in_port and tun_id, at least. */
+    odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
 
-    packet->l2 = payload.l2;
-    packet->l3 = payload.l3;
-    packet->l4 = payload.l4;
-    packet->l7 = payload.l7;
+    /* Set header pointers in 'flow'. */
+    flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
 
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
-    if (in_band_msg_in_hook(p->in_band, &flow, &payload)) {
+    if (in_band_msg_in_hook(p->in_band, &flow, upcall->packet)) {
         struct ofpbuf odp_actions;
 
         ofpbuf_init(&odp_actions, 32);
         nl_msg_put_u32(&odp_actions, ODPAT_OUTPUT, ODPP_LOCAL);
-        dpif_execute(p->dpif, odp_actions.data, odp_actions.size, &payload);
+        dpif_execute(p->dpif, odp_actions.data, odp_actions.size,
+                     upcall->packet);
         ofpbuf_uninit(&odp_actions);
     }
 
@@ -4444,29 +4445,29 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
         struct rule *rule = rule_lookup(p, &flow);
         if (!rule) {
             /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
-            struct ofport *port = get_port(p, msg->port);
+            struct ofport *port = get_port(p, flow.in_port);
             if (port) {
                 if (port->opp.config & OFPPC_NO_PACKET_IN) {
                     COVERAGE_INC(ofproto_no_packet_in);
                     /* XXX install 'drop' flow entry */
-                    ofpbuf_delete(packet);
+                    ofpbuf_delete(upcall->packet);
                     return;
                 }
             } else {
                 VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16,
-                             msg->port);
+                             flow.in_port);
             }
 
             COVERAGE_INC(ofproto_packet_in);
-            send_packet_in(p, packet);
+            send_packet_in(p, upcall, &flow, false);
             return;
         }
 
-        facet = facet_create(p, rule, &flow, packet);
+        facet = facet_create(p, rule, &flow, upcall->packet);
     } else if (!facet->may_install) {
         /* The facet is not installable, that is, we need to process every
          * packet, so process the current packet's actions into 'facet'. */
-        facet_make_actions(p, facet, packet);
+        facet_make_actions(p, facet, upcall->packet);
     }
 
     if (facet->rule->cr.priority == FAIL_OPEN_PRIORITY) {
@@ -4480,40 +4481,39 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
          *
          * See the top-level comment in fail-open.c for more information.
          */
-        send_packet_in(p, ofpbuf_clone_with_headroom(packet,
-                                                     DPIF_RECV_MSG_PADDING));
+        send_packet_in(p, upcall, &flow, true);
     }
 
-    ofpbuf_pull(packet, sizeof *msg);
-    facet_execute(p, facet, packet);
+    facet_execute(p, facet, upcall->packet);
     facet_install(p, facet, false);
 }
 
 static void
-handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
+handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
 {
-    struct odp_msg *msg = packet->data;
+    struct flow flow;
 
-    switch (msg->type) {
+    switch (upcall->type) {
     case _ODPL_ACTION_NR:
         COVERAGE_INC(ofproto_ctlr_action);
-        send_packet_in(p, packet);
+        odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+        send_packet_in(p, upcall, &flow, false);
         break;
 
     case _ODPL_SFLOW_NR:
         if (p->sflow) {
-            ofproto_sflow_received(p->sflow, msg);
+            odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+            ofproto_sflow_received(p->sflow, upcall, &flow);
         }
-        ofpbuf_delete(packet);
+        ofpbuf_delete(upcall->packet);
         break;
 
     case _ODPL_MISS_NR:
-        handle_odp_miss_msg(p, packet);
+        handle_miss_upcall(p, upcall);
         break;
 
     default:
-        VLOG_WARN_RL(&rl, "received ODP message of unexpected type %"PRIu32,
-                     msg->type);
+        VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32, upcall->type);
         break;
     }
 }
@@ -4868,150 +4868,103 @@ rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
     }
 }
 
-/* pinsched callback for sending 'packet' on 'ofconn'. */
+/* pinsched callback for sending 'ofp_packet_in' on 'ofconn'. */
 static void
-do_send_packet_in(struct ofpbuf *packet, void *ofconn_)
+do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
 {
     struct ofconn *ofconn = ofconn_;
 
-    rconn_send_with_limit(ofconn->rconn, packet,
+    rconn_send_with_limit(ofconn->rconn, ofp_packet_in,
                           ofconn->packet_in_counter, 100);
 }
 
-/* Takes 'packet', which has been converted with do_convert_to_packet_in(), and
- * finalizes its content for sending on 'ofconn', and passes it to 'ofconn''s
- * packet scheduler for sending.
+/* Takes 'upcall', whose packet has the flow specified by 'flow', composes an
+ * OpenFlow packet-in message from it, and passes it to 'ofconn''s packet
+ * scheduler for sending.
  *
- * 'max_len' specifies the maximum number of bytes of the packet to send on
- * 'ofconn' (INT_MAX specifies no limit).
- *
- * If 'clone' is true, the caller retains ownership of 'packet'.  Otherwise,
- * ownership is transferred to this function. */
+ * If 'clone' is true, the caller retains ownership of 'upcall->packet'.
+ * Otherwise, ownership is transferred to this function. */
 static void
-schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, int max_len,
-                   bool clone)
+schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
+                   const struct flow *flow, bool clone)
 {
+    enum { OPI_SIZE = offsetof(struct ofp_packet_in, data) };
     struct ofproto *ofproto = ofconn->ofproto;
-    struct ofp_packet_in *opi = packet->data;
-    uint16_t in_port = ofp_port_to_odp_port(ntohs(opi->in_port));
-    int send_len, trim_size;
+    struct ofp_packet_in *opi;
+    int total_len, send_len;
+    struct ofpbuf *packet;
     uint32_t buffer_id;
 
-    /* Get buffer. */
-    if (opi->reason == OFPR_ACTION) {
+    /* Get OpenFlow buffer_id. */
+    if (upcall->type == _ODPL_ACTION_NR) {
         buffer_id = UINT32_MAX;
     } else if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
         buffer_id = pktbuf_get_null();
     } else if (!ofconn->pktbuf) {
         buffer_id = UINT32_MAX;
     } else {
-        struct ofpbuf payload;
-
-        ofpbuf_use_const(&payload, opi->data,
-                         packet->size - offsetof(struct ofp_packet_in, data));
-        buffer_id = pktbuf_save(ofconn->pktbuf, &payload, in_port);
+        buffer_id = pktbuf_save(ofconn->pktbuf, upcall->packet, flow->in_port);
     }
 
     /* Figure out how much of the packet to send. */
-    send_len = ntohs(opi->total_len);
+    total_len = send_len = upcall->packet->size;
     if (buffer_id != UINT32_MAX) {
         send_len = MIN(send_len, ofconn->miss_send_len);
     }
-    send_len = MIN(send_len, max_len);
-
-    /* Adjust packet length and clone if necessary. */
-    trim_size = offsetof(struct ofp_packet_in, data) + send_len;
-    if (clone) {
-        packet = ofpbuf_clone_data(packet->data, trim_size);
-        opi = packet->data;
-    } else {
-        packet->size = trim_size;
+    if (upcall->type == _ODPL_ACTION_NR) {
+        send_len = MIN(send_len, upcall->userdata);
     }
 
-    /* Update packet headers. */
+    /* Copy or steal buffer for OFPT_PACKET_IN. */
+    if (clone) {
+        packet = ofpbuf_clone_data_with_headroom(upcall->packet->data,
+                                                 send_len, OPI_SIZE);
+    } else {
+        packet = upcall->packet;
+        packet->size = send_len;
+    }
+
+    /* Add OFPT_PACKET_IN. */
+    opi = ofpbuf_push_zeros(packet, OPI_SIZE);
+    opi->header.version = OFP_VERSION;
+    opi->header.type = OFPT_PACKET_IN;
+    opi->total_len = htons(total_len);
+    opi->in_port = htons(odp_port_to_ofp_port(flow->in_port));
+    opi->reason = upcall->type == _ODPL_MISS_NR ? OFPR_NO_MATCH : OFPR_ACTION;
     opi->buffer_id = htonl(buffer_id);
     update_openflow_length(packet);
 
     /* Hand over to packet scheduler.  It might immediately call into
      * do_send_packet_in() or it might buffer it for a while (until a later
      * call to pinsched_run()). */
-    pinsched_send(ofconn->schedulers[opi->reason], in_port,
+    pinsched_send(ofconn->schedulers[opi->reason], flow->in_port,
                   packet, do_send_packet_in, ofconn);
 }
 
-/* Replace struct odp_msg header in 'packet' by equivalent struct
- * ofp_packet_in.  The odp_msg must have sufficient headroom to do so (e.g. as
- * returned by dpif_recv()).
- *
- * The conversion is not complete: the caller still needs to trim any unneeded
- * payload off the end of the buffer, set the length in the OpenFlow header,
- * and set buffer_id.  Those require us to know the controller settings and so
- * must be done on a per-controller basis.
- *
- * Returns the maximum number of bytes of the packet that should be sent to
- * the controller (INT_MAX if no limit). */
-static int
-do_convert_to_packet_in(struct ofpbuf *packet)
-{
-    struct odp_msg *msg = packet->data;
-    struct ofp_packet_in *opi;
-    uint8_t reason;
-    uint16_t total_len;
-    uint16_t in_port;
-    int max_len;
-
-    /* Extract relevant header fields */
-    if (msg->type == _ODPL_ACTION_NR) {
-        reason = OFPR_ACTION;
-        max_len = msg->arg;
-    } else {
-        reason = OFPR_NO_MATCH;
-        max_len = INT_MAX;
-    }
-    total_len = msg->length - sizeof *msg;
-    in_port = odp_port_to_ofp_port(msg->port);
-
-    /* Repurpose packet buffer by overwriting header. */
-    ofpbuf_pull(packet, sizeof(struct odp_msg));
-    opi = ofpbuf_push_zeros(packet, offsetof(struct ofp_packet_in, data));
-    opi->header.version = OFP_VERSION;
-    opi->header.type = OFPT_PACKET_IN;
-    opi->total_len = htons(total_len);
-    opi->in_port = htons(in_port);
-    opi->reason = reason;
-
-    return max_len;
-}
-
-/* Given 'packet' containing an odp_msg of type _ODPL_ACTION_NR or
- * _ODPL_MISS_NR, sends an OFPT_PACKET_IN message to each OpenFlow controller
- * as necessary according to their individual configurations.
- *
- * 'packet' must have sufficient headroom to convert it into a struct
- * ofp_packet_in (e.g. as returned by dpif_recv()).
+/* Given 'upcall', of type _ODPL_ACTION_NR or _ODPL_MISS_NR, sends an
+ * OFPT_PACKET_IN message to each OpenFlow controller as necessary according to
+ * their individual configurations.
  *
  * Takes ownership of 'packet'. */
 static void
-send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
+send_packet_in(struct ofproto *ofproto, struct dpif_upcall *upcall,
+               const struct flow *flow, bool clone)
 {
     struct ofconn *ofconn, *prev;
-    int max_len;
-
-    max_len = do_convert_to_packet_in(packet);
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, node, &ofproto->all_conns) {
         if (ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
-                schedule_packet_in(prev, packet, max_len, true);
+                schedule_packet_in(prev, upcall, flow, true);
             }
             prev = ofconn;
         }
     }
     if (prev) {
-        schedule_packet_in(prev, packet, max_len, false);
-    } else {
-        ofpbuf_delete(packet);
+        schedule_packet_in(prev, upcall, flow, clone);
+    } else if (!clone) {
+        ofpbuf_delete(upcall->packet);
     }
 }
 
