@@ -950,7 +950,7 @@ dp_netdev_run(void)
     struct shash_node *node;
     struct ofpbuf packet;
 
-    ofpbuf_init(&packet, DP_NETDEV_HEADROOM + max_mtu);
+    ofpbuf_init(&packet, DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + max_mtu);
     SHASH_FOR_EACH (node, &dp_netdevs) {
         struct dp_netdev *dp = node->data;
         struct dp_netdev_port *port;
