@@ -297,7 +297,7 @@ static int patch_send(struct vport *vport, struct sk_buff *skb)
 }
 
 const struct vport_ops patch_vport_ops = {
-	.type		= "patch",
+	.type		= ODP_VPORT_TYPE_PATCH,
 	.flags		= VPORT_F_GEN_STATS,
 	.init		= patch_init,
 	.exit		= patch_exit,

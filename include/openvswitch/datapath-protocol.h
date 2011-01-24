@@ -176,16 +176,27 @@ struct odp_packet {
 	uint32_t len;
 };
 
-#define VPORT_TYPE_SIZE     16
 #define VPORT_CONFIG_SIZE     32
 struct odp_port {
     char devname[16];           /* IFNAMSIZ */
-    char type[VPORT_TYPE_SIZE];
+    uint32_t type;              /* One of ODP_VPORT_TYPE_*. */
     uint16_t port;
     uint16_t dp_idx;
     uint32_t reserved2;
     __aligned_u64 config[VPORT_CONFIG_SIZE / 8]; /* type-specific */
 };
+
+enum odp_vport_type {
+	ODP_VPORT_TYPE_UNSPEC,
+	ODP_VPORT_TYPE_NETDEV,   /* network device */
+	ODP_VPORT_TYPE_INTERNAL, /* network device implemented by datapath */
+	ODP_VPORT_TYPE_PATCH,    /* virtual tunnel connecting two vports */
+	ODP_VPORT_TYPE_GRE,      /* GRE tunnel */
+	ODP_VPORT_TYPE_CAPWAP,   /* CAPWAP tunnel */
+	__ODP_VPORT_TYPE_MAX
+};
+
+#define ODP_VPORT_TYPE_MAX (__ODP_VPORT_TYPE_MAX - 1)
 
 /**
  * struct odp_vport_dump - ODP_VPORT_DUMP argument.

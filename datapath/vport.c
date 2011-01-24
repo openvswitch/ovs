@@ -569,7 +569,7 @@ struct vport *vport_add(const struct vport_parms *parms)
 	ASSERT_VPORT();
 
 	for (i = 0; i < n_vport_types; i++) {
-		if (!strcmp(vport_ops_list[i]->type, parms->type)) {
+		if (vport_ops_list[i]->type == parms->type) {
 			vport = vport_ops_list[i]->create(parms);
 			if (IS_ERR(vport)) {
 				err = PTR_ERR(vport);
@@ -722,9 +722,9 @@ const char *vport_get_name(const struct vport *vport)
  * @vport: vport from which to retrieve the type.
  *
  * Retrieves the type of the given device.  Either RTNL lock or rcu_read_lock
- * must be held for the entire duration that the type is in use.
+ * must be held.
  */
-const char *vport_get_type(const struct vport *vport)
+enum odp_vport_type vport_get_type(const struct vport *vport)
 {
 	return vport->ops->type;
 }

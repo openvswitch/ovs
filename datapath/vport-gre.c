@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -387,7 +387,7 @@ static void gre_exit(void)
 }
 
 const struct vport_ops gre_vport_ops = {
-	.type		= "gre",
+	.type		= ODP_VPORT_TYPE_GRE,
 	.flags		= VPORT_F_GEN_STATS | VPORT_F_TUN_ID,
 	.init		= gre_init,
 	.exit		= gre_exit,

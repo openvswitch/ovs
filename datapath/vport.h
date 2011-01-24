@@ -49,7 +49,7 @@ int vport_set_addr(struct vport *, const unsigned char *);
 int vport_set_stats(struct vport *, struct rtnl_link_stats64 *);
 
 const char *vport_get_name(const struct vport *);
-const char *vport_get_type(const struct vport *);
+enum odp_vport_type vport_get_type(const struct vport *);
 const unsigned char *vport_get_addr(const struct vport *);
 
 struct kobject *vport_get_kobj(const struct vport *);
@@ -140,7 +140,7 @@ struct vport {
  */
 struct vport_parms {
 	const char *name;
-	const char *type;
+	enum odp_vport_type type;
 	const void *config;
 
 	/* For vport_alloc(). */
@@ -151,8 +151,7 @@ struct vport_parms {
 /**
  * struct vport_ops - definition of a type of virtual port
  *
- * @type: Name of port type, such as "netdev" or "internal" to be matched
- * against the device type when a new port needs to be created.
+ * @type: %ODP_VPORT_TYPE_* value for this type of virtual port.
  * @flags: Flags of type VPORT_F_* that influence how the generic vport layer
  * handles this vport.
  * @init: Called at module initialization.  If VPORT_F_REQUIRED is set then the
@@ -186,7 +185,7 @@ struct vport_parms {
  * @send: Send a packet on the device.  Returns the length of the packet sent.
  */
 struct vport_ops {
-	const char *type;
+	enum odp_vport_type type;
 	u32 flags;
 
 	/* Called at module init and exit respectively. */

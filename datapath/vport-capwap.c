@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -645,7 +645,7 @@ static void capwap_frag_expire(unsigned long ifq)
 }
 
 const struct vport_ops capwap_vport_ops = {
-	.type		= "capwap",
+	.type		= ODP_VPORT_TYPE_CAPWAP,
 	.flags		= VPORT_F_GEN_STATS,
 	.init		= capwap_init,
 	.exit		= capwap_exit,

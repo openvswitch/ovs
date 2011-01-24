@@ -71,6 +71,7 @@ struct netdev_vport {
 };
 
 struct vport_class {
+    enum odp_vport_type type;
     struct netdev_class netdev_class;
     int (*parse_config)(const char *name, const char *type,
                         const struct shash *args, void *config);
@@ -243,7 +244,7 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
 
     memset(&port, 0, sizeof port);
     strncpy(port.devname, netdev_dev_get_name(dev_), sizeof port.devname);
-    strncpy(port.type, netdev_dev_get_type(dev_), sizeof port.type);
+    port.type = vport_class->type;
     error = vport_class->parse_config(netdev_dev_get_name(dev_),
                                       netdev_dev_get_type(dev_),
                                       args, port.config);
@@ -979,13 +980,20 @@ void
 netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
-        { { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
+        { ODP_VPORT_TYPE_GRE,
+          { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
-        { { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
+
+        { ODP_VPORT_TYPE_GRE,
+          { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
-        { { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
+
+        { ODP_VPORT_TYPE_CAPWAP,
+          { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
-        { { "patch", VPORT_FUNCTIONS(NULL) },
+
+        { ODP_VPORT_TYPE_PATCH,
+          { "patch", VPORT_FUNCTIONS(NULL) },
           parse_patch_config, unparse_patch_config }
     };
 

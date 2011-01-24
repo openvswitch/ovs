@@ -232,33 +232,50 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
     return do_ioctl(dpif_, ODP_SET_DROP_FRAGS, &drop_frags_int);
 }
 
-static void
-translate_vport_type_to_netdev_type(struct odp_port *port)
+static const char *
+vport_type_to_netdev_type(const struct odp_port *odp_port)
 {
-    char *type = port->type;
+    struct tnl_port_config tnl_config;
 
-    if (!strcmp(type, "netdev")) {
-        ovs_strlcpy(type, "system", sizeof port->type);
-    } else if (!strcmp(type, "gre")) {
-        const struct tnl_port_config *config;
+    switch (odp_port->type) {
+    case ODP_VPORT_TYPE_UNSPEC:
+        break;
 
-        config = (struct tnl_port_config *)port->config;
-        if (config->flags & TNL_F_IPSEC) {
-            ovs_strlcpy(type, "ipsec_gre", sizeof port->type);
-        }
+    case ODP_VPORT_TYPE_NETDEV:
+        return "system";
+
+    case ODP_VPORT_TYPE_INTERNAL:
+        return "internal";
+
+    case ODP_VPORT_TYPE_PATCH:
+        return "patch";
+
+    case ODP_VPORT_TYPE_GRE:
+        memcpy(&tnl_config, odp_port->config, sizeof tnl_config);
+        return tnl_config.flags & TNL_F_IPSEC ? "ipsec_gre" : "gre";
+
+    case ODP_VPORT_TYPE_CAPWAP:
+        return "capwap";
+
+    case __ODP_VPORT_TYPE_MAX:
+        break;
     }
+
+    VLOG_WARN_RL(&error_rl, "dp%d: port `%s' has unsupported type %"PRIu32,
+                 odp_port->dp_idx, odp_port->devname, odp_port->type);
+    return "unknown";
 }
 
-static void
-translate_netdev_type_to_vport_type(struct odp_port *port)
+static enum odp_vport_type
+netdev_type_to_vport_type(const char *type)
 {
-    char *type = port->type;
-
-    if (!strcmp(type, "system")) {
-        ovs_strlcpy(type, "netdev", sizeof port->type);
-    } else if (!strcmp(type, "ipsec_gre")) {
-        ovs_strlcpy(type, "gre", sizeof port->type);
-    }
+    return (!strcmp(type, "system") ? ODP_VPORT_TYPE_NETDEV
+            : !strcmp(type, "internal") ? ODP_VPORT_TYPE_INTERNAL
+            : !strcmp(type, "patch") ? ODP_VPORT_TYPE_PATCH
+            : (!strcmp(type, "gre")
+               || !strcmp(type, "ipsec_gre")) ? ODP_VPORT_TYPE_GRE
+            : !strcmp(type, "capwap") ? ODP_VPORT_TYPE_CAPWAP
+            : ODP_VPORT_TYPE_UNSPEC);
 }
 
 static int
@@ -272,9 +289,15 @@ dpif_linux_port_add(struct dpif *dpif, struct netdev *netdev,
 
     memset(&port, 0, sizeof port);
     strncpy(port.devname, name, sizeof port.devname);
-    strncpy(port.type, type, sizeof port.type);
     netdev_vport_get_config(netdev, port.config);
-    translate_netdev_type_to_vport_type(&port);
+
+    port.type = netdev_type_to_vport_type(type);
+    if (port.type == ODP_VPORT_TYPE_UNSPEC) {
+        VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
+                     "unsupported type `%s'",
+                     dpif_name(dpif), name, type);
+        return EINVAL;
+    }
 
     error = do_ioctl(dpif, ODP_VPORT_ATTACH, &port);
     if (!error) {
@@ -309,9 +332,8 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
         /* A vport named 'port_name' exists but in some other datapath.  */
         return ENOENT;
     } else {
-        translate_vport_type_to_netdev_type(&odp_port);
         dpif_port->name = xstrdup(odp_port.devname);
-        dpif_port->type = xstrdup(odp_port.type);
+        dpif_port->type = xstrdup(vport_type_to_netdev_type(&odp_port));
         dpif_port->port_no = odp_port.port;
         return 0;
     }
@@ -360,9 +382,8 @@ dpif_linux_port_dump_next(const struct dpif *dpif, void *state,
     } else if (odp_port->devname[0] == '\0') {
         return EOF;
     } else {
-        translate_vport_type_to_netdev_type(odp_port);
         dpif_port->name = odp_port->devname;
-        dpif_port->type = odp_port->type;
+        dpif_port->type = (char *) vport_type_to_netdev_type(odp_port);
         dpif_port->port_no = odp_port->port;
         odp_port->port++;
         return 0;
@@ -681,7 +702,7 @@ lookup_internal_device(const char *name, int *dp_idx, int *port_no)
                          name, strerror(errno));
         }
         return errno;
-    } else if (!strcmp(odp_port.type, "internal")) {
+    } else if (odp_port.type == ODP_VPORT_TYPE_INTERNAL) {
         *dp_idx = odp_port.dp_idx;
         *port_no = odp_port.port;
         return 0;

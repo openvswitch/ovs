@@ -266,7 +266,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	/* Set up our datapath device. */
 	BUILD_BUG_ON(sizeof(internal_dev_port.devname) != sizeof(devname));
 	strcpy(internal_dev_port.devname, devname);
-	strcpy(internal_dev_port.type, "internal");
+	internal_dev_port.type = ODP_VPORT_TYPE_INTERNAL;
 	err = new_vport(dp, &internal_dev_port, ODPP_LOCAL);
 	if (err) {
 		if (err == -EBUSY)
@@ -393,7 +393,6 @@ static int attach_port(int dp_idx, struct odp_port __user *portp)
 	if (copy_from_user(&port, portp, sizeof(port)))
 		goto out;
 	port.devname[IFNAMSIZ - 1] = '\0';
-	port.type[VPORT_TYPE_SIZE - 1] = '\0';
 
 	rtnl_lock();
 	dp = get_dp_locked(dp_idx);
@@ -1353,7 +1352,7 @@ static void compose_odp_port(const struct vport *vport, struct odp_port *odp_por
 {
 	rcu_read_lock();
 	strncpy(odp_port->devname, vport_get_name(vport), sizeof(odp_port->devname));
-	strncpy(odp_port->type, vport_get_type(vport), sizeof(odp_port->type));
+	odp_port->type = vport_get_type(vport);
 	vport_get_config(vport, odp_port->config);
 	odp_port->port = vport->port_no;
 	odp_port->dp_idx = vport->dp->dp_idx;
