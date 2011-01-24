@@ -683,18 +683,27 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 static int
 dpif_linux_execute(struct dpif *dpif_,
                    const struct nlattr *actions, size_t actions_len,
-                   const struct ofpbuf *buf)
+                   const struct ofpbuf *packet)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct odp_execute execute;
+    struct odp_upcall *execute;
+    struct ofpbuf *buf;
+    int error;
 
-    memset(&execute, 0, sizeof execute);
-    execute.dp_idx = dpif->minor;
-    execute.actions = (struct nlattr *) actions;
-    execute.actions_len = actions_len;
-    execute.data = buf->data;
-    execute.length = buf->size;
-    return do_ioctl(dpif_, ODP_EXECUTE, &execute);
+    buf = ofpbuf_new(128 + actions_len + packet->size);
+
+    ofpbuf_reserve(buf, sizeof *execute);
+    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, packet->data, packet->size);
+    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_ACTIONS, actions, actions_len);
+
+    execute = ofpbuf_push_uninit(buf, sizeof *execute);
+    execute->dp_idx = dpif->minor;
+    execute->len = buf->size;
+
+    error = do_ioctl(dpif_, ODP_EXECUTE, buf->data);
+
+    ofpbuf_delete(buf);
+    return error;
 }
 
 static int

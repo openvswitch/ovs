@@ -92,7 +92,7 @@
 #define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
 #define ODP_FLOW_FLUSH          _IO('O', 19)
 
-#define ODP_EXECUTE             _IOR('O', 18, struct odp_execute)
+#define ODP_EXECUTE             _IOR('O', 18, struct odp_upcall)
 
 /**
  * struct odp_datapath - header with basic information about a datapath.
@@ -349,15 +349,5 @@ enum odp_action_type {
 };
 
 #define ODPAT_MAX (__ODPAT_MAX - 1)
-
-struct odp_execute {
-    uint32_t dp_idx;
-
-    struct nlattr *actions;
-    uint32_t actions_len;
-
-    const void *data;
-    uint32_t length;
-};
 
 #endif  /* openvswitch/datapath-protocol.h */

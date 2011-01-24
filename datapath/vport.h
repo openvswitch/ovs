@@ -16,7 +16,6 @@
 
 #include "datapath.h"
 #include "openvswitch/datapath-protocol.h"
-#include "odp-compat.h"
 
 struct vport;
 struct vport_parms;

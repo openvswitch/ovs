@@ -50,7 +50,6 @@
 #include "actions.h"
 #include "flow.h"
 #include "loop_counter.h"
-#include "odp-compat.h"
 #include "table.h"
 #include "vport-internal_dev.h"
 
@@ -668,91 +667,92 @@ static int expand_table(struct datapath *dp)
  	return 0;
 }
 
-static int do_execute(struct datapath *dp, const struct odp_execute *execute)
+static const struct nla_policy execute_policy[ODP_PACKET_ATTR_MAX + 1] = {
+	[ODP_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
+	[ODP_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
+};
+
+static int execute_packet(const struct odp_upcall __user *uodp_upcall)
 {
+	struct nlattr *a[ODP_PACKET_ATTR_MAX + 1];
+	struct odp_upcall *odp_upcall;
+	struct sk_buff *skb, *packet;
+	unsigned int actions_len;
+	struct nlattr *actions;
 	struct sw_flow_key key;
-	struct sk_buff *skb;
-	struct sw_flow_actions *actions;
+	struct datapath *dp;
 	struct ethhdr *eth;
 	bool is_frag;
+	u32 len;
 	int err;
 
-	err = -EINVAL;
-	if (execute->length < ETH_HLEN || execute->length > 65535)
-		goto error;
+	if (get_user(len, &uodp_upcall->len))
+		return -EFAULT;
+	if (len < sizeof(struct odp_upcall))
+		return -EINVAL;
 
-	actions = flow_actions_alloc(execute->actions_len);
-	if (IS_ERR(actions)) {
-		err = PTR_ERR(actions);
-		goto error;
-	}
-
-	err = -EFAULT;
-	if (copy_from_user(actions->actions,
-	    (struct nlattr __user __force *)execute->actions, execute->actions_len))
-		goto error_free_actions;
-
-	err = validate_actions(actions->actions, execute->actions_len);
-	if (err)
-		goto error_free_actions;
-
-	err = -ENOMEM;
-	skb = alloc_skb(execute->length, GFP_KERNEL);
+	skb = alloc_skb(len, GFP_KERNEL);
 	if (!skb)
-		goto error_free_actions;
+		return -ENOMEM;
 
 	err = -EFAULT;
-	if (copy_from_user(skb_put(skb, execute->length),
-			   (const void __user __force *)execute->data,
-			   execute->length))
-		goto error_free_skb;
+	if (copy_from_user(__skb_put(skb, len), uodp_upcall, len))
+		goto exit_free_skb;
 
-	skb_reset_mac_header(skb);
-	eth = eth_hdr(skb);
+	odp_upcall = (struct odp_upcall *)skb->data;
+	err = -EINVAL;
+	if (odp_upcall->len != len)
+		goto exit_free_skb;
+
+	__skb_pull(skb, sizeof(struct odp_upcall));
+	err = nla_parse(a, ODP_PACKET_ATTR_MAX, (struct nlattr *)skb->data,
+			skb->len, execute_policy);
+	if (err)
+		goto exit_free_skb;
+
+	err = -EINVAL;
+	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_ACTIONS] ||
+	    nla_len(a[ODP_PACKET_ATTR_PACKET]) < ETH_HLEN)
+		goto exit_free_skb;
+
+	actions = nla_data(a[ODP_PACKET_ATTR_ACTIONS]);
+	actions_len = nla_len(a[ODP_PACKET_ATTR_ACTIONS]);
+	err = validate_actions(actions, actions_len);
+	if (err)
+		goto exit_free_skb;
+
+	packet = skb_clone(skb, GFP_KERNEL);
+	err = -ENOMEM;
+	if (!packet)
+		goto exit_free_skb;
+	packet->data = nla_data(a[ODP_PACKET_ATTR_PACKET]);
+	packet->len = nla_len(a[ODP_PACKET_ATTR_PACKET]);
+
+	skb_reset_mac_header(packet);
+	eth = eth_hdr(packet);
 
 	/* Normally, setting the skb 'protocol' field would be handled by a
 	 * call to eth_type_trans(), but it assumes there's a sending
 	 * device, which we may not have. */
 	if (ntohs(eth->h_proto) >= 1536)
-		skb->protocol = eth->h_proto;
+		packet->protocol = eth->h_proto;
 	else
-		skb->protocol = htons(ETH_P_802_2);
+		packet->protocol = htons(ETH_P_802_2);
 
-	err = flow_extract(skb, -1, &key, &is_frag);
+	err = flow_extract(packet, -1, &key, &is_frag);
 	if (err)
-		goto error_free_skb;
+		goto exit_free_skb;
 
 	rcu_read_lock();
-	err = execute_actions(dp, skb, &key, actions->actions, actions->actions_len);
+	dp = get_dp(odp_upcall->dp_idx);
+	err = -ENODEV;
+	if (dp)
+		err = execute_actions(dp, packet, &key, actions, actions_len);
 	rcu_read_unlock();
 
-	kfree(actions);
-	return err;
-
-error_free_skb:
+exit_free_skb:
 	kfree_skb(skb);
-error_free_actions:
-	kfree(actions);
-error:
 	return err;
-}
-
-static int execute_packet(const struct odp_execute __user *executep)
-{
-	struct odp_execute execute;
-	struct datapath *dp;
-	int error;
-
-	if (copy_from_user(&execute, executep, sizeof(execute)))
-		return -EFAULT;
-
-	dp = get_dp_locked(execute.dp_idx);
-	if (!dp)
-		return -ENODEV;
-	error = do_execute(dp, &execute);
-	mutex_unlock(&dp->mutex);
-
-	return error;
 }
 
 static void get_dp_stats(struct datapath *dp, struct odp_stats *stats)
@@ -2036,7 +2036,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 
 	case ODP_EXECUTE:
-		err = execute_packet((struct odp_execute __user *)argp);
+		err = execute_packet((struct odp_upcall __user *)argp);
 		goto exit;
 	}
 
@@ -2081,34 +2081,6 @@ static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
 }
 
 #ifdef CONFIG_COMPAT
-static int compat_execute(const struct compat_odp_execute __user *uexecute)
-{
-	struct odp_execute execute;
-	compat_uptr_t actions;
-	compat_uptr_t data;
-	struct datapath *dp;
-	int error;
-
-	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_odp_execute)) ||
-	    __get_user(execute.dp_idx, &uexecute->dp_idx) ||
-	    __get_user(actions, &uexecute->actions) ||
-	    __get_user(execute.actions_len, &uexecute->actions_len) ||
-	    __get_user(data, &uexecute->data) ||
-	    __get_user(execute.length, &uexecute->length))
-		return -EFAULT;
-
-	execute.actions = (struct nlattr __force *)compat_ptr(actions);
-	execute.data = (const void __force *)compat_ptr(data);
-
-	dp = get_dp_locked(execute.dp_idx);
-	if (!dp)
-		return -ENODEV;
-	error = do_execute(dp, &execute);
-	mutex_unlock(&dp->mutex);
-
-	return error;
-}
-
 static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned long argp)
 {
 	switch (cmd) {
@@ -2133,11 +2105,9 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	case ODP_FLOW_DUMP:
 	case ODP_SET_LISTEN_MASK:
 	case ODP_GET_LISTEN_MASK:
+	case ODP_EXECUTE:
 		/* Ioctls that just need their pointer argument extended. */
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
-
-	case ODP_EXECUTE32:
-		return compat_execute(compat_ptr(argp));
 
 	default:
 		return -ENOIOCTLCMD;

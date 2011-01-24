@@ -35,7 +35,6 @@ openvswitch_headers = \
 	dp_sysfs.h \
 	flow.h \
 	loop_counter.h \
-	odp-compat.h \
 	table.h \
 	tunnel.h \
 	vport.h \
