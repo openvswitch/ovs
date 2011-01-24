@@ -53,19 +53,6 @@ static inline int lockdep_rtnl_is_held(void)
 	return 1;
 }
 #endif
-
-static inline int rcu_read_lock_held(void)
-{
-	return 1;
-}
-#endif
-
-#ifndef rcu_dereference_check
-#define rcu_dereference_check(p, c) rcu_dereference(p)
-#endif
-
-#ifndef rcu_dereference_protected
-#define rcu_dereference_protected(p, c) (p)
 #endif
 
 #ifndef rcu_dereference_rtnl
