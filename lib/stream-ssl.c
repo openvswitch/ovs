@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -463,12 +463,6 @@ ssl_cache_session(struct stream *stream)
     struct ssl_stream *sslv = ssl_stream_cast(stream);
     SSL_SESSION *session;
 
-    /* Statistics. */
-    COVERAGE_INC(ssl_session);
-    if (SSL_session_reused(sslv->ssl)) {
-        COVERAGE_INC(ssl_session_reused);
-    }
-
     /* Get session from stream. */
     session = SSL_get1_session(sslv->ssl);
     if (session) {
@@ -490,12 +484,6 @@ ssl_cache_session(struct stream *stream)
                 }
             }
         }
-    } else {
-        /* There is no new session.  This doesn't really make sense because
-         * this function is only called upon successful connection and there
-         * should always be a new session in that case.  But I don't trust
-         * OpenSSL so I'd rather handle this case anyway. */
-        ssl_flush_session(stream);
     }
 }
 
@@ -575,8 +563,10 @@ ssl_connect(struct stream *stream)
             VLOG_ERR("rejecting SSL connection during bootstrap race window");
             return EPROTO;
         } else {
-            if (sslv->type == CLIENT) {
-                ssl_cache_session(stream);
+            /* Statistics. */
+            COVERAGE_INC(ssl_session);
+            if (SSL_session_reused(sslv->ssl)) {
+                COVERAGE_INC(ssl_session_reused);
             }
             return 0;
         }
@@ -597,6 +587,8 @@ ssl_close(struct stream *stream)
      * since we don't have any way to continue the close operation in the
      * background. */
     SSL_shutdown(sslv->ssl);
+
+    ssl_cache_session(stream);
 
     /* SSL_shutdown() might have signaled an error, in which case we need to
      * flush it out of the OpenSSL error queue or the next OpenSSL operation
