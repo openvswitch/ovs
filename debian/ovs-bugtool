@@ -64,7 +64,7 @@ OS_RELEASE = platform.release()
 # Files & directories
 #
 
-BUG_DIR = "/var/log/openvswitch"
+BUG_DIR = "/var/log/ovs-bugtool"
 PLUGIN_DIR = "/etc/openvswitch/bugtool"
 GRUB_CONFIG = '/boot/grub/menu.lst'
 BOOT_KERNEL = '/boot/vmlinuz-' + OS_RELEASE
@@ -93,13 +93,14 @@ HOSTS = '/etc/hosts'
 HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
 DHCP_LEASE_DIR = '/var/lib/dhcp3'
-OPENVSWITCH_CORE_DIR = '/var/log/openvswitch/cores'
+OPENVSWITCH_LOG_DIR = '/var/log/openvswitch'
 OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch'
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
 OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
 OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
 COLLECTD_LOGS_DIR = '/var/lib/collectd/rrd'
 VAR_LOG_DIR = '/var/log/'
+VAR_LOG_CORE_DIR = '/var/log/core'
 X11_LOGS_DIR = VAR_LOG_DIR
 X11_LOGS_RE = re.compile(r'.*/Xorg\..*$')
 X11_AUTH_DIR = '/root/'
@@ -509,7 +510,7 @@ exclude those logs from the archive.
             pass
     cmd_output(CAP_NETWORK_STATUS, [TC, '-s', 'qdisc'])
     file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
-    tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_CORE_DIR)
+    tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_LOG_DIR)
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show'])
         for d in dp_list():
@@ -548,6 +549,7 @@ exclude those logs from the archive.
 
     tree_output(CAP_X11_LOGS, X11_LOGS_DIR, X11_LOGS_RE)
     tree_output(CAP_X11_AUTH, X11_AUTH_DIR, X11_AUTH_RE)
+    tree_output(CAP_SYSTEM_LOGS, VAR_LOG_CORE_DIR)
 
 
     try:
