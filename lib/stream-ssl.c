@@ -1011,6 +1011,17 @@ do_ssl_init(void)
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        NULL);
 
+    /* We have to set a session context ID string in 'ctx' because OpenSSL
+     * otherwise refuses to use a cached session on the server side when
+     * SSL_VERIFY_PEER is set.  And it not only refuses to use the cached
+     * session, it actually generates an error and kills the connection.
+     * According to a comment in ssl_get_prev_session() in OpenSSL's
+     * ssl/ssl_sess.c, this is intentional behavior.
+     *
+     * Any context string is OK, as long as one is set. */
+    SSL_CTX_set_session_id_context(ctx, (const unsigned char *) PACKAGE,
+                                   strlen(PACKAGE));
+
     return 0;
 }
 
