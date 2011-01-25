@@ -1385,6 +1385,20 @@ bridge_run(void)
     /* (Re)configure if necessary. */
     database_changed = ovsdb_idl_run(idl);
     cfg = ovsrec_open_vswitch_first(idl);
+#ifdef HAVE_OPENSSL
+    /* Re-configure SSL.  We do this on every trip through the main loop,
+     * instead of just when the database changes, because the contents of the
+     * key and certificate files can change without the database changing.
+     *
+     * We do this before bridge_reconfigure() because that function might
+     * initiate SSL connections and thus requires SSL to be configured. */
+    if (cfg && cfg->ssl) {
+        const struct ovsrec_ssl *ssl = cfg->ssl;
+
+        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
+        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
+    }
+#endif
     if (database_changed || datapath_destroyed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
@@ -1403,18 +1417,6 @@ bridge_run(void)
             bridge_reconfigure(&null_cfg);
         }
     }
-
-#ifdef HAVE_OPENSSL
-    /* Re-configure SSL.  We do this on every trip through the main loop,
-     * instead of just when the database changes, because the contents of the
-     * key and certificate files can change without the database changing. */
-    if (cfg && cfg->ssl) {
-        const struct ovsrec_ssl *ssl = cfg->ssl;
-
-        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
-        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
-    }
-#endif
 
     /* Refresh system and interface stats if necessary. */
     if (time_msec() >= stats_timer) {
