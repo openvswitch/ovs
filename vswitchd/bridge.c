@@ -1342,13 +1342,20 @@ bridge_refresh_controller_status(const struct bridge *br)
     ofproto_get_ofproto_controller_info(br->ofproto, &info);
 
     OVSREC_CONTROLLER_FOR_EACH(cfg, idl) {
-        struct ofproto_controller_info *cinfo = shash_find_data(&info, cfg->target);
+        struct ofproto_controller_info *cinfo =
+            shash_find_data(&info, cfg->target);
 
-        ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
-        ovsrec_controller_set_role(cfg, nx_role_to_str(cinfo->role));
-        ovsrec_controller_set_status(cfg, (char **) cinfo->pairs.keys,
-                                     (char **) cinfo->pairs.values,
-                                     cinfo->pairs.n);
+        if (cinfo) {
+            ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
+            ovsrec_controller_set_role(cfg, nx_role_to_str(cinfo->role));
+            ovsrec_controller_set_status(cfg, (char **) cinfo->pairs.keys,
+                                         (char **) cinfo->pairs.values,
+                                         cinfo->pairs.n);
+        } else {
+            ovsrec_controller_set_is_connected(cfg, false);
+            ovsrec_controller_set_role(cfg, NULL);
+            ovsrec_controller_set_status(cfg, NULL, NULL, 0);
+        }
     }
 
     ofproto_free_ofproto_controller_info(&info);
