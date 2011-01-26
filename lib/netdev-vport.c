@@ -26,6 +26,7 @@
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
+#include "dpif-linux.h"
 #include "hash.h"
 #include "hmap.h"
 #include "list.h"
@@ -36,8 +37,8 @@
 #include "openvswitch/datapath-protocol.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
-#include "rtnetlink.h"
 #include "route-table.h"
+#include "rtnetlink.h"
 #include "rtnetlink-link.h"
 #include "shash.h"
 #include "socket-util.h"
@@ -63,7 +64,7 @@ struct netdev_vport_notifier {
 
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
-    uint64_t config[VPORT_CONFIG_SIZE / 8];
+    struct ofpbuf *options;
 };
 
 struct netdev_vport {
@@ -74,9 +75,10 @@ struct vport_class {
     enum odp_vport_type type;
     struct netdev_class netdev_class;
     int (*parse_config)(const char *name, const char *type,
-                        const struct shash *args, void *config);
+                        const struct shash *args, struct ofpbuf *options);
     int (*unparse_config)(const char *name, const char *type,
-                          const void *config, struct shash *args);
+                          const struct nlattr *options, size_t options_len,
+                          struct shash *args);
 };
 
 static struct shash netdev_vport_notifiers =
@@ -84,10 +86,12 @@ static struct shash netdev_vport_notifiers =
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int netdev_vport_do_ioctl(int cmd, void *arg);
 static int netdev_vport_create(const struct netdev_class *, const char *,
                                const struct shash *, struct netdev_dev **);
 static void netdev_vport_poll_notify(const struct netdev *);
+static int tnl_port_config_from_nlattr(const struct nlattr *options,
+                                       size_t options_len,
+                                       struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1]);
 
 static void netdev_vport_tnl_iface_init(void);
 static void netdev_vport_link_change(const struct rtnetlink_link_change *,
@@ -122,17 +126,67 @@ netdev_vport_cast(const struct netdev *netdev)
     return CONTAINER_OF(netdev, struct netdev_vport, netdev);
 }
 
-/* If 'netdev' is a vport netdev, copies its kernel configuration into
- * 'config'.  Otherwise leaves 'config' untouched. */
-void
-netdev_vport_get_config(const struct netdev *netdev, void *config)
+/* If 'netdev' is a vport netdev, returns an ofpbuf that contains Netlink
+ * options to include in ODP_VPORT_ATTR_OPTIONS for configuring that vport.
+ * Otherwise returns NULL. */
+const struct ofpbuf *
+netdev_vport_get_options(const struct netdev *netdev)
 {
     const struct netdev_dev *dev = netdev_get_dev(netdev);
 
-    if (is_vport_class(netdev_dev_get_class(dev))) {
-        const struct netdev_dev_vport *vport = netdev_dev_vport_cast(dev);
-        memcpy(config, vport->config, VPORT_CONFIG_SIZE);
+    return (is_vport_class(netdev_dev_get_class(dev))
+            ? netdev_dev_vport_cast(dev)->options
+            : NULL);
+}
+
+enum odp_vport_type
+netdev_vport_get_vport_type(const struct netdev *netdev)
+{
+    const struct netdev_dev *dev = netdev_get_dev(netdev);
+    const struct netdev_class *class = netdev_dev_get_class(dev);
+
+    return (is_vport_class(class) ? vport_class_cast(class)->type
+            : class == &netdev_internal_class ? ODP_VPORT_TYPE_INTERNAL
+            : class == &netdev_linux_class ? ODP_VPORT_TYPE_NETDEV
+            : ODP_VPORT_TYPE_UNSPEC);
+}
+
+const char *
+netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
+{
+    struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
+
+    switch (vport->type) {
+    case ODP_VPORT_TYPE_UNSPEC:
+        break;
+
+    case ODP_VPORT_TYPE_NETDEV:
+        return "system";
+
+    case ODP_VPORT_TYPE_INTERNAL:
+        return "internal";
+
+    case ODP_VPORT_TYPE_PATCH:
+        return "patch";
+
+    case ODP_VPORT_TYPE_GRE:
+        if (tnl_port_config_from_nlattr(vport->options, vport->options_len,
+                                        a)) {
+            break;
+        }
+        return (nl_attr_get_u32(a[ODP_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
+                ? "ipsec_gre" : "gre");
+
+    case ODP_VPORT_TYPE_CAPWAP:
+        return "capwap";
+
+    case __ODP_VPORT_TYPE_MAX:
+        break;
     }
+
+    VLOG_WARN_RL(&rl, "dp%d: port `%s' has unsupported type %u",
+                 vport->dp_idx, vport->name, (unsigned int) vport->type);
+    return "unknown";
 }
 
 static int
@@ -149,38 +203,40 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
                     struct netdev_dev **netdev_devp)
 {
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
-    uint64_t config[VPORT_CONFIG_SIZE / 8];
+    struct ofpbuf *options = NULL;
     struct shash fetched_args;
     int error;
 
-    memset(config, 0, sizeof config);
     shash_init(&fetched_args);
 
     if (!shash_is_empty(args)) {
         /* Parse the provided configuration. */
+        options = ofpbuf_new(64);
         error = vport_class->parse_config(name, netdev_class->type,
-                                          args, config);
+                                          args, options);
     } else {
         /* Fetch an existing configuration from the kernel.
          *
          * This case could be ambiguous with initializing a new vport with an
          * empty configuration, but none of the existing vport classes accept
          * an empty configuration. */
-        struct odp_port odp_port;
+        struct dpif_linux_vport reply;
+        struct ofpbuf *buf;
 
-        memset(&odp_port, 0, sizeof odp_port);
-        strncpy(odp_port.devname, name, sizeof odp_port.devname);
-        error = netdev_vport_do_ioctl(ODP_VPORT_QUERY, &odp_port);
+        error = dpif_linux_vport_get(name, &reply, &buf);
         if (!error) {
             /* XXX verify correct type */
-            memcpy(config, odp_port.config, sizeof config);
             error = vport_class->unparse_config(name, netdev_class->type,
-                                                odp_port.config,
+                                                reply.options,
+                                                reply.options_len,
                                                 &fetched_args);
             if (error) {
                 VLOG_ERR_RL(&rl, "%s: failed to parse kernel config (%s)",
                             name, strerror(error));
+            } else {
+                options = ofpbuf_clone_data(reply.options, reply.options_len);
             }
+            ofpbuf_delete(buf);
         } else {
             VLOG_ERR_RL(&rl, "%s: vport query failed (%s)",
                         name, strerror(error));
@@ -194,9 +250,11 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
         netdev_dev_init(&dev->netdev_dev, name,
                         shash_is_empty(&fetched_args) ? args : &fetched_args,
                         netdev_class);
-        memcpy(dev->config, config, sizeof dev->config);
+        dev->options = options;
 
         *netdev_devp = &dev->netdev_dev;
+    } else {
+        ofpbuf_delete(options);
     }
 
     shash_destroy(&fetched_args);
@@ -239,24 +297,36 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
     const struct netdev_class *netdev_class = netdev_dev_get_class(dev_);
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
     struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
-    struct odp_port port;
+    const char *name = netdev_dev_get_name(dev_);
+    struct ofpbuf *options;
     int error;
 
-    memset(&port, 0, sizeof port);
-    strncpy(port.devname, netdev_dev_get_name(dev_), sizeof port.devname);
-    port.type = vport_class->type;
-    error = vport_class->parse_config(netdev_dev_get_name(dev_),
-                                      netdev_dev_get_type(dev_),
-                                      args, port.config);
-    if (!error && memcmp(port.config, dev->config, sizeof dev->config)) {
-        error = netdev_vport_do_ioctl(ODP_VPORT_MOD, &port);
+    options = ofpbuf_new(64);
+    error = vport_class->parse_config(name, netdev_dev_get_type(dev_),
+                                      args, options);
+    if (!error
+        && (options->size != dev->options->size
+            || memcmp(options->data, dev->options->data, options->size))) {
+        struct dpif_linux_vport vport;
+
+        dpif_linux_vport_init(&vport);
+        vport.cmd = ODP_VPORT_SET;
+        vport.name = name;
+        vport.options = options->data;
+        vport.options_len = options->size;
+        error = dpif_linux_vport_transact(&vport, NULL, NULL);
         if (!error || error == ENODEV) {
             /* Either reconfiguration succeeded or this vport is not installed
              * in the kernel (e.g. it hasn't been added to a dpif yet with
              * dpif_port_add()). */
-            memcpy(dev->config, port.config, sizeof dev->config);
+            ofpbuf_delete(dev->options);
+            dev->options = options;
+            options = NULL;
+            error = 0;
         }
     }
+    ofpbuf_delete(options);
+
     return error;
 }
 
@@ -264,94 +334,94 @@ static int
 netdev_vport_set_etheraddr(struct netdev *netdev,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct odp_vport_ether vport_ether;
-    int err;
+    struct dpif_linux_vport vport;
+    int error;
 
-    ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev),
-                sizeof vport_ether.devname);
+    dpif_linux_vport_init(&vport);
+    vport.cmd = ODP_VPORT_SET;
+    vport.name = netdev_get_name(netdev);
+    vport.address = mac;
 
-    memcpy(vport_ether.ether_addr, mac, ETH_ADDR_LEN);
-
-    err = netdev_vport_do_ioctl(ODP_VPORT_ETHER_SET, &vport_ether);
-    if (err) {
-        return err;
+    error = dpif_linux_vport_transact(&vport, NULL, NULL);
+    if (!error) {
+        netdev_vport_poll_notify(netdev);
     }
-
-    netdev_vport_poll_notify(netdev);
-    return 0;
+    return error;
 }
 
 static int
 netdev_vport_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    struct odp_vport_ether vport_ether;
-    int err;
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
+    int error;
 
-    ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev),
-                sizeof vport_ether.devname);
-
-    err = netdev_vport_do_ioctl(ODP_VPORT_ETHER_GET, &vport_ether);
-    if (err) {
-        return err;
+    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
+    if (!error) {
+        if (reply.address) {
+            memcpy(mac, reply.address, ETH_ADDR_LEN);
+        } else {
+            error = EOPNOTSUPP;
+        }
+        ofpbuf_delete(buf);
     }
-
-    memcpy(mac, vport_ether.ether_addr, ETH_ADDR_LEN);
-    return 0;
+    return error;
 }
 
 static int
 netdev_vport_get_mtu(const struct netdev *netdev, int *mtup)
 {
-    struct odp_vport_mtu vport_mtu;
-    int err;
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
+    int error;
 
-    ovs_strlcpy(vport_mtu.devname, netdev_get_name(netdev),
-                sizeof vport_mtu.devname);
-
-    err = netdev_vport_do_ioctl(ODP_VPORT_MTU_GET, &vport_mtu);
-    if (err) {
-        return err;
+    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
+    if (!error) {
+        *mtup = reply.mtu;
+        ofpbuf_delete(buf);
     }
-
-    *mtup = vport_mtu.mtu;
-    return 0;
+    return error;
 }
 
 int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
-    const char *name = netdev_get_name(netdev);
-    struct odp_vport_stats_req ovsr;
-    int err;
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
+    int error;
 
-    ovs_strlcpy(ovsr.devname, name, sizeof ovsr.devname);
-    err = netdev_vport_do_ioctl(ODP_VPORT_STATS_GET, &ovsr);
-    if (err) {
-        return err;
+    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
+    if (error) {
+        return error;
+    } else if (!reply.stats) {
+        ofpbuf_delete(buf);
+        return EOPNOTSUPP;
     }
 
-    stats->rx_packets = ovsr.stats.rx_packets;
-    stats->tx_packets = ovsr.stats.tx_packets;
-    stats->rx_bytes = ovsr.stats.rx_bytes;
-    stats->tx_bytes = ovsr.stats.tx_bytes;
-    stats->rx_errors = ovsr.stats.rx_errors;
-    stats->tx_errors = ovsr.stats.tx_errors;
-    stats->rx_dropped = ovsr.stats.rx_dropped;
-    stats->tx_dropped = ovsr.stats.tx_dropped;
-    stats->multicast = ovsr.stats.multicast;
-    stats->collisions = ovsr.stats.collisions;
-    stats->rx_length_errors = ovsr.stats.rx_length_errors;
-    stats->rx_over_errors = ovsr.stats.rx_over_errors;
-    stats->rx_crc_errors = ovsr.stats.rx_crc_errors;
-    stats->rx_frame_errors = ovsr.stats.rx_frame_errors;
-    stats->rx_fifo_errors = ovsr.stats.rx_fifo_errors;
-    stats->rx_missed_errors = ovsr.stats.rx_missed_errors;
-    stats->tx_aborted_errors = ovsr.stats.tx_aborted_errors;
-    stats->tx_carrier_errors = ovsr.stats.tx_carrier_errors;
-    stats->tx_fifo_errors = ovsr.stats.tx_fifo_errors;
-    stats->tx_heartbeat_errors = ovsr.stats.tx_heartbeat_errors;
-    stats->tx_window_errors = ovsr.stats.tx_window_errors;
+    stats->rx_packets = reply.stats->rx_packets;
+    stats->tx_packets = reply.stats->tx_packets;
+    stats->rx_bytes = reply.stats->rx_bytes;
+    stats->tx_bytes = reply.stats->tx_bytes;
+    stats->rx_errors = reply.stats->rx_errors;
+    stats->tx_errors = reply.stats->tx_errors;
+    stats->rx_dropped = reply.stats->rx_dropped;
+    stats->tx_dropped = reply.stats->tx_dropped;
+    stats->multicast = reply.stats->multicast;
+    stats->collisions = reply.stats->collisions;
+    stats->rx_length_errors = reply.stats->rx_length_errors;
+    stats->rx_over_errors = reply.stats->rx_over_errors;
+    stats->rx_crc_errors = reply.stats->rx_crc_errors;
+    stats->rx_frame_errors = reply.stats->rx_frame_errors;
+    stats->rx_fifo_errors = reply.stats->rx_fifo_errors;
+    stats->rx_missed_errors = reply.stats->rx_missed_errors;
+    stats->tx_aborted_errors = reply.stats->tx_aborted_errors;
+    stats->tx_carrier_errors = reply.stats->tx_carrier_errors;
+    stats->tx_fifo_errors = reply.stats->tx_fifo_errors;
+    stats->tx_heartbeat_errors = reply.stats->tx_heartbeat_errors;
+    stats->tx_window_errors = reply.stats->tx_window_errors;
+
+    ofpbuf_delete(buf);
 
     return 0;
 }
@@ -359,34 +429,38 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 int
 netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 {
-    struct odp_vport_stats_req ovsr;
+    struct rtnl_link_stats64 rtnl_stats;
+    struct dpif_linux_vport vport;
     int err;
 
-    ovs_strlcpy(ovsr.devname, netdev_get_name(netdev), sizeof ovsr.devname);
+    rtnl_stats.rx_packets = stats->rx_packets;
+    rtnl_stats.tx_packets = stats->tx_packets;
+    rtnl_stats.rx_bytes = stats->rx_bytes;
+    rtnl_stats.tx_bytes = stats->tx_bytes;
+    rtnl_stats.rx_errors = stats->rx_errors;
+    rtnl_stats.tx_errors = stats->tx_errors;
+    rtnl_stats.rx_dropped = stats->rx_dropped;
+    rtnl_stats.tx_dropped = stats->tx_dropped;
+    rtnl_stats.multicast = stats->multicast;
+    rtnl_stats.collisions = stats->collisions;
+    rtnl_stats.rx_length_errors = stats->rx_length_errors;
+    rtnl_stats.rx_over_errors = stats->rx_over_errors;
+    rtnl_stats.rx_crc_errors = stats->rx_crc_errors;
+    rtnl_stats.rx_frame_errors = stats->rx_frame_errors;
+    rtnl_stats.rx_fifo_errors = stats->rx_fifo_errors;
+    rtnl_stats.rx_missed_errors = stats->rx_missed_errors;
+    rtnl_stats.tx_aborted_errors = stats->tx_aborted_errors;
+    rtnl_stats.tx_carrier_errors = stats->tx_carrier_errors;
+    rtnl_stats.tx_fifo_errors = stats->tx_fifo_errors;
+    rtnl_stats.tx_heartbeat_errors = stats->tx_heartbeat_errors;
+    rtnl_stats.tx_window_errors = stats->tx_window_errors;
 
-    ovsr.stats.rx_packets = stats->rx_packets;
-    ovsr.stats.tx_packets = stats->tx_packets;
-    ovsr.stats.rx_bytes = stats->rx_bytes;
-    ovsr.stats.tx_bytes = stats->tx_bytes;
-    ovsr.stats.rx_errors = stats->rx_errors;
-    ovsr.stats.tx_errors = stats->tx_errors;
-    ovsr.stats.rx_dropped = stats->rx_dropped;
-    ovsr.stats.tx_dropped = stats->tx_dropped;
-    ovsr.stats.multicast = stats->multicast;
-    ovsr.stats.collisions = stats->collisions;
-    ovsr.stats.rx_length_errors = stats->rx_length_errors;
-    ovsr.stats.rx_over_errors = stats->rx_over_errors;
-    ovsr.stats.rx_crc_errors = stats->rx_crc_errors;
-    ovsr.stats.rx_frame_errors = stats->rx_frame_errors;
-    ovsr.stats.rx_fifo_errors = stats->rx_fifo_errors;
-    ovsr.stats.rx_missed_errors = stats->rx_missed_errors;
-    ovsr.stats.tx_aborted_errors = stats->tx_aborted_errors;
-    ovsr.stats.tx_carrier_errors = stats->tx_carrier_errors;
-    ovsr.stats.tx_fifo_errors = stats->tx_fifo_errors;
-    ovsr.stats.tx_heartbeat_errors = stats->tx_heartbeat_errors;
-    ovsr.stats.tx_window_errors = stats->tx_window_errors;
+    dpif_linux_vport_init(&vport);
+    vport.cmd = ODP_VPORT_SET;
+    vport.name = netdev_get_name(netdev);
+    vport.stats = &rtnl_stats;
 
-    err = netdev_vport_do_ioctl(ODP_VPORT_STATS_SET, &ovsr);
+    err = dpif_linux_vport_transact(&vport, NULL, NULL);
 
     /* If the vport layer doesn't know about the device, that doesn't mean it
      * doesn't exist (after all were able to open it when netdev_open() was
@@ -615,14 +689,17 @@ netdev_vport_tnl_iface_init(void)
 static const char *
 netdev_vport_get_tnl_iface(const struct netdev *netdev)
 {
+    struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
     int ifindex;
     uint32_t route;
     struct netdev_dev_vport *ndv;
-    struct tnl_port_config *config;
 
     ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
-    config = (struct tnl_port_config *) ndv->config;
-    route = config->daddr;
+    if (tnl_port_config_from_nlattr(ndv->options->data, ndv->options->size,
+                                    a)) {
+        return NULL;
+    }
+    route = nl_attr_get_be32(a[ODP_TUNNEL_ATTR_DST_IPV4]);
 
     if (route_table_get_ifindex(route, &ifindex)) {
         struct name_node *nn;
@@ -637,22 +714,6 @@ netdev_vport_get_tnl_iface(const struct netdev *netdev)
 }
 
 /* Helper functions. */
-
-static int
-netdev_vport_do_ioctl(int cmd, void *arg)
-{
-    static int ioctl_fd = -1;
-
-    if (ioctl_fd < 0) {
-        ioctl_fd = open("/dev/net/dp0", O_RDONLY | O_NONBLOCK);
-        if (ioctl_fd < 0) {
-            VLOG_ERR_RL(&rl, "failed to open ioctl fd: %s", strerror(errno));
-            return errno;
-        }
-    }
-
-    return ioctl(ioctl_fd, cmd, arg) ? errno : 0;
-}
 
 static void
 netdev_vport_poll_notify(const struct netdev *netdev)
@@ -675,30 +736,46 @@ netdev_vport_poll_notify(const struct netdev *netdev)
 
 /* Code specific to individual vport types. */
 
+static void
+set_key(const struct shash *args, const char *name, uint16_t type,
+        struct ofpbuf *options)
+{
+    const char *s;
+
+    s = shash_find_data(args, name);
+    if (!s) {
+        s = shash_find_data(args, "key");
+        if (!s) {
+            s = "0";
+        }
+    }
+
+    if (!strcmp(s, "flow")) {
+        /* This is the default if no attribute is present. */
+    } else {
+        nl_msg_put_be64(options, type, htonll(strtoull(s, NULL, 0)));
+    }
+}
+
 static int
 parse_tunnel_config(const char *name, const char *type,
-                    const struct shash *args, void *configp)
+                    const struct shash *args, struct ofpbuf *options)
 {
     bool is_gre = false;
     bool is_ipsec = false;
-    struct tnl_port_config config;
     struct shash_node *node;
     bool ipsec_mech_set = false;
+    ovs_be32 daddr = htonl(0);
+    uint32_t flags;
 
-    memset(&config, 0, sizeof config);
-    config.flags |= TNL_F_PMTUD;
-    config.flags |= TNL_F_HDR_CACHE;
-
+    flags = TNL_F_PMTUD | TNL_F_HDR_CACHE;
     if (!strcmp(type, "gre")) {
         is_gre = true;
     } else if (!strcmp(type, "ipsec_gre")) {
         is_gre = true;
         is_ipsec = true;
-
-        config.flags |= TNL_F_IPSEC;
-
-        /* IPsec doesn't work when header caching is enabled. */
-        config.flags &= ~TNL_F_HDR_CACHE;
+        flags |= TNL_F_IPSEC;
+        flags &= ~TNL_F_HDR_CACHE;
     }
 
     SHASH_FOR_EACH (node, args) {
@@ -707,58 +784,39 @@ parse_tunnel_config(const char *name, const char *type,
             if (lookup_ip(node->data, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
             } else {
-                config.daddr = in_addr.s_addr;
+                daddr = in_addr.s_addr;
             }
         } else if (!strcmp(node->name, "local_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->data, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
-                config.saddr = in_addr.s_addr;
-            }
-        } else if (!strcmp(node->name, "key") && is_gre) {
-            if (!strcmp(node->data, "flow")) {
-                config.flags |= TNL_F_IN_KEY_MATCH;
-                config.flags |= TNL_F_OUT_KEY_ACTION;
-            } else {
-                uint64_t key = strtoull(node->data, NULL, 0);
-                config.out_key = config.in_key = htonll(key);
-            }
-        } else if (!strcmp(node->name, "in_key") && is_gre) {
-            if (!strcmp(node->data, "flow")) {
-                config.flags |= TNL_F_IN_KEY_MATCH;
-            } else {
-                config.in_key = htonll(strtoull(node->data, NULL, 0));
-            }
-        } else if (!strcmp(node->name, "out_key") && is_gre) {
-            if (!strcmp(node->data, "flow")) {
-                config.flags |= TNL_F_OUT_KEY_ACTION;
-            } else {
-                config.out_key = htonll(strtoull(node->data, NULL, 0));
+                nl_msg_put_be32(options, ODP_TUNNEL_ATTR_SRC_IPV4,
+                                in_addr.s_addr);
             }
         } else if (!strcmp(node->name, "tos")) {
             if (!strcmp(node->data, "inherit")) {
-                config.flags |= TNL_F_TOS_INHERIT;
+                flags |= TNL_F_TOS_INHERIT;
             } else {
-                config.tos = atoi(node->data);
+                nl_msg_put_u8(options, ODP_TUNNEL_ATTR_TOS, atoi(node->data));
             }
         } else if (!strcmp(node->name, "ttl")) {
             if (!strcmp(node->data, "inherit")) {
-                config.flags |= TNL_F_TTL_INHERIT;
+                flags |= TNL_F_TTL_INHERIT;
             } else {
-                config.ttl = atoi(node->data);
+                nl_msg_put_u8(options, ODP_TUNNEL_ATTR_TTL, atoi(node->data));
             }
         } else if (!strcmp(node->name, "csum") && is_gre) {
             if (!strcmp(node->data, "true")) {
-                config.flags |= TNL_F_CSUM;
+                flags |= TNL_F_CSUM;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
-                config.flags &= ~TNL_F_PMTUD;
+                flags &= ~TNL_F_PMTUD;
             }
         } else if (!strcmp(node->name, "header_cache")) {
             if (!strcmp(node->data, "false")) {
-                config.flags &= ~TNL_F_HDR_CACHE;
+                flags &= ~TNL_F_HDR_CACHE;
             }
         } else if (!strcmp(node->name, "peer_cert") && is_ipsec) {
             if (shash_find(args, "certificate")) {
@@ -787,9 +845,12 @@ parse_tunnel_config(const char *name, const char *type,
                     || !strcmp(node->name, "private_key")
                     || !strcmp(node->name, "use_ssl_cert"))) {
             /* Ignore options not used by the netdev. */
+        } else if (is_gre && (!strcmp(node->name, "key") &&
+                              !strcmp(node->name, "in_key") &&
+                              !strcmp(node->name, "out_key"))) {
+            /* Handled separately below. */
         } else {
-            VLOG_WARN("%s: unknown %s argument '%s'",
-                      name, type, node->name);
+            VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->name);
         }
     }
 
@@ -806,65 +867,122 @@ parse_tunnel_config(const char *name, const char *type,
         }
     }
 
-    if (!config.daddr) {
+    if (is_gre) {
+        set_key(args, "in_key", ODP_TUNNEL_ATTR_IN_KEY, options);
+        set_key(args, "out_key", ODP_TUNNEL_ATTR_OUT_KEY, options);
+    }
+
+    if (!daddr) {
         VLOG_WARN("%s: %s type requires valid 'remote_ip' argument",
                   name, type);
         return EINVAL;
     }
+    nl_msg_put_be32(options, ODP_TUNNEL_ATTR_DST_IPV4, daddr);
 
-    BUILD_ASSERT(sizeof config <= VPORT_CONFIG_SIZE);
-    memcpy(configp, &config, sizeof config);
+    nl_msg_put_u32(options, ODP_TUNNEL_ATTR_FLAGS, flags);
+
     return 0;
 }
 
 static int
-unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
-                      const void *config_, struct shash *args)
+tnl_port_config_from_nlattr(const struct nlattr *options, size_t options_len,
+                            struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1])
 {
-    const struct tnl_port_config *config = config_;
+    static const struct nl_policy odp_tunnel_policy[] = {
+        [ODP_TUNNEL_ATTR_FLAGS] = { .type = NL_A_U32 },
+        [ODP_TUNNEL_ATTR_DST_IPV4] = { .type = NL_A_BE32 },
+        [ODP_TUNNEL_ATTR_SRC_IPV4] = { .type = NL_A_BE32, .optional = true },
+        [ODP_TUNNEL_ATTR_IN_KEY] = { .type = NL_A_BE64, .optional = true },
+        [ODP_TUNNEL_ATTR_OUT_KEY] = { .type = NL_A_BE64, .optional = true },
+        [ODP_TUNNEL_ATTR_TOS] = { .type = NL_A_U8, .optional = true },
+        [ODP_TUNNEL_ATTR_TTL] = { .type = NL_A_U8, .optional = true },
+    };
+    struct ofpbuf buf;
 
-    if (!(config->flags & TNL_F_HDR_CACHE) == !(config->flags & TNL_F_IPSEC)) {
+    ofpbuf_use_const(&buf, options, options_len);
+    if (!nl_policy_parse(&buf, 0, odp_tunnel_policy,
+                         a, ARRAY_SIZE(odp_tunnel_policy))) {
+        return EINVAL;
+    }
+    return 0;
+}
+
+static uint64_t
+get_be64_or_zero(const struct nlattr *a)
+{
+    return a ? ntohll(nl_attr_get_be64(a)) : 0;
+}
+
+static int
+unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
+                      const struct nlattr *options, size_t options_len,
+                      struct shash *args)
+{
+    struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
+    ovs_be32 daddr;
+    uint32_t flags;
+    int error;
+
+    error = tnl_port_config_from_nlattr(options, options_len, a);
+    if (error) {
+        return error;
+    }
+
+    flags = nl_attr_get_u32(a[ODP_TUNNEL_ATTR_FLAGS]);
+    if (!(flags & TNL_F_HDR_CACHE) == !(flags & TNL_F_IPSEC)) {
         smap_add(args, "header_cache",
-                 config->flags & TNL_F_HDR_CACHE ? "true" : "false");
-    }
-    shash_add(args, "remote_ip", xasprintf(IP_FMT, IP_ARGS(&config->daddr)));
-    if (config->saddr) {
-        shash_add(args, "local_ip",
-                  xasprintf(IP_FMT, IP_ARGS(&config->saddr)));
+                 flags & TNL_F_HDR_CACHE ? "true" : "false");
     }
 
-    if ((config->flags & (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION))
-                      == (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION)) {
+    daddr = nl_attr_get_be32(a[ODP_TUNNEL_ATTR_DST_IPV4]);
+    shash_add(args, "remote_ip", xasprintf(IP_FMT, IP_ARGS(&daddr)));
+
+    if (a[ODP_TUNNEL_ATTR_SRC_IPV4]) {
+        ovs_be32 saddr = nl_attr_get_be32(a[ODP_TUNNEL_ATTR_SRC_IPV4]);
+        shash_add(args, "local_ip", xasprintf(IP_FMT, IP_ARGS(&saddr)));
+    }
+
+    if (!a[ODP_TUNNEL_ATTR_IN_KEY] && !a[ODP_TUNNEL_ATTR_OUT_KEY]) {
         smap_add(args, "key", "flow");
-    } else if (config->in_key && config->in_key == config->out_key) {
-        shash_add(args, "key",
-                  xasprintf("%"PRIu64, ntohll(config->in_key)));
     } else {
-        if (config->flags & TNL_F_IN_KEY_MATCH) {
-            smap_add(args, "in_key", "flow");
-        } else if (config->in_key) {
-            shash_add(args, "in_key",
-                      xasprintf("%"PRIu64, ntohll(config->in_key)));
-        }
+        uint64_t in_key = get_be64_or_zero(a[ODP_TUNNEL_ATTR_IN_KEY]);
+        uint64_t out_key = get_be64_or_zero(a[ODP_TUNNEL_ATTR_OUT_KEY]);
 
-        if (config->flags & TNL_F_OUT_KEY_ACTION) {
-            smap_add(args, "out_key", "flow");
-        } else if (config->out_key) {
-            shash_add(args, "out_key",
-                      xasprintf("%"PRIu64, ntohll(config->out_key)));
+        if (in_key && in_key == out_key) {
+            shash_add(args, "key", xasprintf("%"PRIu64, in_key));
+        } else {
+            if (!a[ODP_TUNNEL_ATTR_IN_KEY]) {
+                smap_add(args, "in_key", "flow");
+            } else if (in_key) {
+                shash_add(args, "in_key", xasprintf("%"PRIu64, in_key));
+            }
+
+            if (!a[ODP_TUNNEL_ATTR_OUT_KEY]) {
+                smap_add(args, "out_key", "flow");
+            } else if (out_key) {
+                shash_add(args, "out_key", xasprintf("%"PRIu64, out_key));
+            }
         }
     }
 
-    if (config->flags & TNL_F_TTL_INHERIT) {
+    if (flags & TNL_F_TTL_INHERIT) {
         smap_add(args, "tos", "inherit");
-    } else if (config->ttl) {
-        shash_add(args, "tos", xasprintf("%"PRIu8, config->ttl));
+    } else if (a[ODP_TUNNEL_ATTR_TTL]) {
+        int ttl = nl_attr_get_u8(a[ODP_TUNNEL_ATTR_TTL]);
+        shash_add(args, "tos", xasprintf("%d", ttl));
     }
 
-    if (config->flags & TNL_F_CSUM) {
+    if (flags & TNL_F_TOS_INHERIT) {
+        smap_add(args, "tos", "inherit");
+    } else if (a[ODP_TUNNEL_ATTR_TOS]) {
+        int tos = nl_attr_get_u8(a[ODP_TUNNEL_ATTR_TOS]);
+        shash_add(args, "tos", xasprintf("%d", tos));
+    }
+
+    if (flags & TNL_F_CSUM) {
         smap_add(args, "csum", "true");
     }
-    if (!(config->flags & TNL_F_PMTUD)) {
+    if (!(flags & TNL_F_PMTUD)) {
         smap_add(args, "pmtud", "false");
     }
 
@@ -873,7 +991,7 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 
 static int
 parse_patch_config(const char *name, const char *type OVS_UNUSED,
-                   const struct shash *args, void *configp)
+                   const struct shash *args, struct ofpbuf *options)
 {
     const char *peer;
 
@@ -888,7 +1006,7 @@ parse_patch_config(const char *name, const char *type OVS_UNUSED,
         return EINVAL;
     }
 
-    if (strlen(peer) >= MIN(IFNAMSIZ, VPORT_CONFIG_SIZE)) {
+    if (strlen(peer) >= IFNAMSIZ) {
         VLOG_WARN("%s: patch 'peer' arg too long", name);
         return EINVAL;
     }
@@ -898,22 +1016,32 @@ parse_patch_config(const char *name, const char *type OVS_UNUSED,
         return EINVAL;
     }
 
-    strncpy(configp, peer, VPORT_CONFIG_SIZE);
+    nl_msg_put_string(options, ODP_PATCH_ATTR_PEER, peer);
 
     return 0;
 }
 
 static int
 unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
-                     const void *config_, struct shash *args)
+                     const struct nlattr *options, size_t options_len,
+                     struct shash *args)
 {
-    char peer[IFNAMSIZ];
+    static const struct nl_policy odp_patch_policy[] = {
+        [ODP_PATCH_ATTR_PEER] = { .type = NL_A_STRING,
+                               .max_len = IFNAMSIZ,
+                               .optional = false }
+    };
 
-    ovs_strlcpy(peer, config_, MIN(sizeof peer, VPORT_CONFIG_SIZE));
-    if (peer[0]) {
-        smap_add(args, "peer", peer);
+    struct nlattr *a[ARRAY_SIZE(odp_patch_policy)];
+    struct ofpbuf buf;
+
+    ofpbuf_use_const(&buf, options, options_len);
+    if (!nl_policy_parse(&buf, 0, odp_patch_policy,
+                         a, ARRAY_SIZE(odp_patch_policy))) {
+        return EINVAL;
     }
 
+    smap_add(args, "peer", nl_attr_get_string(a[ODP_PATCH_ATTR_PEER]));
     return 0;
 }
 

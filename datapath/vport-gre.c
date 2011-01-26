@@ -34,17 +34,16 @@ struct gre_base_hdr {
 	__be16 protocol;
 };
 
-static int gre_hdr_len(const struct tnl_port_config *port_config)
+static int gre_hdr_len(const struct tnl_mutable_config *mutable)
 {
 	int len;
 
 	len = GRE_HEADER_SECTION;
 
-	if (port_config->flags & TNL_F_CSUM)
+	if (mutable->flags & TNL_F_CSUM)
 		len += GRE_HEADER_SECTION;
 
-	if (port_config->out_key ||
-	    port_config->flags & TNL_F_OUT_KEY_ACTION)
+	if (mutable->out_key || mutable->flags & TNL_F_OUT_KEY_ACTION)
 		len += GRE_HEADER_SECTION;
 
 	return len;
@@ -70,18 +69,17 @@ static void gre_build_header(const struct vport *vport,
 	greh->protocol = htons(ETH_P_TEB);
 	greh->flags = 0;
 
-	if (mutable->port_config.flags & TNL_F_CSUM) {
+	if (mutable->flags & TNL_F_CSUM) {
 		greh->flags |= GRE_CSUM;
 		*options = 0;
 		options++;
 	}
 
-	if (mutable->port_config.out_key ||
-	    mutable->port_config.flags & TNL_F_OUT_KEY_ACTION)
+	if (mutable->out_key || mutable->flags & TNL_F_OUT_KEY_ACTION)
 		greh->flags |= GRE_KEY;
 
-	if (mutable->port_config.out_key)
-		*options = be64_get_low32(mutable->port_config.out_key);
+	if (mutable->out_key)
+		*options = be64_get_low32(mutable->out_key);
 }
 
 static struct sk_buff *gre_update_header(const struct vport *vport,
@@ -93,12 +91,12 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 					       - GRE_HEADER_SECTION);
 
 	/* Work backwards over the options so the checksum is last. */
-	if (mutable->port_config.flags & TNL_F_OUT_KEY_ACTION) {
+	if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
 		*options = be64_get_low32(OVS_CB(skb)->tun_id);
 		options--;
 	}
 
-	if (mutable->port_config.flags & TNL_F_CSUM)
+	if (mutable->flags & TNL_F_CSUM)
 		*(__sum16 *)options = csum_fold(skb_checksum(skb,
 						skb_transport_offset(skb),
 						skb->len - skb_transport_offset(skb),
@@ -206,14 +204,14 @@ static void gre_err(struct sk_buff *skb, u32 info)
 	 * out key as if it were the in key and then check to see if the input
 	 * and output keys are the same.
 	 */
-	if (mutable->port_config.in_key != mutable->port_config.out_key)
+	if (mutable->in_key != mutable->out_key)
 		return;
 
-	if (!!(mutable->port_config.flags & TNL_F_IN_KEY_MATCH) !=
-	    !!(mutable->port_config.flags & TNL_F_OUT_KEY_ACTION))
+	if (!!(mutable->flags & TNL_F_IN_KEY_MATCH) !=
+	    !!(mutable->flags & TNL_F_OUT_KEY_ACTION))
 		return;
 
-	if ((mutable->port_config.flags & TNL_F_CSUM) && !(flags & GRE_CSUM))
+	if ((mutable->flags & TNL_F_CSUM) && !(flags & GRE_CSUM))
 		return;
 
 	tunnel_hdr_len += iph->ihl << 2;
@@ -336,7 +334,7 @@ static int gre_rcv(struct sk_buff *skb)
 		goto error;
 	}
 
-	if (mutable->port_config.flags & TNL_F_IN_KEY_MATCH)
+	if (mutable->flags & TNL_F_IN_KEY_MATCH)
 		OVS_CB(skb)->tun_id = key;
 	else
 		OVS_CB(skb)->tun_id = 0;
@@ -392,13 +390,13 @@ const struct vport_ops gre_vport_ops = {
 	.init		= gre_init,
 	.exit		= gre_exit,
 	.create		= gre_create,
-	.modify		= tnl_modify,
 	.destroy	= tnl_destroy,
 	.set_mtu	= tnl_set_mtu,
 	.set_addr	= tnl_set_addr,
 	.get_name	= tnl_get_name,
 	.get_addr	= tnl_get_addr,
-	.get_config	= tnl_get_config,
+	.get_options	= tnl_get_options,
+	.set_options	= tnl_set_options,
 	.get_dev_flags	= vport_gen_get_dev_flags,
 	.is_running	= vport_gen_is_running,
 	.get_operstate	= vport_gen_get_operstate,

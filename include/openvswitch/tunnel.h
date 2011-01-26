@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -43,24 +43,30 @@
 #include <linux/types.h>
 #include "openvswitch/datapath-protocol.h"
 
-#define TNL_F_CSUM		(1 << 1) /* Checksum packets. */
-#define TNL_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
-#define TNL_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
-#define TNL_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
-#define TNL_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
-#define TNL_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
-#define TNL_F_HDR_CACHE		(1 << 7) /* Enable tunnel header caching. */
-#define TNL_F_IPSEC		(1 << 8) /* Traffic is IPsec encrypted. */
-
-/* This goes in the "config" member of struct odp_port for tunnel vports. */
-struct tnl_port_config {
-	__aligned_be64	in_key;
-	__aligned_be64	out_key;
-	__u32		flags;
-	__be32		saddr;
-	__be32		daddr;
-	__u8		tos;
-	__u8		ttl;
+/* ODP_VPORT_ATTR_OPTIONS attributes for tunnels.
+ *
+ * ODP_TUNNEL_ATTR_FLAGS and ODP_TUNNEL_ATTR_DST_IPV4 are required.  All other
+ * attributes are optional.
+ */
+enum {
+	ODP_TUNNEL_ATTR_UNSPEC,
+	ODP_TUNNEL_ATTR_FLAGS,    /* 32-bit TNL_F_*. */
+	ODP_TUNNEL_ATTR_DST_IPV4, /* IPv4 destination address. */
+	ODP_TUNNEL_ATTR_SRC_IPV4, /* IPv4 source address. */
+	ODP_TUNNEL_ATTR_OUT_KEY,  /* __be64 key to use on output. */
+	ODP_TUNNEL_ATTR_IN_KEY,   /* __be64 key to match on input. */
+	ODP_TUNNEL_ATTR_TOS,      /* 8-bit TOS value. */
+	ODP_TUNNEL_ATTR_TTL,      /* 8-bit TTL value. */
+	__ODP_TUNNEL_ATTR_MAX
 };
+
+#define ODP_TUNNEL_ATTR_MAX (__ODP_TUNNEL_ATTR_MAX - 1)
+
+#define TNL_F_CSUM		(1 << 0) /* Checksum packets. */
+#define TNL_F_TOS_INHERIT	(1 << 1) /* Inherit the ToS from the inner packet. */
+#define TNL_F_TTL_INHERIT	(1 << 2) /* Inherit the TTL from the inner packet. */
+#define TNL_F_PMTUD		(1 << 3) /* Enable path MTU discovery. */
+#define TNL_F_HDR_CACHE		(1 << 4) /* Enable tunnel header caching. */
+#define TNL_F_IPSEC		(1 << 5) /* Traffic is IPsec encrypted. */
 
 #endif /* openvswitch/tunnel.h */

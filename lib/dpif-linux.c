@@ -70,12 +70,11 @@ struct dpif_linux {
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
 static int do_ioctl(const struct dpif *, int cmd, const void *arg);
-static int lookup_internal_device(const char *name, int *dp_idx, int *port_no);
-static int lookup_minor(const char *name, int *minor);
-static int finish_open(struct dpif *, const char *local_ifname);
+static int open_dpif(const struct dpif_linux_vport *local_vport,
+                     struct dpif **);
 static int get_openvswitch_major(void);
-static int create_minor(const char *name, int minor, struct dpif **dpifp);
-static int open_minor(int minor, struct dpif **dpifp);
+static int create_minor(const char *name, int minor);
+static int open_minor(int minor, int *fdp);
 static int make_openvswitch_device(int minor, char **fnp);
 static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
                                     void *dpif);
@@ -122,60 +121,103 @@ static int
 dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
                 bool create, struct dpif **dpifp)
 {
+    struct dpif_linux_vport request, reply;
+    struct ofpbuf *buf;
     int minor;
+    int error;
 
     minor = !strncmp(name, "dp", 2)
             && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
         if (minor >= 0) {
-            return create_minor(name, minor, dpifp);
-        } else {
-            /* Scan for unused minor number. */
-            for (minor = 0; minor < ODP_MAX; minor++) {
-                int error = create_minor(name, minor, dpifp);
-                if (error != EBUSY) {
-                    return error;
-                }
-            }
-
-            /* All datapath numbers in use. */
-            return ENOBUFS;
-        }
-    } else {
-        struct dpif_linux *dpif;
-        struct odp_port port;
-        int error;
-
-        if (minor < 0) {
-            error = lookup_minor(name, &minor);
+            error = create_minor(name, minor);
             if (error) {
                 return error;
             }
-        }
+        } else {
+            /* Scan for unused minor number. */
+            for (minor = 0; ; minor++) {
+                if (minor >= ODP_MAX) {
+                    /* All datapath numbers in use. */
+                    return ENOBUFS;
+                }
 
-        error = open_minor(minor, dpifp);
-        if (error) {
-            return error;
-        }
-        dpif = dpif_linux_cast(*dpifp);
-
-        /* We need the local port's ifindex for the poll function.  Start by
-         * getting the local port's name. */
-        memset(&port, 0, sizeof port);
-        port.port = ODPP_LOCAL;
-        if (ioctl(dpif->fd, ODP_VPORT_QUERY, &port)) {
-            error = errno;
-            if (error != ENODEV) {
-                VLOG_WARN("%s: probe returned unexpected error: %s",
-                          dpif_name(*dpifp), strerror(error));
+                error = create_minor(name, minor);
+                if (!error) {
+                    break;
+                } else if (error != EBUSY) {
+                    return error;
+                }
             }
-            dpif_uninit(*dpifp, true);
-            return error;
         }
-
-        /* Then use that to finish up opening. */
-        return finish_open(&dpif->dpif, port.devname);
     }
+
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_VPORT_GET;
+    request.port_no = ODPP_LOCAL;
+    if (minor >= 0) {
+        request.dp_idx = minor;
+    } else {
+        request.name = name;
+    }
+
+    error = dpif_linux_vport_transact(&request, &reply, &buf);
+    if (error) {
+        return error;
+    } else if (reply.port_no != ODPP_LOCAL) {
+        /* This is an Open vSwitch device but not the local port.  We
+         * intentionally support only using the name of the local port as the
+         * name of a datapath; otherwise, it would be too difficult to
+         * enumerate all the names of a datapath. */
+        error = EOPNOTSUPP;
+    } else {
+        error = open_dpif(&reply, dpifp);
+    }
+
+    ofpbuf_delete(buf);
+    return error;
+}
+
+static int
+open_dpif(const struct dpif_linux_vport *local_vport, struct dpif **dpifp)
+{
+    int dp_idx = local_vport->dp_idx;
+    struct dpif_linux *dpif;
+    char *name;
+    int error;
+    int fd;
+
+    error = open_minor(dp_idx, &fd);
+    if (error) {
+        goto error;
+    }
+
+    dpif = xmalloc(sizeof *dpif);
+    error = rtnetlink_link_notifier_register(&dpif->port_notifier,
+                                             dpif_linux_port_changed, dpif);
+    if (error) {
+        goto error_free;
+    }
+
+    name = xasprintf("dp%d", dp_idx);
+    dpif_init(&dpif->dpif, &dpif_linux_class, name, dp_idx, dp_idx);
+    free(name);
+
+    dpif->fd = fd;
+    dpif->local_ifname = xstrdup(local_vport->name);
+    dpif->local_ifindex = local_vport->ifindex;
+    dpif->minor = dp_idx;
+    shash_init(&dpif->changed_ports);
+    dpif->change_error = false;
+    *dpifp = &dpif->dpif;
+
+    return 0;
+
+error_free:
+    free(dpif);
+    close(fd);
+error:
+    return error;
 }
 
 static void
@@ -232,118 +274,88 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
     return do_ioctl(dpif_, ODP_SET_DROP_FRAGS, &drop_frags_int);
 }
 
-static const char *
-vport_type_to_netdev_type(const struct odp_port *odp_port)
-{
-    struct tnl_port_config tnl_config;
-
-    switch (odp_port->type) {
-    case ODP_VPORT_TYPE_UNSPEC:
-        break;
-
-    case ODP_VPORT_TYPE_NETDEV:
-        return "system";
-
-    case ODP_VPORT_TYPE_INTERNAL:
-        return "internal";
-
-    case ODP_VPORT_TYPE_PATCH:
-        return "patch";
-
-    case ODP_VPORT_TYPE_GRE:
-        memcpy(&tnl_config, odp_port->config, sizeof tnl_config);
-        return tnl_config.flags & TNL_F_IPSEC ? "ipsec_gre" : "gre";
-
-    case ODP_VPORT_TYPE_CAPWAP:
-        return "capwap";
-
-    case __ODP_VPORT_TYPE_MAX:
-        break;
-    }
-
-    VLOG_WARN_RL(&error_rl, "dp%d: port `%s' has unsupported type %"PRIu32,
-                 odp_port->dp_idx, odp_port->devname, odp_port->type);
-    return "unknown";
-}
-
-static enum odp_vport_type
-netdev_type_to_vport_type(const char *type)
-{
-    return (!strcmp(type, "system") ? ODP_VPORT_TYPE_NETDEV
-            : !strcmp(type, "internal") ? ODP_VPORT_TYPE_INTERNAL
-            : !strcmp(type, "patch") ? ODP_VPORT_TYPE_PATCH
-            : (!strcmp(type, "gre")
-               || !strcmp(type, "ipsec_gre")) ? ODP_VPORT_TYPE_GRE
-            : !strcmp(type, "capwap") ? ODP_VPORT_TYPE_CAPWAP
-            : ODP_VPORT_TYPE_UNSPEC);
-}
-
 static int
-dpif_linux_port_add(struct dpif *dpif, struct netdev *netdev,
+dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
                     uint16_t *port_nop)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     const char *name = netdev_get_name(netdev);
     const char *type = netdev_get_type(netdev);
-    struct odp_port port;
+    struct dpif_linux_vport request, reply;
+    const struct ofpbuf *options;
+    struct ofpbuf *buf;
     int error;
 
-    memset(&port, 0, sizeof port);
-    strncpy(port.devname, name, sizeof port.devname);
-    netdev_vport_get_config(netdev, port.config);
-
-    port.type = netdev_type_to_vport_type(type);
-    if (port.type == ODP_VPORT_TYPE_UNSPEC) {
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_VPORT_NEW;
+    request.dp_idx = dpif->minor;
+    request.type = netdev_vport_get_vport_type(netdev);
+    if (request.type == ODP_VPORT_TYPE_UNSPEC) {
         VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
                      "unsupported type `%s'",
-                     dpif_name(dpif), name, type);
+                     dpif_name(dpif_), name, type);
         return EINVAL;
     }
+    request.name = name;
 
-    error = do_ioctl(dpif, ODP_VPORT_ATTACH, &port);
+    options = netdev_vport_get_options(netdev);
+    if (options && options->size) {
+        request.options = options->data;
+        request.options_len = options->size;
+    }
+
+    error = dpif_linux_vport_transact(&request, &reply, &buf);
     if (!error) {
-        *port_nop = port.port;
+        *port_nop = reply.port_no;
+        ofpbuf_delete(buf);
     }
 
     return error;
 }
 
 static int
-dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no_)
+dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
 {
-    int port_no = port_no_;     /* Kernel expects an "int". */
-    return do_ioctl(dpif_, ODP_VPORT_DETACH, &port_no);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_vport vport;
+
+    dpif_linux_vport_init(&vport);
+    vport.cmd = ODP_VPORT_DEL;
+    vport.dp_idx = dpif->minor;
+    vport.port_no = port_no;
+    return dpif_linux_vport_transact(&vport, NULL, NULL);
 }
 
 static int
 dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
                         const char *port_name, struct dpif_port *dpif_port)
 {
-    struct odp_port odp_port;
+    struct dpif_linux_vport request;
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
     int error;
 
-    memset(&odp_port, 0, sizeof odp_port);
-    odp_port.port = port_no;
-    strncpy(odp_port.devname, port_name, sizeof odp_port.devname);
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_VPORT_GET;
+    request.dp_idx = dpif_linux_cast(dpif)->minor;
+    request.port_no = port_no;
+    request.name = port_name;
 
-    error = do_ioctl(dpif, ODP_VPORT_QUERY, &odp_port);
-    if (error) {
-        return error;
-    } else if (odp_port.dp_idx != dpif_linux_cast(dpif)->minor) {
-        /* A vport named 'port_name' exists but in some other datapath.  */
-        return ENOENT;
-    } else {
-        dpif_port->name = xstrdup(odp_port.devname);
-        dpif_port->type = xstrdup(vport_type_to_netdev_type(&odp_port));
-        dpif_port->port_no = odp_port.port;
-        return 0;
+    error = dpif_linux_vport_transact(&request, &reply, &buf);
+    if (!error) {
+        dpif_port->name = xstrdup(reply.name);
+        dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
+        dpif_port->port_no = reply.port_no;
+        ofpbuf_delete(buf);
     }
+    return error;
 }
 
 static int
 dpif_linux_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
                                 struct dpif_port *dpif_port)
 {
-    return dpif_linux_port_query__(dpif, port_no, "", dpif_port);
+    return dpif_linux_port_query__(dpif, port_no, NULL, dpif_port);
 }
 
 static int
@@ -359,40 +371,52 @@ dpif_linux_flow_flush(struct dpif *dpif_)
     return do_ioctl(dpif_, ODP_FLOW_FLUSH, NULL);
 }
 
+struct dpif_linux_port_state {
+    struct ofpbuf *buf;
+    uint32_t next;
+};
+
 static int
 dpif_linux_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    *statep = xzalloc(sizeof(struct odp_port));
+    *statep = xzalloc(sizeof(struct dpif_linux_port_state));
     return 0;
 }
 
 static int
-dpif_linux_port_dump_next(const struct dpif *dpif, void *state,
+dpif_linux_port_dump_next(const struct dpif *dpif, void *state_,
                           struct dpif_port *dpif_port)
 {
-    struct odp_port *odp_port = state;
-    struct odp_vport_dump dump;
+    struct dpif_linux_port_state *state = state_;
+    struct dpif_linux_vport request, reply;
+    struct ofpbuf *buf;
     int error;
 
-    dump.port = odp_port;
-    dump.port_no = odp_port->port;
-    error = do_ioctl(dpif, ODP_VPORT_DUMP, &dump);
+    ofpbuf_delete(state->buf);
+    state->buf = NULL;
+
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_VPORT_DUMP;
+    request.dp_idx = dpif_linux_cast(dpif)->minor;
+    request.port_no = state->next;
+    error = dpif_linux_vport_transact(&request, &reply, &buf);
     if (error) {
-        return error;
-    } else if (odp_port->devname[0] == '\0') {
-        return EOF;
+        return error == ENODEV ? EOF : error;
     } else {
-        dpif_port->name = odp_port->devname;
-        dpif_port->type = (char *) vport_type_to_netdev_type(odp_port);
-        dpif_port->port_no = odp_port->port;
-        odp_port->port++;
+        dpif_port->name = (char *) reply.name;
+        dpif_port->type = (char *) netdev_vport_get_netdev_type(&reply);
+        dpif_port->port_no = reply.port_no;
+        state->buf = buf;
+        state->next = reply.port_no + 1;
         return 0;
     }
 }
 
 static int
-dpif_linux_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+dpif_linux_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
+    struct dpif_linux_port_state *state = state_;
+    ofpbuf_delete(state->buf);
     free(state);
     return 0;
 }
@@ -669,75 +693,22 @@ do_ioctl(const struct dpif *dpif_, int cmd, const void *arg)
     return ioctl(dpif->fd, cmd, arg) ? errno : 0;
 }
 
-static int
-lookup_internal_device(const char *name, int *dp_idx, int *port_no)
-{
-    struct odp_port odp_port;
-    static int dp0_fd = -1;
-
-    if (dp0_fd < 0) {
-        int error;
-        char *fn;
-
-        error = make_openvswitch_device(0, &fn);
-        if (error) {
-            return error;
-        }
-
-        dp0_fd = open(fn, O_RDONLY | O_NONBLOCK);
-        if (dp0_fd < 0) {
-            VLOG_WARN_RL(&error_rl, "%s: open failed (%s)",
-                         fn, strerror(errno));
-            free(fn);
-            return errno;
-        }
-        free(fn);
-    }
-
-    memset(&odp_port, 0, sizeof odp_port);
-    strncpy(odp_port.devname, name, sizeof odp_port.devname);
-    if (ioctl(dp0_fd, ODP_VPORT_QUERY, &odp_port)) {
-        if (errno != ENODEV) {
-            VLOG_WARN_RL(&error_rl, "%s: vport query failed (%s)",
-                         name, strerror(errno));
-        }
-        return errno;
-    } else if (odp_port.type == ODP_VPORT_TYPE_INTERNAL) {
-        *dp_idx = odp_port.dp_idx;
-        *port_no = odp_port.port;
-        return 0;
-    } else {
-        return EINVAL;
-    }
-}
-
-static int
-lookup_minor(const char *name, int *minorp)
-{
-    int minor, port_no;
-    int error;
-
-    error = lookup_internal_device(name, &minor, &port_no);
-    if (error) {
-        return error;
-    } else if (port_no != ODPP_LOCAL) {
-        /* This is an Open vSwitch device but not the local port.  We
-         * intentionally support only using the name of the local port as the
-         * name of a datapath; otherwise, it would be too difficult to
-         * enumerate all the names of a datapath. */
-        return EOPNOTSUPP;
-    } else {
-        *minorp = minor;
-        return 0;
-    }
-}
-
 bool
 dpif_linux_is_internal_device(const char *name)
 {
-    int minor, port_no;
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
+    int error;
 
-    return !lookup_internal_device(name, &minor, &port_no);
+    error = dpif_linux_vport_get(name, &reply, &buf);
+    if (!error) {
+        ofpbuf_delete(buf);
+    } else if (error != ENODEV) {
+        VLOG_WARN_RL(&error_rl, "%s: vport query failed (%s)",
+                     name, strerror(error));
+    }
+
+    return reply.type == ODP_VPORT_TYPE_INTERNAL;
 }
 
 static int
@@ -859,78 +830,41 @@ get_major(const char *target)
 }
 
 static int
-finish_open(struct dpif *dpif_, const char *local_ifname)
+create_minor(const char *name, int minor)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    dpif->local_ifname = xstrdup(local_ifname);
-    dpif->local_ifindex = if_nametoindex(local_ifname);
-    if (!dpif->local_ifindex) {
-        int error = errno;
-        dpif_uninit(dpif_, true);
-        VLOG_WARN("could not get ifindex of %s device: %s",
-                  local_ifname, strerror(errno));
+    int error;
+    int fd;
+
+    error = open_minor(minor, &fd);
+    if (error) {
         return error;
     }
-    return 0;
-}
 
-static int
-create_minor(const char *name, int minor, struct dpif **dpifp)
-{
-    int error = open_minor(minor, dpifp);
-    if (!error) {
-        error = do_ioctl(*dpifp, ODP_DP_CREATE, name);
-        if (!error) {
-            error = finish_open(*dpifp, name);
-        } else {
-            dpif_uninit(*dpifp, true);
-        }
-    }
+    error = ioctl(fd, ODP_DP_CREATE, name) ? errno : 0;
+    close(fd);
     return error;
 }
 
 static int
-open_minor(int minor, struct dpif **dpifp)
+open_minor(int minor, int *fdp)
 {
     int error;
     char *fn;
-    int fd;
 
     error = make_openvswitch_device(minor, &fn);
     if (error) {
         return error;
     }
 
-    fd = open(fn, O_RDONLY | O_NONBLOCK);
-    if (fd >= 0) {
-        struct dpif_linux *dpif = xmalloc(sizeof *dpif);
-        error = rtnetlink_link_notifier_register(&dpif->port_notifier,
-                                                 dpif_linux_port_changed,
-                                                 dpif);
-        if (!error) {
-            char *name;
-
-            name = xasprintf("dp%d", minor);
-            dpif_init(&dpif->dpif, &dpif_linux_class, name, minor, minor);
-            free(name);
-
-            dpif->fd = fd;
-            dpif->local_ifname = NULL;
-            dpif->minor = minor;
-            dpif->local_ifindex = 0;
-            shash_init(&dpif->changed_ports);
-            dpif->change_error = false;
-            *dpifp = &dpif->dpif;
-        } else {
-            free(dpif);
-        }
-    } else {
+    *fdp = open(fn, O_RDONLY | O_NONBLOCK);
+    if (*fdp < 0) {
         error = errno;
         VLOG_WARN("%s: open failed (%s)", fn, strerror(error));
+        free(fn);
+        return error;
     }
     free(fn);
-
-    return error;
+    return 0;
 }
 
 static void
@@ -952,3 +886,204 @@ dpif_linux_port_changed(const struct rtnetlink_link_change *change,
         dpif->change_error = true;
     }
 }
+
+/* Parses the contents of 'buf', which contains a "struct odp_vport" followed
+ * by Netlink attributes, into 'vport'.  Returns 0 if successful, otherwise a
+ * positive errno value.
+ *
+ * 'vport' will contain pointers into 'buf', so the caller should not free
+ * 'buf' while 'vport' is still in use. */
+static int
+dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
+                             const struct ofpbuf *buf)
+{
+    static const struct nl_policy odp_vport_policy[] = {
+        [ODP_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32 },
+        [ODP_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
+        [ODP_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
+        [ODP_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                   .min_len = sizeof(struct rtnl_link_stats64),
+                                   .max_len = sizeof(struct rtnl_link_stats64),
+                                   .optional = true },
+        [ODP_VPORT_ATTR_ADDRESS] = { .type = NL_A_UNSPEC,
+                                     .min_len = ETH_ADDR_LEN,
+                                     .max_len = ETH_ADDR_LEN,
+                                     .optional = true },
+        [ODP_VPORT_ATTR_MTU] = { .type = NL_A_U32, .optional = true },
+        [ODP_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [ODP_VPORT_ATTR_IFINDEX] = { .type = NL_A_U32, .optional = true },
+        [ODP_VPORT_ATTR_IFLINK] = { .type = NL_A_U32, .optional = true },
+    };
+
+    struct odp_vport *odp_vport;
+    struct nlattr *a[ARRAY_SIZE(odp_vport_policy)];
+
+    dpif_linux_vport_init(vport);
+
+    if (!nl_policy_parse(buf, sizeof *odp_vport, odp_vport_policy,
+                         a, ARRAY_SIZE(odp_vport_policy))) {
+        return EINVAL;
+    }
+    odp_vport = buf->data;
+
+    vport->dp_idx = odp_vport->dp_idx;
+    vport->port_no = nl_attr_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
+    vport->type = nl_attr_get_u32(a[ODP_VPORT_ATTR_TYPE]);
+    vport->name = nl_attr_get_string(a[ODP_VPORT_ATTR_NAME]);
+    if (a[ODP_VPORT_ATTR_STATS]) {
+        vport->stats = nl_attr_get(a[ODP_VPORT_ATTR_STATS]);
+    }
+    if (a[ODP_VPORT_ATTR_ADDRESS]) {
+        vport->address = nl_attr_get(a[ODP_VPORT_ATTR_ADDRESS]);
+    }
+    if (a[ODP_VPORT_ATTR_MTU]) {
+        vport->mtu = nl_attr_get_u32(a[ODP_VPORT_ATTR_MTU]);
+    }
+    if (a[ODP_VPORT_ATTR_OPTIONS]) {
+        vport->options = nl_attr_get(a[ODP_VPORT_ATTR_OPTIONS]);
+        vport->options_len = nl_attr_get_size(a[ODP_VPORT_ATTR_OPTIONS]);
+    }
+    if (a[ODP_VPORT_ATTR_IFINDEX]) {
+        vport->ifindex = nl_attr_get_u32(a[ODP_VPORT_ATTR_IFINDEX]);
+    }
+    if (a[ODP_VPORT_ATTR_IFLINK]) {
+        vport->iflink = nl_attr_get_u32(a[ODP_VPORT_ATTR_IFLINK]);
+    }
+    return 0;
+}
+
+/* Appends to 'buf' (which must initially be empty) a "struct odp_vport"
+ * followed by Netlink attributes corresponding to 'vport'. */
+static void
+dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
+                           struct ofpbuf *buf)
+{
+    struct odp_vport *odp_vport;
+
+    ofpbuf_reserve(buf, sizeof odp_vport);
+
+    if (vport->port_no != UINT32_MAX) {
+        nl_msg_put_u32(buf, ODP_VPORT_ATTR_PORT_NO, vport->port_no);
+    }
+
+    if (vport->type != ODP_VPORT_TYPE_UNSPEC) {
+        nl_msg_put_u32(buf, ODP_VPORT_ATTR_TYPE, vport->type);
+    }
+
+    if (vport->name) {
+        nl_msg_put_string(buf, ODP_VPORT_ATTR_NAME, vport->name);
+    }
+
+    if (vport->stats) {
+        nl_msg_put_unspec(buf, ODP_VPORT_ATTR_STATS,
+                          vport->stats, sizeof *vport->stats);
+    }
+
+    if (vport->address) {
+        nl_msg_put_unspec(buf, ODP_VPORT_ATTR_ADDRESS,
+                          vport->address, ETH_ADDR_LEN);
+    }
+
+    if (vport->mtu) {
+        nl_msg_put_u32(buf, ODP_VPORT_ATTR_MTU, vport->mtu);
+    }
+
+    if (vport->options) {
+        nl_msg_put_nested(buf, ODP_VPORT_ATTR_OPTIONS,
+                          vport->options, vport->options_len);
+    }
+
+    if (vport->ifindex) {
+        nl_msg_put_u32(buf, ODP_VPORT_ATTR_IFINDEX, vport->ifindex);
+    }
+
+    if (vport->iflink) {
+        nl_msg_put_u32(buf, ODP_VPORT_ATTR_IFLINK, vport->iflink);
+    }
+
+    odp_vport = ofpbuf_push_uninit(buf, sizeof *odp_vport);
+    odp_vport->dp_idx = vport->dp_idx;
+    odp_vport->len = buf->size;
+    odp_vport->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
+}
+
+/* Clears 'vport' to "empty" values. */
+void
+dpif_linux_vport_init(struct dpif_linux_vport *vport)
+{
+    memset(vport, 0, sizeof *vport);
+    vport->dp_idx = UINT32_MAX;
+    vport->port_no = UINT32_MAX;
+}
+
+/* Executes 'request' in the kernel datapath.  If the command fails, returns a
+ * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
+ * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
+ * result of the command is expected to be an odp_vport also, which is decoded
+ * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
+ * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
+int
+dpif_linux_vport_transact(const struct dpif_linux_vport *request,
+                          struct dpif_linux_vport *reply,
+                          struct ofpbuf **bufp)
+{
+    static int dp0_fd = -1;
+    struct ofpbuf *buf = NULL;
+    int error;
+
+    assert((reply != NULL) == (bufp != NULL));
+    if (dp0_fd < 0) {
+        int fd;
+
+        error = open_minor(0, &fd);
+        if (error) {
+            goto error;
+        }
+        dp0_fd = fd;
+    }
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_vport_to_ofpbuf(request, buf);
+
+    error = ioctl(dp0_fd, request->cmd, buf->data) ? errno : 0;
+    if (error) {
+        goto error;
+    }
+
+    if (bufp) {
+        buf->size = ((struct odp_vport *) buf->data)->len;
+        error = dpif_linux_vport_from_ofpbuf(reply, buf);
+        if (error) {
+            goto error;
+        }
+        *bufp = buf;
+    } else {
+        ofpbuf_delete(buf);
+    }
+    return 0;
+
+error:
+    ofpbuf_delete(buf);
+    if (bufp) {
+        memset(reply, 0, sizeof *reply);
+        *bufp = NULL;
+    }
+    return error;
+}
+
+/* Obtains information about the kernel vport named 'name' and stores it into
+ * '*reply' and '*bufp'.  The caller must free '*bufp' when the reply is no
+ * longer needed ('reply' will contain pointers into '*bufp').  */
+int
+dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
+                     struct ofpbuf **bufp)
+{
+    struct dpif_linux_vport request;
+
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_VPORT_GET;
+    request.name = name;
+
+    return dpif_linux_vport_transact(&request, reply, bufp);
+}
+

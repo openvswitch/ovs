@@ -82,10 +82,11 @@
 #define ODP_GET_LISTEN_MASK     _IOW('O', 5, int)
 #define ODP_SET_LISTEN_MASK     _IOR('O', 6, int)
 
-#define ODP_VPORT_ATTACH        _IOR('O', 7, struct odp_port)
-#define ODP_VPORT_DETACH        _IOR('O', 8, int)
-#define ODP_VPORT_QUERY         _IOWR('O', 9, struct odp_port)
-#define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport_dump)
+#define ODP_VPORT_NEW           _IOR('O', 7, struct odp_vport)
+#define ODP_VPORT_DEL           _IOR('O', 8, struct odp_vport)
+#define ODP_VPORT_GET           _IOWR('O', 9, struct odp_vport)
+#define ODP_VPORT_SET           _IOR('O', 22, struct odp_vport)
+#define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport)
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flowvec)
 #define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
@@ -98,13 +99,6 @@
 #define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
 #define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
 
-#define ODP_VPORT_MOD           _IOR('O', 22, struct odp_port)
-#define ODP_VPORT_STATS_GET     _IOWR('O', 24, struct odp_vport_stats_req)
-#define ODP_VPORT_ETHER_GET     _IOWR('O', 25, struct odp_vport_ether)
-#define ODP_VPORT_ETHER_SET     _IOW('O', 26, struct odp_vport_ether)
-#define ODP_VPORT_MTU_GET       _IOWR('O', 27, struct odp_vport_mtu)
-#define ODP_VPORT_MTU_SET       _IOW('O', 28, struct odp_vport_mtu)
-#define ODP_VPORT_STATS_SET     _IOWR('O', 29, struct odp_vport_stats_req)
 
 struct odp_stats {
     /* Flows. */
@@ -176,16 +170,6 @@ struct odp_packet {
 	uint32_t len;
 };
 
-#define VPORT_CONFIG_SIZE     32
-struct odp_port {
-    char devname[16];           /* IFNAMSIZ */
-    uint32_t type;              /* One of ODP_VPORT_TYPE_*. */
-    uint16_t port;
-    uint16_t dp_idx;
-    uint32_t reserved2;
-    __aligned_u64 config[VPORT_CONFIG_SIZE / 8]; /* type-specific */
-};
-
 enum odp_vport_type {
 	ODP_VPORT_TYPE_UNSPEC,
 	ODP_VPORT_TYPE_NETDEV,   /* network device */
@@ -199,19 +183,45 @@ enum odp_vport_type {
 #define ODP_VPORT_TYPE_MAX (__ODP_VPORT_TYPE_MAX - 1)
 
 /**
- * struct odp_vport_dump - ODP_VPORT_DUMP argument.
- * @port: Points to port structure to fill in.
- * @port_no: Minimum port number of interest.
+ * struct odp_vport - header with basic information about a virtual port.
+ * @dp_idx: Number of datapath to which the vport belongs.
+ * @len: Length of this structure plus the Netlink attributes following it.
+ * @total_len: Total space available for kernel reply to request.
  *
- * Used to iterate through vports one at a time.  The kernel fills in @port
- * with the information for the configured port with the smallest port number
- * greater than or equal to @port_no.  If there is no such port, it sets
- * @port->devname to the empty string.
+ * Followed by &struct nlattr attributes, whose types are drawn from
+ * %ODP_VPORT_ATTR_*, up to a length of @len bytes including the &struct
+ * odp_vport header.
  */
-struct odp_vport_dump {
-    struct odp_port *port;
-    uint32_t port_no;
+struct odp_vport {
+	uint32_t dp_idx;
+	uint32_t len;
+	uint32_t total_len;
 };
+
+enum {
+	ODP_VPORT_ATTR_UNSPEC,
+	ODP_VPORT_ATTR_PORT_NO,	/* port number within datapath */
+	ODP_VPORT_ATTR_TYPE,	/* 32-bit ODP_VPORT_TYPE_* constant. */
+	ODP_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
+	ODP_VPORT_ATTR_STATS,	/* struct rtnl_link_stats64 */
+	ODP_VPORT_ATTR_ADDRESS, /* hardware address */
+	ODP_VPORT_ATTR_MTU,	/* 32-bit maximum transmission unit */
+	ODP_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
+	ODP_VPORT_ATTR_IFINDEX, /* 32-bit ifindex of backing netdev */
+	ODP_VPORT_ATTR_IFLINK,	/* 32-bit ifindex on which packets are sent */
+	__ODP_VPORT_ATTR_MAX
+};
+
+#define ODP_VPORT_ATTR_MAX (__ODP_VPORT_ATTR_MAX - 1)
+
+/* ODP_VPORT_ATTR_OPTIONS attributes for patch vports. */
+enum {
+	ODP_PATCH_ATTR_UNSPEC,
+	ODP_PATCH_ATTR_PEER,	/* name of peer vport, as a string */
+	__ODP_PATCH_ATTR_MAX
+};
+
+#define ODP_PATCH_ATTR_MAX (__ODP_PATCH_ATTR_MAX - 1)
 
 struct odp_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
@@ -351,33 +361,6 @@ struct odp_execute {
 
     const void *data;
     uint32_t length;
-};
-
-#define VPORT_TYPE_SIZE     16
-struct odp_vport_add {
-    char port_type[VPORT_TYPE_SIZE];
-    char devname[16];           /* IFNAMSIZ */
-    void *config;
-};
-
-struct odp_vport_mod {
-    char devname[16];           /* IFNAMSIZ */
-    void *config;
-};
-
-struct odp_vport_stats_req {
-    char devname[16];           /* IFNAMSIZ */
-    struct rtnl_link_stats64 stats;
-};
-
-struct odp_vport_ether {
-    char devname[16];           /* IFNAMSIZ */
-    unsigned char ether_addr[6];
-};
-
-struct odp_vport_mtu {
-    char devname[16];           /* IFNAMSIZ */
-    uint16_t mtu;
 };
 
 #endif  /* openvswitch/datapath-protocol.h */

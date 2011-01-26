@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,37 @@
 #define DPIF_LINUX_H 1
 
 #include <stdbool.h>
+#include "openvswitch/datapath-protocol.h"
+
+struct ofpbuf;
+
+struct dpif_linux_vport {
+    /* ioctl command argument. */
+    int cmd;
+
+    /* odp_vport header. */
+    uint32_t dp_idx;
+    uint32_t port_no;                      /* UINT32_MAX if unknown. */
+    enum odp_vport_type type;
+
+    /* Attributes. */
+    const char *name;                      /* ODP_VPORT_ATTR_NAME. */
+    const struct rtnl_link_stats64 *stats; /* ODP_VPORT_ATTR_STATS. */
+    const uint8_t *address;                /* ODP_VPORT_ATTR_ADDRESS. */
+    int mtu;                               /* ODP_VPORT_ATTR_MTU. */
+    const struct nlattr *options;          /* ODP_VPORT_ATTR_OPTIONS. */
+    size_t options_len;
+    int ifindex;                           /* ODP_VPORT_ATTR_IFINDEX. */
+    int iflink;                            /* ODP_VPORT_ATTR_IFLINK. */
+};
+
+void dpif_linux_vport_init(struct dpif_linux_vport *);
+
+int dpif_linux_vport_transact(const struct dpif_linux_vport *request,
+                              struct dpif_linux_vport *reply,
+                              struct ofpbuf **bufp);
+int dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
+                         struct ofpbuf **bufp);
 
 bool dpif_linux_is_internal_device(const char *name);
 

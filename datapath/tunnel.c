@@ -160,13 +160,13 @@ static void assign_cache_rcu(struct vport *vport, struct tnl_cache *new_cache)
 
 static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 {
-	if (mutable->port_config.flags & TNL_F_IN_KEY_MATCH) {
-		if (mutable->port_config.saddr)
+	if (mutable->flags & TNL_F_IN_KEY_MATCH) {
+		if (mutable->saddr)
 			return &local_remote_ports;
 		else
 			return &remote_ports;
 	} else {
-		if (mutable->port_config.saddr)
+		if (mutable->saddr)
 			return &key_local_remote_ports;
 		else
 			return &key_remote_ports;
@@ -193,9 +193,9 @@ static int port_cmp(const struct tbl_node *node, void *target)
 	lookup->mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
 	return (lookup->mutable->tunnel_type == lookup->tunnel_type &&
-		lookup->mutable->port_config.daddr == lookup->daddr &&
-		lookup->mutable->port_config.in_key == lookup->key &&
-		lookup->mutable->port_config.saddr == lookup->saddr);
+		lookup->mutable->daddr == lookup->daddr &&
+		lookup->mutable->in_key == lookup->key &&
+		lookup->mutable->saddr == lookup->saddr);
 }
 
 static u32 port_hash(struct port_lookup_key *k)
@@ -209,9 +209,9 @@ static u32 mutable_hash(const struct tnl_mutable_config *mutable)
 {
 	struct port_lookup_key lookup;
 
-	lookup.saddr = mutable->port_config.saddr;
-	lookup.daddr = mutable->port_config.daddr;
-	lookup.key = mutable->port_config.in_key;
+	lookup.saddr = mutable->saddr;
+	lookup.daddr = mutable->daddr;
+	lookup.key = mutable->in_key;
 	lookup.tunnel_type = mutable->tunnel_type;
 
 	return port_hash(&lookup);
@@ -701,7 +701,7 @@ bool tnl_frag_needed(struct vport *vport, const struct tnl_mutable_config *mutab
 	 * not symmetric then PMTUD needs to be disabled since we won't have
 	 * any way of synthesizing packets.
 	 */
-	if ((mutable->port_config.flags & (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION)) ==
+	if ((mutable->flags & (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION)) ==
 	    (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION))
 		OVS_CB(nskb)->tun_id = flow_key;
 
@@ -719,7 +719,7 @@ static bool check_mtu(struct sk_buff *skb,
 	int mtu;
 	__be16 frag_off;
 
-	frag_off = (mutable->port_config.flags & TNL_F_PMTUD) ? htons(IP_DF) : 0;
+	frag_off = (mutable->flags & TNL_F_PMTUD) ? htons(IP_DF) : 0;
 	if (frag_off)
 		mtu = dst_mtu(&rt_dst(rt))
 			- ETH_HLEN
@@ -777,10 +777,10 @@ static void create_tunnel_header(const struct vport *vport,
 	iph->ihl	= sizeof(struct iphdr) >> 2;
 	iph->frag_off	= htons(IP_DF);
 	iph->protocol	= tnl_vport->tnl_ops->ipproto;
-	iph->tos	= mutable->port_config.tos;
+	iph->tos	= mutable->tos;
 	iph->daddr	= rt->rt_dst;
 	iph->saddr	= rt->rt_src;
-	iph->ttl	= mutable->port_config.ttl;
+	iph->ttl	= mutable->ttl;
 	if (!iph->ttl)
 		iph->ttl = dst_metric(&rt_dst(rt), RTAX_HOPLIMIT);
 
@@ -866,7 +866,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	void *cache_data;
 	int cache_len;
 
-	if (!(mutable->port_config.flags & TNL_F_HDR_CACHE))
+	if (!(mutable->flags & TNL_F_HDR_CACHE))
 		return NULL;
 
 	/*
@@ -964,22 +964,21 @@ static struct rtable *find_route(struct vport *vport,
 	*cache = NULL;
 	tos = RT_TOS(tos);
 
-	if (likely(tos == mutable->port_config.tos &&
-		   check_cache_valid(cur_cache, mutable))) {
+	if (likely(tos == mutable->tos && check_cache_valid(cur_cache, mutable))) {
 		*cache = cur_cache;
 		return cur_cache->rt;
 	} else {
 		struct rtable *rt;
 		struct flowi fl = { .nl_u = { .ip4_u =
-					      { .daddr = mutable->port_config.daddr,
-						.saddr = mutable->port_config.saddr,
+					      { .daddr = mutable->daddr,
+						.saddr = mutable->saddr,
 						.tos = tos } },
 				    .proto = tnl_vport->tnl_ops->ipproto };
 
 		if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
 			return NULL;
 
-		if (likely(tos == mutable->port_config.tos))
+		if (likely(tos == mutable->tos))
 			*cache = build_cache(vport, mutable, rt);
 
 		return rt;
@@ -1189,10 +1188,10 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	else
 		inner_tos = 0;
 
-	if (mutable->port_config.flags & TNL_F_TOS_INHERIT)
+	if (mutable->flags & TNL_F_TOS_INHERIT)
 		tos = inner_tos;
 	else
-		tos = mutable->port_config.tos;
+		tos = mutable->tos;
 
 	tos = INET_ECN_encapsulate(tos, inner_tos);
 
@@ -1231,11 +1230,11 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	/* TTL */
-	ttl = mutable->port_config.ttl;
+	ttl = mutable->ttl;
 	if (!ttl)
 		ttl = dst_metric(&rt_dst(rt), RTAX_HOPLIMIT);
 
-	if (mutable->port_config.flags & TNL_F_TTL_INHERIT) {
+	if (mutable->flags & TNL_F_TTL_INHERIT) {
 		if (skb->protocol == htons(ETH_P_IP))
 			ttl = ip_hdr(skb)->ttl;
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
@@ -1323,45 +1322,77 @@ out:
 	return sent_len;
 }
 
-static int tnl_set_config(const void *config, const struct tnl_ops *tnl_ops,
+static const struct nla_policy tnl_policy[ODP_TUNNEL_ATTR_MAX + 1] = {
+	[ODP_TUNNEL_ATTR_FLAGS]    = { .type = NLA_U32 },
+	[ODP_TUNNEL_ATTR_DST_IPV4] = { .type = NLA_U32 },
+	[ODP_TUNNEL_ATTR_SRC_IPV4] = { .type = NLA_U32 },
+	[ODP_TUNNEL_ATTR_OUT_KEY]  = { .type = NLA_U64 },
+	[ODP_TUNNEL_ATTR_IN_KEY]   = { .type = NLA_U64 },
+	[ODP_TUNNEL_ATTR_TOS]      = { .type = NLA_U8 },
+	[ODP_TUNNEL_ATTR_TTL]      = { .type = NLA_U8 },
+};
+
+/* Sets ODP_TUNNEL_ATTR_* fields in 'mutable', which must initially be zeroed. */
+static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 			  const struct vport *cur_vport,
 			  struct tnl_mutable_config *mutable)
 {
 	const struct vport *old_vport;
 	const struct tnl_mutable_config *old_mutable;
+	struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
+	int err;
 
-	mutable->port_config = *(struct tnl_port_config *)config;
-
-	if (mutable->port_config.daddr == 0)
+	if (!options)
 		return -EINVAL;
 
-	if (mutable->port_config.tos != RT_TOS(mutable->port_config.tos))
+	err = nla_parse_nested(a, ODP_TUNNEL_ATTR_MAX, options, tnl_policy);
+	if (err)
+		return err;
+
+	if (!a[ODP_TUNNEL_ATTR_FLAGS] || !a[ODP_TUNNEL_ATTR_DST_IPV4])
 		return -EINVAL;
 
-	mutable->tunnel_hlen = tnl_ops->hdr_len(&mutable->port_config);
+	mutable->flags = nla_get_u32(a[ODP_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
+
+	if (a[ODP_TUNNEL_ATTR_SRC_IPV4])
+		mutable->saddr = nla_get_be32(a[ODP_TUNNEL_ATTR_SRC_IPV4]);
+	mutable->daddr = nla_get_be32(a[ODP_TUNNEL_ATTR_DST_IPV4]);
+
+	if (a[ODP_TUNNEL_ATTR_TOS]) {
+		mutable->tos = nla_get_u8(a[ODP_TUNNEL_ATTR_TOS]);
+		if (mutable->tos != RT_TOS(mutable->tos))
+			return -EINVAL;
+	}
+
+	if (a[ODP_TUNNEL_ATTR_TTL])
+		mutable->ttl = nla_get_u8(a[ODP_TUNNEL_ATTR_TTL]);
+
+	mutable->tunnel_hlen = tnl_ops->hdr_len(mutable);
 	if (mutable->tunnel_hlen < 0)
 		return mutable->tunnel_hlen;
 
 	mutable->tunnel_hlen += sizeof(struct iphdr);
 
 	mutable->tunnel_type = tnl_ops->tunnel_type;
-	if (mutable->port_config.flags & TNL_F_IN_KEY_MATCH) {
+	if (!a[ODP_TUNNEL_ATTR_IN_KEY]) {
 		mutable->tunnel_type |= TNL_T_KEY_MATCH;
-		mutable->port_config.in_key = 0;
-	} else
+		mutable->flags |= TNL_F_IN_KEY_MATCH;
+	} else {
 		mutable->tunnel_type |= TNL_T_KEY_EXACT;
+		mutable->in_key = nla_get_be64(a[ODP_TUNNEL_ATTR_IN_KEY]);
+	}
 
-	old_vport = tnl_find_port(mutable->port_config.saddr,
-				  mutable->port_config.daddr,
-				  mutable->port_config.in_key,
-				  mutable->tunnel_type,
+	if (!a[ODP_TUNNEL_ATTR_OUT_KEY])
+		mutable->flags |= TNL_F_OUT_KEY_ACTION;
+	else
+		mutable->out_key = nla_get_be64(a[ODP_TUNNEL_ATTR_OUT_KEY]);
+
+	old_vport = tnl_find_port(mutable->saddr, mutable->daddr,
+				  mutable->in_key, mutable->tunnel_type,
 				  &old_mutable);
 
 	if (old_vport && old_vport != cur_vport)
 		return -EEXIST;
-
-	if (mutable->port_config.flags & TNL_F_OUT_KEY_ACTION)
-		mutable->port_config.out_key = 0;
 
 	return 0;
 }
@@ -1399,7 +1430,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
-	err = tnl_set_config(parms->config, tnl_ops, NULL, mutable);
+	err = tnl_set_config(parms->options, tnl_ops, NULL, mutable);
 	if (err)
 		goto error_free_mutable;
 
@@ -1426,24 +1457,29 @@ error:
 	return ERR_PTR(err);
 }
 
-int tnl_modify(struct vport *vport, struct odp_port *port)
+int tnl_set_options(struct vport *vport, struct nlattr *options)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
+	const struct tnl_mutable_config *old_mutable;
 	struct tnl_mutable_config *mutable;
 	int err;
 
-	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
-			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	mutable = kzalloc(sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable) {
 		err = -ENOMEM;
 		goto error;
 	}
 
-	err = tnl_set_config(port->config, tnl_vport->tnl_ops, vport, mutable);
+	/* Copy fields whose values should be retained. */
+	old_mutable = rtnl_dereference(tnl_vport->mutable);
+	mutable->seq = old_mutable->seq + 1;
+	memcpy(mutable->eth_addr, old_mutable->eth_addr, ETH_ALEN);
+	mutable->mtu = old_mutable->mtu;
+
+	/* Parse the others configured by userspace. */
+	err = tnl_set_config(options, tnl_vport->tnl_ops, vport, mutable);
 	if (err)
 		goto error_free;
-
-	mutable->seq++;
 
 	err = move_port(vport, mutable);
 	if (err)
@@ -1455,6 +1491,31 @@ error_free:
 	kfree(mutable);
 error:
 	return err;
+}
+
+int tnl_get_options(const struct vport *vport, struct sk_buff *skb)
+{
+	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
+	const struct tnl_mutable_config *mutable = rcu_dereference_rtnl(tnl_vport->mutable);
+
+	NLA_PUT_U32(skb, ODP_TUNNEL_ATTR_FLAGS, mutable->flags & TNL_F_PUBLIC);
+	NLA_PUT_BE32(skb, ODP_TUNNEL_ATTR_DST_IPV4, mutable->daddr);
+
+	if (!(mutable->flags & TNL_F_IN_KEY_MATCH))
+		NLA_PUT_BE64(skb, ODP_TUNNEL_ATTR_IN_KEY, mutable->in_key);
+	if (!(mutable->flags & TNL_F_OUT_KEY_ACTION))
+		NLA_PUT_BE64(skb, ODP_TUNNEL_ATTR_OUT_KEY, mutable->out_key);
+	if (mutable->saddr)
+		NLA_PUT_BE32(skb, ODP_TUNNEL_ATTR_SRC_IPV4, mutable->saddr);
+	if (mutable->tos)
+		NLA_PUT_U8(skb, ODP_TUNNEL_ATTR_TOS, mutable->tos);
+	if (mutable->ttl)
+		NLA_PUT_U8(skb, ODP_TUNNEL_ATTR_TTL, mutable->ttl);
+
+	return 0;
+
+nla_put_failure:
+	return -EMSGSIZE;
 }
 
 static void free_port_rcu(struct rcu_head *rcu)
@@ -1474,9 +1535,9 @@ int tnl_destroy(struct vport *vport)
 
 	mutable = rtnl_dereference(tnl_vport->mutable);
 
-	if (vport == tnl_find_port(mutable->port_config.saddr,
-	    mutable->port_config.daddr, mutable->port_config.in_key,
-	    mutable->tunnel_type, &old_mutable))
+	if (vport == tnl_find_port(mutable->saddr, mutable->daddr,
+				   mutable->in_key, mutable->tunnel_type,
+				   &old_mutable))
 		del_port(vport);
 
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
@@ -1526,15 +1587,6 @@ const unsigned char *tnl_get_addr(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
-}
-
-void tnl_get_config(const struct vport *vport, void *config)
-{
-	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_port_config *port_config;
-	
-	port_config = &rcu_dereference_rtnl(tnl_vport->mutable)->port_config;
-	memcpy(config, port_config, sizeof(*port_config));
 }
 
 int tnl_get_mtu(const struct vport *vport)
