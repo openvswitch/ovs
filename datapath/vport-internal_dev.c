@@ -217,6 +217,7 @@ static int internal_dev_destroy(struct vport *vport)
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
 	unregister_netdevice(netdev_vport->dev);
+	/* unregister_netdevice() waits for an RCU grace period. */
 	vport_free(vport);
 
 	return 0;

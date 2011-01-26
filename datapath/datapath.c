@@ -241,7 +241,6 @@ static struct vport *new_vport(const struct vport_parms *parms)
 {
 	struct vport *vport;
 
-	vport_lock();
 	vport = vport_add(parms);
 	if (!IS_ERR(vport)) {
 		struct datapath *dp = parms->dp;
@@ -251,15 +250,12 @@ static struct vport *new_vport(const struct vport_parms *parms)
 
 		dp_ifinfo_notify(RTM_NEWLINK, vport);
 	}
-	vport_unlock();
 
 	return vport;
 }
 
 int dp_detach_port(struct vport *p)
 {
-	int err;
-
 	ASSERT_RTNL();
 
 	if (p->port_no != ODPP_LOCAL)
@@ -271,11 +267,7 @@ int dp_detach_port(struct vport *p)
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 
 	/* Then destroy it. */
-	vport_lock();
-	err = vport_del(p);
-	vport_unlock();
-
-	return err;
+	return vport_del(p);
 }
 
 /* Must be called with rcu_read_lock. */
@@ -1309,10 +1301,10 @@ static struct datapath *lookup_datapath(struct odp_datapath *odp_datapath, struc
 		struct vport *vport;
 		int dp_idx;
 
-		vport_lock();
+		rcu_read_lock();
 		vport = vport_locate(nla_data(a[ODP_DP_ATTR_NAME]));
 		dp_idx = vport && vport->port_no == ODPP_LOCAL ? vport->dp->dp_idx : -1;
-		vport_unlock();
+		rcu_read_unlock();
 
 		if (dp_idx < 0)
 			return ERR_PTR(-ENODEV);
@@ -1698,15 +1690,15 @@ static struct vport *lookup_vport(struct odp_vport *odp_vport,
 		int dp_idx, port_no;
 
 	retry:
-		vport_lock();
+		rcu_read_lock();
 		vport = vport_locate(nla_data(a[ODP_VPORT_ATTR_NAME]));
 		if (!vport) {
-			vport_unlock();
+			rcu_read_unlock();
 			return ERR_PTR(-ENODEV);
 		}
 		dp_idx = vport->dp->dp_idx;
 		port_no = vport->port_no;
-		vport_unlock();
+		rcu_read_unlock();
 
 		dp = get_dp_locked(dp_idx);
 		if (!dp)

@@ -22,9 +22,6 @@ struct vport_parms;
 
 /* The following definitions are for users of the vport subsytem: */
 
-void vport_lock(void);
-void vport_unlock(void);
-
 int vport_init(void);
 void vport_exit(void);
 
@@ -77,6 +74,7 @@ struct vport_err_stats {
 
 /**
  * struct vport - one port within a datapath
+ * @rcu: RCU callback head for deferred destruction.
  * @port_no: Index into @dp's @ports array.
  * @dp: Datapath to which this port belongs.
  * @kobj: Represents /sys/class/net/<devname>/brport.
@@ -97,6 +95,7 @@ struct vport_err_stats {
  * XAPI for Citrix XenServer.  Deprecated.
  */
 struct vport {
+	struct rcu_head rcu;
 	u16 port_no;
 	struct datapath	*dp;
 	struct kobject kobj;
@@ -151,7 +150,8 @@ struct vport_parms {
  * @exit: Called at module unload.
  * @create: Create a new vport configured as specified.  On success returns
  * a new vport allocated with vport_alloc(), otherwise an ERR_PTR() value.
- * @destroy: Detach and destroy a vport.
+ * @destroy: Destroys a vport.  Must call vport_free() on the vport but not
+ * before an RCU grace period has elapsed.
  * @set_options: Modify the configuration of an existing vport.  May be %NULL
  * if modification is not supported.
  * @get_options: Appends vport-specific attributes for the configuration of an

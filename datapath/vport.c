@@ -16,6 +16,7 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/percpu.h>
+#include <linux/rcupdate.h>
 #include <linux/rtnetlink.h>
 #include <linux/compat.h>
 #include <linux/version.h>
@@ -38,54 +39,9 @@ static const struct vport_ops *base_vport_ops_list[] = {
 static const struct vport_ops **vport_ops_list;
 static int n_vport_types;
 
+/* Protected by RCU read lock for reading, RTNL lock for writing. */
 static struct hlist_head *dev_table;
 #define VPORT_HASH_BUCKETS 1024
-
-/* Both RTNL lock and vport_mutex need to be held when updating dev_table.
- *
- * If you use vport_locate and then perform some operations, you need to hold
- * one of these locks if you don't want the vport to be deleted out from under
- * you.
- *
- * If you get a reference to a vport through a datapath, it is protected
- * by RCU and you need to hold rcu_read_lock instead when reading.
- *
- * If multiple locks are taken, the hierarchy is:
- * 1. RTNL
- * 2. DP
- * 3. vport
- */
-static DEFINE_MUTEX(vport_mutex);
-
-/**
- *	vport_lock - acquire vport lock
- *
- * Acquire global vport lock.  See above comment about locking requirements
- * and specific function definitions.  May sleep.
- */
-void vport_lock(void)
-{
-	mutex_lock(&vport_mutex);
-}
-
-/**
- *	vport_unlock - release vport lock
- *
- * Release lock acquired with vport_lock.
- */
-void vport_unlock(void)
-{
-	mutex_unlock(&vport_mutex);
-}
-
-#define ASSERT_VPORT()						\
-do {								\
-	if (unlikely(!mutex_is_locked(&vport_mutex))) {		\
-		pr_err("vport lock not held at %s (%d)\n",	\
-		       __FILE__, __LINE__);			\
-		dump_stack();					\
-	}							\
-} while (0)
 
 /**
  *	vport_init - initialize vport subsystem
@@ -166,9 +122,7 @@ static struct hlist_head *hash_bucket(const char *name)
  *
  * @name: name of port to find
  *
- * Either RTNL or vport lock must be acquired before calling this function
- * and held while using the found port.  See the locking comments at the
- * top of the file.
+ * Must be called with RTNL or RCU read lock.
  */
 struct vport *vport_locate(const char *name)
 {
@@ -176,32 +130,11 @@ struct vport *vport_locate(const char *name)
 	struct vport *vport;
 	struct hlist_node *node;
 
-	if (unlikely(!mutex_is_locked(&vport_mutex) && !rtnl_is_locked())) {
-		pr_err("neither RTNL nor vport lock held in vport_locate\n");
-		dump_stack();
-	}
-
-	rcu_read_lock();
-
-	hlist_for_each_entry(vport, node, bucket, hash_node)
+	hlist_for_each_entry_rcu(vport, node, bucket, hash_node)
 		if (!strcmp(name, vport_get_name(vport)))
-			goto out;
+			return vport;
 
-	vport = NULL;
-
-out:
-	rcu_read_unlock();
-	return vport;
-}
-
-static void register_vport(struct vport *vport)
-{
-	hlist_add_head(&vport->hash_node, hash_bucket(vport_get_name(vport)));
-}
-
-static void unregister_vport(struct vport *vport)
-{
-	hlist_del(&vport->hash_node);
+	return NULL;
 }
 
 static void release_vport(struct kobject *kobj)
@@ -270,6 +203,9 @@ struct vport *vport_alloc(int priv_size, const struct vport_ops *ops, const stru
  * @vport: vport to free
  *
  * Frees a vport allocated with vport_alloc() when it is no longer needed.
+ *
+ * The caller must ensure that an RCU grace period has passed since the last
+ * time @vport was in a datapath.
  */
 void vport_free(struct vport *vport)
 {
@@ -285,8 +221,7 @@ void vport_free(struct vport *vport)
  * @parms: Information about new vport.
  *
  * Creates a new vport with the specified configuration (which is dependent on
- * device type) and attaches it to a datapath.  Both RTNL and vport locks must
- * be held.
+ * device type) and attaches it to a datapath.  RTNL lock must be held.
  */
 struct vport *vport_add(const struct vport_parms *parms)
 {
@@ -295,7 +230,6 @@ struct vport *vport_add(const struct vport_parms *parms)
 	int i;
 
 	ASSERT_RTNL();
-	ASSERT_VPORT();
 
 	for (i = 0; i < n_vport_types; i++) {
 		if (vport_ops_list[i]->type == parms->type) {
@@ -305,7 +239,8 @@ struct vport *vport_add(const struct vport_parms *parms)
 				goto out;
 			}
 
-			register_vport(vport);
+			hlist_add_head_rcu(&vport->hash_node,
+					   hash_bucket(vport_get_name(vport)));
 			return vport;
 		}
 	}
@@ -340,14 +275,13 @@ int vport_set_options(struct vport *vport, struct nlattr *options)
  * @vport: vport to delete.
  *
  * Detaches @vport from its datapath and destroys it.  It is possible to fail
- * for reasons such as lack of memory.  Both RTNL and vport locks must be held.
+ * for reasons such as lack of memory.  RTNL lock must be held.
  */
 int vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
-	ASSERT_VPORT();
 
-	unregister_vport(vport);
+	hlist_del_rcu(&vport->hash_node);
 
 	return vport->ops->destroy(vport);
 }
