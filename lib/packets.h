@@ -60,10 +60,15 @@ static inline bool eth_addr_is_zero(const uint8_t ea[6])
 {
     return !(ea[0] | ea[1] | ea[2] | ea[3] | ea[4] | ea[5]);
 }
+static inline int eth_addr_compare_3way(const uint8_t a[ETH_ADDR_LEN],
+                                        const uint8_t b[ETH_ADDR_LEN])
+{
+    return memcmp(a, b, ETH_ADDR_LEN);
+}
 static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
                                    const uint8_t b[ETH_ADDR_LEN])
 {
-    return !memcmp(a, b, ETH_ADDR_LEN);
+    return !eth_addr_compare_3way(a, b);
 }
 static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
 {

@@ -641,7 +641,7 @@ compare_addrs(const void *a_, const void *b_)
 static int
 compare_macs(const void *a, const void *b)
 {
-    return memcmp(a, b, ETH_ADDR_LEN);
+    return eth_addr_compare_3way(a, b);
 }
 
 void
