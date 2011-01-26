@@ -772,22 +772,22 @@ dpif_flow_get(const struct dpif *dpif, int flags,
  * types ODPAT_* in the 'actions_len' bytes starting at 'actions'.
  *
  * - If the flow's key does not exist in 'dpif', then the flow will be added if
- *   'flags' includes ODPPF_CREATE.  Otherwise the operation will fail with
+ *   'flags' includes DPIF_FP_CREATE.  Otherwise the operation will fail with
  *   ENOENT.
  *
  *   If the operation succeeds, then 'stats', if nonnull, will be zeroed.
  *
  * - If the flow's key does exist in 'dpif', then the flow's actions will be
- *   updated if 'flags' includes ODPPF_MODIFY.  Otherwise the operation will
+ *   updated if 'flags' includes DPIF_FP_MODIFY.  Otherwise the operation will
  *   fail with EEXIST.  If the flow's actions are updated, then its statistics
- *   will be zeroed if 'flags' includes ODPPF_ZERO_STATS, and left as-is
+ *   will be zeroed if 'flags' includes DPIF_FP_ZERO_STATS, and left as-is
  *   otherwise.
  *
  *   If the operation succeeds, then 'stats', if nonnull, will be set to the
  *   flow's statistics before the update.
  */
 int
-dpif_flow_put(struct dpif *dpif, int flags,
+dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *key, size_t key_len,
               const struct nlattr *actions, size_t actions_len,
               struct dpif_flow_stats *stats)
@@ -795,6 +795,7 @@ dpif_flow_put(struct dpif *dpif, int flags,
     int error;
 
     COVERAGE_INC(dpif_flow_put);
+    assert(!(flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_ZERO_STATS)));
 
     error = dpif->dpif_class->flow_put(dpif, flags, key, key_len,
                                        actions, actions_len, stats);
@@ -802,22 +803,18 @@ dpif_flow_put(struct dpif *dpif, int flags,
         memset(stats, 0, sizeof *stats);
     }
     if (should_log_flow_message(error)) {
-        enum { ODPPF_ALL = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS };
         struct ds s;
 
         ds_init(&s);
         ds_put_cstr(&s, "put");
-        if (flags & ODPPF_CREATE) {
+        if (flags & DPIF_FP_CREATE) {
             ds_put_cstr(&s, "[create]");
         }
-        if (flags & ODPPF_MODIFY) {
+        if (flags & DPIF_FP_MODIFY) {
             ds_put_cstr(&s, "[modify]");
         }
-        if (flags & ODPPF_ZERO_STATS) {
+        if (flags & DPIF_FP_ZERO_STATS) {
             ds_put_cstr(&s, "[zero]");
-        }
-        if (flags & ~ODPPF_ALL) {
-            ds_put_format(&s, "[%x]", flags & ~ODPPF_ALL);
         }
         log_flow_message(dpif, error, ds_cstr(&s), key, key_len, stats,
                          actions, actions_len);

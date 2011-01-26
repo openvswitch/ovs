@@ -506,7 +506,7 @@ dpif_linux_flow_get(const struct dpif *dpif_, int flags,
 }
 
 static int
-dpif_linux_flow_put(struct dpif *dpif_, int flags,
+dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
                     const struct nlattr *key, size_t key_len,
                     const struct nlattr *actions, size_t actions_len,
                     struct dpif_flow_stats *stats)
@@ -520,7 +520,16 @@ dpif_linux_flow_put(struct dpif *dpif_, int flags,
     put.flow.actions = (struct nlattr *) actions;
     put.flow.actions_len = actions_len;
     put.flow.flags = 0;
-    put.flags = flags;
+    put.flags = 0;
+    if (flags & DPIF_FP_CREATE) {
+        put.flags |= ODPPF_CREATE;
+    }
+    if (flags & DPIF_FP_MODIFY) {
+        put.flags |= ODPPF_MODIFY;
+    }
+    if (flags & DPIF_FP_ZERO_STATS) {
+        put.flags |= ODPPF_ZERO_STATS;
+    }
     error = do_ioctl(dpif_, ODP_FLOW_PUT, &put);
     if (!error && stats) {
         odp_flow_stats_to_dpif_flow_stats(&put.flow.stats, stats);

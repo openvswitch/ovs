@@ -797,7 +797,7 @@ clear_stats(struct dp_netdev_flow *flow)
 }
 
 static int
-dpif_netdev_flow_put(struct dpif *dpif, int flags,
+dpif_netdev_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
                     const struct nlattr *nl_key, size_t nl_key_len,
                     const struct nlattr *actions, size_t actions_len,
                     struct dpif_flow_stats *stats)
@@ -814,7 +814,7 @@ dpif_netdev_flow_put(struct dpif *dpif, int flags,
 
     flow = dp_netdev_lookup_flow(dp, &key);
     if (!flow) {
-        if (flags & ODPPF_CREATE) {
+        if (flags & DPIF_FP_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
                 if (stats) {
                     memset(stats, 0, sizeof *stats);
@@ -827,13 +827,13 @@ dpif_netdev_flow_put(struct dpif *dpif, int flags,
             return ENOENT;
         }
     } else {
-        if (flags & ODPPF_MODIFY) {
+        if (flags & DPIF_FP_MODIFY) {
             int error = set_flow_actions(flow, actions, actions_len);
             if (!error) {
                 if (stats) {
                     get_dpif_flow_stats(flow, stats);
                 }
-                if (flags & ODPPF_ZERO_STATS) {
+                if (flags & DPIF_FP_ZERO_STATS) {
                     clear_stats(flow);
                 }
             }

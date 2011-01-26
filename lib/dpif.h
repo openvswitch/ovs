@@ -117,8 +117,14 @@ struct dpif_flow_stats {
 
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
 
+enum dpif_flow_put_flags {
+    DPIF_FP_CREATE = 1 << 0,    /* Allow creating a new flow. */
+    DPIF_FP_MODIFY = 1 << 1,    /* Allow modifying an existing flow. */
+    DPIF_FP_ZERO_STATS = 1 << 2 /* Zero the stats of an existing flow. */
+};
+
 int dpif_flow_flush(struct dpif *);
-int dpif_flow_put(struct dpif *, int flags,
+int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
                   const struct nlattr *key, size_t key_len,
                   const struct nlattr *actions, size_t actions_len,
                   struct dpif_flow_stats *);

@@ -231,21 +231,21 @@ struct dpif_class {
      * with types ODPAT_* in the 'actions_len' bytes starting at 'actions'.
      *
      * - If the flow's key does not exist in 'dpif', then the flow will be
-     *   added if 'flags' includes ODPPF_CREATE.  Otherwise the operation will
-     *   fail with ENOENT.
+     *   added if 'flags' includes DPIF_FP_CREATE.  Otherwise the operation
+     *   will fail with ENOENT.
      *
      *   If the operation succeeds, then 'stats', if nonnull, must be zeroed.
      *
      * - If the flow's key does exist in 'dpif', then the flow's actions will
-     *   be updated if 'flags' includes ODPPF_MODIFY.  Otherwise the operation
-     *   will fail with EEXIST.  If the flow's actions are updated, then its
-     *   statistics will be zeroed if 'flags' includes ODPPF_ZERO_STATS, and
-     *   left as-is otherwise.
+     *   be updated if 'flags' includes DPIF_FP_MODIFY.  Otherwise the
+     *   operation will fail with EEXIST.  If the flow's actions are updated,
+     *   then its statistics will be zeroed if 'flags' includes
+     *   DPIF_FP_ZERO_STATS, and left as-is otherwise.
      *
      *   If the operation succeeds, then 'stats', if nonnull, must be set to
      *   the flow's statistics before the update.
      */
-    int (*flow_put)(struct dpif *dpif, int flags,
+    int (*flow_put)(struct dpif *dpif, enum dpif_flow_put_flags flags,
                     const struct nlattr *key, size_t key_len,
                     const struct nlattr *actions, size_t actions_len,
                     struct dpif_flow_stats *stats);

@@ -206,7 +206,8 @@ struct facet {
      *
      *   - Do include packets and bytes that were obtained from the datapath
      *     when a flow was deleted (e.g. dpif_flow_del()) or when its
-     *     statistics were reset (e.g. dpif_flow_put() with ODPPF_ZERO_STATS).
+     *     statistics were reset (e.g. dpif_flow_put() with
+     *     DPIF_FP_ZERO_STATS).
      *
      *   - Do not include any packets or bytes that can currently be obtained
      *     from the datapath by, e.g., dpif_flow_get().
@@ -2306,7 +2307,8 @@ facet_make_actions(struct ofproto *p, struct facet *facet,
 }
 
 static int
-facet_put__(struct ofproto *ofproto, struct facet *facet, int flags)
+facet_put__(struct ofproto *ofproto, struct facet *facet,
+            enum dpif_flow_put_flags flags)
 {
     uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
     struct ofpbuf key;
@@ -2326,9 +2328,9 @@ static void
 facet_install(struct ofproto *p, struct facet *facet, bool zero_stats)
 {
     if (facet->may_install) {
-        int flags = ODPPF_CREATE | ODPPF_MODIFY;
+        enum dpif_flow_put_flags flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         if (zero_stats) {
-            flags |= ODPPF_ZERO_STATS;
+            flags |= DPIF_FP_ZERO_STATS;
         }
         if (!facet_put__(p, facet, flags)) {
             facet->installed = true;
@@ -2507,7 +2509,7 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
             odp_flow_key_from_flow(&key, &facet->flow);
 
             dpif_flow_put(ofproto->dpif,
-                          ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS,
+                          DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_ZERO_STATS,
                           key.data, key.size,
                           odp_actions->data, odp_actions->size, &stats);
 
