@@ -600,7 +600,7 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     /* If it has been at least COMPACT_MIN_MSEC millseconds since the last time
      * we compacted (or at least COMPACT_RETRY_MSEC since the last time we
      * tried), and if there are at least 100 transactions in the database, and
-     * if the database is at least 1 MB, then compact the database. */
+     * if the database is at least 10 MB, then compact the database. */
     if (time_msec() >= file->next_compact
         && file->n_transactions >= 100
         && ovsdb_log_get_offset(file->log) >= 10 * 1024 * 1024)
@@ -610,7 +610,8 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
             char *s = ovsdb_error_to_string(error);
             ovsdb_error_destroy(error);
             VLOG_WARN("%s: compacting database failed (%s), retrying in "
-                      "60 seconds", file->file_name, s);
+                      "%d seconds",
+                      file->file_name, s, COMPACT_RETRY_MSEC / 1000);
             free(s);
 
             file->next_compact = time_msec() + COMPACT_RETRY_MSEC;
