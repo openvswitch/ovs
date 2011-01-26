@@ -188,6 +188,7 @@ struct bridge {
     struct list node;           /* Node in global list of bridges. */
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
+    uint8_t ea[ETH_ADDR_LEN];   /* Bridge Ethernet Address. */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
     const struct ovsrec_bridge *cfg;
 
@@ -753,6 +754,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                             br->name, strerror(error));
             }
         }
+        memcpy(br->ea, ea, ETH_ADDR_LEN);
 
         dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
