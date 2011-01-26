@@ -191,16 +191,6 @@ format_odp_flow_stats(struct ds *ds, const struct odp_flow_stats *s)
         ds_put_format(ds, "never");
     }
 }
-
-void
-format_odp_flow(struct ds *ds, const struct odp_flow *f)
-{
-    odp_flow_key_format(f->key, f->key_len, ds);
-    ds_put_cstr(ds, ", ");
-    format_odp_flow_stats(ds, &f->stats);
-    ds_put_cstr(ds, ", actions:");
-    format_odp_actions(ds, f->actions, f->actions_len);
-}
 
 /* Returns the correct length of the payload for a flow key attribute of the
  * specified 'type', or -1 if 'type' is unknown. */

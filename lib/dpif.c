@@ -76,15 +76,14 @@ static struct vlog_rate_limit dpmsg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 /* Not really much point in logging many dpif errors. */
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
+static void log_flow_message(const struct dpif *dpif, int error,
+                             const char *operation,
+                             const struct nlattr *key, size_t key_len,
+                             const struct odp_flow_stats *stats,
+                             const struct nlattr *actions, size_t actions_len);
 static void log_operation(const struct dpif *, const char *operation,
                           int error);
-static void log_flow_operation(const struct dpif *, const char *operation,
-                               int error, struct odp_flow *flow);
-static void log_flow_put(struct dpif *, int error,
-                         const struct odp_flow_put *);
 static bool should_log_flow_message(int error);
-static void check_rw_flow_actions(struct odp_flow *);
-static void check_rw_flow_key(struct odp_flow *);
 
 static void
 dp_initialize(void)
@@ -702,87 +701,138 @@ dpif_flow_flush(struct dpif *dpif)
     return error;
 }
 
-/* Queries 'dpif' for a flow entry matching 'flow->key'.
+/* Queries 'dpif' for a flow entry.  The flow is specified by the Netlink
+ * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+ * 'key'.
  *
- * If a flow matching 'flow->key' exists in 'dpif', stores statistics for the
- * flow into 'flow->stats'.  If 'flow->actions_len' is zero, then
- * 'flow->actions' is ignored.  If 'flow->actions_len' is nonzero, then
- * 'flow->actions' should point to an array of the specified number of bytes.
- * At most that many bytes of the flow's actions will be copied into that
- * array.  'flow->actions_len' will be updated to the number of bytes of
- * actions actually present in the flow, which may be greater than the amount
- * stored if the flow has more actions than space available in the array.
+ * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
+ * failure, returns a positive errno value.
  *
- * If no flow matching 'flow->key' exists in 'dpif', returns ENOENT.  On other
- * failure, returns a positive errno value. */
+ * If 'actionsp' is nonnull, then on success '*actionsp' will be set to an
+ * ofpbuf owned by the caller that contains the Netlink attributes for the
+ * flow's actions.  The caller must free the ofpbuf (with ofpbuf_delete()) when
+ * it is no longer needed.
+ *
+ * If 'stats' is nonnull, then on success it will be updated with the flow's
+ * statistics. */
 int
-dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
+dpif_flow_get(const struct dpif *dpif, int flags,
+              const struct nlattr *key, size_t key_len,
+              struct ofpbuf **actionsp, struct odp_flow_stats *stats)
 {
     int error;
 
     COVERAGE_INC(dpif_flow_get);
 
-    check_rw_flow_actions(flow);
-    error = dpif->dpif_class->flow_get(dpif, flow);
+    error = dpif->dpif_class->flow_get(dpif, flags, key, key_len, actionsp,
+                                       stats);
     if (error) {
-        /* Make the results predictable on error. */
-        memset(&flow->stats, 0, sizeof flow->stats);
-        flow->actions_len = 0;
+        if (actionsp) {
+            *actionsp = NULL;
+        }
+        if (stats) {
+            memset(stats, 0, sizeof *stats);
+        }
     }
     if (should_log_flow_message(error)) {
-        log_flow_operation(dpif, "flow_get", error, flow);
+        const struct nlattr *actions;
+        size_t actions_len;
+
+        if (!error && actionsp) {
+            actions = (*actionsp)->data;
+            actions_len = (*actionsp)->size;
+        } else {
+            actions = NULL;
+            actions_len = 0;
+        }
+        log_flow_message(dpif, error, "flow_get", key, key_len, stats,
+                         actions, actions_len);
     }
     return error;
 }
 
-/* Adds or modifies a flow in 'dpif' as specified in 'put':
+/* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
+ * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+ * 'key'.  The associated actions are specified by the Netlink attributes with
+ * types ODPAT_* in the 'actions_len' bytes starting at 'actions'.
  *
- * - If the flow specified in 'put->flow' does not exist in 'dpif', then
- *   behavior depends on whether ODPPF_CREATE is specified in 'put->flags': if
- *   it is, the flow will be added, otherwise the operation will fail with
+ * - If the flow's key does not exist in 'dpif', then the flow will be added if
+ *   'flags' includes ODPPF_CREATE.  Otherwise the operation will fail with
  *   ENOENT.
  *
- * - Otherwise, the flow specified in 'put->flow' does exist in 'dpif'.
- *   Behavior in this case depends on whether ODPPF_MODIFY is specified in
- *   'put->flags': if it is, the flow's actions will be updated, otherwise the
- *   operation will fail with EEXIST.  If the flow's actions are updated, then
- *   its statistics will be zeroed if ODPPF_ZERO_STATS is set in 'put->flags',
- *   left as-is otherwise.
+ *   If the operation succeeds, then 'stats', if nonnull, will be zeroed.
  *
- * Returns 0 if successful, otherwise a positive errno value.
+ * - If the flow's key does exist in 'dpif', then the flow's actions will be
+ *   updated if 'flags' includes ODPPF_MODIFY.  Otherwise the operation will
+ *   fail with EEXIST.  If the flow's actions are updated, then its statistics
+ *   will be zeroed if 'flags' includes ODPPF_ZERO_STATS, and left as-is
+ *   otherwise.
+ *
+ *   If the operation succeeds, then 'stats', if nonnull, will be set to the
+ *   flow's statistics before the update.
  */
 int
-dpif_flow_put(struct dpif *dpif, struct odp_flow_put *put)
+dpif_flow_put(struct dpif *dpif, int flags,
+              const struct nlattr *key, size_t key_len,
+              const struct nlattr *actions, size_t actions_len,
+              struct odp_flow_stats *stats)
 {
     int error;
 
     COVERAGE_INC(dpif_flow_put);
 
-    error = dpif->dpif_class->flow_put(dpif, put);
+    error = dpif->dpif_class->flow_put(dpif, flags, key, key_len,
+                                       actions, actions_len, stats);
+    if (error && stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     if (should_log_flow_message(error)) {
-        log_flow_put(dpif, error, put);
+        enum { ODPPF_ALL = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS };
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_cstr(&s, "put");
+        if (flags & ODPPF_CREATE) {
+            ds_put_cstr(&s, "[create]");
+        }
+        if (flags & ODPPF_MODIFY) {
+            ds_put_cstr(&s, "[modify]");
+        }
+        if (flags & ODPPF_ZERO_STATS) {
+            ds_put_cstr(&s, "[zero]");
+        }
+        if (flags & ~ODPPF_ALL) {
+            ds_put_format(&s, "[%x]", flags & ~ODPPF_ALL);
+        }
+        log_flow_message(dpif, error, ds_cstr(&s), key, key_len, stats,
+                         actions, actions_len);
+        ds_destroy(&s);
     }
     return error;
 }
 
-/* Deletes a flow matching 'flow->key' from 'dpif' or returns ENOENT if 'dpif'
- * does not contain such a flow.
+/* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif' does
+ * not contain such a flow.  The flow is specified by the Netlink attributes
+ * with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at 'key'.
  *
- * If successful, updates 'flow->stats', 'flow->actions_len', and
- * 'flow->actions' as described for dpif_flow_get(). */
+ * If the operation succeeds, then 'stats', if nonnull, will be set to the
+ * flow's statistics before its deletion. */
 int
-dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
+dpif_flow_del(struct dpif *dpif,
+              const struct nlattr *key, size_t key_len,
+              struct odp_flow_stats *stats)
 {
     int error;
 
     COVERAGE_INC(dpif_flow_del);
 
-    check_rw_flow_actions(flow);
-    memset(&flow->stats, 0, sizeof flow->stats);
-
-    error = dpif->dpif_class->flow_del(dpif, flow);
+    error = dpif->dpif_class->flow_del(dpif, key, key_len, stats);
+    if (error && stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     if (should_log_flow_message(error)) {
-        log_flow_operation(dpif, "delete flow", error, flow);
+        log_flow_message(dpif, error, "flow_del", key, key_len,
+                         !error ? stats : NULL, NULL, 0);
     }
     return error;
 }
@@ -802,47 +852,66 @@ dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
 }
 
 /* Attempts to retrieve another flow from 'dump', which must have been
- * initialized with dpif_flow_dump_start().  On success, stores a new odp_flow
- * into 'flow' and returns true.  Failure might indicate an actual error or
- * merely the end of the flow table.  An error status for the entire dump
- * operation is provided when it is completed by calling dpif_flow_dump_done().
+ * initialized with dpif_flow_dump_start().  On success, updates the output
+ * parameters as described below and returns true.  Otherwise, returns false.
+ * Failure might indicate an actual error or merely the end of the flow table.
+ * An error status for the entire dump operation is provided when it is
+ * completed by calling dpif_flow_dump_done().
  *
- * Dumping flow actions is optional.  To avoid dumping actions initialize
- * 'flow->actions' to NULL and 'flow->actions_len' to 0.  Otherwise, point
- * 'flow->actions' to an array of struct nlattr and initialize
- * 'flow->actions_len' with the number of bytes of Netlink attributes.
- * dpif_flow_dump_next() will fill in as many actions as will fit into the
- * provided array and update 'flow->actions_len' with the number of bytes
- * required (regardless of whether they fit in the provided space). */
+ * On success, if 'key' and 'key_len' are nonnull then '*key' and '*key_len'
+ * will be set to Netlink attributes with types ODP_KEY_ATTR_* representing the
+ * dumped flow's key.  If 'actions' and 'actions_len' are nonnull then they are
+ * set to Netlink attributes with types ODPAT_* representing the dumped flow's
+ * actions.  If 'stats' is nonnull then it will be set to the dumped flow's
+ * statistics.
+ *
+ * All of the returned data is owned by 'dpif', not by the caller, and the
+ * caller must not modify or free it.  'dpif' guarantees that it remains
+ * accessible and unchanging until at least the next call to 'flow_dump_next'
+ * or 'flow_dump_done' for 'dump'. */
 bool
-dpif_flow_dump_next(struct dpif_flow_dump *dump, struct odp_flow *flow)
+dpif_flow_dump_next(struct dpif_flow_dump *dump,
+                    const struct nlattr **key, size_t *key_len,
+                    const struct nlattr **actions, size_t *actions_len,
+                    const struct odp_flow_stats **stats)
 {
     const struct dpif *dpif = dump->dpif;
+    int error = dump->error;
 
-    check_rw_flow_actions(flow);
-    check_rw_flow_key(flow);
-
-    if (dump->error) {
-        return false;
-    }
-
-    dump->error = dpif->dpif_class->flow_dump_next(dpif, dump->state, flow);
-    if (dump->error == EOF) {
-        VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
-    } else {
-        if (dump->error) {
-            flow->key_len = 0;
-        }
-        if (should_log_flow_message(dump->error)) {
-            log_flow_operation(dpif, "flow_dump_next", dump->error, flow);
+    if (!error) {
+        error = dpif->dpif_class->flow_dump_next(dpif, dump->state,
+                                                 key, key_len,
+                                                 actions, actions_len,
+                                                 stats);
+        if (error) {
+            dpif->dpif_class->flow_dump_done(dpif, dump->state);
         }
     }
-
-    if (dump->error) {
-        dpif->dpif_class->flow_dump_done(dpif, dump->state);
-        return false;
+    if (error) {
+        if (key) {
+            *key = NULL;
+            *key_len = 0;
+        }
+        if (actions) {
+            *actions = NULL;
+            *actions_len = 0;
+        }
+        if (stats) {
+            *stats = NULL;
+        }
     }
-    return true;
+    if (!dump->error) {
+        if (error == EOF) {
+            VLOG_DBG_RL(&dpmsg_rl, "%s: dumped all flows", dpif_name(dpif));
+        } else if (should_log_flow_message(error)) {
+            log_flow_message(dpif, error, "flow_dump",
+                             key ? *key : NULL, key ? *key_len : 0,
+                             stats ? *stats : NULL, actions ? *actions : NULL,
+                             actions ? *actions_len : 0);
+        }
+    }
+    dump->error = error;
+    return !error;
 }
 
 /* Completes flow table dump operation 'dump', which must have been initialized
@@ -1123,77 +1192,4 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     }
     vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
-}
-
-static void
-log_flow_operation(const struct dpif *dpif, const char *operation, int error,
-                   struct odp_flow *flow)
-{
-    if (error) {
-        flow->key_len = 0;
-        flow->actions_len = 0;
-    }
-    log_flow_message(dpif, error, operation,
-                     flow->key, flow->key_len, !error ? &flow->stats : NULL,
-                     flow->actions, flow->actions_len);
-}
-
-static void
-log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
-{
-    enum { ODPPF_ALL = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS };
-    struct ds s;
-
-    ds_init(&s);
-    ds_put_cstr(&s, "put");
-    if (put->flags & ODPPF_CREATE) {
-        ds_put_cstr(&s, "[create]");
-    }
-    if (put->flags & ODPPF_MODIFY) {
-        ds_put_cstr(&s, "[modify]");
-    }
-    if (put->flags & ODPPF_ZERO_STATS) {
-        ds_put_cstr(&s, "[zero]");
-    }
-    if (put->flags & ~ODPPF_ALL) {
-        ds_put_format(&s, "[%x]", put->flags & ~ODPPF_ALL);
-    }
-    log_flow_message(dpif, error, ds_cstr(&s),
-                     put->flow.key, put->flow.key_len,
-                     !error ? &put->flow.stats : NULL,
-                     put->flow.actions, put->flow.actions_len);
-    ds_destroy(&s);
-}
-
-/* There is a tendency to construct odp_flow objects on the stack and to
- * forget to properly initialize their "actions" and "actions_len" members.
- * When this happens, we get memory corruption because the kernel
- * writes through the random pointer that is in the "actions" member.
- *
- * This function attempts to combat the problem by:
- *
- *      - Forcing a segfault if "actions" points to an invalid region (instead
- *        of just getting back EFAULT, which can be easily missed in the log).
- *
- *      - Storing a distinctive value that is likely to cause an
- *        easy-to-identify error later if it is dereferenced, etc.
- *
- *      - Triggering a warning on uninitialized memory from Valgrind if
- *        "actions" or "actions_len" was not initialized.
- */
-static void
-check_rw_flow_actions(struct odp_flow *flow)
-{
-    if (flow->actions_len) {
-        memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
-    }
-}
-
-/* Same as check_rw_flow_actions() but for flow->key. */
-static void
-check_rw_flow_key(struct odp_flow *flow)
-{
-    if (flow->key_len) {
-        memset(&flow->key[0], 0xcc, sizeof flow->key[0]);
-    }
 }

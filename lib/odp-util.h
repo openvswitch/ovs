@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,6 @@ void format_odp_action(struct ds *, const struct nlattr *);
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 void format_odp_flow_stats(struct ds *, const struct odp_flow_stats *);
-void format_odp_flow(struct ds *, const struct odp_flow *);
 
 /* By my calculations currently the longest valid nlattr-formatted flow key is
  * 80 bytes long, so this leaves some safety margin.

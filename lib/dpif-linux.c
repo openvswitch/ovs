@@ -38,6 +38,7 @@
 #include "netdev.h"
 #include "netdev-vport.h"
 #include "netlink.h"
+#include "odp-util.h"
 #include "ofpbuf.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
@@ -459,40 +460,136 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_, struct odp_flow *flow)
+dpif_linux_flow_get(const struct dpif *dpif_, int flags,
+                    const struct nlattr *key, size_t key_len,
+                    struct ofpbuf **actionsp, struct odp_flow_stats *stats)
 {
-    return do_ioctl(dpif_, ODP_FLOW_GET, flow);
+    struct ofpbuf *actions = NULL;
+    struct odp_flow odp_flow;
+    int error;
+
+    memset(&odp_flow, 0, sizeof odp_flow);
+    odp_flow.key = (struct nlattr *) key;
+    odp_flow.key_len = key_len;
+    if (actionsp) {
+        actions = *actionsp = ofpbuf_new(65536);
+        odp_flow.actions = actions->base;
+        odp_flow.actions_len = actions->allocated;
+    }
+    odp_flow.flags = flags;
+
+    error = do_ioctl(dpif_, ODP_FLOW_GET, &odp_flow);
+    if (!error) {
+        if (stats) {
+            *stats = odp_flow.stats;
+        }
+        if (actions) {
+            actions->size = odp_flow.actions_len;
+            ofpbuf_trim(actions);
+        }
+    } else {
+        if (actions) {
+            ofpbuf_delete(actions);
+        }
+    }
+    return error;
 }
 
 static int
-dpif_linux_flow_put(struct dpif *dpif_, struct odp_flow_put *put)
+dpif_linux_flow_put(struct dpif *dpif_, int flags,
+                    const struct nlattr *key, size_t key_len,
+                    const struct nlattr *actions, size_t actions_len,
+                    struct odp_flow_stats *stats)
 {
-    return do_ioctl(dpif_, ODP_FLOW_PUT, put);
+    struct odp_flow_put put;
+    int error;
+
+    memset(&put, 0, sizeof put);
+    put.flow.key = (struct nlattr *) key;
+    put.flow.key_len = key_len;
+    put.flow.actions = (struct nlattr *) actions;
+    put.flow.actions_len = actions_len;
+    put.flow.flags = 0;
+    put.flags = flags;
+    error = do_ioctl(dpif_, ODP_FLOW_PUT, &put);
+    if (!error && stats) {
+        *stats = put.flow.stats;
+    }
+    return error;
 }
 
 static int
-dpif_linux_flow_del(struct dpif *dpif_, struct odp_flow *flow)
+dpif_linux_flow_del(struct dpif *dpif_,
+                    const struct nlattr *key, size_t key_len,
+                    struct odp_flow_stats *stats)
 {
-    return do_ioctl(dpif_, ODP_FLOW_DEL, flow);
+    struct odp_flow odp_flow;
+    int error;
+
+    memset(&odp_flow, 0, sizeof odp_flow);
+    odp_flow.key = (struct nlattr *) key;
+    odp_flow.key_len = key_len;
+    error = do_ioctl(dpif_, ODP_FLOW_DEL, &odp_flow);
+    if (!error && stats) {
+        *stats = odp_flow.stats;
+    }
+    return error;
 }
+
+struct dpif_linux_flow_state {
+    struct odp_flow_dump dump;
+    struct odp_flow flow;
+    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+    uint32_t actionsbuf[65536 / sizeof(uint32_t)];
+};
 
 static int
 dpif_linux_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    *statep = xzalloc(sizeof(struct odp_flow_dump));
+    struct dpif_linux_flow_state *state;
+
+    *statep = state = xmalloc(sizeof *state);
+    state->dump.state[0] = 0;
+    state->dump.state[1] = 0;
+    state->dump.flow = &state->flow;
     return 0;
 }
 
 static int
-dpif_linux_flow_dump_next(const struct dpif *dpif, void *state,
-                          struct odp_flow *flow)
+dpif_linux_flow_dump_next(const struct dpif *dpif, void *state_,
+                          const struct nlattr **key, size_t *key_len,
+                          const struct nlattr **actions, size_t *actions_len,
+                          const struct odp_flow_stats **stats)
 {
-    struct odp_flow_dump *dump = state;
+    struct dpif_linux_flow_state *state = state_;
     int error;
 
-    dump->flow = flow;
-    error = do_ioctl(dpif, ODP_FLOW_DUMP, dump);
-    return error ? error : flow->flags & ODPFF_EOF ? EOF : 0;
+    memset(&state->flow, 0, sizeof state->flow);
+    state->flow.key = (struct nlattr *) state->keybuf;
+    state->flow.key_len = sizeof state->keybuf;
+    if (actions) {
+        state->flow.actions = (struct nlattr *) state->actionsbuf;
+        state->flow.actions_len = sizeof state->actionsbuf;
+    }
+
+    error = do_ioctl(dpif, ODP_FLOW_DUMP, &state->dump);
+    if (!error) {
+        if (state->flow.flags & ODPFF_EOF) {
+            return EOF;
+        }
+        if (key) {
+            *key = (const struct nlattr *) state->keybuf;
+            *key_len = state->flow.key_len;
+        }
+        if (actions) {
+            *actions = (const struct nlattr *) state->actionsbuf;
+            *actions_len = state->flow.actions_len;
+        }
+        if (stats) {
+            *stats = &state->flow.stats;
+        }
+    }
+    return error;
 }
 
 static int

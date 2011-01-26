@@ -480,32 +480,27 @@ do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 do_dump_flows(int argc OVS_UNUSED, char *argv[])
 {
+    const struct odp_flow_stats *stats;
+    const struct nlattr *actions;
     struct dpif_flow_dump dump;
+    const struct nlattr *key;
+    size_t actions_len;
     struct dpif *dpif;
+    size_t key_len;
     struct ds ds;
 
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
 
     ds_init(&ds);
     dpif_flow_dump_start(&dump, dpif);
-    for (;;) {
-        enum { MAX_ACTIONS = 4096 }; /* An arbitrary but large number. */
-        uint32_t actions[MAX_ACTIONS * sizeof(struct nlattr) / 4];
-        uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-        struct odp_flow f;
-
-        memset(&f, 0, sizeof f);
-        f.actions = (struct nlattr *) actions;
-        f.actions_len = sizeof actions;
-        f.key = (struct nlattr *) keybuf;
-        f.key_len = sizeof keybuf;
-
-        if (!dpif_flow_dump_next(&dump, &f)) {
-            break;
-        }
-
+    while (dpif_flow_dump_next(&dump, &key, &key_len,
+                               &actions, &actions_len, &stats)) {
         ds_clear(&ds);
-        format_odp_flow(&ds, &f);
+        odp_flow_key_format(key, key_len, &ds);
+        ds_put_cstr(&ds, ", ");
+        format_odp_flow_stats(&ds, stats);
+        ds_put_cstr(&ds, ", actions:");
+        format_odp_actions(&ds, actions, actions_len);
         printf("%s\n", ds_cstr(&ds));
     }
     dpif_flow_dump_done(&dump);

@@ -207,45 +207,59 @@ struct dpif_class {
      * value other than EAGAIN. */
     void (*port_poll_wait)(const struct dpif *dpif);
 
-    /* Queries 'dpif' for a flow entry matching 'flow->key'.
+    /* Queries 'dpif' for a flow entry.  The flow is specified by the Netlink
+     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * 'key'.
      *
-     * If a flow matching 'flow->key' exists in 'dpif', stores statistics for
-     * the flow into 'flow->stats'.  If 'flow->actions_len' is zero, then
-     * 'flow->actions' is ignored.  If 'flow->actions_len' is nonzero, then
-     * 'flow->actions' should point to an array of the specified number of
-     * bytes.  At most that many bytes of the flow's actions will be copied
-     * into that array.  'flow->actions_len' will be updated to the number of
-     * bytes of actions actually present in the flow, which may be greater than
-     * the amount stored if the flow has more actions than space available in
-     * the array.
+     * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
+     * failure, returns a positive errno value.
      *
-     * If no flow matching 'flow->key' exists in 'dpif', returns ENOENT.  On
-     * other failure, returns a positive errno value. */
-    int (*flow_get)(const struct dpif *dpif, struct odp_flow *flow);
+     * If 'actionsp' is nonnull, then on success '*actionsp' must be set to an
+     * ofpbuf owned by the caller that contains the Netlink attributes for the
+     * flow's actions.  The caller must free the ofpbuf (with ofpbuf_delete())
+     * when it is no longer needed.
+     *
+     * If 'stats' is nonnull, then on success it must be updated with the
+     * flow's statistics. */
+    int (*flow_get)(const struct dpif *dpif, int flags,
+                    const struct nlattr *key, size_t key_len,
+                    struct ofpbuf **actionsp, struct odp_flow_stats *stats);
 
-    /* Adds or modifies a flow in 'dpif' as specified in 'put':
+    /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
+     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * 'key'.  The associated actions are specified by the Netlink attributes
+     * with types ODPAT_* in the 'actions_len' bytes starting at 'actions'.
      *
-     * - If the flow specified in 'put->flow' does not exist in 'dpif', then
-     *   behavior depends on whether ODPPF_CREATE is specified in 'put->flags':
-     *   if it is, the flow will be added, otherwise the operation will fail
-     *   with ENOENT.
+     * - If the flow's key does not exist in 'dpif', then the flow will be
+     *   added if 'flags' includes ODPPF_CREATE.  Otherwise the operation will
+     *   fail with ENOENT.
      *
-     * - Otherwise, the flow specified in 'put->flow' does exist in 'dpif'.
-     *   Behavior in this case depends on whether ODPPF_MODIFY is specified in
-     *   'put->flags': if it is, the flow's actions will be updated, otherwise
-     *   the operation will fail with EEXIST.  If the flow's actions are
-     *   updated, then its statistics will be zeroed if ODPPF_ZERO_STATS is set
-     *   in 'put->flags', left as-is otherwise.
+     *   If the operation succeeds, then 'stats', if nonnull, must be zeroed.
+     *
+     * - If the flow's key does exist in 'dpif', then the flow's actions will
+     *   be updated if 'flags' includes ODPPF_MODIFY.  Otherwise the operation
+     *   will fail with EEXIST.  If the flow's actions are updated, then its
+     *   statistics will be zeroed if 'flags' includes ODPPF_ZERO_STATS, and
+     *   left as-is otherwise.
+     *
+     *   If the operation succeeds, then 'stats', if nonnull, must be set to
+     *   the flow's statistics before the update.
      */
-    int (*flow_put)(struct dpif *dpif, struct odp_flow_put *put);
+    int (*flow_put)(struct dpif *dpif, int flags,
+                    const struct nlattr *key, size_t key_len,
+                    const struct nlattr *actions, size_t actions_len,
+                    struct odp_flow_stats *stats);
 
-    /* Deletes a flow matching 'flow->key' from 'dpif' or returns ENOENT if
-     * 'dpif' does not contain such a flow.
+    /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
+     * does not contain such a flow.  The flow is specified by the Netlink
+     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * 'key'.
      *
-     * If successful, updates 'flow->stats', 'flow->n_actions', and
-     * 'flow->actions' as described in more detail under the flow_get member
-     * function below. */
-    int (*flow_del)(struct dpif *dpif, struct odp_flow *flow);
+     * If the operation succeeds, then 'stats', if nonnull, must be set to the
+     * flow's statistics before its deletion. */
+    int (*flow_del)(struct dpif *dpif,
+                    const struct nlattr *key, size_t key_len,
+                    struct odp_flow_stats *stats);
 
     /* Deletes all flows from 'dpif' and clears all of its queues of received
      * packets. */
@@ -258,22 +272,27 @@ struct dpif_class {
 
     /* Attempts to retrieve another flow from 'dpif' for 'state', which was
      * initialized by a successful call to the 'flow_dump_start' function for
-     * 'dpif'.  On success, stores a new odp_flow into 'flow' and returns 0.
-     * Returns EOF if the end of the flow table has been reached, or a positive
-     * errno value on error.  This function will not be called again once it
-     * returns nonzero once for a given iteration (but the 'flow_dump_done'
-     * function will be called afterward).
+     * 'dpif'.  On success, updates the output parameters as described below
+     * and returns 0.  Returns EOF if the end of the flow table has been
+     * reached, or a positive errno value on error.  This function will not be
+     * called again once it returns nonzero within a given iteration (but the
+     * 'flow_dump_done' function will be called afterward).
      *
-     * Dumping flow actions is optional.  If the caller does not want to dump
-     * actions it will initialize 'flow->actions' to NULL and
-     * 'flow->actions_len' to 0.  Otherwise, 'flow->actions' points to an array
-     * of struct nlattr and 'flow->actions_len' contains the number of bytes of
-     * Netlink attributes.  The implemention should fill in as many actions as
-     * will fit into the provided array and update 'flow->actions_len' with the
-     * number of bytes required (regardless of whether they fit in the provided
-     * space). */
+     * On success, if 'key' and 'key_len' are nonnull then '*key' and
+     * '*key_len' must be set to Netlink attributes with types ODP_KEY_ATTR_*
+     * representing the dumped flow's key.  If 'actions' and 'actions_len' are
+     * nonnull then they should be set to Netlink attributes with types ODPAT_*
+     * representing the dumped flow's actions.  If 'stats' is nonnull then it
+     * should be set to the dumped flow's statistics.
+     *
+     * All of the returned data is owned by 'dpif', not by the caller, and the
+     * caller must not modify or free it.  'dpif' must guarantee that it
+     * remains accessible and unchanging until at least the next call to
+     * 'flow_dump_next' or 'flow_dump_done' for 'state'. */
     int (*flow_dump_next)(const struct dpif *dpif, void *state,
-                          struct odp_flow *flow);
+                          const struct nlattr **key, size_t *key_len,
+                          const struct nlattr **actions, size_t *actions_len,
+                          const struct odp_flow_stats **stats);
 
     /* Releases resources from 'dpif' for 'state', which was initialized by a
      * successful call to the 'flow_dump_start' function for 'dpif'.  */
