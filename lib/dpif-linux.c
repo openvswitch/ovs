@@ -366,6 +366,14 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
 }
 
 static int
+dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
+{
+    /* If the datapath increases its range of supported ports, then it should
+     * start reporting that. */
+    return 1024;
+}
+
+static int
 dpif_linux_flow_flush(struct dpif *dpif_)
 {
     return do_ioctl(dpif_, ODP_FLOW_FLUSH, NULL);
@@ -681,6 +689,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_del,
     dpif_linux_port_query_by_number,
     dpif_linux_port_query_by_name,
+    dpif_linux_get_max_ports,
     dpif_linux_port_dump_start,
     dpif_linux_port_dump_next,
     dpif_linux_port_dump_done,

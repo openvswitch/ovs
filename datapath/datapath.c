@@ -370,7 +370,6 @@ static struct vport *new_vport(const struct vport_parms *parms)
 
 		rcu_assign_pointer(dp->ports[parms->port_no], vport);
 		list_add_rcu(&vport->node, &dp->port_list);
-		dp->n_ports++;
 
 		dp_ifinfo_notify(RTM_NEWLINK, vport);
 	}
@@ -390,7 +389,6 @@ int dp_detach_port(struct vport *p)
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
 	/* First drop references to device. */
-	p->dp->n_ports--;
 	list_del_rcu(&p->node);
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 
@@ -1202,8 +1200,6 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	struct odp_stats stats;
 	int i;
 
-	stats.n_ports = dp->n_ports;
-	stats.max_ports = DP_MAX_PORTS;
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
 	for_each_possible_cpu(i) {
 		const struct dp_stats_percpu *percpu_stats;

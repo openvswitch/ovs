@@ -80,6 +80,7 @@ int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
 int dpif_port_get_name(struct dpif *, uint16_t port_no,
                        char *name, size_t name_size);
+int dpif_get_max_ports(const struct dpif *);
 
 struct dpif_port_dump {
     const struct dpif *dpif;

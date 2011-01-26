@@ -561,6 +561,14 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     return error;
 }
 
+/* Returns one greater than the maximum port number accepted in flow
+ * actions. */
+int
+dpif_get_max_ports(const struct dpif *dpif)
+{
+    return dpif->dpif_class->get_max_ports(dpif);
+}
+
 /* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and copies
  * the port's name into the 'name_size' bytes in 'name', ensuring that the
  * result is null-terminated.  On failure, returns a positive errno value and

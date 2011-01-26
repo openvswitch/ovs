@@ -302,8 +302,6 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct odp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     memset(stats, 0, sizeof *stats);
-    stats->n_ports = dp->n_ports;
-    stats->max_ports = MAX_PORTS;
     stats->n_frags = dp->n_frags;
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
@@ -510,6 +508,12 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
         answer_port_query(port, dpif_port);
     }
     return error;
+}
+
+static int
+dpif_netdev_get_max_ports(const struct dpif *dpif OVS_UNUSED)
+{
+    return MAX_PORTS;
 }
 
 static void
@@ -1393,6 +1397,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_port_del,
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
+    dpif_netdev_get_max_ports,
     dpif_netdev_port_dump_start,
     dpif_netdev_port_dump_next,
     dpif_netdev_port_dump_done,

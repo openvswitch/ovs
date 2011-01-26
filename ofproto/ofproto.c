@@ -429,7 +429,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
                const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
-    struct odp_stats stats;
     struct ofproto *p;
     struct dpif *dpif;
     int error;
@@ -442,13 +441,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     error = dpif_open(datapath, datapath_type, &dpif);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
-        return error;
-    }
-    error = dpif_get_dp_stats(dpif, &stats);
-    if (error) {
-        VLOG_ERR("failed to obtain stats for datapath %s: %s",
-                 datapath, strerror(error));
-        dpif_close(dpif);
         return error;
     }
     error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION | ODPL_SFLOW);
@@ -476,7 +468,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->netdev_monitor = netdev_monitor_create();
     hmap_init(&p->ports);
     shash_init(&p->port_by_name);
-    p->max_ports = stats.max_ports;
+    p->max_ports = dpif_get_max_ports(dpif);
 
     /* Initialize submodules. */
     p->switch_status = switch_status_create(p);

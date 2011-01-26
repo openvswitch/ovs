@@ -100,11 +100,6 @@
 #define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
 
 struct odp_stats {
-    /* Ports. */
-    uint32_t n_ports;           /* Current number of ports. */
-    uint32_t max_ports;         /* Maximum supported number of ports. */
-
-    /* Lookups. */
     uint64_t n_frags;           /* Number of dropped IP fragments. */
     uint64_t n_hit;             /* Number of flow table matches. */
     uint64_t n_missed;          /* Number of flow table misses. */

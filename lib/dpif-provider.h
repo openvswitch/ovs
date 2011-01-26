@@ -156,6 +156,10 @@ struct dpif_class {
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
                               struct dpif_port *port);
 
+    /* Returns one greater than the largest port number accepted in flow
+     * actions. */
+    int (*get_max_ports)(const struct dpif *dpif);
+
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On
      * failure, returns a positive errno value. */
