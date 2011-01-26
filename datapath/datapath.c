@@ -672,10 +672,10 @@ static const struct nla_policy execute_policy[ODP_PACKET_ATTR_MAX + 1] = {
 	[ODP_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
 };
 
-static int execute_packet(const struct odp_upcall __user *uodp_upcall)
+static int execute_packet(const struct odp_packet __user *uodp_packet)
 {
 	struct nlattr *a[ODP_PACKET_ATTR_MAX + 1];
-	struct odp_upcall *odp_upcall;
+	struct odp_packet *odp_packet;
 	struct sk_buff *skb, *packet;
 	unsigned int actions_len;
 	struct nlattr *actions;
@@ -686,9 +686,9 @@ static int execute_packet(const struct odp_upcall __user *uodp_upcall)
 	u32 len;
 	int err;
 
-	if (get_user(len, &uodp_upcall->len))
+	if (get_user(len, &uodp_packet->len))
 		return -EFAULT;
-	if (len < sizeof(struct odp_upcall))
+	if (len < sizeof(struct odp_packet))
 		return -EINVAL;
 
 	skb = alloc_skb(len, GFP_KERNEL);
@@ -696,15 +696,15 @@ static int execute_packet(const struct odp_upcall __user *uodp_upcall)
 		return -ENOMEM;
 
 	err = -EFAULT;
-	if (copy_from_user(__skb_put(skb, len), uodp_upcall, len))
+	if (copy_from_user(__skb_put(skb, len), uodp_packet, len))
 		goto exit_free_skb;
 
-	odp_upcall = (struct odp_upcall *)skb->data;
+	odp_packet = (struct odp_packet *)skb->data;
 	err = -EINVAL;
-	if (odp_upcall->len != len)
+	if (odp_packet->len != len)
 		goto exit_free_skb;
 
-	__skb_pull(skb, sizeof(struct odp_upcall));
+	__skb_pull(skb, sizeof(struct odp_packet));
 	err = nla_parse(a, ODP_PACKET_ATTR_MAX, (struct nlattr *)skb->data,
 			skb->len, execute_policy);
 	if (err)
@@ -744,7 +744,7 @@ static int execute_packet(const struct odp_upcall __user *uodp_upcall)
 		goto exit_free_skb;
 
 	rcu_read_lock();
-	dp = get_dp(odp_upcall->dp_idx);
+	dp = get_dp(odp_packet->dp_idx);
 	err = -ENODEV;
 	if (dp)
 		err = execute_actions(dp, packet, &key, actions, actions_len);
@@ -2036,7 +2036,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 
 	case ODP_EXECUTE:
-		err = execute_packet((struct odp_upcall __user *)argp);
+		err = execute_packet((struct odp_packet __user *)argp);
 		goto exit;
 	}
 

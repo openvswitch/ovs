@@ -150,6 +150,12 @@ int dpif_flow_dump_done(struct dpif_flow_dump *);
 int dpif_execute(struct dpif *, const struct nlattr *actions,
                  size_t actions_len, const struct ofpbuf *);
 
+enum dpif_upcall_type {
+    DPIF_UC_MISS,               /* Miss in flow table. */
+    DPIF_UC_ACTION,             /* ODPAT_CONTROLLER action. */
+    DPIF_UC_SAMPLE              /* Packet sampling. */
+};
+
 /* A packet passed up from the datapath to userspace.
  *
  * If 'key' or 'actions' is nonnull, then it points into data owned by
@@ -158,17 +164,16 @@ int dpif_execute(struct dpif *, const struct nlattr *actions,
  * clients that exist so far.)
  */
 struct dpif_upcall {
-    uint32_t type;              /* One of _ODPL_*_NR. */
-
     /* All types. */
+    enum dpif_upcall_type type;
     struct ofpbuf *packet;      /* Packet data. */
     struct nlattr *key;         /* Flow key. */
     size_t key_len;             /* Length of 'key' in bytes. */
 
-    /* _ODPL_ACTION_NR only. */
+    /* DPIF_UC_ACTION only. */
     uint64_t userdata;          /* Argument to ODPAT_CONTROLLER. */
 
-    /* _ODPL_SFLOW_NR only. */
+    /* DPIF_UC_SAMPLE only. */
     uint32_t sample_pool;       /* # of sampling candidate packets so far. */
     struct nlattr *actions;     /* Associated flow actions. */
     size_t actions_len;

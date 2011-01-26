@@ -973,9 +973,18 @@ dpif_execute(struct dpif *dpif,
     return error;
 }
 
-/* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  Each ODPL_* bit set
- * in '*listen_mask' indicates that dpif_recv() will receive messages of that
- * type.  Returns 0 if successful, otherwise a positive errno value. */
+static bool OVS_UNUSED
+is_valid_listen_mask(int listen_mask)
+{
+    return !(listen_mask & ~((1u << DPIF_UC_MISS) |
+                             (1u << DPIF_UC_ACTION) |
+                             (1u << DPIF_UC_SAMPLE)));
+}
+
+/* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value 2**X
+ * set in '*listen_mask' indicates that dpif_recv() will receive messages of
+ * the type (from "enum dpif_upcall_type") with value X.  Returns 0 if
+ * successful, otherwise a positive errno value. */
 int
 dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
 {
@@ -983,17 +992,23 @@ dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
     if (error) {
         *listen_mask = 0;
     }
+    assert(is_valid_listen_mask(*listen_mask));
     log_operation(dpif, "recv_get_mask", error);
     return error;
 }
 
-/* Sets 'dpif''s "listen mask" to 'listen_mask'.  Each ODPL_* bit set in
- * '*listen_mask' requests that dpif_recv() receive messages of that type.
- * Returns 0 if successful, otherwise a positive errno value. */
+/* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set in
+ * '*listen_mask' requests that dpif_recv() will receive messages of the type
+ * (from "enum dpif_upcall_type") with value X.  Returns 0 if successful,
+ * otherwise a positive errno value. */
 int
 dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 {
-    int error = dpif->dpif_class->recv_set_mask(dpif, listen_mask);
+    int error;
+
+    assert(is_valid_listen_mask(listen_mask));
+
+    error = dpif->dpif_class->recv_set_mask(dpif, listen_mask);
     log_operation(dpif, "recv_set_mask", error);
     return error;
 }
@@ -1034,7 +1049,7 @@ dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
 }
 
 /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
- * '*upcall'.  Only upcalls of the types selected with the set_listen_mask
+ * '*upcall'.  Only upcalls of the types selected with dpif_recv_set_mask()
  * member function will ordinarily be received (but if a message type is
  * enabled and then later disabled, some stragglers might pop up).
  *
@@ -1059,9 +1074,9 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
 
         VLOG_DBG("%s: %s upcall on port %"PRIu16": %s", dpif_name(dpif),
-                 (upcall->type == _ODPL_MISS_NR ? "miss"
-                  : upcall->type == _ODPL_ACTION_NR ? "action"
-                  : upcall->type == _ODPL_SFLOW_NR ? "sFlow"
+                 (upcall->type == DPIF_UC_MISS ? "miss"
+                  : upcall->type == DPIF_UC_ACTION ? "action"
+                  : upcall->type == DPIF_UC_SAMPLE ? "sample"
                   : "<unknown>"),
                  flow.in_port, s);
         free(s);

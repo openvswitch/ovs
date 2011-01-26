@@ -301,7 +301,8 @@ struct ofconn {
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
-    struct pinsched *schedulers[2]; /* Indexed by reason code; see below. */
+#define N_SCHEDULERS 2
+    struct pinsched *schedulers[N_SCHEDULERS];
     struct pktbuf *pktbuf;         /* OpenFlow packet buffers. */
     int miss_send_len;             /* Bytes to send of buffered packets. */
 
@@ -319,15 +320,6 @@ struct ofconn {
     enum ofproto_band band;      /* In-band or out-of-band? */
 };
 
-/* We use OFPR_NO_MATCH and OFPR_ACTION as indexes into struct ofconn's
- * "schedulers" array.  Their values are 0 and 1, and their meanings and values
- * coincide with _ODPL_MISS_NR and _ODPL_ACTION_NR, so this is convenient.  In
- * case anything ever changes, check their values here.  */
-#define N_SCHEDULERS 2
-BUILD_ASSERT_DECL(OFPR_NO_MATCH == 0);
-BUILD_ASSERT_DECL(OFPR_NO_MATCH == _ODPL_MISS_NR);
-BUILD_ASSERT_DECL(OFPR_ACTION == 1);
-BUILD_ASSERT_DECL(OFPR_ACTION == _ODPL_ACTION_NR);
 
 static struct ofconn *ofconn_create(struct ofproto *, struct rconn *,
                                     enum ofconn_type);
@@ -444,7 +436,10 @@ ofproto_create(const char *datapath, const char *datapath_type,
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
     }
-    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION | ODPL_SFLOW);
+    error = dpif_recv_set_mask(dpif,
+                               ((1u << DPIF_UC_MISS) |
+                                (1u << DPIF_UC_ACTION) |
+                                (1u << DPIF_UC_SAMPLE)));
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s",
                  datapath, strerror(error));
@@ -2099,7 +2094,7 @@ execute_odp_actions(struct ofproto *ofproto, const struct flow *flow,
          * buffers along the way. */
         struct dpif_upcall upcall;
 
-        upcall.type = _ODPL_ACTION_NR;
+        upcall.type = DPIF_UC_ACTION;
         upcall.packet = packet;
         upcall.key = NULL;
         upcall.key_len = 0;
@@ -4439,13 +4434,13 @@ handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     struct flow flow;
 
     switch (upcall->type) {
-    case _ODPL_ACTION_NR:
+    case DPIF_UC_ACTION:
         COVERAGE_INC(ofproto_ctlr_action);
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
         send_packet_in(p, upcall, &flow, false);
         break;
 
-    case _ODPL_SFLOW_NR:
+    case DPIF_UC_SAMPLE:
         if (p->sflow) {
             odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
             ofproto_sflow_received(p->sflow, upcall, &flow);
@@ -4453,7 +4448,7 @@ handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
         ofpbuf_delete(upcall->packet);
         break;
 
-    case _ODPL_MISS_NR:
+    case DPIF_UC_MISS:
         handle_miss_upcall(p, upcall);
         break;
 
@@ -4809,9 +4804,10 @@ schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
     int total_len, send_len;
     struct ofpbuf *packet;
     uint32_t buffer_id;
+    int idx;
 
     /* Get OpenFlow buffer_id. */
-    if (upcall->type == _ODPL_ACTION_NR) {
+    if (upcall->type == DPIF_UC_ACTION) {
         buffer_id = UINT32_MAX;
     } else if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
         buffer_id = pktbuf_get_null();
@@ -4826,7 +4822,7 @@ schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
     if (buffer_id != UINT32_MAX) {
         send_len = MIN(send_len, ofconn->miss_send_len);
     }
-    if (upcall->type == _ODPL_ACTION_NR) {
+    if (upcall->type == DPIF_UC_ACTION) {
         send_len = MIN(send_len, upcall->userdata);
     }
 
@@ -4845,18 +4841,19 @@ schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
     opi->header.type = OFPT_PACKET_IN;
     opi->total_len = htons(total_len);
     opi->in_port = htons(odp_port_to_ofp_port(flow->in_port));
-    opi->reason = upcall->type == _ODPL_MISS_NR ? OFPR_NO_MATCH : OFPR_ACTION;
+    opi->reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
     opi->buffer_id = htonl(buffer_id);
     update_openflow_length(packet);
 
     /* Hand over to packet scheduler.  It might immediately call into
      * do_send_packet_in() or it might buffer it for a while (until a later
      * call to pinsched_run()). */
-    pinsched_send(ofconn->schedulers[opi->reason], flow->in_port,
+    idx = upcall->type == DPIF_UC_MISS ? 0 : 1;
+    pinsched_send(ofconn->schedulers[idx], flow->in_port,
                   packet, do_send_packet_in, ofconn);
 }
 
-/* Given 'upcall', of type _ODPL_ACTION_NR or _ODPL_MISS_NR, sends an
+/* Given 'upcall', of type DPIF_UC_ACTION or DPIF_UC_MISS, sends an
  * OFPT_PACKET_IN message to each OpenFlow controller as necessary according to
  * their individual configurations.
  *

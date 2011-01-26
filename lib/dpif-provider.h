@@ -303,14 +303,16 @@ struct dpif_class {
     int (*execute)(struct dpif *dpif, const struct nlattr *actions,
                    size_t actions_len, const struct ofpbuf *packet);
 
-    /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  Each ODPL_* bit
-     * set in '*listen_mask' indicates the 'dpif' will receive messages of the
-     * corresponding type when it calls the recv member function. */
+    /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value
+     * 2**X set in '*listen_mask' indicates that 'dpif' will receive messages
+     * of the type (from "enum dpif_upcall_type") with value X when its 'recv'
+     * function is called. */
     int (*recv_get_mask)(const struct dpif *dpif, int *listen_mask);
 
-    /* Sets 'dpif''s "listen mask" to 'listen_mask'.  Each ODPL_* bit set in
-     * 'listen_mask' indicates the 'dpif' will receive messages of the
-     * corresponding type when it calls the recv member function. */
+    /* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set
+     * in '*listen_mask' requests that 'dpif' will receive messages of the type
+     * (from "enum dpif_upcall_type") with value X when its 'recv' function is
+     * called. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
     /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.

@@ -92,7 +92,7 @@
 #define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
 #define ODP_FLOW_FLUSH          _IO('O', 19)
 
-#define ODP_EXECUTE             _IOR('O', 18, struct odp_upcall)
+#define ODP_EXECUTE             _IOR('O', 18, struct odp_packet)
 
 /**
  * struct odp_datapath - header with basic information about a datapath.

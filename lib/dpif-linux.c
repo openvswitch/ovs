@@ -686,7 +686,7 @@ dpif_linux_execute(struct dpif *dpif_,
                    const struct ofpbuf *packet)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct odp_upcall *execute;
+    struct odp_packet *execute;
     struct ofpbuf *buf;
     int error;
 
@@ -779,6 +779,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall)
 
     struct odp_packet *odp_packet = buf->data;
     struct nlattr *a[ARRAY_SIZE(odp_packet_policy)];
+    uint32_t type;
 
     if (!nl_policy_parse(buf, sizeof *odp_packet, odp_packet_policy,
                          a, ARRAY_SIZE(odp_packet_policy))) {
@@ -786,7 +787,13 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall)
     }
 
     memset(upcall, 0, sizeof *upcall);
-    upcall->type = nl_attr_get_u32(a[ODP_PACKET_ATTR_TYPE]);
+
+    type = nl_attr_get_u32(a[ODP_PACKET_ATTR_TYPE]);
+    upcall->type = (type == _ODPL_MISS_NR ? DPIF_UC_MISS
+                    : type == _ODPL_ACTION_NR ? DPIF_UC_ACTION
+                    : type == _ODPL_SFLOW_NR ? DPIF_UC_SAMPLE
+                    : -1);
+
     upcall->packet = buf;
     upcall->packet->data = (void *) nl_attr_get(a[ODP_PACKET_ATTR_PACKET]);
     upcall->packet->size = nl_attr_get_size(a[ODP_PACKET_ATTR_PACKET]);

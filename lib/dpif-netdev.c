@@ -996,12 +996,8 @@ static int
 dpif_netdev_recv_set_mask(struct dpif *dpif, int listen_mask)
 {
     struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
-    if (!(listen_mask & ~ODPL_ALL)) {
-        dpif_netdev->listen_mask = listen_mask;
-        return 0;
-    } else {
-        return EINVAL;
-    }
+    dpif_netdev->listen_mask = listen_mask;
+    return 0;
 }
 
 static struct dp_netdev_queue *
@@ -1090,7 +1086,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
         dp->n_hit++;
     } else {
         dp->n_missed++;
-        dp_netdev_output_control(dp, packet, _ODPL_MISS_NR, &key, 0);
+        dp_netdev_output_control(dp, packet, DPIF_UC_MISS, &key, 0);
     }
 }
 
@@ -1366,7 +1362,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case ODPAT_CONTROLLER:
-            dp_netdev_output_control(dp, packet, _ODPL_ACTION_NR,
+            dp_netdev_output_control(dp, packet, DPIF_UC_ACTION,
                                      key, nl_attr_get_u64(a));
             break;
 
