@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -33,19 +33,14 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
-		if (!is_internal_dev(dev)) {
-			mutex_lock(&dp->mutex);
+		if (!is_internal_dev(dev))
 			dp_detach_port(vport);
-			mutex_unlock(&dp->mutex);
-		}
 		break;
 
 	case NETDEV_CHANGENAME:
 		if (vport->port_no != ODPP_LOCAL) {
-			mutex_lock(&dp->mutex);
 			dp_sysfs_del_if(vport);
 			dp_sysfs_add_if(vport);
-			mutex_unlock(&dp->mutex);
 		}
 		break;
 

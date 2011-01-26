@@ -270,7 +270,7 @@ int vport_set_options(struct vport *vport, struct nlattr *options)
 }
 
 /**
- *	vport_del - delete existing vport device (for kernel callers)
+ *	vport_del - delete existing vport device
  *
  * @vport: vport to delete.
  *
@@ -340,7 +340,7 @@ int vport_set_addr(struct vport *vport, const unsigned char *addr)
 }
 
 /**
- *	vport_set_stats - sets offset device stats (for kernel callers)
+ *	vport_set_stats - sets offset device stats
  *
  * @vport: vport on which to set stats
  * @stats: stats to set
@@ -348,7 +348,9 @@ int vport_set_addr(struct vport *vport, const unsigned char *addr)
  * Provides a set of transmit, receive, and error stats to be added as an
  * offset to the collect data when stats are retreived.  Some devices may not
  * support setting the stats, in which case the result will always be
- * -EOPNOTSUPP.  RTNL lock must be held.
+ * -EOPNOTSUPP.
+ *
+ * Must be called with RTNL lock.
  */
 int vport_set_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
@@ -382,8 +384,7 @@ const char *vport_get_name(const struct vport *vport)
  *
  * @vport: vport from which to retrieve the type.
  *
- * Retrieves the type of the given device.  Either RTNL lock or rcu_read_lock
- * must be held.
+ * Retrieves the type of the given device.
  */
 enum odp_vport_type vport_get_type(const struct vport *vport)
 {
@@ -432,12 +433,14 @@ static int vport_call_get_stats(struct vport *vport, struct rtnl_link_stats64 *s
 }
 
 /**
- *	vport_get_stats - retrieve device stats (for kernel callers)
+ *	vport_get_stats - retrieve device stats
  *
  * @vport: vport from which to retrieve the stats
  * @stats: location to store stats
  *
  * Retrieves transmit, receive, and error stats for the given device.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
 {
@@ -519,8 +522,9 @@ int vport_get_stats(struct vport *vport, struct rtnl_link_stats64 *stats)
  *
  * @vport: vport from which to retrieve the flags
  *
- * Retrieves the flags of the given device.  Either RTNL lock or rcu_read_lock
- * must be held.
+ * Retrieves the flags of the given device.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 unsigned vport_get_flags(const struct vport *vport)
 {
@@ -532,8 +536,9 @@ unsigned vport_get_flags(const struct vport *vport)
  *
  * @vport: vport on which to check status.
  *
- * Checks whether the given device is running.  Either RTNL lock or
- * rcu_read_lock must be held.
+ * Checks whether the given device is running.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_is_running(const struct vport *vport)
 {
@@ -545,8 +550,9 @@ int vport_is_running(const struct vport *vport)
  *
  * @vport: vport from which to check status
  *
- * Retrieves the RFC2863 operstate of the given device.  Either RTNL lock or
- * rcu_read_lock must be held.
+ * Retrieves the RFC2863 operstate of the given device.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 unsigned char vport_get_operstate(const struct vport *vport)
 {
@@ -560,8 +566,9 @@ unsigned char vport_get_operstate(const struct vport *vport)
  *
  * Retrieves the system interface index of the given device or 0 if
  * the device does not have one (in the case of virtual ports).
- * Returns a negative index on error. Either RTNL lock or
- * rcu_read_lock must be held.
+ * Returns a negative index on error.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_get_ifindex(const struct vport *vport)
 {
@@ -579,8 +586,9 @@ int vport_get_ifindex(const struct vport *vport)
  * Retrieves the system link index of the given device.  The link is the index
  * of the interface on which the packet will actually be sent.  In most cases
  * this is the same as the ifindex but may be different for tunnel devices.
- * Returns a negative index on error.  Either RTNL lock or rcu_read_lock must
- * be held.
+ * Returns a negative index on error.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_get_iflink(const struct vport *vport)
 {
@@ -593,12 +601,13 @@ int vport_get_iflink(const struct vport *vport)
 }
 
 /**
- *	vport_get_mtu - retrieve device MTU (for kernel callers)
+ *	vport_get_mtu - retrieve device MTU
  *
  * @vport: vport from which to retrieve MTU
  *
- * Retrieves the MTU of the given device.  Either RTNL lock or rcu_read_lock
- * must be held.
+ * Retrieves the MTU of the given device.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_get_mtu(const struct vport *vport)
 {
@@ -613,11 +622,12 @@ int vport_get_mtu(const struct vport *vport)
  *
  * Retrieves the configuration of the given device, appending an
  * %ODP_VPORT_ATTR_OPTIONS attribute that in turn contains nested
- * vport-specific attributes to @skb.  Either RTNL lock or rcu_read_lock must
- * be held.
+ * vport-specific attributes to @skb.
  *
  * Returns 0 if successful, -EMSGSIZE if @skb has insufficient room, or another
  * negative error code if a real error occurred.
+ *
+ * Must be called with RTNL lock or rcu_read_lock.
  */
 int vport_get_options(const struct vport *vport, struct sk_buff *skb)
 {

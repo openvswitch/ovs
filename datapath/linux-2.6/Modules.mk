@@ -15,6 +15,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/cpumask.h \
 	linux-2.6/compat-2.6/include/linux/dmi.h \
 	linux-2.6/compat-2.6/include/linux/err.h \
+	linux-2.6/compat-2.6/include/linux/genetlink.h \
 	linux-2.6/compat-2.6/include/linux/icmp.h \
 	linux-2.6/compat-2.6/include/linux/if.h \
 	linux-2.6/compat-2.6/include/linux/if_arp.h \

@@ -60,25 +60,27 @@ struct dp_stats_percpu {
 /**
  * struct datapath - datapath for flow-based packet switching
  * @rcu: RCU callback head for deferred destruction.
- * @mutex: Mutual exclusion for ioctls.
  * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
- * @ifobj: Represents /sys/class/net/<devname>/brif.
+ * @ifobj: Represents /sys/class/net/<devname>/brif.  Protected by RTNL.
  * @drop_frags: Drop all IP fragments if nonzero.
  * @queues: %DP_N_QUEUES sets of queued packets for userspace to handle.
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
- * @table: Current flow table.
+ * @table: Current flow table.  Protected by genl_lock and RCU.
  * @ports: Map from port number to &struct vport.  %ODPP_LOCAL port
- * always exists, other ports may be %NULL.
- * @port_list: List of all ports in @ports in arbitrary order.
+ * always exists, other ports may be %NULL.  Protected by RTNL and RCU.
+ * @port_list: List of all ports in @ports in arbitrary order.  RTNL required
+ * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
  * %ODPL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
  * sampling a given packet.
+ *
+ * Context: See the comment on locking at the top of datapath.c for additional
+ * locking information.
  */
 struct datapath {
 	struct rcu_head rcu;
-	struct mutex mutex;
 	int dp_idx;
 	struct kobject ifobj;
 

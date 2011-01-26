@@ -20,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <linux/etherdevice.h>
+#include <linux/genetlink.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
@@ -56,52 +57,50 @@
 int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
 
-/* Datapaths.  Protected on the read side by rcu_read_lock, on the write side
- * by dp_mutex.
+/**
+ * DOC: Locking:
  *
- * dp_mutex nests inside the RTNL lock: if you need both you must take the RTNL
- * lock first.
+ * Writes to device state (add/remove datapath, port, set operations on vports,
+ * etc.) are protected by RTNL.
  *
- * It is safe to access the datapath and vport structures with just
- * dp_mutex.
+ * Writes to other state (flow table modifications, set miscellaneous datapath
+ * parameters such as drop frags, etc.) are protected by genl_mutex.  The RTNL
+ * lock nests inside genl_mutex.
+ *
+ * Reads are protected by RCU.
+ *
+ * There are a few special cases (mostly stats) that have their own
+ * synchronization but they nest under all of above and don't interact with
+ * each other.
  */
+
+/* Protected by genl_mutex. */
 static struct datapath __rcu *dps[256];
-static DEFINE_MUTEX(dp_mutex);
 
 static struct vport *new_vport(const struct vport_parms *);
 
-/* Must be called with rcu_read_lock or dp_mutex. */
+/* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
 struct datapath *get_dp(int dp_idx)
 {
 	if (dp_idx < 0 || dp_idx >= ARRAY_SIZE(dps))
 		return NULL;
+
 	return rcu_dereference_check(dps[dp_idx], rcu_read_lock_held() ||
-					 lockdep_is_held(&dp_mutex));
+					 lockdep_rtnl_is_held() ||
+					 lockdep_genl_is_held());
 }
 EXPORT_SYMBOL_GPL(get_dp);
 
-static struct datapath *get_dp_locked(int dp_idx)
-{
-	struct datapath *dp;
-
-	mutex_lock(&dp_mutex);
-	dp = get_dp(dp_idx);
-	if (dp)
-		mutex_lock(&dp->mutex);
-	mutex_unlock(&dp_mutex);
-	return dp;
-}
-
+/* Must be called with genl_mutex. */
 static struct tbl *get_table_protected(struct datapath *dp)
 {
-	return rcu_dereference_protected(dp->table,
-					 lockdep_is_held(&dp->mutex));
+	return rcu_dereference_protected(dp->table, lockdep_genl_is_held());
 }
 
+/* Must be called with rcu_read_lock or RTNL lock. */
 static struct vport *get_vport_protected(struct datapath *dp, u16 port_no)
 {
-	return rcu_dereference_protected(dp->ports[port_no],
-					 lockdep_is_held(&dp->mutex));
+	return rcu_dereference_rtnl(dp->ports[port_no]);
 }
 
 /* Must be called with rcu_read_lock or RTNL lock. */
@@ -121,6 +120,7 @@ static inline size_t br_nlmsg_size(void)
 	       + nla_total_size(1); /* IFLA_OPERSTATE */
 }
 
+/* Caller must hold RTNL lock. */
 static int dp_fill_ifinfo(struct sk_buff *skb,
 			  const struct vport *port,
 			  int event, unsigned int flags)
@@ -172,6 +172,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
+/* Caller must hold RTNL lock. */
 static void dp_ifinfo_notify(int event, struct vport *port)
 {
 	struct sk_buff *skb;
@@ -218,25 +219,7 @@ static void destroy_dp_rcu(struct rcu_head *rcu)
 	kobject_put(&dp->ifobj);
 }
 
-/* Caller must hold RTNL, dp_mutex, and dp->mutex. */
-static void destroy_dp(struct datapath *dp)
-{
-	struct vport *p, *n;
-
-	list_for_each_entry_safe (p, n, &dp->port_list, node)
-		if (p->port_no != ODPP_LOCAL)
-			dp_detach_port(p);
-
-	dp_sysfs_del_dp(dp);
-	rcu_assign_pointer(dps[dp->dp_idx], NULL);
-	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
-
-	mutex_unlock(&dp->mutex);
-	call_rcu(&dp->rcu, destroy_dp_rcu);
-	module_put(THIS_MODULE);
-}
-
-/* Called with RTNL lock and dp->mutex. */
+/* Called with RTNL lock and genl_lock. */
 static struct vport *new_vport(const struct vport_parms *parms)
 {
 	struct vport *vport;
@@ -246,7 +229,7 @@ static struct vport *new_vport(const struct vport_parms *parms)
 		struct datapath *dp = parms->dp;
 
 		rcu_assign_pointer(dp->ports[parms->port_no], vport);
-		list_add_rcu(&vport->node, &dp->port_list);
+		list_add(&vport->node, &dp->port_list);
 
 		dp_ifinfo_notify(RTM_NEWLINK, vport);
 	}
@@ -254,6 +237,7 @@ static struct vport *new_vport(const struct vport_parms *parms)
 	return vport;
 }
 
+/* Called with RTNL lock. */
 int dp_detach_port(struct vport *p)
 {
 	ASSERT_RTNL();
@@ -263,7 +247,7 @@ int dp_detach_port(struct vport *p)
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
 	/* First drop references to device. */
-	list_del_rcu(&p->node);
+	list_del(&p->node);
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 
 	/* Then destroy it. */
@@ -512,34 +496,27 @@ err:
 	return err;
 }
 
+/* Called with genl_mutex. */
 static int flush_flows(int dp_idx)
 {
 	struct tbl *old_table;
 	struct tbl *new_table;
 	struct datapath *dp;
-	int err;
 
-	dp = get_dp_locked(dp_idx);
-	err = -ENODEV;
+	dp = get_dp(dp_idx);
 	if (!dp)
-		goto exit;
+		return -ENODEV;
 
 	old_table = get_table_protected(dp);
 	new_table = tbl_create(TBL_MIN_BUCKETS);
-	err = -ENOMEM;
 	if (!new_table)
-		goto exit_unlock;
+		return -ENOMEM;
 
 	rcu_assign_pointer(dp->table, new_table);
 
 	tbl_deferred_destroy(old_table, flow_free_tbl);
 
-	err = 0;
-
-exit_unlock:
-	mutex_unlock(&dp->mutex);
-exit:
-	return err;
+	return 0;
 }
 
 static int validate_actions(const struct nlattr *actions, u32 actions_len)
@@ -644,6 +621,7 @@ static void clear_stats(struct sw_flow *flow)
 	flow->byte_count = 0;
 }
 
+/* Called with genl_mutex. */
 static int expand_table(struct datapath *dp)
 {
 	struct tbl *old_table = get_table_protected(dp);
@@ -771,7 +749,9 @@ static void get_dp_stats(struct datapath *dp, struct odp_stats *stats)
 	}
 }
 
-/* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports */
+/* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports.
+ * Called with RTNL lock.
+ */
 int dp_min_mtu(const struct datapath *dp)
 {
 	struct vport *p;
@@ -779,7 +759,7 @@ int dp_min_mtu(const struct datapath *dp)
 
 	ASSERT_RTNL();
 
-	list_for_each_entry_rcu (p, &dp->port_list, node) {
+	list_for_each_entry (p, &dp->port_list, node) {
 		int dev_mtu;
 
 		/* Skip any internal ports, since that's what we're trying to
@@ -795,8 +775,9 @@ int dp_min_mtu(const struct datapath *dp)
 	return mtu ? mtu : ETH_DATA_LEN;
 }
 
-/* Sets the MTU of all datapath devices to the minimum of the ports.  Must
- * be called with RTNL lock. */
+/* Sets the MTU of all datapath devices to the minimum of the ports
+ * Called with RTNL lock.
+ */
 void set_internal_devs_mtu(const struct datapath *dp)
 {
 	struct vport *p;
@@ -806,7 +787,7 @@ void set_internal_devs_mtu(const struct datapath *dp)
 
 	mtu = dp_min_mtu(dp);
 
-	list_for_each_entry_rcu (p, &dp->port_list, node) {
+	list_for_each_entry (p, &dp->port_list, node) {
 		if (is_internal_vport(p))
 			vport_set_mtu(p, mtu);
 	}
@@ -829,6 +810,7 @@ static const struct nla_policy flow_policy[ODP_FLOW_ATTR_MAX + 1] = {
 	[ODP_FLOW_ATTR_STATE] = { .type = NLA_U64 },
 };
 
+
 static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
 			     struct sw_flow *flow, u32 total_len, u64 state)
 {
@@ -842,14 +824,13 @@ static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
 	int err;
 
 	sf_acts = rcu_dereference_protected(flow->sf_acts,
-					    lockdep_is_held(&dp->mutex));
+					    lockdep_genl_is_held());
 
 	skb = alloc_skb(128 + FLOW_BUFSIZE + sf_acts->actions_len, GFP_KERNEL);
 	err = -ENOMEM;
 	if (!skb)
 		goto exit;
 
-	rcu_read_lock();
 	odp_flow = (struct odp_flow*)__skb_put(skb, sizeof(struct odp_flow));
 	odp_flow->dp_idx = dp->dp_idx;
 	odp_flow->total_len = total_len;
@@ -859,7 +840,7 @@ static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
 		goto nla_put_failure;
 	err = flow_to_nlattrs(&flow->key, skb);
 	if (err)
-		goto exit_unlock;
+		goto exit_free;
 	nla_nest_end(skb, nla);
 
 	nla = nla_nest_start(skb, ODP_FLOW_ATTR_ACTIONS);
@@ -892,17 +873,17 @@ static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
 
 	odp_flow->len = skb->len;
 	err = copy_to_user(dst, skb->data, skb->len) ? -EFAULT : 0;
-	goto exit_unlock;
+	goto exit_free;
 
 nla_put_failure:
 	err = -EMSGSIZE;
-exit_unlock:
-	rcu_read_unlock();
+exit_free:
 	kfree_skb(skb);
 exit:
 	return err;
 }
 
+/* Called with genl_mutex. */
 static struct sk_buff *copy_flow_from_user(struct odp_flow __user *uodp_flow,
 					   struct dp_flowcmd *flowcmd)
 {
@@ -987,10 +968,10 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 	if (IS_ERR(skb))
 		goto exit;
 
-	dp = get_dp_locked(flowcmd.dp_idx);
+	dp = get_dp(flowcmd.dp_idx);
 	error = -ENODEV;
 	if (!dp)
-		goto error_kfree_skb;
+		goto exit;
 
 	hash = flow_hash(&flowcmd.key);
 	table = get_table_protected(dp);
@@ -1001,13 +982,13 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		/* Bail out if we're not allowed to create a new flow. */
 		error = -ENOENT;
 		if (cmd == ODP_FLOW_SET)
-			goto error_unlock_dp;
+			goto exit;
 
 		/* Expand table, if necessary, to make room. */
 		if (tbl_count(table) >= tbl_n_buckets(table)) {
 			error = expand_table(dp);
 			if (error)
-				goto error_unlock_dp;
+				goto exit;
 			table = get_table_protected(dp);
 		}
 
@@ -1015,7 +996,7 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		flow = flow_alloc();
 		if (IS_ERR(flow)) {
 			error = PTR_ERR(flow);
-			goto error_unlock_dp;
+			goto exit;
 		}
 		flow->key = flowcmd.key;
 		clear_stats(flow);
@@ -1052,7 +1033,7 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		/* Update actions. */
 		flow = flow_cast(flow_node);
 		old_acts = rcu_dereference_protected(flow->sf_acts,
-						     lockdep_is_held(&dp->mutex));
+						     lockdep_genl_is_held());
 		if (flowcmd.actions &&
 		    (old_acts->actions_len != flowcmd.actions_len ||
 		     memcmp(old_acts->actions, flowcmd.actions,
@@ -1080,13 +1061,10 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		}
 	}
 	kfree_skb(skb);
-	mutex_unlock(&dp->mutex);
 	return 0;
 
 error_free_flow:
 	flow_put(flow);
-error_unlock_dp:
-	mutex_unlock(&dp->mutex);
 error_kfree_skb:
 	kfree_skb(skb);
 exit:
@@ -1104,25 +1082,22 @@ static int get_or_del_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 	int err;
 
 	skb = copy_flow_from_user(uodp_flow, &flowcmd);
-	err = PTR_ERR(skb);
 	if (IS_ERR(skb))
-		goto exit;
+		return PTR_ERR(skb);
 
-	dp = get_dp_locked(flowcmd.dp_idx);
-	err = -ENODEV;
+	dp = get_dp(flowcmd.dp_idx);
 	if (!dp)
-		goto exit_kfree_skb;
+		return -ENODEV;
 
 	table = get_table_protected(dp);
 	flow_node = tbl_lookup(table, &flowcmd.key, flow_hash(&flowcmd.key), flow_cmp);
-	err = -ENOENT;
 	if (!flow_node)
-		goto exit_unlock_dp;
+		return -ENOENT;
 
 	if (cmd == ODP_FLOW_DEL) {
 		err = tbl_remove(table, flow_node);
 		if (err)
-			goto exit_unlock_dp;
+			return err;
 	}
 
 	flow = flow_cast(flow_node);
@@ -1130,11 +1105,6 @@ static int get_or_del_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 	if (!err && cmd == ODP_FLOW_DEL)
 		flow_deferred_free(flow);
 
-exit_unlock_dp:
-	mutex_unlock(&dp->mutex);
-exit_kfree_skb:
-	kfree_skb(skb);
-exit:
 	return err;
 }
 
@@ -1153,25 +1123,23 @@ static int dump_flow(struct odp_flow __user *uodp_flow)
 	if (IS_ERR(skb))
 		goto exit;
 
-	dp = get_dp_locked(flowcmd.dp_idx);
+	dp = get_dp(flowcmd.dp_idx);
 	err = -ENODEV;
 	if (!dp)
-		goto exit_free;
+		goto exit_kfree_skb;
 
 	bucket = flowcmd.state >> 32;
 	obj = flowcmd.state;
-	flow_node = tbl_next(dp->table, &bucket, &obj);
+	flow_node = tbl_next(get_table_protected(dp), &bucket, &obj);
 	err = -ENODEV;
 	if (!flow_node)
-		goto exit_unlock_dp;
+		goto exit_kfree_skb;
 
 	flow = flow_cast(flow_node);
 	err = copy_flow_to_user(uodp_flow, dp, flow, flowcmd.total_len,
 				((u64)bucket << 32) | obj);
 
-exit_unlock_dp:
-	mutex_unlock(&dp->mutex);
-exit_free:
+exit_kfree_skb:
 	kfree_skb(skb);
 exit:
 	return err;
@@ -1183,6 +1151,7 @@ static const struct nla_policy datapath_policy[ODP_DP_ATTR_MAX + 1] = {
 	[ODP_DP_ATTR_SAMPLING] = { .type = NLA_U32 },
 };
 
+/* Called with genl_mutex. */
 static int copy_datapath_to_user(void __user *dst, struct datapath *dp, uint32_t total_len)
 {
 	struct odp_datapath *odp_datapath;
@@ -1231,6 +1200,7 @@ exit:
 	return err;
 }
 
+/* Called with genl_mutex. */
 static struct sk_buff *copy_datapath_from_user(struct odp_datapath __user *uodp_datapath, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 {
 	struct odp_datapath *odp_datapath;
@@ -1281,23 +1251,15 @@ error_free_skb:
 	return ERR_PTR(err);
 }
 
-/* Called with dp_mutex and optionally with RTNL lock also.
- * Holds the returned datapath's mutex on return.
- */
+/* Called with genl_mutex and optionally with RTNL lock also. */
 static struct datapath *lookup_datapath(struct odp_datapath *odp_datapath, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 {
-	WARN_ON_ONCE(!mutex_is_locked(&dp_mutex));
-
 	if (!a[ODP_DP_ATTR_NAME]) {
-		struct datapath *dp;
-
-		dp = get_dp(odp_datapath->dp_idx);
+		struct datapath *dp = get_dp(odp_datapath->dp_idx);
 		if (!dp)
 			return ERR_PTR(-ENODEV);
-		mutex_lock(&dp->mutex);
 		return dp;
 	} else {
-		struct datapath *dp;
 		struct vport *vport;
 		int dp_idx;
 
@@ -1308,13 +1270,11 @@ static struct datapath *lookup_datapath(struct odp_datapath *odp_datapath, struc
 
 		if (dp_idx < 0)
 			return ERR_PTR(-ENODEV);
-
-		dp = get_dp(dp_idx);
-		mutex_lock(&dp->mutex);
-		return dp;
+		return vport->dp;
 	}
 }
 
+/* Called with genl_mutex. */
 static void change_datapath(struct datapath *dp, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 {
 	if (a[ODP_DP_ATTR_IPV4_FRAGS])
@@ -1346,10 +1306,9 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 		goto err_free_skb;
 
 	rtnl_lock();
-	mutex_lock(&dp_mutex);
 	err = -ENODEV;
 	if (!try_module_get(THIS_MODULE))
-		goto err_unlock_dp_mutex;
+		goto err_unlock_rtnl;
 
 	dp_idx = odp_datapath->dp_idx;
 	if (dp_idx < 0) {
@@ -1372,8 +1331,6 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 	if (dp == NULL)
 		goto err_put_module;
 	INIT_LIST_HEAD(&dp->port_list);
-	mutex_init(&dp->mutex);
-	mutex_lock(&dp->mutex);
 	dp->dp_idx = dp_idx;
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_head_init(&dp->queues[i]);
@@ -1417,8 +1374,6 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 	rcu_assign_pointer(dps[dp_idx], dp);
 	dp_sysfs_add_dp(dp);
 
-	mutex_unlock(&dp->mutex);
-	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 
 	return 0;
@@ -1428,12 +1383,10 @@ err_destroy_local_port:
 err_destroy_table:
 	tbl_destroy(get_table_protected(dp), NULL);
 err_free_dp:
-	mutex_unlock(&dp->mutex);
 	kfree(dp);
 err_put_module:
 	module_put(THIS_MODULE);
-err_unlock_dp_mutex:
-	mutex_unlock(&dp_mutex);
+err_unlock_rtnl:
 	rtnl_unlock();
 err_free_skb:
 	kfree_skb(skb);
@@ -1444,6 +1397,7 @@ err:
 static int del_datapath(struct odp_datapath __user *uodp_datapath)
 {
 	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
+	struct vport *vport, *next_vport;
 	struct datapath *dp;
 	struct sk_buff *skb;
 	int err;
@@ -1454,18 +1408,26 @@ static int del_datapath(struct odp_datapath __user *uodp_datapath)
 		goto exit;
 
 	rtnl_lock();
-	mutex_lock(&dp_mutex);
 	dp = lookup_datapath((struct odp_datapath *)skb->data, a);
 	err = PTR_ERR(dp);
 	if (IS_ERR(dp))
 		goto exit_free;
 
-	destroy_dp(dp);
+	list_for_each_entry_safe (vport, next_vport, &dp->port_list, node)
+		if (vport->port_no != ODPP_LOCAL)
+			dp_detach_port(vport);
+
+	dp_sysfs_del_dp(dp);
+	rcu_assign_pointer(dps[dp->dp_idx], NULL);
+	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
+
+	call_rcu(&dp->rcu, destroy_dp_rcu);
+	module_put(THIS_MODULE);
+
 	err = 0;
 
 exit_free:
 	kfree_skb(skb);
-	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 exit:
 	return err;
@@ -1483,19 +1445,16 @@ static int set_datapath(struct odp_datapath __user *uodp_datapath)
 	if (IS_ERR(skb))
 		goto exit;
 
-	mutex_lock(&dp_mutex);
 	dp = lookup_datapath((struct odp_datapath *)skb->data, a);
 	err = PTR_ERR(dp);
 	if (IS_ERR(dp))
 		goto exit_free;
 
 	change_datapath(dp, a);
-	mutex_unlock(&dp->mutex);
 	err = 0;
 
 exit_free:
 	kfree_skb(skb);
-	mutex_unlock(&dp_mutex);
 exit:
 	return err;
 }
@@ -1514,16 +1473,13 @@ static int get_datapath(struct odp_datapath __user *uodp_datapath)
 		goto exit;
 	odp_datapath = (struct odp_datapath *)skb->data;
 
-	mutex_lock(&dp_mutex);
 	dp = lookup_datapath(odp_datapath, a);
-	mutex_unlock(&dp_mutex);
 
 	err = PTR_ERR(dp);
 	if (IS_ERR(dp))
 		goto exit_free;
 
 	err = copy_datapath_to_user(uodp_datapath, dp, odp_datapath->total_len);
-	mutex_unlock(&dp->mutex);
 exit_free:
 	kfree_skb(skb);
 exit:
@@ -1544,22 +1500,15 @@ static int dump_datapath(struct odp_datapath __user *uodp_datapath)
 		goto exit;
 	odp_datapath = (struct odp_datapath *)skb->data;
 
-	mutex_lock(&dp_mutex);
+	err = -ENODEV;
 	for (dp_idx = odp_datapath->dp_idx; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
 		struct datapath *dp = get_dp(dp_idx);
 		if (!dp)
 			continue;
 
-		mutex_lock(&dp->mutex);
-		mutex_unlock(&dp_mutex);
 		err = copy_datapath_to_user(uodp_datapath, dp, odp_datapath->total_len);
-		mutex_unlock(&dp->mutex);
-		goto exit_free;
+		break;
 	}
-	mutex_unlock(&dp_mutex);
-	err = -ENODEV;
-
-exit_free:
 	kfree_skb(skb);
 exit:
 	return err;
@@ -1575,7 +1524,8 @@ static const struct nla_policy vport_policy[ODP_VPORT_ATTR_MAX + 1] = {
 	[ODP_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
 
-static int copy_vport_to_user(void __user *dst, struct vport *vport, uint32_t total_len)
+/* Called with RCU read lock. */
+static struct sk_buff *odp_vport_build_info(struct vport *vport, uint32_t total_len)
 {
 	struct odp_vport *odp_vport;
 	struct sk_buff *skb;
@@ -1583,12 +1533,11 @@ static int copy_vport_to_user(void __user *dst, struct vport *vport, uint32_t to
 	int ifindex, iflink;
 	int err;
 
-	skb = alloc_skb(NLMSG_GOODSIZE, GFP_KERNEL);
+	skb = alloc_skb(NLMSG_GOODSIZE, GFP_ATOMIC);
 	err = -ENOMEM;
 	if (!skb)
-		goto exit;
+		goto err;
 
-	rcu_read_lock();
 	odp_vport = (struct odp_vport*)__skb_put(skb, sizeof(struct odp_vport));
 	odp_vport->dp_idx = vport->dp->dp_idx;
 	odp_vport->total_len = total_len;
@@ -1619,19 +1568,17 @@ static int copy_vport_to_user(void __user *dst, struct vport *vport, uint32_t to
 
 	err = -EMSGSIZE;
 	if (skb->len > total_len)
-		goto exit_unlock;
+		goto err_free;
 
 	odp_vport->len = skb->len;
-	err = copy_to_user(dst, skb->data, skb->len) ? -EFAULT : 0;
-	goto exit_unlock;
+	return skb;
 
 nla_put_failure:
 	err = -EMSGSIZE;
-exit_unlock:
-	rcu_read_unlock();
+err_free:
 	kfree_skb(skb);
-exit:
-	return err;
+err:
+	return ERR_PTR(err);
 }
 
 static struct sk_buff *copy_vport_from_user(struct odp_vport __user *uodp_vport,
@@ -1676,10 +1623,7 @@ error_free_skb:
 	return ERR_PTR(err);
 }
 
-
-/* Called without any locks (or with RTNL lock).
- * Returns holding vport->dp->mutex.
- */
+/* Called with RTNL lock or RCU read lock. */
 static struct vport *lookup_vport(struct odp_vport *odp_vport,
 				  struct nlattr *a[ODP_VPORT_ATTR_MAX + 1])
 {
@@ -1687,30 +1631,9 @@ static struct vport *lookup_vport(struct odp_vport *odp_vport,
 	struct vport *vport;
 
 	if (a[ODP_VPORT_ATTR_NAME]) {
-		int dp_idx, port_no;
-
-	retry:
-		rcu_read_lock();
 		vport = vport_locate(nla_data(a[ODP_VPORT_ATTR_NAME]));
-		if (!vport) {
-			rcu_read_unlock();
+		if (!vport)
 			return ERR_PTR(-ENODEV);
-		}
-		dp_idx = vport->dp->dp_idx;
-		port_no = vport->port_no;
-		rcu_read_unlock();
-
-		dp = get_dp_locked(dp_idx);
-		if (!dp)
-			goto retry;
-
-		vport = get_vport_protected(dp, port_no);
-		if (!vport ||
-		    strcmp(vport_get_name(vport), nla_data(a[ODP_VPORT_ATTR_NAME]))) {
-			mutex_unlock(&dp->mutex);
-			goto retry;
-		}
-
 		return vport;
 	} else if (a[ODP_VPORT_ATTR_PORT_NO]) {
 		u32 port_no = nla_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
@@ -1718,20 +1641,19 @@ static struct vport *lookup_vport(struct odp_vport *odp_vport,
 		if (port_no >= DP_MAX_PORTS)
 			return ERR_PTR(-EINVAL);
 
-		dp = get_dp_locked(odp_vport->dp_idx);
+		dp = get_dp(odp_vport->dp_idx);
 		if (!dp)
 			return ERR_PTR(-ENODEV);
 
 		vport = get_vport_protected(dp, port_no);
-		if (!vport) {
-			mutex_unlock(&dp->mutex);
+		if (!vport)
 			return ERR_PTR(-ENOENT);
-		}
 		return vport;
 	} else
 		return ERR_PTR(-EINVAL);
 }
 
+/* Called with RTNL lock. */
 static int change_vport(struct vport *vport, struct nlattr *a[ODP_VPORT_ATTR_MAX + 1])
 {
 	int err = 0;
@@ -1749,6 +1671,7 @@ static int attach_vport(struct odp_vport __user *uodp_vport)
 	struct nlattr *a[ODP_VPORT_ATTR_MAX + 1];
 	struct odp_vport *odp_vport;
 	struct vport_parms parms;
+	struct sk_buff *reply;
 	struct vport *vport;
 	struct sk_buff *skb;
 	struct datapath *dp;
@@ -1766,28 +1689,27 @@ static int attach_vport(struct odp_vport __user *uodp_vport)
 		goto exit_kfree_skb;
 
 	rtnl_lock();
-
-	dp = get_dp_locked(odp_vport->dp_idx);
+	dp = get_dp(odp_vport->dp_idx);
 	err = -ENODEV;
 	if (!dp)
-		goto exit_unlock_rtnl;
+		goto exit_unlock;
 
 	if (a[ODP_VPORT_ATTR_PORT_NO]) {
 		port_no = nla_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
 
 		err = -EFBIG;
 		if (port_no >= DP_MAX_PORTS)
-			goto exit_unlock_dp;
+			goto exit_unlock;
 
 		vport = get_vport_protected(dp, port_no);
 		err = -EBUSY;
 		if (vport)
-			goto exit_unlock_dp;
+			goto exit_unlock;
 	} else {
 		for (port_no = 1; ; port_no++) {
 			if (port_no >= DP_MAX_PORTS) {
 				err = -EFBIG;
-				goto exit_unlock_dp;
+				goto exit_unlock;
 			}
 			vport = get_vport_protected(dp, port_no);
 			if (!vport)
@@ -1804,7 +1726,7 @@ static int attach_vport(struct odp_vport __user *uodp_vport)
 	vport = new_vport(&parms);
 	err = PTR_ERR(vport);
 	if (IS_ERR(vport))
-		goto exit_unlock_dp;
+		goto exit_unlock;
 
  	set_internal_devs_mtu(dp);
  	dp_sysfs_add_if(vport);
@@ -1812,14 +1734,18 @@ static int attach_vport(struct odp_vport __user *uodp_vport)
 	err = change_vport(vport, a);
 	if (err) {
 		dp_detach_port(vport);
-		goto exit_unlock_dp;
+		goto exit_unlock;
 	}
 
-	err = copy_vport_to_user(uodp_vport, vport, odp_vport->total_len);
+	reply = odp_vport_build_info(vport, odp_vport->total_len);
+	err = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto exit_unlock;
 
-exit_unlock_dp:
-	mutex_unlock(&dp->mutex);
-exit_unlock_rtnl:
+	err = copy_to_user(uodp_vport, reply->data, reply->len) ? -EFAULT : 0;
+	kfree_skb(reply);
+
+exit_unlock:
 	rtnl_unlock();
 exit_kfree_skb:
 	kfree_skb(skb);
@@ -1851,7 +1777,6 @@ static int set_vport(unsigned int cmd, struct odp_vport __user *uodp_vport)
 	if (!err)
 		err = change_vport(vport, a);
 
-	mutex_unlock(&vport->dp->mutex);
 exit_free:
 	kfree_skb(skb);
 	rtnl_unlock();
@@ -1862,7 +1787,6 @@ exit:
 static int del_vport(unsigned int cmd, struct odp_vport __user *uodp_vport)
 {
 	struct nlattr *a[ODP_VPORT_ATTR_MAX + 1];
-	struct datapath *dp;
 	struct vport *vport;
 	struct sk_buff *skb;
 	int err;
@@ -1875,17 +1799,9 @@ static int del_vport(unsigned int cmd, struct odp_vport __user *uodp_vport)
 	rtnl_lock();
 	vport = lookup_vport((struct odp_vport *)skb->data, a);
 	err = PTR_ERR(vport);
-	if (IS_ERR(vport))
-		goto exit_free;
-	dp = vport->dp;
+	if (!IS_ERR(vport))
+		err = dp_detach_port(vport);
 
-	err = -EINVAL;
-	if (vport->port_no == ODPP_LOCAL)
-		goto exit_free;
-
-	err = dp_detach_port(vport);
-	mutex_unlock(&dp->mutex);
-exit_free:
 	kfree_skb(skb);
 	rtnl_unlock();
 exit:
@@ -1896,6 +1812,7 @@ static int get_vport(struct odp_vport __user *uodp_vport)
 {
 	struct nlattr *a[ODP_VPORT_ATTR_MAX + 1];
 	struct odp_vport *odp_vport;
+	struct sk_buff *reply;
 	struct vport *vport;
 	struct sk_buff *skb;
 	int err;
@@ -1903,19 +1820,32 @@ static int get_vport(struct odp_vport __user *uodp_vport)
 	skb = copy_vport_from_user(uodp_vport, a);
 	err = PTR_ERR(skb);
 	if (IS_ERR(skb))
-		goto exit;
+		goto err;
 	odp_vport = (struct odp_vport *)skb->data;
 
+	rcu_read_lock();
 	vport = lookup_vport(odp_vport, a);
 	err = PTR_ERR(vport);
 	if (IS_ERR(vport))
-		goto exit_free;
+		goto err_unlock_rcu;
+	reply = odp_vport_build_info(vport, odp_vport->total_len);
+	rcu_read_unlock();
 
-	err = copy_vport_to_user(uodp_vport, vport, odp_vport->total_len);
-	mutex_unlock(&vport->dp->mutex);
-exit_free:
+	err = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto err_kfree_skb;
+
+	err = copy_to_user(uodp_vport, reply->data, reply->len) ? -EFAULT : 0;
+	kfree_skb(reply);
 	kfree_skb(skb);
-exit:
+
+	return err;
+
+err_unlock_rcu:
+	rcu_read_unlock();
+err_kfree_skb:
+	kfree_skb(skb);
+err:
 	return err;
 }
 
@@ -1931,41 +1861,57 @@ static int dump_vport(struct odp_vport __user *uodp_vport)
 	skb = copy_vport_from_user(uodp_vport, a);
 	err = PTR_ERR(skb);
 	if (IS_ERR(skb))
-		goto exit;
+		goto err;
 	odp_vport = (struct odp_vport *)skb->data;
 
-	dp = get_dp_locked(odp_vport->dp_idx);
+	dp = get_dp(odp_vport->dp_idx);
 	err = -ENODEV;
 	if (!dp)
-		goto exit_free;
+		goto err_kfree_skb;
 
 	port_no = 0;
 	if (a[ODP_VPORT_ATTR_PORT_NO])
 		port_no = nla_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
+
+	rcu_read_lock();
 	for (; port_no < DP_MAX_PORTS; port_no++) {
-		struct vport *vport = get_vport_protected(dp, port_no);
-		if (vport) {
-			err = copy_vport_to_user(uodp_vport, vport, odp_vport->total_len);
-			goto exit_unlock_dp;
-		}
+		struct sk_buff *skb_out;
+		struct vport *vport;
+		int retval;
+
+		vport = get_vport_protected(dp, port_no);
+		if (!vport)
+			continue;
+
+		skb_out = odp_vport_build_info(vport, odp_vport->total_len);
+		rcu_read_unlock();
+
+		err = PTR_ERR(skb_out);
+		if (IS_ERR(skb_out))
+			goto err_kfree_skb;
+
+		retval = copy_to_user(uodp_vport, skb_out->data, skb_out->len);
+		kfree_skb(skb_out);
+		kfree_skb(skb);
+
+		return retval ? -EFAULT : 0;
 	}
+	rcu_read_unlock();
 	err = -ENODEV;
 
-exit_unlock_dp:
-	mutex_unlock(&dp->mutex);
-exit_free:
+err_kfree_skb:
 	kfree_skb(skb);
-exit:
+err:
 	return err;
 }
 
 static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			   unsigned long argp)
 {
-	int dp_idx = iminor(f->f_dentry->d_inode);
-	struct datapath *dp;
 	int listeners;
 	int err;
+
+	genl_lock();
 
 	/* Handle commands with special locking requirements up front. */
 	switch (cmd) {
@@ -2032,11 +1978,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 	}
 
-	dp = get_dp_locked(dp_idx);
-	err = -ENODEV;
-	if (!dp)
-		goto exit;
-
 	switch (cmd) {
 	case ODP_GET_LISTEN_MASK:
 		err = put_user(get_listen_mask(f), (int __user *)argp);
@@ -2057,8 +1998,8 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = -ENOIOCTLCMD;
 		break;
 	}
-	mutex_unlock(&dp->mutex);
 exit:
+	genl_unlock();
 	return err;
 }
 
@@ -2107,49 +2048,58 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 }
 #endif
 
+static struct sk_buff *openvswitch_try_read(struct file *f, struct datapath *dp)
+{
+	int listeners = get_listen_mask(f);
+	int i;
+
+	for (i = 0; i < DP_N_QUEUES; i++) {
+		if (listeners & (1 << i)) {
+			struct sk_buff *skb = skb_dequeue(&dp->queues[i]);
+			if (skb)
+				return skb;
+		}
+	}
+
+	if (f->f_flags & O_NONBLOCK)
+		return ERR_PTR(-EAGAIN);
+
+	wait_event_interruptible(dp->waitqueue,
+				 dp_has_packet_of_interest(dp, listeners));
+
+	if (signal_pending(current))
+		return ERR_PTR(-ERESTARTSYS);
+
+	return NULL;
+}
+
 static ssize_t openvswitch_read(struct file *f, char __user *buf,
 				size_t nbytes, loff_t *ppos)
 {
-	int listeners = get_listen_mask(f);
 	int dp_idx = iminor(f->f_dentry->d_inode);
-	struct datapath *dp = get_dp_locked(dp_idx);
+	struct datapath *dp;
 	struct sk_buff *skb;
 	struct iovec iov;
 	int retval;
 
+	genl_lock();
+
+	dp = get_dp(dp_idx);
+	retval = -ENODEV;
 	if (!dp)
-		return -ENODEV;
+		goto error;
 
-	if (nbytes == 0 || !listeners)
-		return 0;
+	retval = 0;
+	if (nbytes == 0 || !get_listen_mask(f))
+		goto error;
 
-	for (;;) {
-		int i;
+	do {
+		skb = openvswitch_try_read(f, dp);
+	} while (!skb);
 
-		for (i = 0; i < DP_N_QUEUES; i++) {
-			if (listeners & (1 << i)) {
-				skb = skb_dequeue(&dp->queues[i]);
-				if (skb)
-					goto success;
-			}
-		}
-
-		if (f->f_flags & O_NONBLOCK) {
-			retval = -EAGAIN;
-			goto error;
-		}
-
-		wait_event_interruptible(dp->waitqueue,
-					 dp_has_packet_of_interest(dp,
-								   listeners));
-
-		if (signal_pending(current)) {
-			retval = -ERESTARTSYS;
-			goto error;
-		}
-	}
-success:
-	mutex_unlock(&dp->mutex);
+	genl_unlock();
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
 
 	iov.iov_base = buf;
 	iov.iov_len = min_t(size_t, skb->len, nbytes);
@@ -2161,25 +2111,28 @@ success:
 	return retval;
 
 error:
-	mutex_unlock(&dp->mutex);
+	genl_unlock();
 	return retval;
 }
 
 static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 {
 	int dp_idx = iminor(file->f_dentry->d_inode);
-	struct datapath *dp = get_dp_locked(dp_idx);
+	struct datapath *dp;
 	unsigned int mask;
 
+	genl_lock();
+	dp = get_dp(dp_idx);
 	if (dp) {
 		mask = 0;
 		poll_wait(file, &dp->waitqueue, wait);
 		if (dp_has_packet_of_interest(dp, get_listen_mask(file)))
 			mask |= POLLIN | POLLRDNORM;
-		mutex_unlock(&dp->mutex);
 	} else {
 		mask = POLLIN | POLLRDNORM | POLLHUP;
 	}
+	genl_unlock();
+
 	return mask;
 }
 
