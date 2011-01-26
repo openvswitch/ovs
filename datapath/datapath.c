@@ -17,6 +17,7 @@
 #include <linux/if_vlan.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/jhash.h>
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <linux/etherdevice.h>
@@ -209,10 +210,6 @@ static struct kobj_type dp_ktype = {
 static void destroy_dp_rcu(struct rcu_head *rcu)
 {
 	struct datapath *dp = container_of(rcu, struct datapath, rcu);
-	int i;
-
-	for (i = 0; i < DP_N_QUEUES; i++)
-		skb_queue_purge(&dp->queues[i]);
 
 	tbl_destroy((struct tbl __force *)dp->table, flow_free_tbl);
 	free_percpu(dp->stats_percpu);
@@ -290,7 +287,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		if (unlikely(!flow_node)) {
 			struct dp_upcall_info upcall;
 
-			upcall.type = _ODPL_MISS_NR;
+			upcall.cmd = ODP_PACKET_CMD_MISS;
 			upcall.key = &key;
 			upcall.userdata = 0;
 			upcall.sample_pool = 0;
@@ -361,11 +358,23 @@ static void copy_and_csum_skb(struct sk_buff *skb, void *to)
 	*(__sum16 *)(to + csum_start + csum_offset) = csum_fold(csum);
 }
 
-/* Append each packet in 'skb' list to 'queue'.  There will be only one packet
- * unless we broke up a GSO packet. */
+static struct genl_family dp_packet_genl_family;
+#define PACKET_N_MC_GROUPS 16
+
+static int packet_mc_group(struct datapath *dp, u8 cmd)
+{
+	BUILD_BUG_ON_NOT_POWER_OF_2(PACKET_N_MC_GROUPS);
+	return jhash_2words(dp->dp_idx, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
+}
+
+/* Send each packet in the 'skb' list to userspace for 'dp' as directed by
+ * 'upcall_info'.  There will be only one packet unless we broke up a GSO
+ * packet.
+ */
 static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 				 const struct dp_upcall_info *upcall_info)
 {
+	u32 group = packet_mc_group(dp, upcall_info->cmd);
 	struct sk_buff *nskb;
 	int port_no;
 	int err;
@@ -376,7 +385,7 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		port_no = ODPP_LOCAL;
 
 	do {
-		struct odp_packet *upcall;
+		struct odp_header *upcall;
 		struct sk_buff *user_skb; /* to be queued to userspace */
 		struct nlattr *nla;
 		unsigned int len;
@@ -384,7 +393,7 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		nskb = skb->next;
 		skb->next = NULL;
 
-		len = sizeof(struct odp_packet);
+		len = sizeof(struct odp_header);
 		len += nla_total_size(4); /* ODP_PACKET_ATTR_TYPE. */
 		len += nla_total_size(skb->len);
 		len += nla_total_size(FLOW_BUFSIZE);
@@ -395,14 +404,14 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		if (upcall_info->actions_len)
 			len += nla_total_size(upcall_info->actions_len);
 
-		user_skb = alloc_skb(len, GFP_ATOMIC);
-		if (!user_skb)
+		user_skb = genlmsg_new(len, GFP_ATOMIC);
+		if (!user_skb) {
+			netlink_set_err(INIT_NET_GENL_SOCK, 0, group, -ENOBUFS);
 			goto err_kfree_skbs;
+		}
 
-		upcall = (struct odp_packet *)__skb_put(user_skb, sizeof(*upcall));
+		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family, 0, upcall_info->cmd);
 		upcall->dp_idx = dp->dp_idx;
-
-		nla_put_u32(user_skb, ODP_PACKET_ATTR_TYPE, upcall_info->type);
 
 		nla = nla_nest_start(user_skb, ODP_PACKET_ATTR_KEY);
 		flow_to_nlattrs(upcall_info->key, user_skb);
@@ -427,8 +436,9 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		else
 			skb_copy_bits(skb, 0, nla_data(nla), skb->len);
 
-		upcall->len = user_skb->len;
-		skb_queue_tail(&dp->queues[upcall_info->type], user_skb);
+		err = genlmsg_multicast(user_skb, 0, group, GFP_ATOMIC);
+		if (err)
+			goto err_kfree_skbs;
 
 		kfree_skb(skb);
 		skb = nskb;
@@ -444,19 +454,49 @@ err_kfree_skbs:
 	return err;
 }
 
+/* Generic Netlink multicast groups for upcalls.
+ *
+ * We really want three unique multicast groups per datapath, but we can't even
+ * get one, because genl_register_mc_group() takes genl_lock, which is also
+ * held during Generic Netlink message processing, so trying to acquire
+ * multicast groups during ODP_DP_NEW processing deadlocks.  Instead, we
+ * preallocate a few groups and use them round-robin for datapaths.  Collision
+ * isn't fatal--multicast listeners should check that the family is the one
+ * that they want and discard others--but it wastes time and memory to receive
+ * unwanted messages.
+ */
+static struct genl_multicast_group packet_mc_groups[PACKET_N_MC_GROUPS];
+
+static struct genl_family dp_packet_genl_family = {
+	.id = GENL_ID_GENERATE,
+	.hdrsize = sizeof(struct odp_header),
+	.name = ODP_PACKET_FAMILY,
+	.version = 1,
+	.maxattr = ODP_PACKET_ATTR_MAX
+};
+
+static int packet_register_mc_groups(void)
+{
+	int i;
+
+	for (i = 0; i < PACKET_N_MC_GROUPS; i++) {
+		struct genl_multicast_group *group = &packet_mc_groups[i];
+		int error;
+
+		sprintf(group->name, "packet%d", i);
+		error = genl_register_mc_group(&dp_packet_genl_family, group);
+		if (error)
+			return error;
+	}
+	return 0;
+}
+
 int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
 {
 	struct dp_stats_percpu *stats;
-	struct sk_buff_head *queue;
 	int err;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	BUG_ON(upcall_info->type >= DP_N_QUEUES);
-
-	queue = &dp->queues[upcall_info->type];
-	err = -ENOBUFS;
-	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
-		goto err_kfree_skb;
 
 	forward_ip_summed(skb);
 
@@ -477,9 +517,7 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 		}
 	}
 
-	err = queue_control_packets(dp, skb, upcall_info);
-	wake_up_interruptible(&dp->waitqueue);
-	return err;
+	return queue_control_packets(dp, skb, upcall_info);
 
 err_kfree_skb:
 	kfree_skb(skb);
@@ -637,64 +675,34 @@ static int expand_table(struct datapath *dp)
  	return 0;
 }
 
-static const struct nla_policy execute_policy[ODP_PACKET_ATTR_MAX + 1] = {
-	[ODP_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
-	[ODP_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
-};
-
-static int execute_packet(const struct odp_packet __user *uodp_packet)
+static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *a[ODP_PACKET_ATTR_MAX + 1];
-	struct odp_packet *odp_packet;
-	struct sk_buff *skb, *packet;
+	struct odp_header *odp_header = info->userhdr;
+	struct nlattr **a = info->attrs;
+	struct sk_buff *packet;
 	unsigned int actions_len;
 	struct nlattr *actions;
 	struct sw_flow_key key;
 	struct datapath *dp;
 	struct ethhdr *eth;
 	bool is_frag;
-	u32 len;
 	int err;
-
-	if (get_user(len, &uodp_packet->len))
-		return -EFAULT;
-	if (len < sizeof(struct odp_packet))
-		return -EINVAL;
-
-	skb = alloc_skb(len, GFP_KERNEL);
-	if (!skb)
-		return -ENOMEM;
-
-	err = -EFAULT;
-	if (copy_from_user(__skb_put(skb, len), uodp_packet, len))
-		goto exit_free_skb;
-
-	odp_packet = (struct odp_packet *)skb->data;
-	err = -EINVAL;
-	if (odp_packet->len != len)
-		goto exit_free_skb;
-
-	__skb_pull(skb, sizeof(struct odp_packet));
-	err = nla_parse(a, ODP_PACKET_ATTR_MAX, (struct nlattr *)skb->data,
-			skb->len, execute_policy);
-	if (err)
-		goto exit_free_skb;
 
 	err = -EINVAL;
 	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_ACTIONS] ||
 	    nla_len(a[ODP_PACKET_ATTR_PACKET]) < ETH_HLEN)
-		goto exit_free_skb;
+		goto exit;
 
 	actions = nla_data(a[ODP_PACKET_ATTR_ACTIONS]);
 	actions_len = nla_len(a[ODP_PACKET_ATTR_ACTIONS]);
 	err = validate_actions(actions, actions_len);
 	if (err)
-		goto exit_free_skb;
+		goto exit;
 
 	packet = skb_clone(skb, GFP_KERNEL);
 	err = -ENOMEM;
 	if (!packet)
-		goto exit_free_skb;
+		goto exit;
 	packet->data = nla_data(a[ODP_PACKET_ATTR_PACKET]);
 	packet->len = nla_len(a[ODP_PACKET_ATTR_PACKET]);
 
@@ -711,19 +719,31 @@ static int execute_packet(const struct odp_packet __user *uodp_packet)
 
 	err = flow_extract(packet, -1, &key, &is_frag);
 	if (err)
-		goto exit_free_skb;
+		goto exit;
 
 	rcu_read_lock();
-	dp = get_dp(odp_packet->dp_idx);
+	dp = get_dp(odp_header->dp_idx);
 	err = -ENODEV;
 	if (dp)
 		err = execute_actions(dp, packet, &key, actions, actions_len);
 	rcu_read_unlock();
 
-exit_free_skb:
-	kfree_skb(skb);
+exit:
 	return err;
 }
+
+static const struct nla_policy packet_policy[ODP_PACKET_ATTR_MAX + 1] = {
+	[ODP_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
+	[ODP_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
+};
+
+static struct genl_ops dp_packet_genl_ops[] = {
+	{ .cmd = ODP_PACKET_CMD_EXECUTE,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = packet_policy,
+	  .doit = odp_packet_cmd_execute
+	}
+};
 
 static void get_dp_stats(struct datapath *dp, struct odp_stats *stats)
 {
@@ -791,16 +811,6 @@ void set_internal_devs_mtu(const struct datapath *dp)
 		if (is_internal_vport(p))
 			vport_set_mtu(p, mtu);
 	}
-}
-
-static int get_listen_mask(const struct file *f)
-{
-	return (long)f->private_data;
-}
-
-static void set_listen_mask(struct file *f, int listen_mask)
-{
-	f->private_data = (void*)(long)listen_mask;
 }
 
 static const struct nla_policy flow_policy[ODP_FLOW_ATTR_MAX + 1] = {
@@ -1185,6 +1195,14 @@ static int copy_datapath_to_user(void __user *dst, struct datapath *dp, uint32_t
 	if (dp->sflow_probability)
 		NLA_PUT_U32(skb, ODP_DP_ATTR_SAMPLING, dp->sflow_probability);
 
+	nla = nla_nest_start(skb, ODP_DP_ATTR_MCGROUPS);
+	if (!nla)
+		goto nla_put_failure;
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_MISS, packet_mc_group(dp, ODP_PACKET_CMD_MISS));
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_ACTION, packet_mc_group(dp, ODP_PACKET_CMD_ACTION));
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_SAMPLE, packet_mc_group(dp, ODP_PACKET_CMD_SAMPLE));
+	nla_nest_end(skb, nla);
+
 	if (skb->len > total_len)
 		goto nla_put_failure;
 
@@ -1293,7 +1311,6 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 	struct vport *vport;
 	int dp_idx;
 	int err;
-	int i;
 
 	skb = copy_datapath_from_user(uodp_datapath, a);
 	err = PTR_ERR(skb);
@@ -1332,9 +1349,6 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 		goto err_put_module;
 	INIT_LIST_HEAD(&dp->port_list);
 	dp->dp_idx = dp_idx;
-	for (i = 0; i < DP_N_QUEUES; i++)
-		skb_queue_head_init(&dp->queues[i]);
-	init_waitqueue_head(&dp->waitqueue);
 
 	/* Initialize kobject for bridge.  This will be added as
 	 * /sys/class/net/<devname>/brif later, if sysfs is enabled. */
@@ -1908,12 +1922,9 @@ err:
 static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			   unsigned long argp)
 {
-	int listeners;
 	int err;
 
 	genl_lock();
-
-	/* Handle commands with special locking requirements up front. */
 	switch (cmd) {
 	case ODP_DP_NEW:
 		err = new_datapath((struct odp_datapath __user *)argp);
@@ -1973,27 +1984,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = dump_flow((struct odp_flow __user *)argp);
 		goto exit;
 
-	case ODP_EXECUTE:
-		err = execute_packet((struct odp_packet __user *)argp);
-		goto exit;
-	}
-
-	switch (cmd) {
-	case ODP_GET_LISTEN_MASK:
-		err = put_user(get_listen_mask(f), (int __user *)argp);
-		break;
-
-	case ODP_SET_LISTEN_MASK:
-		err = get_user(listeners, (int __user *)argp);
-		if (err)
-			break;
-		err = -EINVAL;
-		if (listeners & ~ODPL_ALL)
-			break;
-		err = 0;
-		set_listen_mask(f, listeners);
-		break;
-
 	default:
 		err = -ENOIOCTLCMD;
 		break;
@@ -2001,16 +1991,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 exit:
 	genl_unlock();
 	return err;
-}
-
-static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
-{
-	int i;
-	for (i = 0; i < DP_N_QUEUES; i++) {
-		if (listeners & (1 << i) && !skb_queue_empty(&dp->queues[i]))
-			return 1;
-	}
-	return 0;
 }
 
 #ifdef CONFIG_COMPAT
@@ -2036,9 +2016,6 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	case ODP_FLOW_GET:
 	case ODP_FLOW_SET:
 	case ODP_FLOW_DUMP:
-	case ODP_SET_LISTEN_MASK:
-	case ODP_GET_LISTEN_MASK:
-	case ODP_EXECUTE:
 		/* Ioctls that just need their pointer argument extended. */
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
 
@@ -2048,98 +2025,8 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 }
 #endif
 
-static struct sk_buff *openvswitch_try_read(struct file *f, struct datapath *dp)
-{
-	int listeners = get_listen_mask(f);
-	int i;
-
-	for (i = 0; i < DP_N_QUEUES; i++) {
-		if (listeners & (1 << i)) {
-			struct sk_buff *skb = skb_dequeue(&dp->queues[i]);
-			if (skb)
-				return skb;
-		}
-	}
-
-	if (f->f_flags & O_NONBLOCK)
-		return ERR_PTR(-EAGAIN);
-
-	wait_event_interruptible(dp->waitqueue,
-				 dp_has_packet_of_interest(dp, listeners));
-
-	if (signal_pending(current))
-		return ERR_PTR(-ERESTARTSYS);
-
-	return NULL;
-}
-
-static ssize_t openvswitch_read(struct file *f, char __user *buf,
-				size_t nbytes, loff_t *ppos)
-{
-	int dp_idx = iminor(f->f_dentry->d_inode);
-	struct datapath *dp;
-	struct sk_buff *skb;
-	struct iovec iov;
-	int retval;
-
-	genl_lock();
-
-	dp = get_dp(dp_idx);
-	retval = -ENODEV;
-	if (!dp)
-		goto error;
-
-	retval = 0;
-	if (nbytes == 0 || !get_listen_mask(f))
-		goto error;
-
-	do {
-		skb = openvswitch_try_read(f, dp);
-	} while (!skb);
-
-	genl_unlock();
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
-
-	iov.iov_base = buf;
-	iov.iov_len = min_t(size_t, skb->len, nbytes);
-	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
-	if (!retval)
-		retval = skb->len;
-
-	kfree_skb(skb);
-	return retval;
-
-error:
-	genl_unlock();
-	return retval;
-}
-
-static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
-{
-	int dp_idx = iminor(file->f_dentry->d_inode);
-	struct datapath *dp;
-	unsigned int mask;
-
-	genl_lock();
-	dp = get_dp(dp_idx);
-	if (dp) {
-		mask = 0;
-		poll_wait(file, &dp->waitqueue, wait);
-		if (dp_has_packet_of_interest(dp, get_listen_mask(file)))
-			mask |= POLLIN | POLLRDNORM;
-	} else {
-		mask = POLLIN | POLLRDNORM | POLLHUP;
-	}
-	genl_unlock();
-
-	return mask;
-}
-
 static struct file_operations openvswitch_fops = {
 	.owner = THIS_MODULE,
-	.read  = openvswitch_read,
-	.poll  = openvswitch_poll,
 	.unlocked_ioctl = openvswitch_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = openvswitch_compat_ioctl,
@@ -2147,6 +2034,61 @@ static struct file_operations openvswitch_fops = {
 };
 
 static int major;
+
+struct genl_family_and_ops {
+	struct genl_family *family;
+	struct genl_ops *ops;
+	int n_ops;
+	struct genl_multicast_group *group;
+};
+
+static const struct genl_family_and_ops dp_genl_families[] = {
+	{ &dp_packet_genl_family,
+	  dp_packet_genl_ops, ARRAY_SIZE(dp_packet_genl_ops),
+	  NULL },
+};
+
+static void dp_unregister_genl(int n_families)
+{
+	int i;
+
+	for (i = 0; i < n_families; i++) {
+		genl_unregister_family(dp_genl_families[i].family);
+	}
+}
+
+static int dp_register_genl(void)
+{
+	int n_registered;
+	int err;
+	int i;
+
+	n_registered = 0;
+	for (i = 0; i < ARRAY_SIZE(dp_genl_families); i++) {
+		const struct genl_family_and_ops *f = &dp_genl_families[i];
+
+		err = genl_register_family_with_ops(f->family, f->ops,
+						    f->n_ops);
+		if (err)
+			goto error;
+		n_registered++;
+
+		if (f->group) {
+			err = genl_register_mc_group(f->family, f->group);
+			if (err)
+				goto error;
+		}
+	}
+
+	err = packet_register_mc_groups();
+	if (err)
+		goto error;
+	return 0;
+
+error:
+	dp_unregister_genl(n_registered);
+	return err;
+}
 
 static int __init dp_init(void)
 {
@@ -2173,8 +2115,14 @@ static int __init dp_init(void)
 	if (err < 0)
 		goto error_unreg_notifier;
 
+	err = dp_register_genl();
+	if (err < 0)
+		goto error_unreg_chrdev;
+
 	return 0;
 
+error_unreg_chrdev:
+	unregister_chrdev(major, "openvswitch");
 error_unreg_notifier:
 	unregister_netdevice_notifier(&dp_device_notifier);
 error_vport_exit:
@@ -2188,6 +2136,7 @@ error:
 static void dp_cleanup(void)
 {
 	rcu_barrier();
+	dp_unregister_genl(ARRAY_SIZE(dp_genl_families));
 	unregister_chrdev(major, "openvswitch");
 	unregister_netdevice_notifier(&dp_device_notifier);
 	vport_exit();

@@ -15,7 +15,6 @@
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/netdevice.h>
-#include <linux/workqueue.h>
 #include <linux/seqlock.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
@@ -32,9 +31,6 @@ struct vport;
 #define VLAN_PCP_SHIFT 13
 
 #define DP_MAX_PORTS 1024
-
-#define DP_N_QUEUES 3
-#define DP_MAX_QUEUE_LEN 100
 
 /**
  * struct dp_stats_percpu - per-cpu packet processing statistics for a given
@@ -63,8 +59,6 @@ struct dp_stats_percpu {
  * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
  * @ifobj: Represents /sys/class/net/<devname>/brif.  Protected by RTNL.
  * @drop_frags: Drop all IP fragments if nonzero.
- * @queues: %DP_N_QUEUES sets of queued packets for userspace to handle.
- * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table.  Protected by genl_lock and RCU.
  * @ports: Map from port number to &struct vport.  %ODPP_LOCAL port
@@ -73,8 +67,8 @@ struct dp_stats_percpu {
  * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %ODPL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
- * sampling a given packet.
+ * %ODP_PACKET_CMD_SAMPLE multicast group, e.g. (@sflow_probability/UINT_MAX)
+ * is the probability of sampling a given packet.
  *
  * Context: See the comment on locking at the top of datapath.c for additional
  * locking information.
@@ -85,10 +79,6 @@ struct datapath {
 	struct kobject ifobj;
 
 	int drop_frags;
-
-	/* Queued data. */
-	struct sk_buff_head queues[DP_N_QUEUES];
-	wait_queue_head_t waitqueue;
 
 	/* Flow table. */
 	struct tbl __rcu *table;
@@ -125,7 +115,7 @@ struct ovs_skb_cb {
 
 /**
  * struct dp_upcall - metadata to include with a packet to send to userspace
- * @type: One of %_ODPL_*_NR.
+ * @cmd: One of %ODP_PACKET_CMD_*.
  * @key: Becomes %ODP_PACKET_ATTR_KEY.  Must be nonnull.
  * @userdata: Becomes %ODP_PACKET_ATTR_USERDATA if nonzero.
  * @sample_pool: Becomes %ODP_PACKET_ATTR_SAMPLE_POOL if nonzero.
@@ -133,7 +123,7 @@ struct ovs_skb_cb {
  * @actions_len: Number of bytes in @actions.
 */
 struct dp_upcall_info {
-	u32 type;
+	u8 cmd;
 	const struct sw_flow_key *key;
 	u64 userdata;
 	u32 sample_pool;

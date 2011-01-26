@@ -71,3 +71,10 @@ err_out:
 	return err;
 }
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+/* This function wasn't exported before 2.6.30.  Lose! */
+void netlink_set_err(struct sock *ssk, u32 pid, u32 group, int code)
+{
+}
+#endif

@@ -153,7 +153,8 @@ int dpif_execute(struct dpif *, const struct nlattr *actions,
 enum dpif_upcall_type {
     DPIF_UC_MISS,               /* Miss in flow table. */
     DPIF_UC_ACTION,             /* ODPAT_CONTROLLER action. */
-    DPIF_UC_SAMPLE              /* Packet sampling. */
+    DPIF_UC_SAMPLE,             /* Packet sampling. */
+    DPIF_N_UC_TYPES
 };
 
 /* A packet passed up from the datapath to userspace.

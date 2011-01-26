@@ -4452,6 +4452,7 @@ handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
         handle_miss_upcall(p, upcall);
         break;
 
+    case DPIF_N_UC_TYPES:
     default:
         VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32, upcall->type);
         break;

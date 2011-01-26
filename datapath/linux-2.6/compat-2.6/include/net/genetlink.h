@@ -4,6 +4,7 @@
 
 #include <linux/netlink.h>
 #include_next <net/genetlink.h>
+#include <net/net_namespace.h>
 
 #include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)

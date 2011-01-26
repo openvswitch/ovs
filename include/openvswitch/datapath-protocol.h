@@ -76,9 +76,6 @@
 #define ODP_DP_SET		_IOWR('O', 3, struct odp_datapath)
 #define ODP_DP_DUMP		_IOWR('O', 4, struct odp_datapath)
 
-#define ODP_GET_LISTEN_MASK     _IOW('O', 5, int)
-#define ODP_SET_LISTEN_MASK     _IOR('O', 6, int)
-
 #define ODP_VPORT_NEW           _IOR('O', 7, struct odp_vport)
 #define ODP_VPORT_DEL           _IOR('O', 8, struct odp_vport)
 #define ODP_VPORT_GET           _IOWR('O', 9, struct odp_vport)
@@ -92,8 +89,17 @@
 #define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
 #define ODP_FLOW_FLUSH          _IO('O', 19)
 
-#define ODP_EXECUTE             _IOR('O', 18, struct odp_packet)
-
+/**
+ * struct odp_header - header for ODP Generic Netlink messages.
+ * @dp_idx: Number of datapath to which the packet belongs.
+ *
+ * Attributes following the header are specific to a particular ODP Generic
+ * Netlink family, but all of the ODP families use this header.
+ */
+struct odp_header {
+	uint32_t dp_idx;
+};
+
 /**
  * struct odp_datapath - header with basic information about a datapath.
  * @dp_idx: Datapath index (-1 to make a request not specific to a datapath).
@@ -116,6 +122,7 @@ enum odp_datapath_type {
 	ODP_DP_ATTR_STATS,      /* struct odp_stats */
 	ODP_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum odp_frag_handling */
 	ODP_DP_ATTR_SAMPLING,   /* 32-bit fraction of packets to sample. */
+	ODP_DP_ATTR_MCGROUPS,   /* Nested attributes with multicast groups. */
 	__ODP_DP_ATTR_MAX
 };
 
@@ -137,19 +144,50 @@ struct odp_stats {
 
 /* Logical ports. */
 #define ODPP_LOCAL      ((uint16_t)0)
+
+#define ODP_PACKET_FAMILY "odp_packet"
 
-/* Listening channels. */
-#define _ODPL_MISS_NR   0       /* Packet missed in flow table. */
-#define ODPL_MISS       (1 << _ODPL_MISS_NR)
-#define _ODPL_ACTION_NR 1       /* Packet output to ODPP_CONTROLLER. */
-#define ODPL_ACTION     (1 << _ODPL_ACTION_NR)
-#define _ODPL_SFLOW_NR  2       /* sFlow samples. */
-#define ODPL_SFLOW      (1 << _ODPL_SFLOW_NR)
-#define ODPL_ALL        (ODPL_MISS | ODPL_ACTION | ODPL_SFLOW)
+enum odp_packet_cmd {
+        ODP_PACKET_CMD_UNSPEC,
 
-enum odp_packet_type {
+        /* Kernel-to-user notifications. */
+        ODP_PACKET_CMD_MISS,    /* Flow table miss. */
+        ODP_PACKET_CMD_ACTION,  /* ODPAT_CONTROLLER action. */
+        ODP_PACKET_CMD_SAMPLE,  /* Sampled packet. */
+
+        /* User commands. */
+        ODP_PACKET_CMD_EXECUTE  /* Apply actions to a packet. */
+};
+
+/**
+ * enum odp_packet_attr - attributes for %ODP_PACKET_* commands.
+ * @ODP_PACKET_ATTR_PACKET: Present for all notifications.  Contains the entire
+ * packet as received, from the start of the Ethernet header onward.  For
+ * %ODP_PACKET_CMD_ACTION, %ODP_PACKET_ATTR_PACKET reflects changes made by
+ * actions preceding %ODPAT_CONTROLLER, but %ODP_PACKET_ATTR_KEY is the flow
+ * key extracted from the packet as originally received.
+ * @ODP_PACKET_ATTR_KEY: Present for all notifications.  Contains the flow key
+ * extracted from the packet as nested %ODP_KEY_ATTR_* attributes.  This allows
+ * userspace to adapt its flow setup strategy by comparing its notion of the
+ * flow key against the kernel's.
+ * @ODP_PACKET_ATTR_USERDATA: Present for an %ODP_PACKET_CMD_ACTION
+ * notification if the %ODPAT_CONTROLLER action's argument was nonzero.
+ * @ODP_PACKET_ATTR_SAMPLE_POOL: Present for %ODP_PACKET_CMD_SAMPLE.  Contains
+ * the number of packets processed so far that were candidates for sampling.
+ * @ODP_PACKET_ATTR_ACTIONS: Present for %ODP_PACKET_CMD_SAMPLE.  Contains a
+ * copy of the actions applied to the packet, as nested %ODPAT_* attributes.
+ *
+ * These attributes follow the &struct odp_header within the Generic Netlink
+ * payload for %ODP_PACKET_* commands.
+ *
+ * The %ODP_PACKET_ATTR_TYPE, %ODP_PACKET_ATTR_PACKET and %ODP_PACKET_ATTR_KEY
+ * attributes are present for all notifications.  For %ODP_PACKET_CMD_ACTION,
+ * the %ODP_PACKET_ATTR_USERDATA attribute is included if it would be nonzero.
+ * For %ODP_PACKET_CMD_SAMPLE, the %ODP_PACKET_ATTR_SAMPLE_POOL and
+ * %ODP_PACKET_ATTR_ACTIONS attributes are included.
+ */
+enum odp_packet_attr {
 	ODP_PACKET_ATTR_UNSPEC,
-	ODP_PACKET_ATTR_TYPE,	     /* 32-bit enum, one of _ODP_*_NR. */
 	ODP_PACKET_ATTR_PACKET,      /* Packet data. */
 	ODP_PACKET_ATTR_KEY,         /* Nested ODP_KEY_ATTR_* attributes. */
 	ODP_PACKET_ATTR_USERDATA,    /* 64-bit data from ODPAT_CONTROLLER. */
@@ -159,29 +197,7 @@ enum odp_packet_type {
 };
 
 #define ODP_PACKET_ATTR_MAX (__ODP_PACKET_ATTR_MAX - 1)
-
-/**
- * struct odp_packet - header for packets passed up between kernel and
- * userspace.
- * @dp_idx: Number of datapath to which the packet belongs.
- * @len: Length of complete message, including this header.
- *
- * The header is followed by a sequence of Netlink attributes.  The
- * %ODP_PACKET_ATTR_TYPE, %ODP_PACKET_ATTR_PACKET, and %ODP_PACKET_ATTR_KEY
- * attributes are always present.  When @type == %_ODPL_ACTION_NR, the
- * %ODP_PACKET_ATTR_USERDATA attribute is included if it would be nonzero.
- * When @type == %_ODPL_SFLOW_NR, the %ODP_PACKET_ATTR_SAMPLE_POOL and
- * %ODP_PACKET_ATTR_ACTIONS attributes are included.
- *
- * For @type of %_ODPL_ACTION_NR, %ODP_PACKET_ATTR_PACKET reflects changes made
- * by actions preceding %ODPAT_CONTROLLER, but %ODP_PACKET_ATTR_KEY is the flow
- * key extracted from the packet as originally received.
- */
-struct odp_packet {
-	uint32_t dp_idx;
-	uint32_t len;
-};
-
+
 enum odp_vport_type {
 	ODP_VPORT_TYPE_UNSPEC,
 	ODP_VPORT_TYPE_NETDEV,   /* network device */

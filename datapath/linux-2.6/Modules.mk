@@ -50,6 +50,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/net/dst.h \
 	linux-2.6/compat-2.6/include/net/genetlink.h \
 	linux-2.6/compat-2.6/include/net/ip.h \
+	linux-2.6/compat-2.6/include/net/net_namespace.h \
 	linux-2.6/compat-2.6/include/net/netlink.h \
 	linux-2.6/compat-2.6/include/net/protocol.h \
 	linux-2.6/compat-2.6/include/net/route.h \

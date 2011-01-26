@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -369,7 +369,7 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg,
 	if (!skb)
 		return -ENOMEM;
 
-	upcall.type = _ODPL_ACTION_NR;
+	upcall.cmd = ODP_PACKET_CMD_ACTION;
 	upcall.key = key;
 	upcall.userdata = arg;
 	upcall.sample_pool = 0;
@@ -496,7 +496,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	if (unlikely(!nskb))
 		return;
 
-	upcall.type = _ODPL_SFLOW_NR;
+	upcall.cmd = ODP_PACKET_CMD_SAMPLE;
 	upcall.key = key;
 	upcall.userdata = 0;
 	upcall.sample_pool = atomic_read(&p->sflow_pool);
