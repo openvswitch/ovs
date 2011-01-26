@@ -111,7 +111,7 @@ struct dp_netdev_flow {
     struct flow key;
 
     /* Statistics. */
-    struct timespec used;       /* Last used time. */
+    long long int used;         /* Last used time, in monotonic msecs. */
     long long int packet_count; /* Number of packets matched. */
     long long int byte_count;   /* Number of bytes matched. */
     uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
@@ -621,14 +621,12 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const struct flow *key)
 }
 
 static void
-get_odp_flow_stats(struct dp_netdev_flow *flow, struct odp_flow_stats *stats)
+get_dpif_flow_stats(struct dp_netdev_flow *flow, struct dpif_flow_stats *stats)
 {
     stats->n_packets = flow->packet_count;
     stats->n_bytes = flow->byte_count;
-    stats->used_sec = flow->used.tv_sec;
-    stats->used_nsec = flow->used.tv_nsec;
+    stats->used = flow->used;
     stats->tcp_flags = TCP_FLAGS(flow->tcp_ctl);
-    stats->reserved = 0;
 }
 
 static int
@@ -660,7 +658,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 static int
 dpif_netdev_flow_get(const struct dpif *dpif, int flags,
                      const struct nlattr *nl_key, size_t nl_key_len,
-                     struct ofpbuf **actionsp, struct odp_flow_stats *stats)
+                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
@@ -678,7 +676,7 @@ dpif_netdev_flow_get(const struct dpif *dpif, int flags,
     }
 
     if (stats) {
-        get_odp_flow_stats(flow, stats);
+        get_dpif_flow_stats(flow, stats);
     }
     if (actionsp) {
         *actionsp = ofpbuf_clone_data(flow->actions, flow->actions_len);
@@ -792,8 +790,7 @@ add_flow(struct dpif *dpif, const struct flow *key,
 static void
 clear_stats(struct dp_netdev_flow *flow)
 {
-    flow->used.tv_sec = 0;
-    flow->used.tv_nsec = 0;
+    flow->used = 0;
     flow->packet_count = 0;
     flow->byte_count = 0;
     flow->tcp_ctl = 0;
@@ -803,7 +800,7 @@ static int
 dpif_netdev_flow_put(struct dpif *dpif, int flags,
                     const struct nlattr *nl_key, size_t nl_key_len,
                     const struct nlattr *actions, size_t actions_len,
-                    struct odp_flow_stats *stats)
+                    struct dpif_flow_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
@@ -834,7 +831,7 @@ dpif_netdev_flow_put(struct dpif *dpif, int flags,
             int error = set_flow_actions(flow, actions, actions_len);
             if (!error) {
                 if (stats) {
-                    get_odp_flow_stats(flow, stats);
+                    get_dpif_flow_stats(flow, stats);
                 }
                 if (flags & ODPPF_ZERO_STATS) {
                     clear_stats(flow);
@@ -850,7 +847,7 @@ dpif_netdev_flow_put(struct dpif *dpif, int flags,
 static int
 dpif_netdev_flow_del(struct dpif *dpif,
                      const struct nlattr *nl_key, size_t nl_key_len,
-                     struct odp_flow_stats *stats)
+                     struct dpif_flow_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
@@ -865,7 +862,7 @@ dpif_netdev_flow_del(struct dpif *dpif,
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         if (stats) {
-            get_odp_flow_stats(flow, stats);
+            get_dpif_flow_stats(flow, stats);
         }
         dp_netdev_free_flow(dp, flow);
         return 0;
@@ -879,7 +876,7 @@ struct dp_netdev_flow_state {
     uint32_t offset;
     struct nlattr *actions;
     uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-    struct odp_flow_stats stats;
+    struct dpif_flow_stats stats;
 };
 
 static int
@@ -898,7 +895,7 @@ static int
 dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
                            const struct nlattr **key, size_t *key_len,
                            const struct nlattr **actions, size_t *actions_len,
-                           const struct odp_flow_stats **stats)
+                           const struct dpif_flow_stats **stats)
 {
     struct dp_netdev_flow_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -932,7 +929,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
     }
 
     if (stats) {
-        get_odp_flow_stats(flow, &state->stats);
+        get_dpif_flow_stats(flow, &state->stats);
         *stats = &state->stats;
     }
 
@@ -1064,7 +1061,7 @@ static void
 dp_netdev_flow_used(struct dp_netdev_flow *flow, struct flow *key,
                     const struct ofpbuf *packet)
 {
-    time_timespec(&flow->used);
+    flow->used = time_msec();
     flow->packet_count++;
     flow->byte_count += packet->size;
     if (key->dl_type == htons(ETH_TYPE_IP) && key->nw_proto == IPPROTO_TCP) {

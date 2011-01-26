@@ -223,7 +223,7 @@ struct dpif_class {
      * flow's statistics. */
     int (*flow_get)(const struct dpif *dpif, int flags,
                     const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **actionsp, struct odp_flow_stats *stats);
+                    struct ofpbuf **actionsp, struct dpif_flow_stats *stats);
 
     /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
      * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
@@ -248,7 +248,7 @@ struct dpif_class {
     int (*flow_put)(struct dpif *dpif, int flags,
                     const struct nlattr *key, size_t key_len,
                     const struct nlattr *actions, size_t actions_len,
-                    struct odp_flow_stats *stats);
+                    struct dpif_flow_stats *stats);
 
     /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
      * does not contain such a flow.  The flow is specified by the Netlink
@@ -259,7 +259,7 @@ struct dpif_class {
      * flow's statistics before its deletion. */
     int (*flow_del)(struct dpif *dpif,
                     const struct nlattr *key, size_t key_len,
-                    struct odp_flow_stats *stats);
+                    struct dpif_flow_stats *stats);
 
     /* Deletes all flows from 'dpif' and clears all of its queues of received
      * packets. */
@@ -292,7 +292,7 @@ struct dpif_class {
     int (*flow_dump_next)(const struct dpif *dpif, void *state,
                           const struct nlattr **key, size_t *key_len,
                           const struct nlattr **actions, size_t *actions_len,
-                          const struct odp_flow_stats **stats);
+                          const struct dpif_flow_stats **stats);
 
     /* Releases resources from 'dpif' for 'state', which was initialized by a
      * successful call to the 'flow_dump_start' function for 'dpif'.  */

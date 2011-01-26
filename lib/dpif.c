@@ -37,6 +37,7 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "svec.h"
+#include "timeval.h"
 #include "util.h"
 #include "valgrind.h"
 #include "vlog.h"
@@ -79,7 +80,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 static void log_flow_message(const struct dpif *dpif, int error,
                              const char *operation,
                              const struct nlattr *key, size_t key_len,
-                             const struct odp_flow_stats *stats,
+                             const struct dpif_flow_stats *stats,
                              const struct nlattr *actions, size_t actions_len);
 static void log_operation(const struct dpif *, const char *operation,
                           int error);
@@ -687,6 +688,20 @@ dpif_port_poll_wait(const struct dpif *dpif)
     dpif->dpif_class->port_poll_wait(dpif);
 }
 
+/* Appends a human-readable representation of 'stats' to 's'. */
+void
+dpif_flow_stats_format(const struct dpif_flow_stats *stats, struct ds *s)
+{
+    ds_put_format(s, "packets:%"PRIu64", bytes:%"PRIu64", used:",
+                  stats->n_packets, stats->n_bytes);
+    if (stats->used) {
+        ds_put_format(s, "%.3fs", (time_msec() - stats->used) / 1000.0);
+    } else {
+        ds_put_format(s, "never");
+    }
+    /* XXX tcp_flags? */
+}
+
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
  * positive errno value.  */
 int
@@ -718,7 +733,7 @@ dpif_flow_flush(struct dpif *dpif)
 int
 dpif_flow_get(const struct dpif *dpif, int flags,
               const struct nlattr *key, size_t key_len,
-              struct ofpbuf **actionsp, struct odp_flow_stats *stats)
+              struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
     int error;
 
@@ -775,7 +790,7 @@ int
 dpif_flow_put(struct dpif *dpif, int flags,
               const struct nlattr *key, size_t key_len,
               const struct nlattr *actions, size_t actions_len,
-              struct odp_flow_stats *stats)
+              struct dpif_flow_stats *stats)
 {
     int error;
 
@@ -820,7 +835,7 @@ dpif_flow_put(struct dpif *dpif, int flags,
 int
 dpif_flow_del(struct dpif *dpif,
               const struct nlattr *key, size_t key_len,
-              struct odp_flow_stats *stats)
+              struct dpif_flow_stats *stats)
 {
     int error;
 
@@ -873,7 +888,7 @@ bool
 dpif_flow_dump_next(struct dpif_flow_dump *dump,
                     const struct nlattr **key, size_t *key_len,
                     const struct nlattr **actions, size_t *actions_len,
-                    const struct odp_flow_stats **stats)
+                    const struct dpif_flow_stats **stats)
 {
     const struct dpif *dpif = dump->dpif;
     int error = dump->error;
@@ -1169,7 +1184,7 @@ should_log_flow_message(int error)
 static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
                  const struct nlattr *key, size_t key_len,
-                 const struct odp_flow_stats *stats,
+                 const struct dpif_flow_stats *stats,
                  const struct nlattr *actions, size_t actions_len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
@@ -1184,7 +1199,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     odp_flow_key_format(key, key_len, &ds);
     if (stats) {
         ds_put_cstr(&ds, ", ");
-        format_odp_flow_stats(&ds, stats);
+        dpif_flow_stats_format(stats, &ds);
     }
     if (actions || actions_len) {
         ds_put_cstr(&ds, ", actions:");

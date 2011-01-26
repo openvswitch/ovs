@@ -22,9 +22,9 @@
 #include <string.h>
 #include "byte-order.h"
 #include "coverage.h"
+#include "dpif.h"
 #include "dynamic-string.h"
 #include "hash.h"
-#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
@@ -235,9 +235,9 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
  */
 void
 flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
-        struct odp_flow_stats *stats)
+                   struct dpif_flow_stats *stats)
 {
-    memset(stats, '\0', sizeof(*stats));
+    memset(stats, 0, sizeof(*stats));
 
     if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
         if ((flow->nw_proto == IP_TYPE_TCP) && packet->l7) {

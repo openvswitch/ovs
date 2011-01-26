@@ -27,6 +27,7 @@
 #include "openvswitch/datapath-protocol.h"
 #include "util.h"
 
+struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
 struct ofp_match;
@@ -66,7 +67,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
-        struct odp_flow_stats *stats);
+                        struct dpif_flow_stats *);
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);

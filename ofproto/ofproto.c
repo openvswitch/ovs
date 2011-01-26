@@ -248,7 +248,7 @@ static void facet_flush_stats(struct ofproto *, struct facet *);
 static void facet_make_actions(struct ofproto *, struct facet *,
                                const struct ofpbuf *packet);
 static void facet_update_stats(struct ofproto *, struct facet *,
-                               const struct odp_flow_stats *);
+                               const struct dpif_flow_stats *);
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -2135,7 +2135,7 @@ static void
 facet_execute(struct ofproto *ofproto, struct facet *facet,
               struct ofpbuf *packet)
 {
-    struct odp_flow_stats stats;
+    struct dpif_flow_stats stats;
 
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
@@ -2360,7 +2360,7 @@ facet_uninstall(struct ofproto *p, struct facet *facet)
 {
     if (facet->installed) {
         uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-        struct odp_flow_stats stats;
+        struct dpif_flow_stats stats;
         struct ofpbuf key;
 
         ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
@@ -2500,7 +2500,7 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
     if (actions_changed || facet->may_install != facet->installed) {
         if (facet->may_install) {
             uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-            struct odp_flow_stats stats;
+            struct dpif_flow_stats stats;
             struct ofpbuf key;
 
             ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
@@ -3476,7 +3476,7 @@ query_stats(struct ofproto *p, struct rule *rule,
      * to a rule. */
     ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
     LIST_FOR_EACH (facet, list_node, &rule->facets) {
-        struct odp_flow_stats stats;
+        struct dpif_flow_stats stats;
 
         ofpbuf_clear(&key);
         odp_flow_key_from_flow(&key, &facet->flow);
@@ -3854,17 +3854,11 @@ handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static long long int
-msec_from_nsec(uint64_t sec, uint32_t nsec)
-{
-    return !sec ? 0 : sec * 1000 + nsec / 1000000;
-}
-
 static void
 facet_update_time(struct ofproto *ofproto, struct facet *facet,
-                  const struct odp_flow_stats *stats)
+                  const struct dpif_flow_stats *stats)
 {
-    long long int used = msec_from_nsec(stats->used_sec, stats->used_nsec);
+    long long int used = stats->used;
     if (used > facet->used) {
         facet->used = used;
         if (used > facet->rule->used) {
@@ -3882,7 +3876,7 @@ facet_update_time(struct ofproto *ofproto, struct facet *facet,
  * cleared out of the datapath. */
 static void
 facet_update_stats(struct ofproto *ofproto, struct facet *facet,
-                   const struct odp_flow_stats *stats)
+                   const struct dpif_flow_stats *stats)
 {
     if (stats->n_packets) {
         facet_update_time(ofproto, facet, stats);
@@ -4518,7 +4512,7 @@ ofproto_expire(struct ofproto *ofproto)
 static void
 ofproto_update_used(struct ofproto *p)
 {
-    const struct odp_flow_stats *stats;
+    const struct dpif_flow_stats *stats;
     struct dpif_flow_dump dump;
     const struct nlattr *key;
     size_t key_len;
@@ -4663,7 +4657,7 @@ facet_active_timeout(struct ofproto *ofproto, struct facet *facet)
          * ofproto_update_used() zeroed TCP flags. */
         if (facet->installed) {
             uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-            struct odp_flow_stats stats;
+            struct dpif_flow_stats stats;
             struct ofpbuf key;
 
             ofpbuf_use_stack(&key, keybuf, sizeof keybuf);

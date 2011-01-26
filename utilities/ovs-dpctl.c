@@ -480,7 +480,7 @@ do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 do_dump_flows(int argc OVS_UNUSED, char *argv[])
 {
-    const struct odp_flow_stats *stats;
+    const struct dpif_flow_stats *stats;
     const struct nlattr *actions;
     struct dpif_flow_dump dump;
     const struct nlattr *key;
@@ -498,7 +498,7 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
         ds_clear(&ds);
         odp_flow_key_format(key, key_len, &ds);
         ds_put_cstr(&ds, ", ");
-        format_odp_flow_stats(&ds, stats);
+        dpif_flow_stats_format(stats, &ds);
         ds_put_cstr(&ds, ", actions:");
         format_odp_actions(&ds, actions, actions_len);
         printf("%s\n", ds_cstr(&ds));

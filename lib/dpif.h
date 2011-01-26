@@ -30,6 +30,7 @@ extern "C" {
 #endif
 
 struct dpif;
+struct ds;
 struct netdev;
 struct nlattr;
 struct ofpbuf;
@@ -107,17 +108,26 @@ int dpif_port_dump_done(struct dpif_port_dump *);
 int dpif_port_poll(const struct dpif *, char **devnamep);
 void dpif_port_poll_wait(const struct dpif *);
 
+struct dpif_flow_stats {
+    uint64_t n_packets;
+    uint64_t n_bytes;
+    long long int used;
+    uint8_t tcp_flags;
+};
+
+void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
+
 int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, int flags,
                   const struct nlattr *key, size_t key_len,
                   const struct nlattr *actions, size_t actions_len,
-                  struct odp_flow_stats *);
+                  struct dpif_flow_stats *);
 int dpif_flow_del(struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  struct odp_flow_stats *);
+                  struct dpif_flow_stats *);
 int dpif_flow_get(const struct dpif *, int flags,
                   const struct nlattr *key, size_t key_len,
-                  struct ofpbuf **actionsp, struct odp_flow_stats *);
+                  struct ofpbuf **actionsp, struct dpif_flow_stats *);
 
 struct dpif_flow_dump {
     const struct dpif *dpif;
@@ -128,7 +138,7 @@ void dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
 bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct nlattr **key, size_t *key_len,
                          const struct nlattr **actions, size_t *actions_len,
-                         const struct odp_flow_stats **);
+                         const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
 
 int dpif_execute(struct dpif *, const struct nlattr *actions,
