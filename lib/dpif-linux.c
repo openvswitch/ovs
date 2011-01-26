@@ -47,10 +47,63 @@
 #include "rtnetlink-link.h"
 #include "shash.h"
 #include "svec.h"
+#include "unaligned.h"
 #include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
+
+struct dpif_linux_dp {
+    /* ioctl command argument. */
+    int cmd;
+
+    /* struct odp_datapath header. */
+    uint32_t dp_idx;
+
+    /* Attributes. */
+    const char *name;                  /* ODP_DP_ATTR_NAME. */
+    struct odp_stats stats;            /* ODP_DP_ATTR_STATS. */
+    enum odp_frag_handling ipv4_frags; /* ODP_DP_ATTR_IPV4_FRAGS. */
+    const uint32_t *sampling;          /* ODP_DP_ATTR_SAMPLING. */
+};
+
+static void dpif_linux_dp_init(struct dpif_linux_dp *);
+static int dpif_linux_dp_transact(const struct dpif_linux_dp *request,
+                                  struct dpif_linux_dp *reply,
+                                  struct ofpbuf **bufp);
+static int dpif_linux_dp_get(const struct dpif *, struct dpif_linux_dp *reply,
+                             struct ofpbuf **bufp);
+
+struct dpif_linux_flow {
+    /* ioctl command argument. */
+    int cmd;
+
+    /* struct odp_flow header. */
+    unsigned int nlmsg_flags;
+    uint32_t dp_idx;
+
+    /* Attributes.
+     *
+     * The 'stats', 'used', and 'state' members point to 64-bit data that might
+     * only be aligned on 32-bit boundaries, so get_unaligned_u64() should be
+     * used to access their values. */
+    const struct nlattr *key;           /* ODP_FLOW_ATTR_KEY. */
+    size_t key_len;
+    const struct nlattr *actions;       /* ODP_FLOW_ATTR_ACTIONS. */
+    size_t actions_len;
+    const struct odp_flow_stats *stats; /* ODP_FLOW_ATTR_STATS. */
+    const uint8_t *tcp_flags;           /* ODP_FLOW_ATTR_TCP_FLAGS. */
+    const uint64_t *used;               /* ODP_FLOW_ATTR_USED. */
+    bool clear;                         /* ODP_FLOW_ATTR_CLEAR. */
+    const uint64_t *state;              /* ODP_FLOW_ATTR_STATE. */
+};
+
+static void dpif_linux_flow_init(struct dpif_linux_flow *);
+static int dpif_linux_flow_transact(const struct dpif_linux_flow *request,
+                                    struct dpif_linux_flow *reply,
+                                    struct ofpbuf **bufp);
+static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
+                                      struct dpif_flow_stats *);
 
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {
@@ -74,7 +127,6 @@ static int do_ioctl(const struct dpif *, int cmd, const void *arg);
 static int open_dpif(const struct dpif_linux_vport *local_vport,
                      struct dpif **);
 static int get_openvswitch_major(void);
-static int create_minor(const char *name, int minor);
 static int open_minor(int minor, int *fdp);
 static int make_openvswitch_device(int minor, char **fnp);
 static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
@@ -90,9 +142,8 @@ dpif_linux_cast(const struct dpif *dpif)
 static int
 dpif_linux_enumerate(struct svec *all_dps)
 {
+    uint32_t dp_idx;
     int major;
-    int error;
-    int i;
 
     /* Check that the Open vSwitch module is loaded. */
     major = get_openvswitch_major();
@@ -100,22 +151,28 @@ dpif_linux_enumerate(struct svec *all_dps)
         return -major;
     }
 
-    error = 0;
-    for (i = 0; i < ODP_MAX; i++) {
-        struct dpif *dpif;
+    dp_idx = 0;
+    for (;;) {
+        struct dpif_linux_dp request, reply;
+        struct ofpbuf *buf;
         char devname[16];
-        int retval;
+        int error;
 
-        sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, "system", &dpif);
-        if (!retval) {
-            svec_add(all_dps, devname);
-            dpif_uninit(dpif, true);
-        } else if (retval != ENODEV && !error) {
-            error = retval;
+        dpif_linux_dp_init(&request);
+        request.dp_idx = dp_idx;
+        request.cmd = ODP_DP_DUMP;
+
+        error = dpif_linux_dp_transact(&request, &reply, &buf);
+        if (error) {
+            return error == ENODEV ? 0 : error;
         }
+        ofpbuf_delete(buf);
+
+        sprintf(devname, "dp%d", reply.dp_idx);
+        svec_add(all_dps, devname);
+
+        dp_idx = reply.dp_idx + 1;
     }
-    return error;
 }
 
 static int
@@ -130,27 +187,20 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     minor = !strncmp(name, "dp", 2)
             && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
-        if (minor >= 0) {
-            error = create_minor(name, minor);
-            if (error) {
-                return error;
-            }
-        } else {
-            /* Scan for unused minor number. */
-            for (minor = 0; ; minor++) {
-                if (minor >= ODP_MAX) {
-                    /* All datapath numbers in use. */
-                    return ENOBUFS;
-                }
+        struct dpif_linux_dp request, reply;
+        struct ofpbuf *buf;
+        int error;
 
-                error = create_minor(name, minor);
-                if (!error) {
-                    break;
-                } else if (error != EBUSY) {
-                    return error;
-                }
-            }
+        dpif_linux_dp_init(&request);
+        request.cmd = ODP_DP_NEW;
+        request.dp_idx = minor;
+        request.name = name;
+        error = dpif_linux_dp_transact(&request, &reply, &buf);
+        if (error) {
+            return error;
         }
+        minor = reply.dp_idx;
+        ofpbuf_delete(buf);
     }
 
     dpif_linux_vport_init(&request);
@@ -245,25 +295,41 @@ dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
 static int
 dpif_linux_destroy(struct dpif *dpif_)
 {
-    return do_ioctl(dpif_, ODP_DP_DESTROY, NULL);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_dp dp;
+
+    dpif_linux_dp_init(&dp);
+    dp.cmd = ODP_DP_DEL;
+    dp.dp_idx = dpif->minor;
+    return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
 static int
 dpif_linux_get_stats(const struct dpif *dpif_, struct odp_stats *stats)
 {
-    memset(stats, 0, sizeof *stats);
-    return do_ioctl(dpif_, ODP_DP_STATS, stats);
+    struct dpif_linux_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    error = dpif_linux_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+        *stats = dp.stats;
+        ofpbuf_delete(buf);
+    }
+    return error;
 }
 
 static int
 dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
 {
-    int drop_frags;
+    struct dpif_linux_dp dp;
+    struct ofpbuf *buf;
     int error;
 
-    error = do_ioctl(dpif_, ODP_GET_DROP_FRAGS, &drop_frags);
+    error = dpif_linux_dp_get(dpif_, &dp, &buf);
     if (!error) {
-        *drop_fragsp = drop_frags & 1;
+        *drop_fragsp = dp.ipv4_frags == ODP_DP_FRAG_DROP;
+        ofpbuf_delete(buf);
     }
     return error;
 }
@@ -271,8 +337,14 @@ dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
 static int
 dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
 {
-    int drop_frags_int = drop_frags;
-    return do_ioctl(dpif_, ODP_SET_DROP_FRAGS, &drop_frags_int);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_dp dp;
+
+    dpif_linux_dp_init(&dp);
+    dp.cmd = ODP_DP_SET;
+    dp.dp_idx = dpif->minor;
+    dp.ipv4_frags = drop_frags ? ODP_DP_FRAG_DROP : ODP_DP_FRAG_ZERO;
+    return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
 static int
@@ -460,48 +532,32 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
     }
 }
 
-static void
-odp_flow_stats_to_dpif_flow_stats(const struct odp_flow_stats *ofs,
-                                  struct dpif_flow_stats *dfs)
-{
-    dfs->n_packets = ofs->n_packets;
-    dfs->n_bytes = ofs->n_bytes;
-    dfs->used = ofs->used_sec * 1000 + ofs->used_nsec / 1000000;
-    dfs->tcp_flags = ofs->tcp_flags;
-}
-
 static int
 dpif_linux_flow_get(const struct dpif *dpif_,
                     const struct nlattr *key, size_t key_len,
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct ofpbuf *actions = NULL;
-    struct odp_flow odp_flow;
+    struct dpif_linux_flow request, reply;
+    struct ofpbuf *buf;
     int error;
 
-    memset(&odp_flow, 0, sizeof odp_flow);
-    odp_flow.dp_idx = dpif->minor;
-    odp_flow.key = (struct nlattr *) key;
-    odp_flow.key_len = key_len;
-    if (actionsp) {
-        actions = *actionsp = ofpbuf_new(65536);
-        odp_flow.actions = actions->base;
-        odp_flow.actions_len = actions->allocated;
-    }
-
-    error = do_ioctl(dpif_, ODP_FLOW_GET, &odp_flow);
+    dpif_linux_flow_init(&request);
+    request.cmd = ODP_FLOW_GET;
+    request.dp_idx = dpif->minor;
+    request.key = key;
+    request.key_len = key_len;
+    error = dpif_linux_flow_transact(&request, &reply, &buf);
     if (!error) {
         if (stats) {
-            odp_flow_stats_to_dpif_flow_stats(&odp_flow.stats, stats);
+            dpif_linux_flow_get_stats(&reply, stats);
         }
-        if (actions) {
-            actions->size = odp_flow.actions_len;
-            ofpbuf_trim(actions);
-        }
-    } else {
-        if (actions) {
-            ofpbuf_delete(actions);
+        if (actionsp) {
+            buf->data = (void *) reply.actions;
+            buf->size = reply.actions_len;
+            *actionsp = buf;
+        } else {
+            ofpbuf_delete(buf);
         }
     }
     return error;
@@ -514,28 +570,27 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
                     struct dpif_flow_stats *stats)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct odp_flow_put put;
+    struct dpif_linux_flow request, reply;
+    struct ofpbuf *buf;
     int error;
 
-    memset(&put, 0, sizeof put);
-    put.flow.dp_idx = dpif->minor;
-    put.flow.key = (struct nlattr *) key;
-    put.flow.key_len = key_len;
-    put.flow.actions = (struct nlattr *) actions;
-    put.flow.actions_len = actions_len;
-    put.flags = 0;
-    if (flags & DPIF_FP_CREATE) {
-        put.flags |= ODPPF_CREATE;
-    }
-    if (flags & DPIF_FP_MODIFY) {
-        put.flags |= ODPPF_MODIFY;
-    }
+    dpif_linux_flow_init(&request);
+    request.cmd = flags & DPIF_FP_CREATE ? ODP_FLOW_NEW : ODP_FLOW_SET;
+    request.dp_idx = dpif->minor;
+    request.key = key;
+    request.key_len = key_len;
+    request.actions = actions;
+    request.actions_len = actions_len;
     if (flags & DPIF_FP_ZERO_STATS) {
-        put.flags |= ODPPF_ZERO_STATS;
+        request.clear = true;
     }
-    error = do_ioctl(dpif_, ODP_FLOW_PUT, &put);
+    request.nlmsg_flags = flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
+    error = dpif_linux_flow_transact(&request,
+                                     stats ? &reply : NULL,
+                                     stats ? &buf : NULL);
     if (!error && stats) {
-        odp_flow_stats_to_dpif_flow_stats(&put.flow.stats, stats);
+        dpif_linux_flow_get_stats(&reply, stats);
+        ofpbuf_delete(buf);
     }
     return error;
 }
@@ -546,84 +601,81 @@ dpif_linux_flow_del(struct dpif *dpif_,
                     struct dpif_flow_stats *stats)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct odp_flow odp_flow;
+    struct dpif_linux_flow request, reply;
+    struct ofpbuf *buf;
     int error;
 
-    memset(&odp_flow, 0, sizeof odp_flow);
-    odp_flow.dp_idx = dpif->minor;
-    odp_flow.key = (struct nlattr *) key;
-    odp_flow.key_len = key_len;
-    error = do_ioctl(dpif_, ODP_FLOW_DEL, &odp_flow);
+    dpif_linux_flow_init(&request);
+    request.cmd = ODP_FLOW_DEL;
+    request.dp_idx = dpif->minor;
+    request.key = key;
+    request.key_len = key_len;
+    error = dpif_linux_flow_transact(&request,
+                                     stats ? &reply : NULL,
+                                     stats ? &buf : NULL);
     if (!error && stats) {
-        odp_flow_stats_to_dpif_flow_stats(&odp_flow.stats, stats);
+        dpif_linux_flow_get_stats(&reply, stats);
+        ofpbuf_delete(buf);
     }
     return error;
 }
 
+
 struct dpif_linux_flow_state {
-    struct odp_flow_dump dump;
-    struct odp_flow flow;
-    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-    uint32_t actionsbuf[65536 / sizeof(uint32_t)];
+    struct dpif_linux_flow flow;
+    struct ofpbuf *buf;
     struct dpif_flow_stats stats;
 };
 
 static int
-dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
+dpif_linux_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow_state *state;
-
-    *statep = state = xmalloc(sizeof *state);
-    state->dump.dp_idx = dpif->minor;
-    state->dump.state[0] = 0;
-    state->dump.state[1] = 0;
-    state->dump.flow = &state->flow;
+    *statep = xzalloc(sizeof(struct dpif_linux_flow_state));
     return 0;
 }
 
 static int
-dpif_linux_flow_dump_next(const struct dpif *dpif, void *state_,
+dpif_linux_flow_dump_next(const struct dpif *dpif_, void *state_,
                           const struct nlattr **key, size_t *key_len,
                           const struct nlattr **actions, size_t *actions_len,
                           const struct dpif_flow_stats **stats)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow_state *state = state_;
+    struct ofpbuf *old_buf = state->buf;
+    struct dpif_linux_flow request;
     int error;
 
-    memset(&state->flow, 0, sizeof state->flow);
-    state->flow.key = (struct nlattr *) state->keybuf;
-    state->flow.key_len = sizeof state->keybuf;
-    if (actions) {
-        state->flow.actions = (struct nlattr *) state->actionsbuf;
-        state->flow.actions_len = sizeof state->actionsbuf;
-    }
+    dpif_linux_flow_init(&request);
+    request.cmd = ODP_FLOW_DUMP;
+    request.dp_idx = dpif->minor;
+    request.state = state->flow.state;
+    error = dpif_linux_flow_transact(&request, &state->flow, &state->buf);
+    ofpbuf_delete(old_buf);
 
-    error = do_ioctl(dpif, ODP_FLOW_DUMP, &state->dump);
     if (!error) {
-        if (!state->flow.key_len) {
-            return EOF;
-        }
         if (key) {
-            *key = (const struct nlattr *) state->keybuf;
+            *key = state->flow.key;
             *key_len = state->flow.key_len;
         }
         if (actions) {
-            *actions = (const struct nlattr *) state->actionsbuf;
+            *actions = state->flow.actions;
             *actions_len = state->flow.actions_len;
         }
         if (stats) {
-            odp_flow_stats_to_dpif_flow_stats(&state->flow.stats,
-                                              &state->stats);
+            dpif_linux_flow_get_stats(&state->flow, &state->stats);
             *stats = &state->stats;
         }
     }
-    return error;
+    return error == ENODEV ? EOF : error;
 }
 
 static int
-dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state)
+dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
+    struct dpif_linux_flow_state *state = state_;
+
+    ofpbuf_delete(state->buf);
     free(state);
     return 0;
 }
@@ -661,13 +713,29 @@ static int
 dpif_linux_get_sflow_probability(const struct dpif *dpif_,
                                  uint32_t *probability)
 {
-    return do_ioctl(dpif_, ODP_GET_SFLOW_PROBABILITY, probability);
+    struct dpif_linux_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    error = dpif_linux_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+        *probability = dp.sampling ? *dp.sampling : 0;
+        ofpbuf_delete(buf);
+    }
+    return error;
 }
 
 static int
 dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
 {
-    return do_ioctl(dpif_, ODP_SET_SFLOW_PROBABILITY, &probability);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_dp dp;
+
+    dpif_linux_dp_init(&dp);
+    dp.cmd = ODP_DP_SET;
+    dp.dp_idx = dpif->minor;
+    dp.sampling = &probability;
+    return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
 static int
@@ -986,22 +1054,6 @@ get_major(const char *target)
 }
 
 static int
-create_minor(const char *name, int minor)
-{
-    int error;
-    int fd;
-
-    error = open_minor(minor, &fd);
-    if (error) {
-        return error;
-    }
-
-    error = ioctl(fd, ODP_DP_CREATE, name) ? errno : 0;
-    close(fd);
-    return error;
-}
-
-static int
 open_minor(int minor, int *fdp)
 {
     int error;
@@ -1041,6 +1093,24 @@ dpif_linux_port_changed(const struct rtnetlink_link_change *change,
     } else {
         dpif->change_error = true;
     }
+}
+
+static int
+get_dp0_fd(int *dp0_fdp)
+{
+    static int dp0_fd = -1;
+    if (dp0_fd < 0) {
+        int error;
+        int fd;
+
+        error = open_minor(0, &fd);
+        if (error) {
+            return error;
+        }
+        dp0_fd = fd;
+    }
+    *dp0_fdp = dp0_fd;
+    return 0;
 }
 
 /* Parses the contents of 'buf', which contains a "struct odp_vport" followed
@@ -1183,25 +1253,21 @@ dpif_linux_vport_transact(const struct dpif_linux_vport *request,
                           struct dpif_linux_vport *reply,
                           struct ofpbuf **bufp)
 {
-    static int dp0_fd = -1;
     struct ofpbuf *buf = NULL;
     int error;
+    int fd;
 
     assert((reply != NULL) == (bufp != NULL));
-    if (dp0_fd < 0) {
-        int fd;
 
-        error = open_minor(0, &fd);
-        if (error) {
-            goto error;
-        }
-        dp0_fd = fd;
+    error = get_dp0_fd(&fd);
+    if (error) {
+        goto error;
     }
 
     buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(request, buf);
 
-    error = ioctl(dp0_fd, request->cmd, buf->data) ? errno : 0;
+    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
     if (error) {
         goto error;
     }
@@ -1241,5 +1307,323 @@ dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
     request.name = name;
 
     return dpif_linux_vport_transact(&request, reply, bufp);
+}
+
+/* Parses the contents of 'buf', which contains a "struct odp_datapath"
+ * followed by Netlink attributes, into 'dp'.  Returns 0 if successful,
+ * otherwise a positive errno value.
+ *
+ * 'dp' will contain pointers into 'buf', so the caller should not free 'buf'
+ * while 'dp' is still in use. */
+static int
+dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
+{
+    static const struct nl_policy odp_datapath_policy[] = {
+        [ODP_DP_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
+        [ODP_DP_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                .min_len = sizeof(struct odp_stats),
+                                .max_len = sizeof(struct odp_stats),
+                                .optional = true },
+        [ODP_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
+        [ODP_DP_ATTR_SAMPLING] = { .type = NL_A_U32, .optional = true },
+    };
+
+    struct odp_datapath *odp_dp;
+    struct nlattr *a[ARRAY_SIZE(odp_datapath_policy)];
+
+    dpif_linux_dp_init(dp);
+
+    if (!nl_policy_parse(buf, sizeof *odp_dp, odp_datapath_policy,
+                         a, ARRAY_SIZE(odp_datapath_policy))) {
+        return EINVAL;
+    }
+    odp_dp = buf->data;
+
+    dp->dp_idx = odp_dp->dp_idx;
+    dp->name = nl_attr_get_string(a[ODP_DP_ATTR_NAME]);
+    if (a[ODP_DP_ATTR_STATS]) {
+        /* Can't use structure assignment because Netlink doesn't ensure
+         * sufficient alignment for 64-bit members. */
+        memcpy(&dp->stats, nl_attr_get(a[ODP_DP_ATTR_STATS]),
+               sizeof dp->stats);
+    }
+    if (a[ODP_DP_ATTR_IPV4_FRAGS]) {
+        dp->ipv4_frags = nl_attr_get_u32(a[ODP_DP_ATTR_IPV4_FRAGS]);
+    }
+    if (a[ODP_DP_ATTR_SAMPLING]) {
+        dp->sampling = nl_attr_get(a[ODP_DP_ATTR_SAMPLING]);
+    }
+    return 0;
+}
+
+/* Appends to 'buf' (which must initially be empty) a "struct odp_datapath"
+ * followed by Netlink attributes corresponding to 'dp'. */
+static void
+dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
+{
+    struct odp_datapath *odp_dp;
+
+    ofpbuf_reserve(buf, sizeof odp_dp);
+
+    if (dp->name) {
+        nl_msg_put_string(buf, ODP_DP_ATTR_NAME, dp->name);
+    }
+
+    /* Skip ODP_DP_ATTR_STATS since we never have a reason to serialize it. */
+
+    if (dp->ipv4_frags) {
+        nl_msg_put_u32(buf, ODP_DP_ATTR_IPV4_FRAGS, dp->ipv4_frags);
+    }
+
+    if (dp->sampling) {
+        nl_msg_put_u32(buf, ODP_DP_ATTR_SAMPLING, *dp->sampling);
+    }
+
+    odp_dp = ofpbuf_push_uninit(buf, sizeof *odp_dp);
+    odp_dp->dp_idx = dp->dp_idx;
+    odp_dp->len = buf->size;
+    odp_dp->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
+}
+
+/* Clears 'dp' to "empty" values. */
+void
+dpif_linux_dp_init(struct dpif_linux_dp *dp)
+{
+    memset(dp, 0, sizeof *dp);
+    dp->dp_idx = -1;
+}
+
+/* Executes 'request' in the kernel datapath.  If the command fails, returns a
+ * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
+ * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
+ * result of the command is expected to be an odp_datapath also, which is
+ * decoded and stored in '*reply' and '*bufp'.  The caller must free '*bufp'
+ * when the reply is no longer needed ('reply' will contain pointers into
+ * '*bufp'). */
+int
+dpif_linux_dp_transact(const struct dpif_linux_dp *request,
+                       struct dpif_linux_dp *reply, struct ofpbuf **bufp)
+{
+    struct ofpbuf *buf = NULL;
+    int error;
+    int fd;
+
+    assert((reply != NULL) == (bufp != NULL));
+
+    error = get_dp0_fd(&fd);
+    if (error) {
+        goto error;
+    }
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_dp_to_ofpbuf(request, buf);
+
+    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
+    if (error) {
+        goto error;
+    }
+
+    if (bufp) {
+        buf->size = ((struct odp_datapath *) buf->data)->len;
+        error = dpif_linux_dp_from_ofpbuf(reply, buf);
+        if (error) {
+            goto error;
+        }
+        *bufp = buf;
+    } else {
+        ofpbuf_delete(buf);
+    }
+    return 0;
+
+error:
+    ofpbuf_delete(buf);
+    if (bufp) {
+        memset(reply, 0, sizeof *reply);
+        *bufp = NULL;
+    }
+    return error;
+}
+
+/* Obtains information about 'dpif_' and stores it into '*reply' and '*bufp'.
+ * The caller must free '*bufp' when the reply is no longer needed ('reply'
+ * will contain pointers into '*bufp').  */
+int
+dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
+                  struct ofpbuf **bufp)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_dp request;
+
+    dpif_linux_dp_init(&request);
+    request.cmd = ODP_DP_GET;
+    request.dp_idx = dpif->minor;
+
+    return dpif_linux_dp_transact(&request, reply, bufp);
+}
+
+/* Parses the contents of 'buf', which contains a "struct odp_flow" followed by
+ * Netlink attributes, into 'flow'.  Returns 0 if successful, otherwise a
+ * positive errno value.
+ *
+ * 'flow' will contain pointers into 'buf', so the caller should not free 'buf'
+ * while 'flow' is still in use. */
+static int
+dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
+                            const struct ofpbuf *buf)
+{
+    static const struct nl_policy odp_flow_policy[] = {
+        [ODP_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
+        [ODP_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [ODP_FLOW_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                  .min_len = sizeof(struct odp_flow_stats),
+                                  .max_len = sizeof(struct odp_flow_stats),
+                                  .optional = true },
+        [ODP_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
+        [ODP_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
+        /* The kernel never uses ODP_FLOW_ATTR_CLEAR. */
+        [ODP_FLOW_ATTR_STATE] = { .type = NL_A_U64, .optional = true },
+    };
+
+    struct odp_flow *odp_flow;
+    struct nlattr *a[ARRAY_SIZE(odp_flow_policy)];
+
+    dpif_linux_flow_init(flow);
+
+    if (!nl_policy_parse(buf, sizeof *odp_flow, odp_flow_policy,
+                         a, ARRAY_SIZE(odp_flow_policy))) {
+        return EINVAL;
+    }
+    odp_flow = buf->data;
+
+    flow->nlmsg_flags = odp_flow->nlmsg_flags;
+    flow->dp_idx = odp_flow->dp_idx;
+    flow->key = nl_attr_get(a[ODP_FLOW_ATTR_KEY]);
+    flow->key_len = nl_attr_get_size(a[ODP_FLOW_ATTR_KEY]);
+    if (a[ODP_FLOW_ATTR_ACTIONS]) {
+        flow->actions = nl_attr_get(a[ODP_FLOW_ATTR_ACTIONS]);
+        flow->actions_len = nl_attr_get_size(a[ODP_FLOW_ATTR_ACTIONS]);
+    }
+    if (a[ODP_FLOW_ATTR_STATS]) {
+        flow->stats = nl_attr_get(a[ODP_FLOW_ATTR_STATS]);
+    }
+    if (a[ODP_FLOW_ATTR_TCP_FLAGS]) {
+        flow->tcp_flags = nl_attr_get(a[ODP_FLOW_ATTR_TCP_FLAGS]);
+    }
+    if (a[ODP_FLOW_ATTR_STATE]) {
+        flow->state = nl_attr_get(a[ODP_FLOW_ATTR_STATE]);
+    }
+    return 0;
+}
+
+/* Appends to 'buf' (which must initially be empty) a "struct odp_flow"
+ * followed by Netlink attributes corresponding to 'flow'. */
+static void
+dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
+                          struct ofpbuf *buf)
+{
+    struct odp_flow *odp_flow;
+
+    ofpbuf_reserve(buf, sizeof odp_flow);
+
+    if (flow->key_len) {
+        nl_msg_put_unspec(buf, ODP_FLOW_ATTR_KEY, flow->key, flow->key_len);
+    }
+
+    if (flow->actions_len) {
+        nl_msg_put_unspec(buf, ODP_FLOW_ATTR_ACTIONS,
+                          flow->actions, flow->actions_len);
+    }
+
+    /* We never need to send these to the kernel. */
+    assert(!flow->stats);
+    assert(!flow->tcp_flags);
+    assert(!flow->used);
+
+    if (flow->clear) {
+        nl_msg_put_flag(buf, ODP_FLOW_ATTR_CLEAR);
+    }
+
+    if (flow->state) {
+        nl_msg_put_u64(buf, ODP_FLOW_ATTR_STATE,
+                       get_unaligned_u64(flow->state));
+    }
+
+    odp_flow = ofpbuf_push_uninit(buf, sizeof *odp_flow);
+    odp_flow->nlmsg_flags = flow->nlmsg_flags;
+    odp_flow->dp_idx = flow->dp_idx;
+    odp_flow->len = buf->size;
+    odp_flow->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
+}
+
+/* Clears 'flow' to "empty" values. */
+void
+dpif_linux_flow_init(struct dpif_linux_flow *flow)
+{
+    memset(flow, 0, sizeof *flow);
+}
+
+/* Executes 'request' in the kernel datapath.  If the command fails, returns a
+ * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
+ * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
+ * result of the command is expected to be an odp_flow also, which is decoded
+ * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
+ * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
+int
+dpif_linux_flow_transact(const struct dpif_linux_flow *request,
+                         struct dpif_linux_flow *reply, struct ofpbuf **bufp)
+{
+    struct ofpbuf *buf = NULL;
+    int error;
+    int fd;
+
+    assert((reply != NULL) == (bufp != NULL));
+
+    error = get_dp0_fd(&fd);
+    if (error) {
+        goto error;
+    }
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_flow_to_ofpbuf(request, buf);
+
+    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
+    if (error) {
+        goto error;
+    }
+
+    if (bufp) {
+        buf->size = ((struct odp_flow *) buf->data)->len;
+        error = dpif_linux_flow_from_ofpbuf(reply, buf);
+        if (error) {
+            goto error;
+        }
+        *bufp = buf;
+    } else {
+        ofpbuf_delete(buf);
+    }
+    return 0;
+
+error:
+    ofpbuf_delete(buf);
+    if (bufp) {
+        memset(reply, 0, sizeof *reply);
+        *bufp = NULL;
+    }
+    return error;
+}
+
+static void
+dpif_linux_flow_get_stats(const struct dpif_linux_flow *flow,
+                          struct dpif_flow_stats *stats)
+{
+    if (flow->stats) {
+        stats->n_packets = get_unaligned_u64(&flow->stats->n_packets);
+        stats->n_bytes = get_unaligned_u64(&flow->stats->n_bytes);
+    } else {
+        stats->n_packets = 0;
+        stats->n_bytes = 0;
+    }
+    stats->used = flow->used ? get_unaligned_u64(flow->used) : 0;
+    stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
 }
 

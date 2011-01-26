@@ -399,15 +399,15 @@ int flow_cmp(const struct tbl_node *node, void *key2_)
 /**
  * flow_from_nlattrs - parses Netlink attributes into a flow key.
  * @swkey: receives the extracted flow key.
- * @key: start of %ODP_KEY_ATTR_* Netlink attribute sequence.
- * @key_len: number of bytes in @key.
+ * @key: Netlink attribute holding nested %ODP_KEY_ATTR_* Netlink attribute
+ * sequence.
  *
  * This state machine accepts the following forms, with [] for optional
  * elements and | for alternatives:
  *
  * [tun_id] in_port ethernet [8021q] [ethertype [IP [TCP|UDP|ICMP] | ARP]
  */
-static int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *key, u32 key_len)
+int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 {
 	const struct nlattr *nla;
 	u16 prev_type;
@@ -417,7 +417,7 @@ static int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *key
 	swkey->dl_type = htons(ETH_P_802_2);
 
 	prev_type = ODP_KEY_ATTR_UNSPEC;
-	nla_for_each_attr(nla, key, key_len, rem) {
+	nla_for_each_nested(nla, attr, rem) {
 		static const u32 key_lens[ODP_KEY_ATTR_MAX + 1] = {
 			[ODP_KEY_ATTR_TUN_ID] = 8,
 			[ODP_KEY_ATTR_IN_PORT] = 4,
@@ -572,39 +572,43 @@ static int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *key
 	return -EINVAL;
 }
 
-u32 flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
+int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 {
 	struct odp_key_ethernet *eth_key;
-
-	if (skb_tailroom(skb) < FLOW_BUFSIZE)
-		return -EMSGSIZE;
+	struct nlattr *nla;
 
 	if (swkey->tun_id != cpu_to_be64(0))
-		nla_put_be64(skb, ODP_KEY_ATTR_TUN_ID, swkey->tun_id);
+		NLA_PUT_BE64(skb, ODP_KEY_ATTR_TUN_ID, swkey->tun_id);
 
-	nla_put_u32(skb, ODP_KEY_ATTR_IN_PORT, swkey->in_port);
+	NLA_PUT_U32(skb, ODP_KEY_ATTR_IN_PORT, swkey->in_port);
 
-	eth_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ETHERNET, sizeof(*eth_key)));
+	nla = nla_reserve(skb, ODP_KEY_ATTR_ETHERNET, sizeof(*eth_key));
+	if (!nla)
+		goto nla_put_failure;
+	eth_key = nla_data(nla);
 	memcpy(eth_key->eth_src, swkey->dl_src, ETH_ALEN);
 	memcpy(eth_key->eth_dst, swkey->dl_dst, ETH_ALEN);
 
 	if (swkey->dl_tci != htons(0)) {
-		struct odp_key_8021q *q_key;
+		struct odp_key_8021q q_key;
 
-		q_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_8021Q, sizeof(*q_key)));
-		q_key->q_tpid = htons(ETH_P_8021Q);
-		q_key->q_tci = swkey->dl_tci & ~htons(VLAN_TAG_PRESENT);
+		q_key.q_tpid = htons(ETH_P_8021Q);
+		q_key.q_tci = swkey->dl_tci & ~htons(VLAN_TAG_PRESENT);
+		NLA_PUT(skb, ODP_KEY_ATTR_8021Q, sizeof(q_key), &q_key);
 	}
 
 	if (swkey->dl_type == htons(ETH_P_802_2))
-		goto exit;
+		return 0;
 
-	nla_put_be16(skb, ODP_KEY_ATTR_ETHERTYPE, swkey->dl_type);
+	NLA_PUT_BE16(skb, ODP_KEY_ATTR_ETHERTYPE, swkey->dl_type);
 
 	if (swkey->dl_type == htons(ETH_P_IP)) {
 		struct odp_key_ipv4 *ipv4_key;
 
-		ipv4_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_IPV4, sizeof(*ipv4_key)));
+		nla = nla_reserve(skb, ODP_KEY_ATTR_IPV4, sizeof(*ipv4_key));
+		if (!nla)
+			goto nla_put_failure;
+		ipv4_key = nla_data(nla);
 		ipv4_key->ipv4_src = swkey->nw_src;
 		ipv4_key->ipv4_dst = swkey->nw_dst;
 		ipv4_key->ipv4_proto = swkey->nw_proto;
@@ -613,63 +617,47 @@ u32 flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (swkey->nw_proto == IPPROTO_TCP) {
 			struct odp_key_tcp *tcp_key;
 
-			tcp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_TCP, sizeof(*tcp_key)));
+			nla = nla_reserve(skb, ODP_KEY_ATTR_TCP, sizeof(*tcp_key));
+			if (!nla)
+				goto nla_put_failure;
+			tcp_key = nla_data(nla);
 			tcp_key->tcp_src = swkey->tp_src;
 			tcp_key->tcp_dst = swkey->tp_dst;
 		} else if (swkey->nw_proto == IPPROTO_UDP) {
 			struct odp_key_udp *udp_key;
 
-			udp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_UDP, sizeof(*udp_key)));
+			nla = nla_reserve(skb, ODP_KEY_ATTR_UDP, sizeof(*udp_key));
+			if (!nla)
+				goto nla_put_failure;
+			udp_key = nla_data(nla);
 			udp_key->udp_src = swkey->tp_src;
 			udp_key->udp_dst = swkey->tp_dst;
 		} else if (swkey->nw_proto == IPPROTO_ICMP) {
 			struct odp_key_icmp *icmp_key;
 
-			icmp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ICMP, sizeof(*icmp_key)));
+			nla = nla_reserve(skb, ODP_KEY_ATTR_ICMP, sizeof(*icmp_key));
+			if (!nla)
+				goto nla_put_failure;
+			icmp_key = nla_data(nla);
 			icmp_key->icmp_type = ntohs(swkey->tp_src);
 			icmp_key->icmp_code = ntohs(swkey->tp_dst);
 		}
 	} else if (swkey->dl_type == htons(ETH_P_ARP)) {
 		struct odp_key_arp *arp_key;
 
-		arp_key = nla_data(__nla_reserve(skb, ODP_KEY_ATTR_ARP, sizeof(*arp_key)));
+		nla = nla_reserve(skb, ODP_KEY_ATTR_ARP, sizeof(*arp_key));
+		if (!nla)
+			goto nla_put_failure;
+		arp_key = nla_data(nla);
 		arp_key->arp_sip = swkey->nw_src;
 		arp_key->arp_tip = swkey->nw_dst;
 		arp_key->arp_op = htons(swkey->nw_proto);
 	}
 
-exit:
-	return skb->len;
-}
+	return 0;
 
-int flow_copy_from_user(struct sw_flow_key *swkey, const struct nlattr __user *ukey, u32 ukey_len)
-{
-	char key[FLOW_BUFSIZE] __aligned(NLA_ALIGNTO);
-
-	if (ukey_len > FLOW_BUFSIZE || ukey_len % NLA_ALIGNTO)
-		return -EINVAL;
-
-	if (copy_from_user(key, ukey, ukey_len))
-		return -EFAULT;
-
-	return flow_from_nlattrs(swkey, (const struct nlattr *)key, ukey_len);
-}
-
-int flow_copy_to_user(struct nlattr __user *ukey, const struct sw_flow_key *swkey, u32 ukey_len)
-{
-	struct sk_buff *skb;
-	int retval;
-
-	skb = alloc_skb(FLOW_BUFSIZE, GFP_KERNEL);
-	if (!skb)
-		return -ENOMEM;
-
-	retval = flow_to_nlattrs(swkey, skb);
-	if (copy_to_user(ukey, skb->data, min(skb->len, ukey_len)))
-		retval = -EFAULT;
-	kfree_skb(skb);
-
-	return retval;
+nla_put_failure:
+	return -EMSGSIZE;
 }
 
 /* Initializes the flow module.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -100,9 +100,8 @@ int flow_cmp(const struct tbl_node *, void *target);
  */
 #define FLOW_BUFSIZE 96
 
-u32 flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
-int flow_copy_from_user(struct sw_flow_key *, const struct nlattr __user *ukey, u32 key_len);
-int flow_copy_to_user(struct nlattr __user *ukey, const struct sw_flow_key *, u32 key_len);
+int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
+int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *);
 
 static inline struct sw_flow *flow_cast(const struct tbl_node *node)
 {

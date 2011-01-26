@@ -70,14 +70,11 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 
-#define ODP_MAX 256             /* Maximum number of datapaths. */
-
-#define ODP_DP_CREATE           _IO('O', 0)
-#define ODP_DP_DESTROY          _IO('O', 1)
-#define ODP_DP_STATS            _IOW('O', 2, struct odp_stats)
-
-#define ODP_GET_DROP_FRAGS      _IOW('O', 3, int)
-#define ODP_SET_DROP_FRAGS      _IOR('O', 4, int)
+#define ODP_DP_NEW              _IOWR('O', 0, struct odp_datapath)
+#define ODP_DP_DEL              _IOR('O', 1, struct odp_datapath)
+#define ODP_DP_GET              _IOWR('O', 2, struct odp_datapath)
+#define ODP_DP_SET		_IOWR('O', 3, struct odp_datapath)
+#define ODP_DP_DUMP		_IOWR('O', 4, struct odp_datapath)
 
 #define ODP_GET_LISTEN_MASK     _IOW('O', 5, int)
 #define ODP_SET_LISTEN_MASK     _IOR('O', 6, int)
@@ -88,16 +85,48 @@
 #define ODP_VPORT_SET           _IOR('O', 22, struct odp_vport)
 #define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport)
 
-#define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
-#define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
-#define ODP_FLOW_DUMP           _IOWR('O', 15, struct odp_flow_dump)
-#define ODP_FLOW_FLUSH          _IO('O', 16)
-#define ODP_FLOW_DEL            _IOWR('O', 17, struct odp_flow)
+#define ODP_FLOW_NEW            _IOWR('O', 13, struct odp_flow)
+#define ODP_FLOW_DEL            _IOWR('O', 14, struct odp_flow)
+#define ODP_FLOW_GET            _IOWR('O', 15, struct odp_flow)
+#define ODP_FLOW_SET            _IOWR('O', 16, struct odp_flow)
+#define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
+#define ODP_FLOW_FLUSH          _IO('O', 19)
 
 #define ODP_EXECUTE             _IOR('O', 18, struct odp_execute)
 
-#define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
-#define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
+/**
+ * struct odp_datapath - header with basic information about a datapath.
+ * @dp_idx: Datapath index (-1 to make a request not specific to a datapath).
+ * @len: Length of this structure plus the Netlink attributes following it.
+ * @total_len: Total space available for kernel reply to request.
+ *
+ * Followed by &struct nlattr attributes, whose types are drawn from
+ * %ODP_DP_ATTR_*, up to a length of @len bytes including the &struct
+ * odp_datapath header.
+ */
+struct odp_datapath {
+	int32_t dp_idx;
+	uint32_t len;
+	uint32_t total_len;
+};
+
+enum odp_datapath_type {
+	ODP_DP_ATTR_UNSPEC,
+	ODP_DP_ATTR_NAME,       /* name of dp_ifidx netdev */
+	ODP_DP_ATTR_STATS,      /* struct odp_stats */
+	ODP_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum odp_frag_handling */
+	ODP_DP_ATTR_SAMPLING,   /* 32-bit fraction of packets to sample. */
+	__ODP_DP_ATTR_MAX
+};
+
+#define ODP_DP_ATTR_MAX (__ODP_DP_ATTR_MAX - 1)
+
+/* Values for ODP_DP_ATTR_IPV4_FRAGS. */
+enum odp_frag_handling {
+	ODP_DP_FRAG_UNSPEC,
+	ODP_DP_FRAG_ZERO,	/* Treat IP fragments as transport port 0. */
+	ODP_DP_FRAG_DROP	/* Drop IP fragments. */
+};
 
 struct odp_stats {
     uint64_t n_frags;           /* Number of dropped IP fragments. */
@@ -210,10 +239,6 @@ enum {
 struct odp_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
     uint64_t n_bytes;           /* Number of matched bytes. */
-    uint64_t used_sec;          /* Time last used, in system monotonic time. */
-    uint32_t used_nsec;
-    uint8_t  tcp_flags;
-    uint8_t  reserved;
 };
 
 enum odp_key_type {
@@ -271,41 +296,36 @@ struct odp_key_arp {
 	ovs_be16 arp_op;
 };
 
-struct odp_flow {
-    uint32_t dp_idx;
-    struct odp_flow_stats stats;
-    struct nlattr *key;
-    uint32_t key_len;
-    struct nlattr *actions;
-    uint32_t actions_len;
-};
-
-/* Flags for ODP_FLOW_PUT. */
-#define ODPPF_CREATE        (1 << 0) /* Allow creating a new flow. */
-#define ODPPF_MODIFY        (1 << 1) /* Allow modifying an existing flow. */
-#define ODPPF_ZERO_STATS    (1 << 2) /* Zero the stats of an existing flow. */
-
-/* ODP_FLOW_PUT argument. */
-struct odp_flow_put {
-    struct odp_flow flow;
-    uint32_t flags;
-};
-
-/* ODP_FLOW_DUMP argument.
+/**
+ * struct odp_flow - header with basic information about a flow.
+ * @dp_idx: Datapath index.
+ * @len: Length of this structure plus the Netlink attributes following it.
+ * @total_len: Total space available for kernel reply to request.
  *
- * This is used to iterate through the flow table flow-by-flow.  Each
- * ODP_FLOW_DUMP call either stores a new odp_flow into 'flow' or stores 0 into
- * flow->key_len to indicate that the end of the table has been reached, and
- * updates 'state' in-place.
- *
- * Before the first call, zero 'state'.  The format of 'state' is otherwise
- * unspecified.
+ * Followed by &struct nlattr attributes, whose types are drawn from
+ * %ODP_FLOW_ATTR_*, up to a length of @len bytes including the &struct
+ * odp_flow header.
  */
-struct odp_flow_dump {
+struct odp_flow {
+	uint32_t nlmsg_flags;
 	uint32_t dp_idx;
-	struct odp_flow *flow;
-	uint32_t state[2];
+	uint32_t len;
+	uint32_t total_len;
 };
+
+enum odp_flow_type {
+	ODP_FLOW_ATTR_UNSPEC,
+	ODP_FLOW_ATTR_KEY,       /* Sequence of ODP_KEY_ATTR_* attributes. */
+	ODP_FLOW_ATTR_ACTIONS,   /* Sequence of nested ODPAT_* attributes. */
+	ODP_FLOW_ATTR_STATS,     /* struct odp_flow_stats. */
+	ODP_FLOW_ATTR_TCP_FLAGS, /* 8-bit OR'd TCP flags. */
+	ODP_FLOW_ATTR_USED,      /* u64 msecs last used in monotonic time. */
+	ODP_FLOW_ATTR_CLEAR,     /* Flag to clear stats, tcp_flags, used. */
+	ODP_FLOW_ATTR_STATE,     /* u64 state for ODP_FLOW_DUMP. */
+	__ODP_FLOW_ATTR_MAX
+};
+
+#define ODP_FLOW_ATTR_MAX (__ODP_FLOW_ATTR_MAX - 1)
 
 /* Action types. */
 enum odp_action_type {
