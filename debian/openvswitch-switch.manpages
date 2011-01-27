@@ -2,5 +2,8 @@ _debian/ovsdb/ovsdb-server.1
 _debian/utilities/ovs-discover.8
 _debian/utilities/ovs-dpctl.8
 _debian/utilities/ovs-kill.8
+_debian/utilities/ovs-pcap.1
+_debian/utilities/ovs-tcpundump.1
+_debian/utilities/ovs-vlan-test.8
 _debian/utilities/ovs-vsctl.8
 _debian/vswitchd/ovs-vswitchd.8
