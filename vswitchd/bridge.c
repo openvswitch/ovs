@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@
 #include "ofpbuf.h"
 #include "ofproto/netflow.h"
 #include "ofproto/ofproto.h"
+#include "ofproto/wdp.h"
 #include "ovsdb-data.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -299,7 +300,7 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 {
     static bool already_configured_once;
     struct svec bridge_names;
-    struct svec xfif_names, xfif_types;
+    struct svec wdp_names, wdp_types;
     size_t i;
 
     /* Only do this once per ovs-vswitchd run. */
@@ -317,46 +318,46 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     }
     svec_sort(&bridge_names);
 
-    /* Iterate over all system xfifs and delete any of them that do not appear
+    /* Iterate over all system wdps and delete any of them that do not appear
      * in 'cfg'. */
-    svec_init(&xfif_names);
-    svec_init(&xfif_types);
-    xf_enumerate_types(&xfif_types);
-    for (i = 0; i < xfif_types.n; i++) {
-        struct xfif *xfif;
+    svec_init(&wdp_names);
+    svec_init(&wdp_types);
+    wdp_enumerate_types(&wdp_types);
+    for (i = 0; i < wdp_types.n; i++) {
+        struct wdp *wdp;
         int retval;
         size_t j;
 
-        xf_enumerate_names(xfif_types.names[i], &xfif_names);
+        wdp_enumerate_names(wdp_types.names[i], &wdp_names);
 
-        /* For each xfif... */
-        for (j = 0; j < xfif_names.n; j++) {
-            retval = xfif_open(xfif_names.names[j], xfif_types.names[i], &xfif);
+        /* For each wdp... */
+        for (j = 0; j < wdp_names.n; j++) {
+            retval = wdp_open(wdp_names.names[j], wdp_types.names[i], &wdp);
             if (!retval) {
                 struct svec all_names;
                 size_t k;
 
                 /* ...check whether any of its names is in 'bridge_names'. */
                 svec_init(&all_names);
-                xfif_get_all_names(xfif, &all_names);
+                wdp_get_all_names(wdp, &all_names);
                 for (k = 0; k < all_names.n; k++) {
                     if (svec_contains(&bridge_names, all_names.names[k])) {
                         goto found;
                     }
                 }
 
-                /* No.  Delete the xfif. */
-                xfif_delete(xfif);
+                /* No.  Delete the wdp. */
+                wdp_delete(wdp);
 
             found:
                 svec_destroy(&all_names);
-                xfif_close(xfif);
+                wdp_close(wdp);
             }
         }
     }
     svec_destroy(&bridge_names);
-    svec_destroy(&xfif_names);
-    svec_destroy(&xfif_types);
+    svec_destroy(&wdp_names);
+    svec_destroy(&wdp_types);
 }
 
 /* Attempt to create the network device 'iface_name' through the netdev
