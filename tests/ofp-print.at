@@ -224,10 +224,13 @@ AT_CHECK([ovs-ofctl ofp-print "\
 45 00 00 28 bd 12 00 00 40 06 3c 6a c0 a8 00 01 \
 c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
 50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
-"], [0], [dnl
+"], [0], [stdout])
+dnl The tcpdump output format differs slightly from one version to another,
+dnl so trim off the end of the line where differences appear.
+AT_CHECK([sed 's/\(length 60:\).*/\1 .../' stdout], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 data_len=60 buffer=0x00000111
 tunnel0:in_port0003:tci(0) mac50:54:00:00:00:05->50:54:00:00:00:06 type0800 proto6 tos0 ip192.168.0.1->192.168.0.2 port10031->0
--8:00:00.000000 50:54:00:00:00:05 > 50:54:00:00:00:06, ethertype IPv4 (0x0800), length 60: 192.168.0.1.10031 > 192.168.0.2.0: . win 512
+-8:00:00.000000 50:54:00:00:00:05 > 50:54:00:00:00:06, ethertype IPv4 (0x0800), length 60: ...
 ])
 AT_CLEANUP
 
