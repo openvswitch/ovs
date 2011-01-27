@@ -331,7 +331,7 @@ _BOND_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                           lambda n: _strlist_from_xml(n, 'slaves', 'slave')),
               }
 
-_NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes' ] + _ETHTOOL_OTHERCONFIG_ATTRS
+_NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes', 'vswitch-controller-fail-mode' ] + _ETHTOOL_OTHERCONFIG_ATTRS
 
 _NETWORK_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                    'bridge': (_str_to_xml,_str_from_xml),
@@ -604,10 +604,21 @@ class DatabaseCache(object):
                    filter(lambda (ref,rec): rec['device'] == device,
                           self.__pifs.items()))
 
+    def get_networks_with_bridge(self, bridge):
+        return map(lambda (ref,rec): ref,
+                  filter(lambda (ref,rec): rec['bridge'] == bridge,
+                         self.__networks.items()))
+
+    def get_network_by_bridge(self, bridge):
+        #Assumes one network has bridge.
+        try:
+            return self.get_networks_with_bridge(bridge)[0]
+        except KeyError:
+            return None
+
     def get_pif_by_bridge(self, bridge):
-        networks = map(lambda (ref,rec): ref,
-                       filter(lambda (ref,rec): rec['bridge'] == bridge,
-                              self.__networks.items()))
+        networks = self.get_networks_with_bridge(bridge)
+
         if len(networks) == 0:
             raise Error("No matching network \"%s\"" % bridge)
 

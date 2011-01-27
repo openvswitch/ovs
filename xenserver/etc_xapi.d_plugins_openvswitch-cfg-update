@@ -84,12 +84,18 @@ def update(session, args):
         ret_str += "Successfully set controller to %s.  " % controller
 
     try:
-        fail_mode = pool["other_config"]["vswitch-controller-fail-mode"]
+        pool_fail_mode = pool["other_config"]["vswitch-controller-fail-mode"]
     except KeyError, e:
-        fail_mode = None
+        pool_fail_mode = None
 
-    if fail_mode != 'secure':
-        fail_mode = 'standalone'
+    bton = {}
+
+    for n in session.xenapi.network.get_all():
+        rec = session.xenapi.network.get_record(n)
+        try:
+            bton[rec['bridge']] = rec
+        except KeyError:
+            pass
 
     fail_mode_changed = False
     for bridge in vswitchCfgQuery(['list-br']).split():
@@ -97,13 +103,24 @@ def update(session, args):
         bridge_fail_mode = vswitchCfgQuery(["get", "Bridge",
             bridge, "fail_mode"]).strip('[]"')
 
+        try:
+            fail_mode = bton[bridge]["other_config"]["vswitch-controller-fail-mode"]
+        except KeyError, e:
+            fail_mode = None
+
+        if fail_mode not in ['secure', 'standalone']:
+            fail_mode = pool_fail_mode
+
+        if fail_mode != 'secure':
+            fail_mode = 'standalone'
+
         if bridge_fail_mode != fail_mode:
             vswitchCfgMod(['--', 'set', 'Bridge', bridge,
                 "fail_mode=%s" % fail_mode])
             fail_mode_changed = True
 
     if fail_mode_changed:
-        ret_str += "Set fail_mode to %s.  " % fail_mode
+        ret_str += "Updated fail_mode.  "
 
     if ret_str != '':
         return ret_str
