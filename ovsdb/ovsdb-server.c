@@ -346,7 +346,7 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
     if (read_integer_column(row, "max_backoff", &max_backoff)) {
         options->max_backoff = max_backoff;
     }
-    if (read_integer_column(row, "probe_interval", &probe_interval)) {
+    if (read_integer_column(row, "inactivity_probe", &probe_interval)) {
         options->probe_interval = probe_interval;
     }
 }
