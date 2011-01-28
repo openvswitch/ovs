@@ -876,6 +876,8 @@ jsonrpc_session_get_backlog(const struct jsonrpc_session *s)
     return s->rpc ? jsonrpc_get_backlog(s->rpc) : 0;
 }
 
+/* Always returns a pointer to a valid C string, assuming 's' was initialized
+ * correctly. */
 const char *
 jsonrpc_session_get_name(const struct jsonrpc_session *s)
 {
@@ -945,6 +947,19 @@ unsigned int
 jsonrpc_session_get_seqno(const struct jsonrpc_session *s)
 {
     return s->seqno;
+}
+
+int
+jsonrpc_session_get_status(const struct jsonrpc_session *s)
+{
+    return s && s->rpc ? jsonrpc_get_status(s->rpc) : 0;
+}
+
+void
+jsonrpc_session_get_reconnect_stats(const struct jsonrpc_session *s,
+                                    struct reconnect_stats *stats)
+{
+    reconnect_get_stats(s->reconnect, time_msec(), stats);
 }
 
 void

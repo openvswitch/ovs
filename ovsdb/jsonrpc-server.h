@@ -16,6 +16,8 @@
 #ifndef OVSDB_JSONRPC_SERVER_H
 #define OVSDB_JSONRPC_SERVER_H 1
 
+#include <stdbool.h>
+
 struct ovsdb;
 struct shash;
 
@@ -31,6 +33,17 @@ struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_default_options(void);
 
 void ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *,
                                       const struct shash *);
+
+/* Status of a single remote connection. */
+struct ovsdb_jsonrpc_remote_status {
+    const char *state;
+    int last_error;
+    unsigned int state_elapsed;
+    bool is_connected;
+};
+void ovsdb_jsonrpc_server_get_remote_status(
+    const struct ovsdb_jsonrpc_server *,
+    struct shash * /* of 'struct ovsdb_jsonrpc_remote_status' */ );
 
 void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
 

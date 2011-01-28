@@ -2037,6 +2037,38 @@
         unique.  No common key-value pairs are currently defined.
       </column>
     </group>
+
+    <group title="Status">
+      <column name="is_connected">
+        <code>true</code> if currently connected to this manager,
+        <code>false</code> otherwise.
+      </column>
+
+      <column name="status">
+        <p>Key-value pairs that report manager status.</p>
+        <dl>
+          <dt><code>last_error</code></dt>
+          <dd>A human-readable description of the last error on the connection
+            to the manager; i.e. <code>strerror(errno)</code>.  This key
+            will exist only if an error has occurred.</dd>
+        </dl>
+        <dl>
+          <dt><code>state</code></dt>
+          <dd>The state of the connection to the manager.  Possible values
+            are: <code>VOID</code> (connection is disabled),
+            <code>BACKOFF</code> (attempting to reconnect at an increasing
+            period), <code>CONNECT_IN_PROGRESS</code> (attempting to connect),
+            <code>ACTIVE</code> (connected, remote host responsive), and
+            <code>IDLE</code> (remote host unresponsive, disconnecting).  These
+            values may change in the future.  They are provided only for human
+            consumption.</dd>
+        </dl>
+        <dl>
+          <dt><code>time_in_state</code></dt>
+          <dd>Milliseconds since the <code>state</code> key changed.</dd>
+        </dl>
+      </column>
+    </group>
   </table>
 
   <table name="NetFlow">

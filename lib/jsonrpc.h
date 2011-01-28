@@ -26,6 +26,7 @@
 struct json;
 struct jsonrpc_msg;
 struct pstream;
+struct reconnect_stats;
 struct stream;
 
 /* API for a JSON-RPC stream. */
@@ -113,6 +114,10 @@ void jsonrpc_session_recv_wait(struct jsonrpc_session *);
 bool jsonrpc_session_is_alive(const struct jsonrpc_session *);
 bool jsonrpc_session_is_connected(const struct jsonrpc_session *);
 unsigned int jsonrpc_session_get_seqno(const struct jsonrpc_session *);
+int jsonrpc_session_get_status(const struct jsonrpc_session *);
+void jsonrpc_session_get_reconnect_stats(const struct jsonrpc_session *,
+                                         struct reconnect_stats *);
+
 void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
 
 void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
