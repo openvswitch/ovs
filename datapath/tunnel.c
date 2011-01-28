@@ -716,54 +716,57 @@ static bool check_mtu(struct sk_buff *skb,
 		      const struct tnl_mutable_config *mutable,
 		      const struct rtable *rt, __be16 *frag_offp)
 {
+	bool pmtud = mutable->flags & TNL_F_PMTUD;
+	__be16 frag_off = 0;
 	int mtu;
-	__be16 frag_off;
 
-	frag_off = (mutable->flags & TNL_F_PMTUD) ? htons(IP_DF) : 0;
-	if (frag_off)
+	if (pmtud) {
+		frag_off = htons(IP_DF);
+
 		mtu = dst_mtu(&rt_dst(rt))
 			- ETH_HLEN
 			- mutable->tunnel_hlen
-			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
-	else
-		mtu = mutable->mtu;
+			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ?
+				VLAN_HLEN : 0);
+	}
 
 	if (skb->protocol == htons(ETH_P_IP)) {
-		struct iphdr *old_iph = ip_hdr(skb);
+		struct iphdr *iph = ip_hdr(skb);
 
-		frag_off |= old_iph->frag_off & htons(IP_DF);
-		mtu = max(mtu, IP_MIN_MTU);
+		frag_off |= iph->frag_off & htons(IP_DF);
 
-		if ((old_iph->frag_off & htons(IP_DF)) &&
-		    mtu < ntohs(old_iph->tot_len)) {
-			if (tnl_frag_needed(vport, mutable, skb, mtu, OVS_CB(skb)->tun_id))
-				goto drop;
+		if (pmtud && iph->frag_off & htons(IP_DF)) {
+			mtu = max(mtu, IP_MIN_MTU);
+
+			if (ntohs(iph->tot_len) > mtu &&
+			    tnl_frag_needed(vport, mutable, skb, mtu,
+					    OVS_CB(skb)->tun_id))
+				return false;
 		}
 	}
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		unsigned int packet_length = skb->len - ETH_HLEN
-			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
-
-		mtu = max(mtu, IPV6_MIN_MTU);
+			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ?
+				VLAN_HLEN : 0);
 
 		/* IPv6 requires PMTUD if the packet is above the minimum MTU. */
 		if (packet_length > IPV6_MIN_MTU)
 			frag_off = htons(IP_DF);
 
-		if (mtu < packet_length) {
-			if (tnl_frag_needed(vport, mutable, skb, mtu, OVS_CB(skb)->tun_id))
-				goto drop;
+		if (pmtud) {
+			mtu = max(mtu, IPV6_MIN_MTU);
+
+			if (packet_length > mtu &&
+			    tnl_frag_needed(vport, mutable, skb, mtu,
+					    OVS_CB(skb)->tun_id))
+				return false;
 		}
 	}
 #endif
 
 	*frag_offp = frag_off;
 	return true;
-
-drop:
-	*frag_offp = 0;
-	return false;
 }
 
 static void create_tunnel_header(const struct vport *vport,
@@ -1151,7 +1154,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	struct dst_entry *unattached_dst = NULL;
 	struct tnl_cache *cache;
 	int sent_len = 0;
-	__be16 frag_off;
+	__be16 frag_off = 0;
 	u8 ttl;
 	u8 inner_tos;
 	u8 tos;
