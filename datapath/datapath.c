@@ -12,7 +12,6 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/fs.h>
 #include <linux/if_arp.h>
 #include <linux/if_vlan.h>
 #include <linux/in.h>
@@ -44,7 +43,6 @@
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
 #include <net/genetlink.h>
-#include <linux/compat.h>
 
 #include "openvswitch/datapath-protocol.h"
 #include "checksum.h"
@@ -557,12 +555,12 @@ static int flush_flows(int dp_idx)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *actions, u32 actions_len)
+static int validate_actions(const struct nlattr *attr)
 {
 	const struct nlattr *a;
 	int rem;
 
-	nla_for_each_attr(a, actions, actions_len, rem) {
+	nla_for_each_nested(a, attr, rem) {
 		static const u32 action_lens[ODPAT_MAX + 1] = {
 			[ODPAT_OUTPUT] = 4,
 			[ODPAT_CONTROLLER] = 8,
@@ -629,28 +627,6 @@ static int validate_actions(const struct nlattr *actions, u32 actions_len)
 
 	return 0;
 }
-
-struct dp_flowcmd {
-	u32 nlmsg_flags;
-	u32 dp_idx;
-	u32 total_len;
-	struct sw_flow_key key;
-	const struct nlattr *actions;
-	u32 actions_len;
-	bool clear;
-	u64 state;
-};
-
-static struct sw_flow_actions *get_actions(const struct dp_flowcmd *flowcmd)
-{
-	struct sw_flow_actions *actions;
-
-	actions = flow_actions_alloc(flowcmd->actions_len);
-	if (!IS_ERR(actions) && flowcmd->actions_len)
-		memcpy(actions->actions, flowcmd->actions, flowcmd->actions_len);
-	return actions;
-}
-
 static void clear_stats(struct sw_flow *flow)
 {
 	flow->used = 0;
@@ -680,8 +656,6 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	struct odp_header *odp_header = info->userhdr;
 	struct nlattr **a = info->attrs;
 	struct sk_buff *packet;
-	unsigned int actions_len;
-	struct nlattr *actions;
 	struct sw_flow_key key;
 	struct datapath *dp;
 	struct ethhdr *eth;
@@ -693,9 +667,7 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	    nla_len(a[ODP_PACKET_ATTR_PACKET]) < ETH_HLEN)
 		goto exit;
 
-	actions = nla_data(a[ODP_PACKET_ATTR_ACTIONS]);
-	actions_len = nla_len(a[ODP_PACKET_ATTR_ACTIONS]);
-	err = validate_actions(actions, actions_len);
+	err = validate_actions(a[ODP_PACKET_ATTR_ACTIONS]);
 	if (err)
 		goto exit;
 
@@ -725,7 +697,9 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	dp = get_dp(odp_header->dp_idx);
 	err = -ENODEV;
 	if (dp)
-		err = execute_actions(dp, packet, &key, actions, actions_len);
+		err = execute_actions(dp, packet, &key,
+				      nla_data(a[ODP_PACKET_ATTR_ACTIONS]),
+				      nla_len(a[ODP_PACKET_ATTR_ACTIONS]));
 	rcu_read_unlock();
 
 exit:
@@ -817,46 +791,49 @@ static const struct nla_policy flow_policy[ODP_FLOW_ATTR_MAX + 1] = {
 	[ODP_FLOW_ATTR_KEY] = { .type = NLA_NESTED },
 	[ODP_FLOW_ATTR_ACTIONS] = { .type = NLA_NESTED },
 	[ODP_FLOW_ATTR_CLEAR] = { .type = NLA_FLAG },
-	[ODP_FLOW_ATTR_STATE] = { .type = NLA_U64 },
 };
 
+static struct genl_family dp_flow_genl_family = {
+	.id = GENL_ID_GENERATE,
+	.hdrsize = sizeof(struct odp_header),
+	.name = ODP_FLOW_FAMILY,
+	.version = 1,
+	.maxattr = ODP_FLOW_ATTR_MAX
+};
 
-static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
-			     struct sw_flow *flow, u32 total_len, u64 state)
+static struct genl_multicast_group dp_flow_multicast_group = {
+	.name = ODP_FLOW_MCGROUP
+};
+
+/* Called with genl_lock. */
+static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
+				  struct sk_buff *skb, u32 pid, u32 seq, u32 flags, u8 cmd)
 {
+	const int skb_orig_len = skb->len;
 	const struct sw_flow_actions *sf_acts;
 	struct odp_flow_stats stats;
-	struct odp_flow *odp_flow;
-	struct sk_buff *skb;
+	struct odp_header *odp_header;
 	struct nlattr *nla;
 	unsigned long used;
 	u8 tcp_flags;
+	int nla_len;
 	int err;
 
 	sf_acts = rcu_dereference_protected(flow->sf_acts,
 					    lockdep_genl_is_held());
 
-	skb = alloc_skb(128 + FLOW_BUFSIZE + sf_acts->actions_len, GFP_KERNEL);
-	err = -ENOMEM;
-	if (!skb)
-		goto exit;
+	odp_header = genlmsg_put(skb, pid, seq, &dp_flow_genl_family, flags, cmd);
+	if (!odp_header)
+		return -EMSGSIZE;
 
-	odp_flow = (struct odp_flow*)__skb_put(skb, sizeof(struct odp_flow));
-	odp_flow->dp_idx = dp->dp_idx;
-	odp_flow->total_len = total_len;
+	odp_header->dp_idx = dp->dp_idx;
 
 	nla = nla_nest_start(skb, ODP_FLOW_ATTR_KEY);
 	if (!nla)
 		goto nla_put_failure;
 	err = flow_to_nlattrs(&flow->key, skb);
 	if (err)
-		goto exit_free;
-	nla_nest_end(skb, nla);
-
-	nla = nla_nest_start(skb, ODP_FLOW_ATTR_ACTIONS);
-	if (!nla || skb_tailroom(skb) < sf_acts->actions_len)
-		goto nla_put_failure;
-	memcpy(__skb_put(skb, sf_acts->actions_len), sf_acts->actions, sf_acts->actions_len);
+		goto error;
 	nla_nest_end(skb, nla);
 
 	spin_lock_bh(&flow->lock);
@@ -875,130 +852,116 @@ static int copy_flow_to_user(struct odp_flow __user *dst, struct datapath *dp,
 	if (tcp_flags)
 		NLA_PUT_U8(skb, ODP_FLOW_ATTR_TCP_FLAGS, tcp_flags);
 
-	if (state)
-		NLA_PUT_U64(skb, ODP_FLOW_ATTR_STATE, state);
+	/* If ODP_FLOW_ATTR_ACTIONS doesn't fit, and this is the first flow to
+	 * be dumped into 'skb', then expand the skb.  This is unusual for
+	 * Netlink but individual action lists can be longer than a page and
+	 * thus entirely undumpable if we didn't do this. */
+	nla_len = nla_total_size(sf_acts->actions_len);
+	if (nla_len > skb_tailroom(skb) && !skb_orig_len) {
+		int hdr_off = (unsigned char *)odp_header - skb->data;
 
-	if (skb->len > total_len)
-		goto nla_put_failure;
+		err = pskb_expand_head(skb, 0, nla_len - skb_tailroom(skb), GFP_KERNEL);
+		if (err)
+			goto error;
 
-	odp_flow->len = skb->len;
-	err = copy_to_user(dst, skb->data, skb->len) ? -EFAULT : 0;
-	goto exit_free;
+		odp_header = (struct odp_header *)(skb->data + hdr_off);
+	}
+	nla = nla_nest_start(skb, ODP_FLOW_ATTR_ACTIONS);
+	memcpy(__skb_put(skb, sf_acts->actions_len), sf_acts->actions, sf_acts->actions_len);
+	nla_nest_end(skb, nla);
+
+	return genlmsg_end(skb, odp_header);
 
 nla_put_failure:
 	err = -EMSGSIZE;
-exit_free:
-	kfree_skb(skb);
-exit:
+error:
+	genlmsg_cancel(skb, odp_header);
 	return err;
 }
 
-/* Called with genl_mutex. */
-static struct sk_buff *copy_flow_from_user(struct odp_flow __user *uodp_flow,
-					   struct dp_flowcmd *flowcmd)
+static struct sk_buff *odp_flow_cmd_alloc_info(struct sw_flow *flow)
 {
-	struct nlattr *a[ODP_FLOW_ATTR_MAX + 1];
-	struct odp_flow *odp_flow;
+	const struct sw_flow_actions *sf_acts;
+	int len;
+
+	sf_acts = rcu_dereference_protected(flow->sf_acts,
+					    lockdep_genl_is_held());
+
+	len = nla_total_size(FLOW_BUFSIZE); /* ODP_FLOW_ATTR_KEY */
+	len += nla_total_size(sf_acts->actions_len); /* ODP_FLOW_ATTR_ACTIONS */
+	len += nla_total_size(sizeof(struct odp_flow_stats)); /* ODP_FLOW_ATTR_STATS */
+	len += nla_total_size(1); /* ODP_FLOW_ATTR_TCP_FLAGS */
+	len += nla_total_size(8); /* ODP_FLOW_ATTR_USED */
+	return genlmsg_new(NLMSG_ALIGN(sizeof(struct odp_header)) + len, GFP_KERNEL);
+}
+
+static struct sk_buff *odp_flow_cmd_build_info(struct sw_flow *flow, struct datapath *dp,
+					       u32 pid, u32 seq, u8 cmd)
+{
 	struct sk_buff *skb;
-	u32 len;
-	int err;
+	int retval;
 
-	if (get_user(len, &uodp_flow->len))
-		return ERR_PTR(-EFAULT);
-	if (len < sizeof(struct odp_flow))
-		return ERR_PTR(-EINVAL);
-
-	skb = alloc_skb(len, GFP_KERNEL);
+	skb = odp_flow_cmd_alloc_info(flow);
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
 
-	err = -EFAULT;
-	if (copy_from_user(__skb_put(skb, len), uodp_flow, len))
-		goto error_free_skb;
-
-	odp_flow = (struct odp_flow *)skb->data;
-	err = -EINVAL;
-	if (odp_flow->len != len)
-		goto error_free_skb;
-
-	flowcmd->nlmsg_flags = odp_flow->nlmsg_flags;
-	flowcmd->dp_idx = odp_flow->dp_idx;
-	flowcmd->total_len = odp_flow->total_len;
-
-	err = nla_parse(a, ODP_FLOW_ATTR_MAX,
-			(struct nlattr *)(skb->data + sizeof(struct odp_flow)),
-			skb->len - sizeof(struct odp_flow), flow_policy);
-	if (err)
-		goto error_free_skb;
-
-	/* ODP_FLOW_ATTR_KEY. */
-	if (a[ODP_FLOW_ATTR_KEY]) {
-		err = flow_from_nlattrs(&flowcmd->key, a[ODP_FLOW_ATTR_KEY]);
-		if (err)
-			goto error_free_skb;
-	} else
-		memset(&flowcmd->key, 0, sizeof(struct sw_flow_key));
-
-	/* ODP_FLOW_ATTR_ACTIONS. */
-	if (a[ODP_FLOW_ATTR_ACTIONS]) {
-		flowcmd->actions = nla_data(a[ODP_FLOW_ATTR_ACTIONS]);
-		flowcmd->actions_len = nla_len(a[ODP_FLOW_ATTR_ACTIONS]);
-		err = validate_actions(flowcmd->actions, flowcmd->actions_len);
-		if (err)
-			goto error_free_skb;
-	} else {
-		flowcmd->actions = NULL;
-		flowcmd->actions_len = 0;
-	}
-
-	flowcmd->clear = a[ODP_FLOW_ATTR_CLEAR] != NULL;
-
-	flowcmd->state = a[ODP_FLOW_ATTR_STATE] ? nla_get_u64(a[ODP_FLOW_ATTR_STATE]) : 0;
-
+	retval = odp_flow_cmd_fill_info(flow, dp, skb, pid, seq, 0, cmd);
+	BUG_ON(retval < 0);
 	return skb;
-
-error_free_skb:
-	kfree_skb(skb);
-	return ERR_PTR(err);
 }
 
-static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
+static int odp_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 {
+	struct nlattr **a = info->attrs;
+	struct odp_header *odp_header = info->userhdr;
 	struct tbl_node *flow_node;
-	struct dp_flowcmd flowcmd;
+	struct sw_flow_key key;
 	struct sw_flow *flow;
-	struct sk_buff *skb;
+	struct sk_buff *reply;
 	struct datapath *dp;
 	struct tbl *table;
 	u32 hash;
 	int error;
 
-	skb = copy_flow_from_user(uodp_flow, &flowcmd);
-	error = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto exit;
+	/* Extract key. */
+	error = -EINVAL;
+	if (!a[ODP_FLOW_ATTR_KEY])
+		goto error;
+	error = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	if (error)
+		goto error;
 
-	dp = get_dp(flowcmd.dp_idx);
+	/* Validate actions. */
+	if (a[ODP_FLOW_ATTR_ACTIONS]) {
+		error = validate_actions(a[ODP_FLOW_ATTR_ACTIONS]);
+		if (error)
+			goto error;
+	} else if (info->genlhdr->cmd == ODP_FLOW_CMD_NEW) {
+		error = -EINVAL;
+		goto error;
+	}
+
+	dp = get_dp(odp_header->dp_idx);
 	error = -ENODEV;
 	if (!dp)
-		goto exit;
+		goto error;
 
-	hash = flow_hash(&flowcmd.key);
+	hash = flow_hash(&key);
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &flowcmd.key, hash, flow_cmp);
+	flow_node = tbl_lookup(table, &key, hash, flow_cmp);
 	if (!flow_node) {
 		struct sw_flow_actions *acts;
 
 		/* Bail out if we're not allowed to create a new flow. */
 		error = -ENOENT;
-		if (cmd == ODP_FLOW_SET)
-			goto exit;
+		if (info->genlhdr->cmd == ODP_FLOW_CMD_SET)
+			goto error;
 
 		/* Expand table, if necessary, to make room. */
 		if (tbl_count(table) >= tbl_n_buckets(table)) {
 			error = expand_table(dp);
 			if (error)
-				goto exit;
+				goto error;
 			table = get_table_protected(dp);
 		}
 
@@ -1006,26 +969,25 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		flow = flow_alloc();
 		if (IS_ERR(flow)) {
 			error = PTR_ERR(flow);
-			goto exit;
+			goto error;
 		}
-		flow->key = flowcmd.key;
+		flow->key = key;
 		clear_stats(flow);
 
 		/* Obtain actions. */
-		acts = get_actions(&flowcmd);
+		acts = flow_actions_alloc(a[ODP_FLOW_ATTR_ACTIONS]);
 		error = PTR_ERR(acts);
 		if (IS_ERR(acts))
 			goto error_free_flow;
 		rcu_assign_pointer(flow->sf_acts, acts);
 
-		error = copy_flow_to_user(uodp_flow, dp, flow, flowcmd.total_len, 0);
-		if (error)
-			goto error_free_flow;
-
 		/* Put flow in bucket. */
 		error = tbl_insert(table, &flow->tbl_node, hash);
 		if (error)
 			goto error_free_flow;
+
+		reply = odp_flow_cmd_build_info(flow, dp, info->snd_pid,
+						info->snd_seq, ODP_FLOW_CMD_NEW);
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts;
@@ -1037,123 +999,193 @@ static int new_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
 		 * gets fixed.
 		 */
 		error = -EEXIST;
-		if (flowcmd.nlmsg_flags & (NLM_F_CREATE | NLM_F_EXCL))
-			goto error_kfree_skb;
+		if (info->genlhdr->cmd == ODP_FLOW_CMD_NEW &&
+		    info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_EXCL))
+			goto error;
 
 		/* Update actions. */
 		flow = flow_cast(flow_node);
 		old_acts = rcu_dereference_protected(flow->sf_acts,
 						     lockdep_genl_is_held());
-		if (flowcmd.actions &&
-		    (old_acts->actions_len != flowcmd.actions_len ||
-		     memcmp(old_acts->actions, flowcmd.actions,
-			    flowcmd.actions_len))) {
+		if (a[ODP_FLOW_ATTR_ACTIONS] &&
+		    (old_acts->actions_len != nla_len(a[ODP_FLOW_ATTR_ACTIONS]) ||
+		     memcmp(old_acts->actions, nla_data(a[ODP_FLOW_ATTR_ACTIONS]),
+			    old_acts->actions_len))) {
 			struct sw_flow_actions *new_acts;
 
-			new_acts = get_actions(&flowcmd);
+			new_acts = flow_actions_alloc(a[ODP_FLOW_ATTR_ACTIONS]);
 			error = PTR_ERR(new_acts);
 			if (IS_ERR(new_acts))
-				goto error_kfree_skb;
+				goto error;
 
 			rcu_assign_pointer(flow->sf_acts, new_acts);
 			flow_deferred_free_acts(old_acts);
 		}
 
-		error = copy_flow_to_user(uodp_flow, dp, flow, flowcmd.total_len, 0);
-		if (error)
-			goto error_kfree_skb;
+		reply = odp_flow_cmd_build_info(flow, dp, info->snd_pid,
+						info->snd_seq, ODP_FLOW_CMD_NEW);
 
 		/* Clear stats. */
-		if (flowcmd.clear) {
+		if (a[ODP_FLOW_ATTR_CLEAR]) {
 			spin_lock_bh(&flow->lock);
 			clear_stats(flow);
 			spin_unlock_bh(&flow->lock);
 		}
 	}
-	kfree_skb(skb);
+
+	if (!IS_ERR(reply))
+		genl_notify(reply, genl_info_net(info), info->snd_pid,
+			    dp_flow_multicast_group.id, info->nlhdr, GFP_KERNEL);
+	else
+		netlink_set_err(INIT_NET_GENL_SOCK, 0,
+				dp_flow_multicast_group.id, PTR_ERR(reply));
 	return 0;
 
 error_free_flow:
 	flow_put(flow);
-error_kfree_skb:
-	kfree_skb(skb);
-exit:
+error:
 	return error;
 }
 
-static int get_or_del_flow(unsigned int cmd, struct odp_flow __user *uodp_flow)
+static int odp_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 {
+	struct nlattr **a = info->attrs;
+	struct odp_header *odp_header = info->userhdr;
+	struct sw_flow_key key;
 	struct tbl_node *flow_node;
-	struct dp_flowcmd flowcmd;
+	struct sk_buff *reply;
 	struct sw_flow *flow;
-	struct sk_buff *skb;
 	struct datapath *dp;
 	struct tbl *table;
 	int err;
 
-	skb = copy_flow_from_user(uodp_flow, &flowcmd);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
+	if (!a[ODP_FLOW_ATTR_KEY])
+		return -EINVAL;
+	err = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	if (err)
+		return err;
 
-	dp = get_dp(flowcmd.dp_idx);
+	dp = get_dp(odp_header->dp_idx);
 	if (!dp)
 		return -ENODEV;
 
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &flowcmd.key, flow_hash(&flowcmd.key), flow_cmp);
+	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
 	if (!flow_node)
 		return -ENOENT;
 
-	if (cmd == ODP_FLOW_DEL) {
-		err = tbl_remove(table, flow_node);
-		if (err)
-			return err;
-	}
-
 	flow = flow_cast(flow_node);
-	err = copy_flow_to_user(uodp_flow, dp, flow, flowcmd.total_len, 0);
-	if (!err && cmd == ODP_FLOW_DEL)
-		flow_deferred_free(flow);
+	reply = odp_flow_cmd_build_info(flow, dp, info->snd_pid, info->snd_seq, ODP_FLOW_CMD_NEW);
+	if (IS_ERR(reply))
+		return PTR_ERR(reply);
 
-	return err;
+	return genlmsg_reply(reply, info);
 }
 
-static int dump_flow(struct odp_flow __user *uodp_flow)
+static int odp_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 {
+	struct nlattr **a = info->attrs;
+	struct odp_header *odp_header = info->userhdr;
+	struct sw_flow_key key;
 	struct tbl_node *flow_node;
-	struct dp_flowcmd flowcmd;
+	struct sk_buff *reply;
 	struct sw_flow *flow;
-	struct sk_buff *skb;
 	struct datapath *dp;
-	u32 bucket, obj;
+	struct tbl *table;
 	int err;
 
-	skb = copy_flow_from_user(uodp_flow, &flowcmd);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto exit;
+	if (!a[ODP_FLOW_ATTR_KEY])
+		return flush_flows(odp_header->dp_idx);
+	err = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	if (err)
+		return err;
 
-	dp = get_dp(flowcmd.dp_idx);
-	err = -ENODEV;
+	dp = get_dp(odp_header->dp_idx);
 	if (!dp)
-		goto exit_kfree_skb;
+ 		return -ENODEV;
 
-	bucket = flowcmd.state >> 32;
-	obj = flowcmd.state;
-	flow_node = tbl_next(get_table_protected(dp), &bucket, &obj);
-	err = -ENODEV;
+	table = get_table_protected(dp);
+	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
 	if (!flow_node)
-		goto exit_kfree_skb;
-
+		return -ENOENT;
 	flow = flow_cast(flow_node);
-	err = copy_flow_to_user(uodp_flow, dp, flow, flowcmd.total_len,
-				((u64)bucket << 32) | obj);
 
-exit_kfree_skb:
-	kfree_skb(skb);
-exit:
-	return err;
+	reply = odp_flow_cmd_alloc_info(flow);
+	if (!reply)
+		return -ENOMEM;
+
+	err = tbl_remove(table, flow_node);
+	if (err) {
+		kfree_skb(reply);
+		return err;
+	}
+
+	err = odp_flow_cmd_fill_info(flow, dp, reply, info->snd_pid,
+				     info->snd_seq, 0, ODP_FLOW_CMD_DEL);
+	BUG_ON(err < 0);
+
+	flow_deferred_free(flow);
+
+	genl_notify(reply, genl_info_net(info), info->snd_pid,
+		    dp_flow_multicast_group.id, info->nlhdr, GFP_KERNEL);
+	return 0;
 }
+
+static int odp_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
+{
+	struct odp_header *odp_header = genlmsg_data(nlmsg_data(cb->nlh));
+	struct datapath *dp;
+
+	dp = get_dp(odp_header->dp_idx);
+	if (!dp)
+		return -ENODEV;
+
+	for (;;) {
+		struct tbl_node *flow_node;
+		struct sw_flow *flow;
+		u32 bucket, obj;
+
+		bucket = cb->args[0];
+		obj = cb->args[1];
+		flow_node = tbl_next(get_table_protected(dp), &bucket, &obj);
+		if (!flow_node)
+			break;
+
+		flow = flow_cast(flow_node);
+		if (odp_flow_cmd_fill_info(flow, dp, skb, NETLINK_CB(cb->skb).pid,
+					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
+					   ODP_FLOW_CMD_NEW) < 0)
+			break;
+
+		cb->args[0] = bucket;
+		cb->args[1] = obj;
+	}
+	return skb->len;
+}
+
+static struct genl_ops dp_flow_genl_ops[] = {
+	{ .cmd = ODP_FLOW_CMD_NEW,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = flow_policy,
+	  .doit = odp_flow_cmd_new_or_set
+	},
+	{ .cmd = ODP_FLOW_CMD_DEL,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = flow_policy,
+	  .doit = odp_flow_cmd_del
+	},
+	{ .cmd = ODP_FLOW_CMD_GET,
+	  .flags = 0,		    /* OK for unprivileged users. */
+	  .policy = flow_policy,
+	  .doit = odp_flow_cmd_get,
+	  .dumpit = odp_flow_cmd_dump
+	},
+	{ .cmd = ODP_FLOW_CMD_SET,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = flow_policy,
+	  .doit = odp_flow_cmd_new_or_set,
+	},
+};
 
 static const struct nla_policy datapath_policy[ODP_DP_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
@@ -1925,72 +1957,6 @@ static struct genl_ops dp_vport_genl_ops[] = {
 	},
 };
 
-static long openvswitch_ioctl(struct file *f, unsigned int cmd,
-			   unsigned long argp)
-{
-	int err;
-
-	genl_lock();
-	switch (cmd) {
-	case ODP_FLOW_FLUSH:
-		err = flush_flows(argp);
-		goto exit;
-
-	case ODP_FLOW_NEW:
-	case ODP_FLOW_SET:
-		err = new_flow(cmd, (struct odp_flow __user *)argp);
-		goto exit;
-
-	case ODP_FLOW_GET:
-	case ODP_FLOW_DEL:
-		err = get_or_del_flow(cmd, (struct odp_flow __user *)argp);
-		goto exit;
-
-	case ODP_FLOW_DUMP:
-		err = dump_flow((struct odp_flow __user *)argp);
-		goto exit;
-
-	default:
-		err = -ENOIOCTLCMD;
-		break;
-	}
-exit:
-	genl_unlock();
-	return err;
-}
-
-#ifdef CONFIG_COMPAT
-static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned long argp)
-{
-	switch (cmd) {
-	case ODP_FLOW_FLUSH:
-		/* Ioctls that don't need any translation at all. */
-		return openvswitch_ioctl(f, cmd, argp);
-
-	case ODP_FLOW_NEW:
-	case ODP_FLOW_DEL:
-	case ODP_FLOW_GET:
-	case ODP_FLOW_SET:
-	case ODP_FLOW_DUMP:
-		/* Ioctls that just need their pointer argument extended. */
-		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
-
-	default:
-		return -ENOIOCTLCMD;
-	}
-}
-#endif
-
-static struct file_operations openvswitch_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = openvswitch_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = openvswitch_compat_ioctl,
-#endif
-};
-
-static int major;
-
 struct genl_family_and_ops {
 	struct genl_family *family;
 	struct genl_ops *ops;
@@ -2005,6 +1971,9 @@ static const struct genl_family_and_ops dp_genl_families[] = {
 	{ &dp_vport_genl_family,
 	  dp_vport_genl_ops, ARRAY_SIZE(dp_vport_genl_ops),
 	  &dp_vport_multicast_group },
+	{ &dp_flow_genl_family,
+	  dp_flow_genl_ops, ARRAY_SIZE(dp_flow_genl_ops),
+	  &dp_flow_multicast_group },
 	{ &dp_packet_genl_family,
 	  dp_packet_genl_ops, ARRAY_SIZE(dp_packet_genl_ops),
 	  NULL },
@@ -2073,18 +2042,12 @@ static int __init dp_init(void)
 	if (err)
 		goto error_vport_exit;
 
-	major = register_chrdev(0, "openvswitch", &openvswitch_fops);
+	err = dp_register_genl();
 	if (err < 0)
 		goto error_unreg_notifier;
 
-	err = dp_register_genl();
-	if (err < 0)
-		goto error_unreg_chrdev;
-
 	return 0;
 
-error_unreg_chrdev:
-	unregister_chrdev(major, "openvswitch");
 error_unreg_notifier:
 	unregister_netdevice_notifier(&dp_device_notifier);
 error_vport_exit:
@@ -2099,7 +2062,6 @@ static void dp_cleanup(void)
 {
 	rcu_barrier();
 	dp_unregister_genl(ARRAY_SIZE(dp_genl_families));
-	unregister_chrdev(major, "openvswitch");
 	unregister_netdevice_notifier(&dp_device_notifier);
 	vport_exit();
 	flow_exit();

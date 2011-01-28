@@ -25,12 +25,10 @@
 #include <inttypes.h>
 #include <net/if.h>
 #include <linux/types.h>
-#include <linux/ethtool.h>
 #include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <stdlib.h>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -80,18 +78,18 @@ static int dpif_linux_dp_get(const struct dpif *, struct dpif_linux_dp *reply,
                              struct ofpbuf **bufp);
 
 struct dpif_linux_flow {
-    /* ioctl command argument. */
-    int cmd;
+    /* Generic Netlink header. */
+    uint8_t cmd;
 
-    /* struct odp_flow header. */
+    /* struct odp_header. */
     unsigned int nlmsg_flags;
     uint32_t dp_idx;
 
     /* Attributes.
      *
-     * The 'stats', 'used', and 'state' members point to 64-bit data that might
-     * only be aligned on 32-bit boundaries, so get_unaligned_u64() should be
-     * used to access their values. */
+     * The 'stats' and 'used' members point to 64-bit data that might only be
+     * aligned on 32-bit boundaries, so get_unaligned_u64() should be used to
+     * access their values. */
     const struct nlattr *key;           /* ODP_FLOW_ATTR_KEY. */
     size_t key_len;
     const struct nlattr *actions;       /* ODP_FLOW_ATTR_ACTIONS. */
@@ -100,10 +98,13 @@ struct dpif_linux_flow {
     const uint8_t *tcp_flags;           /* ODP_FLOW_ATTR_TCP_FLAGS. */
     const uint64_t *used;               /* ODP_FLOW_ATTR_USED. */
     bool clear;                         /* ODP_FLOW_ATTR_CLEAR. */
-    const uint64_t *state;              /* ODP_FLOW_ATTR_STATE. */
 };
 
 static void dpif_linux_flow_init(struct dpif_linux_flow *);
+static int dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *,
+                                       const struct ofpbuf *);
+static void dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *,
+                                      struct ofpbuf *);
 static int dpif_linux_flow_transact(const struct dpif_linux_flow *request,
                                     struct dpif_linux_flow *reply,
                                     struct ofpbuf **bufp);
@@ -113,7 +114,6 @@ static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {
     struct dpif dpif;
-    int fd;
 
     /* Multicast group messages. */
     struct nl_sock *mc_sock;
@@ -136,6 +136,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 /* Generic Netlink family numbers for ODP. */
 static int odp_datapath_family;
 static int odp_vport_family;
+static int odp_flow_family;
 static int odp_packet_family;
 
 /* Generic Netlink socket. */
@@ -145,9 +146,6 @@ static int dpif_linux_init(void);
 static int open_dpif(const struct dpif_linux_dp *,
                      const struct dpif_linux_vport *local_vport,
                      struct dpif **);
-static int get_openvswitch_major(void);
-static int open_minor(int minor, int *fdp);
-static int make_openvswitch_device(int minor, char **fnp);
 static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
                                     void *dpif);
 
@@ -168,18 +166,11 @@ dpif_linux_enumerate(struct svec *all_dps)
 {
     struct nl_dump dump;
     struct ofpbuf msg;
-    int major;
     int error;
 
     error = dpif_linux_init();
     if (error) {
         return error;
-    }
-
-    /* Check that the Open vSwitch module is loaded. */
-    major = get_openvswitch_major();
-    if (major < 0) {
-        return -major;
     }
 
     dpif_linux_dp_dump_start(&dump);
@@ -252,13 +243,7 @@ open_dpif(const struct dpif_linux_dp *dp,
     struct dpif_linux *dpif;
     char *name;
     int error;
-    int fd;
     int i;
-
-    error = open_minor(dp_idx, &fd);
-    if (error) {
-        goto error;
-    }
 
     dpif = xmalloc(sizeof *dpif);
     error = rtnetlink_link_notifier_register(&dpif->port_notifier,
@@ -271,7 +256,6 @@ open_dpif(const struct dpif_linux_dp *dp,
     dpif_init(&dpif->dpif, &dpif_linux_class, name, dp_idx, dp_idx);
     free(name);
 
-    dpif->fd = fd;
     dpif->mc_sock = NULL;
     for (i = 0; i < DPIF_N_UC_TYPES; i++) {
         dpif->mcgroups[i] = dp->mcgroups[i];
@@ -288,8 +272,6 @@ open_dpif(const struct dpif_linux_dp *dp,
 
 error_free:
     free(dpif);
-    close(fd);
-error:
     return error;
 }
 
@@ -300,7 +282,6 @@ dpif_linux_close(struct dpif *dpif_)
     rtnetlink_link_notifier_unregister(&dpif->port_notifier);
     shash_destroy(&dpif->changed_ports);
     free(dpif->local_ifname);
-    close(dpif->fd);
     free(dpif);
 }
 
@@ -472,7 +453,12 @@ static int
 dpif_linux_flow_flush(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    return ioctl(dpif->fd, ODP_FLOW_FLUSH, dpif->minor) ? errno : 0;
+    struct dpif_linux_flow flow;
+
+    dpif_linux_flow_init(&flow);
+    flow.cmd = ODP_FLOW_CMD_DEL;
+    flow.dp_idx = dpif->minor;
+    return dpif_linux_flow_transact(&flow, NULL, NULL);
 }
 
 struct dpif_linux_port_state {
@@ -574,7 +560,7 @@ dpif_linux_flow_get(const struct dpif *dpif_,
     int error;
 
     dpif_linux_flow_init(&request);
-    request.cmd = ODP_FLOW_GET;
+    request.cmd = ODP_FLOW_CMD_GET;
     request.dp_idx = dpif->minor;
     request.key = key;
     request.key_len = key_len;
@@ -606,7 +592,7 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     int error;
 
     dpif_linux_flow_init(&request);
-    request.cmd = flags & DPIF_FP_CREATE ? ODP_FLOW_NEW : ODP_FLOW_SET;
+    request.cmd = flags & DPIF_FP_CREATE ? ODP_FLOW_CMD_NEW : ODP_FLOW_CMD_SET;
     request.dp_idx = dpif->minor;
     request.key = key;
     request.key_len = key_len;
@@ -637,7 +623,7 @@ dpif_linux_flow_del(struct dpif *dpif_,
     int error;
 
     dpif_linux_flow_init(&request);
-    request.cmd = ODP_FLOW_DEL;
+    request.cmd = ODP_FLOW_CMD_DEL;
     request.dp_idx = dpif->minor;
     request.key = key;
     request.key_len = key_len;
@@ -652,37 +638,48 @@ dpif_linux_flow_del(struct dpif *dpif_,
 }
 
 struct dpif_linux_flow_state {
+    struct nl_dump dump;
     struct dpif_linux_flow flow;
-    struct ofpbuf *buf;
     struct dpif_flow_stats stats;
 };
 
 static int
-dpif_linux_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
+dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 {
-    *statep = xzalloc(sizeof(struct dpif_linux_flow_state));
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_flow_state *state;
+    struct dpif_linux_flow request;
+    struct ofpbuf *buf;
+
+    *statep = state = xmalloc(sizeof *state);
+
+    dpif_linux_flow_init(&request);
+    request.cmd = ODP_DP_CMD_GET;
+    request.dp_idx = dpif->minor;
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_flow_to_ofpbuf(&request, buf);
+    nl_dump_start(&state->dump, genl_sock, buf);
+    ofpbuf_delete(buf);
+
     return 0;
 }
 
 static int
-dpif_linux_flow_dump_next(const struct dpif *dpif_, void *state_,
+dpif_linux_flow_dump_next(const struct dpif *dpif_ OVS_UNUSED, void *state_,
                           const struct nlattr **key, size_t *key_len,
                           const struct nlattr **actions, size_t *actions_len,
                           const struct dpif_flow_stats **stats)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow_state *state = state_;
-    struct ofpbuf *old_buf = state->buf;
-    struct dpif_linux_flow request;
+    struct ofpbuf buf;
     int error;
 
-    dpif_linux_flow_init(&request);
-    request.cmd = ODP_FLOW_DUMP;
-    request.dp_idx = dpif->minor;
-    request.state = state->flow.state;
-    error = dpif_linux_flow_transact(&request, &state->flow, &state->buf);
-    ofpbuf_delete(old_buf);
+    if (!nl_dump_next(&state->dump, &buf)) {
+        return EOF;
+    }
 
+    error = dpif_linux_flow_from_ofpbuf(&state->flow, &buf);
     if (!error) {
         if (key) {
             *key = state->flow.key;
@@ -697,17 +694,16 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_, void *state_,
             *stats = &state->stats;
         }
     }
-    return error == ENODEV ? EOF : error;
+    return error;
 }
 
 static int
 dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
     struct dpif_linux_flow_state *state = state_;
-
-    ofpbuf_delete(state->buf);
+    int error = nl_dump_done(&state->dump);
     free(state);
-    return 0;
+    return error;
 }
 
 static int
@@ -994,8 +990,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_recv_purge,
 };
 
-static int get_major(const char *target);
-
 static int
 dpif_linux_init(void)
 {
@@ -1004,8 +998,16 @@ dpif_linux_init(void)
     if (error < 0) {
         error = nl_lookup_genl_family(ODP_DATAPATH_FAMILY,
                                       &odp_datapath_family);
+        if (error) {
+            VLOG_ERR("Generic Netlink family '%s' does not exist. "
+                     "The Open vSwitch kernel module is probably not loaded.",
+                     ODP_DATAPATH_FAMILY);
+        }
         if (!error) {
             error = nl_lookup_genl_family(ODP_VPORT_FAMILY, &odp_vport_family);
+        }
+        if (!error) {
+            error = nl_lookup_genl_family(ODP_FLOW_FAMILY, &odp_flow_family);
         }
         if (!error) {
             error = nl_lookup_genl_family(ODP_PACKET_FAMILY,
@@ -1037,146 +1039,6 @@ dpif_linux_is_internal_device(const char *name)
     return reply.type == ODP_VPORT_TYPE_INTERNAL;
 }
 
-static int
-make_openvswitch_device(int minor, char **fnp)
-{
-    const char dirname[] = "/dev/net";
-    int major;
-    dev_t dev;
-    struct stat s;
-    char fn[128];
-
-    *fnp = NULL;
-
-    major = get_openvswitch_major();
-    if (major < 0) {
-        return -major;
-    }
-    dev = makedev(major, minor);
-
-    sprintf(fn, "%s/dp%d", dirname, minor);
-    if (!stat(fn, &s)) {
-        if (!S_ISCHR(s.st_mode)) {
-            VLOG_WARN_RL(&error_rl, "%s is not a character device, fixing",
-                         fn);
-        } else if (s.st_rdev != dev) {
-            VLOG_WARN_RL(&error_rl,
-                         "%s is device %u:%u but should be %u:%u, fixing",
-                         fn, major(s.st_rdev), minor(s.st_rdev),
-                         major(dev), minor(dev));
-        } else {
-            goto success;
-        }
-        if (unlink(fn)) {
-            VLOG_WARN_RL(&error_rl, "%s: unlink failed (%s)",
-                         fn, strerror(errno));
-            return errno;
-        }
-    } else if (errno == ENOENT) {
-        if (stat(dirname, &s)) {
-            if (errno == ENOENT) {
-                if (mkdir(dirname, 0755)) {
-                    VLOG_WARN_RL(&error_rl, "%s: mkdir failed (%s)",
-                                 dirname, strerror(errno));
-                    return errno;
-                }
-            } else {
-                VLOG_WARN_RL(&error_rl, "%s: stat failed (%s)",
-                             dirname, strerror(errno));
-                return errno;
-            }
-        }
-    } else {
-        VLOG_WARN_RL(&error_rl, "%s: stat failed (%s)", fn, strerror(errno));
-        return errno;
-    }
-
-    /* The device needs to be created. */
-    if (mknod(fn, S_IFCHR | 0700, dev)) {
-        VLOG_WARN_RL(&error_rl,
-                     "%s: creating character device %u:%u failed (%s)",
-                     fn, major(dev), minor(dev), strerror(errno));
-        return errno;
-    }
-
-success:
-    *fnp = xstrdup(fn);
-    return 0;
-}
-
-/* Return the major device number of the Open vSwitch device.  If it
- * cannot be determined, a negative errno is returned. */
-static int
-get_openvswitch_major(void)
-{
-    static int openvswitch_major = -1;
-    if (openvswitch_major < 0) {
-        openvswitch_major = get_major("openvswitch");
-    }
-    return openvswitch_major;
-}
-
-static int
-get_major(const char *target)
-{
-    const char fn[] = "/proc/devices";
-    char line[128];
-    FILE *file;
-    int ln;
-
-    file = fopen(fn, "r");
-    if (!file) {
-        VLOG_ERR("opening %s failed (%s)", fn, strerror(errno));
-        return -errno;
-    }
-
-    for (ln = 1; fgets(line, sizeof line, file); ln++) {
-        char name[64];
-        int major;
-
-        if (!strncmp(line, "Character", 9) || line[0] == '\0') {
-            /* Nothing to do. */
-        } else if (!strncmp(line, "Block", 5)) {
-            /* We only want character devices, so skip the rest of the file. */
-            break;
-        } else if (sscanf(line, "%d %63s", &major, name)) {
-            if (!strcmp(name, target)) {
-                fclose(file);
-                return major;
-            }
-        } else {
-            VLOG_WARN_ONCE("%s:%d: syntax error", fn, ln);
-        }
-    }
-
-    fclose(file);
-
-    VLOG_ERR("%s: %s major not found (is the module loaded?)", fn, target);
-    return -ENODEV;
-}
-
-static int
-open_minor(int minor, int *fdp)
-{
-    int error;
-    char *fn;
-
-    error = make_openvswitch_device(minor, &fn);
-    if (error) {
-        return error;
-    }
-
-    *fdp = open(fn, O_RDONLY | O_NONBLOCK);
-    if (*fdp < 0) {
-        error = errno;
-        VLOG_WARN("%s: open failed (%s)", fn, strerror(error));
-        free(fn);
-        return error;
-    }
-    free(fn);
-    return 0;
-}
-
 static void
 dpif_linux_port_changed(const struct rtnetlink_link_change *change,
                         void *dpif_)
@@ -1195,24 +1057,6 @@ dpif_linux_port_changed(const struct rtnetlink_link_change *change,
     } else {
         dpif->change_error = true;
     }
-}
-
-static int
-get_dp0_fd(int *dp0_fdp)
-{
-    static int dp0_fd = -1;
-    if (dp0_fd < 0) {
-        int error;
-        int fd;
-
-        error = open_minor(0, &fd);
-        if (error) {
-            return error;
-        }
-        dp0_fd = fd;
-    }
-    *dp0_fdp = dp0_fd;
-    return 0;
 }
 
 /* Parses the contents of 'buf', which contains a "struct odp_header" followed
@@ -1588,8 +1432,8 @@ dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
     return dpif_linux_dp_transact(&request, reply, bufp);
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_flow" followed by
- * Netlink attributes, into 'flow'.  Returns 0 if successful, otherwise a
+/* Parses the contents of 'buf', which contains a "struct odp_header" followed
+ * by Netlink attributes, into 'flow'.  Returns 0 if successful, otherwise a
  * positive errno value.
  *
  * 'flow' will contain pointers into 'buf', so the caller should not free 'buf'
@@ -1608,22 +1452,29 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
         [ODP_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
         [ODP_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
         /* The kernel never uses ODP_FLOW_ATTR_CLEAR. */
-        [ODP_FLOW_ATTR_STATE] = { .type = NL_A_U64, .optional = true },
     };
 
-    struct odp_flow *odp_flow;
     struct nlattr *a[ARRAY_SIZE(odp_flow_policy)];
+    struct odp_header *odp_header;
+    struct nlmsghdr *nlmsg;
+    struct genlmsghdr *genl;
+    struct ofpbuf b;
 
     dpif_linux_flow_init(flow);
 
-    if (!nl_policy_parse(buf, sizeof *odp_flow, odp_flow_policy,
-                         a, ARRAY_SIZE(odp_flow_policy))) {
+    ofpbuf_use_const(&b, buf->data, buf->size);
+    nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    genl = ofpbuf_try_pull(&b, sizeof *genl);
+    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
+    if (!nlmsg || !genl || !odp_header
+        || nlmsg->nlmsg_type != odp_flow_family
+        || !nl_policy_parse(&b, 0, odp_flow_policy, a,
+                            ARRAY_SIZE(odp_flow_policy))) {
         return EINVAL;
     }
-    odp_flow = buf->data;
 
-    flow->nlmsg_flags = odp_flow->nlmsg_flags;
-    flow->dp_idx = odp_flow->dp_idx;
+    flow->nlmsg_flags = nlmsg->nlmsg_flags;
+    flow->dp_idx = odp_header->dp_idx;
     flow->key = nl_attr_get(a[ODP_FLOW_ATTR_KEY]);
     flow->key_len = nl_attr_get_size(a[ODP_FLOW_ATTR_KEY]);
     if (a[ODP_FLOW_ATTR_ACTIONS]) {
@@ -1636,21 +1487,22 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     if (a[ODP_FLOW_ATTR_TCP_FLAGS]) {
         flow->tcp_flags = nl_attr_get(a[ODP_FLOW_ATTR_TCP_FLAGS]);
     }
-    if (a[ODP_FLOW_ATTR_STATE]) {
-        flow->state = nl_attr_get(a[ODP_FLOW_ATTR_STATE]);
-    }
     return 0;
 }
 
-/* Appends to 'buf' (which must initially be empty) a "struct odp_flow"
+/* Appends to 'buf' (which must initially be empty) a "struct odp_header"
  * followed by Netlink attributes corresponding to 'flow'. */
 static void
 dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
                           struct ofpbuf *buf)
 {
-    struct odp_flow *odp_flow;
+    struct odp_header *odp_header;
 
-    ofpbuf_reserve(buf, sizeof odp_flow);
+    nl_msg_put_genlmsghdr(buf, 0, odp_flow_family,
+                          NLM_F_REQUEST | flow->nlmsg_flags, flow->cmd, 1);
+
+    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
+    odp_header->dp_idx = flow->dp_idx;
 
     if (flow->key_len) {
         nl_msg_put_unspec(buf, ODP_FLOW_ATTR_KEY, flow->key, flow->key_len);
@@ -1669,17 +1521,6 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
     if (flow->clear) {
         nl_msg_put_flag(buf, ODP_FLOW_ATTR_CLEAR);
     }
-
-    if (flow->state) {
-        nl_msg_put_u64(buf, ODP_FLOW_ATTR_STATE,
-                       get_unaligned_u64(flow->state));
-    }
-
-    odp_flow = ofpbuf_push_uninit(buf, sizeof *odp_flow);
-    odp_flow->nlmsg_flags = flow->nlmsg_flags;
-    odp_flow->dp_idx = flow->dp_idx;
-    odp_flow->len = buf->size;
-    odp_flow->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
 }
 
 /* Clears 'flow' to "empty" values. */
@@ -1692,49 +1533,32 @@ dpif_linux_flow_init(struct dpif_linux_flow *flow)
 /* Executes 'request' in the kernel datapath.  If the command fails, returns a
  * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
  * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
- * result of the command is expected to be an odp_flow also, which is decoded
- * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
- * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
+ * result of the command is expected to be a flow also, which is decoded and
+ * stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the reply
+ * is no longer needed ('reply' will contain pointers into '*bufp'). */
 int
 dpif_linux_flow_transact(const struct dpif_linux_flow *request,
                          struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {
-    struct ofpbuf *buf = NULL;
+    struct ofpbuf *request_buf;
     int error;
-    int fd;
 
     assert((reply != NULL) == (bufp != NULL));
 
-    error = get_dp0_fd(&fd);
-    if (error) {
-        goto error;
-    }
+    request_buf = ofpbuf_new(1024);
+    dpif_linux_flow_to_ofpbuf(request, request_buf);
+    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    ofpbuf_delete(request_buf);
 
-    buf = ofpbuf_new(1024);
-    dpif_linux_flow_to_ofpbuf(request, buf);
-
-    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
-    if (error) {
-        goto error;
-    }
-
-    if (bufp) {
-        buf->size = ((struct odp_flow *) buf->data)->len;
-        error = dpif_linux_flow_from_ofpbuf(reply, buf);
-        if (error) {
-            goto error;
+    if (reply) {
+        if (!error) {
+            error = dpif_linux_flow_from_ofpbuf(reply, *bufp);
         }
-        *bufp = buf;
-    } else {
-        ofpbuf_delete(buf);
-    }
-    return 0;
-
-error:
-    ofpbuf_delete(buf);
-    if (bufp) {
-        memset(reply, 0, sizeof *reply);
-        *bufp = NULL;
+        if (error) {
+            dpif_linux_flow_init(reply);
+            ofpbuf_delete(*bufp);
+            *bufp = NULL;
+        }
     }
     return error;
 }

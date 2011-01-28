@@ -103,12 +103,10 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 	spin_unlock_bh(&flow->lock);
 }
 
-struct sw_flow_actions *flow_actions_alloc(u32 actions_len)
+struct sw_flow_actions *flow_actions_alloc(const struct nlattr *actions)
 {
+	int actions_len = nla_len(actions);
 	struct sw_flow_actions *sfa;
-
-	if (actions_len % NLA_ALIGNTO)
-		return ERR_PTR(-EINVAL);
 
 	/* At least DP_MAX_PORTS actions are required to be able to flood a
 	 * packet to every port.  Factor of 2 allows for setting VLAN tags,
@@ -121,6 +119,7 @@ struct sw_flow_actions *flow_actions_alloc(u32 actions_len)
 		return ERR_PTR(-ENOMEM);
 
 	sfa->actions_len = actions_len;
+	memcpy(sfa->actions, nla_data(actions), actions_len);
 	return sfa;
 }
 

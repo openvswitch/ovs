@@ -69,13 +69,6 @@
 
 #include <linux/if_link.h>
 #include <linux/netlink.h>
-
-#define ODP_FLOW_NEW            _IOWR('O', 13, struct odp_flow)
-#define ODP_FLOW_DEL            _IOWR('O', 14, struct odp_flow)
-#define ODP_FLOW_GET            _IOWR('O', 15, struct odp_flow)
-#define ODP_FLOW_SET            _IOWR('O', 16, struct odp_flow)
-#define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
-#define ODP_FLOW_FLUSH          _IO('O', 19)
 
 /* Datapaths. */
 
@@ -288,6 +281,19 @@ enum {
 };
 
 #define ODP_PATCH_ATTR_MAX (__ODP_PATCH_ATTR_MAX - 1)
+
+/* Flows. */
+
+#define ODP_FLOW_FAMILY  "odp_flow"
+#define ODP_FLOW_MCGROUP "odp_flow"
+
+enum odp_flow_cmd {
+	ODP_FLOW_CMD_UNSPEC,
+	ODP_FLOW_CMD_NEW,
+	ODP_FLOW_CMD_DEL,
+	ODP_FLOW_CMD_GET,
+	ODP_FLOW_CMD_SET
+};
 
 struct odp_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
@@ -350,23 +356,32 @@ struct odp_key_arp {
 };
 
 /**
- * struct odp_flow - header with basic information about a flow.
- * @dp_idx: Datapath index.
- * @len: Length of this structure plus the Netlink attributes following it.
- * @total_len: Total space available for kernel reply to request.
+ * enum odp_flow_attr - attributes for %ODP_FLOW_* commands.
+ * @ODP_FLOW_ATTR_KEY: Nested %ODP_KEY_ATTR_* attributes specifying the flow
+ * key.  Always present in notifications.  Required for all requests (except
+ * dumps).
+ * @ODP_FLOW_ATTR_ACTIONS: Nested %ODPAT_* attributes specifying the actions to
+ * take for packets that match the key.  Always present in notifications.
+ * Required for %ODP_FLOW_CMD_NEW requests, optional on %ODP_FLOW_CMD_SET
+ * request to change the existing actions, ignored for other requests.
+ * @ODP_FLOW_ATTR_STATS: &struct odp_flow_stats giving statistics for this
+ * flow.  Present in notifications if the stats would be nonzero.  Ignored in
+ * requests.
+ * @ODP_FLOW_ATTR_TCP_FLAGS: An 8-bit value giving the OR'd value of all of the
+ * TCP flags seen on packets in this flow.  Only present in notifications for
+ * TCP flows, and only if it would be nonzero.  Ignored in requests.
+ * @ODP_FLOW_ATTR_USED: A 64-bit integer giving the time, in milliseconds on
+ * the system monotonic clock, at which a packet was last processed for this
+ * flow.  Only present in notifications if a packet has been processed for this
+ * flow.  Ignored in requests.
+ * @ODP_FLOW_ATTR_CLEAR: If present in a %ODP_FLOW_CMD_SET request, clears the
+ * last-used time, accumulated TCP flags, and statistics for this flow.
+ * Otherwise ignored in requests.  Never present in notifications.
  *
- * Followed by &struct nlattr attributes, whose types are drawn from
- * %ODP_FLOW_ATTR_*, up to a length of @len bytes including the &struct
- * odp_flow header.
+ * These attributes follow the &struct odp_header within the Generic Netlink
+ * payload for %ODP_FLOW_* commands.
  */
-struct odp_flow {
-	uint32_t nlmsg_flags;
-	uint32_t dp_idx;
-	uint32_t len;
-	uint32_t total_len;
-};
-
-enum odp_flow_type {
+enum odp_flow_attr {
 	ODP_FLOW_ATTR_UNSPEC,
 	ODP_FLOW_ATTR_KEY,       /* Sequence of ODP_KEY_ATTR_* attributes. */
 	ODP_FLOW_ATTR_ACTIONS,   /* Sequence of nested ODPAT_* attributes. */
@@ -374,7 +389,6 @@ enum odp_flow_type {
 	ODP_FLOW_ATTR_TCP_FLAGS, /* 8-bit OR'd TCP flags. */
 	ODP_FLOW_ATTR_USED,      /* u64 msecs last used in monotonic time. */
 	ODP_FLOW_ATTR_CLEAR,     /* Flag to clear stats, tcp_flags, used. */
-	ODP_FLOW_ATTR_STATE,     /* u64 state for ODP_FLOW_DUMP. */
 	__ODP_FLOW_ATTR_MAX
 };
 

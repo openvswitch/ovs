@@ -83,7 +83,7 @@ struct sw_flow *flow_alloc(void);
 void flow_deferred_free(struct sw_flow *);
 void flow_free_tbl(struct tbl_node *);
 
-struct sw_flow_actions *flow_actions_alloc(u32 actions_len);
+struct sw_flow_actions *flow_actions_alloc(const struct nlattr *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
 
 void flow_hold(struct sw_flow *);
