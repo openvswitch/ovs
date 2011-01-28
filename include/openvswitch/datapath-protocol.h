@@ -70,12 +70,6 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 
-#define ODP_VPORT_NEW           _IOR('O', 7, struct odp_vport)
-#define ODP_VPORT_DEL           _IOR('O', 8, struct odp_vport)
-#define ODP_VPORT_GET           _IOWR('O', 9, struct odp_vport)
-#define ODP_VPORT_SET           _IOR('O', 22, struct odp_vport)
-#define ODP_VPORT_DUMP          _IOWR('O', 10, struct odp_vport)
-
 #define ODP_FLOW_NEW            _IOWR('O', 13, struct odp_flow)
 #define ODP_FLOW_DEL            _IOWR('O', 14, struct odp_flow)
 #define ODP_FLOW_GET            _IOWR('O', 15, struct odp_flow)
@@ -224,24 +218,53 @@ enum odp_vport_type {
 };
 
 #define ODP_VPORT_TYPE_MAX (__ODP_VPORT_TYPE_MAX - 1)
+
+#define ODP_VPORT_FAMILY  "odp_vport"
+#define ODP_VPORT_MCGROUP "odp_vport"
 
-/**
- * struct odp_vport - header with basic information about a virtual port.
- * @dp_idx: Number of datapath to which the vport belongs.
- * @len: Length of this structure plus the Netlink attributes following it.
- * @total_len: Total space available for kernel reply to request.
- *
- * Followed by &struct nlattr attributes, whose types are drawn from
- * %ODP_VPORT_ATTR_*, up to a length of @len bytes including the &struct
- * odp_vport header.
- */
-struct odp_vport {
-	uint32_t dp_idx;
-	uint32_t len;
-	uint32_t total_len;
+enum odp_vport_cmd {
+	ODP_VPORT_CMD_UNSPEC,
+	ODP_VPORT_CMD_NEW,
+	ODP_VPORT_CMD_DEL,
+	ODP_VPORT_CMD_GET,
+	ODP_VPORT_CMD_SET
 };
 
-enum {
+/**
+ * enum odp_vport_attr - attributes for %ODP_VPORT_* commands.
+ * @ODP_VPORT_ATTR_PORT_NO: 32-bit port number within datapath.
+ * @ODP_VPORT_ATTR_TYPE: 32-bit %ODP_VPORT_TYPE_* constant describing the type
+ * of vport.
+ * @ODP_VPORT_ATTR_NAME: Name of vport.  For a vport based on a network device
+ * this is the name of the network device.  Maximum length %IFNAMSIZ-1 bytes
+ * plus a null terminator.
+ * @ODP_VPORT_ATTR_STATS: A &struct rtnl_link_stats64 giving statistics for
+ * packets sent or received through the vport.
+ * @ODP_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
+ * @ODP_VPORT_ATTR_MTU: MTU for the vport.
+ * @ODP_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
+ * @ODP_VPORT_ATTR_IFLINK: ifindex of the device on which packets are sent (for
+ * tunnels), if any.
+ *
+ * These attributes follow the &struct odp_header within the Generic Netlink
+ * payload for %ODP_VPORT_* commands.
+ *
+ * All attributes applicable to a given port are present in notifications.
+ * This means that, for example, a vport that has no corresponding network
+ * device would omit %ODP_VPORT_ATTR_IFINDEX.
+ *
+ * For %ODP_VPORT_CMD_NEW requests, the %ODP_VPORT_ATTR_TYPE and
+ * %ODP_VPORT_ATTR_NAME attributes are required.  %ODP_VPORT_ATTR_PORT_NO is
+ * optional; if not specified a free port number is automatically selected.
+ * Whether %ODP_VPORT_ATTR_OPTIONS is required or optional depends on the type
+ * of vport.  %ODP_VPORT_ATTR_STATS, %ODP_VPORT_ATTR_ADDRESS, and
+ * %ODP_VPORT_ATTR_MTU are optional, and other attributes are ignored.
+ *
+ * For other requests, if %ODP_VPORT_ATTR_NAME is specified then it is used to
+ * look up the vport to operate on; otherwise dp_idx from the &struct
+ * odp_header plus %ODP_VPORT_ATTR_PORT_NO determine the vport.
+ */
+enum odp_vport_attr {
 	ODP_VPORT_ATTR_UNSPEC,
 	ODP_VPORT_ATTR_PORT_NO,	/* port number within datapath */
 	ODP_VPORT_ATTR_TYPE,	/* 32-bit ODP_VPORT_TYPE_* constant. */

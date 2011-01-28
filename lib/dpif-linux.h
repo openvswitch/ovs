@@ -18,13 +18,14 @@
 #define DPIF_LINUX_H 1
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "openvswitch/datapath-protocol.h"
 
 struct ofpbuf;
 
 struct dpif_linux_vport {
-    /* ioctl command argument. */
-    int cmd;
+    /* Generic Netlink header. */
+    uint8_t cmd;
 
     /* odp_vport header. */
     uint32_t dp_idx;

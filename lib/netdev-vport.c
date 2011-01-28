@@ -310,7 +310,7 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
         struct dpif_linux_vport vport;
 
         dpif_linux_vport_init(&vport);
-        vport.cmd = ODP_VPORT_SET;
+        vport.cmd = ODP_VPORT_CMD_SET;
         vport.name = name;
         vport.options = options->data;
         vport.options_len = options->size;
@@ -338,7 +338,7 @@ netdev_vport_set_etheraddr(struct netdev *netdev,
     int error;
 
     dpif_linux_vport_init(&vport);
-    vport.cmd = ODP_VPORT_SET;
+    vport.cmd = ODP_VPORT_CMD_SET;
     vport.name = netdev_get_name(netdev);
     vport.address = mac;
 
@@ -456,7 +456,7 @@ netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
     rtnl_stats.tx_window_errors = stats->tx_window_errors;
 
     dpif_linux_vport_init(&vport);
-    vport.cmd = ODP_VPORT_SET;
+    vport.cmd = ODP_VPORT_CMD_SET;
     vport.name = netdev_get_name(netdev);
     vport.stats = &rtnl_stats;
 

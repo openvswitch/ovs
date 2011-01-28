@@ -625,7 +625,8 @@ int vport_get_mtu(const struct vport *vport)
  * vport-specific attributes to @skb.
  *
  * Returns 0 if successful, -EMSGSIZE if @skb has insufficient room, or another
- * negative error code if a real error occurred.
+ * negative error code if a real error occurred.  If an error occurs, @skb is
+ * left unmodified.
  *
  * Must be called with RTNL lock or rcu_read_lock.
  */
@@ -639,8 +640,10 @@ int vport_get_options(const struct vport *vport, struct sk_buff *skb)
 
 	if (vport->ops->get_options) {
 		int err = vport->ops->get_options(vport, skb);
-		if (err)
+		if (err) {
+			nla_nest_cancel(skb, nla);
 			return err;
+		}
 	}
 
 	nla_nest_end(skb, nla);

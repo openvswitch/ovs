@@ -135,6 +135,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
 /* Generic Netlink family numbers for ODP. */
 static int odp_datapath_family;
+static int odp_vport_family;
 static int odp_packet_family;
 
 /* Generic Netlink socket. */
@@ -149,6 +150,11 @@ static int open_minor(int minor, int *fdp);
 static int make_openvswitch_device(int minor, char **fnp);
 static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
                                     void *dpif);
+
+static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
+                                       struct ofpbuf *);
+static int dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *,
+                                        const struct ofpbuf *);
 
 static struct dpif_linux *
 dpif_linux_cast(const struct dpif *dpif)
@@ -218,7 +224,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
 
     /* Look up local port. */
     dpif_linux_vport_init(&vport_request);
-    vport_request.cmd = ODP_VPORT_GET;
+    vport_request.cmd = ODP_VPORT_CMD_GET;
     vport_request.dp_idx = dp.dp_idx;
     vport_request.port_no = ODPP_LOCAL;
     vport_request.name = minor < 0 ? name : NULL;
@@ -376,7 +382,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     int error;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_NEW;
+    request.cmd = ODP_VPORT_CMD_NEW;
     request.dp_idx = dpif->minor;
     request.type = netdev_vport_get_vport_type(netdev);
     if (request.type == ODP_VPORT_TYPE_UNSPEC) {
@@ -409,7 +415,7 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
     struct dpif_linux_vport vport;
 
     dpif_linux_vport_init(&vport);
-    vport.cmd = ODP_VPORT_DEL;
+    vport.cmd = ODP_VPORT_CMD_DEL;
     vport.dp_idx = dpif->minor;
     vport.port_no = port_no;
     return dpif_linux_vport_transact(&vport, NULL, NULL);
@@ -425,7 +431,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
     int error;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_GET;
+    request.cmd = ODP_VPORT_CMD_GET;
     request.dp_idx = dpif_linux_cast(dpif)->minor;
     request.port_no = port_no;
     request.name = port_name;
@@ -470,53 +476,62 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 }
 
 struct dpif_linux_port_state {
-    struct ofpbuf *buf;
-    uint32_t next;
+    struct nl_dump dump;
 };
 
 static int
-dpif_linux_port_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
+dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
 {
-    *statep = xzalloc(sizeof(struct dpif_linux_port_state));
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux_port_state *state;
+    struct dpif_linux_vport request;
+    struct ofpbuf *buf;
+
+    *statep = state = xmalloc(sizeof *state);
+
+    dpif_linux_vport_init(&request);
+    request.cmd = ODP_DP_CMD_GET;
+    request.dp_idx = dpif->minor;
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_vport_to_ofpbuf(&request, buf);
+    nl_dump_start(&state->dump, genl_sock, buf);
+    ofpbuf_delete(buf);
+
     return 0;
 }
 
 static int
-dpif_linux_port_dump_next(const struct dpif *dpif, void *state_,
+dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
                           struct dpif_port *dpif_port)
 {
     struct dpif_linux_port_state *state = state_;
-    struct dpif_linux_vport request, reply;
-    struct ofpbuf *buf;
+    struct dpif_linux_vport vport;
+    struct ofpbuf buf;
     int error;
 
-    ofpbuf_delete(state->buf);
-    state->buf = NULL;
-
-    dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_DUMP;
-    request.dp_idx = dpif_linux_cast(dpif)->minor;
-    request.port_no = state->next;
-    error = dpif_linux_vport_transact(&request, &reply, &buf);
-    if (error) {
-        return error == ENODEV ? EOF : error;
-    } else {
-        dpif_port->name = (char *) reply.name;
-        dpif_port->type = (char *) netdev_vport_get_netdev_type(&reply);
-        dpif_port->port_no = reply.port_no;
-        state->buf = buf;
-        state->next = reply.port_no + 1;
-        return 0;
+    if (!nl_dump_next(&state->dump, &buf)) {
+        return EOF;
     }
+
+    error = dpif_linux_vport_from_ofpbuf(&vport, &buf);
+    if (error) {
+        return error;
+    }
+
+    dpif_port->name = (char *) vport.name;
+    dpif_port->type = (char *) netdev_vport_get_netdev_type(&vport);
+    dpif_port->port_no = vport.port_no;
+    return 0;
 }
 
 static int
 dpif_linux_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
     struct dpif_linux_port_state *state = state_;
-    ofpbuf_delete(state->buf);
+    int error = nl_dump_done(&state->dump);
     free(state);
-    return 0;
+    return error;
 }
 
 static int
@@ -990,6 +1005,9 @@ dpif_linux_init(void)
         error = nl_lookup_genl_family(ODP_DATAPATH_FAMILY,
                                       &odp_datapath_family);
         if (!error) {
+            error = nl_lookup_genl_family(ODP_VPORT_FAMILY, &odp_vport_family);
+        }
+        if (!error) {
             error = nl_lookup_genl_family(ODP_PACKET_FAMILY,
                                           &odp_packet_family);
         }
@@ -1197,7 +1215,7 @@ get_dp0_fd(int *dp0_fdp)
     return 0;
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_vport" followed
+/* Parses the contents of 'buf', which contains a "struct odp_header" followed
  * by Netlink attributes, into 'vport'.  Returns 0 if successful, otherwise a
  * positive errno value.
  *
@@ -1225,18 +1243,27 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
         [ODP_VPORT_ATTR_IFLINK] = { .type = NL_A_U32, .optional = true },
     };
 
-    struct odp_vport *odp_vport;
     struct nlattr *a[ARRAY_SIZE(odp_vport_policy)];
+    struct odp_header *odp_header;
+    struct nlmsghdr *nlmsg;
+    struct genlmsghdr *genl;
+    struct ofpbuf b;
 
     dpif_linux_vport_init(vport);
 
-    if (!nl_policy_parse(buf, sizeof *odp_vport, odp_vport_policy,
-                         a, ARRAY_SIZE(odp_vport_policy))) {
+    ofpbuf_use_const(&b, buf->data, buf->size);
+    nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    genl = ofpbuf_try_pull(&b, sizeof *genl);
+    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
+    if (!nlmsg || !genl || !odp_header
+        || nlmsg->nlmsg_type != odp_vport_family
+        || !nl_policy_parse(&b, 0, odp_vport_policy, a,
+                            ARRAY_SIZE(odp_vport_policy))) {
         return EINVAL;
     }
-    odp_vport = buf->data;
 
-    vport->dp_idx = odp_vport->dp_idx;
+    vport->cmd = genl->cmd;
+    vport->dp_idx = odp_header->dp_idx;
     vport->port_no = nl_attr_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
     vport->type = nl_attr_get_u32(a[ODP_VPORT_ATTR_TYPE]);
     vport->name = nl_attr_get_string(a[ODP_VPORT_ATTR_NAME]);
@@ -1262,15 +1289,19 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     return 0;
 }
 
-/* Appends to 'buf' (which must initially be empty) a "struct odp_vport"
+/* Appends to 'buf' (which must initially be empty) a "struct odp_header"
  * followed by Netlink attributes corresponding to 'vport'. */
 static void
 dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
                            struct ofpbuf *buf)
 {
-    struct odp_vport *odp_vport;
+    struct odp_header *odp_header;
 
-    ofpbuf_reserve(buf, sizeof odp_vport);
+    nl_msg_put_genlmsghdr(buf, 0, odp_vport_family, NLM_F_REQUEST | NLM_F_ECHO,
+                          vport->cmd, 1);
+
+    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
+    odp_header->dp_idx = vport->dp_idx;
 
     if (vport->port_no != UINT32_MAX) {
         nl_msg_put_u32(buf, ODP_VPORT_ATTR_PORT_NO, vport->port_no);
@@ -1310,11 +1341,6 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
     if (vport->iflink) {
         nl_msg_put_u32(buf, ODP_VPORT_ATTR_IFLINK, vport->iflink);
     }
-
-    odp_vport = ofpbuf_push_uninit(buf, sizeof *odp_vport);
-    odp_vport->dp_idx = vport->dp_idx;
-    odp_vport->len = buf->size;
-    odp_vport->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
 }
 
 /* Clears 'vport' to "empty" values. */
@@ -1337,42 +1363,25 @@ dpif_linux_vport_transact(const struct dpif_linux_vport *request,
                           struct dpif_linux_vport *reply,
                           struct ofpbuf **bufp)
 {
-    struct ofpbuf *buf = NULL;
+    struct ofpbuf *request_buf;
     int error;
-    int fd;
 
     assert((reply != NULL) == (bufp != NULL));
 
-    error = get_dp0_fd(&fd);
-    if (error) {
-        goto error;
-    }
+    request_buf = ofpbuf_new(1024);
+    dpif_linux_vport_to_ofpbuf(request, request_buf);
+    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    ofpbuf_delete(request_buf);
 
-    buf = ofpbuf_new(1024);
-    dpif_linux_vport_to_ofpbuf(request, buf);
-
-    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
-    if (error) {
-        goto error;
-    }
-
-    if (bufp) {
-        buf->size = ((struct odp_vport *) buf->data)->len;
-        error = dpif_linux_vport_from_ofpbuf(reply, buf);
-        if (error) {
-            goto error;
+    if (reply) {
+        if (!error) {
+            error = dpif_linux_vport_from_ofpbuf(reply, *bufp);
         }
-        *bufp = buf;
-    } else {
-        ofpbuf_delete(buf);
-    }
-    return 0;
-
-error:
-    ofpbuf_delete(buf);
-    if (bufp) {
-        memset(reply, 0, sizeof *reply);
-        *bufp = NULL;
+        if (error) {
+            dpif_linux_vport_init(reply);
+            ofpbuf_delete(*bufp);
+            *bufp = NULL;
+        }
     }
     return error;
 }
@@ -1387,7 +1396,7 @@ dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
     struct dpif_linux_vport request;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_GET;
+    request.cmd = ODP_VPORT_CMD_GET;
     request.name = name;
 
     return dpif_linux_vport_transact(&request, reply, bufp);
