@@ -280,6 +280,13 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     if (!verify_peer_cert || (bootstrap_ca_cert && type == CLIENT)) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
     }
+    if (type == CLIENT) {
+        /* Grab SSL session information from the cache. */
+        SSL_SESSION *session = shash_find_data(&client_sessions, name);
+        if (session && SSL_set_session(ssl, session) != 1) {
+            interpret_queued_ssl_error("SSL_set_session");
+        }
+    }
 
     /* Create and return the ssl_stream. */
     sslv = xmalloc(sizeof *sslv);
@@ -509,15 +516,6 @@ ssl_connect(struct stream *stream)
         if (sslv->n_head <= 0) {
             sslv->n_head = recv(sslv->fd, sslv->head, sizeof sslv->head,
                                 MSG_PEEK);
-        }
-
-        /* Grab SSL session information from the cache. */
-        if (sslv->type == CLIENT) {
-            SSL_SESSION *session = shash_find_data(&client_sessions,
-                                                   stream_get_name(stream));
-            if (session) {
-                SSL_set_session(sslv->ssl, session);
-            }
         }
 
         retval = (sslv->type == CLIENT
