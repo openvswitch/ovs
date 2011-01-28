@@ -55,10 +55,10 @@
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
 
 struct dpif_linux_dp {
-    /* ioctl command argument. */
-    int cmd;
+    /* Generic Netlink header. */
+    uint8_t cmd;
 
-    /* struct odp_datapath header. */
+    /* struct odp_header. */
     uint32_t dp_idx;
 
     /* Attributes. */
@@ -70,6 +70,9 @@ struct dpif_linux_dp {
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
+static int dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *,
+                                     const struct ofpbuf *);
+static void dpif_linux_dp_dump_start(struct nl_dump *);
 static int dpif_linux_dp_transact(const struct dpif_linux_dp *request,
                                   struct dpif_linux_dp *reply,
                                   struct ofpbuf **bufp);
@@ -131,6 +134,7 @@ struct dpif_linux {
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
 /* Generic Netlink family numbers for ODP. */
+static int odp_datapath_family;
 static int odp_packet_family;
 
 /* Generic Netlink socket. */
@@ -156,13 +160,14 @@ dpif_linux_cast(const struct dpif *dpif)
 static int
 dpif_linux_enumerate(struct svec *all_dps)
 {
-    uint32_t dp_idx;
+    struct nl_dump dump;
+    struct ofpbuf msg;
     int major;
-    int err;
+    int error;
 
-    err = dpif_linux_init();
-    if (err) {
-        return err;
+    error = dpif_linux_init();
+    if (error) {
+        return error;
     }
 
     /* Check that the Open vSwitch module is loaded. */
@@ -171,28 +176,15 @@ dpif_linux_enumerate(struct svec *all_dps)
         return -major;
     }
 
-    dp_idx = 0;
-    for (;;) {
-        struct dpif_linux_dp request, reply;
-        struct ofpbuf *buf;
-        char devname[16];
-        int error;
+    dpif_linux_dp_dump_start(&dump);
+    while (nl_dump_next(&dump, &msg)) {
+        struct dpif_linux_dp dp;
 
-        dpif_linux_dp_init(&request);
-        request.dp_idx = dp_idx;
-        request.cmd = ODP_DP_DUMP;
-
-        error = dpif_linux_dp_transact(&request, &reply, &buf);
-        if (error) {
-            return error == ENODEV ? 0 : error;
+        if (!dpif_linux_dp_from_ofpbuf(&dp, &msg)) {
+            svec_add(all_dps, dp.name);
         }
-        ofpbuf_delete(buf);
-
-        sprintf(devname, "dp%d", reply.dp_idx);
-        svec_add(all_dps, devname);
-
-        dp_idx = reply.dp_idx + 1;
     }
+    return nl_dump_done(&dump);
 }
 
 static int
@@ -215,7 +207,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
 
     /* Create or look up datapath. */
     dpif_linux_dp_init(&dp_request);
-    dp_request.cmd = create ? ODP_DP_NEW : ODP_DP_GET;
+    dp_request.cmd = create ? ODP_DP_CMD_NEW : ODP_DP_CMD_GET;
     dp_request.dp_idx = minor;
     dp_request.name = minor < 0 ? name : NULL;
     error = dpif_linux_dp_transact(&dp_request, &dp, &buf);
@@ -323,7 +315,7 @@ dpif_linux_destroy(struct dpif *dpif_)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_DEL;
+    dp.cmd = ODP_DP_CMD_DEL;
     dp.dp_idx = dpif->minor;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
@@ -365,7 +357,7 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_SET;
+    dp.cmd = ODP_DP_CMD_SET;
     dp.dp_idx = dpif->minor;
     dp.ipv4_frags = drop_frags ? ODP_DP_FRAG_DROP : ODP_DP_FRAG_ZERO;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
@@ -806,7 +798,7 @@ dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_SET;
+    dp.cmd = ODP_DP_CMD_SET;
     dp.dp_idx = dpif->minor;
     dp.sampling = &probability;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
@@ -847,6 +839,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     struct nlmsghdr *nlmsg;
     struct genlmsghdr *genl;
     struct ofpbuf b;
+    int type;
 
     ofpbuf_use_const(&b, buf->data, buf->size);
 
@@ -854,18 +847,22 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     genl = ofpbuf_try_pull(&b, sizeof *genl);
     odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
     if (!nlmsg || !genl || !odp_header
+        || nlmsg->nlmsg_type != odp_packet_family
         || !nl_policy_parse(&b, 0, odp_packet_policy, a,
                             ARRAY_SIZE(odp_packet_policy))) {
         return EINVAL;
     }
 
+    type = (genl->cmd == ODP_PACKET_CMD_MISS ? DPIF_UC_MISS
+            : genl->cmd == ODP_PACKET_CMD_ACTION ? DPIF_UC_ACTION
+            : genl->cmd == ODP_PACKET_CMD_SAMPLE ? DPIF_UC_SAMPLE
+            : -1);
+    if (type < 0) {
+        return EINVAL;
+    }
+
     memset(upcall, 0, sizeof *upcall);
-
-    upcall->type = (genl->cmd == ODP_PACKET_CMD_MISS ? DPIF_UC_MISS
-                    : genl->cmd == ODP_PACKET_CMD_ACTION ? DPIF_UC_ACTION
-                    : genl->cmd == ODP_PACKET_CMD_SAMPLE ? DPIF_UC_SAMPLE
-                    : -1);
-
+    upcall->type = type;
     upcall->packet = buf;
     upcall->packet->data = (void *) nl_attr_get(a[ODP_PACKET_ATTR_PACKET]);
     upcall->packet->size = nl_attr_get_size(a[ODP_PACKET_ATTR_PACKET]);
@@ -990,7 +987,12 @@ dpif_linux_init(void)
     static int error = -1;
 
     if (error < 0) {
-        error = nl_lookup_genl_family(ODP_PACKET_FAMILY, &odp_packet_family);
+        error = nl_lookup_genl_family(ODP_DATAPATH_FAMILY,
+                                      &odp_datapath_family);
+        if (!error) {
+            error = nl_lookup_genl_family(ODP_PACKET_FAMILY,
+                                          &odp_packet_family);
+        }
         if (!error) {
             error = nl_sock_create(NETLINK_GENERIC, &genl_sock);
         }
@@ -1391,9 +1393,9 @@ dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
     return dpif_linux_vport_transact(&request, reply, bufp);
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_datapath"
- * followed by Netlink attributes, into 'dp'.  Returns 0 if successful,
- * otherwise a positive errno value.
+/* Parses the contents of 'buf', which contains a "struct odp_header" followed
+ * by Netlink attributes, into 'dp'.  Returns 0 if successful, otherwise a
+ * positive errno value.
  *
  * 'dp' will contain pointers into 'buf', so the caller should not free 'buf'
  * while 'dp' is still in use. */
@@ -1411,18 +1413,27 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
         [ODP_DP_ATTR_MCGROUPS] = { .type = NL_A_NESTED, .optional = true },
     };
 
-    struct odp_datapath *odp_dp;
     struct nlattr *a[ARRAY_SIZE(odp_datapath_policy)];
+    struct odp_header *odp_header;
+    struct nlmsghdr *nlmsg;
+    struct genlmsghdr *genl;
+    struct ofpbuf b;
 
     dpif_linux_dp_init(dp);
 
-    if (!nl_policy_parse(buf, sizeof *odp_dp, odp_datapath_policy,
-                         a, ARRAY_SIZE(odp_datapath_policy))) {
+    ofpbuf_use_const(&b, buf->data, buf->size);
+    nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    genl = ofpbuf_try_pull(&b, sizeof *genl);
+    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
+    if (!nlmsg || !genl || !odp_header
+        || nlmsg->nlmsg_type != odp_datapath_family
+        || !nl_policy_parse(&b, 0, odp_datapath_policy, a,
+                            ARRAY_SIZE(odp_datapath_policy))) {
         return EINVAL;
     }
-    odp_dp = buf->data;
 
-    dp->dp_idx = odp_dp->dp_idx;
+    dp->cmd = genl->cmd;
+    dp->dp_idx = odp_header->dp_idx;
     dp->name = nl_attr_get_string(a[ODP_DP_ATTR_NAME]);
     if (a[ODP_DP_ATTR_STATS]) {
         /* Can't use structure assignment because Netlink doesn't ensure
@@ -1468,14 +1479,17 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
     return 0;
 }
 
-/* Appends to 'buf' (which must initially be empty) a "struct odp_datapath"
- * followed by Netlink attributes corresponding to 'dp'. */
+/* Appends to 'buf' the Generic Netlink message described by 'dp'. */
 static void
 dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
 {
-    struct odp_datapath *odp_dp;
+    struct odp_header *odp_header;
 
-    ofpbuf_reserve(buf, sizeof odp_dp);
+    nl_msg_put_genlmsghdr(buf, 0, odp_datapath_family,
+                          NLM_F_REQUEST | NLM_F_ECHO, dp->cmd, 1);
+
+    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
+    odp_header->dp_idx = dp->dp_idx;
 
     if (dp->name) {
         nl_msg_put_string(buf, ODP_DP_ATTR_NAME, dp->name);
@@ -1490,11 +1504,6 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
     if (dp->sampling) {
         nl_msg_put_u32(buf, ODP_DP_ATTR_SAMPLING, *dp->sampling);
     }
-
-    odp_dp = ofpbuf_push_uninit(buf, sizeof *odp_dp);
-    odp_dp->dp_idx = dp->dp_idx;
-    odp_dp->len = buf->size;
-    odp_dp->total_len = (char *) ofpbuf_end(buf) - (char *) buf->data;
 }
 
 /* Clears 'dp' to "empty" values. */
@@ -1505,53 +1514,50 @@ dpif_linux_dp_init(struct dpif_linux_dp *dp)
     dp->dp_idx = -1;
 }
 
+static void
+dpif_linux_dp_dump_start(struct nl_dump *dump)
+{
+    struct dpif_linux_dp request;
+    struct ofpbuf *buf;
+
+    dpif_linux_dp_init(&request);
+    request.cmd = ODP_DP_CMD_GET;
+
+    buf = ofpbuf_new(1024);
+    dpif_linux_dp_to_ofpbuf(&request, buf);
+    nl_dump_start(dump, genl_sock, buf);
+    ofpbuf_delete(buf);
+}
+
 /* Executes 'request' in the kernel datapath.  If the command fails, returns a
  * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
  * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
- * result of the command is expected to be an odp_datapath also, which is
- * decoded and stored in '*reply' and '*bufp'.  The caller must free '*bufp'
- * when the reply is no longer needed ('reply' will contain pointers into
- * '*bufp'). */
+ * result of the command is expected to be of the same form, which is decoded
+ * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
+ * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
 int
 dpif_linux_dp_transact(const struct dpif_linux_dp *request,
                        struct dpif_linux_dp *reply, struct ofpbuf **bufp)
 {
-    struct ofpbuf *buf = NULL;
+    struct ofpbuf *request_buf;
     int error;
-    int fd;
 
     assert((reply != NULL) == (bufp != NULL));
 
-    error = get_dp0_fd(&fd);
-    if (error) {
-        goto error;
-    }
+    request_buf = ofpbuf_new(1024);
+    dpif_linux_dp_to_ofpbuf(request, request_buf);
+    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    ofpbuf_delete(request_buf);
 
-    buf = ofpbuf_new(1024);
-    dpif_linux_dp_to_ofpbuf(request, buf);
-
-    error = ioctl(fd, request->cmd, buf->data) ? errno : 0;
-    if (error) {
-        goto error;
-    }
-
-    if (bufp) {
-        buf->size = ((struct odp_datapath *) buf->data)->len;
-        error = dpif_linux_dp_from_ofpbuf(reply, buf);
-        if (error) {
-            goto error;
+    if (reply) {
+        if (!error) {
+            error = dpif_linux_dp_from_ofpbuf(reply, *bufp);
         }
-        *bufp = buf;
-    } else {
-        ofpbuf_delete(buf);
-    }
-    return 0;
-
-error:
-    ofpbuf_delete(buf);
-    if (bufp) {
-        memset(reply, 0, sizeof *reply);
-        *bufp = NULL;
+        if (error) {
+            dpif_linux_dp_init(reply);
+            ofpbuf_delete(*bufp);
+            *bufp = NULL;
+        }
     }
     return error;
 }
@@ -1567,7 +1573,7 @@ dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
     struct dpif_linux_dp request;
 
     dpif_linux_dp_init(&request);
-    request.cmd = ODP_DP_GET;
+    request.cmd = ODP_DP_CMD_GET;
     request.dp_idx = dpif->minor;
 
     return dpif_linux_dp_transact(&request, reply, bufp);

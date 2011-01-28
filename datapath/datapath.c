@@ -1156,27 +1156,38 @@ exit:
 }
 
 static const struct nla_policy datapath_policy[ODP_DP_ATTR_MAX + 1] = {
+#ifdef HAVE_NLA_NUL_STRING
 	[ODP_DP_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
+#endif
 	[ODP_DP_ATTR_IPV4_FRAGS] = { .type = NLA_U32 },
 	[ODP_DP_ATTR_SAMPLING] = { .type = NLA_U32 },
 };
 
-/* Called with genl_mutex. */
-static int copy_datapath_to_user(void __user *dst, struct datapath *dp, uint32_t total_len)
+static struct genl_family dp_datapath_genl_family = {
+	.id = GENL_ID_GENERATE,
+	.hdrsize = sizeof(struct odp_header),
+	.name = ODP_DATAPATH_FAMILY,
+	.version = 1,
+	.maxattr = ODP_DP_ATTR_MAX
+};
+
+static struct genl_multicast_group dp_datapath_multicast_group = {
+	.name = ODP_DATAPATH_MCGROUP
+};
+
+static int odp_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
+				u32 pid, u32 seq, u32 flags, u8 cmd)
 {
-	struct odp_datapath *odp_datapath;
-	struct sk_buff *skb;
+	struct odp_header *odp_header;
 	struct nlattr *nla;
 	int err;
 
-	skb = alloc_skb(NLMSG_GOODSIZE, GFP_KERNEL);
-	err = -ENOMEM;
-	if (!skb)
-		goto exit;
+	odp_header = genlmsg_put(skb, pid, seq, &dp_datapath_genl_family,
+				   flags, cmd);
+	if (!odp_header)
+		goto error;
 
-	odp_datapath = (struct odp_datapath*)__skb_put(skb, sizeof(struct odp_datapath));
-	odp_datapath->dp_idx = dp->dp_idx;
-	odp_datapath->total_len = total_len;
+	odp_header->dp_idx = dp->dp_idx;
 
 	rcu_read_lock();
 	err = nla_put_string(skb, ODP_DP_ATTR_NAME, dp_name(dp));
@@ -1203,77 +1214,49 @@ static int copy_datapath_to_user(void __user *dst, struct datapath *dp, uint32_t
 	NLA_PUT_U32(skb, ODP_PACKET_CMD_SAMPLE, packet_mc_group(dp, ODP_PACKET_CMD_SAMPLE));
 	nla_nest_end(skb, nla);
 
-	if (skb->len > total_len)
-		goto nla_put_failure;
-
-	odp_datapath->len = skb->len;
-	err = copy_to_user(dst, skb->data, skb->len) ? -EFAULT : 0;
-	goto exit_free_skb;
+	return genlmsg_end(skb, odp_header);
 
 nla_put_failure:
-	err = -EMSGSIZE;
-exit_free_skb:
-	kfree_skb(skb);
-exit:
-	return err;
+	genlmsg_cancel(skb, odp_header);
+error:
+	return -EMSGSIZE;
 }
 
-/* Called with genl_mutex. */
-static struct sk_buff *copy_datapath_from_user(struct odp_datapath __user *uodp_datapath, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
+static struct sk_buff *odp_dp_cmd_build_info(struct datapath *dp, u32 pid,
+					     u32 seq, u8 cmd)
 {
-	struct odp_datapath *odp_datapath;
 	struct sk_buff *skb;
-	u32 len;
-	int err;
+	int retval;
 
-	if (get_user(len, &uodp_datapath->len))
-		return ERR_PTR(-EFAULT);
-	if (len < sizeof(struct odp_datapath))
-		return ERR_PTR(-EINVAL);
-
-	skb = alloc_skb(len, GFP_KERNEL);
+	skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
 
-	err = -EFAULT;
-	if (copy_from_user(__skb_put(skb, len), uodp_datapath, len))
-		goto error_free_skb;
+	retval = odp_dp_cmd_fill_info(dp, skb, pid, seq, 0, cmd);
+	if (retval < 0) {
+		kfree_skb(skb);
+		return ERR_PTR(retval);
+	}
+	return skb;
+}
 
-	odp_datapath = (struct odp_datapath *)skb->data;
-	err = -EINVAL;
-	if (odp_datapath->len != len)
-		goto error_free_skb;
-
-	err = nla_parse(a, ODP_DP_ATTR_MAX,
-			(struct nlattr *)(skb->data + sizeof(struct odp_datapath)),
-			skb->len - sizeof(struct odp_datapath), datapath_policy);
-	if (err)
-		goto error_free_skb;
-
+static int odp_dp_cmd_validate(struct nlattr *a[ODP_DP_ATTR_MAX + 1])
+{
 	if (a[ODP_DP_ATTR_IPV4_FRAGS]) {
 		u32 frags = nla_get_u32(a[ODP_DP_ATTR_IPV4_FRAGS]);
 
-		err = -EINVAL;
 		if (frags != ODP_DP_FRAG_ZERO && frags != ODP_DP_FRAG_DROP)
-			goto error_free_skb;
+			return -EINVAL;
 	}
 
-	err = VERIFY_NUL_STRING(a[ODP_DP_ATTR_NAME], IFNAMSIZ - 1);
-	if (err)
-		goto error_free_skb;
-
-	return skb;
-
-error_free_skb:
-	kfree_skb(skb);
-	return ERR_PTR(err);
+	return VERIFY_NUL_STRING(a[ODP_DP_ATTR_NAME], IFNAMSIZ - 1);
 }
 
 /* Called with genl_mutex and optionally with RTNL lock also. */
-static struct datapath *lookup_datapath(struct odp_datapath *odp_datapath, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
+static struct datapath *lookup_datapath(struct odp_header *odp_header, struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 {
 	if (!a[ODP_DP_ATTR_NAME]) {
-		struct datapath *dp = get_dp(odp_datapath->dp_idx);
+		struct datapath *dp = get_dp(odp_header->dp_idx);
 		if (!dp)
 			return ERR_PTR(-ENODEV);
 		return dp;
@@ -1301,33 +1284,31 @@ static void change_datapath(struct datapath *dp, struct nlattr *a[ODP_DP_ATTR_MA
 		dp->sflow_probability = nla_get_u32(a[ODP_DP_ATTR_SAMPLING]);
 }
 
-static int new_datapath(struct odp_datapath __user *uodp_datapath)
+static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
-	struct odp_datapath *odp_datapath;
+	struct nlattr **a = info->attrs;
+	struct odp_header *odp_header = info->userhdr;
 	struct vport_parms parms;
-	struct sk_buff *skb;
+	struct sk_buff *reply;
 	struct datapath *dp;
 	struct vport *vport;
 	int dp_idx;
 	int err;
 
-	skb = copy_datapath_from_user(uodp_datapath, a);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto err;
-	odp_datapath = (struct odp_datapath *)skb->data;
-
 	err = -EINVAL;
 	if (!a[ODP_DP_ATTR_NAME])
-		goto err_free_skb;
+		goto err;
+
+	err = odp_dp_cmd_validate(a);
+	if (err)
+		goto err;
 
 	rtnl_lock();
 	err = -ENODEV;
 	if (!try_module_get(THIS_MODULE))
 		goto err_unlock_rtnl;
 
-	dp_idx = odp_datapath->dp_idx;
+	dp_idx = odp_header->dp_idx;
 	if (dp_idx < 0) {
 		err = -EFBIG;
 		for (dp_idx = 0; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
@@ -1385,11 +1366,18 @@ static int new_datapath(struct odp_datapath __user *uodp_datapath)
 
 	change_datapath(dp, a);
 
+	reply = odp_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, ODP_DP_CMD_NEW);
+	err = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto err_destroy_local_port;
+
 	rcu_assign_pointer(dps[dp_idx], dp);
 	dp_sysfs_add_dp(dp);
 
 	rtnl_unlock();
 
+	genl_notify(reply, genl_info_net(info), info->snd_pid,
+		    dp_datapath_multicast_group.id, info->nlhdr, GFP_KERNEL);
 	return 0;
 
 err_destroy_local_port:
@@ -1402,30 +1390,31 @@ err_put_module:
 	module_put(THIS_MODULE);
 err_unlock_rtnl:
 	rtnl_unlock();
-err_free_skb:
-	kfree_skb(skb);
 err:
 	return err;
 }
 
-static int del_datapath(struct odp_datapath __user *uodp_datapath)
+static int odp_dp_cmd_del(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
 	struct vport *vport, *next_vport;
+	struct sk_buff *reply;
 	struct datapath *dp;
-	struct sk_buff *skb;
 	int err;
 
-	skb = copy_datapath_from_user(uodp_datapath, a);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
+	err = odp_dp_cmd_validate(info->attrs);
+	if (err)
 		goto exit;
 
 	rtnl_lock();
-	dp = lookup_datapath((struct odp_datapath *)skb->data, a);
+	dp = lookup_datapath(info->userhdr, info->attrs);
 	err = PTR_ERR(dp);
 	if (IS_ERR(dp))
-		goto exit_free;
+		goto exit_unlock;
+
+	reply = odp_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, ODP_DP_CMD_DEL);
+	err = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto exit_unlock;
 
 	list_for_each_entry_safe (vport, next_vport, &dp->port_list, node)
 		if (vport->port_no != ODPP_LOCAL)
@@ -1438,95 +1427,107 @@ static int del_datapath(struct odp_datapath __user *uodp_datapath)
 	call_rcu(&dp->rcu, destroy_dp_rcu);
 	module_put(THIS_MODULE);
 
+	genl_notify(reply, genl_info_net(info), info->snd_pid,
+		    dp_datapath_multicast_group.id, info->nlhdr, GFP_KERNEL);
 	err = 0;
 
-exit_free:
-	kfree_skb(skb);
+exit_unlock:
 	rtnl_unlock();
 exit:
 	return err;
 }
 
-static int set_datapath(struct odp_datapath __user *uodp_datapath)
+static int odp_dp_cmd_set(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
+	struct sk_buff *reply;
 	struct datapath *dp;
-	struct sk_buff *skb;
 	int err;
 
-	skb = copy_datapath_from_user(uodp_datapath, a);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto exit;
+	err = odp_dp_cmd_validate(info->attrs);
+	if (err)
+		return err;
 
-	dp = lookup_datapath((struct odp_datapath *)skb->data, a);
-	err = PTR_ERR(dp);
+	dp = lookup_datapath(info->userhdr, info->attrs);
 	if (IS_ERR(dp))
-		goto exit_free;
+		return PTR_ERR(dp);
 
-	change_datapath(dp, a);
-	err = 0;
+	change_datapath(dp, info->attrs);
 
-exit_free:
-	kfree_skb(skb);
-exit:
-	return err;
+	reply = odp_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, ODP_DP_CMD_NEW);
+	if (IS_ERR(reply)) {
+		err = PTR_ERR(reply);
+		netlink_set_err(INIT_NET_GENL_SOCK, 0,
+				dp_datapath_multicast_group.id, err);
+		return 0;
+	}
+
+	genl_notify(reply, genl_info_net(info), info->snd_pid,
+		    dp_datapath_multicast_group.id, info->nlhdr, GFP_KERNEL);
+	return 0;
 }
 
-static int get_datapath(struct odp_datapath __user *uodp_datapath)
+static int odp_dp_cmd_get(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
-	struct odp_datapath *odp_datapath;
+	struct sk_buff *reply;
 	struct datapath *dp;
-	struct sk_buff *skb;
 	int err;
 
-	skb = copy_datapath_from_user(uodp_datapath, a);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto exit;
-	odp_datapath = (struct odp_datapath *)skb->data;
+	err = odp_dp_cmd_validate(info->attrs);
+	if (err)
+		return err;
 
-	dp = lookup_datapath(odp_datapath, a);
-
-	err = PTR_ERR(dp);
+	dp = lookup_datapath(info->userhdr, info->attrs);
 	if (IS_ERR(dp))
-		goto exit_free;
+		return PTR_ERR(dp);
 
-	err = copy_datapath_to_user(uodp_datapath, dp, odp_datapath->total_len);
-exit_free:
-	kfree_skb(skb);
-exit:
-	return err;
+	reply = odp_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, ODP_DP_CMD_NEW);
+	if (IS_ERR(reply))
+		return PTR_ERR(reply);
+
+	return genlmsg_reply(reply, info);
 }
 
-static int dump_datapath(struct odp_datapath __user *uodp_datapath)
+static int odp_dp_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 {
-	struct nlattr *a[ODP_DP_ATTR_MAX + 1];
-	struct odp_datapath *odp_datapath;
-	struct sk_buff *skb;
 	u32 dp_idx;
-	int err;
 
-	skb = copy_datapath_from_user(uodp_datapath, a);
-	err = PTR_ERR(skb);
-	if (IS_ERR(skb))
-		goto exit;
-	odp_datapath = (struct odp_datapath *)skb->data;
-
-	err = -ENODEV;
-	for (dp_idx = odp_datapath->dp_idx; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
+	for (dp_idx = cb->args[0]; dp_idx < ARRAY_SIZE(dps); dp_idx++) {
 		struct datapath *dp = get_dp(dp_idx);
 		if (!dp)
 			continue;
-
-		err = copy_datapath_to_user(uodp_datapath, dp, odp_datapath->total_len);
-		break;
+		if (odp_dp_cmd_fill_info(dp, skb, NETLINK_CB(cb->skb).pid,
+					 cb->nlh->nlmsg_seq, NLM_F_MULTI,
+					 ODP_DP_CMD_NEW) < 0)
+			break;
 	}
-	kfree_skb(skb);
-exit:
-	return err;
+
+	cb->args[0] = dp_idx;
+	return skb->len;
 }
+
+static struct genl_ops dp_datapath_genl_ops[] = {
+	{ .cmd = ODP_DP_CMD_NEW,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = datapath_policy,
+	  .doit = odp_dp_cmd_new
+	},
+	{ .cmd = ODP_DP_CMD_DEL,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = datapath_policy,
+	  .doit = odp_dp_cmd_del
+	},
+	{ .cmd = ODP_DP_CMD_GET,
+	  .flags = 0,		    /* OK for unprivileged users. */
+	  .policy = datapath_policy,
+	  .doit = odp_dp_cmd_get,
+	  .dumpit = odp_dp_cmd_dump
+	},
+	{ .cmd = ODP_DP_CMD_SET,
+	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
+	  .policy = datapath_policy,
+	  .doit = odp_dp_cmd_set,
+	},
+};
 
 static const struct nla_policy vport_policy[ODP_VPORT_ATTR_MAX + 1] = {
 	[ODP_VPORT_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
@@ -1926,26 +1927,6 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 
 	genl_lock();
 	switch (cmd) {
-	case ODP_DP_NEW:
-		err = new_datapath((struct odp_datapath __user *)argp);
-		goto exit;
-
-	case ODP_DP_GET:
-		err = get_datapath((struct odp_datapath __user *)argp);
-		goto exit;
-
-	case ODP_DP_DEL:
-		err = del_datapath((struct odp_datapath __user *)argp);
-		goto exit;
-
-	case ODP_DP_SET:
-		err = set_datapath((struct odp_datapath __user *)argp);
-		goto exit;
-
-	case ODP_DP_DUMP:
-		err = dump_datapath((struct odp_datapath __user *)argp);
-		goto exit;
-
 	case ODP_VPORT_NEW:
 		err = attach_vport((struct odp_vport __user *)argp);
 		goto exit;
@@ -2001,11 +1982,6 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		/* Ioctls that don't need any translation at all. */
 		return openvswitch_ioctl(f, cmd, argp);
 
-	case ODP_DP_NEW:
-	case ODP_DP_GET:
-	case ODP_DP_DEL:
-	case ODP_DP_SET:
-	case ODP_DP_DUMP:
 	case ODP_VPORT_NEW:
 	case ODP_VPORT_DEL:
 	case ODP_VPORT_GET:
@@ -2043,6 +2019,9 @@ struct genl_family_and_ops {
 };
 
 static const struct genl_family_and_ops dp_genl_families[] = {
+	{ &dp_datapath_genl_family,
+	  dp_datapath_genl_ops, ARRAY_SIZE(dp_datapath_genl_ops),
+	  &dp_datapath_multicast_group },
 	{ &dp_packet_genl_family,
 	  dp_packet_genl_ops, ARRAY_SIZE(dp_packet_genl_ops),
 	  NULL },

@@ -128,4 +128,42 @@ static inline struct nlattr *nla_find_nested(struct nlattr *nla, int attrtype)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/**
+ * nlmsg_report - need to report back to application?
+ * @nlh: netlink message header
+ *
+ * Returns 1 if a report back to the application is requested.
+ */
+static inline int nlmsg_report(const struct nlmsghdr *nlh)
+{
+	return !!(nlh->nlmsg_flags & NLM_F_ECHO);
+}
+
+extern int		nlmsg_notify(struct sock *sk, struct sk_buff *skb,
+				     u32 pid, unsigned int group, int report,
+				     gfp_t flags);
+#endif	/* linux kernel < 2.6.19 */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/* Before 2.6.19 the 'flags' parameter was missing, so replace it.  We have to
+ * #include <net/genetlink.h> first because the 2.6.18 version of that header
+ * has an inline call to nlmsg_multicast() without, of course, any 'flags'
+ * argument. */
+#define nlmsg_multicast rpl_nlmsg_multicast
+static inline int nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
+				  u32 pid, unsigned int group, gfp_t flags)
+{
+	int err;
+
+	NETLINK_CB(skb).dst_group = group;
+
+	err = netlink_broadcast(sk, skb, pid, group, flags);
+	if (err > 0)
+		err = 0;
+
+	return err;
+}
+#endif	/* linux kernel < 2.6.19 */
+
 #endif /* net/netlink.h */

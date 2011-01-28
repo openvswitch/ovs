@@ -72,6 +72,65 @@ err_out:
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+/**
+ * nlmsg_notify - send a notification netlink message
+ * @sk: netlink socket to use
+ * @skb: notification message
+ * @pid: destination netlink pid for reports or 0
+ * @group: destination multicast group or 0
+ * @report: 1 to report back, 0 to disable
+ * @flags: allocation flags
+ */
+int nlmsg_notify(struct sock *sk, struct sk_buff *skb, u32 pid,
+		 unsigned int group, int report, gfp_t flags)
+{
+	int err = 0;
+
+	if (group) {
+		int exclude_pid = 0;
+
+		if (report) {
+			atomic_inc(&skb->users);
+			exclude_pid = pid;
+		}
+
+		/* errors reported via destination sk->sk_err, but propagate
+		 * delivery errors if NETLINK_BROADCAST_ERROR flag is set */
+		err = nlmsg_multicast(sk, skb, exclude_pid, group, flags);
+	}
+
+	if (report) {
+		int err2;
+
+		err2 = nlmsg_unicast(sk, skb, pid);
+		if (!err || err == -ESRCH)
+			err = err2;
+	}
+
+	return err;
+}
+#endif
+
+/* This is analogous to rtnl_notify() but uses genl_sock instead of rtnl.
+ *
+ * This is not (yet) in any upstream kernel. */
+void genl_notify(struct sk_buff *skb, struct net *net, u32 pid, u32 group,
+		 struct nlmsghdr *nlh, gfp_t flags)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+	struct sock *sk = net->genl_sock;
+#else
+	struct sock *sk = genl_sock;
+#endif
+	int report = 0;
+
+	if (nlh)
+		report = nlmsg_report(nlh);
+
+	nlmsg_notify(sk, skb, pid, group, report, flags);
+}
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 /* This function wasn't exported before 2.6.30.  Lose! */
 void netlink_set_err(struct sock *ssk, u32 pid, u32 group, int code)

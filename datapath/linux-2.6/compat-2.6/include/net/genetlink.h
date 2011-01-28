@@ -1,12 +1,44 @@
 #ifndef __NET_GENERIC_NETLINK_WRAPPER_H
 #define __NET_GENERIC_NETLINK_WRAPPER_H 1
 
-
+#include <linux/version.h>
 #include <linux/netlink.h>
+
+/* Very special super-nasty workaround here:
+ *
+ * Before 2.6.19, nlmsg_multicast() lacked a 'flags' parameter.  We work
+ * around that in our <net/netlink.h> replacement, so that nlmsg_multicast
+ * is a macro that expands to rpl_nlmsg_multicast, which in turn has the
+ * 'flags' parameter.
+ *
+ * However, also before 2.6.19, <net/genetlink.h> contains an inline definition
+ * of genlmsg_multicast() that, of course, calls it without the 'flags'
+ * parameter.  This causes a build failure.
+ *
+ * This works around the problem by temporarily renaming both nlmsg_multicast
+ * and genlmsg_multicast with a "busted_" prefix.  (Nothing actually defines
+ * busted_nlmsg_multicast(), so if anything actually tries to call it, then
+ * we'll get a link error.)
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#undef nlmsg_multicast
+#define nlmsg_multicast busted_nlmsg_multicast
+#define genlmsg_multicast busted_genlmsg_multicast
+extern int busted_nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
+				  u32 pid, unsigned int group);
+#endif	/* linux kernel < v2.6.19 */
+
 #include_next <net/genetlink.h>
+
+/* Drop the "busted_" prefix described above. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#undef nlmsg_multicast
+#undef genlmsg_multicast
+#define nlmsg_multicast rpl_nlmsg_multicast
+#endif	/* linux kernel < v2.6.19 */
+
 #include <net/net_namespace.h>
 
-#include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 
 #include <linux/genetlink.h>
@@ -118,6 +150,21 @@ static inline struct sk_buff *genlmsg_new(size_t payload, gfp_t flags)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
 int genl_register_family_with_ops(struct genl_family *family,
 	struct genl_ops *ops, size_t n_ops);
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#define genl_notify(skb, net, pid, group, nlh, flags) \
+	genl_notify(skb, pid, group, nlh, flags)
+#endif
+extern void genl_notify(struct sk_buff *skb, struct net *net, u32 pid,
+			u32 group, struct nlmsghdr *nlh, gfp_t flags);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19) && \
+    LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+static inline struct net *genl_info_net(struct genl_info *info)
+{
+	return &init_net;
+}
 #endif
 
 #endif /* genetlink.h */

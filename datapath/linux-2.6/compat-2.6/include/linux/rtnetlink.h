@@ -12,7 +12,7 @@ static inline void rtnl_notify(struct sk_buff *skb, u32 pid, u32 group,
 	BUG_ON(nlh != NULL);		/* not implemented */
 	if (group) {
 		/* errors reported via destination sk->sk_err */
-		nlmsg_multicast(rtnl, skb, 0, group);
+		nlmsg_multicast(rtnl, skb, 0, group, flags);
 	}
 }
 

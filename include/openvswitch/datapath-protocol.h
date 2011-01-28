@@ -70,12 +70,6 @@
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 
-#define ODP_DP_NEW              _IOWR('O', 0, struct odp_datapath)
-#define ODP_DP_DEL              _IOR('O', 1, struct odp_datapath)
-#define ODP_DP_GET              _IOWR('O', 2, struct odp_datapath)
-#define ODP_DP_SET		_IOWR('O', 3, struct odp_datapath)
-#define ODP_DP_DUMP		_IOWR('O', 4, struct odp_datapath)
-
 #define ODP_VPORT_NEW           _IOR('O', 7, struct odp_vport)
 #define ODP_VPORT_DEL           _IOR('O', 8, struct odp_vport)
 #define ODP_VPORT_GET           _IOWR('O', 9, struct odp_vport)
@@ -88,6 +82,19 @@
 #define ODP_FLOW_SET            _IOWR('O', 16, struct odp_flow)
 #define ODP_FLOW_DUMP           _IOWR('O', 17, struct odp_flow)
 #define ODP_FLOW_FLUSH          _IO('O', 19)
+
+/* Datapaths. */
+
+#define ODP_DATAPATH_FAMILY  "odp_datapath"
+#define ODP_DATAPATH_MCGROUP "odp_datapath"
+
+enum odp_datapath_cmd {
+	ODP_DP_CMD_UNSPEC,
+	ODP_DP_CMD_NEW,
+	ODP_DP_CMD_DEL,
+	ODP_DP_CMD_GET,
+	ODP_DP_CMD_SET
+};
 
 /**
  * struct odp_header - header for ODP Generic Netlink messages.
@@ -101,22 +108,30 @@ struct odp_header {
 };
 
 /**
- * struct odp_datapath - header with basic information about a datapath.
- * @dp_idx: Datapath index (-1 to make a request not specific to a datapath).
- * @len: Length of this structure plus the Netlink attributes following it.
- * @total_len: Total space available for kernel reply to request.
+ * enum odp_datapath_attr - attributes for %ODP_DP_* commands.
+ * @ODP_DP_ATTR_NAME: Name of the network device that serves as the "local
+ * port".  This is the name of the network device whose dp_idx is given in the
+ * &struct odp_header.  Always present in notifications.  Required in
+ * %ODP_DP_NEW requests.  May be used as an alternative to specifying dp_idx on
+ * other requests (with a dp_idx of %UINT32_MAX).
+ * @ODP_DP_ATTR_STATS: Statistics about packets that have passed through the
+ * datapath.  Always present in notifications.
+ * @ODP_DP_ATTR_IPV4_FRAGS: One of %ODP_DP_FRAG_*.  Always present in
+ * notifications.  May be included in %ODP_DP_NEW or %ODP_DP_SET requests to
+ * change the fragment handling policy.
+ * @ODP_DP_ATTR_SAMPLING: 32-bit fraction of packets to sample with
+ * @ODP_PACKET_CMD_SAMPLE.  A value of 0 samples no packets, a value of
+ * %UINT32_MAX samples all packets, and intermediate values sample intermediate
+ * fractions of packets.
+ * @ODP_DP_ATTR_MCGROUPS: Nested attributes with multicast groups.  Each nested
+ * attribute has a %ODP_PACKET_CMD_* type with a 32-bit value giving the
+ * Generic Netlink multicast group number used for sending this datapath's
+ * messages with that command type up to userspace.
  *
- * Followed by &struct nlattr attributes, whose types are drawn from
- * %ODP_DP_ATTR_*, up to a length of @len bytes including the &struct
- * odp_datapath header.
+ * These attributes follow the &struct odp_header within the Generic Netlink
+ * payload for %ODP_DP_* commands.
  */
-struct odp_datapath {
-	int32_t dp_idx;
-	uint32_t len;
-	uint32_t total_len;
-};
-
-enum odp_datapath_type {
+enum odp_datapath_attr {
 	ODP_DP_ATTR_UNSPEC,
 	ODP_DP_ATTR_NAME,       /* name of dp_ifidx netdev */
 	ODP_DP_ATTR_STATS,      /* struct odp_stats */
@@ -128,7 +143,13 @@ enum odp_datapath_type {
 
 #define ODP_DP_ATTR_MAX (__ODP_DP_ATTR_MAX - 1)
 
-/* Values for ODP_DP_ATTR_IPV4_FRAGS. */
+/**
+ * enum odp_frag_handling - policy for handling received IPv4 fragments.
+ * @ODP_DP_FRAG_ZERO: Treat IP fragments as IP protocol 0 and transport ports
+ * zero.
+ * @ODP_DP_FRAG_DROP: Drop IP fragments.  Do not pass them through the flow
+ * table or up to userspace.
+ */
 enum odp_frag_handling {
 	ODP_DP_FRAG_UNSPEC,
 	ODP_DP_FRAG_ZERO,	/* Treat IP fragments as transport port 0. */
@@ -179,12 +200,6 @@ enum odp_packet_cmd {
  *
  * These attributes follow the &struct odp_header within the Generic Netlink
  * payload for %ODP_PACKET_* commands.
- *
- * The %ODP_PACKET_ATTR_TYPE, %ODP_PACKET_ATTR_PACKET and %ODP_PACKET_ATTR_KEY
- * attributes are present for all notifications.  For %ODP_PACKET_CMD_ACTION,
- * the %ODP_PACKET_ATTR_USERDATA attribute is included if it would be nonzero.
- * For %ODP_PACKET_CMD_SAMPLE, the %ODP_PACKET_ATTR_SAMPLE_POOL and
- * %ODP_PACKET_ATTR_ACTIONS attributes are included.
  */
 enum odp_packet_attr {
 	ODP_PACKET_ATTR_UNSPEC,
