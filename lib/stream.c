@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -782,7 +782,7 @@ stream_report_content(const void *data, size_t size,
         vlog_rate_limit(module, VLL_WARN, &rl,
                         "%s: received %s data on %s channel",
                         stream_name,
-                        stream_content_type_to_string(expected_type),
-                        stream_content_type_to_string(actual_type));
+                        stream_content_type_to_string(actual_type),
+                        stream_content_type_to_string(expected_type));
     }
 }
