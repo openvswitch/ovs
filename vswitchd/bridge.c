@@ -106,6 +106,7 @@ struct iface {
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
+    bool up;                    /* Is the interface up? */
     const char *type;           /* Usually same as cfg->type. */
     struct cfm *cfm;            /* Connectivity Fault Management */
     const struct ovsrec_interface *cfg;
@@ -709,6 +710,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 if (iface) {
                     iface->netdev = netdev;
                     iface->enabled = netdev_get_carrier(iface->netdev);
+                    iface->up = iface->enabled;
                 }
             } else if (iface && iface->netdev) {
                 struct shash args;
@@ -2148,10 +2150,11 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
 }
 
 static void
-bond_link_status_update(struct iface *iface, bool carrier)
+bond_link_status_update(struct iface *iface)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct port *port = iface->port;
+    bool carrier = iface->up;
 
     if ((carrier == iface->enabled) == (iface->delay_expires == LLONG_MAX)) {
         /* Nothing to do. */
@@ -2307,8 +2310,10 @@ bond_run(struct bridge *br)
                     if (iface) {
                         bool up = netdev_get_carrier(iface->netdev);
 
-                        bond_link_status_update(iface, up);
-                        port_update_bond_compat(port);
+                        if (up != iface->up) {
+                            port->bond_compat_is_stale = true;
+                        }
+                        iface->up = up;
                     }
                     free(devname);
                 }
@@ -2320,12 +2325,18 @@ bond_run(struct bridge *br)
                         struct iface *iface = port->ifaces[j];
                         bool up = netdev_get_miimon(iface->netdev);
 
-                        bond_link_status_update(iface, up);
-                        port_update_bond_compat(port);
+                        if (up != iface->up) {
+                            port->bond_compat_is_stale = true;
+                        }
+                        iface->up = up;
                     }
                     port->bond_miimon_next_update = time_msec() +
                         port->bond_miimon_interval;
                 }
+            }
+
+            for (j = 0; j < port->n_ifaces; j++) {
+                bond_link_status_update(port->ifaces[j]);
             }
 
             for (j = 0; j < port->n_ifaces; j++) {
