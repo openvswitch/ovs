@@ -475,11 +475,14 @@ daemonize_start(void)
 }
 
 /* If daemonization is configured, then this function notifies the parent
- * process that the child process has completed startup successfully. */
+ * process that the child process has completed startup successfully.
+ *
+ * Calling this function more than once has no additional effect. */
 void
 daemonize_complete(void)
 {
     fork_notify_startup(daemonize_fd);
+    daemonize_fd = -1;
 
     if (detach) {
         setsid();
@@ -487,6 +490,7 @@ daemonize_complete(void)
             ignore(chdir("/"));
         }
         close_standard_fds();
+        detach = false;
     }
 }
 

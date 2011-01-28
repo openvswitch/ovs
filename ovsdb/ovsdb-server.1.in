@@ -81,6 +81,9 @@ This option can be useful where a database server is needed only to
 run a single command, e.g.:
 .B "ovsdb\-server \-\-remote=punix:socket \-\-run='ovsdb\-client dump unix:socket Open_vSwitch'"
 .SS "Daemon Options"
+.ds DD \
+\fBovsdb\-server\fR detaches only after it starts listening on all \
+configured remotes.
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man

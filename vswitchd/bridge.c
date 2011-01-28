@@ -35,6 +35,7 @@
 #include "cfm.h"
 #include "classifier.h"
 #include "coverage.h"
+#include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
 #include "dynamic-string.h"
@@ -933,6 +934,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
 
     free(managers);
+
+    /* ovs-vswitchd has completed initialization, so allow the process that
+     * forked us to exit successfully. */
+    daemonize_complete();
 }
 
 static const char *

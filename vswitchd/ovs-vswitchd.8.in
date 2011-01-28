@@ -102,6 +102,10 @@ to be loaded.
 .IP
 On non-Linux hosts, this option is accepted but has no effect.
 .
+.ds DD \
+\fBovs\-vswitchd\fR detaches only after it has connected to the \
+database, retrieved the initial configuration, and set up that \
+configuration.
 .so lib/daemon.man
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man

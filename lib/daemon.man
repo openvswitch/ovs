@@ -20,7 +20,7 @@ When \fB\-\-pidfile\fR is not specified, this option has no effect.
 .TP
 \fB\-\-detach\fR
 Causes \fB\*(PN\fR to detach itself from the foreground session and
-run as a background process.
+run as a background process. \*(DD
 .
 .TP
 \fB\-\-monitor\fR
