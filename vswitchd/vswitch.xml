@@ -508,22 +508,45 @@
 
     <group title="Bonding Configuration">
       <p>A port that has more than one interface is a ``bonded port.'' Bonding
-        allows for load balancing and fail-over.  Open vSwitch supports
-        ``source load balancing'' (SLB) and "active backup" bonding.  SLB
-        bonding assigns flows to slaves based on source MAC address and output
-        VLAN, with periodic rebalancing as traffic patterns change.  Active
-        backup bonding assigns all flows to one slave, failing over to a backup
-        slave when the active slave is disabled.  Neither form of bonding
-        require 802.3ad or other special support from the upstream switch to
-        which the slave devices are connected.</p>
+        allows for load balancing and fail-over.  Some kinds of bonding will
+        work with any kind of upstream switch:</p>
+
+      <dl>
+        <dt><code>balance-slb</code></dt>
+        <dd>
+          Balances flows among slaves based on source MAC address and output
+          VLAN, with periodic rebalancing as traffic patterns change.
+        </dd>
+
+        <dt><code>active-backup</code></dt>
+        <dd>
+          Assigns all flows to one slave, failing over to a backup slave when
+          the active slave is disabled.
+        </dd>
+      </dl>
+
+      <p>
+        The following mode requires the upstream switch to support 802.3ad with
+        successful LACP negotiation.  If LACP negotiation fails then
+        <code>balance-slb</code> mode is used as a fallback:
+      </p>
+
+      <dl>
+        <dt><code>balance-tcp</code></dt>
+        <dd>
+          Balances flows among slaves based on L2, L3, and L4 protocol
+          information such as destination MAC address, IP address, and TCP
+          port.
+        </dd>
+      </dl>
 
       <p>These columns apply only to bonded ports.  Their values are
         otherwise ignored.</p>
 
       <column name="bond_mode">
-        <p>The type of bonding used for a bonded port.  Currently supported
-          values are <code>balance-slb</code> and <code>active-backup</code>.
-          Defaults to SLB if unset.</p>
+        <p>The type of bonding used for a bonded port.  Defaults to
+          <code>balance-slb</code> if unset.
+        </p>
       </column>
 
       <column name="bond_updelay">

@@ -136,7 +136,8 @@ struct bond_entry {
 };
 
 enum bond_mode {
-    BM_SLB, /* Source Load Balance (Default). */
+    BM_TCP, /* Transport Layer Load Balance. */
+    BM_SLB, /* Source Load Balance. */
     BM_AB   /* Active Backup. */
 };
 
@@ -2105,18 +2106,42 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 
 /* Bridge packet processing functions. */
 
+static bool
+bond_is_tcp_hash(const struct port *port)
+{
+    return port->bond_mode == BM_TCP && port->lacp & LACP_NEGOTIATED;
+}
+
 static int
-bond_hash(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
+bond_hash_src(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
 {
     return hash_bytes(mac, ETH_ADDR_LEN, vlan) & BOND_MASK;
 }
 
+static int bond_hash_tcp(const struct flow *flow, uint16_t vlan)
+{
+    struct flow hash_flow;
+
+    memcpy(&hash_flow, flow, sizeof hash_flow);
+    hash_flow.vlan_tci = 0;
+
+    /* The symmetric quality of this hash function is not required, but
+     * flow_hash_symmetric_l4 already exists, and is sufficient for our
+     * purposes, so we use it out of convenience. */
+    return flow_hash_symmetric_l4(&hash_flow, vlan) & BOND_MASK;
+}
+
 static struct bond_entry *
-lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN],
+lookup_bond_entry(const struct port *port, const struct flow *flow,
                   uint16_t vlan)
 {
-    assert(port->bond_mode == BM_SLB);
-    return &port->bond_hash[bond_hash(mac, vlan)];
+    assert(port->bond_mode != BM_AB);
+
+    if (bond_is_tcp_hash(port)) {
+        return &port->bond_hash[bond_hash_tcp(flow, vlan)];
+    } else {
+        return &port->bond_hash[bond_hash_src(flow->dl_src, vlan)];
+    }
 }
 
 static int
@@ -2152,7 +2177,7 @@ bond_choose_iface(const struct port *port)
 }
 
 static bool
-choose_output_iface(const struct port *port, const uint8_t *dl_src,
+choose_output_iface(const struct port *port, const struct flow *flow,
                     uint16_t vlan, uint16_t *dp_ifidx, tag_type *tags)
 {
     struct iface *iface;
@@ -2166,8 +2191,8 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
             return false;
         }
         iface = port->ifaces[port->active_iface];
-    } else if (port->bond_mode == BM_SLB){
-        struct bond_entry *e = lookup_bond_entry(port, dl_src, vlan);
+    } else {
+        struct bond_entry *e = lookup_bond_entry(port, flow, vlan);
         if (e->iface_idx < 0 || e->iface_idx >= port->n_ifaces
             || !port->ifaces[e->iface_idx]->enabled) {
             /* XXX select interface properly.  The current interface selection
@@ -2182,8 +2207,6 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
         }
         *tags |= e->iface_tag;
         iface = port->ifaces[e->iface_idx];
-    } else {
-        NOT_REACHED();
     }
     *dp_ifidx = iface->dp_ifidx;
     *tags |= iface->tag;        /* Currently only used for bonding. */
@@ -2470,7 +2493,7 @@ set_dst(struct dst *dst, const struct flow *flow,
               : in_port->vlan >= 0 ? in_port->vlan
               : flow->vlan_tci == 0 ? OFP_VLAN_NONE
               : vlan_tci_to_vid(flow->vlan_tci));
-    return choose_output_iface(out_port, flow->dl_src, dst->vlan,
+    return choose_output_iface(out_port, flow, dst->vlan,
                                &dst->dp_ifidx, tags);
 }
 
@@ -3035,8 +3058,7 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
                 uint16_t vlan = (flow->vlan_tci
                                  ? vlan_tci_to_vid(flow->vlan_tci)
                                  : OFP_VLAN_NONE);
-                struct bond_entry *e = lookup_bond_entry(out_port,
-                                                         flow->dl_src, vlan);
+                struct bond_entry *e = lookup_bond_entry(out_port, flow, vlan);
                 e->tx_bytes += n_bytes;
             }
         }
@@ -3275,10 +3297,12 @@ static const char *
 bond_mode_to_string(enum bond_mode bm) {
     static char *bm_slb = "balance-slb";
     static char *bm_ab  = "active-backup";
+    static char *bm_tcp = "balance-tcp";
 
     switch (bm) {
     case BM_SLB: return bm_slb;
     case BM_AB:  return bm_ab;
+    case BM_TCP: return bm_tcp;
     }
 
     NOT_REACHED();
@@ -3437,7 +3461,7 @@ bond_rebalance_port(struct port *port)
     struct bond_entry *e;
     size_t i;
 
-    assert(port->bond_mode == BM_SLB);
+    assert(port->bond_mode != BM_AB);
 
     /* Sets up 'bals' to describe each of the port's interfaces, sorted in
      * descending order of tx_bytes, so that bals[0] represents the most
@@ -3585,7 +3609,7 @@ bond_send_learning_packets(struct port *port)
     struct ofpbuf packet;
     int error, n_packets, n_errors;
 
-    if (!port->n_ifaces || port->active_iface < 0) {
+    if (!port->n_ifaces || port->active_iface < 0 || bond_is_tcp_hash(port)) {
         return;
     }
 
@@ -3598,8 +3622,15 @@ bond_send_learning_packets(struct port *port)
         struct flow flow;
         int retval;
 
-        if (e->port == port->port_idx
-            || !choose_output_iface(port, e->mac, e->vlan, &dp_ifidx, &tags)) {
+        if (e->port == port->port_idx) {
+            continue;
+        }
+
+        compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
+                              e->mac);
+        flow_extract(&packet, 0, ODPP_NONE, &flow);
+
+        if (!choose_output_iface(port, &flow, e->vlan, &dp_ifidx, &tags)) {
             continue;
         }
 
@@ -3619,9 +3650,6 @@ bond_send_learning_packets(struct port *port)
 
         /* Send packet. */
         n_packets++;
-        compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
-                              e->mac);
-        flow_extract(&packet, 0, ODPP_NONE, &flow);
         retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
                                      &packet);
         if (retval) {
@@ -3756,6 +3784,12 @@ bond_unixctl_show(struct unixctl_conn *conn,
         ds_put_cstr(&ds, "\tlacp: off\n");
     }
 
+    if (port->bond_mode != BM_AB) {
+        ds_put_format(&ds, "bond-hash-algorithm: %s\n",
+                      bond_is_tcp_hash(port) ? "balance-tcp" : "balance-slb");
+    }
+
+
     ds_put_format(&ds, "bond-detect-mode: %s\n",
                   port->miimon ? "miimon" : "carrier");
 
@@ -3767,7 +3801,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
 
-    if (port->bond_mode == BM_SLB) {
+    if (port->bond_mode != BM_AB) {
         ds_put_format(&ds, "next rebalance: %lld ms\n",
                       port->bond_next_rebalance - time_msec());
     }
@@ -3775,6 +3809,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
     for (j = 0; j < port->n_ifaces; j++) {
         const struct iface *iface = port->ifaces[j];
         struct bond_entry *be;
+        struct flow flow;
 
         /* Basic info. */
         ds_put_format(&ds, "slave %s: %s\n",
@@ -3848,11 +3883,12 @@ bond_unixctl_show(struct unixctl_conn *conn,
             ds_put_cstr(&ds, "\n\n");
         }
 
-        if (port->bond_mode != BM_SLB) {
+        if (port->bond_mode == BM_AB) {
             continue;
         }
 
         /* Hashes. */
+        memset(&flow, 0, sizeof flow);
         for (be = port->bond_hash; be <= &port->bond_hash[BOND_MASK]; be++) {
             int hash = be - port->bond_hash;
             struct mac_entry *me;
@@ -3864,13 +3900,19 @@ bond_unixctl_show(struct unixctl_conn *conn,
             ds_put_format(&ds, "\thash %d: %"PRIu64" kB load\n",
                           hash, be->tx_bytes / 1024);
 
+            if (port->bond_mode != BM_SLB) {
+                continue;
+            }
+
             /* MACs. */
             LIST_FOR_EACH (me, lru_node, &port->bridge->ml->lrus) {
                 uint16_t dp_ifidx;
                 tag_type tags = 0;
-                if (bond_hash(me->mac, me->vlan) == hash
+
+                memcpy(flow.dl_src, me->mac, ETH_ADDR_LEN);
+                if (bond_hash_src(me->mac, me->vlan) == hash
                     && me->port != port->port_idx
-                    && choose_output_iface(port, me->mac, me->vlan,
+                    && choose_output_iface(port, &flow, me->vlan,
                                            &dp_ifidx, &tags)
                     && dp_ifidx == iface->dp_ifidx)
                 {
@@ -4063,7 +4105,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
 
     if (sscanf(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
         == ETH_ADDR_SCAN_COUNT) {
-        hash = bond_hash(mac, vlan);
+        hash = bond_hash_src(mac, vlan);
 
         hash_cstr = xasprintf("%u", hash);
         unixctl_command_reply(conn, 200, hash_cstr);
@@ -4222,6 +4264,8 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         port->bond_mode = BM_SLB;
     } else if (!strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_AB))) {
         port->bond_mode = BM_AB;
+    } else if (!strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_TCP))) {
+        port->bond_mode = BM_TCP;
     } else {
         port->bond_mode = BM_SLB;
         VLOG_WARN("port %s: unknown bond_mode %s, defaulting to %s",
@@ -4480,7 +4524,7 @@ port_update_bonding(struct port *port)
     } else {
         size_t i;
 
-        if (port->bond_mode == BM_SLB && !port->bond_hash) {
+        if (port->bond_mode != BM_AB && !port->bond_hash) {
             port->bond_hash = xcalloc(BOND_MASK + 1, sizeof *port->bond_hash);
             for (i = 0; i <= BOND_MASK; i++) {
                 struct bond_entry *e = &port->bond_hash[i];
@@ -4495,7 +4539,7 @@ port_update_bonding(struct port *port)
             if (port->cfg->bond_fake_iface) {
                 port->bond_next_fake_iface_update = time_msec();
             }
-        } else if (port->bond_mode != BM_SLB) {
+        } else if (port->bond_mode == BM_AB) {
             free(port->bond_hash);
             port->bond_hash = NULL;
         }
