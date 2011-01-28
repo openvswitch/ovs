@@ -188,6 +188,7 @@ static int do_ssl_init(void);
 static bool ssl_wants_io(int ssl_error);
 static void ssl_close(struct stream *);
 static void ssl_clear_txbuf(struct ssl_stream *);
+static void interpret_queued_ssl_error(const char *function);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
 static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
@@ -600,6 +601,18 @@ ssl_close(struct stream *stream)
     free(sslv);
 }
 
+static void
+interpret_queued_ssl_error(const char *function)
+{
+    int queued_error = ERR_get_error();
+    if (queued_error != 0) {
+        VLOG_WARN_RL(&rl, "%s: %s",
+                     function, ERR_error_string(queued_error, NULL));
+    } else {
+        VLOG_ERR_RL(&rl, "%s: SSL_ERROR_SSL without queued error", function);
+    }
+}
+
 static int
 interpret_ssl_error(const char *function, int ret, int error,
                     int *want)
@@ -656,17 +669,9 @@ interpret_ssl_error(const char *function, int ret, int error,
         }
     }
 
-    case SSL_ERROR_SSL: {
-        int queued_error = ERR_get_error();
-        if (queued_error != 0) {
-            VLOG_WARN_RL(&rl, "%s: %s",
-                         function, ERR_error_string(queued_error, NULL));
-        } else {
-            VLOG_ERR_RL(&rl, "%s: SSL_ERROR_SSL without queued error",
-                        function);
-        }
+    case SSL_ERROR_SSL:
+        interpret_queued_ssl_error(function);
         break;
-    }
 
     default:
         VLOG_ERR_RL(&rl, "%s: bad SSL error code %d", function, error);
