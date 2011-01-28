@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,12 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-enum {
-    OPT_DETACH = UCHAR_MAX + 2048,
-    OPT_NO_CHDIR,
-    OPT_OVERWRITE_PIDFILE,
-    OPT_PIDFILE,
+#define DAEMON_OPTION_ENUMS                     \
+    OPT_DETACH,                                 \
+    OPT_NO_CHDIR,                               \
+    OPT_OVERWRITE_PIDFILE,                      \
+    OPT_PIDFILE,                                \
     OPT_MONITOR
-};
 
 #define DAEMON_LONG_OPTIONS                                          \
         {"detach",            no_argument, 0, OPT_DETACH},           \

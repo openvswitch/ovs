@@ -123,7 +123,8 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
         OPT_BOOTSTRAP_CA_CERT,
-        OPT_ENABLE_DUMMY
+        OPT_ENABLE_DUMMY,
+        DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"help",        no_argument, 0, 'h'},

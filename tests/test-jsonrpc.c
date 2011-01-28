@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,8 @@ static void
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1
+        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
+        DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"verbose", optional_argument, 0, 'v'},

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,7 +280,8 @@ parse_options(int argc, char *argv[])
         OPT_EXIT_WITHOUT_BIND,
         OPT_EXIT_AFTER_BIND,
         OPT_NO_DETACH,
-        VLOG_OPTION_ENUMS
+        VLOG_OPTION_ENUMS,
+        DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},

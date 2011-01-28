@@ -85,7 +85,8 @@ static void
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1
+        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
+        DAEMON_OPTION_ENUMS,
     };
     static struct option long_options[] = {
         {"format", required_argument, 0, 'f'},

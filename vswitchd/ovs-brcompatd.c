@@ -1413,7 +1413,8 @@ parse_options(int argc, char *argv[])
         OPT_PRUNE_TIMEOUT,
         OPT_APPCTL_COMMAND,
         VLOG_OPTION_ENUMS,
-        LEAK_CHECKER_OPTION_ENUMS
+        LEAK_CHECKER_OPTION_ENUMS,
+        DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"help",             no_argument, 0, 'h'},
