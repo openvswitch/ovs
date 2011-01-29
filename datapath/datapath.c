@@ -79,6 +79,8 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
+static int queue_control_packets(struct datapath *, struct sk_buff *,
+				 const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
 struct datapath *get_dp(int dp_ifindex)
@@ -365,13 +367,94 @@ static void copy_and_csum_skb(struct sk_buff *skb, void *to)
 	*(__sum16 *)(to + csum_start + csum_offset) = csum_fold(csum);
 }
 
-static struct genl_family dp_packet_genl_family;
-#define PACKET_N_MC_GROUPS 16
+static struct genl_family dp_packet_genl_family = {
+	.id = GENL_ID_GENERATE,
+	.hdrsize = sizeof(struct odp_header),
+	.name = ODP_PACKET_FAMILY,
+	.version = 1,
+	.maxattr = ODP_PACKET_ATTR_MAX
+};
 
-static int packet_mc_group(struct datapath *dp, u8 cmd)
+/* Generic Netlink multicast groups for upcalls.
+ *
+ * We really want three unique multicast groups per datapath, but we can't even
+ * get one, because genl_register_mc_group() takes genl_lock, which is also
+ * held during Generic Netlink message processing, so trying to acquire
+ * multicast groups during ODP_DP_NEW processing deadlocks.  Instead, we
+ * preallocate a few groups and use them round-robin for datapaths.  Collision
+ * isn't fatal--multicast listeners should check that the family is the one
+ * that they want and discard others--but it wastes time and memory to receive
+ * unwanted messages.
+ */
+#define PACKET_N_MC_GROUPS 16
+static struct genl_multicast_group packet_mc_groups[PACKET_N_MC_GROUPS];
+
+static u32 packet_mc_group(struct datapath *dp, u8 cmd)
 {
+	u32 idx;
 	BUILD_BUG_ON_NOT_POWER_OF_2(PACKET_N_MC_GROUPS);
-	return jhash_2words(dp->dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
+
+	idx = jhash_2words(dp->dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
+	return packet_mc_groups[idx].id;
+}
+
+static int packet_register_mc_groups(void)
+{
+	int i;
+
+	for (i = 0; i < PACKET_N_MC_GROUPS; i++) {
+		struct genl_multicast_group *group = &packet_mc_groups[i];
+		int error;
+
+		sprintf(group->name, "packet%d", i);
+		error = genl_register_mc_group(&dp_packet_genl_family, group);
+		if (error)
+			return error;
+	}
+	return 0;
+}
+
+int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
+{
+	struct dp_stats_percpu *stats;
+	int err;
+
+	WARN_ON_ONCE(skb_shared(skb));
+
+	forward_ip_summed(skb);
+
+	err = vswitch_skb_checksum_setup(skb);
+	if (err)
+		goto err_kfree_skb;
+
+	/* Break apart GSO packets into their component pieces.  Otherwise
+	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
+	if (skb_is_gso(skb)) {
+		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
+		
+		kfree_skb(skb);
+		skb = nskb;
+		if (IS_ERR(skb)) {
+			err = PTR_ERR(skb);
+			goto err;
+		}
+	}
+
+	return queue_control_packets(dp, skb, upcall_info);
+
+err_kfree_skb:
+	kfree_skb(skb);
+err:
+	local_bh_disable();
+	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+
+	write_seqcount_begin(&stats->seqlock);
+	stats->n_lost++;
+	write_seqcount_end(&stats->seqlock);
+
+	local_bh_enable();
+
+	return err;
 }
 
 /* Send each packet in the 'skb' list to userspace for 'dp' as directed by
@@ -458,86 +541,6 @@ err_kfree_skbs:
 		nskb = skb->next;
 		kfree_skb(skb);
 	}
-	return err;
-}
-
-/* Generic Netlink multicast groups for upcalls.
- *
- * We really want three unique multicast groups per datapath, but we can't even
- * get one, because genl_register_mc_group() takes genl_lock, which is also
- * held during Generic Netlink message processing, so trying to acquire
- * multicast groups during ODP_DP_NEW processing deadlocks.  Instead, we
- * preallocate a few groups and use them round-robin for datapaths.  Collision
- * isn't fatal--multicast listeners should check that the family is the one
- * that they want and discard others--but it wastes time and memory to receive
- * unwanted messages.
- */
-static struct genl_multicast_group packet_mc_groups[PACKET_N_MC_GROUPS];
-
-static struct genl_family dp_packet_genl_family = {
-	.id = GENL_ID_GENERATE,
-	.hdrsize = sizeof(struct odp_header),
-	.name = ODP_PACKET_FAMILY,
-	.version = 1,
-	.maxattr = ODP_PACKET_ATTR_MAX
-};
-
-static int packet_register_mc_groups(void)
-{
-	int i;
-
-	for (i = 0; i < PACKET_N_MC_GROUPS; i++) {
-		struct genl_multicast_group *group = &packet_mc_groups[i];
-		int error;
-
-		sprintf(group->name, "packet%d", i);
-		error = genl_register_mc_group(&dp_packet_genl_family, group);
-		if (error)
-			return error;
-	}
-	return 0;
-}
-
-int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
-{
-	struct dp_stats_percpu *stats;
-	int err;
-
-	WARN_ON_ONCE(skb_shared(skb));
-
-	forward_ip_summed(skb);
-
-	err = vswitch_skb_checksum_setup(skb);
-	if (err)
-		goto err_kfree_skb;
-
-	/* Break apart GSO packets into their component pieces.  Otherwise
-	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
-	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
-		
-		kfree_skb(skb);
-		skb = nskb;
-		if (IS_ERR(skb)) {
-			err = PTR_ERR(skb);
-			goto err;
-		}
-	}
-
-	return queue_control_packets(dp, skb, upcall_info);
-
-err_kfree_skb:
-	kfree_skb(skb);
-err:
-	local_bh_disable();
-	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
-
-	write_seqcount_begin(&stats->seqlock);
-	stats->n_lost++;
-	write_seqcount_end(&stats->seqlock);
-
-	local_bh_enable();
-
 	return err;
 }
 
