@@ -147,6 +147,7 @@ def datapath_configure_bond(pif,slaves):
         "downdelay": "200",
         "updelay": "31000",
         "use_carrier": "1",
+        "hashing-algorithm": "src_mac",
         }
     # override defaults with values from other-config whose keys
     # being with "bond-"
@@ -155,6 +156,8 @@ def datapath_configure_bond(pif,slaves):
                            key.startswith("bond-"), oc.items())
     overrides = map(lambda (key,val): (key[5:], val), overrides)
     bond_options.update(overrides)
+    mode = None
+    halgo = None
 
     argv += ['--', 'set', 'Port', interface]
     if pifrec['MAC'] != "":
@@ -188,15 +191,30 @@ def datapath_configure_bond(pif,slaves):
             except ValueError:
                 log("bridge %s has invalid %s '%s'" % (bridge, name, value))
         elif name == "mode":
-
-            if val in ['balance-slb', 'active-backup']:
-                argv += ['bond_%s=%s' % (name, val)]
-            else:
-                log("bridge %s has invalid %s '%s'" % (bridge, name, val))
+            mode = val
+        elif name == "hashing-algorithm":
+            halgo = val
         else:
             # Pass other bond options into other_config.
             argv += ["other-config:%s=%s" % (vsctl_escape("bond-%s" % name),
                                              vsctl_escape(val))]
+
+    if mode == 'lacp':
+        argv += ['lacp=active']
+
+        if halgo == 'src_mac':
+            argv += ['bond_mode=balance-slb']
+        elif halgo == "tcpudp_ports":
+            argv += ['bond_mode=balance-tcp']
+        else:
+            log("bridge %s has invalid bond-hashing-algorithm '%s'" % (bridge, halgo))
+            argv += ['bond_mode=balance-slb']
+    elif mode in ['balance-slb', 'active-backup']:
+        argv += ['lacp=off', 'bond_mode=%s' % mode]
+    else:
+        log("bridge %s has invalid bond-mode '%s'" % (bridge, mode))
+        argv += ['lacp=off', 'bond_mode=balance-slb']
+
     return argv
 
 def datapath_deconfigure_bond(netdev):

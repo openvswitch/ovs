@@ -349,6 +349,7 @@ def _configure_bond_interface(pif):
         "downdelay": "200",
         "updelay": "31000",
         "use_carrier": "1",
+        "hashing-algorithm": "src_mac",
         }
 
     # override defaults with values from other-config whose keys being with "bond-"

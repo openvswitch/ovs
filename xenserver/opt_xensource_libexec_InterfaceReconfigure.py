@@ -282,7 +282,8 @@ _POOL_XML_TAG = "pool"
 _ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso' ]
 
 _PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
-                        [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay', 'updelay', 'use_carrier' ] + \
+                        [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay',
+                                'updelay', 'use_carrier', 'hashing-algorithm' ] + \
                         _ETHTOOL_OTHERCONFIG_ATTRS
 
 _PIF_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
