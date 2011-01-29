@@ -1437,6 +1437,9 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     if (a[ODP_FLOW_ATTR_TCP_FLAGS]) {
         flow->tcp_flags = nl_attr_get(a[ODP_FLOW_ATTR_TCP_FLAGS]);
     }
+    if (a[ODP_FLOW_ATTR_USED]) {
+        flow->used = nl_attr_get(a[ODP_FLOW_ATTR_USED]);
+    }
     return 0;
 }
 
