@@ -209,7 +209,6 @@ static int
 open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 {
     struct dpif_linux *dpif;
-    char *name;
     int error;
     int i;
 
@@ -222,7 +221,6 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
-    free(name);
 
     dpif->mc_sock = NULL;
     for (i = 0; i < DPIF_N_UC_TYPES; i++) {
