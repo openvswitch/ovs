@@ -82,6 +82,20 @@ static inline bool icmphdr_ok(struct sk_buff *skb)
 	return skb->len >= skb_transport_offset(skb) + sizeof(struct icmphdr);
 }
 
+u64 flow_used_time(unsigned long flow_jiffies)
+{
+	struct timespec cur_ts;
+	u64 cur_ms, idle_ms;
+
+	ktime_get_ts(&cur_ts);
+	idle_ms = jiffies_to_msecs(jiffies - flow_jiffies);
+	cur_ms = (u64)cur_ts.tv_sec * MSEC_PER_SEC +
+		 cur_ts.tv_nsec / NSEC_PER_MSEC;
+
+	return cur_ms - idle_ms;
+}
+
+
 #define TCP_FLAGS_OFFSET 13
 #define TCP_FLAG_MASK 0x3f
 

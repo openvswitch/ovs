@@ -91,6 +91,7 @@ void flow_put(struct sw_flow *);
 
 int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *, bool *is_frag);
 void flow_used(struct sw_flow *, struct sk_buff *);
+u64 flow_used_time(unsigned long flow_jiffies);
 
 u32 flow_hash(const struct sw_flow_key *);
 int flow_cmp(const struct tbl_node *, void *target);

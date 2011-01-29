@@ -855,7 +855,7 @@ static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	spin_unlock_bh(&flow->lock);
 
 	if (used)
-		NLA_PUT_MSECS(skb, ODP_FLOW_ATTR_USED, used);
+		NLA_PUT_U64(skb, ODP_FLOW_ATTR_USED, flow_used_time(used));
 
 	if (stats.n_packets)
 		NLA_PUT(skb, ODP_FLOW_ATTR_STATS, sizeof(struct odp_flow_stats), &stats);
