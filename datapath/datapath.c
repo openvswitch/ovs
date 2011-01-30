@@ -484,7 +484,6 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		skb->next = NULL;
 
 		len = sizeof(struct odp_header);
-		len += nla_total_size(4); /* ODP_PACKET_ATTR_TYPE. */
 		len += nla_total_size(skb->len);
 		len += nla_total_size(FLOW_BUFSIZE);
 		if (upcall_info->userdata)
