@@ -1449,7 +1449,8 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
     struct odp_header *odp_header;
 
     nl_msg_put_genlmsghdr(buf, 0, odp_flow_family,
-                          NLM_F_REQUEST | flow->nlmsg_flags, flow->cmd, 1);
+                          NLM_F_REQUEST | NLM_F_ECHO | flow->nlmsg_flags,
+                          flow->cmd, 1);
 
     odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
     odp_header->dp_ifindex = flow->dp_ifindex;
