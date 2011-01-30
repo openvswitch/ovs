@@ -1363,13 +1363,10 @@ ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
 
         cinfo->pairs.n = 0;
 
-        if (last_error == EOF) {
-            cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
-            cinfo->pairs.values[cinfo->pairs.n++] = xstrdup("End of file");
-        } else if (last_error > 0) {
+        if (last_error) {
             cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
             cinfo->pairs.values[cinfo->pairs.n++] =
-                xstrdup(strerror(last_error));
+                xstrdup(ovs_retval_to_string(last_error));
         }
 
         cinfo->pairs.keys[cinfo->pairs.n] = "state";

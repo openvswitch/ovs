@@ -158,8 +158,7 @@ ovs_fatal(int err_no, const char *format, ...)
     vfprintf(stderr, format, args);
     va_end(args);
     if (err_no != 0)
-        fprintf(stderr, " (%s)",
-                err_no == EOF ? "end of file" : strerror(err_no));
+        fprintf(stderr, " (%s)", ovs_retval_to_string(err_no));
     putc('\n', stderr);
 
     exit(EXIT_FAILURE);
@@ -176,12 +175,38 @@ ovs_error(int err_no, const char *format, ...)
     vfprintf(stderr, format, args);
     va_end(args);
     if (err_no != 0) {
-        fprintf(stderr, " (%s)",
-                err_no == EOF ? "end of file" : strerror(err_no));
+        fprintf(stderr, " (%s)", ovs_retval_to_string(err_no));
     }
     putc('\n', stderr);
 
     errno = save_errno;
+}
+
+/* Many OVS functions return an int which is one of:
+ * - 0: no error yet
+ * - >0: errno value
+ * - EOF: end of file (not necessarily an error; depends on the function called)
+ *
+ * Returns the appropriate human-readable string. The caller must copy the
+ * string if it wants to hold onto it, as the storage may be overwritten on
+ * subsequent function calls.
+ */
+const char *
+ovs_retval_to_string(int retval)
+{
+    static char unknown[48];
+
+    if (!retval) {
+        return "";
+    }
+    if (retval > 0) {
+        return strerror(retval);
+    }
+    if (retval == EOF) {
+        return "End of file";
+    }
+    snprintf(unknown, sizeof unknown, "***unknown return value: %d***", retval);
+    return unknown;
 }
 
 /* Sets program_name based on 'argv0'.  Should be called at the beginning of

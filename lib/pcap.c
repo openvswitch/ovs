@@ -76,8 +76,7 @@ pcap_read_header(FILE *file)
     struct pcap_hdr ph;
     if (fread(&ph, sizeof ph, 1, file) != 1) {
         int error = ferror(file) ? errno : EOF;
-        VLOG_WARN("failed to read pcap header: %s",
-                  error > 0 ? strerror(error) : "end of file");
+        VLOG_WARN("failed to read pcap header: %s", ovs_retval_to_string(error));
         return error;
     }
     if (ph.magic_number != 0xa1b2c3d4 && ph.magic_number != 0xd4c3b2a1) {
@@ -118,7 +117,7 @@ pcap_read(FILE *file, struct ofpbuf **bufp)
     if (fread(&prh, sizeof prh, 1, file) != 1) {
         int error = ferror(file) ? errno : EOF;
         VLOG_WARN("failed to read pcap record header: %s",
-                  error > 0 ? strerror(error) : "end of file");
+                  ovs_retval_to_string(error));
         return error;
     }
 
@@ -144,7 +143,7 @@ pcap_read(FILE *file, struct ofpbuf **bufp)
     if (fread(data, len, 1, file) != 1) {
         int error = ferror(file) ? errno : EOF;
         VLOG_WARN("failed to read pcap packet: %s",
-                  error > 0 ? strerror(error) : "end of file");
+                  ovs_retval_to_string(error));
         ofpbuf_delete(buf);
         return error;
     }

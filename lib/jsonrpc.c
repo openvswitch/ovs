@@ -142,6 +142,12 @@ jsonrpc_wait(struct jsonrpc *rpc)
     }
 }
 
+/*
+ * Possible status values:
+ * - 0: no error yet
+ * - >0: errno value
+ * - EOF: end of file (remote end closed connection; not necessarily an error)
+ */
 int
 jsonrpc_get_status(const struct jsonrpc *rpc)
 {

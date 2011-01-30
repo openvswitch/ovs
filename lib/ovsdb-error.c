@@ -237,4 +237,3 @@ ovsdb_error_assert(struct ovsdb_error *error)
         ovsdb_error_destroy(error);
     }
 }
-
