@@ -3,6 +3,7 @@
 
 #include <linux/version.h>
 #include <linux/netlink.h>
+#include <net/net_namespace.h>
 
 /* Very special super-nasty workaround here:
  *
@@ -152,14 +153,14 @@ int genl_register_family_with_ops(struct genl_family *family,
 	struct genl_ops *ops, size_t n_ops);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 #define genl_notify(skb, net, pid, group, nlh, flags) \
 	genl_notify(skb, pid, group, nlh, flags)
 #endif
 extern void genl_notify(struct sk_buff *skb, struct net *net, u32 pid,
 			u32 group, struct nlmsghdr *nlh, gfp_t flags);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19) && \
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24) && \
     LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 static inline struct net *genl_info_net(struct genl_info *info)
 {
