@@ -266,7 +266,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         q_key = nl_attr_get(a);
         ds_put_cstr(ds, "vlan(");
         if (q_key->q_tpid != htons(ETH_TYPE_VLAN)) {
-            ds_put_format(ds, "tpid=%#"PRIx16",", ntohs(q_key->q_tpid));
+            ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(q_key->q_tpid));
         }
         ds_put_format(ds, "vid%"PRIu16",pcp%d)",
                       vlan_tci_to_vid(q_key->q_tci),
@@ -274,7 +274,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
 
     case ODP_KEY_ATTR_ETHERTYPE:
-        ds_put_format(ds, "eth_type(%#04"PRIx16")",
+        ds_put_format(ds, "eth_type(0x%04"PRIx16")",
                       ntohs(nl_attr_get_be16(a)));
         break;
 
