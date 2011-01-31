@@ -111,7 +111,10 @@ static inline int nla_type(const struct nlattr *nla)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+#define nla_parse_nested(tb, maxtype, nla, policy) \
+	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), (struct nla_policy *)(policy))
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 #define nla_parse_nested(tb, maxtype, nla, policy) \
 	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), policy)
 #endif
