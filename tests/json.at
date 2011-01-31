@@ -19,6 +19,18 @@ m4_define([JSON_CHECK_POSITIVE_PY],
 ])
    AT_CLEANUP])
 
+m4_define([JSON_CHECK_POSITIVE_UCS4PY],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([json positive Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_XFAIL_IF([$PYTHON -c "exit(len(u'\U00010800'))"; test $? -ne 1])
+   AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
+   AT_CAPTURE_FILE([input])
+   AT_CHECK([$PYTHON $srcdir/test-json.py $4 input], [0], [stdout], [])
+   AT_CHECK([cat stdout], [0], [$3
+])
+   AT_CLEANUP])
+
 m4_define([JSON_CHECK_POSITIVE],
   [JSON_CHECK_POSITIVE_C([$1 - C], [$2], [$3], [$4])
    JSON_CHECK_POSITIVE_PY([$1 - Python], [$2], [$3], [$4])])
@@ -75,7 +87,10 @@ JSON_CHECK_POSITIVE([escape sequences],
 JSON_CHECK_POSITIVE([Unicode escape sequences], 
   [[[ " \u0022 \u005c \u002F \u0008 \u000c \u000A \u000d \u0009" ]]],
   [[[" \" \\ / \b \f \n \r \t"]]])
-JSON_CHECK_POSITIVE([surrogate pairs],
+JSON_CHECK_POSITIVE_C([surrogate pairs - C],
+  [[["\ud834\udd1e"]]],
+  [[["𝄞"]]])
+JSON_CHECK_POSITIVE_UCS4PY([surrogate pairs - Python],
   [[["\ud834\udd1e"]]],
   [[["𝄞"]]])
 JSON_CHECK_NEGATIVE([a string by itself is not valid JSON], ["xxx"],

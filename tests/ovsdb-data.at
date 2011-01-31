@@ -457,12 +457,12 @@ OVSDB_CHECK_POSITIVE_CPY([strings no more than 2 characters long],
     '["a"]' \
     '["ab"]' \
     '["abc"]' \
-    '["\ud834\udd1e"]']],
+    '["de"]']],
   [[""
 "a"
 "ab"
 constraint violation: "abc" length 3 is greater than maximum allowed length 2
-"𝄞"]])
+"de"]])
 
 AT_BANNER([OSVDB -- simple data])
 
