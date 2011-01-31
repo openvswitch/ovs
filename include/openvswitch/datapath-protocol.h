@@ -61,12 +61,6 @@
 #include <sys/socket.h>
 #endif
 
-#ifndef __aligned_u64
-#define __aligned_u64 __u64 __attribute__((aligned(8)))
-#define __aligned_be64 __be64 __attribute__((aligned(8)))
-#define __aligned_le64 __le64 __attribute__((aligned(8)))
-#endif
-
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 
