@@ -37,19 +37,9 @@
  * ----------------------------------------------------------------------
  */
 
-/* Protocol between userspace and kernel datapath.
- *
- * Be sure to update datapath/odp-compat.h if you change any of the structures
- * in here. */
-
 #ifndef OPENVSWITCH_DATAPATH_PROTOCOL_H
 #define OPENVSWITCH_DATAPATH_PROTOCOL_H 1
 
-/* The ovs_be<N> types indicate that an object is in big-endian, not
- * native-endian, byte order.  They are otherwise equivalent to uint<N>_t.
- * The Linux kernel already has __be<N> types for this, which take on
- * additional semantics when the "sparse" static checker is used, so we use
- * those types when compiling the kernel. */
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/socket.h>
