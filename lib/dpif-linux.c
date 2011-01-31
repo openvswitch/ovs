@@ -89,7 +89,10 @@ struct dpif_linux_flow {
      *
      * The 'stats' and 'used' members point to 64-bit data that might only be
      * aligned on 32-bit boundaries, so get_unaligned_u64() should be used to
-     * access their values. */
+     * access their values.
+     *
+     * If 'actions' is nonnull then ODP_FLOW_ATTR_ACTIONS will be included in
+     * the Netlink version of the command, even if actions_len is zero. */
     const struct nlattr *key;           /* ODP_FLOW_ATTR_KEY. */
     size_t key_len;
     const struct nlattr *actions;       /* ODP_FLOW_ATTR_ACTIONS. */
@@ -541,6 +544,7 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow request, reply;
+    struct nlattr dummy_action;
     struct ofpbuf *buf;
     int error;
 
@@ -549,7 +553,8 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     request.dp_ifindex = dpif->dp_ifindex;
     request.key = key;
     request.key_len = key_len;
-    request.actions = actions;
+    /* Ensure that ODP_FLOW_ATTR_ACTIONS will always be included. */
+    request.actions = actions ? actions : &dummy_action;
     request.actions_len = actions_len;
     if (flags & DPIF_FP_ZERO_STATS) {
         request.clear = true;
@@ -1462,7 +1467,7 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
         nl_msg_put_unspec(buf, ODP_FLOW_ATTR_KEY, flow->key, flow->key_len);
     }
 
-    if (flow->actions_len) {
+    if (flow->actions || flow->actions_len) {
         nl_msg_put_unspec(buf, ODP_FLOW_ATTR_ACTIONS,
                           flow->actions, flow->actions_len);
     }
