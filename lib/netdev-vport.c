@@ -39,22 +39,11 @@
 #include "packets.h"
 #include "route-table.h"
 #include "rtnetlink.h"
-#include "rtnetlink-link.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
-
-static struct hmap name_map;
-static struct rtnetlink_notifier netdev_vport_link_notifier;
-
-struct name_node {
-    struct hmap_node node; /* Node in name_map. */
-    uint32_t ifi_index;    /* Kernel interface index. */
-
-    char ifname[IFNAMSIZ]; /* Interface name. */
-};
 
 struct netdev_vport_notifier {
     struct netdev_notifier notifier;
@@ -93,9 +82,6 @@ static int tnl_port_config_from_nlattr(const struct nlattr *options,
                                        size_t options_len,
                                        struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1]);
 
-static void netdev_vport_tnl_iface_init(void);
-static void netdev_vport_link_change(const struct rtnetlink_link_change *,
-                                     void *);
 static const char *netdev_vport_get_tnl_iface(const struct netdev *netdev);
 
 static bool
@@ -187,13 +173,6 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
     VLOG_WARN_RL(&rl, "dp%d: port `%s' has unsupported type %u",
                  vport->dp_ifindex, vport->name, (unsigned int) vport->type);
     return "unknown";
-}
-
-static int
-netdev_vport_init(void)
-{
-    netdev_vport_tnl_iface_init();
-    return 0;
 }
 
 static int
@@ -563,136 +542,23 @@ netdev_vport_poll_remove(struct netdev_notifier *notifier_)
 static void
 netdev_vport_run(void)
 {
-    rtnetlink_link_notifier_run();
     route_table_run();
 }
 
 static void
 netdev_vport_wait(void)
 {
-    rtnetlink_link_notifier_wait();
     route_table_wait();
 }
 
 /* get_tnl_iface() implementation. */
-
-static struct name_node *
-name_node_lookup(int ifi_index)
-{
-    struct name_node *nn;
-
-    HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifi_index, 0), &name_map) {
-        if (nn->ifi_index == ifi_index) {
-            return nn;
-        }
-    }
-
-    return NULL;
-}
-
-/* Queries the kernel for fresh data to populate the name map with. */
-static int
-netdev_vport_reset_names(void)
-{
-    int error;
-    struct nl_dump dump;
-    struct rtgenmsg *rtmsg;
-    struct ofpbuf request, reply;
-    static struct nl_sock *rtnl_sock;
-    struct name_node *nn, *nn_next;
-
-    HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
-        hmap_remove(&name_map, &nn->node);
-        free(nn);
-    }
-
-    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
-    if (error) {
-        VLOG_WARN_RL(&rl, "Failed to create NETLINK_ROUTE socket");
-        return error;
-    }
-
-    ofpbuf_init(&request, 0);
-
-    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, RTM_GETLINK, NLM_F_REQUEST);
-
-    rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
-    rtmsg->rtgen_family = AF_INET;
-
-    nl_dump_start(&dump, rtnl_sock, &request);
-
-    while (nl_dump_next(&dump, &reply)) {
-        struct rtnetlink_link_change change;
-
-        if (rtnetlink_link_parse(&reply, &change)) {
-            netdev_vport_link_change(&change, NULL);
-        }
-    }
-    nl_sock_destroy(rtnl_sock);
-
-    return nl_dump_done(&dump);
-}
-
-static void
-netdev_vport_link_change(const struct rtnetlink_link_change *change,
-                         void *aux OVS_UNUSED)
-{
-
-    if (!change) {
-        netdev_vport_reset_names();
-    } else if (change->nlmsg_type == RTM_NEWLINK) {
-        struct name_node *nn;
-
-        if (name_node_lookup(change->ifi_index)) {
-            return;
-        }
-
-        nn            = xzalloc(sizeof *nn);
-        nn->ifi_index = change->ifi_index;
-
-        strncpy(nn->ifname, change->ifname, IFNAMSIZ);
-        nn->ifname[IFNAMSIZ - 1] = '\0';
-
-        hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
-    } else if (change->nlmsg_type == RTM_DELLINK) {
-        struct name_node *nn;
-
-        nn = name_node_lookup(change->ifi_index);
-
-        if (nn) {
-            hmap_remove(&name_map, &nn->node);
-            free(nn);
-        }
-
-    } else {
-        VLOG_WARN_RL(&rl, "Received unexpected rtnetlink message type %d",
-                     change->nlmsg_type);
-    }
-}
-
-static void
-netdev_vport_tnl_iface_init(void)
-{
-    static bool tnl_iface_is_init = false;
-
-    if (!tnl_iface_is_init) {
-        hmap_init(&name_map);
-
-        rtnetlink_link_notifier_register(&netdev_vport_link_notifier,
-                                         netdev_vport_link_change, NULL);
-
-        netdev_vport_reset_names();
-        tnl_iface_is_init = true;
-    }
-}
-
 static const char *
 netdev_vport_get_tnl_iface(const struct netdev *netdev)
 {
     struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
-    int ifindex;
     uint32_t route;
     struct netdev_dev_vport *ndv;
+    static char name[IFNAMSIZ];
 
     ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
     if (tnl_port_config_from_nlattr(ndv->options->data, ndv->options->size,
@@ -701,13 +567,8 @@ netdev_vport_get_tnl_iface(const struct netdev *netdev)
     }
     route = nl_attr_get_be32(a[ODP_TUNNEL_ATTR_DST_IPV4]);
 
-    if (route_table_get_ifindex(route, &ifindex)) {
-        struct name_node *nn;
-        HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifindex, 0), &name_map) {
-            if (nn->ifi_index == ifindex) {
-                return nn->ifname;
-            }
-        }
+    if (route_table_get_name(route, name)) {
+        return name;
     }
 
     return NULL;
@@ -1046,7 +907,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 }
 
 #define VPORT_FUNCTIONS(GET_STATUS)                         \
-    netdev_vport_init,                                      \
+    NULL,                                                   \
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
                                                             \

@@ -30,6 +30,7 @@
 #include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "rtnetlink.h"
+#include "rtnetlink-link.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(route_table);
@@ -56,15 +57,25 @@ struct route_node {
     struct route_data rd;  /* Data associated with this node. */
 };
 
+struct name_node {
+    struct hmap_node node; /* Node in name_map. */
+    uint32_t ifi_index;    /* Kernel interface index. */
+
+    char ifname[IFNAMSIZ]; /* Interface name. */
+};
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static unsigned int register_count = 0;
 static struct rtnetlink *rtn = NULL;
 static struct route_table_msg rtmsg;
-static struct rtnetlink_notifier notifier;
+static struct rtnetlink_notifier route_notifier;
+static struct rtnetlink_notifier name_notifier;
 
 static bool route_table_valid = false;
+static bool name_table_valid = false;
 static struct hmap route_map;
+static struct hmap name_map;
 
 static int route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *);
@@ -74,6 +85,39 @@ static struct route_node *route_node_lookup(const struct route_data *);
 static struct route_node *route_node_lookup_by_ip(uint32_t ip);
 static void route_map_clear(void);
 static uint32_t hash_route_data(const struct route_data *);
+
+static void name_table_init(void);
+static void name_table_uninit(void);
+static int name_table_reset(void);
+static void name_table_change(const struct rtnetlink_link_change *, void *);
+static void name_map_clear(void);
+static struct name_node *name_node_lookup(int ifi_index);
+
+/* Populates 'name' with the name of the interface traffic destined for 'ip'
+ * is likely to egress out of (see route_table_get_ifindex).
+ *
+ * Returns true if successful, otherwise false. */
+bool
+route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
+{
+    int ifindex;
+
+    if (!name_table_valid) {
+        name_table_reset();
+    }
+
+    if (route_table_get_ifindex(ip, &ifindex)) {
+        struct name_node *nn;
+
+        nn = name_node_lookup(ifindex);
+        if (nn) {
+            strncpy(name, nn->ifname, IFNAMSIZ);
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /* Populates 'ifindex' with the interface index traffic destined for 'ip' is
  * likely to egress.  There is no hard guarantee that traffic destined for 'ip'
@@ -126,10 +170,11 @@ route_table_register(void)
         nf = (rtnetlink_notify_func *) route_table_change;
 
         rtn = rtnetlink_create(RTNLGRP_IPV4_ROUTE, pf, &rtmsg);
-        rtnetlink_notifier_register(rtn, &notifier, nf, NULL);
+        rtnetlink_notifier_register(rtn, &route_notifier, nf, NULL);
 
         hmap_init(&route_map);
         route_table_reset();
+        name_table_init();
     }
 
     register_count++;
@@ -149,6 +194,7 @@ route_table_unregister(void)
 
         route_map_clear();
         hmap_destroy(&route_map);
+        name_table_uninit();
     }
 }
 
@@ -157,6 +203,7 @@ void
 route_table_run(void)
 {
     if (rtn) {
+        rtnetlink_link_notifier_run();
         rtnetlink_notifier_run(rtn);
     }
 }
@@ -166,6 +213,7 @@ void
 route_table_wait(void)
 {
     if (rtn) {
+        rtnetlink_link_notifier_wait();
         rtnetlink_notifier_wait(rtn);
     }
 }
@@ -344,4 +392,99 @@ static uint32_t
 hash_route_data(const struct route_data *rd)
 {
     return hash_bytes(rd, sizeof *rd, 0);
+}
+
+/* name_table . */
+
+static void
+name_table_init(void)
+{
+    hmap_init(&name_map);
+    rtnetlink_link_notifier_register(&name_notifier, name_table_change, NULL);
+    name_table_valid = false;
+}
+
+static void
+name_table_uninit(void)
+{
+    rtnetlink_link_notifier_unregister(&name_notifier);
+    name_map_clear();
+    hmap_destroy(&name_map);
+}
+
+static int
+name_table_reset(void)
+{
+    int error;
+    struct nl_dump dump;
+    struct rtgenmsg *rtmsg;
+    struct ofpbuf request, reply;
+    static struct nl_sock *rtnl_sock;
+
+    name_table_valid = true;
+    name_map_clear();
+    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
+    if (error) {
+        VLOG_WARN_RL(&rl, "failed to create NETLINK_ROUTE socket");
+        return error;
+    }
+
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, RTM_GETLINK, NLM_F_REQUEST);
+    rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
+    rtmsg->rtgen_family = AF_INET;
+
+    nl_dump_start(&dump, rtnl_sock, &request);
+    while (nl_dump_next(&dump, &reply)) {
+        struct rtnetlink_link_change change;
+
+        if (rtnetlink_link_parse(&reply, &change)
+            && change.nlmsg_type == RTM_NEWLINK
+            && !name_node_lookup(change.ifi_index)) {
+            struct name_node *nn;
+
+            nn = xzalloc(sizeof *nn);
+            nn->ifi_index = change.ifi_index;
+            strncpy(nn->ifname, change.ifname, IFNAMSIZ);
+            nn->ifname[IFNAMSIZ] = '\0';
+            hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
+        }
+    }
+    nl_sock_destroy(rtnl_sock);
+    return nl_dump_done(&dump);
+}
+
+static void
+name_table_change(const struct rtnetlink_link_change *change OVS_UNUSED,
+                  void *aux OVS_UNUSED)
+{
+    /* Changes to interface status can cause routing table changes that some
+     * versions of the linux kernel do not advertise for some reason. */
+    route_table_valid = false;
+    name_table_valid = false;
+}
+
+static struct name_node *
+name_node_lookup(int ifi_index)
+{
+    struct name_node *nn;
+
+    HMAP_FOR_EACH_WITH_HASH(nn, node, hash_int(ifi_index, 0), &name_map) {
+        if (nn->ifi_index == ifi_index) {
+            return nn;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+name_map_clear(void)
+{
+    struct name_node *nn, *nn_next;
+
+    HMAP_FOR_EACH_SAFE(nn, nn_next, node, &name_map) {
+        hmap_remove(&name_map, &nn->node);
+        free(nn);
+    }
 }

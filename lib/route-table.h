@@ -17,12 +17,14 @@
 #ifndef ROUTE_TABLE_H
 #define ROUTE_TABLE_H 1
 
+#include <net/if.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "openvswitch/types.h"
 
 bool route_table_get_ifindex(ovs_be32 ip, int *ifindex);
+bool route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ]);
 void route_table_register(void);
 void route_table_unregister(void);
 void route_table_run(void);
