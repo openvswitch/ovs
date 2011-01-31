@@ -193,7 +193,6 @@ static int
 netdev_vport_init(void)
 {
     netdev_vport_tnl_iface_init();
-    route_table_register();
     return 0;
 }
 
@@ -253,6 +252,7 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
         dev->options = options;
 
         *netdev_devp = &dev->netdev_dev;
+        route_table_register();
     } else {
         ofpbuf_delete(options);
     }
