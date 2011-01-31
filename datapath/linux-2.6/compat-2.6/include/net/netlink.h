@@ -4,6 +4,31 @@
 #include <linux/version.h>
 #include_next <net/netlink.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+/* Before v2.6.29, a NLA_NESTED attribute, if it was present, was not allowed
+ * to be empty.  However, OVS depends on the ability to accept empty
+ * attributes.  For example, a present but empty ODP_FLOW_ATTR_ACTIONS on
+ * ODP_FLOW_CMD_SET replaces the existing set of actions by an empty "drop"
+ * action, whereas a missing ODP_FLOW_ATTR_ACTIONS leaves the existing
+ * actions, if any, unchanged.
+ *
+ * NLA_NESTED is different from NLA_UNSPEC in only two ways:
+ *
+ * - If the size of the nested attributes is zero, no further size checks
+ *   are performed.
+ *
+ * - If the size of the nested attributes is not zero and no length
+ *   parameter is specified the minimum size of nested attributes is
+ *   NLA_HDRLEN.
+ *
+ * nla_parse_nested() validates that there is at least enough space for
+ * NLA_HDRLEN, so neither of these conditions are important, and we might
+ * as well use NLA_UNSPEC with old kernels.
+ */
+#undef NLA_NESTED
+#define NLA_NESTED NLA_UNSPEC
+#endif
+
 #ifndef HAVE_NLA_NUL_STRING
 static inline int VERIFY_NUL_STRING(struct nlattr *attr, int maxlen)
 {
