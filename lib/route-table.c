@@ -446,7 +446,7 @@ name_table_reset(void)
             nn = xzalloc(sizeof *nn);
             nn->ifi_index = change.ifi_index;
             strncpy(nn->ifname, change.ifname, IFNAMSIZ);
-            nn->ifname[IFNAMSIZ] = '\0';
+            nn->ifname[IFNAMSIZ - 1] = '\0';
             hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
         }
     }
