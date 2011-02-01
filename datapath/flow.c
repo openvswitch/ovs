@@ -845,6 +845,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (!nla)
 			goto nla_put_failure;
 		ipv4_key = nla_data(nla);
+		memset(ipv4_key, 0, sizeof(struct odp_key_ipv4));
 		ipv4_key->ipv4_src = swkey->ipv4_src;
 		ipv4_key->ipv4_dst = swkey->ipv4_dst;
 		ipv4_key->ipv4_proto = swkey->nw_proto;
@@ -856,6 +857,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (!nla)
 			goto nla_put_failure;
 		ipv6_key = nla_data(nla);
+		memset(ipv6_key, 0, sizeof(struct odp_key_ipv6));
 		memcpy(ipv6_key->ipv6_src, swkey->ipv6_src,
 				sizeof(ipv6_key->ipv6_src));
 		memcpy(ipv6_key->ipv6_dst, swkey->ipv6_dst,
@@ -869,6 +871,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (!nla)
 			goto nla_put_failure;
 		arp_key = nla_data(nla);
+		memset(arp_key, 0, sizeof(struct odp_key_arp));
 		arp_key->arp_sip = swkey->ipv4_src;
 		arp_key->arp_tip = swkey->ipv4_dst;
 		arp_key->arp_op = htons(swkey->nw_proto);

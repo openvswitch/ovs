@@ -430,6 +430,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 
         ipv4_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_IPV4,
                                             sizeof *ipv4_key);
+        memset(ipv4_key, 0, sizeof *ipv4_key);
         ipv4_key->ipv4_src = flow->nw_src;
         ipv4_key->ipv4_dst = flow->nw_dst;
         ipv4_key->ipv4_proto = flow->nw_proto;
@@ -439,6 +440,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 
         ipv6_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_IPV6,
                                             sizeof *ipv6_key);
+        memset(ipv6_key, 0, sizeof *ipv6_key);
         memcpy(ipv6_key->ipv6_src, &flow->ipv6_src, sizeof ipv6_key->ipv6_src);
         memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
         ipv6_key->ipv6_proto = flow->nw_proto;
@@ -448,6 +450,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 
         arp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ARP,
                                            sizeof *arp_key);
+        memset(arp_key, 0, sizeof *arp_key);
         arp_key->arp_sip = flow->nw_src;
         arp_key->arp_tip = flow->nw_dst;
         arp_key->arp_op = htons(flow->nw_proto);
