@@ -237,7 +237,8 @@ enum odp_vport_cmd {
  * @ODP_VPORT_ATTR_STATS: A &struct rtnl_link_stats64 giving statistics for
  * packets sent or received through the vport.
  * @ODP_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
- * @ODP_VPORT_ATTR_MTU: MTU for the vport.
+ * @ODP_VPORT_ATTR_MTU: MTU for the vport.  Omitted if the vport does not have
+ * an MTU as, e.g., some tunnels do not.
  * @ODP_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
  * @ODP_VPORT_ATTR_IFLINK: ifindex of the device on which packets are sent (for
  * tunnels), if any.

@@ -2365,6 +2365,11 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     int mtu;
 
     netdev_get_mtu(netdev, &mtu);
+    if (mtu == INT_MAX) {
+        VLOG_WARN_RL(&rl, "cannot set up HTB on device %s that lacks MTU",
+                     netdev_get_name(netdev));
+        return EINVAL;
+    }
 
     memset(&opt, 0, sizeof opt);
     tc_fill_rate(&opt.rate, class->min_rate, mtu);
@@ -2484,6 +2489,13 @@ htb_parse_class_details__(struct netdev *netdev,
     const char *priority_s = shash_find_data(details, "priority");
     int mtu;
 
+    netdev_get_mtu(netdev, &mtu);
+    if (mtu == INT_MAX) {
+        VLOG_WARN_RL(&rl, "cannot parse HTB class on device %s that lacks MTU",
+                     netdev_get_name(netdev));
+        return EINVAL;
+    }
+
     /* min-rate.  Don't allow a min-rate below 1500 bytes/s. */
     if (!min_rate_s) {
         /* min-rate is required. */
@@ -2509,7 +2521,6 @@ htb_parse_class_details__(struct netdev *netdev,
      * doesn't include the Ethernet header, we need to add at least 14 (18?) to
      * the MTU.  We actually add 64, instead of 14, as a guard against
      * additional headers get tacked on somewhere that we're not aware of. */
-    netdev_get_mtu(netdev, &mtu);
     hc->burst = burst_s ? strtoull(burst_s, NULL, 10) / 8 : 0;
     hc->burst = MAX(hc->burst, mtu + 64);
 

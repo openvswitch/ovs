@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -934,10 +934,8 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
     const char *cli_name = dhclient_get_name(cli);
     uint8_t cli_mac[ETH_ADDR_LEN];
     struct ofpbuf b;
-    int mtu;
 
-    netdev_get_mtu(cli->netdev, &mtu);
-    ofpbuf_init(&b, mtu + VLAN_ETH_HEADER_LEN);
+    ofpbuf_init(&b, ETH_TOTAL_MAX + VLAN_ETH_HEADER_LEN);
     netdev_get_etheraddr(cli->netdev, cli_mac);
     for (; cli->received < 50; cli->received++) {
         const struct ip_header *ip;

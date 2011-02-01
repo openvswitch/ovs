@@ -663,7 +663,6 @@ bool tnl_frag_needed(struct vport *vport, const struct tnl_mutable_config *mutab
 	}
 #endif
 
-	total_length = min(total_length, mutable->mtu);
 	payload_length = total_length - header_length;
 
 	nskb = dev_alloc_skb(NET_IP_ALIGN + eth_hdr_len + header_length +
@@ -1428,7 +1427,6 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	}
 
 	vport_gen_rand_ether_addr(mutable->eth_addr);
-	mutable->mtu = ETH_DATA_LEN;
 
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
@@ -1477,7 +1475,6 @@ int tnl_set_options(struct vport *vport, struct nlattr *options)
 	old_mutable = rtnl_dereference(tnl_vport->mutable);
 	mutable->seq = old_mutable->seq + 1;
 	memcpy(mutable->eth_addr, old_mutable->eth_addr, ETH_ALEN);
-	mutable->mtu = old_mutable->mtu;
 
 	/* Parse the others configured by userspace. */
 	err = tnl_set_config(options, tnl_vport->tnl_ops, vport, mutable);
@@ -1548,22 +1545,6 @@ int tnl_destroy(struct vport *vport)
 	return 0;
 }
 
-int tnl_set_mtu(struct vport *vport, int mtu)
-{
-	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_mutable_config *mutable;
-
-	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
-			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
-	if (!mutable)
-		return -ENOMEM;
-
-	mutable->mtu = mtu;
-	assign_config_rcu(vport, mutable);
-
-	return 0;
-}
-
 int tnl_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
@@ -1590,12 +1571,6 @@ const unsigned char *tnl_get_addr(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
-}
-
-int tnl_get_mtu(const struct vport *vport)
-{
-	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	return rcu_dereference_rtnl(tnl_vport->mutable)->mtu;
 }
 
 void tnl_free_linked_skbs(struct sk_buff *skb)

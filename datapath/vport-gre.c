@@ -391,7 +391,6 @@ const struct vport_ops gre_vport_ops = {
 	.exit		= gre_exit,
 	.create		= gre_create,
 	.destroy	= tnl_destroy,
-	.set_mtu	= tnl_set_mtu,
 	.set_addr	= tnl_set_addr,
 	.get_name	= tnl_get_name,
 	.get_addr	= tnl_get_addr,
@@ -400,6 +399,5 @@ const struct vport_ops gre_vport_ops = {
 	.get_dev_flags	= vport_gen_get_dev_flags,
 	.is_running	= vport_gen_is_running,
 	.get_operstate	= vport_gen_get_operstate,
-	.get_mtu	= tnl_get_mtu,
 	.send		= tnl_send,
 };

@@ -605,12 +605,14 @@ int vport_get_iflink(const struct vport *vport)
  *
  * @vport: vport from which to retrieve MTU
  *
- * Retrieves the MTU of the given device.
- *
- * Must be called with RTNL lock or rcu_read_lock.
+ * Retrieves the MTU of the given device.  Returns 0 if @vport does not have an
+ * MTU (as e.g. some tunnels do not).  Either RTNL lock or rcu_read_lock must
+ * be held.
  */
 int vport_get_mtu(const struct vport *vport)
 {
+	if (!vport->ops->get_mtu)
+		return 0;
 	return vport->ops->get_mtu(vport);
 }
 
@@ -710,7 +712,7 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	int sent;
 
 	mtu = vport_get_mtu(vport);
-	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
+	if (mtu && unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
 		if (net_ratelimit())
 			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
 				dp_name(vport->dp), packet_length(skb), mtu);

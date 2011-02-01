@@ -1108,6 +1108,8 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     }
     if (a[ODP_VPORT_ATTR_MTU]) {
         vport->mtu = nl_attr_get_u32(a[ODP_VPORT_ATTR_MTU]);
+    } else {
+        vport->mtu = INT_MAX;
     }
     if (a[ODP_VPORT_ATTR_OPTIONS]) {
         vport->options = nl_attr_get(a[ODP_VPORT_ATTR_OPTIONS]);
@@ -1158,7 +1160,7 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
                           vport->address, ETH_ADDR_LEN);
     }
 
-    if (vport->mtu) {
+    if (vport->mtu && vport->mtu != INT_MAX) {
         nl_msg_put_u32(buf, ODP_VPORT_ATTR_MTU, vport->mtu);
     }
 

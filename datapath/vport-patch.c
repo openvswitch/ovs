@@ -20,7 +20,6 @@ struct patch_config {
 
 	char peer_name[IFNAMSIZ];
 	unsigned char eth_addr[ETH_ALEN];
-	unsigned int mtu;
 };
 
 struct patch_vport {
@@ -148,10 +147,6 @@ static struct vport *patch_create(const struct vport_parms *parms)
 
 	vport_gen_rand_ether_addr(patchconf->eth_addr);
 
-	/* Make the default MTU fairly large so that it doesn't become the
-	 * bottleneck on systems using jumbo frames. */
-	patchconf->mtu = 65535;
-
 	rcu_assign_pointer(patch_vport->patchconf, patchconf);
 
 	peer_name = patchconf->peer_name;
@@ -236,22 +231,6 @@ static void update_peers(const char *name, struct vport *vport)
 	}
 }
 
-static int patch_set_mtu(struct vport *vport, int mtu)
-{
-	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct patch_config *patchconf;
-
-	patchconf = kmemdup(rtnl_dereference(patch_vport->patchconf),
-			  sizeof(struct patch_config), GFP_KERNEL);
-	if (!patchconf)
-		return -ENOMEM;
-
-	patchconf->mtu = mtu;
-	assign_config_rcu(vport, patchconf);
-
-	return 0;
-}
-
 static int patch_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
@@ -289,12 +268,6 @@ static int patch_get_options(const struct vport *vport, struct sk_buff *skb)
 	return nla_put_string(skb, ODP_PATCH_ATTR_PEER, patchconf->peer_name);
 }
 
-static int patch_get_mtu(const struct vport *vport)
-{
-	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference_rtnl(patch_vport->patchconf)->mtu;
-}
-
 static int patch_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
@@ -319,7 +292,6 @@ const struct vport_ops patch_vport_ops = {
 	.exit		= patch_exit,
 	.create		= patch_create,
 	.destroy	= patch_destroy,
-	.set_mtu	= patch_set_mtu,
 	.set_addr	= patch_set_addr,
 	.get_name	= patch_get_name,
 	.get_addr	= patch_get_addr,
@@ -328,6 +300,5 @@ const struct vport_ops patch_vport_ops = {
 	.get_dev_flags	= vport_gen_get_dev_flags,
 	.is_running	= vport_gen_is_running,
 	.get_operstate	= vport_gen_get_operstate,
-	.get_mtu	= patch_get_mtu,
 	.send		= patch_send,
 };

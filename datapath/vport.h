@@ -175,7 +175,8 @@ struct vport_parms {
  * @get_iflink: Get the system interface index associated with the device that
  * will be used to send packets (may be different than ifindex for tunnels).
  * May be null if the device does not have an iflink.
- * @get_mtu: Get the device's MTU.
+ * @get_mtu: Get the device's MTU.  May be %NULL if the device does not have an
+ * MTU (as e.g. some tunnels do not).
  * @send: Send a packet on the device.  Returns the length of the packet sent.
  */
 struct vport_ops {

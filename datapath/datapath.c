@@ -773,6 +773,8 @@ int dp_min_mtu(const struct datapath *dp)
 			continue;
 
 		dev_mtu = vport_get_mtu(p);
+		if (!dev_mtu)
+			continue;
 		if (!mtu || dev_mtu < mtu)
 			mtu = dev_mtu;
 	}
@@ -1582,6 +1584,7 @@ static int odp_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	struct odp_header *odp_header;
 	struct nlattr *nla;
 	int ifindex, iflink;
+	int mtu;
 	int err;
 
 	odp_header = genlmsg_put(skb, pid, seq, &dp_vport_genl_family,
@@ -1603,7 +1606,9 @@ static int odp_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 
 	NLA_PUT(skb, ODP_VPORT_ATTR_ADDRESS, ETH_ALEN, vport_get_addr(vport));
 
-	NLA_PUT_U32(skb, ODP_VPORT_ATTR_MTU, vport_get_mtu(vport));
+	mtu = vport_get_mtu(vport);
+	if (mtu)
+		NLA_PUT_U32(skb, ODP_VPORT_ATTR_MTU, mtu);
 
 	err = vport_get_options(vport, skb);
 	if (err == -EMSGSIZE)

@@ -1065,6 +1065,10 @@
           and many kinds of virtual interfaces can be configured with
           higher MTUs.
         </p>
+        <p>
+          This column will be empty for an interface that does not
+          have an MTU as, for example, some kinds of tunnels do not.
+        </p>
       </column>
 
       <column name="status">

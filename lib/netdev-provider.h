@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,7 +237,10 @@ struct netdev_class {
      *
      * The MTU is the maximum size of transmitted (and received) packets, in
      * bytes, not including the hardware header; thus, this is typically 1500
-     * bytes for Ethernet devices.*/
+     * bytes for Ethernet devices.
+     *
+     * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
+     * this function should set '*mtup' to INT_MAX. */
     int (*get_mtu)(const struct netdev *netdev, int *mtup);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.

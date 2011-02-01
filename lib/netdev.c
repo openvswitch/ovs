@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -521,8 +521,9 @@ netdev_get_name(const struct netdev *netdev)
  * (and received) packets, in bytes, not including the hardware header; thus,
  * this is typically 1500 bytes for Ethernet devices.
  *
- * If successful, returns 0 and stores the MTU size in '*mtup'.  On failure,
- * returns a positive errno value and stores ETH_PAYLOAD_MAX (1500) in
+ * If successful, returns 0 and stores the MTU size in '*mtup'.  Stores INT_MAX
+ * in '*mtup' if 'netdev' does not have an MTU (as e.g. some tunnels do not).On
+ * failure, returns a positive errno value and stores ETH_PAYLOAD_MAX (1500) in
  * '*mtup'. */
 int
 netdev_get_mtu(const struct netdev *netdev, int *mtup)
