@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -536,6 +536,7 @@ read_pidfile(const char *pidfile)
     lck.l_whence = SEEK_SET;
     lck.l_start = 0;
     lck.l_len = 0;
+    lck.l_pid = 0;
     if (fcntl(fileno(file), F_GETLK, &lck)) {
         error = errno;
         VLOG_WARN("%s: fcntl: %s", pidfile, strerror(error));
