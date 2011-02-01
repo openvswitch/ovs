@@ -827,7 +827,6 @@ static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	struct nlattr *nla;
 	unsigned long used;
 	u8 tcp_flags;
-	int nla_len;
 	int err;
 
 	sf_acts = rcu_dereference_protected(flow->sf_acts,
@@ -863,23 +862,20 @@ static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (tcp_flags)
 		NLA_PUT_U8(skb, ODP_FLOW_ATTR_TCP_FLAGS, tcp_flags);
 
-	/* If ODP_FLOW_ATTR_ACTIONS doesn't fit, and this is the first flow to
-	 * be dumped into 'skb', then expand the skb.  This is unusual for
-	 * Netlink but individual action lists can be longer than a page and
-	 * thus entirely undumpable if we didn't do this. */
-	nla_len = nla_total_size(sf_acts->actions_len);
-	if (nla_len > skb_tailroom(skb) && !skb_orig_len) {
-		int hdr_off = (unsigned char *)odp_header - skb->data;
-
-		err = pskb_expand_head(skb, 0, nla_len - skb_tailroom(skb), GFP_KERNEL);
-		if (err)
-			goto error;
-
-		odp_header = (struct odp_header *)(skb->data + hdr_off);
-	}
-	nla = nla_nest_start(skb, ODP_FLOW_ATTR_ACTIONS);
-	memcpy(__skb_put(skb, sf_acts->actions_len), sf_acts->actions, sf_acts->actions_len);
-	nla_nest_end(skb, nla);
+	/* If ODP_FLOW_ATTR_ACTIONS doesn't fit, skip dumping the actions if
+	 * this is the first flow to be dumped into 'skb'.  This is unusual for
+	 * Netlink but individual action lists can be longer than
+	 * NLMSG_GOODSIZE and thus entirely undumpable if we didn't do this.
+	 * The userspace caller can always fetch the actions separately if it
+	 * really wants them.  (Most userspace callers in fact don't care.)
+	 *
+	 * This can only fail for dump operations because the skb is always
+	 * properly sized for single flows.
+	 */
+	err = nla_put(skb, ODP_FLOW_ATTR_ACTIONS, sf_acts->actions_len,
+		      sf_acts->actions);
+	if (err < 0 && skb_orig_len)
+		goto error;
 
 	return genlmsg_end(skb, odp_header);
 

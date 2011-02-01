@@ -506,21 +506,31 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_,
-                    const struct nlattr *key, size_t key_len,
-                    struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+dpif_linux_flow_get__(const struct dpif *dpif_,
+                      const struct nlattr *key, size_t key_len,
+                      struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_flow request, reply;
-    struct ofpbuf *buf;
-    int error;
+    struct dpif_linux_flow request;
 
     dpif_linux_flow_init(&request);
     request.cmd = ODP_FLOW_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
     request.key = key;
     request.key_len = key_len;
-    error = dpif_linux_flow_transact(&request, &reply, &buf);
+    return dpif_linux_flow_transact(&request, reply, bufp);
+}
+
+static int
+dpif_linux_flow_get(const struct dpif *dpif_,
+                    const struct nlattr *key, size_t key_len,
+                    struct ofpbuf **actionsp, struct dpif_flow_stats *stats)
+{
+    struct dpif_linux_flow reply;
+    struct ofpbuf *buf;
+    int error;
+
+    error = dpif_linux_flow_get__(dpif_, key, key_len, &reply, &buf);
     if (!error) {
         if (stats) {
             dpif_linux_flow_get_stats(&reply, stats);
@@ -599,6 +609,7 @@ struct dpif_linux_flow_state {
     struct nl_dump dump;
     struct dpif_linux_flow flow;
     struct dpif_flow_stats stats;
+    struct ofpbuf *buf;
 };
 
 static int
@@ -620,6 +631,8 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
     nl_dump_start(&state->dump, genl_sock, buf);
     ofpbuf_delete(buf);
 
+    state->buf = NULL;
+
     return 0;
 }
 
@@ -633,24 +646,42 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_ OVS_UNUSED, void *state_,
     struct ofpbuf buf;
     int error;
 
-    if (!nl_dump_next(&state->dump, &buf)) {
-        return EOF;
-    }
+    do {
+        ofpbuf_delete(state->buf);
+        state->buf = NULL;
 
-    error = dpif_linux_flow_from_ofpbuf(&state->flow, &buf);
-    if (!error) {
-        if (key) {
-            *key = state->flow.key;
-            *key_len = state->flow.key_len;
+        if (!nl_dump_next(&state->dump, &buf)) {
+            return EOF;
         }
-        if (actions) {
-            *actions = state->flow.actions;
-            *actions_len = state->flow.actions_len;
+
+        error = dpif_linux_flow_from_ofpbuf(&state->flow, &buf);
+        if (error) {
+            return error;
         }
-        if (stats) {
-            dpif_linux_flow_get_stats(&state->flow, &state->stats);
-            *stats = &state->stats;
+
+        if (actions && !state->flow.actions) {
+            error = dpif_linux_flow_get__(dpif_, state->flow.key,
+                                          state->flow.key_len,
+                                          &state->flow, &state->buf);
+            if (error == ENOENT) {
+                VLOG_DBG("dumped flow disappeared on get");
+            } else if (error) {
+                VLOG_WARN("error fetching dumped flow: %s", strerror(error));
+            }
         }
+    } while (error);
+
+    if (actions) {
+        *actions = state->flow.actions;
+        *actions_len = state->flow.actions_len;
+    }
+    if (key) {
+        *key = state->flow.key;
+        *key_len = state->flow.key_len;
+    }
+    if (stats) {
+        dpif_linux_flow_get_stats(&state->flow, &state->stats);
+        *stats = &state->stats;
     }
     return error;
 }
@@ -660,6 +691,7 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 {
     struct dpif_linux_flow_state *state = state_;
     int error = nl_dump_done(&state->dump);
+    ofpbuf_delete(state->buf);
     free(state);
     return error;
 }
