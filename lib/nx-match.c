@@ -18,6 +18,8 @@
 
 #include "nx-match.h"
 
+#include <netinet/icmp6.h>
+
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "ofp-util.h"
@@ -361,6 +363,30 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         return 0;
     case NFI_NXM_NX_ICMPV6_CODE:
         flow->tp_dst = htons(*(uint8_t *) value);
+        return 0;
+
+        /* IPv6 Neighbor Discovery. */
+    case NFI_NXM_NX_ND_TARGET:
+        /* We've already verified that it's an ICMPv6 message. */
+        if ((flow->tp_src != htons(ND_NEIGHBOR_SOLICIT)) 
+                    && (flow->tp_src != htons(ND_NEIGHBOR_ADVERT))) {
+            return NXM_BAD_PREREQ;
+        }
+        memcpy(&flow->nd_target, value, sizeof flow->nd_target);
+        return 0;
+    case NFI_NXM_NX_ND_SLL:
+        /* We've already verified that it's an ICMPv6 message. */
+        if (flow->tp_src != htons(ND_NEIGHBOR_SOLICIT)) {
+            return NXM_BAD_PREREQ;
+        }
+        memcpy(flow->arp_sha, value, ETH_ADDR_LEN);
+        return 0;
+    case NFI_NXM_NX_ND_TLL:
+        /* We've already verified that it's an ICMPv6 message. */
+        if (flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+            return NXM_BAD_PREREQ;
+        }
+        memcpy(flow->arp_tha, value, ETH_ADDR_LEN);
         return 0;
 
         /* ARP header. */
@@ -814,6 +840,16 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
                 }
                 if (!(wc & FWW_TP_DST)) {
                     nxm_put_8(b, NXM_NX_ICMPV6_CODE, ntohs(flow->tp_dst));
+                }
+                if (!(wc & FWW_ND_TARGET)) {
+                    nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
+                            &in6addr_exact);
+                }
+                if (!(wc & FWW_ARP_SHA)) {
+                    nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
+                }
+                if (!(wc & FWW_ARP_THA)) {
+                    nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
                 }
                 break;
             }
@@ -1303,9 +1339,11 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 #endif
 
     case NFI_NXM_NX_ARP_SHA:
+    case NFI_NXM_NX_ND_SLL:
         return eth_addr_to_uint64(flow->arp_sha);
 
     case NFI_NXM_NX_ARP_THA:
+    case NFI_NXM_NX_ND_TLL:
         return eth_addr_to_uint64(flow->arp_tha);
 
     case NFI_NXM_NX_TUN_ID_W:
@@ -1319,6 +1357,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     case NFI_NXM_NX_IPV6_SRC_W:
     case NFI_NXM_NX_IPV6_DST:
     case NFI_NXM_NX_IPV6_DST_W:
+    case NFI_NXM_NX_ND_TARGET:
     case N_NXM_FIELDS:
         NOT_REACHED();
     }
@@ -1392,6 +1431,9 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_NX_IPV6_DST_W:
     case NFI_NXM_NX_ICMPV6_TYPE:
     case NFI_NXM_NX_ICMPV6_CODE:
+    case NFI_NXM_NX_ND_TARGET:
+    case NFI_NXM_NX_ND_SLL:
+    case NFI_NXM_NX_ND_TLL:
     case N_NXM_FIELDS:
         NOT_REACHED();
     }

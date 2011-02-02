@@ -54,19 +54,20 @@ struct flow {
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */
-    uint8_t arp_sha[6];         /* ARP source hardware address. */
-    uint8_t arp_tha[6];         /* ARP target hardware address. */
+    uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
+    uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
+    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     uint32_t reserved;          /* Reserved for 64-bit packing. */
 };
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (84 + FLOW_N_REGS * 4)
+#define FLOW_SIG_SIZE (100 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 4
-BUILD_ASSERT_DECL(offsetof(struct flow, ipv6_dst) == FLOW_SIG_SIZE - 16);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->ipv6_dst) == 16);
+BUILD_ASSERT_DECL(offsetof(struct flow, nd_target) == FLOW_SIG_SIZE - 16);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nd_target) == 16);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
@@ -122,7 +123,8 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
                                                        /* multicast bit only */
 #define FWW_ARP_SHA     ((OVS_FORCE flow_wildcards_t) (1 << 9))
 #define FWW_ARP_THA     ((OVS_FORCE flow_wildcards_t) (1 << 10))
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 11)) - 1))
+#define FWW_ND_TARGET   ((OVS_FORCE flow_wildcards_t) (1 << 11))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 12)) - 1))
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *

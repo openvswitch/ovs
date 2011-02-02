@@ -32,6 +32,7 @@
 #include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/ipv6.h>
+#include <net/ndisc.h>
 
 static struct kmem_cache *flow_cache;
 static unsigned int hash_seed __read_mostly;
@@ -314,6 +315,75 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	return llc->ethertype;
 }
 
+static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
+		int nh_len)
+{
+	struct ipv6hdr *nh = ipv6_hdr(skb);
+	int icmp_len = ntohs(nh->payload_len) + sizeof(*nh) - nh_len;
+	struct icmp6hdr *icmp = icmp6_hdr(skb);
+
+	/* The ICMPv6 type and code fields use the 16-bit transport port
+	 * fields, so we need to store them in 16-bit network byte order. */
+	key->tp_src = htons(icmp->icmp6_type);
+	key->tp_dst = htons(icmp->icmp6_code);
+
+	if (!icmp->icmp6_code
+			&& ((icmp->icmp6_type == NDISC_NEIGHBOUR_SOLICITATION)
+			  || (icmp->icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT))) {
+		struct nd_msg *nd;
+		int offset;
+
+		/* In order to process neighbor discovery options, we need the
+		 * entire packet. */
+		if (icmp_len < sizeof(*nd))
+			goto invalid;
+		if (!pskb_may_pull(skb, skb_transport_offset(skb) + icmp_len))
+			return -ENOMEM;
+
+		nd = (struct nd_msg *)skb_transport_header(skb);
+		memcpy(key->nd_target, &nd->target, sizeof(key->nd_target));
+
+		icmp_len -= sizeof(*nd);
+		offset = 0;
+		while (icmp_len >= 8) {
+			struct nd_opt_hdr *nd_opt = (struct nd_opt_hdr *)(nd->opt + offset);
+			int opt_len = nd_opt->nd_opt_len * 8;
+
+			if (!opt_len || (opt_len > icmp_len))
+				goto invalid;
+
+			/* Store the link layer address if the appropriate option is
+			 * provided.  It is considered an error if the same link
+			 * layer option is specified twice. */
+			if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LL_ADDR
+					&& opt_len == 8) {
+				if (!is_zero_ether_addr(key->arp_sha))
+					goto invalid;
+				memcpy(key->arp_sha,
+						&nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
+			} else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LL_ADDR
+					&& opt_len == 8) {
+				if (!is_zero_ether_addr(key->arp_tha))
+					goto invalid;
+				memcpy(key->arp_tha,
+						&nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
+			}
+
+			icmp_len -= opt_len;
+			offset += opt_len;
+		}
+	}
+
+	return 0;
+
+invalid:
+	memset(key->nd_target, 0, sizeof(key->nd_target));
+	memset(key->arp_sha, 0, sizeof(key->arp_sha));
+	memset(key->arp_tha, 0, sizeof(key->arp_tha));
+
+	return 0;
+}
+
 /**
  * flow_extract - extracts a flow key from an Ethernet frame.
  * @skb: sk_buff that contains the frame, with skb->data pointing to the
@@ -482,12 +552,9 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 			}
 		} else if (key->nw_proto == NEXTHDR_ICMP) {
 			if (icmp6hdr_ok(skb)) {
-				struct icmp6hdr *icmp = icmp6_hdr(skb);
-				/* The ICMPv6 type and code fields use the 16-bit
-				 * transport port fields, so we need to store them
-				 * in 16-bit network byte order. */
-				key->tp_src = htons(icmp->icmp6_type);
-				key->tp_dst = htons(icmp->icmp6_code);
+				int error = parse_icmpv6(skb, key, nh_len);
+				if (error < 0)
+					return error;
 			}
 		}
 	}
@@ -517,7 +584,7 @@ int flow_cmp(const struct tbl_node *node, void *key2_)
  * elements and | for alternatives:
  *
  * [tun_id] in_port ethernet [8021q] [ethertype \
- *              [IPv4 [TCP|UDP|ICMP] | IPv6 [TCP|UDP|ICMPv6] | ARP]]
+ *              [IPv4 [TCP|UDP|ICMP] | IPv6 [TCP|UDP|ICMPv6 [ND]] | ARP]]
  */
 int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 {
@@ -543,6 +610,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 			[ODP_KEY_ATTR_ICMP] = sizeof(struct odp_key_icmp),
 			[ODP_KEY_ATTR_ICMPV6] = sizeof(struct odp_key_icmpv6),
 			[ODP_KEY_ATTR_ARP] = sizeof(struct odp_key_arp),
+			[ODP_KEY_ATTR_ND] = sizeof(struct odp_key_nd),
 		};
 
 		const struct odp_key_ethernet *eth_key;
@@ -554,6 +622,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 		const struct odp_key_icmp *icmp_key;
 		const struct odp_key_icmpv6 *icmpv6_key;
 		const struct odp_key_arp *arp_key;
+		const struct odp_key_nd *nd_key;
 
                 int type = nla_type(nla);
 
@@ -669,6 +738,17 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 			memcpy(swkey->arp_tha, arp_key->arp_tha, ETH_ALEN);
 			break;
 
+		case TRANSITION(ODP_KEY_ATTR_ICMPV6, ODP_KEY_ATTR_ND):
+			if (swkey->tp_src != htons(NDISC_NEIGHBOUR_SOLICITATION)
+					&& swkey->tp_src != htons(NDISC_NEIGHBOUR_ADVERTISEMENT))
+				return -EINVAL;
+			nd_key = nla_data(nla);
+			memcpy(swkey->nd_target, nd_key->nd_target,
+					sizeof(swkey->nd_target));
+			memcpy(swkey->arp_sha, nd_key->nd_sll, ETH_ALEN);
+			memcpy(swkey->arp_tha, nd_key->nd_tll, ETH_ALEN);
+			break;
+
 		default:
 			return -EINVAL;
 		}
@@ -710,11 +790,17 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 			return -EINVAL;
 		return 0;
 
+	case ODP_KEY_ATTR_ICMPV6:
+		if (swkey->tp_src == htons(NDISC_NEIGHBOUR_SOLICITATION) ||
+		    swkey->tp_src == htons(NDISC_NEIGHBOUR_ADVERTISEMENT))
+			return -EINVAL;
+		return 0;
+
 	case ODP_KEY_ATTR_TCP:
 	case ODP_KEY_ATTR_UDP:
 	case ODP_KEY_ATTR_ICMP:
-	case ODP_KEY_ATTR_ICMPV6:
 	case ODP_KEY_ATTR_ARP:
+	case ODP_KEY_ATTR_ND:
 		return 0;
 	}
 
@@ -831,6 +917,20 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 			icmpv6_key = nla_data(nla);
 			icmpv6_key->icmpv6_type = ntohs(swkey->tp_src);
 			icmpv6_key->icmpv6_code = ntohs(swkey->tp_dst);
+
+			if (icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_SOLICITATION
+					|| icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_ADVERTISEMENT) {
+				struct odp_key_nd *nd_key;
+
+				nla = nla_reserve(skb, ODP_KEY_ATTR_ND, sizeof(*nd_key));
+				if (!nla)
+					goto nla_put_failure;
+				nd_key = nla_data(nla);
+				memcpy(nd_key->nd_target, swkey->nd_target,
+							sizeof(nd_key->nd_target));
+				memcpy(nd_key->nd_sll, swkey->arp_sha, ETH_ALEN);
+				memcpy(nd_key->nd_tll, swkey->arp_tha, ETH_ALEN);
+			}
 		}
 	}
 

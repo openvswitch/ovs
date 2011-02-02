@@ -230,6 +230,94 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     return nh_len;
 }
 
+/* Neighbor Discovery Solicitation and Advertisement messages are
+ * identical in structure, so we'll just use one of them.  To be safe,
+ * we'll assert that they're still identical. */
+BUILD_ASSERT_DECL(sizeof(struct nd_neighbor_solicit) 
+        == sizeof(struct nd_neighbor_advert));
+
+static bool
+parse_icmpv6(struct ofpbuf *b, struct flow *flow, int icmp_len)
+{
+    const struct icmp6_hdr *icmp = pull_icmpv6(b);
+
+    if (!icmp) {
+        return false;
+    }
+
+    /* The ICMPv6 type and code fields use the 16-bit transport port
+     * fields, so we need to store them in 16-bit network byte order. */
+    flow->icmp_type = htons(icmp->icmp6_type);
+    flow->icmp_code = htons(icmp->icmp6_code);
+
+    if (!icmp->icmp6_code
+            && ((icmp->icmp6_type == ND_NEIGHBOR_SOLICIT)
+             || (icmp->icmp6_type == ND_NEIGHBOR_ADVERT))) {
+        struct nd_neighbor_solicit *nd_ns;  /* Identical to ND advert */
+
+        /* In order to process neighbor discovery options, we need the
+         * entire packet. */
+        if ((icmp_len < sizeof *nd_ns)
+                || (!ofpbuf_try_pull(b, sizeof *nd_ns - sizeof *icmp))) {
+            return false;
+        }
+        nd_ns = (struct nd_neighbor_solicit *)icmp;
+        flow->nd_target = nd_ns->nd_ns_target;
+
+        icmp_len -= sizeof(*nd_ns);
+        while (icmp_len >= 8) {
+            struct nd_opt_hdr *nd_opt;
+            int opt_len;
+            const uint8_t *data;
+
+            /* The minimum size of an option is 8 bytes, which also is
+             * the size of Ethernet link-layer options. */
+            nd_opt = ofpbuf_pull(b, 8);
+            if (!nd_opt->nd_opt_len || nd_opt->nd_opt_len * 8 > icmp_len) {
+                goto invalid;
+            }
+            opt_len = nd_opt->nd_opt_len * 8;
+            data = (const uint8_t *)(nd_opt + 1);
+
+            /* Store the link layer address if the appropriate option is
+             * provided.  It is considered an error if the same link
+             * layer option is specified twice. */
+            if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
+                    && opt_len == 8) {
+                if (eth_addr_is_zero(flow->arp_sha)) {
+                    memcpy(flow->arp_sha, data, ETH_ADDR_LEN);
+                } else {
+                    goto invalid;
+                }
+            } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
+                    && opt_len == 8) {
+                if (eth_addr_is_zero(flow->arp_tha)) {
+                    memcpy(flow->arp_tha, data, ETH_ADDR_LEN);
+                } else {
+                    goto invalid;
+                }
+            }
+
+            /* Pull the rest of this option. */
+            if (!ofpbuf_try_pull(b, opt_len - 8)) {
+                goto invalid;
+            }
+
+            icmp_len -= opt_len;
+        }
+    }
+
+    return true;
+
+invalid:
+    memset(&flow->nd_target, '\0', sizeof(flow->nd_target));
+    memset(flow->arp_sha, '\0', sizeof(flow->arp_sha));
+    memset(flow->arp_tha, '\0', sizeof(flow->arp_tha));
+
+    return false;
+
+}
+
 /* Initializes 'flow' members from 'packet', 'tun_id', and 'in_port.
  * Initializes 'packet' header pointers as follows:
  *
@@ -344,10 +432,8 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
                     packet->l7 = b.data;
                 }
             } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-                const struct icmp6_hdr *icmp = pull_icmpv6(&b);
-                if (icmp) {
-                    flow->icmp_type = htons(icmp->icmp6_type);
-                    flow->icmp_code = htons(icmp->icmp6_code);
+                int icmp_len = ntohs(nh->ip6_plen) + sizeof *nh - nh_len;
+                if (parse_icmpv6(&b, flow, icmp_len)) {
                     packet->l7 = b.data;
                 }
             }

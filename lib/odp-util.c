@@ -19,6 +19,7 @@
 #include "odp-util.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <netinet/icmp6.h>
 #include <stdlib.h>
 #include <string.h>
 #include "byte-order.h"
@@ -201,6 +202,7 @@ odp_flow_key_attr_len(uint16_t type)
     case ODP_KEY_ATTR_ICMP: return sizeof(struct odp_key_icmp);
     case ODP_KEY_ATTR_ICMPV6: return sizeof(struct odp_key_icmpv6);
     case ODP_KEY_ATTR_ARP: return sizeof(struct odp_key_arp);
+    case ODP_KEY_ATTR_ND: return sizeof(struct odp_key_nd);
 
     case ODP_KEY_ATTR_UNSPEC:
     case __ODP_KEY_ATTR_MAX:
@@ -242,6 +244,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct odp_key_icmp *icmp_key;
     const struct odp_key_icmpv6 *icmpv6_key;
     const struct odp_key_arp *arp_key;
+    const struct odp_key_nd *nd_key;
 
     if (nl_attr_get_size(a) != odp_flow_key_attr_len(nl_attr_type(a))) {
         ds_put_format(ds, "bad length %zu, expected %d for: ",
@@ -338,6 +341,25 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
                       ntohs(arp_key->arp_op), ETH_ADDR_ARGS(arp_key->arp_sha),
                       ETH_ADDR_ARGS(arp_key->arp_tha));
         break;
+
+    case ODP_KEY_ATTR_ND: {
+        char target[INET6_ADDRSTRLEN];
+
+        nd_key = nl_attr_get(a);
+        inet_ntop(AF_INET6, nd_key->nd_target, target, sizeof target);
+
+        ds_put_format(ds, "nd(target=%s", target);
+        if (!eth_addr_is_zero(nd_key->nd_sll)) {
+            ds_put_format(ds, ",sll="ETH_ADDR_FMT,
+                          ETH_ADDR_ARGS(nd_key->nd_sll));
+        }
+        if (!eth_addr_is_zero(nd_key->nd_tll)) {
+            ds_put_format(ds, ",tll="ETH_ADDR_FMT,
+                          ETH_ADDR_ARGS(nd_key->nd_tll));
+        }
+        ds_put_char(ds, ')');
+        break;
+    }
 
     default:
         format_generic_odp_key(a, ds);
@@ -466,6 +488,18 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
                                                   sizeof *icmpv6_key);
             icmpv6_key->icmpv6_type = ntohs(flow->tp_src);
             icmpv6_key->icmpv6_code = ntohs(flow->tp_dst);
+
+            if (icmpv6_key->icmpv6_type == ND_NEIGHBOR_SOLICIT
+                    || icmpv6_key->icmpv6_type == ND_NEIGHBOR_ADVERT) {
+                struct odp_key_nd *nd_key;
+
+                nd_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ND,
+                                                    sizeof *nd_key);
+                memcpy(nd_key->nd_target, &flow->nd_target,
+                        sizeof nd_key->nd_target);
+                memcpy(nd_key->nd_sll, flow->arp_sha, ETH_ADDR_LEN);
+                memcpy(nd_key->nd_tll, flow->arp_tha, ETH_ADDR_LEN);
+            }
         }
     }
 }
@@ -494,6 +528,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         const struct odp_key_icmp *icmp_key;
         const struct odp_key_icmpv6 *icmpv6_key;
         const struct odp_key_arp *arp_key;
+        const struct odp_key_nd *nd_key;
 
         uint16_t type = nl_attr_type(nla);
         int len = odp_flow_key_attr_len(type);
@@ -623,6 +658,17 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             memcpy(flow->arp_tha, arp_key->arp_tha, ETH_ADDR_LEN);
             break;
 
+        case TRANSITION(ODP_KEY_ATTR_ICMPV6, ODP_KEY_ATTR_ND):
+            if (flow->tp_src != htons(ND_NEIGHBOR_SOLICIT)
+                    && flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+                return EINVAL;
+            }
+            nd_key = nl_attr_get(nla);
+            memcpy(&flow->nd_target, nd_key->nd_target, sizeof flow->nd_target);
+            memcpy(flow->arp_sha, nd_key->nd_sll, ETH_ADDR_LEN);
+            memcpy(flow->arp_tha, nd_key->nd_tll, ETH_ADDR_LEN);
+            break;
+
         default:
             if (type == ODP_KEY_ATTR_UNSPEC
                 || prev_type == ODP_KEY_ATTR_UNSPEC) {
@@ -673,11 +719,18 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
         return 0;
 
+    case ODP_KEY_ATTR_ICMPV6:
+        if (flow->icmp_type == htons(ND_NEIGHBOR_SOLICIT)
+            || flow->icmp_type == htons(ND_NEIGHBOR_ADVERT)) {
+            return EINVAL;
+        }
+        return 0;
+
     case ODP_KEY_ATTR_TCP:
     case ODP_KEY_ATTR_UDP:
     case ODP_KEY_ATTR_ICMP:
-    case ODP_KEY_ATTR_ICMPV6:
     case ODP_KEY_ATTR_ARP:
+    case ODP_KEY_ATTR_ND:
         return 0;
 
     case __ODP_KEY_ATTR_MAX:

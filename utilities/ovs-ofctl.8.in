@@ -388,6 +388,24 @@ groups of 16-bits of zeros.  The optional \fInetmask\fR allows
 restricting a match to an IPv6 address prefix.  A netmask is specified
 as a CIDR block (e.g. \fB2001:db8:3c4d:1::/64\fR).
 .
+.IP \fBnd_target=\fIipv6\fR
+When \fBdl_type\fR, \fBnw_proto\fR, and \fBicmp_type\fR specify
+IPv6 Neighbor Discovery (ICMPv6 type 135 or 136), matches the target address
+\fIipv6\fR.  \fIipv6\fR is in the same format described earlier for the
+\fBipv6_src\fR and \fBipv6_dst\fR fields.
+.
+.IP \fBnd_sll=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+When \fBdl_type\fR, \fBnw_proto\fR, and \fBicmp_type\fR specify IPv6
+Neighbor Solicitation (ICMPv6 type 135), matches the source link\-layer
+address option.  An address is specified as 6 pairs of hexadecimal
+digits delimited by colons.
+.
+.IP \fBnd_tll=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+When \fBdl_type\fR, \fBnw_proto\fR, and \fBicmp_type\fR specify IPv6
+Neighbor Advertisement (ICMPv6 type 136), matches the target link\-layer
+address option.  An address is specified as 6 pairs of hexadecimal
+digits delimited by colons.
+.
 .IP \fBtun_id=\fItunnel-id\fR[\fB/\fImask\fR]
 Matches tunnel identifier \fItunnel-id\fR.  Only packets that arrive
 over a tunnel that carries a key (e.g. GRE with the RFC 2890 key

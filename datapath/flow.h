@@ -41,6 +41,7 @@ struct sw_flow_key {
 			__be32	ipv6_dst[4]; /* IPv6 source address. */
 		};
 	};
+	__be32	nd_target[4]; /* IPv6 ND target address. */
 	u16	in_port;    /* Input switch port. */
 	__be16	dl_tci;	    /* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
 	__be16	dl_type;    /* Ethernet frame type. */
@@ -50,8 +51,8 @@ struct sw_flow_key {
 	u8	dl_dst[ETH_ALEN]; /* Ethernet destination address. */
 	u8	nw_proto;   /* IP protocol or lower 8 bits of ARP opcode. */
 	u8	nw_tos;	    /* IP ToS (DSCP field, 6 bits). */
-	u8	arp_sha[ETH_ALEN]; /* ARP source hardware address. */
-	u8	arp_tha[ETH_ALEN]; /* ARP target hardware address. */
+	u8	arp_sha[ETH_ALEN]; /* ARP/ND source hardware address. */
+	u8	arp_tha[ETH_ALEN]; /* ARP/ND target hardware address. */
 };
 
 struct sw_flow {

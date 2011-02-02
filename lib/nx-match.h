@@ -95,15 +95,17 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
  *  NXM_OF_IP_PROTO     4       2    --      6
  *  NXM_OF_IPV6_SRC_W   4      16    16     36
  *  NXM_OF_IPV6_DST_W   4      16    16     36
- *  NXM_OF_TCP_SRC      4       2    --      6
- *  NXM_OF_TCP_DST      4       2    --      6
+ *  NXM_OF_ICMP_TYPE    4       1    --      5
+ *  NXM_OF_ICMP_CODE    4       1    --      5
+ *  NXM_NX_ND_TARGET    4      16    --     20 
+ *  NXM_NX_ND_SLL       4       6    --     10 
  *  NXM_NX_REG_W(0)     4       4     4     12
  *  NXM_NX_REG_W(1)     4       4     4     12
  *  NXM_NX_REG_W(2)     4       4     4     12
  *  NXM_NX_REG_W(3)     4       4     4     12
  *  NXM_NX_TUN_ID_W     4       8     8     20
  *  -------------------------------------------
- *  total                                  209
+ *  total                                  237
  *
  * So this value is conservative.
  */

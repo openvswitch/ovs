@@ -126,7 +126,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     wc->wildcards = ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
-    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA);
+    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET);
 
     if (ofpfw & OFPFW_NW_TOS) {
         wc->wildcards |= FWW_NW_TOS;

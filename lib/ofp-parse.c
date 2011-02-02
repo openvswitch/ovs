@@ -540,7 +540,10 @@ parse_protocol(const char *name, const struct protocol **p_out)
     FIELD(F_ARP_SHA,     "arp_sha",     FWW_ARP_SHA)        \
     FIELD(F_ARP_THA,     "arp_tha",     FWW_ARP_THA)        \
     FIELD(F_IPV6_SRC,    "ipv6_src",    0)                  \
-    FIELD(F_IPV6_DST,    "ipv6_dst",    0)
+    FIELD(F_IPV6_DST,    "ipv6_dst",    0)                  \
+    FIELD(F_ND_TARGET,   "nd_target",   FWW_ND_TARGET)      \
+    FIELD(F_ND_SLL,      "nd_sll",      FWW_ARP_SHA)        \
+    FIELD(F_ND_TLL,      "nd_tll",      FWW_ARP_THA)
 
 enum field_index {
 #define FIELD(ENUM, NAME, WILDCARD) ENUM,
@@ -675,6 +678,21 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     case F_IPV6_DST:
         str_to_ipv6(value, &ipv6, &ipv6_mask);
         cls_rule_set_ipv6_dst_masked(rule, &ipv6, &ipv6_mask);
+        break;
+
+    case F_ND_TARGET:
+        str_to_ipv6(value, &ipv6, NULL);
+        cls_rule_set_nd_target(rule, ipv6);
+        break;
+
+    case F_ND_SLL:
+        str_to_mac(value, mac);
+        cls_rule_set_arp_sha(rule, mac);
+        break;
+
+    case F_ND_TLL:
+        str_to_mac(value, mac);
+        cls_rule_set_arp_tha(rule, mac);
         break;
 
     case N_FIELDS:

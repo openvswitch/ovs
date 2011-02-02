@@ -390,6 +390,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_NX_ARP_THA
  *   - NXM_NX_ICMPV6_TYPE
  *   - NXM_NX_ICMPV6_CODE
+ *   - NXM_NX_ND_SLL
+ *   - NXM_NX_ND_TLL
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
  * The following nxm_header values are potentially acceptable as 'dst':
@@ -1077,6 +1079,44 @@ enum nx_mp_algorithm {
  * Masking: Not maskable. */
 #define NXM_NX_ICMPV6_TYPE NXM_HEADER  (0x0001, 21, 1)
 #define NXM_NX_ICMPV6_CODE NXM_HEADER  (0x0001, 22, 1)
+
+/* The target address in an IPv6 Neighbor Discovery message.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *   NXM_OF_IP_PROTO must match 58 exactly.
+ *   NXM_OF_ICMPV6_TYPE must be either 135 or 136.
+ *
+ * Format: 128-bit IPv6 address.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_ND_TARGET   NXM_HEADER  (0x0001, 23, 16)
+
+/* The source link-layer address option in an IPv6 Neighbor Discovery
+ * message.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *   NXM_OF_IP_PROTO must match 58 exactly.
+ *   NXM_OF_ICMPV6_TYPE must be exactly 135.
+ *
+ * Format: 48-bit Ethernet MAC address.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_ND_SLL      NXM_HEADER  (0x0001, 24, 6)
+
+/* The target link-layer address option in an IPv6 Neighbor Discovery
+ * message.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *   NXM_OF_IP_PROTO must match 58 exactly.
+ *   NXM_OF_ICMPV6_TYPE must be exactly 136.
+ *
+ * Format: 48-bit Ethernet MAC address.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_ND_TLL      NXM_HEADER  (0x0001, 25, 6)
 
 
 /* ## --------------------- ## */

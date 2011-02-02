@@ -369,6 +369,13 @@ cls_rule_set_ipv6_dst_masked(struct cls_rule *rule, const struct in6_addr *dst,
     }
 }
 
+void
+cls_rule_set_nd_target(struct cls_rule *rule, const struct in6_addr target)
+{
+    rule->wc.wildcards &= ~FWW_ND_TARGET;
+    rule->flow.nd_target = target;
+}
+
 /* Returns true if 'a' and 'b' have the same priority, wildcard the same
  * fields, and have the same values for fixed fields, otherwise false. */
 bool
@@ -586,7 +593,20 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         if (!(w & FWW_TP_DST)) {
             ds_put_format(s, "icmp_code=%"PRIu16",", ntohs(f->tp_dst));
         }
-    } else {
+        if (!(w & FWW_ND_TARGET)) {
+            ds_put_cstr(s, "nd_target=");
+            print_ipv6_addr(s, &f->nd_target);
+            ds_put_char(s, ',');
+        }
+        if (!(w & FWW_ARP_SHA)) {
+            ds_put_format(s, "nd_sll="ETH_ADDR_FMT",", 
+                    ETH_ADDR_ARGS(f->arp_sha));
+        }
+        if (!(w & FWW_ARP_THA)) {
+            ds_put_format(s, "nd_tll="ETH_ADDR_FMT",", 
+                    ETH_ADDR_ARGS(f->arp_tha));
+        }
+   } else {
         if (!(w & FWW_TP_SRC)) {
             ds_put_format(s, "tp_src=%"PRIu16",", ntohs(f->tp_src));
         }
@@ -1080,7 +1100,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 84 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 100 + FLOW_N_REGS * 4);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1113,7 +1133,9 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && ipv6_equal_except(&a->ipv6_src, &b->ipv6_src,
                     &wildcards->ipv6_src_mask)
             && ipv6_equal_except(&a->ipv6_dst, &b->ipv6_dst,
-                    &wildcards->ipv6_dst_mask));
+                    &wildcards->ipv6_dst_mask)
+            && (wc & FWW_ND_TARGET 
+                || ipv6_addr_equals(&a->nd_target, &b->nd_target)));
 }
 
 static void
@@ -1122,7 +1144,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 84 + 4 * FLOW_N_REGS);
+    BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 100 + 4 * FLOW_N_REGS);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -1169,4 +1191,7 @@ zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
             &wildcards->ipv6_src_mask);
     flow->ipv6_dst = ipv6_addr_bitand(&flow->ipv6_dst,
             &wildcards->ipv6_dst_mask);
+    if (wc & FWW_ND_TARGET) {
+        memset(&flow->nd_target, 0, sizeof flow->nd_target);
+    }
 }

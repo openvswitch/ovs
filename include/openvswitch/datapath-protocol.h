@@ -317,6 +317,7 @@ enum odp_key_type {
 	ODP_KEY_ATTR_ICMP,      /* struct odp_key_icmp */
 	ODP_KEY_ATTR_ICMPV6,    /* struct odp_key_icmpv6 */
 	ODP_KEY_ATTR_ARP,       /* struct odp_key_arp */
+	ODP_KEY_ATTR_ND,        /* struct odp_key_nd */
 	__ODP_KEY_ATTR_MAX
 };
 
@@ -372,6 +373,12 @@ struct odp_key_arp {
 	ovs_be16 arp_op;
 	uint8_t  arp_sha[6];
 	uint8_t  arp_tha[6];
+};
+
+struct odp_key_nd {
+	uint32_t nd_target[4];
+	uint8_t  nd_sll[6];
+	uint8_t  nd_tll[6];
 };
 
 /**
