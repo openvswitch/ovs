@@ -363,8 +363,9 @@ class VlanClient:
         if success:
             print_safe('OK')
             return 0
-
-        return 1
+        else:
+            print_safe('FAILED')
+            return 1
 
 def usage():
     print_safe("""\
