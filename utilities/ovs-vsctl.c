@@ -978,6 +978,7 @@ static void
 pre_cmd_emer_reset(struct vsctl_context *ctx)
 {
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_managers);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
@@ -1005,12 +1006,14 @@ cmd_emer_reset(struct vsctl_context *ctx)
     const struct ovsrec_interface *iface;
     const struct ovsrec_mirror *mirror, *next_mirror;
     const struct ovsrec_controller *ctrl, *next_ctrl;
+    const struct ovsrec_manager *mgr, *next_mgr;
     const struct ovsrec_netflow *nf, *next_nf;
     const struct ovsrec_ssl *ssl, *next_ssl;
     const struct ovsrec_sflow *sflow, *next_sflow;
 
     /* Reset the Open_vSwitch table. */
     ovsrec_open_vswitch_set_managers(ctx->ovs, NULL, 0);
+    ovsrec_open_vswitch_set_manager_options(ctx->ovs, NULL, 0);
     ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
 
     OVSREC_BRIDGE_FOR_EACH (br, idl) {
@@ -1058,6 +1061,10 @@ cmd_emer_reset(struct vsctl_context *ctx)
 
     OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
         ovsrec_controller_delete(ctrl);
+    }
+
+    OVSREC_MANAGER_FOR_EACH_SAFE (mgr, next_mgr, idl) {
+        ovsrec_manager_delete(mgr);
     }
 
     OVSREC_NETFLOW_FOR_EACH_SAFE (nf, next_nf, idl) {
