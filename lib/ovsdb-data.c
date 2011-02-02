@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -622,6 +622,20 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     case OVSDB_N_TYPES:
     default:
         NOT_REACHED();
+    }
+}
+
+/* Appends 'atom' (which has the given 'type') to 'out', in a bare string
+ * format that cannot be parsed uniformly back into a datum but is easier for
+ * shell scripts, etc., to deal with. */
+void
+ovsdb_atom_to_bare(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                   struct ds *out)
+{
+    if (type == OVSDB_TYPE_STRING) {
+        ds_put_cstr(out, atom->string);
+    } else {
+        ovsdb_atom_to_string(atom, type, out);
     }
 }
 
@@ -1442,6 +1456,29 @@ ovsdb_datum_to_string(const struct ovsdb_datum *datum,
     }
     if (type->n_max > 1 || !datum->n) {
         ds_put_char(out, is_map ? '}' : ']');
+    }
+}
+
+/* Appends to 'out' the 'datum' (with the given 'type') in a bare string format
+ * that cannot be parsed uniformly back into a datum but is easier for shell
+ * scripts, etc., to deal with. */
+void
+ovsdb_datum_to_bare(const struct ovsdb_datum *datum,
+                    const struct ovsdb_type *type, struct ds *out)
+{
+    bool is_map = ovsdb_type_is_map(type);
+    size_t i;
+
+    for (i = 0; i < datum->n; i++) {
+        if (i > 0) {
+            ds_put_cstr(out, " ");
+        }
+
+        ovsdb_atom_to_bare(&datum->keys[i], type->key.type, out);
+        if (is_map) {
+            ds_put_char(out, '=');
+            ovsdb_atom_to_bare(&datum->values[i], type->value.type, out);
+        }
     }
 }
 

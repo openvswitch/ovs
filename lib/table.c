@@ -36,7 +36,7 @@ cell_to_text(struct cell *cell, const struct table_style *style)
         if (cell->json) {
             if (style->cell_format == CF_JSON || !cell->type) {
                 cell->text = json_to_string(cell->json, JSSF_SORT);
-            } else if (style->cell_format == CF_STRING) {
+            } else {
                 struct ovsdb_datum datum;
                 struct ovsdb_error *error;
                 struct ds s;
@@ -45,14 +45,16 @@ cell_to_text(struct cell *cell, const struct table_style *style)
                                               NULL);
                 if (!error) {
                     ds_init(&s);
-                    ovsdb_datum_to_string(&datum, cell->type, &s);
+                    if (style->cell_format == CF_STRING) {
+                        ovsdb_datum_to_string(&datum, cell->type, &s);
+                    } else {
+                        ovsdb_datum_to_bare(&datum, cell->type, &s);
+                    }
                     ovsdb_datum_destroy(&datum, cell->type);
                     cell->text = ds_steal_cstr(&s);
                 } else {
                     cell->text = json_to_string(cell->json, JSSF_SORT);
                 }
-            } else {
-                NOT_REACHED();
             }
         } else {
             cell->text = xstrdup("");
@@ -273,6 +275,34 @@ table_print_table__(const struct table *table, const struct table_style *style)
 }
 
 static void
+table_print_list__(const struct table *table, const struct table_style *style)
+{
+    static int n = 0;
+    size_t x, y;
+
+    if (n++ > 0) {
+        putchar('\n');
+    }
+
+    if (table->caption) {
+        puts(table->caption);
+    }
+
+    for (y = 0; y < table->n_rows; y++) {
+        if (y > 0) {
+            putchar('\n');
+        }
+        for (x = 0; x < table->n_columns; x++) {
+            const char *text = cell_to_text(table_cell__(table, y, x), style);
+            if (style->headings) {
+                printf("%-20s: ", table->columns[x].heading);
+            }
+            puts(text);
+        }
+    }
+}
+
+static void
 table_escape_html_text__(const char *s, size_t n)
 {
     size_t i;
@@ -469,6 +499,8 @@ table_parse_format(struct table_style *style, const char *format)
 {
     if (!strcmp(format, "table")) {
         style->format = TF_TABLE;
+    } else if (!strcmp(format, "list")) {
+        style->format = TF_LIST;
     } else if (!strcmp(format, "html")) {
         style->format = TF_HTML;
     } else if (!strcmp(format, "csv")) {
@@ -487,6 +519,8 @@ table_parse_cell_format(struct table_style *style, const char *format)
 {
     if (!strcmp(format, "string")) {
         style->cell_format = CF_STRING;
+    } else if (!strcmp(format, "bare")) {
+        style->cell_format = CF_BARE;
     } else if (!strcmp(format, "json")) {
         style->cell_format = CF_JSON;
     } else {
@@ -501,6 +535,10 @@ table_print(const struct table *table, const struct table_style *style)
     switch (style->format) {
     case TF_TABLE:
         table_print_table__(table, style);
+        break;
+
+    case TF_LIST:
+        table_print_list__(table, style);
         break;
 
     case TF_HTML:

@@ -127,6 +127,7 @@ contents of \fItable\fR.
 Much of the output from \fBovsdb\-client\fR is in the form of tables.
 The following options controlling output formatting:
 .
+.ds TD (default)
 .so lib/table.man
 .
 .SS "Daemon Options"

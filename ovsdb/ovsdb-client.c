@@ -80,7 +80,7 @@ parse_options(int argc, char *argv[])
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-        TABLE_LONG_OPTIONS
+        TABLE_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS
 #endif
         {0, 0, 0, 0},

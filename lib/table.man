@@ -3,8 +3,10 @@
 Sets the type of table formatting.  The following types of
 \fIformat\fR are available:
 .RS
-.IP "\fBtable\fR (default)"
-Text-based tables with aligned columns.
+.IP "\fBtable\fR"
+2-D text tables with aligned columns.
+.IP "\fBlist\fR"
+A list with one column per line and rows separated by a blank line.
 .IP "\fBhtml\fR"
 HTML tables.
 .IP "\fBcvs\fR"
@@ -37,6 +39,11 @@ types of \fIformat\fR are available:
 .RS
 .IP "\fBstring\fR (default)"
 The simple format described in \fBovs\-vsctl\fR(8).
+.IP "\fBbare\fR"
+The simple format with punctuation stripped off: \fB[]\fR and \fB{}\fR
+are omitted around sets, maps, and empty columns, items within sets
+and maps are space-separated, and strings are never quoted.  This
+format may be easier for scripts to parse.
 .IP "\fBjson\fR"
 JSON.
 .RE
@@ -56,3 +63,5 @@ per line, with indentation.
 .IP
 This option does not affect JSON in tables, which is always printed
 compactly.
+.IP "\fB\-\-bare\fR"
+Equivalent to \fB\-\-format=list \-\-data=bare \-\-no\-headings\fR.

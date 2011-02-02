@@ -59,6 +59,7 @@ struct cell *table_add_cell(struct table *);
 
 enum table_format {
     TF_TABLE,                   /* 2-d table. */
+    TF_LIST,                    /* One cell per line, one row per paragraph. */
     TF_HTML,                    /* HTML table. */
     TF_CSV,                     /* Comma-separated lines. */
     TF_JSON                     /* JSON. */
@@ -66,6 +67,7 @@ enum table_format {
 
 enum cell_format {
     CF_STRING,                  /* String format. */
+    CF_BARE,                    /* String format without most punctuation. */
     CF_JSON                     /* JSON. */
 };
 
@@ -80,13 +82,15 @@ struct table_style {
 
 #define TABLE_OPTION_ENUMS                      \
     OPT_NO_HEADINGS,                            \
-    OPT_PRETTY
+    OPT_PRETTY,                                 \
+    OPT_BARE
 
 #define TABLE_LONG_OPTIONS                                  \
         {"format", required_argument, 0, 'f'},              \
         {"data", required_argument, 0, 'd'},                \
         {"no-headings", no_argument, 0, OPT_NO_HEADINGS},   \
-        {"pretty", no_argument, 0, OPT_PRETTY},
+        {"pretty", no_argument, 0, OPT_PRETTY},             \
+        {"bare", no_argument, 0, OPT_BARE}
 
 #define TABLE_OPTION_HANDLERS(STYLE)                \
         case 'f':                                   \
@@ -103,6 +107,12 @@ struct table_style {
                                                     \
         case OPT_PRETTY:                            \
             (STYLE)->json_flags |= JSSF_PRETTY;     \
+            break;                                  \
+                                                    \
+        case OPT_BARE:                              \
+            (STYLE)->format = TF_LIST;              \
+            (STYLE)->cell_format = CF_BARE;         \
+            (STYLE)->headings = false;              \
             break;
 
 void table_parse_format(struct table_style *, const char *format);

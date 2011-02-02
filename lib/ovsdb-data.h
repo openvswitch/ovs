@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,8 @@ char *ovsdb_atom_from_string(union ovsdb_atom *,
     WARN_UNUSED_RESULT;
 void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
                           struct ds *);
+void ovsdb_atom_to_bare(const union ovsdb_atom *, enum ovsdb_atomic_type,
+                        struct ds *);
 
 struct ovsdb_error *ovsdb_atom_check_constraints(
     const union ovsdb_atom *, const struct ovsdb_base_type *)
@@ -167,6 +169,8 @@ char *ovsdb_datum_from_string(struct ovsdb_datum *,
     WARN_UNUSED_RESULT;
 void ovsdb_datum_to_string(const struct ovsdb_datum *,
                            const struct ovsdb_type *, struct ds *);
+void ovsdb_datum_to_bare(const struct ovsdb_datum *,
+                         const struct ovsdb_type *, struct ds *);
 
 void ovsdb_datum_from_shash(struct ovsdb_datum *, struct shash *);
 
