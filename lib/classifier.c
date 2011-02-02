@@ -368,11 +368,11 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         if (f->dl_type == htons(ETH_TYPE_IP)) {
             if (!(w & FWW_NW_PROTO)) {
                 skip_proto = true;
-                if (f->nw_proto == IP_TYPE_ICMP) {
+                if (f->nw_proto == IPPROTO_ICMP) {
                     ds_put_cstr(s, "icmp,");
-                } else if (f->nw_proto == IP_TYPE_TCP) {
+                } else if (f->nw_proto == IPPROTO_TCP) {
                     ds_put_cstr(s, "tcp,");
-                } else if (f->nw_proto == IP_TYPE_UDP) {
+                } else if (f->nw_proto == IPPROTO_UDP) {
                     ds_put_cstr(s, "udp,");
                 } else {
                     ds_put_cstr(s, "ip,");
@@ -470,7 +470,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     if (!(w & FWW_NW_TOS)) {
         ds_put_format(s, "nw_tos=%"PRIu8",", f->nw_tos);
     }
-    if (f->nw_proto == IP_TYPE_ICMP) {
+    if (f->nw_proto == IPPROTO_ICMP) {
         if (!(w & FWW_TP_SRC)) {
             ds_put_format(s, "icmp_type=%"PRIu16",", ntohs(f->tp_src));
         }

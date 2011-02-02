@@ -460,9 +460,9 @@ parse_protocol(const char *name, const struct protocol **p_out)
     static const struct protocol protocols[] = {
         { "ip", ETH_TYPE_IP, 0 },
         { "arp", ETH_TYPE_ARP, 0 },
-        { "icmp", ETH_TYPE_IP, IP_TYPE_ICMP },
-        { "tcp", ETH_TYPE_IP, IP_TYPE_TCP },
-        { "udp", ETH_TYPE_IP, IP_TYPE_UDP },
+        { "icmp", ETH_TYPE_IP, IPPROTO_ICMP },
+        { "tcp", ETH_TYPE_IP, IPPROTO_TCP },
+        { "udp", ETH_TYPE_IP, IPPROTO_UDP },
     };
     const struct protocol *p;
 

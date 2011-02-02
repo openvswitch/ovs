@@ -386,21 +386,21 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv4_key->ipv4_proto = flow->nw_proto;
         ipv4_key->ipv4_tos = flow->nw_tos;
 
-        if (flow->nw_proto == IP_TYPE_TCP) {
+        if (flow->nw_proto == IPPROTO_TCP) {
             struct odp_key_tcp *tcp_key;
 
             tcp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_TCP,
                                                sizeof *tcp_key);
             tcp_key->tcp_src = flow->tp_src;
             tcp_key->tcp_dst = flow->tp_dst;
-        } else if (flow->nw_proto == IP_TYPE_UDP) {
+        } else if (flow->nw_proto == IPPROTO_UDP) {
             struct odp_key_udp *udp_key;
 
             udp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_UDP,
                                                sizeof *udp_key);
             udp_key->udp_src = flow->tp_src;
             udp_key->udp_dst = flow->tp_dst;
-        } else if (flow->nw_proto == IP_TYPE_ICMP) {
+        } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct odp_key_icmp *icmp_key;
 
             icmp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ICMP,
@@ -504,7 +504,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_TCP):
-            if (flow->nw_proto != IP_TYPE_TCP) {
+            if (flow->nw_proto != IPPROTO_TCP) {
                 return EINVAL;
             }
             tcp_key = nl_attr_get(nla);
@@ -513,7 +513,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_UDP):
-            if (flow->nw_proto != IP_TYPE_UDP) {
+            if (flow->nw_proto != IPPROTO_UDP) {
                 return EINVAL;
             }
             udp_key = nl_attr_get(nla);
@@ -522,7 +522,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_ICMP):
-            if (flow->nw_proto != IP_TYPE_ICMP) {
+            if (flow->nw_proto != IPPROTO_ICMP) {
                 return EINVAL;
             }
             icmp_key = nl_attr_get(nla);
@@ -577,9 +577,9 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         return 0;
 
     case ODP_KEY_ATTR_IPV4:
-        if (flow->nw_proto == IP_TYPE_TCP
-            || flow->nw_proto == IP_TYPE_UDP
-            || flow->nw_proto == IP_TYPE_ICMP) {
+        if (flow->nw_proto == IPPROTO_TCP
+            || flow->nw_proto == IPPROTO_UDP
+            || flow->nw_proto == IPPROTO_ICMP) {
             return EINVAL;
         }
         return 0;

@@ -953,7 +953,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
 
         flow_extract(&b, 0, 0, &flow);
         if (flow.dl_type != htons(ETH_TYPE_IP)
-            || flow.nw_proto != IP_TYPE_UDP
+            || flow.nw_proto != IPPROTO_UDP
             || flow.tp_dst != htons(DHCP_CLIENT_PORT)
             || !(eth_addr_is_broadcast(flow.dl_dst)
                  || eth_addr_equals(flow.dl_dst, cli_mac))) {
@@ -1025,7 +1025,7 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     nh.ip_id = 0;
     nh.ip_frag_off = htons(IP_DONT_FRAGMENT);
     nh.ip_ttl = 64;
-    nh.ip_proto = IP_TYPE_UDP;
+    nh.ip_proto = IPPROTO_UDP;
     nh.ip_csum = 0;
     nh.ip_src = dhclient_get_ip(cli);
     /* XXX need to use UDP socket for nonzero server IPs so that we can get
@@ -1046,7 +1046,7 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     th.udp_csum = 0;
     udp_csum = csum_add32(0, nh.ip_src);
     udp_csum = csum_add32(udp_csum, nh.ip_dst);
-    udp_csum = csum_add16(udp_csum, IP_TYPE_UDP << 8);
+    udp_csum = csum_add16(udp_csum, IPPROTO_UDP << 8);
     udp_csum = csum_add16(udp_csum, th.udp_len);
     udp_csum = csum_continue(udp_csum, &th, sizeof th);
     th.udp_csum = csum_finish(csum_continue(udp_csum, b.data, b.size));

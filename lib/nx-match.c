@@ -656,7 +656,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
             nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
             switch (flow->nw_proto) {
                 /* TCP. */
-            case IP_TYPE_TCP:
+            case IPPROTO_TCP:
                 if (!(wc & FWW_TP_SRC)) {
                     nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
                 }
@@ -666,7 +666,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
                 break;
 
                 /* UDP. */
-            case IP_TYPE_UDP:
+            case IPPROTO_UDP:
                 if (!(wc & FWW_TP_SRC)) {
                     nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
                 }
@@ -676,7 +676,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
                 break;
 
                 /* ICMP. */
-            case IP_TYPE_ICMP:
+            case IPPROTO_ICMP:
                 if (!(wc & FWW_TP_SRC)) {
                     nxm_put_8(b, NXM_OF_ICMP_TYPE, ntohs(flow->tp_src));
                 }

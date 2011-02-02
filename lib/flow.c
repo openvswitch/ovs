@@ -183,21 +183,21 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
             flow->nw_proto = nh->ip_proto;
             packet->l4 = b.data;
             if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
-                if (flow->nw_proto == IP_TYPE_TCP) {
+                if (flow->nw_proto == IPPROTO_TCP) {
                     const struct tcp_header *tcp = pull_tcp(&b);
                     if (tcp) {
                         flow->tp_src = tcp->tcp_src;
                         flow->tp_dst = tcp->tcp_dst;
                         packet->l7 = b.data;
                     }
-                } else if (flow->nw_proto == IP_TYPE_UDP) {
+                } else if (flow->nw_proto == IPPROTO_UDP) {
                     const struct udp_header *udp = pull_udp(&b);
                     if (udp) {
                         flow->tp_src = udp->udp_src;
                         flow->tp_dst = udp->udp_dst;
                         packet->l7 = b.data;
                     }
-                } else if (flow->nw_proto == IP_TYPE_ICMP) {
+                } else if (flow->nw_proto == IPPROTO_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
                     if (icmp) {
                         flow->icmp_type = htons(icmp->icmp_type);
@@ -240,7 +240,7 @@ flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
     memset(stats, 0, sizeof(*stats));
 
     if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
-        if ((flow->nw_proto == IP_TYPE_TCP) && packet->l7) {
+        if ((flow->nw_proto == IPPROTO_TCP) && packet->l7) {
             struct tcp_header *tcp = packet->l4;
             stats->tcp_flags = TCP_FLAGS(tcp->tcp_ctl);
         }
@@ -486,7 +486,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     if (fields.eth_type == htons(ETH_TYPE_IP)) {
         fields.ip_addr = flow->nw_src ^ flow->nw_dst;
         fields.ip_proto = flow->nw_proto;
-        if (fields.ip_proto == IP_TYPE_TCP || fields.ip_proto == IP_TYPE_UDP) {
+        if (fields.ip_proto == IPPROTO_TCP || fields.ip_proto == IPPROTO_UDP) {
             fields.tp_addr = flow->tp_src ^ flow->tp_dst;
         } else {
             fields.tp_addr = htons(0);

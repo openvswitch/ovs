@@ -148,7 +148,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
     nf_rec->init_time = htonl(nf_flow->created - nf->boot_time);
     nf_rec->used_time = htonl(MAX(nf_flow->created, expired->used)
                              - nf->boot_time);
-    if (expired->flow.nw_proto == IP_TYPE_ICMP) {
+    if (expired->flow.nw_proto == IPPROTO_ICMP) {
         /* In NetFlow, the ICMP type and code are concatenated and
          * placed in the 'dst_port' field. */
         uint8_t type = ntohs(expired->flow.tp_src);

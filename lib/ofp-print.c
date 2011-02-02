@@ -749,11 +749,11 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
         if (om->dl_type == htons(ETH_TYPE_IP)) {
             if (!(w & OFPFW_NW_PROTO)) {
                 skip_proto = true;
-                if (om->nw_proto == IP_TYPE_ICMP) {
+                if (om->nw_proto == IPPROTO_ICMP) {
                     ds_put_cstr(&f, "icmp,");
-                } else if (om->nw_proto == IP_TYPE_TCP) {
+                } else if (om->nw_proto == IPPROTO_TCP) {
                     ds_put_cstr(&f, "tcp,");
-                } else if (om->nw_proto == IP_TYPE_UDP) {
+                } else if (om->nw_proto == IPPROTO_UDP) {
                     ds_put_cstr(&f, "udp,");
                 } else {
                     ds_put_cstr(&f, "ip,");
@@ -800,7 +800,7 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
     }
     print_wild(&f, "nw_tos=", w & OFPFW_NW_TOS, verbosity,
                "%u", om->nw_tos);
-    if (om->nw_proto == IP_TYPE_ICMP) {
+    if (om->nw_proto == IPPROTO_ICMP) {
         print_wild(&f, "icmp_type=", w & OFPFW_ICMP_TYPE, verbosity,
                    "%d", ntohs(om->icmp_type));
         print_wild(&f, "icmp_code=", w & OFPFW_ICMP_CODE, verbosity,

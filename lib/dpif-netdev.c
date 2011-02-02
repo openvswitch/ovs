@@ -1216,10 +1216,10 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
         uint32_t *field;
 
         field = type == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
-        if (key->nw_proto == IP_TYPE_TCP && packet->l7) {
+        if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             th->tcp_csum = recalc_csum32(th->tcp_csum, *field, ip);
-        } else if (key->nw_proto == IP_TYPE_UDP && packet->l7) {
+        } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
             if (uh->udp_csum) {
                 uh->udp_csum = recalc_csum32(uh->udp_csum, *field, ip);

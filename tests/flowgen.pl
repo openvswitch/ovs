@@ -84,15 +84,15 @@ sub output {
             $flow{NW_PROTO} = 42;
         } elsif ($attrs{TP_PROTO} eq 'TCP' ||
                  $attrs{TP_PROTO} eq 'TCP+options') {
-            $flow{NW_PROTO} = 6; # IP_TYPE_TCP
+            $flow{NW_PROTO} = 6; # IPPROTO_TCP
             $flow{TP_SRC} = 6667;
             $flow{TP_DST} = 9998;
         } elsif ($attrs{TP_PROTO} eq 'UDP') {
-            $flow{NW_PROTO} = 17; # IP_TYPE_UDP
+            $flow{NW_PROTO} = 17; # IPPROTO_UDP
             $flow{TP_SRC} = 1112;
             $flow{TP_DST} = 2223;
         } elsif ($attrs{TP_PROTO} eq 'ICMP') {
-            $flow{NW_PROTO} = 1; # IP_TYPE_ICMP
+            $flow{NW_PROTO} = 1; # IPPROTO_ICMP
             $flow{TP_SRC} = 8;   # echo request
             $flow{TP_DST} = 0;   # code
         } else {

@@ -262,7 +262,7 @@ static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
                                       { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
                                       { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
-static uint8_t nw_proto_values[] = { IP_TYPE_TCP, IP_TYPE_ICMP };
+static uint8_t nw_proto_values[] = { IPPROTO_TCP, IPPROTO_ICMP };
 static uint8_t nw_tos_values[] = { 49, 0 };
 
 static void *values[CLS_N_FIELDS][2];

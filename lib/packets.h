@@ -286,10 +286,6 @@ ip_is_cidr(ovs_be32 netmask)
 #define IP_ECN_MASK 0x03
 #define IP_DSCP_MASK 0xfc
 
-#define IP_TYPE_ICMP 1
-#define IP_TYPE_TCP 6
-#define IP_TYPE_UDP 17
-
 #define IP_VERSION 4
 
 #define IP_DONT_FRAGMENT  0x4000 /* Don't fragment. */

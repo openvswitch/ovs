@@ -403,7 +403,7 @@ in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
     /* Regardless of how the flow table is configured, we want to be
      * able to see replies to our DHCP requests. */
     if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
+            && flow->nw_proto == IPPROTO_UDP
             && flow->tp_src == htons(DHCP_SERVER_PORT)
             && flow->tp_dst == htons(DHCP_CLIENT_PORT)
             && packet->l7) {
@@ -438,7 +438,7 @@ in_band_rule_check(struct in_band *in_band, const struct flow *flow,
     /* Don't allow flows that would prevent DHCP replies from being seen
      * by the local port. */
     if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
+            && flow->nw_proto == IPPROTO_UDP
             && flow->tp_src == htons(DHCP_SERVER_PORT)
             && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
         const struct nlattr *a;
@@ -469,7 +469,7 @@ make_rules(struct in_band *ib,
         cls_rule_set_in_port(&rule, ODPP_LOCAL);
         cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
         cls_rule_set_dl_src(&rule, ib->installed_local_mac);
-        cls_rule_set_nw_proto(&rule, IP_TYPE_UDP);
+        cls_rule_set_nw_proto(&rule, IPPROTO_UDP);
         cls_rule_set_tp_src(&rule, htons(DHCP_CLIENT_PORT));
         cls_rule_set_tp_dst(&rule, htons(DHCP_SERVER_PORT));
         cb(ib, &rule);
@@ -542,7 +542,7 @@ make_rules(struct in_band *ib,
             /* (h) Allow TCP traffic to the remote's IP and port. */
             cls_rule_init_catchall(&rule, IBR_TO_REMOTE_TCP);
             cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
-            cls_rule_set_nw_proto(&rule, IP_TYPE_TCP);
+            cls_rule_set_nw_proto(&rule, IPPROTO_TCP);
             cls_rule_set_nw_dst(&rule, a->sin_addr.s_addr);
             cls_rule_set_tp_dst(&rule, a->sin_port);
             cb(ib, &rule);
@@ -550,7 +550,7 @@ make_rules(struct in_band *ib,
             /* (i) Allow TCP traffic from the remote's IP and port. */
             cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_TCP);
             cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
-            cls_rule_set_nw_proto(&rule, IP_TYPE_TCP);
+            cls_rule_set_nw_proto(&rule, IPPROTO_TCP);
             cls_rule_set_nw_src(&rule, a->sin_addr.s_addr);
             cls_rule_set_tp_src(&rule, a->sin_port);
             cb(ib, &rule);
