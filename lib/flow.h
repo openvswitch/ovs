@@ -150,5 +150,6 @@ bool flow_wildcards_has_extra(const struct flow_wildcards *,
 uint32_t flow_wildcards_hash(const struct flow_wildcards *);
 bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
+uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 
 #endif /* flow.h */

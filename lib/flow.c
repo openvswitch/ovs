@@ -461,3 +461,40 @@ flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
 {
     wc->reg_masks[idx] = mask;
 }
+
+/* Hashes 'flow' based on its L2 through L4 protocol information. */
+uint32_t
+flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
+{
+    struct {
+        ovs_be32 ip_addr;
+        ovs_be16 eth_type;
+        ovs_be16 vlan_tci;
+        ovs_be16 tp_addr;
+        uint8_t eth_addr[ETH_ADDR_LEN];
+        uint8_t ip_proto;
+    } fields;
+
+    int i;
+
+    memset(&fields, 0, sizeof fields);
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        fields.eth_addr[i] = flow->dl_src[i] ^ flow->dl_dst[i];
+    }
+    fields.vlan_tci = flow->vlan_tci & htons(VLAN_VID_MASK);
+    fields.eth_type = flow->dl_type;
+    if (fields.eth_type == htons(ETH_TYPE_IP)) {
+        fields.ip_addr = flow->nw_src ^ flow->nw_dst;
+        fields.ip_proto = flow->nw_proto;
+        if (fields.ip_proto == IP_TYPE_TCP || fields.ip_proto == IP_TYPE_UDP) {
+            fields.tp_addr = flow->tp_src ^ flow->tp_dst;
+        } else {
+            fields.tp_addr = htons(0);
+        }
+    } else {
+        fields.ip_addr = htonl(0);
+        fields.ip_proto = 0;
+        fields.tp_addr = htons(0);
+    }
+    return hash_bytes(&fields, sizeof fields, basis);
+}
