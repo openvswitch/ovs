@@ -35,7 +35,7 @@
 
 # OVSDB_SERVER_REMOTES: Space-separated list of methods on which to have
 #     ovsdb-server listen or connect for a JSON-RPC connection.
-# OVSDB_SERVER_REMOTES="punix:/var/run/openvswitch/db.sock db:Open_vSwitch,managers"
+# OVSDB_SERVER_REMOTES="punix:/var/run/openvswitch/db.sock db:Open_vSwitch,managers db:Open_vSwitch,manager_options"
 
 # OVSDB_SERVER_DB: File for which ovsdb-server uses for storage.
 # OVSDB_SERVER_DB=/etc/openvswitch/conf.db

@@ -94,7 +94,7 @@ fi
 : ${FORCE_COREFILES:=y}
 
 # Config variables specific to ovsdb-server
-: ${OVSDB_SERVER_REMOTES:=punix:/var/run/openvswitch/db.sock db:Open_vSwitch,managers}
+: ${OVSDB_SERVER_REMOTES:=punix:/var/run/openvswitch/db.sock db:Open_vSwitch,managers db:Open_vSwitch,manager_options}
 : ${OVSDB_SERVER_DB:=/etc/openvswitch/conf.db}
 : ${OVSDB_SERVER_PIDFILE:=/var/run/openvswitch/ovsdb-server.pid}
 : ${OVSDB_SERVER_RUN_DIR:=/var/xen/openvswitch}
