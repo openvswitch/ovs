@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,6 +104,8 @@ static struct wx_port *wx_port_get(const struct wx *, uint16_t xflow_port);
 static void wx_port_process_change(struct wx *wx, int error, char *devname,
                                    wdp_port_poll_cb_func *cb, void *aux);
 static void wx_port_refresh_groups(struct wx *);
+
+static bool wx_make_wdp_port(const struct xflow_port *, struct wdp_port *);
 
 static void wx_purge_ctl_packets__(struct wx *);
 
@@ -1619,20 +1621,40 @@ wx_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
 }
 
 static int
-wx_port_list(const struct wdp *wdp, struct wdp_port **portsp, size_t *n_portsp)
+wx_port_list(const struct wdp *wdp,
+             struct wdp_port **wdp_portsp, size_t *n_wdp_portsp)
 {
     struct wx *wx = wx_cast(wdp);
-    struct wdp_port *ports;
-    struct wx_port *port;
-    size_t n_ports, i;
+    struct xflow_port *xflow_ports;
+    size_t n_xflow_ports;
+    struct wdp_port *wdp_ports;
+    size_t n_wdp_ports;
+    int error;
+    size_t i;
 
-    *n_portsp = n_ports = hmap_count(&wx->ports);
-    *portsp = ports = xmalloc(n_ports * sizeof *ports);
-    i = 0;
-    HMAP_FOR_EACH (port, hmap_node, &wx->ports) {
-        wdp_port_copy(&ports[i++], &port->wdp_port);
+    /* Instead of using the cached set of ports kept in wdp->ports, this
+     * queries the underlying xfif.  This isn't really desirable, but otherwise
+     * a wx_port_add() or wx_port_del() isn't reflected in the list of ports
+     * until the next time that ofproto_run() calls wx_port_poll() below.  That
+     * confuses bridge.c's reconfiguration code, which expects to have the
+     * port list updated immediately. */
+
+    error = xfif_port_list(wx->xfif, &xflow_ports, &n_xflow_ports);
+    if (error) {
+        return error;
     }
-    assert(i == n_ports);
+
+    n_wdp_ports = 0;
+    wdp_ports = xmalloc(n_xflow_ports * sizeof *wdp_ports);
+    for (i = 0; i < n_xflow_ports; i++) {
+        if (wx_make_wdp_port(&xflow_ports[i], &wdp_ports[n_wdp_ports])) {
+            n_wdp_ports++;
+        }
+    }
+    free(xflow_ports);
+
+    *wdp_portsp = wdp_ports;
+    *n_wdp_portsp = n_wdp_ports;
 
     return 0;
 }
@@ -2353,13 +2375,12 @@ wx_port_reinit(struct wx *wx, wdp_port_poll_cb_func *cb, void *aux)
     wx_port_refresh_groups(wx);
 }
 
-static struct wx_port *
-make_wx_port(const struct xflow_port *xflow_port)
+static bool
+wx_make_wdp_port(const struct xflow_port *xflow_port,
+                 struct wdp_port *wdp_port)
 {
     struct netdev_options netdev_options;
     enum netdev_flags flags;
-    struct wx_port *wx_port;
-    struct wdp_port *wdp_port;
     struct netdev *netdev;
     bool carrier;
     int error;
@@ -2374,12 +2395,9 @@ make_wx_port(const struct xflow_port *xflow_port)
                      "cannot be opened (%s)",
                      xflow_port->devname, xflow_port->port,
                      xflow_port->devname, strerror(error));
-        return NULL;
+        return false;
     }
 
-    wx_port = xmalloc(sizeof *wx_port);
-    wx_port->xflow_port = xflow_port->port;
-    wdp_port = &wx_port->wdp_port;
     wdp_port->netdev = netdev;
     wdp_port->opp.port_no = xflow_port_to_ofp_port(xflow_port->port);
     netdev_get_etheraddr(netdev, wdp_port->opp.hw_addr);
@@ -2399,6 +2417,22 @@ make_wx_port(const struct xflow_port *xflow_port)
 
     wdp_port->devname = xstrdup(xflow_port->devname);
     wdp_port->internal = (xflow_port->flags & XFLOW_PORT_INTERNAL) != 0;
+    return true;
+}
+
+static struct wx_port *
+make_wx_port(const struct xflow_port *xflow_port)
+{
+    struct wdp_port wdp_port;
+    struct wx_port *wx_port;
+
+    if (!wx_make_wdp_port(xflow_port, &wdp_port)) {
+        return NULL;
+    }
+
+    wx_port = xmalloc(sizeof *wx_port);
+    wx_port->wdp_port = wdp_port;
+    wx_port->xflow_port = xflow_port->port;
     return wx_port;
 }
 
