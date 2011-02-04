@@ -91,8 +91,6 @@ COVERAGE_DEFINE(ofproto_unexpected_rule);
 COVERAGE_DEFINE(ofproto_uninstallable);
 COVERAGE_DEFINE(ofproto_update_port);
 
-#include "sflow_api.h"
-
 /* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 16
