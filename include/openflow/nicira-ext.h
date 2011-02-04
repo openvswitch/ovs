@@ -126,16 +126,9 @@ OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
 /* Values for the 'subtype' member of struct nicira_header. */
 enum nicira_type {
-    /* Switch status request.  The request body is an ASCII string that
-     * specifies a prefix of the key names to include in the output; if it is
-     * the null string, then all key-value pairs are included. */
-    NXT_STATUS_REQUEST,
-
-    /* Switch status reply.  The reply body is an ASCII string of key-value
-     * pairs in the form "key=value\n". */
-    NXT_STATUS_REPLY,
-
     /* No longer used. */
+    NXT_STATUS_REQUEST__OBSOLETE,
+    NXT_STATUS_REPLY__OBSOLETE,
     NXT_ACT_SET_CONFIG__OBSOLETE,
     NXT_ACT_GET_CONFIG__OBSOLETE,
     NXT_COMMAND_REQUEST__OBSOLETE,

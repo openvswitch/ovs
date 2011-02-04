@@ -35,7 +35,6 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "status.h"
 #include "timeval.h"
 #include "vlog.h"
 
@@ -235,7 +234,6 @@ struct in_band_remote {
 
 struct in_band {
     struct ofproto *ofproto;
-    struct status_category *ss_cat;
     int queue_id, prev_queue_id;
 
     /* Remote information. */
@@ -371,23 +369,6 @@ refresh_local(struct in_band *ib)
 
     memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
     return true;
-}
-
-static void
-in_band_status_cb(struct status_reply *sr, void *in_band_)
-{
-    struct in_band *in_band = in_band_;
-
-    if (!eth_addr_is_zero(in_band->local_mac)) {
-        status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(in_band->local_mac));
-    }
-
-    if (in_band->n_remotes
-        && !eth_addr_is_zero(in_band->remotes[0].remote_mac)) {
-        status_reply_put(sr, "remote-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(in_band->remotes[0].remote_mac));
-    }
 }
 
 /* Returns true if 'packet' should be sent to the local port regardless
@@ -704,7 +685,7 @@ in_band_flushed(struct in_band *in_band)
 
 int
 in_band_create(struct ofproto *ofproto, struct dpif *dpif,
-               struct switch_status *ss, struct in_band **in_bandp)
+               struct in_band **in_bandp)
 {
     struct in_band *in_band;
     char local_name[IF_NAMESIZE];
@@ -729,8 +710,6 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
 
     in_band = xzalloc(sizeof *in_band);
     in_band->ofproto = ofproto;
-    in_band->ss_cat = switch_status_register(ss, "in-band",
-                                             in_band_status_cb, in_band);
     in_band->queue_id = in_band->prev_queue_id = -1;
     in_band->next_remote_refresh = TIME_MIN;
     in_band->next_local_refresh = TIME_MIN;
@@ -747,7 +726,6 @@ in_band_destroy(struct in_band *ib)
     if (ib) {
         drop_rules(ib);
         in_band_set_remotes(ib, NULL, 0);
-        switch_status_unregister(ib->ss_cat);
         netdev_close(ib->local_netdev);
         free(ib);
     }

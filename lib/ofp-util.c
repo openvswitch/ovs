@@ -399,14 +399,6 @@ ofputil_decode_vendor(const struct ofp_header *oh,
                       const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxt_messages[] = {
-        { OFPUTIL_NXT_STATUS_REQUEST,
-          NXT_STATUS_REQUEST, "NXT_STATUS_REQUEST",
-          sizeof(struct nicira_header), 1 },
-
-        { OFPUTIL_NXT_STATUS_REPLY,
-          NXT_STATUS_REPLY, "NXT_STATUS_REPLY",
-          sizeof(struct nicira_header), 1 },
-
         { OFPUTIL_NXT_TUN_ID_FROM_COOKIE,
           NXT_TUN_ID_FROM_COOKIE, "NXT_TUN_ID_FROM_COOKIE",
           sizeof(struct nxt_tun_id_cookie), 0 },

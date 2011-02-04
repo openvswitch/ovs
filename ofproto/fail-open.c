@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #include "pktbuf.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "status.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"
@@ -73,7 +72,6 @@ struct fail_open {
     struct rconn **controllers;
     size_t n_controllers;
     int last_disconn_secs;
-    struct status_category *ss_cat;
     long long int next_bogus_packet_in;
     struct rconn_packet_counter *bogus_packet_counter;
 };
@@ -298,35 +296,19 @@ fail_open_flushed(struct fail_open *fo)
     }
 }
 
-static void
-fail_open_status_cb(struct status_reply *sr, void *fo_)
-{
-    struct fail_open *fo = fo_;
-    int cur_duration = failure_duration(fo);
-    int trigger = trigger_duration(fo);
-
-    status_reply_put(sr, "trigger-duration=%d", trigger);
-    status_reply_put(sr, "current-duration=%d", cur_duration);
-    status_reply_put(sr, "triggered=%s",
-                     cur_duration >= trigger ? "true" : "false");
-}
-
-/* Creates and returns a new struct fail_open for 'ofproto', registering switch
- * status with 'switch_status'.
+/* Creates and returns a new struct fail_open for 'ofproto'.
  *
  * The caller should register its set of controllers with
  * fail_open_set_controllers().  (There should be at least one controller,
  * otherwise there isn't any point in having the struct fail_open around.) */
 struct fail_open *
-fail_open_create(struct ofproto *ofproto, struct switch_status *switch_status)
+fail_open_create(struct ofproto *ofproto)
 {
     struct fail_open *fo = xmalloc(sizeof *fo);
     fo->ofproto = ofproto;
     fo->controllers = NULL;
     fo->n_controllers = 0;
     fo->last_disconn_secs = 0;
-    fo->ss_cat = switch_status_register(switch_status, "fail-open",
-                                        fail_open_status_cb, fo);
     fo->next_bogus_packet_in = LLONG_MAX;
     fo->bogus_packet_counter = rconn_packet_counter_create();
     return fo;
@@ -355,7 +337,6 @@ fail_open_destroy(struct fail_open *fo)
         fail_open_recover(fo);
         free(fo->controllers);
         /* We don't own the rconns behind fo->controllers. */
-        switch_status_unregister(fo->ss_cat);
         rconn_packet_counter_destroy(fo->bogus_packet_counter);
         free(fo);
     }

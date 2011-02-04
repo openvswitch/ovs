@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,8 +238,6 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_OFPST_PORT_REPLY:
     case OFPUTIL_OFPST_TABLE_REPLY:
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
-    case OFPUTIL_NXT_STATUS_REQUEST:
-    case OFPUTIL_NXT_STATUS_REPLY:
     case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
     case OFPUTIL_NXT_ROLE_REQUEST:
     case OFPUTIL_NXT_ROLE_REPLY:

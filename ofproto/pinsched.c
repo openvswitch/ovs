@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "rconn.h"
-#include "status.h"
 #include "timeval.h"
 #include "vconn.h"
 
@@ -64,9 +63,6 @@ struct pinsched {
     unsigned long long n_normal;        /* # txed w/o rate limit queuing. */
     unsigned long long n_limited;       /* # queued for rate limiting. */
     unsigned long long n_queue_dropped; /* # dropped due to queue overflow. */
-
-    /* Switch status. */
-    struct status_category *ss_cat;
 };
 
 static void
@@ -230,16 +226,6 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
     }
 }
 
-static void
-pinsched_status_cb(struct status_reply *sr, void *ps_)
-{
-    struct pinsched *ps = ps_;
-
-    status_reply_put(sr, "normal=%llu", ps->n_normal);
-    status_reply_put(sr, "limited=%llu", ps->n_limited);
-    status_reply_put(sr, "queue-dropped=%llu", ps->n_queue_dropped);
-}
-
 void
 pinsched_run(struct pinsched *ps, pinsched_tx_cb *cb, void *aux)
 {
@@ -272,7 +258,7 @@ pinsched_wait(struct pinsched *ps)
 
 /* Creates and returns a scheduler for sending packet-in messages. */
 struct pinsched *
-pinsched_create(int rate_limit, int burst_limit, struct switch_status *ss)
+pinsched_create(int rate_limit, int burst_limit)
 {
     struct pinsched *ps;
 
@@ -287,11 +273,6 @@ pinsched_create(int rate_limit, int burst_limit, struct switch_status *ss)
     ps->n_limited = 0;
     ps->n_queue_dropped = 0;
     pinsched_set_limits(ps, rate_limit, burst_limit);
-
-    if (ss) {
-        ps->ss_cat = switch_status_register(ss, "rate-limit",
-                                            pinsched_status_cb, ps);
-    }
 
     return ps;
 }
@@ -308,7 +289,6 @@ pinsched_destroy(struct pinsched *ps)
             free(q);
         }
         hmap_destroy(&ps->queues);
-        switch_status_unregister(ps->ss_cat);
         free(ps);
     }
 }

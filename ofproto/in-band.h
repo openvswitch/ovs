@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@ struct in_band;
 struct ofproto;
 struct rconn;
 struct settings;
-struct switch_status;
 
-int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
-                   struct in_band **);
+int in_band_create(struct ofproto *, struct dpif *, struct in_band **);
 void in_band_destroy(struct in_band *);
 
 void in_band_set_queue(struct in_band *, int queue_id);

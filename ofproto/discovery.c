@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include "netdev.h"
 #include "openflow/openflow.h"
 #include "packets.h"
-#include "status.h"
 #include "stream-ssl.h"
 #include "vlog.h"
 
@@ -42,7 +41,6 @@ struct discovery {
     regex_t *regex;
     struct dhclient *dhcp;
     int n_changes;
-    struct status_category *ss_cat;
 };
 
 static void modify_dhcp_request(struct dhcp_msg *, void *aux);
@@ -50,55 +48,9 @@ static bool validate_dhcp_offer(const struct dhcp_msg *, void *aux);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
-static void
-discovery_status_cb(struct status_reply *sr, void *d_)
-{
-    struct discovery *d = d_;
-
-    status_reply_put(sr, "accept-remote=%s", d->re);
-    status_reply_put(sr, "n-changes=%d", d->n_changes);
-    if (d->dhcp) {
-        status_reply_put(sr, "state=%s", dhclient_get_state(d->dhcp));
-        status_reply_put(sr, "state-elapsed=%u",
-                         dhclient_get_state_elapsed(d->dhcp));
-        if (dhclient_is_bound(d->dhcp)) {
-            uint32_t ip = dhclient_get_ip(d->dhcp);
-            uint32_t netmask = dhclient_get_netmask(d->dhcp);
-            uint32_t router = dhclient_get_router(d->dhcp);
-
-            const struct dhcp_msg *cfg = dhclient_get_config(d->dhcp);
-            uint32_t dns_server;
-            char *domain_name;
-            int i;
-
-            status_reply_put(sr, "ip="IP_FMT, IP_ARGS(&ip));
-            status_reply_put(sr, "netmask="IP_FMT, IP_ARGS(&netmask));
-            if (router) {
-                status_reply_put(sr, "router="IP_FMT, IP_ARGS(&router));
-            }
-
-            for (i = 0; dhcp_msg_get_ip(cfg, DHCP_CODE_DNS_SERVER, i,
-                                        &dns_server);
-                 i++) {
-                status_reply_put(sr, "dns%d="IP_FMT, i, IP_ARGS(&dns_server));
-            }
-
-            domain_name = dhcp_msg_get_string(cfg, DHCP_CODE_DOMAIN_NAME);
-            if (domain_name) {
-                status_reply_put(sr, "domain=%s", domain_name);
-                free(domain_name);
-            }
-
-            status_reply_put(sr, "lease-remaining=%u",
-                             dhclient_get_lease_remaining(d->dhcp));
-        }
-    }
-}
-
 int
 discovery_create(const char *re, bool update_resolv_conf,
-                 struct dpif *dpif, struct switch_status *ss,
-                 struct discovery **discoveryp)
+                 struct dpif *dpif, struct discovery **discoveryp)
 {
     struct discovery *d;
     char local_name[IF_NAMESIZE];
@@ -133,9 +85,6 @@ discovery_create(const char *re, bool update_resolv_conf,
     dhclient_set_max_timeout(d->dhcp, 3);
     dhclient_init(d->dhcp, 0);
 
-    d->ss_cat = switch_status_register(ss, "discovery",
-                                       discovery_status_cb, d);
-
     *discoveryp = d;
     return 0;
 
@@ -157,7 +106,6 @@ discovery_destroy(struct discovery *d)
         regfree(d->regex);
         free(d->regex);
         dhclient_destroy(d->dhcp);
-        switch_status_unregister(d->ss_cat);
         free(d->dpif_name);
         free(d);
     }

@@ -54,7 +54,6 @@
 #include "poll-loop.h"
 #include "rconn.h"
 #include "shash.h"
-#include "status.h"
 #include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
@@ -334,7 +333,6 @@ struct ofconn {
     enum nx_role role;           /* Role. */
     struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
     struct discovery *discovery; /* Controller discovery object, if enabled. */
-    struct status_category *ss;  /* Switch status category. */
     enum ofproto_band band;      /* In-band or out-of-band? */
 };
 
@@ -373,7 +371,6 @@ struct ofproto {
     uint32_t max_ports;
 
     /* Configuration. */
-    struct switch_status *switch_status;
     struct fail_open *fail_open;
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
@@ -488,7 +485,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->max_ports = dpif_get_max_ports(dpif);
 
     /* Initialize submodules. */
-    p->switch_status = switch_status_create(p);
     p->fail_open = NULL;
     p->netflow = NULL;
     p->sflow = NULL;
@@ -571,8 +567,7 @@ add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
 
     if (is_discovery_controller(c)) {
         int error = discovery_create(c->accept_re, c->update_resolv_conf,
-                                     ofproto->dpif, ofproto->switch_status,
-                                     &discovery);
+                                     ofproto->dpif, &discovery);
         if (error) {
             return;
         }
@@ -683,8 +678,7 @@ update_in_band_remotes(struct ofproto *ofproto)
      * even before we know any remote addresses. */
     if (n_addrs || discovery) {
         if (!ofproto->in_band) {
-            in_band_create(ofproto, ofproto->dpif, ofproto->switch_status,
-                           &ofproto->in_band);
+            in_band_create(ofproto, ofproto->dpif, &ofproto->in_band);
         }
         if (ofproto->in_band) {
             in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
@@ -711,7 +705,7 @@ update_fail_open(struct ofproto *p)
         size_t n;
 
         if (!p->fail_open) {
-            p->fail_open = fail_open_create(p, p->switch_status);
+            p->fail_open = fail_open_create(p);
         }
 
         n = 0;
@@ -736,7 +730,6 @@ ofproto_set_controllers(struct ofproto *p,
     struct shash new_controllers;
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice, *next_ofservice;
-    bool ss_exists;
     size_t i;
 
     /* Create newly configured controllers and services.
@@ -764,7 +757,6 @@ ofproto_set_controllers(struct ofproto *p,
 
     /* Delete controllers that are no longer configured.
      * Update configuration of all now-existing controllers. */
-    ss_exists = false;
     HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, hmap_node, &p->controllers) {
         struct ofproto_controller *c;
 
@@ -773,9 +765,6 @@ ofproto_set_controllers(struct ofproto *p,
             ofconn_destroy(ofconn);
         } else {
             update_controller(ofconn, c);
-            if (ofconn->ss) {
-                ss_exists = true;
-            }
         }
     }
 
@@ -797,13 +786,6 @@ ofproto_set_controllers(struct ofproto *p,
 
     update_in_band_remotes(p);
     update_fail_open(p);
-
-    if (!hmap_is_empty(&p->controllers) && !ss_exists) {
-        ofconn = CONTAINER_OF(hmap_first(&p->controllers),
-                              struct ofconn, hmap_node);
-        ofconn->ss = switch_status_register(p->switch_status, "remote",
-                                            rconn_status_cb, ofconn->rconn);
-    }
 }
 
 void
@@ -1078,7 +1060,6 @@ ofproto_destroy(struct ofproto *p)
     }
     shash_destroy(&p->port_by_name);
 
-    switch_status_destroy(p->switch_status);
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
 
@@ -1843,7 +1824,6 @@ ofconn_destroy(struct ofconn *ofconn)
     discovery_destroy(ofconn->discovery);
 
     list_remove(&ofconn->node);
-    switch_status_unregister(ofconn->ss);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
@@ -1958,8 +1938,7 @@ ofconn_set_rate_limit(struct ofconn *ofconn, int rate, int burst)
 
         if (rate > 0) {
             if (!*s) {
-                *s = pinsched_create(rate, burst,
-                                     ofconn->ofproto->switch_status);
+                *s = pinsched_create(rate, burst);
             } else {
                 pinsched_set_limits(*s, rate, burst);
             }
@@ -4359,10 +4338,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return 0;
 
         /* Nicira extension requests. */
-    case OFPUTIL_NXT_STATUS_REQUEST:
-        return switch_status_handle_request(
-            ofconn->ofproto->switch_status, ofconn->rconn, oh);
-
     case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
         return handle_tun_id_from_cookie(ofconn, oh);
 
@@ -4418,7 +4393,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_OFPST_PORT_REPLY:
     case OFPUTIL_OFPST_TABLE_REPLY:
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
-    case OFPUTIL_NXT_STATUS_REPLY:
     case OFPUTIL_NXT_ROLE_REPLY:
     case OFPUTIL_NXT_FLOW_REMOVED:
     case OFPUTIL_NXST_FLOW_REPLY:

@@ -54,13 +54,6 @@ Prints to the console information on \fIswitch\fR, including
 information on its flow tables and ports.
 .
 .TP
-\fBstatus \fIswitch\fR [\fIkey\fR]
-Prints to the console a series of key-value pairs that report the
-status of \fIswitch\fR.  If \fIkey\fR is specified, only the key-value
-pairs whose key names begin with \fIkey\fR are printed.  If \fIkey\fR is
-omitted, all key-value pairs are printed.
-.
-.TP
 \fBdump\-tables \fIswitch\fR
 Prints to the console statistics for each of the flow tables used by
 \fIswitch\fR.

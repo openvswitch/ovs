@@ -158,7 +158,6 @@ usage(void)
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
            "\nFor OpenFlow switches:\n"
            "  show SWITCH                 show OpenFlow information\n"
-           "  status SWITCH [KEY]         report statistics (about KEY)\n"
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
@@ -398,36 +397,6 @@ do_show(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
-}
-
-static void
-do_status(int argc, char *argv[])
-{
-    struct nicira_header *request, *reply;
-    struct vconn *vconn;
-    struct ofpbuf *b;
-
-    request = make_nxmsg(sizeof *request, NXT_STATUS_REQUEST, &b);
-    if (argc > 2) {
-        ofpbuf_put(b, argv[2], strlen(argv[2]));
-        update_openflow_length(b);
-    }
-    open_vconn(argv[1], &vconn);
-    run(vconn_transact(vconn, b, &b), "talking to %s", argv[1]);
-    vconn_close(vconn);
-
-    if (b->size < sizeof *reply) {
-        ovs_fatal(0, "short reply (%zu bytes)", b->size);
-    }
-    reply = b->data;
-    if (reply->header.type != OFPT_VENDOR
-        || reply->vendor != ntohl(NX_VENDOR_ID)
-        || reply->subtype != ntohl(NXT_STATUS_REPLY)) {
-        ofp_print(stderr, b->data, b->size, verbosity + 2);
-        ovs_fatal(0, "bad reply");
-    }
-
-    fwrite(reply + 1, b->size - sizeof *reply, 1, stdout);
 }
 
 static void
@@ -1063,7 +1032,6 @@ do_ofp_print(int argc, char *argv[])
 
 static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
-    { "status", 1, 2, do_status },
     { "monitor", 1, 2, do_monitor },
     { "snoop", 1, 1, do_snoop },
     { "dump-desc", 1, 1, do_dump_desc },

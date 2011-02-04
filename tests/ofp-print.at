@@ -601,29 +601,6 @@ OFPT_BARRIER_REPLY (xid=0x1):
 ])
 AT_CLEANUP
 
-AT_SETUP([NXT_STATUS_REQUEST])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
-01 04 00 16 00 00 00 01 00 00 23 20 00 00 00 00 \
-73 77 69 74 63 68 \
-"], [0], [dnl
-NXT_STATUS_REQUEST (xid=0x1): "switch"
-])
-AT_CLEANUP
-
-AT_SETUP([NXT_STATUS_REPLY])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
-01 04 00 43 00 00 00 01 00 00 23 20 00 00 00 01 \
-73 77 69 74 63 68 2e 6e 6f 77 3d 31 30 36 31 36 \
-0a 73 77 69 74 63 68 2e 75 70 74 69 6d 65 3d 31 \
-31 33 36 0a 73 77 69 74 63 68 2e 70 69 64 3d 38 \
-31 31 0a \
-"], [0], [dnl
-NXT_STATUS_REPLY (xid=0x1): "switch.now=10616\012switch.uptime=1136\012switch.pid=811\012"
-])
-AT_CLEANUP
-
 AT_SETUP([NXT_TUN_ID_FROM_COOKIE])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

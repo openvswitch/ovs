@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 struct fail_open;
 struct ofproto;
 struct rconn;
-struct switch_status;
 
 /* Priority of the rule added by the fail-open subsystem when a switch enters
  * fail-open mode.  This priority value uniquely identifies a fail-open flow
@@ -32,7 +31,7 @@ struct switch_status;
  * creates flows with this priority).  And "f0" is mnemonic for "fail open"! */
 #define FAIL_OPEN_PRIORITY 0xf0f0f0
 
-struct fail_open *fail_open_create(struct ofproto *, struct switch_status *);
+struct fail_open *fail_open_create(struct ofproto *);
 void fail_open_set_controllers(struct fail_open *, struct rconn **, size_t n);
 void fail_open_destroy(struct fail_open *);
 void fail_open_wait(struct fail_open *);
