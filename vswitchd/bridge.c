@@ -78,12 +78,6 @@ COVERAGE_DEFINE(bridge_process_flow);
 COVERAGE_DEFINE(bridge_reconfigure);
 COVERAGE_DEFINE(bridge_lacp_update);
 
-enum lacp_status {
-    LACP_STATUS_CURRENT,  /* Partner is up to date. */
-    LACP_STATUS_EXPIRED,  /* Partner is out of date. Attempt to re-sync. */
-    LACP_STATUS_DEFAULTED /* Partner information is unknown. */
-};
-
 struct dst {
     uint16_t vlan;
     uint16_t dp_ifidx;
@@ -98,6 +92,13 @@ struct dst_set {
 static void dst_set_init(struct dst_set *);
 static void dst_set_add(struct dst_set *, const struct dst *);
 static void dst_set_free(struct dst_set *);
+
+enum lacp_status {
+    LACP_CURRENT   = 0x01, /* Current State. */
+    LACP_EXPIRED   = 0x02, /* Expired State. */
+    LACP_DEFAULTED = 0x04, /* Partner is defaulted. */
+    LACP_ATTACHED  = 0x08, /* Attached. Interface may be choosen for flows. */
+};
 
 struct iface {
     /* These members are always valid. */
@@ -119,14 +120,12 @@ struct iface {
     const struct ovsrec_interface *cfg;
 
     /* LACP information. */
-    enum lacp_status lacp_status;  /* LACP state machine status. */
+    enum lacp_status lacp_status;  /* LACP status. */
     uint16_t lacp_priority;        /* LACP port priority. */
     struct lacp_info lacp_actor;   /* LACP actor information. */
     struct lacp_info lacp_partner; /* LACP partner information. */
     long long int lacp_tx;         /* Next LACP message transmission time. */
     long long int lacp_rx;         /* Next LACP message receive time. */
-    bool lacp_attached;            /* Attached to its aggregator?  LACP allows
-                                      this link to be chosen for flows. */
 };
 
 #define BOND_MASK 0xff
@@ -2158,7 +2157,7 @@ bond_choose_iface(const struct port *port)
         if (iface->enabled) {
             return i;
         } else if (iface->delay_expires < next_delay_expiration
-                   && (iface->lacp_attached
+                   && (iface->lacp_status & LACP_ATTACHED
                        || !(port->lacp & LACP_NEGOTIATED))) {
             best_down_slave = i;
             next_delay_expiration = iface->delay_expires;
@@ -2236,9 +2235,9 @@ bond_link_status_update(struct iface *iface)
          * They are not required to have synchronized partners because they
          * have no partners at all.  However, they will only be attached if
          * negotiations failed on all interfaces in the bond. */
-        up = iface->lacp_attached
+        up = iface->lacp_status & LACP_ATTACHED
             && (iface->lacp_partner.state & LACP_STATE_SYNC
-                 || iface->lacp_status == LACP_STATUS_DEFAULTED);
+                 || iface->lacp_status & LACP_DEFAULTED);
     }
 
 
@@ -2381,7 +2380,7 @@ bond_link_carrier_update(struct iface *iface, bool carrier)
         return;
     }
 
-    if (iface->lacp_status == LACP_STATUS_CURRENT) {
+    if (iface->lacp_status & LACP_CURRENT) {
         iface_set_lacp_expired(iface);
     }
 
@@ -3110,7 +3109,7 @@ lacp_process_packet(const struct ofpbuf *packet, struct iface *iface)
         return;
     }
 
-    iface->lacp_status = LACP_STATUS_CURRENT;
+    iface->lacp_status = LACP_CURRENT;
     iface->lacp_rx = time_msec() + LACP_SLOW_TIME_RX;
 
     iface->lacp_actor.state = iface_get_lacp_state(iface);
@@ -3146,7 +3145,7 @@ lacp_update_ifaces(struct port *port)
         struct iface *iface = port->ifaces[i];
         struct lacp_info pri;
 
-        iface->lacp_attached = true;
+        iface->lacp_status |= LACP_ATTACHED;
         ofproto_revalidate(port->bridge->ofproto, iface->tag);
 
         /* Don't allow loopback interfaces to send traffic or lead. */
@@ -3154,11 +3153,11 @@ lacp_update_ifaces(struct port *port)
                             iface->lacp_actor.sysid)) {
             VLOG_WARN_RL(&rl, "iface %s: Loopback detected. Interface is "
                          "connected to its own bridge", iface->name);
-            iface->lacp_attached = false;
+            iface->lacp_status &= ~LACP_ATTACHED;
             continue;
         }
 
-        if (iface->lacp_status == LACP_STATUS_DEFAULTED) {
+        if (iface->lacp_status & LACP_DEFAULTED) {
             continue;
         }
 
@@ -3180,11 +3179,11 @@ lacp_update_ifaces(struct port *port)
     for (i = 0; i < port->n_ifaces; i++) {
         struct iface *iface = port->ifaces[i];
 
-        if (iface->lacp_status == LACP_STATUS_DEFAULTED
+        if (iface->lacp_status & LACP_DEFAULTED
             || lead->lacp_partner.key != iface->lacp_partner.key
             || !eth_addr_equals(lead->lacp_partner.sysid,
                                 iface->lacp_partner.sysid)) {
-            iface->lacp_attached = false;
+            iface->lacp_status &= ~LACP_ATTACHED;
         }
     }
 }
@@ -3193,7 +3192,7 @@ static bool
 lacp_iface_may_tx(const struct iface *iface)
 {
     return iface->port->lacp & LACP_ACTIVE
-        || iface->lacp_status != LACP_STATUS_DEFAULTED;
+        || iface->lacp_status & (LACP_CURRENT | LACP_EXPIRED);
 }
 
 static void
@@ -3215,9 +3214,9 @@ lacp_run(struct bridge *br)
             struct iface *iface = port->ifaces[j];
 
             if (time_msec() > iface->lacp_rx) {
-                if (iface->lacp_status == LACP_STATUS_CURRENT) {
+                if (iface->lacp_status & LACP_CURRENT) {
                     iface_set_lacp_expired(iface);
-                } else if (iface->lacp_status == LACP_STATUS_EXPIRED) {
+                } else if (iface->lacp_status & LACP_EXPIRED) {
                     iface_set_lacp_defaulted(iface);
                 }
             }
@@ -3276,7 +3275,7 @@ lacp_wait(struct bridge *br)
                 poll_timer_wait_until(iface->lacp_tx);
             }
 
-            if (iface->lacp_status != LACP_STATUS_DEFAULTED) {
+            if (iface->lacp_status & (LACP_CURRENT | LACP_EXPIRED)) {
                 poll_timer_wait_until(iface->lacp_rx);
             }
         }
@@ -3830,15 +3829,19 @@ bond_unixctl_show(struct unixctl_conn *conn,
         if (port->lacp) {
             ds_put_cstr(&ds, "\tstatus: ");
 
-            if (iface->lacp_status == LACP_STATUS_CURRENT) {
+            if (iface->lacp_status & LACP_CURRENT) {
                 ds_put_cstr(&ds, "current ");
-            } else if (iface->lacp_status == LACP_STATUS_EXPIRED) {
+            }
+
+            if (iface->lacp_status & LACP_EXPIRED) {
                 ds_put_cstr(&ds, "expired ");
-            } else {
+            }
+
+            if (iface->lacp_status & LACP_DEFAULTED) {
                 ds_put_cstr(&ds, "defaulted ");
             }
 
-            if (iface->lacp_attached) {
+            if (iface->lacp_status & LACP_ATTACHED) {
                 ds_put_cstr(&ds, "attached ");
             }
 
@@ -4679,7 +4682,7 @@ iface_set_lacp_defaulted(struct iface *iface)
 {
     memset(&iface->lacp_partner, 0, sizeof iface->lacp_partner);
 
-    iface->lacp_status = LACP_STATUS_DEFAULTED;
+    iface->lacp_status = LACP_DEFAULTED;
     iface->lacp_tx = 0;
     iface->port->lacp_need_update = true;
 }
@@ -4687,7 +4690,8 @@ iface_set_lacp_defaulted(struct iface *iface)
 static void
 iface_set_lacp_expired(struct iface *iface)
 {
-    iface->lacp_status = LACP_STATUS_EXPIRED;
+    iface->lacp_status &= ~LACP_CURRENT;
+    iface->lacp_status |= LACP_EXPIRED;
     iface->lacp_partner.state |= LACP_STATE_TIME;
     iface->lacp_partner.state &= ~LACP_STATE_SYNC;
 
@@ -4704,13 +4708,15 @@ iface_get_lacp_state(const struct iface *iface)
         state |= LACP_STATE_ACT;
     }
 
-    if (iface->lacp_status == LACP_STATUS_DEFAULTED) {
-        state |= LACP_STATE_DEF;
-    } else if (iface->lacp_attached) {
+    if (iface->lacp_status & LACP_ATTACHED) {
         state |= LACP_STATE_SYNC;
     }
 
-    if (iface->lacp_status == LACP_STATUS_EXPIRED) {
+    if (iface->lacp_status & LACP_DEFAULTED) {
+        state |= LACP_STATE_DEF;
+    }
+
+    if (iface->lacp_status & LACP_EXPIRED) {
         state |= LACP_STATE_EXP;
     }
 
