@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,9 +365,9 @@ pvconn_pstream_wait(struct pvconn *pvconn)
 
 /* Stream-based vconns and pvconns. */
 
-#define DEFINE_VCONN_STREAM_CLASS(NAME)             \
-        struct vconn_class NAME##_vconn_class = {   \
-            #NAME,                                  \
+#define STREAM_INIT(NAME)                           \
+    {                                               \
+            NAME,                                   \
             vconn_stream_open,                      \
             vconn_stream_close,                     \
             vconn_stream_connect,                   \
@@ -376,27 +376,27 @@ pvconn_pstream_wait(struct pvconn *pvconn)
             vconn_stream_run,                       \
             vconn_stream_run_wait,                  \
             vconn_stream_wait,                      \
-        };
+    }
 
-#define DEFINE_PVCONN_STREAM_CLASS(NAME)            \
-        struct pvconn_class NAME##_pvconn_class = { \
-            #NAME,                                  \
+#define PSTREAM_INIT(NAME)                          \
+    {                                               \
+            NAME,                                   \
             pvconn_pstream_listen,                  \
             pvconn_pstream_close,                   \
             pvconn_pstream_accept,                  \
             pvconn_pstream_wait                     \
-        };
+    }
 
-static DEFINE_VCONN_STREAM_CLASS(stream);
-static DEFINE_PVCONN_STREAM_CLASS(pstream);
+static struct vconn_class stream_vconn_class = STREAM_INIT("stream");
+static struct pvconn_class pstream_pvconn_class = PSTREAM_INIT("pstream");
 
-DEFINE_VCONN_STREAM_CLASS(tcp);
-DEFINE_PVCONN_STREAM_CLASS(ptcp);
+struct vconn_class tcp_vconn_class = STREAM_INIT("tcp");
+struct pvconn_class ptcp_pvconn_class = PSTREAM_INIT("ptcp");
 
-DEFINE_VCONN_STREAM_CLASS(unix);
-DEFINE_PVCONN_STREAM_CLASS(punix);
+struct vconn_class unix_vconn_class = STREAM_INIT("unix");
+struct pvconn_class punix_pvconn_class = PSTREAM_INIT("punix");
 
 #ifdef HAVE_OPENSSL
-DEFINE_VCONN_STREAM_CLASS(ssl);
-DEFINE_PVCONN_STREAM_CLASS(pssl);
+struct vconn_class ssl_vconn_class = STREAM_INIT("ssl");
+struct pvconn_class pssl_pvconn_class = PSTREAM_INIT("pssl");
 #endif
