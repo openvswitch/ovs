@@ -5021,6 +5021,8 @@ iface_update_cfm(struct iface *iface)
     mon = iface->cfg->monitor;
 
     if (!mon) {
+        cfm_destroy(iface->cfm);
+        iface->cfm = NULL;
         return;
     }
 
