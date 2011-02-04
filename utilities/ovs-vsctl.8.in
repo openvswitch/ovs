@@ -360,6 +360,30 @@ Deletes the configured failure mode.
 .IP "\fBset\-fail\-mode\fR \fIbridge\fR \fBstandalone\fR|\fBsecure\fR"
 Sets the configured failure mode.
 .
+.SS "Manager Connectivity"
+.
+These commands manipulate the \fBmanagers\fR and \fBmanager_options\fR columns
+in the \fBOpen_vSwitch\fR table and rows in the \fBManagers\fR table.  When
+\fBovsdb\-server\fR is configured to use those rows and columns for OVSDB
+connections, as described in \fBINSTALL.Linux\fR and in the startup scripts
+provided with Open vSwitch, this allows the administrator to use
+\fBovs\-vsctl\fR to configure database connections.
+.
+.IP "\fBget\-manager\fR"
+Prints the configured manager(s).
+.
+.IP "\fBdel\-manager\fR"
+Deletes the configured manager(s).
+.
+.IP "\fBset\-manager\fR \fItarget\fR\&..."
+Sets the configured manager target or targets.  Each \fItarget\fR may
+use any of the following forms:
+.
+.RS
+.so ovsdb/remote-active.man
+.so ovsdb/remote-passive.man
+.RE
+.
 .SS "SSL Configuration"
 When \fBovs\-vswitchd\fR is configured to connect over SSL for management or
 controller connectivity, the following parameters are required:

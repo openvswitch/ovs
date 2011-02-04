@@ -493,6 +493,11 @@ Controller commands:\n\
   del-fail-mode BRIDGE       delete the fail-mode for BRIDGE\n\
   set-fail-mode BRIDGE MODE  set the fail-mode for BRIDGE to MODE\n\
 \n\
+Manager commands:\n\
+  get-manager                print all manager(s)\n\
+  del-manager                delete all manager(s)\n\
+  set-manager TARGET...      set the list of manager(s) to TARGET(s)\n\
+\n\
 SSL commands:\n\
   get-ssl                     print the SSL configuration\n\
   del-ssl                     delete the SSL configuration\n\
@@ -1859,6 +1864,116 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
     ovsrec_bridge_set_fail_mode(br->br_cfg, fail_mode);
 
     free_info(&info);
+}
+
+static void
+verify_managers(const struct ovsrec_open_vswitch *ovs)
+{
+    size_t i;
+
+    ovsrec_open_vswitch_verify_managers(ovs);
+    ovsrec_open_vswitch_verify_manager_options(ovs);
+
+    for (i = 0; i < ovs->n_manager_options; ++i) {
+        const struct ovsrec_manager *mgr = ovs->manager_options[i];
+
+        ovsrec_manager_verify_target(mgr);
+    }
+}
+
+static void
+pre_manager(struct vsctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_managers);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_manager_col_target);
+}
+
+static void
+cmd_get_manager(struct vsctl_context *ctx)
+{
+    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
+    struct svec targets;
+    size_t i;
+
+    verify_managers(ovs);
+
+    /* Print the targets in sorted order for reproducibility. */
+    svec_init(&targets);
+
+    /* First, add all targets found in deprecated 'managers' column. */
+    for (i = 0; i < ovs->n_managers; i++) {
+        svec_add(&targets, ovs->managers[i]);
+    }
+
+    /* Second, add all targets pointed to by 'manager_options' column. */
+    for (i = 0; i < ovs->n_manager_options; i++) {
+        svec_add(&targets, ovs->manager_options[i]->target);
+    }
+
+    svec_sort_unique(&targets);
+    for (i = 0; i < targets.n; i++) {
+        ds_put_format(&ctx->output, "%s\n", targets.names[i]);
+    }
+    svec_destroy(&targets);
+}
+
+static void
+delete_managers(const struct vsctl_context *ctx)
+{
+    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
+    size_t i;
+
+    /* Delete manager targets in deprecated 'managers' column. */
+    ovsrec_open_vswitch_set_managers(ovs, NULL, 0);
+
+    /* Delete Manager rows pointed to by 'manager_options' column. */
+    for (i = 0; i < ovs->n_manager_options; i++) {
+        ovsrec_manager_delete(ovs->manager_options[i]);
+    }
+
+    /* Delete 'Manager' row refs in 'manager_options' column. */
+    ovsrec_open_vswitch_set_manager_options(ovs, NULL, 0);
+}
+
+static void
+cmd_del_manager(struct vsctl_context *ctx)
+{
+    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
+
+    verify_managers(ovs);
+    delete_managers(ctx);
+}
+
+static void
+insert_managers(struct vsctl_context *ctx, char *targets[], size_t n)
+{
+    struct ovsrec_manager **managers;
+    size_t i;
+
+    /* Store in deprecated 'manager' column. */
+    ovsrec_open_vswitch_set_managers(ctx->ovs, targets, n);
+
+    /* Insert each manager in a new row in Manager table. */
+    managers = xmalloc(n * sizeof *managers);
+    for (i = 0; i < n; i++) {
+        managers[i] = ovsrec_manager_insert(ctx->txn);
+        ovsrec_manager_set_target(managers[i], targets[i]);
+    }
+
+    /* Store uuids of new Manager rows in 'manager_options' column. */
+    ovsrec_open_vswitch_set_manager_options(ctx->ovs, managers, n);
+    free(managers);
+}
+
+static void
+cmd_set_manager(struct vsctl_context *ctx)
+{
+    const size_t n = ctx->argc - 1;
+
+    verify_managers(ctx->ovs);
+    delete_managers(ctx);
+    insert_managers(ctx, &ctx->argv[1], n);
 }
 
 static void
@@ -3286,6 +3401,11 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"get-fail-mode", 1, 1, pre_get_info, cmd_get_fail_mode, NULL, "", RO},
     {"del-fail-mode", 1, 1, pre_get_info, cmd_del_fail_mode, NULL, "", RW},
     {"set-fail-mode", 2, 2, pre_get_info, cmd_set_fail_mode, NULL, "", RW},
+
+    /* Manager commands. */
+    {"get-manager", 0, 0, pre_manager, cmd_get_manager, NULL, "", RO},
+    {"del-manager", 0, INT_MAX, pre_manager, cmd_del_manager, NULL, "", RW},
+    {"set-manager", 1, INT_MAX, pre_manager, cmd_set_manager, NULL, "", RW},
 
     /* SSL commands. */
     {"get-ssl", 0, 0, pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},

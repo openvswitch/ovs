@@ -504,6 +504,32 @@ OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
+AT_BANNER([ovs-vsctl unit tests -- manager commands])
+
+AT_SETUP([managers])
+AT_KEYWORDS([manager ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [del-manager],
+  [get-manager],
+  [set-manager tcp:4.5.6.7],
+  [get-manager],
+  [set-manager tcp:8.9.10.11 tcp:5.4.3.2],
+  [get-manager],
+  [del-manager],
+  [get-manager])], [0], [
+
+
+tcp:4.5.6.7
+
+tcp:5.4.3.2\ntcp:8.9.10.11
+
+
+], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- database commands])
 
 AT_SETUP([database commands -- positive checks])
