@@ -125,6 +125,11 @@ struct action_xlate_ctx {
      * calling action_xlate_ctx_init(). */
     void (*resubmit_hook)(struct action_xlate_ctx *, const struct rule *);
 
+    /* If true, the speciality of 'flow' should be checked before executing
+     * its actions.  If special_cb returns false on 'flow' rendered
+     * uninstallable and no actions will be executed. */
+    bool check_special;
+
 /* xlate_actions() initializes and uses these members.  The client might want
  * to look at them after it returns. */
 
@@ -1446,6 +1451,8 @@ ofproto_send_packet(struct ofproto *p, const struct flow *flow,
     struct ofpbuf *odp_actions;
 
     action_xlate_ctx_init(&ctx, p, flow, packet);
+    /* Always xlate packets originated in this function. */
+    ctx.check_special = false;
     odp_actions = xlate_actions(&ctx, actions, n_actions);
 
     /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
@@ -3110,6 +3117,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->flow = *flow;
     ctx->packet = packet;
     ctx->resubmit_hook = NULL;
+    ctx->check_special = true;
 }
 
 static struct ofpbuf *
@@ -3124,7 +3132,16 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
     ctx->last_pop_priority = -1;
-    do_xlate_actions(in, n_in, ctx);
+
+    if (!ctx->check_special
+        || (ctx->ofproto->ofhooks->special_cb
+            && ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
+                                                 ctx->ofproto->aux))) {
+        do_xlate_actions(in, n_in, ctx);
+    } else {
+        ctx->may_set_up_flow = false;
+    }
+
     remove_pop_action(ctx);
 
     /* Check with in-band control to see if we're allowed to set up this
@@ -4370,6 +4387,12 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     /* Set header pointers in 'flow'. */
     flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
 
+    if (p->ofhooks->special_cb
+        && !p->ofhooks->special_cb(&flow, upcall->packet, p->aux)) {
+        ofpbuf_delete(upcall->packet);
+        return;
+    }
+
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (in_band_msg_in_hook(p->in_band, &flow, upcall->packet)) {
@@ -5125,6 +5148,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
 
 static const struct ofhooks default_ofhooks = {
     default_normal_ofhook_cb,
+    NULL,
     NULL,
     NULL
 };

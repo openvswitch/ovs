@@ -76,6 +76,8 @@ VLOG_DEFINE_THIS_MODULE(bridge);
 
 COVERAGE_DEFINE(bridge_flush);
 COVERAGE_DEFINE(bridge_process_flow);
+COVERAGE_DEFINE(bridge_process_cfm);
+COVERAGE_DEFINE(bridge_process_lacp);
 COVERAGE_DEFINE(bridge_reconfigure);
 COVERAGE_DEFINE(bridge_lacp_update);
 
@@ -3005,26 +3007,38 @@ bridge_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
                         struct ofpbuf *actions, tag_type *tags,
                         uint16_t *nf_output_iface, void *br_)
 {
-    struct iface *iface;
     struct bridge *br = br_;
 
     COVERAGE_INC(bridge_process_flow);
+    return process_flow(br, flow, packet, actions, tags, nf_output_iface);
+}
+
+static bool
+bridge_special_ofhook_cb(const struct flow *flow,
+                         const struct ofpbuf *packet, void *br_)
+{
+    struct iface *iface;
+    struct bridge *br = br_;
 
     iface = iface_from_dp_ifidx(br, flow->in_port);
 
     if (cfm_should_process_flow(flow)) {
-        if (packet && iface->cfm) {
+
+        if (iface && packet && iface->cfm) {
+            COVERAGE_INC(bridge_process_cfm);
             cfm_process_heartbeat(iface->cfm, packet);
         }
         return false;
     } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
-        if (packet) {
+
+        if (iface && packet) {
+            COVERAGE_INC(bridge_process_lacp);
             lacp_process_packet(packet, iface);
         }
         return false;
     }
 
-    return process_flow(br, flow, packet, actions, tags, nf_output_iface);
+    return true;
 }
 
 static void
@@ -3094,6 +3108,7 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
 
 static struct ofhooks bridge_ofhooks = {
     bridge_normal_ofhook_cb,
+    bridge_special_ofhook_cb,
     bridge_account_flow_ofhook_cb,
     bridge_account_checkpoint_ofhook_cb,
 };

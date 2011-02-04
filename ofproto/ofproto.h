@@ -149,6 +149,8 @@ struct ofhooks {
     bool (*normal_cb)(const struct flow *, const struct ofpbuf *packet,
                       struct ofpbuf *odp_actions, tag_type *,
                       uint16_t *nf_output_iface, void *aux);
+    bool (*special_cb)(const struct flow *flow, const struct ofpbuf *packet,
+                       void *aux);
     void (*account_flow_cb)(const struct flow *, tag_type tags,
                             const struct nlattr *odp_actions,
                             size_t actions_len,
