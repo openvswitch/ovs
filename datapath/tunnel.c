@@ -717,7 +717,7 @@ static bool check_mtu(struct sk_buff *skb,
 {
 	bool pmtud = mutable->flags & TNL_F_PMTUD;
 	__be16 frag_off = 0;
-	int mtu;
+	int mtu = 0;
 
 	if (pmtud) {
 		frag_off = htons(IP_DF);
