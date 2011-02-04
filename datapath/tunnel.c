@@ -718,6 +718,10 @@ static bool check_mtu(struct sk_buff *skb,
 	bool pmtud = mutable->flags & TNL_F_PMTUD;
 	__be16 frag_off = 0;
 	int mtu = 0;
+	unsigned int packet_length = skb->len - ETH_HLEN;
+
+	if (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
+		packet_length -= VLAN_HLEN;
 
 	if (pmtud) {
 		frag_off = htons(IP_DF);
@@ -737,7 +741,7 @@ static bool check_mtu(struct sk_buff *skb,
 		if (pmtud && iph->frag_off & htons(IP_DF)) {
 			mtu = max(mtu, IP_MIN_MTU);
 
-			if (ntohs(iph->tot_len) > mtu &&
+			if (packet_length > mtu &&
 			    tnl_frag_needed(vport, mutable, skb, mtu,
 					    OVS_CB(skb)->tun_id))
 				return false;
@@ -745,10 +749,6 @@ static bool check_mtu(struct sk_buff *skb,
 	}
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else if (skb->protocol == htons(ETH_P_IPV6)) {
-		unsigned int packet_length = skb->len - ETH_HLEN
-			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ?
-				VLAN_HLEN : 0);
-
 		/* IPv6 requires PMTUD if the packet is above the minimum MTU. */
 		if (packet_length > IPV6_MIN_MTU)
 			frag_off = htons(IP_DF);
