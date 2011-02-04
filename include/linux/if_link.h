@@ -3,6 +3,10 @@
 
 #include <linux/version.h>
 
+#ifdef HAVE_RTNL_LINK_STATS64
+#include_next <linux/if_link.h>
+#else  /* !HAVE_RTNL_LINK_STATS64 */
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
 #include_next <linux/if_link.h>
 #else
@@ -13,9 +17,8 @@
  * turn only really needs __u64.  */
 #include <linux/types.h>
 #include <linux/netlink.h>
-#endif
+#endif	/* kernel < 2.6.19 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 /* The main device statistics structure */
 struct rtnl_link_stats64 {
 	__u64	rx_packets;		/* total packets received	*/
@@ -48,6 +51,6 @@ struct rtnl_link_stats64 {
 	__u64	rx_compressed;
 	__u64	tx_compressed;
 };
-#endif	/* linux kernel < 2.6.35 */
+#endif	/* !HAVE_RTNL_LINK_STATS64 */
 
 #endif

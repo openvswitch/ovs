@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009, 2010 Nicira Networks
+# Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ OVS_CHECK_NDEBUG
 OVS_CHECK_NETLINK
 OVS_CHECK_OPENSSL
 OVS_CHECK_LOGDIR
+OVS_CHECK_RTNL_LINK_STATS64
 OVS_CHECK_PYTHON
 OVS_CHECK_PYUIC4
 OVS_CHECK_OVSDBMONITOR

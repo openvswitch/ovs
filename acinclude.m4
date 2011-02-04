@@ -204,6 +204,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16])
   OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_find_nested])
 
+  OVS_GREP_IFELSE([$KSRC26/include/linux/if_link.h], [rtnl_link_stats64])
+
   OVS_CHECK_LOG2_H
 
   if cmp -s datapath/linux-2.6/kcompat.h.new \
