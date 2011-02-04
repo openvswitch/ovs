@@ -5007,7 +5007,8 @@ schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
  * OFPT_PACKET_IN message to each OpenFlow controller as necessary according to
  * their individual configurations.
  *
- * Takes ownership of 'packet'. */
+ * If 'clone' is true, the caller retains ownership of 'upcall->packet'.
+ * Otherwise, ownership is transferred to this function. */
 static void
 send_packet_in(struct ofproto *ofproto, struct dpif_upcall *upcall,
                const struct flow *flow, bool clone)
