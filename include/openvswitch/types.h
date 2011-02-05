@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #ifndef OPENVSWITCH_TYPES_H
 #define OPENVSWITCH_TYPES_H 1
 
+#include <arpa/inet.h>
+#include <sys/types.h>
 #include <stdint.h>
 
 #ifdef __CHECKER__
@@ -35,5 +37,26 @@
 typedef uint16_t OVS_BITWISE ovs_be16;
 typedef uint32_t OVS_BITWISE ovs_be32;
 typedef uint64_t OVS_BITWISE ovs_be64;
+
+/* Netlink and OpenFlow both contain 64-bit values that are only guaranteed to
+ * be aligned on 32-bit boundaries.  These types help.
+ *
+ * lib/unaligned.h has helper functions for accessing these. */
+
+/* A 64-bit value, in host byte order, that is only aligned on a 32-bit
+ * boundary.  */
+typedef struct {
+#ifdef WORDS_BIGENDIAN
+	uint32_t hi, lo;
+#else
+	uint32_t lo, hi;
+#endif
+} ovs_32aligned_u64;
+
+/* A 64-bit value, in network byte order, that is only aligned on a 32-bit
+ * boundary. */
+typedef struct {
+	ovs_be32 hi, lo;
+} ovs_32aligned_be64;
 
 #endif /* openvswitch/types.h */
