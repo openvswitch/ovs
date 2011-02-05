@@ -4673,8 +4673,7 @@ port_update_vlan_compat(struct port *port)
 static void
 iface_set_lacp_defaulted(struct iface *iface)
 {
-    memset(&iface->lacp_partner, 0xff, sizeof iface->lacp_partner);
-    iface->lacp_partner.state = 0;
+    memset(&iface->lacp_partner, 0, sizeof iface->lacp_partner);
 
     iface->lacp_status = LACP_STATUS_DEFAULTED;
     iface->lacp_tx = 0;

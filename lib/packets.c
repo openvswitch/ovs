@@ -237,7 +237,7 @@ compose_lacp_packet(struct ofpbuf *b, struct lacp_info *actor,
 
     pdu->collector_type = 3;
     pdu->collector_len = 16;
-    pdu->collector_delay = htons(UINT16_MAX);
+    pdu->collector_delay = htons(0);
 }
 
 /* Parses 'b' which represents a packet containing a LACP PDU.  This function
