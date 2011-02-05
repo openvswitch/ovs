@@ -76,6 +76,7 @@ VLOG_DEFINE_THIS_MODULE(bridge);
 COVERAGE_DEFINE(bridge_flush);
 COVERAGE_DEFINE(bridge_process_flow);
 COVERAGE_DEFINE(bridge_reconfigure);
+COVERAGE_DEFINE(bridge_lacp_update);
 
 enum lacp_status {
     LACP_STATUS_CURRENT,  /* Partner is up to date. */
@@ -3129,12 +3130,16 @@ lacp_update_ifaces(struct port *port)
     size_t i;
     struct iface *lead;
     struct lacp_info lead_pri;
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
 
     port->lacp_need_update = false;
+    COVERAGE_INC(bridge_lacp_update);
 
     if (!port->lacp) {
         return;
     }
+
+    VLOG_DBG_RL(&rl, "port %s: re-evaluating LACP link status", port->name);
 
     lead = NULL;
     for (i = 0; i < port->n_ifaces; i++) {
@@ -3147,7 +3152,6 @@ lacp_update_ifaces(struct port *port)
         /* Don't allow loopback interfaces to send traffic or lead. */
         if (eth_addr_equals(iface->lacp_partner.sysid,
                             iface->lacp_actor.sysid)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
             VLOG_WARN_RL(&rl, "iface %s: Loopback detected. Interface is "
                          "connected to its own bridge", iface->name);
             iface->lacp_attached = false;
