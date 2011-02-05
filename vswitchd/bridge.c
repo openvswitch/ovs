@@ -3778,10 +3778,10 @@ bond_unixctl_show(struct unixctl_conn *conn,
                   bond_mode_to_string(port->bond_mode));
 
     if (port->lacp) {
-        ds_put_format(&ds, "\tlacp: %s\n",
+        ds_put_format(&ds, "lacp: %s\n",
                       port->lacp & LACP_ACTIVE ? "active" : "passive");
     } else {
-        ds_put_cstr(&ds, "\tlacp: off\n");
+        ds_put_cstr(&ds, "lacp: off\n");
     }
 
     if (port->bond_mode != BM_AB) {
@@ -3812,7 +3812,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
         struct flow flow;
 
         /* Basic info. */
-        ds_put_format(&ds, "slave %s: %s\n",
+        ds_put_format(&ds, "\nslave %s: %s\n",
                       iface->name, iface->enabled ? "enabled" : "disabled");
         if (j == port->active_iface) {
             ds_put_cstr(&ds, "\tactive slave\n");
@@ -3880,7 +3880,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
             ds_put_cstr(&ds, "\tpartner state: ");
             ds_put_lacp_state(&ds, iface->lacp_partner.state);
-            ds_put_cstr(&ds, "\n\n");
+            ds_put_cstr(&ds, "\n");
         }
 
         if (port->bond_mode == BM_AB) {
