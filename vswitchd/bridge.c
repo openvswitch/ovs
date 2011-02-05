@@ -4469,6 +4469,9 @@ port_update_lacp(struct port *port)
     bool key_changed;
 
     if (!port->lacp || port->n_ifaces < 1) {
+        for (i = 0; i < port->n_ifaces; i++) {
+            iface_set_lacp_defaulted(port->ifaces[i]);
+        }
         return;
     }
 
