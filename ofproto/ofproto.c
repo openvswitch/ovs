@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -252,7 +252,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     *ofprotop = NULL;
 
     /* Connect to datapath and start listening for messages. */
-    error = wdp_open(datapath, datapath_type, &wdp);
+    error = wdp_create_and_open(datapath, datapath_type, &wdp);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
@@ -311,6 +311,12 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     *ofprotop = p;
     return 0;
+}
+
+struct wdp *
+ofproto_get_wdp(struct ofproto *ofproto)
+{
+    return ofproto->wdp;
 }
 
 void

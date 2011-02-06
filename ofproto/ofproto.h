@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,8 @@ int ofproto_run1(struct ofproto *);
 int ofproto_run2(struct ofproto *, bool revalidate_all);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
+
+struct wdp *ofproto_get_wdp(struct ofproto *);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);

@@ -65,7 +65,6 @@
 #include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "vlog.h"
-#include "xfif.h"
 #include "xtoxll.h"
 #include "sflow_api.h"
 
@@ -166,7 +165,7 @@ struct bridge {
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
     /* Kernel datapath information. */
-    struct xfif *xfif;          /* Datapath. */
+    struct wdp *wdp;          /* Datapath. */
     struct hmap ifaces;         /* Contains "struct iface"s. */
 
     /* Bridge ports. */
@@ -459,12 +458,12 @@ check_iface_xf_ifidx(struct bridge *br, struct iface *iface,
 {
     if (iface->xf_ifidx >= 0) {
         VLOG_DBG("%s has interface %s on port %d",
-                 xfif_name(br->xfif),
+                 wdp_name(br->wdp),
                  iface->name, iface->xf_ifidx);
         return true;
     } else {
         VLOG_ERR("%s interface not in %s, dropping",
-                 iface->name, xfif_name(br->xfif));
+                 iface->name, wdp_name(br->wdp));
         return false;
     }
 }
@@ -623,40 +622,42 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions. */
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct xflow_port *xfif_ports;
-        size_t n_xfif_ports;
+        struct wdp_port *wdp_ports;
+        size_t n_wdp_ports;
         struct shash want_ifaces;
 
-        xfif_port_list(br->xfif, &xfif_ports, &n_xfif_ports);
+        wdp_port_list(br->wdp, &wdp_ports, &n_wdp_ports);
         bridge_get_all_ifaces(br, &want_ifaces);
-        for (i = 0; i < n_xfif_ports; i++) {
-            const struct xflow_port *p = &xfif_ports[i];
+        for (i = 0; i < n_wdp_ports; i++) {
+            const struct wdp_port *p = &wdp_ports[i];
             if (!shash_find(&want_ifaces, p->devname)
                 && strcmp(p->devname, br->name)) {
-                int retval = xfif_port_del(br->xfif, p->port);
+                int retval;
+
+                retval = wdp_port_del(br->wdp, p->opp.port_no);
                 if (retval) {
                     VLOG_ERR("failed to remove %s interface from %s: %s",
-                             p->devname, xfif_name(br->xfif),
+                             p->devname, wdp_name(br->wdp),
                              strerror(retval));
                 }
             }
         }
         shash_destroy(&want_ifaces);
-        free(xfif_ports);
+        wdp_port_array_free(wdp_ports, n_wdp_ports);
     }
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct xflow_port *xfif_ports;
-        size_t n_xfif_ports;
+        struct wdp_port *wdp_ports;
+        size_t n_wdp_ports;
         struct shash cur_ifaces, want_ifaces;
 
         /* Get the set of interfaces currently in this datapath. */
-        xfif_port_list(br->xfif, &xfif_ports, &n_xfif_ports);
+        wdp_port_list(br->wdp, &wdp_ports, &n_wdp_ports);
         shash_init(&cur_ifaces);
-        for (i = 0; i < n_xfif_ports; i++) {
-            const char *name = xfif_ports[i].devname;
+        for (i = 0; i < n_wdp_ports; i++) {
+            const char *name = wdp_ports[i].devname;
             shash_add_once(&cur_ifaces, name, NULL);
         }
-        free(xfif_ports);
+        wdp_port_array_free(wdp_ports, n_wdp_ports);
 
         /* Get the set of interfaces we want on this datapath. */
         bridge_get_all_ifaces(br, &want_ifaces);
@@ -677,15 +678,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
                 /* Add to datapath. */
                 internal = iface_is_internal(br, if_name);
-                error = xfif_port_add(br->xfif, if_name,
-                                      internal ? XFLOW_PORT_INTERNAL : 0, NULL);
+                error = wdp_port_add(br->wdp, if_name, internal, NULL);
                 if (error == EFBIG) {
                     VLOG_ERR("ran out of valid port numbers on %s",
-                             xfif_name(br->xfif));
+                             wdp_name(br->wdp));
                     break;
                 } else if (error) {
                     VLOG_ERR("failed to add %s interface to %s: %s",
-                             if_name, xfif_name(br->xfif), strerror(error));
+                             if_name, wdp_name(br->wdp), strerror(error));
                 }
             }
         }
@@ -732,7 +732,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             memset(&opts, 0, sizeof opts);
 
-            xfif_get_netflow_ids(br->xfif, &opts.engine_type, &opts.engine_id);
+            wdp_get_netflow_ids(br->wdp, &opts.engine_type, &opts.engine_id);
             if (nf_cfg->engine_type) {
                 opts.engine_type = *nf_cfg->engine_type;
             }
@@ -1295,25 +1295,16 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     assert(!bridge_lookup(br_cfg->name));
     br = xzalloc(sizeof *br);
 
-    error = xfif_create_and_open(br_cfg->name, br_cfg->datapath_type,
-                                 &br->xfif);
-    if (error) {
-        free(br);
-        return NULL;
-    }
-    xfif_flow_flush(br->xfif);
-
     error = ofproto_create(br_cfg->name, br_cfg->datapath_type, &bridge_ofhooks,
                            br, &br->ofproto);
     if (error) {
         VLOG_ERR("failed to create switch %s: %s", br_cfg->name,
                  strerror(error));
-        xfif_delete(br->xfif);
-        xfif_close(br->xfif);
         free(br);
         return NULL;
     }
 
+    br->wdp = ofproto_get_wdp(br->ofproto);
     br->name = xstrdup(br_cfg->name);
     br->cfg = br_cfg;
     br->ml = mac_learning_create();
@@ -1326,7 +1317,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     list_push_back(&all_bridges, &br->node);
 
-    VLOG_INFO("created bridge %s on %s", br->name, xfif_name(br->xfif));
+    VLOG_INFO("created bridge %s on %s", br->name, wdp_name(br->wdp));
 
     return br;
 }
@@ -1341,12 +1332,11 @@ bridge_destroy(struct bridge *br)
             port_destroy(br->ports[br->n_ports - 1]);
         }
         list_remove(&br->node);
-        error = xfif_delete(br->xfif);
+        error = wdp_delete(br->wdp);
         if (error && error != ENOENT) {
             VLOG_ERR("failed to delete %s: %s",
-                     xfif_name(br->xfif), strerror(error));
+                     wdp_name(br->wdp), strerror(error));
         }
-        xfif_close(br->xfif);
         ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
@@ -1475,16 +1465,16 @@ bridge_reconfigure_one(struct bridge *br)
      *
      * XXX perhaps we should synthesize a port ourselves in this case. */
     if (bridge_get_controllers(br, NULL)) {
-        char local_name[IF_NAMESIZE];
+        char *local_name;
         int error;
 
-        error = xfif_port_get_name(br->xfif, XFLOWP_LOCAL,
-                                   local_name, sizeof local_name);
+        error = wdp_port_get_name(br->wdp, OFPP_LOCAL, &local_name);
         if (!error && !shash_find(&new_ports, local_name)) {
             VLOG_WARN("bridge %s: controller specified but no local port "
                       "(port named %s) defined",
                       br->name, local_name);
         }
+        free(local_name);
     }
 
     /* Get rid of deleted ports.
@@ -1732,8 +1722,8 @@ bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 static void
 bridge_fetch_dp_ifaces(struct bridge *br)
 {
-    struct xflow_port *xfif_ports;
-    size_t n_xfif_ports;
+    struct wdp_port *wdp_ports;
+    size_t n_wdp_ports;
     size_t i, j;
 
     /* Reset all interface numbers. */
@@ -1746,32 +1736,31 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     hmap_clear(&br->ifaces);
 
-    xfif_port_list(br->xfif, &xfif_ports, &n_xfif_ports);
-    for (i = 0; i < n_xfif_ports; i++) {
-        struct xflow_port *p = &xfif_ports[i];
+    wdp_port_list(br->wdp, &wdp_ports, &n_wdp_ports);
+    for (i = 0; i < n_wdp_ports; i++) {
+        struct wdp_port *p = &wdp_ports[i];
         struct iface *iface = iface_lookup(br, p->devname);
         if (iface) {
             if (iface->xf_ifidx >= 0) {
                 VLOG_WARN("%s reported interface %s twice",
-                          xfif_name(br->xfif), p->devname);
-            } else if (iface_from_xf_ifidx(br, p->port)) {
+                          wdp_name(br->wdp), p->devname);
+            } else if (iface_from_xf_ifidx(
+                           br, ofp_port_to_xflow_port(p->opp.port_no))) {
                 VLOG_WARN("%s reported interface %"PRIu16" twice",
-                          xfif_name(br->xfif), p->port);
+                          wdp_name(br->wdp), p->opp.port_no);
             } else {
-                iface->xf_ifidx = p->port;
+                iface->xf_ifidx = ofp_port_to_xflow_port(p->opp.port_no);
                 hmap_insert(&br->ifaces, &iface->xf_ifidx_node,
                             hash_int(iface->xf_ifidx, 0));
             }
 
             if (iface->cfg) {
-                int64_t ofport = (iface->xf_ifidx >= 0
-                                  ? xflow_port_to_ofp_port(iface->xf_ifidx)
-                                  : -1);
+                int64_t ofport = iface->xf_ifidx >= 0 ? p->opp.port_no : -1;
                 ovsrec_interface_set_ofport(iface->cfg, &ofport, 1);
             }
         }
     }
-    free(xfif_ports);
+    wdp_port_array_free(wdp_ports, n_wdp_ports);
 }
 
 /* Bridge packet processing functions. */
