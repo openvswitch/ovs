@@ -29,7 +29,7 @@ DODTIME=1                   # Time to wait for the server to die, in seconds
                             # let some servers to die gracefully and
                             # 'restart' will not work
 
-# Include ovs-openflowd defaults if available
+# Include openvswitch-switch defaults if available
 unset OVSDB_SERVER_OPTS
 unset OVS_VSWITCHD_OPTS
 unset CORE_LIMIT
@@ -195,6 +195,10 @@ unload_modules() {
 
 case "$1" in
     start)
+        conf_file=/etc/openvswitch/conf.db
+        schema_file=/usr/share/openvswitch/vswitch.ovsschema
+        schema_ver=`ovsdb-tool schema-version "$schema_file"`
+
         load_module openvswitch_mod
 
         if test -n "$CORE_LIMIT"; then
@@ -202,16 +206,18 @@ case "$1" in
         fi
 
         # Create an empty configuration database if it doesn't exist.
-        if test ! -e /etc/openvswitch/conf.db; then
+        if test ! -e $conf_file; then
             # Create configuration database.
-            ovsdb-tool -vANY:console:emer \
-                create /etc/openvswitch/conf.db \
-                /usr/share/openvswitch/vswitch.ovsschema
-        elif ! running ovsdb-server; then
+            ovsdb-tool -vANY:console:emer create $conf_file $schema_file
+        else
+            # If schema version changed, then back up the old version.
+            old_ver=`ovsdb-tool db-version "$conf_file"`
+            if test "X$old_ver" != "X$schema_ver"; then
+                cp "$conf_file" "$conf_file.backup$old_ver"
+            fi
+            
             # Upgrade or downgrade schema and compact database.
-            ovsdb-tool -vANY:console:emer \
-                convert /etc/openvswitch/conf.db \
-                /usr/share/openvswitch/vswitch.ovsschema
+            ovsdb-tool -vANY:console:emer convert $conf_file $schema_file
         fi
 
         if test "$ENABLE_MONITOR" = y; then
@@ -234,7 +240,7 @@ case "$1" in
 
         # Start ovsdb-server.
         set --
-        set -- "$@" /etc/openvswitch/conf.db
+        set -- "$@" $conf_file
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
         set -- "$@" --log-file=/var/log/openvswitch/ovsdb-server.log
         set -- "$@" --detach --no-chdir --pidfile $monitor_opt
@@ -256,7 +262,7 @@ case "$1" in
             echo " ERROR."
         fi
 
-        ovs-vsctl --no-wait --timeout=5 init
+        ovs-vsctl --no-wait --timeout=5 init -- set Open_vSwitch . db-version="$schema_ver"
 
         # Start ovs-vswitchd.
         set --
