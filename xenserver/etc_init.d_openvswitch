@@ -49,9 +49,9 @@ else
        "$@"
        rc=$?
        if [ $rc -eq 0 ] ; then
-	       log_success_msg $"$STRING "
+            log_success_msg $"$STRING "
        else
-	       log_failure_msg $"$STRING "
+            log_failure_msg $"$STRING "
        fi
        return $rc
     }
@@ -178,8 +178,8 @@ function remove_all_dp {
 
 function insert_modules_if_required {
     if test -e /sys/module/bridge; then
-	bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
-	if test "$bridges" != "*"; then
+        bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
+        if test "$bridges" != "*"; then
             log_warning_msg "not removing bridge module because bridges exist ($bridges)"
         else
             action "removing bridge module" rmmod bridge
@@ -354,13 +354,13 @@ function set_system_ids {
             external-ids:system-id="$INSTALLATION_UUID" \
             external-ids:xs-system-uuid="$INSTALLATION_UUID"
     else
-	if test -f /etc/openvswitch/install_uuid.conf; then
+        if test -f /etc/openvswitch/install_uuid.conf; then
             . /etc/openvswitch/install_uuid.conf
-	elif INSTALLATION_UUID=`uuidgen`; then
-	    echo "INSTALLATION_UUID=$INSTALLATION_UUID" > /etc/openvswitch/install_uuid.conf
-	else
-	    log_failure_msg "missing uuidgen, could not generate system UUID"
-	    return
+        elif INSTALLATION_UUID=`uuidgen`; then
+            echo "INSTALLATION_UUID=$INSTALLATION_UUID" > /etc/openvswitch/install_uuid.conf
+        else
+            log_failure_msg "missing uuidgen, could not generate system UUID"
+            return
         fi
         $vsctl --no-wait --timeout=5 set Open_vSwitch . \
             external-ids:system-id="$INSTALLATION_UUID"
@@ -460,7 +460,7 @@ case "$1" in
         # configuration up-to-date all the time.  HUP ovs-external-ids so it
         # re-runs.
         hup_monitor_external_ids
-	;;
+        ;;
     strace-vswitchd)
         shift
         strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
