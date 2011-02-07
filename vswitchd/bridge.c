@@ -3130,7 +3130,7 @@ lacp_process_packet(const struct ofpbuf *packet, struct iface *iface)
     }
 
     iface->lacp_status |= LACP_CURRENT;
-    iface->lacp_status &= ~LACP_EXPIRED;
+    iface->lacp_status &= ~(LACP_EXPIRED | LACP_DEFAULTED);
     iface->lacp_rx = time_msec() + LACP_SLOW_TIME_RX;
 
     iface->lacp_actor.state = iface_get_lacp_state(iface);
