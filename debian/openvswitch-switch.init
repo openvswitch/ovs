@@ -193,6 +193,23 @@ unload_modules() {
     unload_module openvswitch_mod
 }
 
+set_system_info() {
+    ovs_version=`ovs-vswitchd --version | sed 's/.*) //;1q'`
+    ovs-vsctl --no-wait --timeout=5 set Open_vSwitch . \
+        ovs-version="$ovs_version"
+
+    if (lsb_release --id) >/dev/null 2>&1; then
+        system_type=`lsb_release --id -s`
+        system_release=`lsb_release --release -s`
+        system_codename=`lsb_release --codename -s`
+        system_version="${system_release}-${system_codename}"
+
+        ovs-vsctl --no-wait --timeout=5 set Open_vSwitch . \
+            system-type="$system_type" \
+            system-version="$system_version"
+    fi
+}
+
 case "$1" in
     start)
         conf_file=/etc/openvswitch/conf.db
@@ -263,6 +280,8 @@ case "$1" in
         fi
 
         ovs-vsctl --no-wait --timeout=5 init -- set Open_vSwitch . db-version="$schema_ver"
+
+        set_system_info
 
         # Start ovs-vswitchd.
         set --
