@@ -3129,7 +3129,8 @@ lacp_process_packet(const struct ofpbuf *packet, struct iface *iface)
         return;
     }
 
-    iface->lacp_status = LACP_CURRENT;
+    iface->lacp_status |= LACP_CURRENT;
+    iface->lacp_status &= ~LACP_EXPIRED;
     iface->lacp_rx = time_msec() + LACP_SLOW_TIME_RX;
 
     iface->lacp_actor.state = iface_get_lacp_state(iface);
@@ -4702,7 +4703,8 @@ iface_set_lacp_defaulted(struct iface *iface)
 {
     memset(&iface->lacp_partner, 0, sizeof iface->lacp_partner);
 
-    iface->lacp_status = LACP_DEFAULTED;
+    iface->lacp_status |= LACP_DEFAULTED;
+    iface->lacp_status &= ~(LACP_CURRENT | LACP_EXPIRED);
     iface->lacp_tx = 0;
     iface->port->lacp_need_update = true;
 }
