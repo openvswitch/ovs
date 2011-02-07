@@ -64,13 +64,13 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 
 /* By my calculations currently the longest valid nlattr-formatted flow key is
- * 124 bytes long, so this leaves some safety margin.
+ * 132 bytes long.
  *
  * We allocate temporary on-stack buffers for flow keys as arrays of uint32_t
  * to ensure proper 32-bit alignment for Netlink attributes.  (An array of
  * "struct nlattr" might not, in theory, be sufficiently aligned because it
  * only contains 16-bit types.) */
-#define ODPUTIL_FLOW_KEY_BYTES 144
+#define ODPUTIL_FLOW_KEY_BYTES 132
 #define ODPUTIL_FLOW_KEY_U32S DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)
 
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);

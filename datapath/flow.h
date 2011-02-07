@@ -108,9 +108,9 @@ u32 flow_hash(const struct sw_flow_key *);
 int flow_cmp(const struct tbl_node *, void *target);
 
 /* By my calculations currently the longest valid nlattr-formatted flow key is
- * 80 bytes long, so this leaves some safety margin.
+ * 132 bytes long.
  */
-#define FLOW_BUFSIZE 96
+#define FLOW_BUFSIZE 132
 
 int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *);
