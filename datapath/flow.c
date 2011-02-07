@@ -819,6 +819,11 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	struct odp_key_ethernet *eth_key;
 	struct nlattr *nla;
 
+	/* This is an imperfect sanity-check that FLOW_BUFSIZE doesn't need
+	 * to be updated, but will at least raise awareness when new ODP key
+	 * types are added. */
+	BUILD_BUG_ON(__ODP_KEY_ATTR_MAX != 14);
+
 	if (swkey->tun_id != cpu_to_be64(0))
 		NLA_PUT_BE64(skb, ODP_KEY_ATTR_TUN_ID, swkey->tun_id);
 

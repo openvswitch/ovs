@@ -107,8 +107,21 @@ u64 flow_used_time(unsigned long flow_jiffies);
 u32 flow_hash(const struct sw_flow_key *);
 int flow_cmp(const struct tbl_node *, void *target);
 
-/* By my calculations currently the longest valid nlattr-formatted flow key is
- * 132 bytes long.
+/* Upper bound on the length of a nlattr-formatted flow key.  The longest
+ * nlattr-formatted flow key would be:
+ *
+ *                         struct  pad  nl hdr  total
+ *                         ------  ---  ------  -----
+ *  ODP_KEY_ATTR_TUN_ID        8    --     4     12
+ *  ODP_KEY_ATTR_IN_PORT       4    --     4      8
+ *  ODP_KEY_ATTR_ETHERNET     12    --     4     16
+ *  ODP_KEY_ATTR_8021Q         4    --     4      8
+ *  ODP_KEY_ATTR_ETHERTYPE     2     2     4      8
+ *  ODP_KEY_ATTR_IPV6         34     2     4     40
+ *  ODP_KEY_ATTR_ICMPV6        2     2     4      8
+ *  ODP_KEY_ATTR_ND           28    --     4     32
+ *  -------------------------------------------------
+ *  total                                       132
  */
 #define FLOW_BUFSIZE 132
 
