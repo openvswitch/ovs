@@ -128,8 +128,7 @@ def update(session, args):
         return "No change to configuration"
 
 def vswitchCurrentController():
-    controller = vswitchCfgQuery(["get", "Open_vSwitch", 
-                                  ".", "managers"]).strip('[]"')
+    controller = vswitchCfgQuery(["get-manager"])
     if controller == "":
         return controller
     if len(controller) < 4 or controller[0:4] != "ssl:":
@@ -138,20 +137,19 @@ def vswitchCurrentController():
         return controller.split(':')[1]
 
 def removeControllerCfg():
-    vswitchCfgMod(["--", "clear", "Open_vSwitch", ".", "managers",
+    vswitchCfgMod(["--", "del-manager",
                    "--", "del-ssl"])
 
 def setControllerCfg(controller):
     # /etc/xensource/xapi-ssl.pem is mentioned twice below because it
     # contains both the private key and the certificate.
-    vswitchCfgMod(["--", "clear", "Open_vSwitch", ".", "managers",
+    vswitchCfgMod(["--", "del-manager",
                    "--", "del-ssl",
                    "--", "--bootstrap", "set-ssl",
                    "/etc/xensource/xapi-ssl.pem",
                    "/etc/xensource/xapi-ssl.pem",
                    cacert_filename,
-                   "--", "set", "Open_vSwitch", ".",
-                   'managers="ssl:' + controller + ':6632"'])
+                   "--", "set-manager", 'ssl:' + controller + ':6632'])
 
 def vswitchCfgQuery(action_args):
     cmd = [vsctl, "--timeout=5", "-vANY:console:emer"] + action_args
