@@ -436,6 +436,7 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb)
 
 	skb_dst_drop(skb);
 	nf_reset(skb);
+	skb_clear_rxhash(skb);
 	secpath_reset(skb);
 
 	ecn_decapsulate(skb);
@@ -1203,6 +1204,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	nf_reset(skb);
 	secpath_reset(skb);
 	skb_dst_drop(skb);
+	skb_clear_rxhash(skb);
 
 	/* Offloading */
 	skb = handle_offloads(skb, mutable, rt);

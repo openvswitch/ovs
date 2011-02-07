@@ -158,6 +158,8 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		inet_proto_csum_replace4(check, skb, *nwaddr, new_nwaddr, 1);
 	csum_replace4(&nh->check, *nwaddr, new_nwaddr);
 
+	skb_clear_rxhash(skb);
+
 	*nwaddr = new_nwaddr;
 
 	return skb;
@@ -217,6 +219,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 	port = nla_type(a) == ODP_ACTION_ATTR_SET_TP_SRC ? &th->source : &th->dest;
 	inet_proto_csum_replace2(check, skb, *port, nla_get_be16(a), 0);
 	*port = nla_get_be16(a);
+	skb_clear_rxhash(skb);
 
 	return skb;
 }
