@@ -277,7 +277,11 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 	if (vlan_tx_tag_present(skb)) {
 		int err;
-		int features = skb->dev->features & skb->dev->vlan_features;
+		int features = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+		features = skb->dev->features & skb->dev->vlan_features;
+#endif
 
 		err = vswitch_skb_checksum_setup(skb);
 		if (unlikely(err)) {
