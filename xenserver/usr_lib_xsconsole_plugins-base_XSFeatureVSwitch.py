@@ -304,8 +304,7 @@ class XSFeatureVSwitch:
         if dbController == "":
             dbController = Lang("<None>")
         inPane.AddStatusField(Lang("Controller (config)", 20), dbController)
-        controller = VSwitchConfig.Get("get Open_vSwitch . managers")
-        controller = controller.strip('[]"')
+        controller = VSwitchConfig.Get("get-manager")
 
         if controller == "":
             controller = Lang("<None>")
