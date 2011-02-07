@@ -1567,7 +1567,7 @@ make_ofport(const struct dpif_port *dpif_port)
         return NULL;
     }
 
-    ofport = xmalloc(sizeof *ofport);
+    ofport = xzalloc(sizeof *ofport);
     ofport->netdev = netdev;
     ofport->odp_port = dpif_port->port_no;
     ofport->opp.port_no = odp_port_to_ofp_port(dpif_port->port_no);
