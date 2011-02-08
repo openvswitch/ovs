@@ -168,6 +168,10 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_get_stats])
 
+  OVS_GREP_IFELSE([$KSRC26/include/linux/rcupdate.h], [rcu_read_lock_held], [],
+                  [OVS_GREP_IFELSE([$KSRC26/include/linux/rtnetlink.h],
+                                   [rcu_read_lock_held])])
+  
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
   # member but retain the kerneldoc comment that describes it (which

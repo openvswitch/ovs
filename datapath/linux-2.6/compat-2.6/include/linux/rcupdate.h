@@ -11,7 +11,7 @@
 #define rcu_dereference_protected(p, c) (p)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#ifndef HAVE_RCU_READ_LOCK_HELD
 static inline int rcu_read_lock_held(void)
 {
 	return 1;
