@@ -242,8 +242,7 @@ parse_db_string_column(const struct ovsdb *db,
     *tablep = table;
 }
 
-#if HAVE_OPENSSL
-static const char *
+static OVS_UNUSED const char *
 query_db_string(const struct ovsdb *db, const char *name)
 {
     if (!name || strncmp(name, "db:", 3)) {
@@ -269,7 +268,6 @@ query_db_string(const struct ovsdb *db, const char *name)
         return NULL;
     }
 }
-#endif /* HAVE_OPENSSL */
 
 static struct ovsdb_jsonrpc_options *
 add_remote(struct shash *remotes, const char *target)
