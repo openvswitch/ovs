@@ -244,6 +244,20 @@ do_convert(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+do_needs_conversion(int argc OVS_UNUSED, char *argv[])
+{
+    const char *db_file_name = argv[1];
+    const char *schema_file_name = argv[2];
+    struct ovsdb_schema *schema1, *schema2;
+
+    check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema1));
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema2));
+    puts(ovsdb_schema_equal(schema1, schema2) ? "no" : "yes");
+    ovsdb_schema_destroy(schema1);
+    ovsdb_schema_destroy(schema2);
+}
+
+static void
 do_db_version(int argc OVS_UNUSED, char *argv[])
 {
     const char *db_file_name = argv[1];
@@ -458,6 +472,7 @@ static const struct command all_commands[] = {
     { "create", 2, 2, do_create },
     { "compact", 1, 2, do_compact },
     { "convert", 2, 3, do_convert },
+    { "needs-conversion", 2, 2, do_needs_conversion },
     { "db-version", 1, 1, do_db_version },
     { "db-cksum", 1, 1, do_db_cksum },
     { "schema-version", 1, 1, do_schema_version },

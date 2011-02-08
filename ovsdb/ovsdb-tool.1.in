@@ -19,6 +19,8 @@ ovsdb\-tool \- Open vSwitch database management utility
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert\fI db schema
 \fR[\fItarget\fR]
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBneeds\-conversion\fI db schema\fR
+.br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-version\fI db\fR
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-version\fI schema\fR
@@ -75,6 +77,11 @@ interpreted under \fIschema\fR, with only one exception: data in
 ignored.  Columns that exist in \fIschema\fR but not in \fIdb\fR are
 set to their default values.  All of \fIschema\fR's constraints apply
 in full.
+.
+.IP "\fBneeds\-conversion\fI db schema\fR"
+Reads the schema embedded in \fIdb\fR and the standalone schema in
+\fIschema\fR and compares them.  If the schemas are the same, prints
+\fBno\fR on stdout; if they differ, print \fByes\fR.
 .
 .IP "\fBdb\-version\fI db\fR"
 .IQ "\fBschema\-version\fI schema\fR"

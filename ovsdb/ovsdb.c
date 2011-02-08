@@ -235,6 +235,23 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
 
     return json;
 }
+
+/* Returns true if 'a' and 'b' specify equivalent schemas, false if they
+ * differ. */
+bool
+ovsdb_schema_equal(const struct ovsdb_schema *a,
+                   const struct ovsdb_schema *b)
+{
+    /* This implementation is simple, stupid, and slow, but I doubt that it
+     * will ever require much maintenance. */
+    struct json *ja = ovsdb_schema_to_json(a);
+    struct json *jb = ovsdb_schema_to_json(b);
+    bool equals = json_equal(ja, jb);
+    json_destroy(ja);
+    json_destroy(jb);
+
+    return equals;
+}
 
 static void
 ovsdb_set_ref_table(const struct shash *tables,

@@ -47,6 +47,9 @@ struct ovsdb_error *ovsdb_schema_from_json(struct json *,
                                            struct ovsdb_schema **)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_schema_to_json(const struct ovsdb_schema *);
+
+bool ovsdb_schema_equal(const struct ovsdb_schema *,
+                        const struct ovsdb_schema *);
 
 /* Database. */
 struct ovsdb {

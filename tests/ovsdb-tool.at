@@ -306,3 +306,25 @@ AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool db-cksum db], [0], [12345678 9
 ])
 AT_CLEANUP
+
+AT_SETUP([ovsdb-tool needs-conversion (no conversion needed)])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([ovsdb-tool needs-conversion db schema], [0], [no
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool needs-conversion (conversion needed)])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+sed 's/5\.1\.3/5.1.4/' < schema > schema2
+AT_CHECK([diff schema schema2], [1], [ignore])
+AT_CHECK([ovsdb-tool needs-conversion db schema2], [0], [yes
+])
+AT_CLEANUP
