@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,11 +245,11 @@ static void
 do_db_version(int argc OVS_UNUSED, char *argv[])
 {
     const char *db_file_name = argv[1];
-    struct ovsdb *db;
+    struct ovsdb_schema *schema;
 
-    check_ovsdb_error(ovsdb_file_open(db_file_name, true, &db, NULL));
-    puts(db->schema->version);
-    ovsdb_destroy(db);
+    check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema));
+    puts(schema->version);
+    ovsdb_schema_destroy(schema);
 }
 
 static void

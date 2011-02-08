@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,24 +121,16 @@ ovsdb_file_open_as_schema(const char *file_name,
 }
 
 static struct ovsdb_error *
-ovsdb_file_open__(const char *file_name,
-                  const struct ovsdb_schema *alternate_schema,
-                  bool read_only, struct ovsdb **dbp,
-                  struct ovsdb_file **filep)
+ovsdb_file_open_log(const char *file_name, enum ovsdb_log_open_mode open_mode,
+                    struct ovsdb_log **logp, struct ovsdb_schema **schemap)
 {
-    enum ovsdb_log_open_mode open_mode;
-    long long int oldest_commit;
-    unsigned int n_transactions;
     struct ovsdb_schema *schema = NULL;
-    struct ovsdb_error *error;
     struct ovsdb_log *log = NULL;
-    struct json *json;
-    struct ovsdb *db = NULL;
+    struct ovsdb_error *error;
+    struct json *json = NULL;
 
-    /* In read-only mode there is no ovsdb_file so 'filep' must be null. */
-    assert(!(read_only && filep));
+    assert(logp || schemap);
 
-    open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
     error = ovsdb_log_open(file_name, open_mode, -1, &log);
     if (error) {
         goto error;
@@ -153,9 +145,7 @@ ovsdb_file_open__(const char *file_name,
         goto error;
     }
 
-    if (alternate_schema) {
-        schema = ovsdb_schema_clone(alternate_schema);
-    } else {
+    if (schemap) {
         error = ovsdb_schema_from_json(json, &schema);
         if (error) {
             json_destroy(json);
@@ -167,8 +157,54 @@ ovsdb_file_open__(const char *file_name,
     }
     json_destroy(json);
 
-    db = ovsdb_create(schema);
-    schema = NULL;
+    if (logp) {
+        *logp = log;
+    } else {
+        ovsdb_log_close(log);
+    }
+    if (schemap) {
+        *schemap = schema;
+    }
+    return NULL;
+
+error:
+    ovsdb_log_close(log);
+    json_destroy(json);
+    if (logp) {
+        *logp = NULL;
+    }
+    if (schemap) {
+        *schemap = NULL;
+    }
+    return error;
+}
+
+static struct ovsdb_error *
+ovsdb_file_open__(const char *file_name,
+                  const struct ovsdb_schema *alternate_schema,
+                  bool read_only, struct ovsdb **dbp,
+                  struct ovsdb_file **filep)
+{
+    enum ovsdb_log_open_mode open_mode;
+    long long int oldest_commit;
+    unsigned int n_transactions;
+    struct ovsdb_schema *schema = NULL;
+    struct ovsdb_error *error;
+    struct ovsdb_log *log;
+    struct json *json;
+    struct ovsdb *db = NULL;
+
+    /* In read-only mode there is no ovsdb_file so 'filep' must be null. */
+    assert(!(read_only && filep));
+
+    open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
+    error = ovsdb_file_open_log(file_name, open_mode, &log,
+                                alternate_schema ? NULL : &schema);
+    if (error) {
+        goto error;
+    }
+
+    db = ovsdb_create(schema ? schema : ovsdb_schema_clone(alternate_schema));
 
     oldest_commit = LLONG_MAX;
     n_transactions = 0;
@@ -225,7 +261,6 @@ error:
         *filep = NULL;
     }
     ovsdb_destroy(db);
-    ovsdb_schema_destroy(schema);
     ovsdb_log_close(log);
     return error;
 }
@@ -459,6 +494,17 @@ ovsdb_file_save_copy(const char *file_name, int locking,
                      const char *comment, const struct ovsdb *db)
 {
     return ovsdb_file_save_copy__(file_name, locking, comment, db, NULL);
+}
+
+/* Opens database 'file_name', reads its schema, and closes it.  On success,
+ * stores the schema into '*schemap' and returns NULL; the caller then owns the
+ * schema.  On failure, returns an ovsdb_error (which the caller must destroy)
+ * and sets '*dbp' to NULL. */
+struct ovsdb_error *
+ovsdb_file_read_schema(const char *file_name, struct ovsdb_schema **schemap)
+{
+    assert(schemap != NULL);
+    return ovsdb_file_open_log(file_name, OVSDB_LOG_READ_ONLY, NULL, schemap);
 }
 
 /* Replica implementation. */

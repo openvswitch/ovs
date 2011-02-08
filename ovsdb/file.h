@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,5 +39,9 @@ struct ovsdb_error *ovsdb_file_save_copy(const char *file_name, int locking,
     WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_file_compact(struct ovsdb_file *);
+
+struct ovsdb_error *ovsdb_file_read_schema(const char *file_name,
+                                           struct ovsdb_schema **)
+    WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/file.h */
