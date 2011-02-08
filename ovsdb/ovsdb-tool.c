@@ -111,7 +111,9 @@ usage(void)
            "  compact DB [DST]   compact DB in-place (or to DST)\n"
            "  convert DB SCHEMA [DST]   convert DB to SCHEMA (to DST)\n"
            "  db-version DB      report version of schema used by DB\n"
+           "  db-cksum DB        report checksum of schema used by DB\n"
            "  schema-version SCHEMA  report SCHEMA's schema version\n"
+           "  schema-cksum SCHEMA  report SCHEMA's checksum\n"
            "  query DB TRNS      execute read-only transaction on DB\n"
            "  transact DB TRNS   execute read/write transaction on DB\n"
            "  show-log DB        prints information about DB's log entries\n",
@@ -253,6 +255,17 @@ do_db_version(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+do_db_cksum(int argc OVS_UNUSED, char *argv[])
+{
+    const char *db_file_name = argv[1];
+    struct ovsdb_schema *schema;
+
+    check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema));
+    puts(schema->cksum);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
 do_schema_version(int argc OVS_UNUSED, char *argv[])
 {
     const char *schema_file_name = argv[1];
@@ -260,6 +273,17 @@ do_schema_version(int argc OVS_UNUSED, char *argv[])
 
     check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
     puts(schema->version);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
+do_schema_cksum(int argc OVS_UNUSED, char *argv[])
+{
+    const char *schema_file_name = argv[1];
+    struct ovsdb_schema *schema;
+
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
+    puts(schema->cksum);
     ovsdb_schema_destroy(schema);
 }
 
@@ -435,7 +459,9 @@ static const struct command all_commands[] = {
     { "compact", 1, 2, do_compact },
     { "convert", 2, 3, do_convert },
     { "db-version", 1, 1, do_db_version },
+    { "db-cksum", 1, 1, do_db_cksum },
     { "schema-version", 1, 1, do_schema_version },
+    { "schema-cksum", 1, 1, do_schema_cksum },
     { "query", 2, 2, do_query },
     { "transact", 2, 2, do_transact },
     { "show-log", 1, 1, do_show_log },

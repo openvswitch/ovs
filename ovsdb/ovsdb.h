@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,13 @@ struct uuid;
 struct ovsdb_schema {
     char *name;
     char *version;
+    char *cksum;
     struct shash tables;        /* Contains "struct ovsdb_table_schema *"s. */
 };
 
 struct ovsdb_schema *ovsdb_schema_create(const char *name,
-                                         const char *version);
+                                         const char *version,
+                                         const char *cksum);
 struct ovsdb_schema *ovsdb_schema_clone(const struct ovsdb_schema *);
 void ovsdb_schema_destroy(struct ovsdb_schema *);
 

@@ -108,6 +108,7 @@ is represented by <database-schema>, as described below.
 
         "name": <id>                            required
         "version": <version>                    required
+        "cksum": <string>                       optional
         "tables": {<id>: <table-schema>, ...}   required
 
     The "name" identifies the database as a whole.  It must be
@@ -120,6 +121,9 @@ is represented by <database-schema>, as described below.
     to be omitted, but future versions of OVSDB will require it to be
     present.  Open vSwitch semantics for "version" are described in
     ovs-vswitchd.conf.db(5).
+
+    The "cksum" optionally reports an implementation-defined checksum
+    for the database schema.
 
 <table-schema>
 

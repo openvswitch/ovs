@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,14 @@
 #include "transaction.h"
 
 struct ovsdb_schema *
-ovsdb_schema_create(const char *name, const char *version)
+ovsdb_schema_create(const char *name, const char *version, const char *cksum)
 {
     struct ovsdb_schema *schema;
 
     schema = xzalloc(sizeof *schema);
     schema->name = xstrdup(name);
     schema->version = xstrdup(version);
+    schema->cksum = xstrdup(cksum);
     shash_init(&schema->tables);
 
     return schema;
@@ -44,7 +45,7 @@ ovsdb_schema_clone(const struct ovsdb_schema *old)
     struct ovsdb_schema *new;
     struct shash_node *node;
 
-    new = ovsdb_schema_create(old->name, old->version);
+    new = ovsdb_schema_create(old->name, old->version, old->cksum);
     SHASH_FOR_EACH (node, &old->tables) {
         const struct ovsdb_table_schema *ts = node->data;
 
@@ -68,6 +69,7 @@ ovsdb_schema_destroy(struct ovsdb_schema *schema)
     shash_destroy(&schema->tables);
     free(schema->name);
     free(schema->version);
+    free(schema->cksum);
     free(schema);
 }
 
@@ -129,7 +131,7 @@ struct ovsdb_error *
 ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
 {
     struct ovsdb_schema *schema;
-    const struct json *name, *tables, *version_json;
+    const struct json *name, *tables, *version_json, *cksum;
     struct ovsdb_error *error;
     struct shash_node *node;
     struct ovsdb_parser parser;
@@ -141,7 +143,7 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
     name = ovsdb_parser_member(&parser, "name", OP_ID);
     version_json = ovsdb_parser_member(&parser, "version",
                                        OP_STRING | OP_OPTIONAL);
-    ovsdb_parser_member(&parser, "cksum", OP_STRING | OP_OPTIONAL);
+    cksum = ovsdb_parser_member(&parser, "cksum", OP_STRING | OP_OPTIONAL);
     tables = ovsdb_parser_member(&parser, "tables", OP_OBJECT);
     error = ovsdb_parser_finish(&parser);
     if (error) {
@@ -159,7 +161,8 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
         version = "";
     }
 
-    schema = ovsdb_schema_create(json_string(name), version);
+    schema = ovsdb_schema_create(json_string(name), version,
+                                 cksum ? json_string(cksum) : "");
     SHASH_FOR_EACH (node, json_object(tables)) {
         struct ovsdb_table_schema *table;
 
@@ -216,6 +219,9 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
     json_object_put_string(json, "name", schema->name);
     if (schema->version[0]) {
         json_object_put_string(json, "version", schema->version);
+    }
+    if (schema->cksum[0]) {
+        json_object_put_string(json, "cksum", schema->cksum);
     }
 
     tables = json_object_create();

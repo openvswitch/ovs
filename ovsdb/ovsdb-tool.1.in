@@ -23,6 +23,10 @@ ovsdb\-tool \- Open vSwitch database management utility
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-version\fI schema\fR
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cksum\fI db\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-cksum\fI schema\fR
+.br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBquery\fI db transaction\fR
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
@@ -73,24 +77,27 @@ set to their default values.  All of \fIschema\fR's constraints apply
 in full.
 .
 .IP "\fBdb\-version\fI db\fR"
-Reads \fIdb\fR and prints the version number of the schema embedded
-within the database on stdout.  A schema version number has the form
-\fIx\fB.\fIy\fB.\fIz\fR.  See \fBovs\-vswitchd.conf.db\fR(5) for
-details.
+.IQ "\fBschema\-version\fI schema\fR"
+Prints the version number in the schema embedded within the database
+\fIdb\fR or in the standalone schema \fIschema\fR on stdout.  A schema
+version number has the form \fIx\fB.\fIy\fB.\fIz\fR.  See
+\fBovs\-vswitchd.conf.db\fR(5) for details.
 .IP
 Schema version numbers and Open vSwitch version numbers are
 independent.
 .IP
-If \fIdb\fR was created before schema versioning was introduced, then
-it will not have a version number and this command will print a blank
-line.
+If \fIschema\fR or \fIdb\fR was created before schema versioning was
+introduced, then it will not have a version number and this command
+will print a blank line.
 .
-.IP "\fBschema\-version\fI schema\fR"
-Reads \fIschema\fR and prints the schema's version number on stdout.
+.IP "\fBdb\-cksum\fI db\fR"
+.IQ "\fBschema\-cksum\fI schema\fR"
+Prints the checksum in the schema embedded within the database
+\fIdb\fR or of the standalone schema \fIschema\fR on stdout.
 .IP
-If \fIschema\fR was created before versioning was introduced, then it
-does not have a version number and this command will print a blank
-line.
+If \fIschema\fR or \fIdb\fR was created before schema versioning was
+introduced, then it will not have a version number and this command
+will print a blank line.
 .
 .IP "\fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
