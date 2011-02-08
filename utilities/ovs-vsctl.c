@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3026,9 +3026,9 @@ cmd_destroy(struct vsctl_context *ctx)
 }
 
 static bool
-is_condition_satified(const struct vsctl_table_class *table,
-                      const struct ovsdb_idl_row *row, const char *arg,
-                      struct ovsdb_symbol_table *symtab)
+is_condition_satisfied(const struct vsctl_table_class *table,
+                       const struct ovsdb_idl_row *row, const char *arg,
+                       struct ovsdb_symbol_table *symtab)
 {
     static const char *operators[] = {
         "=", "!=", "<", ">", "<=", ">="
@@ -3130,7 +3130,7 @@ cmd_wait_until(struct vsctl_context *ctx)
     }
 
     for (i = 3; i < ctx->argc; i++) {
-        if (!is_condition_satified(table, row, ctx->argv[i], ctx->symtab)) {
+        if (!is_condition_satisfied(table, row, ctx->argv[i], ctx->symtab)) {
             ctx->try_again = true;
             return;
         }
