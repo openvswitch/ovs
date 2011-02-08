@@ -2651,53 +2651,128 @@ cmd_get(struct vsctl_context *ctx)
 }
 
 static void
-pre_cmd_list(struct vsctl_context *ctx)
+parse_column_names(const char *column_names,
+                   const struct vsctl_table_class *table,
+                   const struct ovsdb_idl_column ***columnsp,
+                   size_t *n_columnsp)
 {
-    const char *table_name = ctx->argv[1];
-    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_column **columns;
+    size_t n_columns;
+
+    if (!column_names) {
+        size_t i;
+
+        n_columns = table->class->n_columns + 1;
+        columns = xmalloc(n_columns * sizeof *columns);
+        columns[0] = NULL;
+        for (i = 0; i < table->class->n_columns; i++) {
+            columns[i + 1] = &table->class->columns[i];
+        }
+    } else {
+        char *s = xstrdup(column_names);
+        size_t allocated_columns;
+        char *save_ptr = NULL;
+        char *column_name;
+
+        columns = NULL;
+        allocated_columns = n_columns = 0;
+        for (column_name = strtok_r(s, ", ", &save_ptr); column_name;
+             column_name = strtok_r(NULL, ", ", &save_ptr)) {
+            const struct ovsdb_idl_column *column;
+
+            if (!strcasecmp(column_name, "_uuid")) {
+                column = NULL;
+            } else {
+                die_if_error(get_column(table, column_name, &column));
+            }
+            if (n_columns >= allocated_columns) {
+                columns = x2nrealloc(columns, &allocated_columns,
+                                     sizeof *columns);
+            }
+            columns[n_columns++] = column;
+        }
+        free(s);
+
+        if (!n_columns) {
+            vsctl_fatal("must specify at least one column name");
+        }
+    }
+    *columnsp = columns;
+    *n_columnsp = n_columns;
+}
+
+
+static void
+pre_list_columns(struct vsctl_context *ctx,
+                 const struct vsctl_table_class *table,
+                 const char *column_names)
+{
+    const struct ovsdb_idl_column **columns;
+    size_t n_columns;
     size_t i;
 
-    table = pre_get_table(ctx, table_name);
-    for (i = 0; i < table->class->n_columns; i++) {
-        ovsdb_idl_add_column(ctx->idl, &table->class->columns[i]);
+    parse_column_names(column_names, table, &columns, &n_columns);
+    for (i = 0; i < n_columns; i++) {
+        if (columns[i]) {
+            ovsdb_idl_add_column(ctx->idl, columns[i]);
+        }
     }
+    free(columns);
 }
 
 static void
-list_record(const struct vsctl_table_class *table,
-            const struct ovsdb_idl_row *row, struct ds *out)
+pre_cmd_list(struct vsctl_context *ctx)
+{
+    const char *column_names = shash_find_data(&ctx->options, "--columns");
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+
+    table = pre_get_table(ctx, table_name);
+    pre_list_columns(ctx, table, column_names);
+}
+
+static void
+list_record(const struct ovsdb_idl_row *row,
+            const struct ovsdb_idl_column **columns, size_t n_columns,
+            struct ds *out)
 {
     size_t i;
 
-    ds_put_format(out, "%-20s: "UUID_FMT"\n", "_uuid",
-                  UUID_ARGS(&row->uuid));
-    for (i = 0; i < table->class->n_columns; i++) {
-        const struct ovsdb_idl_column *column = &table->class->columns[i];
-        const struct ovsdb_datum *datum;
+    for (i = 0; i < n_columns; i++) {
+        const struct ovsdb_idl_column *column = columns[i];
 
-        datum = ovsdb_idl_read(row, column);
-
-        ds_put_format(out, "%-20s: ", column->name);
-        ovsdb_datum_to_string(datum, &column->type, out);
-        ds_put_char(out, '\n');
+        if (!column) {
+            ds_put_format(out, "%-20s: "UUID_FMT"\n", "_uuid",
+                          UUID_ARGS(&row->uuid));
+        } else {
+            const struct ovsdb_datum *datum = ovsdb_idl_read(row, column);
+            ds_put_format(out, "%-20s: ", column->name);
+            ovsdb_datum_to_string(datum, &column->type, out);
+            ds_put_char(out, '\n');
+        }
     }
 }
 
 static void
 cmd_list(struct vsctl_context *ctx)
 {
+    const char *column_names = shash_find_data(&ctx->options, "--columns");
+    const struct ovsdb_idl_column **columns;
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     struct ds *out = &ctx->output;
+    size_t n_columns;
     int i;
 
     table = get_table(table_name);
+    parse_column_names(column_names, table, &columns, &n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
             if (i > 2) {
                 ds_put_char(out, '\n');
             }
-            list_record(table, must_get_row(ctx, table, ctx->argv[i]), out);
+            list_record(must_get_row(ctx, table, ctx->argv[i]),
+                        columns, n_columns, out);
         }
     } else {
         const struct ovsdb_idl_row *row;
@@ -2709,9 +2784,10 @@ cmd_list(struct vsctl_context *ctx)
             if (!first) {
                 ds_put_char(out, '\n');
             }
-            list_record(table, row, out);
+            list_record(row, columns, n_columns, out);
         }
     }
+    free(columns);
 }
 
 static void
@@ -3417,7 +3493,7 @@ static const struct vsctl_command_syntax all_commands[] = {
 
     /* Parameter commands. */
     {"get", 2, INT_MAX, pre_cmd_get, cmd_get, NULL, "--if-exists,--id=", RO},
-    {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL, "", RO},
+    {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL, "--columns=", RO},
     {"set", 3, INT_MAX, pre_cmd_set, cmd_set, NULL, "", RW},
     {"add", 4, INT_MAX, pre_cmd_add, cmd_add, NULL, "", RW},
     {"remove", 4, INT_MAX, pre_cmd_remove, cmd_remove, NULL, "", RW},

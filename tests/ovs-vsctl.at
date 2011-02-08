@@ -559,6 +559,13 @@ sflow               : []
 <0>
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
+  [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type list b])],
+  [0],
+  [[fail_mode           : []
+name                : "br0"
+datapath_type       : ""
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
   [RUN_OVS_VSCTL(
     [set bridge br0 \
       'other_config:datapath_id="0123456789ab"' \

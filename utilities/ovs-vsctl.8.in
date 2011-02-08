@@ -543,9 +543,14 @@ as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
 as well.
 .
 .ST "Database Command Syntax"
-.IP "\fBlist \fItable \fR[\fIrecord\fR]..."
-List the values of all columns of each specified \fIrecord\fR.  If no
+.IP "[\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBlist \fItable \fR[\fIrecord\fR]..."
+Lists the data in each specified \fIrecord\fR.  If no
 records are specified, lists all the records in \fItable\fR.
+.IP
+If \fB\-\-columns\fR is specified, only the requested columns are
+listed, in the specified order.  Otherwise, all columns are listed, in
+alphabetical order by column name.
+.
 .IP
 The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
 invocation will be wrong.
