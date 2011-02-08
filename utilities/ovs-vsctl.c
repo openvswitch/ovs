@@ -138,6 +138,11 @@ static void set_column(const struct vsctl_table_class *,
                        const struct ovsdb_idl_row *, const char *arg,
                        struct ovsdb_symbol_table *);
 
+static bool is_condition_satisfied(const struct vsctl_table_class *,
+                                   const struct ovsdb_idl_row *,
+                                   const char *arg,
+                                   struct ovsdb_symbol_table *);
+
 int
 main(int argc, char *argv[])
 {
@@ -508,6 +513,7 @@ Switch commands:\n\
 \n\
 Database commands:\n\
   list TBL [REC]              list RECord (or all records) in TBL\n\
+  find TBL CONDITION...       list records satisfying CONDITION in TBL\n\
   get TBL REC COL[:KEY]       print values of COLumns in RECord in TBL\n\
   set TBL REC COL[:KEY]=VALUE set COLumn values in RECord in TBL\n\
   add TBL REC COL [KEY=]VALUE add (KEY=)VALUE to COLumn in RECord in TBL\n\
@@ -2791,6 +2797,54 @@ cmd_list(struct vsctl_context *ctx)
 }
 
 static void
+pre_cmd_find(struct vsctl_context *ctx)
+{
+    const char *column_names = shash_find_data(&ctx->options, "--columns");
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+    int i;
+
+    table = pre_get_table(ctx, table_name);
+    pre_list_columns(ctx, table, column_names);
+    for (i = 2; i < ctx->argc; i++) {
+        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+    }
+}
+
+static void
+cmd_find(struct vsctl_context *ctx)
+{
+    const char *column_names = shash_find_data(&ctx->options, "--columns");
+    const struct ovsdb_idl_column **columns;
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    struct ds *out = &ctx->output;
+    size_t n_columns;
+
+    table = get_table(table_name);
+    parse_column_names(column_names, table, &columns, &n_columns);
+
+    for (row = ovsdb_idl_first_row(ctx->idl, table->class); row;
+         row = ovsdb_idl_next_row(row)) {
+        int i;
+
+        for (i = 2; i < ctx->argc; i++) {
+            if (!is_condition_satisfied(table, row, ctx->argv[i],
+                                        ctx->symtab)) {
+                goto next_row;
+            }
+        }
+        if (out->length) {
+            ds_put_char(out, '\n');
+        }
+        list_record(row, columns, n_columns, out);
+
+    next_row: ;
+    }
+}
+
+static void
 pre_cmd_set(struct vsctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
@@ -3494,6 +3548,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Parameter commands. */
     {"get", 2, INT_MAX, pre_cmd_get, cmd_get, NULL, "--if-exists,--id=", RO},
     {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL, "--columns=", RO},
+    {"find", 1, INT_MAX, pre_cmd_find, cmd_find, NULL, "--columns=", RO},
     {"set", 3, INT_MAX, pre_cmd_set, cmd_set, NULL, "", RW},
     {"add", 4, INT_MAX, pre_cmd_add, cmd_add, NULL, "", RW},
     {"remove", 4, INT_MAX, pre_cmd_remove, cmd_remove, NULL, "", RW},

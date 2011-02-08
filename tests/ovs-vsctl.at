@@ -566,6 +566,23 @@ name                : "br0"
 datapath_type       : ""
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
+  [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type find b])],
+  [0],
+  [[fail_mode           : []
+name                : "br0"
+datapath_type       : ""
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK([RUN_OVS_VSCTL([create b name=br1 datapath_type="foo"],
+                        [create b name=br2 external-ids:bar=quux])],
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [RUN_OVS_VSCTL([--columns=name find b datapath_type!=foo])], [0], [stdout],
+  [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK([sed -n '/./p' stdout | sort], [0],
+  [[name                : "br0"
+name                : "br2"
+]])
+AT_CHECK(
   [RUN_OVS_VSCTL(
     [set bridge br0 \
       'other_config:datapath_id="0123456789ab"' \
@@ -589,7 +606,9 @@ AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config 'datapath_id="0123456789ab"'
 AT_CHECK([RUN_OVS_VSCTL([clear br br0 external-ids -- get br br0 external_ids])], 
   [0], [{}
 ], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([destroy b br0])], 
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER([destroy b br0],
+                                 [destroy b br1],
+                                 [destroy b br2])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([list b])], 
   [0], [], [], [OVS_VSCTL_CLEANUP])
