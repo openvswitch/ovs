@@ -112,6 +112,9 @@ on a single line.  New-line characters that would otherwise separate
 lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
 would otherwise appear in the output are doubled.
 Prints a blank line for each command that has no output.
+This option does not affect the formatting of output from the
+\fBlist\fR or \fBfind\fR commands; see \fBTable Formatting Options\fR
+below.
 .
 .IP "\fB\-\-dry\-run\fR"
 Prevents \fBovs\-vsctl\fR from actually modifying the database.
@@ -124,6 +127,11 @@ to approximately \fIsecs\fR seconds.  If the timeout expires,
 \fBovs\-vsctl\fR will exit with a \fBSIGALRM\fR signal.  (A timeout
 would normally happen only if the database cannot be contacted, or if
 the system is overloaded.)
+.
+.SS "Table Formatting Options"
+These options control the format of output from the \fBlist\fR and
+\fBfind\fR commands.
+.so lib/table.man
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man

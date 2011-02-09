@@ -39,6 +39,7 @@
 #include "stream-ssl.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
+#include "table.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -61,7 +62,7 @@ struct vsctl_command_syntax {
     void (*prerequisites)(struct vsctl_context *ctx);
 
     /* Does the actual work of the command and puts the command's output, if
-     * any, in ctx->output.
+     * any, in ctx->output or ctx->table.
      *
      * Alternatively, if some prerequisite of the command is not met and the
      * caller should wait for something to change and then retry, it may set
@@ -90,6 +91,7 @@ struct vsctl_command {
 
     /* Data modified by commands. */
     struct ds output;
+    struct table *table;
 };
 
 /* --db: The database server to contact. */
@@ -106,6 +108,9 @@ static bool wait_for_reload = true;
 
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout;
+
+/* Format for table output. */
+static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 /* All supported commands. */
 static const struct vsctl_command_syntax all_commands[];
@@ -195,7 +200,8 @@ parse_options(int argc, char *argv[])
         OPT_NO_WAIT,
         OPT_DRY_RUN,
         OPT_PEER_CA_CERT,
-        VLOG_OPTION_ENUMS
+        VLOG_OPTION_ENUMS,
+        TABLE_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"db", required_argument, 0, OPT_DB},
@@ -207,6 +213,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
+        TABLE_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         STREAM_SSL_LONG_OPTIONS
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
@@ -218,6 +225,8 @@ parse_options(int argc, char *argv[])
     tmp = long_options_to_short_options(long_options);
     short_options = xasprintf("+%s", tmp);
     free(tmp);
+
+    table_style.format = TF_LIST;
 
     for (;;) {
         int c;
@@ -264,6 +273,7 @@ parse_options(int argc, char *argv[])
             break;
 
         VLOG_OPTION_HANDLERS
+        TABLE_OPTION_HANDLERS(&table_style)
 
 #ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
@@ -570,6 +580,7 @@ struct vsctl_context {
 
     /* Modifiable state. */
     struct ds output;
+    struct table *table;
     struct ovsdb_idl *idl;
     struct ovsdb_idl_txn *txn;
     struct ovsdb_symbol_table *symtab;
@@ -2737,24 +2748,54 @@ pre_cmd_list(struct vsctl_context *ctx)
     pre_list_columns(ctx, table, column_names);
 }
 
-static void
-list_record(const struct ovsdb_idl_row *row,
-            const struct ovsdb_idl_column **columns, size_t n_columns,
-            struct ds *out)
+static struct table *
+list_make_table(const struct ovsdb_idl_column **columns, size_t n_columns)
 {
+    struct table *out;
     size_t i;
+
+    out = xmalloc(sizeof *out);
+    table_init(out);
 
     for (i = 0; i < n_columns; i++) {
         const struct ovsdb_idl_column *column = columns[i];
+        const char *column_name = column ? column->name : "_uuid";
+
+        table_add_column(out, "%s", column_name);
+    }
+
+    return out;
+}
+
+static void
+list_record(const struct ovsdb_idl_row *row,
+            const struct ovsdb_idl_column **columns, size_t n_columns,
+            struct table *out)
+{
+    size_t i;
+
+    table_add_row(out);
+    for (i = 0; i < n_columns; i++) {
+        const struct ovsdb_idl_column *column = columns[i];
+        struct cell *cell = table_add_cell(out);
 
         if (!column) {
-            ds_put_format(out, "%-20s: "UUID_FMT"\n", "_uuid",
-                          UUID_ARGS(&row->uuid));
+            struct ovsdb_datum datum;
+            union ovsdb_atom atom;
+
+            atom.uuid = row->uuid;
+
+            datum.keys = &atom;
+            datum.values = NULL;
+            datum.n = 1;
+
+            cell->json = ovsdb_datum_to_json(&datum, &ovsdb_type_uuid);
+            cell->type = &ovsdb_type_uuid;
         } else {
             const struct ovsdb_datum *datum = ovsdb_idl_read(row, column);
-            ds_put_format(out, "%-20s: ", column->name);
-            ovsdb_datum_to_string(datum, &column->type, out);
-            ds_put_char(out, '\n');
+
+            cell->json = ovsdb_datum_to_json(datum, &column->type);
+            cell->type = &column->type;
         }
     }
 }
@@ -2766,17 +2807,15 @@ cmd_list(struct vsctl_context *ctx)
     const struct ovsdb_idl_column **columns;
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
-    struct ds *out = &ctx->output;
+    struct table *out;
     size_t n_columns;
     int i;
 
     table = get_table(table_name);
     parse_column_names(column_names, table, &columns, &n_columns);
+    out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
-            if (i > 2) {
-                ds_put_char(out, '\n');
-            }
             list_record(must_get_row(ctx, table, ctx->argv[i]),
                         columns, n_columns, out);
         }
@@ -2787,9 +2826,6 @@ cmd_list(struct vsctl_context *ctx)
         for (row = ovsdb_idl_first_row(ctx->idl, table->class), first = true;
              row != NULL;
              row = ovsdb_idl_next_row(row), first = false) {
-            if (!first) {
-                ds_put_char(out, '\n');
-            }
             list_record(row, columns, n_columns, out);
         }
     }
@@ -2819,12 +2855,12 @@ cmd_find(struct vsctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     const struct ovsdb_idl_row *row;
-    struct ds *out = &ctx->output;
+    struct table *out;
     size_t n_columns;
 
     table = get_table(table_name);
     parse_column_names(column_names, table, &columns, &n_columns);
-
+    out = ctx->table = list_make_table(columns, n_columns);
     for (row = ovsdb_idl_first_row(ctx->idl, table->class); row;
          row = ovsdb_idl_next_row(row)) {
         int i;
@@ -2834,9 +2870,6 @@ cmd_find(struct vsctl_context *ctx)
                                         ctx->symtab)) {
                 goto next_row;
             }
-        }
-        if (out->length) {
-            ds_put_char(out, '\n');
         }
         list_record(row, columns, n_columns, out);
 
@@ -3292,6 +3325,7 @@ vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
     ctx->options = command->options;
 
     ds_swap(&ctx->output, &command->output);
+    ctx->table = command->table;
     ctx->idl = idl;
     ctx->txn = txn;
     ctx->ovs = ovs;
@@ -3305,6 +3339,7 @@ static void
 vsctl_context_done(struct vsctl_context *ctx, struct vsctl_command *command)
 {
     ds_swap(&ctx->output, &command->output);
+    command->table = ctx->table;
 }
 
 static void
@@ -3322,12 +3357,14 @@ run_prerequisites(struct vsctl_command *commands, size_t n_commands,
             struct vsctl_context ctx;
 
             ds_init(&c->output);
+            c->table = NULL;
 
             vsctl_context_init(&ctx, c, idl, NULL, NULL, NULL);
             (c->syntax->prerequisites)(&ctx);
             vsctl_context_done(&ctx, c);
 
             assert(!c->output.string);
+            assert(!c->table);
         }
     }
 }
@@ -3367,6 +3404,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_init(&c->output);
+        c->table = NULL;
     }
     for (c = commands; c < &commands[n_commands]; c++) {
         struct vsctl_context ctx;
@@ -3433,7 +3471,9 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
 
-        if (oneline) {
+        if (c->table) {
+            table_print(c->table, &table_style);
+        } else if (oneline) {
             size_t j;
 
             ds_chomp(ds, '\n');
@@ -3457,6 +3497,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
             fputs(ds_cstr(ds), stdout);
         }
         ds_destroy(&c->output);
+        table_destroy(c->table);
+        free(c->table);
 
         smap_destroy(&c->options);
     }
@@ -3489,6 +3531,8 @@ try_again:
     ovsdb_symbol_table_destroy(symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_destroy(&c->output);
+        table_destroy(c->table);
+        free(c->table);
     }
     free(error);
 }

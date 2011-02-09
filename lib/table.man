@@ -3,9 +3,11 @@
 Sets the type of table formatting.  The following types of
 \fIformat\fR are available:
 .RS
-.IP "\fBtable\fR"
+.ie '\*(PN'ovs\-vsctl' .IP "\fBtable\fR"
+.el                    .IP "\fBtable\fR (default)"
 2-D text tables with aligned columns.
-.IP "\fBlist\fR"
+.ie '\*(PN'ovs\-vsctl' .IP "\fBlist\fR (default)"
+.el                    .IP "\fBlist\fR"
 A list with one column per line and rows separated by a blank line.
 .IP "\fBhtml\fR"
 HTML tables.
@@ -38,7 +40,9 @@ Sets the formatting for cells within output tables.  The following
 types of \fIformat\fR are available:
 .RS
 .IP "\fBstring\fR (default)"
-The simple format described in \fBovs\-vsctl\fR(8).
+The simple format described in the \fBDatabase Values\fR
+.ie '\*(PN'ovs\-vsctl' section below.
+.el                    section of \fBovs\-vsctl\fR(8).
 .IP "\fBbare\fR"
 The simple format with punctuation stripped off: \fB[]\fR and \fB{}\fR
 are omitted around sets, maps, and empty columns, items within sets
