@@ -200,6 +200,8 @@ static void rule_insert(struct ofproto *, struct rule *);
 static void rule_remove(struct ofproto *, struct rule *);
 
 static void rule_send_removed(struct ofproto *, struct rule *, uint8_t reason);
+static void rule_get_stats(const struct rule *, uint64_t *packets,
+                           uint64_t *bytes);
 
 /* An exact-match instantiation of an OpenFlow flow. */
 struct facet {
@@ -220,6 +222,9 @@ struct facet {
      */
     uint64_t packet_count;       /* Number of packets received. */
     uint64_t byte_count;         /* Number of bytes received. */
+
+    uint64_t dp_packet_count;    /* Last known packet count in the datapath. */
+    uint64_t dp_byte_count;      /* Last known byte count in the datapath. */
 
     /* Number of bytes passed to account_cb.  This may include bytes that can
      * currently obtained from the datapath (thus, it can be greater than
@@ -2318,6 +2323,8 @@ facet_put__(struct ofproto *ofproto, struct facet *facet,
     flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
     if (stats) {
         flags |= DPIF_FP_ZERO_STATS;
+        facet->dp_packet_count = 0;
+        facet->dp_byte_count = 0;
     }
 
     ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
@@ -2378,6 +2385,8 @@ facet_uninstall(struct ofproto *p, struct facet *facet)
             facet_update_stats(p, facet, &stats);
         }
         facet->installed = false;
+        facet->dp_packet_count = 0;
+        facet->dp_byte_count = 0;
     }
 }
 
@@ -2394,10 +2403,15 @@ facet_is_controller_flow(struct facet *facet)
 }
 
 /* Folds all of 'facet''s statistics into its rule.  Also updates the
- * accounting ofhook and emits a NetFlow expiration if appropriate.  */
+ * accounting ofhook and emits a NetFlow expiration if appropriate.  All of
+ * 'facet''s statistics in the datapath should have been zeroed and folded into
+ * its packet and byte counts before this function is called. */
 static void
 facet_flush_stats(struct ofproto *ofproto, struct facet *facet)
 {
+    assert(!facet->dp_byte_count);
+    assert(!facet->dp_packet_count);
+
     facet_account(ofproto, facet, 0);
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
@@ -3462,46 +3476,6 @@ handle_port_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-/* Obtains statistic counters for 'rule' within 'p' and stores them into
- * '*packet_countp' and '*byte_countp'.  The returned statistics include
- * statistics for all of 'rule''s facets. */
-static void
-query_stats(struct ofproto *p, struct rule *rule,
-            uint64_t *packet_countp, uint64_t *byte_countp)
-{
-    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
-    uint64_t packet_count, byte_count;
-    struct facet *facet;
-    struct ofpbuf key;
-
-    /* Start from historical data for 'rule' itself that are no longer tracked
-     * by the datapath.  This counts, for example, facets that have expired. */
-    packet_count = rule->packet_count;
-    byte_count = rule->byte_count;
-
-    /* Ask the datapath for statistics on all of the rule's facets.
-     *
-     * Also, add any statistics that are not tracked by the datapath for each
-     * facet.  This includes, for example, statistics for packets that were
-     * executed "by hand" by ofproto via dpif_execute() but must be accounted
-     * to a rule. */
-    ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
-    LIST_FOR_EACH (facet, list_node, &rule->facets) {
-        struct dpif_flow_stats stats;
-
-        ofpbuf_clear(&key);
-        odp_flow_key_from_flow(&key, &facet->flow);
-        dpif_flow_get(p->dpif, key.data, key.size, NULL, &stats);
-
-        packet_count += stats.n_packets + facet->packet_count;
-        byte_count += stats.n_bytes + facet->byte_count;
-    }
-
-    /* Return the stats to the caller. */
-    *packet_countp = packet_count;
-    *byte_countp = byte_count;
-}
-
 static void
 calc_flow_duration(long long int start, ovs_be32 *sec, ovs_be32 *nsec)
 {
@@ -3526,7 +3500,7 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     act_len = sizeof *rule->actions * rule->n_actions;
     len = offsetof(struct ofp_flow_stats, actions) + act_len;
 
-    query_stats(ofconn->ofproto, rule, &packet_count, &byte_count);
+    rule_get_stats(rule, &packet_count, &byte_count);
 
     ofs = append_ofp_stats_reply(len, ofconn, replyp);
     ofs->length = htons(len);
@@ -3591,7 +3565,7 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
         return;
     }
 
-    query_stats(ofconn->ofproto, rule, &packet_count, &byte_count);
+    rule_get_stats(rule, &packet_count, &byte_count);
 
     act_len = sizeof *rule->actions * rule->n_actions;
 
@@ -3655,12 +3629,12 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static void
-flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
+flow_stats_ds(struct rule *rule, struct ds *results)
 {
     uint64_t packet_count, byte_count;
     size_t act_len = sizeof *rule->actions * rule->n_actions;
 
-    query_stats(ofproto, rule, &packet_count, &byte_count);
+    rule_get_stats(rule, &packet_count, &byte_count);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -3688,7 +3662,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 
     cls_cursor_init(&cursor, &p->cls, NULL);
     CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-        flow_stats_ds(p, rule, results);
+        flow_stats_ds(rule, results);
     }
 }
 
@@ -3713,7 +3687,7 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
                 uint64_t packet_count;
                 uint64_t byte_count;
 
-                query_stats(ofproto, rule, &packet_count, &byte_count);
+                rule_get_stats(rule, &packet_count, &byte_count);
 
                 total_packets += packet_count;
                 total_bytes += byte_count;
@@ -3871,9 +3845,8 @@ handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 
 static void
 facet_update_time(struct ofproto *ofproto, struct facet *facet,
-                  const struct dpif_flow_stats *stats)
+                  long long int used)
 {
-    long long int used = stats->used;
     if (used > facet->used) {
         facet->used = used;
         if (used > facet->rule->used) {
@@ -3894,7 +3867,7 @@ facet_update_stats(struct ofproto *ofproto, struct facet *facet,
                    const struct dpif_flow_stats *stats)
 {
     if (stats->n_packets) {
-        facet_update_time(ofproto, facet, stats);
+        facet_update_time(ofproto, facet, stats->used);
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
         netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
@@ -4489,7 +4462,7 @@ handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
 /* Flow expiration. */
 
 static int ofproto_dp_max_idle(const struct ofproto *);
-static void ofproto_update_used(struct ofproto *);
+static void ofproto_update_stats(struct ofproto *);
 static void rule_expire(struct ofproto *, struct rule *);
 static void ofproto_expire_facets(struct ofproto *, int dp_max_idle);
 
@@ -4506,8 +4479,8 @@ ofproto_expire(struct ofproto *ofproto)
     struct cls_cursor cursor;
     int dp_max_idle;
 
-    /* Update 'used' for each flow in the datapath. */
-    ofproto_update_used(ofproto);
+    /* Update stats for each flow in the datapath. */
+    ofproto_update_stats(ofproto);
 
     /* Expire facets that have been idle too long. */
     dp_max_idle = ofproto_dp_max_idle(ofproto);
@@ -4530,9 +4503,10 @@ ofproto_expire(struct ofproto *ofproto)
     return MIN(dp_max_idle, 1000);
 }
 
-/* Update 'used' member of installed facets. */
+/* Update 'packet_count', 'byte_count', and 'used' members of installed facets.
+ */
 static void
-ofproto_update_used(struct ofproto *p)
+ofproto_update_stats(struct ofproto *p)
 {
     const struct dpif_flow_stats *stats;
     struct dpif_flow_dump dump;
@@ -4558,7 +4532,23 @@ ofproto_update_used(struct ofproto *p)
         facet = facet_find(p, &flow);
 
         if (facet && facet->installed) {
-            facet_update_time(p, facet, stats);
+
+            if (stats->n_packets >= facet->dp_packet_count) {
+                facet->packet_count += stats->n_packets - facet->dp_packet_count;
+            } else {
+                VLOG_WARN_RL(&rl, "unexpected packet count from the datapath");
+            }
+
+            if (stats->n_bytes >= facet->dp_byte_count) {
+                facet->byte_count += stats->n_bytes - facet->dp_byte_count;
+            } else {
+                VLOG_WARN_RL(&rl, "unexpected byte count from datapath");
+            }
+
+            facet->dp_packet_count = stats->n_packets;
+            facet->dp_byte_count = stats->n_bytes;
+
+            facet_update_time(p, facet, stats->used);
             facet_account(p, facet, stats->n_bytes);
         } else {
             /* There's a flow in the datapath that we know nothing about.
@@ -4602,7 +4592,7 @@ ofproto_dp_max_idle(const struct ofproto *ofproto)
      * they receive additional data).
      *
      * This requires a second pass through the facets, in addition to the pass
-     * made by ofproto_update_used(), because the former function never looks
+     * made by ofproto_update_stats(), because the former function never looks
      * at uninstallable facets.
      */
     enum { BUCKET_WIDTH = ROUND_UP(100, TIME_UPDATE_INTERVAL) };
@@ -4804,6 +4794,31 @@ rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
          * requests that would not add new flows, so it is imperfect.) */
         queue_tx(msg, ofconn, ofconn->reply_counter);
     }
+}
+
+/* Obtains statistics for 'rule' and stores them in '*packets' and '*bytes'.
+ * The returned statistics include statistics for all of 'rule''s facets. */
+static void
+rule_get_stats(const struct rule *rule, uint64_t *packets, uint64_t *bytes)
+{
+    uint64_t p, b;
+    struct facet *facet;
+
+    /* Start from historical data for 'rule' itself that are no longer tracked
+     * in facets.  This counts, for example, facets that have expired. */
+    p = rule->packet_count;
+    b = rule->byte_count;
+
+    /* Add any statistics that are tracked by facets.  This includes
+     * statistical data recently updated by ofproto_update_stats() as well as
+     * stats for packets that were executed "by hand" via dpif_execute(). */
+    LIST_FOR_EACH (facet, list_node, &rule->facets) {
+        p += facet->packet_count;
+        b += facet->byte_count;
+    }
+
+    *packets = p;
+    *bytes = b;
 }
 
 /* pinsched callback for sending 'ofp_packet_in' on 'ofconn'. */
