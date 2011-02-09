@@ -68,21 +68,29 @@ def init_session():
 
     return True
 
-# By default, the "bridge-id" external id in the Bridge table is the
-# same as "xs-network-uuids".  This may be overridden by defining a
-# "nicira-bridge-id" key in the "other_config" field of the network
-# record of XAPI.
-def get_bridge_id(br_name, default=None):
+def get_network_by_bridge(br_name):
     if not init_session():
         s_log.warning("Failed to get bridge id %s because"
                 " XAPI session could not be initialized" % br_name)
-        return default
+        return None
 
     for n in session.xenapi.network.get_all():
         rec = session.xenapi.network.get_record(n)
-        if rec['bridge'] != br_name:
-            continue
+        if rec['bridge'] == br_name:
+            return rec
+
+    return None
+
+# By default, the "bridge-id" external id in the Bridge table is the
+# same as "xs-network-uuids".  This may be overridden by defining a
+# "nicira-bridge-id" key in the "other_config" field of the network
+# record of XAPI.  If nicira-bridge-id is undefined returns default.
+# On error returns None.
+def get_bridge_id(br_name, default=None):
+    rec = get_network_by_bridge(br_name)
+    if rec:
         return rec['other_config'].get('nicira-bridge-id', default)
+    return None
 
 # By default, the "iface-id" external id in the Interface table is the
 # same as "xs-vif-uuid".  This may be overridden by defining a
@@ -107,12 +115,15 @@ def get_iface_id(if_name, xs_vif_uuid):
         s_log.warning("Could not find XAPI entry for VIF %s" % if_name)
         return xs_vif_uuid
 
-def set_external_id(table, record, key, value):
-    col = 'external-ids:"' + key + '"="' + value + '"'
-    cmd = [vsctl, "--timeout=30", "-vANY:console:emer", "set", table, record, col]
+def call_vsctl(args):
+    cmd = [vsctl, "--timeout=30", "-vANY:console:emer"] + args
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
         s_log.warning("Couldn't call ovs-vsctl")
+
+def set_external_id(table, record, key, value):
+    col = 'external-ids:"' + key + '"="' + value + '"'
+    call_vsctl(["set", table, record, col])
 
 # XAPI on XenServer 5.6 uses the external-id "network-uuids" for internal
 # networks, but we now prefer "xs-network-uuids".  Look for its use and
@@ -121,6 +132,25 @@ def update_network_uuids(name, ids):
     if ids["network-uuids"] and not ids["xs-network-uuids"]:
         set_external_id("Bridge", name, "xs-network-uuids",
                 ids["network-uuids"])
+
+def update_fail_mode(name):
+    rec = get_network_by_bridge(name)
+
+    if not rec:
+        return
+
+    fail_mode = rec['other_config'].get('vswitch-controller-fail-mode')
+
+    if not fail_mode:
+        pools = session.xenapi.pool.get_all()
+        if len(pools) == 1:
+            prec = session.xenapi.pool.get_record(pools[0])
+            fail_mode = prec['other_config'].get('vswitch-controller-fail-mode')
+
+    if fail_mode not in ['standalone', 'secure']:
+        fail_mode = 'standalone'
+
+    call_vsctl(["set", "bridge", name, "fail_mode=" + fail_mode])
 
 def update_bridge_id(name, ids):
     id = get_bridge_id(name, ids.get("xs-network-uuids"))
@@ -257,6 +287,7 @@ def main(argv):
                 # so only check for "network-uuids" on creation.
                 if name not in bridges:
                     update_network_uuids(name, ids)
+                    update_fail_mode(name)
 
                 if (name not in bridges) or (bridges[name] != ids):
                     update_bridge_id(name, ids)
