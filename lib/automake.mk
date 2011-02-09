@@ -140,6 +140,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/string.h \
 	lib/svec.c \
 	lib/svec.h \
+	lib/table.c \
+	lib/table.h \
 	lib/tag.c \
 	lib/tag.h \
 	lib/timeval.c \
@@ -229,6 +231,7 @@ EXTRA_DIST += \
 	lib/ssl.man \
 	lib/ssl-syn.man \
 	lib/stress-unixctl.man \
+	lib/table.man \
 	lib/unixctl.man \
 	lib/unixctl-syn.man \
 	lib/vconn-active.man \

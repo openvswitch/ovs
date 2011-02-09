@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
+#include "lib/table.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -45,25 +46,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_client);
 
-/* --format: Output formatting. */
-static enum {
-    FMT_TABLE,                  /* Textual table. */
-    FMT_HTML,                   /* HTML table. */
-    FMT_CSV,                    /* Comma-separated lines. */
-    FMT_JSON                    /* JSON. */
-} output_format;
-
-/* --no-headings: Whether table output should include headings. */
-static int output_headings = true;
-
-/* --pretty: Flags to pass to json_to_string(). */
-static int json_flags = JSSF_SORT;
-
-/* --data: Format of data in output tables. */
-static enum {
-    DF_STRING,                  /* String format. */
-    DF_JSON,                    /* JSON. */
-} data_format;
+/* Format for table output. */
+static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 static const struct command all_commands[];
 
@@ -87,18 +71,16 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
         DAEMON_OPTION_ENUMS,
+        TABLE_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"format", required_argument, 0, 'f'},
-        {"data", required_argument, 0, 'd'},
-        {"no-headings", no_argument, &output_headings, 0},
-        {"pretty", no_argument, &json_flags, JSSF_PRETTY | JSSF_SORT},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+        TABLE_LONG_OPTIONS
         STREAM_SSL_LONG_OPTIONS
 #endif
         {0, 0, 0, 0},
@@ -114,30 +96,6 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
-        case 'f':
-            if (!strcmp(optarg, "table")) {
-                output_format = FMT_TABLE;
-            } else if (!strcmp(optarg, "html")) {
-                output_format = FMT_HTML;
-            } else if (!strcmp(optarg, "csv")) {
-                output_format = FMT_CSV;
-            } else if (!strcmp(optarg, "json")) {
-                output_format = FMT_JSON;
-            } else {
-                ovs_fatal(0, "unknown output format \"%s\"", optarg);
-            }
-            break;
-
-        case 'd':
-            if (!strcmp(optarg, "string")) {
-                data_format = DF_STRING;
-            } else if (!strcmp(optarg, "json")) {
-                data_format = DF_JSON;
-            } else {
-                ovs_fatal(0, "unknown data format \"%s\"", optarg);
-            }
-            break;
-
         case 'h':
             usage();
 
@@ -150,6 +108,8 @@ parse_options(int argc, char *argv[])
             break;
 
         DAEMON_OPTION_HANDLERS
+
+        TABLE_OPTION_HANDLERS(&table_style)
 
 #ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
@@ -257,7 +217,7 @@ open_jsonrpc(const char *server)
 static void
 print_json(struct json *json)
 {
-    char *string = json_to_string(json, json_flags);
+    char *string = json_to_string(json, table_style.json_flags);
     fputs(string, stdout);
     free(string);
 }
@@ -311,440 +271,6 @@ fetch_schema(const char *server, const char *database)
     return schema;
 }
 
-struct column {
-    char *heading;
-};
-
-struct cell {
-    /* Literal text. */
-    char *text;
-
-    /* JSON. */
-    struct json *json;
-    const struct ovsdb_type *type;
-};
-
-static const char *
-cell_to_text(const struct cell *cell_)
-{
-    struct cell *cell = (struct cell *) cell_;
-    if (!cell->text) {
-        if (cell->json) {
-            if (data_format == DF_JSON || !cell->type) {
-                cell->text = json_to_string(cell->json, JSSF_SORT);
-            } else if (data_format == DF_STRING) {
-                struct ovsdb_datum datum;
-                struct ovsdb_error *error;
-                struct ds s;
-
-                error = ovsdb_datum_from_json(&datum, cell->type, cell->json,
-                                              NULL);
-                if (!error) {
-                    ds_init(&s);
-                    ovsdb_datum_to_string(&datum, cell->type, &s);
-                    ovsdb_datum_destroy(&datum, cell->type);
-                    cell->text = ds_steal_cstr(&s);
-                } else {
-                    cell->text = json_to_string(cell->json, JSSF_SORT);
-                }
-            } else {
-                NOT_REACHED();
-            }
-        } else {
-            cell->text = xstrdup("");
-        }
-    }
-
-    return cell->text;
-}
-
-static void
-cell_destroy(struct cell *cell)
-{
-    free(cell->text);
-    json_destroy(cell->json);
-}
-
-struct table {
-    struct cell *cells;
-    struct column *columns;
-    size_t n_columns, allocated_columns;
-    size_t n_rows, allocated_rows;
-    size_t current_column;
-    char *caption;
-};
-
-static void
-table_init(struct table *table)
-{
-    memset(table, 0, sizeof *table);
-}
-
-static void
-table_destroy(struct table *table)
-{
-    size_t i;
-
-    for (i = 0; i < table->n_columns; i++) {
-        free(table->columns[i].heading);
-    }
-    free(table->columns);
-
-    for (i = 0; i < table->n_columns * table->n_rows; i++) {
-        cell_destroy(&table->cells[i]);
-    }
-    free(table->cells);
-
-    free(table->caption);
-}
-
-static void
-table_set_caption(struct table *table, char *caption)
-{
-    free(table->caption);
-    table->caption = caption;
-}
-
-static void
-table_add_column(struct table *table, const char *heading, ...)
-    PRINTF_FORMAT(2, 3);
-
-static void
-table_add_column(struct table *table, const char *heading, ...)
-{
-    struct column *column;
-    va_list args;
-
-    assert(!table->n_rows);
-    if (table->n_columns >= table->allocated_columns) {
-        table->columns = x2nrealloc(table->columns, &table->allocated_columns,
-                                    sizeof *table->columns);
-    }
-    column = &table->columns[table->n_columns++];
-
-    va_start(args, heading);
-    column->heading = xvasprintf(heading, args);
-    va_end(args);
-}
-
-static struct cell *
-table_cell__(const struct table *table, size_t row, size_t column)
-{
-    return &table->cells[column + row * table->n_columns];
-}
-
-static void
-table_add_row(struct table *table)
-{
-    size_t x, y;
-
-    if (table->n_rows >= table->allocated_rows) {
-        table->cells = x2nrealloc(table->cells, &table->allocated_rows,
-                                  table->n_columns * sizeof *table->cells);
-    }
-
-    y = table->n_rows++;
-    table->current_column = 0;
-    for (x = 0; x < table->n_columns; x++) {
-        struct cell *cell = table_cell__(table, y, x);
-        memset(cell, 0, sizeof *cell);
-    }
-}
-
-static struct cell *
-table_add_cell(struct table *table)
-{
-    size_t x, y;
-
-    assert(table->n_rows > 0);
-    assert(table->current_column < table->n_columns);
-
-    x = table->current_column++;
-    y = table->n_rows - 1;
-
-    return table_cell__(table, y, x);
-}
-
-static void
-table_print_table_line__(struct ds *line)
-{
-    puts(ds_cstr(line));
-    ds_clear(line);
-}
-
-static void
-table_print_table__(const struct table *table)
-{
-    static int n = 0;
-    struct ds line = DS_EMPTY_INITIALIZER;
-    int *widths;
-    size_t x, y;
-
-    if (n++ > 0) {
-        putchar('\n');
-    }
-
-    if (table->caption) {
-        puts(table->caption);
-    }
-
-    widths = xmalloc(table->n_columns * sizeof *widths);
-    for (x = 0; x < table->n_columns; x++) {
-        const struct column *column = &table->columns[x];
-
-        widths[x] = strlen(column->heading);
-        for (y = 0; y < table->n_rows; y++) {
-            const char *text = cell_to_text(table_cell__(table, y, x));
-            size_t length = strlen(text);
-
-            if (length > widths[x])
-                widths[x] = length;
-        }
-    }
-
-    if (output_headings) {
-        for (x = 0; x < table->n_columns; x++) {
-            const struct column *column = &table->columns[x];
-            if (x) {
-                ds_put_char(&line, ' ');
-            }
-            ds_put_format(&line, "%-*s", widths[x], column->heading);
-        }
-        table_print_table_line__(&line);
-
-        for (x = 0; x < table->n_columns; x++) {
-            if (x) {
-                ds_put_char(&line, ' ');
-            }
-            ds_put_char_multiple(&line, '-', widths[x]);
-        }
-        table_print_table_line__(&line);
-    }
-
-    for (y = 0; y < table->n_rows; y++) {
-        for (x = 0; x < table->n_columns; x++) {
-            const char *text = cell_to_text(table_cell__(table, y, x));
-            if (x) {
-                ds_put_char(&line, ' ');
-            }
-            ds_put_format(&line, "%-*s", widths[x], text);
-        }
-        table_print_table_line__(&line);
-    }
-
-    ds_destroy(&line);
-    free(widths);
-}
-
-static void
-table_escape_html_text__(const char *s, size_t n)
-{
-    size_t i;
-
-    for (i = 0; i < n; i++) {
-        char c = s[i];
-
-        switch (c) {
-        case '&':
-            fputs("&amp;", stdout);
-            break;
-        case '<':
-            fputs("&lt;", stdout);
-            break;
-        case '>':
-            fputs("&gt;", stdout);
-            break;
-        case '"':
-            fputs("&quot;", stdout);
-            break;
-        default:
-            putchar(c);
-            break;
-        }
-    }
-}
-
-static void
-table_print_html_cell__(const char *element, const char *content)
-{
-    const char *p;
-
-    printf("    <%s>", element);
-    for (p = content; *p; ) {
-        struct uuid uuid;
-
-        if (uuid_from_string_prefix(&uuid, p)) {
-            printf("<a href=\"#%.*s\">%.*s</a>", UUID_LEN, p, 8, p);
-            p += UUID_LEN;
-        } else {
-            table_escape_html_text__(p, 1);
-            p++;
-        }
-    }
-    printf("</%s>\n", element);
-}
-
-static void
-table_print_html__(const struct table *table)
-{
-    size_t x, y;
-
-    fputs("<table border=1>\n", stdout);
-
-    if (table->caption) {
-        table_print_html_cell__("caption", table->caption);
-    }
-
-    if (output_headings) {
-        fputs("  <tr>\n", stdout);
-        for (x = 0; x < table->n_columns; x++) {
-            const struct column *column = &table->columns[x];
-            table_print_html_cell__("th", column->heading);
-        }
-        fputs("  </tr>\n", stdout);
-    }
-
-    for (y = 0; y < table->n_rows; y++) {
-        fputs("  <tr>\n", stdout);
-        for (x = 0; x < table->n_columns; x++) {
-            const char *content = cell_to_text(table_cell__(table, y, x));
-
-            if (!strcmp(table->columns[x].heading, "_uuid")) {
-                fputs("    <td><a name=\"", stdout);
-                table_escape_html_text__(content, strlen(content));
-                fputs("\">", stdout);
-                table_escape_html_text__(content, 8);
-                fputs("</a></td>\n", stdout);
-            } else {
-                table_print_html_cell__("td", content);
-            }
-        }
-        fputs("  </tr>\n", stdout);
-    }
-
-    fputs("</table>\n", stdout);
-}
-
-static void
-table_print_csv_cell__(const char *content)
-{
-    const char *p;
-
-    if (!strpbrk(content, "\n\",")) {
-        fputs(content, stdout);
-    } else {
-        putchar('"');
-        for (p = content; *p != '\0'; p++) {
-            switch (*p) {
-            case '"':
-                fputs("\"\"", stdout);
-                break;
-            default:
-                putchar(*p);
-                break;
-            }
-        }
-        putchar('"');
-    }
-}
-
-static void
-table_print_csv__(const struct table *table)
-{
-    static int n = 0;
-    size_t x, y;
-
-    if (n++ > 0) {
-        putchar('\n');
-    }
-
-    if (table->caption) {
-        puts(table->caption);
-    }
-
-    if (output_headings) {
-        for (x = 0; x < table->n_columns; x++) {
-            const struct column *column = &table->columns[x];
-            if (x) {
-                putchar(',');
-            }
-            table_print_csv_cell__(column->heading);
-        }
-        putchar('\n');
-    }
-
-    for (y = 0; y < table->n_rows; y++) {
-        for (x = 0; x < table->n_columns; x++) {
-            if (x) {
-                putchar(',');
-            }
-            table_print_csv_cell__(cell_to_text(table_cell__(table, y, x)));
-        }
-        putchar('\n');
-    }
-}
-
-static void
-table_print_json__(const struct table *table)
-{
-    struct json *json, *headings, *data;
-    size_t x, y;
-    char *s;
-
-    json = json_object_create();
-    if (table->caption) {
-        json_object_put_string(json, "caption", table->caption);
-    }
-
-    headings = json_array_create_empty();
-    for (x = 0; x < table->n_columns; x++) {
-        const struct column *column = &table->columns[x];
-        json_array_add(headings, json_string_create(column->heading));
-    }
-    json_object_put(json, "headings", headings);
-
-    data = json_array_create_empty();
-    for (y = 0; y < table->n_rows; y++) {
-        struct json *row = json_array_create_empty();
-        for (x = 0; x < table->n_columns; x++) {
-            const struct cell *cell = table_cell__(table, y, x);
-            if (cell->text) {
-                json_array_add(row, json_string_create(cell->text));
-            } else {
-                json_array_add(row, json_clone(cell->json));
-            }
-        }
-        json_array_add(data, row);
-    }
-    json_object_put(json, "data", data);
-
-    s = json_to_string(json, json_flags);
-    json_destroy(json);
-    puts(s);
-    free(s);
-}
-
-static void
-table_print(const struct table *table)
-{
-    switch (output_format) {
-    case FMT_TABLE:
-        table_print_table__(table);
-        break;
-
-    case FMT_HTML:
-        table_print_html__(table);
-        break;
-
-    case FMT_CSV:
-        table_print_csv__(table);
-        break;
-
-    case FMT_JSON:
-        table_print_json__(table);
-        break;
-    }
-}
 
 static void
 do_list_dbs(int argc OVS_UNUSED, char *argv[])
@@ -810,7 +336,7 @@ do_list_tables(int argc OVS_UNUSED, char *argv[])
         table_add_cell(&t)->text = xstrdup(ts->name);
     }
     ovsdb_schema_destroy(schema);
-    table_print(&t);
+    table_print(&t, &table_style);
 }
 
 static void
@@ -847,7 +373,7 @@ do_list_columns(int argc OVS_UNUSED, char *argv[])
         }
     }
     ovsdb_schema_destroy(schema);
-    table_print(&t);
+    table_print(&t, &table_style);
 }
 
 static void
@@ -868,7 +394,7 @@ do_transact(int argc OVS_UNUSED, char *argv[])
     }
     if (reply->error) {
         ovs_fatal(error, "transaction returned error: %s",
-                  json_to_string(reply->error, json_flags));
+                  json_to_string(reply->error, table_style.json_flags));
     }
     print_json(reply->result);
     putchar('\n');
@@ -955,7 +481,7 @@ monitor_print(struct json *table_updates,
             monitor_print_row(new, "new", "", columns, &t);
         }
     }
-    table_print(&t);
+    table_print(&t, &table_style);
     table_destroy(&t);
 }
 
@@ -1266,7 +792,7 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
             cell->type = &columns[x]->type;
         }
     }
-    table_print(&t);
+    table_print(&t, &table_style);
     table_destroy(&t);
 }
 

@@ -1,0 +1,58 @@
+.IP "\fB\-f \fIformat\fR"
+.IQ "\fB\-\-format=\fIformat\fR"
+Sets the type of table formatting.  The following types of
+\fIformat\fR are available:
+.RS
+.IP "\fBtable\fR (default)"
+Text-based tables with aligned columns.
+.IP "\fBhtml\fR"
+HTML tables.
+.IP "\fBcvs\fR"
+Comma-separated values as defined in RFC 4180.
+.IP "\fBjson\fR"
+JSON format as defined in RFC 4627.  The output is a sequence of JSON
+objects, each of which corresponds to one table.  Each JSON object has
+the following members with the noted values:
+.RS
+.IP "\fBcaption\fR"
+The table's caption.  This member is omitted if the table has no
+caption.
+.IP "\fBheadings\fR"
+An array with one element per table column.  Each array element is a
+string giving the corresponding column's heading.
+.IP "\fBdata\fR"
+An array with one element per table row.  Each element is also an
+array with one element per table column.  The elements of this
+second-level array are the cells that constitute the table.  Cells
+that represent OVSDB data or data types are expressed in the format
+described in the OVSDB specification; other cells are simply expressed
+as text strings.
+.RE
+.RE
+.
+.IP "\fB\-d \fIformat\fR"
+.IP "\fB\-\-data=\fIformat\fR"
+Sets the formatting for cells within output tables.  The following
+types of \fIformat\fR are available:
+.RS
+.IP "\fBstring\fR (default)"
+The simple format described in \fBovs\-vsctl\fR(8).
+.IP "\fBjson\fR"
+JSON.
+.RE
+.IP
+The \fBjson\fR output format always outputs cells in JSON format,
+ignoring this option.
+.
+.IP "\fB\-\-no\-heading\fR"
+This option suppresses the heading row that otherwise appears in the
+first row of table output.
+.
+.IP "\fB\-\-pretty\fR"
+By default, JSON in output is printed as compactly as possible.  This
+option causes JSON in output to be printed in a more readable
+fashion.  Members of objects and elements of arrays are printed one
+per line, with indentation.
+.IP
+This option does not affect JSON in tables, which is always printed
+compactly.
