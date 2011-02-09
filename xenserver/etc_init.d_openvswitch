@@ -445,6 +445,51 @@ function restart {
     fi
 }
 
+function internal_interfaces {
+    # Outputs a list of internal interfaces:
+    #
+    #   - There is an internal interface for every bridge, whether it has
+    #     an Interface record or not and whether the Interface record's
+    #     'type' is properly set.
+    #
+    #   - There is an internal interface for each Interface record whose
+    #     'type' is 'internal'.
+    #
+    # But ignore interfaces that don't really exist.
+    for d in `(ovs-vsctl --bare \
+                -- --columns=name find Interface type=internal \
+		-- list-br) | sort -u`
+    do
+        if test -e "/sys/class/net/$d"; then
+	    printf "%s " "$d"
+	fi
+    done
+}
+
+function force_reload_kmod {
+    ifaces=$(internal_interfaces)
+    action "Configured internal interfaces: $ifaces" true
+
+    stop
+
+    script=$(mktemp)
+    action "Save interface configuration to $script" true
+    if ! /usr/share/openvswitch/scripts/ovs-save $ifaces > $script; then
+        warning "Failed to save configuration, not replacing kernel module"
+        start
+        exit 1
+    fi
+    chmod +x $script
+
+    action "Destroy datapaths" remove_all_dp
+
+    remove_modules
+
+    start
+
+    action "Restore interface configuration from $script" $script
+}
+
 case "$1" in
     start)
         start
@@ -479,6 +524,9 @@ case "$1" in
         /usr/sbin/ovsdb-server -V
         /usr/sbin/ovs-vswitchd -V
         /usr/sbin/ovs-brcompatd -V
+        ;;
+    force-reload-kmod)
+	force_reload_kmod
         ;;
     help)
         printf "openvswitch [start|stop|restart|reload|force-reload|status|version]\n"

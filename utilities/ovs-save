@@ -1,0 +1,157 @@
+#! /bin/sh
+
+# Copyright (c) 2011 Nicira Networks, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+if test "X$1" = X--help; then
+    cat <<EOF
+$0: saves the kernel configuration of network interfaces
+usage: $0 NETDEV...
+
+Outputs a shell script on stdout that will restore the current
+kernel configuration of the specified network interfaces, as
+well as the system iptables configuration.
+
+This script is meant as a helper for the Open vSwitch init
+script "force-reload-kmod" command.
+EOF
+    exit 0
+fi
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+missing_program () {
+    save_IFS=$IFS
+    IFS=:
+    for dir in $PATH; do
+        IFS=$save_IFS
+        if test -x $dir/$1; then
+            return 1
+        fi
+    done
+    IFS=$save_IFS
+    return 0
+}
+if missing_program ip; then 
+    echo "$0: ip not found in $PATH" >&2
+    exit 1
+fi
+
+if test "$#" = 0; then
+    echo "# $0: no parameters given (use \"$0 --help\" for help)"
+fi
+
+devs=$*
+for dev in $devs; do
+    state=`ip link show $dev` || continue
+
+    echo "# $dev"
+    # Link state (Ethernet addresses, up/down, ...)
+    linkcmd=
+    case $state in
+        *"state UP"* | *[,\<]"UP"[,\>]* )
+            linkcmd="$linkcmd up"
+            ;;
+        *"state DOWN"*)
+            linkcmd="$linkcmd down"
+            ;;
+    esac
+    if expr "$state" : '.*\bdynamic\b' > /dev/null; then
+        linkcmd="$linkcmd dynamic"
+    fi
+    if qlen=`expr "$state" : '.*qlen \([0-9]+\)'`; then
+        linkcmd="$linkcmd txqueuelen $qlen"
+    fi
+    if hwaddr=`expr "$state" : '.*link/ether \([^ ]*\)'`; then
+        linkcmd="$linkcmd address $hwaddr"
+    fi
+    if brd=`expr "$state" : '.*brd \([^ ]*\)'`; then
+        linkcmd="$linkcmd broadcast $brd"
+    fi
+    if mtu=`expr "$state" : '.*mtu \([0-9]+\)'`; then
+        linkcmd="$linkcmd mtu $mtu"
+    fi
+    if test -n "$linkcmd"; then
+        echo ip link set $dev down # Required to change hwaddr.
+        echo ip link set $dev $linkcmd
+    fi
+
+    # IP addresses (including IPv6).
+    echo "ip addr flush $dev 2>/dev/null" # Suppresses "Nothing to flush".
+    ip addr show dev $dev | while read addr; do
+        set -- $addr
+
+        # Check and trim family.
+        family=$1
+        shift
+        case $family in
+            inet | inet6) ;;
+            *) continue ;;
+        esac
+
+        # Trim device off the end--"ip" insists on having "dev" precede it.
+        addrcmd=
+        while test $# != 0; do
+            case $1 in
+                dynamic)
+                    # Omit kernel-maintained route.
+                    continue 2
+                    ;;
+                scope)
+                    if test "$2" = link; then
+                        # Omit route derived from IP address, e.g.
+                        # 172.16.0.0/16 derived from 172.16.12.34.
+                        continue 2
+                    fi
+                    ;;
+                "$dev")
+                    # Omit because "ip" wants "dev" keyword in front.
+                    shift
+                    continue
+                    ;;
+            esac
+            addrcmd="$addrcmd $1"
+            shift
+        done
+        if test "$1" != "$dev"; then
+            addrcmd="$addrcmd $1"
+        fi
+
+        echo ip -f $family addr add $addrcmd dev $dev
+    done
+
+    # Routes.
+    echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
+    ip route show dev $dev | while read route; do
+        # "proto kernel" routes are installed by the kernel automatically.
+        case $route in
+            *" proto kernel "*) continue ;;
+        esac
+
+        echo "ip route add $route dev $dev"
+    done
+
+    echo
+done
+
+if missing_program iptables-save; then
+    echo "# iptables-save not found in $PATH, not saving iptables state"
+else
+    echo "# global"
+    echo "iptables-restore <<'EOF'"
+    iptables-save
+    echo "EOF"
+fi
+
+exit 0

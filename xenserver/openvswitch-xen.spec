@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -83,6 +83,8 @@ install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/brctl
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
+install -m 755 utilities/ovs-save \
+         $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-save
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
@@ -402,6 +404,7 @@ fi
 /usr/share/openvswitch/scripts/xen-bugtool
 /usr/share/openvswitch/scripts/brctl
 /usr/share/openvswitch/scripts/sysconfig.template
+/usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd

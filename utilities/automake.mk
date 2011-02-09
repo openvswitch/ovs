@@ -31,6 +31,7 @@ EXTRA_DIST += \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
 	utilities/ovs-pki.in \
+	utilities/ovs-save \
 	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-tcpundump.in \
 	utilities/ovs-vlan-test.in \
