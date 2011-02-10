@@ -349,6 +349,8 @@ static char *ofconn_make_name(const struct ofproto *, const char *target);
 static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 
 static struct ofproto *ofconn_get_ofproto(struct ofconn *);
+static enum nx_flow_format ofconn_get_flow_format(struct ofconn *);
+static void ofconn_set_flow_format(struct ofconn *, enum nx_flow_format);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -2005,6 +2007,18 @@ ofconn_get_ofproto(struct ofconn *ofconn)
 {
     return ofconn->ofproto;
 }
+
+static enum nx_flow_format
+ofconn_get_flow_format(struct ofconn *ofconn)
+{
+    return ofconn->flow_format;
+}
+
+static void
+ofconn_set_flow_format(struct ofconn *ofconn, enum nx_flow_format flow_format)
+{
+    ofconn->flow_format = flow_format;
+}
 
 static void
 ofservice_reconfigure(struct ofservice *ofservice,
@@ -3487,7 +3501,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     ots = append_ofp_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     strcpy(ots->name, "classifier");
-    ots->wildcards = (ofconn->flow_format == NXFF_OPENFLOW10
+    ots->wildcards = (ofconn_get_flow_format(ofconn) == NXFF_OPENFLOW10
                       ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
     ots->active_count = htonl(classifier_count(&p->cls));
@@ -3592,8 +3606,8 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
-    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofs->match,
-                              rule->flow_cookie, &cookie);
+    ofputil_cls_rule_to_match(&rule->cr, ofconn_get_flow_format(ofconn),
+                              &ofs->match, rule->flow_cookie, &cookie);
     put_32aligned_be64(&ofs->cookie, cookie);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->priority = htons(rule->cr.priority);
@@ -4257,7 +4271,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_flow_mod(&fm, oh, ofconn->flow_format);
+    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_flow_format(ofconn));
     if (error) {
         return error;
     }
@@ -4304,8 +4318,11 @@ handle_tun_id_from_cookie(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     const struct nxt_tun_id_cookie *msg
         = (const struct nxt_tun_id_cookie *) oh;
+    enum nx_flow_format flow_format;
 
-    ofconn->flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
+    flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
+    ofconn_set_flow_format(ofconn, flow_format);
+
     return 0;
 }
 
@@ -4362,7 +4379,7 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
     if (format == NXFF_OPENFLOW10
         || format == NXFF_TUN_ID_FROM_COOKIE
         || format == NXFF_NXM) {
-        ofconn->flow_format = format;
+        ofconn_set_flow_format(ofconn, format);
         return 0;
     } else {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
@@ -4920,7 +4937,7 @@ rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
          * being processed also prevents new flows from being added (and
          * expiring).  (It also prevents processing OpenFlow requests that
          * would not add new flows, so it is imperfect.) */
-        msg = ofputil_encode_flow_removed(&fr, ofconn->flow_format);
+        msg = ofputil_encode_flow_removed(&fr, ofconn_get_flow_format(ofconn));
         ofconn_send_reply(ofconn, msg);
     }
 }
