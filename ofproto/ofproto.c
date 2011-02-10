@@ -351,6 +351,8 @@ static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 static struct ofproto *ofconn_get_ofproto(struct ofconn *);
 static enum nx_flow_format ofconn_get_flow_format(struct ofconn *);
 static void ofconn_set_flow_format(struct ofconn *, enum nx_flow_format);
+static int ofconn_get_miss_send_len(const struct ofconn *);
+static void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -2019,6 +2021,18 @@ ofconn_set_flow_format(struct ofconn *ofconn, enum nx_flow_format flow_format)
 {
     ofconn->flow_format = flow_format;
 }
+
+static int
+ofconn_get_miss_send_len(const struct ofconn *ofconn)
+{
+    return ofconn->miss_send_len;
+}
+
+static void
+ofconn_set_miss_send_len(struct ofconn *ofconn, int miss_send_len)
+{
+    ofconn->miss_send_len = miss_send_len;
+}
 
 static void
 ofservice_reconfigure(struct ofservice *ofservice,
@@ -2721,7 +2735,7 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Send reply. */
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
     osc->flags = htons(flags);
-    osc->miss_send_len = htons(ofconn->miss_send_len);
+    osc->miss_send_len = htons(ofconn_get_miss_send_len(ofconn));
     ofconn_send_reply(ofconn, buf);
 
     return 0;
@@ -2748,7 +2762,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
         }
     }
 
-    ofconn->miss_send_len = ntohs(osc->miss_send_len);
+    ofconn_set_miss_send_len(ofconn, ntohs(osc->miss_send_len));
 
     return 0;
 }
