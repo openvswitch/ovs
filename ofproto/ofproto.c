@@ -2633,20 +2633,26 @@ queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
 }
 
 static void
+ofconn_send_reply(const struct ofconn *ofconn, struct ofpbuf *msg)
+{
+    queue_tx(msg, ofconn, ofconn->reply_counter);
+}
+
+static void
 send_error_oh(const struct ofconn *ofconn, const struct ofp_header *oh,
               int error)
 {
     struct ofpbuf *buf = ofputil_encode_error_msg(error, oh);
     if (buf) {
         COVERAGE_INC(ofproto_error);
-        queue_tx(buf, ofconn, ofconn->reply_counter);
+        ofconn_send_reply(ofconn, buf);
     }
 }
 
 static int
 handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    queue_tx(make_echo_reply(oh), ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, make_echo_reply(oh));
     return 0;
 }
 
@@ -2681,7 +2687,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
     }
 
-    queue_tx(buf, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, buf);
     return 0;
 }
 
@@ -2702,7 +2708,7 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
     osc->flags = htons(flags);
     osc->miss_send_len = htons(ofconn->miss_send_len);
-    queue_tx(buf, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, buf);
 
     return 0;
 }
@@ -3405,7 +3411,7 @@ append_ofp_stats_reply(size_t nbytes, struct ofconn *ofconn,
         struct ofp_stats_reply *reply = msg->data;
         reply->flags = htons(OFPSF_REPLY_MORE);
         *msgp = make_ofp_stats_reply(reply->header.xid, reply->type, nbytes);
-        queue_tx(msg, ofconn, ofconn->reply_counter);
+        ofconn_send_reply(ofconn, msg);
     }
     return ofpbuf_put_uninit(*msgp, nbytes);
 }
@@ -3441,7 +3447,7 @@ append_nxstats_reply(size_t nbytes, struct ofconn *ofconn,
         struct nicira_stats_msg *reply = msg->data;
         reply->flags = htons(OFPSF_REPLY_MORE);
         *msgp = make_nxstats_reply(reply->header.xid, reply->subtype, nbytes);
-        queue_tx(msg, ofconn, ofconn->reply_counter);
+        ofconn_send_reply(ofconn, msg);
     }
     ofpbuf_prealloc_tailroom(*msgp, nbytes);
 }
@@ -3462,7 +3468,7 @@ handle_desc_stats_request(struct ofconn *ofconn,
     ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
     ovs_strlcpy(ods->serial_num, p->serial_desc, sizeof ods->serial_num);
     ovs_strlcpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
-    queue_tx(msg, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, msg);
 
     return 0;
 }
@@ -3488,7 +3494,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     put_32aligned_be64(&ots->lookup_count, htonll(0));  /* XXX */
     put_32aligned_be64(&ots->matched_count, htonll(0)); /* XXX */
 
-    queue_tx(msg, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, msg);
     return 0;
 }
 
@@ -3542,7 +3548,7 @@ handle_port_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
         }
     }
 
-    queue_tx(msg, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, msg);
     return 0;
 }
 
@@ -3637,7 +3643,7 @@ handle_flow_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
             put_ofp_flow_stats(ofconn, rule, fsr->out_port, &reply);
         }
     }
-    queue_tx(reply, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, reply);
 
     return 0;
 }
@@ -3714,7 +3720,7 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
             put_nx_flow_stats(ofconn, rule, nfsr->out_port, &reply);
         }
     }
-    queue_tx(reply, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, reply);
 
     return 0;
 }
@@ -3810,7 +3816,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
     query_aggregate_stats(ofproto, &target, request->out_port,
                           request->table_id, reply);
-    queue_tx(msg, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, msg);
     return 0;
 }
 
@@ -3843,7 +3849,7 @@ handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
     reply = ofpbuf_put_uninit(buf, sizeof *reply);
     query_aggregate_stats(ofproto, &target, request->out_port,
                           request->table_id, reply);
-    queue_tx(buf, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, buf);
 
     return 0;
 }
@@ -3931,7 +3937,7 @@ handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
         ofpbuf_delete(cbdata.msg);
         return ofp_mkerr(OFPET_QUEUE_OP_FAILED, OFPQOFC_BAD_PORT);
     }
-    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, cbdata.msg);
 
     return 0;
 }
@@ -4340,7 +4346,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 
     reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, oh->xid, &buf);
     reply->role = htonl(role);
-    queue_tx(buf, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, buf);
 
     return 0;
 }
@@ -4372,7 +4378,7 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Currently, everything executes synchronously, so we can just
      * immediately send the barrier reply. */
     ob = make_openflow_xid(sizeof *ob, OFPT_BARRIER_REPLY, oh->xid, &buf);
-    queue_tx(buf, ofconn, ofconn->reply_counter);
+    ofconn_send_reply(ofconn, buf);
     return 0;
 }
 
@@ -4902,18 +4908,20 @@ rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
     fr.byte_count = rule->byte_count;
 
     LIST_FOR_EACH (ofconn, node, &p->all_conns) {
+        struct ofpbuf *msg;
+
         if (!rconn_is_connected(ofconn->rconn)
             || !ofconn_receives_async_msgs(ofconn)) {
             continue;
         }
 
-        /* Account flow expirations under ofconn->reply_counter, the counter
-         * for replies to OpenFlow requests.  That works because preventing
-         * OpenFlow requests from being processed also prevents new flows from
-         * being added (and expiring).  (It also prevents processing OpenFlow
-         * requests that would not add new flows, so it is imperfect.) */
-        queue_tx(ofputil_encode_flow_removed(&fr, ofconn->flow_format),
-                 ofconn, ofconn->reply_counter);
+        /* This accounts flow expirations as if they were replies to OpenFlow
+         * requests.  That works because preventing OpenFlow requests from
+         * being processed also prevents new flows from being added (and
+         * expiring).  (It also prevents processing OpenFlow requests that
+         * would not add new flows, so it is imperfect.) */
+        msg = ofputil_encode_flow_removed(&fr, ofconn->flow_format);
+        ofconn_send_reply(ofconn, msg);
     }
 }
 
