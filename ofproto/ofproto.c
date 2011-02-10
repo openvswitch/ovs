@@ -349,10 +349,17 @@ static char *ofconn_make_name(const struct ofproto *, const char *target);
 static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
 
 static struct ofproto *ofconn_get_ofproto(struct ofconn *);
+
 static enum nx_flow_format ofconn_get_flow_format(struct ofconn *);
 static void ofconn_set_flow_format(struct ofconn *, enum nx_flow_format);
+
 static int ofconn_get_miss_send_len(const struct ofconn *);
 static void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
+
+static enum ofconn_type ofconn_get_type(const struct ofconn *);
+
+static enum nx_role ofconn_get_role(const struct ofconn *);
+static void ofconn_set_role(struct ofconn *, enum nx_role);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -1141,7 +1148,7 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
 static int
 snoop_preference(const struct ofconn *ofconn)
 {
-    switch (ofconn->role) {
+    switch (ofconn_get_role(ofconn)) {
     case NX_ROLE_MASTER:
         return 3;
     case NX_ROLE_OTHER:
@@ -1164,7 +1171,7 @@ add_snooper(struct ofproto *ofproto, struct vconn *vconn)
     /* Pick a controller for monitoring. */
     best = NULL;
     LIST_FOR_EACH (ofconn, node, &ofproto->all_conns) {
-        if (ofconn->type == OFCONN_PRIMARY
+        if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
             && (!best || snoop_preference(ofconn) > snoop_preference(best))) {
             best = ofconn;
         }
@@ -1401,7 +1408,7 @@ ofproto_get_ofproto_controller_info(const struct ofproto *ofproto,
         shash_add(info, rconn_get_target(rconn), cinfo);
 
         cinfo->is_connected = rconn_is_connected(rconn);
-        cinfo->role = ofconn->role;
+        cinfo->role = ofconn_get_role(ofconn);
 
         cinfo->pairs.n = 0;
 
@@ -1692,7 +1699,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 
         /* Primary controllers, even slaves, should always get port status
            updates.  Otherwise obey ofconn_receives_async_msgs(). */
-        if (ofconn->type != OFCONN_PRIMARY
+        if (ofconn_get_type(ofconn) != OFCONN_PRIMARY
             && !ofconn_receives_async_msgs(ofconn)) {
             continue;
         }
@@ -1894,7 +1901,7 @@ ofconn_destroy(struct ofconn *ofconn)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
 
-    if (ofconn->type == OFCONN_PRIMARY) {
+    if (ofconn_get_type(ofconn) == OFCONN_PRIMARY) {
         hmap_remove(&ofproto->controllers, &ofconn->hmap_node);
     }
 
@@ -1960,10 +1967,10 @@ ofconn_wait(struct ofconn *ofconn)
 static bool
 ofconn_receives_async_msgs(const struct ofconn *ofconn)
 {
-    if (ofconn->type == OFCONN_PRIMARY) {
+    if (ofconn_get_type(ofconn) == OFCONN_PRIMARY) {
         /* Primary controllers always get asynchronous messages unless they
          * have configured themselves as "slaves".  */
-        return ofconn->role != NX_ROLE_SLAVE;
+        return ofconn_get_role(ofconn) != NX_ROLE_SLAVE;
     } else {
         /* Service connections don't get asynchronous messages unless they have
          * explicitly asked for them by setting a nonzero miss send length. */
@@ -2032,6 +2039,24 @@ static void
 ofconn_set_miss_send_len(struct ofconn *ofconn, int miss_send_len)
 {
     ofconn->miss_send_len = miss_send_len;
+}
+
+static enum ofconn_type
+ofconn_get_type(const struct ofconn *ofconn)
+{
+    return ofconn->type;
+}
+
+static enum nx_role
+ofconn_get_role(const struct ofconn *ofconn)
+{
+    return ofconn->role;
+}
+
+static void
+ofconn_set_role(struct ofconn *ofconn, enum nx_role role)
+{
+    ofconn->role = role;
 }
 
 static void
@@ -2747,7 +2772,8 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     uint16_t flags = ntohs(osc->flags);
 
-    if (ofconn->type == OFCONN_PRIMARY && ofconn->role != NX_ROLE_SLAVE) {
+    if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
+        && ofconn_get_role(ofconn) != NX_ROLE_SLAVE) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
             dpif_set_drop_frags(ofproto->dpif, false);
@@ -3280,7 +3306,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
 static int
 reject_slave_controller(struct ofconn *ofconn, const const char *msg_type)
 {
-    if (ofconn->type == OFCONN_PRIMARY && ofconn->role == NX_ROLE_SLAVE) {
+    if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
+        && ofconn_get_role(ofconn) == NX_ROLE_SLAVE) {
         static struct vlog_rate_limit perm_rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&perm_rl, "rejecting %s message from slave controller",
                      msg_type);
@@ -4348,7 +4375,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     uint32_t role;
 
-    if (ofconn->type != OFCONN_PRIMARY) {
+    if (ofconn_get_type(ofconn) != OFCONN_PRIMARY) {
         VLOG_WARN_RL(&rl, "ignoring role request on non-controller "
                      "connection");
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
@@ -4368,12 +4395,12 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
         struct ofconn *other;
 
         HMAP_FOR_EACH (other, hmap_node, &ofproto->controllers) {
-            if (other->role == NX_ROLE_MASTER) {
-                other->role = NX_ROLE_SLAVE;
+            if (ofconn_get_role(other) == NX_ROLE_MASTER) {
+                ofconn_set_role(other, NX_ROLE_SLAVE);
             }
         }
     }
-    ofconn->role = role;
+    ofconn_set_role(ofconn, role);
 
     reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, oh->xid, &buf);
     reply->role = htonl(role);
