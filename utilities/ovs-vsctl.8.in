@@ -104,7 +104,7 @@ By default, \fBovs\-vsctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this
 logging.
 .IP
-This option is equivalent to \fB\-\-verbose=vvsctl:syslog:warn\fR.
+This option is equivalent to \fB\-\-verbose=vsctl:syslog:warn\fR.
 .
 .IP "\fB\-\-oneline\fR"
 Modifies the output format so that the output for each command is printed
@@ -396,17 +396,17 @@ use any of the following forms:
 When \fBovs\-vswitchd\fR is configured to connect over SSL for management or
 controller connectivity, the following parameters are required:
 .TP
-\fBprivate\-key\fR
+\fIprivate-key\fR
 Specifies a PEM file containing the private key used as the virtual
 switch's identity for SSL connections to the controller.
 .TP
-\fBcertificate\fR
+\fIcertificate\fR
 Specifies a PEM file containing a certificate, signed by the
 certificate authority (CA) used by the controller and manager, that
 certifies the virtual switch's private key, identifying a trustworthy
 switch.
 .TP
-\fBca\-cert\fR
+\fIca-cert\fR
 Specifies a PEM file containing the CA certificate used to verify that
 the virtual switch is connected to a trustworthy controller.
 .PP

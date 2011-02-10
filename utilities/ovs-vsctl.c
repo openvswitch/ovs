@@ -36,6 +36,7 @@
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "stream.h"
 #include "stream-ssl.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
@@ -475,6 +476,10 @@ usage(void)
 %s: ovs-vswitchd management utility\n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
+Open vSwitch commands:\n\
+  init                        initialize database, if not yet initialized\n\
+  emer-reset                  reset configuration to clean state\n\
+\n\
 Bridge commands:\n\
   add-br BRIDGE               create a new bridge named BRIDGE\n\
   add-br BRIDGE PARENT VLAN   create new fake BRIDGE in PARENT on VLAN\n\
@@ -488,13 +493,12 @@ Bridge commands:\n\
   br-get-external-id BRIDGE KEY  print value of KEY on BRIDGE\n\
   br-get-external-id BRIDGE  list key-value pairs on BRIDGE\n\
 \n\
-Port commands:\n\
+Port commands (a bond is considered to be a single port):\n\
   list-ports BRIDGE           print the names of all the ports on BRIDGE\n\
   add-port BRIDGE PORT        add network device PORT to BRIDGE\n\
   add-bond BRIDGE PORT IFACE...  add bonded port PORT in BRIDGE from IFACES\n\
   del-port [BRIDGE] PORT      delete PORT (which may be bonded) from BRIDGE\n\
   port-to-br PORT             print name of bridge that contains PORT\n\
-A bond is considered to be a single port.\n\
 \n\
 Interface commands (a bond consists of multiple interfaces):\n\
   list-ifaces BRIDGE          print the names of all interfaces on BRIDGE\n\
@@ -537,9 +541,15 @@ Potentially unsafe database commands require --force option.\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
+  --no-wait                   do not wait for ovs-vswitchd to reconfigure\n\
+  -t, --timeout=SECS          wait at most SECS seconds for ovs-vswitchd\n\
+  --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, default_db());
     vlog_usage();
+    printf("\
+  --no-syslog             equivalent to --verbose=vsctl:syslog:warn\n");
+    stream_usage("database", true, true, false);
     printf("\n\
 Other options:\n\
   -h, --help                  display this help message\n\
