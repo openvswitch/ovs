@@ -240,7 +240,8 @@ Prerequisites section, follow the procedure below to build.
 
 7. Initialize the configuration database using ovsdb-tool, e.g.:
 
-      % ovsdb-tool create /usr/local/etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
+      % mkdir -p /usr/local/etc/openvswitch
+      % ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
 
 Startup
 =======
@@ -253,7 +254,7 @@ installation, above, to listen on a Unix domain socket, to connect to
 any managers specified in the database itself, and to use the SSL
 configuration in the database:
 
-      % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db \
+      % ovsdb-server /usr/local/etc/openvswitch/conf.db \
                       --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                       --remote=db:Open_vSwitch,managers \
                       --private-key=db:SSL,private_key \
@@ -305,7 +306,7 @@ also upgrade the database schema:
       - If you want to preserve the contents of your database, back it
         up first, then use "ovsdb-tool convert" to upgrade it, e.g.:
 
-        % ovsdb-tool convert /usr/local/etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
+        % ovsdb-tool convert /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
 
 4. Start the Open vSwitch daemons as described under "Building and
    Installing Open vSwitch for Linux" above.
