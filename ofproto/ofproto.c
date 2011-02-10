@@ -361,6 +361,10 @@ static enum ofconn_type ofconn_get_type(const struct ofconn *);
 static enum nx_role ofconn_get_role(const struct ofconn *);
 static void ofconn_set_role(struct ofconn *, enum nx_role);
 
+static int ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
+                                  struct ofpbuf **bufferp, uint16_t *in_port);
+
+
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
 
@@ -2058,6 +2062,13 @@ ofconn_set_role(struct ofconn *ofconn, enum nx_role role)
 {
     ofconn->role = role;
 }
+
+static int
+ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
+                       struct ofpbuf **bufferp, uint16_t *in_port)
+{
+    return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
+}
 
 static void
 ofservice_reconfigure(struct ofservice *ofservice,
@@ -3353,8 +3364,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     /* Get payload. */
     if (opo->buffer_id != htonl(UINT32_MAX)) {
-        error = pktbuf_retrieve(ofconn->pktbuf, ntohl(opo->buffer_id),
-                                &buffer, &in_port);
+        error = ofconn_pktbuf_retrieve(ofconn, ntohl(opo->buffer_id),
+                                       &buffer, &in_port);
         if (error || !buffer) {
             return error;
         }
@@ -4115,8 +4126,8 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
 
     error = 0;
     if (fm->buffer_id != UINT32_MAX) {
-        error = pktbuf_retrieve(ofconn->pktbuf, fm->buffer_id,
-                                &packet, &in_port);
+        error = ofconn_pktbuf_retrieve(ofconn, fm->buffer_id,
+                                       &packet, &in_port);
     } else {
         packet = NULL;
         in_port = UINT16_MAX;
@@ -4151,7 +4162,7 @@ send_buffered_packet(struct ofconn *ofconn,
         return 0;
     }
 
-    error = pktbuf_retrieve(ofconn->pktbuf, buffer_id, &packet, &in_port);
+    error = ofconn_pktbuf_retrieve(ofconn, buffer_id, &packet, &in_port);
     if (error) {
         return error;
     }
