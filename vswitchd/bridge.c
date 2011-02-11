@@ -55,7 +55,6 @@
 #include "ovsdb-data.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "proc-net-compat.h"
 #include "process.h"
 #include "sha1.h"
 #include "shash.h"
@@ -191,7 +190,6 @@ struct port {
     tag_type active_iface_tag;  /* Tag for bcast flows. */
     tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
-    bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
     bool miimon;                /* Use miimon instead of carrier? */
     long long int bond_miimon_interval; /* Miimon status refresh interval. */
@@ -303,8 +301,6 @@ static struct port *port_lookup(const struct bridge *, const char *name);
 static struct iface *port_lookup_iface(const struct port *, const char *name);
 static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
-static void port_update_bond_compat(struct port *);
-static void port_update_vlan_compat(struct port *);
 static void port_update_bonding(struct port *);
 static void port_update_lacp(struct port *);
 
@@ -915,7 +911,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             struct port *port = br->ports[i];
             int j;
 
-            port_update_vlan_compat(port);
             port_update_bonding(port);
             port_update_lacp(port);
 
@@ -2210,7 +2205,6 @@ choose_output_iface(const struct port *port, const struct flow *flow,
                 return false;
             }
             e->iface_tag = tag_create_random();
-            ((struct port *) port)->bond_compat_is_stale = true;
         }
         *tags |= e->iface_tag;
         iface = port->ifaces[e->iface_idx];
@@ -2340,7 +2334,6 @@ bond_enable_slave(struct iface *iface, bool enable)
     }
 
     moving_active_iface = false;
-    port->bond_compat_is_stale = true;
 }
 
 /* Attempts to make the sum of the bond slaves' statistics appear on the fake
@@ -2393,7 +2386,6 @@ bond_link_carrier_update(struct iface *iface, bool carrier)
 
     iface->up = carrier;
     iface->lacp_tx = 0;
-    iface->port->bond_compat_is_stale = true;
 }
 
 static void
@@ -2451,11 +2443,6 @@ bond_run(struct bridge *br)
                 bond_update_fake_iface_stats(port);
                 port->bond_next_fake_iface_update = time_msec() + 1000;
             }
-        }
-
-        if (port->bond_compat_is_stale) {
-            port->bond_compat_is_stale = false;
-            port_update_bond_compat(port);
         }
     }
 }
@@ -3595,7 +3582,6 @@ bond_rebalance_port(struct port *port)
             }
             if (i < from->n_hashes) {
                 bond_shift_load(from, to, i);
-                port->bond_compat_is_stale = true;
 
                 /* If the result of the migration changed the relative order of
                  * 'from' and 'to' swap them back to maintain invariants. */
@@ -4008,7 +3994,6 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
     ofproto_revalidate(port->bridge->ofproto, entry->iface_tag);
     entry->iface_idx = iface->port_ifidx;
     entry->iface_tag = tag_create_random();
-    port->bond_compat_is_stale = true;
     unixctl_command_reply(conn, 200, "migrated");
 }
 
@@ -4440,9 +4425,6 @@ port_destroy(struct port *port)
         struct port *del;
         int i;
 
-        proc_net_compat_update_vlan(port->name, NULL, 0);
-        proc_net_compat_update_bond(port->name, NULL);
-
         for (i = 0; i < MAX_MIRRORS; i++) {
             struct mirror *m = br->mirrors[i];
             if (m && m->out_port == port) {
@@ -4545,12 +4527,8 @@ port_update_bonding(struct port *port)
     }
     if (port->n_ifaces < 2) {
         /* Not a bonded port. */
-        if (port->bond_hash) {
-            free(port->bond_hash);
-            port->bond_hash = NULL;
-            port->bond_compat_is_stale = true;
-        }
-
+        free(port->bond_hash);
+        port->bond_hash = NULL;
         port->bond_fake_iface = false;
     } else {
         size_t i;
@@ -4574,7 +4552,6 @@ port_update_bonding(struct port *port)
             free(port->bond_hash);
             port->bond_hash = NULL;
         }
-        port->bond_compat_is_stale = true;
         port->bond_fake_iface = port->cfg->bond_fake_iface;
 
         if (!port->miimon) {
@@ -4584,116 +4561,6 @@ port_update_bonding(struct port *port)
             }
         }
     }
-}
-
-static void
-port_update_bond_compat(struct port *port)
-{
-    struct compat_bond_hash compat_hashes[BOND_MASK + 1];
-    struct compat_bond bond;
-    size_t i;
-
-    if (port->n_ifaces < 2 || port->bond_mode != BM_SLB) {
-        proc_net_compat_update_bond(port->name, NULL);
-        return;
-    }
-
-    bond.up = false;
-    bond.updelay = port->updelay;
-    bond.downdelay = port->downdelay;
-
-    bond.n_hashes = 0;
-    bond.hashes = compat_hashes;
-    if (port->bond_hash) {
-        const struct bond_entry *e;
-        for (e = port->bond_hash; e <= &port->bond_hash[BOND_MASK]; e++) {
-            if (e->iface_idx >= 0 && e->iface_idx < port->n_ifaces) {
-                struct compat_bond_hash *cbh = &bond.hashes[bond.n_hashes++];
-                cbh->hash = e - port->bond_hash;
-                cbh->netdev_name = port->ifaces[e->iface_idx]->name;
-            }
-        }
-    }
-
-    bond.n_slaves = port->n_ifaces;
-    bond.slaves = xmalloc(port->n_ifaces * sizeof *bond.slaves);
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
-        struct compat_bond_slave *slave = &bond.slaves[i];
-        slave->name = iface->name;
-
-        /* We need to make the same determination as the Linux bonding
-         * code to determine whether a slave should be consider "up".
-         * The Linux function bond_miimon_inspect() supports four
-         * BOND_LINK_* states:
-         *
-         *    - BOND_LINK_UP: carrier detected, updelay has passed.
-         *    - BOND_LINK_FAIL: carrier lost, downdelay in progress.
-         *    - BOND_LINK_DOWN: carrier lost, downdelay has passed.
-         *    - BOND_LINK_BACK: carrier detected, updelay in progress.
-         *
-         * The function bond_info_show_slave() only considers BOND_LINK_UP
-         * to be "up" and anything else to be "down".
-         */
-        slave->up = iface->enabled && iface->delay_expires == LLONG_MAX;
-        if (slave->up) {
-            bond.up = true;
-        }
-        netdev_get_etheraddr(iface->netdev, slave->mac);
-    }
-
-    if (port->bond_fake_iface) {
-        struct netdev *bond_netdev;
-
-        if (!netdev_open_default(port->name, &bond_netdev)) {
-            if (bond.up) {
-                netdev_turn_flags_on(bond_netdev, NETDEV_UP, true);
-            } else {
-                netdev_turn_flags_off(bond_netdev, NETDEV_UP, true);
-            }
-            netdev_close(bond_netdev);
-        }
-    }
-
-    proc_net_compat_update_bond(port->name, &bond);
-    free(bond.slaves);
-}
-
-static void
-port_update_vlan_compat(struct port *port)
-{
-    struct bridge *br = port->bridge;
-    char *vlandev_name = NULL;
-
-    if (port->vlan > 0) {
-        /* Figure out the name that the VLAN device should actually have, if it
-         * existed.  This takes some work because the VLAN device would not
-         * have port->name in its name; rather, it would have the trunk port's
-         * name, and 'port' would be attached to a bridge that also had the
-         * VLAN device one of its ports.  So we need to find a trunk port that
-         * includes port->vlan.
-         *
-         * There might be more than one candidate.  This doesn't happen on
-         * XenServer, so if it happens we just pick the first choice in
-         * alphabetical order instead of creating multiple VLAN devices. */
-        size_t i;
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *p = br->ports[i];
-            if (port_trunks_vlan(p, port->vlan)
-                && p->n_ifaces
-                && (!vlandev_name || strcmp(p->name, vlandev_name) <= 0))
-            {
-                uint8_t ea[ETH_ADDR_LEN];
-                netdev_get_etheraddr(p->ifaces[0]->netdev, ea);
-                if (!eth_addr_is_multicast(ea) &&
-                    !eth_addr_is_reserved(ea) &&
-                    !eth_addr_is_zero(ea)) {
-                    vlandev_name = p->name;
-                }
-            }
-        }
-    }
-    proc_net_compat_update_vlan(port->name, vlandev_name, port->vlan);
 }
 
 /* Interface functions. */

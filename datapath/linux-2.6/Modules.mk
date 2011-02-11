@@ -58,9 +58,5 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/genetlink.inc
 
 both_modules += brcompat
-brcompat_sources = \
-	linux-2.6/compat-2.6/genetlink-brcompat.c \
-	brcompat.c \
-	brc_procfs.c
-brcompat_headers = \
-	brc_procfs.h
+brcompat_sources = linux-2.6/compat-2.6/genetlink-brcompat.c brcompat.c
+brcompat_headers =

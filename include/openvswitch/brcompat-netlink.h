@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -64,11 +64,6 @@ enum {
 	/* BRC_GENL_C_QUERY_MC. */
 	BRC_GENL_A_MC_GROUP,	/* K: Generic netlink multicast group. */
 
-	/* BRC_GENL_C_SET_PROC. */
-	BRC_GENL_A_PROC_DIR,	/* U: Name of subdirectory in /proc. */
-	BRC_GENL_A_PROC_NAME,	/* U: Name of file in /proc. */
-	BRC_GENL_A_PROC_DATA,	/* U: Contents of file in /proc. */
-
 	/* BRC_GENL_C_FDB_QUERY. */
 	BRC_GENL_A_FDB_COUNT,	/* K: Number of FDB entries to read. */
 	BRC_GENL_A_FDB_SKIP,	/* K: Record offset into FDB to start reading. */
@@ -95,7 +90,6 @@ enum brc_genl_command {
 	BRC_GENL_C_PORT_ADD,	/* K: Port added to datapath. */
 	BRC_GENL_C_PORT_DEL,	/* K: Port removed from datapath. */
 	BRC_GENL_C_QUERY_MC,	/* U: Get multicast group for brcompat. */
-	BRC_GENL_C_SET_PROC,	/* U: Set contents of file in /proc. */
 	BRC_GENL_C_FDB_QUERY,	/* K: Read records from forwarding database. */
 	BRC_GENL_C_GET_BRIDGES, /* K: Get ifindexes of all bridges. */
 	BRC_GENL_C_GET_PORTS,   /* K: Get ifindexes of all ports on a bridge. */

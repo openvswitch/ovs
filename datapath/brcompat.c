@@ -18,7 +18,6 @@
 #include <net/genetlink.h>
 
 #include "openvswitch/brcompat-netlink.h"
-#include "brc_procfs.h"
 #include "datapath.h"
 
 static struct genl_family brc_genl_family;
@@ -399,15 +398,6 @@ nla_put_failure:
 /* Attribute policy: what each attribute may contain.  */
 static struct nla_policy brc_genl_policy[BRC_GENL_A_MAX + 1] = {
 	[BRC_GENL_A_ERR_CODE] = { .type = NLA_U32 },
-
-#ifdef HAVE_NLA_NUL_STRING
-	[BRC_GENL_A_PROC_DIR] = { .type = NLA_NUL_STRING,
-				  .len = BRC_NAME_LEN_MAX },
-	[BRC_GENL_A_PROC_NAME] = { .type = NLA_NUL_STRING,
-				  .len = BRC_NAME_LEN_MAX },
-	[BRC_GENL_A_PROC_DATA] = { .type = NLA_NUL_STRING },
-#endif
-
 	[BRC_GENL_A_FDB_DATA] = { .type = NLA_UNSPEC },
 };
 
@@ -451,11 +441,6 @@ static struct genl_ops brc_genl_ops[] = {
 	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privelege. */
 	  .policy = brc_genl_policy,
 	  .doit = brc_genl_dp_result,
-	},
-	{ .cmd = BRC_GENL_C_SET_PROC,
-	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privelege. */
-	  .policy = brc_genl_policy,
-	  .doit = brc_genl_set_proc,
 	},
 };
 
@@ -555,7 +540,6 @@ static void brc_cleanup(void)
 	brioctl_set(NULL);
 
 	genl_unregister_family(&brc_genl_family);
-	brc_procfs_exit();
 }
 
 module_init(brc_init);

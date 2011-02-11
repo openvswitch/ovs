@@ -93,15 +93,6 @@ only allow privileged users, such as the superuser, to use it.
 \fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
 unavailable or unsuccessful.
 .
-.IP "\fB\-\-fake\-proc\-net\fR"
-Causes \fBovs\-vswitchd\fR to simulate some files in \fB/proc/net/vlan\fR
-and \fB/proc/net/bonding\fR that some legacy software expects to
-exist.  This option should only be used if such legacy software is
-actually in use.  It requires the \fBbrcompat_mod.ko\fR kernel module
-to be loaded.
-.IP
-On non-Linux hosts, this option is accepted but has no effect.
-.
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \
 database, retrieved the initial configuration, and set up that \

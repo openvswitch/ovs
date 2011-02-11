@@ -4,7 +4,6 @@
 /Module.markers
 /actions.c
 /addrconf_core-openvswitch.c
-/brc_procfs.c
 /brc_sysfs_dp.c
 /brc_sysfs_if.c
 /brcompat.c
