@@ -1,9 +1,0 @@
-#! /bin/sh
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
-#
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.  This file is offered as-is,
-# without warranty of any kind.
-
-exec /opt/xensource/libexec/interface-reconfigure rewrite
