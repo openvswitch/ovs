@@ -22,7 +22,6 @@ EXTRA_DIST += \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
 	xenserver/opt_xensource_libexec_interface-reconfigure \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
-	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
 	xenserver/usr_share_openvswitch_scripts_ovs-external-ids \
 	xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \

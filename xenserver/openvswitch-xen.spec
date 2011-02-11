@@ -79,8 +79,6 @@ install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids 
                $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
-install -m 755 xenserver/usr_sbin_brctl \
-             $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/brctl
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
 install -m 755 utilities/ovs-save \
@@ -259,8 +257,7 @@ for f in \
     /opt/xensource/libexec/InterfaceReconfigureBridge.py \
     /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
     /etc/xensource/scripts/vif \
-    /usr/sbin/xen-bugtool \
-    /usr/sbin/brctl
+    /usr/sbin/xen-bugtool
 do
     s=$(basename "$f")
     t=$(readlink "$f")
@@ -328,8 +325,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
         /opt/xensource/libexec/InterfaceReconfigureBridge.py \
         /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
         /etc/xensource/scripts/vif \
-        /usr/sbin/xen-bugtool \
-        /usr/sbin/brctl
+        /usr/sbin/xen-bugtool
     do
         s=$(basename "$f")
         if [ ! -f "/usr/lib/openvswitch/xs-original/$s" ]; then
@@ -402,7 +398,6 @@ fi
 /usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 /usr/share/openvswitch/scripts/vif
 /usr/share/openvswitch/scripts/xen-bugtool
-/usr/share/openvswitch/scripts/brctl
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/vswitch.ovsschema
