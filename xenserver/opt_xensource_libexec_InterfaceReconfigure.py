@@ -279,7 +279,7 @@ _BOND_XML_TAG = "bond"
 _NETWORK_XML_TAG = "network"
 _POOL_XML_TAG = "pool"
 
-_ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso' ]
+_ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso', 'gro', 'lro' ]
 
 _PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
                         [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay',
@@ -391,12 +391,7 @@ class DatabaseCache(object):
                 continue
             self.__pifs[p] = {}
             for f in _PIF_ATTRS:
-                if f in [ "tunnel_access_PIF_of", "tunnel_transport_PIF_of" ] and f not in rec:
-                    # XenServer 5.5 network records did not have
-                    # these fields, so allow them to be missing.
-                    pass
-                else:
-                    self.__pifs[p][f] = rec[f]
+                self.__pifs[p][f] = rec[f]
             self.__pifs[p]['other_config'] = {}
             for f in _PIF_OTHERCONFIG_ATTRS:
                 if not rec['other_config'].has_key(f): continue
@@ -404,8 +399,7 @@ class DatabaseCache(object):
 
     def __get_vlan_records_from_xapi(self, session):
         self.__vlans = {}
-        for v in session.xenapi.VLAN.get_all():
-            rec = session.xenapi.VLAN.get_record(v)
+        for (v,rec) in session.xenapi.VLAN.get_all_records().items():
             if not self.__pif_on_host(rec['untagged_PIF']):
                 continue
             self.__vlans[v] = {}
@@ -424,8 +418,7 @@ class DatabaseCache(object):
 
     def __get_bond_records_from_xapi(self, session):
         self.__bonds = {}
-        for b in session.xenapi.Bond.get_all():
-            rec = session.xenapi.Bond.get_record(b)
+        for (b,rec) in session.xenapi.Bond.get_all_records().items():
             if not self.__pif_on_host(rec['master']):
                 continue
             self.__bonds[b] = {}
@@ -434,8 +427,7 @@ class DatabaseCache(object):
 
     def __get_network_records_from_xapi(self, session):
         self.__networks = {}
-        for n in session.xenapi.network.get_all():
-            rec = session.xenapi.network.get_record(n)
+        for (n,rec) in session.xenapi.network.get_all_records().items():
             self.__networks[n] = {}
             for f in _NETWORK_ATTRS:
                 if f == "PIFs":
@@ -512,13 +504,7 @@ class DatabaseCache(object):
 
                 self.__get_pif_records_from_xapi(session, host)
 
-                try:
-                    self.__get_tunnel_records_from_xapi(session)
-                except XenAPI.Failure, e:
-                    error,details = e.details
-                    if error == "MESSAGE_METHOD_UNKNOWN" and details == "tunnel.get_all":
-                        pass
-
+                self.__get_tunnel_records_from_xapi(session)
                 self.__get_pool_records_from_xapi(session)
                 self.__get_vlan_records_from_xapi(session)
                 self.__get_bond_records_from_xapi(session)
@@ -677,8 +663,9 @@ class DatabaseCache(object):
 #
 #
 #
+PIF_OTHERCONFIG_DEFAULTS = {'gro': 'off', 'lro': 'off'}
 
-def ethtool_settings(oc):
+def ethtool_settings(oc, defaults = {}):
     settings = []
     if oc.has_key('ethtool-speed'):
         val = oc['ethtool-speed']
@@ -688,8 +675,8 @@ def ethtool_settings(oc):
             log("Invalid value for ethtool-speed = %s. Must be 10|100|1000." % val)
     if oc.has_key('ethtool-duplex'):
         val = oc['ethtool-duplex']
-        if val in ["10", "100", "1000"]:
-            settings += ['duplex', 'val']
+        if val in ["half", "full"]:
+            settings += ['duplex', val]
         else:
             log("Invalid value for ethtool-duplex = %s. Must be half|full." % val)
     if oc.has_key('ethtool-autoneg'):
@@ -701,7 +688,7 @@ def ethtool_settings(oc):
         else:
             log("Invalid value for ethtool-autoneg = %s. Must be on|true|off|false." % val)
     offload = []
-    for opt in ("rx", "tx", "sg", "tso", "ufo", "gso"):
+    for opt in ("rx", "tx", "sg", "tso", "ufo", "gso", "gro", "lro"):
         if oc.has_key("ethtool-" + opt):
             val = oc["ethtool-" + opt]
             if val in ["true", "on"]:
@@ -710,6 +697,8 @@ def ethtool_settings(oc):
                 offload += [opt, 'off']
             else:
                 log("Invalid value for ethtool-%s = %s. Must be on|true|off|false." % (opt, val))
+        elif opt in defaults:
+            offload += [opt, defaults[opt]]
     return settings,offload
 
 # By default the MTU is taken from the Network.MTU setting for VIF,
@@ -882,8 +871,7 @@ def pif_get_vlan_masters(pif):
 # Tunnel PIFs
 #
 def pif_is_tunnel(pif):
-    rec = db().get_pif_record(pif)
-    return rec.has_key('tunnel_access_PIF_of') and len(rec['tunnel_access_PIF_of']) > 0
+    return len(db().get_pif_record(pif)['tunnel_access_PIF_of']) > 0
 
 #
 # Datapath base class

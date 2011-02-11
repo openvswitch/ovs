@@ -529,7 +529,7 @@ class DatapathVswitch(Datapath):
 
             netdev_up(dev, mtu)
 
-            settings, offload = ethtool_settings(oc)
+            settings, offload = ethtool_settings(oc, PIF_OTHERCONFIG_DEFAULTS)
             if len(settings):
                 run_command(['/sbin/ethtool', '-s', dev] + settings)
             if len(offload):

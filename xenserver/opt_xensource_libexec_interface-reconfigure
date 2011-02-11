@@ -527,6 +527,8 @@ def action_force_rewrite(bridge, config):
     f.write('\t\t<VLAN_slave_of/>\n')
     f.write('\t\t<VLAN_master_of>OpaqueRef:NULL</VLAN_master_of>\n')
     f.write('\t\t<VLAN>-1</VLAN>\n')
+    f.write('\t\t<tunnel_access_PIF_of/>\n')
+    f.write('\t\t<tunnel_transport_PIF_of/>\n')
     f.write('\t\t<device>%s</device>\n' % interface)
     f.write('\t\t<MAC>%s</MAC>\n' % mac)
     f.write('\t\t<other_config/>\n')

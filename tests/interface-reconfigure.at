@@ -73,6 +73,7 @@ EOF
 <xenserver-network-configuration>
 	<pif ref="OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -120,6 +121,7 @@ EOF
 	</pif>
 	<pif ref="OpaqueRef:eea8da94-a5e6-18fc-34a7-5e9b5a235806">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -167,6 +169,7 @@ EOF
 	</pif>
 	<pif ref="OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -214,6 +217,7 @@ EOF
 	</pif>
 	<pif ref="OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -265,6 +269,7 @@ EOF
 				OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297
 			</master>
 		</VLAN_slave_of>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -312,6 +317,7 @@ EOF
 	</pif>
 	<pif ref="OpaqueRef:205d1186-2cd1-d5e6-45e4-ea1698ea6e15">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			True
 		</management>
@@ -359,6 +365,7 @@ EOF
 	</pif>
 	<pif ref="OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3">
 		<VLAN_slave_of/>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -410,6 +417,7 @@ EOF
 				OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c
 			</master>
 		</VLAN_slave_of>
+                <tunnel_access_PIF_of/>
 		<management>
 			False
 		</management>
@@ -656,6 +664,7 @@ Applying changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
 Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
 /sbin/ifconfig eth2 up mtu 1500
+/sbin/ethtool -K eth2 gro off lro off
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth2
     --may-exist add-br xenbr2
@@ -720,6 +729,7 @@ configure_datapath: extra bonds - []
 Applying changes to /etc/sysconfig/network-scripts/route-xapi3 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
 /sbin/ifconfig eth3 up mtu 1500
+/sbin/ethtool -K eth3 gro off lro off
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth3
     --may-exist add-br xenbr3
@@ -800,7 +810,9 @@ netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
 /sbin/ifconfig eth0 up mtu 1500
+/sbin/ethtool -K eth0 gro off lro off
 /sbin/ifconfig eth1 up mtu 1500
+/sbin/ethtool -K eth1 gro off lro off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
@@ -882,7 +894,9 @@ netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
 /sbin/ifconfig eth0 up mtu 1500
+/sbin/ethtool -K eth0 gro off lro off
 /sbin/ifconfig eth1 up mtu 1500
+/sbin/ethtool -K eth1 gro off lro off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1

@@ -79,7 +79,8 @@ FSTAB = '/etc/fstab'
 PROC_MOUNTS = '/proc/mounts'
 ISCSI_CONF = '/etc/iscsi/iscsid.conf'
 ISCSI_INITIATOR = '/etc/iscsi/initiatorname.iscsi'
-LVM_CACHE = '/etc/lvm/.cache'
+LVM_CACHE = '/etc/lvm/cache/.cache'
+LVM_CONFIG = '/etc/lvm/lvm.conf'
 PROC_CPUINFO = '/proc/cpuinfo'
 PROC_MEMINFO = '/proc/meminfo'
 PROC_IOPORTS = '/proc/ioports'
@@ -109,6 +110,7 @@ IFCFG_RE = re.compile(r'^.*/ifcfg-.*')
 ROUTE_RE = re.compile(r'^.*/route-.*')
 NETWORK_DBCACHE = '/var/xapi/network.dbcache'
 RESOLV_CONF = '/etc/resolv.conf'
+MPP_CONF = '/etc/mpp.conf'
 MULTIPATH_CONF = '/etc/multipath.conf'
 NSSWITCH_CONF = '/etc/nsswitch.conf'
 NTP_CONF = '/etc/ntp.conf'
@@ -152,11 +154,11 @@ INSTALLED_REPOS_DIR = '/etc/xensource/installed-repos'
 PATCH_APPLIED_DIR = '/var/patch/applied'
 XENSERVER_LOGS = \
     [ VAR_LOG_DIR + x for x in
-      ['xensource.log', 'audit.log', 'xenstored-access.log', 'SMlog', 'xen/xenstored-trace.log', 
+      ['xensource.log', 'audit.log', 'xenstored-access.log', 'SMlog', 'VMPRlog', 'xen/xenstored-trace.log', 
        'xen/xen-hotplug.log', 'xen/domain-builder-ng.log', 'squeezed.log',
        'openvswitch/ovs-brcompatd.log', 'openvswitch/ovs-vswitchd.log', 'openvswitch/ovsdb-server.log' ] +
       [ f % n for n in range(1, 20) \
-            for f in ['xensource.log.%d', 'xensource.log.%d.gz','SMlog.%d', 'SMlog.%d.gz',
+            for f in ['xensource.log.%d', 'xensource.log.%d.gz','SMlog.%d', 'SMlog.%d.gz', 'VMPRlog.%d', 'VMPRlog.%d.gz',
                       'audit.log.%d', 'audit.log.%d.gz', 'xenstored-access.log.%d', 'xenstored-access.log.%d.gz', \
                       'xen/xenstored-access.log.%d', 'xen/xenstored-access.log.%d.gz', 'squeezed.log.%d', \
                       'openvswitch/ovs-brcompatd.log.%d', 'openvswitch/ovs-brcompatd.log.%d.gz', \
@@ -211,6 +213,7 @@ LVS = '/usr/sbin/lvs'
 LVDISPLAY = '/usr/sbin/lvdisplay'
 MD5SUM = '/usr/bin/md5sum'
 MODINFO = '/sbin/modinfo'
+MPPUTIL = '/usr/sbin/mppUtil'
 MULTIPATHD = '/sbin/multipathd'
 NETSTAT = '/bin/netstat'
 OVS_DPCTL = '/usr/bin/ovs-dpctl'
@@ -322,6 +325,8 @@ dbg = False
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
         max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
+    if  os.getenv('XEN_RT') and max_time > 0:
+        max_time *= 5
     caps[key] = (key, pii, min_size, max_size, min_time, max_time, mime,
                  checked, hidden)
     cap_sizes[key] = 0
@@ -331,11 +336,11 @@ cap(CAP_BLOBS,               PII_NO,                    max_size=5*MB)
 cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
     max_time=5)
 cap(CAP_CVSM,                PII_NO,                    max_size=3*MB,
-    max_time=60)
-cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=25*KB,
+    max_time=120)
+cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=50*KB,
     max_time=20)
 cap(CAP_FIRSTBOOT,           PII_YES,   min_size=60*KB, max_size=80*KB)
-cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=30*KB,
+cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=50*KB,
     max_time=20)
 cap(CAP_HDPARM_T,            PII_NO,    min_size=0,     max_size=5*KB,
     min_time=20, max_time=90, checked=False, hidden=True)
@@ -345,13 +350,13 @@ cap(CAP_HOST_CRASHDUMP_LOGS, PII_NO)
 cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
     max_time=5)
 cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
-cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=10*KB,
+cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=20*KB,
     max_time=10)
 cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
-                                        min_size=0,     max_size=20*KB)
+                                        min_size=0,     max_size=40*KB)
 cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=19*KB,
     max_time=30)
-cap(CAP_PAM,                 PII_NO,                    max_size=30*KB)
+cap(CAP_PAM,                 PII_NO,                    max_size=50*KB)
 cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
     max_time=60)
 cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
@@ -369,7 +374,7 @@ cap(CAP_X11_AUTH,            PII_NO,                    max_size=100*KB)
 cap(CAP_XAPI_DEBUG,          PII_MAYBE,                 max_size=10*MB)
 cap(CAP_XAPI_SUBPROCESS,     PII_NO,                    max_size=5*KB,
     max_time=10)
-cap(CAP_XENRT,               PII_NO,    min_size=0,     max_size=5*KB,
+cap(CAP_XENRT,               PII_NO,    min_size=0,     max_size=500*MB,
     checked=False, hidden=True)
 cap(CAP_XENSERVER_CONFIG,    PII_MAYBE,                 max_size=80*KB,
     max_time=5)
@@ -615,7 +620,7 @@ exclude those logs from the archive.
     cmd_output(CAP_DISK_INFO, [PVS])
     cmd_output(CAP_DISK_INFO, [VGS])
     cmd_output(CAP_DISK_INFO, [LVS])
-    file_output(CAP_DISK_INFO, [LVM_CACHE])
+    file_output(CAP_DISK_INFO, [LVM_CACHE, LVM_CONFIG])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_host'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_disk'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/fc_transport'])
@@ -656,9 +661,12 @@ exclude those logs from the archive.
 
     cmd_output(CAP_LOSETUP_A, [LOSETUP, '-a'])
 
-    file_output(CAP_MULTIPATH, [MULTIPATH_CONF])
-    cmd_output(CAP_MULTIPATH, [DMSETUP, 'status'])
+    file_output(CAP_MULTIPATH, [MULTIPATH_CONF, MPP_CONF])
+    cmd_output(CAP_MULTIPATH, [DMSETUP, 'table'])
     func_output(CAP_MULTIPATH, 'multipathd_topology', multipathd_topology)
+    cmd_output(CAP_MULTIPATH, [MPPUTIL, '-a'])
+    if CAP_MULTIPATH in entries:
+        dump_rdac_groups(CAP_MULTIPATH)
 
     file_output(CAP_NETWORK_CONFIG, [NETWORK_CONF])
     file_output(CAP_NETWORK_CONFIG, [NETWORK_DBCACHE])
@@ -751,6 +759,7 @@ exclude those logs from the archive.
 
     tree_output(CAP_VNCTERM, VNCTERM_CORE_DIR)
 
+    cmd_output(CAP_WLB, [XE, 'pool-retrieve-wlb-configuration'])
     cmd_output(CAP_WLB, [XE, 'pool-retrieve-wlb-diagnostics'])
 
     tree_output(CAP_X11_LOGS, X11_LOGS_DIR, X11_LOGS_RE)
@@ -761,6 +770,9 @@ exclude those logs from the archive.
     func_output(CAP_XAPI_SUBPROCESS, 'xapi_subprocesses', dump_xapi_subprocess_info)
 
     tree_output(CAP_XENRT, '/tmp', FIST_RE)
+    # CA-45540: capture QEMU core files
+    tree_output(CAP_XENRT, '/var/xen/qemu')
+    tree_output(CAP_XENRT, '/tmp', re.compile(r'^.*xen\.qemu-dm\.'))
 
     file_output(CAP_XENSERVER_CONFIG, [INITIAL_INVENTORY])
     file_output(CAP_XENSERVER_CONFIG, [POOL_CONF, PTOKEN, XAPI_CONF, XAPI_SSL_CONF, 
@@ -772,7 +784,7 @@ exclude those logs from the archive.
     cmd_output(CAP_XENSERVER_CONFIG, [LS, '-lR', STATIC_VDIS])
 
     func_output(CAP_XENSERVER_DATABASES, 'xapi-db.xml', dump_filtered_xapi_db)
-    cmd_output(CAP_XENSERVER_DATABASES, [XENSTORE_LS])
+    cmd_output(CAP_XENSERVER_DATABASES, [XENSTORE_LS, '-f'])
     file_output(CAP_XENSERVER_DATABASES, [DB_CONF, DB_CONF_RIO, DB_DEFAULT_FIELDS, DB_SCHEMA_SQL])
     tree_output(CAP_XENSERVER_DATABASES, OEM_CONFIG_DIR, OEM_DB_FILES_RE)
     file_output(CAP_XENSERVER_DATABASES, [XENSTORED_DB, XENSTORED_DB + '.bak'])
@@ -973,18 +985,53 @@ def dump_xapi_rrds(cap):
     session.xenapi.session.logout()
     return output
 
-def filter_db_pii(str, state):
-    if 'in_secret_table' not in state:
-        state['in_secret_table'] = False
+'''Filter a Xapi XML database.
 
-    if str.startswith('<table ') and 'name="secret"' in str:
-        state['in_secret_table'] = True
-    elif str.startswith('</table>'):
-        state['in_secret_table'] = False
-    
-    if state['in_secret_table'] and str.startswith("<row"): # match only on DB rows
-        str = re.sub(r'(value=")[^"]+(")', r'\1REMOVED\2', str)
-    return str
+    There is one important assumption made in this class:
+    - the XML document does not contain any characters between the end of one
+      tag and the beginning of the next, ie every > is immediately followed by
+      a <
+'''
+class DBFilter:
+    def __init__(self):
+        self.result = ''
+        self.rest = ''
+        self.state = {}
+
+    def filter_secrets(self, s):
+        if 'in_secret_table' not in self.state:
+            self.state['in_secret_table'] = False
+
+        # this logic doesn't deal with <table name="secret" /> properly!!!
+        if s.startswith('<table ') and 'name="secret"' in s:
+            self.state['in_secret_table'] = True
+        elif s.startswith('</table>'):
+            self.state['in_secret_table'] = False
+        
+        if self.state['in_secret_table'] and s.startswith("<row"): # match only on DB rows
+            s = re.sub(r'(value=")[^"]+(")', r'\1REMOVED\2', s)
+        return s
+
+    def feed(self, s):
+        rem = self.rest + s
+        p = rem.find('>')
+        while p != -1:
+            s = rem[:p+1]
+            rem = rem[p+1:]
+            self.result  += self.filter_secrets(s)
+            p = rem.find('>')
+        self.rest = rem
+
+    def output(self):
+        r = self.result + self.filter_secrets(self.rest)
+        self.result, self.rest = '', ''
+        self.state = {}
+        return r
+
+def filter_db_pii(s, state):
+    dbfilter = DBFilter()
+    dbfilter.feed(s)
+    return dbfilter.output()
 
 def dump_filtered_xapi_db(cap):
     db_file = None
@@ -1018,18 +1065,12 @@ def dump_filtered_xapi_db(cap):
     if not ih:
         return ''
 
-    remain = ''
+    dbfilter = DBFilter()
     rec = ih.read(2048)
     while rec != '':
-        remain += rec
-        p = remain.find('>')
-        while p != -1:
-            str = remain[:p+1]
-            remain = remain[p+1:]
-            output += filter_db_pii(str, state)
-            p = remain.find('>')
+        dbfilter.feed(rec)
         rec = ih.read(2048)
-    output += remain
+    output = dbfilter.output()
 
     if pipe:
         pipe.wait()
@@ -1088,24 +1129,12 @@ def csl_logs(cap):
 
     output = StringIO.StringIO()
     procs = []
-
-    def rotate_string(x, n):
-        transtbl = ""
-        for a in range(0, 256):
-            transtbl = transtbl + chr(a)
-        transtbl = transtbl[n:] + transtbl[0:n]
-        return x.translate(transtbl)
-
-    def _untransform_string(str, remove_trailing_nulls=False):
-        """De-obfuscate string. To cope with an obfuscation bug in Rio, the argument
-        remove_trailing_nulls should be set to True"""
-        tmp = base64.decodestring(str)
-        if remove_trailing_nulls:
-            tmp = tmp.rstrip('\x00')
-        return rotate_string(tmp, -13)
+    csl_targets_fetched = []
 
     for pbd in session.xenapi.PBD.get_all_records().values():
         if pbd.has_key('device_config') and pbd['device_config'].has_key('target'):
+            if pbd['device_config']['target'] in csl_targets_fetched:
+                continue
             sr = session.xenapi.SR.get_record(pbd['SR'])
             if sr.has_key('type') and sr['type'] == 'cslg':
                 if sr['shared'] and pbd['host'] != this_host and not i_am_master:
@@ -1117,9 +1146,11 @@ def csl_logs(cap):
                     server += ':' + dev_cfg['port']
                 if dev_cfg.has_key('username'):
                     server += ',' + dev_cfg['username']
-                if dev_cfg.has_key('password_transformed'):
-                    server += ',' + _untransform_string(dev_cfg['password_transformed'])
+                if dev_cfg.has_key('password_secret'):
+                    sec_ref = session.xenapi.secret.get_by_uuid(dev_cfg['password_secret'])
+                    server += ',' + session.xenapi.secret.get_value(sec_ref)
                 procs.append(ProcOutput([CSL, server, 'srv-log-get'], caps[cap][MAX_TIME], output))
+                csl_targets_fetched.append(dev_cfg['target'])
 
     session.xenapi.session.logout()
 
@@ -1174,6 +1205,23 @@ def fd_usage(cap):
     for k in keys:
         output += "%s: %s\n" % (k, str(fd_dict[k]))
     return output
+
+def dump_rdac_groups(cap):
+    output = StringIO.StringIO()
+    procs = [ProcOutput([MPPUTIL, '-a'], caps[cap][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        proc_line = 0
+        for line in output.getvalue().splitlines():
+            if line.startswith('ID'):
+                proc_line = 2
+            elif line.startswith('----'):
+                proc_line -= 1
+            elif proc_line > 0:
+                group, _ = line.split(None, 1)
+                cmd_output(cap, [MPPUTIL, '-g', group])
 
 def load_plugins(just_capabilities = False):
     def getText(nodelist):
@@ -1294,7 +1342,7 @@ def make_zip(subdir):
             
                 if v.has_key('output'):
                     zf.writestr(dest, v['output'].getvalue())
-                else:
+                elif v.has_key('filename'):
                     if os.stat(v['filename']).st_size < 50:
                         compress_type = zipfile.ZIP_STORED
                     else:

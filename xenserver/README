@@ -79,8 +79,8 @@ files are:
     uuid.py
 
         This is uuid.py from Python 2.5.  It is installed into the
-        Open vSwitch RPM because XenServer 5.5 and 5.6 use Python 2.4,
-        which do not have uuid.py.
+        Open vSwitch RPM because XenServer uses Python 2.4, which does
+        not have uuid.py.
 
 To install, build the Open vSwitch RPM with a command like this:
 
@@ -94,7 +94,7 @@ question and reboot them.  (The openvswitch-dbg package that is also
 produced need not be installed, but it is harmless to do so.)
 
 ----------------------------------------------------------------------
-Copyright (C) 2009, 2010 Nicira Networks, Inc.
+Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright
