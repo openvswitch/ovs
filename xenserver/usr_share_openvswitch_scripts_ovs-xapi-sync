@@ -15,9 +15,12 @@
 
 
 # A daemon to monitor the external_ids columns of the Bridge and
-# Interface OVSDB tables.  Its primary responsibility is to set the
-# "bridge-id" and "iface-id" keys in the Bridge and Interface tables,
-# respectively.
+# Interface OVSDB tables for changes that require interrogating XAPI.
+# Its responsibilities include:
+#
+#   - Set the "bridge-id" key in the Bridge table.
+#   - Set the "iface-id" key in the Interface table.
+#   - Set the fail-mode on internal bridges.
 
 import getopt
 import logging, logging.handlers
@@ -35,9 +38,9 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
-s_log     = logging.getLogger("ovs-external-ids")
+s_log     = logging.getLogger("ovs-xapi-sync")
 l_handler = logging.handlers.RotatingFileHandler(
-        "/var/log/openvswitch/ovs-external-ids.log")
+        "/var/log/openvswitch/ovs-xapi-sync.log")
 l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
 l_handler.setFormatter(l_formatter)
 s_log.addHandler(l_handler)
@@ -124,6 +127,8 @@ def set_external_id(table, record, key, value):
     col = 'external-ids:"' + key + '"="' + value + '"'
     call_vsctl(["set", table, record, col])
 
+# XenServer does not call interface-reconfigure on internal networks,
+# which is where the fail-mode would normally be set.
 def update_fail_mode(name):
     rec = get_network_by_bridge(name)
 

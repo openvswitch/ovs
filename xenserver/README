@@ -46,10 +46,11 @@ files are:
 
         Open vSwitch-aware replacement for Citrix script of the same name.
 
-    usr_share_openvswitch_scripts_ovs-external-ids
+    usr_share_openvswitch_scripts_ovs-xapi-sync
 
         Daemon to monitor the external_ids columns of the Bridge and
-        Interface OVSDB tables.
+        Interface OVSDB tables for changes that require interrogating
+        XAPI.
 
     usr_share_openvswitch_scripts_sysconfig.template
 
