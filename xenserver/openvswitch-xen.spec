@@ -60,6 +60,9 @@ install -m 755 xenserver/etc_profile.d_openvswitch.sh \
 install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/openvswitch-cfg-update
+install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/network-status
+install -m 644 xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
+         $RPM_BUILD_ROOT/etc/xensource/bugtool/network-status/openvswitch.xml
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
 install -m 644 vswitchd/vswitch.ovsschema \
          $RPM_BUILD_ROOT/usr/share/openvswitch/vswitch.ovsschema
@@ -75,10 +78,10 @@ install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/vif
 install -m 755 xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
                $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-xapi-sync
-install -m 755 xenserver/usr_sbin_xen-bugtool \
-             $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
+install -m 755 xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show \
+         $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
 install -m 755 utilities/ovs-save \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-save
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
@@ -186,8 +189,7 @@ for f in \
     /opt/xensource/libexec/InterfaceReconfigure.py \
     /opt/xensource/libexec/InterfaceReconfigureBridge.py \
     /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
-    /etc/xensource/scripts/vif \
-    /usr/sbin/xen-bugtool
+    /etc/xensource/scripts/vif
 do
     s=$(basename "$f")
     t=$(readlink "$f")
@@ -248,15 +250,13 @@ rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
     /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
     /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
 
-# Restore original XenServer scripts. It's important to do this even on upgrade
-# since the version to be installed may be missing some of these scripts.
+# Restore original XenServer scripts
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
     /opt/xensource/libexec/InterfaceReconfigure.py \
     /opt/xensource/libexec/InterfaceReconfigureBridge.py \
     /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
-    /etc/xensource/scripts/vif \
-    /usr/sbin/xen-bugtool
+    /etc/xensource/scripts/vif
 do
     s=$(basename "$f")
     if [ ! -f "/usr/lib/openvswitch/xs-original/$s" ]; then
@@ -290,6 +290,7 @@ fi
 /etc/init.d/openvswitch
 /etc/init.d/openvswitch-xapi-update
 /etc/xapi.d/plugins/openvswitch-cfg-update
+/etc/xensource/bugtool/network-status/openvswitch.xml
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
@@ -321,8 +322,8 @@ fi
 /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.py
 /usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 /usr/share/openvswitch/scripts/vif
-/usr/share/openvswitch/scripts/xen-bugtool
 /usr/share/openvswitch/scripts/sysconfig.template
+/usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-vswitchd

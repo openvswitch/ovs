@@ -15,6 +15,7 @@ EXTRA_DIST += \
 	xenserver/etc_logrotate.d_openvswitch \
 	xenserver/etc_profile.d_openvswitch.sh \
 	xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
+	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
 	xenserver/etc_xensource_scripts_vif \
 	xenserver/openvswitch-xen.spec \
 	xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
@@ -22,7 +23,7 @@ EXTRA_DIST += \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
 	xenserver/opt_xensource_libexec_interface-reconfigure \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
-	xenserver/usr_sbin_xen-bugtool \
 	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template \
+	xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show \
 	xenserver/uuid.py

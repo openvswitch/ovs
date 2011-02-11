@@ -34,6 +34,12 @@ files are:
         in the ovs-vswitchd configuration that are managed in the
         xapi database when integrated with Citrix management tools.
 
+    etc_xensource_bugtool_network-status_openvswitch.xml
+
+        xen-bugtool extension to collect networking information relevant to
+        Open vSwitch. Runs
+        usr_share_openvswitch_scripts_xen-bugtool-tc-class-show.
+
     etc_xensource_scripts_vif
 
         Open vSwitch-aware replacement for Citrix script of the same name.
@@ -57,15 +63,17 @@ files are:
         Template for Open vSwitch's /etc/sysconfig/openvswitch 
         configuration file.
 
+    usr_share_openvswitch_scripts_xen-bugtool-tc-class-show
+
+        Script to dump tc class configuration for all network
+        interfaces. Intended to be run by xen-bugtool via
+        etc_xensource_bugtool_network-status_openvswitch.xml.
+
     usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
 
         xsconsole plugin to configure the pool-wide configuration keys
         used to control Open vSwitch when integrated with Citrix 
         management tools.
-
-    usr_sbin_xen-bugtool
-
-        Open vSwitch-aware replacement for Citrix script of the same name.
 
     uuid.py
 

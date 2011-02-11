@@ -25,7 +25,6 @@ License:
 	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py
 	xenserver/opt_xensource_libexec_interface-reconfigure
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
-	xenserver/usr_sbin_xen-bugtool
 
 	* These components are only distributed in the source package.
 	  They do not appear in any binary packages.
@@ -54,10 +53,6 @@ License:
   GNU Lesser General Public Licence version 2.1.
 
 	debian/ovs-bugtool
-	xenserver/usr_sbin_xen-bugtool [*]
-
-	* This component is only distributed in the source package.
-	  It does not appear in any binary packages.
 
   On Debian systems, the complete text of the
   GNU Lesser General Public Licence version 2.1 can be found in
