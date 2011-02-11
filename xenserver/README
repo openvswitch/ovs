@@ -51,11 +51,6 @@ files are:
         Daemon to monitor the external_ids columns of the Bridge and
         Interface OVSDB tables.
 
-    usr_share_openvswitch_scripts_refresh-xs-network-uuids
-
-        Script to refresh Bridge table external-ids:xs-network-uuids
-        values, which can get out-of-sync following a pool join.
-
     usr_share_openvswitch_scripts_sysconfig.template
 
         Template for Open vSwitch's /etc/sysconfig/openvswitch 

@@ -75,21 +75,6 @@ case ${NETWORK_MODE:=openvswitch} in
         ;;
 esac
 
-# General config variables in /etc/sysconfig/openvswitch
-if [ -f /etc/xensource-inventory ]; then
-    if test "$PRODUCT_VERSION" = "5.5.0"; then
-        # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
-        : ${ENABLE_BRCOMPAT:=y}
-        : ${ENABLE_FAKE_PROC_NET:=y}
-    else
-        # Later versions don't need them.
-        : ${ENABLE_BRCOMPAT:=n}
-        : ${ENABLE_FAKE_PROC_NET:=n}
-    fi
-else
-    : ${ENABLE_BRCOMPAT:=y}
-    : ${ENABLE_FAKE_PROC_NET:=y}
-fi
 : ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
 
@@ -124,35 +109,14 @@ fi
 : ${VSWITCHD_VALGRIND_LOG:=}
 : ${VSWITCHD_VALGRIND_OPT:=}
 
-# Config variables specific to ovs-brcompatd
-: ${BRCOMPATD_PIDFILE:=/var/run/openvswitch/ovs-brcompatd.pid}
-: ${BRCOMPATD_RUN_DIR:=/var/xen/openvswitch}
-: ${BRCOMPATD_PRIORITY:=-10}
-: ${BRCOMPATD_LOGFILE:=/var/log/openvswitch/ovs-brcompatd.log}
-: ${BRCOMPATD_FILE_LOGLEVEL:=INFO}
-: ${BRCOMPATD_SYSLOG_LOGLEVEL:=ERR}
-: ${BRCOMPATD_MEMLEAK_LOGFILE:=}
-: ${BRCOMPATD_STRACE_LOG:=}
-: ${BRCOMPATD_STRACE_OPT:=}
-: ${BRCOMPATD_VALGRIND_LOG:=}
-: ${BRCOMPATD_VALGRIND_OPT:=}
-
 # Full paths to executables & modules
 ovsdb_server="/usr/sbin/ovsdb-server"
 ovsdb_tool="/usr/bin/ovsdb-tool"
 vswitchd="/usr/sbin/ovs-vswitchd"
-brcompatd="/usr/sbin/ovs-brcompatd"
 dpctl="/usr/bin/ovs-dpctl"
 appctl="/usr/bin/ovs-appctl"
 ofctl="/usr/bin/ovs-ofctl"
 vsctl="/usr/bin/ovs-vsctl"
-
-if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
-    if [ "$ENABLE_BRCOMPAT" != "y" ]; then
-        warning "FAKE_PROC_NET required BRCOMPAT which was disabled.  Force enabling."
-        ENABLE_BRCOMPAT="y"
-    fi
-fi
 
 if test "$ENABLE_MONITOR" = "y"; then
     monitor_opt="--monitor"
@@ -189,15 +153,9 @@ function insert_modules_if_required {
         action "Inserting llc module" modprobe llc
         action "Inserting openvswitch module" modprobe openvswitch_mod
     fi
-    if [ "$ENABLE_BRCOMPAT" = "y" ] && [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
-        action "Inserting brcompat module" modprobe brcompat_mod
-    fi
 }
 
 function remove_modules {
-    if lsmod | grep -q "brcompat_mod"; then
-        action "Removing brcompat module" rmmod brcompat_mod.ko
-    fi
     if lsmod | grep -q "openvswitch_mod"; then
         action "Removing openvswitch module" rmmod openvswitch_mod.ko
     fi
@@ -280,25 +238,13 @@ function start_ovsdb_server {
 }
 
 function start_vswitchd {
-    local fake_proc_net_opt=
-    if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
-        fake_proc_net_opt="--fake-proc-net"
-    fi
-
     local mlockall_opt=
     if [ "$VSWITCHD_MLOCKALL" != "no" ]; then
         mlockall_opt="--mlockall"
     fi
 
-    start_daemon VSWITCHD "$vswitchd" $fake_proc_net_opt $mlockall_opt \
-                 "$VSWITCHD_OVSDB_SERVER"
+    start_daemon VSWITCHD "$vswitchd" $mlockall_opt "$VSWITCHD_OVSDB_SERVER"
  }
-
-function start_brcompatd {
-    start_daemon BRCOMPATD "$brcompatd" \
-                 --appctl-command="$appctl --target=/var/run/openvswitch/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl %s" \
-                 "$VSWITCHD_OVSDB_SERVER"
-}
 
 function stop_daemon {
     local DAEMON=$1
@@ -414,9 +360,6 @@ function start {
     set_system_ids
 
     start_vswitchd
-    if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
-        start_brcompatd
-    fi
 
     if [ -f /etc/xensource-inventory ]; then
         # Start daemon to monitor external ids
@@ -429,7 +372,6 @@ function start {
 }
 
 function stop {
-    stop_daemon BRCOMPATD "$brcompatd"
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
     if [ -e /var/run/openvswitch/ovs-external-ids.pid ]; then
@@ -510,20 +452,13 @@ case "$1" in
         shift
         strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
         ;;
-    strace-brcompatd)
-        shift
-        strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
-        ;;
     status)
         status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server &&
-        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd &&
-        (test "$ENABLE_BRCOMPAT" != "y" || 
-            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd)
+        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
         ;;
     version)
         /usr/sbin/ovsdb-server -V
         /usr/sbin/ovs-vswitchd -V
-        /usr/sbin/ovs-brcompatd -V
         ;;
     force-reload-kmod)
 	force_reload_kmod

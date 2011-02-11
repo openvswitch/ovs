@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -15,9 +15,6 @@
 	fi
 	if [ -e /var/run/openvswitch/ovsdb-server.pid ]; then	
 	    /usr/bin/ovs-appctl -t ovsdb-server vlog/reopen
-	fi
-	if [ -e /var/run/openvswitch/ovs-brcompatd.pid ]; then
-		/usr/bin/ovs-appctl -t ovs-brcompatd vlog/reopen
 	fi
 	endscript
 }

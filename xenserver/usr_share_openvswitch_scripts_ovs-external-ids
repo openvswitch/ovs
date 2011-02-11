@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 # A daemon to monitor the external_ids columns of the Bridge and
 # Interface OVSDB tables.  Its primary responsibility is to set the
 # "bridge-id" and "iface-id" keys in the Bridge and Interface tables,
-# respectively.  It also looks for the use of "network-uuids" in the
-# Bridge table and duplicates its value to the preferred "xs-network-uuids".
+# respectively.
 
 import getopt
 import logging, logging.handlers
@@ -124,14 +123,6 @@ def call_vsctl(args):
 def set_external_id(table, record, key, value):
     col = 'external-ids:"' + key + '"="' + value + '"'
     call_vsctl(["set", table, record, col])
-
-# XAPI on XenServer 5.6 uses the external-id "network-uuids" for internal
-# networks, but we now prefer "xs-network-uuids".  Look for its use and
-# write our preferred external-id.
-def update_network_uuids(name, ids):
-    if ids["network-uuids"] and not ids["xs-network-uuids"]:
-        set_external_id("Bridge", name, "xs-network-uuids",
-                ids["network-uuids"])
 
 def update_fail_mode(name):
     rec = get_network_by_bridge(name)
@@ -271,9 +262,7 @@ def main(argv):
         for rec in idl.data["Bridge"].itervalues():
             name = rec.name.as_scalar()
             xs_network_uuids = rec.external_ids.get("xs-network-uuids")
-            network_uuids = rec.external_ids.get("network-uuids")
-            new_bridges[name] = {"xs-network-uuids": xs_network_uuids,
-                                 "network-uuids": network_uuids}
+            new_bridges[name] = {"xs-network-uuids": xs_network_uuids}
 
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
@@ -283,10 +272,7 @@ def main(argv):
 
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
-                # Network uuids shouldn't change in the life of a bridge,
-                # so only check for "network-uuids" on creation.
                 if name not in bridges:
-                    update_network_uuids(name, ids)
                     update_fail_mode(name)
 
                 if (name not in bridges) or (bridges[name] != ids):

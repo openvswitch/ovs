@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -42,7 +42,7 @@ function monitorlogs {
         done
         grep="$grep'"
     fi
-    cmd="tail -F /var/log/messages /var/log/openvswitch/ovs-vswitchd.log /var/log/openvswitch/ovs-brcompatd.log /var/log/openvswitch/ovsdb-server /var/log/xensource.log $grep | tee /var/log/monitorlogs.out"
+    cmd="tail -F /var/log/messages /var/log/openvswitch/ovs-vswitchd.log /var/log/openvswitch/ovsdb-server /var/log/xensource.log $grep | tee /var/log/monitorlogs.out"
     printf "cmd: $cmd\n"
     eval "$cmd"
 }

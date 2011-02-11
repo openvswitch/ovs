@@ -1,5 +1,5 @@
 # Copyright (c) 2008,2009 Citrix Systems, Inc.
-# Copyright (c) 2009,2010 Nicira Networks.
+# Copyright (c) 2009,2010,2011 Nicira Networks.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
@@ -465,10 +465,6 @@ class DatapathVswitch(Datapath):
         dpname = pif_bridge_name(self._dp)
         
         if pif_is_vlan(self._pif):
-            # XXX this is only needed on XS5.5, because XAPI misguidedly
-            # creates the fake bridge (via bridge ioctl) before it calls us.
-            vsctl_argv += ['--', '--if-exists', 'del-br', bridge]
-
             # configure_datapath() set up the underlying datapath bridge.
             # Stack a VLAN bridge on top of it.
             vsctl_argv += ['--', '--may-exist', 'add-br',
@@ -549,11 +545,6 @@ class DatapathVswitch(Datapath):
         ipdev = self._ipdev
         
         bridge = pif_bridge_name(dp)
-
-        #nw = db().get_pif_record(self._pif)['network']
-        #nwrec = db().get_network_record(nw)
-        #vsctl_argv += ['# deconfigure network-uuids']
-        #vsctl_argv += ['--del-entry=bridge.%s.network-uuids=%s' % (bridge,nwrec['uuid'])]
 
         log("deconfigure ipdev %s on %s" % (ipdev,bridge))
         vsctl_argv += ["# deconfigure ipdev %s" % ipdev]

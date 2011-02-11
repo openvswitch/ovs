@@ -1,5 +1,5 @@
 # Copyright (c) 2007-2010 Citrix Systems Inc.
-# Copyright (c) 2009,2010 Nicira Networks.
+# Copyright (c) 2009,2010,2011 Nicira Networks.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -109,10 +109,7 @@ class VSwitchControllerDialogue(Dialogue):
         self.xs_version = data.host.software_version.product_version('')
         pool = data.GetPoolForThisHost()
         if pool is not None:
-            if self.xs_version == "5.5.0":
-                self.controller = pool.get("other_config", {}).get("vSwitchController", "")
-            else:
-                self.controller = pool.get("vswitch_controller", "")
+            self.controller = pool.get("vswitch_controller", "")
         else:
             self.controller = ""
 
@@ -125,8 +122,6 @@ class VSwitchControllerDialogue(Dialogue):
                       lambda: self.syncController()),
 #             ChoiceDef(Lang("Restart ovs-vswitchd"),
 #                       lambda: self.restartService("vswitch")),
-#             ChoiceDef(Lang("Restart ovs-brcompatd"),
-#                       lambda: self.restartService("vswitch-brcompatd"))
             ]
         self.menu = Menu(self, None, Lang("Configure Open vSwitch"), choiceDefs)
 
@@ -250,13 +245,7 @@ class VSwitchControllerDialogue(Dialogue):
         if len(pools) > 1:
             XSLogFatal(Lang("More than one pool for host."))
             return
-        if self.xs_version == "5.5.0":
-            key = "vSwitchController"
-            session.xenapi.pool.remove_from_other_config(pools[0], key)
-            if value != None:
-                session.xenapi.pool.add_to_other_config(pools[0], key, value)
-        else:
-            session.xenapi.pool.set_vswitch_controller(value)
+        session.xenapi.pool.set_vswitch_controller(value)
         Data.Inst().Update()
 
     def _updateActiveServers(self, session):
@@ -294,10 +283,7 @@ class XSFeatureVSwitch:
 
         pool = data.GetPoolForThisHost()
         if pool is not None:
-            if (xs_version == "5.5.0"):
-                dbController = pool.get("other_config", {}).get("vSwitchController", "")
-            else:
-                dbController = pool.get("vswitch_controller", "")
+            dbController = pool.get("vswitch_controller", "")
         else:
             dbController = ""
 
@@ -317,11 +303,6 @@ class XSFeatureVSwitch:
                               VSwitchService.Inst("openvswitch", "ovs-vswitchd").status())
         inPane.AddStatusField(Lang("ovsdb-server status", 20),
                               VSwitchService.Inst("openvswitch", "ovsdb-server").status())
-
-        # Only XenServer 5.5.0 runs ovs-brcompatd
-        if (xs_version == "5.5.0"):
-            inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
-                   VSwitchService.Inst("openvswitch", "ovs-brcompatd").status())
 
         inPane.AddKeyHelpField( {
             Lang("<Enter>") : Lang("Reconfigure"),

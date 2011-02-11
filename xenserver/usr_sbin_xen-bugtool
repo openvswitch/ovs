@@ -156,12 +156,11 @@ XENSERVER_LOGS = \
     [ VAR_LOG_DIR + x for x in
       ['xensource.log', 'audit.log', 'xenstored-access.log', 'SMlog', 'VMPRlog', 'xen/xenstored-trace.log', 
        'xen/xen-hotplug.log', 'xen/domain-builder-ng.log', 'squeezed.log',
-       'openvswitch/ovs-brcompatd.log', 'openvswitch/ovs-vswitchd.log', 'openvswitch/ovsdb-server.log' ] +
+       'openvswitch/ovs-vswitchd.log', 'openvswitch/ovsdb-server.log' ] +
       [ f % n for n in range(1, 20) \
             for f in ['xensource.log.%d', 'xensource.log.%d.gz','SMlog.%d', 'SMlog.%d.gz', 'VMPRlog.%d', 'VMPRlog.%d.gz',
                       'audit.log.%d', 'audit.log.%d.gz', 'xenstored-access.log.%d', 'xenstored-access.log.%d.gz', \
                       'xen/xenstored-access.log.%d', 'xen/xenstored-access.log.%d.gz', 'squeezed.log.%d', \
-                      'openvswitch/ovs-brcompatd.log.%d', 'openvswitch/ovs-brcompatd.log.%d.gz', \
                       'openvswitch/ovs-vswitchd.log.%d', 'openvswitch/ovs-vswitchd.log.%d.gz', \
                       'openvswitch/ovsdb-server.log.%d', 'openvswitch/ovsdb-server.log.%d.gz']]] \
       + glob.glob('/tmp/qemu.[0-9]*')

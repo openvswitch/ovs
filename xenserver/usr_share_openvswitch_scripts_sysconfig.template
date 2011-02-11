@@ -1,25 +1,11 @@
 ### Configuration options for openvswitch
 
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
-
-# ENABLE_BRCOMPAT: If 'y' than emulate linux bridging interfaces
-#    using the brcompat kernel module and ovs-brcompatd daemon
-#    This is required and enabled by default for XenServer 5.5.0,
-#    and not required and not enabled by default for later versions.
-# ENABLE_BRCOMPAT=?
-
-# ENABLE_FAKE_PROC_NET: If 'y' then emulate linux bonding and vlan
-#    files in /proc as if the bonding and vlan demultiplexing done in
-#    ovs-vswitchd were being implemented using existing Linux mechanisms.
-#    This is useful in some cases when replacing existing solutions.
-#    This is required and enabled by default for XenServer 5.5.0,
-#    and not required and not enabled by default for later versions.
-# ENABLE_FAKE_PROC_NET=?
 
 # ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
 #    if they die due to an error signal.
@@ -174,65 +160,3 @@
 #     This option's value is honored only when VSWITCHD_VALGRIND_LOG is
 #     set to a nonempty string.
 # VSWITCHD_VALGRIND_OPT=""
-
-# BRCOMPATD_PIDFILE: File in which to store the pid of the running
-#     ovs-brcompatd (the Linux bridge compatibility daemon for ovs-vswitchd).
-#     If this is the empty string, ovs-brcompatd will not be started and
-#     the brcompat_mod kernel module will not be inserted.  Note that
-#     the default is to use brcompat!
-# BRCOMPATD_PIDFILE=/var/run/openvswitch/ovs-brcompatd.pid
-
-# BRCOMPATD_RUN_DIR: Set the directory in which ovs-brcompatd should be
-#     run.  This mainly affects where core files will be placed.
-# BRCOMPATD_RUN_DIR=/var/xen/openvswitch
-
-# BRCOMPATD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
-#     processes.
-# BRCOMPATD_PRIORITY=-10
-
-# BRCOMPATD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# BRCOMPATD_LOGFILE=/var/log/openvswitch/ovs-brcompatd.log
-
-# BRCOMPATD_FILE_LOGLEVEL: Log level at which to log into the
-#     BRCOMPATD_LOG file.  If this is null or not set the logfile will
-#     not be created and nothing will be sent to it.  This is the
-#     default.  The available options are: EMER, WARN, INFO and DBG.
-# BRCOMPATD_FILE_LOGLEVEL=""
-
-# BRCOMPATD_SYSLOG_LOGLEVEL: Log level at which to log into syslog.  If
-#     this is null or not set the default is to log to syslog
-#     emergency and warning level messages only.
-# BRCOMPATD_SYSLOG_LOGLEVEL="WARN"
-
-# BRCOMPATD_MEMLEAK_LOGFILE: File for logging memory leak data.
-#     Enabling this option will slow ovs-brcompatd significantly.  Do not
-#     enable it except to debug a suspected memory leak.  Use the
-#     ovs-parse-leaks utility included with Open vSwitch to parse the
-#     log file.  For best results, you also need debug symbols.
-# BRCOMPATD_MEMLEAK_LOGFILE=""
-
-# BRCOMPATD_STRACE_LOG: File for logging strace output.
-#     If this is set to a nonempty string, then ovs-brcompatd will run
-#     under strace, whose output will be logged to the specified file.
-#     Enabling this option will slow brcompatd significantly.
-#     BRCOMPATD_STRACE_LOG and BRCOMPATD_VALGRIND_LOG are mutually exclusive.
-# BRCOMPATD_STRACE_LOG=""
-
-# BRCOMPATD_STRACE_OPT: Options to pass to strace.
-#     This option's value is honored only when BRCOMPATD_STRACE_LOG is
-#     set to a nonempty string.
-# BRCOMPATD_STRACE_OPT=""
-
-# BRCOMPATD_VALGRIND_LOG: File for logging valgrind output.
-#     If this is set to a nonempty string, then ovs-brcompatd will run
-#     under valgrind, whose output will be logged to the specified file.
-#     Enabling this option will slow brcompatd by 100X or more.
-#     valgrind is not installed by default on XenServer systems; you must
-#     install it by hand to usefully enable this option.
-#     BRCOMPATD_STRACE_LOG and BRCOMPATD_VALGRIND_LOG are mutually exclusive.
-# BRCOMPATD_VALGRIND_LOG=""
-
-# BRCOMPATD_VALGRIND_OPT: Options to pass to valgrind.
-#     This option's value is honored only when BRCOMPATD_VALGRIND_LOG is
-#     set to a nonempty string.
-# BRCOMPATD_VALGRIND_OPT=""

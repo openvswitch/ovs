@@ -75,8 +75,6 @@ install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/vif
 install -m 755 xenserver/usr_share_openvswitch_scripts_ovs-external-ids \
                $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-external-ids
-install -m 755 xenserver/usr_share_openvswitch_scripts_refresh-xs-network-uuids \
-               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
@@ -111,77 +109,6 @@ install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 rm -rf $RPM_BUILD_ROOT
 
 %post
-if [ ! -f /etc/xensource-inventory ]; then
-    printf "XenSource inventory not present in /etc/xensource-inventory"
-    exit 1
-fi
-. /etc/xensource-inventory
-
-if [ "$1" = "1" ]; then
-    if md5sum -c --status <<EOF
-ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
-b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
-51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
-5654c8c36699fcc8744ca9cd5b855414  /usr/sbin/xen-bugtool
-EOF
-    then
-        printf "\nVerified host scripts from XenServer 5.5.0.\n\n"
-    elif md5sum -c --status <<EOF
-ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
-b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
-51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
-f6519085c2fc5f7bc4eccc294ed62000  /usr/sbin/xen-bugtool
-EOF
-    then
-        printf "\nVerified host scripts from XenServer 5.5.0-24648p (Update 1)\n"
-        printf "or 5.5.0-25727p (Update 2).\n\n"
-    elif md5sum -c --status <<EOF
-ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
-02cf136237ed85fcbcc1efc15ce0591c  /opt/xensource/libexec/interface-reconfigure
-3a192ee70ebf2153c90051b3af95f331  /opt/xensource/libexec/InterfaceReconfigureBridge.py
-f71cadf1464caefa7943de0ab47fdd8a  /opt/xensource/libexec/InterfaceReconfigure.py
-d70f08f235fb1bfd49a0580e440f15a0  /opt/xensource/libexec/InterfaceReconfigureVswitch.py
-f5c85ca825b1e6f5a0845530981cd836  /etc/xensource/scripts/vif
-facb851606f82ca2bcc760a4d91bbe33  /usr/sbin/xen-bugtool
-EOF
-    then
-        printf "\nVerified host scripts from XenServer 5.5.900-29381p.\n\n"
-    else
-cat <<EOF
-
-The original XenServer scripts replaced by this package are not those
-of any supported version of XenServer.  This could lead to unexpected
-behavior of your server.  Unless you are sure you know what you are
-doing, it is highly recommended that you remove this package
-immediately after the install completes, which will restore the
-XenServer scripts that you were previously using.
-
-EOF
-    fi
-fi
-
-# On XenServer 5.5.0, we need refresh-xs-network-uuids to run whenever
-# XAPI starts or restarts.  (On XenServer 5.6.0, XAPI calls the
-# "update" method of the vswitch-cfg-update plugin whenever it starts
-# or restarts, so this is no longer necessary.)
-if test "$PRODUCT_VERSION" = "5.5.0"; then
-    RNU=/usr/share/openvswitch/scripts/refresh-xs-network-uuids
-    XSS=/opt/xensource/libexec/xapi-startup-script
-    if test -e $XSS && (test ! -L $XSS || test "`readlink $XSS`" != $RNU); then
-        echo "$XSS is already in use, refusing to overwrite"
-        exit 1
-    fi
-    rm -f $XSS
-    ln -s $RNU $XSS
-
-    # If /etc/xensource/network.conf doesn't exist (it was added in 5.6.0),
-    # then interface-reconfigure will be unhappy when we run it below.
-    if test ! -e /etc/xensource/network.conf; then
-        echo bridge > /etc/xensource/network.conf
-    fi
-fi
-
-
 if test ! -e /var/xapi/network.dbcache; then
     if test "$1" = 1; then
         printf "Creating xapi database cache...  "
@@ -302,12 +229,6 @@ fi
 
 %postun
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
-    . /etc/xensource-inventory
-    if test "$PRODUCT_VERSION" = "5.5.0"; then
-        XSS=/opt/xensource/libexec/xapi-startup-script
-        rm -f $XSS
-    fi
-
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
 
@@ -344,13 +265,8 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/openvswitch/vswitchd.cacert
     rm -f /var/xapi/network.dbcache
 
-    if test "$PRODUCT_VERSION" != "5.5.0"; then
-        # Configure system to use bridge
-        echo bridge > /etc/xensource/network.conf
-    else
-        # Get rid of network.conf entirely, to make the system pristine.
-        rm -f /etc/xensource/network.conf
-    fi
+    # Configure system to use bridge
+    echo bridge > /etc/xensource/network.conf
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
@@ -367,7 +283,6 @@ fi
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
-/lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
 /usr/share/openvswitch/python/ovs/__init__.py
 /usr/share/openvswitch/python/ovs/daemon.py
 /usr/share/openvswitch/python/ovs/db/__init__.py
@@ -391,7 +306,6 @@ fi
 /usr/share/openvswitch/python/ovs/util.py
 /usr/share/openvswitch/python/uuid.py
 /usr/share/openvswitch/scripts/ovs-external-ids
-/usr/share/openvswitch/scripts/refresh-xs-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py
 /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.py
@@ -401,7 +315,6 @@ fi
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/vswitch.ovsschema
-/usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
@@ -419,7 +332,6 @@ fi
 /usr/share/man/man1/ovsdb-tool.1.gz
 /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
-/usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-leaks.8.gz
@@ -429,7 +341,10 @@ fi
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
+%exclude /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
 %exclude /usr/lib/xsconsole/plugins-base/*.py[co]
+%exclude /usr/sbin/ovs-brcompatd
+%exclude /usr/share/man/man8/ovs-brcompatd.8.gz
 %exclude /usr/share/openvswitch/scripts/*.py[co]
 %exclude /usr/share/openvswitch/python/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/*.py[co]
