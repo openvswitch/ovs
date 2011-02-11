@@ -3073,7 +3073,7 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
         if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, nl_attr_get_u32(a));
             if (out_port && out_port->n_ifaces >= 2 &&
-                out_port->bond_mode == BM_SLB) {
+                out_port->bond_mode != BM_AB) {
                 uint16_t vlan = (flow->vlan_tci
                                  ? vlan_tci_to_vid(flow->vlan_tci)
                                  : OFP_VLAN_NONE);
@@ -3098,7 +3098,7 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
     now = time_msec();
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
-        if (port->n_ifaces > 1 && port->bond_mode == BM_SLB
+        if (port->n_ifaces > 1 && port->bond_mode != BM_AB
             && now >= port->bond_next_rebalance) {
             port->bond_next_rebalance = now + port->bond_rebalance_interval;
             bond_rebalance_port(port);
@@ -3441,7 +3441,7 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
     struct port *port = from->iface->port;
     uint64_t delta = hash->tx_bytes;
 
-    assert(port->bond_mode == BM_SLB);
+    assert(port->bond_mode != BM_AB);
 
     VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %td) "
               "from %s to %s (now carrying %"PRIu64"kB and "
