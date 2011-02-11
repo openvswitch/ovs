@@ -93,6 +93,10 @@ COVERAGE_DEFINE(ofproto_update_port);
 
 #include "sflow_api.h"
 
+/* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
+ * flow translation. */
+#define MAX_RESUBMIT_RECURSION 16
+
 struct rule;
 
 struct ofport {
@@ -123,7 +127,7 @@ struct action_xlate_ctx {
      *
      * This is normally null so the client has to set it manually after
      * calling action_xlate_ctx_init(). */
-    void (*resubmit_hook)(struct action_xlate_ctx *, const struct rule *);
+    void (*resubmit_hook)(struct action_xlate_ctx *, struct rule *);
 
     /* If true, the speciality of 'flow' should be checked before executing
      * its actions.  If special_cb returns false on 'flow' rendered
@@ -226,6 +230,10 @@ struct facet {
     uint64_t dp_packet_count;    /* Last known packet count in the datapath. */
     uint64_t dp_byte_count;      /* Last known byte count in the datapath. */
 
+    uint64_t rs_packet_count;    /* Packets pushed to resubmit children. */
+    uint64_t rs_byte_count;      /* Bytes pushed to resubmit children. */
+    long long int rs_used;       /* Used time pushed to resubmit children. */
+
     /* Number of bytes passed to account_cb.  This may include bytes that can
      * currently obtained from the datapath (thus, it can be greater than
      * byte_count). */
@@ -261,6 +269,7 @@ static void facet_make_actions(struct ofproto *, struct facet *,
                                const struct ofpbuf *packet);
 static void facet_update_stats(struct ofproto *, struct facet *,
                                const struct dpif_flow_stats *);
+static void facet_push_stats(struct ofproto *, struct facet *);
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -416,6 +425,9 @@ static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 
 static int ofproto_expire(struct ofproto *);
+static void flow_push_stats(struct ofproto *, const struct rule *,
+                            struct flow *, uint64_t packets, uint64_t bytes,
+                            long long int used);
 
 static void handle_upcall(struct ofproto *, struct dpif_upcall *);
 
@@ -2148,8 +2160,8 @@ facet_execute(struct ofproto *ofproto, struct facet *facet,
     flow_extract_stats(&facet->flow, packet, &stats);
     if (execute_odp_actions(ofproto, &facet->flow,
                             facet->actions, facet->actions_len, packet)) {
-        facet_update_stats(ofproto, facet, &stats);
         facet->used = time_msec();
+        facet_update_stats(ofproto, facet, &stats);
         netflow_flow_update_time(ofproto->netflow,
                                  &facet->nf_flow, facet->used);
     }
@@ -2203,6 +2215,7 @@ rule_execute(struct ofproto *ofproto, struct rule *rule, uint16_t in_port,
         rule->used = time_msec();
         rule->packet_count++;
         rule->byte_count += size;
+        flow_push_stats(ofproto, rule, &flow, 1, size, rule->used);
     }
     ofpbuf_delete(odp_actions);
 }
@@ -2412,6 +2425,7 @@ facet_flush_stats(struct ofproto *ofproto, struct facet *facet)
     assert(!facet->dp_byte_count);
     assert(!facet->dp_packet_count);
 
+    facet_push_stats(ofproto, facet);
     facet_account(ofproto, facet, 0);
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
@@ -2430,6 +2444,8 @@ facet_flush_stats(struct ofproto *ofproto, struct facet *facet)
      * reinstalled. */
     facet->packet_count = 0;
     facet->byte_count = 0;
+    facet->rs_packet_count = 0;
+    facet->rs_byte_count = 0;
     facet->accounted_bytes = 0;
 
     netflow_flow_clear(&facet->nf_flow);
@@ -2675,10 +2691,6 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 
     return 0;
 }
-
-/* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
- * flow translation. */
-#define MAX_RESUBMIT_RECURSION 16
 
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
@@ -3843,6 +3855,8 @@ handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
+/* Updates 'facet''s used time.  Caller is responsible for calling
+ * facet_push_stats() to update the flows which 'facet' resubmits into. */
 static void
 facet_update_time(struct ofproto *ofproto, struct facet *facet,
                   long long int used)
@@ -3870,8 +3884,68 @@ facet_update_stats(struct ofproto *ofproto, struct facet *facet,
         facet_update_time(ofproto, facet, stats->used);
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
+        facet_push_stats(ofproto, facet);
         netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
     }
+}
+
+static void
+facet_push_stats(struct ofproto *ofproto, struct facet *facet)
+{
+    uint64_t rs_packets, rs_bytes;
+
+    assert(facet->packet_count >= facet->rs_packet_count);
+    assert(facet->byte_count >= facet->rs_byte_count);
+    assert(facet->used >= facet->rs_used);
+
+    rs_packets = facet->packet_count - facet->rs_packet_count;
+    rs_bytes = facet->byte_count - facet->rs_byte_count;
+
+    if (rs_packets || rs_bytes || facet->used > facet->rs_used) {
+        facet->rs_packet_count = facet->packet_count;
+        facet->rs_byte_count = facet->byte_count;
+        facet->rs_used = facet->used;
+
+        flow_push_stats(ofproto, facet->rule, &facet->flow,
+                        rs_packets, rs_bytes, facet->used);
+    }
+}
+
+struct ofproto_push {
+    struct action_xlate_ctx ctx;
+    uint64_t packets;
+    uint64_t bytes;
+    long long int used;
+};
+
+static void
+push_resubmit(struct action_xlate_ctx *ctx, struct rule *rule)
+{
+    struct ofproto_push *push = CONTAINER_OF(ctx, struct ofproto_push, ctx);
+
+    if (rule) {
+        rule->packet_count += push->packets;
+        rule->byte_count += push->bytes;
+        rule->used = MAX(push->used, rule->used);
+    }
+}
+
+/* Pushes flow statistics to the rules which 'flow' resubmits into given
+ * 'rule''s actions. */
+static void
+flow_push_stats(struct ofproto *ofproto, const struct rule *rule,
+                struct flow *flow, uint64_t packets, uint64_t bytes,
+                long long int used)
+{
+    struct ofproto_push push;
+
+    push.packets = packets;
+    push.bytes = bytes;
+    push.used = used;
+
+    action_xlate_ctx_init(&push.ctx, ofproto, flow, NULL);
+    push.ctx.resubmit_hook = push_resubmit;
+    ofpbuf_delete(xlate_actions(&push.ctx, rule->actions, rule->n_actions));
 }
 
 /* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
@@ -4504,6 +4578,15 @@ ofproto_expire(struct ofproto *ofproto)
 }
 
 /* Update 'packet_count', 'byte_count', and 'used' members of installed facets.
+ *
+ * This function also pushes statistics updates to rules which each facet
+ * resubmits into.  Generally these statistics will be accurate.  However, if a
+ * facet changes the rule it resubmits into at some time in between
+ * ofproto_update_stats() runs, it is possible that statistics accrued to the
+ * old rule will be incorrectly attributed to the new rule.  This could be
+ * avoided by calling ofproto_update_stats() whenever rules are created or
+ * deleted.  However, the performance impact of making so many calls to the
+ * datapath do not justify the benefit of having perfectly accurate statistics.
  */
 static void
 ofproto_update_stats(struct ofproto *p)
@@ -4550,6 +4633,7 @@ ofproto_update_stats(struct ofproto *p)
 
             facet_update_time(p, facet, stats->used);
             facet_account(p, facet, stats->n_bytes);
+            facet_push_stats(p, facet);
         } else {
             /* There's a flow in the datapath that we know nothing about.
              * Delete it. */
@@ -5009,7 +5093,7 @@ trace_format_flow(struct ds *result, int level, const char *title,
 }
 
 static void
-trace_resubmit(struct action_xlate_ctx *ctx, const struct rule *rule)
+trace_resubmit(struct action_xlate_ctx *ctx, struct rule *rule)
 {
     struct ofproto_trace *trace = CONTAINER_OF(ctx, struct ofproto_trace, ctx);
     struct ds *result = trace->result;
