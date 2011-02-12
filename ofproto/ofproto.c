@@ -3664,6 +3664,7 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
+    ds_put_format(results, "idle=%.3fs, ", (time_msec() - rule->used) / 1000.0);
     ds_put_format(results, "priority=%u, ", rule->cr.priority);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
