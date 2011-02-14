@@ -3668,6 +3668,7 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
+    ds_put_char(results, ',');
     if (act_len > 0) {
         ofp_print_actions(results, &rule->actions->header, act_len);
     } else {
