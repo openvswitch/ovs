@@ -199,6 +199,13 @@ do
     fi
 done
 
+# Bug #4667: one-time cleanup of brctl removal in commit 54f16a10
+# (xenserver: Remove brctl wrapper script).
+if [ -h /usr/sbin/brctl ] &&
+    [ "$(readlink /usr/sbin/brctl)" = /usr/share/openvswitch/scripts/brctl ]; then
+    mv -f /usr/lib/openvswitch/xs-original/brctl /usr/sbin/
+fi
+
 # Ensure all required services are set to run
 for s in openvswitch openvswitch-xapi-update; do
     if chkconfig --list $s >/dev/null 2>&1; then
@@ -231,37 +238,38 @@ fi
 
 
 %postun
+rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
+    /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
+
+rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
+    /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
+    /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
+    /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
+    /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
+    /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
+
+# Restore original XenServer scripts. It's important to do this even on upgrade
+# since the version to be installed may be missing some of these scripts.
+for f in \
+    /opt/xensource/libexec/interface-reconfigure \
+    /opt/xensource/libexec/InterfaceReconfigure.py \
+    /opt/xensource/libexec/InterfaceReconfigureBridge.py \
+    /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
+    /etc/xensource/scripts/vif \
+    /usr/sbin/xen-bugtool
+do
+    s=$(basename "$f")
+    if [ ! -f "/usr/lib/openvswitch/xs-original/$s" ]; then
+        printf "Original XenServer $s script not present in /usr/lib/openvswitch/xs-original\n"
+        printf "Could not restore original XenServer script.\n"
+    else
+        (rm -f "$f" \
+            && mv "/usr/lib/openvswitch/xs-original/$s" "$f") \
+            || printf "Could not restore original XenServer $s script.\n"
+    fi
+done
+
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
-    rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
-        /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
-
-    rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
-        /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
-        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
-        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
-        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
-        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
-
-    # Restore original XenServer scripts
-    for f in \
-        /opt/xensource/libexec/interface-reconfigure \
-        /opt/xensource/libexec/InterfaceReconfigure.py \
-        /opt/xensource/libexec/InterfaceReconfigureBridge.py \
-        /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
-        /etc/xensource/scripts/vif \
-        /usr/sbin/xen-bugtool
-    do
-        s=$(basename "$f")
-        if [ ! -f "/usr/lib/openvswitch/xs-original/$s" ]; then
-            printf "Original XenServer $s script not present in /usr/lib/openvswitch/xs-original\n"
-            printf "Could not restore original XenServer script.\n"
-        else
-            (rm -f "$f" \
-                && mv "/usr/lib/openvswitch/xs-original/$s" "$f") \
-                || printf "Could not restore original XenServer $s script.\n"
-        fi
-    done
-
     # Remove all configuration files
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
@@ -276,7 +284,6 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     printf "server or any hosted VM will fail until after the reboot and\n"
     printf "could leave the server in a state requiring manual recovery.\n\n"
 fi
-
 
 %files
 %defattr(-,root,root)
