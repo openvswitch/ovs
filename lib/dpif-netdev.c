@@ -1315,7 +1315,7 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
     upcall->key_len = key_len;
     upcall->userdata = arg;
 
-    q->upcalls[++q->head & QUEUE_MASK] = upcall;
+    q->upcalls[q->head++ & QUEUE_MASK] = upcall;
 
     return 0;
 }
