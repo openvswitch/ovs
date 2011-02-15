@@ -53,6 +53,11 @@ License:
   GNU Lesser General Public Licence version 2.1.
 
 	debian/ovs-bugtool
+	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml [*]
+	xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show [*]
+
+	* These components are only distributed in the source package.
+	  They do not appear in any binary packages.
 
   On Debian systems, the complete text of the
   GNU Lesser General Public Licence version 2.1 can be found in
