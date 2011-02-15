@@ -226,12 +226,11 @@ case "$1" in
         if test ! -e $conf_file; then
             # Create configuration database.
             ovsdb-tool -vANY:console:emer create $conf_file $schema_file
-        else
-            # If schema version changed, then back up the old version.
-            old_ver=`ovsdb-tool db-version "$conf_file"`
-            if test "X$old_ver" != "X$schema_ver"; then
-                cp "$conf_file" "$conf_file.backup$old_ver"
-            fi
+        elif test "X`ovsdb-tool needs-conversion $conf_file $schema_file`" != Xno; then
+            # Back up the old version.
+            version=`ovsdb-tool db-version "$conf_file"`
+            cksum=`ovsdb-tool db-cksum "$conf_file" | awk '{print $1}'`
+            cp "$conf_file" "$conf_file.backup$version-$cksum"
             
             # Upgrade or downgrade schema and compact database.
             ovsdb-tool -vANY:console:emer convert $conf_file $schema_file
