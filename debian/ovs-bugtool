@@ -33,6 +33,9 @@
 # or func_output().
 #
 
+import warnings
+warnings.filterwarnings(action="ignore", category=DeprecationWarning)
+
 import getopt
 import re
 import os
