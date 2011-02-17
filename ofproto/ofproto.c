@@ -3134,9 +3134,9 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->last_pop_priority = -1;
 
     if (!ctx->check_special
-        || (ctx->ofproto->ofhooks->special_cb
-            && ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
-                                                 ctx->ofproto->aux))) {
+        || !ctx->ofproto->ofhooks->special_cb
+        || ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
+                                             ctx->ofproto->aux)) {
         do_xlate_actions(in, n_in, ctx);
     } else {
         ctx->may_set_up_flow = false;
