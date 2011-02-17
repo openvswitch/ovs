@@ -181,8 +181,17 @@ else
     done
 fi
 
+# Deliberately break %postun in broken OVS builds that revert original
+# XenServer scripts during rpm -U by moving the directory where it thinks
+# they are saved.
+if [ -d /usr/lib/openvswitch/xs-original ]; then
+    mkdir -p /usr/lib/openvswitch/xs-saved
+    mv /usr/lib/openvswitch/xs-original/* /usr/lib/openvswitch/xs-saved/ &&
+        rmdir /usr/lib/openvswitch/xs-original
+fi
+
 # Replace XenServer files by our versions.
-mkdir -p /usr/lib/openvswitch/xs-original \
+mkdir -p /usr/lib/openvswitch/xs-saved \
     || printf "Could not create script backup directory.\n"
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
@@ -194,19 +203,24 @@ do
     s=$(basename "$f")
     t=$(readlink "$f")
     if [ -f "$f" ] && [ "$t" != "/usr/share/openvswitch/scripts/$s" ]; then
-        mv "$f" /usr/lib/openvswitch/xs-original/ \
+        mv "$f" /usr/lib/openvswitch/xs-saved/ \
             || printf "Could not save original XenServer $s script\n"
         ln -s "/usr/share/openvswitch/scripts/$s" "$f" \
             || printf "Could not link to Open vSwitch $s script\n"
     fi
 done
 
-# Bug #4667: one-time cleanup of brctl removal in commit 54f16a10
-# (xenserver: Remove brctl wrapper script).
-if [ -h /usr/sbin/brctl ] &&
-    [ "$(readlink /usr/sbin/brctl)" = /usr/share/openvswitch/scripts/brctl ]; then
-    mv -f /usr/lib/openvswitch/xs-original/brctl /usr/sbin/
-fi
+# Clean up dangling symlinks to removed OVS replacement scripts no longer
+# provided by OVS. Any time a replacement script is removed from OVS,
+# it should be added here to ensure correct reversion from old versions of
+# OVS that don't clean up dangling symlinks during the uninstall phase.
+for orig in \
+    /usr/sbin/brctl \
+    /usr/sbin/xen-bugtool
+do
+    saved=/usr/lib/openvswitch/xs-saved/$(basename "$orig")
+    [ -e "$saved" ] && mv -f "$saved" "$orig"
+done
 
 # Ensure all required services are set to run
 for s in openvswitch openvswitch-xapi-update; do
@@ -240,41 +254,56 @@ fi
 
 
 %postun
-rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
-    /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
-
-rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
-    /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
-    /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
-    /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
-    /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
-    /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
-
-# Restore original XenServer scripts
+# Restore original XenServer scripts if the OVS equivalent no longer exists.
+# This works both in the upgrade and erase cases.
+# This lists every file that every version of OVS has ever replaced. Never
+# remove old files that OVS no longer replaces, or upgrades from old versions
+# will fail to restore the XS originals, leaving the system in a broken state.
+# Also be sure to add removed script paths to the %post scriptlet above to
+# prevent the same problem when upgrading from old versions of OVS that lack
+# this restore-on-upgrade logic.
 for f in \
+    /etc/xensource/scripts/vif \
+    /usr/sbin/brctl \
+    /usr/sbin/xen-bugtool \
     /opt/xensource/libexec/interface-reconfigure \
     /opt/xensource/libexec/InterfaceReconfigure.py \
     /opt/xensource/libexec/InterfaceReconfigureBridge.py \
-    /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
-    /etc/xensource/scripts/vif
+    /opt/xensource/libexec/InterfaceReconfigureVswitch.py
 do
-    s=$(basename "$f")
-    if [ ! -f "/usr/lib/openvswitch/xs-original/$s" ]; then
-        printf "Original XenServer $s script not present in /usr/lib/openvswitch/xs-original\n"
-        printf "Could not restore original XenServer script.\n"
-    else
-        (rm -f "$f" \
-            && mv "/usr/lib/openvswitch/xs-original/$s" "$f") \
-            || printf "Could not restore original XenServer $s script.\n"
+    # Only revert dangling symlinks.
+    if [ -h "$f" ] && [ ! -e "$f" ]; then
+        s=$(basename "$f")
+        if [ ! -f "/usr/lib/openvswitch/xs-saved/$s" ]; then
+            printf "Original XenServer $s script not present in /usr/lib/openvswitch/xs-saved\n" >&2
+            printf "Could not restore original XenServer script.\n" >&2
+        else
+            (rm -f "$f" \
+                && mv "/usr/lib/openvswitch/xs-saved/$s" "$f") \
+                || printf "Could not restore original XenServer $s script.\n" >&2
+        fi
     fi
 done
 
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+    rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
+        /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
+
+    rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo
+
     # Remove all configuration files
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
     rm -f /etc/openvswitch/vswitchd.cacert
     rm -f /var/xapi/network.dbcache
+
+    # Remove saved XenServer scripts directory, but only if it's empty
+    rmdir -p /usr/lib/openvswitch/xs-saved 2>/dev/null
 
     # Configure system to use bridge
     echo bridge > /etc/xensource/network.conf
