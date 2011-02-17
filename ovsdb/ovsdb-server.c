@@ -171,7 +171,7 @@ main(int argc, char *argv[])
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     ovsdb_destroy(db);
-    shash_destroy(&remotes);
+    shash_destroy_free_data(&remotes);
     unixctl_server_destroy(unixctl);
 
     if (run_process && process_exited(run_process)) {
@@ -593,7 +593,7 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
         }
     }
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
-    shash_destroy(&resolved_remotes);
+    shash_destroy_free_data(&resolved_remotes);
 
 #if HAVE_OPENSSL
     /* Configure SSL. */
