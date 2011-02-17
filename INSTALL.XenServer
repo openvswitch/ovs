@@ -41,27 +41,30 @@ where:
     appears as the name of a directory in /lib/modules inside the VM.
     It always ends in "xen".
 
-Two RPMs will be output into /usr/src/redhat/RPMS/i386, whose names
-begin with "openvswitch" and "openvswitch-debuginfo".
+Three RPMs will be output into /usr/src/redhat/RPMS/i386, whose names begin
+with "openvswitch", "openvswitch-modules-xen", and "openvswitch-debuginfo".
 
 Installing Open vSwitch for XenServer
 -------------------------------------
 
-To install Open vSwitch on a XenServer host, or to upgrade to a newer
-version, copy the "openvswitch" RPM to that host with "scp", then install
-it with "rpm -U", e.g.:
+To install Open vSwitch on a XenServer host, or to upgrade to a newer version,
+copy the "openvswitch" and "openvswitch-modules-xen" RPMs to that host with
+"scp", then install them with "rpm -U", e.g.:
 
-     scp openvswitch-$VERSION-1.i386.rpm root@<host>:
-(At this point you will have to enter <host>'s root password.) 
+     scp openvswitch-$VERSION-1.i386.rpm \
+         openvswitch-modules-xen-$XEN_KERNEL_VERSION-$VERSION-1.i386.rpm \
+         root@<host>:
+(At this point you will have to enter <host>'s root password.)
      ssh root@<host>
-(At this point you will have to enter <host>'s root password again.) 
-     rpm -U openvswitch-$VERSION-1.i386.rpm
+(At this point you will have to enter <host>'s root password again.)
+     rpm -U openvswitch-$VERSION-1.i386.rpm \
+         openvswitch-modules-xen-$XEN_KERNEL_VERSION-$VERSION-1.i386.rpm
 
-To uninstall Open vSwitch from a XenServer host, remove the package:
+To uninstall Open vSwitch from a XenServer host, remove the packages:
 
      ssh root@<host>
-(At this point you will have to enter <host>'s root password again.) 
-     rpm -e openvswitch
+(At this point you will have to enter <host>'s root password again.)
+     rpm -e openvswitch openvswitch-modules-xen-$XEN_KERNEL_VERSION
 
 After installing or uninstalling Open vSwitch, the XenServer should be
 rebooted as soon as possible.

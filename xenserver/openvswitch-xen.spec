@@ -12,27 +12,47 @@
 # for example:
 #
 #    rpmbuild -D "openvswitch_version 0.8.9~1+build123" -D "xen_version 2.6.18-128.1.1.el5.xs5.1.0.483.1000xen" -D "build_number --with-build-number=123" -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
-#
+
 %define version %{openvswitch_version}-%{xen_version}
 
+# bump this when breaking compatibility with userspace
+%define module_abi_version 0
+
+# extract kernel type (xen or kdump)
+%define binsuffix -%(echo '%{xen_version}' | sed -r 's/^.*[0-9]+//')
+# kernel version string w/o kernel type
+%define kernel_version %(echo '%{xen_version}' | sed -r 's/[a-z]+$//')
+# build-supplemental-pack.sh requires this naming for kernel module packages
+%define module_package modules%{binsuffix}-%{kernel_version}
+
 Name: openvswitch
-Summary: Virtual switch
+Summary: Open vSwitch daemon/database/utilities
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
 Vendor: Nicira Networks, Inc.
 Version: %{openvswitch_version}
 
-# The entire source code is ASL 2.0 except datapath/ which is GPLv2
-License: ASL 2.0 and GPLv2
+License: ASL 2.0
 Release: 1
 Source: openvswitch-%{openvswitch_version}.tar.gz
 Buildroot: /tmp/openvswitch-xen-rpm
-Requires: kernel-xen = %(echo '%{xen_version}' | sed 's/xen$//')
+Requires: openvswitch_mod.ko.%{module_abi_version}
 
 %description
 Open vSwitch provides standard network bridging functions augmented with
 support for the OpenFlow protocol for remote per-flow control of
 traffic.
+
+%package %{module_package}
+Summary: Open vSwitch kernel module
+Group: System Environment/Kernel
+License: GPLv2
+Provides: %{name}-modules = %{kernel_version}, openvswitch_mod.ko.%{module_abi_version}
+Requires: kernel%{binsuffix} = %{kernel_version}
+
+%description %{module_package}
+Open vSwitch Linux kernel module compiled against kernel version
+%{xen_version}.
 
 %prep
 %setup -q -n openvswitch-%{openvswitch_version}
@@ -134,9 +154,6 @@ if runlevel >/dev/null 2>&1; then
         fi
     fi
 fi
-
-# Ensure that modprobe will find our modules.
-depmod %{xen_version}
 
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
@@ -245,13 +262,16 @@ else
     printf "\n\n"
 fi
 
+%post %{module_package}
+# Ensure that modprobe will find our modules.
+depmod %{xen_version}
+
 %preun
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     for s in openvswitch openvswitch-xapi-update; do
         chkconfig --del $s || printf "Could not remove $s init script."
     done
 fi
-
 
 %postun
 # Restore original XenServer scripts if the OVS equivalent no longer exists.
@@ -322,7 +342,6 @@ fi
 /etc/xensource/bugtool/network-status/openvswitch.xml
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
-/lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
 /usr/share/openvswitch/python/ovs/__init__.py
 /usr/share/openvswitch/python/ovs/daemon.py
 /usr/share/openvswitch/python/ovs/db/__init__.py
@@ -381,7 +400,6 @@ fi
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
-%exclude /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
 %exclude /usr/lib/xsconsole/plugins-base/*.py[co]
 %exclude /usr/sbin/ovs-brcompatd
 %exclude /usr/share/man/man8/ovs-brcompatd.8.gz
@@ -389,3 +407,7 @@ fi
 %exclude /usr/share/openvswitch/python/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/db/*.py[co]
+
+%files %{module_package}
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
+%exclude /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
