@@ -256,7 +256,7 @@ configuration in the database:
 
       % ovsdb-server /usr/local/etc/openvswitch/conf.db \
                       --remote=punix:/usr/local/var/run/openvswitch/db.sock \
-                      --remote=db:Open_vSwitch,managers \
+                      --remote=db:Open_vSwitch,manager_options \
                       --private-key=db:SSL,private_key \
                       --certificate=db:SSL,certificate \
                       --bootstrap-ca-cert=db:SSL,ca_cert \

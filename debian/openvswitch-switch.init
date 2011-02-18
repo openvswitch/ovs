@@ -261,7 +261,6 @@ case "$1" in
         set -- "$@" --log-file=/var/log/openvswitch/ovsdb-server.log
         set -- "$@" --detach --no-chdir --pidfile $monitor_opt
         set -- "$@" --remote punix:/var/run/openvswitch/db.sock
-        set -- "$@" --remote db:Open_vSwitch,managers
         set -- "$@" --remote db:Open_vSwitch,manager_options
         set -- "$@" --private-key=db:SSL,private_key
         set -- "$@" --certificate=db:SSL,certificate

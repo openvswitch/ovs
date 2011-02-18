@@ -370,11 +370,11 @@ Sets the configured failure mode.
 .
 .SS "Manager Connectivity"
 .
-These commands manipulate the \fBmanagers\fR and \fBmanager_options\fR columns
-in the \fBOpen_vSwitch\fR table and rows in the \fBManagers\fR table.  When
-\fBovsdb\-server\fR is configured to use those rows and columns for OVSDB
-connections, as described in \fBINSTALL.Linux\fR and in the startup scripts
-provided with Open vSwitch, this allows the administrator to use
+These commands manipulate the \fBmanager_options\fR column in the
+\fBOpen_vSwitch\fR table and rows in the \fBManagers\fR table.  When
+\fBovsdb\-server\fR is configured to use the \fBmanager_options\fR column for
+OVSDB connections (as described in \fBINSTALL.Linux\fR and in the startup
+scripts provided with Open vSwitch), this allows the administrator to use
 \fBovs\-vsctl\fR to configure database connections.
 .
 .IP "\fBget\-manager\fR"

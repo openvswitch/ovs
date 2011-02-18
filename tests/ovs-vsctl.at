@@ -707,7 +707,7 @@ AT_CHECK([RUN_OVS_VSCTL(
     [add-bond br0 bond0 eth0 eth1],
     [set port bond0 bond_updelay=500 other-config:abc=def])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . managers=[]]])],
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . manager_options=[]]])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . bridges!=[]]])],
   [0], [], [], [OVS_VSCTL_CLEANUP])

@@ -1009,7 +1009,6 @@ cmd_init(struct vsctl_context *ctx OVS_UNUSED)
 static void
 pre_cmd_emer_reset(struct vsctl_context *ctx)
 {
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_managers);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
 
@@ -1044,7 +1043,6 @@ cmd_emer_reset(struct vsctl_context *ctx)
     const struct ovsrec_sflow *sflow, *next_sflow;
 
     /* Reset the Open_vSwitch table. */
-    ovsrec_open_vswitch_set_managers(ctx->ovs, NULL, 0);
     ovsrec_open_vswitch_set_manager_options(ctx->ovs, NULL, 0);
     ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
 
@@ -1898,7 +1896,6 @@ verify_managers(const struct ovsrec_open_vswitch *ovs)
 {
     size_t i;
 
-    ovsrec_open_vswitch_verify_managers(ovs);
     ovsrec_open_vswitch_verify_manager_options(ovs);
 
     for (i = 0; i < ovs->n_manager_options; ++i) {
@@ -1911,7 +1908,6 @@ verify_managers(const struct ovsrec_open_vswitch *ovs)
 static void
 pre_manager(struct vsctl_context *ctx)
 {
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_managers);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_manager_col_target);
 }
@@ -1928,12 +1924,6 @@ cmd_get_manager(struct vsctl_context *ctx)
     /* Print the targets in sorted order for reproducibility. */
     svec_init(&targets);
 
-    /* First, add all targets found in deprecated 'managers' column. */
-    for (i = 0; i < ovs->n_managers; i++) {
-        svec_add(&targets, ovs->managers[i]);
-    }
-
-    /* Second, add all targets pointed to by 'manager_options' column. */
     for (i = 0; i < ovs->n_manager_options; i++) {
         svec_add(&targets, ovs->manager_options[i]->target);
     }
@@ -1950,9 +1940,6 @@ delete_managers(const struct vsctl_context *ctx)
 {
     const struct ovsrec_open_vswitch *ovs = ctx->ovs;
     size_t i;
-
-    /* Delete manager targets in deprecated 'managers' column. */
-    ovsrec_open_vswitch_set_managers(ovs, NULL, 0);
 
     /* Delete Manager rows pointed to by 'manager_options' column. */
     for (i = 0; i < ovs->n_manager_options; i++) {
@@ -1977,9 +1964,6 @@ insert_managers(struct vsctl_context *ctx, char *targets[], size_t n)
 {
     struct ovsrec_manager **managers;
     size_t i;
-
-    /* Store in deprecated 'manager' column. */
-    ovsrec_open_vswitch_set_managers(ctx->ovs, targets, n);
 
     /* Insert each manager in a new row in Manager table. */
     managers = xmalloc(n * sizeof *managers);

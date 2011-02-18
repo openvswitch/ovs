@@ -273,21 +273,6 @@
         connection should be configured.  See the <ref table="Manager"/> table
         for more information.
       </column>
-
-      <column name="managers">
-        <p>
-          Remote database clients to which the Open vSwitch's database server
-          should connect or to which it should listen.  Adding an OVSDB target
-          to this set is equivalent to adding it to <ref
-          column="manager_options"/> with all of the default options.
-        </p>
-
-        <p>
-          Use of this column is deprecated and may be removed sometime in the
-          future.  New applications should use and set <ref
-          column="manager_options"/> instead.
-        </p>
-      </column>
     </group>
   </table>
 

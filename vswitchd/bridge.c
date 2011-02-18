@@ -526,13 +526,10 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
     struct shash targets;
     size_t i;
 
-    /* Collect all of the potential targets, as the union of the "managers"
-     * column and the "targets" columns of the rows pointed to by
-     * "manager_options", excluding any that are out-of-band. */
+    /* Collect all of the potential targets from the "targets" columns of the
+     * rows pointed to by "manager_options", excluding any that are
+     * out-of-band. */
     shash_init(&targets);
-    for (i = 0; i < ovs_cfg->n_managers; i++) {
-        shash_add_once(&targets, ovs_cfg->managers[i], NULL);
-    }
     for (i = 0; i < ovs_cfg->n_manager_options; i++) {
         struct ovsrec_manager *m = ovs_cfg->manager_options[i];
 
