@@ -709,6 +709,15 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto exit;
 
+	/* Initialize OVS_CB (it came from Netlink so might not be zeroed). */
+	OVS_CB(packet)->vport = NULL;
+	OVS_CB(packet)->flow = NULL;
+	/* execute_actions() will reset tun_id to 0 anyhow. */
+#ifdef NEED_CSUM_NORMALIZE
+	OVS_CB(packet)->ip_summed = OVS_CSUM_NONE;
+#endif
+	vlan_copy_skb_tci(packet);
+
 	rcu_read_lock();
 	dp = get_dp(odp_header->dp_ifindex);
 	err = -ENODEV;
