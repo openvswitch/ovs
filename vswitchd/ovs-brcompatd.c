@@ -965,6 +965,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
 
     /* Free memory. */
     ofpbuf_uninit(&query_data);
+    free(local_macs);
 
     return 0;
 }
