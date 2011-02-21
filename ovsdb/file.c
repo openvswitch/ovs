@@ -148,7 +148,6 @@ ovsdb_file_open_log(const char *file_name, enum ovsdb_log_open_mode open_mode,
     if (schemap) {
         error = ovsdb_schema_from_json(json, &schema);
         if (error) {
-            json_destroy(json);
             error = ovsdb_wrap_error(error,
                                      "failed to parse \"%s\" as ovsdb schema",
                                      file_name);
