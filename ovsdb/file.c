@@ -404,9 +404,7 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
         if (!table) {
             if (!strcmp(table_name, "_date")
                 && node_json->type == JSON_INTEGER) {
-                if (date) {
-                    *date = json_integer(node_json);
-                }
+                *date = json_integer(node_json);
                 continue;
             } else if (!strcmp(table_name, "_comment") || converting) {
                 continue;
