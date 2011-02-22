@@ -856,7 +856,8 @@ is_nxm_required(const struct cls_rule *rule, bool cookie_support,
                 ovs_be64 cookie)
 {
     const struct flow_wildcards *wc = &rule->wc;
-    ovs_be32 cookie_hi;
+    uint32_t cookie_hi;
+    uint64_t tun_id;
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -885,11 +886,21 @@ is_nxm_required(const struct cls_rule *rule, bool cookie_support,
         break;
 
     case CONSTANT_HTONLL(UINT64_MAX):
-        /* Only NXM supports matching tunnel ID, unless there is a cookie and
-         * the top 32 bits of the cookie are the desired tunnel ID value. */
-        cookie_hi = htonl(ntohll(cookie) >> 32);
-        if (!cookie_support
-            || (cookie_hi && cookie_hi != ntohll(rule->flow.tun_id))) {
+        /* Only NXM supports tunnel ID matching without a cookie. */
+        if (!cookie_support) {
+            return true;
+        }
+
+        /* Only NXM supports 64-bit tunnel IDs. */
+        tun_id = ntohll(rule->flow.tun_id);
+        if (tun_id > UINT32_MAX) {
+            return true;
+        }
+
+        /* Only NXM supports a cookie whose top 32 bits conflict with the
+         * tunnel ID. */
+        cookie_hi = ntohll(cookie) >> 32;
+        if (cookie_hi && cookie_hi != tun_id) {
             return true;
         }
         break;
