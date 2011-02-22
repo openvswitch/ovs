@@ -23,6 +23,7 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "ovsdb-data.h"
+#include "ovsdb-error.h"
 #include "util.h"
 
 struct column {
@@ -54,6 +55,7 @@ cell_to_text(struct cell *cell, const struct table_style *style)
                     cell->text = ds_steal_cstr(&s);
                 } else {
                     cell->text = json_to_string(cell->json, JSSF_SORT);
+                    ovsdb_error_destroy(error);
                 }
             }
         } else {
