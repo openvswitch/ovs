@@ -270,6 +270,8 @@ make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
 
             dirfd = open(dir, O_DIRECTORY | O_RDONLY);
             if (dirfd < 0) {
+                free(base);
+                free(dir);
                 return errno;
             }
 
