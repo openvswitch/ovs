@@ -563,7 +563,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
 
     /* Create tap device. */
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     if (ioctl(state->fd, TUNSETIFF, &ifr) == -1) {
         VLOG_WARN("%s: creating tap device failed: %s", name,
                   strerror(errno));
@@ -1924,7 +1924,7 @@ do_set_addr(struct netdev *netdev,
             int ioctl_nr, const char *ioctl_name, struct in_addr addr)
 {
     struct ifreq ifr;
-    strncpy(ifr.ifr_name, netdev_get_name(netdev), sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, netdev_get_name(netdev), sizeof ifr.ifr_name);
     make_in4_sockaddr(&ifr.ifr_addr, addr);
 
     return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, ioctl_nr,
@@ -2051,7 +2051,7 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
     memcpy(&r.arp_pa, &sin, sizeof sin);
     r.arp_ha.sa_family = ARPHRD_ETHER;
     r.arp_flags = 0;
-    strncpy(r.arp_dev, netdev_get_name(netdev), sizeof r.arp_dev);
+    ovs_strzcpy(r.arp_dev, netdev_get_name(netdev), sizeof r.arp_dev);
     COVERAGE_INC(netdev_arp_lookup);
     retval = ioctl(af_inet_sock, SIOCGARP, &r) < 0 ? errno : 0;
     if (!retval) {
@@ -4054,7 +4054,7 @@ do_get_ifindex(const char *netdev_name)
 {
     struct ifreq ifr;
 
-    strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_ifindex);
     if (ioctl(af_inet_sock, SIOCGIFINDEX, &ifr) < 0) {
         VLOG_WARN_RL(&rl, "ioctl(SIOCGIFINDEX) on %s device failed: %s",
@@ -4089,7 +4089,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
     int hwaddr_family;
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_hwaddr);
     if (ioctl(af_inet_sock, SIOCGIFHWADDR, &ifr) < 0) {
         VLOG_ERR("ioctl(SIOCGIFHWADDR) on %s device failed: %s",
@@ -4112,7 +4112,7 @@ set_etheraddr(const char *netdev_name, int hwaddr_family,
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_hwaddr.sa_family = hwaddr_family;
     memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
     COVERAGE_INC(netdev_set_hwaddr);
@@ -4131,7 +4131,7 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    ovs_strzcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     ifr.ifr_data = (caddr_t) ecmd;
 
     ecmd->cmd = cmd;
@@ -4154,7 +4154,7 @@ static int
 netdev_linux_do_ioctl(const char *name, struct ifreq *ifr, int cmd,
                       const char *cmd_name)
 {
-    strncpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
+    ovs_strzcpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
     if (ioctl(af_inet_sock, cmd, ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
                      strerror(errno));

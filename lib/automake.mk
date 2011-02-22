@@ -137,6 +137,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/stream.h \
 	lib/stress.c \
 	lib/stress.h \
+	lib/string.c \
 	lib/string.h \
 	lib/svec.c \
 	lib/svec.h \

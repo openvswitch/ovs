@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,6 +133,7 @@ char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0) MALLOC_LIKE;
 void *x2nrealloc(void *p, size_t *n, size_t s);
 
 void ovs_strlcpy(char *dst, const char *src, size_t size);
+void ovs_strzcpy(char *dst, const char *src, size_t size);
 
 void ovs_fatal(int err_no, const char *format, ...)
     PRINTF_FORMAT(2, 3) NO_RETURN;

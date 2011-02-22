@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,28 @@ ovs_strlcpy(char *dst, const char *src, size_t size)
         size_t len = strnlen(src, size - 1);
         memcpy(dst, src, len);
         dst[len] = '\0';
+    }
+}
+
+/* Copies 'src' to 'dst'.  Reads no more than 'size - 1' bytes from 'src'.
+ * Always null-terminates 'dst' (if 'size' is nonzero), and writes a zero byte
+ * to every otherwise unused byte in 'dst'.
+ *
+ * Except for performance, the following call:
+ *     ovs_strzcpy(dst, src, size);
+ * is equivalent to these two calls:
+ *     memset(dst, '\0', size);
+ *     ovs_strlcpy(dst, src, size);
+ *
+ * (Thus, ovs_strzcpy() is similar to strncpy() without some of the pitfalls.)
+ */
+void
+ovs_strzcpy(char *dst, const char *src, size_t size)
+{
+    if (size > 0) {
+        size_t len = strnlen(src, size - 1);
+        memcpy(dst, src, len);
+        memset(dst + len, '\0', size - len);
     }
 }
 

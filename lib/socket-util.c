@@ -233,8 +233,7 @@ static void
 make_sockaddr_un__(const char *name, struct sockaddr_un *un, socklen_t *un_len)
 {
     un->sun_family = AF_UNIX;
-    strncpy(un->sun_path, name, sizeof un->sun_path);
-    un->sun_path[sizeof un->sun_path - 1] = '\0';
+    ovs_strzcpy(un->sun_path, name, sizeof un->sun_path);
     *un_len = (offsetof(struct sockaddr_un, sun_path)
                 + strlen (un->sun_path) + 1);
 }
