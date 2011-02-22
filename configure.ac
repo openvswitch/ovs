@@ -56,7 +56,7 @@ OVS_CHECK_IF_PACKET
 OVS_CHECK_STRTOK_R
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
-AC_CHECK_FUNCS([mlockall strsignal getloadavg statvfs setmntent])
+AC_CHECK_FUNCS([mlockall strnlen strsignal getloadavg statvfs setmntent])
 AC_CHECK_HEADERS([mntent.h sys/statvfs.h])
 
 OVS_CHECK_PKIDIR
