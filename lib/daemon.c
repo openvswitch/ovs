@@ -223,11 +223,11 @@ make_pidfile(void)
                                      pidfile, strerror(errno));
                         }
                     }
-                    free(text);
                 } else {
                     VLOG_ERR("%s: write failed: %s", tmpfile, strerror(errno));
                     close(fd);
                 }
+                free(text);
             } else {
                 VLOG_ERR("%s: fcntl failed: %s", tmpfile, strerror(errno));
                 close(fd);
