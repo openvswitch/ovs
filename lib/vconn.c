@@ -283,7 +283,7 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 
     error = vconn_open(name, min_version, &vconn);
     if (!error) {
-        while ((error == vconn_connect(vconn)) == EAGAIN) {
+        while ((error = vconn_connect(vconn)) == EAGAIN) {
             vconn_run(vconn);
             vconn_run_wait(vconn);
             vconn_connect_wait(vconn);
