@@ -16,6 +16,7 @@ import errno
 import logging
 import os
 
+import ovs.json
 import ovs.poller
 import ovs.reconnect
 import ovs.stream
