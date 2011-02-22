@@ -622,6 +622,43 @@ do_queue_stats(int argc, char *argv[])
     dump_stats_transaction(argv[1], request);
 }
 
+/* Sets up the flow format for a vconn that will be used to modify the flow
+ * table.  Returns the flow format used, after possibly adding an OpenFlow
+ * request to 'requests'.
+ *
+ * If 'preferred_flow_format' is -1, returns NXFF_OPENFLOW10 without modifying
+ * 'requests', since NXFF_OPENFLOW10 is the default flow format for any
+ * OpenFlow connection.
+ *
+ * If 'preferred_flow_format' is a specific format, adds a request to set that
+ * format to 'requests' and returns the format. */
+static enum nx_flow_format
+set_initial_format_for_flow_mod(struct list *requests)
+{
+    if (preferred_flow_format < 0) {
+        return NXFF_OPENFLOW10;
+    } else {
+        struct ofpbuf *sff;
+
+        sff = ofputil_make_set_flow_format(preferred_flow_format);
+        list_push_back(requests, &sff->list_node);
+        return preferred_flow_format;
+    }
+}
+
+/* Checks that 'flow_format' is acceptable as a flow format after a flow_mod
+ * operation, given the global 'preferred_flow_format'. */
+static void
+check_final_format_for_flow_mod(enum nx_flow_format flow_format)
+{
+    if (preferred_flow_format >= 0 && flow_format != preferred_flow_format) {
+        ovs_fatal(0, "flow cannot be expressed in flow format %s "
+                  "(flow format %s or better is required)",
+                  ofputil_flow_format_to_string(preferred_flow_format),
+                  ofputil_flow_format_to_string(flow_format));
+    }
+}
+
 static void
 do_flow_mod__(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
@@ -630,9 +667,11 @@ do_flow_mod__(int argc OVS_UNUSED, char *argv[], uint16_t command)
     struct vconn *vconn;
 
     list_init(&requests);
-    flow_format = NXFF_OPENFLOW10;
+    flow_format = set_initial_format_for_flow_mod(&requests);
+
     parse_ofp_flow_mod_str(&requests, &flow_format, argc > 2 ? argv[2] : "",
                            command);
+    check_final_format_for_flow_mod(flow_format);
 
     open_vconn(argv[1], &vconn);
     transact_multiple_noreply(vconn, &requests);
@@ -659,10 +698,11 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     }
 
     list_init(&requests);
-    flow_format = NXFF_OPENFLOW10;
+    flow_format = set_initial_format_for_flow_mod(&requests);
 
     open_vconn(argv[1], &vconn);
     while (parse_ofp_add_flow_file(&requests, &flow_format, file)) {
+        check_final_format_for_flow_mod(flow_format);
         transact_multiple_noreply(vconn, &requests);
     }
     vconn_close(vconn);

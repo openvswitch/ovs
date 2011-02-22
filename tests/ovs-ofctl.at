@@ -464,3 +464,25 @@ nx_pull_match() returned error 44010101
 nx_pull_match() returned error 44010101
 ])
 AT_CLEANUP
+
+dnl Check that "-F openflow10" rejects a flow_mod with a tun_id, since
+dnl OpenFlow 1.0 doesn't support tunnels.
+AT_SETUP([ovs-ofctl -F option and tun_id])
+AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy tun_id=123,actions=drop],
+  [1], [], [ovs-ofctl: flow cannot be expressed in flow format openflow10 (flow format tun_id_from_cookie or better is required)
+])
+AT_CLEANUP
+
+dnl Check that "-F nxm" really forces add-flow to use the NXM flow format.
+dnl (If it doesn't, then either the tun_id won't show up at all, or it will
+dnl additionally show up as the top 32 bits of the cookie.)  This checks
+dnl for regression against bug #4566.
+AT_SETUP([ovs-ofctl -F option with flow_mods])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -F nxm add-flow br0 tun_id=0x12345678,actions=drop])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
+NXST_FLOW reply:
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, tun_id=0x12345678 actions=drop
+])
+OFPROTO_STOP
+AT_CLEANUP
