@@ -283,17 +283,19 @@ static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static unixctl_cb_func bridge_unixctl_fdb_show;
 static unixctl_cb_func qos_unixctl_show;
 
-static void lacp_run(struct bridge *);
-static void lacp_wait(struct bridge *);
+static void lacp_run(struct port *);
+static void lacp_wait(struct port *);
 static void lacp_process_packet(const struct ofpbuf *, struct iface *);
 
 static void bond_init(void);
-static void bond_run(struct bridge *);
-static void bond_wait(struct bridge *);
+static void bond_run(struct port *);
+static void bond_wait(struct port *);
 static void bond_rebalance_port(struct port *);
 static void bond_send_learning_packets(struct port *);
 static void bond_enable_slave(struct iface *iface, bool enable);
 
+static void port_run(struct port *);
+static void port_wait(struct port *);
 static struct port *port_create(struct bridge *, const char *name);
 static void port_reconfigure(struct port *, const struct ovsrec_port *);
 static void port_del_ifaces(struct port *, const struct ovsrec_port *);
@@ -1490,22 +1492,19 @@ void
 bridge_wait(void)
 {
     struct bridge *br;
-    struct iface *iface;
 
     LIST_FOR_EACH (br, node, &all_bridges) {
+        size_t i;
+
         ofproto_wait(br->ofproto);
         if (ofproto_has_primary_controller(br->ofproto)) {
             continue;
         }
 
         mac_learning_wait(br->ml);
-        lacp_wait(br);
-        bond_wait(br);
 
-        HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
-            if (iface->cfm) {
-                cfm_wait(iface->cfm);
-            }
+        for (i = 0; i < br->n_ports; i++) {
+            port_wait(br->ports[i]);
         }
     }
     ovsdb_idl_wait(idl);
@@ -1799,8 +1798,8 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn,
 static int
 bridge_run_one(struct bridge *br)
 {
+    size_t i;
     int error;
-    struct iface *iface;
 
     error = ofproto_run1(br->ofproto);
     if (error) {
@@ -1808,26 +1807,13 @@ bridge_run_one(struct bridge *br)
     }
 
     mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
-    lacp_run(br);
-    bond_run(br);
+
+    for (i = 0; i < br->n_ports; i++) {
+        port_run(br->ports[i]);
+    }
 
     error = ofproto_run2(br->ofproto, br->flush);
     br->flush = false;
-
-    HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
-        struct ofpbuf *packet;
-
-        if (!iface->cfm) {
-            continue;
-        }
-
-        packet = cfm_run(iface->cfm);
-        if (packet) {
-            iface_send_packet(iface, packet);
-            ofpbuf_uninit(packet);
-            free(packet);
-        }
-    }
 
     return error;
 }
@@ -2482,92 +2468,87 @@ bond_link_carrier_update(struct iface *iface, bool carrier)
 }
 
 static void
-bond_run(struct bridge *br)
+bond_run(struct port *port)
 {
-    size_t i, j;
+    size_t i;
+    char *devname;
 
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    if (port->n_ifaces < 2) {
+        return;
+    }
 
-        if (port->n_ifaces >= 2) {
-            char *devname;
+    if (port->monitor) {
+        assert(!port->miimon);
 
-            if (port->monitor) {
-                assert(!port->miimon);
+        /* Track carrier going up and down on interfaces. */
+        while (!netdev_monitor_poll(port->monitor, &devname)) {
+            struct iface *iface;
 
-                /* Track carrier going up and down on interfaces. */
-                while (!netdev_monitor_poll(port->monitor, &devname)) {
-                    struct iface *iface;
-
-                    iface = port_lookup_iface(port, devname);
-                    if (iface) {
-                        bool up = netdev_get_carrier(iface->netdev);
-                        bond_link_carrier_update(iface, up);
-                    }
-                    free(devname);
-                }
-            } else {
-                assert(port->miimon);
-
-                if (time_msec() >= port->bond_miimon_next_update) {
-                    for (j = 0; j < port->n_ifaces; j++) {
-                        struct iface *iface = port->ifaces[j];
-                        bool up = netdev_get_miimon(iface->netdev);
-                        bond_link_carrier_update(iface, up);
-                    }
-                    port->bond_miimon_next_update = time_msec() +
-                        port->bond_miimon_interval;
-                }
+            iface = port_lookup_iface(port, devname);
+            if (iface) {
+                bool up = netdev_get_carrier(iface->netdev);
+                bond_link_carrier_update(iface, up);
             }
-
-            for (j = 0; j < port->n_ifaces; j++) {
-                bond_link_status_update(port->ifaces[j]);
-            }
-
-            for (j = 0; j < port->n_ifaces; j++) {
-                struct iface *iface = port->ifaces[j];
-                if (time_msec() >= iface->delay_expires) {
-                    bond_enable_slave(iface, !iface->enabled);
-                }
-            }
-
-            if (port->bond_fake_iface
-                && time_msec() >= port->bond_next_fake_iface_update) {
-                bond_update_fake_iface_stats(port);
-                port->bond_next_fake_iface_update = time_msec() + 1000;
-            }
+            free(devname);
         }
+    } else {
+        assert(port->miimon);
+
+        if (time_msec() >= port->bond_miimon_next_update) {
+            for (i = 0; i < port->n_ifaces; i++) {
+                struct iface *iface = port->ifaces[i];
+                bool up = netdev_get_miimon(iface->netdev);
+                bond_link_carrier_update(iface, up);
+            }
+            port->bond_miimon_next_update = time_msec() +
+                port->bond_miimon_interval;
+        }
+    }
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        bond_link_status_update(port->ifaces[i]);
+    }
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+        if (time_msec() >= iface->delay_expires) {
+            bond_enable_slave(iface, !iface->enabled);
+        }
+    }
+
+    if (port->bond_fake_iface
+        && time_msec() >= port->bond_next_fake_iface_update) {
+        bond_update_fake_iface_stats(port);
+        port->bond_next_fake_iface_update = time_msec() + 1000;
     }
 }
 
 static void
-bond_wait(struct bridge *br)
+bond_wait(struct port *port)
 {
-    size_t i, j;
+    size_t i;
 
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
-        if (port->n_ifaces < 2) {
-            continue;
-        }
+    if (port->n_ifaces < 2) {
+        return;
+    }
 
-        if (port->monitor) {
-            netdev_monitor_poll_wait(port->monitor);
-        }
+    if (port->monitor) {
+        netdev_monitor_poll_wait(port->monitor);
+    }
 
-        if (port->miimon) {
-            poll_timer_wait_until(port->bond_miimon_next_update);
-        }
+    if (port->miimon) {
+        poll_timer_wait_until(port->bond_miimon_next_update);
+    }
 
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            if (iface->delay_expires != LLONG_MAX) {
-                poll_timer_wait_until(iface->delay_expires);
-            }
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+        if (iface->delay_expires != LLONG_MAX) {
+            poll_timer_wait_until(iface->delay_expires);
         }
-        if (port->bond_fake_iface) {
-            poll_timer_wait_until(port->bond_next_fake_iface_update);
-        }
+    }
+
+    if (port->bond_fake_iface) {
+        poll_timer_wait_until(port->bond_next_fake_iface_update);
     }
 }
 
@@ -3297,88 +3278,80 @@ lacp_iface_may_tx(const struct iface *iface)
 }
 
 static void
-lacp_run(struct bridge *br)
+lacp_run(struct port *port)
 {
-    size_t i, j;
+    size_t i;
     struct ofpbuf packet;
+
+    if (!port->lacp) {
+        return;
+    }
 
     ofpbuf_init(&packet, ETH_HEADER_LEN + LACP_PDU_LEN);
 
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
 
-        if (!port->lacp) {
+        if (time_msec() > iface->lacp_rx) {
+            if (iface->lacp_status & LACP_CURRENT) {
+                iface_set_lacp_expired(iface);
+            } else if (iface->lacp_status & LACP_EXPIRED) {
+                iface_set_lacp_defaulted(iface);
+            }
+        }
+    }
+
+    if (port->lacp_need_update) {
+        lacp_update_ifaces(port);
+    }
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+        uint8_t ea[ETH_ADDR_LEN];
+        int error;
+
+        if (time_msec() < iface->lacp_tx || !lacp_iface_may_tx(iface)) {
             continue;
         }
 
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-
-            if (time_msec() > iface->lacp_rx) {
-                if (iface->lacp_status & LACP_CURRENT) {
-                    iface_set_lacp_expired(iface);
-                } else if (iface->lacp_status & LACP_EXPIRED) {
-                    iface_set_lacp_defaulted(iface);
-                }
-            }
+        error = netdev_get_etheraddr(iface->netdev, ea);
+        if (!error) {
+            iface->lacp_actor.state = iface_get_lacp_state(iface);
+            compose_lacp_packet(&packet, &iface->lacp_actor,
+                                &iface->lacp_partner, ea);
+            iface_send_packet(iface, &packet);
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
+            VLOG_ERR_RL(&rl, "iface %s: failed to obtain Ethernet address "
+                        "(%s)", iface->name, strerror(error));
         }
 
-        if (port->lacp_need_update) {
-            lacp_update_ifaces(port);
-        }
-
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            uint8_t ea[ETH_ADDR_LEN];
-            int error;
-
-            if (time_msec() < iface->lacp_tx || !lacp_iface_may_tx(iface)) {
-                continue;
-            }
-
-            error = netdev_get_etheraddr(iface->netdev, ea);
-            if (!error) {
-                iface->lacp_actor.state = iface_get_lacp_state(iface);
-                compose_lacp_packet(&packet, &iface->lacp_actor,
-                                    &iface->lacp_partner, ea);
-                iface_send_packet(iface, &packet);
-            } else {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
-                VLOG_ERR_RL(&rl, "iface %s: failed to obtain Ethernet address "
-                            "(%s)", iface->name, strerror(error));
-            }
-
-            iface->lacp_tx = time_msec() +
-                (iface->lacp_partner.state & LACP_STATE_TIME
-                 ? LACP_FAST_TIME_TX
-                 : LACP_SLOW_TIME_TX);
-        }
+        iface->lacp_tx = time_msec() +
+            (iface->lacp_partner.state & LACP_STATE_TIME
+             ? LACP_FAST_TIME_TX
+             : LACP_SLOW_TIME_TX);
     }
     ofpbuf_uninit(&packet);
 }
 
 static void
-lacp_wait(struct bridge *br)
+lacp_wait(struct port *port)
 {
-    size_t i, j;
+    size_t i;
 
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    if (!port->lacp) {
+        return;
+    }
 
-        if (!port->lacp) {
-            continue;
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+
+        if (lacp_iface_may_tx(iface)) {
+            poll_timer_wait_until(iface->lacp_tx);
         }
 
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-
-            if (lacp_iface_may_tx(iface)) {
-                poll_timer_wait_until(iface->lacp_tx);
-            }
-
-            if (iface->lacp_status & (LACP_CURRENT | LACP_EXPIRED)) {
-                poll_timer_wait_until(iface->lacp_rx);
-            }
+        if (iface->lacp_status & (LACP_CURRENT | LACP_EXPIRED)) {
+            poll_timer_wait_until(iface->lacp_rx);
         }
     }
 }
@@ -4237,6 +4210,44 @@ bond_init(void)
 }
 
 /* Port functions. */
+
+static void
+port_run(struct port *port)
+{
+    size_t i;
+
+    lacp_run(port);
+    bond_run(port);
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+
+        if (iface->cfm) {
+            struct ofpbuf *packet = cfm_run(iface->cfm);
+            if (packet) {
+                iface_send_packet(iface, packet);
+                ofpbuf_uninit(packet);
+                free(packet);
+            }
+        }
+    }
+}
+
+static void
+port_wait(struct port *port)
+{
+    size_t i;
+
+    lacp_wait(port);
+    bond_wait(port);
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct iface *iface = port->ifaces[i];
+        if (iface->cfm) {
+            cfm_wait(iface->cfm);
+        }
+    }
+}
 
 static struct port *
 port_create(struct bridge *br, const char *name)
