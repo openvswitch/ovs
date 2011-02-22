@@ -43,7 +43,7 @@ str_to_u32(const char *str)
     char *tail;
     uint32_t value;
 
-    if (!str) {
+    if (!str[0]) {
         ovs_fatal(0, "missing required numeric argument");
     }
 
@@ -60,6 +60,10 @@ str_to_u64(const char *str)
 {
     char *tail;
     uint64_t value;
+
+    if (!str[0]) {
+        ovs_fatal(0, "missing required numeric argument");
+    }
 
     errno = 0;
     value = strtoull(str, &tail, 0);
@@ -271,6 +275,7 @@ str_to_action(char *str, struct ofpbuf *b)
     pos = str;
     n_actions = 0;
     for (;;) {
+        char empty_string[] = "";
         char *act, *arg;
         size_t actlen;
         uint16_t port;
@@ -320,7 +325,7 @@ str_to_action(char *str, struct ofpbuf *b)
             pos = arg + arglen;
         } else {
             /* There might be no argument at all. */
-            arg = NULL;
+            arg = empty_string;
             pos = act + actlen + (act[actlen] != '\0');
         }
         act[actlen] = '\0';
@@ -410,7 +415,7 @@ str_to_action(char *str, struct ofpbuf *b)
             nan->subtype = htons(NXAST_NOTE);
 
             b->size -= sizeof nan->note;
-            while (arg && *arg != '\0') {
+            while (*arg != '\0') {
                 uint8_t byte;
                 bool ok;
 
@@ -472,7 +477,7 @@ str_to_action(char *str, struct ofpbuf *b)
 
             /* Unless a numeric argument is specified, we send the whole
              * packet to the controller. */
-            if (arg && (strspn(arg, "0123456789") == strlen(arg))) {
+            if (arg[0] && (strspn(arg, "0123456789") == strlen(arg))) {
                oao->max_len = htons(str_to_u32(arg));
             } else {
                 oao->max_len = htons(UINT16_MAX);
@@ -909,4 +914,3 @@ parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
     fsr->out_port = fm.out_port;
     fsr->table_id = table_id;
 }
-
