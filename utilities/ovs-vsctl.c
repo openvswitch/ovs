@@ -1403,7 +1403,7 @@ get_external_id(char **keys, char **values, size_t n,
         if (!key && !strncmp(keys[i], prefix, prefix_len)) {
             svec_add_nocopy(&svec, xasprintf("%s=%s",
                                              keys[i] + prefix_len, values[i]));
-        } else if (key_matches(keys[i], prefix, prefix_len, key)) {
+        } else if (key && key_matches(keys[i], prefix, prefix_len, key)) {
             svec_add(&svec, values[i]);
             break;
         }
