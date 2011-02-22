@@ -198,6 +198,7 @@ discovery_set_accept_controller_re(struct discovery *d, const char *re_)
         char *buffer = xmalloc(length);
         regerror(error, regex, buffer, length);
         VLOG_WARN("%s: %s: %s", d->dpif_name, re, buffer);
+        free(buffer);
         free(regex);
         free(re);
         return EINVAL;
