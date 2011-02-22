@@ -1857,6 +1857,7 @@ ofconn_run(struct ofconn *ofconn)
                 char *ofconn_name = ofconn_make_name(p, controller_name);
                 rconn_connect(ofconn->rconn, controller_name, ofconn_name);
                 free(ofconn_name);
+                free(controller_name);
             } else {
                 rconn_disconnect(ofconn->rconn);
             }
