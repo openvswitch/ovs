@@ -1367,8 +1367,10 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         union ovsdb_atom key, value;
 
         if (ovsdb_token_is_delim(*p)) {
+            char *type_str = ovsdb_type_to_english(type);
             error = xasprintf("%s: unexpected \"%c\" parsing %s",
-                              s, *p, ovsdb_type_to_english(type));
+                              s, *p, type_str);
+            free(type_str);
             goto error;
         }
 
