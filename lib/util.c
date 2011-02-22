@@ -137,14 +137,15 @@ xasprintf(const char *format, ...)
     return s;
 }
 
+/* Similar to strlcpy() from OpenBSD, but it never reads more than 'size - 1'
+ * bytes from 'src' and doesn't return anything. */
 void
 ovs_strlcpy(char *dst, const char *src, size_t size)
 {
     if (size > 0) {
-        size_t n = strlen(src);
-        size_t n_copy = MIN(n, size - 1);
-        memcpy(dst, src, n_copy);
-        dst[n_copy] = '\0';
+        size_t len = strnlen(src, size - 1);
+        memcpy(dst, src, len);
+        dst[len] = '\0';
     }
 }
 

@@ -1315,8 +1315,7 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
 
     for (; n--; ts++) {
         char name[OFP_MAX_TABLE_NAME_LEN + 1];
-        strncpy(name, ts->name, sizeof name);
-        name[OFP_MAX_TABLE_NAME_LEN] = '\0';
+        ovs_strlcpy(name, ts->name, sizeof name);
 
         ds_put_format(string, "  %d: %-8s: ", ts->table_id, name);
         ds_put_format(string, "wild=0x%05"PRIx32", ", ntohl(ts->wildcards));

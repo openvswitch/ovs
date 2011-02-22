@@ -111,7 +111,7 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
 
         nn = name_node_lookup(ifindex);
         if (nn) {
-            strncpy(name, nn->ifname, IFNAMSIZ);
+            ovs_strlcpy(name, nn->ifname, IFNAMSIZ);
             return true;
         }
     }
@@ -445,8 +445,7 @@ name_table_reset(void)
 
             nn = xzalloc(sizeof *nn);
             nn->ifi_index = change.ifi_index;
-            strncpy(nn->ifname, change.ifname, IFNAMSIZ);
-            nn->ifname[IFNAMSIZ - 1] = '\0';
+            ovs_strlcpy(nn->ifname, change.ifname, IFNAMSIZ);
             hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
         }
     }
