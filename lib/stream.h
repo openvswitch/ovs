@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 #include "openvswitch/types.h"
 #include "vlog.h"
 
@@ -84,7 +85,7 @@ enum stream_content_type {
     STREAM_JSONRPC
 };
 
-void stream_report_content(const void *, size_t, enum stream_content_type,
+void stream_report_content(const void *, ssize_t, enum stream_content_type,
                            struct vlog_module *, const char *stream_name);
 
 #endif /* stream.h */

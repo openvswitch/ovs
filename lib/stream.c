@@ -727,7 +727,7 @@ pstream_open_with_default_ports(const char *name_,
 /* Attempts to guess the content type of a stream whose first few bytes were
  * the 'size' bytes of 'data'. */
 static enum stream_content_type
-stream_guess_content(const uint8_t *data, size_t size)
+stream_guess_content(const uint8_t *data, ssize_t size)
 {
     if (size >= 2) {
 #define PAIR(A, B) (((A) << 8) | (B))
@@ -770,7 +770,7 @@ stream_content_type_to_string(enum stream_content_type type)
  * module 'module', naming 'stream_name' as the source, explaining what
  * content was expected and what was actually received. */
 void
-stream_report_content(const void *data, size_t size,
+stream_report_content(const void *data, ssize_t size,
                       enum stream_content_type expected_type,
                       struct vlog_module *module, const char *stream_name)
 {
