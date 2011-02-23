@@ -123,7 +123,7 @@ static bool
 is_valid_version(const char *s)
 {
     int n = -1;
-    sscanf(s, "%*[0-9].%*[0-9].%*[0-9]%n", &n);
+    ignore(sscanf(s, "%*[0-9].%*[0-9].%*[0-9]%n", &n));
     return n != -1 && s[n] == '\0';
 }
 
