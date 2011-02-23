@@ -2869,6 +2869,7 @@ cmd_find(struct vsctl_context *ctx)
 
     next_row: ;
     }
+    free(columns);
 }
 
 static void
