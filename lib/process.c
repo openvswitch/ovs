@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,7 @@ process_start(char **argv,
               struct process **pp)
 {
     sigset_t oldsigs;
+    int nullfd;
     pid_t pid;
     int error;
 
@@ -203,6 +204,15 @@ process_start(char **argv,
     error = process_prestart(argv);
     if (error) {
         return error;
+    }
+
+    if (n_null_fds) {
+        nullfd = get_null_fd();
+        if (nullfd < 0) {
+            return -nullfd;
+        }
+    } else {
+        nullfd = -1;
     }
 
     block_sigchld(&oldsigs);
@@ -225,14 +235,16 @@ process_start(char **argv,
         unblock_sigchld(&oldsigs);
         for (fd = 0; fd < fd_max; fd++) {
             if (is_member(fd, null_fds, n_null_fds)) {
-                /* We can't use get_null_fd() here because we might have
-                 * already closed its fd. */
-                int nullfd = open("/dev/null", O_RDWR);
                 dup2(nullfd, fd);
-                close(nullfd);
-            } else if (fd >= 3 && !is_member(fd, keep_fds, n_keep_fds)) {
+            } else if (fd >= 3 && fd != nullfd
+                       && !is_member(fd, keep_fds, n_keep_fds)) {
                 close(fd);
             }
+        }
+        if (nullfd >= 0
+            && !is_member(nullfd, keep_fds, n_keep_fds)
+            && !is_member(nullfd, null_fds, n_null_fds)) {
+            close(nullfd);
         }
         execvp(argv[0], argv);
         fprintf(stderr, "execvp(\"%s\") failed: %s\n",
