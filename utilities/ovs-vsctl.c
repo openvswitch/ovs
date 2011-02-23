@@ -3127,7 +3127,9 @@ post_create(struct vsctl_context *ctx)
     const struct uuid *real;
     struct uuid dummy;
 
-    uuid_from_string(&dummy, ds_cstr(&ctx->output));
+    if (!uuid_from_string(&dummy, ds_cstr(&ctx->output))) {
+        NOT_REACHED();
+    }
     real = ovsdb_idl_txn_get_insert_uuid(ctx->txn, &dummy);
     if (real) {
         ds_clear(&ctx->output);
