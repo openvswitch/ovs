@@ -981,7 +981,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
     /* Otherwise choose the minimum non-local MAC address among all of the
      * interfaces. */
-    memset(ea, 0xff, sizeof ea);
+    memset(ea, 0xff, ETH_ADDR_LEN);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
         uint8_t iface_ea[ETH_ADDR_LEN];
