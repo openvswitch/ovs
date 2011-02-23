@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -510,6 +510,9 @@ rconn_run_wait(struct rconn *rc)
 
     if (rc->vconn) {
         vconn_run_wait(rc->vconn);
+        if ((rc->state & (S_ACTIVE | S_IDLE)) && !list_is_empty(&rc->txq)) {
+            vconn_wait(rc->vconn, WAIT_SEND);
+        }
     }
     for (i = 0; i < rc->n_monitors; i++) {
         vconn_run_wait(rc->monitors[i]);
@@ -519,10 +522,6 @@ rconn_run_wait(struct rconn *rc)
     if (timeo != UINT_MAX) {
         long long int expires = sat_add(rc->state_entered, timeo);
         poll_timer_wait_until(expires * 1000);
-    }
-
-    if ((rc->state & (S_ACTIVE | S_IDLE)) && !list_is_empty(&rc->txq)) {
-        vconn_wait(rc->vconn, WAIT_SEND);
     }
 }
 
