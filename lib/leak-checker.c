@@ -216,10 +216,9 @@ hook_free(void *p, const void *caller OVS_UNUSED)
     }
 
     set_hooks(&libc_hooks);
+    log_callers("free(%p)", p);
     free(p);
     get_hooks(&libc_hooks);
-
-    log_callers("free(%p)", p);
 
     reset_hooks();
 }
