@@ -459,6 +459,7 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
         putchar('\n');
     }
 
+    ovsdb_log_close(log);
     /* XXX free 'names'. */
 }
 
