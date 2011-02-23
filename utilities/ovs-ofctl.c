@@ -884,6 +884,36 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 /* Undocumented commands for unit testing. */
 
+static void
+print_packet_list(struct list *packets)
+{
+    struct ofpbuf *packet, *next;
+
+    LIST_FOR_EACH_SAFE (packet, next, list_node, packets) {
+        ofp_print(stdout, packet->data, packet->size, verbosity);
+        list_remove(&packet->list_node);
+        ofpbuf_delete(packet);
+    }
+}
+
+/* "parse-flow FLOW": parses the argument as a flow (like add-flow) and prints
+ * it back to stdout.  */
+static void
+do_parse_flow(int argc OVS_UNUSED, char *argv[])
+{
+    enum nx_flow_format flow_format;
+    struct list packets;
+
+    flow_format = NXFF_OPENFLOW10;
+    if (preferred_flow_format > 0) {
+        flow_format = preferred_flow_format;
+    }
+
+    list_init(&packets);
+    parse_ofp_flow_mod_str(&packets, &flow_format, argv[1], OFPFC_ADD);
+    print_packet_list(&packets);
+}
+
 /* "parse-flows FILENAME": reads the named file as a sequence of flows (like
  * add-flows) and prints each of the flows back to stdout.  */
 static void
@@ -898,20 +928,14 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(errno, "%s: open", argv[2]);
     }
 
-    list_init(&packets);
     flow_format = NXFF_OPENFLOW10;
     if (preferred_flow_format > 0) {
         flow_format = preferred_flow_format;
     }
 
+    list_init(&packets);
     while (parse_ofp_add_flow_file(&packets, &flow_format, file)) {
-        struct ofpbuf *packet, *next;
-
-        LIST_FOR_EACH_SAFE (packet, next, list_node, &packets) {
-            ofp_print(stdout, packet->data, packet->size, verbosity);
-            list_remove(&packet->list_node);
-            ofpbuf_delete(packet);
-        }
+        print_packet_list(&packets);
     }
     fclose(file);
 }
@@ -1011,6 +1035,7 @@ static const struct command all_commands[] = {
     { "help", 0, INT_MAX, do_help },
 
     /* Undocumented commands for testing. */
+    { "parse-flow", 1, 1, do_parse_flow },
     { "parse-flows", 1, 1, do_parse_flows },
     { "parse-nx-match", 0, 0, do_parse_nx_match },
     { "ofp-print", 1, 2, do_ofp_print },

@@ -183,18 +183,19 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
 {
     char *s = xstrdup(s_);
     char *save_ptr = NULL;
-    char *fields, *basis, *algorithm, *n_links, *arg, *dst;
+    char *fields, *basis, *algorithm, *n_links_str, *arg, *dst;
     uint32_t header;
     int ofs, n_bits;
+    int n_links;
 
     fields = strtok_r(s, ", ", &save_ptr);
     basis = strtok_r(NULL, ", ", &save_ptr);
     algorithm = strtok_r(NULL, ", ", &save_ptr);
-    n_links = strtok_r(NULL, ", ", &save_ptr);
+    n_links_str = strtok_r(NULL, ", ", &save_ptr);
     arg = strtok_r(NULL, ", ", &save_ptr);
     dst = strtok_r(NULL, ", ", &save_ptr);
     if (!dst) {
-        ovs_fatal(0, "%s: not enough arguments to multipath action", s);
+        ovs_fatal(0, "%s: not enough arguments to multipath action", s_);
     }
 
     memset(mp, 0, sizeof *mp);
@@ -207,7 +208,7 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     } else if (!strcasecmp(fields, "symmetric_l4")) {
         mp->fields = htons(NX_MP_FIELDS_SYMMETRIC_L4);
     } else {
-        ovs_fatal(0, "%s: unknown fields `%s'", s, fields);
+        ovs_fatal(0, "%s: unknown fields `%s'", s_, fields);
     }
     mp->basis = htons(atoi(basis));
     if (!strcasecmp(algorithm, "modulo_n")) {
@@ -219,12 +220,25 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     } else if (!strcasecmp(algorithm, "iter_hash")) {
         mp->algorithm = htons(NX_MP_ALG_ITER_HASH);
     } else {
-        ovs_fatal(0, "%s: unknown algorithm `%s'", s, algorithm);
+        ovs_fatal(0, "%s: unknown algorithm `%s'", s_, algorithm);
     }
-    mp->max_link = htons(atoi(n_links) - 1);
+    n_links = atoi(n_links_str);
+    if (n_links < 1 || n_links > 65536) {
+        ovs_fatal(0, "%s: n_links %d is not in valid range 1 to 65536",
+                  s_, n_links);
+    }
+    mp->max_link = htons(n_links - 1);
     mp->arg = htonl(atoi(arg));
 
     nxm_parse_field_bits(dst, &header, &ofs, &n_bits);
+    if (!NXM_IS_NX_REG(header) || NXM_NX_REG_IDX(header) >= FLOW_N_REGS) {
+        ovs_fatal(0, "%s: destination field must be register", s_);
+    }
+    if (n_bits < 16 && n_links > (1u << n_bits)) {
+        ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
+                  "less than specified n_links %d",
+                  s_, n_bits, 1u << n_bits, n_links);
+    }
     mp->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
     mp->dst = htonl(header);
 
