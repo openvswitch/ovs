@@ -223,7 +223,7 @@ ovsdb_file_open__(const char *file_name,
             oldest_commit = date;
         }
 
-        ovsdb_txn_commit(txn, false);
+        ovsdb_error_destroy(ovsdb_txn_commit(txn, false));
     }
     if (error) {
         /* Log error but otherwise ignore it.  Probably the database just got
