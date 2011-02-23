@@ -509,8 +509,9 @@ OFP_ASSERT(sizeof(struct nx_action_note) == 16);
  *       Some algorithms use 'arg' as an additional argument.
  *
  *    3. Stores 'link' in dst[ofs:ofs+n_bits].  The format and semantics of
- *       'dst' and 'ofs_nbits' are identical to those for the NXAST_REG_LOAD
- *       action; refer to the description of that action for details.
+ *       'dst' and 'ofs_nbits' are similar to those for the NXAST_REG_LOAD
+ *       action, except that 'dst' must be NXM_NX_REG(idx) for 'idx' in the
+ *       switch's supported range.
  *
  * The switch will reject actions that have an unknown 'fields', or an unknown
  * 'algorithm', or in which ofs+n_bits is greater than the width of 'dst', or
