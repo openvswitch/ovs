@@ -429,7 +429,8 @@ below.
 .ST "CA Certificate Bootstrap"
 .PP
 Ordinarily, all of the files named in the SSL configuration must exist
-when \fBovs\-vswitchd\fR starts.  However, if the \fB\-\-bootstrap\fR 
+when \fBovs\-vswitchd\fR starts.  However, if the \fIca-cert\fR file
+does not exist and the \fB\-\-bootstrap\fR
 option is given, then \fBovs\-vswitchd\fR will attempt to obtain the
 CA certificate from the controller on its first SSL connection and
 save it to the named PEM file.  If it is successful, it will
