@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks.
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -312,8 +312,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             idl->monitor_request_id = NULL;
             ovsdb_idl_clear(idl);
             ovsdb_idl_parse_update(idl, msg->result);
-        } else if (msg->type == JSONRPC_REPLY
-                   && msg->id && msg->id->type == JSON_STRING
+        } else if (msg->type == JSONRPC_REPLY && msg->id->type == JSON_STRING
                    && !strcmp(msg->id->u.string, "echo")) {
             /* It's a reply to our echo request.  Ignore it. */
         } else if ((msg->type == JSONRPC_ERROR
