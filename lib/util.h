@@ -135,9 +135,13 @@ void *x2nrealloc(void *p, size_t *n, size_t s);
 void ovs_strlcpy(char *dst, const char *src, size_t size);
 void ovs_strzcpy(char *dst, const char *src, size_t size);
 
+void ovs_abort(int err_no, const char *format, ...)
+    PRINTF_FORMAT(2, 3) NO_RETURN;
 void ovs_fatal(int err_no, const char *format, ...)
     PRINTF_FORMAT(2, 3) NO_RETURN;
 void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
+void ovs_error_valist(int err_no, const char *format, va_list)
+    PRINTF_FORMAT(2, 0);
 const char *ovs_retval_to_string(int);
 void ovs_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
 

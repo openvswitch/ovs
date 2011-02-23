@@ -34,7 +34,7 @@ const char *program_name;
 void
 out_of_memory(void)
 {
-    ovs_fatal(0, "virtual memory exhausted");
+    ovs_abort(0, "virtual memory exhausted");
 }
 
 void *
@@ -171,32 +171,69 @@ ovs_strzcpy(char *dst, const char *src, size_t size)
     }
 }
 
+/* Prints 'format' on stderr, formatting it like printf() does.  If 'err_no' is
+ * nonzero, then it is formatted with ovs_retval_to_string() and appended to
+ * the message inside parentheses.  Then, terminates with abort().
+ *
+ * This function is preferred to ovs_fatal() in a situation where it would make
+ * sense for a monitoring process to restart the daemon.
+ *
+ * 'format' should not end with a new-line, because this function will add one
+ * itself. */
+void
+ovs_abort(int err_no, const char *format, ...)
+{
+    va_list args;
+
+    va_start(args, format);
+    ovs_error_valist(err_no, format, args);
+    va_end(args);
+
+    abort();
+}
+
+/* Prints 'format' on stderr, formatting it like printf() does.  If 'err_no' is
+ * nonzero, then it is formatted with ovs_retval_to_string() and appended to
+ * the message inside parentheses.  Then, terminates with EXIT_FAILURE.
+ *
+ * 'format' should not end with a new-line, because this function will add one
+ * itself. */
 void
 ovs_fatal(int err_no, const char *format, ...)
 {
     va_list args;
 
-    fprintf(stderr, "%s: ", program_name);
     va_start(args, format);
-    vfprintf(stderr, format, args);
+    ovs_error_valist(err_no, format, args);
     va_end(args);
-    if (err_no != 0)
-        fprintf(stderr, " (%s)", ovs_retval_to_string(err_no));
-    putc('\n', stderr);
 
     exit(EXIT_FAILURE);
 }
 
+/* Prints 'format' on stderr, formatting it like printf() does.  If 'err_no' is
+ * nonzero, then it is formatted with ovs_retval_to_string() and appended to
+ * the message inside parentheses.
+ *
+ * 'format' should not end with a new-line, because this function will add one
+ * itself. */
 void
 ovs_error(int err_no, const char *format, ...)
 {
-    int save_errno = errno;
     va_list args;
 
-    fprintf(stderr, "%s: ", program_name);
     va_start(args, format);
-    vfprintf(stderr, format, args);
+    ovs_error_valist(err_no, format, args);
     va_end(args);
+}
+
+/* Same as ovs_error() except that the arguments are supplied as a va_list. */
+void
+ovs_error_valist(int err_no, const char *format, va_list args)
+{
+    int save_errno = errno;
+
+    fprintf(stderr, "%s: ", program_name);
+    vfprintf(stderr, format, args);
     if (err_no != 0) {
         fprintf(stderr, " (%s)", ovs_retval_to_string(err_no));
     }
