@@ -1344,7 +1344,7 @@ static struct ovsdb_table *do_transact_table;
 static void
 do_transact_commit(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    ovsdb_txn_commit(do_transact_txn, false);
+    ovsdb_error_destroy(ovsdb_txn_commit(do_transact_txn, false));
     do_transact_txn = NULL;
 }
 
