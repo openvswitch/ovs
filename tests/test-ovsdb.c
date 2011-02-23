@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1749,7 +1749,9 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
                 idltest_simple_set_s(s, arg3);
             } else if (!strcmp(arg2, "u")) {
                 struct uuid uuid;
-                uuid_from_string(&uuid, arg3);
+                if (!uuid_from_string(&uuid, arg3)) {
+                    ovs_fatal(0, "\"%s\" is not a valid UUID", arg3);
+                }
                 idltest_simple_set_u(s, uuid);
             } else if (!strcmp(arg2, "r")) {
                 idltest_simple_set_r(s, atof(arg3));
