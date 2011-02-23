@@ -894,7 +894,6 @@ send_reliably(struct dhclient *cli,
         do_send_msg(cli, &msg);
         cli->delay = MIN(cli->max_timeout, MAX(4, cli->delay * 2));
         cli->retransmit += fuzz(cli->delay, 1);
-        timeout(cli, cli->retransmit);
         dhcp_msg_uninit(&msg);
      }
 }
