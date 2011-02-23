@@ -2045,6 +2045,7 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
     int retval;
 
     memset(&r, 0, sizeof r);
+    memset(&sin, 0, sizeof sin);
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = ip;
     sin.sin_port = 0;
