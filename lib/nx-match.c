@@ -198,10 +198,12 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         } else if (eth_addr_equals(mask, eth_mcast_1)) {
             wc->wildcards &= ~FWW_ETH_MCAST;
             flow->dl_dst[0] = *(uint8_t *) value & 0x01;
+            return 0;
         } else if (eth_addr_equals(mask, eth_mcast_0)) {
             wc->wildcards &= ~FWW_DL_DST;
             memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
             flow->dl_dst[0] &= 0xfe;
+            return 0;
         } else if (eth_addr_equals(mask, eth_all_0s)) {
             return 0;
         } else if (eth_addr_equals(mask, eth_all_1s)) {
