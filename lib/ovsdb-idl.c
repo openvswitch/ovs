@@ -282,7 +282,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
     assert(!idl->txn);
     jsonrpc_session_run(idl->session);
     for (i = 0; jsonrpc_session_is_connected(idl->session) && i < 50; i++) {
-        struct jsonrpc_msg *msg, *reply;
+        struct jsonrpc_msg *msg;
         unsigned int seqno;
 
         seqno = jsonrpc_session_get_seqno(idl->session);
@@ -298,7 +298,6 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             break;
         }
 
-        reply = NULL;
         if (msg->type == JSONRPC_NOTIFY
                    && !strcmp(msg->method, "update")
                    && msg->params->type == JSON_ARRAY
@@ -328,9 +327,6 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             VLOG_DBG("%s: received unexpected %s message",
                      jsonrpc_session_get_name(idl->session),
                      jsonrpc_msg_type_to_string(msg->type));
-        }
-        if (reply) {
-            jsonrpc_session_send(idl->session, reply);
         }
         jsonrpc_msg_destroy(msg);
     }
