@@ -2408,13 +2408,12 @@ missing_operator_error(const char *arg, const char **allowed_operators,
 
 /* Breaks 'arg' apart into a number of fields in the following order:
  *
- *      - If 'columnp' is nonnull, the name of a column in 'table'.  The column
- *        is stored into '*columnp'.  The column name may be abbreviated.
+ *      - The name of a column in 'table', stored into '*columnp'.  The column
+ *        name may be abbreviated.
  *
- *      - If 'keyp' is nonnull, optionally a key string.  (If both 'columnp'
- *        and 'keyp' are nonnull, then the column and key names are expected to
- *        be separated by ':').  The key is stored as a malloc()'d string into
- *        '*keyp', or NULL if no key is present in 'arg'.
+ *      - Optionally ':' followed by a key string.  The key is stored as a
+ *        malloc()'d string into '*keyp', or NULL if no key is present in
+ *        'arg'.
  *
  *      - If 'valuep' is nonnull, an operator followed by a value string.  The
  *        allowed operators are the 'n_allowed' string in 'allowed_operators',
@@ -2423,8 +2422,6 @@ missing_operator_error(const char *arg, const char **allowed_operators,
  *        'allowed_operators' is stored; nothing is malloc()'d).  The value is
  *        stored as a malloc()'d string into '*valuep', or NULL if no value is
  *        present in 'arg'.
- *
- * At least 'columnp' or 'keyp' must be nonnull.
  *
  * On success, returns NULL.  On failure, returned a malloc()'d string error
  * message and stores NULL into all of the nonnull output arguments. */
@@ -2437,51 +2434,38 @@ parse_column_key_value(const char *arg,
                        char **valuep)
 {
     const char *p = arg;
+    char *column_name;
     char *error;
 
-    assert(columnp || keyp);
     assert(!(operatorp && !valuep));
-    if (keyp) {
-        *keyp = NULL;
-    }
+    *keyp = NULL;
     if (valuep) {
         *valuep = NULL;
     }
 
     /* Parse column name. */
-    if (columnp) {
-        char *column_name;
-
-        error = ovsdb_token_parse(&p, &column_name);
-        if (error) {
-            goto error;
-        }
-        if (column_name[0] == '\0') {
-            free(column_name);
-            error = xasprintf("%s: missing column name", arg);
-            goto error;
-        }
-        error = get_column(table, column_name, columnp);
+    error = ovsdb_token_parse(&p, &column_name);
+    if (error) {
+        goto error;
+    }
+    if (column_name[0] == '\0') {
         free(column_name);
-        if (error) {
-            goto error;
-        }
+        error = xasprintf("%s: missing column name", arg);
+        goto error;
+    }
+    error = get_column(table, column_name, columnp);
+    free(column_name);
+    if (error) {
+        goto error;
     }
 
     /* Parse key string. */
-    if (*p == ':' || !columnp) {
-        if (columnp) {
-            p++;
-        } else if (!keyp) {
-            error = xasprintf("%s: key not accepted here", arg);
-            goto error;
-        }
+    if (*p == ':') {
+        p++;
         error = ovsdb_token_parse(&p, keyp);
         if (error) {
             goto error;
         }
-    } else if (keyp) {
-        *keyp = NULL;
     }
 
     /* Parse value string. */
@@ -2529,13 +2513,9 @@ parse_column_key_value(const char *arg,
     return NULL;
 
 error:
-    if (columnp) {
-        *columnp = NULL;
-    }
-    if (keyp) {
-        free(*keyp);
-        *keyp = NULL;
-    }
+    *columnp = NULL;
+    free(*keyp);
+    *keyp = NULL;
     if (valuep) {
         free(*valuep);
         *valuep = NULL;
