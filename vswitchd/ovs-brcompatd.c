@@ -1081,26 +1081,45 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
     return 0;
 }
 
+static struct ofpbuf *
+brc_recv_update__(void)
+{
+    for (;;) {
+        struct ofpbuf *buffer;
+        int retval;
+
+        retval = nl_sock_recv(brc_sock, &buffer, false);
+        switch (retval) {
+        case 0:
+            if (nl_msg_nlmsgerr(buffer, NULL)
+                || nl_msg_nlmsghdr(buffer)->nlmsg_type == NLMSG_DONE) {
+                break;
+            }
+            return buffer;
+
+        case ENOBUFS:
+            break;
+
+        case EAGAIN:
+            return NULL;
+
+        default:
+            VLOG_WARN_RL(&rl, "brc_recv_update: %s", strerror(retval));
+            return NULL;
+        }
+        ofpbuf_delete(buffer);
+    }
+}
+
 static void
 brc_recv_update(struct ovsdb_idl *idl)
 {
-    int retval;
     struct ofpbuf *buffer;
     struct genlmsghdr *genlmsghdr;
     const struct ovsrec_open_vswitch *ovs;
 
-    buffer = NULL;
-    do {
-        ofpbuf_delete(buffer);
-        retval = nl_sock_recv(brc_sock, &buffer, false);
-    } while (retval == ENOBUFS
-            || (!retval
-                && (nl_msg_nlmsgerr(buffer, NULL)
-                    || nl_msg_nlmsghdr(buffer)->nlmsg_type == NLMSG_DONE)));
-    if (retval) {
-        if (retval != EAGAIN) {
-            VLOG_WARN_RL(&rl, "brc_recv_update: %s", strerror(retval));
-        }
+    buffer = brc_recv_update__();
+    if (!buffer) {
         return;
     }
 
