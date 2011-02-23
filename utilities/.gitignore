@@ -11,8 +11,6 @@
 /ovs-discover.8
 /ovs-dpctl
 /ovs-dpctl.8
-/ovs-kill
-/ovs-kill.8
 /ovs-ofctl
 /ovs-ofctl.8
 /ovs-openflowd

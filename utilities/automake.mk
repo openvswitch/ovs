@@ -3,7 +3,6 @@ bin_PROGRAMS += \
 	utilities/ovs-controller \
 	utilities/ovs-discover \
 	utilities/ovs-dpctl \
-	utilities/ovs-kill \
 	utilities/ovs-ofctl \
 	utilities/ovs-openflowd \
 	utilities/ovs-vsctl
@@ -21,7 +20,6 @@ EXTRA_DIST += \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-discover.8.in \
 	utilities/ovs-dpctl.8.in \
-	utilities/ovs-kill.8.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-openflowd.8.in \
 	utilities/ovs-parse-leaks.8 \
@@ -42,7 +40,6 @@ DISTCLEANFILES += \
 	utilities/ovs-controller.8 \
 	utilities/ovs-discover.8 \
 	utilities/ovs-dpctl.8 \
-	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks \
@@ -62,7 +59,6 @@ man_MANS += \
 	utilities/ovs-controller.8 \
 	utilities/ovs-discover.8 \
 	utilities/ovs-dpctl.8 \
-	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks.8 \
@@ -83,9 +79,6 @@ utilities_ovs_discover_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_dpctl_SOURCES = utilities/ovs-dpctl.c
 utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a
-
-utilities_ovs_kill_SOURCES = utilities/ovs-kill.c
-utilities_ovs_kill_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
 utilities_ovs_ofctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)

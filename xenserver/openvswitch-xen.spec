@@ -117,12 +117,10 @@ install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-controller \
     $RPM_BUILD_ROOT/usr/bin/ovs-discover \
-    $RPM_BUILD_ROOT/usr/bin/ovs-kill \
     $RPM_BUILD_ROOT/usr/bin/ovs-openflowd \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-discover.8 \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
 
