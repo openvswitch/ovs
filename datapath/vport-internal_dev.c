@@ -132,6 +132,14 @@ static int internal_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int 
 	return -EOPNOTSUPP;
 }
 
+static void internal_dev_destructor(struct net_device *dev)
+{
+	struct vport *vport = internal_dev_get_vport(dev);
+
+	vport_free(vport);
+	free_netdev(dev);
+}
+
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_open = internal_dev_open,
@@ -160,7 +168,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->change_mtu = internal_dev_change_mtu;
 #endif
 
-	netdev->destructor = free_netdev;
+	netdev->destructor = internal_dev_destructor;
 	SET_ETHTOOL_OPS(netdev, &internal_dev_ethtool_ops);
 	netdev->tx_queue_len = 0;
 
@@ -219,9 +227,8 @@ static int internal_dev_destroy(struct vport *vport)
 	netif_stop_queue(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
-	unregister_netdevice(netdev_vport->dev);
 	/* unregister_netdevice() waits for an RCU grace period. */
-	vport_free(vport);
+	unregister_netdevice(netdev_vport->dev);
 
 	return 0;
 }
