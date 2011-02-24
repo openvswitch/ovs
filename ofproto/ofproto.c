@@ -2566,6 +2566,7 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
         list_push_back(&new_rule->facets, &facet->list_node);
         facet->rule = new_rule;
         facet->used = new_rule->created;
+        facet->rs_used = facet->used;
     }
 
     ofpbuf_delete(odp_actions);
