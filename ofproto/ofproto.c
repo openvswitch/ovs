@@ -1526,6 +1526,8 @@ ofproto_flush_flows(struct ofproto *ofproto)
          * individually since we are about to blow away all the facets with
          * dpif_flow_flush(). */
         facet->installed = false;
+        facet->dp_packet_count = 0;
+        facet->dp_byte_count = 0;
         facet_remove(ofproto, facet);
     }
 
@@ -2401,6 +2403,9 @@ facet_uninstall(struct ofproto *p, struct facet *facet)
         facet->installed = false;
         facet->dp_packet_count = 0;
         facet->dp_byte_count = 0;
+    } else {
+        assert(facet->dp_packet_count == 0);
+        assert(facet->dp_byte_count == 0);
     }
 }
 
