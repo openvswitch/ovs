@@ -1450,12 +1450,20 @@ static int odp_dp_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	list_del(&dp->list_node);
 	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
 
+	/* rtnl_unlock() will wait until all the references to devices that
+	 * are pending unregistration have been dropped.  We do it here to
+	 * ensure that any internal devices (which contain DP pointers) are
+	 * fully destroyed before freeing the datapath.
+	 */
+	rtnl_unlock();
+
 	call_rcu(&dp->rcu, destroy_dp_rcu);
 	module_put(THIS_MODULE);
 
 	genl_notify(reply, genl_info_net(info), info->snd_pid,
 		    dp_datapath_multicast_group.id, info->nlhdr, GFP_KERNEL);
-	err = 0;
+
+	return 0;
 
 exit_unlock:
 	rtnl_unlock();
