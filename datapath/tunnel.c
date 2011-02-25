@@ -1369,12 +1369,6 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 	if (a[ODP_TUNNEL_ATTR_TTL])
 		mutable->ttl = nla_get_u8(a[ODP_TUNNEL_ATTR_TTL]);
 
-	mutable->tunnel_hlen = tnl_ops->hdr_len(mutable);
-	if (mutable->tunnel_hlen < 0)
-		return mutable->tunnel_hlen;
-
-	mutable->tunnel_hlen += sizeof(struct iphdr);
-
 	mutable->tunnel_type = tnl_ops->tunnel_type;
 	if (!a[ODP_TUNNEL_ATTR_IN_KEY]) {
 		mutable->tunnel_type |= TNL_T_KEY_MATCH;
@@ -1388,6 +1382,12 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 		mutable->flags |= TNL_F_OUT_KEY_ACTION;
 	else
 		mutable->out_key = nla_get_be64(a[ODP_TUNNEL_ATTR_OUT_KEY]);
+
+	mutable->tunnel_hlen = tnl_ops->hdr_len(mutable);
+	if (mutable->tunnel_hlen < 0)
+		return mutable->tunnel_hlen;
+
+	mutable->tunnel_hlen += sizeof(struct iphdr);
 
 	old_vport = tnl_find_port(mutable->saddr, mutable->daddr,
 				  mutable->in_key, mutable->tunnel_type,
