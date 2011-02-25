@@ -411,7 +411,7 @@ ff fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 ff 00 ff ff \
 "], [0], [dnl
-OFPST_FLOW request (xid=0x4): priority=0
+OFPST_FLOW request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 
@@ -460,7 +460,7 @@ ff fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 ff 00 ff ff \
 "], [0], [dnl
-OFPST_AGGREGATE request (xid=0x4): priority=0
+OFPST_AGGREGATE request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 
@@ -716,7 +716,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 20 00 00 00 04 ff ff 00 00 00 00 23 20 \
 00 00 00 00 00 00 00 00 ff ff 00 00 ff 00 00 00 \
 "], [0], [dnl
-NXST_FLOW request (xid=0x4): priority=0
+NXST_FLOW request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 
@@ -876,7 +876,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 20 00 00 00 04 ff ff 00 00 00 00 23 20 \
 00 00 00 01 00 00 00 00 ff ff 00 00 ff 00 00 00 \
 "], [0], [dnl
-NXST_AGGREGATE request (xid=0x4): priority=0
+NXST_AGGREGATE request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 

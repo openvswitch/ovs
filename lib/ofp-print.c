@@ -1074,6 +1074,10 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
         ofp_print_port_name(string, fsr.out_port);
     }
 
+    /* A flow stats request doesn't include a priority, but cls_rule_format()
+     * will print one unless it is OFP_DEFAULT_PRIORITY. */
+    fsr.match.priority = OFP_DEFAULT_PRIORITY;
+
     ds_put_char(string, ' ');
     cls_rule_format(&fsr.match, string);
 }
