@@ -3543,7 +3543,16 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
 static bool
 is_valid_table(uint8_t table_id)
 {
-    return table_id == 0 || table_id == 0xff;
+    if (table_id == 0 || table_id == 0xff) {
+        return true;
+    } else {
+        /* It would probably be better to reply with an error but there doesn't
+         * seem to be any appropriate value, so that might just be
+         * confusing. */
+        VLOG_WARN_RL(&rl, "controller asked for invalid table %"PRIu8,
+                     table_id);
+        return false;
+    }
 }
 
 static int
