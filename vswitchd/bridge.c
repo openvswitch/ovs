@@ -3029,7 +3029,7 @@ static void
 bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
                               const struct nlattr *actions,
                               size_t actions_len,
-                              unsigned long long int n_bytes, void *br_)
+                              uint64_t n_bytes, void *br_)
 {
     struct bridge *br = br_;
     const struct nlattr *a;

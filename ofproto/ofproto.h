@@ -154,7 +154,7 @@ struct ofhooks {
     void (*account_flow_cb)(const struct flow *, tag_type tags,
                             const struct nlattr *odp_actions,
                             size_t actions_len,
-                            unsigned long long int n_bytes, void *aux);
+                            uint64_t n_bytes, void *aux);
     void (*account_checkpoint_cb)(void *aux);
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
