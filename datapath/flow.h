@@ -15,6 +15,7 @@
 #include <linux/types.h>
 #include <linux/rcupdate.h>
 #include <linux/if_ether.h>
+#include <linux/in6.h>
 #include <linux/jiffies.h>
 #include <linux/time.h>
 
@@ -37,11 +38,11 @@ struct sw_flow_key {
 			__be32	ipv4_dst;	 /* IPv4 destination address. */
 		};
 		struct {
-			__be32	ipv6_src[4]; /* IPv6 source address. */
-			__be32	ipv6_dst[4]; /* IPv6 source address. */
+			struct in6_addr	ipv6_src; /* IPv6 source address. */
+			struct in6_addr ipv6_dst; /* IPv6 source address. */
 		};
 	};
-	__be32	nd_target[4]; /* IPv6 ND target address. */
+	struct in6_addr	nd_target; /* IPv6 ND target address. */
 	u16	in_port;    /* Input switch port. */
 	__be16	dl_tci;	    /* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
 	__be16	dl_type;    /* Ethernet frame type. */

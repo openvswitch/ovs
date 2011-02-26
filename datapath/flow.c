@@ -116,15 +116,15 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 	nexthdr = nh->nexthdr;
 	payload_ofs = (u8 *)(nh + 1) - skb->data;
 
-	memcpy(key->ipv6_src, nh->saddr.in6_u.u6_addr8, sizeof(key->ipv6_src));
-	memcpy(key->ipv6_dst, nh->daddr.in6_u.u6_addr8, sizeof(key->ipv6_dst));
+	ipv6_addr_copy(&key->ipv6_src, &nh->saddr);
+	ipv6_addr_copy(&key->ipv6_dst, &nh->daddr);
 	key->nw_tos = ipv6_get_dsfield(nh) & ~INET_ECN_MASK;
 	key->nw_proto = NEXTHDR_NONE;
 
 	payload_ofs = ipv6_skip_exthdr(skb, payload_ofs, &nexthdr);
-	if (payload_ofs < 0) {
+	if (unlikely(payload_ofs < 0))
 		return -EINVAL;
-	}
+
 	nh_len = payload_ofs - nh_ofs;
 
 	/* Pull enough header bytes to account for the IP header plus the
@@ -304,31 +304,33 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 }
 
 static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
-		int nh_len)
+			int nh_len)
 {
 	struct icmp6hdr *icmp = icmp6_hdr(skb);
 
 	/* The ICMPv6 type and code fields use the 16-bit transport port
-	 * fields, so we need to store them in 16-bit network byte order. */
+	 * fields, so we need to store them in 16-bit network byte order.
+	 */
 	key->tp_src = htons(icmp->icmp6_type);
 	key->tp_dst = htons(icmp->icmp6_code);
 
-	if (!icmp->icmp6_code
-			&& ((icmp->icmp6_type == NDISC_NEIGHBOUR_SOLICITATION)
-			  || (icmp->icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT))) {
+	if (icmp->icmp6_code == 0 &&
+	    (icmp->icmp6_type == NDISC_NEIGHBOUR_SOLICITATION ||
+	     icmp->icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT)) {
 		int icmp_len = skb->len - skb_transport_offset(skb);
 		struct nd_msg *nd;
 		int offset;
 
 		/* In order to process neighbor discovery options, we need the
-		 * entire packet. */
-		if (icmp_len < sizeof(*nd))
-			goto invalid;
-		if (unlikely(!pskb_may_pull(skb, skb->len)))
+		 * entire packet.
+		 */
+		if (unlikely(icmp_len < sizeof(*nd)))
+			return 0;
+		if (unlikely(skb_linearize(skb)))
 			return -ENOMEM;
 
 		nd = (struct nd_msg *)skb_transport_header(skb);
-		memcpy(key->nd_target, &nd->target, sizeof(key->nd_target));
+		ipv6_addr_copy(&key->nd_target, &nd->target);
 
 		icmp_len -= sizeof(*nd);
 		offset = 0;
@@ -336,24 +338,25 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 			struct nd_opt_hdr *nd_opt = (struct nd_opt_hdr *)(nd->opt + offset);
 			int opt_len = nd_opt->nd_opt_len * 8;
 
-			if (!opt_len || (opt_len > icmp_len))
+			if (unlikely(!opt_len || opt_len > icmp_len))
 				goto invalid;
 
-			/* Store the link layer address if the appropriate option is
-			 * provided.  It is considered an error if the same link
-			 * layer option is specified twice. */
+			/* Store the link layer address if the appropriate
+			 * option is provided.  It is considered an error if
+			 * the same link layer option is specified twice.
+			 */
 			if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LL_ADDR
-					&& opt_len == 8) {
-				if (!is_zero_ether_addr(key->arp_sha))
+			    && opt_len == 8) {
+				if (unlikely(!is_zero_ether_addr(key->arp_sha)))
 					goto invalid;
 				memcpy(key->arp_sha,
-						&nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
+				    &nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
 			} else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LL_ADDR
-					&& opt_len == 8) {
-				if (!is_zero_ether_addr(key->arp_tha))
+				   && opt_len == 8) {
+				if (unlikely(!is_zero_ether_addr(key->arp_tha)))
 					goto invalid;
 				memcpy(key->arp_tha,
-						&nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
+				    &nd->opt[offset+sizeof(*nd_opt)], ETH_ALEN);
 			}
 
 			icmp_len -= opt_len;
@@ -364,7 +367,7 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 	return 0;
 
 invalid:
-	memset(key->nd_target, 0, sizeof(key->nd_target));
+	memset(&key->nd_target, 0, sizeof(key->nd_target));
 	memset(key->arp_sha, 0, sizeof(key->arp_sha));
 	memset(key->arp_tha, 0, sizeof(key->arp_tha));
 
@@ -672,9 +675,9 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 			if (swkey->dl_type != htons(ETH_P_IPV6))
 				return -EINVAL;
 			ipv6_key = nla_data(nla);
-			memcpy(swkey->ipv6_src, ipv6_key->ipv6_src,
+			memcpy(&swkey->ipv6_src, ipv6_key->ipv6_src,
 					sizeof(swkey->ipv6_src));
-			memcpy(swkey->ipv6_dst, ipv6_key->ipv6_dst,
+			memcpy(&swkey->ipv6_dst, ipv6_key->ipv6_dst,
 					sizeof(swkey->ipv6_dst));
 			swkey->nw_proto = ipv6_key->ipv6_proto;
 			swkey->nw_tos = ipv6_key->ipv6_tos;
@@ -731,10 +734,10 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *attr)
 
 		case TRANSITION(ODP_KEY_ATTR_ICMPV6, ODP_KEY_ATTR_ND):
 			if (swkey->tp_src != htons(NDISC_NEIGHBOUR_SOLICITATION)
-					&& swkey->tp_src != htons(NDISC_NEIGHBOUR_ADVERTISEMENT))
+			    && swkey->tp_src != htons(NDISC_NEIGHBOUR_ADVERTISEMENT))
 				return -EINVAL;
 			nd_key = nla_data(nla);
-			memcpy(swkey->nd_target, nd_key->nd_target,
+			memcpy(&swkey->nd_target, nd_key->nd_target,
 					sizeof(swkey->nd_target));
 			memcpy(swkey->arp_sha, nd_key->nd_sll, ETH_ALEN);
 			memcpy(swkey->arp_tha, nd_key->nd_tll, ETH_ALEN);
@@ -854,9 +857,9 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 			goto nla_put_failure;
 		ipv6_key = nla_data(nla);
 		memset(ipv6_key, 0, sizeof(struct odp_key_ipv6));
-		memcpy(ipv6_key->ipv6_src, swkey->ipv6_src,
+		memcpy(ipv6_key->ipv6_src, &swkey->ipv6_src,
 				sizeof(ipv6_key->ipv6_src));
-		memcpy(ipv6_key->ipv6_dst, swkey->ipv6_dst,
+		memcpy(ipv6_key->ipv6_dst, &swkey->ipv6_dst,
 				sizeof(ipv6_key->ipv6_dst));
 		ipv6_key->ipv6_proto = swkey->nw_proto;
 		ipv6_key->ipv6_tos = swkey->nw_tos;
@@ -875,8 +878,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		memcpy(arp_key->arp_tha, swkey->arp_tha, ETH_ALEN);
 	}
 
-	if (swkey->dl_type == htons(ETH_P_IP)
-			|| swkey->dl_type == htons(ETH_P_IPV6)) {
+	if (swkey->dl_type == htons(ETH_P_IP) ||
+	    swkey->dl_type == htons(ETH_P_IPV6)) {
 
 		if (swkey->nw_proto == IPPROTO_TCP) {
 			struct odp_key_tcp *tcp_key;
@@ -896,8 +899,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 			udp_key = nla_data(nla);
 			udp_key->udp_src = swkey->tp_src;
 			udp_key->udp_dst = swkey->tp_dst;
-		} else if (swkey->dl_type == htons(ETH_P_IP)
-				&& swkey->nw_proto == IPPROTO_ICMP) {
+		} else if (swkey->dl_type == htons(ETH_P_IP) &&
+			   swkey->nw_proto == IPPROTO_ICMP) {
 			struct odp_key_icmp *icmp_key;
 
 			nla = nla_reserve(skb, ODP_KEY_ATTR_ICMP, sizeof(*icmp_key));
@@ -906,26 +909,27 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 			icmp_key = nla_data(nla);
 			icmp_key->icmp_type = ntohs(swkey->tp_src);
 			icmp_key->icmp_code = ntohs(swkey->tp_dst);
-		} else if (swkey->dl_type == htons(ETH_P_IPV6)
-				&& swkey->nw_proto == IPPROTO_ICMPV6) {
+		} else if (swkey->dl_type == htons(ETH_P_IPV6) &&
+			   swkey->nw_proto == IPPROTO_ICMPV6) {
 			struct odp_key_icmpv6 *icmpv6_key;
 
-			nla = nla_reserve(skb, ODP_KEY_ATTR_ICMPV6, sizeof(*icmpv6_key));
+			nla = nla_reserve(skb, ODP_KEY_ATTR_ICMPV6,
+						sizeof(*icmpv6_key));
 			if (!nla)
 				goto nla_put_failure;
 			icmpv6_key = nla_data(nla);
 			icmpv6_key->icmpv6_type = ntohs(swkey->tp_src);
 			icmpv6_key->icmpv6_code = ntohs(swkey->tp_dst);
 
-			if (icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_SOLICITATION
-					|| icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_ADVERTISEMENT) {
+			if (icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_SOLICITATION ||
+			    icmpv6_key->icmpv6_type == NDISC_NEIGHBOUR_ADVERTISEMENT) {
 				struct odp_key_nd *nd_key;
 
 				nla = nla_reserve(skb, ODP_KEY_ATTR_ND, sizeof(*nd_key));
 				if (!nla)
 					goto nla_put_failure;
 				nd_key = nla_data(nla);
-				memcpy(nd_key->nd_target, swkey->nd_target,
+				memcpy(nd_key->nd_target, &swkey->nd_target,
 							sizeof(nd_key->nd_target));
 				memcpy(nd_key->nd_sll, swkey->arp_sha, ETH_ALEN);
 				memcpy(nd_key->nd_tll, swkey->arp_tha, ETH_ALEN);
