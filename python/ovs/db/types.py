@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -363,6 +363,7 @@ class BaseType(object):
         elif self.type == UuidType:
             if self.ref_table is not None:
                 stmts.append('%s.u.uuid.refTableName = "%s";' % (var, escapeCString(self.ref_table)))
+                stmts.append('%s.u.uuid.refType = OVSDB_REF_%s;' % (var, self.ref_type.upper()))
         return '\n'.join([indent + stmt for stmt in stmts])
 
 class Type(object):
