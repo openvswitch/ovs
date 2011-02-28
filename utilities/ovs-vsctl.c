@@ -2365,11 +2365,11 @@ create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
     }
 
     symbol = ovsdb_symbol_table_insert(symtab, id);
-    if (symbol->used) {
+    if (symbol->created) {
         vsctl_fatal("row id \"%s\" may only be specified on one --id option",
                     id);
     }
-    symbol->used = true;
+    symbol->created = true;
     return &symbol->uuid;
 }
 
@@ -3354,7 +3354,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
     struct ovsdb_symbol_table *symtab;
-    const char *unused;
+    const char *uncreated;
     struct vsctl_command *c;
     int64_t next_cfg = 0;
     char *error = NULL;
@@ -3395,10 +3395,10 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     }
 
-    unused = ovsdb_symbol_table_find_unused(symtab);
-    if (unused) {
+    uncreated = ovsdb_symbol_table_find_uncreated(symtab);
+    if (uncreated) {
         vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                    "with \"-- --id=%s create ...\")", unused, unused);
+                    "with \"-- --id=%s create ...\")", uncreated, uncreated);
     }
 
     status = ovsdb_idl_txn_commit_block(txn);

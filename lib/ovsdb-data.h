@@ -231,7 +231,7 @@ ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,
 
 struct ovsdb_symbol {
     struct uuid uuid;           /* The UUID that the symbol represents. */
-    bool used;                  /* Already used as row UUID? */
+    bool created;               /* Already used to create row? */
 };
 
 struct ovsdb_symbol_table *ovsdb_symbol_table_create(void);
@@ -243,7 +243,8 @@ struct ovsdb_symbol *ovsdb_symbol_table_put(struct ovsdb_symbol_table *,
                                             const struct uuid *, bool used);
 struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
                                                const char *name);
-const char *ovsdb_symbol_table_find_unused(const struct ovsdb_symbol_table *);
+const char *ovsdb_symbol_table_find_uncreated(
+    const struct ovsdb_symbol_table *);
 
 /* Tokenization
  *

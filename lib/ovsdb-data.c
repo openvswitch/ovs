@@ -1825,14 +1825,14 @@ ovsdb_symbol_table_get(const struct ovsdb_symbol_table *symtab,
 
 struct ovsdb_symbol *
 ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
-                       const struct uuid *uuid, bool used)
+                       const struct uuid *uuid, bool created)
 {
     struct ovsdb_symbol *symbol;
 
     assert(!ovsdb_symbol_table_get(symtab, name));
     symbol = xmalloc(sizeof *symbol);
     symbol->uuid = *uuid;
-    symbol->used = used;
+    symbol->created = created;
     shash_add(&symtab->sh, name, symbol);
     return symbol;
 }
@@ -1854,13 +1854,13 @@ ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
 }
 
 const char *
-ovsdb_symbol_table_find_unused(const struct ovsdb_symbol_table *symtab)
+ovsdb_symbol_table_find_uncreated(const struct ovsdb_symbol_table *symtab)
 {
     struct shash_node *node;
 
     SHASH_FOR_EACH (node, &symtab->sh) {
         struct ovsdb_symbol *symbol = node->data;
-        if (!symbol->used) {
+        if (!symbol->created) {
             return node->name;
         }
     }

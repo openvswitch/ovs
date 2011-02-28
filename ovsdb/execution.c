@@ -292,13 +292,13 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         struct ovsdb_symbol *symbol;
 
         symbol = ovsdb_symbol_table_insert(x->symtab, json_string(uuid_name));
-        if (symbol->used) {
+        if (symbol->created) {
             return ovsdb_syntax_error(uuid_name, "duplicate uuid-name",
                                       "This \"uuid-name\" appeared on an "
                                       "earlier \"insert\" operation.");
         }
         row_uuid = symbol->uuid;
-        symbol->used = true;
+        symbol->created = true;
     } else {
         uuid_generate(&row_uuid);
     }
