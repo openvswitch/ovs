@@ -441,7 +441,11 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 		}
 	}
 
-	return queue_control_packets(dp, skb, upcall_info);
+	err = queue_control_packets(dp, skb, upcall_info);
+	if (err)
+		goto err;
+
+	return 0;
 
 err_kfree_skb:
 	kfree_skb(skb);
