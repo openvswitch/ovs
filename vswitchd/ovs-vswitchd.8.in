@@ -153,6 +153,8 @@ lists information about each slave: whether it is enabled or disabled,
 the time to completion of an updelay or downdelay if one is in
 progress, whether it is the active slave, the MAC hashes assigned to
 the slave, and the MAC learning table entries that hash to each MAC.
+Any LACP information related to this bond may be found using the
+\fBlacp/show\fR command.
 .IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
 Only valid for SLB bonds.  Assigns a given MAC hash to a new slave.
 \fIport\fR specifies the bond port, \fIhash\fR the MAC hash to be
@@ -180,6 +182,13 @@ status of \fIslave\fR changes.
 .IP "\fBbond/hash\fR \fImac\fR [\fIvlan\fR]"
 Returns the hash value which would be used for \fImac\fR with \fIvlan\fR
 if specified.
+.
+.IP "\fBlacp/show\fR \fIport\fR"
+Lists all of the LACP related information about the given \fIport\fR:
+active or passive, aggregation key, system id, and system priority.  Also
+lists information about each slave: whether it is enabled or disabled,
+whether it is attached or detached, port id and priority, actor
+information, and partner information.
 .
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man

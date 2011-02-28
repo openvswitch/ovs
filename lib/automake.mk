@@ -55,6 +55,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/json.h \
 	lib/jsonrpc.c \
 	lib/jsonrpc.h \
+	lib/lacp.c \
+	lib/lacp.h \
 	lib/leak-checker.c \
 	lib/leak-checker.h \
 	lib/learning-switch.c \
