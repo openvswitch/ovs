@@ -3395,6 +3395,12 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     }
 
+    unused = ovsdb_symbol_table_find_unused(symtab);
+    if (unused) {
+        vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
+                    "with \"-- --id=%s create ...\")", unused, unused);
+    }
+
     status = ovsdb_idl_txn_commit_block(txn);
     if (wait_for_reload && status == TXN_SUCCESS) {
         next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
@@ -3413,12 +3419,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     error = xstrdup(ovsdb_idl_txn_get_error(txn));
     ovsdb_idl_txn_destroy(txn);
     txn = the_idl_txn = NULL;
-
-    unused = ovsdb_symbol_table_find_unused(symtab);
-    if (unused) {
-        vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                    "with \"-- --id=%s create ...\")", unused, unused);
-    }
 
     switch (status) {
     case TXN_INCOMPLETE:
