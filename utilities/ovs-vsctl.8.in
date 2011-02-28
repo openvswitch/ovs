@@ -811,4 +811,3 @@ bridge that does not exist.
 .
 .BR ovsdb\-server (1),
 .BR ovs\-vswitchd (8).
-\
