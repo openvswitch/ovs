@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,6 +51,8 @@ class UUID(uuid.UUID):
                 raise error.Error("\"%s\" is not a valid UUID" % s, json)
             return UUID(s)
         except error.Error, e:
+            if not symtab:
+                raise e
             try:
                 name = ovs.db.parser.unwrap_json(json, "named-uuid", unicode)
             except error.Error:

@@ -260,6 +260,10 @@ OVSDB_CHECK_POSITIVE_CPY([uuid atom must be expressed as JSON array],
   [[parse-atoms '["uuid"]' '["550e8400-e29b-41d4-a716-446655440000"]']],
   [[syntax ""550e8400-e29b-41d4-a716-446655440000"": syntax error: expected ["uuid", <string>]]])
 
+OVSDB_CHECK_POSITIVE_CPY([named-uuid requires symbol table],
+  [parse-atoms '[["uuid"]]' '[["named-uuid", "x"]]'],
+  [[syntax "["named-uuid","x"]": syntax error: expected ["uuid", <string>]]])
+
 OVSDB_CHECK_NEGATIVE([empty string atom must be quoted],
   [[parse-atom-strings '["string"]' '']],
   [An empty string is not valid as input; use "" to represent the empty string])
