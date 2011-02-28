@@ -77,6 +77,25 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$4])
    AT_CLEANUP])
 
+OVSDB_CHECK_EXECUTION([uuid-name must be <id>],
+  [CONSTRAINT_SCHEMA],
+  [[[["constraints",
+      {"op": "insert",
+       "table": "a",
+       "row": {},
+       "uuid-name": "0"}]]]],
+  [[[{"details":"Parsing ovsdb operation 1 of 1 failed: Type mismatch for member 'uuid-name'.","error":"syntax error","syntax":"{\"op\":\"insert\",\"row\":{},\"table\":\"a\",\"uuid-name\":\"0\"}"}]
+]])
+
+OVSDB_CHECK_EXECUTION([named-uuid must be <id>],
+  [CONSTRAINT_SCHEMA],
+  [[[["constraints",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a2a": ["named-uuid", "0"]}}]]]],
+  [[[{"details":"named-uuid string is not a valid <id>","error":"syntax error","syntax":"[\"named-uuid\",\"0\"]"}]
+]])
+
 m4_define([EXECUTION_EXAMPLES], [
 dnl At one point the "commit" code ignored new rows with all-default values,
 dnl so this checks for that problem.

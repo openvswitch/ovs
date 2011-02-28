@@ -679,7 +679,7 @@ Notation for the Wire Protocol
     A 2-element JSON array that represents the UUID of a row inserted
     in an "insert" operation within the same transaction.  The first
     element of the array must be the string "named-uuid" and the
-    second element should be the string specified as the "uuid-name"
+    second element should be the <id> specified as the "uuid-name"
     for an "insert" operation within the same transaction.  For
     example, if an "insert" operation within this transaction
     specifies a "uuid-name" of "myrow", the following <named-uuid>

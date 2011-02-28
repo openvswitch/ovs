@@ -26,6 +26,7 @@
 #include "dynamic-string.h"
 #include "hash.h"
 #include "ovsdb-error.h"
+#include "ovsdb-parser.h"
 #include "json.h"
 #include "shash.h"
 #include "sort.h"
@@ -307,6 +308,10 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
 
             ovsdb_error_destroy(error0);
             *uuid = ovsdb_symbol_table_insert(symtab, name)->uuid;
+            if (!ovsdb_parser_is_id(json_string(value))) {
+                return ovsdb_syntax_error(json, NULL, "named-uuid string is "
+                                          "not a valid <id>");
+            }
             return NULL;
         }
         ovsdb_error_destroy(error1);
