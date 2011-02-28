@@ -492,6 +492,9 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		if (unlikely(err))
 			goto err_kfree_skbs;
 
+		if (nla_attr_size(skb->len) > USHRT_MAX)
+			goto err_kfree_skbs;
+
 		len = sizeof(struct odp_header);
 		len += nla_total_size(skb->len);
 		len += nla_total_size(FLOW_BUFSIZE);
