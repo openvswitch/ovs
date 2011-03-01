@@ -332,7 +332,11 @@ _BOND_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                           lambda n: _strlist_from_xml(n, 'slaves', 'slave')),
               }
 
-_NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes', 'vswitch-controller-fail-mode' ] + _ETHTOOL_OTHERCONFIG_ATTRS
+_NETWORK_OTHERCONFIG_ATTRS = [ 'mtu',
+                               'static-routes',
+                               'vswitch-controller-fail-mode',
+                               'vswitch-disable-in-band' ] \
+                               + _ETHTOOL_OTHERCONFIG_ATTRS
 
 _NETWORK_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                    'bridge': (_str_to_xml,_str_from_xml),

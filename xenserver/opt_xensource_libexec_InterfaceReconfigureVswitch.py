@@ -351,6 +351,7 @@ def configure_datapath(pif):
 
     pool = db().get_pool_record()
     network = db().get_network_by_bridge(bridge)
+    network_rec = None
     fail_mode = None
     valid_fail_modes = ['standalone', 'secure']
 
@@ -365,6 +366,15 @@ def configure_datapath(pif):
         fail_mode = 'standalone'
 
     vsctl_argv += ['--', 'set', 'Bridge', bridge, 'fail_mode=%s' % fail_mode]
+
+    if network_rec:
+        dib = network_rec['other_config'].get('vswitch-disable-in-band')
+        if not dib:
+            vsctl_argv += ['--', 'remove', 'Bridge', bridge, 'other_config', 'disable-in-band']
+        elif dib in ['true', 'false']:
+            vsctl_argv += ['--', 'set', 'Bridge', bridge, 'other_config:disable-in-band=' + dib]
+        else:
+            log('"' + dib + '"' "isn't a valid setting for other_config:disable-in-band on " + bridge)
 
     vsctl_argv += set_br_external_ids(pif)
     vsctl_argv += ['## done configuring datapath %s' % bridge]

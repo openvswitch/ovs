@@ -97,9 +97,38 @@ def update(session, args):
         except KeyError:
             pass
 
+    dib_changed = False
     fail_mode_changed = False
     for bridge in vswitchCfgQuery(['list-br']).split():
+        network = bton[bridge]
         bridge = vswitchCfgQuery(['br-to-parent', bridge])
+
+        xapi_dib = network['other_config'].get('vswitch-disable-in-band')
+        if not xapi_dib:
+            xapi_dib = ''
+
+        ovs_dib = vswitchCfgQuery(['get', 'Bridge', bridge,
+                                   'other_config:disable-in-band']).strip('"')
+
+        # Do nothing if setting is invalid, and warn the user.
+        if xapi_dib not in ['true', 'false', '']:
+            ret_str += '"' + xapi_dib + '"' + \
+                ' is an invalid value for vswitch-disable-in-band on ' + \
+                bridge + '  '
+
+        # Change bridge disable-in-band option if XAPI and OVS states differ.
+        elif xapi_dib != ovs_dib:
+            # 'true' or 'false'
+            if xapi_dib:
+                vswitchCfgMod(['--', 'set', 'Bridge', bridge,
+                               'other_config:disable-in-band=' + xapi_dib])
+            # '' or None
+            else:
+                vswitchCfgMod(['--', 'remove', 'Bridge', bridge,
+                               'other_config', 'disable-in-band'])
+            dib_changed = True
+
+        # Change bridge fail_mode if XAPI state differs from OVS state.
         bridge_fail_mode = vswitchCfgQuery(["get", "Bridge",
             bridge, "fail_mode"]).strip('[]"')
 
@@ -119,6 +148,8 @@ def update(session, args):
                 "fail_mode=%s" % fail_mode])
             fail_mode_changed = True
 
+    if dib_changed:
+        ret_str += "Updated in-band management.  "
     if fail_mode_changed:
         ret_str += "Updated fail_mode.  "
 

@@ -148,6 +148,24 @@ def update_fail_mode(name):
 
     call_vsctl(["set", "bridge", name, "fail_mode=" + fail_mode])
 
+def update_in_band_mgmt(name):
+    rec = get_network_by_bridge(name)
+
+    if not rec:
+        return
+
+    dib = rec['other_config'].get('vswitch-disable-in-band')
+    if not dib:
+        call_vsctl(['remove', 'bridge', name, 'other_config',
+                    'disable-in-band'])
+    elif dib in ['true', 'false']:
+        call_vsctl(['set', 'bridge', name,
+                    'other_config:disable-in-band=' + dib])
+    else:
+        s_log.warning('"' + dib + '"'
+                      "isn't a valid setting for other_config:disable-in-band on " +
+                      bridge)
+
 def update_bridge_id(name, ids):
     id = get_bridge_id(name, ids.get("xs-network-uuids"))
 
@@ -279,6 +297,7 @@ def main(argv):
             for name,ids in new_bridges.items():
                 if name not in bridges:
                     update_fail_mode(name)
+                    update_in_band_mgmt(name)
 
                 if (name not in bridges) or (bridges[name] != ids):
                     update_bridge_id(name, ids)
