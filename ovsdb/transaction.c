@@ -176,6 +176,10 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
     for (i = 0; i < n; i++) {
         const struct uuid *uuid = &atoms[i].uuid;
         struct ovsdb_txn_row *txn_row = find_txn_row(table, uuid);
+        if (uuid_equals(uuid, ovsdb_row_get_uuid(r))) {
+            /* Self-references don't count. */
+            continue;
+        }
         if (!txn_row) {
             const struct ovsdb_row *row = ovsdb_table_get_row(table, uuid);
             if (row) {
