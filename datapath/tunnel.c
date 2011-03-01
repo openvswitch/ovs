@@ -1105,25 +1105,21 @@ static int send_frags(struct sk_buff *skb,
 		      const struct tnl_mutable_config *mutable)
 {
 	int sent_len;
-	int err;
 
 	sent_len = 0;
 	while (skb) {
 		struct sk_buff *next = skb->next;
 		int frag_len = skb->len - mutable->tunnel_hlen;
+		int err;
 
 		skb->next = NULL;
 		memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
 		err = ip_local_out(skb);
-		if (likely(net_xmit_eval(err) == 0))
-			sent_len += frag_len;
-		else {
-			skb = next;
-			goto free_frags;
-		}
-
 		skb = next;
+		if (unlikely(net_xmit_eval(err)))
+			goto free_frags;
+		sent_len += frag_len;
 	}
 
 	return sent_len;
