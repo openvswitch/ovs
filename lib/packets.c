@@ -204,25 +204,32 @@ ipv6_is_cidr(const struct in6_addr *netmask)
     return true;
 }
 
-/* Fills 'b' with a LACP packet whose source address is 'eth_src', LACP actor
- * information is 'actor', and LACP partner information is 'partner'. */
+/* Populates 'b' with a LACP packet containing 'pdu' with source address
+ * 'eth_src'. */
 void
-compose_lacp_packet(struct ofpbuf *b, struct lacp_info *actor,
-                    struct lacp_info *partner,
-                    const uint8_t eth_src[ETH_ADDR_LEN])
+compose_lacp_packet(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN],
+                    const struct lacp_pdu *pdu)
 {
     struct eth_header *eth;
-    struct lacp_pdu *pdu;
+    struct lacp_pdu *eth_pdu;
 
     ofpbuf_clear(b);
 
     ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + LACP_PDU_LEN);
     eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
-    pdu = ofpbuf_put_zeros(b, LACP_PDU_LEN);
+    eth_pdu = ofpbuf_put(b, pdu, LACP_PDU_LEN);
 
     memcpy(eth->eth_dst, eth_addr_lacp, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(ETH_TYPE_LACP);
+}
+
+/* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */
+void
+compose_lacp_pdu(const struct lacp_info *actor,
+                 const struct lacp_info *partner, struct lacp_pdu *pdu)
+{
+    memset(pdu, 0, sizeof *pdu);
 
     pdu->subtype = 1;
     pdu->version = 1;

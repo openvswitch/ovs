@@ -460,9 +460,11 @@ struct lacp_pdu {
 } __attribute__((packed));
 BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
 
-void compose_lacp_packet(struct ofpbuf *, struct lacp_info *actor,
-                         struct lacp_info *partner,
-                         const uint8_t eth_src[ETH_ADDR_LEN]);
+void compose_lacp_packet(struct ofpbuf *, const uint8_t eth_src[ETH_ADDR_LEN],
+                         const struct lacp_pdu *);
+
+void compose_lacp_pdu(const struct lacp_info *actor,
+                      const struct lacp_info *partner, struct lacp_pdu *);
 
 const struct lacp_pdu *parse_lacp_packet(const struct ofpbuf *);
 

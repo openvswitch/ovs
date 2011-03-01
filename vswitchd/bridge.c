@@ -3265,9 +3265,11 @@ lacp_run(struct port *port)
 
         error = netdev_get_etheraddr(iface->netdev, ea);
         if (!error) {
+            struct lacp_pdu pdu;
+
             iface->lacp_actor.state = iface_get_lacp_state(iface);
-            compose_lacp_packet(&packet, &iface->lacp_actor,
-                                &iface->lacp_partner, ea);
+            compose_lacp_pdu(&iface->lacp_actor, &iface->lacp_partner, &pdu);
+            compose_lacp_packet(&packet, ea, &pdu);
             iface_send_packet(iface, &packet);
         } else {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
