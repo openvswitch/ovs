@@ -1795,10 +1795,6 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
     }
 }
 
-struct ovsdb_symbol_table {
-    struct shash sh;
-};
-
 struct ovsdb_symbol_table *
 ovsdb_symbol_table_create(void)
 {
@@ -1851,21 +1847,6 @@ ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
         symbol = ovsdb_symbol_table_put(symtab, name, &uuid, false);
     }
     return symbol;
-}
-
-const char *
-ovsdb_symbol_table_find_uncreated(const struct ovsdb_symbol_table *symtab)
-{
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &symtab->sh) {
-        struct ovsdb_symbol *symbol = node->data;
-        if (!symbol->created) {
-            return node->name;
-        }
-    }
-
-    return NULL;
 }
 
 /* Extracts a token from the beginning of 's' and returns a pointer just after

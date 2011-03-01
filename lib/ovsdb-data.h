@@ -19,10 +19,10 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
+#include "shash.h"
 
 struct ds;
 struct ovsdb_symbol_table;
-struct shash;
 
 /* One value of an atomic type (given by enum ovs_atomic_type). */
 union ovsdb_atom {
@@ -229,6 +229,10 @@ ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,
 /* A table mapping from names to data items.  Currently the data items are
  * always UUIDs; perhaps this will be expanded in the future. */
 
+struct ovsdb_symbol_table {
+    struct shash sh;            /* Maps from name to struct ovsdb_symbol *. */
+};
+
 struct ovsdb_symbol {
     struct uuid uuid;           /* The UUID that the symbol represents. */
     bool created;               /* Already used to create row? */
@@ -243,8 +247,6 @@ struct ovsdb_symbol *ovsdb_symbol_table_put(struct ovsdb_symbol_table *,
                                             const struct uuid *, bool used);
 struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
                                                const char *name);
-const char *ovsdb_symbol_table_find_uncreated(
-    const struct ovsdb_symbol_table *);
 
 /* Tokenization
  *

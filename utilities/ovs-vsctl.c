@@ -3354,8 +3354,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
     struct ovsdb_symbol_table *symtab;
-    const char *uncreated;
     struct vsctl_command *c;
+    struct shash_node *node;
     int64_t next_cfg = 0;
     char *error = NULL;
 
@@ -3395,10 +3395,13 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     }
 
-    uncreated = ovsdb_symbol_table_find_uncreated(symtab);
-    if (uncreated) {
-        vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                    "with \"-- --id=%s create ...\")", uncreated, uncreated);
+    SHASH_FOR_EACH (node, &symtab->sh) {
+        struct ovsdb_symbol *symbol = node->data;
+        if (!symbol->created) {
+            vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
+                        "with \"-- --id=%s create ...\")",
+                        node->name, node->name);
+        }
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
