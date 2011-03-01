@@ -1571,9 +1571,6 @@ const unsigned char *tnl_get_addr(const struct vport *vport)
 
 void tnl_free_linked_skbs(struct sk_buff *skb)
 {
-	if (unlikely(!skb))
-		return;
-
 	while (skb) {
 		struct sk_buff *next = skb->next;
 		kfree_skb(skb);
