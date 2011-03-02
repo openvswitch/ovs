@@ -872,7 +872,7 @@ struct dp_netdev_flow_state {
     uint32_t bucket;
     uint32_t offset;
     struct nlattr *actions;
-    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+    struct odputil_keybuf keybuf;
     struct dpif_flow_stats stats;
 };
 
@@ -909,9 +909,9 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
     if (key) {
         struct ofpbuf buf;
 
-        ofpbuf_use_stack(&buf, state->keybuf, sizeof state->keybuf);
+        ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
         odp_flow_key_from_flow(&buf, &flow->key);
-        assert(buf.base == state->keybuf);
+        assert(buf.base == &state->keybuf);
 
         *key = buf.data;
         *key_len = buf.size;

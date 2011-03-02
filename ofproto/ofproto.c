@@ -1603,7 +1603,7 @@ facet_put__(struct ofproto *ofproto, struct facet *facet,
             const struct nlattr *actions, size_t actions_len,
             struct dpif_flow_stats *stats)
 {
-    uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+    struct odputil_keybuf keybuf;
     enum dpif_flow_put_flags flags;
     struct ofpbuf key;
 
@@ -1614,9 +1614,9 @@ facet_put__(struct ofproto *ofproto, struct facet *facet,
         facet->dp_byte_count = 0;
     }
 
-    ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &facet->flow);
-    assert(key.base == keybuf);
+    assert(key.base == &keybuf);
 
     return dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
                          actions, actions_len, stats);
@@ -1660,13 +1660,13 @@ static void
 facet_uninstall(struct ofproto *p, struct facet *facet)
 {
     if (facet->installed) {
-        uint32_t keybuf[ODPUTIL_FLOW_KEY_U32S];
+        struct odputil_keybuf keybuf;
         struct dpif_flow_stats stats;
         struct ofpbuf key;
 
-        ofpbuf_use_stack(&key, keybuf, sizeof keybuf);
+        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, &facet->flow);
-        assert(key.base == keybuf);
+        assert(key.base == &keybuf);
 
         if (!dpif_flow_del(p->dpif, key.data, key.size, &stats)) {
             facet_update_stats(p, facet, &stats);

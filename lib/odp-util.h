@@ -86,11 +86,12 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  * key types are added. */
 BUILD_ASSERT_DECL(__ODP_KEY_ATTR_MAX == 14);
 
-/* We allocate temporary on-stack buffers for flow keys as arrays of uint32_t
- * to ensure proper 32-bit alignment for Netlink attributes.  (An array of
- * "struct nlattr" might not, in theory, be sufficiently aligned because it
- * only contains 16-bit types.) */
-#define ODPUTIL_FLOW_KEY_U32S DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)
+/* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
+ * key.  An array of "struct nlattr" might not, in theory, be sufficiently
+ * aligned because it only contains 16-bit types. */
+struct odputil_keybuf {
+    uint32_t keybuf[DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)];
+};
 
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 
