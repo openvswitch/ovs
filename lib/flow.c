@@ -414,7 +414,7 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
             return 0;
         }
 
-        nh = ofpbuf_pull(&b, nh_len);
+        nh = ofpbuf_try_pull(&b, nh_len);
         if (nh) {
             packet->l4 = b.data;
             if (flow->nw_proto == IPPROTO_TCP) {
