@@ -84,11 +84,8 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb)
 	return skb;
 }
 
-static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-				       const struct sw_flow_key *key,
-				       const struct nlattr *a, u32 actions_len)
+static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, __be16 tci)
 {
-	__be16 tci = nla_get_be16(a);
 	struct vlan_ethhdr *vh;
 	__be16 old_tci;
 
@@ -327,7 +324,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODP_ACTION_ATTR_SET_DL_TCI:
-			skb = modify_vlan_tci(dp, skb, key, a, rem);
+			skb = modify_vlan_tci(skb, nla_get_be16(a));
 			break;
 
 		case ODP_ACTION_ATTR_STRIP_VLAN:
