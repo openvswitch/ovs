@@ -28,8 +28,7 @@ extern "C" {
 
 enum ofpbuf_source {
     OFPBUF_MALLOC,              /* Obtained via malloc(). */
-    OFPBUF_STACK,               /* Stack space or static buffer. */
-    OFPBUF_CONST                /* Must not be expanded. */
+    OFPBUF_STACK                /* Stack space or static buffer. */
 };
 
 /* Buffer for holding arbitrary data.  An ofpbuf is automatically reallocated

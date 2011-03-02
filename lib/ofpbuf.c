@@ -47,9 +47,9 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
  * memory starting at 'base'.  'base' should point to a buffer on the stack.
- * If 'b' is resized, new memory will be allocated with malloc() and 'base'
- * will not be freed.  This is useful when a small stack-allocated buffer is
- * normally appropriate but sometimes it must be expanded.
+ *
+ * An ofpbuf operation that requires reallocating data will assert-fail if this
+ * function was used to initialize it.
  *
  * 'base' should be appropriately aligned.  Using an array of uint32_t or
  * uint64_t for the buffer is a reasonable way to ensure appropriate alignment
@@ -74,7 +74,7 @@ ofpbuf_use_stack(struct ofpbuf *b, void *base, size_t allocated)
 void
 ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
 {
-    ofpbuf_use__(b, (void *) data, size, OFPBUF_CONST);
+    ofpbuf_use__(b, (void *) data, size, OFPBUF_STACK);
     b->size = size;
 }
 
@@ -225,12 +225,6 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
         break;
 
     case OFPBUF_STACK:
-        new_base = xmalloc(new_allocated);
-        ofpbuf_copy__(b, new_base, new_headroom, new_tailroom);
-        b->source = OFPBUF_MALLOC;
-        break;
-
-    case OFPBUF_CONST:
         NOT_REACHED();
 
     default:

@@ -911,7 +911,6 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
         odp_flow_key_from_flow(&buf, &flow->key);
-        assert(buf.base == &state->keybuf);
 
         *key = buf.data;
         *key_len = buf.size;
