@@ -106,7 +106,6 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 	unsigned int nh_ofs = skb_network_offset(skb);
 	unsigned int nh_len;
 	int payload_ofs;
-	int payload_len;
 	struct ipv6hdr *nh;
 	uint8_t nexthdr;
 
@@ -116,30 +115,17 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 	nh = ipv6_hdr(skb);
 	nexthdr = nh->nexthdr;
 	payload_ofs = (u8 *)(nh + 1) - skb->data;
-	payload_len = ntohs(nh->payload_len);
 
 	memcpy(key->ipv6_src, nh->saddr.in6_u.u6_addr8, sizeof(key->ipv6_src));
 	memcpy(key->ipv6_dst, nh->daddr.in6_u.u6_addr8, sizeof(key->ipv6_dst));
 	key->nw_tos = ipv6_get_dsfield(nh) & ~INET_ECN_MASK;
 	key->nw_proto = NEXTHDR_NONE;
 
-	/* We don't process jumbograms. */
-	if (!payload_len)
-		return -EINVAL;
-
-	if (unlikely(skb->len < nh_ofs + sizeof(*nh) + payload_len))
-		return -EINVAL;
-
 	payload_ofs = ipv6_skip_exthdr(skb, payload_ofs, &nexthdr);
 	if (payload_ofs < 0) {
 		return -EINVAL;
 	}
 	nh_len = payload_ofs - nh_ofs;
-
-	/* Ensure that the payload length claimed is at least large enough
-	 * for the headers we've already processed. */
-	if (payload_len < nh_len - sizeof(*nh))
-		return -EINVAL;
 
 	/* Pull enough header bytes to account for the IP header plus the
 	 * longest transport header that we parse, currently 20 bytes for TCP.
@@ -320,8 +306,6 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 		int nh_len)
 {
-	struct ipv6hdr *nh = ipv6_hdr(skb);
-	int icmp_len = ntohs(nh->payload_len) + sizeof(*nh) - nh_len;
 	struct icmp6hdr *icmp = icmp6_hdr(skb);
 
 	/* The ICMPv6 type and code fields use the 16-bit transport port
@@ -332,6 +316,7 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 	if (!icmp->icmp6_code
 			&& ((icmp->icmp6_type == NDISC_NEIGHBOUR_SOLICITATION)
 			  || (icmp->icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT))) {
+		int icmp_len = skb->len - skb_transport_offset(skb);
 		struct nd_msg *nd;
 		int offset;
 
@@ -339,7 +324,7 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 		 * entire packet. */
 		if (icmp_len < sizeof(*nd))
 			goto invalid;
-		if (!pskb_may_pull(skb, skb_transport_offset(skb) + icmp_len))
+		if (unlikely(!pskb_may_pull(skb, skb->len)))
 			return -ENOMEM;
 
 		nd = (struct nd_msg *)skb_transport_header(skb);

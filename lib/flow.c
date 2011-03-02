@@ -136,7 +136,6 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 {
     struct ip6_hdr *nh;
     int nh_len = sizeof(struct ip6_hdr);
-    int payload_len;
     ovs_be32 tc_flow;
     int nexthdr;
 
@@ -146,7 +145,6 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 
     nh = packet->data;
     nexthdr = nh->ip6_nxt;
-    payload_len = ntohs(nh->ip6_plen);
 
     flow->ipv6_src = nh->ip6_src;
     flow->ipv6_dst = nh->ip6_dst;
@@ -154,15 +152,6 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     tc_flow = get_unaligned_be32(&nh->ip6_flow);
     flow->nw_tos = (ntohl(tc_flow) >> 4) & IP_DSCP_MASK;
     flow->nw_proto = IPPROTO_NONE;
-
-    /* We don't process jumbograms. */
-    if (!payload_len) {
-        return -EINVAL;
-    }
-
-    if (packet->size < sizeof *nh + payload_len) {
-        return -EINVAL;
-    }
 
     while (1) {
         if ((nexthdr != IPPROTO_HOPOPTS)
@@ -218,12 +207,6 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
                 break;
             }
         }
-    }
-
-    /* The payload length claims to be smaller than the size of the
-     * headers we've already processed. */
-    if (payload_len < nh_len - sizeof *nh) {
-        return -EINVAL;
     }
 
     flow->nw_proto = nexthdr;
@@ -432,8 +415,7 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
                     packet->l7 = b.data;
                 }
             } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-                int icmp_len = ntohs(nh->ip6_plen) + sizeof *nh - nh_len;
-                if (parse_icmpv6(&b, flow, icmp_len)) {
+                if (parse_icmpv6(&b, flow, b.size)) {
                     packet->l7 = b.data;
                 }
             }
