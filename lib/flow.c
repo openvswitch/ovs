@@ -134,16 +134,15 @@ parse_ethertype(struct ofpbuf *b)
 static int
 parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 {
-    struct ip6_hdr *nh;
-    int nh_len = sizeof(struct ip6_hdr);
+    const struct ip6_hdr *nh;
     ovs_be32 tc_flow;
     int nexthdr;
 
-    if (packet->size < sizeof *nh) {
-        return -EINVAL;
+    nh = ofpbuf_try_pull(packet, sizeof *nh);
+    if (!nh) {
+        return EINVAL;
     }
 
-    nh = packet->data;
     nexthdr = nh->ip6_nxt;
 
     flow->ipv6_src = nh->ip6_src;
@@ -168,9 +167,10 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
         /* We only verify that at least 8 bytes of the next header are
          * available, but many of these headers are longer.  Ensure that
          * accesses within the extension header are within those first 8
+         * bytes. All extension headers are required to be at least 8
          * bytes. */
-        if (packet->size < nh_len + 8) {
-            return -EINVAL;
+        if (packet->size < 8) {
+            return EINVAL;
         }
 
         if ((nexthdr == IPPROTO_HOPOPTS)
@@ -178,28 +178,28 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
                 || (nexthdr == IPPROTO_DSTOPTS)) {
             /* These headers, while different, have the fields we care about
              * in the same location and with the same interpretation. */
-            struct ip6_ext *ext_hdr;
-
-            ext_hdr = (struct ip6_ext *)((char *)packet->data + nh_len);
+            const struct ip6_ext *ext_hdr = (struct ip6_ext *)packet->data;
             nexthdr = ext_hdr->ip6e_nxt;
-            nh_len += (ext_hdr->ip6e_len + 1) * 8;
+            if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 1) * 8)) {
+                return EINVAL;
+            }
         } else if (nexthdr == IPPROTO_AH) {
             /* A standard AH definition isn't available, but the fields
              * we care about are in the same location as the generic
              * option header--only the header length is calculated
              * differently. */
-            struct ip6_ext *ext_hdr;
-
-            ext_hdr = (struct ip6_ext *)((char *)packet->data + nh_len);
+            const struct ip6_ext *ext_hdr = (struct ip6_ext *)packet->data;
             nexthdr = ext_hdr->ip6e_nxt;
-            nh_len += (ext_hdr->ip6e_len + 2) * 4;
+            if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 2) * 4)) {
+               return EINVAL;
+            }
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            struct ip6_frag *frag_hdr;
-
-            frag_hdr = (struct ip6_frag *)((char *)packet->data + nh_len);
+            const struct ip6_frag *frag_hdr = (struct ip6_frag *)packet->data;
 
             nexthdr = frag_hdr->ip6f_nxt;
-            nh_len += sizeof *frag_hdr;
+            if (!ofpbuf_try_pull(packet, sizeof *frag_hdr)) {
+                return EINVAL;
+            }
 
             /* We only process the first fragment. */
             if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
@@ -210,17 +210,33 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     }
 
     flow->nw_proto = nexthdr;
-    return nh_len;
+    return 0;
 }
 
-/* Neighbor Discovery Solicitation and Advertisement messages are
- * identical in structure, so we'll just use one of them.  To be safe,
- * we'll assert that they're still identical. */
-BUILD_ASSERT_DECL(sizeof(struct nd_neighbor_solicit) 
-        == sizeof(struct nd_neighbor_advert));
+static void
+parse_tcp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+{
+    const struct tcp_header *tcp = pull_tcp(b);
+    if (tcp) {
+        flow->tp_src = tcp->tcp_src;
+        flow->tp_dst = tcp->tcp_dst;
+        packet->l7 = b->data;
+    }
+}
+
+static void
+parse_udp(struct ofpbuf *packet, struct ofpbuf *b, struct flow *flow)
+{
+    const struct udp_header *udp = pull_udp(b);
+    if (udp) {
+        flow->tp_src = udp->udp_src;
+        flow->tp_dst = udp->udp_dst;
+        packet->l7 = b->data;
+    }
+}
 
 static bool
-parse_icmpv6(struct ofpbuf *b, struct flow *flow, int icmp_len)
+parse_icmpv6(struct ofpbuf *b, struct flow *flow)
 {
     const struct icmp6_hdr *icmp = pull_icmpv6(b);
 
@@ -233,34 +249,26 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow, int icmp_len)
     flow->icmp_type = htons(icmp->icmp6_type);
     flow->icmp_code = htons(icmp->icmp6_code);
 
-    if (!icmp->icmp6_code
-            && ((icmp->icmp6_type == ND_NEIGHBOR_SOLICIT)
-             || (icmp->icmp6_type == ND_NEIGHBOR_ADVERT))) {
-        struct nd_neighbor_solicit *nd_ns;  /* Identical to ND advert */
+    if (icmp->icmp6_code == 0 &&
+        (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
+         icmp->icmp6_type == ND_NEIGHBOR_ADVERT)) {
+        const struct in6_addr *nd_target;
 
-        /* In order to process neighbor discovery options, we need the
-         * entire packet. */
-        if ((icmp_len < sizeof *nd_ns)
-                || (!ofpbuf_try_pull(b, sizeof *nd_ns - sizeof *icmp))) {
+        nd_target = ofpbuf_try_pull(b, sizeof *nd_target);
+        if (!nd_target) {
             return false;
         }
-        nd_ns = (struct nd_neighbor_solicit *)icmp;
-        flow->nd_target = nd_ns->nd_ns_target;
+        flow->nd_target = *nd_target;
 
-        icmp_len -= sizeof(*nd_ns);
-        while (icmp_len >= 8) {
-            struct nd_opt_hdr *nd_opt;
-            int opt_len;
-            const uint8_t *data;
-
+        while (b->size >= 8) {
             /* The minimum size of an option is 8 bytes, which also is
              * the size of Ethernet link-layer options. */
-            nd_opt = ofpbuf_pull(b, 8);
-            if (!nd_opt->nd_opt_len || nd_opt->nd_opt_len * 8 > icmp_len) {
+            const struct nd_opt_hdr *nd_opt = b->data;
+            int opt_len = nd_opt->nd_opt_len * 8;
+
+            if (!opt_len || opt_len > b->size) {
                 goto invalid;
             }
-            opt_len = nd_opt->nd_opt_len * 8;
-            data = (const uint8_t *)(nd_opt + 1);
 
             /* Store the link layer address if the appropriate option is
              * provided.  It is considered an error if the same link
@@ -268,34 +276,31 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow, int icmp_len)
             if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
                     && opt_len == 8) {
                 if (eth_addr_is_zero(flow->arp_sha)) {
-                    memcpy(flow->arp_sha, data, ETH_ADDR_LEN);
+                    memcpy(flow->arp_sha, nd_opt + 1, ETH_ADDR_LEN);
                 } else {
                     goto invalid;
                 }
             } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
                     && opt_len == 8) {
                 if (eth_addr_is_zero(flow->arp_tha)) {
-                    memcpy(flow->arp_tha, data, ETH_ADDR_LEN);
+                    memcpy(flow->arp_tha, nd_opt + 1, ETH_ADDR_LEN);
                 } else {
                     goto invalid;
                 }
             }
 
-            /* Pull the rest of this option. */
-            if (!ofpbuf_try_pull(b, opt_len - 8)) {
+            if (!ofpbuf_try_pull(b, opt_len)) {
                 goto invalid;
             }
-
-            icmp_len -= opt_len;
         }
     }
 
     return true;
 
 invalid:
-    memset(&flow->nd_target, '\0', sizeof(flow->nd_target));
-    memset(flow->arp_sha, '\0', sizeof(flow->arp_sha));
-    memset(flow->arp_tha, '\0', sizeof(flow->arp_tha));
+    memset(&flow->nd_target, 0, sizeof(flow->nd_target));
+    memset(flow->arp_sha, 0, sizeof(flow->arp_sha));
+    memset(flow->arp_tha, 0, sizeof(flow->arp_tha));
 
     return false;
 
@@ -363,19 +368,9 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
             packet->l4 = b.data;
             if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
                 if (flow->nw_proto == IPPROTO_TCP) {
-                    const struct tcp_header *tcp = pull_tcp(&b);
-                    if (tcp) {
-                        flow->tp_src = tcp->tcp_src;
-                        flow->tp_dst = tcp->tcp_dst;
-                        packet->l7 = b.data;
-                    }
+                    parse_tcp(packet, &b, flow);
                 } else if (flow->nw_proto == IPPROTO_UDP) {
-                    const struct udp_header *udp = pull_udp(&b);
-                    if (udp) {
-                        flow->tp_src = udp->udp_src;
-                        flow->tp_dst = udp->udp_dst;
-                        packet->l7 = b.data;
-                    }
+                    parse_udp(packet, &b, flow);
                 } else if (flow->nw_proto == IPPROTO_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
                     if (icmp) {
@@ -389,35 +384,20 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        int nh_len;
-        const struct ip6_hdr *nh;
 
-        nh_len = parse_ipv6(&b, flow);
-        if (nh_len < 0) {
+        retval = parse_ipv6(&b, flow);
+        if (retval) {
             return 0;
         }
 
-        nh = ofpbuf_try_pull(&b, nh_len);
-        if (nh) {
-            packet->l4 = b.data;
-            if (flow->nw_proto == IPPROTO_TCP) {
-                const struct tcp_header *tcp = pull_tcp(&b);
-                if (tcp) {
-                    flow->tp_src = tcp->tcp_src;
-                    flow->tp_dst = tcp->tcp_dst;
-                    packet->l7 = b.data;
-                }
-            } else if (flow->nw_proto == IPPROTO_UDP) {
-                const struct udp_header *udp = pull_udp(&b);
-                if (udp) {
-                    flow->tp_src = udp->udp_src;
-                    flow->tp_dst = udp->udp_dst;
-                    packet->l7 = b.data;
-                }
-            } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-                if (parse_icmpv6(&b, flow, b.size)) {
-                    packet->l7 = b.data;
-                }
+        packet->l4 = b.data;
+        if (flow->nw_proto == IPPROTO_TCP) {
+            parse_tcp(packet, &b, flow);
+        } else if (flow->nw_proto == IPPROTO_UDP) {
+            parse_udp(packet, &b, flow);
+        } else if (flow->nw_proto == IPPROTO_ICMPV6) {
+            if (parse_icmpv6(&b, flow)) {
+                packet->l7 = b.data;
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
