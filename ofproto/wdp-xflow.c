@@ -1386,6 +1386,7 @@ wx_close(struct wdp *wdp)
 {
     struct wx *wx = wx_cast(wdp);
 
+    list_remove(&wx->list_node);
     wx_flow_flush(wdp);
     xfif_close(wx->xfif);
     classifier_destroy(&wx->cls);
