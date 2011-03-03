@@ -3180,8 +3180,8 @@ lacp_update_ifaces(struct port *port)
         ofproto_revalidate(port->bridge->ofproto, iface->tag);
 
         /* Don't allow loopback interfaces to send traffic or lead. */
-        if (eth_addr_equals(iface->lacp_partner.sysid,
-                            iface->lacp_actor.sysid)) {
+        if (eth_addr_equals(iface->lacp_partner.sys_id,
+                            iface->lacp_actor.sys_id)) {
             VLOG_WARN_RL(&rl, "iface %s: Loopback detected. Interface is "
                          "connected to its own bridge", iface->name);
             iface->lacp_status &= ~LACP_ATTACHED;
@@ -3212,8 +3212,8 @@ lacp_update_ifaces(struct port *port)
 
         if (iface->lacp_status & LACP_DEFAULTED
             || lead->lacp_partner.key != iface->lacp_partner.key
-            || !eth_addr_equals(lead->lacp_partner.sysid,
-                                iface->lacp_partner.sysid)) {
+            || !eth_addr_equals(lead->lacp_partner.sys_id,
+                                iface->lacp_partner.sys_id)) {
             iface->lacp_status &= ~LACP_ATTACHED;
         }
     }
@@ -3871,16 +3871,16 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
             ds_put_cstr(&ds, "\n");
 
-            ds_put_cstr(&ds, "\n\tactor sysid: ");
+            ds_put_cstr(&ds, "\n\tactor sys_id: ");
             ds_put_format(&ds, ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(iface->lacp_actor.sysid));
+                          ETH_ADDR_ARGS(iface->lacp_actor.sys_id));
             ds_put_cstr(&ds, "\n");
 
             ds_put_format(&ds, "\tactor sys_priority: %u\n",
                           ntohs(iface->lacp_actor.sys_priority));
 
-            ds_put_format(&ds, "\tactor portid: %u\n",
-                          ntohs(iface->lacp_actor.portid));
+            ds_put_format(&ds, "\tactor port_id: %u\n",
+                          ntohs(iface->lacp_actor.port_id));
 
             ds_put_format(&ds, "\tactor port_priority: %u\n",
                           ntohs(iface->lacp_actor.port_priority));
@@ -3892,16 +3892,16 @@ bond_unixctl_show(struct unixctl_conn *conn,
             ds_put_lacp_state(&ds, iface_get_lacp_state(iface));
             ds_put_cstr(&ds, "\n\n");
 
-            ds_put_cstr(&ds, "\tpartner sysid: ");
+            ds_put_cstr(&ds, "\tpartner sys_id: ");
             ds_put_format(&ds, ETH_ADDR_FMT,
-                          ETH_ADDR_ARGS(iface->lacp_partner.sysid));
+                          ETH_ADDR_ARGS(iface->lacp_partner.sys_id));
             ds_put_cstr(&ds, "\n");
 
             ds_put_format(&ds, "\tpartner sys_priority: %u\n",
                           ntohs(iface->lacp_partner.sys_priority));
 
-            ds_put_format(&ds, "\tpartner portid: %u\n",
-                          ntohs(iface->lacp_partner.portid));
+            ds_put_format(&ds, "\tpartner port_id: %u\n",
+                          ntohs(iface->lacp_partner.port_id));
 
             ds_put_format(&ds, "\tpartner port_priority: %u\n",
                           ntohs(iface->lacp_partner.port_priority));
@@ -4592,10 +4592,10 @@ port_update_lacp(struct port *port)
         struct iface *iface = port->ifaces[i];
 
         iface->lacp_actor.sys_priority = htons(port->lacp_priority);
-        memcpy(&iface->lacp_actor.sysid, port->bridge->ea, ETH_ADDR_LEN);
+        memcpy(&iface->lacp_actor.sys_id, port->bridge->ea, ETH_ADDR_LEN);
 
         iface->lacp_actor.port_priority = htons(iface->lacp_priority);
-        iface->lacp_actor.portid = htons(iface->dp_ifidx);
+        iface->lacp_actor.port_id = htons(iface->dp_ifidx);
         iface->lacp_actor.key = htons(port->lacp_key);
 
         iface->lacp_tx = 0;
@@ -4720,8 +4720,8 @@ iface_get_lacp_priority(struct iface *iface, struct lacp_info *priority)
         *priority = iface->lacp_actor;
     } else if (partner_priority < actor_priority) {
         *priority = iface->lacp_partner;
-    } else if (eth_addr_compare_3way(iface->lacp_actor.sysid,
-                                     iface->lacp_partner.sysid) < 0) {
+    } else if (eth_addr_compare_3way(iface->lacp_actor.sys_id,
+                                     iface->lacp_partner.sys_id) < 0) {
         *priority = iface->lacp_actor;
     } else {
         *priority = iface->lacp_partner;

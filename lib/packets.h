@@ -429,12 +429,12 @@ bool ipv6_is_cidr(const struct in6_addr *netmask);
 
 #define LACP_INFO_LEN 15
 struct lacp_info {
-    ovs_be16 sys_priority;       /* System priority. */
-    uint8_t sysid[ETH_ADDR_LEN]; /* System ID. */
-    ovs_be16 key;                /* Operational key. */
-    ovs_be16 port_priority;      /* Port priority. */
-    ovs_be16 portid;             /* Port ID. */
-    uint8_t state;               /* State mask.  See LACP_STATE macros. */
+    ovs_be16 sys_priority;            /* System priority. */
+    uint8_t sys_id[ETH_ADDR_LEN];     /* System ID. */
+    ovs_be16 key;                     /* Operational key. */
+    ovs_be16 port_priority;           /* Port priority. */
+    ovs_be16 port_id;                 /* Port ID. */
+    uint8_t state;                    /* State mask.  See LACP_STATE macros. */
 } __attribute__((packed));
 BUILD_ASSERT_DECL(LACP_INFO_LEN == sizeof(struct lacp_info));
 
