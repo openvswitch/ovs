@@ -48,4 +48,10 @@
 #error "CONFIG_PREEMPT is broken before 2.6.21--see commit 4498121ca3, \"[NET]: Handle disabled preemption in gfp_any()\""
 #endif
 
+#ifndef USHRT_MAX
+#define USHRT_MAX	((u16)(~0U))
+#define SHRT_MAX	((s16)(USHRT_MAX>>1))
+#define SHRT_MIN	((s16)(-SHRT_MAX - 1))
+#endif
+
 #endif /* linux/kernel.h */
