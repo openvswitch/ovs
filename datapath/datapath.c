@@ -359,7 +359,6 @@ static void copy_and_csum_skb(struct sk_buff *skb, void *to)
 
 	get_skb_csum_pointers(skb, &csum_start, &csum_offset);
 	csum_start -= skb_headroom(skb);
-	BUG_ON(csum_start >= skb_headlen(skb));
 
 	skb_copy_bits(skb, 0, to, csum_start);
 
