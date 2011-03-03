@@ -3896,7 +3896,7 @@ static void
 facet_update_stats(struct ofproto *ofproto, struct facet *facet,
                    const struct dpif_flow_stats *stats)
 {
-    if (stats->n_packets) {
+    if (stats->n_packets || stats->used > facet->used) {
         facet_update_time(ofproto, facet, stats->used);
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
