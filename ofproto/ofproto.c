@@ -2161,12 +2161,10 @@ facet_execute(struct ofproto *ofproto, struct facet *facet,
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
     flow_extract_stats(&facet->flow, packet, &stats);
+    stats.used = time_msec();
     if (execute_odp_actions(ofproto, &facet->flow,
                             facet->actions, facet->actions_len, packet)) {
-        facet->used = time_msec();
         facet_update_stats(ofproto, facet, &stats);
-        netflow_flow_update_time(ofproto->netflow,
-                                 &facet->nf_flow, facet->used);
     }
 }
 
