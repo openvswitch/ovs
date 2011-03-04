@@ -502,7 +502,7 @@ netdev_vport_poll_add(struct netdev *netdev,
     struct list *list;
     struct shash_node *shash_node;
 
-    shash_node = shash_find_data(&netdev_vport_notifiers, poll_name);
+    shash_node = shash_find(&netdev_vport_notifiers, poll_name);
     if (!shash_node) {
         list = xmalloc(sizeof *list);
         list_init(list);
