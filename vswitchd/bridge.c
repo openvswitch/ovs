@@ -4527,6 +4527,8 @@ port_update_bonding(struct port *port)
         free(port->bond_hash);
         port->bond_hash = NULL;
         port->bond_fake_iface = false;
+        port->active_iface = -1;
+        port->no_ifaces_tag = 0;
     } else {
         size_t i;
 
@@ -4537,19 +4539,25 @@ port_update_bonding(struct port *port)
                 e->iface_idx = -1;
                 e->tx_bytes = 0;
             }
-            port->no_ifaces_tag = tag_create_random();
-            bond_choose_active_iface(port);
             port->bond_next_rebalance
                 = time_msec() + port->bond_rebalance_interval;
-
-            if (port->cfg->bond_fake_iface) {
-                port->bond_next_fake_iface_update = time_msec();
-            }
         } else if (port->bond_mode == BM_AB) {
             free(port->bond_hash);
             port->bond_hash = NULL;
         }
+
+        if (!port->no_ifaces_tag) {
+            port->no_ifaces_tag = tag_create_random();
+        }
+
+        if (port->active_iface < 0) {
+            bond_choose_active_iface(port);
+        }
+
         port->bond_fake_iface = port->cfg->bond_fake_iface;
+        if (port->bond_fake_iface) {
+            port->bond_next_fake_iface_update = time_msec();
+        }
 
         if (!port->miimon) {
             port->monitor = netdev_monitor_create();
