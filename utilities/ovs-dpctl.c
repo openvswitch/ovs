@@ -241,7 +241,7 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
         }
 
         shash_init(&args);
-        while ((option = strtok_r(NULL, "", &save_ptr)) != NULL) {
+        while ((option = strtok_r(NULL, ",", &save_ptr)) != NULL) {
             char *save_ptr_2 = NULL;
             char *key, *value;
 

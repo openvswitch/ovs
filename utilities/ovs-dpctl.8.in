@@ -46,7 +46,7 @@ Deletes datapath \fIdp\fR.  If \fIdp\fR is associated with any network
 devices, they are automatically removed.
 .
 .TP
-\fBadd\-if \fIdp netdev\fR[\fIoption\fR...]...
+\fBadd\-if \fIdp netdev\fR[\fB,\fIoption\fR]...
 Adds each \fInetdev\fR to the set of network devices datapath
 \fIdp\fR monitors, where \fIdp\fR is the name of an existing
 datapath, and \fInetdev\fR is the name of one of the host's
