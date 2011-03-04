@@ -1314,9 +1314,9 @@ next:
 error_free:
 	tnl_free_linked_skbs(skb);
 error:
-	dst_release(unattached_dst);
 	vport_record_error(vport, err);
 out:
+	dst_release(unattached_dst);
 	return sent_len;
 }
 
