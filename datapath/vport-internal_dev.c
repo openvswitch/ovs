@@ -176,6 +176,11 @@ static void do_setup(struct net_device *netdev)
 	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_FRAGLIST |
 				NETIF_F_HIGHDMA | NETIF_F_HW_CSUM | NETIF_F_TSO;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+	netdev->vlan_features = netdev->features;
+	netdev->features |= NETIF_F_HW_VLAN_TX;
+#endif
+
 	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
 
