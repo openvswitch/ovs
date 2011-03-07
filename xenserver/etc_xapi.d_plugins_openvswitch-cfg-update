@@ -55,15 +55,7 @@ def update(session, args):
     if len(pools) > 1:
         raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
     pool = session.xenapi.pool.get_record(pools[0])
-    try:
-        try:
-            controller = pool["vswitch_controller"]
-        except KeyError:
-            # On systems older than XenServer 5.6.0, we needed to store
-            # the key in "other_config".
-            controller = pool["other_config"]["vSwitchController"]
-    except KeyError, e:
-        controller = ""
+    controller = pool.get("vswitch_controller", "")
     ret_str = ""
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
