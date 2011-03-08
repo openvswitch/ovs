@@ -922,7 +922,7 @@
              where GRE is not available.  Note that only the tunneling component
              of the protocol is implemented.  Due to the non-standard use of
              CAPWAP, UDP ports 58881 and 58882 are used as the source and
-             destinations ports respectivedly.  Each tunnel must be uniquely
+             destination ports respectively.  Each tunnel must be uniquely
              identified by the combination of <code>remote_ip</code> and
              <code>local_ip</code>.  If two ports are defined that are the same
              except one includes <code>local_ip</code> and the other does not,
