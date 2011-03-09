@@ -477,6 +477,15 @@ A bridge port.  Records may be identified by port name.
 .IP "\fBInterface\fR"
 A network device attached to a port.  Records may be identified by
 name.
+.IP "\fBQoS\fR"
+Quality-of-service configuration for an \fBInterface\fR.
+.IP "\fBQueue\fR"
+Configuration for one queue within a \fBQoS\fR configuration.
+.IP "\fBMonitor\fR"
+Connectivity Monitoring attached to an \fBInterface\fR.  Records may be
+identified by \fBInterface\fR name.
+.IP "\fBMaintenance_Point\fR"
+Maintenance Point managed by a \fBMonitor\fR.
 .IP "\fBMirror\fR"
 A port mirroring configuration attached to a bridge.  Records may be
 identified by mirror name.
@@ -496,11 +505,6 @@ specifying \fB.\fR as the record name.
 .IP "\fBsFlow\fR"
 An sFlow configuration attached to a bridge.  Records may be
 identified by bridge name.
-.IP "\fBMonitor\fR"
-Connectivity Monitoring attached to an interface.  Records may be
-identified by interface name.
-.IP "\fBMaintenance_Point\fR"
-Maintenance Point managed by a Monitor.
 .PP
 Record names must be specified in full and with correct
 capitalization.  Names of tables and columns are not case-sensitive,
