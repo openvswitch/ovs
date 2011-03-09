@@ -495,8 +495,9 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
 
     keys[n] = xstrdup("state");
     values[n++] = xstrdup(status->state);
-    keys[n] = xstrdup("time_in_state");
-    values[n++] = xasprintf("%u", status->state_elapsed);
+    keys[n] = xstrdup(status->is_connected ? "time_connected"
+                      : "time_disconnected");
+    values[n++] = xasprintf("%u", status->conn_secs);
     if (status->last_error) {
         keys[n] = xstrdup("last_error");
         values[n++] =
