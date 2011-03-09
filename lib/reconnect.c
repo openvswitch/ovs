@@ -28,7 +28,7 @@ VLOG_DEFINE_THIS_MODULE(reconnect);
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \
     STATE(BACKOFF, 1 << 1)                      \
-    STATE(CONNECT_IN_PROGRESS, 1 << 3)          \
+    STATE(CONNECTING, 1 << 3)          \
     STATE(ACTIVE, 1 << 4)                       \
     STATE(IDLE, 1 << 5)                         \
     STATE(RECONNECT, 1 << 6)                    \
@@ -263,7 +263,7 @@ reconnect_set_passive(struct reconnect *fsm, bool passive, long long int now)
         fsm->passive = passive;
 
         if (passive
-            ? fsm->state & (S_CONNECT_IN_PROGRESS | S_RECONNECT)
+            ? fsm->state & (S_CONNECTING | S_RECONNECT)
             : fsm->state == S_LISTENING && reconnect_may_retry(fsm)) {
             reconnect_transition__(fsm, now, S_BACKOFF);
             fsm->backoff = 0;
@@ -312,7 +312,7 @@ reconnect_disable(struct reconnect *fsm, long long int now)
 void
 reconnect_force_reconnect(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state & (S_CONNECT_IN_PROGRESS | S_ACTIVE | S_IDLE)) {
+    if (fsm->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
         reconnect_transition__(fsm, now, S_RECONNECT);
     }
 }
@@ -393,13 +393,13 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
 void
 reconnect_connecting(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state != S_CONNECT_IN_PROGRESS) {
+    if (fsm->state != S_CONNECTING) {
         if (fsm->passive) {
             VLOG(fsm->info, "%s: listening...", fsm->name);
         } else {
             VLOG(fsm->info, "%s: connecting...", fsm->name);
         }
-        reconnect_transition__(fsm, now, S_CONNECT_IN_PROGRESS);
+        reconnect_transition__(fsm, now, S_CONNECTING);
     }
 }
 
@@ -482,7 +482,7 @@ static void
 reconnect_transition__(struct reconnect *fsm, long long int now,
                        enum state state)
 {
-    if (fsm->state == S_CONNECT_IN_PROGRESS) {
+    if (fsm->state == S_CONNECTING) {
         fsm->n_attempted_connections++;
         if (state == S_ACTIVE) {
             fsm->n_successful_connections++;
@@ -512,7 +512,7 @@ reconnect_deadline__(const struct reconnect *fsm)
     case S_BACKOFF:
         return fsm->state_entered + fsm->backoff;
 
-    case S_CONNECT_IN_PROGRESS:
+    case S_CONNECTING:
         return fsm->state_entered + MAX(1000, fsm->backoff);
 
     case S_ACTIVE:
@@ -579,7 +579,7 @@ reconnect_run(struct reconnect *fsm, long long int now)
         case S_BACKOFF:
             return RECONNECT_CONNECT;
 
-        case S_CONNECT_IN_PROGRESS:
+        case S_CONNECTING:
             return RECONNECT_DISCONNECT;
 
         case S_ACTIVE:

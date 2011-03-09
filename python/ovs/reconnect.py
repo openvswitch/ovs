@@ -72,7 +72,7 @@ class Reconnect(object):
             return CONNECT
 
     class ConnectInProgress(object):
-        name = "CONNECT_IN_PROGRESS"
+        name = "CONNECTING"
         is_connected = False
 
         @staticmethod

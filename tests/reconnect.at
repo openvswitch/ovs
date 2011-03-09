@@ -119,13 +119,13 @@ enable
 run
   should connect
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+  in CONNECTING for 0 ms (0 ms backoff)
 
 # Connect after 500 ms.
 advance 500
 
 ### t=1500 ###
-  in CONNECT_IN_PROGRESS for 500 ms (0 ms backoff)
+  in CONNECTING for 500 ms (0 ms backoff)
   disconnected for 500 ms
 run
 connected
@@ -232,13 +232,13 @@ enable
 run
   should connect
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+  in CONNECTING for 0 ms (0 ms backoff)
 run
 timeout
   advance 1000 ms
 
 ### t=2000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  in CONNECTING for 1000 ms (0 ms backoff)
   disconnected for 1000 ms
 run
   should disconnect
@@ -258,12 +258,12 @@ run
 
 # Second connection attempt fails after 1000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+  in CONNECTING for 0 ms (1000 ms backoff)
 timeout
   advance 1000 ms
 
 ### t=4000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  in CONNECTING for 1000 ms (1000 ms backoff)
   disconnected for 3000 ms
 run
   should disconnect
@@ -283,12 +283,12 @@ run
 
 # Third connection attempt fails after 2000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+  in CONNECTING for 0 ms (2000 ms backoff)
 timeout
   advance 2000 ms
 
 ### t=8000 ###
-  in CONNECT_IN_PROGRESS for 2000 ms (2000 ms backoff)
+  in CONNECTING for 2000 ms (2000 ms backoff)
   disconnected for 7000 ms
 run
   should disconnect
@@ -308,12 +308,12 @@ run
 
 # Third connection attempt fails after 4000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (4000 ms backoff)
+  in CONNECTING for 0 ms (4000 ms backoff)
 timeout
   advance 4000 ms
 
 ### t=16000 ###
-  in CONNECT_IN_PROGRESS for 4000 ms (4000 ms backoff)
+  in CONNECTING for 4000 ms (4000 ms backoff)
   disconnected for 15000 ms
 run
   should disconnect
@@ -333,12 +333,12 @@ run
 
 # Third connection attempt fails after 8000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (8000 ms backoff)
+  in CONNECTING for 0 ms (8000 ms backoff)
 timeout
   advance 8000 ms
 
 ### t=32000 ###
-  in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+  in CONNECTING for 8000 ms (8000 ms backoff)
   disconnected for 31000 ms
 run
   should disconnect
@@ -358,12 +358,12 @@ run
 
 # Fourth connection attempt fails after 8000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (8000 ms backoff)
+  in CONNECTING for 0 ms (8000 ms backoff)
 timeout
   advance 8000 ms
 
 ### t=48000 ###
-  in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+  in CONNECTING for 8000 ms (8000 ms backoff)
   disconnected for 47000 ms
 run
   should disconnect
@@ -588,13 +588,13 @@ enable
 run
   should connect
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+  in CONNECTING for 0 ms (0 ms backoff)
 run
 timeout
   advance 1000 ms
 
 ### t=2000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  in CONNECTING for 1000 ms (0 ms backoff)
   disconnected for 1000 ms
 run
   should disconnect
@@ -614,12 +614,12 @@ run
 
 # Second connection attempt fails after 1000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+  in CONNECTING for 0 ms (1000 ms backoff)
 timeout
   advance 1000 ms
 
 ### t=4000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  in CONNECTING for 1000 ms (1000 ms backoff)
   disconnected for 3000 ms
 run
   should disconnect
@@ -639,11 +639,11 @@ run
 
 # Third connection attempt succeeds after 500 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+  in CONNECTING for 0 ms (2000 ms backoff)
 advance 500
 
 ### t=6500 ###
-  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  in CONNECTING for 500 ms (2000 ms backoff)
   disconnected for 5500 ms
 run
 connected
@@ -736,13 +736,13 @@ enable
 run
   should connect
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+  in CONNECTING for 0 ms (0 ms backoff)
 run
 timeout
   advance 1000 ms
 
 ### t=2000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  in CONNECTING for 1000 ms (0 ms backoff)
   disconnected for 1000 ms
 run
   should disconnect
@@ -762,12 +762,12 @@ run
 
 # Second connection attempt fails after 1000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+  in CONNECTING for 0 ms (1000 ms backoff)
 timeout
   advance 1000 ms
 
 ### t=4000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  in CONNECTING for 1000 ms (1000 ms backoff)
   disconnected for 3000 ms
 run
   should disconnect
@@ -787,11 +787,11 @@ run
 
 # Third connection attempt succeeds after 500 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+  in CONNECTING for 0 ms (2000 ms backoff)
 advance 500
 
 ### t=6500 ###
-  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  in CONNECTING for 500 ms (2000 ms backoff)
   disconnected for 5500 ms
 run
 connected
@@ -905,13 +905,13 @@ enable
 run
   should connect
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+  in CONNECTING for 0 ms (0 ms backoff)
 run
 timeout
   advance 1000 ms
 
 ### t=2000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  in CONNECTING for 1000 ms (0 ms backoff)
   disconnected for 1000 ms
 run
   should disconnect
@@ -931,12 +931,12 @@ run
 
 # Second connection attempt fails after 1000 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+  in CONNECTING for 0 ms (1000 ms backoff)
 timeout
   advance 1000 ms
 
 ### t=4000 ###
-  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  in CONNECTING for 1000 ms (1000 ms backoff)
   disconnected for 3000 ms
 run
   should disconnect
@@ -956,11 +956,11 @@ run
 
 # Third connection attempt succeeds after 500 ms.
 connecting
-  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+  in CONNECTING for 0 ms (2000 ms backoff)
 advance 500
 
 ### t=6500 ###
-  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  in CONNECTING for 500 ms (2000 ms backoff)
   disconnected for 5500 ms
 run
 connected
