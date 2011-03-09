@@ -711,12 +711,12 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	else
 		packet->protocol = htons(ETH_P_802_2);
 
+	/* Initialize OVS_CB (it came from Netlink so might not be zeroed). */
+	memset(OVS_CB(packet), 0, sizeof(struct ovs_skb_cb));
+
 	err = flow_extract(packet, -1, &key, &is_frag);
 	if (err)
 		goto exit;
-
-	/* Initialize OVS_CB (it came from Netlink so might not be zeroed). */
-	memset(OVS_CB(packet), 0, sizeof(struct ovs_skb_cb));
 
 	rcu_read_lock();
 	dp = get_dp(odp_header->dp_ifindex);
