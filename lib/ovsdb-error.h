@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,25 @@ struct ovsdb_error *ovsdb_wrap_error(struct ovsdb_error *error,
                                      const char *details, ...)
     PRINTF_FORMAT(2, 3);
 
-struct ovsdb_error *ovsdb_internal_error(const char *file, int line,
+struct ovsdb_error *ovsdb_internal_error(struct ovsdb_error *error,
+                                         const char *file, int line,
                                          const char *details, ...)
-    PRINTF_FORMAT(3, 4)
+    PRINTF_FORMAT(4, 5)
     WARN_UNUSED_RESULT;
-#define OVSDB_BUG(MSG) ovsdb_internal_error(__FILE__, __LINE__, "%s", MSG)
+
+/* Returns a pointer to an ovsdb_error that represents an internal error for
+ * the current file name and line number with MSG as the associated message.
+ * The caller is responsible for freeing the internal error. */
+#define OVSDB_BUG(MSG)                                      \
+    ovsdb_internal_error(NULL, __FILE__, __LINE__, "%s", MSG)
+
+/* Returns a pointer to an ovsdb_error that represents an internal error for
+ * the current file name and line number, with MSG as the associated message.
+ * If ERROR is nonnull then the internal error is wrapped around ERROR.  Takes
+ * ownership of ERROR.  The caller is responsible for freeing the returned
+ * error. */
+#define OVSDB_WRAP_BUG(MSG, ERROR)                          \
+    ovsdb_internal_error(ERROR, __FILE__, __LINE__, "%s", MSG)
 
 void ovsdb_error_destroy(struct ovsdb_error *);
 struct ovsdb_error *ovsdb_error_clone(const struct ovsdb_error *)

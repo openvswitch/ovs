@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,8 +218,7 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
         if (r->old) {
             error = ovsdb_txn_adjust_row_refs(txn, r->old, column, -1);
             if (error) {
-                ovsdb_error_destroy(error);
-                return OVSDB_BUG("error decreasing refcount");
+                return OVSDB_WRAP_BUG("error decreasing refcount", error);
             }
         }
         if (r->new) {
@@ -476,8 +475,7 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
      * was really a no-op. */
     error = for_each_txn_row(txn, determine_changes);
     if (error) {
-        ovsdb_error_destroy(error);
-        return OVSDB_BUG("can't happen");
+        return OVSDB_WRAP_BUG("can't happen", error);
     }
     if (list_is_empty(&txn->txn_tables)) {
         ovsdb_txn_abort(txn);

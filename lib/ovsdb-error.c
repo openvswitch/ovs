@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,8 +114,16 @@ ovsdb_wrap_error(struct ovsdb_error *error, const char *details, ...)
     return error;
 }
 
+/* Returns an ovsdb_error that represents an internal error for file name
+ * 'file' and line number 'line', with 'details' (formatted as with printf())
+ * as the associated message.  The caller is responsible for freeing the
+ * returned error.
+ *
+ * If 'inner_error' is nonnull then the returned error is wrapped around
+ * 'inner_error'.  Takes ownership of 'inner_error'.  */
 struct ovsdb_error *
-ovsdb_internal_error(const char *file, int line, const char *details, ...)
+ovsdb_internal_error(struct ovsdb_error *inner_error,
+                     const char *file, int line, const char *details, ...)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct backtrace backtrace;
@@ -143,6 +151,14 @@ ovsdb_internal_error(const char *file, int line, const char *details, ...)
     }
 
     ds_put_format(&ds, " (%s %s%s)", program_name, VERSION, BUILDNR);
+
+    if (inner_error) {
+        char *s = ovsdb_error_to_string(inner_error);
+        ds_put_format(&ds, " (generated from: %s)", s);
+        free(s);
+
+        ovsdb_error_destroy(inner_error);
+    }
 
     error = ovsdb_error("internal error", "%s", ds_cstr(&ds));
 
