@@ -132,7 +132,8 @@ below.
 .
 .TP
 \fBadd\-flows \fIswitch file\fR
-Add flow entries as described in \fIfile\fR to \fIswitch\fR's 
+Add the flow entries listed in \fIfile\fR, or supplied on \fBstdin\fR
+if \fIfile\fR is \fB\-\fR, to \fIswitch\fR's
 tables.  Each line in \fIfile\fR is a flow entry in the format
 described in \fBFlow Syntax\fR, below.
 .

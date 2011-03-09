@@ -692,7 +692,7 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     FILE *file;
 
-    file = fopen(argv[2], "r");
+    file = !strcmp(argv[2], "-") ? stdin : fopen(argv[2], "r");
     if (file == NULL) {
         ovs_fatal(errno, "%s: open", argv[2]);
     }
@@ -707,7 +707,9 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     }
     vconn_close(vconn);
 
-    fclose(file);
+    if (file != stdin) {
+        fclose(file);
+    }
 }
 
 static void
