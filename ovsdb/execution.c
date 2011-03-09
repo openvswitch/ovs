@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -243,13 +243,11 @@ parse_table(struct ovsdb_execution *x,
 }
 
 static WARN_UNUSED_RESULT struct ovsdb_error *
-parse_row(struct ovsdb_parser *parser, const char *member,
-          const struct ovsdb_table *table,
+parse_row(const struct json *json, const struct ovsdb_table *table,
           struct ovsdb_symbol_table *symtab,
           struct ovsdb_row **rowp, struct ovsdb_column_set *columns)
 {
     struct ovsdb_error *error;
-    const struct json *json;
     struct ovsdb_row *row;
 
     *rowp = NULL;
@@ -257,9 +255,8 @@ parse_row(struct ovsdb_parser *parser, const char *member,
     if (!table) {
         return OVSDB_BUG("null table");
     }
-    json = ovsdb_parser_member(parser, member, OP_OBJECT);
     if (!json) {
-        return OVSDB_BUG("null row member");
+        return OVSDB_BUG("null row");
     }
 
     row = ovsdb_row_create(table);
@@ -279,20 +276,23 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     struct ovsdb_row *row = NULL;
-    const struct json *uuid_name;
+    const struct json *uuid_name, *row_json;
     struct ovsdb_error *error;
     struct uuid row_uuid;
 
     table = parse_table(x, parser, "table");
     uuid_name = ovsdb_parser_member(parser, "uuid-name", OP_ID | OP_OPTIONAL);
+    row_json = ovsdb_parser_member(parser, "row", OP_OBJECT);
     error = ovsdb_parser_get_error(parser);
+    if (error) {
+        return error;
+    }
 
     if (uuid_name) {
         struct ovsdb_symbol *symbol;
 
         symbol = ovsdb_symbol_table_insert(x->symtab, json_string(uuid_name));
         if (symbol->used) {
-            ovsdb_error_destroy(error);
             return ovsdb_syntax_error(uuid_name, "duplicate uuid-name",
                                       "This \"uuid-name\" appeared on an "
                                       "earlier \"insert\" operation.");
@@ -304,7 +304,7 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     }
 
     if (!error) {
-        error = parse_row(parser, "row", table, x->symtab, &row, NULL);
+        error = parse_row(row_json, table, x->symtab, &row, NULL);
     }
     if (!error) {
         /* Check constraints for columns not included in "row", in case the
@@ -413,7 +413,7 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
     struct ovsdb_table *table;
-    const struct json *where;
+    const struct json *where, *row_json;
     struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_row *row = NULL;
@@ -422,9 +422,10 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 
     table = parse_table(x, parser, "table");
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    row_json = ovsdb_parser_member(parser, "row", OP_OBJECT);
     error = ovsdb_parser_get_error(parser);
     if (!error) {
-        error = parse_row(parser, "row", table, x->symtab, &row, &columns);
+        error = parse_row(row_json, table, x->symtab, &row, &columns);
     }
     if (!error) {
         error = ovsdb_condition_from_json(table->schema, where, x->symtab,

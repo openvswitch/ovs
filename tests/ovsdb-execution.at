@@ -96,6 +96,20 @@ OVSDB_CHECK_EXECUTION([named-uuid must be <id>],
   [[[{"details":"named-uuid string is not a valid <id>","error":"syntax error","syntax":"[\"named-uuid\",\"0\"]"}]
 ]])
 
+OVSDB_CHECK_EXECUTION([duplicate uuid-name not allowed],
+  [ORDINAL_SCHEMA],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {},
+       "uuid-name": "x"},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {},
+       "uuid-name": "x"}]]]],
+  [[[{"uuid":["uuid","<0>"]},{"details":"This \"uuid-name\" appeared on an earlier \"insert\" operation.","error":"duplicate uuid-name","syntax":"\"x\""}]
+]])
+
 m4_define([EXECUTION_EXAMPLES], [
 dnl At one point the "commit" code ignored new rows with all-default values,
 dnl so this checks for that problem.
