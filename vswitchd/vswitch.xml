@@ -637,6 +637,13 @@
             LACP negotiations, link status decisions are made by the system
             with the numerically lower priority.  Must be a number between 1
             and 65535.</dd>
+          <dt><code>lacp-time</code></dt>
+          <dd> The LACP timing which should be used on this
+            <ref table="Port"/>.  Possible values are <code>fast</code> and
+            <code>slow</code>.  By default <code>slow</code> is used.  When
+            configured to be <code>fast</code> more frequent LACP heartbeats
+            will be requested causing connectivity problems to be detected more
+            quickly.</dd>
         </dl>
       </column>
     </group>

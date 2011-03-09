@@ -47,6 +47,7 @@ struct lacp {
     struct hmap slaves;      /* Slaves this LACP object controls. */
     struct slave *key_slave; /* Slave whose ID will be the aggregation key. */
 
+    bool fast;                /* Fast or Slow LACP time. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
 };
@@ -127,7 +128,7 @@ lacp_destroy(struct lacp *lacp)
 void
 lacp_configure(struct lacp *lacp, const char *name,
                uint8_t sys_id[ETH_ADDR_LEN], uint16_t sys_priority,
-               bool active)
+               bool active, bool fast)
 {
     if (!lacp->name || strcmp(name, lacp->name)) {
         free(lacp->name);
@@ -137,6 +138,7 @@ lacp_configure(struct lacp *lacp, const char *name,
     memcpy(lacp->sys_id, sys_id, ETH_ADDR_LEN);
     lacp->sys_priority = sys_priority;
     lacp->active = active;
+    lacp->fast = fast;
 }
 
 /* Processes 'pdu', a parsed LACP packet received on 'slave_'.  This function
@@ -149,7 +151,9 @@ lacp_process_pdu(struct lacp *lacp, const void *slave_,
     struct slave *slave = slave_lookup(lacp, slave_);
 
     slave->status = LACP_CURRENT;
-    slave->rx = time_msec() + LACP_SLOW_TIME_RX;
+    slave->rx = time_msec() + (lacp->fast
+                               ? LACP_FAST_TIME_RX
+                               : LACP_SLOW_TIME_RX);
 
     slave->ntt_actor = pdu->partner;
 
@@ -429,6 +433,10 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
 
     if (slave->lacp->active) {
         state |= LACP_STATE_ACT;
+    }
+
+    if (slave->lacp->fast) {
+        state |= LACP_STATE_TIME;
     }
 
     if (slave->attached) {

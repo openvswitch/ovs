@@ -185,6 +185,7 @@ struct port {
     /* LACP information. */
     struct lacp *lacp;          /* LACP object. NULL if LACP is disabled. */
     bool lacp_active;           /* True if LACP is active */
+    bool lacp_fast;             /* True if LACP is in fast mode. */
     uint16_t lacp_priority;     /* LACP system priority. */
 
     /* SLB specific bonding info. */
@@ -4132,6 +4133,9 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     }
     shash_destroy(&new_ifaces);
 
+    port->lacp_fast = !strcmp(get_port_other_config(cfg, "lacp-time", "slow"),
+                             "fast");
+
     lacp_priority =
         atoi(get_port_other_config(cfg, "lacp-system-priority", "0"));
 
@@ -4290,7 +4294,7 @@ port_update_lacp(struct port *port)
 
         lacp_configure(port->lacp, port->name,
                        port->bridge->ea, port->lacp_priority,
-                       port->lacp_active);
+                       port->lacp_active, port->lacp_fast);
 
         for (i = 0; i < port->n_ifaces; i++) {
             struct iface *iface = port->ifaces[i];

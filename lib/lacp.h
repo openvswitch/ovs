@@ -32,7 +32,7 @@ void lacp_init(void);
 struct lacp *lacp_create(void);
 void lacp_destroy(struct lacp *);
 void lacp_configure(struct lacp *, const char *name, uint8_t sys_id[8],
-                    uint16_t sys_priority, bool active);
+                    uint16_t sys_priority, bool active, bool fast);
 void lacp_process_pdu(struct lacp *, const void *slave,
                       const struct lacp_pdu *);
 bool lacp_negotiated(const struct lacp *);
