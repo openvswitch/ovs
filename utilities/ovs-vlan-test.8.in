@@ -77,19 +77,19 @@ Set up a bridge which forwards traffic originating from \fB1.2.3.4\fR out
 .IP
 .B \-\- set Interface vlan\-br\-tag type=internal
 .IP
-.B ifconfig vlan\-br\-tag up 5.6.7.8
+.B ifconfig vlan\-br\-tag up 1.2.3.4
 .
 .PP
 Run an \fBovs\-vlan\-test\fR server listening for client control traffic on
-5.6.7.8 port 80 and VLAN traffic on the default port of 1.2.3.0.
+172.16.0.142 port 8080 and VLAN traffic on the default port of 1.2.3.3.
 .IP
-.B ovs\-vlan\-test \-s 5.6.7.8:80 1.2.3.0
+.B ovs\-vlan\-test \-s 172.16.0.142:8080 1.2.3.3
 .
 .PP
-Run an \fBovs\-vlan\-test\fR client with a control server located at 5.6.7.8
-port 80 and a local VLAN ip of 1.2.3.4.
+Run an \fBovs\-vlan\-test\fR client with a control server located at
+172.16.0.142 port 8080 and a local VLAN ip of 1.2.3.4.
 .IP
-.B ovs\-vlan\-test 5.6.7.8:80 1.2.3.4
+.B ovs\-vlan\-test 172.16.0.142:8080 1.2.3.4
 .
 .TP
 
