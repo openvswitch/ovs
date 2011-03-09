@@ -342,7 +342,7 @@ static int gre_rcv(struct sk_buff *skb)
 	__skb_pull(skb, hdr_len);
 	skb_postpull_rcsum(skb, skb_transport_header(skb), hdr_len + ETH_HLEN);
 
-	tnl_rcv(vport, skb);
+	tnl_rcv(vport, skb, iph->tos);
 	return 0;
 
 error:

@@ -225,7 +225,7 @@ int tnl_set_addr(struct vport *vport, const unsigned char *addr);
 const char *tnl_get_name(const struct vport *vport);
 const unsigned char *tnl_get_addr(const struct vport *vport);
 int tnl_send(struct vport *vport, struct sk_buff *skb);
-void tnl_rcv(struct vport *vport, struct sk_buff *skb);
+void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos);
 
 struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    int tunnel_type,

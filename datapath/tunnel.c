@@ -379,18 +379,14 @@ found:
 	return tnl_vport_to_vport(tnl_vport_table_cast(tbl_node));
 }
 
-static inline void ecn_decapsulate(struct sk_buff *skb)
+static void ecn_decapsulate(struct sk_buff *skb, u8 tos)
 {
-	/* This is accessing the outer IP header of the tunnel, which we've
-	 * already validated to be OK.  skb->data is currently set to the start
-	 * of the inner Ethernet header, and we've validated ETH_HLEN.
-	 */
-	if (unlikely(INET_ECN_is_ce(ip_hdr(skb)->tos))) {
+	if (unlikely(INET_ECN_is_ce(tos))) {
 		__be16 protocol = skb->protocol;
 
 		skb_set_network_header(skb, ETH_HLEN);
 
-		if (skb->protocol == htons(ETH_P_8021Q)) {
+		if (protocol == htons(ETH_P_8021Q)) {
 			if (unlikely(!pskb_may_pull(skb, VLAN_ETH_HLEN)))
 				return;
 
@@ -417,17 +413,27 @@ static inline void ecn_decapsulate(struct sk_buff *skb)
 	}
 }
 
-/* Called with rcu_read_lock. */
-void tnl_rcv(struct vport *vport, struct sk_buff *skb)
+/**
+ *	tnl_rcv - ingress point for generic tunnel code
+ *
+ * @vport: port this packet was received on
+ * @skb: received packet
+ * @tos: ToS from encapsulating IP packet, used to copy ECN bits
+ *
+ * Must be called with rcu_read_lock.
+ *
+ * Packets received by this function are in the following state:
+ * - skb->data points to the inner Ethernet header.
+ * - The inner Ethernet header is in the linear data area.
+ * - skb->csum does not include the inner Ethernet header.
+ * - The layer pointers are undefined.
+ */
+void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos)
 {
-	/* Packets received by this function are in the following state:
-	 * - skb->data points to the inner Ethernet header.
-	 * - The inner Ethernet header is in the linear data area.
-	 * - skb->csum does not include the inner Ethernet header.
-	 * - The layer pointers point at the outer headers.
-	 */
+	struct ethhdr *eh;
 
-	struct ethhdr *eh = (struct ethhdr *)skb->data;
+	skb_reset_mac_header(skb);
+	eh = eth_hdr(skb);
 
 	if (likely(ntohs(eh->h_proto) >= 1536))
 		skb->protocol = eh->h_proto;
@@ -439,7 +445,7 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb)
 	skb_clear_rxhash(skb);
 	secpath_reset(skb);
 
-	ecn_decapsulate(skb);
+	ecn_decapsulate(skb, tos);
 	compute_ip_summed(skb, false);
 	vlan_set_tci(skb, 0);
 

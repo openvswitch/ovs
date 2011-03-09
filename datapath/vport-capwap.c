@@ -206,7 +206,7 @@ static int capwap_rcv(struct sock *sk, struct sk_buff *skb)
 		goto error;
 	}
 
-	tnl_rcv(vport, skb);
+	tnl_rcv(vport, skb, iph->tos);
 	goto out;
 
 error:
