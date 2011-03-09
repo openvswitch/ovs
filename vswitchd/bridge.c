@@ -923,8 +923,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 port->miimon_next_update = 0;
             }
 
-            port_update_bonding(port);
             port_update_lacp(port);
+            port_update_bonding(port);
 
             for (j = 0; j < port->n_ifaces; j++) {
                 iface_update_qos(port->ifaces[j], port->cfg->qos);
