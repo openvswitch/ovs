@@ -1396,9 +1396,15 @@ ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
         cinfo->pairs.values[cinfo->pairs.n++] =
             xstrdup(rconn_get_state(rconn));
 
-        cinfo->pairs.keys[cinfo->pairs.n] = "time_in_state";
-        cinfo->pairs.values[cinfo->pairs.n++] =
-            xasprintf("%u", rconn_get_state_elapsed(rconn));
+        if (rconn_is_admitted(rconn)) {
+            cinfo->pairs.keys[cinfo->pairs.n] = "time_connected";
+            cinfo->pairs.values[cinfo->pairs.n++] =
+                xasprintf("%ld", time_now() - rconn_get_last_connection(rconn));
+        } else {
+            cinfo->pairs.keys[cinfo->pairs.n] = "time_disconnected";
+            cinfo->pairs.values[cinfo->pairs.n++] =
+                xasprintf("%d", rconn_failure_duration(rconn));
+        }
     }
 }
 
