@@ -63,8 +63,8 @@ struct slave {
     enum slave_status status;     /* Slave status. */
     bool attached;                /* Attached. Traffic may flow. */
     bool enabled;                 /* Enabled. Traffic is flowing. */
-    struct lacp_info actor;       /* Actor information. */
     struct lacp_info partner;     /* Partner information. */
+    struct lacp_info ntt_actor;   /* Used to decide if we Need To Transmit. */
     long long int tx;             /* Next message transmission time. */
     long long int rx;             /* Expected message receive time. */
 };
@@ -76,10 +76,11 @@ static void lacp_update_attached(struct lacp *);
 static void slave_destroy(struct slave *);
 static void slave_set_defaulted(struct slave *);
 static void slave_set_expired(struct slave *);
-static void slave_update_actor(struct slave *);
+static void slave_get_actor(struct slave *, struct lacp_info *actor);
 static void slave_get_priority(struct slave *, struct lacp_info *priority);
 static bool slave_may_tx(const struct slave *);
 static struct slave *slave_lookup(const struct lacp *, const void *slave);
+static bool info_tx_equal(struct lacp_info *, struct lacp_info *);
 
 static void lacp_unixctl_show(struct unixctl_conn *, const char *args,
                               void *aux);
@@ -150,12 +151,7 @@ lacp_process_pdu(struct lacp *lacp, const void *slave_,
     slave->status = LACP_CURRENT;
     slave->rx = time_msec() + LACP_SLOW_TIME_RX;
 
-    /* Check if our partner has incorrect information about our current state.
-     * If so update them. */
-    slave_update_actor(slave);
-    if (memcmp(&slave->actor, &pdu->partner, sizeof pdu->partner)) {
-        slave->tx = LLONG_MIN;
-    }
+    slave->ntt_actor = pdu->partner;
 
     /* Update our information about our partner if it's out of date.  This may
      * cause priorities to change so re-calculate attached status of all
@@ -205,7 +201,6 @@ lacp_slave_register(struct lacp *lacp, void *slave_, const char *name,
         slave->port_id = port_id;
         slave->port_priority = port_priority;
 
-        slave->tx = LLONG_MIN;
         lacp->update = true;
 
         if (lacp->active || lacp->negotiated) {
@@ -232,12 +227,7 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
 void
 lacp_slave_enable(struct lacp *lacp, void *slave_, bool enabled)
 {
-    struct slave *slave = slave_lookup(lacp, slave_);
-
-    if (slave->enabled != enabled) {
-        slave->enabled = enabled;
-        slave->tx = LLONG_MIN;
-    }
+   slave_lookup(lacp, slave_)->enabled = enabled;
 }
 
 /* This function should be called whenever the carrier status of 'slave_' has
@@ -247,7 +237,6 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
 {
     struct slave *slave = slave_lookup(lacp, slave_);
 
-    slave->tx = LLONG_MIN;
     if (slave->status == LACP_CURRENT || slave->lacp->active) {
         slave_set_expired(slave);
     }
@@ -288,7 +277,6 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
                 slave_set_defaulted(slave);
             }
         }
-        slave_update_actor(slave);
     }
 
     if (lacp->update) {
@@ -297,18 +285,26 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         struct lacp_pdu pdu;
+        struct lacp_info actor;
 
-        if (time_msec() < slave->tx || !slave_may_tx(slave)) {
+        if (!slave_may_tx(slave)) {
             continue;
         }
 
-        compose_lacp_pdu(&slave->actor, &slave->partner, &pdu);
-        send_pdu(slave->aux, &pdu);
+        slave_get_actor(slave, &actor);
 
-        slave->tx = time_msec() +
-            (slave->partner.state & LACP_STATE_TIME
-             ? LACP_FAST_TIME_TX
-             : LACP_SLOW_TIME_TX);
+        if (time_msec() >= slave->tx
+            || !info_tx_equal(&actor, &slave->ntt_actor)) {
+
+            slave->ntt_actor = actor;
+            compose_lacp_pdu(&actor, &slave->partner, &pdu);
+            send_pdu(slave->aux, &pdu);
+
+            slave->tx = time_msec() +
+                (slave->partner.state & LACP_STATE_TIME
+                 ? LACP_FAST_TIME_TX
+                 : LACP_SLOW_TIME_TX);
+        }
     }
 }
 
@@ -350,7 +346,7 @@ lacp_update_attached(struct lacp *lacp)
 
         /* XXX: In the future allow users to configure the expected system ID.
          * For now just special case loopback. */
-        if (eth_addr_equals(slave->partner.sys_id, slave->actor.sys_id)) {
+        if (eth_addr_equals(slave->partner.sys_id, slave->lacp->sys_id)) {
             VLOG_WARN_RL(&rl, "slave %s: Loopback detected. Slave is "
                          "connected to its own bond", slave->name);
             slave->attached = false;
@@ -412,7 +408,6 @@ slave_set_defaulted(struct slave *slave)
 {
     memset(&slave->partner, 0, sizeof slave->partner);
 
-    slave->tx = LLONG_MIN;
     slave->lacp->update = true;
     slave->status = LACP_DEFAULTED;
 }
@@ -425,11 +420,10 @@ slave_set_expired(struct slave *slave)
     slave->partner.state &= ~LACP_STATE_SYNC;
 
     slave->rx = time_msec() + LACP_FAST_TIME_RX;
-    slave->tx = LLONG_MIN;
 }
 
 static void
-slave_update_actor(struct slave *slave)
+slave_get_actor(struct slave *slave, struct lacp_info *actor)
 {
     uint8_t state = 0;
 
@@ -457,12 +451,12 @@ slave_update_actor(struct slave *slave)
         state |= LACP_STATE_COL | LACP_STATE_DIST;
     }
 
-    slave->actor.state = state;
-    slave->actor.key = htons(slave->lacp->key_slave->port_id);
-    slave->actor.port_priority = htons(slave->port_priority);
-    slave->actor.port_id = htons(slave->port_id);
-    slave->actor.sys_priority = htons(slave->lacp->sys_priority);
-    memcpy(&slave->actor.sys_id, slave->lacp->sys_id, ETH_ADDR_LEN);
+    actor->state = state;
+    actor->key = htons(slave->lacp->key_slave->port_id);
+    actor->port_priority = htons(slave->port_priority);
+    actor->port_id = htons(slave->port_id);
+    actor->sys_priority = htons(slave->lacp->sys_priority);
+    memcpy(&actor->sys_id, slave->lacp->sys_id, ETH_ADDR_LEN);
 }
 
 /* Given 'slave', populates 'priority' with data representing its LACP link
@@ -476,15 +470,15 @@ slave_get_priority(struct slave *slave, struct lacp_info *priority)
 
     /* Choose the lacp_info of the higher priority system by comparing their
      * system priorities and mac addresses. */
-    actor_priority = ntohs(slave->actor.sys_priority);
+    actor_priority = slave->lacp->sys_priority;
     partner_priority = ntohs(slave->partner.sys_priority);
     if (actor_priority < partner_priority) {
-        *priority = slave->actor;
+        slave_get_actor(slave, priority);
     } else if (partner_priority < actor_priority) {
         *priority = slave->partner;
-    } else if (eth_addr_compare_3way(slave->actor.sys_id,
+    } else if (eth_addr_compare_3way(slave->lacp->sys_id,
                                      slave->partner.sys_id) < 0) {
-        *priority = slave->actor;
+        slave_get_actor(slave, priority);
     } else {
         *priority = slave->partner;
     }
@@ -513,6 +507,28 @@ slave_lookup(const struct lacp *lacp, const void *slave_)
     }
 
     return NULL;
+}
+
+/* Two lacp_info structures are tx_equal if and only if they do not differ in
+ * ways which would require a lacp_pdu transmission. */
+static bool
+info_tx_equal(struct lacp_info *a, struct lacp_info *b)
+{
+
+    /* LACP specification dictates that we transmit whenever the actor and
+     * remote_actor differ in the following fields: Port, Port Priority,
+     * System, System Priority, Aggregation Key, Activity State, Timeout State,
+     * Sync State, and Aggregation State. The state flags are most likely to
+     * change so are checked first. */
+    return !((a->state ^ b->state) & (LACP_STATE_ACT
+                                      | LACP_STATE_TIME
+                                      | LACP_STATE_SYNC
+                                      | LACP_STATE_AGG))
+        && a->port_id == b->port_id
+        && a->port_priority == b->port_priority
+        && a->key == b->key
+        && a->sys_priority == b->sys_priority
+        && eth_addr_equals(a->sys_id, b->sys_id);
 }
 
 static struct lacp *
@@ -595,8 +611,9 @@ lacp_unixctl_show(struct unixctl_conn *conn,
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         char *status;
+        struct lacp_info actor;
 
-        slave_update_actor(slave);
+        slave_get_actor(slave, &actor);
         switch (slave->status) {
         case LACP_CURRENT:
             status = "current";
@@ -618,17 +635,17 @@ lacp_unixctl_show(struct unixctl_conn *conn,
         ds_put_format(&ds, "\tport_priority: %u\n", slave->port_priority);
 
         ds_put_format(&ds, "\n\tactor sys_id: " ETH_ADDR_FMT "\n",
-                      ETH_ADDR_ARGS(slave->actor.sys_id));
+                      ETH_ADDR_ARGS(actor.sys_id));
         ds_put_format(&ds, "\tactor sys_priority: %u\n",
-                      ntohs(slave->actor.sys_priority));
+                      ntohs(actor.sys_priority));
         ds_put_format(&ds, "\tactor port_id: %u\n",
-                      ntohs(slave->actor.port_id));
+                      ntohs(actor.port_id));
         ds_put_format(&ds, "\tactor port_priority: %u\n",
-                      ntohs(slave->actor.port_priority));
+                      ntohs(actor.port_priority));
         ds_put_format(&ds, "\tactor key: %u\n",
-                      ntohs(slave->actor.key));
+                      ntohs(actor.key));
         ds_put_cstr(&ds, "\tactor state: ");
-        ds_put_lacp_state(&ds, slave->actor.state);
+        ds_put_lacp_state(&ds, actor.state);
         ds_put_cstr(&ds, "\n\n");
 
         ds_put_format(&ds, "\tpartner sys_id: " ETH_ADDR_FMT "\n",
