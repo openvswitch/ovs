@@ -11,7 +11,7 @@ Sets the type of table formatting.  The following types of
 A list with one column per line and rows separated by a blank line.
 .IP "\fBhtml\fR"
 HTML tables.
-.IP "\fBcvs\fR"
+.IP "\fBcsv\fR"
 Comma-separated values as defined in RFC 4180.
 .IP "\fBjson\fR"
 JSON format as defined in RFC 4627.  The output is a sequence of JSON
