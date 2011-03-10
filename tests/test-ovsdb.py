@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -121,10 +121,11 @@ def do_parse_column(name, column_string):
     column = ovs.db.schema.ColumnSchema.from_json(column_json, name)
     print ovs.json.to_string(column.to_json(), sort_keys=True)
 
-def do_parse_table(name, table_string):
+def do_parse_table(name, table_string, default_is_root_string='false'):
+    default_is_root = default_is_root_string == 'true'
     table_json = unbox_json(ovs.json.from_string(table_string))
     table = ovs.db.schema.TableSchema.from_json(table_json, name)
-    print ovs.json.to_string(table.to_json(), sort_keys=True)
+    print ovs.json.to_string(table.to_json(default_is_root), sort_keys=True)
 
 def do_parse_rows(table_string, *rows):
     table_json = unbox_json(ovs.json.from_string(table_string))
@@ -272,7 +273,7 @@ parse-data TYPE DATUM...
   parse JSON DATUMs as data of given TYPE, and re-serialize
 parse-column NAME OBJECT
   parse column NAME with info OBJECT, and re-serialize
-parse-table NAME OBJECT
+parse-table NAME OBJECT [DEFAULT-IS-ROOT]
   parse table NAME with info OBJECT
 parse-schema JSON
   parse JSON as an OVSDB schema, and re-serialize
@@ -332,7 +333,7 @@ def main(argv):
                 "parse-data": (do_parse_data, (2,)),
                 "sort-atoms": (do_sort_atoms, 2),
                 "parse-column": (do_parse_column, 2),
-                "parse-table": (do_parse_table, 2),
+                "parse-table": (do_parse_table, (2, 3)),
                 "parse-schema": (do_parse_schema, 1),
                 "idl": (do_idl, (1,))}
 

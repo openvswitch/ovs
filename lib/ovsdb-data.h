@@ -236,6 +236,8 @@ struct ovsdb_symbol_table {
 struct ovsdb_symbol {
     struct uuid uuid;           /* The UUID that the symbol represents. */
     bool created;               /* Already used to create row? */
+    bool strong_ref;            /* Parsed a strong reference to this row? */
+    bool weak_ref;              /* Parsed a weak reference to this row? */
 };
 
 struct ovsdb_symbol_table *ovsdb_symbol_table_create(void);

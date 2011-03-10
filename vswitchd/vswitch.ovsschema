@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "2.0.0",
- "cksum": "4107852581 15651",
+ "version": "2.1.0",
+ "cksum": "1990266641 15714",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -43,6 +43,7 @@
        "system_version": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}}},
+     "isRoot": true,
      "maxRows": 1},
    "Capability": {
      "columns": {
@@ -267,7 +268,8 @@
                   "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
-                  "min": 0, "max": "unlimited"}}}},
+                  "min": 0, "max": "unlimited"}}},
+     "isRoot": true},
    "Queue": {
      "columns": {
        "other_config": {
@@ -275,7 +277,8 @@
                   "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
-                  "min": 0, "max": "unlimited"}}}},
+                  "min": 0, "max": "unlimited"}}},
+     "isRoot": true},
    "Mirror": {
      "columns": {
        "name": {

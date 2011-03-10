@@ -1,6 +1,6 @@
 AT_BANNER([OVSDB -- tables])
 
-OVSDB_CHECK_POSITIVE_CPY([table with one column],
+OVSDB_CHECK_POSITIVE_CPY([non-root table with one column],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}}']],
   [[{"columns":{"name":{"type":"string"}}}]])
 
@@ -9,6 +9,22 @@ OVSDB_CHECK_POSITIVE_CPY([immutable table with one column],
     '{"columns": {"name": {"type": "string"}},
       "mutable": false}']],
   [[{"columns":{"name":{"type":"string"}},"mutable":false}]])
+
+OVSDB_CHECK_POSITIVE_CPY([root table with one column],
+  [[parse-table mytable \
+    '{"columns": {"name": {"type": "string"}},
+      "isRoot": true}']],
+  [[{"columns":{"name":{"type":"string"}},"isRoot":true}]])
+
+OVSDB_CHECK_POSITIVE_CPY([non-root table with default_is_root=true],
+  [[parse-table mytable '{"columns": {"name": {"type": "string"}}}' true]],
+  [[{"columns":{"name":{"type":"string"}},"isRoot":false}]])
+
+OVSDB_CHECK_POSITIVE_CPY([root table with default_is_root=true],
+  [[parse-table mytable \
+    '{"columns": {"name": {"type": "string"}},
+      "isRoot": true}' true]],
+  [[{"columns":{"name":{"type":"string"}}}]])
 
 OVSDB_CHECK_POSITIVE_CPY([table with maxRows of 2],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 

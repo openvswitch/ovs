@@ -285,9 +285,28 @@ parse_json_pair(const struct json *json,
     return NULL;
 }
 
+static void
+ovsdb_symbol_referenced(struct ovsdb_symbol *symbol,
+                        const struct ovsdb_base_type *base)
+{
+    assert(base->type == OVSDB_TYPE_UUID);
+
+    if (base->u.uuid.refTableName) {
+        switch (base->u.uuid.refType) {
+        case OVSDB_REF_STRONG:
+            symbol->strong_ref = true;
+            break;
+        case OVSDB_REF_WEAK:
+            symbol->weak_ref = true;
+            break;
+        }
+    }
+}
+
 static struct ovsdb_error * WARN_UNUSED_RESULT
 ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
-                      struct ovsdb_symbol_table *symtab)
+                      struct ovsdb_symbol_table *symtab,
+                      const struct ovsdb_base_type *base)
 {
     struct ovsdb_error *error0;
     const struct json *value;
@@ -304,14 +323,17 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
 
         error1 = unwrap_json(json, "named-uuid", JSON_STRING, &value);
         if (!error1) {
-            const char *name = json_string(value);
+            struct ovsdb_symbol *symbol;
 
             ovsdb_error_destroy(error0);
-            *uuid = ovsdb_symbol_table_insert(symtab, name)->uuid;
             if (!ovsdb_parser_is_id(json_string(value))) {
                 return ovsdb_syntax_error(json, NULL, "named-uuid string is "
                                           "not a valid <id>");
             }
+
+            symbol = ovsdb_symbol_table_insert(symtab, json_string(value));
+            *uuid = symbol->uuid;
+            ovsdb_symbol_referenced(symbol, base);
             return NULL;
         }
         ovsdb_error_destroy(error1);
@@ -321,10 +343,13 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
 }
 
 static struct ovsdb_error * WARN_UNUSED_RESULT
-ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+ovsdb_atom_from_json__(union ovsdb_atom *atom,
+                       const struct ovsdb_base_type *base,
                        const struct json *json,
                        struct ovsdb_symbol_table *symtab)
 {
+    enum ovsdb_atomic_type type = base->type;
+
     switch (type) {
     case OVSDB_TYPE_VOID:
         NOT_REACHED();
@@ -364,7 +389,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_UUID:
-        return ovsdb_atom_parse_uuid(&atom->uuid, json, symtab);
+        return ovsdb_atom_parse_uuid(&atom->uuid, json, symtab, base);
 
     case OVSDB_N_TYPES:
     default:
@@ -384,7 +409,9 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  *
  * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
  * ovsdb/SPECS for information about this, and for the syntax that this
- * function accepts. */
+ * function accepts.  If 'base' is a reference and a symbol is parsed, then the
+ * symbol's 'strong_ref' or 'weak_ref' member is set to true, as
+ * appropriate. */
 struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
@@ -393,7 +420,7 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
 {
     struct ovsdb_error *error;
 
-    error = ovsdb_atom_from_json__(atom, base->type, json, symtab);
+    error = ovsdb_atom_from_json__(atom, base, json, symtab);
     if (error) {
         return error;
     }
@@ -440,9 +467,12 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 }
 
 static char *
-ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
-                         const char *s, struct ovsdb_symbol_table *symtab)
+ovsdb_atom_from_string__(union ovsdb_atom *atom,
+                         const struct ovsdb_base_type *base, const char *s,
+                         struct ovsdb_symbol_table *symtab)
 {
+    enum ovsdb_atomic_type type = base->type;
+
     switch (type) {
     case OVSDB_TYPE_VOID:
         NOT_REACHED();
@@ -503,7 +533,9 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 
     case OVSDB_TYPE_UUID:
         if (*s == '@') {
-            atom->uuid = ovsdb_symbol_table_insert(symtab, s)->uuid;
+            struct ovsdb_symbol *symbol = ovsdb_symbol_table_insert(symtab, s);
+            atom->uuid = symbol->uuid;
+            ovsdb_symbol_referenced(symbol, base);
         } else if (!uuid_from_string(&atom->uuid, s)) {
             return xasprintf("\"%s\" is not a valid UUID", s);
         }
@@ -535,7 +567,9 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  *        then an identifier beginning with '@' is also acceptable.  If the
  *        named identifier is already in 'symtab', then the associated UUID is
  *        used; otherwise, a new, random UUID is used and added to the symbol
- *        table.
+ *        table.  If 'base' is a reference and a symbol is parsed, then the
+ *        symbol's 'strong_ref' or 'weak_ref' member is set to true, as
+ *        appropriate.
  *
  * Returns a null pointer if successful, otherwise an error message describing
  * the problem.  On failure, the contents of 'atom' are indeterminate.  The
@@ -549,7 +583,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom,
     struct ovsdb_error *error;
     char *msg;
 
-    msg = ovsdb_atom_from_string__(atom, base->type, s, symtab);
+    msg = ovsdb_atom_from_string__(atom, base, s, symtab);
     if (msg) {
         return msg;
     }
@@ -1829,6 +1863,8 @@ ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
     symbol = xmalloc(sizeof *symbol);
     symbol->uuid = *uuid;
     symbol->created = created;
+    symbol->strong_ref = false;
+    symbol->weak_ref = false;
     shash_add(&symtab->sh, name, symbol);
     return symbol;
 }

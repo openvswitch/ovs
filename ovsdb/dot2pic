@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,14 @@ while (<>) {
         $y *= $scale;
         $width *= $scale;
         $height *= $scale;
+        print "linethick = ", ($style eq 'bold' ? 0.5 : 1.0), ";\n";
         print "box at $x,$y wid $width height $height \"$name\"\n";
+        if ($style eq 'bold') {
+            my $inset = 2.0 / 72.0;
+            $width -= $inset * 2;
+            $height -= $inset * 2;
+            print "box at $x,$y wid $width height $height\n";
+        }
     } elsif (/edge/) {
         my (undef, $tail, $head, $n, $rest) = split(' ', $_, 5);
         my @xy;
@@ -50,6 +57,8 @@ while (<>) {
             $yl *= $scale;
         }
         my ($style, $color) = split(' ', $rest);
+
+        print "linethick = ", ($style eq 'dotted' ? 0.5 : 1), ";\n";
 
         print "spline -> from $xy[0][0],$xy[0][1]";
         for (my ($i) = 0; $i <= $#xy; $i++) {

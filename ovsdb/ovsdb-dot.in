@@ -16,6 +16,7 @@ def printEdge(tableName, baseType, label):
         options['label'] = '"%s"' % label
         if baseType.ref_type == 'weak':
             options['constraint'] = 'false'
+            options['style'] = 'dotted'
         print "\t%s -> %s [%s];" % (
             tableName,
             baseType.ref_table,
@@ -25,12 +26,17 @@ def schemaToDot(schemaFile):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
 
     print "digraph %s {" % schema.name
+    print '\tsize="6.5,4";'
+    print '\tmargin="0";'
+    print "\tnode [shape=box];"
+    print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
     for tableName, table in schema.tables.iteritems():
-        print '\tsize="6.5,4";'
-        print '\tmargin="0";'
-        print "\tnode [shape=box];"
-        print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
-        print "\t%s;" % tableName
+        options = {}
+        if table.is_root:
+            options['style'] = 'bold'
+        print "\t%s [%s];" % (
+            tableName,
+            ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
         for columnName, column in table.columns.iteritems():
             if column.type.value:
                 printEdge(tableName, column.type.key, "%s key" % columnName)

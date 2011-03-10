@@ -487,7 +487,11 @@ static void\n%s_columns_init(void)
     print "struct ovsdb_idl_table_class %stable_classes[%sN_TABLES] = {" % (prefix, prefix.upper())
     for tableName, table in sorted(schema.tables.iteritems()):
         structName = "%s%s" % (prefix, tableName.lower())
-        print "    {\"%s\"," % tableName
+        if table.is_root:
+            is_root = "true"
+        else:
+            is_root = "false"
+        print "    {\"%s\", %s," % (tableName, is_root)
         print "     %s_columns, ARRAY_SIZE(%s_columns)," % (
             structName, structName)
         print "     sizeof(struct %s)}," % structName

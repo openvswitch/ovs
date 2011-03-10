@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,11 @@ struct ovsdb_table_schema {
     bool mutable;
     struct shash columns;       /* Contains "struct ovsdb_column *"s. */
     unsigned int max_rows;      /* Maximum number of rows. */
+    bool is_root;               /* Part of garbage collection root set? */
 };
 
-struct ovsdb_table_schema *ovsdb_table_schema_create(const char *name,
-                                                     bool mutable,
-                                                     unsigned int max_rows);
+struct ovsdb_table_schema *ovsdb_table_schema_create(
+    const char *name, bool mutable, unsigned int max_rows, bool is_root);
 struct ovsdb_table_schema *ovsdb_table_schema_clone(
     const struct ovsdb_table_schema *);
 void ovsdb_table_schema_destroy(struct ovsdb_table_schema *);
@@ -43,7 +43,8 @@ struct ovsdb_error *ovsdb_table_schema_from_json(const struct json *,
                                                  const char *name,
                                                  struct ovsdb_table_schema **)
     WARN_UNUSED_RESULT;
-struct json *ovsdb_table_schema_to_json(const struct ovsdb_table_schema *);
+struct json *ovsdb_table_schema_to_json(const struct ovsdb_table_schema *,
+                                        bool default_is_root);
 
 const struct ovsdb_column *ovsdb_table_schema_get_column(
     const struct ovsdb_table_schema *, const char *name);

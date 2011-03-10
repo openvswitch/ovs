@@ -497,14 +497,6 @@ del_port(const struct ovsrec_bridge *br, const struct ovsrec_port *port)
     }
     ovsrec_bridge_set_ports(br, ports, n);
     free(ports);
-
-    /* Delete all of the port's interfaces. */
-    for (i = 0; i < port->n_interfaces; i++) {
-        ovsrec_interface_delete(port->interfaces[i]);
-    }
-
-    /* Delete the port itself. */
-    ovsrec_port_delete(port);
 }
 
 /* Delete 'iface' from 'port' (which must be within 'br').  If 'iface' was
@@ -530,7 +522,6 @@ del_interface(const struct ovsrec_bridge *br,
         }
         ovsrec_port_set_interfaces(port, ifaces, n);
         free(ifaces);
-        ovsrec_interface_delete(iface);
     }
 }
 
@@ -591,24 +582,6 @@ del_bridge(struct ovsdb_idl *idl,
 
     ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: delbr %s", br_name);
 
-    /* Delete everything that the bridge points to, then delete the bridge
-     * itself. */
-    while (br->n_ports > 0) {
-        del_port(br, br->ports[0]);
-    }
-    for (i = 0; i < br->n_mirrors; i++) {
-        ovsrec_mirror_delete(br->mirrors[i]);
-    }
-    if (br->netflow) {
-        ovsrec_netflow_delete(br->netflow);
-    }
-    if (br->sflow) {
-        ovsrec_sflow_delete(br->sflow);
-    }
-    for (i = 0; i < br->n_controller; i++) {
-        ovsrec_controller_delete(br->controller[i]);
-    }
-
     /* Remove 'br' from the vswitch's list of bridges. */
     bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
     for (i = n = 0; i < ovs->n_bridges; i++) {
@@ -618,9 +591,6 @@ del_bridge(struct ovsdb_idl *idl,
     }
     ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
     free(bridges);
-
-    /* Delete the bridge itself. */
-    ovsrec_bridge_delete(br);
 
     return commit_txn(txn, true);
 }

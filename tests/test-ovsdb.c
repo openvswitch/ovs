@@ -141,7 +141,7 @@ usage(void)
            "    parse string DATUMs as data of given TYPE, and re-serialize\n"
            "  parse-column NAME OBJECT\n"
            "    parse column NAME with info OBJECT, and re-serialize\n"
-           "  parse-table NAME OBJECT\n"
+           "  parse-table NAME OBJECT [DEFAULT-IS-ROOT]\n"
            "    parse table NAME with info OBJECT\n"
            "  parse-row TABLE ROW..., and re-serialize\n"
            "    parse each ROW of defined TABLE\n"
@@ -608,12 +608,15 @@ static void
 do_parse_table(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_table_schema *ts;
+    bool default_is_root;
     struct json *json;
+
+    default_is_root = argc > 3 && !strcmp(argv[3], "true");
 
     json = parse_json(argv[2]);
     check_ovsdb_error(ovsdb_table_schema_from_json(json, argv[1], &ts));
     json_destroy(json);
-    print_and_free_json(ovsdb_table_schema_to_json(ts));
+    print_and_free_json(ovsdb_table_schema_to_json(ts, default_is_root));
     ovsdb_table_schema_destroy(ts);
 }
 
@@ -1932,7 +1935,7 @@ static struct command all_commands[] = {
     { "parse-data-strings", 2, INT_MAX, do_parse_data_strings },
     { "sort-atoms", 2, 2, do_sort_atoms },
     { "parse-column", 2, 2, do_parse_column },
-    { "parse-table", 2, 2, do_parse_table },
+    { "parse-table", 2, 3, do_parse_table },
     { "parse-rows", 2, INT_MAX, do_parse_rows },
     { "compare-rows", 2, INT_MAX, do_compare_rows },
     { "parse-conditions", 2, INT_MAX, do_parse_conditions },

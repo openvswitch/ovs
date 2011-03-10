@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,22 @@ class DbSchema(object):
                 self.__check_ref_table(column, column.type.key, "key")
                 self.__check_ref_table(column, column.type.value, "value")
 
+        # "isRoot" was not part of the original schema definition.  Before it
+        # was added, there was no support for garbage collection.  So, for
+        # backward compatibility, if the root set is empty then assume that
+        # every table is in the root set.
+        if self.__root_set_size() == 0:
+            for table in self.tables.itervalues():
+                table.is_root = True
+
+    def __root_set_size(self):
+        """Returns the number of tables in the schema's root set."""
+        n_root = 0
+        for table in self.tables.itervalues():
+            if table.is_root:
+                n_root += 1
+        return n_root
+
     @staticmethod
     def from_json(json):
         parser = ovs.db.parser.Parser(json, "database schema")
@@ -60,9 +76,15 @@ class DbSchema(object):
         return DbSchema(name, version, tables)
 
     def to_json(self):
+        # "isRoot" was not part of the original schema definition.  Before it
+        # was added, there was no support for garbage collection.  So, for
+        # backward compatibility, if every table is in the root set then do not
+        # output "isRoot" in table schemas.
+        default_is_root = self.__root_set_size() == len(self.tables)
+
         tables = {}
         for table in self.tables.itervalues():
-            tables[table.name] = table.to_json()
+            tables[table.name] = table.to_json(default_is_root)
         json = {"name": self.name, "tables": tables}
         if self.version:
             json["version"] = self.version
@@ -96,11 +118,13 @@ class IdlSchema(DbSchema):
                          idlPrefix, idlHeader)
 
 class TableSchema(object):
-    def __init__(self, name, columns, mutable=True, max_rows=sys.maxint):
+    def __init__(self, name, columns, mutable=True, max_rows=sys.maxint,
+                 is_root=True):
         self.name = name
         self.columns = columns
         self.mutable = mutable
-        self.max_rows = max_rows        
+        self.max_rows = max_rows
+        self.is_root = is_root
 
     @staticmethod
     def from_json(json, name):
@@ -108,6 +132,7 @@ class TableSchema(object):
         columnsJson = parser.get("columns", [dict])
         mutable = parser.get_optional("mutable", [bool], True)
         max_rows = parser.get_optional("maxRows", [int])
+        is_root = parser.get_optional("isRoot", [bool], False)
         parser.finish()
 
         if max_rows == None:
@@ -128,12 +153,25 @@ class TableSchema(object):
             columns[columnName] = ColumnSchema.from_json(columnJson,
                                                          columnName)
 
-        return TableSchema(name, columns, mutable, max_rows)
+        return TableSchema(name, columns, mutable, max_rows, is_root)
 
-    def to_json(self):
+    def to_json(self, default_is_root=False):
+        """Returns this table schema serialized into JSON.
+
+        The "isRoot" member is included in the JSON only if its value would
+        differ from 'default_is_root'.  Ordinarily 'default_is_root' should be
+        false, because ordinarily a table would be not be part of the root set
+        if its "isRoot" member is omitted.  However, garbage collection was not
+        orginally included in OVSDB, so in older schemas that do not include
+        any "isRoot" members, every table is implicitly part of the root set.
+        To serialize such a schema in a way that can be read by older OVSDB
+        tools, specify 'default_is_root' as True.
+        """
         json = {}
         if not self.mutable:
             json["mutable"] = False
+        if default_is_root != self.is_root:
+            json["isRoot"] = self.is_root
 
         json["columns"] = columns = {}
         for column in self.columns.itervalues():

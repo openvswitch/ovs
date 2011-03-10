@@ -290,9 +290,11 @@ Table	Purpose
 .SH "TABLE RELATIONSHIPS"
 .PP
 The following diagram shows the relationship among tables in the
-database.  Each node represents a table.  Each edge leads from the
+database.  Each node represents a table.  Tables that are part of the
+``root set'' are shown with double borders.  Each edge leads from the
 table that contains it and points to the table that its value
-represents.  Edges are labeled with their column names.
+represents.  Edges are labeled with their column names.  Thick lines
+represent strong references; thin lines represent weak references.
 .RS -1in
 """
         erStream = open(erFile, "r")

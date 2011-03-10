@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <database title="Open vSwitch Configuration Database">
-  <p>A database with this schema holds the configuration for one Open
-    vSwitch daemon.  The root of the configuration for the daemon is
-    the <ref table="Open_vSwitch"/> table, which must have exactly one
+  <p>
+    A database with this schema holds the configuration for one Open
+    vSwitch daemon.  The top-level configuration for the daemon is the
+    <ref table="Open_vSwitch"/> table, which must have exactly one
     record.  Records in other tables are significant only when they
-    can be reached directly or indirectly from the
-    <ref table="Open_vSwitch"/> table.</p>
+    can be reached directly or indirectly from the <ref
+    table="Open_vSwitch"/> table.  Records that are not reachable from
+    the <ref table="Open_vSwitch"/> table are automatically deleted
+    from the database, except for records in a few distinguished
+    ``root set'' tables noted below.
+  </p>
 
   <table name="Open_vSwitch" title="Open vSwitch configuration.">
-    Configuration for an Open vSwitch daemon.  There must be exactly one record
-    in the <ref table="Open_vSwitch"/> table.
+    Configuration for an Open vSwitch daemon.  There must be exactly
+    one record in the <ref table="Open_vSwitch"/> table.
 
     <group title="Configuration">
       <column name="bridges">

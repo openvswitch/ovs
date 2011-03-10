@@ -341,7 +341,18 @@ function start {
         cksum=`$ovsdb_tool db-cksum "$OVSDB_SERVER_DB" | awk '{print $1}'`
         cp "$OVSDB_SERVER_DB" "$OVSDB_SERVER_DB.backup$version-$cksum"
 
-        # Upgrade or downgrade schema and compact database.
+        # Compact database.  This is important if the old schema did not enable
+        # garbage collection (i.e. if it did not have any tables with "isRoot":
+        # true) but the new schema does.  In that situation the old database
+        # may contain a transaction that creates a record followed by a
+        # transaction that creates the first use of the record.  Replaying that
+        # series of transactions against the new database schema (as "convert"
+        # does) would cause the record to be dropped by the first transaction,
+        # then the second transaction would cause a referential integrity
+        # failure (for a strong reference).
+        $ovsdb_tool -vANY:console:emer compact "$OVSDB_SERVER_DB"
+
+        # Upgrade or downgrade schema.
         $ovsdb_tool -vANY:console:emer convert "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
     fi
 

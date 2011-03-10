@@ -131,6 +131,7 @@ is represented by <database-schema>, as described below.
 
         "columns": {<id>: <column-schema>, ...}   required
         "maxRows": <integer>                      optional
+        "isRoot": <boolean>                       optional
 
     The value of "columns" is a JSON object whose names are column
     names and whose values are <column-schema>s.
@@ -152,12 +153,28 @@ is represented by <database-schema>, as described below.
         the database process is stopped and then started again, each
         "_version" also changes to a new random value.
 
+    If "isRoot" is omitted or specified as false, then any given row
+    in the table may exist only when there is at least one reference
+    to it, with refType "strong", from a different row (in the same
+    table or a different table).  This is a "deferred" action:
+    unreferenced rows in the table are deleted just before transaction
+    commit.  If "isRoot" is specified as true, then rows in the table
+    exist independent of any references (they can be thought of as
+    part of the "root set" in a garbage collector).
+
+    For compatibility with schemas created before "isRoot" was
+    introduced, if "isRoot" is omitted or false in every
+    <table-schema> in a given <database-schema>, then every table is
+    part of the root set.
+
     If "maxRows" is specified, as a positive integer, it limits the
     maximum number of rows that may be present in the table.  This is
     a "deferred" constraint, enforced only at transaction commit time
     (see the "transact" request below).  If "maxRows" is not
     specified, the size of the table is limited only by the resources
-    available to the database server.
+    available to the database server.  "maxRows" constraints are
+    enforced after unreferenced rows are deleted from tables with a
+    false "isRoot".
 
 <column-schema>
 

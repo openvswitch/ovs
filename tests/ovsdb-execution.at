@@ -57,6 +57,44 @@ m4_define([WEAK_SCHEMA],
                                     "refType": "weak"},
                             "min": 0, "max": "unlimited"}}}}}}]])
 
+m4_define([GC_SCHEMA],
+  [[{"name": "gc",
+     "tables": {
+       "root": {
+         "columns": {
+           "a": {"type": {"key": {"type": "uuid",
+                                  "refTable": "a"},
+                            "min": 0, "max": "unlimited"}}},
+         "isRoot": true},
+       "a": {
+         "columns": {
+           "a": {"type": "integer"},
+           "a2a": {"type": {"key": {"type": "uuid",
+                                    "refTable": "a"},
+                            "min": 0, "max": "unlimited"}},
+           "a2b": {"type": {"key": {"type": "uuid",
+                                    "refTable": "b"},
+                            "min": 0, "max": "unlimited"}},
+           "wa2a": {"type": {"key": {"type": "uuid",
+                                     "refTable": "a",
+                                     "refType": "weak"},
+                             "min": 0, "max": "unlimited"}},
+           "wa2b": {"type": {"key": {"type": "uuid",
+                                    "refTable": "b",
+                                    "refType": "weak"},
+                             "min": 0, "max": "unlimited"}}}},
+       "b": {
+         "columns": {
+           "b": {"type": "integer"},
+           "b2a": {"type": {"key": {"type": "uuid",
+                                    "refTable": "a"},
+                            "min": 0, "max": "unlimited"}},
+           "wb2a": {"type": {"key": {"type": "uuid",
+                                     "refTable": "a",
+                                     "refType": "weak"},
+                             "min": 0, "max": "unlimited"}}},
+         "isRoot": false}}}]])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Runs "test-ovsdb execute" with the given SCHEMA and each of the
@@ -760,6 +798,150 @@ OVSDB_CHECK_EXECUTION([weak references],
 [{"count":1}]
 [{"rows":[]}]
 [{"rows":[{"_uuid":["uuid","<3>"],"b":2,"b2a":["set",[]]},{"_uuid":["uuid","<4>"],"b":3,"b2a":["set",[]]}]}]
+]])
+
+OVSDB_CHECK_EXECUTION([garbage collection],
+  [GC_SCHEMA],
+  [dnl Check that inserting a row without any references is a no-op.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 0}}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]],
+   dnl Check that inserting a chain of rows that reference each other
+   dnl in turn is also a no-op.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 0, "a2a": ["named-uuid", "row1"]},
+       "uuid-name": "row0"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 1, "a2a": ["named-uuid", "row2"]},
+       "uuid-name": "row1"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 2, "a2a": ["named-uuid", "row3"]},
+       "uuid-name": "row2"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 3},
+       "uuid-name": "row3"}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]],
+   dnl Check that inserting a pair of rows that mutually reference each
+   dnl other causes the rows to be retained.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 4, "a2a": ["named-uuid", "row5"]},
+       "uuid-name": "row4"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 5, "a2a": ["named-uuid", "row4"]},
+       "uuid-name": "row5"}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"],
+       "sort": ["a"]}]]],
+   dnl Check that unreferencing one of the rows causes the other to be deleted.
+   [[["gc",
+      {"op": "update",
+       "table": "a",
+       "where": [["a", "==", 4]],
+       "row": {"a2a": ["set", []]}}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]],
+   dnl Check that inserting a pair of rows that mutually weak reference each
+   dnl other is a no-op.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 6, "wa2a": ["named-uuid", "row7"]},
+       "uuid-name": "row6"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 7, "wa2a": ["named-uuid", "row6"]},
+       "uuid-name": "row7"}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]],
+   dnl Check that a circular chain of rows is retained.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 8, "a2a": ["named-uuid", "row9"]},
+       "uuid-name": "row8"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 9, "a2a": ["named-uuid", "row10"]},
+       "uuid-name": "row9"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 10, "a2a": ["named-uuid", "row11"]},
+       "uuid-name": "row10"},
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 11, "a2a": ["named-uuid", "row8"]},
+       "uuid-name": "row11"}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"],
+       "sort": ["a"]}]]],
+   dnl Check that breaking the chain causes all of the rows to be deleted.
+   [[["gc",
+      {"op": "update",
+       "table": "a",
+       "where": [["a", "==", 9]],
+       "row": {"a2a": ["set", []]}}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]],
+   dnl Check that inserting a row only referenced by itself is a no-op.
+   [[["gc",
+      {"op": "insert",
+       "table": "a",
+       "row": {"a": 12, "a2a": ["named-uuid", "self"]},
+       "uuid-name": "self"}]]],
+   [[["gc",
+      {"op": "select",
+       "table": "a",
+       "where": [],
+       "columns": ["a"]}]]]],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"rows":[]}]
+[{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]},{"uuid":["uuid","<4>"]}]
+[{"rows":[]}]
+[{"uuid":["uuid","<5>"]},{"uuid":["uuid","<6>"]}]
+[{"rows":[{"a":4},{"a":5}]}]
+[{"count":1}]
+[{"rows":[]}]
+[{"uuid":["uuid","<7>"]},{"uuid":["uuid","<8>"]}]
+[{"rows":[]}]
+[{"uuid":["uuid","<9>"]},{"uuid":["uuid","<10>"]},{"uuid":["uuid","<11>"]},{"uuid":["uuid","<12>"]}]
+[{"rows":[{"a":8},{"a":9},{"a":10},{"a":11}]}]
+[{"count":1}]
+[{"rows":[]}]
+[{"uuid":["uuid","<13>"]}]
+[{"rows":[]}]
 ]])])
 
 EXECUTION_EXAMPLES

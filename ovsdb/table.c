@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ add_column(struct ovsdb_table_schema *ts, struct ovsdb_column *column)
 
 struct ovsdb_table_schema *
 ovsdb_table_schema_create(const char *name, bool mutable,
-                          unsigned int max_rows)
+                          unsigned int max_rows, bool is_root)
 {
     struct ovsdb_column *uuid, *version;
     struct ovsdb_table_schema *ts;
@@ -47,6 +47,7 @@ ovsdb_table_schema_create(const char *name, bool mutable,
     ts->mutable = mutable;
     shash_init(&ts->columns);
     ts->max_rows = max_rows;
+    ts->is_root = is_root;
 
     uuid = ovsdb_column_create("_uuid", false, true, &ovsdb_type_uuid);
     add_column(ts, uuid);
@@ -65,7 +66,8 @@ ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
     struct ovsdb_table_schema *new;
     struct shash_node *node;
 
-    new = ovsdb_table_schema_create(old->name, old->mutable, old->max_rows);
+    new = ovsdb_table_schema_create(old->name, old->mutable,
+                                    old->max_rows, old->is_root);
     SHASH_FOR_EACH (node, &old->columns) {
         const struct ovsdb_column *column = node->data;
 
@@ -97,7 +99,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
                              struct ovsdb_table_schema **tsp)
 {
     struct ovsdb_table_schema *ts;
-    const struct json *columns, *mutable, *max_rows;
+    const struct json *columns, *mutable, *max_rows, *is_root;
     struct shash_node *node;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
@@ -111,6 +113,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
                                   OP_TRUE | OP_FALSE | OP_OPTIONAL);
     max_rows = ovsdb_parser_member(&parser, "maxRows",
                                    OP_INTEGER | OP_OPTIONAL);
+    is_root = ovsdb_parser_member(&parser, "isRoot", OP_BOOLEAN | OP_OPTIONAL);
     error = ovsdb_parser_finish(&parser);
     if (error) {
         return error;
@@ -133,7 +136,8 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
 
     ts = ovsdb_table_schema_create(name,
                                    mutable ? json_boolean(mutable) : true,
-                                   MIN(n_max_rows, UINT_MAX));
+                                   MIN(n_max_rows, UINT_MAX),
+                                   is_root ? json_boolean(is_root) : false);
     SHASH_FOR_EACH (node, json_object(columns)) {
         struct ovsdb_column *column;
 
@@ -156,8 +160,19 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     return 0;
 }
 
+/* Returns table schema 'ts' serialized into JSON.
+ *
+ * The "isRoot" member is included in the JSON only if its value would differ
+ * from 'default_is_root'.  Ordinarily 'default_is_root' should be false,
+ * because ordinarily a table would be not be part of the root set if its
+ * "isRoot" member is omitted.  However, garbage collection was not orginally
+ * included in OVSDB, so in older schemas that do not include any "isRoot"
+ * members, every table is implicitly part of the root set.  To serialize such
+ * a schema in a way that can be read by older OVSDB tools, specify
+ * 'default_is_root' as true. */
 struct json *
-ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts)
+ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts,
+                           bool default_is_root)
 {
     struct json *json, *columns;
     struct shash_node *node;
@@ -165,6 +180,9 @@ ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts)
     json = json_object_create();
     if (!ts->mutable) {
         json_object_put(json, "mutable", json_boolean_create(false));
+    }
+    if (default_is_root != ts->is_root) {
+        json_object_put(json, "isRoot", json_boolean_create(ts->is_root));
     }
 
     columns = json_object_create();

@@ -81,6 +81,8 @@ struct ovsdb_txn_row {
     unsigned long changed[];    /* Bits set to 1 for columns that changed. */
 };
 
+static struct ovsdb_error * WARN_UNUSED_RESULT
+delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *r);
 static void ovsdb_txn_row_prefree(struct ovsdb_txn_row *);
 static struct ovsdb_error * WARN_UNUSED_RESULT
 for_each_txn_row(struct ovsdb_txn *txn,
@@ -158,6 +160,20 @@ find_txn_row(const struct ovsdb_table *table, const struct uuid *uuid)
     return NULL;
 }
 
+static struct ovsdb_txn_row *
+find_or_make_txn_row(struct ovsdb_txn *txn, const struct ovsdb_table *table,
+                     const struct uuid *uuid)
+{
+    struct ovsdb_txn_row *txn_row = find_txn_row(table, uuid);
+    if (!txn_row) {
+        const struct ovsdb_row *row = ovsdb_table_get_row(table, uuid);
+        if (row) {
+            txn_row = ovsdb_txn_row_modify(txn, row)->txn_row;
+        }
+    }
+    return txn_row;
+}
+
 static struct ovsdb_error * WARN_UNUSED_RESULT
 ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
                            const struct ovsdb_column *c,
@@ -175,24 +191,22 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
     table = base->u.uuid.refTable;
     for (i = 0; i < n; i++) {
         const struct uuid *uuid = &atoms[i].uuid;
-        struct ovsdb_txn_row *txn_row = find_txn_row(table, uuid);
+        struct ovsdb_txn_row *txn_row;
+
         if (uuid_equals(uuid, ovsdb_row_get_uuid(r))) {
             /* Self-references don't count. */
             continue;
         }
+
+        txn_row = find_or_make_txn_row(txn, table, uuid);
         if (!txn_row) {
-            const struct ovsdb_row *row = ovsdb_table_get_row(table, uuid);
-            if (row) {
-                txn_row = ovsdb_txn_row_modify(txn, row)->txn_row;
-            } else {
-                return ovsdb_error("referential integrity violation",
-                                   "Table %s column %s row "UUID_FMT" "
-                                   "references nonexistent row "UUID_FMT" in "
-                                   "table %s.",
-                                   r->table->schema->name, c->name,
-                                   UUID_ARGS(ovsdb_row_get_uuid(r)),
-                                   UUID_ARGS(uuid), table->schema->name);
-            }
+            return ovsdb_error("referential integrity violation",
+                               "Table %s column %s row "UUID_FMT" "
+                               "references nonexistent row "UUID_FMT" in "
+                               "table %s.",
+                               r->table->schema->name, c->name,
+                               UUID_ARGS(ovsdb_row_get_uuid(r)),
+                               UUID_ARGS(uuid), table->schema->name);
         }
         txn_row->n_refs += delta;
     }
@@ -255,6 +269,92 @@ check_ref_count(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *r)
                            r->table->schema->name, UUID_ARGS(&r->uuid),
                            r->n_refs);
     }
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
+                const struct ovsdb_base_type *base,
+                const union ovsdb_atom *atoms, unsigned int n)
+{
+    const struct ovsdb_table *table;
+    unsigned int i;
+
+    if (!ovsdb_base_type_is_strong_ref(base)) {
+        return NULL;
+    }
+
+    table = base->u.uuid.refTable;
+    for (i = 0; i < n; i++) {
+        const struct uuid *uuid = &atoms[i].uuid;
+        struct ovsdb_txn_row *txn_row;
+
+        if (uuid_equals(uuid, ovsdb_row_get_uuid(row))) {
+            /* Self-references don't count. */
+            continue;
+        }
+
+        txn_row = find_or_make_txn_row(txn, table, uuid);
+        if (!txn_row) {
+            return OVSDB_BUG("strong ref target missing");
+        } else if (!txn_row->n_refs) {
+            return OVSDB_BUG("strong ref target has zero n_refs");
+        } else if (!txn_row->new) {
+            return OVSDB_BUG("deleted strong ref target");
+        }
+
+        if (--txn_row->n_refs == 0) {
+            struct ovsdb_error *error = delete_garbage_row(txn, txn_row);
+            if (error) {
+                return error;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+{
+    struct shash_node *node;
+    struct ovsdb_row *row;
+
+    if (txn_row->table->schema->is_root) {
+        return NULL;
+    }
+
+    row = txn_row->new;
+    txn_row->new = NULL;
+    hmap_remove(&txn_row->table->rows, &row->hmap_node);
+    SHASH_FOR_EACH (node, &txn_row->table->schema->columns) {
+        const struct ovsdb_column *column = node->data;
+        const struct ovsdb_datum *field = &row->fields[column->index];
+        struct ovsdb_error *error;
+
+        error = delete_row_refs(txn, row,
+                                &column->type.key, field->keys, field->n);
+        if (error) {
+            return error;
+        }
+
+        error = delete_row_refs(txn, row,
+                                &column->type.value, field->values, field->n);
+        if (error) {
+            return error;
+        }
+    }
+    ovsdb_row_destroy(row);
+
+    return NULL;
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+collect_garbage(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+{
+    if (txn_row->new && !txn_row->n_refs) {
+        return delete_garbage_row(txn, txn_row);
+    }
+    return NULL;
 }
 
 static struct ovsdb_error * WARN_UNUSED_RESULT
@@ -491,15 +591,22 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
         return NULL;
     }
 
-    /* Check maximum rows table constraints. */
-    error = check_max_rows(txn);
+    /* Update reference counts and check referential integrity. */
+    error = update_ref_counts(txn);
     if (error) {
         ovsdb_txn_abort(txn);
         return error;
     }
 
-    /* Update reference counts and check referential integrity. */
-    error = update_ref_counts(txn);
+    /* Delete unreferenced, non-root rows. */
+    error = for_each_txn_row(txn, collect_garbage);
+    if (error) {
+        ovsdb_txn_abort(txn);
+        return OVSDB_WRAP_BUG("can't happen", error);
+    }
+
+    /* Check maximum rows table constraints. */
+    error = check_max_rows(txn);
     if (error) {
         ovsdb_txn_abort(txn);
         return error;

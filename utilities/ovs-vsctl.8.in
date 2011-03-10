@@ -478,9 +478,11 @@ A bridge port.  Records may be identified by port name.
 A network device attached to a port.  Records may be identified by
 name.
 .IP "\fBQoS\fR"
-Quality-of-service configuration for an \fBInterface\fR.
+Quality-of-service configuration for a \fBPort\fR.  Records may be
+identified by port name.
 .IP "\fBQueue\fR"
-Configuration for one queue within a \fBQoS\fR configuration.
+Configuration for one queue within a \fBQoS\fR configuration.  Records
+may only be identified by UUID.
 .IP "\fBMonitor\fR"
 Connectivity Monitoring attached to an \fBInterface\fR.  Records may be
 identified by \fBInterface\fR name.
@@ -637,10 +639,30 @@ If \fB@\fIname\fR is specified, then the UUID for the new row may be
 referred to by that name elsewhere in the same \fBovs\-vsctl\fR
 invocation in contexts where a UUID is expected.  Such references may
 precede or follow the \fBcreate\fR command.
+.IP
+Records in the Open vSwitch database are significant only when they
+can be reached directly or indirectly from the \fBOpen_vSwitch\fR
+table.  Except for records in the \fBQoS\fR or \fBQueue\fR tables,
+records that are not reachable from the \fBOpen_vSwitch\fR table are
+automatically deleted from the database.  This deletion happens
+immediately, without waiting for additional \fBovs\-vsctl\fR commands
+or other database activity.  Thus, a \fBcreate\fR command must
+generally be accompanied by additional commands \fIwithin the same
+\fBovs\-vsctl\fI invocation\fR to add a chain of references to the
+newly created record from the top-level \fBOpen_vSwitch\fR record.
+The \fBEXAMPLES\fR section gives some examples that show how to do
+this.
 .
 .IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 \fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
+.IP
+It is often unnecessary to specify explicit \fBdestroy\fR commands,
+because (except for records in the \fBQoS\fR or \fBQueue\fR tables)
+records that are not reachable from the \fBOpen_vSwitch\fR table are
+automatically deleted from the database.  This means that deleting the
+last reference to a record is sufficient for deleting the record
+itself.  See the \fBEXAMPLES\fR section below for more information.
 .
 .IP "\fBwait\-until \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
 Waits until \fItable\fR contains a record named \fIrecord\fR whose
@@ -720,10 +742,10 @@ ignored):
 .IP
 .B "\-\- \-\-id=@m create Mirror name=mymirror select-dst-port=@eth0,@eth1 select-src-port=@eth0,@eth1 output-port=@eth2"
 .PP
-Remove the mirror created above from \fBbr0\fR and destroy the Mirror
-record (to avoid having an unreferenced record in the database):
+Remove the mirror created above from \fBbr0\fR, which also destroys
+the Mirror record (since it is now unreferenced):
 .IP
-.B "ovs\-vsctl destroy Mirror mymirror \-\- clear Bridge br0 mirrors"
+.B "remove Bridge br0 mirrors mymirror"
 .SS "Quality of Service (QoS)"
 .PP
 Create a \fBlinux\-htb\fR QoS record that points to a few queues and
@@ -744,7 +766,8 @@ Deconfigure the QoS record above from \fBeth1\fR only:
 .B "ovs\-vsctl clear Port eth1 qos"
 .PP
 To deconfigure the QoS record from both \fBeth0\fR and \fBeth1\fR and
-then delete the QoS record:
+then delete the QoS record (which must be done explicitly because
+unreferenced QoS records are not automatically destroyed):
 .IP
 .B "ovs\-vsctl \-\- destroy QoS eth0 \-\- clear Port eth0 qos \-\- clear Port eth1 qos"
 .PP
@@ -781,10 +804,10 @@ instead use an active timeout of 60 seconds:
 .IP
 .B "ovs\-vsctl set NetFlow br0 active_timeout=60"
 .PP
-Deconfigure the NetFlow settings from \fBbr0\fR and delete the NetFlow
-record (to avoid having an unreferenced record in the database):
+Deconfigure the NetFlow settings from \fBbr0\fR, which also destroys
+the NetFlow record (since it is now unreferenced):
 .IP
-.B "ovs\-vsctl destroy NetFlow br0 \-\- clear Bridge br0 netflow"
+.B "ovs\-vsctl clear Bridge br0 netflow"
 .SS "sFlow"
 .PP
 Configure bridge \fBbr0\fR to send sFlow records to a collector on
@@ -795,10 +818,10 @@ with specific sampling parameters:
 .IP
 .B "\-\- set Bridge br0 sflow=@s"
 .PP
-Deconfigure sFlow from br0 and destroy the sFlow record (to avoid
-having an unreferenced record in the database):
+Deconfigure sFlow from br0, which also destroys the sFlow record
+(since it is now unreferenced):
 .IP
-.B "ovs\-vsctl \-\- destroy sFlow br0 \-\- clear Bridge br0 sflow"
+.B "ovs\-vsctl \-\- clear Bridge br0 sflow"
 .SH "EXIT STATUS"
 .IP "0"
 Successful program execution.

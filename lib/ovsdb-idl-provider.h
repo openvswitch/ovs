@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks.
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ struct ovsdb_idl_column {
 
 struct ovsdb_idl_table_class {
     char *name;
+    bool is_root;
     const struct ovsdb_idl_column *columns;
     size_t n_columns;
     size_t allocation_size;

@@ -127,6 +127,21 @@ is_valid_version(const char *s)
     return n != -1 && s[n] == '\0';
 }
 
+/* Returns the number of tables in 'schema''s root set. */
+static size_t
+root_set_size(const struct ovsdb_schema *schema)
+{
+    struct shash_node *node;
+    size_t n_root;
+
+    SHASH_FOR_EACH (node, &schema->tables) {
+        struct ovsdb_table_schema *table = node->data;
+
+        n_root += table->is_root;
+    }
+    return n_root;
+}
+
 struct ovsdb_error *
 ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
 {
@@ -205,6 +220,18 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
         }
     }
 
+    /* "isRoot" was not part of the original schema definition.  Before it was
+     * added, there was no support for garbage collection.  So, for backward
+     * compatibility, if the root set is empty then assume that every table is
+     * in the root set. */
+    if (root_set_size(schema) == 0) {
+        SHASH_FOR_EACH (node, &schema->tables) {
+            struct ovsdb_table_schema *table = node->data;
+
+            table->is_root = true;
+        }
+    }
+
     *schemap = schema;
     return 0;
 }
@@ -214,6 +241,7 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
 {
     struct json *json, *tables;
     struct shash_node *node;
+    bool default_is_root;
 
     json = json_object_create();
     json_object_put_string(json, "name", schema->name);
@@ -224,12 +252,18 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
         json_object_put_string(json, "cksum", schema->cksum);
     }
 
+    /* "isRoot" was not part of the original schema definition.  Before it was
+     * added, there was no support for garbage collection.  So, for backward
+     * compatibility, if every table is in the root set then do not output
+     * "isRoot" in table schemas. */
+    default_is_root = root_set_size(schema) == shash_count(&schema->tables);
+
     tables = json_object_create();
 
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *table = node->data;
         json_object_put(tables, table->name,
-                        ovsdb_table_schema_to_json(table));
+                        ovsdb_table_schema_to_json(table, default_is_root));
     }
     json_object_put(json, "tables", tables);
 
