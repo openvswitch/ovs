@@ -60,6 +60,7 @@ struct reconnect {
     int backoff;
     long long int last_received;
     long long int last_connected;
+    long long int last_disconnected;
     unsigned int max_tries;
 
     /* These values are simply for statistics reporting, not otherwise used
@@ -106,6 +107,7 @@ reconnect_create(long long int now)
     fsm->backoff = 0;
     fsm->last_received = now;
     fsm->last_connected = now;
+    fsm->last_disconnected = now;
     fsm->max_tries = UINT_MAX;
     fsm->creation_time = now;
 
@@ -353,6 +355,9 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
             }
         }
 
+        if (fsm->state & (S_ACTIVE | S_IDLE)) {
+            fsm->last_disconnected = now;
+        }
         /* Back off. */
         if (fsm->state & (S_ACTIVE | S_IDLE)
              && (fsm->last_received - fsm->last_connected >= fsm->backoff
@@ -646,6 +651,16 @@ reconnect_get_connection_duration(const struct reconnect *fsm,
     return reconnect_is_connected(fsm) ? now - fsm->last_connected : 0;
 }
 
+/* Returns the number of milliseconds for which 'fsm' has been continuously
+ * disconnected from its peer.  (If 'fsm' is not currently connected,
+ * this is 0.) */
+unsigned int
+reconnect_get_disconnect_duration(const struct reconnect *fsm,
+                                  long long int now)
+{
+    return reconnect_is_connected(fsm) ? 0 : now - fsm->last_disconnected;
+}
+
 /* Copies various statistics for 'fsm' into '*stats'. */
 void
 reconnect_get_stats(const struct reconnect *fsm, long long int now,
@@ -654,11 +669,14 @@ reconnect_get_stats(const struct reconnect *fsm, long long int now,
     stats->creation_time = fsm->creation_time;
     stats->last_received = fsm->last_received;
     stats->last_connected = fsm->last_connected;
+    stats->last_disconnected = fsm->last_disconnected;
     stats->backoff = fsm->backoff;
     stats->seqno = fsm->seqno;
     stats->is_connected = reconnect_is_connected(fsm);
     stats->current_connection_duration
         = reconnect_get_connection_duration(fsm, now);
+    stats->current_disconnect_duration
+        = reconnect_get_disconnect_duration(fsm, now);
     stats->total_connected_duration = (stats->current_connection_duration
                                        + fsm->total_connected_duration);
     stats->n_attempted_connections = fsm->n_attempted_connections;

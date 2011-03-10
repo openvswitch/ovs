@@ -237,6 +237,13 @@ diff_stats(const struct reconnect_stats *old,
                new->current_connection_duration,
                new->total_connected_duration);
     }
+    if (old->last_disconnected != new->last_disconnected) {
+        printf("  disconnected at %llu ms (%u ms ago)\n",
+               new->last_disconnected, new->current_disconnect_duration);
+    }
+    if (old->current_disconnect_duration != new->current_disconnect_duration) {
+        printf("  disconnected for %llu ms\n", new->current_disconnect_duration);
+    }
 }
 
 static void

@@ -117,6 +117,13 @@ def diff_stats(old, new):
               % (negate, new.current_connection_duration,
                  new.total_connected_duration))
 
+    if (old.last_disconnected != new.last_disconnected):
+        print("  disconnected at %d ms (%d ms ago)"
+              % (new.last_disconnected, new.current_disconnect_duration))
+
+    if (old.current_disconnect_duration != new.current_disconnect_duration):
+        print("  disconnected for %d ms" % (new.current_disconnect_duration))
+
 def do_set_passive(arg):
     r.set_passive(True, now)
 

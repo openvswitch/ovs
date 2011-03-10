@@ -146,6 +146,7 @@ class Reconnect(object):
         self.backoff = 0
         self.last_received = now
         self.last_connected = now
+        self.last_disconnected = now
         self.max_tries = None
 
         self.creation_time = now
@@ -341,6 +342,9 @@ class Reconnect(object):
                     self.info_level("%s: %s attempt timed out"
                                     % (self.name, type))
 
+            if (self.state in (Reconnect.Active, Reconnect.Idle)):
+                self.last_disconnected = now
+
             # Back off
             if (self.state in (Reconnect.Active, Reconnect.Idle) and
                 (self.last_received - self.last_connected >= self.backoff or
@@ -534,17 +538,28 @@ class Reconnect(object):
         else:
             return 0
 
+    def get_disconnect_duration(self, now):
+        """Returns the number of milliseconds for which this FSM has been
+        continuously disconnected from its peer.  (If this FSM is not currently
+        connected, this is 0.)"""
+        if not self.is_connected():
+            return now - self.last_disconnected
+        else:
+            return 0
+
     def get_stats(self, now):
         class Stats(object):
             pass
         stats = Stats()
         stats.creation_time = self.creation_time
         stats.last_connected = self.last_connected
+        stats.last_disconnected = self.last_disconnected
         stats.last_received = self.last_received
         stats.backoff = self.backoff
         stats.seqno = self.seqno
         stats.is_connected = self.is_connected()
         stats.current_connection_duration = self.get_connection_duration(now)
+        stats.current_disconnect_duration = self.get_disconnect_duration(now)
         stats.total_connected_duration = (stats.current_connection_duration +
                                           self.total_connected_duration)
         stats.n_attempted_connections = self.n_attempted_connections

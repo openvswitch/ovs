@@ -86,6 +86,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
+  disconnected at 11000 ms (0 ms ago)
 ])
 
 ######################################################################
@@ -125,12 +126,14 @@ advance 500
 
 ### t=1500 ###
   in CONNECT_IN_PROGRESS for 500 ms (0 ms backoff)
+  disconnected for 500 ms
 run
 connected
   in ACTIVE for 0 ms (0 ms backoff)
   created 1000, last received 1000, last connected 1500
   1 successful connections out of 1 attempts, seqno 1
   connected (0 ms), total 0 ms connected
+  disconnected for 0 ms
 
 # Send inactivity probe.
 timeout
@@ -156,6 +159,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
+  disconnected at 11500 ms (0 ms ago)
 ])
 
 ######################################################################
@@ -235,6 +239,7 @@ timeout
 
 ### t=2000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  disconnected for 1000 ms
 run
   should disconnect
 connect-failed
@@ -247,6 +252,7 @@ timeout
 
 ### t=3000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 2000 ms
 run
   should connect
 
@@ -258,6 +264,7 @@ timeout
 
 ### t=4000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  disconnected for 3000 ms
 run
   should disconnect
 connect-failed
@@ -270,6 +277,7 @@ timeout
 
 ### t=6000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 5000 ms
 run
   should connect
 
@@ -281,6 +289,7 @@ timeout
 
 ### t=8000 ###
   in CONNECT_IN_PROGRESS for 2000 ms (2000 ms backoff)
+  disconnected for 7000 ms
 run
   should disconnect
 connect-failed
@@ -293,6 +302,7 @@ timeout
 
 ### t=12000 ###
   in BACKOFF for 4000 ms (4000 ms backoff)
+  disconnected for 11000 ms
 run
   should connect
 
@@ -304,6 +314,7 @@ timeout
 
 ### t=16000 ###
   in CONNECT_IN_PROGRESS for 4000 ms (4000 ms backoff)
+  disconnected for 15000 ms
 run
   should disconnect
 connect-failed
@@ -316,6 +327,7 @@ timeout
 
 ### t=24000 ###
   in BACKOFF for 8000 ms (8000 ms backoff)
+  disconnected for 23000 ms
 run
   should connect
 
@@ -327,6 +339,7 @@ timeout
 
 ### t=32000 ###
   in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+  disconnected for 31000 ms
 run
   should disconnect
 connect-failed
@@ -339,6 +352,7 @@ timeout
 
 ### t=40000 ###
   in BACKOFF for 8000 ms (8000 ms backoff)
+  disconnected for 39000 ms
 run
   should connect
 
@@ -350,6 +364,7 @@ timeout
 
 ### t=48000 ###
   in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+  disconnected for 47000 ms
 run
   should disconnect
 connect-failed
@@ -430,6 +445,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
+  disconnected at 11000 ms (0 ms ago)
 
 # Back off for 1000 ms.
 timeout
@@ -437,6 +453,7 @@ timeout
 
 ### t=12000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 1000 ms
 run
   should connect
 
@@ -448,6 +465,7 @@ connected
   created 1000, last received 1000, last connected 12000
   2 successful connections out of 2 attempts, seqno 3
   connected (0 ms), total 10000 ms connected
+  disconnected for 0 ms
 timeout
   advance 5000 ms
 
@@ -469,6 +487,7 @@ disconnected
   in BACKOFF for 0 ms (2000 ms backoff)
   2 successful connections out of 2 attempts, seqno 4
   not connected (0 ms), total 20000 ms connected
+  disconnected at 22000 ms (0 ms ago)
 
 # Back off for 2000 ms.
 timeout
@@ -476,6 +495,7 @@ timeout
 
 ### t=24000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 2000 ms
 run
   should connect
 
@@ -487,6 +507,7 @@ connected
   created 1000, last received 1000, last connected 24000
   3 successful connections out of 3 attempts, seqno 5
   connected (0 ms), total 20000 ms connected
+  disconnected for 0 ms
 timeout
   advance 5000 ms
 
@@ -508,6 +529,7 @@ disconnected
   in BACKOFF for 0 ms (4000 ms backoff)
   3 successful connections out of 3 attempts, seqno 6
   not connected (0 ms), total 30000 ms connected
+  disconnected at 34000 ms (0 ms ago)
 
 # Back off for 4000 ms.
 timeout
@@ -515,6 +537,7 @@ timeout
 
 ### t=38000 ###
   in BACKOFF for 4000 ms (4000 ms backoff)
+  disconnected for 4000 ms
 ])
 
 ######################################################################
@@ -572,6 +595,7 @@ timeout
 
 ### t=2000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  disconnected for 1000 ms
 run
   should disconnect
 connect-failed
@@ -584,6 +608,7 @@ timeout
 
 ### t=3000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 2000 ms
 run
   should connect
 
@@ -595,6 +620,7 @@ timeout
 
 ### t=4000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  disconnected for 3000 ms
 run
   should disconnect
 connect-failed
@@ -607,6 +633,7 @@ timeout
 
 ### t=6000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 5000 ms
 run
   should connect
 
@@ -617,12 +644,14 @@ advance 500
 
 ### t=6500 ###
   in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  disconnected for 5500 ms
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
   created 1000, last received 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected (0 ms), total 0 ms connected
+  disconnected for 0 ms
 
 # Connection drops after another 250 ms.
 advance 250
@@ -634,6 +663,7 @@ disconnected
   in BACKOFF for 0 ms (4000 ms backoff)
   1 successful connections out of 3 attempts, seqno 2
   not connected (0 ms), total 250 ms connected
+  disconnected at 6750 ms (0 ms ago)
 run
 
 # Back off for 4000 ms.
@@ -642,6 +672,7 @@ timeout
 
 ### t=10750 ###
   in BACKOFF for 4000 ms (4000 ms backoff)
+  disconnected for 4000 ms
 run
   should connect
 ])
@@ -712,6 +743,7 @@ timeout
 
 ### t=2000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  disconnected for 1000 ms
 run
   should disconnect
 connect-failed
@@ -724,6 +756,7 @@ timeout
 
 ### t=3000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 2000 ms
 run
   should connect
 
@@ -735,6 +768,7 @@ timeout
 
 ### t=4000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  disconnected for 3000 ms
 run
   should disconnect
 connect-failed
@@ -747,6 +781,7 @@ timeout
 
 ### t=6000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 5000 ms
 run
   should connect
 
@@ -757,12 +792,14 @@ advance 500
 
 ### t=6500 ###
   in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  disconnected for 5500 ms
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
   created 1000, last received 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected (0 ms), total 0 ms connected
+  disconnected for 0 ms
 
 # Connection receives 3 chunks of data spaced 250 ms apart.
 advance 250
@@ -795,6 +832,7 @@ disconnected
   in BACKOFF for 0 ms (4000 ms backoff)
   1 successful connections out of 3 attempts, seqno 2
   not connected (0 ms), total 750 ms connected
+  disconnected at 7250 ms (0 ms ago)
 run
 
 # Back off for 4000 ms.
@@ -803,6 +841,7 @@ timeout
 
 ### t=11250 ###
   in BACKOFF for 4000 ms (4000 ms backoff)
+  disconnected for 4000 ms
 run
   should connect
 ])
@@ -873,6 +912,7 @@ timeout
 
 ### t=2000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+  disconnected for 1000 ms
 run
   should disconnect
 connect-failed
@@ -885,6 +925,7 @@ timeout
 
 ### t=3000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 2000 ms
 run
   should connect
 
@@ -896,6 +937,7 @@ timeout
 
 ### t=4000 ###
   in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+  disconnected for 3000 ms
 run
   should disconnect
 connect-failed
@@ -908,6 +950,7 @@ timeout
 
 ### t=6000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 5000 ms
 run
   should connect
 
@@ -918,12 +961,14 @@ advance 500
 
 ### t=6500 ###
   in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+  disconnected for 5500 ms
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
   created 1000, last received 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected (0 ms), total 0 ms connected
+  disconnected for 0 ms
 
 # Connection receives 3 chunks of data spaced 2000 ms apart.
 advance 2000
@@ -956,6 +1001,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 3 attempts, seqno 2
   not connected (0 ms), total 6000 ms connected
+  disconnected at 12500 ms (0 ms ago)
 run
 
 # Back off for 1000 ms.
@@ -964,6 +1010,7 @@ timeout
 
 ### t=13500 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 1000 ms
 run
   should connect
 ])
@@ -1006,6 +1053,7 @@ timeout
 
 ### t=2000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 1000 ms
 
 # Connection fails quickly again.
 run
@@ -1021,6 +1069,7 @@ timeout
 
 ### t=4000 ###
   in BACKOFF for 2000 ms (2000 ms backoff)
+  disconnected for 3000 ms
 ])
 
 ######################################################################
@@ -1080,6 +1129,7 @@ disconnected
   in VOID for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 10000 ms connected
+  disconnected at 11000 ms (0 ms ago)
 ])
 
 ######################################################################
@@ -1162,6 +1212,7 @@ timeout
 
 ### t=2000 ###
   in BACKOFF for 1000 ms (1000 ms backoff)
+  disconnected for 1000 ms
 run
   should connect
 listening
@@ -1173,6 +1224,7 @@ connected
   created 1000, last received 1000, last connected 2000
   1 successful connections out of 1 attempts, seqno 1
   connected (0 ms), total 0 ms connected
+  disconnected for 0 ms
 received
   created 1000, last received 2000, last connected 2000
 advance 1000
@@ -1205,6 +1257,7 @@ disconnected
   in BACKOFF for 0 ms (0 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   not connected (0 ms), total 11000 ms connected
+  disconnected at 13000 ms (0 ms ago)
 
 # Start listening again.
 timeout
