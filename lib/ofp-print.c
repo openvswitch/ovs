@@ -1083,147 +1083,43 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
-                           int verbosity)
+ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    size_t len = ofputil_stats_body_len(oh);
-    const char *body = ofputil_stats_body(oh);
-    const char *pos = body;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     for (;;) {
-        const struct ofp_flow_stats *fs;
-        ptrdiff_t bytes_left = body + len - pos;
-        size_t length;
+        struct ofputil_flow_stats fs;
+        int retval;
 
-        ds_put_char(string, '\n');
-
-        if (bytes_left < sizeof *fs) {
-            if (bytes_left != 0) {
-                ds_put_format(string, " ***%td leftover bytes at end***",
-                              bytes_left);
+        retval = ofputil_decode_flow_stats_reply(&fs, &b, NXFF_OPENFLOW10);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(string, " ***parse error***");
             }
             break;
         }
 
-        fs = (const void *) pos;
-        length = ntohs(fs->length);
-        if (length < sizeof *fs) {
-            ds_put_format(string, " ***length=%zu shorter than minimum %zu***",
-                          length, sizeof *fs);
-            break;
-        } else if (length > bytes_left) {
-            ds_put_format(string,
-                          " ***length=%zu but only %td bytes left***",
-                          length, bytes_left);
-            break;
-        } else if ((length - sizeof *fs) % sizeof fs->actions[0]) {
-            ds_put_format(string,
-                          " ***length=%zu has %zu bytes leftover in "
-                          "final action***",
-                          length,
-                          (length - sizeof *fs) % sizeof fs->actions[0]);
-            break;
-        }
-
-        ds_put_format(string, " cookie=0x%"PRIx64", duration=",
-                      ntohll(get_32aligned_be64(&fs->cookie)));
-        ofp_print_duration(string, ntohl(fs->duration_sec),
-                           ntohl(fs->duration_nsec));
-        ds_put_format(string, ", table_id=%"PRIu8", ", fs->table_id);
-        if (fs->priority != htons(OFP_DEFAULT_PRIORITY)) {
-            ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
-        }
-        ds_put_format(string, "n_packets=%"PRIu64", ",
-                      ntohll(get_32aligned_be64(&fs->packet_count)));
-        ds_put_format(string, "n_bytes=%"PRIu64", ",
-                      ntohll(get_32aligned_be64(&fs->byte_count)));
-        if (fs->idle_timeout != htons(OFP_FLOW_PERMANENT)) {
-            ds_put_format(string, "idle_timeout=%"PRIu16",",
-                          ntohs(fs->idle_timeout));
-        }
-        if (fs->hard_timeout != htons(OFP_FLOW_PERMANENT)) {
-            ds_put_format(string, "hard_timeout=%"PRIu16",",
-                          ntohs(fs->hard_timeout));
-        }
-        ofp_print_match(string, &fs->match, verbosity);
-        ds_put_char(string, ' ');
-        ofp_print_actions(string, fs->actions, length - sizeof *fs);
-
-        pos += length;
-     }
-}
-
-static void
-ofp_print_nxst_flow_reply(struct ds *string, const struct ofp_header *oh)
-{
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, ofputil_nxstats_body(oh),
-                     ofputil_nxstats_body_len(oh));
-    while (b.size > 0) {
-        const struct nx_flow_stats *fs;
-        union ofp_action *actions;
-        struct cls_rule rule;
-        size_t actions_len, n_actions;
-        size_t length;
-        int match_len;
-        int error;
-
         ds_put_char(string, '\n');
 
-        fs = ofpbuf_try_pull(&b, sizeof *fs);
-        if (!fs) {
-            ds_put_format(string, " ***%td leftover bytes at end***", b.size);
-            break;
-        }
-
-        length = ntohs(fs->length);
-        if (length < sizeof *fs) {
-            ds_put_format(string, " ***nx_flow_stats claims length %zu***",
-                          length);
-            break;
-        }
-
-        match_len = ntohs(fs->match_len);
-        if (match_len > length - sizeof *fs) {
-            ds_put_format(string, " ***length=%zu match_len=%d***",
-                          length, match_len);
-            break;
-        }
-
         ds_put_format(string, " cookie=0x%"PRIx64", duration=",
-                      ntohll(fs->cookie));
-        ofp_print_duration(string, ntohl(fs->duration_sec),
-                           ntohl(fs->duration_nsec));
-        ds_put_format(string, ", table_id=%"PRIu8", ", fs->table_id);
-        ds_put_format(string, "n_packets=%"PRIu64", ",
-                    ntohll(fs->packet_count));
-        ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
-        if (fs->idle_timeout != htons(OFP_FLOW_PERMANENT)) {
-            ds_put_format(string, "idle_timeout=%"PRIu16",",
-                          ntohs(fs->idle_timeout));
+                      ntohll(fs.cookie));
+        ofp_print_duration(string, fs.duration_sec, fs.duration_nsec);
+        ds_put_format(string, ", table_id=%"PRIu8", ", fs.table_id);
+        ds_put_format(string, "n_packets=%"PRIu64", ", fs.packet_count);
+        ds_put_format(string, "n_bytes=%"PRIu64", ", fs.byte_count);
+        if (fs.idle_timeout != OFP_FLOW_PERMANENT) {
+            ds_put_format(string, "idle_timeout=%"PRIu16",", fs.idle_timeout);
         }
-        if (fs->hard_timeout != htons(OFP_FLOW_PERMANENT)) {
-            ds_put_format(string, "hard_timeout=%"PRIu16",",
-                          ntohs(fs->hard_timeout));
+        if (fs.hard_timeout != OFP_FLOW_PERMANENT) {
+            ds_put_format(string, "hard_timeout=%"PRIu16",", fs.hard_timeout);
         }
 
-        error = nx_pull_match(&b, match_len, ntohs(fs->priority), &rule);
-        if (error) {
-            ofp_print_error(string, error);
-            break;
-        }
-
-        actions_len = length - sizeof *fs - ROUND_UP(match_len, 8);
-        error = ofputil_pull_actions(&b, actions_len, &actions, &n_actions);
-        if (error) {
-            ofp_print_error(string, error);
-            break;
-        }
-
-        cls_rule_format(&rule, string);
+        cls_rule_format(&fs.rule, string);
         ds_put_char(string, ' ');
-        ofp_print_actions(string, (const struct ofp_action_header *) actions,
-                          n_actions * sizeof *actions);
+        ofp_print_actions(string,
+                          (const struct ofp_action_header *) fs.actions,
+                          fs.n_actions * sizeof *fs.actions);
      }
 }
 
@@ -1587,8 +1483,9 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPST_FLOW_REPLY:
+    case OFPUTIL_NXST_FLOW_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_ofpst_flow_reply(string, oh, verbosity);
+        ofp_print_flow_stats_reply(string, oh);
         break;
 
     case OFPUTIL_OFPST_QUEUE_REPLY:
@@ -1631,10 +1528,6 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_NXT_FLOW_MOD:
         ofp_print_flow_mod(string, msg, code, verbosity);
-        break;
-
-    case OFPUTIL_NXST_FLOW_REPLY:
-        ofp_print_nxst_flow_reply(string, oh);
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,25 @@ int ofputil_decode_flow_stats_request(struct flow_stats_request *,
                                       enum nx_flow_format);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct flow_stats_request *, enum nx_flow_format);
+
+/* Flow stats reply, independent of flow format. */
+struct ofputil_flow_stats {
+    struct cls_rule rule;
+    ovs_be64 cookie;
+    uint8_t table_id;
+    uint32_t duration_sec;
+    uint32_t duration_nsec;
+    uint16_t idle_timeout;
+    uint16_t hard_timeout;
+    uint64_t packet_count;
+    uint64_t byte_count;
+    union ofp_action *actions;
+    size_t n_actions;
+};
+
+int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
+                                    struct ofpbuf *msg,
+                                    enum nx_flow_format);
 
 /* Flow removed message, independent of flow format. */
 struct ofputil_flow_removed {

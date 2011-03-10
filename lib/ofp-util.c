@@ -29,6 +29,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
+#include "unaligned.h"
 #include "type-props.h"
 #include "vlog.h"
 
@@ -1157,7 +1158,7 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
 }
 
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
- * message 'oh', received when the current flow format was 'flow_format', into
+ * request 'oh', received when the current flow format was 'flow_format', into
  * an abstract flow_stats_request in 'fsr'.  Returns 0 if successful, otherwise
  * an OpenFlow error code.
  *
@@ -1197,7 +1198,7 @@ ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
 }
 
 /* Converts abstract flow_stats_request 'fsr' into an OFPST_FLOW,
- * OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE message 'oh' according to
+ * OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE request 'oh' according to
  * 'flow_format', and returns the message. */
 struct ofpbuf *
 ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
@@ -1237,6 +1238,117 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
     }
 
     return msg;
+}
+
+/* Converts an OFPST_FLOW or NXST_FLOW reply in 'msg' into an abstract
+ * ofputil_flow_stats in 'fs'.  For OFPST_FLOW messages, 'flow_format' should
+ * be the current flow format at the time when the request corresponding to the
+ * reply in 'msg' was sent.  Otherwise 'flow_format' is ignored.
+ *
+ * Multiple OFPST_FLOW or NXST_FLOW replies can be packed into a single
+ * OpenFlow message.  Calling this function multiple times for a single 'msg'
+ * iterates through the replies.  The caller must initially leave 'msg''s layer
+ * pointers null and not modify them between calls.
+ *
+ * Returns 0 if successful, EOF if no replies were left in this 'msg',
+ * otherwise a positive errno value. */
+int
+ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
+                                struct ofpbuf *msg,
+                                enum nx_flow_format flow_format)
+{
+    const struct ofputil_msg_type *type;
+    int code;
+
+    ofputil_decode_msg_type(msg->l2 ? msg->l2 : msg->data, &type);
+    code = ofputil_msg_type_code(type);
+    if (!msg->l2) {
+        msg->l2 = msg->data;
+        if (code == OFPUTIL_OFPST_FLOW_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct ofp_stats_reply));
+        } else if (code == OFPUTIL_NXST_FLOW_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct nicira_stats_msg));
+        } else {
+            NOT_REACHED();
+        }
+    }
+
+    if (!msg->size) {
+        return EOF;
+    } else if (code == OFPUTIL_OFPST_FLOW_REPLY) {
+        const struct ofp_flow_stats *ofs;
+        size_t length;
+
+        ofs = ofpbuf_try_pull(msg, sizeof *ofs);
+        if (!ofs) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply has %zu leftover "
+                         "bytes at end", msg->size);
+            return EINVAL;
+        }
+
+        length = ntohs(ofs->length);
+        if (length < sizeof *ofs) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply claims invalid "
+                         "length %zu", length);
+            return EINVAL;
+        }
+
+        if (ofputil_pull_actions(msg, length - sizeof *ofs,
+                                 &fs->actions, &fs->n_actions)) {
+            return EINVAL;
+        }
+
+        fs->cookie = get_32aligned_be64(&ofs->cookie);
+        ofputil_cls_rule_from_match(&ofs->match, ntohs(ofs->priority),
+                                    flow_format, fs->cookie, &fs->rule);
+        fs->table_id = ofs->table_id;
+        fs->duration_sec = ntohl(ofs->duration_sec);
+        fs->duration_nsec = ntohl(ofs->duration_nsec);
+        fs->idle_timeout = ntohs(ofs->idle_timeout);
+        fs->hard_timeout = ntohs(ofs->hard_timeout);
+        fs->packet_count = ntohll(get_32aligned_be64(&ofs->packet_count));
+        fs->byte_count = ntohll(get_32aligned_be64(&ofs->byte_count));
+    } else if (code == OFPUTIL_NXST_FLOW_REPLY) {
+        const struct nx_flow_stats *nfs;
+        size_t match_len, length;
+
+        nfs = ofpbuf_try_pull(msg, sizeof *nfs);
+        if (!nfs) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply has %zu leftover "
+                         "bytes at end", msg->size);
+            return EINVAL;
+        }
+
+        length = ntohs(nfs->length);
+        match_len = ntohs(nfs->match_len);
+        if (length < sizeof *nfs + ROUND_UP(match_len, 8)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "NXST_FLOW reply with match_len=%zu "
+                         "claims invalid length %zu", match_len, length);
+            return EINVAL;
+        }
+        if (nx_pull_match(msg, match_len, ntohs(nfs->priority), &fs->rule)) {
+            return EINVAL;
+        }
+
+        if (ofputil_pull_actions(msg,
+                                 length - sizeof *nfs - ROUND_UP(match_len, 8),
+                                 &fs->actions, &fs->n_actions)) {
+            return EINVAL;
+        }
+
+        fs->cookie = nfs->cookie;
+        fs->table_id = nfs->table_id;
+        fs->duration_sec = ntohl(nfs->duration_sec);
+        fs->duration_nsec = ntohl(nfs->duration_nsec);
+        fs->idle_timeout = ntohs(nfs->idle_timeout);
+        fs->hard_timeout = ntohs(nfs->hard_timeout);
+        fs->packet_count = ntohll(nfs->packet_count);
+        fs->byte_count = ntohll(nfs->byte_count);
+    } else {
+        NOT_REACHED();
+    }
+
+    return 0;
 }
 
 /* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh', received
