@@ -706,8 +706,8 @@ parse_tunnel_config(const char *name, const char *type,
                     || !strcmp(node->name, "private_key")
                     || !strcmp(node->name, "use_ssl_cert"))) {
             /* Ignore options not used by the netdev. */
-        } else if (is_gre && (!strcmp(node->name, "key") &&
-                              !strcmp(node->name, "in_key") &&
+        } else if (is_gre && (!strcmp(node->name, "key") ||
+                              !strcmp(node->name, "in_key") ||
                               !strcmp(node->name, "out_key"))) {
             /* Handled separately below. */
         } else {
