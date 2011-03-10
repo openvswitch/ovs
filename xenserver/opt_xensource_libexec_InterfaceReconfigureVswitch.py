@@ -475,6 +475,10 @@ class DatapathVswitch(Datapath):
         dpname = pif_bridge_name(self._dp)
         
         if pif_is_vlan(self._pif):
+            # In some cases XAPI may misguidedly leave an instance of
+            # 'bridge' which should be deleted.
+            vsctl_argv += ['--', '--if-exists', 'del-br', bridge]
+
             # configure_datapath() set up the underlying datapath bridge.
             # Stack a VLAN bridge on top of it.
             vsctl_argv += ['--', '--may-exist', 'add-br',
