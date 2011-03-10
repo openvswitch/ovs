@@ -132,7 +132,7 @@ static size_t
 root_set_size(const struct ovsdb_schema *schema)
 {
     struct shash_node *node;
-    size_t n_root;
+    size_t n_root = 0;
 
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *table = node->data;
