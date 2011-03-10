@@ -526,6 +526,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                 ds_put_format(s, "dl_vlan_pcp=%d,",
                               vlan_tci_to_pcp(f->vlan_tci));
             }
+        } else if (wc->vlan_tci_mask == htons(0xffff)) {
+            ds_put_format(s, "vlan_tci=0x%04"PRIx16",", ntohs(f->vlan_tci));
         } else {
             ds_put_format(s, "vlan_tci=0x%04"PRIx16"/0x%04"PRIx16",",
                           ntohs(f->vlan_tci), ntohs(wc->vlan_tci_mask));
