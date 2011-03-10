@@ -1129,7 +1129,9 @@ ofp_print_ofpst_flow_reply(struct ds *string, const struct ofp_header *oh,
         ofp_print_duration(string, ntohl(fs->duration_sec),
                            ntohl(fs->duration_nsec));
         ds_put_format(string, ", table_id=%"PRIu8", ", fs->table_id);
-        ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
+        if (fs->priority != htons(OFP_DEFAULT_PRIORITY)) {
+            ds_put_format(string, "priority=%"PRIu16", ", ntohs(fs->priority));
+        }
         ds_put_format(string, "n_packets=%"PRIu64", ",
                       ntohll(get_32aligned_be64(&fs->packet_count)));
         ds_put_format(string, "n_bytes=%"PRIu64", ",
