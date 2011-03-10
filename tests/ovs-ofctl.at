@@ -486,3 +486,25 @@ NXST_FLOW reply:
 ])
 OFPROTO_STOP
 AT_CLEANUP
+
+dnl Check that "-F openflow10" is really honored on dump-flows.
+dnl (If it isn't, then dump-flows will show the register match.)
+AT_SETUP([ovs-ofctl dump-flows honors -F option])
+OFPROTO_START
+AT_CHECK([ovs-ofctl add-flow br0 reg0=0x12345,actions=drop])
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
+OFPST_FLOW reply:
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0,  actions=drop
+])
+OFPROTO_STOP
+AT_CLEANUP
+
+dnl Check that "-F openflow10" fails on dump-flows if the requested match
+dnl can't be represented in OpenFlow 1.0.
+AT_SETUP([ovs-ofctl dump-flows rejects bad -F option])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows unix:br0.mgmt reg0=0xabcdef], [1], [],
+  [ovs-ofctl: unix:br0.mgmt: cannot use requested flow format nxm for specified flow
+])
+OFPROTO_STOP
+AT_CLEANUP

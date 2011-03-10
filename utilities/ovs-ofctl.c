@@ -540,33 +540,39 @@ static enum nx_flow_format
 negotiate_highest_flow_format(struct vconn *vconn, const struct cls_rule *rule,
                               bool cookie_support, ovs_be64 cookie)
 {
-    int flow_format;
+    enum nx_flow_format min_format;
 
+    min_format = ofputil_min_flow_format(rule, cookie_support, cookie);
     if (preferred_flow_format != -1) {
-        enum nx_flow_format min_format;
-
-        min_format = ofputil_min_flow_format(rule, cookie_support, cookie);
-        if (preferred_flow_format >= min_format) {
-            set_flow_format(vconn, preferred_flow_format);
-            return preferred_flow_format;
+        if (preferred_flow_format < min_format) {
+            ovs_fatal(0, "%s: cannot use requested flow format %s for "
+                      "specified flow", vconn_get_name(vconn),
+                      ofputil_flow_format_to_string(min_format));
         }
 
-        VLOG_WARN("%s: cannot use requested flow format %s for "
-                  "specified flow", vconn_get_name(vconn),
-                  ofputil_flow_format_to_string(min_format));
-    }
-
-    if (try_set_flow_format(vconn, NXFF_NXM)) {
-        flow_format = NXFF_NXM;
-    } else if (try_set_flow_format(vconn, NXFF_TUN_ID_FROM_COOKIE)) {
-        flow_format = NXFF_TUN_ID_FROM_COOKIE;
+        set_flow_format(vconn, preferred_flow_format);
+        return preferred_flow_format;
     } else {
-        flow_format = NXFF_OPENFLOW10;
-    }
+        enum nx_flow_format flow_format;
 
-    VLOG_DBG("%s: negotiated flow format %s", vconn_get_name(vconn),
-             ofputil_flow_format_to_string(flow_format));
-    return flow_format;
+        if (try_set_flow_format(vconn, NXFF_NXM)) {
+            flow_format = NXFF_NXM;
+        } else if (try_set_flow_format(vconn, NXFF_TUN_ID_FROM_COOKIE)) {
+            flow_format = NXFF_TUN_ID_FROM_COOKIE;
+        } else {
+            flow_format = NXFF_OPENFLOW10;
+        }
+
+        if (flow_format < min_format) {
+            ovs_fatal(0, "%s: cannot use switch's most advanced flow format "
+                      "%s for specified flow", vconn_get_name(vconn),
+                      ofputil_flow_format_to_string(min_format));
+        }
+
+        VLOG_DBG("%s: negotiated flow format %s", vconn_get_name(vconn),
+                 ofputil_flow_format_to_string(flow_format));
+        return flow_format;
+    }
 }
 
 static void
