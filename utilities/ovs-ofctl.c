@@ -329,7 +329,7 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
     open_vconn(vconn_name, &vconn);
     send_openflow_buffer(vconn, request);
     while (!done) {
-        uint32_t recv_xid;
+        ovs_be32 recv_xid;
         struct ofpbuf *reply;
 
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
