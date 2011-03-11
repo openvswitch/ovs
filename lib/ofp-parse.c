@@ -874,27 +874,13 @@ bool
 parse_ofp_add_flow_file(struct list *packets, enum nx_flow_format *cur,
                         FILE *stream)
 {
-    struct ds s = DS_EMPTY_INITIALIZER;
-    bool ok = false;
+    struct ds s;
+    bool ok;
 
-    while (!ds_get_line(&s, stream)) {
-        char *line = ds_cstr(&s);
-        char *comment;
-
-        /* Delete comments. */
-        comment = strchr(line, '#');
-        if (comment) {
-            *comment = '\0';
-        }
-
-        /* Drop empty lines. */
-        if (line[strspn(line, " \t\n")] == '\0') {
-            continue;
-        }
-
-        parse_ofp_flow_mod_str(packets, cur, line, OFPFC_ADD);
-        ok = true;
-        break;
+    ds_init(&s);
+    ok = ds_get_preprocessed_line(&s, stream) == 0;
+    if (ok) {
+        parse_ofp_flow_mod_str(packets, cur, ds_cstr(&s), OFPFC_ADD);
     }
     ds_destroy(&s);
 

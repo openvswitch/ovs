@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ void ds_put_strftime(struct ds *, const char *, const struct tm *)
 void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 int ds_get_line(struct ds *, FILE *);
+int ds_get_preprocessed_line(struct ds *, FILE *);
 
 char *ds_cstr(struct ds *);
 const char *ds_cstr_ro(const struct ds *);

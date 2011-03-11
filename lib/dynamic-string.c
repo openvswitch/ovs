@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,32 @@ ds_get_line(struct ds *ds, FILE *file)
             ds_put_char(ds, c);
         }
     }
+}
+
+/* Reads a line from 'file' into 'ds', clearing anything initially in 'ds'.
+ * Deletes comments introduced by "#" and skips lines that contains only white
+ * space (after deleting comments).
+ *
+ * Returns 0 if successful, EOF if no non-blank line was found. */
+int
+ds_get_preprocessed_line(struct ds *ds, FILE *file)
+{
+    while (!ds_get_line(ds, file)) {
+        char *line = ds_cstr(ds);
+        char *comment;
+
+        /* Delete comments. */
+        comment = strchr(line, '#');
+        if (comment) {
+            *comment = '\0';
+        }
+
+        /* Return successfully unless the line is all spaces. */
+        if (line[strspn(line, " \t\n")] != '\0') {
+            return 0;
+        }
+    }
+    return EOF;
 }
 
 char *
