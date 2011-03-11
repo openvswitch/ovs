@@ -26,6 +26,8 @@
 #include <sys/ioctl.h>
 
 #include "byte-order.h"
+#include "daemon.h"
+#include "dirs.h"
 #include "dpif-linux.h"
 #include "hash.h"
 #include "hmap.h"
@@ -716,6 +718,14 @@ parse_tunnel_config(const char *name, const char *type,
     }
 
     if (is_ipsec) {
+        char *file_name = xasprintf("%s/%s", ovs_rundir(),
+                "ovs-monitor-ipsec.pid");
+        if (read_pidfile(file_name) < 0) {
+            VLOG_WARN("%s: ovs-monitor-ipsec doesn't appear to be running, "
+                    "traffic may not pass", name);
+        }
+        free(file_name);
+
         if (shash_find(args, "peer_cert") && shash_find(args, "psk")) {
             VLOG_WARN("%s: cannot define both 'peer_cert' and 'psk'", name);
             return EINVAL;
