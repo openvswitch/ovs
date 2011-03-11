@@ -146,6 +146,33 @@ omitted and the \fB\-\-strict\fR option is not used, all flows in the
 switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
 syntax of \fIflows\fR.
 .
+.IP "\fBreplace\-flows \fIswitch file\fR"
+Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
+\fB\-\fR) and queries the flow table from \fIswitch\fR.  Then it fixes
+up any differences, adding flows from \fIflow\fR that are missing on
+\fIswitch\fR, deleting flows from \fIswitch\fR that are not in
+\fIfile\fR, and updating flows in \fIswitch\fR whose actions, cookie,
+or timeouts differ in \fIfile\fR.
+.
+.IP "\fBdiff\-flows \fIsource1 source2\fR"
+Reads flow entries from \fIsource1\fR and \fIsource2\fR and prints the
+differences.  A flow that is in \fIsource1\fR but not in \fIsource2\fR
+is printed preceded by a \fB\-\fR, and a flow that is in \fIsource2\fR
+but not in \fIsource1\fR is printed preceded by a \fB+\fR.  If a flow
+exists in both \fIsource1\fR and \fIsource2\fR with different actions,
+cookie, or timeouts, then both versions are printed preceded by
+\fB\-\fR and \fB+\fR, respectively.
+.IP
+\fIsource1\fR and \fIsource2\fR may each name a file or a switch.  If
+a name begins with \fB/\fR or \fB.\fR, then it is considered to be a
+file name.  A name that contains \fB:\fR is considered to be a switch.
+Otherwise, it is a file if a file by that name exists, a switch if
+not.
+.IP
+For this command, an exit status of 0 means that no differences were
+found, 1 means that an error occurred, and 2 means that some
+differences were found.
+.
 .IP "\fBsnoop \fIswitch\fR"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Unlike other \fBovs\-ofctl\fR commands, if

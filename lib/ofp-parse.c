@@ -726,7 +726,7 @@ parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
 /* Convert 'string' (as described in the Flow Syntax section of the ovs-ofctl
  * man page) into 'pf'.  If 'actions' is specified, an action must be in
  * 'string' and may be expanded or reallocated. */
-static void
+void
 parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
               struct ofpbuf *actions, char *string)
 {
