@@ -281,6 +281,7 @@ static struct iface *bridge_get_local_iface(struct bridge *);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static unixctl_cb_func bridge_unixctl_fdb_show;
+static unixctl_cb_func qos_unixctl_show;
 
 static void lacp_run(struct bridge *);
 static void lacp_wait(struct bridge *);
@@ -314,6 +315,7 @@ static struct iface *iface_create(struct port *port,
                                   const struct ovsrec_interface *if_cfg);
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
+static struct iface *iface_find(const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
 static void iface_set_mac(struct iface *);
@@ -362,6 +364,7 @@ bridge_init(const char *remote)
 
     /* Register unixctl commands. */
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    unixctl_command_register("qos/show", qos_unixctl_show, NULL);
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
                              NULL);
     unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
@@ -1564,6 +1567,99 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
                       e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+/* QoS unixctl user interface functions. */
+
+struct qos_unixctl_show_cbdata {
+    struct ds *ds;
+    struct iface *iface;
+};
+
+static void
+qos_unixctl_show_cb(unsigned int queue_id,
+                    const struct shash *details,
+                    void *aux)
+{
+    struct qos_unixctl_show_cbdata *data = aux;
+    struct ds *ds = data->ds;
+    struct iface *iface = data->iface;
+    struct netdev_queue_stats stats;
+    struct shash_node *node;
+    int error;
+
+    ds_put_cstr(ds, "\n");
+    if (queue_id) {
+        ds_put_format(ds, "Queue %u:\n", queue_id);
+    } else {
+        ds_put_cstr(ds, "Default:\n");
+    }
+
+    SHASH_FOR_EACH (node, details) {
+        ds_put_format(ds, "\t%s: %s\n", node->name, (char *)node->data);
+    }
+
+    error = netdev_get_queue_stats(iface->netdev, queue_id, &stats);
+    if (!error) {
+        if (stats.tx_packets != UINT64_MAX) {
+            ds_put_format(ds, "\ttx_packets: %"PRIu64"\n", stats.tx_packets);
+        }
+
+        if (stats.tx_bytes != UINT64_MAX) {
+            ds_put_format(ds, "\ttx_bytes: %"PRIu64"\n", stats.tx_bytes);
+        }
+
+        if (stats.tx_errors != UINT64_MAX) {
+            ds_put_format(ds, "\ttx_errors: %"PRIu64"\n", stats.tx_errors);
+        }
+    } else {
+        ds_put_format(ds, "\tFailed to get statistics for queue %u: %s",
+                      queue_id, strerror(error));
+    }
+}
+
+static void
+qos_unixctl_show(struct unixctl_conn *conn,
+                 const char *args, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct shash sh = SHASH_INITIALIZER(&sh);
+    struct iface *iface;
+    const char *type;
+    struct shash_node *node;
+    struct qos_unixctl_show_cbdata data;
+    int error;
+
+    iface = iface_find(args);
+    if (!iface) {
+        unixctl_command_reply(conn, 501, "no such interface");
+        return;
+    }
+
+    netdev_get_qos(iface->netdev, &type, &sh);
+
+    if (*type != '\0') {
+        ds_put_format(&ds, "QoS: %s %s\n", iface->name, type);
+
+        SHASH_FOR_EACH (node, &sh) {
+            ds_put_format(&ds, "%s: %s\n", node->name, (char *)node->data);
+        }
+
+        data.ds = &ds;
+        data.iface = iface;
+        error = netdev_dump_queues(iface->netdev, qos_unixctl_show_cb, &data);
+
+        if (error) {
+            ds_put_format(&ds, "failed to dump queues: %s", strerror(error));
+        }
+        unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    } else {
+        ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
+        unixctl_command_reply(conn, 501, ds_cstr(&ds));
+    }
+
+    shash_destroy_free_data(&sh);
     ds_destroy(&ds);
 }
 
@@ -4757,6 +4853,21 @@ static struct iface *
 iface_lookup(const struct bridge *br, const char *name)
 {
     return shash_find_data(&br->iface_by_name, name);
+}
+
+static struct iface *
+iface_find(const char *name)
+{
+    const struct bridge *br;
+
+    LIST_FOR_EACH (br, node, &all_bridges) {
+        struct iface *iface = iface_lookup(br, name);
+
+        if (iface) {
+            return iface;
+        }
+    }
+    return NULL;
 }
 
 static struct iface *

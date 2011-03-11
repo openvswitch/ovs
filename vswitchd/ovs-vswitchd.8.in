@@ -113,6 +113,9 @@ how to configure Open vSwitch.
 .SS "GENERAL COMMANDS"
 .IP "\fBexit\fR"
 Causes \fBovs\-vswitchd\fR to gracefully terminate.
+.IP "\fBqos/show\fR \fIinterface\fR"
+Queries the kernel for Quality of Service configuration and statistics
+associated with the given \fIinterface\fR.
 .SS "BRIDGE COMMANDS"
 These commands manage bridges.
 .IP "\fBfdb/show\fR \fIbridge\fR"
