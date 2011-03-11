@@ -3688,7 +3688,7 @@ flow_stats_ds(struct rule *rule, struct ds *results)
 }
 
 /* Adds a pretty-printed description of all flows to 'results', including
- * those marked hidden by secchan (e.g., by in-band control). */
+ * hidden flows (e.g., set up by in-band control). */
 void
 ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 {

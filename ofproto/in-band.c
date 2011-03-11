@@ -41,9 +41,9 @@
 
 VLOG_DEFINE_THIS_MODULE(in_band);
 
-/* In-band control allows a single network to be used for OpenFlow
- * traffic and other data traffic.  Refer to ovs-vswitchd.conf(5) and
- * secchan(8) for a description of configuring in-band control.
+/* In-band control allows a single network to be used for OpenFlow traffic and
+ * other data traffic.  See ovs-vswitchd.conf.db(5) for a description of
+ * configuring in-band control.
  *
  * This comment is an attempt to describe how in-band control works at a
  * wire- and implementation-level.  Correctly implementing in-band
