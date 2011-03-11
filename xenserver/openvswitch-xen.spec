@@ -246,10 +246,10 @@ for s in openvswitch openvswitch-xapi-update; do
     chkconfig $s on || printf "Could not enable $s init script."
 done
 
-# Configure system to use Open vSwitch
-echo vswitch > /etc/xensource/network.conf
-
 if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
+    # Configure system to use Open vSwitch
+    echo vswitch > /etc/xensource/network.conf
+
     printf "\nYou MUST reboot the server NOW to complete the change to\n"
     printf "Open vSwitch.  Attempts to modify networking on the server\n"
     printf "or any hosted VM will fail until after the reboot and could\n"
