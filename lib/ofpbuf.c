@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -460,6 +460,25 @@ void *
 ofpbuf_try_pull(struct ofpbuf *b, size_t size)
 {
     return b->size >= size ? ofpbuf_pull(b, size) : NULL;
+}
+
+/* Returns the data in 'b' as a block of malloc()'d memory and frees the buffer
+ * within 'b'.  (If 'b' itself was dynamically allocated, e.g. with
+ * ofpbuf_new(), then it should still be freed with, e.g., ofpbuf_delete().) */
+void *
+ofpbuf_steal_data(struct ofpbuf *b)
+{
+    void *p;
+    if (b->source == OFPBUF_MALLOC && b->data == b->base) {
+        p = b->data;
+    } else {
+        p = xmemdup(b->data, b->size);
+        if (b->source == OFPBUF_MALLOC) {
+            free(b->base);
+        }
+    }
+    b->base = b->data = NULL;
+    return p;
 }
 
 /* Returns a string that describes some of 'b''s metadata plus a hex dump of up
