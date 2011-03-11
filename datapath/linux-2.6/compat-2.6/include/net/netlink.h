@@ -29,31 +29,6 @@
 #define NLA_NESTED NLA_UNSPEC
 #endif
 
-#ifndef HAVE_NLA_NUL_STRING
-static inline int VERIFY_NUL_STRING(struct nlattr *attr, int maxlen)
-{
-	char *s;
-	int len;
-	if (!attr)
-		return 0;
-
-	len = nla_len(attr);
-	if (len >= maxlen)
-		return -EINVAL;
-
-	s = nla_data(attr);
-	if (s[len - 1] != '\0')
-		return -EINVAL;
-
-	return 0;
-}
-#else
-static inline int VERIFY_NUL_STRING(struct nlattr *attr, int maxlen)
-{
-	return 0;
-}
-#endif	/* !HAVE_NLA_NUL_STRING */
-
 #ifndef NLA_PUT_BE16
 #define NLA_PUT_BE16(skb, attrtype, value) \
         NLA_PUT_TYPE(skb, __be16, attrtype, value)

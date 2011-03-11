@@ -32,6 +32,7 @@ openvswitch_sources = \
 openvswitch_headers = \
 	actions.h \
 	checksum.h \
+	compat.h \
 	datapath.h \
 	dp_sysfs.h \
 	flow.h \

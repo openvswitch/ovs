@@ -1304,7 +1304,7 @@ static int odp_dp_cmd_validate(struct nlattr *a[ODP_DP_ATTR_MAX + 1])
 			return -EINVAL;
 	}
 
-	return VERIFY_NUL_STRING(a[ODP_DP_ATTR_NAME], IFNAMSIZ - 1);
+	return CHECK_NUL_STRING(a[ODP_DP_ATTR_NAME], IFNAMSIZ - 1);
 }
 
 /* Called with genl_mutex and optionally with RTNL lock also. */
@@ -1674,7 +1674,7 @@ static struct sk_buff *odp_vport_cmd_build_info(struct vport *vport, u32 pid,
 
 static int odp_vport_cmd_validate(struct nlattr *a[ODP_VPORT_ATTR_MAX + 1])
 {
-	return VERIFY_NUL_STRING(a[ODP_VPORT_ATTR_NAME], IFNAMSIZ - 1);
+	return CHECK_NUL_STRING(a[ODP_VPORT_ATTR_NAME], IFNAMSIZ - 1);
 }
 
 /* Called with RTNL lock or RCU read lock. */

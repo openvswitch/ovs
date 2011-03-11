@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <linux/rtnetlink.h>
 
+#include "compat.h"
 #include "datapath.h"
 #include "vport.h"
 #include "vport-generic.h"
@@ -105,7 +106,8 @@ static int patch_set_config(struct vport *vport, const struct nlattr *options,
 	if (err)
 		return err;
 
-	if (!a[ODP_PATCH_ATTR_PEER] || VERIFY_NUL_STRING(a[ODP_PATCH_ATTR_PEER], IFNAMSIZ - 1))
+	if (!a[ODP_PATCH_ATTR_PEER] ||
+	    CHECK_NUL_STRING(a[ODP_PATCH_ATTR_PEER], IFNAMSIZ - 1))
 		return -EINVAL;
 
 	peer_name = nla_data(a[ODP_PATCH_ATTR_PEER]);

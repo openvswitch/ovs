@@ -20,6 +20,7 @@
 #include <linux/version.h>
 
 #include "checksum.h"
+#include "compat.h"
 #include "flow.h"
 #include "dp_sysfs.h"
 #include "vlan.h"
