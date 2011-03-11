@@ -167,6 +167,7 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_get_stats])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_get_by_index_rcu])
 
   OVS_GREP_IFELSE([$KSRC26/include/linux/rcupdate.h], [rcu_read_lock_held], [],
                   [OVS_GREP_IFELSE([$KSRC26/include/linux/rtnetlink.h],
