@@ -117,34 +117,31 @@ If only \fIqueue\fR is omitted, then statistics are printed for all
 queues on \fIport\fR; if only \fIport\fR is omitted, then statistics
 are printed for \fIqueue\fR on every port where it exists.
 .
-.TP
-\fBadd\-flow \fIswitch flow\fR
-Add the flow entry as described by \fIflow\fR to the \fIswitch\fR's 
-tables.  The flow entry is in the format described in \fBFlow Syntax\fR, 
-below.
+.SS "OpenFlow Switch Flow Table Commands"
 .
-.TP
-\fBadd\-flows \fIswitch file\fR
-Add the flow entries listed in \fIfile\fR, or supplied on \fBstdin\fR
-if \fIfile\fR is \fB\-\fR, to \fIswitch\fR's
-tables.  Each line in \fIfile\fR is a flow entry in the format
-described in \fBFlow Syntax\fR, below.
+These commands manage the flow table in an OpenFlow switch.  In each
+case, \fIflow\fR specifies a flow entry in the format described in
+\fBFlow Syntax\fR, below, and \fIfile\fR is a text file that contains
+zero or more flows in the same syntax, one per line.
 .
-.TP
-\fBmod\-flows \fIswitch flow\fR
-Modify the actions in entries from the \fIswitch\fR's tables 
-that match \fIflow\fR.  When invoked with the \fB\-\-strict\fR option,
-wildcards are not treated as active for matching purposes.  See 
-\fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
+.IP "\fBadd\-flow \fIswitch flow\fR"
+.IQ "\fBadd\-flow \fIswitch \fB\- < \fIfile\fR"
+.IQ "\fBadd\-flows \fIswitch file\fR"
+Add each flow entry to \fIswitch\fR's tables.
 .
-.TP
-\fBdel\-flows \fIswitch \fR[\fIflow\fR]
-Deletes entries from the \fIswitch\fR's tables that match
-\fIflow\fR.  When invoked with the \fB\-\-strict\fR option, wildcards are 
-not treated as active for matching purposes.  If \fIflow\fR is 
-omitted and the \fB\-\-strict\fR option is not used, all flows in the 
-switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
-syntax of \fIflows\fR.
+.IP "[\fB\-\-strict\fR] \fBmod\-flows \fIswitch flow\fR"
+.IQ "[\fB\-\-strict\fR] \fBmod\-flows \fIswitch \fB\- < \fIfile\fR"
+Modify the actions in entries from \fIswitch\fR's tables that match
+the specified flows.  With \fB\-\-strict\fR, wildcards are not treated
+as active for matching purposes.
+.
+.IP "\fBdel\-flows \fIswitch\fR"
+.IQ "[\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fR[\fIflow\fR]"
+.IQ "[\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fB\- < \fIfile\fR"
+Deletes entries from \fIswitch\fR's flow table.  With only a
+\fIswitch\fR argument, deletes all flows.  Otherwise, deletes flow
+entries that match the specified flows.  With \fB\-\-strict\fR,
+wildcards are not treated as active for matching purposes.
 .
 .IP "\fBreplace\-flows \fIswitch file\fR"
 Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
@@ -173,6 +170,8 @@ For this command, an exit status of 0 means that no differences were
 found, 1 means that an error occurred, and 2 means that some
 differences were found.
 .
+.SS "OpenFlow Switch Monitoring Commands"
+.
 .IP "\fBsnoop \fIswitch\fR"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Unlike other \fBovs\-ofctl\fR commands, if
@@ -198,7 +197,7 @@ If a switch has no controller configured, or if
 the configured controller is disconnected, no traffic is sent, so
 monitoring will not show any traffic.
 .
-.IQ "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
+.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
 named on \fBovs\-openflowd\fR(8)'s \fB\-l\fR or \fB\-\-listen\fR command line

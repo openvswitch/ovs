@@ -633,11 +633,44 @@ check_final_format_for_flow_mod(enum nx_flow_format flow_format)
 }
 
 static void
-do_flow_mod__(int argc OVS_UNUSED, char *argv[], uint16_t command)
+do_flow_mod_file__(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
     enum nx_flow_format flow_format;
     struct list requests;
     struct vconn *vconn;
+    FILE *file;
+
+    file = !strcmp(argv[2], "-") ? stdin : fopen(argv[2], "r");
+    if (file == NULL) {
+        ovs_fatal(errno, "%s: open", argv[2]);
+    }
+
+    list_init(&requests);
+    flow_format = set_initial_format_for_flow_mod(&requests);
+
+    open_vconn(argv[1], &vconn);
+    while (parse_ofp_flow_mod_file(&requests, &flow_format, file, command)) {
+        check_final_format_for_flow_mod(flow_format);
+        transact_multiple_noreply(vconn, &requests);
+    }
+    vconn_close(vconn);
+
+    if (file != stdin) {
+        fclose(file);
+    }
+}
+
+static void
+do_flow_mod__(int argc, char *argv[], uint16_t command)
+{
+    enum nx_flow_format flow_format;
+    struct list requests;
+    struct vconn *vconn;
+
+    if (argc > 2 && !strcmp(argv[2], "-")) {
+        do_flow_mod_file__(argc, argv, command);
+        return;
+    }
 
     list_init(&requests);
     flow_format = set_initial_format_for_flow_mod(&requests);
@@ -658,31 +691,9 @@ do_add_flow(int argc, char *argv[])
 }
 
 static void
-do_add_flows(int argc OVS_UNUSED, char *argv[])
+do_add_flows(int argc, char *argv[])
 {
-    enum nx_flow_format flow_format;
-    struct list requests;
-    struct vconn *vconn;
-    FILE *file;
-
-    file = !strcmp(argv[2], "-") ? stdin : fopen(argv[2], "r");
-    if (file == NULL) {
-        ovs_fatal(errno, "%s: open", argv[2]);
-    }
-
-    list_init(&requests);
-    flow_format = set_initial_format_for_flow_mod(&requests);
-
-    open_vconn(argv[1], &vconn);
-    while (parse_ofp_flow_mod_file(&requests, &flow_format, file, OFPFC_ADD)) {
-        check_final_format_for_flow_mod(flow_format);
-        transact_multiple_noreply(vconn, &requests);
-    }
-    vconn_close(vconn);
-
-    if (file != stdin) {
-        fclose(file);
-    }
+    do_flow_mod_file__(argc, argv, OFPFC_ADD);
 }
 
 static void
