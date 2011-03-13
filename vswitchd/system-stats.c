@@ -22,7 +22,6 @@
 #if HAVE_MNTENT_H
 #include <mntent.h>
 #endif
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -414,7 +413,7 @@ get_process_stats(struct shash *stats)
         file_name = xasprintf("%s/%s", ovs_rundir(), de->d_name);
         pid = read_pidfile(file_name);
         free(file_name);
-        if (pid < 0 || kill(pid, 0)) {
+        if (pid < 0) {
             continue;
         }
 
