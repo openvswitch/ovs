@@ -720,11 +720,13 @@ parse_tunnel_config(const char *name, const char *type,
     if (is_ipsec) {
         char *file_name = xasprintf("%s/%s", ovs_rundir(),
                 "ovs-monitor-ipsec.pid");
-        if (read_pidfile(file_name) < 0) {
-            VLOG_WARN("%s: ovs-monitor-ipsec doesn't appear to be running, "
-                    "traffic may not pass", name);
-        }
+        pid_t pid = read_pidfile(file_name);
         free(file_name);
+        if (pid < 0) {
+            VLOG_WARN("%s: IPsec requires the ovs-monitor-ipsec daemon",
+                    name);
+            return EINVAL;
+        }
 
         if (shash_find(args, "peer_cert") && shash_find(args, "psk")) {
             VLOG_WARN("%s: cannot define both 'peer_cert' and 'psk'", name);
