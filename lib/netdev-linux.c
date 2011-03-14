@@ -2973,7 +2973,7 @@ hfsc_parse_class_details__(struct netdev *netdev,
     max_rate_s = shash_find_data(details, "max-rate");
 
     min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
-    min_rate = MAX(min_rate, 1500);
+    min_rate = MAX(min_rate, 1);
     min_rate = MIN(min_rate, hfsc->max_rate);
 
     max_rate = (max_rate_s
