@@ -31,7 +31,7 @@ ovsdbmonitordir = ${pkgdatadir}/ovsdbmonitor
 if BUILD_OVSDBMONITOR
 noinst_SCRIPTS += ovsdb/ovsdbmonitor/ovsdbmonitor
 ovsdbmonitor_DATA = $(ovsdbmonitor_pyfiles)
-install-exec-local:
+install-exec-hook:
 	sed -e '/NOINSTALL/d' < ovsdb/ovsdbmonitor/ovsdbmonitor > ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 	chmod +x ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 	$(INSTALL_PROGRAM) ovsdb/ovsdbmonitor/ovsdbmonitor.tmp $(DESTDIR)$(bindir)/ovsdbmonitor
