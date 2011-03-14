@@ -130,29 +130,6 @@ install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 rm -rf $RPM_BUILD_ROOT
 
 %post
-# Do not run the first block if we are in the XenServer installer
-if runlevel >/dev/null 2>&1; then
-    if test ! -e /var/xapi/network.dbcache; then
-        if test "$1" = 1; then
-            printf "Creating xapi database cache...  "
-        else
-            printf "warning: Open vSwitch is being re-installed or upgraded,\n"
-            printf "         but the xapi database cache is missing.\n"
-            printf "Re-creating xapi database cache...  "
-        fi
-
-        if /usr/share/openvswitch/scripts/interface-reconfigure rewrite; then
-            printf "done.\n"
-        else
-            printf "FAILED\n"
-            printf "Open vSwitch can only be installed on a XenServer that\n"
-            printf "has connectivity to xapi on the pool master.  Please\n"
-            printf "fix connectivity to the pool master, then try again.\n"
-            exit 1
-        fi
-    fi
-fi
-
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
 # This works around an issue in xhad, which binds to a particular
