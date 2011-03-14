@@ -35,7 +35,8 @@ static int now;
 static const struct command commands[];
 
 static void diff_stats(const struct reconnect_stats *old,
-                       const struct reconnect_stats *new);
+                       const struct reconnect_stats *new,
+                       int delta);
 
 int
 main(void)
@@ -74,16 +75,17 @@ main(void)
 
         if (old_time != now) {
             printf("\n### t=%d ###\n", now);
-            old_time = now;
         }
 
         reconnect_get_stats(reconnect, now, &cur);
-        diff_stats(&prev, &cur);
+        diff_stats(&prev, &cur, now - old_time);
         prev = cur;
         if (reconnect_get_max_tries(reconnect) != old_max_tries) {
             old_max_tries = reconnect_get_max_tries(reconnect);
             printf("  %u tries left\n", old_max_tries);
         }
+
+        old_time = now;
     }
 
     return 0;
@@ -208,7 +210,8 @@ do_set_max_tries(int argc OVS_UNUSED, char *argv[])
 
 static void
 diff_stats(const struct reconnect_stats *old,
-           const struct reconnect_stats *new)
+           const struct reconnect_stats *new,
+           int delta)
 {
     if (old->state != new->state
         || old->state_elapsed != new->state_elapsed
@@ -229,20 +232,25 @@ diff_stats(const struct reconnect_stats *old,
                new->n_successful_connections, new->n_attempted_connections,
                new->seqno);
     }
-    if (old->is_connected != new->is_connected
-        || old->current_connection_duration != new->current_connection_duration
-        || old->total_connected_duration != new->total_connected_duration) {
-        printf("  %sconnected (%u ms), total %u ms connected\n",
-               new->is_connected ? "" : "not ",
-               new->current_connection_duration,
-               new->total_connected_duration);
+    if (old->is_connected != new->is_connected) {
+        printf("  %sconnected\n", new->is_connected ? "" : "dis");
     }
-    if (old->last_disconnected != new->last_disconnected) {
+    if (old->last_connected != new->last_connected
+        || (old->msec_since_connect != new->msec_since_connect - delta
+            && !(old->msec_since_connect == UINT_MAX
+                 && new->msec_since_connect == UINT_MAX))
+        || (old->total_connected_duration != new->total_connected_duration - delta
+            && !(old->total_connected_duration == 0
+                 && new->total_connected_duration == 0))) {
+        printf("  last connected %u ms ago, connected %u ms total\n",
+               new->msec_since_connect, new->total_connected_duration);
+    }
+    if (old->last_disconnected != new->last_disconnected
+        || (old->msec_since_disconnect != new->msec_since_disconnect - delta
+            && !(old->msec_since_disconnect == UINT_MAX
+                 && new->msec_since_disconnect == UINT_MAX))) {
         printf("  disconnected at %llu ms (%u ms ago)\n",
-               new->last_disconnected, new->current_disconnect_duration);
-    }
-    if (old->current_disconnect_duration != new->current_disconnect_duration) {
-        printf("  disconnected for %u ms\n", new->current_disconnect_duration);
+               new->last_disconnected, new->msec_since_disconnect);
     }
 }
 
@@ -282,4 +290,3 @@ static const struct command commands[] = {
     { "listen-error", 1, 1, do_listen_error },
     { NULL, 0, 0, NULL },
 };
-

@@ -469,7 +469,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
     struct ovsdb_row *rw_row;
     const char *target;
     const struct ovsdb_jsonrpc_remote_status *status;
-    char *keys[3], *values[3];
+    char *keys[4], *values[4];
     size_t n = 0;
 
     /* Get the "target" (protocol/host/port) spec. */
@@ -495,9 +495,14 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
 
     keys[n] = xstrdup("state");
     values[n++] = xstrdup(status->state);
-    keys[n] = xstrdup(status->is_connected ? "time_connected"
-                      : "time_disconnected");
-    values[n++] = xasprintf("%u", status->conn_secs);
+    if (status->sec_since_connect != UINT_MAX) {
+        keys[n] = xstrdup("sec_since_connect");
+        values[n++] = xasprintf("%u", status->sec_since_connect);
+    }
+    if (status->sec_since_disconnect != UINT_MAX) {
+        keys[n] = xstrdup("sec_since_disconnect");
+        values[n++] = xasprintf("%u", status->sec_since_disconnect);
+    }
     if (status->last_error) {
         keys[n] = xstrdup("last_error");
         values[n++] =

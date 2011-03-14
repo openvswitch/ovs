@@ -470,10 +470,10 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
 
     jsonrpc_session_get_reconnect_stats(js, &rstats);
     status->state = rstats.state;
-    status->conn_secs = (rstats.is_connected
-                         ? rstats.current_connection_duration
-                         : rstats.current_disconnect_duration
-                         ) / 1000;
+    status->sec_since_connect = rstats.msec_since_connect == UINT_MAX
+        ? UINT_MAX : rstats.msec_since_connect / 1000;
+    status->sec_since_disconnect = rstats.msec_since_disconnect == UINT_MAX
+        ? UINT_MAX : rstats.msec_since_disconnect / 1000;
 
     return;
 }

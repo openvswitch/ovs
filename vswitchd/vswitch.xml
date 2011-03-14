@@ -2097,15 +2097,23 @@
           <dd>The state of the connection to the manager.  Possible values
             are: <code>VOID</code> (connection is disabled),
             <code>BACKOFF</code> (attempting to reconnect at an increasing
-            period), <code>CONNECT_IN_PROGRESS</code> (attempting to connect),
+            period), <code>CONNECTING</code> (attempting to connect),
             <code>ACTIVE</code> (connected, remote host responsive), and
-            <code>IDLE</code> (remote host unresponsive, disconnecting).  These
+            <code>IDLE</code> (remote host idle, sending keep-alive).  These
             values may change in the future.  They are provided only for human
             consumption.</dd>
         </dl>
         <dl>
-          <dt><code>time_in_state</code></dt>
-          <dd>Milliseconds since the <code>state</code> key changed.</dd>
+          <dt><code>sec_since_connect</code></dt>
+          <dd>The amount of time since this manager last successfully connected
+            to the database (in seconds). Value is empty if manager has never
+            successfully connected.</dd>
+        </dl>
+        <dl>
+          <dt><code>sec_since_disconnect</code></dt>
+          <dd>The amount of time since this manager last disconnected from the
+            database (in seconds). Value is empty if manager has never
+            disconnected.</dd>
         </dl>
       </column>
     </group>

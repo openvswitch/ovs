@@ -67,10 +67,10 @@ void reconnect_disable(struct reconnect *, long long int now);
 void reconnect_force_reconnect(struct reconnect *, long long int now);
 
 bool reconnect_is_connected(const struct reconnect *);
-unsigned int reconnect_get_connection_duration(const struct reconnect *,
-                                               long long int now);
-unsigned int reconnect_get_disconnect_duration(const struct reconnect *,
-                                               long long int now);
+unsigned int reconnect_get_last_connect_elapsed(const struct reconnect *,
+                                                long long int now);
+unsigned int reconnect_get_last_disconnect_elapsed(const struct reconnect *,
+                                                   long long int now);
 
 void reconnect_disconnected(struct reconnect *, long long int now, int error);
 void reconnect_connecting(struct reconnect *, long long int now);
@@ -92,18 +92,18 @@ int reconnect_timeout(struct reconnect *, long long int now);
 
 struct reconnect_stats {
     /* All times and durations in this structure are in milliseconds. */
-    long long int creation_time;  /* Time reconnect_create() called. */
-    long long int last_received; /* Last call to reconnect_received(). */
-    long long int last_connected; /* Last call to reconnect_connected(). */
+    long long int creation_time;     /* Time reconnect_create() called. */
+    long long int last_received;     /* Last call to reconnect_received(). */
+    long long int last_connected;    /* Last call to reconnect_connected(). */
     long long int last_disconnected; /* Last call to reconnect_disconnected(). */
-    int backoff;                  /* Current backoff duration.  */
+    int backoff;                     /* Current backoff duration.  */
 
-    unsigned int seqno;         /* # of connections + # of disconnections. */
+    unsigned int seqno;              /* # of connections + # of disconnections. */
 
-    bool is_connected;          /* Currently connected? */
-    unsigned int current_connection_duration; /* Time of current connection. */
-    unsigned int current_disconnect_duration; /* Time disconnected (if disconnected). */
-    unsigned int total_connected_duration;    /* Sum of all connections. */
+    bool is_connected;                     /* Currently connected? */
+    unsigned int msec_since_connect;       /* Time since last connect. */
+    unsigned int msec_since_disconnect;    /* Time since last disconnect. */
+    unsigned int total_connected_duration; /* Sum of all connections. */
     unsigned int n_attempted_connections;
     unsigned int n_successful_connections;
 

@@ -145,8 +145,8 @@ class Reconnect(object):
         self.state_entered = now
         self.backoff = 0
         self.last_received = now
-        self.last_connected = now
-        self.last_disconnected = now
+        self.last_connected = None
+        self.last_disconnected = None
         self.max_tries = None
 
         self.creation_time = now
@@ -529,23 +529,21 @@ class Reconnect(object):
         False otherwise."""
         return self.state.is_connected
 
-    def get_connection_duration(self, now):
-        """Returns the number of milliseconds for which this FSM has been
-        continuously connected to its peer.  (If this FSM is not currently
-        connected, this is 0.)"""
-        if self.is_connected():
+    def get_last_connect_elapsed(self, now):
+        """Returns the number of milliseconds since 'fsm' was last connected
+        to its peer. Returns None if never connected."""
+        if self.last_connected:
             return now - self.last_connected
         else:
-            return 0
+            return None
 
-    def get_disconnect_duration(self, now):
-        """Returns the number of milliseconds for which this FSM has been
-        continuously disconnected from its peer.  (If this FSM is not currently
-        connected, this is 0.)"""
-        if not self.is_connected():
+    def get_last_disconnect_elapsed(self, now):
+        """Returns the number of milliseconds since 'fsm' was last disconnected
+        from its peer. Returns None if never disconnected."""
+        if self.last_disconnected:
             return now - self.last_disconnected
         else:
-            return 0
+            return None
 
     def get_stats(self, now):
         class Stats(object):
@@ -558,10 +556,10 @@ class Reconnect(object):
         stats.backoff = self.backoff
         stats.seqno = self.seqno
         stats.is_connected = self.is_connected()
-        stats.current_connection_duration = self.get_connection_duration(now)
-        stats.current_disconnect_duration = self.get_disconnect_duration(now)
-        stats.total_connected_duration = (stats.current_connection_duration +
-                                          self.total_connected_duration)
+        stats.msec_since_connect = self.get_last_connect_elapsed(now)
+        stats.msec_since_disconnect = self.get_last_disconnect_elapsed(now)
+        stats.total_connected_duration = self.total_connected_duration + \
+            (self.get_last_connect_elapsed(now) if self.is_connected() else 0)
         stats.n_attempted_connections = self.n_attempted_connections
         stats.n_successful_connections = self.n_successful_connections
         stats.state = self.state.name

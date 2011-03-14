@@ -86,7 +86,7 @@ def do_timeout(arg):
 def do_set_max_tries(arg):
     r.set_max_tries(int(arg))
 
-def diff_stats(old, new):
+def diff_stats(old, new, delta):
     if (old.state != new.state or
         old.state_elapsed != new.state_elapsed or
         old.backoff != new.backoff):
@@ -106,23 +106,27 @@ def diff_stats(old, new):
               % (new.n_successful_connections, new.n_attempted_connections,
                  new.seqno))
 
-    if (old.is_connected != new.is_connected or
-        old.current_connection_duration != new.current_connection_duration or
-        old.total_connected_duration != new.total_connected_duration):
+    if (old.is_connected != new.is_connected):
         if new.is_connected:
             negate = ""
         else:
-            negate = "not "
-        print("  %sconnected (%d ms), total %d ms connected"
-              % (negate, new.current_connection_duration,
-                 new.total_connected_duration))
+            negate = "dis"
+        print("  %sconnected" % negate)
 
-    if (old.last_disconnected != new.last_disconnected):
+    if (old.last_connected != new.last_connected or
+        (new.msec_since_connect != None and
+         old.msec_since_connect != new.msec_since_connect - delta) or
+        (old.total_connected_duration != new.total_connected_duration - delta and
+         not (old.total_connected_duration == 0 and
+              new.total_connected_duration == 0))):
+        print("  last connected %d ms ago, connected %d ms total"
+              % (new.msec_since_connect, new.total_connected_duration))
+
+    if (old.last_disconnected != new.last_disconnected or
+        (new.msec_since_disconnect != None and
+         old.msec_since_disconnect != new.msec_since_disconnect - delta)):
         print("  disconnected at %d ms (%d ms ago)"
-              % (new.last_disconnected, new.current_disconnect_duration))
-
-    if (old.current_disconnect_duration != new.current_disconnect_duration):
-        print("  disconnected for %d ms" % (new.current_disconnect_duration))
+              % (new.last_disconnected, new.msec_since_disconnect))
 
 def do_set_passive(arg):
     r.set_passive(True, now)
@@ -187,14 +191,15 @@ def main():
         if old_time != now:
             print
             print "### t=%d ###" % now
-            old_time = now
 
         cur = r.get_stats(now)
-        diff_stats(prev, cur)
+        diff_stats(prev, cur, now - old_time)
         prev = cur
         if r.get_max_tries() != old_max_tries:
             old_max_tries = r.get_max_tries()
             print "  %d tries left" % old_max_tries
+
+        old_time = now
 
 if __name__ == '__main__':
     main()
