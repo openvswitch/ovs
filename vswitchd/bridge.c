@@ -500,7 +500,7 @@ iterate_and_prune_ifaces(struct bridge *br,
         if (port->n_ifaces) {
             i++;
         } else  {
-            VLOG_ERR("%s port has no interfaces, dropping", port->name);
+            VLOG_WARN("%s port has no interfaces, dropping", port->name);
             port_destroy(port);
         }
     }
@@ -639,9 +639,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 && strcmp(dpif_port.name, br->name)) {
                 int retval = dpif_port_del(br->dpif, dpif_port.port_no);
                 if (retval) {
-                    VLOG_ERR("failed to remove %s interface from %s: %s",
-                             dpif_port.name, dpif_name(br->dpif),
-                             strerror(retval));
+                    VLOG_WARN("failed to remove %s interface from %s: %s",
+                              dpif_port.name, dpif_name(br->dpif),
+                              strerror(retval));
                 }
             }
         }
@@ -731,9 +731,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                      dpif_name(br->dpif));
                             break;
                         } else {
-                            VLOG_ERR("failed to add %s interface to %s: %s",
-                                     if_name, dpif_name(br->dpif),
-                                     strerror(error));
+                            VLOG_WARN("failed to add %s interface to %s: %s",
+                                      if_name, dpif_name(br->dpif),
+                                      strerror(error));
                             continue;
                         }
                     }
