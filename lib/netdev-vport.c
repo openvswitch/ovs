@@ -695,8 +695,8 @@ parse_tunnel_config(const char *name, const char *type,
                  */
                 use_ssl_cert = shash_find_data(args, "use_ssl_cert");
                 if (!use_ssl_cert || strcmp(use_ssl_cert, "true")) {
-                    VLOG_WARN("%s: 'peer_cert' requires 'certificate' argument",
-                              name);
+                    VLOG_ERR("%s: 'peer_cert' requires 'certificate' argument",
+                             name);
                     return EINVAL;
                 }
                 ipsec_mech_set = true;
@@ -723,19 +723,19 @@ parse_tunnel_config(const char *name, const char *type,
         pid_t pid = read_pidfile(file_name);
         free(file_name);
         if (pid < 0) {
-            VLOG_WARN("%s: IPsec requires the ovs-monitor-ipsec daemon",
-                    name);
+            VLOG_ERR("%s: IPsec requires the ovs-monitor-ipsec daemon",
+                     name);
             return EINVAL;
         }
 
         if (shash_find(args, "peer_cert") && shash_find(args, "psk")) {
-            VLOG_WARN("%s: cannot define both 'peer_cert' and 'psk'", name);
+            VLOG_ERR("%s: cannot define both 'peer_cert' and 'psk'", name);
             return EINVAL;
         }
 
         if (!ipsec_mech_set) {
-            VLOG_WARN("%s: IPsec requires an 'peer_cert' or psk' argument",
-                      name);
+            VLOG_ERR("%s: IPsec requires an 'peer_cert' or psk' argument",
+                     name);
             return EINVAL;
         }
     }
@@ -746,8 +746,8 @@ parse_tunnel_config(const char *name, const char *type,
     }
 
     if (!daddr) {
-        VLOG_WARN("%s: %s type requires valid 'remote_ip' argument",
-                  name, type);
+        VLOG_ERR("%s: %s type requires valid 'remote_ip' argument",
+                 name, type);
         return EINVAL;
     }
     nl_msg_put_be32(options, ODP_TUNNEL_ATTR_DST_IPV4, daddr);
@@ -870,22 +870,22 @@ parse_patch_config(const char *name, const char *type OVS_UNUSED,
 
     peer = shash_find_data(args, "peer");
     if (!peer) {
-        VLOG_WARN("%s: patch type requires valid 'peer' argument", name);
+        VLOG_ERR("%s: patch type requires valid 'peer' argument", name);
         return EINVAL;
     }
 
     if (shash_count(args) > 1) {
-        VLOG_WARN("%s: patch type takes only a 'peer' argument", name);
+        VLOG_ERR("%s: patch type takes only a 'peer' argument", name);
         return EINVAL;
     }
 
     if (strlen(peer) >= IFNAMSIZ) {
-        VLOG_WARN("%s: patch 'peer' arg too long", name);
+        VLOG_ERR("%s: patch 'peer' arg too long", name);
         return EINVAL;
     }
 
     if (!strcmp(name, peer)) {
-        VLOG_WARN("%s: patch peer must not be self", name);
+        VLOG_ERR("%s: patch peer must not be self", name);
         return EINVAL;
     }
 
