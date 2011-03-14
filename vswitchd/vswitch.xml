@@ -1897,15 +1897,11 @@
         <dl>
           <dt><code>other</code></dt>
           <dd>Allows the controller access to all OpenFlow features.</dd>
-        </dl>
-        <dl>
           <dt><code>master</code></dt>
           <dd>Equivalent to <code>other</code>, except that there may be at
             most one master controller at a time.  When a controller configures
             itself as <code>master</code>, any existing master is demoted to
             the <code>slave</code>role.</dd>
-        </dl>
-        <dl>
           <dt><code>slave</code></dt>
           <dd>Allows the controller read-only access to OpenFlow features.
             Attempts to modify the flow table will be rejected with an
@@ -1922,19 +1918,23 @@
           <dd>A human-readable description of the last error on the connection
             to the controller; i.e. <code>strerror(errno)</code>.  This key
             will exist only if an error has occurred.</dd>
-        </dl>
-        <dl>
           <dt><code>state</code></dt>
           <dd>The state of the connection to the controller.  Possible values
-            are: <code>VOID</code>, <code>BACKOFF</code>,
-            <code>CONNECTING</code>, <code>ACTIVE</code>, and
-            <code>IDLE</code>.</dd>
-        </dl>
-        <dl>
-          <dt><code>time_in_state</code></dt>
-          <dd>Seconds since connecting to (if currently connected) or
-            disconnecting from (if currently disconnected) this
-            controller.</dd>
+            are: <code>VOID</code> (connection is disabled),
+            <code>BACKOFF</code> (attempting to reconnect at an increasing
+            period), <code>CONNECTING</code> (attempting to connect),
+            <code>ACTIVE</code> (connected, remote host responsive), and
+            <code>IDLE</code> (remote host idle, sending keep-alive).  These
+            values may change in the future.  They are provided only for human
+            consumption.</dd>
+          <dt><code>sec_since_connect</code></dt>
+          <dd>The amount of time since this controller last successfully
+            connected to the switch (in seconds). Value is empty if controller
+            has never successfully connected.</dd>
+          <dt><code>sec_since_disconnect</code></dt>
+          <dd>The amount of time since this controller last disconnected from
+            the switch (in seconds). Value is empty if controller has never
+            disconnected.</dd>
         </dl>
       </column>
     </group>

@@ -81,6 +81,7 @@ struct rconn {
     time_t backoff_deadline;
     time_t last_received;
     time_t last_connected;
+    time_t last_disconnected;
     unsigned int packets_sent;
     unsigned int seqno;
     int last_error;
@@ -188,7 +189,8 @@ rconn_create(int probe_interval, int max_backoff)
     rc->max_backoff = max_backoff ? max_backoff : 8;
     rc->backoff_deadline = TIME_MIN;
     rc->last_received = time_now();
-    rc->last_connected = time_now();
+    rc->last_connected = TIME_MIN;
+    rc->last_disconnected = TIME_MIN;
     rc->seqno = 0;
 
     rc->packets_sent = 0;
@@ -792,11 +794,19 @@ rconn_get_successful_connections(const struct rconn *rc)
 }
 
 /* Returns the time at which the last successful connection was made by
- * 'rc'. */
+ * 'rc'. Returns TIME_MIN if never connected. */
 time_t
 rconn_get_last_connection(const struct rconn *rc)
 {
     return rc->last_connected;
+}
+
+/* Returns the time at which 'rc' was last disconnected. Returns TIME_MIN
+ * if never disconnected. */
+time_t
+rconn_get_last_disconnect(const struct rconn *rc)
+{
+    return rc->last_disconnected;
 }
 
 /* Returns the time at which the last OpenFlow message was received by 'rc'.
@@ -980,6 +990,7 @@ disconnect(struct rconn *rc, int error)
         time_t now = time_now();
 
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
+            rc->last_disconnected = now;
             vconn_close(rc->vconn);
             rc->vconn = NULL;
             flush_queue(rc);
@@ -1005,6 +1016,7 @@ disconnect(struct rconn *rc, int error)
             question_connectivity(rc);
         }
     } else {
+        rc->last_disconnected = time_now();
         rconn_disconnect(rc);
     }
 }

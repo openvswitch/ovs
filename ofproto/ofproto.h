@@ -41,8 +41,8 @@ struct ofproto_controller_info {
     bool is_connected;
     enum nx_role role;
     struct {
-        const char *keys[3];
-        const char *values[3];
+        const char *keys[4];
+        const char *values[4];
         size_t n;
     } pairs;
 };

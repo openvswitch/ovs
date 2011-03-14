@@ -1367,7 +1367,7 @@ ofproto_is_alive(const struct ofproto *p)
 }
 
 void
-ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
+ofproto_get_ofproto_controller_info(const struct ofproto *ofproto,
                                     struct shash *info)
 {
     const struct ofconn *ofconn;
@@ -1376,6 +1376,9 @@ ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
 
     HMAP_FOR_EACH (ofconn, hmap_node, &ofproto->controllers) {
         const struct rconn *rconn = ofconn->rconn;
+        time_t now = time_now();
+        time_t last_connection = rconn_get_last_connection(rconn);
+        time_t last_disconnect = rconn_get_last_disconnect(rconn);
         const int last_error = rconn_get_last_error(rconn);
         struct ofproto_controller_info *cinfo = xmalloc(sizeof *cinfo);
 
@@ -1396,14 +1399,16 @@ ofproto_get_ofproto_controller_info(const struct ofproto * ofproto,
         cinfo->pairs.values[cinfo->pairs.n++] =
             xstrdup(rconn_get_state(rconn));
 
-        if (rconn_is_admitted(rconn)) {
-            cinfo->pairs.keys[cinfo->pairs.n] = "time_connected";
-            cinfo->pairs.values[cinfo->pairs.n++] =
-                xasprintf("%ld", time_now() - rconn_get_last_connection(rconn));
-        } else {
-            cinfo->pairs.keys[cinfo->pairs.n] = "time_disconnected";
-            cinfo->pairs.values[cinfo->pairs.n++] =
-                xasprintf("%d", rconn_failure_duration(rconn));
+        if (last_connection != TIME_MIN) {
+            cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_connect";
+            cinfo->pairs.values[cinfo->pairs.n++]
+                = xasprintf("%ld", (long int) (now - last_connection));
+        }
+
+        if (last_disconnect != TIME_MIN) {
+            cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_disconnect";
+            cinfo->pairs.values[cinfo->pairs.n++]
+                = xasprintf("%ld", (long int) (now - last_disconnect));
         }
     }
 }
