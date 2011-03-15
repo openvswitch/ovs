@@ -1124,13 +1124,6 @@ ofport_equal(const struct ofport *a_, const struct ofport *b_)
 }
 
 static void
-send_port_status(struct ofproto *p, const struct ofport *ofport,
-                 uint8_t reason)
-{
-    connmgr_send_port_status(p->connmgr, &ofport->opp, reason);
-}
-
-static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
     const char *netdev_name = ofport->opp.name;
@@ -1269,10 +1262,11 @@ update_port(struct ofproto *p, const char *devname)
     if (new_ofport) {
         ofport_install(p, new_ofport);
     }
-    send_port_status(p, new_ofport ? new_ofport : old_ofport,
-                     (!old_ofport ? OFPPR_ADD
-                      : !new_ofport ? OFPPR_DELETE
-                      : OFPPR_MODIFY));
+    connmgr_send_port_status(p->connmgr,
+                             new_ofport ? &new_ofport->opp : &old_ofport->opp,
+                             (!old_ofport ? OFPPR_ADD
+                              : !new_ofport ? OFPPR_DELETE
+                              : OFPPR_MODIFY));
     ofport_free(old_ofport);
 
 exit:
