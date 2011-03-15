@@ -258,13 +258,6 @@ struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 void hton_ofp_phy_port(struct ofp_phy_port *);
-
-struct flow_stats_iterator {
-    const uint8_t *pos, *end;
-};
-const struct ofp_flow_stats *flow_stats_first(struct flow_stats_iterator *,
-                                              const struct ofp_stats_reply *);
-const struct ofp_flow_stats *flow_stats_next(struct flow_stats_iterator *);
 
 /* Actions. */
 

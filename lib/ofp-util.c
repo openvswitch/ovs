@@ -1876,51 +1876,6 @@ hton_ofp_phy_port(struct ofp_phy_port *opp)
     opp->peer = htonl(opp->peer);
 }
 
-const struct ofp_flow_stats *
-flow_stats_first(struct flow_stats_iterator *iter,
-                 const struct ofp_stats_reply *osr)
-{
-    iter->pos = osr->body;
-    iter->end = osr->body + (ntohs(osr->header.length)
-                             - offsetof(struct ofp_stats_reply, body));
-    return flow_stats_next(iter);
-}
-
-const struct ofp_flow_stats *
-flow_stats_next(struct flow_stats_iterator *iter)
-{
-    ptrdiff_t bytes_left = iter->end - iter->pos;
-    const struct ofp_flow_stats *fs;
-    size_t length;
-
-    if (bytes_left < sizeof *fs) {
-        if (bytes_left != 0) {
-            VLOG_WARN_RL(&bad_ofmsg_rl,
-                         "%td leftover bytes in flow stats reply", bytes_left);
-        }
-        return NULL;
-    }
-
-    fs = (const void *) iter->pos;
-    length = ntohs(fs->length);
-    if (length < sizeof *fs) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "flow stats length %zu is shorter than "
-                     "min %zu", length, sizeof *fs);
-        return NULL;
-    } else if (length > bytes_left) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "flow stats length %zu but only %td "
-                     "bytes left", length, bytes_left);
-        return NULL;
-    } else if ((length - sizeof *fs) % sizeof fs->actions[0]) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "flow stats length %zu has %zu bytes "
-                     "left over in final action", length,
-                     (length - sizeof *fs) % sizeof fs->actions[0]);
-        return NULL;
-    }
-    iter->pos += length;
-    return fs;
-}
-
 static int
 check_action_exact_len(const union ofp_action *a, unsigned int len,
                        unsigned int required_len)
