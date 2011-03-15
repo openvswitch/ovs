@@ -558,8 +558,9 @@ class Reconnect(object):
         stats.is_connected = self.is_connected()
         stats.msec_since_connect = self.get_last_connect_elapsed(now)
         stats.msec_since_disconnect = self.get_last_disconnect_elapsed(now)
-        stats.total_connected_duration = self.total_connected_duration + \
-            (self.get_last_connect_elapsed(now) if self.is_connected() else 0)
+        stats.total_connected_duration = self.total_connected_duration
+        if self.is_connected():
+            stats.total_connected_duration += self.get_last_connect_elapsed(now)
         stats.n_attempted_connections = self.n_attempted_connections
         stats.n_successful_connections = self.n_successful_connections
         stats.state = self.state.name
