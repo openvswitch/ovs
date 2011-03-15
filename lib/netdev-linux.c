@@ -2497,12 +2497,7 @@ htb_parse_class_details__(struct netdev *netdev,
         return EINVAL;
     }
 
-    /* min-rate.  Don't allow a min-rate below 1500 bytes/s. */
-    if (!min_rate_s) {
-        /* min-rate is required. */
-        return EINVAL;
-    }
-    hc->min_rate = strtoull(min_rate_s, NULL, 10) / 8;
+    hc->min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
     hc->min_rate = MAX(hc->min_rate, 1500);
     hc->min_rate = MIN(hc->min_rate, htb->max_rate);
 
@@ -2977,11 +2972,7 @@ hfsc_parse_class_details__(struct netdev *netdev,
     min_rate_s = shash_find_data(details, "min-rate");
     max_rate_s = shash_find_data(details, "max-rate");
 
-    if (!min_rate_s) {
-        return EINVAL;
-    }
-
-    min_rate = strtoull(min_rate_s, NULL, 10) / 8;
+    min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
     min_rate = MAX(min_rate, 1500);
     min_rate = MIN(min_rate, hfsc->max_rate);
 

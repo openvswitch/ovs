@@ -1384,7 +1384,7 @@
         column="type"/> of <code>linux-htb</code> are:</p>
       <dl>
         <dt><code>min-rate</code></dt>
-        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+        <dd>Minimum guaranteed bandwidth, in bit/s.</dd>
         <dt><code>max-rate</code></dt>
         <dd>Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
           queue's rate will not be allowed to exceed the specified value, even
@@ -1407,7 +1407,7 @@
         column="type"/> of <code>linux-hfsc</code> are:</p>
       <dl>
         <dt><code>min-rate</code></dt>
-        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+        <dd>Minimum guaranteed bandwidth, in bit/s.</dd>
         <dt><code>max-rate</code></dt>
         <dd>Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
           queue's rate will not be allowed to exceed the specified value, even
