@@ -107,7 +107,6 @@ struct ofport {
 static void ofport_free(struct ofport *);
 static void ofport_run(struct ofproto *, struct ofport *);
 static void ofport_wait(struct ofport *);
-static void hton_ofp_phy_port(struct ofp_phy_port *);
 
 struct action_xlate_ctx {
 /* action_xlate_ctx_init() initializes these members. */
@@ -2631,18 +2630,6 @@ send_error_oh(const struct ofconn *ofconn, const struct ofp_header *oh,
         COVERAGE_INC(ofproto_error);
         queue_tx(buf, ofconn, ofconn->reply_counter);
     }
-}
-
-static void
-hton_ofp_phy_port(struct ofp_phy_port *opp)
-{
-    opp->port_no = htons(opp->port_no);
-    opp->config = htonl(opp->config);
-    opp->state = htonl(opp->state);
-    opp->curr = htonl(opp->curr);
-    opp->advertised = htonl(opp->advertised);
-    opp->supported = htonl(opp->supported);
-    opp->peer = htonl(opp->peer);
 }
 
 static int

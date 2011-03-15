@@ -257,6 +257,8 @@ struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
+void hton_ofp_phy_port(struct ofp_phy_port *);
+
 struct flow_stats_iterator {
     const uint8_t *pos, *end;
 };
