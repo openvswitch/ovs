@@ -168,5 +168,4 @@ white space.
 .BR ovs\-vswitchd (8),
 .BR ovs\-openflowd (8),
 .BR ovs\-controller (8),
-.BR ovs\-brcompatd (8),
-.BR ovs\-discover (8).
+.BR ovs\-brcompatd (8).

@@ -1,5 +1,4 @@
 _debian/ovsdb/ovsdb-server.1
-_debian/utilities/ovs-discover.8
 _debian/utilities/ovs-dpctl.8
 _debian/utilities/ovs-pcap.1
 _debian/utilities/ovs-tcpundump.1

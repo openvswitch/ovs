@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "2.1.0",
- "cksum": "1990266641 15714",
+ "version": "3.0.0",
+ "cksum": "705848946 15525",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -362,10 +362,6 @@
                   "min": 0, "max": 1}},
        "inactivity_probe": {
          "type": {"key": "integer", "min": 0, "max": 1}},
-       "discover_accept_regex": {
-         "type": {"key": "string", "min": 0, "max": 1}},
-       "discover_update_resolv_conf": {
-         "type": {"key": "boolean", "min": 0, "max": 1}},
        "connection_mode": {
          "type": {"key": {"type": "string",
                   "enum": ["set", ["in-band", "out-of-band"]]},

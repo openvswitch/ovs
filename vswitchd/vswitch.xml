@@ -1692,23 +1692,6 @@
           <dd>The specified TCP <var>port</var> (default: 6633) on the host at
             the given <var>ip</var>, which must be expressed as an IP address
             (not a DNS name).</dd>
-          <dt><code>discover</code></dt>
-          <dd>
-            <p>Enables controller discovery.</p>
-            <p>In controller discovery mode, Open vSwitch broadcasts a DHCP
-              request with vendor class identifier <code>OpenFlow</code> across
-              all of the bridge's network devices.  It will accept any valid
-              DHCP reply that has the same vendor class identifier and includes
-              a vendor-specific option with code 1 whose contents are a string
-              specifying the location of the controller in the same format as
-              <ref column="target"/>.</p>
-            <p>The DHCP reply may also, optionally, include a vendor-specific
-              option with code 2 whose contents are a string specifying the URI
-              to the base of the OpenFlow PKI
-              (e.g. <code>http://192.168.0.1/openflow/pki</code>).  This URI is
-              used only for bootstrapping the OpenFlow PKI at initial switch
-              setup; <code>ovs-vswitchd</code> does not use it at all.</p>
-          </dd>
         </dl>
         <p>
           The following connection methods are currently supported for service
@@ -1768,10 +1751,7 @@
           </dd>
         </dl>
 
-        <p>If not specified, the default is implementation-specific.  If
-          <ref column="target"/> is <code>discover</code>, the connection mode
-          is always treated as <code>in-band</code> regardless of the actual
-          setting.</p>
+        <p>If not specified, the default is implementation-specific.</p>
       </column>
     </group>
 
@@ -1821,33 +1801,9 @@
         </column>
     </group>
 
-    <group title="Additional Discovery Configuration">
-      <p>These values are considered only when <ref column="target"/>
-        is <code>discover</code>.</p>
-
-      <column name="discover_accept_regex">
-        A POSIX
-        extended regular expression against which the discovered controller
-        location is validated.  The regular expression is implicitly
-        anchored at the beginning of the controller location string, as
-        if it begins with <code>^</code>.  If not specified, the default
-        is implementation-specific.
-      </column>
-
-      <column name="discover_update_resolv_conf">
-        Whether to update <code>/etc/resolv.conf</code> when the
-        controller is discovered.  If not specified, the default
-        is implementation-specific.  Open vSwitch will only modify
-        <code>/etc/resolv.conf</code> if the DHCP response that it receives
-        specifies one or more DNS servers.
-      </column>
-    </group>
-
     <group title="Additional In-Band Configuration">
       <p>These values are considered only in in-band control mode (see
-        <ref column="connection_mode"/>) and only when <ref column="target"/>
-        is not <code>discover</code>.  (For controller discovery, the network
-        configuration obtained via DHCP is used instead.)</p>
+        <ref column="connection_mode"/>).</p>
 
       <p>When multiple controllers are configured on a single bridge, there
         should be only one set of unique values in these columns.  If different

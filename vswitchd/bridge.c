@@ -1956,8 +1956,6 @@ bridge_ofproto_controller_for_mgmt(const struct bridge *br,
     oc->max_backoff = 0;
     oc->probe_interval = 60;
     oc->band = OFPROTO_OUT_OF_BAND;
-    oc->accept_re = NULL;
-    oc->update_resolv_conf = false;
     oc->rate_limit = 0;
     oc->burst_limit = 0;
 }
@@ -1972,8 +1970,6 @@ bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
     oc->probe_interval = c->inactivity_probe ? *c->inactivity_probe / 1000 : 5;
     oc->band = (!c->connection_mode || !strcmp(c->connection_mode, "in-band")
                 ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND);
-    oc->accept_re = c->discover_accept_regex;
-    oc->update_resolv_conf = c->discover_update_resolv_conf;
     oc->rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
     oc->burst_limit = (c->controller_burst_limit
                        ? *c->controller_burst_limit : 0);
@@ -1990,11 +1986,6 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     struct iface *local_iface;
     struct in_addr ip;
-
-    /* Controller discovery does its own TCP/IP configuration later. */
-    if (strcmp(c->target, "discover")) {
-        return;
-    }
 
     /* If there's no local interface or no IP address, give up. */
     local_iface = bridge_get_local_iface(br);

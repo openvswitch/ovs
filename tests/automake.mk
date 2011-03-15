@@ -68,7 +68,6 @@ lcov_wrappers = \
 	tests/lcov/test-byte-order \
 	tests/lcov/test-classifier \
 	tests/lcov/test-csum \
-	tests/lcov/test-dhcp-client \
 	tests/lcov/test-file_name \
 	tests/lcov/test-flows \
 	tests/lcov/test-hash \
@@ -121,7 +120,6 @@ valgrind_wrappers = \
 	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-csum \
-	tests/valgrind/test-dhcp-client \
 	tests/valgrind/test-file_name \
 	tests/valgrind/test-flows \
 	tests/valgrind/test-hash \
@@ -277,10 +275,6 @@ tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
 
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
-
-noinst_PROGRAMS += tests/test-dhcp-client
-tests_test_dhcp_client_SOURCES = tests/test-dhcp-client.c
-tests_test_dhcp_client_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-uuid
 tests_test_uuid_SOURCES = tests/test-uuid.c

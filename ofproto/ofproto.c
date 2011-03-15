@@ -27,7 +27,6 @@
 #include "byte-order.h"
 #include "classifier.h"
 #include "coverage.h"
-#include "discovery.h"
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
@@ -332,7 +331,6 @@ struct ofconn {
     /* type == OFCONN_PRIMARY only. */
     enum nx_role role;           /* Role. */
     struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
-    struct discovery *discovery; /* Controller discovery object, if enabled. */
     enum ofproto_band band;      /* In-band or out-of-band? */
 };
 
@@ -544,73 +542,39 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
     }
 }
 
-static bool
-is_discovery_controller(const struct ofproto_controller *c)
-{
-    return !strcmp(c->target, "discover");
-}
-
-static bool
-is_in_band_controller(const struct ofproto_controller *c)
-{
-    return is_discovery_controller(c) || c->band == OFPROTO_IN_BAND;
-}
-
 /* Creates a new controller in 'ofproto'.  Some of the settings are initially
  * drawn from 'c', but update_controller() needs to be called later to finish
  * the new ofconn's configuration. */
 static void
 add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
 {
-    struct discovery *discovery;
+    char *name = ofconn_make_name(ofproto, c->target);
     struct ofconn *ofconn;
-
-    if (is_discovery_controller(c)) {
-        int error = discovery_create(c->accept_re, c->update_resolv_conf,
-                                     ofproto->dpif, &discovery);
-        if (error) {
-            return;
-        }
-    } else {
-        discovery = NULL;
-    }
 
     ofconn = ofconn_create(ofproto, rconn_create(5, 8), OFCONN_PRIMARY);
     ofconn->pktbuf = pktbuf_create();
     ofconn->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
-    if (discovery) {
-        ofconn->discovery = discovery;
-    } else {
-        char *name = ofconn_make_name(ofproto, c->target);
-        rconn_connect(ofconn->rconn, c->target, name);
-        free(name);
-    }
+    rconn_connect(ofconn->rconn, c->target, name);
     hmap_insert(&ofproto->controllers, &ofconn->hmap_node,
                 hash_string(c->target, 0));
+
+    free(name);
 }
 
 /* Reconfigures 'ofconn' to match 'c'.  This function cannot update an ofconn's
- * target or turn discovery on or off (these are done by creating new ofconns
- * and deleting old ones), but it can update the rest of an ofconn's
- * settings. */
+ * target (this is done by creating new ofconns and deleting old ones), but it
+ * can update the rest of an ofconn's settings. */
 static void
 update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
 {
     int probe_interval;
 
-    ofconn->band = (is_in_band_controller(c)
-                    ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND);
+    ofconn->band = c->band;
 
     rconn_set_max_backoff(ofconn->rconn, c->max_backoff);
 
     probe_interval = c->probe_interval ? MAX(c->probe_interval, 5) : 0;
     rconn_set_probe_interval(ofconn->rconn, probe_interval);
-
-    if (ofconn->discovery) {
-        discovery_set_update_resolv_conf(ofconn->discovery,
-                                         c->update_resolv_conf);
-        discovery_set_accept_controller_re(ofconn->discovery, c->accept_re);
-    }
 
     ofconn_set_rate_limit(ofconn, c->rate_limit, c->burst_limit);
 }
@@ -618,7 +582,7 @@ update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
 static const char *
 ofconn_get_target(const struct ofconn *ofconn)
 {
-    return ofconn->discovery ? "discover" : rconn_get_target(ofconn->rconn);
+    return rconn_get_target(ofconn->rconn);
 }
 
 static struct ofconn *
@@ -641,7 +605,6 @@ update_in_band_remotes(struct ofproto *ofproto)
     const struct ofconn *ofconn;
     struct sockaddr_in *addrs;
     size_t max_addrs, n_addrs;
-    bool discovery;
     size_t i;
 
     /* Allocate enough memory for as many remotes as we could possibly have. */
@@ -650,7 +613,6 @@ update_in_band_remotes(struct ofproto *ofproto)
     n_addrs = 0;
 
     /* Add all the remotes. */
-    discovery = false;
     HMAP_FOR_EACH (ofconn, hmap_node, &ofproto->controllers) {
         struct sockaddr_in *sin = &addrs[n_addrs];
 
@@ -663,20 +625,13 @@ update_in_band_remotes(struct ofproto *ofproto)
             sin->sin_port = rconn_get_remote_port(ofconn->rconn);
             n_addrs++;
         }
-        if (ofconn->discovery) {
-            discovery = true;
-        }
     }
     for (i = 0; i < ofproto->n_extra_remotes; i++) {
         addrs[n_addrs++] = ofproto->extra_in_band_remotes[i];
     }
 
-    /* Create or update or destroy in-band.
-     *
-     * Ordinarily we only enable in-band if there's at least one remote
-     * address, but discovery needs the in-band rules for DHCP to be installed
-     * even before we know any remote addresses. */
-    if (n_addrs || discovery) {
+    /* Create or update or destroy in-band. */
+    if (n_addrs) {
         if (!ofproto->in_band) {
             in_band_create(ofproto, ofproto->dpif, &ofproto->in_band);
         }
@@ -738,7 +693,7 @@ ofproto_set_controllers(struct ofproto *p,
     for (i = 0; i < n_controllers; i++) {
         const struct ofproto_controller *c = &controllers[i];
 
-        if (!vconn_verify_name(c->target) || !strcmp(c->target, "discover")) {
+        if (!vconn_verify_name(c->target)) {
             if (!find_controller_by_target(p, c->target)) {
                 add_controller(p, c);
             }
@@ -1821,7 +1776,6 @@ ofconn_destroy(struct ofconn *ofconn)
     if (ofconn->type == OFCONN_PRIMARY) {
         hmap_remove(&ofconn->ofproto->controllers, &ofconn->hmap_node);
     }
-    discovery_destroy(ofconn->discovery);
 
     list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
@@ -1837,23 +1791,6 @@ ofconn_run(struct ofconn *ofconn)
     struct ofproto *p = ofconn->ofproto;
     int iteration;
     size_t i;
-
-    if (ofconn->discovery) {
-        char *controller_name;
-        if (rconn_is_connectivity_questionable(ofconn->rconn)) {
-            discovery_question_connectivity(ofconn->discovery);
-        }
-        if (discovery_run(ofconn->discovery, &controller_name)) {
-            if (controller_name) {
-                char *ofconn_name = ofconn_make_name(p, controller_name);
-                rconn_connect(ofconn->rconn, controller_name, ofconn_name);
-                free(ofconn_name);
-                free(controller_name);
-            } else {
-                rconn_disconnect(ofconn->rconn);
-            }
-        }
-    }
 
     for (i = 0; i < N_SCHEDULERS; i++) {
         pinsched_run(ofconn->schedulers[i], do_send_packet_in, ofconn);
@@ -1877,7 +1814,7 @@ ofconn_run(struct ofconn *ofconn)
         }
     }
 
-    if (!ofconn->discovery && !rconn_is_alive(ofconn->rconn)) {
+    if (!rconn_is_alive(ofconn->rconn)) {
         ofconn_destroy(ofconn);
     }
 }
@@ -1887,9 +1824,6 @@ ofconn_wait(struct ofconn *ofconn)
 {
     int i;
 
-    if (ofconn->discovery) {
-        discovery_wait(ofconn->discovery);
-    }
     for (i = 0; i < N_SCHEDULERS; i++) {
         pinsched_wait(ofconn->schedulers[i]);
     }

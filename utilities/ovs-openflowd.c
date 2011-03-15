@@ -216,8 +216,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_SW_DESC,
         OPT_SERIAL_DESC,
         OPT_DP_DESC,
-        OPT_ACCEPT_VCONN,
-        OPT_NO_RESOLV_CONF,
         OPT_BR_NAME,
         OPT_FAIL_MODE,
         OPT_INACTIVITY_PROBE,
@@ -244,8 +242,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"sw-desc", required_argument, 0, OPT_SW_DESC},
         {"serial-desc", required_argument, 0, OPT_SERIAL_DESC},
         {"dp-desc", required_argument, 0, OPT_DP_DESC},
-        {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
-        {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"config",      required_argument, 0, 'F'},
         {"br-name",     required_argument, 0, OPT_BR_NAME},
         {"fail",        required_argument, 0, OPT_FAIL_MODE},
@@ -284,8 +280,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     controller_opts.max_backoff = 8;
     controller_opts.probe_interval = 5;
     controller_opts.band = OFPROTO_IN_BAND;
-    controller_opts.accept_re = NULL;
-    controller_opts.update_resolv_conf = true;
     controller_opts.rate_limit = 0;
     controller_opts.burst_limit = 0;
     s->unixctl_path = NULL;
@@ -335,14 +329,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_DP_DESC:
             s->dp_desc = optarg;
-            break;
-
-        case OPT_ACCEPT_VCONN:
-            controller_opts.accept_re = optarg;
-            break;
-
-        case OPT_NO_RESOLV_CONF:
-            controller_opts.update_resolv_conf = false;
             break;
 
         case OPT_FAIL_MODE:
@@ -467,15 +453,9 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     argc -= optind;
     argv += optind;
-    if (argc < 1) {
-        ovs_fatal(0, "need at least one non-option arguments; "
+    if (argc < 2) {
+        ovs_fatal(0, "need at least two non-option arguments; "
                   "use --help for usage");
-    }
-
-    /* Set accept_controller_regex. */
-    if (!controller_opts.accept_re) {
-        controller_opts.accept_re
-            = stream_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
     /* Rate limiting. */
@@ -500,9 +480,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             svec_add(&controllers, argv[i]);
         }
     }
-    if (argc < 2) {
-        svec_add(&controllers, "discover");
-    }
 
     /* Set up controllers. */
     s->n_controllers = controllers.n;
@@ -511,27 +488,16 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         s->controllers[i] = controller_opts;
         s->controllers[i].target = controllers.names[i];
     }
-
-    /* Sanity check. */
-    if (controller_opts.band == OFPROTO_OUT_OF_BAND) {
-        for (i = 0; i < s->n_controllers; i++) {
-            if (!strcmp(s->controllers[i].target, "discover")) {
-                ovs_fatal(0, "Cannot perform discovery with out-of-band "
-                          "control");
-            }
-        }
-    }
 }
 
 static void
 usage(void)
 {
     printf("%s: an OpenFlow switch implementation.\n"
-           "usage: %s [OPTIONS] [TYPE@]DATAPATH [CONTROLLER...]\n"
+           "usage: %s [OPTIONS] [TYPE@]DATAPATH CONTROLLER...\n"
            "where DATAPATH is a local datapath (e.g. \"dp0\")\n"
            "optionally with an explicit TYPE (default: \"system\").\n"
-           "Each CONTROLLER is an active OpenFlow connection method.  If\n"
-           "none is given, ovs-openflowd performs controller discovery.\n",
+           "Each CONTROLLER is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
@@ -542,9 +508,6 @@ usage(void)
            "  --sw-desc=SW            Identify software as SW\n"
            "  --serial-desc=SERIAL    Identify serial number as SERIAL\n"
            "  --dp-desc=DP_DESC       Identify dp description as DP_DESC\n"
-           "\nController discovery options:\n"
-           "  --accept-vconn=REGEX    accept matching discovered controllers\n"
-           "  --no-resolv-conf        do not update /etc/resolv.conf\n"
            "\nNetworking options:\n"
            "  --fail=open|closed      when controller connection fails:\n"
            "                            closed: drop all packets\n"

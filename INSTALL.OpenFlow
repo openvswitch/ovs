@@ -118,19 +118,12 @@ OpenFlow switch.
              contact the DHCP server until the secure channel has 
              started.  The address will be obtained in step 7.
 
-      - If you are using in-band control with controller discovery, no
-        configuration is required at this point.  You may proceed to
-        the next step.
-
 6. Run ovs-openflowd to start the secure channel connecting the datapath to
    a remote controller.  If the controller is running on host
    192.168.1.2 port 6633 (the default port), the ovs-openflowd invocation
    would look like this:
 
       # ovs-openflowd dp0 tcp:192.168.1.2
-
-   - If you are using in-band control with controller discovery, omit
-     the second argument to the ovs-openflowd command.
 
    - If you are using out-of-band control, add --out-of-band to the
      command line.
@@ -139,16 +132,13 @@ OpenFlow switch.
    in an insecure manner.  Please see INSTALL.SSL for a description of
    how to connect securely using SSL.
 
-7. If you are using in-band control with manual configuration, and the
-   switch obtains its IP address dynamically, then you may now obtain
-   the switch's IP address, e.g. by invoking a DHCP client.  The
-   secure channel will only be able to connect to the controller after
-   an IP address has been obtained.
+7. If you are using in-band control, and the switch obtains its IP address
+   dynamically, then you may now obtain the switch's IP address, e.g. by
+   invoking a DHCP client.  The secure channel will only be able to connect
+   to the controller after an IP address has been obtained.
 
 8. The secure channel should connect to the controller within a few
-   seconds.  It may take a little longer if controller discovery is in
-   use, because the switch must then also obtain its own IP address
-   and the controller's location via DHCP.
+   seconds.
 
 References
 ----------

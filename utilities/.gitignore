@@ -7,8 +7,6 @@
 /ovs-cfg-mod.8
 /ovs-controller
 /ovs-controller.8
-/ovs-discover
-/ovs-discover.8
 /ovs-dpctl
 /ovs-dpctl.8
 /ovs-ofctl

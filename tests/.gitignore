@@ -9,7 +9,6 @@
 /test-byte-order
 /test-classifier
 /test-csum
-/test-dhcp-client
 /test-file_name
 /test-flows
 /test-hash

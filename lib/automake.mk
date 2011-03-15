@@ -30,12 +30,9 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/csum.h \
 	lib/daemon.c \
 	lib/daemon.h \
+	lib/dhcp.h \
 	lib/dummy.c \
 	lib/dummy.h \
-	lib/dhcp-client.c \
-	lib/dhcp-client.h \
-	lib/dhcp.c \
-	lib/dhcp.h \
 	lib/dhparams.h \
 	lib/dirs.h \
 	lib/dpif-netdev.c \

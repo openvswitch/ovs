@@ -175,10 +175,9 @@ struct netdev_class {
      *
      * May return -EOPNOTSUPP if a network device does not implement packet
      * reception through this interface.  This function may be set to null if
-     * it would always return -EOPNOTSUPP anyhow.  (This will disable the OVS
-     * integrated DHCP client and OpenFlow controller discovery, and prevent
-     * the network device from being usefully used by the netdev-based
-     * "userspace datapath".) */
+     * it would always return -EOPNOTSUPP anyhow.  (This will prevent the
+     * network device from being usefully used by the netdev-based "userspace
+     * datapath".) */
     int (*recv)(struct netdev *netdev, void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
@@ -209,10 +208,9 @@ struct netdev_class {
      *
      * May return EOPNOTSUPP if a network device does not implement packet
      * transmission through this interface.  This function may be set to null
-     * if it would always return EOPNOTSUPP anyhow.  (This will disable the OVS
-     * integrated DHCP client and OpenFlow controller discovery, and prevent
-     * the network device from being usefully used by the netdev-based
-     * "userspace datapath".) */
+     * if it would always return EOPNOTSUPP anyhow.  (This will prevent the
+     * network device from being usefully used by the netdev-based "userspace
+     * datapath".) */
     int (*send)(struct netdev *netdev, const void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to

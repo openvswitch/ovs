@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,6 @@ bool rconn_is_alive(const struct rconn *);
 bool rconn_is_connected(const struct rconn *);
 bool rconn_is_admitted(const struct rconn *);
 int rconn_failure_duration(const struct rconn *);
-bool rconn_is_connectivity_questionable(struct rconn *);
 
 uint32_t rconn_get_remote_ip(const struct rconn *);
 uint16_t rconn_get_remote_port(const struct rconn *);

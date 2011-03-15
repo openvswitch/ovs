@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,10 +80,6 @@ struct ofproto_controller {
     int max_backoff;            /* Maximum reconnection backoff, in seconds. */
     int probe_interval;         /* Max idle time before probing, in seconds. */
     enum ofproto_band band;      /* In-band or out-of-band? */
-
-    /* Discovery options. */
-    char *accept_re;            /* Regexp for acceptable controllers.  */
-    bool update_resolv_conf;    /* Update /etc/resolv.conf? */
 
     /* OpenFlow packet-in rate-limiting. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
