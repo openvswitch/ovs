@@ -3546,11 +3546,21 @@ handle_port_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static void
-calc_flow_duration(long long int start, ovs_be32 *sec, ovs_be32 *nsec)
+calc_flow_duration__(long long int start, uint32_t *sec, uint32_t *nsec)
 {
     long long int msecs = time_msec() - start;
-    *sec = htonl(msecs / 1000);
-    *nsec = htonl((msecs % 1000) * (1000 * 1000));
+    *sec = msecs / 1000;
+    *nsec = (msecs % 1000) * (1000 * 1000);
+}
+
+static void
+calc_flow_duration(long long int start, ovs_be32 *sec_be, ovs_be32 *nsec_be)
+{
+    uint32_t sec, nsec;
+
+    calc_flow_duration__(start, &sec, &nsec);
+    *sec_be = htonl(sec);
+    *nsec_be = htonl(nsec);
 }
 
 static void
@@ -4866,76 +4876,37 @@ rule_expire(struct ofproto *ofproto, struct rule *rule)
     rule_remove(ofproto, rule);
 }
 
-static struct ofpbuf *
-compose_ofp_flow_removed(struct ofconn *ofconn, const struct rule *rule,
-                         uint8_t reason)
-{
-    struct ofp_flow_removed *ofr;
-    struct ofpbuf *buf;
-
-    ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0), &buf);
-    ofputil_cls_rule_to_match(&rule->cr, ofconn->flow_format, &ofr->match,
-                              rule->flow_cookie, &ofr->cookie);
-    ofr->priority = htons(rule->cr.priority);
-    ofr->reason = reason;
-    calc_flow_duration(rule->created, &ofr->duration_sec, &ofr->duration_nsec);
-    ofr->idle_timeout = htons(rule->idle_timeout);
-    ofr->packet_count = htonll(rule->packet_count);
-    ofr->byte_count = htonll(rule->byte_count);
-
-    return buf;
-}
-
-static struct ofpbuf *
-compose_nx_flow_removed(const struct rule *rule, uint8_t reason)
-{
-    struct nx_flow_removed *nfr;
-    struct ofpbuf *buf;
-    int match_len;
-
-    make_nxmsg_xid(sizeof *nfr, NXT_FLOW_REMOVED, htonl(0), &buf);
-    match_len = nx_put_match(buf, &rule->cr);
-
-    nfr = buf->data;
-    nfr->cookie = rule->flow_cookie;
-    nfr->priority = htons(rule->cr.priority);
-    nfr->reason = reason;
-    calc_flow_duration(rule->created, &nfr->duration_sec, &nfr->duration_nsec);
-    nfr->idle_timeout = htons(rule->idle_timeout);
-    nfr->match_len = htons(match_len);
-    nfr->packet_count = htonll(rule->packet_count);
-    nfr->byte_count = htonll(rule->byte_count);
-
-    return buf;
-}
-
 static void
 rule_send_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
 {
+    struct ofputil_flow_removed fr;
     struct ofconn *ofconn;
 
     if (!rule->send_flow_removed) {
         return;
     }
 
-    LIST_FOR_EACH (ofconn, node, &p->all_conns) {
-        struct ofpbuf *msg;
+    fr.rule = rule->cr;
+    fr.cookie = rule->flow_cookie;
+    fr.reason = reason;
+    calc_flow_duration__(rule->created, &fr.duration_sec, &fr.duration_nsec);
+    fr.idle_timeout = rule->idle_timeout;
+    fr.packet_count = rule->packet_count;
+    fr.byte_count = rule->byte_count;
 
+    LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         if (!rconn_is_connected(ofconn->rconn)
             || !ofconn_receives_async_msgs(ofconn)) {
             continue;
         }
-
-        msg = (ofconn->flow_format == NXFF_NXM
-               ? compose_nx_flow_removed(rule, reason)
-               : compose_ofp_flow_removed(ofconn, rule, reason));
 
         /* Account flow expirations under ofconn->reply_counter, the counter
          * for replies to OpenFlow requests.  That works because preventing
          * OpenFlow requests from being processed also prevents new flows from
          * being added (and expiring).  (It also prevents processing OpenFlow
          * requests that would not add new flows, so it is imperfect.) */
-        queue_tx(msg, ofconn, ofconn->reply_counter);
+        queue_tx(ofputil_encode_flow_removed(&fr, ofconn->flow_format),
+                 ofconn, ofconn->reply_counter);
     }
 }
 

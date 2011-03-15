@@ -189,6 +189,8 @@ struct ofputil_flow_removed {
 int ofputil_decode_flow_removed(struct ofputil_flow_removed *,
                                 const struct ofp_header *,
                                 enum nx_flow_format);
+struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
+                                           enum nx_flow_format);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);

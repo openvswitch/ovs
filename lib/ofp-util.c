@@ -1405,6 +1405,54 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
     return 0;
 }
 
+/* Converts abstract ofputil_flow_removed 'fr' into an OFPT_FLOW_REMOVED or
+ * NXT_FLOW_REMOVED message 'oh' according to 'flow_format', and returns the
+ * message. */
+struct ofpbuf *
+ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
+                            enum nx_flow_format flow_format)
+{
+    struct ofpbuf *msg;
+
+    if (flow_format == NXFF_OPENFLOW10
+        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+        struct ofp_flow_removed *ofr;
+
+        ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0),
+                                &msg);
+        ofputil_cls_rule_to_match(&fr->rule, flow_format, &ofr->match,
+                                  fr->cookie, &ofr->cookie);
+        ofr->priority = htons(fr->rule.priority);
+        ofr->reason = fr->reason;
+        ofr->duration_sec = htonl(fr->duration_sec);
+        ofr->duration_nsec = htonl(fr->duration_nsec);
+        ofr->idle_timeout = htons(fr->idle_timeout);
+        ofr->packet_count = htonll(fr->packet_count);
+        ofr->byte_count = htonll(fr->byte_count);
+    } else if (flow_format == NXFF_NXM) {
+        struct nx_flow_removed *nfr;
+        int match_len;
+
+        make_nxmsg_xid(sizeof *nfr, NXT_FLOW_REMOVED, htonl(0), &msg);
+        match_len = nx_put_match(msg, &fr->rule);
+
+        nfr = msg->data;
+        nfr->cookie = fr->cookie;
+        nfr->priority = htons(fr->rule.priority);
+        nfr->reason = fr->reason;
+        nfr->duration_sec = htonl(fr->duration_sec);
+        nfr->duration_nsec = htonl(fr->duration_nsec);
+        nfr->idle_timeout = htons(fr->idle_timeout);
+        nfr->match_len = htons(match_len);
+        nfr->packet_count = htonll(fr->packet_count);
+        nfr->byte_count = htonll(fr->byte_count);
+    } else {
+        NOT_REACHED();
+    }
+
+    return msg;
+}
+
 /* Returns a string representing the message type of 'type'.  The string is the
  * enumeration constant for the type, e.g. "OFPT_HELLO".  For statistics
  * messages, the constant is followed by "request" or "reply",
