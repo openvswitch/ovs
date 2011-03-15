@@ -2497,8 +2497,10 @@ htb_parse_class_details__(struct netdev *netdev,
         return EINVAL;
     }
 
+    /* HTB requires at least an mtu sized min-rate to send any traffic even
+     * on uncongested links. */
     hc->min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
-    hc->min_rate = MAX(hc->min_rate, 1500);
+    hc->min_rate = MAX(hc->min_rate, mtu);
     hc->min_rate = MIN(hc->min_rate, htb->max_rate);
 
     /* max-rate */
