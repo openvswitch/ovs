@@ -1035,6 +1035,12 @@ cmd_emer_reset(struct vsctl_context *ctx)
     const struct ovsrec_bridge *br;
     const struct ovsrec_port *port;
     const struct ovsrec_interface *iface;
+    const struct ovsrec_mirror *mirror, *next_mirror;
+    const struct ovsrec_controller *ctrl, *next_ctrl;
+    const struct ovsrec_manager *mgr, *next_mgr;
+    const struct ovsrec_netflow *nf, *next_nf;
+    const struct ovsrec_ssl *ssl, *next_ssl;
+    const struct ovsrec_sflow *sflow, *next_sflow;
 
     /* Reset the Open_vSwitch table. */
     ovsrec_open_vswitch_set_manager_options(ctx->ovs, NULL, 0);
@@ -1077,6 +1083,30 @@ cmd_emer_reset(struct vsctl_context *ctx)
 
         ovsrec_interface_set_ingress_policing_rate(iface, 0);
         ovsrec_interface_set_ingress_policing_burst(iface, 0);
+    }
+
+    OVSREC_MIRROR_FOR_EACH_SAFE (mirror, next_mirror, idl) {
+        ovsrec_mirror_delete(mirror);
+    }
+
+    OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
+        ovsrec_controller_delete(ctrl);
+    }
+
+    OVSREC_MANAGER_FOR_EACH_SAFE (mgr, next_mgr, idl) {
+        ovsrec_manager_delete(mgr);
+    }
+
+    OVSREC_NETFLOW_FOR_EACH_SAFE (nf, next_nf, idl) {
+        ovsrec_netflow_delete(nf);
+    }
+
+    OVSREC_SSL_FOR_EACH_SAFE (ssl, next_ssl, idl) {
+        ovsrec_ssl_delete(ssl);
+    }
+
+    OVSREC_SFLOW_FOR_EACH_SAFE (sflow, next_sflow, idl) {
+        ovsrec_sflow_delete(sflow);
     }
 }
 
@@ -1188,8 +1218,18 @@ cmd_add_br(struct vsctl_context *ctx)
 }
 
 static void
-del_port(struct vsctl_port *port)
+del_port(struct vsctl_info *info, struct vsctl_port *port)
 {
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &info->ifaces) {
+        struct vsctl_iface *iface = node->data;
+        if (iface->port == port) {
+            ovsrec_interface_delete(iface->iface_cfg);
+        }
+    }
+    ovsrec_port_delete(port->port_cfg);
+
     bridge_delete_port((port->bridge->parent
                         ? port->bridge->parent->br_cfg
                         : port->bridge->br_cfg), port->port_cfg);
@@ -1205,18 +1245,18 @@ cmd_del_br(struct vsctl_context *ctx)
     get_info(ctx, &info);
     bridge = find_bridge(&info, ctx->argv[1], must_exist);
     if (bridge) {
-        if (bridge->br_cfg) {
-            ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
-        } else {
-            struct shash_node *node;
+        struct shash_node *node;
 
-            SHASH_FOR_EACH (node, &info.ports) {
-                struct vsctl_port *port = node->data;
-                if (port->bridge == bridge || port->bridge->parent == bridge
-                    || !strcmp(port->port_cfg->name, bridge->name)) {
-                    del_port(port);
-                }
+        SHASH_FOR_EACH (node, &info.ports) {
+            struct vsctl_port *port = node->data;
+            if (port->bridge == bridge || port->bridge->parent == bridge
+                || !strcmp(port->port_cfg->name, bridge->name)) {
+                del_port(&info, port);
             }
+        }
+        if (bridge->br_cfg) {
+            ovsrec_bridge_delete(bridge->br_cfg);
+            ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
         }
     }
     free_info(&info);
@@ -1601,7 +1641,7 @@ cmd_del_port(struct vsctl_context *ctx)
             }
         }
 
-        del_port(port);
+        del_port(&info, port);
     }
 
     free_info(&info);
@@ -1734,6 +1774,17 @@ cmd_get_controller(struct vsctl_context *ctx)
 }
 
 static void
+delete_controllers(struct ovsrec_controller **controllers,
+                   size_t n_controllers)
+{
+    size_t i;
+
+    for (i = 0; i < n_controllers; i++) {
+        ovsrec_controller_delete(controllers[i]);
+    }
+}
+
+static void
 cmd_del_controller(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
@@ -1742,7 +1793,12 @@ cmd_del_controller(struct vsctl_context *ctx)
     get_info(ctx, &info);
 
     br = find_real_bridge(&info, ctx->argv[1], true);
-    ovsrec_bridge_set_controller(br->br_cfg, NULL, 0);
+    verify_controllers(br->br_cfg);
+
+    if (br->ctrl) {
+        delete_controllers(br->ctrl, br->n_ctrl);
+        ovsrec_bridge_set_controller(br->br_cfg, NULL, 0);
+    }
 
     free_info(&info);
 }
@@ -1772,6 +1828,9 @@ cmd_set_controller(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_real_bridge(&info, ctx->argv[1], true);
+    verify_controllers(br->br_cfg);
+
+    delete_controllers(br->ctrl, br->n_ctrl);
 
     n = ctx->argc - 2;
     controllers = insert_controllers(ctx->txn, &ctx->argv[2], n);
@@ -1878,11 +1937,27 @@ cmd_get_manager(struct vsctl_context *ctx)
 }
 
 static void
+delete_managers(const struct vsctl_context *ctx)
+{
+    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
+    size_t i;
+
+    /* Delete Manager rows pointed to by 'manager_options' column. */
+    for (i = 0; i < ovs->n_manager_options; i++) {
+        ovsrec_manager_delete(ovs->manager_options[i]);
+    }
+
+    /* Delete 'Manager' row refs in 'manager_options' column. */
+    ovsrec_open_vswitch_set_manager_options(ovs, NULL, 0);
+}
+
+static void
 cmd_del_manager(struct vsctl_context *ctx)
 {
     const struct ovsrec_open_vswitch *ovs = ctx->ovs;
 
-    ovsrec_open_vswitch_set_manager_options(ovs, NULL, 0);
+    verify_managers(ovs);
+    delete_managers(ctx);
 }
 
 static void
@@ -1908,6 +1983,8 @@ cmd_set_manager(struct vsctl_context *ctx)
 {
     const size_t n = ctx->argc - 1;
 
+    verify_managers(ctx->ovs);
+    delete_managers(ctx);
     insert_managers(ctx, &ctx->argv[1], n);
 }
 
@@ -1951,7 +2028,13 @@ pre_cmd_del_ssl(struct vsctl_context *ctx)
 static void
 cmd_del_ssl(struct vsctl_context *ctx)
 {
-    ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
+    struct ovsrec_ssl *ssl = ctx->ovs->ssl;
+
+    if (ssl) {
+        ovsrec_open_vswitch_verify_ssl(ctx->ovs);
+        ovsrec_ssl_delete(ssl);
+        ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
+    }
 }
 
 static void
@@ -1964,8 +2047,12 @@ static void
 cmd_set_ssl(struct vsctl_context *ctx)
 {
     bool bootstrap = shash_find(&ctx->options, "--bootstrap");
-    struct ovsrec_ssl *ssl;
+    struct ovsrec_ssl *ssl = ctx->ovs->ssl;
 
+    ovsrec_open_vswitch_verify_ssl(ctx->ovs);
+    if (ssl) {
+        ovsrec_ssl_delete(ssl);
+    }
     ssl = ovsrec_ssl_insert(ctx->txn);
 
     ovsrec_ssl_set_private_key(ssl, ctx->argv[1]);

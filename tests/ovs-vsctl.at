@@ -190,6 +190,26 @@ CHECK_IFACES([b])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([add-br a, del-br a, add-br a])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [add-br a],
+  [del-br a],
+  [add-br a],
+  [set Interface a other_config:key=value],
+  [get Interface a other_config:key])], [0], [
+
+
+
+value
+], [], [OVS_VSCTL_CLEANUP])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a])
+CHECK_IFACES([a])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 AT_SETUP([add-br a, add-port a a1, add-port a a2])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
