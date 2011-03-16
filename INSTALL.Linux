@@ -234,9 +234,10 @@ Prerequisites section, follow the procedure below to build.
    whether this is the case. If you know that your particular driver can
    handle it (for example by testing sending large TCP packets over VLANs)
    then passing in a value of 1 may improve performance. Modules built for
-   Linux kernels 2.6.37 and later do not need this and do not have this
-   parameter. If you do not understand what this means or do not know if
-   your driver will work, do not set this.
+   Linux kernels 2.6.37 and later, as well as specially patched versions
+   of earlier kernels, do not need this and do not have this parameter. If
+   you do not understand what this means or do not know if your driver
+   will work, do not set this.
 
 7. Initialize the configuration database using ovsdb-tool, e.g.:
 

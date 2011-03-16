@@ -284,6 +284,7 @@ _ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'dup
 _PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
                         [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay',
                                 'updelay', 'use_carrier', 'hashing-algorithm' ] + \
+                        [ 'vlan-bug-workaround' ] + \
                         _ETHTOOL_OTHERCONFIG_ATTRS
 
 _PIF_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),

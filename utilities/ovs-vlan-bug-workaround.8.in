@@ -1,0 +1,90 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-vlan\-bug\-workaround 8 "February 2011" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-vlan\-bug\-workaround
+.
+.SH NAME
+ovs\-vlan\-bug\-workaround \- utility for configuring Linux VLAN driver bug workaround
+.
+.SH SYNOPSIS
+\fBovs\-vlan\-bug\-workaround \fInetdev\fR \fBon\fR
+.br
+\fBovs\-vlan\-bug\-workaround \fInetdev\fR \fBoff\fR
+.br
+\fBovs\-vlan\-bug\-workaround \-\-help
+.br
+\fBovs\-vlan\-bug\-workaround \-\-version
+.SH DESCRIPTION
+.
+.PP
+Some Linux network drivers support a feature called ``VLAN
+acceleration''.  VLAN acceleration is associated with a data structure
+called a \fBvlan_group\fR that is, abstractly, a dictionary that maps
+from a VLAN ID (in the range 0 to 4095) to a VLAN device, that is, a
+Linux network device associated with a particular VLAN,
+e.g. \fBeth0.9\fR for VLAN 9 on \fBeth0\fR.
+.PP
+Some drivers that support VLAN acceleration have bugs that fall
+roughly into the categories listed below.  \fBovs\-vlan\-test\fR(8)
+can test for these driver bugs.
+.so utilities/ovs-vlan-bugs.man
+.PP
+.PP
+The correct long term solution is to fix these driver bugs.
+.PP
+For now, \fBovs\-vlan\-bug\-workaround\fR can enable a special-purpose
+workaround for devices with buggy VLAN acceleration.  A kernel patch
+must be applied for this workaround to work.
+.PP
+Use the command \fBovs\-vlan\-bug\-workaround \fInetdev\fR \fBon\fR to
+enable the VLAN driver bug workaround for network device \fInetdev\fR.
+Use the command \fBovs\-vlan\-bug\-workaround \fInetdev\fR \fBoff\fR to
+disable the VLAN driver bug workaround for network device \fInetdev\fR.
+.SH "DRIVER DETAILS"
+.PP
+The following drivers in Linux version
+2.6.32.12-0.7.1.xs1.0.0.311.170586 implement VLAN acceleration and are
+relevant to Open vSwitch on XenServer.  We have not tested any version
+of most of these drivers, so we do not know whether they have a VLAN
+problem that needs to be fixed.  The drivers are listed by the name
+that they report in, e.g., \fBethtool \-i\fR output; in a few cases
+this differs slightly from the name of the module's \fB.ko\fR file:
+.
+.nf
+.ta T 1i
+\fB8139cp	acenic	amd8111e	atl1c	ATL1E	atl1
+atl2	be2net	bna	bnx2	bnx2x	cnic
+cxgb	cxgb3	e1000	e1000e	enic	forcedeth
+igb	igbvf	ixgb	ixgbe	jme	ml4x_core
+ns83820	qlge	r8169	S2IO	sky2	starfire
+tehuti	tg3	typhoon	via-velocity	vxge
+.fi
+.PP
+The following drivers use \fBvlan_group\fR but are irrelevant to Open
+vSwitch on XenServer:
+.IP "\fBbonding\fR"
+Not used with Open vSwitch on XenServer.
+.IP "\fBgianfar\fR"
+Not shipped with XenServer.  A FreeScale CPU-integrated device.
+.IP "\fBehea\fR"
+Cannot be built on x86.  IBM Power architecture only.
+.IP "\fBstmmac\fR"
+Cannot be built on x86.  SH4 architecture only.
+.IP "\fBvmxnet3\fR"
+Not shipped with XenServer.  For use inside VMware VMs only.
+.
+.SH OPTIONS
+.
+.so lib/common.man
+.
+.SH BUGS
+.
+Obviously.
+.
+.SH "SEE ALSO"
+.
+.BR ovs\-vlan\-test (8).

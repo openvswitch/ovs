@@ -211,6 +211,9 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC26/include/linux/if_link.h], [rtnl_link_stats64])
 
+  OVS_GREP_IFELSE([$KSRC26/include/linux/if_vlan.h], [ADD_ALL_VLANS_CMD],
+                  [OVS_DEFINE([HAVE_VLAN_BUG_WORKAROUND])])
+
   OVS_CHECK_LOG2_H
 
   if cmp -s datapath/linux-2.6/kcompat.h.new \

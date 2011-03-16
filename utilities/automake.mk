@@ -32,7 +32,9 @@ EXTRA_DIST += \
 	utilities/ovs-save \
 	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-tcpundump.in \
+	utilities/ovs-vlan-bugs.man \
 	utilities/ovs-vlan-test.in \
+	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-vlan-test.8.in \
 	utilities/ovs-vsctl.8.in
 DISTCLEANFILES += \
@@ -65,6 +67,7 @@ man_MANS += \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki.8 \
 	utilities/ovs-tcpundump.1 \
+	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vsctl.8
 
@@ -94,6 +97,10 @@ utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 if HAVE_NETLINK
+sbin_PROGRAMS += utilities/ovs-vlan-bug-workaround
+utilities_ovs_vlan_bug_workaround_SOURCES = utilities/ovs-vlan-bug-workaround.c
+utilities_ovs_vlan_bug_workaround_LDADD = lib/libopenvswitch.a
+
 noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.a

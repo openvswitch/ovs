@@ -18,23 +18,7 @@ client mode connecting to an \fBovs\-vlan\-test\fR server.
 \fBovs\-vlan\-test\fR will display "OK" if it did not detect problems.
 .PP
 Some examples of the types of problems that may be encountered are:
-.IP \(bu
-When NICs use vlan stripping on receive they must pass a pointer to
-a vlan group when reporting the stripped tag to the networking core.
-If there is no vlan group in use then some drivers just drop the
-extracted tag.  Drivers are supposed to only enable stripping if a
-vlan group is registered but not all of them do that.
-.
-.IP \(bu
-Some drivers size their receive buffers based on whether a vlan
-group is enabled, meaning that a maximum size packet with a vlan tag
-will not fit if a vlan group is not configured.
-.
-.IP \(bu
-On transmit some drivers expect that vlan acceleration will be used
-if it is available (which can only be done if a vlan group is
-configured).  In these cases, the driver may fail to parse the packet
-and correctly setup checksum offloading and/or TSO.
+.so utilities/ovs-vlan-bugs.man
 .
 .SS "Client Mode"
 An \fBovs\-vlan\-test\fR client may be run on a host to check for VLAN

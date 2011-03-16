@@ -349,6 +349,7 @@ fi
 /usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/vswitch.ovsschema
+/usr/sbin/ovs-vlan-bug-workaround
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
@@ -371,6 +372,7 @@ fi
 /usr/share/man/man8/ovs-parse-leaks.8.gz
 /usr/share/man/man1/ovs-pcap.1.gz
 /usr/share/man/man1/ovs-tcpundump.1.gz
+/usr/share/man/man8/ovs-vlan-bug-workaround.8.gz
 /usr/share/man/man8/ovs-vlan-test.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz

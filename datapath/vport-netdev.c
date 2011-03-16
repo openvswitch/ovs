@@ -22,12 +22,15 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) && \
+    !defined(HAVE_VLAN_BUG_WORKAROUND)
 #include <linux/module.h>
 
 static int vlan_tso __read_mostly = 0;
 module_param(vlan_tso, int, 0644);
 MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
+#else
+#define vlan_tso true
 #endif
 
 /* If the native device stats aren't 64 bit use the vport stats tracking instead. */
@@ -266,6 +269,19 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	vport_receive(vport, skb);
 }
 
+static bool dev_supports_vlan_tx(struct net_device *dev)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
+	/* Software fallback means every device supports vlan_tci on TX. */
+	return true;
+#elif defined(HAVE_VLAN_BUG_WORKAROUND)
+	return dev->features & NETIF_F_HW_VLAN_TX;
+#else
+	/* Assume that the driver is buggy. */
+	return false;
+#endif
+}
+
 static int netdev_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
@@ -274,8 +290,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 	skb->dev = netdev_vport->dev;
 	forward_ip_summed(skb);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-	if (vlan_tx_tag_present(skb)) {
+	if (vlan_tx_tag_present(skb) && !dev_supports_vlan_tx(skb->dev)) {
 		int err;
 		int features = 0;
 
@@ -339,7 +354,6 @@ tag:
 			return 0;
 		vlan_set_tci(skb, 0);
 	}
-#endif
 
 	len = skb->len;
 	dev_queue_xmit(skb);
