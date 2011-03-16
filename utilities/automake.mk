@@ -63,7 +63,7 @@ man_MANS += \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki.8 \
 	utilities/ovs-tcpundump.1 \
-	utilities/ovs-vlan-bug-workaround.8.in \
+	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vsctl.8
 
