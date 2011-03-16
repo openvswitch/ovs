@@ -306,7 +306,6 @@ static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_update_cfm(struct iface *);
 static void iface_refresh_cfm_stats(struct iface *iface);
-static void iface_send_packet(struct iface *, struct ofpbuf *packet);
 static void iface_update_carrier(struct iface *);
 static bool iface_get_carrier(const struct iface *);
 
@@ -314,7 +313,6 @@ static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
 static void shash_to_ovs_idl_map(struct shash *,
                                  char ***keys, char ***values, size_t *n);
-
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -3427,9 +3425,8 @@ bond_send_learning_packets(struct port *port)
     ofpbuf_init(&packet, 128);
     error = n_packets = n_errors = 0;
     LIST_FOR_EACH (e, lru_node, &br->ml->lrus) {
-        union ofp_action actions[2], *a;
-        uint16_t dp_ifidx;
         tag_type tags = 0;
+        uint16_t dp_ifidx;
         struct flow flow;
         int retval;
 
@@ -3445,24 +3442,9 @@ bond_send_learning_packets(struct port *port)
             continue;
         }
 
-        /* Compose actions. */
-        memset(actions, 0, sizeof actions);
-        a = actions;
-        if (e->vlan) {
-            a->vlan_vid.type = htons(OFPAT_SET_VLAN_VID);
-            a->vlan_vid.len = htons(sizeof *a);
-            a->vlan_vid.vlan_vid = htons(e->vlan);
-            a++;
-        }
-        a->output.type = htons(OFPAT_OUTPUT);
-        a->output.len = htons(sizeof *a);
-        a->output.port = htons(odp_port_to_ofp_port(dp_ifidx));
-        a++;
-
         /* Send packet. */
         n_packets++;
-        retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
-                                     &packet);
+        retval = ofproto_send_packet(br->ofproto, dp_ifidx, e->vlan, &packet);
         if (retval) {
             error = retval;
             n_errors++;
@@ -3859,7 +3841,8 @@ lacp_send_pdu_cb(void *aux, const struct lacp_pdu *pdu)
 
         ofpbuf_init(&packet, ETH_HEADER_LEN + LACP_PDU_LEN);
         compose_lacp_packet(&packet, ea, pdu);
-        iface_send_packet(iface, &packet);
+        ofproto_send_packet(iface->port->bridge->ofproto,
+                            iface->dp_ifidx, 0, &packet);
         ofpbuf_uninit(&packet);
     } else {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
@@ -3912,7 +3895,8 @@ port_run(struct port *port)
         if (iface->cfm) {
             struct ofpbuf *packet = cfm_run(iface->cfm);
             if (packet) {
-                iface_send_packet(iface, packet);
+                ofproto_send_packet(port->bridge->ofproto, iface->dp_ifidx,
+                                    0, packet);
                 ofpbuf_uninit(packet);
                 free(packet);
             }
@@ -4348,26 +4332,6 @@ port_update_bonding(struct port *port)
 }
 
 /* Interface functions. */
-
-static void
-iface_send_packet(struct iface *iface, struct ofpbuf *packet)
-{
-    struct flow flow;
-    union ofp_action action;
-
-    memset(&action, 0, sizeof action);
-    action.output.type = htons(OFPAT_OUTPUT);
-    action.output.len  = htons(sizeof action);
-    action.output.port = htons(odp_port_to_ofp_port(iface->dp_ifidx));
-
-    flow_extract(packet, 0, ODPP_NONE, &flow);
-
-    if (ofproto_send_packet(iface->port->bridge->ofproto, &flow, &action, 1,
-                            packet)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "interface %s: Failed to send packet.", iface->name);
-    }
-}
 
 static struct iface *
 iface_create(struct port *port, const struct ovsrec_interface *if_cfg)

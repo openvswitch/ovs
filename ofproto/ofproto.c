@@ -1404,26 +1404,34 @@ ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
     return ofport && !(ofport->opp.config & OFPPC_NO_FLOOD);
 }
 
+/* Sends 'packet' out of port 'port_no' within 'p'.  If 'vlan_tci' is zero the
+ * packet will not have any 802.1Q hader; if it is nonzero, then the packet
+ * will be sent with the VLAN TCI specified by 'vlan_tci & ~VLAN_CFI'.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
 int
-ofproto_send_packet(struct ofproto *p, const struct flow *flow,
-                    const union ofp_action *actions, size_t n_actions,
+ofproto_send_packet(struct ofproto *ofproto,
+                    uint32_t port_no, uint16_t vlan_tci,
                     const struct ofpbuf *packet)
 {
-    struct action_xlate_ctx ctx;
-    struct ofpbuf *odp_actions;
+    struct ofpbuf odp_actions;
+    int error;
 
-    action_xlate_ctx_init(&ctx, p, flow, packet);
-    /* Always xlate packets originated in this function. */
-    ctx.check_special = false;
-    odp_actions = xlate_actions(&ctx, actions, n_actions);
+    ofpbuf_init(&odp_actions, 32);
+    if (vlan_tci != 0) {
+        nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
+                       ntohs(vlan_tci & ~VLAN_CFI));
+    }
+    nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, port_no);
+    error = dpif_execute(ofproto->dpif, odp_actions.data, odp_actions.size,
+                         packet);
+    ofpbuf_uninit(&odp_actions);
 
-    /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
-     * error code? */
-    dpif_execute(p->dpif, odp_actions->data, odp_actions->size, packet);
-
-    ofpbuf_delete(odp_actions);
-
-    return 0;
+    if (error) {
+        VLOG_WARN_RL(&rl, "%s: failed to send packet on port %"PRIu32" (%s)",
+                     dpif_name(ofproto->dpif), port_no, strerror(error));
+    }
+    return error;
 }
 
 /* Adds a flow to the OpenFlow flow table in 'p' that matches 'cls_rule' and
@@ -4376,13 +4384,7 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (in_band_msg_in_hook(p->in_band, &flow, upcall->packet)) {
-        struct ofpbuf odp_actions;
-
-        ofpbuf_init(&odp_actions, 32);
-        nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, ODPP_LOCAL);
-        dpif_execute(p->dpif, odp_actions.data, odp_actions.size,
-                     upcall->packet);
-        ofpbuf_uninit(&odp_actions);
+        ofproto_send_packet(p, ODPP_LOCAL, 0, upcall->packet);
     }
 
     facet = facet_lookup_valid(p, &flow);

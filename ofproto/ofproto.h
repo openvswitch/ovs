@@ -132,8 +132,7 @@ void ofproto_get_snoops(const struct ofproto *, struct svec *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 
 /* Functions for use by ofproto implementation modules, not by clients. */
-int ofproto_send_packet(struct ofproto *, const struct flow *,
-                        const union ofp_action *, size_t n_actions,
+int ofproto_send_packet(struct ofproto *, uint32_t port_no, uint16_t vlan_tci,
                         const struct ofpbuf *);
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
                       const union ofp_action *, size_t n_actions);
