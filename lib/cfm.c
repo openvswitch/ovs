@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -435,6 +435,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         rmp       = xzalloc(sizeof *rmp);
         rmp->mpid = ccm_mpid;
         hmap_insert(&cfm->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
+        cfm->fault = true;
     }
 
     rmp->recv_time = time_msec();
