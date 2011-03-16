@@ -41,7 +41,8 @@ EOF
         sbin/update-issue \
         sbin/vconfig \
         usr/bin/ovs-vsctl \
-        usr/sbin/brctl
+        usr/sbin/brctl \
+        usr/sbin/ovs-vlan-bug-workaround
     do
         mkdir -p `dirname $utility`
         cat > $utility <<'EOF'
@@ -56,6 +57,15 @@ EOF
         mkdir -p sys/class/net/${1}
         echo ${2} > sys/class/net/${1}/address
         echo ${3} > sys/class/net/${1}/tx_queue_len
+        if test ${1} = eth1; then
+            # No VLAN acceleration.
+            echo 0x829 > sys/class/net/${1}/features
+        else
+            # Supports VLAN acceleration.
+            echo 0x10b89 > sys/class/net/${1}/features
+        fi
+        mkdir sys/class/net/${1}/device
+        ln -s ../../../bus/pci/drivers/e1000 sys/class/net/${1}/device/driver
 
         : >> etc/sysconfig/network-scripts/ifcfg-${1}
     }
@@ -669,6 +679,7 @@ Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
 /sbin/ifconfig eth2 up mtu 1500
 /sbin/ethtool -K eth2 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth2 on
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth2
     --may-exist add-br xenbr2
@@ -735,6 +746,7 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi3 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
 /sbin/ifconfig eth3 up mtu 1500
 /sbin/ethtool -K eth3 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth3 on
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth3
     --may-exist add-br xenbr3
@@ -817,8 +829,10 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
 /sbin/ifconfig eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth0 on
 /sbin/ifconfig eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
@@ -902,8 +916,10 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
 /sbin/ifconfig eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth0 on
 /sbin/ifconfig eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
+/usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
