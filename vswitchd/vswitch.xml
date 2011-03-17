@@ -1036,8 +1036,10 @@
 
       <column name="link_state">
         <p>
-          The observed state of the physical network link;
-          i.e. whether a carrier is detected by the interface.
+          The observed state of the physical network link.  This is ordinarily
+          the link's carrier status.  If the interface's <ref table="Port"/> is
+          a bond configured for miimon monitoring, it is instead the network
+          link's miimon status.
         </p>
       </column>
 

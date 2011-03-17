@@ -307,7 +307,8 @@ static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_update_cfm(struct iface *);
 static void iface_refresh_cfm_stats(struct iface *iface);
 static void iface_send_packet(struct iface *, struct ofpbuf *packet);
-static void iface_update_carrier(struct iface *, bool carrier);
+static void iface_update_carrier(struct iface *);
+static bool iface_get_carrier(const struct iface *);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
@@ -726,7 +727,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 /* Update 'iface'. */
                 if (iface) {
                     iface->netdev = netdev;
-                    iface->enabled = netdev_get_carrier(iface->netdev);
+                    iface->enabled = iface_get_carrier(iface);
                     iface->up = iface->enabled;
                 }
             } else if (iface && iface->netdev) {
@@ -1194,8 +1195,7 @@ iface_refresh_status(struct iface *iface)
 
 
     ovsrec_interface_set_link_state(iface->cfg,
-                                    netdev_get_carrier(iface->netdev)
-                                    ? "up" : "down");
+                                    iface_get_carrier(iface) ? "up" : "down");
 
     error = netdev_get_mtu(iface->netdev, &mtu);
     if (!error && mtu != INT_MAX) {
@@ -3882,7 +3882,7 @@ port_run(struct port *port)
 
             iface = port_lookup_iface(port, devname);
             if (iface) {
-                iface_update_carrier(iface, netdev_get_carrier(iface->netdev));
+                iface_update_carrier(iface);
             }
             free(devname);
         }
@@ -3890,7 +3890,7 @@ port_run(struct port *port)
 
         for (i = 0; i < port->n_ifaces; i++) {
             struct iface *iface = port->ifaces[i];
-            iface_update_carrier(iface, netdev_get_miimon(iface->netdev));
+            iface_update_carrier(iface);
         }
         port->miimon_next_update = time_msec() + port->miimon_interval;
     }
@@ -4589,8 +4589,9 @@ iface_delete_queues(unsigned int queue_id,
 }
 
 static void
-iface_update_carrier(struct iface *iface, bool carrier)
+iface_update_carrier(struct iface *iface)
 {
+    bool carrier = iface_get_carrier(iface);
     if (carrier == iface->up) {
         return;
     }
@@ -4687,6 +4688,18 @@ iface_update_cfm(struct iface *iface)
         cfm_destroy(iface->cfm);
         iface->cfm = NULL;
     }
+}
+
+/* Read carrier or miimon status directly from 'iface''s netdev, according to
+ * how 'iface''s port is configured.
+ *
+ * Returns true if 'iface' is up, false otherwise. */
+static bool
+iface_get_carrier(const struct iface *iface)
+{
+    return (iface->port->monitor
+            ? netdev_get_carrier(iface->netdev)
+            : netdev_get_miimon(iface->netdev));
 }
 
 /* Port mirroring. */
