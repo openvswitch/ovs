@@ -122,7 +122,7 @@ struct iface {
 struct bond_entry {
     int iface_idx;              /* Index of assigned iface, or -1 if none. */
     uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
-    tag_type iface_tag;         /* Tag associated with iface_idx. */
+    tag_type tag;               /* Tag for bond_entry<->iface association. */
 };
 
 enum bond_mode {
@@ -2237,9 +2237,9 @@ choose_output_iface(const struct port *port, const struct flow *flow,
                 return false;
             }
             e->iface_idx = iface->port_ifidx;
-            e->iface_tag = tag_create_random();
+            e->tag = tag_create_random();
         }
-        *tags |= e->iface_tag;
+        *tags |= e->tag;
         iface = port->ifaces[e->iface_idx];
     }
     *dp_ifidx = iface->dp_ifidx;
@@ -3234,9 +3234,9 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
     to->tx_bytes += delta;
 
     /* Arrange for flows to be revalidated. */
-    ofproto_revalidate(port->bridge->ofproto, hash->iface_tag);
+    ofproto_revalidate(port->bridge->ofproto, hash->tag);
     hash->iface_idx = to->iface->port_ifidx;
-    hash->iface_tag = tag_create_random();
+    hash->tag = tag_create_random();
 }
 
 static void
@@ -3652,9 +3652,9 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
     }
 
     entry = &port->bond_hash[hash];
-    ofproto_revalidate(port->bridge->ofproto, entry->iface_tag);
+    ofproto_revalidate(port->bridge->ofproto, entry->tag);
     entry->iface_idx = iface->port_ifidx;
-    entry->iface_tag = tag_create_random();
+    entry->tag = tag_create_random();
     unixctl_command_reply(conn, 200, "migrated");
 }
 
