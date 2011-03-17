@@ -4368,7 +4368,6 @@ iface_destroy(struct iface *iface)
         netdev_close(iface->netdev);
 
         if (del_active) {
-            ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
             bond_choose_active_iface(port);
             bond_send_learning_packets(port);
         }
