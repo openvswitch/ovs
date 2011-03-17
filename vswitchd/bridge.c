@@ -175,7 +175,6 @@ struct port {
     /* Bonding info. */
     enum bond_mode bond_mode;   /* Type of the bond. BM_SLB is the default. */
     int active_iface;           /* Ifidx on which bcasts accepted, or -1. */
-    tag_type active_iface_tag;  /* Tag for bcast flows. */
     tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
@@ -2319,7 +2318,6 @@ bond_choose_active_iface(struct port *port)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
     port->active_iface = bond_choose_iface(port);
-    port->active_iface_tag = tag_create_random();
     if (port->active_iface >= 0) {
         VLOG_INFO_RL(&rl, "port %s: active interface is now %s",
                      port->name, port->ifaces[port->active_iface]->name);
@@ -2351,9 +2349,6 @@ bond_enable_slave(struct iface *iface, bool enable)
         VLOG_WARN("interface %s: disabled", iface->name);
         ofproto_revalidate(br->ofproto, iface->tag);
         if (iface->port_ifidx == port->active_iface) {
-            ofproto_revalidate(br->ofproto,
-                               port->active_iface_tag);
-
             /* Disabling a slave can lead to another slave being immediately
              * enabled if there will be no active slaves but one is waiting
              * on an updelay.  In this case we do not need to run most of the
@@ -2600,6 +2595,16 @@ port_is_floodable(const struct port *port)
         }
     }
     return true;
+}
+
+/* Returns the tag for 'port''s active iface, or 'port''s no_ifaces_tag if
+ * there is no active iface. */
+static tag_type
+port_get_active_iface_tag(const struct port *port)
+{
+    return (port->active_iface >= 0
+            ? port->ifaces[port->active_iface]->tag
+            : port->no_ifaces_tag);
 }
 
 static void
@@ -2894,7 +2899,7 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
         bool is_grat_arp_locked;
 
         if (eth_addr_is_multicast(flow->dl_dst)) {
-            *tags |= in_port->active_iface_tag;
+            *tags |= port_get_active_iface_tag(in_port);
             if (in_port->active_iface != in_iface->port_ifidx) {
                 /* Drop all multicast packets on inactive slaves. */
                 return false;
@@ -3708,9 +3713,9 @@ bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
     }
 
     if (port->active_iface != iface->port_ifidx) {
-        ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
+        ofproto_revalidate(port->bridge->ofproto,
+                           port_get_active_iface_tag(port));
         port->active_iface = iface->port_ifidx;
-        port->active_iface_tag = tag_create_random();
         VLOG_INFO("port %s: active interface is now %s",
                   port->name, iface->name);
         bond_send_learning_packets(port);
