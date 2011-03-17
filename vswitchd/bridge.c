@@ -260,7 +260,6 @@ static void bridge_pick_local_hw_addr(struct bridge *,
 static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
-static struct iface *bridge_get_local_iface(struct bridge *);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static unixctl_cb_func bridge_unixctl_fdb_show;
@@ -760,7 +759,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         /* Pick local port hardware address, datapath ID. */
         bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
-        local_iface = bridge_get_local_iface(br);
+        local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
         if (local_iface) {
             int error = netdev_set_etheraddr(local_iface->netdev, ea);
             if (error) {
@@ -1503,26 +1502,6 @@ bridge_flush(struct bridge *br)
     br->flush = true;
     mac_learning_flush(br->ml);
 }
-
-/* Returns the 'br' interface for the ODPP_LOCAL port, or null if 'br' has no
- * such interface. */
-static struct iface *
-bridge_get_local_iface(struct bridge *br)
-{
-    size_t i, j;
-
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            if (iface->dp_ifidx == ODPP_LOCAL) {
-                return iface;
-            }
-        }
-    }
-
-    return NULL;
-}
 
 /* Bridge unixctl user interface functions. */
 static void
@@ -1971,7 +1950,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
     struct in_addr ip;
 
     /* If there's no local interface or no IP address, give up. */
-    local_iface = bridge_get_local_iface(br);
+    local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
     if (!local_iface || !c->local_ip || !inet_aton(c->local_ip, &ip)) {
         return;
     }
