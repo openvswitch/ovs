@@ -5275,7 +5275,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
         struct mac_entry *src_mac;
 
         src_mac = mac_learning_insert(ofproto->ml, flow->dl_src, 0);
-        if (mac_entry_is_new(src_mac) || src_mac->port != flow->in_port) {
+        if (mac_entry_is_new(src_mac) || src_mac->port.i != flow->in_port) {
             /* The log messages here could actually be useful in debugging,
              * so keep the rate limit relatively high. */
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -5284,7 +5284,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
 
             ofproto_revalidate(ofproto,
                                mac_learning_changed(ofproto->ml, src_mac));
-            src_mac->port = flow->in_port;
+            src_mac->port.i = flow->in_port;
         }
     }
 
@@ -5294,7 +5294,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
         flood_packets(ofproto, flow->in_port, OFPPC_NO_FLOOD,
                       nf_output_iface, odp_actions);
     } else {
-        int out_port = dst_mac->port;
+        int out_port = dst_mac->port.i;
         if (out_port != flow->in_port) {
             nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, out_port);
             *nf_output_iface = out_port;

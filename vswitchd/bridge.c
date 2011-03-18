@@ -1517,11 +1517,11 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
 
     ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
     LIST_FOR_EACH (e, lru_node, &br->ml->lrus) {
-        if (e->port < 0 || e->port >= br->n_ports) {
+        if (e->port.i < 0 || e->port.i >= br->n_ports) {
             continue;
         }
         ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
-                      port_get_an_iface(br->ports[e->port])->dp_ifidx,
+                      port_get_an_iface(br->ports[e->port.i])->dp_ifidx,
                       e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
@@ -2787,7 +2787,7 @@ update_learning_table(struct bridge *br, const struct flow *flow, int vlan,
         }
     }
 
-    if (mac_entry_is_new(mac) || mac->port != in_port->port_idx) {
+    if (mac_entry_is_new(mac) || mac->port.i != in_port->port_idx) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -2796,7 +2796,7 @@ update_learning_table(struct bridge *br, const struct flow *flow, int vlan,
                     br->name, ETH_ADDR_ARGS(flow->dl_src),
                     in_port->name, vlan);
 
-        mac->port = in_port->port_idx;
+        mac->port.i = in_port->port_idx;
         ofproto_revalidate(br->ofproto, mac_learning_changed(br->ml, mac));
     }
 }
@@ -2902,7 +2902,7 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
          * reflections on bond slaves.  If this is the case, just drop the
          * packet now. */
         mac = mac_learning_lookup(br->ml, flow->dl_src, vlan, NULL);
-        if (mac && mac->port != in_port->port_idx &&
+        if (mac && mac->port.i != in_port->port_idx &&
             (!is_gratuitous_arp(flow) || mac_entry_is_grat_arp_locked(mac))) {
                 return false;
         }
@@ -2937,8 +2937,8 @@ process_flow(struct bridge *br, const struct flow *flow,
 
     /* Determine output port. */
     mac = mac_learning_lookup(br->ml, flow->dl_dst, vlan, tags);
-    if (mac && mac->port >= 0 && mac->port < br->n_ports) {
-        out_port = br->ports[mac->port];
+    if (mac && mac->port.i >= 0 && mac->port.i < br->n_ports) {
+        out_port = br->ports[mac->port.i];
     } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
         /* If we are revalidating but don't have a learning entry then
          * eject the flow.  Installing a flow that floods packets opens
@@ -3425,7 +3425,7 @@ bond_send_learning_packets(struct port *port)
         struct flow flow;
         int retval;
 
-        if (e->port == port->port_idx) {
+        if (e->port.i == port->port_idx) {
             continue;
         }
 
@@ -3601,7 +3601,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
                 memcpy(flow.dl_src, me->mac, ETH_ADDR_LEN);
                 if (bond_hash_src(me->mac, me->vlan) == hash
-                    && me->port != port->port_idx
+                    && me->port.i != port->port_idx
                     && choose_output_iface(port, &flow, me->vlan,
                                            &dp_ifidx, &tags)
                     && dp_ifidx == iface->dp_ifidx)

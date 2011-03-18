@@ -44,8 +44,12 @@ struct mac_entry {
     time_t grat_arp_lock;       /* Gratuitous ARP lock expiration time. */
     uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
     uint16_t vlan;              /* VLAN tag. */
-    int port;                   /* Port on which MAC was most recently seen. */
     tag_type tag;               /* Tag for this learning entry. */
+
+    /* Learned port. */
+    union {
+        int i;
+    } port;
 };
 
 int mac_entry_age(const struct mac_entry *);
