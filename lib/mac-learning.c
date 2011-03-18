@@ -105,16 +105,6 @@ get_lru(struct mac_learning *ml, struct mac_entry **e)
     }
 }
 
-/* Removes 'e' from the 'ml' hash table.  'e' must not already be on the free
- * list. */
-static void
-free_mac_entry(struct mac_learning *ml, struct mac_entry *e)
-{
-    list_remove(&e->hash_node);
-    list_remove(&e->lru_node);
-    list_push_front(&ml->free, &e->lru_node);
-}
-
 /* Creates and returns a new MAC learning table. */
 struct mac_learning *
 mac_learning_create(void)
@@ -268,6 +258,16 @@ mac_learning_lookup(const struct mac_learning *ml,
     }
 }
 
+/* Expires 'e' from the 'ml' hash table.  'e' must not already be on the free
+ * list. */
+void
+mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
+{
+    list_remove(&e->hash_node);
+    list_remove(&e->lru_node);
+    list_push_front(&ml->free, &e->lru_node);
+}
+
 /* Expires all the mac-learning entries in 'ml'.  The tags in 'ml' are
  * discarded, so the client is responsible for revalidating any flows that
  * depend on 'ml', if necessary. */
@@ -276,7 +276,7 @@ mac_learning_flush(struct mac_learning *ml)
 {
     struct mac_entry *e;
     while (get_lru(ml, &e)){
-        free_mac_entry(ml, e);
+        mac_learning_expire(ml, e);
     }
 }
 
@@ -289,7 +289,7 @@ mac_learning_run(struct mac_learning *ml, struct tag_set *set)
         if (set) {
             tag_set_add(set, e->tag);
         }
-        free_mac_entry(ml, e);
+        mac_learning_expire(ml, e);
     }
 }
 

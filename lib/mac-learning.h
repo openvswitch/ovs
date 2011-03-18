@@ -113,6 +113,7 @@ struct mac_entry *mac_learning_lookup(const struct mac_learning *,
                                       uint16_t vlan, tag_type *);
 
 /* Flushing. */
+void mac_learning_expire(struct mac_learning *, struct mac_entry *);
 void mac_learning_flush(struct mac_learning *);
 
 #endif /* mac-learning.h */
