@@ -105,7 +105,7 @@ bool ofproto_is_alive(const struct ofproto *);
 int ofproto_port_del(struct ofproto *, uint16_t odp_port);
 bool ofproto_port_is_floodable(struct ofproto *, uint16_t odp_port);
 
-/* Configuration. */
+/* Top-level configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
                              const struct ofproto_controller *, size_t n);
@@ -122,6 +122,15 @@ int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
+
+/* Configuration of individual interfaces. */
+struct cfm;
+
+void ofproto_iface_clear_cfm(struct ofproto *, uint32_t port_no);
+void ofproto_iface_set_cfm(struct ofproto *, uint32_t port_no,
+                           const struct cfm *,
+                           const uint16_t *remote_mps, size_t n_remote_mps);
+const struct cfm *ofproto_iface_get_cfm(struct ofproto *, uint32_t port_no);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);

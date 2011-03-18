@@ -112,7 +112,6 @@ struct iface {
     bool enabled;               /* May be chosen for flows? */
     bool up;                    /* Is the interface up? */
     const char *type;           /* Usually same as cfg->type. */
-    struct cfm *cfm;            /* Connectivity Fault Management */
     const struct ovsrec_interface *cfg;
 
     /* LACP information. */
@@ -1208,12 +1207,12 @@ iface_refresh_status(struct iface *iface)
 static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
-    size_t i;
-    struct cfm *cfm;
     const struct ovsrec_monitor *mon;
+    const struct cfm *cfm;
+    size_t i;
 
     mon = iface->cfg->monitor;
-    cfm = iface->cfm;
+    cfm = ofproto_iface_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
 
     if (!cfm || !mon) {
         return;
@@ -2994,14 +2993,7 @@ bridge_special_ofhook_cb(const struct flow *flow,
 
     iface = iface_from_dp_ifidx(br, flow->in_port);
 
-    if (cfm_should_process_flow(flow)) {
-
-        if (iface && packet && iface->cfm) {
-            COVERAGE_INC(bridge_process_cfm);
-            cfm_process_heartbeat(iface->cfm, packet);
-        }
-        return false;
-    } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
+    if (flow->dl_type == htons(ETH_TYPE_LACP)) {
 
         if (iface && iface->port->lacp && packet) {
             const struct lacp_pdu *pdu = parse_lacp_packet(packet);
@@ -3854,8 +3846,6 @@ lacp_send_pdu_cb(void *aux, const struct lacp_pdu *pdu)
 static void
 port_run(struct port *port)
 {
-    size_t i;
-
     if (port->monitor) {
         char *devname;
 
@@ -3870,6 +3860,7 @@ port_run(struct port *port)
             free(devname);
         }
     } else if (time_msec() >= port->miimon_next_update) {
+        size_t i;
 
         for (i = 0; i < port->n_ifaces; i++) {
             struct iface *iface = port->ifaces[i];
@@ -3879,6 +3870,8 @@ port_run(struct port *port)
     }
 
     if (port->lacp) {
+        size_t i;
+
         for (i = 0; i < port->n_ifaces; i++) {
             struct iface *iface = port->ifaces[i];
             lacp_slave_enable(port->lacp, iface, iface->enabled);
@@ -3888,27 +3881,11 @@ port_run(struct port *port)
     }
 
     bond_run(port);
-
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
-
-        if (iface->cfm) {
-            struct ofpbuf *packet = cfm_run(iface->cfm);
-            if (packet) {
-                ofproto_send_packet(port->bridge->ofproto, iface->dp_ifidx,
-                                    0, packet);
-                ofpbuf_uninit(packet);
-                free(packet);
-            }
-        }
-    }
 }
 
 static void
 port_wait(struct port *port)
 {
-    size_t i;
-
     if (port->monitor) {
         netdev_monitor_poll_wait(port->monitor);
     } else {
@@ -3920,13 +3897,6 @@ port_wait(struct port *port)
     }
 
     bond_wait(port);
-
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
-        if (iface->cfm) {
-            cfm_wait(iface->cfm);
-        }
-    }
 }
 
 static struct port *
@@ -4402,8 +4372,6 @@ iface_destroy(struct iface *iface)
             bond_send_learning_packets(port);
         }
 
-        cfm_destroy(iface->cfm);
-
         free(iface->name);
         free(iface);
 
@@ -4606,7 +4574,7 @@ static void
 iface_update_cfm(struct iface *iface)
 {
     size_t i;
-    struct cfm *cfm;
+    struct cfm cfm;
     uint16_t *remote_mps;
     struct ovsrec_monitor *mon;
     uint8_t ea[ETH_ADDR_LEN], maid[CCM_MAID_LEN];
@@ -4614,8 +4582,7 @@ iface_update_cfm(struct iface *iface)
     mon = iface->cfg->monitor;
 
     if (!mon) {
-        cfm_destroy(iface->cfm);
-        iface->cfm = NULL;
+        ofproto_iface_clear_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
         return;
     }
 
@@ -4630,28 +4597,20 @@ iface_update_cfm(struct iface *iface)
         return;
     }
 
-    if (!iface->cfm) {
-        iface->cfm = cfm_create();
-    }
+    cfm.mpid     = mon->mpid;
+    cfm.interval = mon->interval ? *mon->interval : 1000;
 
-    cfm           = iface->cfm;
-    cfm->mpid     = mon->mpid;
-    cfm->interval = mon->interval ? *mon->interval : 1000;
-
-    memcpy(cfm->eth_src, ea, sizeof cfm->eth_src);
-    memcpy(cfm->maid, maid, sizeof cfm->maid);
+    memcpy(cfm.eth_src, ea, sizeof cfm.eth_src);
+    memcpy(cfm.maid, maid, sizeof cfm.maid);
 
     remote_mps = xzalloc(mon->n_remote_mps * sizeof *remote_mps);
     for(i = 0; i < mon->n_remote_mps; i++) {
         remote_mps[i] = mon->remote_mps[i]->mpid;
     }
-    cfm_update_remote_mps(cfm, remote_mps, mon->n_remote_mps);
-    free(remote_mps);
 
-    if (!cfm_configure(iface->cfm)) {
-        cfm_destroy(iface->cfm);
-        iface->cfm = NULL;
-    }
+    ofproto_iface_set_cfm(iface->port->bridge->ofproto, iface->dp_ifidx,
+                          &cfm, remote_mps, mon->n_remote_mps);
+    free(remote_mps);
 }
 
 /* Read carrier or miimon status directly from 'iface''s netdev, according to

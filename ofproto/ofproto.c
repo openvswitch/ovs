@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "byte-order.h"
+#include "cfm.h"
 #include "classifier.h"
 #include "coverage.h"
 #include "dpif.h"
@@ -100,9 +101,12 @@ struct ofport {
     struct netdev *netdev;
     struct ofp_phy_port opp;    /* In host byte order. */
     uint16_t odp_port;
+    struct cfm *cfm;            /* Connectivity Fault Management, if any. */
 };
 
 static void ofport_free(struct ofport *);
+static void ofport_run(struct ofproto *, struct ofport *);
+static void ofport_wait(struct ofport *);
 static void hton_ofp_phy_port(struct ofp_phy_port *);
 
 struct action_xlate_ctx {
@@ -947,7 +951,71 @@ ofproto_set_sflow(struct ofproto *ofproto,
         ofproto->sflow = NULL;
     }
 }
+
+/* Connectivity Fault Management configuration. */
 
+/* Clears the CFM configuration from 'port_no' on 'ofproto'. */
+void
+ofproto_iface_clear_cfm(struct ofproto *ofproto, uint32_t port_no)
+{
+    struct ofport *ofport = get_port(ofproto, port_no);
+    if (ofport && ofport->cfm){
+        cfm_destroy(ofport->cfm);
+        ofport->cfm = NULL;
+    }
+}
+
+/* Configures connectivity fault management on 'port_no' in 'ofproto'.  Takes
+ * basic configuration from the configuration members in 'cfm', and the set of
+ * remote maintenance points from the 'n_remote_mps' elements in 'remote_mps'.
+ * Ignores the statistics members of 'cfm'.
+ *
+ * This function has no effect if 'ofproto' does not have a port 'port_no'. */
+void
+ofproto_iface_set_cfm(struct ofproto *ofproto, uint32_t port_no,
+                      const struct cfm *cfm,
+                      const uint16_t *remote_mps, size_t n_remote_mps)
+{
+    struct ofport *ofport;
+
+    ofport = get_port(ofproto, port_no);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure CFM on nonexistent port %"PRIu32,
+                  dpif_name(ofproto->dpif), port_no);
+        return;
+    }
+
+    if (!ofport->cfm) {
+        ofport->cfm = cfm_create();
+    }
+
+    ofport->cfm->mpid = cfm->mpid;
+    ofport->cfm->interval = cfm->interval;
+    memcpy(ofport->cfm->eth_src, cfm->eth_src, ETH_ADDR_LEN);
+    memcpy(ofport->cfm->maid, cfm->maid, CCM_MAID_LEN);
+
+    cfm_update_remote_mps(ofport->cfm, remote_mps, n_remote_mps);
+
+    if (!cfm_configure(ofport->cfm)) {
+        VLOG_WARN("%s: CFM configuration on port %"PRIu32" (%s) failed",
+                  dpif_name(ofproto->dpif), port_no,
+                  netdev_get_name(ofport->netdev));
+        cfm_destroy(ofport->cfm);
+        ofport->cfm = NULL;
+    }
+}
+
+/* Returns the connectivity fault management object associated with 'port_no'
+ * within 'ofproto', or a null pointer if 'ofproto' does not have a port
+ * 'port_no' or if that port does not have CFM configured.  The caller must not
+ * modify or destroy the returned object. */
+const struct cfm *
+ofproto_iface_get_cfm(struct ofproto *ofproto, uint32_t port_no)
+{
+    struct ofport *ofport = get_port(ofproto, port_no);
+    return ofport ? ofport->cfm : NULL;
+}
+
 uint64_t
 ofproto_get_datapath_id(const struct ofproto *ofproto)
 {
@@ -1110,6 +1178,7 @@ ofproto_run1(struct ofproto *p)
 {
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice;
+    struct ofport *ofport;
     char *devname;
     int error;
     int i;
@@ -1144,6 +1213,10 @@ ofproto_run1(struct ofproto *p)
     while ((error = netdev_monitor_poll(p->netdev_monitor,
                                         &devname)) != EAGAIN) {
         process_port_change(p, error, devname);
+    }
+
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        ofport_run(p, ofport);
     }
 
     if (p->in_band) {
@@ -1246,11 +1319,15 @@ ofproto_wait(struct ofproto *p)
 {
     struct ofservice *ofservice;
     struct ofconn *ofconn;
+    struct ofport *ofport;
     size_t i;
 
     dpif_recv_wait(p->dpif);
     dpif_port_poll_wait(p->dpif);
     netdev_monitor_poll_wait(p->netdev_monitor);
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        ofport_wait(ofport);
+    }
     LIST_FOR_EACH (ofconn, node, &p->all_conns) {
         ofconn_wait(ofconn);
     }
@@ -1649,9 +1726,30 @@ ofport_remove(struct ofproto *p, struct ofport *ofport)
 }
 
 static void
+ofport_run(struct ofproto *ofproto, struct ofport *ofport)
+{
+    if (ofport->cfm) {
+        struct ofpbuf *packet = cfm_run(ofport->cfm);
+        if (packet) {
+            ofproto_send_packet(ofproto, ofport->odp_port, 0, packet);
+            ofpbuf_delete(packet);
+        }
+    }
+}
+
+static void
+ofport_wait(struct ofport *ofport)
+{
+    if (ofport->cfm) {
+        cfm_wait(ofport->cfm);
+    }
+}
+
+static void
 ofport_free(struct ofport *ofport)
 {
     if (ofport) {
+        cfm_destroy(ofport->cfm);
         netdev_close(ofport->netdev);
         free(ofport);
     }
@@ -3081,6 +3179,18 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->check_special = true;
 }
 
+static void
+ofproto_process_cfm(struct ofproto *ofproto, const struct flow *flow,
+                    const struct ofpbuf *packet)
+{
+    struct ofport *ofport;
+
+    ofport = get_port(ofproto, flow->in_port);
+    if (ofport && ofport->cfm) {
+        cfm_process_heartbeat(ofport->cfm, packet);
+    }
+}
+
 static struct ofpbuf *
 xlate_actions(struct action_xlate_ctx *ctx,
               const union ofp_action *in, size_t n_in)
@@ -3094,13 +3204,18 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->recurse = 0;
     ctx->last_pop_priority = -1;
 
-    if (!ctx->check_special
-        || !ctx->ofproto->ofhooks->special_cb
-        || ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
-                                             ctx->ofproto->aux)) {
-        do_xlate_actions(in, n_in, ctx);
-    } else {
+    if (ctx->check_special && cfm_should_process_flow(&ctx->flow)) {
+        if (ctx->packet) {
+            ofproto_process_cfm(ctx->ofproto, &ctx->flow, ctx->packet);
+        }
         ctx->may_set_up_flow = false;
+    } else if (ctx->check_special
+               && ctx->ofproto->ofhooks->special_cb
+               && !ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
+                                                     ctx->ofproto->aux)) {
+        ctx->may_set_up_flow = false;
+    } else {
+        do_xlate_actions(in, n_in, ctx);
     }
 
     remove_pop_action(ctx);
@@ -4375,8 +4490,12 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     /* Set header pointers in 'flow'. */
     flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
 
-    if (p->ofhooks->special_cb
-        && !p->ofhooks->special_cb(&flow, upcall->packet, p->aux)) {
+    if (cfm_should_process_flow(&flow)) {
+        ofproto_process_cfm(p, &flow, upcall->packet);
+        ofpbuf_delete(upcall->packet);
+        return;
+    } else if (p->ofhooks->special_cb
+               && !p->ofhooks->special_cb(&flow, upcall->packet, p->aux)) {
         ofpbuf_delete(upcall->packet);
         return;
     }
