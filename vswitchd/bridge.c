@@ -3962,8 +3962,9 @@ port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
 
     /* Get rid of deleted interfaces. */
     for (i = 0; i < port->n_ifaces; ) {
-        if (!shash_find(&new_ifaces, cfg->interfaces[i]->name)) {
-            iface_destroy(port->ifaces[i]);
+        struct iface *iface = port->ifaces[i];
+        if (!shash_find(&new_ifaces, iface->name)) {
+            iface_destroy(iface);
         } else {
             i++;
         }
