@@ -3382,6 +3382,9 @@ bond_rebalance_port(struct port *port)
      * historical data to decay to <1% in 7 rebalancing runs.  */
     for (e = &port->bond_hash[0]; e <= &port->bond_hash[BOND_MASK]; e++) {
         e->tx_bytes /= 2;
+        if (!e->tx_bytes) {
+            e->iface_idx = -1;
+        }
     }
 
 exit:
