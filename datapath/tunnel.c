@@ -804,7 +804,7 @@ static void create_tunnel_header(const struct vport *vport,
 	iph->saddr	= rt->rt_src;
 	iph->ttl	= mutable->ttl;
 	if (!iph->ttl)
-		iph->ttl = dst_metric(&rt_dst(rt), RTAX_HOPLIMIT);
+		iph->ttl = ip4_dst_hoplimit(&rt_dst(rt));
 
 	tnl_vport->tnl_ops->build_header(vport, mutable, iph + 1);
 }
@@ -1233,7 +1233,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 	/* TTL */
 	ttl = mutable->ttl;
 	if (!ttl)
-		ttl = dst_metric(&rt_dst(rt), RTAX_HOPLIMIT);
+		ttl = ip4_dst_hoplimit(&rt_dst(rt));
 
 	if (mutable->flags & TNL_F_TTL_INHERIT) {
 		if (skb->protocol == htons(ETH_P_IP))
