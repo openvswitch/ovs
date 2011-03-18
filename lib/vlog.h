@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,27 @@
 extern "C" {
 #endif
 
-/* Logging importance levels. */
+/* Logging importance levels.
+ *
+ * The following log levels, in descending order of importance, are enabled by
+ * default:
+ *
+ *   - EMER: Not currently used.
+ *
+ *   - ERR: A high-level operation or a subsystem failed.  Attention is
+ *     warranted.
+ *
+ *   - WARN: A low-level operation failed, but higher-level subsystems may be
+ *     able to recover.
+ *
+ *   - INFO: Information that may be useful in retrospect when investigating
+ *     a problem.
+ *
+ * The lowest log level is not enabled by default:
+ *
+ *   - DBG: Information useful only to someone with intricate knowledge of the
+ *     system, or that would commonly cause too-voluminous log output.
+ */
 #define VLOG_LEVELS                             \
     VLOG_LEVEL(EMER, LOG_ALERT)                 \
     VLOG_LEVEL(ERR, LOG_ERR)                    \
