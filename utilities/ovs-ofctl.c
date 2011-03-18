@@ -674,7 +674,7 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
     flow_format = set_initial_format_for_flow_mod(&requests);
 
     open_vconn(argv[1], &vconn);
-    while (parse_ofp_add_flow_file(&requests, &flow_format, file)) {
+    while (parse_ofp_flow_mod_file(&requests, &flow_format, file, OFPFC_ADD)) {
         check_final_format_for_flow_mod(flow_format);
         transact_multiple_noreply(vconn, &requests);
     }
@@ -1339,7 +1339,7 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
     }
 
     list_init(&packets);
-    while (parse_ofp_add_flow_file(&packets, &flow_format, file)) {
+    while (parse_ofp_flow_mod_file(&packets, &flow_format, file, OFPFC_ADD)) {
         print_packet_list(&packets);
     }
     fclose(file);

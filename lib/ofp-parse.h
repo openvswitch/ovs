@@ -34,8 +34,8 @@ void parse_ofp_str(struct flow_mod *, uint8_t *table_idx,
 
 void parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur,
                             char *string, uint16_t command);
-bool parse_ofp_add_flow_file(struct list *packets, enum nx_flow_format *cur,
-                             FILE *);
+bool parse_ofp_flow_mod_file(struct list *packets, enum nx_flow_format *cur,
+                             FILE *, uint16_t command);
 
 void parse_ofp_flow_stats_request_str(struct flow_stats_request *,
                                       bool aggregate, char *string);

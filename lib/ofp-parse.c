@@ -871,8 +871,8 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
  * 'stream' and the command is always OFPFC_ADD.  Returns false if end-of-file
  * is reached before reading a flow, otherwise true. */
 bool
-parse_ofp_add_flow_file(struct list *packets, enum nx_flow_format *cur,
-                        FILE *stream)
+parse_ofp_flow_mod_file(struct list *packets, enum nx_flow_format *cur,
+                        FILE *stream, uint16_t command)
 {
     struct ds s;
     bool ok;
@@ -880,7 +880,7 @@ parse_ofp_add_flow_file(struct list *packets, enum nx_flow_format *cur,
     ds_init(&s);
     ok = ds_get_preprocessed_line(&s, stream) == 0;
     if (ok) {
-        parse_ofp_flow_mod_str(packets, cur, ds_cstr(&s), OFPFC_ADD);
+        parse_ofp_flow_mod_str(packets, cur, ds_cstr(&s), command);
     }
     ds_destroy(&s);
 
