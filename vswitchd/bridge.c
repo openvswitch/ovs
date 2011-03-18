@@ -1497,7 +1497,6 @@ bridge_flush(struct bridge *br)
 {
     COVERAGE_INC(bridge_flush);
     br->flush = true;
-    mac_learning_flush(br->ml);
 }
 
 /* Bridge unixctl user interface functions. */
@@ -3969,12 +3968,30 @@ port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
     shash_destroy(&new_ifaces);
 }
 
+/* Expires all MAC learning entries associated with 'port' and forces ofproto
+ * to revalidate every flow. */
+static void
+port_flush_macs(struct port *port)
+{
+    struct bridge *br = port->bridge;
+    struct mac_learning *ml = br->ml;
+    struct mac_entry *mac, *next_mac;
+
+    bridge_flush(br);
+    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+        if (mac->port.p == port) {
+            mac_learning_expire(ml, mac);
+        }
+    }
+}
+
 static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
     const char *detect_mode;
     struct shash new_ifaces;
     long long int next_rebalance, miimon_next_update, lacp_priority;
+    bool need_flush = false;
     unsigned long *trunks;
     int vlan;
     size_t i;
@@ -4141,7 +4158,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     }
     if (port->vlan != vlan) {
         port->vlan = vlan;
-        bridge_flush(port->bridge);
+        need_flush = true;
     }
 
     /* Get trunked VLANs. */
@@ -4176,10 +4193,14 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     if (trunks == NULL
         ? port->trunks != NULL
         : port->trunks == NULL || !bitmap_equal(trunks, port->trunks, 4096)) {
-        bridge_flush(port->bridge);
+        need_flush = true;
     }
     bitmap_free(port->trunks);
     port->trunks = trunks;
+
+    if (need_flush) {
+        port_flush_macs(port);
+    }
 }
 
 static void
@@ -4209,11 +4230,12 @@ port_destroy(struct port *port)
 
         VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
 
+        port_flush_macs(port);
+
         netdev_monitor_destroy(port->monitor);
         bitmap_free(port->trunks);
         free(port->name);
         free(port);
-        bridge_flush(br);
     }
 }
 
@@ -4703,6 +4725,7 @@ mirror_reconfigure(struct bridge *br)
     }
     if (mac_learning_set_flood_vlans(br->ml, rspan_vlans)) {
         bridge_flush(br);
+        mac_learning_flush(br->ml);
     }
 }
 
@@ -4725,6 +4748,7 @@ mirror_create(struct bridge *br, struct ovsrec_mirror *cfg)
 
     VLOG_INFO("created port mirror %s on bridge %s", cfg->name, br->name);
     bridge_flush(br);
+    mac_learning_flush(br->ml);
 
     br->mirrors[i] = m = xzalloc(sizeof *m);
     m->bridge = br;
@@ -4761,6 +4785,7 @@ mirror_destroy(struct mirror *m)
         free(m);
 
         bridge_flush(br);
+        mac_learning_flush(br->ml);
     }
 }
 
@@ -4900,6 +4925,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
         || m->out_port != out_port
         || m->out_vlan != out_vlan) {
         bridge_flush(m->bridge);
+        mac_learning_flush(m->bridge->ml);
     }
     shash_swap(&m->src_ports, &src_ports);
     shash_swap(&m->dst_ports, &dst_ports);
