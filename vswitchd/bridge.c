@@ -99,7 +99,6 @@ static void dst_set_free(struct dst_set *);
 struct iface {
     /* These members are always valid. */
     struct port *port;          /* Containing port. */
-    size_t port_ifidx;          /* Index within containing port. */
     char *name;                 /* Host network device name. */
     tag_type tag;               /* Tag associated with this interface. */
     long long delay_expires;    /* Time after which 'enabled' may change. */
@@ -120,7 +119,7 @@ struct iface {
 
 #define BOND_MASK 0xff
 struct bond_entry {
-    int iface_idx;              /* Index of assigned iface, or -1 if none. */
+    struct iface *iface;        /* Assigned iface, or NULL if none. */
     uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
     tag_type tag;               /* Tag for bond_entry<->iface association. */
 };
@@ -2226,21 +2225,18 @@ choose_output_iface(const struct port *port, const struct flow *flow,
         }
     } else {
         struct bond_entry *e = lookup_bond_entry(port, flow, vlan);
-        if (e->iface_idx < 0 || e->iface_idx >= port->n_ifaces
-            || !port->ifaces[e->iface_idx]->enabled) {
+        if (!e->iface || !e->iface->enabled) {
             /* XXX select interface properly.  The current interface selection
              * is only good for testing the rebalancing code. */
-            iface = bond_choose_iface(port);
-            if (!iface) {
-                e->iface_idx = -1;
+            e->iface = bond_choose_iface(port);
+            if (!e->iface) {
                 *tags |= port->no_ifaces_tag;
                 return false;
             }
-            e->iface_idx = iface->port_ifidx;
             e->tag = tag_create_random();
         }
         *tags |= e->tag;
-        iface = port->ifaces[e->iface_idx];
+        iface = e->iface;
     }
     *dp_ifidx = iface->dp_ifidx;
     *tags |= iface->tag;        /* Currently only used for bonding. */
@@ -3107,8 +3103,8 @@ compare_bond_entries(const void *a_, const void *b_)
     const struct bond_entry *const *bp = b_;
     const struct bond_entry *a = *ap;
     const struct bond_entry *b = *bp;
-    if (a->iface_idx != b->iface_idx) {
-        return a->iface_idx > b->iface_idx ? 1 : -1;
+    if (a->iface != b->iface) {
+        return a->iface > b->iface ? 1 : -1;
     } else if (a->tx_bytes != b->tx_bytes) {
         return a->tx_bytes > b->tx_bytes ? 1 : -1;
     } else {
@@ -3235,7 +3231,7 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
 
     /* Arrange for flows to be revalidated. */
     ofproto_revalidate(port->bridge->ofproto, hash->tag);
-    hash->iface_idx = to->iface->port_ifidx;
+    hash->iface = to->iface;
     hash->tag = tag_create_random();
 }
 
@@ -3275,13 +3271,19 @@ bond_rebalance_port(struct port *port)
     qsort(hashes, BOND_MASK + 1, sizeof *hashes, compare_bond_entries);
     for (i = 0; i <= BOND_MASK; i++) {
         e = hashes[i];
-        if (e->iface_idx >= 0 && e->iface_idx < port->n_ifaces) {
-            b = &bals[e->iface_idx];
-            b->tx_bytes += e->tx_bytes;
-            if (!b->hashes) {
-                b->hashes = &hashes[i];
+        if (!e->iface) {
+            continue;
+        }
+
+        for (b = bals; b < &bals[n_bals]; b++) {
+            if (b->iface == e->iface) {
+                b->tx_bytes += e->tx_bytes;
+                if (!b->hashes) {
+                    b->hashes = &hashes[i];
+                }
+                b->n_hashes++;
+                break;
             }
-            b->n_hashes++;
         }
     }
     qsort(bals, n_bals, sizeof *bals, compare_slave_balance);
@@ -3383,7 +3385,7 @@ bond_rebalance_port(struct port *port)
     for (e = &port->bond_hash[0]; e <= &port->bond_hash[BOND_MASK]; e++) {
         e->tx_bytes /= 2;
         if (!e->tx_bytes) {
-            e->iface_idx = -1;
+            e->iface = NULL;
         }
     }
 
@@ -3571,7 +3573,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
             int hash = be - port->bond_hash;
             struct mac_entry *me;
 
-            if (be->iface_idx != j) {
+            if (be->iface != iface) {
                 continue;
             }
 
@@ -3656,7 +3658,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
 
     entry = &port->bond_hash[hash];
     ofproto_revalidate(port->bridge->ofproto, entry->tag);
-    entry->iface_idx = iface->port_ifidx;
+    entry->iface = iface;
     entry->tag = tag_create_random();
     unixctl_command_reply(conn, 200, "migrated");
 }
@@ -4265,7 +4267,7 @@ port_update_bonding(struct port *port)
             port->bond_hash = xcalloc(BOND_MASK + 1, sizeof *port->bond_hash);
             for (i = 0; i <= BOND_MASK; i++) {
                 struct bond_entry *e = &port->bond_hash[i];
-                e->iface_idx = -1;
+                e->iface = NULL;
                 e->tx_bytes = 0;
             }
             port->bond_next_rebalance
@@ -4302,7 +4304,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 
     iface = xzalloc(sizeof *iface);
     iface->port = port;
-    iface->port_ifidx = port->n_ifaces;
     iface->name = xstrdup(name);
     iface->dp_ifidx = -1;
     iface->tag = tag_create_random();
@@ -4335,7 +4336,16 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
         bool del_active = port->active_iface == iface;
-        struct iface *del;
+        size_t i;
+
+        if (port->bond_hash) {
+            struct bond_entry *e;
+            for (e = port->bond_hash; e <= &port->bond_hash[BOND_MASK]; e++) {
+                if (e->iface == iface) {
+                    e->iface = NULL;
+                }
+            }
+        }
 
         if (iface->port->lacp) {
             lacp_slave_unregister(iface->port->lacp, iface);
@@ -4351,8 +4361,12 @@ iface_destroy(struct iface *iface)
             hmap_remove(&br->ifaces, &iface->dp_ifidx_node);
         }
 
-        del = port->ifaces[iface->port_ifidx] = port->ifaces[--port->n_ifaces];
-        del->port_ifidx = iface->port_ifidx;
+        for (i = 0; i < port->n_ifaces; i++) {
+            if (iface == port->ifaces[i]) {
+                port->ifaces[i] = port->ifaces[--port->n_ifaces];
+                break;
+            }
+        }
 
         netdev_close(iface->netdev);
 
