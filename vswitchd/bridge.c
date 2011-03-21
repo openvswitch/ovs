@@ -114,9 +114,6 @@ struct iface {
     bool up;                    /* Is the interface up? */
     const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
-
-    /* LACP information. */
-    uint16_t lacp_priority;     /* LACP port priority. */
 };
 
 #define BOND_MASK 0xff
@@ -184,9 +181,6 @@ struct port {
 
     /* LACP information. */
     struct lacp *lacp;          /* LACP object. NULL if LACP is disabled. */
-    bool lacp_active;           /* True if LACP is active */
-    bool lacp_fast;             /* True if LACP is in fast mode. */
-    uint16_t lacp_priority;     /* LACP system priority. */
 
     /* SLB specific bonding info. */
     struct bond_entry *bond_hash; /* An array of (BOND_MASK + 1) elements. */
@@ -3529,7 +3523,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
     if (port->lacp) {
         ds_put_format(&ds, "lacp: %s\n",
-                      port->lacp_active ? "active" : "passive");
+                      lacp_is_active(port->lacp) ? "active" : "passive");
     } else {
         ds_put_cstr(&ds, "lacp: off\n");
     }
@@ -3989,7 +3983,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
     const char *detect_mode;
     struct sset new_ifaces;
-    long long int next_rebalance, miimon_next_update, lacp_priority;
+    long long int next_rebalance, miimon_next_update;
     bool need_flush = false;
     unsigned long *trunks;
     int vlan;
@@ -4087,56 +4081,8 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         iface->type = (!strcmp(if_cfg->name, port->bridge->name) ? "internal"
                        : if_cfg->type[0] ? if_cfg->type
                        : "system");
-
-        lacp_priority =
-            atoi(get_interface_other_config(if_cfg, "lacp-port-priority",
-                                            "0"));
-
-        if (lacp_priority <= 0 || lacp_priority > UINT16_MAX) {
-            iface->lacp_priority = UINT16_MAX;
-        } else {
-            iface->lacp_priority = lacp_priority;
-        }
     }
     sset_destroy(&new_ifaces);
-
-    port->lacp_fast = !strcmp(get_port_other_config(cfg, "lacp-time", "slow"),
-                             "fast");
-
-    lacp_priority =
-        atoi(get_port_other_config(cfg, "lacp-system-priority", "0"));
-
-    if (lacp_priority <= 0 || lacp_priority > UINT16_MAX) {
-        /* Prefer bondable links if unspecified. */
-        port->lacp_priority = port->n_ifaces > 1 ? UINT16_MAX - 1 : UINT16_MAX;
-    } else {
-        port->lacp_priority = lacp_priority;
-    }
-
-    if (!port->cfg->lacp) {
-        /* XXX when LACP implementation has been sufficiently tested, enable by
-         * default and make active on bonded ports. */
-        lacp_destroy(port->lacp);
-        port->lacp = NULL;
-    } else if (!strcmp(port->cfg->lacp, "off")) {
-        lacp_destroy(port->lacp);
-        port->lacp = NULL;
-    } else if (!strcmp(port->cfg->lacp, "active")) {
-        if (!port->lacp) {
-            port->lacp = lacp_create();
-        }
-        port->lacp_active = true;
-    } else if (!strcmp(port->cfg->lacp, "passive")) {
-        if (!port->lacp) {
-            port->lacp = lacp_create();
-        }
-        port->lacp_active = false;
-    } else {
-        VLOG_WARN("port %s: unknown LACP mode %s",
-                  port->name, port->cfg->lacp);
-        lacp_destroy(port->lacp);
-        port->lacp = NULL;
-    }
 
     /* Get VLAN tag. */
     vlan = -1;
@@ -4264,20 +4210,68 @@ port_lookup_iface(const struct port *port, const char *name)
     return iface && iface->port == port ? iface : NULL;
 }
 
+static bool
+enable_lacp(struct port *port, bool *activep)
+{
+    if (!port->cfg->lacp) {
+        /* XXX when LACP implementation has been sufficiently tested, enable by
+         * default and make active on bonded ports. */
+        return false;
+    } else if (!strcmp(port->cfg->lacp, "off")) {
+        return false;
+    } else if (!strcmp(port->cfg->lacp, "active")) {
+        *activep = true;
+        return true;
+    } else if (!strcmp(port->cfg->lacp, "passive")) {
+        *activep = false;
+        return true;
+    } else {
+        VLOG_WARN("port %s: unknown LACP mode %s",
+                  port->name, port->cfg->lacp);
+        return false;
+    }
+}
+
 static void
 port_update_lacp(struct port *port)
 {
-    if (port->lacp) {
-        struct iface *iface;
+    struct iface *iface;
+    int priority;
+    bool active;
+    bool fast;
 
-        lacp_configure(port->lacp, port->name,
-                       port->bridge->ea, port->lacp_priority,
-                       port->lacp_active, port->lacp_fast);
+    if (!enable_lacp(port, &active)) {
+        lacp_destroy(port->lacp);
+        port->lacp = NULL;
+        return;
+    }
 
-        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            lacp_slave_register(port->lacp, iface, iface->name,
-                                iface->dp_ifidx, iface->lacp_priority);
+    if (!port->lacp) {
+        port->lacp = lacp_create();
+    }
+
+    fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
+                   "fast");
+
+    priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
+                                          "0"));
+    if (priority <= 0 || priority > UINT16_MAX) {
+        /* Prefer bondable links if unspecified. */
+        priority = UINT16_MAX - (port->n_ifaces > 1);
+    }
+
+    lacp_configure(port->lacp, port->name, port->bridge->ea, priority,
+                   active, fast);
+
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+        priority = atoi(get_interface_other_config(
+                            iface->cfg, "lacp-port-priority", "0"));
+        if (priority <= 0 || priority > UINT16_MAX) {
+            priority = UINT16_MAX;
         }
+
+        lacp_slave_register(port->lacp, iface, iface->name,
+                            iface->dp_ifidx, priority);
     }
 }
 

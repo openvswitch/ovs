@@ -142,6 +142,14 @@ lacp_configure(struct lacp *lacp, const char *name,
     lacp->fast = fast;
 }
 
+/* Returns true if 'lacp' is configured in active mode, false if 'lacp' is
+ * configured for passive mode. */
+bool
+lacp_is_active(const struct lacp *lacp)
+{
+    return lacp->active;
+}
+
 /* Processes 'pdu', a parsed LACP packet received on 'slave_'.  This function
  * should be called on all packets received on 'slave_' with Ethernet Type
  * ETH_TYPE_LACP and parsable by parse_lacp_packet(). */

@@ -27,9 +27,12 @@ typedef void lacp_send_pdu(void *slave, const struct lacp_pdu *);
 void lacp_init(void);
 struct lacp *lacp_create(void);
 void lacp_destroy(struct lacp *);
+
 void lacp_configure(struct lacp *, const char *name,
                     const uint8_t sys_id[ETH_ADDR_LEN],
                     uint16_t sys_priority, bool active, bool fast);
+bool lacp_is_active(const struct lacp *);
+
 void lacp_process_pdu(struct lacp *, const void *slave,
                       const struct lacp_pdu *);
 bool lacp_negotiated(const struct lacp *);
