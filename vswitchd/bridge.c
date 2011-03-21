@@ -98,6 +98,7 @@ static void dst_set_free(struct dst_set *);
 
 struct iface {
     /* These members are always valid. */
+    struct list port_elem;      /* Element in struct port's "ifaces" list. */
     struct port *port;          /* Containing port. */
     char *name;                 /* Host network device name. */
     tag_type tag;               /* Tag associated with this interface. */
@@ -168,8 +169,8 @@ struct port {
 
     /* An ordinary bridge port has 1 interface.
      * A bridge port for bonding has at least 2 interfaces. */
-    struct iface **ifaces;
-    size_t n_ifaces, allocated_ifaces;
+    struct list ifaces;         /* List of "struct iface"s. */
+    size_t n_ifaces;            /* list_size(ifaces). */
 
     /* Bonding info. */
     enum bond_mode bond_mode;   /* Type of the bond. BM_SLB is the default. */
@@ -279,6 +280,7 @@ static void port_del_ifaces(struct port *, const struct ovsrec_port *);
 static void port_destroy(struct port *);
 static struct port *port_lookup(const struct bridge *, const char *name);
 static struct iface *port_lookup_iface(const struct port *, const char *name);
+static struct iface *port_get_an_iface(const struct port *);
 static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
 static void port_update_bonding(struct port *);
@@ -462,15 +464,14 @@ iterate_and_prune_ifaces(struct bridge *br,
                                     void *aux),
                          void *aux)
 {
-    size_t i, j;
+    size_t i;
 
     for (i = 0; i < br->n_ports; ) {
         struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; ) {
-            struct iface *iface = port->ifaces[j];
-            if (cb(br, iface, aux)) {
-                j++;
-            } else {
+        struct iface *iface, *next;
+
+        LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
+            if (!cb(br, iface, aux)) {
                 iface_set_ofport(iface->cfg, -1);
                 iface_destroy(iface);
             }
@@ -885,11 +886,11 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
-            int j;
+            struct iface *iface;
 
             if (port->monitor) {
-                for (j = 0; j < port->n_ifaces; j++) {
-                    netdev_monitor_add(port->monitor, port->ifaces[j]->netdev);
+                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                    netdev_monitor_add(port->monitor, iface->netdev);
                 }
             } else {
                 port->miimon_next_update = 0;
@@ -898,8 +899,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             port_update_lacp(port);
             port_update_bonding(port);
 
-            for (j = 0; j < port->n_ifaces; j++) {
-                iface_update_qos(port->ifaces[j], port->cfg->qos);
+            LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                iface_update_qos(iface, port->cfg->qos);
             }
         }
     }
@@ -948,7 +949,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                           struct iface **hw_addr_iface)
 {
     const char *hwaddr;
-    size_t i, j;
+    size_t i;
     int error;
 
     *hw_addr_iface = NULL;
@@ -972,6 +973,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
         uint8_t iface_ea[ETH_ADDR_LEN];
+        struct iface *candidate;
         struct iface *iface;
 
         /* Mirror output ports don't participate. */
@@ -980,12 +982,11 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
 
         /* Choose the MAC address to represent the port. */
+        iface = NULL;
         if (port->cfg->mac && eth_addr_from_string(port->cfg->mac, iface_ea)) {
             /* Find the interface with this Ethernet address (if any) so that
              * we can provide the correct devname to the caller. */
-            iface = NULL;
-            for (j = 0; j < port->n_ifaces; j++) {
-                struct iface *candidate = port->ifaces[j];
+            LIST_FOR_EACH (candidate, port_elem, &port->ifaces) {
                 uint8_t candidate_ea[ETH_ADDR_LEN];
                 if (!netdev_get_etheraddr(candidate->netdev, candidate_ea)
                     && eth_addr_equals(iface_ea, candidate_ea)) {
@@ -999,10 +1000,8 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
              * scripts always add slaves to a bond in alphabetical order, so
              * for compatibility we choose the interface with the name that is
              * first in alphabetical order. */
-            iface = port->ifaces[0];
-            for (j = 1; j < port->n_ifaces; j++) {
-                struct iface *candidate = port->ifaces[j];
-                if (strcmp(candidate->name, iface->name) < 0) {
+            LIST_FOR_EACH (candidate, port_elem, &port->ifaces) {
+                if (!iface || strcmp(candidate->name, iface->name) < 0) {
                     iface = candidate;
                 }
             }
@@ -1449,10 +1448,9 @@ bridge_run(void)
 
                 for (i = 0; i < br->n_ports; i++) {
                     struct port *port = br->ports[i];
-                    size_t j;
+                    struct iface *iface;
 
-                    for (j = 0; j < port->n_ifaces; j++) {
-                        struct iface *iface = port->ifaces[j];
+                    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                         iface_refresh_stats(iface);
                         iface_refresh_cfm_stats(iface);
                         iface_refresh_status(iface);
@@ -1523,7 +1521,7 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
             continue;
         }
         ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
-                      br->ports[e->port]->ifaces[0]->dp_ifidx,
+                      port_get_an_iface(br->ports[e->port])->dp_ifidx,
                       e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
@@ -2074,13 +2072,14 @@ bridge_reconfigure_remotes(struct bridge *br,
 static void
 bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 {
-    size_t i, j;
+    size_t i;
 
     shash_init(ifaces);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
+        struct iface *iface;
+
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             shash_add_once(ifaces, iface->name, iface);
         }
         if (port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
@@ -2102,13 +2101,14 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 {
     struct dpif_port_dump dump;
     struct dpif_port dpif_port;
-    size_t i, j;
+    size_t i;
 
     /* Reset all interface numbers. */
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
+        struct iface *iface;
+
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             iface->dp_ifidx = -1;
         }
     }
@@ -2182,12 +2182,10 @@ bond_choose_iface(const struct port *port)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct iface *best_down_slave;
-    size_t i;
+    struct iface *iface;
 
     best_down_slave = NULL;
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
-
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         if (iface->enabled) {
             return iface;
         } else if ((!best_down_slave
@@ -2216,7 +2214,7 @@ choose_output_iface(const struct port *port, const struct flow *flow,
 
     assert(port->n_ifaces);
     if (port->n_ifaces == 1) {
-        iface = port->ifaces[0];
+        iface = port_get_an_iface(port);
     } else if (port->bond_mode == BM_AB) {
         iface = port->active_iface;
         if (!iface) {
@@ -2356,14 +2354,14 @@ bond_update_fake_iface_stats(struct port *port)
 {
     struct netdev_stats bond_stats;
     struct netdev *bond_dev;
-    size_t i;
+    struct iface *iface;
 
     memset(&bond_stats, 0, sizeof bond_stats);
 
-    for (i = 0; i < port->n_ifaces; i++) {
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         struct netdev_stats slave_stats;
 
-        if (!netdev_get_stats(port->ifaces[i]->netdev, &slave_stats)) {
+        if (!netdev_get_stats(iface->netdev, &slave_stats)) {
             /* XXX: We swap the stats here because they are swapped back when
              * reported by the internal device.  The reason for this is
              * internal devices normally represent packets going into the system
@@ -2389,18 +2387,17 @@ bond_update_fake_iface_stats(struct port *port)
 static void
 bond_run(struct port *port)
 {
-    size_t i;
+    struct iface *iface;
 
     if (port->n_ifaces < 2) {
         return;
     }
 
-    for (i = 0; i < port->n_ifaces; i++) {
-        bond_link_status_update(port->ifaces[i]);
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+        bond_link_status_update(iface);
     }
 
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         if (time_msec() >= iface->delay_expires) {
             bond_enable_slave(iface, !iface->enabled);
         }
@@ -2416,14 +2413,13 @@ bond_run(struct port *port)
 static void
 bond_wait(struct port *port)
 {
-    size_t i;
+    struct iface *iface;
 
     if (port->n_ifaces < 2) {
         return;
     }
 
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         if (iface->delay_expires != LLONG_MAX) {
             poll_timer_wait_until(iface->delay_expires);
         }
@@ -2563,11 +2559,11 @@ port_includes_vlan(const struct port *port, uint16_t vlan)
 static bool
 port_is_floodable(const struct port *port)
 {
-    int i;
+    struct iface *iface;
 
-    for (i = 0; i < port->n_ifaces; i++) {
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         if (!ofproto_port_is_floodable(port->bridge->ofproto,
-                                       port->ifaces[i]->dp_ifidx)) {
+                                       iface->dp_ifidx)) {
             return false;
         }
     }
@@ -2582,6 +2578,15 @@ port_get_active_iface_tag(const struct port *port)
     return (port->active_iface
             ? port->active_iface->tag
             : port->no_ifaces_tag);
+}
+
+/* Returns an arbitrary interface within 'port'.
+ *
+ * 'port' must have at least one interface. */
+static struct iface *
+port_get_an_iface(const struct port *port)
+{
+    return CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
 }
 
 static void
@@ -3243,6 +3248,7 @@ bond_rebalance_port(struct port *port)
     struct bond_entry *hashes[BOND_MASK + 1];
     struct slave_balance *b, *from, *to;
     struct bond_entry *e;
+    struct iface *iface;
     size_t i;
 
     assert(port->bond_mode != BM_AB);
@@ -3258,13 +3264,15 @@ bond_rebalance_port(struct port *port)
      * become contiguous in memory, and then we point each 'hashes' members of
      * a slave_balance structure to the start of a contiguous group. */
     n_bals = port->n_ifaces;
-    bals = xmalloc(n_bals * sizeof *bals);
-    for (b = bals; b < &bals[n_bals]; b++) {
-        b->iface = port->ifaces[b - bals];
+    b = bals = xmalloc(n_bals * sizeof *bals);
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+        b->iface = iface;
         b->tx_bytes = 0;
         b->hashes = NULL;
         b->n_hashes = 0;
+        b++;
     }
+    assert(b == &bals[n_bals]);
     for (i = 0; i <= BOND_MASK; i++) {
         hashes[i] = &port->bond_hash[i];
     }
@@ -3463,13 +3471,12 @@ bond_unixctl_list(struct unixctl_conn *conn,
         for (i = 0; i < br->n_ports; i++) {
             const struct port *port = br->ports[i];
             if (port->n_ifaces > 1) {
-                size_t j;
+                struct iface *iface;
 
                 ds_put_format(&ds, "%s\t%s\t%s\t", br->name, port->name,
                               bond_mode_to_string(port->bond_mode));
-                for (j = 0; j < port->n_ifaces; j++) {
-                    const struct iface *iface = port->ifaces[j];
-                    if (j) {
+                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                    if (&iface->port_elem != list_front(&port->ifaces)) {
                         ds_put_cstr(&ds, ", ");
                     }
                     ds_put_cstr(&ds, iface->name);
@@ -3506,7 +3513,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct port *port;
-    size_t j;
+    struct iface *iface;
 
     port = bond_find(args);
     if (!port) {
@@ -3546,8 +3553,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
                       port->bond_next_rebalance - time_msec());
     }
 
-    for (j = 0; j < port->n_ifaces; j++) {
-        const struct iface *iface = port->ifaces[j];
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         struct bond_entry *be;
         struct flow flow;
 
@@ -3851,20 +3857,18 @@ port_run(struct port *port)
             free(devname);
         }
     } else if (time_msec() >= port->miimon_next_update) {
-        size_t i;
+        struct iface *iface;
 
-        for (i = 0; i < port->n_ifaces; i++) {
-            struct iface *iface = port->ifaces[i];
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             iface_update_carrier(iface);
         }
         port->miimon_next_update = time_msec() + port->miimon_interval;
     }
 
     if (port->lacp) {
-        size_t i;
+        struct iface *iface;
 
-        for (i = 0; i < port->n_ifaces; i++) {
-            struct iface *iface = port->ifaces[i];
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             lacp_slave_enable(port->lacp, iface, iface->enabled);
         }
 
@@ -3902,6 +3906,7 @@ port_create(struct bridge *br, const char *name)
     port->trunks = NULL;
     port->name = xstrdup(name);
     port->active_iface = NULL;
+    list_init(&port->ifaces);
 
     if (br->n_ports >= br->allocated_ports) {
         br->ports = x2nrealloc(br->ports, &br->allocated_ports,
@@ -3941,6 +3946,7 @@ get_interface_other_config(const struct ovsrec_interface *iface,
 static void
 port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
 {
+    struct iface *iface, *next;
     struct shash new_ifaces;
     size_t i;
 
@@ -3952,12 +3958,9 @@ port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
     }
 
     /* Get rid of deleted interfaces. */
-    for (i = 0; i < port->n_ifaces; ) {
-        struct iface *iface = port->ifaces[i];
+    LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
         if (!shash_find(&new_ifaces, iface->name)) {
             iface_destroy(iface);
-        } else {
-            i++;
         }
     }
 
@@ -4182,6 +4185,7 @@ port_destroy(struct port *port)
 {
     if (port) {
         struct bridge *br = port->bridge;
+        struct iface *iface, *next;
         struct port *del;
         int i;
 
@@ -4192,8 +4196,8 @@ port_destroy(struct port *port)
             }
         }
 
-        while (port->n_ifaces > 0) {
-            iface_destroy(port->ifaces[port->n_ifaces - 1]);
+        LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
+            iface_destroy(iface);
         }
 
         shash_find_and_delete_assert(&br->port_by_name, port->name);
@@ -4204,7 +4208,6 @@ port_destroy(struct port *port)
         VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
 
         netdev_monitor_destroy(port->monitor);
-        free(port->ifaces);
         bitmap_free(port->trunks);
         free(port->name);
         free(port);
@@ -4236,14 +4239,13 @@ static void
 port_update_lacp(struct port *port)
 {
     if (port->lacp) {
-        size_t i;
+        struct iface *iface;
 
         lacp_configure(port->lacp, port->name,
                        port->bridge->ea, port->lacp_priority,
                        port->lacp_active, port->lacp_fast);
 
-        for (i = 0; i < port->n_ifaces; i++) {
-            struct iface *iface = port->ifaces[i];
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             lacp_slave_register(port->lacp, iface, iface->name,
                                 iface->dp_ifidx, iface->lacp_priority);
         }
@@ -4313,11 +4315,9 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 
     shash_add_assert(&br->iface_by_name, iface->name, iface);
 
-    if (port->n_ifaces >= port->allocated_ifaces) {
-        port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
-                                  sizeof *port->ifaces);
-    }
-    port->ifaces[port->n_ifaces++] = iface;
+    list_push_back(&port->ifaces, &iface->port_elem);
+    port->n_ifaces++;
+
     if (port->n_ifaces > 1) {
         br->has_bonded_ports = true;
     }
@@ -4336,7 +4336,6 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
         bool del_active = port->active_iface == iface;
-        size_t i;
 
         if (port->bond_hash) {
             struct bond_entry *e;
@@ -4361,12 +4360,8 @@ iface_destroy(struct iface *iface)
             hmap_remove(&br->ifaces, &iface->dp_ifidx_node);
         }
 
-        for (i = 0; i < port->n_ifaces; i++) {
-            if (iface == port->ifaces[i]) {
-                port->ifaces[i] = port->ifaces[--port->n_ifaces];
-                break;
-            }
-        }
+        list_remove(&iface->port_elem);
+        port->n_ifaces--;
 
         netdev_close(iface->netdev);
 
