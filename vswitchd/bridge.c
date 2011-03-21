@@ -155,12 +155,13 @@ struct mirror {
 #define FLOOD_PORT ((struct port *) 1) /* The 'flood' output port. */
 struct port {
     struct bridge *bridge;
-    size_t port_idx;
+    struct hmap_node hmap_node; /* Element in struct bridge's "ports" hmap. */
+    char *name;
+
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                  * NULL if all VLANs are trunked. */
     const struct ovsrec_port *cfg;
-    char *name;
 
     /* Monitoring. */
     struct netdev_monitor *monitor;   /* Tracks carrier. NULL if miimon. */
@@ -213,10 +214,8 @@ struct bridge {
     struct hmap ifaces;         /* Contains "struct iface"s. */
 
     /* Bridge ports. */
-    struct port **ports;
-    size_t n_ports, allocated_ports;
+    struct hmap ports;          /* "struct port"s indexed by name. */
     struct shash iface_by_name; /* "struct iface"s indexed by name. */
-    struct shash port_by_name;  /* "struct port"s indexed by name. */
 
     /* Bonding. */
     bool has_bonded_ports;
@@ -464,22 +463,19 @@ iterate_and_prune_ifaces(struct bridge *br,
                                     void *aux),
                          void *aux)
 {
-    size_t i;
+    struct port *port, *next_port;
 
-    for (i = 0; i < br->n_ports; ) {
-        struct port *port = br->ports[i];
-        struct iface *iface, *next;
+    HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
+        struct iface *iface, *next_iface;
 
-        LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
+        LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
             if (!cb(br, iface, aux)) {
                 iface_set_ofport(iface->cfg, -1);
                 iface_destroy(iface);
             }
         }
 
-        if (port->n_ifaces) {
-            i++;
-        } else  {
+        if (!port->n_ifaces) {
             VLOG_WARN("%s port has no interfaces, dropping", port->name);
             port_destroy(port);
         }
@@ -810,7 +806,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                               "with another vswitch, choose an engine id less "
                               "than 128", br->name);
                 }
-                if (br->n_ports > 508) {
+                if (hmap_count(&br->ports) > 508) {
                     VLOG_WARN("bridge %s: netflow port mangling will conflict "
                               "with another port when more than 508 ports are "
                               "used", br->name);
@@ -884,8 +880,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_reconfigure_remotes(br, managers, n_managers);
     }
     LIST_FOR_EACH (br, node, &all_bridges) {
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *port = br->ports[i];
+        struct port *port;
+
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             struct iface *iface;
 
             if (port->monitor) {
@@ -949,7 +946,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                           struct iface **hw_addr_iface)
 {
     const char *hwaddr;
-    size_t i;
+    struct port *port;
     int error;
 
     *hw_addr_iface = NULL;
@@ -970,8 +967,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     /* Otherwise choose the minimum non-local MAC address among all of the
      * interfaces. */
     memset(ea, 0xff, ETH_ADDR_LEN);
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         uint8_t iface_ea[ETH_ADDR_LEN];
         struct iface *candidate;
         struct iface *iface;
@@ -1444,10 +1440,9 @@ bridge_run(void)
 
             txn = ovsdb_idl_txn_create(idl);
             LIST_FOR_EACH (br, node, &all_bridges) {
-                size_t i;
+                struct port *port;
 
-                for (i = 0; i < br->n_ports; i++) {
-                    struct port *port = br->ports[i];
+                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
                     struct iface *iface;
 
                     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
@@ -1473,7 +1468,7 @@ bridge_wait(void)
     struct bridge *br;
 
     LIST_FOR_EACH (br, node, &all_bridges) {
-        size_t i;
+        struct port *port;
 
         ofproto_wait(br->ofproto);
         if (ofproto_has_primary_controller(br->ofproto)) {
@@ -1482,8 +1477,8 @@ bridge_wait(void)
 
         mac_learning_wait(br->ml);
 
-        for (i = 0; i < br->n_ports; i++) {
-            port_wait(br->ports[i]);
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+            port_wait(port);
         }
     }
     ovsdb_idl_wait(idl);
@@ -1652,9 +1647,8 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->ml = mac_learning_create();
     eth_addr_nicira_random(br->default_ea);
 
+    hmap_init(&br->ports);
     hmap_init(&br->ifaces);
-
-    shash_init(&br->port_by_name);
     shash_init(&br->iface_by_name);
 
     br->flush = false;
@@ -1670,10 +1664,11 @@ static void
 bridge_destroy(struct bridge *br)
 {
     if (br) {
+        struct port *port, *next;
         int error;
 
-        while (br->n_ports > 0) {
-            port_destroy(br->ports[br->n_ports - 1]);
+        HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
+            port_destroy(port);
         }
         list_remove(&br->node);
         error = dpif_delete(br->dpif);
@@ -1685,9 +1680,8 @@ bridge_destroy(struct bridge *br)
         ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
-        shash_destroy(&br->port_by_name);
+        hmap_destroy(&br->ports);
         shash_destroy(&br->iface_by_name);
-        free(br->ports);
         free(br->name);
         free(br);
     }
@@ -1754,7 +1748,7 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn,
 static int
 bridge_run_one(struct bridge *br)
 {
-    size_t i;
+    struct port *port;
     int error;
 
     error = ofproto_run1(br->ofproto);
@@ -1764,8 +1758,8 @@ bridge_run_one(struct bridge *br)
 
     mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
 
-    for (i = 0; i < br->n_ports; i++) {
-        port_run(br->ports[i]);
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+        port_run(port);
     }
 
     error = ofproto_run2(br->ofproto, br->flush);
@@ -1798,17 +1792,12 @@ bridge_get_controllers(const struct bridge *br,
 static void
 bridge_reconfigure_one(struct bridge *br)
 {
-    struct shash old_ports, new_ports;
-    struct svec snoops, old_snoops;
-    struct shash_node *node;
     enum ofproto_fail_mode fail_mode;
+    struct svec snoops, old_snoops;
+    struct port *port, *next;
+    struct shash_node *node;
+    struct shash new_ports;
     size_t i;
-
-    /* Collect old ports. */
-    shash_init(&old_ports);
-    for (i = 0; i < br->n_ports; i++) {
-        shash_add(&old_ports, br->ports[i]->name, br->ports[i]);
-    }
 
     /* Collect new ports. */
     shash_init(&new_ports);
@@ -1839,11 +1828,10 @@ bridge_reconfigure_one(struct bridge *br)
 
     /* Get rid of deleted ports.
      * Get rid of deleted interfaces on ports that still exist. */
-    SHASH_FOR_EACH (node, &old_ports) {
-        struct port *port = node->data;
+    HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
         const struct ovsrec_port *port_cfg;
 
-        port_cfg = shash_find_data(&new_ports, node->name);
+        port_cfg = shash_find_data(&new_ports, port->name);
         if (!port_cfg) {
             port_destroy(port);
         } else {
@@ -1855,7 +1843,7 @@ bridge_reconfigure_one(struct bridge *br)
      * Add new interfaces to existing ports.
      * Reconfigure existing ports. */
     SHASH_FOR_EACH (node, &new_ports) {
-        struct port *port = shash_find_data(&old_ports, node->name);
+        struct port *port = port_lookup(br, node->name);
         if (!port) {
             port = port_create(br, node->name);
         }
@@ -1867,7 +1855,6 @@ bridge_reconfigure_one(struct bridge *br)
             port_destroy(port);
         }
     }
-    shash_destroy(&old_ports);
     shash_destroy(&new_ports);
 
     /* Set the fail-mode */
@@ -2069,11 +2056,10 @@ bridge_reconfigure_remotes(struct bridge *br,
 static void
 bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 {
-    size_t i;
+    struct port *port;
 
     shash_init(ifaces);
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         struct iface *iface;
 
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
@@ -2098,11 +2084,10 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 {
     struct dpif_port_dump dump;
     struct dpif_port dpif_port;
-    size_t i;
+    struct port *port;
 
     /* Reset all interface numbers. */
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         struct iface *iface;
 
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
@@ -2594,7 +2579,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
     mirror_mask_t mirrors = in_port->src_mirrors;
     struct dst dst;
     int flow_vlan;
-    size_t i;
 
     flow_vlan = vlan_tci_to_vid(flow->vlan_tci);
     if (flow_vlan == 0) {
@@ -2602,8 +2586,9 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
     }
 
     if (out_port == FLOOD_PORT) {
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *port = br->ports[i];
+        struct port *port;
+
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             if (port != in_port
                 && port_is_floodable(port)
                 && port_includes_vlan(port, vlan)
@@ -2629,8 +2614,9 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
                     dst_set_add(set, &dst);
                 }
             } else {
-                for (i = 0; i < br->n_ports; i++) {
-                    struct port *port = br->ports[i];
+                struct port *port;
+
+                HMAP_FOR_EACH (port, hmap_node, &br->ports) {
                     if (port_includes_vlan(port, m->out_vlan)
                         && set_dst(&dst, flow, in_port, port, tags))
                     {
@@ -3044,16 +3030,15 @@ static void
 bridge_account_checkpoint_ofhook_cb(void *br_)
 {
     struct bridge *br = br_;
+    struct port *port;
     long long int now;
-    size_t i;
 
     if (!br->has_bonded_ports) {
         return;
     }
 
     now = time_msec();
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         if (port->n_ifaces > 1 && port->bond_mode != BM_AB
             && now >= port->bond_next_rebalance) {
             port->bond_next_rebalance = now + port->bond_rebalance_interval;
@@ -3467,10 +3452,9 @@ bond_unixctl_list(struct unixctl_conn *conn,
     ds_put_cstr(&ds, "bridge\tbond\ttype\tslaves\n");
 
     LIST_FOR_EACH (br, node, &all_bridges) {
-        size_t i;
+        struct port *port;
 
-        for (i = 0; i < br->n_ports; i++) {
-            const struct port *port = br->ports[i];
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             if (port->n_ifaces > 1) {
                 struct iface *iface;
 
@@ -3496,10 +3480,9 @@ bond_find(const char *name)
     const struct bridge *br;
 
     LIST_FOR_EACH (br, node, &all_bridges) {
-        size_t i;
+        struct port *port;
 
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *port = br->ports[i];
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             if (!strcmp(port->name, name) && port->n_ifaces > 1) {
                 return port;
             }
@@ -3902,19 +3885,13 @@ port_create(struct bridge *br, const char *name)
 
     port = xzalloc(sizeof *port);
     port->bridge = br;
-    port->port_idx = br->n_ports;
     port->vlan = -1;
     port->trunks = NULL;
     port->name = xstrdup(name);
     port->active_iface = NULL;
     list_init(&port->ifaces);
 
-    if (br->n_ports >= br->allocated_ports) {
-        br->ports = x2nrealloc(br->ports, &br->allocated_ports,
-                               sizeof *br->ports);
-    }
-    br->ports[br->n_ports++] = port;
-    shash_add_assert(&br->port_by_name, port->name, port);
+    hmap_insert(&br->ports, &port->hmap_node, hash_string(port->name, 0));
 
     VLOG_INFO("created port %s on bridge %s", port->name, br->name);
     bridge_flush(br);
@@ -4209,7 +4186,6 @@ port_destroy(struct port *port)
     if (port) {
         struct bridge *br = port->bridge;
         struct iface *iface, *next;
-        struct port *del;
         int i;
 
         for (i = 0; i < MAX_MIRRORS; i++) {
@@ -4223,10 +4199,7 @@ port_destroy(struct port *port)
             iface_destroy(iface);
         }
 
-        shash_find_and_delete_assert(&br->port_by_name, port->name);
-
-        del = br->ports[port->port_idx] = br->ports[--br->n_ports];
-        del->port_idx = port->port_idx;
+        hmap_remove(&br->ports, &port->hmap_node);
 
         VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
 
@@ -4249,7 +4222,15 @@ port_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
 static struct port *
 port_lookup(const struct bridge *br, const char *name)
 {
-    return shash_find_data(&br->port_by_name, name);
+    struct port *port;
+
+    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_string(name, 0),
+                             &br->ports) {
+        if (!strcmp(port->name, name)) {
+            return port;
+        }
+    }
+    return NULL;
 }
 
 static struct iface *
@@ -4667,6 +4648,7 @@ static void
 mirror_reconfigure(struct bridge *br)
 {
     unsigned long *rspan_vlans;
+    struct port *port;
     int i;
 
     /* Get rid of deleted mirrors. */
@@ -4696,8 +4678,8 @@ mirror_reconfigure(struct bridge *br)
     }
 
     /* Update port reserved status. */
-    for (i = 0; i < br->n_ports; i++) {
-        br->ports[i]->is_mirror_output_port = false;
+    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+        port->is_mirror_output_port = false;
     }
     for (i = 0; i < MAX_MIRRORS; i++) {
         struct mirror *m = br->mirrors[i];
@@ -4769,11 +4751,11 @@ mirror_destroy(struct mirror *m)
 {
     if (m) {
         struct bridge *br = m->bridge;
-        size_t i;
+        struct port *port;
 
-        for (i = 0; i < br->n_ports; i++) {
-            br->ports[i]->src_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
-            br->ports[i]->dst_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+            port->src_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
+            port->dst_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
         }
 
         shash_destroy(&m->src_ports);
@@ -4859,10 +4841,10 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     struct shash src_ports, dst_ports;
     mirror_mask_t mirror_bit;
     struct port *out_port;
+    struct port *port;
     int out_vlan;
     size_t n_vlans;
     int *vlans;
-    size_t i;
 
     /* Set name. */
     if (strcmp(cfg->name, m->name)) {
@@ -4899,10 +4881,9 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     shash_init(&src_ports);
     shash_init(&dst_ports);
     if (cfg->select_all) {
-        for (i = 0; i < m->bridge->n_ports; i++) {
-            const char *name = m->bridge->ports[i]->name;
-            shash_add_once(&src_ports, name, NULL);
-            shash_add_once(&dst_ports, name, NULL);
+        HMAP_FOR_EACH (port, hmap_node, &m->bridge->ports) {
+            shash_add_once(&src_ports, port->name, NULL);
+            shash_add_once(&dst_ports, port->name, NULL);
         }
         vlans = NULL;
         n_vlans = 0;
@@ -4937,9 +4918,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
 
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
-    for (i = 0; i < m->bridge->n_ports; i++) {
-        struct port *port = m->bridge->ports[i];
-
+    HMAP_FOR_EACH (port, hmap_node, &m->bridge->ports) {
         if (shash_find(&m->src_ports, port->name)
             || (m->n_vlans
                 && (!port->vlan
