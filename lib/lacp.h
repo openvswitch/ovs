@@ -21,11 +21,6 @@
 #include <stdint.h>
 #include "packets.h"
 
-struct ds;
-struct lacp;
-struct lacp_pdu;
-struct ofpbuf;
-
 /* Function called when a LACP PDU is ready to be sent out the given slave */
 typedef void lacp_send_pdu(void *slave, const struct lacp_pdu *);
 
