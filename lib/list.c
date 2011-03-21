@@ -127,20 +127,24 @@ list_pop_back(struct list *list)
     return back;
 }
 
-/* Returns the front element in 'list'.
-   Undefined behavior if 'list' is empty. */
+/* Returns the front element in 'list_'.
+   Undefined behavior if 'list_' is empty. */
 struct list *
-list_front(struct list *list)
+list_front(const struct list *list_)
 {
+    struct list *list = (struct list *) list_;
+
     assert(!list_is_empty(list));
     return list->next;
 }
 
-/* Returns the back element in 'list'.
-   Undefined behavior if 'list' is empty. */
+/* Returns the back element in 'list_'.
+   Undefined behavior if 'list_' is empty. */
 struct list *
-list_back(struct list *list)
+list_back(const struct list *list_)
 {
+    struct list *list = (struct list *) list_;
+
     assert(!list_is_empty(list));
     return list->prev;
 }

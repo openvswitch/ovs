@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,8 @@ struct list *list_pop_front(struct list *);
 struct list *list_pop_back(struct list *);
 
 /* List elements. */
-struct list *list_front(struct list *);
-struct list *list_back(struct list *);
+struct list *list_front(const struct list *);
+struct list *list_back(const struct list *);
 
 /* List properties. */
 size_t list_size(const struct list *);
