@@ -4233,14 +4233,28 @@ enable_lacp(struct port *port, bool *activep)
 }
 
 static void
+iface_update_lacp(struct iface *iface)
+{
+    struct lacp_slave_settings s;
+    int priority;
+
+    s.name = iface->name;
+    s.id = iface->dp_ifidx;
+    priority = atoi(get_interface_other_config(
+                        iface->cfg, "lacp-port-priority", "0"));
+    s.priority = (priority >= 0 && priority <= UINT16_MAX ? priority
+                  : UINT16_MAX);
+
+    lacp_slave_register(iface->port->lacp, iface, &s);
+}
+
+static void
 port_update_lacp(struct port *port)
 {
+    struct lacp_settings s;
     struct iface *iface;
-    int priority;
-    bool active;
-    bool fast;
 
-    if (!enable_lacp(port, &active)) {
+    if (!enable_lacp(port, &s.active)) {
         lacp_destroy(port->lacp);
         port->lacp = NULL;
         return;
@@ -4250,28 +4264,21 @@ port_update_lacp(struct port *port)
         port->lacp = lacp_create();
     }
 
-    fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
-                   "fast");
-
-    priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
+    s.name = port->name;
+    memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
+    s.priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
                                           "0"));
-    if (priority <= 0 || priority > UINT16_MAX) {
+    s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
+                     "fast");
+
+    if (s.priority <= 0 || s.priority > UINT16_MAX) {
         /* Prefer bondable links if unspecified. */
-        priority = UINT16_MAX - (port->n_ifaces > 1);
+        s.priority = UINT16_MAX - (port->n_ifaces > 1);
     }
 
-    lacp_configure(port->lacp, port->name, port->bridge->ea, priority,
-                   active, fast);
-
+    lacp_configure(port->lacp, &s);
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        priority = atoi(get_interface_other_config(
-                            iface->cfg, "lacp-port-priority", "0"));
-        if (priority <= 0 || priority > UINT16_MAX) {
-            priority = UINT16_MAX;
-        }
-
-        lacp_slave_register(port->lacp, iface, iface->name,
-                            iface->dp_ifidx, priority);
+        iface_update_lacp(iface);
     }
 }
 

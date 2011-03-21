@@ -124,22 +124,19 @@ lacp_destroy(struct lacp *lacp)
     }
 }
 
-/* Configures 'lacp' with the given 'name', 'sys_id', 'sys_priority', and
- * 'active' parameters. */
+/* Configures 'lacp' with settings from 's'. */
 void
-lacp_configure(struct lacp *lacp, const char *name,
-               const uint8_t sys_id[ETH_ADDR_LEN], uint16_t sys_priority,
-               bool active, bool fast)
+lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 {
-    if (!lacp->name || strcmp(name, lacp->name)) {
+    if (!lacp->name || strcmp(s->name, lacp->name)) {
         free(lacp->name);
-        lacp->name = xstrdup(name);
+        lacp->name = xstrdup(s->name);
     }
 
-    memcpy(lacp->sys_id, sys_id, ETH_ADDR_LEN);
-    lacp->sys_priority = sys_priority;
-    lacp->active = active;
-    lacp->fast = fast;
+    memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
+    lacp->sys_priority = s->priority;
+    lacp->active = s->active;
+    lacp->fast = s->fast;
 }
 
 /* Returns true if 'lacp' is configured in active mode, false if 'lacp' is
@@ -185,10 +182,10 @@ lacp_negotiated(const struct lacp *lacp)
 
 /* Registers 'slave_' as subordinate to 'lacp'.  This should be called at least
  * once per slave in a LACP managed bond.  Should also be called whenever a
- * slave's name, port_id, or port_priority change. */
+ * slave's settings change. */
 void
-lacp_slave_register(struct lacp *lacp, void *slave_, const char *name,
-                    uint16_t port_id, uint16_t port_priority)
+lacp_slave_register(struct lacp *lacp, void *slave_,
+                    const struct lacp_slave_settings *s)
 {
     struct slave *slave = slave_lookup(lacp, slave_);
 
@@ -204,15 +201,14 @@ lacp_slave_register(struct lacp *lacp, void *slave_, const char *name,
         }
     }
 
-    if (!slave->name || strcmp(name, slave->name)) {
+    if (!slave->name || strcmp(s->name, slave->name)) {
         free(slave->name);
-        slave->name = xstrdup(name);
+        slave->name = xstrdup(s->name);
     }
 
-    if (slave->port_id != port_id || slave->port_priority != port_priority) {
-
-        slave->port_id = port_id;
-        slave->port_priority = port_priority;
+    if (slave->port_id != s->id || slave->port_priority != s->priority) {
+        slave->port_id = s->id;
+        slave->port_priority = s->priority;
 
         lacp->update = true;
 

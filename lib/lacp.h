@@ -21,28 +21,40 @@
 #include <stdint.h>
 #include "packets.h"
 
-/* Function called when a LACP PDU is ready to be sent out the given slave */
-typedef void lacp_send_pdu(void *slave, const struct lacp_pdu *);
+struct lacp_settings {
+    char *name;
+    uint8_t id[ETH_ADDR_LEN];
+    uint16_t priority;
+    bool active;
+    bool fast;
+};
 
 void lacp_init(void);
 struct lacp *lacp_create(void);
 void lacp_destroy(struct lacp *);
 
-void lacp_configure(struct lacp *, const char *name,
-                    const uint8_t sys_id[ETH_ADDR_LEN],
-                    uint16_t sys_priority, bool active, bool fast);
+void lacp_configure(struct lacp *, const struct lacp_settings *);
 bool lacp_is_active(const struct lacp *);
 
 void lacp_process_pdu(struct lacp *, const void *slave,
                       const struct lacp_pdu *);
 bool lacp_negotiated(const struct lacp *);
 
-void lacp_slave_register(struct lacp *, void *slave_, const char *name,
-                         uint16_t port_id, uint16_t port_priority);
+struct lacp_slave_settings {
+    char *name;
+    uint16_t id;
+    uint16_t priority;
+};
+
+void lacp_slave_register(struct lacp *, void *slave_,
+                         const struct lacp_slave_settings *);
 void lacp_slave_unregister(struct lacp *, const void *slave);
 void lacp_slave_enable(struct lacp *lacp, void *slave_, bool enabled);
 void lacp_slave_carrier_changed(const struct lacp *, const void *slave);
 bool lacp_slave_may_enable(const struct lacp *, const void *slave);
+
+/* Callback function for lacp_run() for sending a LACP PDU. */
+typedef void lacp_send_pdu(void *slave, const struct lacp_pdu *);
 
 void lacp_run(struct lacp *, lacp_send_pdu *);
 void lacp_wait(struct lacp *);
