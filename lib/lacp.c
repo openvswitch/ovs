@@ -128,7 +128,7 @@ lacp_destroy(struct lacp *lacp)
  * 'active' parameters. */
 void
 lacp_configure(struct lacp *lacp, const char *name,
-               uint8_t sys_id[ETH_ADDR_LEN], uint16_t sys_priority,
+               const uint8_t sys_id[ETH_ADDR_LEN], uint16_t sys_priority,
                bool active, bool fast)
 {
     if (!lacp->name || strcmp(name, lacp->name)) {
