@@ -99,7 +99,8 @@ def update(session, args):
         if not xapi_dib:
             xapi_dib = ''
 
-        ovs_dib = vswitchCfgQuery(['get', 'Bridge', bridge,
+        ovs_dib = vswitchCfgQuery(['--', '--if-exists', 'get', 'Bridge',
+                                   bridge,
                                    'other_config:disable-in-band']).strip('"')
 
         # Do nothing if setting is invalid, and warn the user.
