@@ -4207,6 +4207,7 @@ port_destroy(struct port *port)
 
         netdev_monitor_destroy(port->monitor);
         bitmap_free(port->trunks);
+        free(port->bond_hash);
         free(port->name);
         free(port);
     }
