@@ -4205,6 +4205,7 @@ port_destroy(struct port *port)
 
         port_flush_macs(port);
 
+        lacp_destroy(port->lacp);
         netdev_monitor_destroy(port->monitor);
         bitmap_free(port->trunks);
         free(port->bond_hash);
