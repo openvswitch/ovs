@@ -192,6 +192,19 @@ int ofputil_decode_flow_removed(struct ofputil_flow_removed *,
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum nx_flow_format);
 
+/* Abstract packet-in message. */
+struct ofputil_packet_in {
+    struct ofpbuf *packet;
+    uint16_t in_port;
+    uint8_t reason;             /* One of OFPR_*. */
+
+    uint32_t buffer_id;
+    int send_len;
+};
+
+struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
+                                        struct ofpbuf *rw_packet);
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);

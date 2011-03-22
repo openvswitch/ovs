@@ -4955,59 +4955,42 @@ static void
 schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
                    const struct flow *flow, bool clone)
 {
-    enum { OPI_SIZE = offsetof(struct ofp_packet_in, data) };
     struct ofproto *ofproto = ofconn->ofproto;
-    struct ofp_packet_in *opi;
-    int total_len, send_len;
-    struct ofpbuf *packet;
-    uint32_t buffer_id;
-    int idx;
+    struct ofputil_packet_in pin;
+    struct ofpbuf *msg;
+
+    /* Figure out the easy parts. */
+    pin.packet = upcall->packet;
+    pin.in_port = odp_port_to_ofp_port(flow->in_port);
+    pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
 
     /* Get OpenFlow buffer_id. */
     if (upcall->type == DPIF_UC_ACTION) {
-        buffer_id = UINT32_MAX;
+        pin.buffer_id = UINT32_MAX;
     } else if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
-        buffer_id = pktbuf_get_null();
+        pin.buffer_id = pktbuf_get_null();
     } else if (!ofconn->pktbuf) {
-        buffer_id = UINT32_MAX;
+        pin.buffer_id = UINT32_MAX;
     } else {
-        buffer_id = pktbuf_save(ofconn->pktbuf, upcall->packet, flow->in_port);
+        pin.buffer_id = pktbuf_save(ofconn->pktbuf, upcall->packet,
+                                    flow->in_port);
     }
 
     /* Figure out how much of the packet to send. */
-    total_len = send_len = upcall->packet->size;
-    if (buffer_id != UINT32_MAX) {
-        send_len = MIN(send_len, ofconn->miss_send_len);
+    pin.send_len = upcall->packet->size;
+    if (pin.buffer_id != UINT32_MAX) {
+        pin.send_len = MIN(pin.send_len, ofconn->miss_send_len);
     }
     if (upcall->type == DPIF_UC_ACTION) {
-        send_len = MIN(send_len, upcall->userdata);
+        pin.send_len = MIN(pin.send_len, upcall->userdata);
     }
 
-    /* Copy or steal buffer for OFPT_PACKET_IN. */
-    if (clone) {
-        packet = ofpbuf_clone_data_with_headroom(upcall->packet->data,
-                                                 send_len, OPI_SIZE);
-    } else {
-        packet = upcall->packet;
-        packet->size = send_len;
-    }
-
-    /* Add OFPT_PACKET_IN. */
-    opi = ofpbuf_push_zeros(packet, OPI_SIZE);
-    opi->header.version = OFP_VERSION;
-    opi->header.type = OFPT_PACKET_IN;
-    opi->total_len = htons(total_len);
-    opi->in_port = htons(odp_port_to_ofp_port(flow->in_port));
-    opi->reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
-    opi->buffer_id = htonl(buffer_id);
-    update_openflow_length(packet);
-
-    /* Hand over to packet scheduler.  It might immediately call into
-     * do_send_packet_in() or it might buffer it for a while (until a later
-     * call to pinsched_run()). */
-    idx = upcall->type == DPIF_UC_MISS ? 0 : 1;
-    pinsched_send(ofconn->schedulers[idx], flow->in_port,
-                  packet, do_send_packet_in, ofconn);
+    /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might
+     * immediately call into do_send_packet_in() or it might buffer it for a
+     * while (until a later call to pinsched_run()). */
+    msg = ofputil_encode_packet_in(&pin, clone ? NULL : upcall->packet);
+    pinsched_send(ofconn->schedulers[upcall->type == DPIF_UC_MISS ? 0 : 1],
+                  flow->in_port, msg, do_send_packet_in, ofconn);
 }
 
 /* Given 'upcall', of type DPIF_UC_ACTION or DPIF_UC_MISS, sends an
