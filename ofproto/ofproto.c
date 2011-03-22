@@ -991,7 +991,6 @@ ofproto_iface_set_cfm(struct ofproto *ofproto, uint32_t port_no,
 
     ofport->cfm->mpid = cfm->mpid;
     ofport->cfm->interval = cfm->interval;
-    memcpy(ofport->cfm->eth_src, cfm->eth_src, ETH_ADDR_LEN);
     memcpy(ofport->cfm->maid, cfm->maid, CCM_MAID_LEN);
 
     cfm_update_remote_mps(ofport->cfm, remote_mps, n_remote_mps);
@@ -1729,10 +1728,18 @@ static void
 ofport_run(struct ofproto *ofproto, struct ofport *ofport)
 {
     if (ofport->cfm) {
-        struct ofpbuf *packet = cfm_run(ofport->cfm);
-        if (packet) {
-            ofproto_send_packet(ofproto, ofport->odp_port, 0, packet);
-            ofpbuf_delete(packet);
+        cfm_run(ofport->cfm);
+
+        if (cfm_should_send_ccm(ofport->cfm)) {
+            struct ofpbuf packet;
+            struct ccm *ccm;
+
+            ofpbuf_init(&packet, 0);
+            ccm = compose_packet(&packet, eth_addr_ccm, ofport->opp.hw_addr,
+                                 ETH_TYPE_CFM,  sizeof *ccm);
+            cfm_compose_ccm(ofport->cfm, ccm);
+            ofproto_send_packet(ofproto, ofport->odp_port, 0, &packet);
+            ofpbuf_uninit(&packet);
         }
     }
 }

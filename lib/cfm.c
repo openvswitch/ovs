@@ -110,34 +110,6 @@ lookup_remote_mp(const struct hmap *hmap, uint16_t mpid)
     return NULL;
 }
 
-static struct ofpbuf *
-compose_ccm(struct cfm_internal *cfmi)
-{
-    struct ccm *ccm;
-    struct ofpbuf *packet;
-    struct eth_header *eth;
-
-    packet = ofpbuf_new(ETH_HEADER_LEN + CCM_LEN + 2);
-
-    ofpbuf_reserve(packet, 2);
-
-    eth = ofpbuf_put_zeros(packet, ETH_HEADER_LEN);
-    ccm = ofpbuf_put_zeros(packet, CCM_LEN);
-
-    memcpy(eth->eth_dst, eth_addr_ccm, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, cfmi->cfm.eth_src, sizeof eth->eth_src);
-    eth->eth_type = htons(ETH_TYPE_CFM);
-
-    ccm->mdlevel_version = 0;
-    ccm->opcode          = CCM_OPCODE;
-    ccm->tlv_offset      = 70;
-    ccm->seq             = htonl(++cfmi->seq);
-    ccm->mpid            = htons(cfmi->cfm.mpid);
-    ccm->flags           = cfmi->ccm_interval;
-    memcpy(ccm->maid, cfmi->cfm.maid, sizeof ccm->maid);
-    return packet;
-}
-
 /* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
  * 'eth_src', and 'interval' filled out.  When changes are made to the 'cfm'
  * object, cfm_configure should be called before using it. */
@@ -187,10 +159,8 @@ cfm_destroy(struct cfm *cfm)
     free(cfm_to_internal(cfm));
 }
 
-/* Should be run periodically to update fault statistics and generate CCM
- * messages.  If necessary, returns a packet which the caller is responsible
- * for sending, un-initing, and deallocating.  Otherwise returns NULL. */
-struct ofpbuf *
+/* Should be run periodically to update fault statistics messages. */
+void
 cfm_run(struct cfm *cfm)
 {
     long long now = time_msec();
@@ -237,13 +207,34 @@ cfm_run(struct cfm *cfm)
         cfm->fault        = fault;
         cfmi->fault_check = now;
     }
+}
 
-    if (now >= cfmi->ccm_sent + cfmi->ccm_interval_ms) {
-        cfmi->ccm_sent = now;
-        return compose_ccm(cfmi);
-    }
+/* Should be run periodically to check if the CFM module has a CCM message it
+ * wishes to send. */
+bool
+cfm_should_send_ccm(struct cfm *cfm)
+{
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
-    return NULL;
+    return time_msec() >= cfmi->ccm_sent + cfmi->ccm_interval_ms;
+}
+
+/* Composes a CCM message into 'ccm'.  Messages generated with this function
+ * should be sent whenever cfm_should_send_ccm() indicates. */
+void
+cfm_compose_ccm(struct cfm *cfm, struct ccm *ccm)
+{
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
+
+    cfmi->ccm_sent = time_msec();
+
+    ccm->mdlevel_version = 0;
+    ccm->opcode = CCM_OPCODE;
+    ccm->tlv_offset = 70;
+    ccm->seq = htonl(++cfmi->seq);
+    ccm->mpid = htons(cfmi->cfm.mpid);
+    ccm->flags = cfmi->ccm_interval;
+    memcpy(ccm->maid, cfmi->cfm.maid, sizeof ccm->maid);
 }
 
 void

@@ -4585,18 +4585,12 @@ iface_update_cfm(struct iface *iface)
     struct cfm cfm;
     uint16_t *remote_mps;
     struct ovsrec_monitor *mon;
-    uint8_t ea[ETH_ADDR_LEN], maid[CCM_MAID_LEN];
+    uint8_t maid[CCM_MAID_LEN];
 
     mon = iface->cfg->monitor;
 
     if (!mon) {
         ofproto_iface_clear_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
-        return;
-    }
-
-    if (netdev_get_etheraddr(iface->netdev, ea)) {
-        VLOG_WARN("interface %s: Failed to get ethernet address. "
-                  "Skipping Monitor.", iface->name);
         return;
     }
 
@@ -4608,7 +4602,6 @@ iface_update_cfm(struct iface *iface)
     cfm.mpid     = mon->mpid;
     cfm.interval = mon->interval ? *mon->interval : 1000;
 
-    memcpy(cfm.eth_src, ea, sizeof cfm.eth_src);
     memcpy(cfm.maid, maid, sizeof cfm.maid);
 
     remote_mps = xzalloc(mon->n_remote_mps * sizeof *remote_mps);

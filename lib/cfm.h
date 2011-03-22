@@ -36,7 +36,6 @@ struct cfm {
     uint16_t mpid;              /* The MPID of this CFM. */
     uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
     int interval;               /* The requested transmission interval. */
-    uint8_t eth_src[ETH_ADDR_LEN];
 
     /* Statistics. */
     struct hmap remote_mps;     /* Expected remote MPs. */
@@ -68,7 +67,11 @@ struct cfm *cfm_create(void);
 
 void cfm_destroy(struct cfm *);
 
-struct ofpbuf *cfm_run(struct cfm *);
+void cfm_run(struct cfm *);
+
+bool cfm_should_send_ccm(struct cfm *);
+
+void cfm_compose_ccm(struct cfm *, struct ccm *);
 
 void cfm_wait(struct cfm *);
 
