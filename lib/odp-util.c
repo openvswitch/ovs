@@ -256,7 +256,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     switch (nl_attr_type(a)) {
     case ODP_KEY_ATTR_TUN_ID:
-        ds_put_format(ds, "tun_id(%#"PRIx64")", nl_attr_get_be64(a));
+        ds_put_format(ds, "tun_id(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
 
     case ODP_KEY_ATTR_IN_PORT:
