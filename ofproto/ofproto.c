@@ -5262,7 +5262,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
                          uint16_t *nf_output_iface, void *ofproto_)
 {
     struct ofproto *ofproto = ofproto_;
-    int out_port;
+    struct mac_entry *dst_mac;
 
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
@@ -5270,31 +5270,37 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
     }
 
     /* Learn source MAC (but don't try to learn from revalidation). */
-    if (packet != NULL) {
-        tag_type rev_tag = mac_learning_learn(ofproto->ml, flow->dl_src,
-                                              0, flow->in_port,
-                                              GRAT_ARP_LOCK_NONE);
-        if (rev_tag) {
+    if (packet != NULL
+        && mac_learning_may_learn(ofproto->ml, flow->dl_src, 0)) {
+        struct mac_entry *src_mac;
+
+        src_mac = mac_learning_insert(ofproto->ml, flow->dl_src, 0);
+        if (mac_entry_is_new(src_mac) || src_mac->port != flow->in_port) {
             /* The log messages here could actually be useful in debugging,
              * so keep the rate limit relatively high. */
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
             VLOG_DBG_RL(&rl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
                         ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
-            ofproto_revalidate(ofproto, rev_tag);
+
+            ofproto_revalidate(ofproto,
+                               mac_learning_changed(ofproto->ml, src_mac));
+            src_mac->port = flow->in_port;
         }
     }
 
     /* Determine output port. */
-    out_port = mac_learning_lookup_tag(ofproto->ml, flow->dl_dst, 0, tags,
-                                       NULL);
-    if (out_port < 0) {
+    dst_mac = mac_learning_lookup(ofproto->ml, flow->dl_dst, 0, tags);
+    if (!dst_mac) {
         flood_packets(ofproto, flow->in_port, OFPPC_NO_FLOOD,
                       nf_output_iface, odp_actions);
-    } else if (out_port != flow->in_port) {
-        nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, out_port);
-        *nf_output_iface = out_port;
     } else {
-        /* Drop. */
+        int out_port = dst_mac->port;
+        if (out_port != flow->in_port) {
+            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, out_port);
+            *nf_output_iface = out_port;
+        } else {
+            /* Drop. */
+        }
     }
 
     return true;

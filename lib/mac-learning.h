@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "list.h"
 #include "packets.h"
 #include "tag.h"
+#include "timeval.h"
 
 #define MAC_HASH_BITS 10
 #define MAC_HASH_MASK (MAC_HASH_SIZE - 1)
@@ -34,12 +35,6 @@
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
  * relearning based on a reflection from a bond slave. */
 #define MAC_GRAT_ARP_LOCK_TIME 5
-
-enum grat_arp_lock_type {
-    GRAT_ARP_LOCK_NONE,
-    GRAT_ARP_LOCK_SET,
-    GRAT_ARP_LOCK_CHECK
-};
 
 /* A MAC learning table entry. */
 struct mac_entry {
@@ -55,6 +50,27 @@ struct mac_entry {
 
 int mac_entry_age(const struct mac_entry *);
 
+/* Returns true if mac_learning_insert() just created 'mac' and the caller has
+ * not yet properly initialized it. */
+static inline bool mac_entry_is_new(const struct mac_entry *mac)
+{
+    return !mac->tag;
+}
+
+/* Sets a gratuitous ARP lock on 'mac' that will expire in
+ * MAC_GRAT_ARP_LOCK_TIME seconds. */
+static inline void mac_entry_set_grat_arp_lock(struct mac_entry *mac)
+{
+    mac->grat_arp_lock = time_now() + MAC_GRAT_ARP_LOCK_TIME;
+}
+
+/* Returns true if a gratuitous ARP lock is in effect on 'mac', false if none
+ * has ever been asserted or if it has expired. */
+static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
+{
+    return time_now() >= mac->grat_arp_lock;
+}
+
 /* MAC learning table. */
 struct mac_learning {
     struct list free;           /* Not-in-use entries. */
@@ -66,23 +82,32 @@ struct mac_learning {
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
 };
 
+/* Basics. */
 struct mac_learning *mac_learning_create(void);
 void mac_learning_destroy(struct mac_learning *);
-bool mac_learning_set_flood_vlans(struct mac_learning *,
-                                  unsigned long *bitmap);
-tag_type mac_learning_learn(struct mac_learning *,
-                            const uint8_t src[ETH_ADDR_LEN], uint16_t vlan,
-                            uint16_t src_port, enum grat_arp_lock_type
-                            lock_type);
-int mac_learning_lookup(const struct mac_learning *,
-                        const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan,
-                        bool *is_grat_arp_locked);
-int mac_learning_lookup_tag(const struct mac_learning *,
-                            const uint8_t dst[ETH_ADDR_LEN],
-                            uint16_t vlan, tag_type *tag,
-                            bool *is_grat_arp_locked);
-void mac_learning_flush(struct mac_learning *);
+
 void mac_learning_run(struct mac_learning *, struct tag_set *);
 void mac_learning_wait(struct mac_learning *);
+
+/* Configuration. */
+bool mac_learning_set_flood_vlans(struct mac_learning *,
+                                  unsigned long *bitmap);
+
+/* Learning. */
+bool mac_learning_may_learn(const struct mac_learning *,
+                            const uint8_t src_mac[ETH_ADDR_LEN],
+                            uint16_t vlan);
+struct mac_entry *mac_learning_insert(struct mac_learning *,
+                                      const uint8_t src[ETH_ADDR_LEN],
+                                      uint16_t vlan);
+tag_type mac_learning_changed(struct mac_learning *, struct mac_entry *);
+
+/* Lookup. */
+struct mac_entry *mac_learning_lookup(const struct mac_learning *,
+                                      const uint8_t dst[ETH_ADDR_LEN],
+                                      uint16_t vlan, tag_type *);
+
+/* Flushing. */
+void mac_learning_flush(struct mac_learning *);
 
 #endif /* mac-learning.h */

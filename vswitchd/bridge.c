@@ -2770,27 +2770,34 @@ static void
 update_learning_table(struct bridge *br, const struct flow *flow, int vlan,
                       struct port *in_port)
 {
-    enum grat_arp_lock_type lock_type;
-    tag_type rev_tag;
+    struct mac_entry *mac;
 
-    /* We don't want to learn from gratuitous ARP packets that are reflected
-     * back over bond slaves so we lock the learning table. */
-    lock_type = !is_gratuitous_arp(flow) ? GRAT_ARP_LOCK_NONE :
-                    (in_port->n_ifaces == 1) ? GRAT_ARP_LOCK_SET :
-                                               GRAT_ARP_LOCK_CHECK;
+    if (!mac_learning_may_learn(br->ml, flow->dl_src, vlan)) {
+        return;
+    }
 
-    rev_tag = mac_learning_learn(br->ml, flow->dl_src, vlan, in_port->port_idx,
-                                 lock_type);
-    if (rev_tag) {
+    mac = mac_learning_insert(br->ml, flow->dl_src, vlan);
+    if (is_gratuitous_arp(flow)) {
+        /* We don't want to learn from gratuitous ARP packets that are
+         * reflected back over bond slaves so we lock the learning table. */
+        if (in_port->n_ifaces == 1) {
+            mac_entry_set_grat_arp_lock(mac);
+        } else if (mac_entry_is_grat_arp_locked(mac)) {
+            return;
+        }
+    }
+
+    if (mac_entry_is_new(mac) || mac->port != in_port->port_idx) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
-                                                                300);
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
         VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
                     "on port %s in VLAN %d",
                     br->name, ETH_ADDR_ARGS(flow->dl_src),
                     in_port->name, vlan);
-        ofproto_revalidate(br->ofproto, rev_tag);
+
+        mac->port = in_port->port_idx;
+        ofproto_revalidate(br->ofproto, mac_learning_changed(br->ml, mac));
     }
 }
 
@@ -2877,8 +2884,7 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
     /* Packets received on non-LACP bonds need special attention to avoid
      * duplicates. */
     if (in_port->n_ifaces > 1 && !lacp_negotiated(in_port->lacp)) {
-        int src_idx;
-        bool is_grat_arp_locked;
+        struct mac_entry *mac;
 
         if (eth_addr_is_multicast(flow->dl_dst)) {
             *tags |= port_get_active_iface_tag(in_port);
@@ -2895,10 +2901,9 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
          * to the exception is if we locked the learning table to avoid
          * reflections on bond slaves.  If this is the case, just drop the
          * packet now. */
-        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan,
-                                      &is_grat_arp_locked);
-        if (src_idx != -1 && src_idx != in_port->port_idx &&
-            (!is_gratuitous_arp(flow) || is_grat_arp_locked)) {
+        mac = mac_learning_lookup(br->ml, flow->dl_src, vlan, NULL);
+        if (mac && mac->port != in_port->port_idx &&
+            (!is_gratuitous_arp(flow) || mac_entry_is_grat_arp_locked(mac))) {
                 return false;
         }
     }
@@ -2916,8 +2921,8 @@ process_flow(struct bridge *br, const struct flow *flow,
 {
     struct port *in_port;
     struct port *out_port;
+    struct mac_entry *mac;
     int vlan;
-    int out_port_idx;
 
     /* Check whether we should drop packets in this flow. */
     if (!is_admissible(br, flow, packet != NULL, tags, &vlan, &in_port)) {
@@ -2931,10 +2936,9 @@ process_flow(struct bridge *br, const struct flow *flow,
     }
 
     /* Determine output port. */
-    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan, tags,
-                                           NULL);
-    if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
-        out_port = br->ports[out_port_idx];
+    mac = mac_learning_lookup(br->ml, flow->dl_dst, vlan, tags);
+    if (mac && mac->port >= 0 && mac->port < br->n_ports) {
+        out_port = br->ports[mac->port];
     } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
         /* If we are revalidating but don't have a learning entry then
          * eject the flow.  Installing a flow that floods packets opens
