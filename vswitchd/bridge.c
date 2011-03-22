@@ -4541,6 +4541,7 @@ port_destroy(struct port *port)
         netdev_monitor_destroy(port->monitor);
         free(port->ifaces);
         bitmap_free(port->trunks);
+        free(port->bond_hash);
         free(port->name);
         free(port);
         bridge_flush(br);
