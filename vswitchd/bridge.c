@@ -2921,7 +2921,7 @@ process_flow(struct bridge *br, const struct flow *flow,
     /* Determine output port. */
     mac = mac_learning_lookup(br->ml, flow->dl_dst, vlan, tags);
     if (mac) {
-        mac = mac->port.p;
+        out_port = mac->port.p;
     } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
         /* If we are revalidating but don't have a learning entry then
          * eject the flow.  Installing a flow that floods packets opens
