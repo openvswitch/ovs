@@ -53,6 +53,7 @@ License:
   GNU Lesser General Public Licence version 2.1.
 
 	debian/ovs-bugtool
+	xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml [*]
 	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml [*]
 	xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show [*]
 

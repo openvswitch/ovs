@@ -40,6 +40,11 @@ files are:
         Open vSwitch. Runs
         usr_share_openvswitch_scripts_xen-bugtool-tc-class-show.
 
+    etc_xensource_bugtool_kernel-info_openvswitch.xml
+
+        xen-bugtool extension to collect kernel information relevant to
+        Open vSwitch.
+
     etc_xensource_scripts_vif
 
         Open vSwitch-aware replacement for Citrix script of the same name.

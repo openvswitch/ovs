@@ -16,6 +16,7 @@ EXTRA_DIST += \
 	xenserver/etc_profile.d_openvswitch.sh \
 	xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
 	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
+	xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml \
 	xenserver/etc_xensource_scripts_vif \
 	xenserver/openvswitch-xen.spec \
 	xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
