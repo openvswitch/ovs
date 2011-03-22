@@ -33,7 +33,6 @@
 VLOG_DEFINE_THIS_MODULE(cfm);
 
 #define CCM_OPCODE 1              /* CFM message opcode meaning CCM. */
-#define DEST_ADDR  UINT64_C(0x0180C2000030) /* MD level 0 CCM destination. */
 
 struct cfm_internal {
     struct cfm cfm;
@@ -125,7 +124,7 @@ compose_ccm(struct cfm_internal *cfmi)
     eth = ofpbuf_put_zeros(packet, ETH_HEADER_LEN);
     ccm = ofpbuf_put_zeros(packet, CCM_LEN);
 
-    eth_addr_from_uint64(DEST_ADDR, eth->eth_dst);
+    memcpy(eth->eth_dst, eth_addr_ccm, ETH_ADDR_LEN);
     memcpy(eth->eth_src, cfmi->cfm.eth_src, sizeof eth->eth_src);
     eth->eth_type = htons(ETH_TYPE_CFM);
 
@@ -370,7 +369,7 @@ bool
 cfm_should_process_flow(const struct flow *flow)
 {
     return (ntohs(flow->dl_type) == ETH_TYPE_CFM
-            && eth_addr_to_uint64(flow->dl_dst) == DEST_ADDR);
+            && eth_addr_equals(flow->dl_dst, eth_addr_ccm));
 }
 
 /* Updates internal statistics relevant to packet 'p'.  Should be called on

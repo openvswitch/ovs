@@ -24,6 +24,10 @@
 
 struct flow;
 
+/* Ethernet destination address of CCM packets. */
+static const uint8_t eth_addr_ccm[ETH_ADDR_LEN] OVS_UNUSED
+    = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
+
 /* A 'cfm' represent a local Maintenance Point (MP) and its Connectivity Fault
  * Management (CFM) state machine.  Its configuration variables should be set
  * by clients of the CFM library. */
