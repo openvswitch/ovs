@@ -204,24 +204,29 @@ ipv6_is_cidr(const struct in6_addr *netmask)
     return true;
 }
 
-/* Populates 'b' with a LACP packet containing 'pdu' with source address
- * 'eth_src'. */
-void
-compose_lacp_packet(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN],
-                    const struct lacp_pdu *pdu)
+/* Populates 'b' with an L2 packet headed with the given 'eth_dst', 'eth_src'
+ * and 'eth_type' paramaters.  A payload of 'size' bytes is allocated in 'b'
+ * and returned.  This payload may be populated with appropriate information by
+ * the caller. */
+void *
+compose_packet(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
+               const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+               size_t size)
 {
+    void *data;
     struct eth_header *eth;
-    struct lacp_pdu *eth_pdu;
 
     ofpbuf_clear(b);
 
-    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + LACP_PDU_LEN);
-    eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
-    eth_pdu = ofpbuf_put(b, pdu, LACP_PDU_LEN);
+    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + size);
+    eth = ofpbuf_put_uninit(b, ETH_HEADER_LEN);
+    data = ofpbuf_put_uninit(b, size);
 
-    memcpy(eth->eth_dst, eth_addr_lacp, ETH_ADDR_LEN);
+    memcpy(eth->eth_dst, eth_dst, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
-    eth->eth_type = htons(ETH_TYPE_LACP);
+    eth->eth_type = htons(eth_type);
+
+    return data;
 }
 
 /* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */

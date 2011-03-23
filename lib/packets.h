@@ -412,6 +412,11 @@ struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
 
+void *
+compose_packet(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
+               const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+               size_t size);
+
 /* Masks for lacp_info state member. */
 #define LACP_STATE_ACT  0x01 /* Activity. Active or passive? */
 #define LACP_STATE_TIME 0x02 /* Timeout. Short or long timeout? */
@@ -459,9 +464,6 @@ struct lacp_pdu {
     uint8_t z3[64];           /* Combination of several fields.  Always 0. */
 } __attribute__((packed));
 BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
-
-void compose_lacp_packet(struct ofpbuf *, const uint8_t eth_src[ETH_ADDR_LEN],
-                         const struct lacp_pdu *);
 
 void compose_lacp_pdu(const struct lacp_info *actor,
                       const struct lacp_info *partner, struct lacp_pdu *);
