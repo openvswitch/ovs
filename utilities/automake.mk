@@ -51,6 +51,7 @@ DISTCLEANFILES += \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-vlan-test \
 	utilities/ovs-vlan-test.8 \
+	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-vsctl.8
 
 man_MANS += \
