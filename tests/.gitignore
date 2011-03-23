@@ -1,3 +1,4 @@
+*.pem
 /Makefile
 /Makefile.in
 /atconfig
@@ -5,6 +6,8 @@
 /idltest.c
 /idltest.h
 /idltest.ovsidl
+/ovs-pki.log
+/pki/
 /test-aes128
 /test-byte-order
 /test-classifier
@@ -30,3 +33,5 @@
 /test-uuid
 /test-vconn
 /testsuite
+/testsuite.dir/
+/testsuite.log
