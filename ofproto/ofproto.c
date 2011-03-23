@@ -5191,7 +5191,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         goto exit;
     }
 
-    tun_id = htonll(strtoull(tun_id_s, NULL, 10));
+    tun_id = htonll(strtoull(tun_id_s, NULL, 0));
     in_port = ofp_port_to_odp_port(atoi(in_port_s));
 
     packet_s = ofpbuf_put_hex(&packet, packet_s, NULL);
