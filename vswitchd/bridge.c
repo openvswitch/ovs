@@ -2721,7 +2721,6 @@ static int flow_get_vlan(struct bridge *br, const struct flow *flow,
     int vlan = vlan_tci_to_vid(flow->vlan_tci);
     if (in_port->vlan >= 0) {
         if (vlan) {
-            /* XXX support double tagging? */
             if (have_packet) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
