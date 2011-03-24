@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,6 +107,7 @@ struct tag_set {
 
 void tag_set_init(struct tag_set *);
 void tag_set_add(struct tag_set *, tag_type);
+void tag_set_union(struct tag_set *, const struct tag_set *);
 static inline bool tag_set_is_empty(const struct tag_set *);
 static inline bool tag_set_intersects(const struct tag_set *, tag_type);
 

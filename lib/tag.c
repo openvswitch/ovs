@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,3 +105,13 @@ tag_set_add(struct tag_set *set, tag_type tag)
     }
 }
 
+/* Adds all the tags in 'other' to 'set'. */
+void
+tag_set_union(struct tag_set *set, const struct tag_set *other)
+{
+    size_t i;
+
+    for (i = 0; i < TAG_SET_SIZE; i++) {
+        tag_set_add(set, other->tags[i]);
+    }
+}
