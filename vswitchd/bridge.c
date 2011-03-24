@@ -2237,14 +2237,7 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
              const struct port *in_port, const struct port *out_port,
              struct dst_set *set, tag_type *tags, uint16_t *nf_output_iface)
 {
-    mirror_mask_t mirrors = in_port->src_mirrors;
     struct dst dst;
-    int flow_vlan;
-
-    flow_vlan = vlan_tci_to_vid(flow->vlan_tci);
-    if (flow_vlan == 0) {
-        flow_vlan = OFP_VLAN_NONE;
-    }
 
     if (out_port == FLOOD_PORT) {
         struct port *port;
@@ -2255,7 +2248,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
                 && port_includes_vlan(port, vlan)
                 && !port->is_mirror_output_port
                 && set_dst(&dst, flow, in_port, port, tags)) {
-                mirrors |= port->dst_mirrors;
                 dst_set_add(set, &dst);
             }
         }
@@ -2263,12 +2255,37 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
     } else if (out_port && set_dst(&dst, flow, in_port, out_port, tags)) {
         dst_set_add(set, &dst);
         *nf_output_iface = dst.iface->dp_ifidx;
-        mirrors |= out_port->dst_mirrors;
+    }
+}
+
+static void
+compose_mirror_dsts(const struct bridge *br, const struct flow *flow,
+                    uint16_t vlan, const struct port *in_port,
+                    struct dst_set *set, tag_type *tags)
+{
+    mirror_mask_t mirrors;
+    int flow_vlan;
+    size_t i;
+
+    mirrors = in_port->src_mirrors;
+    for (i = 0; i < set->n; i++) {
+        mirrors |= set->dsts[i].iface->port->dst_mirrors;
+    }
+
+    if (!mirrors) {
+        return;
+    }
+
+    flow_vlan = vlan_tci_to_vid(flow->vlan_tci);
+    if (flow_vlan == 0) {
+        flow_vlan = OFP_VLAN_NONE;
     }
 
     while (mirrors) {
         struct mirror *m = br->mirrors[mirror_mask_ffs(mirrors) - 1];
         if (!m->n_vlans || vlan_is_mirrored(m, vlan)) {
+            struct dst dst;
+
             if (m->out_port) {
                 if (set_dst(&dst, flow, in_port, m->out_port, tags)
                     && !dst_is_duplicate(set, &dst)) {
@@ -2305,8 +2322,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
         }
         mirrors &= mirrors - 1;
     }
-
-    partition_dsts(set, flow_vlan);
 }
 
 static void
@@ -2322,11 +2337,15 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
     dst_set_init(&set);
     compose_dsts(br, flow, vlan, in_port, out_port, &set, tags,
                  nf_output_iface);
+    compose_mirror_dsts(br, flow, vlan, in_port, &set, tags);
 
     cur_vlan = vlan_tci_to_vid(flow->vlan_tci);
     if (cur_vlan == 0) {
         cur_vlan = OFP_VLAN_NONE;
     }
+
+    partition_dsts(&set, cur_vlan);
+
     for (i = 0; i < set.n; i++) {
         const struct dst *dst = &set.dsts[i];
         if (dst->vlan != cur_vlan) {
