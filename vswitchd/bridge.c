@@ -146,7 +146,6 @@ struct port {
     /* An ordinary bridge port has 1 interface.
      * A bridge port for bonding has at least 2 interfaces. */
     struct list ifaces;         /* List of "struct iface"s. */
-    size_t n_ifaces;            /* list_size(ifaces). */
 
     /* Bonding info. */
     struct bond *bond;
@@ -430,7 +429,7 @@ iterate_and_prune_ifaces(struct bridge *br,
             }
         }
 
-        if (!port->n_ifaces) {
+        if (list_is_empty(&port->ifaces)) {
             VLOG_WARN("%s port has no interfaces, dropping", port->name);
             port_destroy(port);
         }
@@ -1810,7 +1809,7 @@ bridge_reconfigure_one(struct bridge *br)
         }
 
         port_reconfigure(port, node->data);
-        if (!port->n_ifaces) {
+        if (list_is_empty(&port->ifaces)) {
             VLOG_WARN("bridge %s: port %s has no interfaces, dropping",
                       br->name, port->name);
             port_destroy(port);
@@ -2025,7 +2024,7 @@ bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             shash_add_once(ifaces, iface->name, iface);
         }
-        if (port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
+        if (!list_is_short(&port->ifaces) && port->cfg->bond_fake_iface) {
             shash_add_once(ifaces, port->name, NULL);
         }
     }
@@ -2431,7 +2430,7 @@ update_learning_table(struct bridge *br, const struct flow *flow, int vlan,
     if (is_gratuitous_arp(flow)) {
         /* We don't want to learn from gratuitous ARP packets that are
          * reflected back over bond slaves so we lock the learning table. */
-        if (in_port->n_ifaces == 1) {
+        if (!in_port->bond) {
             mac_entry_set_grat_arp_lock(mac);
         } else if (mac_entry_is_grat_arp_locked(mac)) {
             return;
@@ -2852,7 +2851,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     /* Get VLAN tag. */
     vlan = -1;
     if (cfg->tag) {
-        if (port->n_ifaces < 2) {
+        if (list_is_short(&port->ifaces)) {
             vlan = *cfg->tag;
             if (vlan >= 0 && vlan <= 4095) {
                 VLOG_DBG("port %s: assigning VLAN tag %d", port->name, vlan);
@@ -3003,7 +3002,7 @@ port_reconfigure_bond_lacp(struct port *port, struct lacp_settings *s)
 
     if (s->priority <= 0 || s->priority > UINT16_MAX) {
         /* Prefer bondable links if unspecified. */
-        s->priority = UINT16_MAX - (port->n_ifaces > 1);
+        s->priority = UINT16_MAX - !list_is_short(&port->ifaces);
     }
     return s;
 }
@@ -3031,7 +3030,7 @@ port_reconfigure_bond(struct port *port)
     const char *detect_s;
     struct iface *iface;
 
-    if (port->n_ifaces < 2) {
+    if (list_is_short(&port->ifaces)) {
         /* Not a bonded port. */
         bond_destroy(port->bond);
         port->bond = NULL;
@@ -3135,7 +3134,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     shash_add_assert(&br->iface_by_name, iface->name, iface);
 
     list_push_back(&port->ifaces, &iface->port_elem);
-    port->n_ifaces++;
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
@@ -3162,7 +3160,6 @@ iface_destroy(struct iface *iface)
         }
 
         list_remove(&iface->port_elem);
-        port->n_ifaces--;
 
         netdev_close(iface->netdev);
 
