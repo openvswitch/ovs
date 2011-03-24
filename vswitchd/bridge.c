@@ -3833,8 +3833,8 @@ lacp_send_pdu_cb(void *aux, const struct lacp_pdu *pdu)
         struct lacp_pdu *packet_pdu;
 
         ofpbuf_init(&packet, 0);
-        packet_pdu = compose_packet(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
-                                    sizeof *packet_pdu);
+        packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
+                                 sizeof *packet_pdu);
         memcpy(packet_pdu, pdu, sizeof *packet_pdu);
         ofproto_send_packet(iface->port->bridge->ofproto,
                             iface->dp_ifidx, 0, &packet);

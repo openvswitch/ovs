@@ -204,14 +204,14 @@ ipv6_is_cidr(const struct in6_addr *netmask)
     return true;
 }
 
-/* Populates 'b' with an L2 packet headed with the given 'eth_dst', 'eth_src'
- * and 'eth_type' paramaters.  A payload of 'size' bytes is allocated in 'b'
- * and returned.  This payload may be populated with appropriate information by
- * the caller. */
+/* Populates 'b' with an Ethernet II packet headed with the given 'eth_dst',
+ * 'eth_src' and 'eth_type' parameters.  A payload of 'size' bytes is allocated
+ * in 'b' and returned.  This payload may be populated with appropriate
+ * information by the caller. */
 void *
-compose_packet(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
-               const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
-               size_t size)
+eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
+            const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+            size_t size)
 {
     void *data;
     struct eth_header *eth;
@@ -227,6 +227,44 @@ compose_packet(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     eth->eth_type = htons(eth_type);
 
     return data;
+}
+
+/* Populates 'b' with an Ethernet LLC+SNAP packet headed with the given
+ * 'eth_dst', 'eth_src', 'snap_org', and 'snap_type'.  A payload of 'size'
+ * bytes is allocated in 'b' and returned.  This payload may be populated with
+ * appropriate information by the caller. */
+void *
+snap_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
+             const uint8_t eth_src[ETH_ADDR_LEN],
+             unsigned int oui, uint16_t snap_type, size_t size)
+{
+    struct eth_header *eth;
+    struct llc_snap_header *llc_snap;
+    void *payload;
+
+    /* Compose basic packet structure.  (We need the payload size to stick into
+     * the 802.2 header.) */
+    ofpbuf_clear(b);
+    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + LLC_SNAP_HEADER_LEN + size);
+    eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
+    llc_snap = ofpbuf_put_zeros(b, LLC_SNAP_HEADER_LEN);
+    payload = ofpbuf_put_uninit(b, size);
+
+    /* Compose 802.2 header. */
+    memcpy(eth->eth_dst, eth_dst, ETH_ADDR_LEN);
+    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    eth->eth_type = htons(b->size - ETH_HEADER_LEN);
+
+    /* Compose LLC, SNAP headers. */
+    llc_snap->llc.llc_dsap = LLC_DSAP_SNAP;
+    llc_snap->llc.llc_ssap = LLC_SSAP_SNAP;
+    llc_snap->llc.llc_cntl = LLC_CNTL_SNAP;
+    llc_snap->snap.snap_org[0] = oui >> 16;
+    llc_snap->snap.snap_org[1] = oui >> 8;
+    llc_snap->snap.snap_org[2] = oui;
+    llc_snap->snap.snap_type = htons(snap_type);
+
+    return payload;
 }
 
 /* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */

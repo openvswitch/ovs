@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -394,10 +394,12 @@ struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
 
-void *
-compose_packet(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
-               const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
-               size_t size);
+void *eth_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
+                  const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+                  size_t size);
+void *snap_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
+                   const uint8_t eth_src[ETH_ADDR_LEN],
+                   unsigned int oui, uint16_t snap_type, size_t size);
 
 /* Masks for lacp_info state member. */
 #define LACP_STATE_ACT  0x01 /* Activity. Active or passive? */

@@ -1164,8 +1164,8 @@ ofport_run(struct ofproto *ofproto, struct ofport *ofport)
             struct ccm *ccm;
 
             ofpbuf_init(&packet, 0);
-            ccm = compose_packet(&packet, eth_addr_ccm, ofport->opp.hw_addr,
-                                 ETH_TYPE_CFM,  sizeof *ccm);
+            ccm = eth_compose(&packet, eth_addr_ccm, ofport->opp.hw_addr,
+                              ETH_TYPE_CFM,  sizeof *ccm);
             cfm_compose_ccm(ofport->cfm, ccm);
             ofproto_send_packet(ofproto, ofport->odp_port, 0, &packet);
             ofpbuf_uninit(&packet);
