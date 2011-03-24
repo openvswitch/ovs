@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,8 @@ check_list(struct list *list, const int values[], size_t n)
     assert(i == n);
 
     assert(list_is_empty(list) == !n);
+    assert(list_is_singleton(list) == (n == 1));
+    assert(list_is_short(list) == (n < 2));
     assert(list_size(list) == n);
 }
 

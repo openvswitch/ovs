@@ -53,6 +53,8 @@ struct list *list_back(const struct list *);
 /* List properties. */
 size_t list_size(const struct list *);
 bool list_is_empty(const struct list *);
+bool list_is_singleton(const struct list *);
+bool list_is_short(const struct list *);
 
 #define LIST_FOR_EACH(ITER, MEMBER, LIST)                               \
     for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);                  \

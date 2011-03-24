@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,4 +167,18 @@ bool
 list_is_empty(const struct list *list)
 {
     return list->next == list;
+}
+
+/* Returns true if 'list' has exactly 1 element, false otherwise. */
+bool
+list_is_singleton(const struct list *list)
+{
+    return list_is_short(list) && !list_is_empty(list);
+}
+
+/* Returns true if 'list' has 0 or 1 elements, false otherwise. */
+bool
+list_is_short(const struct list *list)
+{
+    return list->next == list->prev;
 }
