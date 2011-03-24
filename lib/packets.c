@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,28 +66,13 @@ void
 compose_benign_packet(struct ofpbuf *b, const char *tag, uint16_t snap_type,
                       const uint8_t eth_src[ETH_ADDR_LEN])
 {
-    struct eth_header *eth;
-    struct llc_snap_header *llc_snap;
+    size_t tag_size = strlen(tag) + 1;
+    char *payload;
 
-    /* Compose basic packet structure.  (We need the payload size to stick into
-     * the 802.2 header.) */
-    ofpbuf_clear(b);
-    eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
-    llc_snap = ofpbuf_put_zeros(b, LLC_SNAP_HEADER_LEN);
-    ofpbuf_put(b, tag, strlen(tag) + 1); /* Includes null byte. */
-    ofpbuf_put(b, eth_src, ETH_ADDR_LEN);
-
-    /* Compose 802.2 header. */
-    memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
-    eth->eth_type = htons(b->size - ETH_HEADER_LEN);
-
-    /* Compose LLC, SNAP headers. */
-    llc_snap->llc.llc_dsap = LLC_DSAP_SNAP;
-    llc_snap->llc.llc_ssap = LLC_SSAP_SNAP;
-    llc_snap->llc.llc_cntl = LLC_CNTL_SNAP;
-    memcpy(llc_snap->snap.snap_org, "\x00\x23\x20", 3);
-    llc_snap->snap.snap_type = htons(snap_type);
+    payload = snap_compose(b, eth_addr_broadcast, eth_src, 0x002320, snap_type,
+                           tag_size + ETH_ADDR_LEN);
+    memcpy(payload, tag, tag_size);
+    memcpy(payload + tag_size, eth_src, ETH_ADDR_LEN);
 }
 
 /* Stores the string representation of the IPv6 address 'addr' into the
