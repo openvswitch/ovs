@@ -206,7 +206,7 @@ struct bridge {
 
     /* Kernel datapath information. */
     struct dpif *dpif;          /* Datapath. */
-    struct hmap ifaces;         /* Contains "struct iface"s. */
+    struct hmap ifaces;         /* "struct iface"s indexed by dp_ifidx. */
 
     /* Bridge ports. */
     struct hmap ports;          /* "struct port"s indexed by name. */
