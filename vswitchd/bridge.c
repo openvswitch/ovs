@@ -81,8 +81,8 @@ COVERAGE_DEFINE(bridge_process_flow);
 COVERAGE_DEFINE(bridge_reconfigure);
 
 struct dst {
+    struct iface *iface;
     uint16_t vlan;
-    uint16_t dp_ifidx;
 };
 
 struct dst_set {
@@ -2085,24 +2085,17 @@ set_dst(struct dst *dst, const struct flow *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
-    struct iface *iface;
-    uint16_t vlan;
+    dst->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
+                 : in_port->vlan >= 0 ? in_port->vlan
+                 : flow->vlan_tci == 0 ? OFP_VLAN_NONE
+                 : vlan_tci_to_vid(flow->vlan_tci));
 
-    vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
-            : in_port->vlan >= 0 ? in_port->vlan
-            : flow->vlan_tci == 0 ? OFP_VLAN_NONE
-            : vlan_tci_to_vid(flow->vlan_tci));
+    dst->iface = (!out_port->bond
+                  ? port_get_an_iface(out_port)
+                  : bond_choose_output_slave(out_port->bond, flow,
+                                             dst->vlan, tags));
 
-    iface = (!out_port->bond
-             ? port_get_an_iface(out_port)
-             : bond_choose_output_slave(out_port->bond, flow, vlan, tags));
-    if (iface) {
-        dst->vlan = vlan;
-        dst->dp_ifidx = iface->dp_ifidx;
-        return true;
-    } else {
-        return false;
-    }
+    return dst->iface != NULL;
 }
 
 static void
@@ -2198,7 +2191,7 @@ dst_is_duplicate(const struct dst_set *set, const struct dst *test)
     size_t i;
     for (i = 0; i < set->n; i++) {
         if (set->dsts[i].vlan == test->vlan
-            && set->dsts[i].dp_ifidx == test->dp_ifidx) {
+            && set->dsts[i].iface == test->iface) {
             return true;
         }
     }
@@ -2269,7 +2262,7 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
         *nf_output_iface = NF_OUT_FLOOD;
     } else if (out_port && set_dst(&dst, flow, in_port, out_port, tags)) {
         dst_set_add(set, &dst);
-        *nf_output_iface = dst.dp_ifidx;
+        *nf_output_iface = dst.iface->dp_ifidx;
         mirrors |= out_port->dst_mirrors;
     }
 
@@ -2316,21 +2309,6 @@ compose_dsts(const struct bridge *br, const struct flow *flow, uint16_t vlan,
     partition_dsts(set, flow_vlan);
 }
 
-static void OVS_UNUSED
-print_dsts(const struct dst_set *set)
-{
-    size_t i;
-
-    for (i = 0; i < set->n; i++) {
-        const struct dst *dst = &set->dsts[i];
-
-        printf(">p%"PRIu16, dst->dp_ifidx);
-        if (dst->vlan != OFP_VLAN_NONE) {
-            printf("v%"PRIu16, dst->vlan);
-        }
-    }
-}
-
 static void
 compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
                 const struct port *in_port, const struct port *out_port,
@@ -2362,7 +2340,7 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
             }
             cur_vlan = dst->vlan;
         }
-        nl_msg_put_u32(actions, ODP_ACTION_ATTR_OUTPUT, dst->dp_ifidx);
+        nl_msg_put_u32(actions, ODP_ACTION_ATTR_OUTPUT, dst->iface->dp_ifidx);
     }
     dst_set_free(&set);
 }
