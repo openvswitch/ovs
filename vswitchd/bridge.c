@@ -2098,51 +2098,6 @@ set_dst(struct dst *dst, const struct flow *flow,
     return dst->iface != NULL;
 }
 
-static void
-swap_dst(struct dst *p, struct dst *q)
-{
-    struct dst tmp = *p;
-    *p = *q;
-    *q = tmp;
-}
-
-/* Moves all the dsts with vlan == 'vlan' to the front of the 'n_dsts' in
- * 'dsts'.  (This may help performance by reducing the number of VLAN changes
- * that we push to the datapath.  We could in fact fully sort the array by
- * vlan, but in most cases there are at most two different vlan tags so that's
- * possibly overkill.) */
-static void
-partition_dsts(struct dst_set *set, int vlan)
-{
-    struct dst *first = set->dsts;
-    struct dst *last = set->dsts + set->n;
-
-    while (first != last) {
-        /* Invariants:
-         *      - All dsts < first have vlan == 'vlan'.
-         *      - All dsts >= last have vlan != 'vlan'.
-         *      - first < last. */
-        while (first->vlan == vlan) {
-            if (++first == last) {
-                return;
-            }
-        }
-
-        /* Same invariants, plus one additional:
-         *      - first->vlan != vlan.
-         */
-        while (last[-1].vlan != vlan) {
-            if (--last == first) {
-                return;
-            }
-        }
-
-        /* Same invariants, plus one additional:
-         *      - last[-1].vlan == vlan.*/
-        swap_dst(first++, --last);
-    }
-}
-
 static int
 mirror_mask_ffs(mirror_mask_t mask)
 {
@@ -2330,24 +2285,33 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
                 tag_type *tags, struct ofpbuf *actions,
                 uint16_t *nf_output_iface)
 {
+    uint16_t initial_vlan, cur_vlan;
+    const struct dst *dst;
     struct dst_set set;
-    uint16_t cur_vlan;
-    size_t i;
 
     dst_set_init(&set);
     compose_dsts(br, flow, vlan, in_port, out_port, &set, tags,
                  nf_output_iface);
     compose_mirror_dsts(br, flow, vlan, in_port, &set, tags);
 
-    cur_vlan = vlan_tci_to_vid(flow->vlan_tci);
-    if (cur_vlan == 0) {
-        cur_vlan = OFP_VLAN_NONE;
+    /* Output all the packets we can without having to change the VLAN. */
+    initial_vlan = vlan_tci_to_vid(flow->vlan_tci);
+    if (initial_vlan == 0) {
+        initial_vlan = OFP_VLAN_NONE;
+    }
+    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
+        if (dst->vlan != initial_vlan) {
+            continue;
+        }
+        nl_msg_put_u32(actions, ODP_ACTION_ATTR_OUTPUT, dst->iface->dp_ifidx);
     }
 
-    partition_dsts(&set, cur_vlan);
-
-    for (i = 0; i < set.n; i++) {
-        const struct dst *dst = &set.dsts[i];
+    /* Then output the rest. */
+    cur_vlan = initial_vlan;
+    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
+        if (dst->vlan == initial_vlan) {
+            continue;
+        }
         if (dst->vlan != cur_vlan) {
             if (dst->vlan == OFP_VLAN_NONE) {
                 nl_msg_put_flag(actions, ODP_ACTION_ATTR_STRIP_VLAN);
@@ -2361,6 +2325,7 @@ compose_actions(struct bridge *br, const struct flow *flow, uint16_t vlan,
         }
         nl_msg_put_u32(actions, ODP_ACTION_ATTR_OUTPUT, dst->iface->dp_ifidx);
     }
+
     dst_set_free(&set);
 }
 
