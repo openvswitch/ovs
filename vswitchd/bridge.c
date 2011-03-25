@@ -374,7 +374,7 @@ static void
 bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 {
     static bool already_configured_once;
-    struct svec bridge_names;
+    struct sset bridge_names;
     struct sset dpif_names, dpif_types;
     const char *type;
     size_t i;
@@ -388,11 +388,10 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     stats_timer = time_msec() + STATS_INTERVAL;
 
     /* Get all the configured bridges' names from 'cfg' into 'bridge_names'. */
-    svec_init(&bridge_names);
+    sset_init(&bridge_names);
     for (i = 0; i < cfg->n_bridges; i++) {
-        svec_add(&bridge_names, cfg->bridges[i]->name);
+        sset_add(&bridge_names, cfg->bridges[i]->name);
     }
-    svec_sort(&bridge_names);
 
     /* Iterate over all system dpifs and delete any of them that do not appear
      * in 'cfg'. */
@@ -406,7 +405,7 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 
         /* Delete each dpif whose name is not in 'bridge_names'. */
         SSET_FOR_EACH (name, &dpif_names) {
-            if (!svec_contains(&bridge_names, name)) {
+            if (!sset_contains(&bridge_names, name)) {
                 struct dpif *dpif;
                 int retval;
 
@@ -418,7 +417,7 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
             }
         }
     }
-    svec_destroy(&bridge_names);
+    sset_destroy(&bridge_names);
     sset_destroy(&dpif_names);
     sset_destroy(&dpif_types);
 }
