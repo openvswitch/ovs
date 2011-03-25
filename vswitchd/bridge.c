@@ -238,6 +238,11 @@ static struct ovsdb_idl *idl;
 #define STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 static long long int stats_timer = LLONG_MIN;
 
+/* Stores the time after which CFM statistics may be written to the database.
+ * Only updated when changes to the database require rate limiting. */
+#define CFM_LIMIT_INTERVAL (1 * 1000) /* In milliseconds. */
+static long long int cfm_limiter = LLONG_MIN;
+
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
@@ -302,7 +307,7 @@ static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_update_cfm(struct iface *);
-static void iface_refresh_cfm_stats(struct iface *iface);
+static bool iface_refresh_cfm_stats(struct iface *iface);
 static void iface_update_carrier(struct iface *);
 static bool iface_get_carrier(const struct iface *);
 
@@ -1196,18 +1201,21 @@ iface_refresh_status(struct iface *iface)
     }
 }
 
-static void
+/* Writes 'iface''s CFM statistics to the database.  Returns true if anything
+ * changed, false otherwise. */
+static bool
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_monitor *mon;
     const struct cfm *cfm;
+    bool changed = false;
     size_t i;
 
     mon = iface->cfg->monitor;
     cfm = ofproto_iface_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
 
     if (!cfm || !mon) {
-        return;
+        return false;
     }
 
     for (i = 0; i < mon->n_remote_mps; i++) {
@@ -1217,10 +1225,18 @@ iface_refresh_cfm_stats(struct iface *iface)
         mp = mon->remote_mps[i];
         rmp = cfm_get_remote_mp(cfm, mp->mpid);
 
-        ovsrec_maintenance_point_set_fault(mp, &rmp->fault, 1);
+        if (mp->n_fault != 1 || mp->fault[0] != rmp->fault) {
+            ovsrec_maintenance_point_set_fault(mp, &rmp->fault, 1);
+            changed = true;
+        }
     }
 
-    ovsrec_monitor_set_fault(mon, &cfm->fault, 1);
+    if (mon->n_fault != 1 || mon->fault[0] != cfm->fault) {
+        ovsrec_monitor_set_fault(mon, &cfm->fault, 1);
+        changed = true;
+    }
+
+    return changed;
 }
 
 static void
@@ -1398,7 +1414,6 @@ bridge_run(void)
 
                     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                         iface_refresh_stats(iface);
-                        iface_refresh_cfm_stats(iface);
                         iface_refresh_status(iface);
                     }
                 }
@@ -1410,6 +1425,31 @@ bridge_run(void)
         }
 
         stats_timer = time_msec() + STATS_INTERVAL;
+    }
+
+    if (time_msec() >= cfm_limiter) {
+        struct ovsdb_idl_txn *txn;
+        bool changed = false;
+
+        txn = ovsdb_idl_txn_create(idl);
+        LIST_FOR_EACH (br, node, &all_bridges) {
+            struct port *port;
+
+            HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                struct iface *iface;
+
+                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                    changed = iface_refresh_cfm_stats(iface) || changed;
+                }
+            }
+        }
+
+        if (changed) {
+            cfm_limiter = time_msec() + CFM_LIMIT_INTERVAL;
+        }
+
+        ovsdb_idl_txn_commit(txn);
+        ovsdb_idl_txn_destroy(txn);
     }
 }
 
@@ -1434,6 +1474,10 @@ bridge_wait(void)
     }
     ovsdb_idl_wait(idl);
     poll_timer_wait_until(stats_timer);
+
+    if (cfm_limiter > time_msec()) {
+        poll_timer_wait_until(cfm_limiter);
+    }
 }
 
 /* Forces 'br' to revalidate all of its flows.  This is appropriate when 'br''s
