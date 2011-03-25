@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -370,22 +370,6 @@ svec_join(const struct svec *svec,
     }
     ds_put_cstr(&ds, terminator);
     return ds_cstr(&ds);
-}
-
-/* Breaks 's' into tokens at any character in 'delimiters', and appends each
- * token to 'svec'.  Empty tokens are not added. */
-void
-svec_split(struct svec *svec, const char *s_, const char *delimiters)
-{
-    char *s = xstrdup(s_);
-    char *save_ptr = NULL;
-    char *token;
-
-    for (token = strtok_r(s, delimiters, &save_ptr); token != NULL;
-         token = strtok_r(NULL, delimiters, &save_ptr)) {
-        svec_add(svec, token);
-    }
-    free(s);
 }
 
 const char *

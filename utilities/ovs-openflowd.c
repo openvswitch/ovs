@@ -40,7 +40,6 @@
 #include "poll-loop.h"
 #include "rconn.h"
 #include "stream-ssl.h"
-#include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -63,7 +62,7 @@ struct ofsettings {
     uint64_t datapath_id;       /* Datapath ID. */
     char *dp_name;              /* Name of local datapath. */
     char *dp_type;              /* Type of local datapath. */
-    struct svec ports;          /* Set of ports to add to datapath (if any). */
+    struct sset ports;          /* Set of ports to add to datapath (if any). */
 
     /* Description strings. */
     const char *mfr_desc;       /* Manufacturer. */
@@ -96,6 +95,7 @@ main(int argc, char *argv[])
     int error;
     struct dpif *dpif;
     struct netflow_options nf_options;
+    const char *port;
     bool exiting;
 
     proctitle_init(argc, argv);
@@ -123,25 +123,20 @@ main(int argc, char *argv[])
     }
 
     /* Add ports to the datapath if requested by the user. */
-    if (s.ports.n) {
-        const char *port;
-        size_t i;
+    SSET_FOR_EACH (port, &s.ports) {
+        struct netdev *netdev;
 
-        SVEC_FOR_EACH (i, port, &s.ports) {
-            struct netdev *netdev;
-
-            error = netdev_open_default(port, &netdev);
-            if (error) {
-                ovs_fatal(error, "%s: failed to open network device", port);
-            }
-
-            error = dpif_port_add(dpif, netdev, NULL);
-            if (error) {
-                ovs_fatal(error, "failed to add %s as a port", port);
-            }
-
-            netdev_close(netdev);
+        error = netdev_open_default(port, &netdev);
+        if (error) {
+            ovs_fatal(error, "%s: failed to open network device", port);
         }
+
+        error = dpif_port_add(dpif, netdev, NULL);
+        if (error) {
+            ovs_fatal(error, "failed to add %s as a port", port);
+        }
+
+        netdev_close(netdev);
     }
 
     /* Start OpenFlow processing. */
@@ -205,6 +200,21 @@ ovs_openflowd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 }
 
 /* User interface. */
+
+/* Breaks 'ports' apart at commas and adds each resulting word to 'ports'. */
+static void
+parse_ports(const char *s_, struct sset *ports)
+{
+    char *s = xstrdup(s_);
+    char *save_ptr = NULL;
+    char *token;
+
+    for (token = strtok_r(s, ",", &save_ptr); token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        sset_add(ports, token);
+    }
+    free(s);
+}
 
 static void
 parse_options(int argc, char *argv[], struct ofsettings *s)
@@ -272,7 +282,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     };
     char *short_options = long_options_to_short_options(long_options);
     struct ofproto_controller controller_opts;
-    struct svec controllers;
+    struct sset controllers;
+    const char *name;
     int i;
 
     /* Set defaults that we can figure out before parsing options. */
@@ -290,11 +301,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->sw_desc = NULL;
     s->serial_desc = NULL;
     s->dp_desc = NULL;
-    svec_init(&controllers);
+    sset_init(&controllers);
     sset_init(&s->snoops);
     s->max_idle = 0;
     sset_init(&s->netflow);
-    svec_init(&s->ports);
+    sset_init(&s->ports);
     for (;;) {
         int c;
 
@@ -402,7 +413,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case 'l':
-            svec_add(&controllers, optarg);
+            sset_add(&controllers, optarg);
             break;
 
         case OPT_SNOOP:
@@ -410,7 +421,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_PORTS:
-            svec_split(&s->ports, optarg, ",");
+            parse_ports(optarg, &s->ports);
             break;
 
         case OPT_UNIXCTL:
@@ -469,25 +480,28 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     /* Figure out controller names. */
     s->run_forever = false;
-    if (!controllers.n) {
-        svec_add_nocopy(&controllers, xasprintf("punix:%s/%s.mgmt",
-                                                ovs_rundir(), s->dp_name));
+    if (sset_is_empty(&controllers)) {
+        sset_add_and_free(&controllers, xasprintf("punix:%s/%s.mgmt",
+                                                  ovs_rundir(), s->dp_name));
     }
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "none")) {
             s->run_forever = true;
         } else {
-            svec_add(&controllers, argv[i]);
+            sset_add(&controllers, argv[i]);
         }
     }
 
     /* Set up controllers. */
-    s->n_controllers = controllers.n;
+    s->n_controllers = sset_count(&controllers);
     s->controllers = xmalloc(s->n_controllers * sizeof *s->controllers);
-    for (i = 0; i < s->n_controllers; i++) {
+    i = 0;
+    SSET_FOR_EACH (name, &controllers) {
         s->controllers[i] = controller_opts;
-        s->controllers[i].target = controllers.names[i];
+        s->controllers[i].target = xstrdup(name);
+        i++;
     }
+    sset_destroy(&controllers);
 }
 
 static void
