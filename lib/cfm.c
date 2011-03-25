@@ -192,9 +192,8 @@ cfm_run(struct cfm *cfm)
      * MPs at once making this quite a bit simpler.
      *
      * According to the specification we should check when (ccm_interval_ms *
-     * 3.5)ms have passed.  We changed the multiplier to 4 to avoid messy
-     * floating point arithmetic and add a bit of wiggle room. */
-    if (now >= cfmi->fault_check + cfmi->ccm_interval_ms * 4) {
+     * 3.5)ms have passed. */
+    if (now >= cfmi->fault_check + (cfmi->ccm_interval_ms * 7) / 2) {
         bool fault;
         struct remote_mp *rmp, *rmp_next;
         struct remote_maid *rmaid, *rmaid_next;
