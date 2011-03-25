@@ -86,7 +86,7 @@ struct dpif_class {
      *
      * Some kinds of datapaths might not be practically enumerable, in which
      * case this function may be a null pointer. */
-    int (*enumerate)(struct svec *all_dps);
+    int (*enumerate)(struct sset *all_dps);
 
     /* Attempts to open an existing dpif called 'name', if 'create' is false,
      * or to open an existing dpif or create a new one, if 'create' is true.

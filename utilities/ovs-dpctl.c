@@ -38,7 +38,7 @@
 #include "netdev.h"
 #include "odp-util.h"
 #include "shash.h"
-#include "svec.h"
+#include "sset.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -404,23 +404,21 @@ do_show(int argc, char *argv[])
             }
         }
     } else {
-        struct svec types;
+        struct sset types;
         const char *type;
-        size_t i;
 
-        svec_init(&types);
+        sset_init(&types);
         dp_enumerate_types(&types);
-        SVEC_FOR_EACH (i, type, &types) {
-            struct svec names;
+        SSET_FOR_EACH (type, &types) {
+            struct sset names;
             const char *name;
-            size_t j;
 
-            svec_init(&names);
+            sset_init(&names);
             if (dp_enumerate_names(type, &names)) {
                 failure = true;
                 continue;
             }
-            SVEC_FOR_EACH (j, name, &names) {
+            SSET_FOR_EACH (name, &names) {
                 struct dpif *dpif;
                 int error;
 
@@ -432,9 +430,9 @@ do_show(int argc, char *argv[])
                     failure = true;
                 }
             }
-            svec_destroy(&names);
+            sset_destroy(&names);
         }
-        svec_destroy(&types);
+        sset_destroy(&types);
     }
     if (failure) {
         exit(EXIT_FAILURE);
@@ -444,34 +442,34 @@ do_show(int argc, char *argv[])
 static void
 do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    struct svec dpif_names, dpif_types;
-    unsigned int i;
+    struct sset dpif_names, dpif_types;
+    const char *type;
     int error = 0;
 
-    svec_init(&dpif_names);
-    svec_init(&dpif_types);
+    sset_init(&dpif_names);
+    sset_init(&dpif_types);
     dp_enumerate_types(&dpif_types);
 
-    for (i = 0; i < dpif_types.n; i++) {
-        unsigned int j;
+    SSET_FOR_EACH (type, &dpif_types) {
+        const char *name;
         int retval;
 
-        retval = dp_enumerate_names(dpif_types.names[i], &dpif_names);
+        retval = dp_enumerate_names(type, &dpif_names);
         if (retval) {
             error = retval;
         }
 
-        for (j = 0; j < dpif_names.n; j++) {
+        SSET_FOR_EACH (name, &dpif_names) {
             struct dpif *dpif;
-            if (!dpif_open(dpif_names.names[j], dpif_types.names[i], &dpif)) {
+            if (!dpif_open(name, type, &dpif)) {
                 printf("%s\n", dpif_name(dpif));
                 dpif_close(dpif);
             }
         }
     }
 
-    svec_destroy(&dpif_names);
-    svec_destroy(&dpif_types);
+    sset_destroy(&dpif_names);
+    sset_destroy(&dpif_types);
     if (error) {
         exit(EXIT_FAILURE);
     }

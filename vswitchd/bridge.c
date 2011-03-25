@@ -375,7 +375,8 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 {
     static bool already_configured_once;
     struct svec bridge_names;
-    struct svec dpif_names, dpif_types;
+    struct sset dpif_names, dpif_types;
+    const char *type;
     size_t i;
 
     /* Only do this once per ovs-vswitchd run. */
@@ -395,22 +396,21 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 
     /* Iterate over all system dpifs and delete any of them that do not appear
      * in 'cfg'. */
-    svec_init(&dpif_names);
-    svec_init(&dpif_types);
+    sset_init(&dpif_names);
+    sset_init(&dpif_types);
     dp_enumerate_types(&dpif_types);
-    for (i = 0; i < dpif_types.n; i++) {
-        size_t j;
+    SSET_FOR_EACH (type, &dpif_types) {
+        const char *name;
 
-        dp_enumerate_names(dpif_types.names[i], &dpif_names);
+        dp_enumerate_names(type, &dpif_names);
 
         /* Delete each dpif whose name is not in 'bridge_names'. */
-        for (j = 0; j < dpif_names.n; j++) {
-            if (!svec_contains(&bridge_names, dpif_names.names[j])) {
+        SSET_FOR_EACH (name, &dpif_names) {
+            if (!svec_contains(&bridge_names, name)) {
                 struct dpif *dpif;
                 int retval;
 
-                retval = dpif_open(dpif_names.names[j], dpif_types.names[i],
-                                   &dpif);
+                retval = dpif_open(name, type, &dpif);
                 if (!retval) {
                     dpif_delete(dpif);
                     dpif_close(dpif);
@@ -419,8 +419,8 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
         }
     }
     svec_destroy(&bridge_names);
-    svec_destroy(&dpif_names);
-    svec_destroy(&dpif_types);
+    sset_destroy(&dpif_names);
+    sset_destroy(&dpif_types);
 }
 
 /* Callback for iterate_and_prune_ifaces(). */

@@ -36,7 +36,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
-#include "svec.h"
+#include "sset.h"
 #include "timeval.h"
 #include "util.h"
 #include "valgrind.h"
@@ -184,36 +184,36 @@ dp_unregister_provider(const char *type)
 }
 
 /* Clears 'types' and enumerates the types of all currently registered datapath
- * providers into it.  The caller must first initialize the svec. */
+ * providers into it.  The caller must first initialize the sset. */
 void
-dp_enumerate_types(struct svec *types)
+dp_enumerate_types(struct sset *types)
 {
     struct shash_node *node;
 
     dp_initialize();
-    svec_clear(types);
+    sset_clear(types);
 
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
-        svec_add(types, registered_class->dpif_class->type);
+        sset_add(types, registered_class->dpif_class->type);
     }
 }
 
 /* Clears 'names' and enumerates the names of all known created datapaths with
- * the given 'type'.  The caller must first initialize the svec. Returns 0 if
+ * the given 'type'.  The caller must first initialize the sset.  Returns 0 if
  * successful, otherwise a positive errno value.
  *
  * Some kinds of datapaths might not be practically enumerable.  This is not
  * considered an error. */
 int
-dp_enumerate_names(const char *type, struct svec *names)
+dp_enumerate_names(const char *type, struct sset *names)
 {
     const struct registered_dpif_class *registered_class;
     const struct dpif_class *dpif_class;
     int error;
 
     dp_initialize();
-    svec_clear(names);
+    sset_clear(names);
 
     registered_class = shash_find_data(&dpif_classes, type);
     if (!registered_class) {

@@ -46,7 +46,6 @@
 #include "rtnetlink-link.h"
 #include "shash.h"
 #include "sset.h"
-#include "svec.h"
 #include "unaligned.h"
 #include "util.h"
 #include "vlog.h"
@@ -160,7 +159,7 @@ dpif_linux_cast(const struct dpif *dpif)
 }
 
 static int
-dpif_linux_enumerate(struct svec *all_dps)
+dpif_linux_enumerate(struct sset *all_dps)
 {
     struct nl_dump dump;
     struct ofpbuf msg;
@@ -176,7 +175,7 @@ dpif_linux_enumerate(struct svec *all_dps)
         struct dpif_linux_dp dp;
 
         if (!dpif_linux_dp_from_ofpbuf(&dp, &msg)) {
-            svec_add(all_dps, dp.name);
+            sset_add(all_dps, dp.name);
         }
     }
     return nl_dump_done(&dump);
