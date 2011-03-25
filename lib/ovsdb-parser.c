@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ ovsdb_parser_init(struct ovsdb_parser *parser, const struct json *json,
     parser->name = xvasprintf(name, args);
     va_end(args);
 
-    svec_init(&parser->used);
+    sset_init(&parser->used);
     parser->error = NULL;
 
     parser->json = (json && json->type == JSON_OBJECT ? json : NULL);
@@ -85,7 +85,7 @@ ovsdb_parser_member(struct ovsdb_parser *parser, const char *name,
         || (types & OP_ID && value->type == JSON_STRING
             && ovsdb_parser_is_id(value->u.string)))
     {
-        svec_add(&parser->used, name);
+        sset_add(&parser->used, name);
         return value;
     } else {
         ovsdb_parser_raise_error(parser, "Type mismatch for member '%s'.",
@@ -133,14 +133,12 @@ ovsdb_parser_finish(struct ovsdb_parser *parser)
         const struct shash *object = json_object(parser->json);
         size_t n_unused;
 
-        /* XXX this method of detecting unused members can be made cheaper */
-        svec_sort_unique(&parser->used);
-        n_unused = shash_count(object) - parser->used.n;
+        n_unused = shash_count(object) - sset_count(&parser->used);
         if (n_unused) {
             struct shash_node *node;
 
             SHASH_FOR_EACH (node, object) {
-                if (!svec_contains(&parser->used, node->name)) {
+                if (!sset_contains(&parser->used, node->name)) {
                     if (n_unused > 1) {
                         ovsdb_parser_raise_error(
                             parser,
@@ -160,7 +158,7 @@ ovsdb_parser_finish(struct ovsdb_parser *parser)
     }
 
     free(parser->name);
-    svec_destroy(&parser->used);
+    sset_destroy(&parser->used);
 
     return parser->error;
 }

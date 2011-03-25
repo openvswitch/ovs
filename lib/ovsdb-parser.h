@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@
 #include <stdbool.h>
 #include "compiler.h"
 #include "json.h"
-#include "svec.h"
+#include "sset.h"
 #include "util.h"
 
 struct ovsdb_parser {
     char *name;                 /* Used only in error messages. */
-    struct svec used;           /* Already-parsed names from 'object'. */
+    struct sset used;           /* Already-parsed names from 'object'. */
     const struct json *json;    /* JSON object being parsed. */
     struct ovsdb_error *error;  /* Error signaled, if any. */
 };
