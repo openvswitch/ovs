@@ -687,16 +687,16 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = -EINVAL;
 	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_ACTIONS] ||
 	    nla_len(a[ODP_PACKET_ATTR_PACKET]) < ETH_HLEN)
-		goto exit;
+		goto err;
 
 	err = validate_actions(a[ODP_PACKET_ATTR_ACTIONS]);
 	if (err)
-		goto exit;
+		goto err;
 
 	packet = skb_clone(skb, GFP_KERNEL);
 	err = -ENOMEM;
 	if (!packet)
-		goto exit;
+		goto err;
 	packet->data = nla_data(a[ODP_PACKET_ATTR_PACKET]);
 	packet->len = nla_len(a[ODP_PACKET_ATTR_PACKET]);
 
@@ -716,18 +716,24 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	err = flow_extract(packet, -1, &key, &is_frag);
 	if (err)
-		goto exit;
+		goto err_kfree_skb;
 
 	rcu_read_lock();
 	dp = get_dp(odp_header->dp_ifindex);
 	err = -ENODEV;
-	if (dp)
-		err = execute_actions(dp, packet, &key,
-				      nla_data(a[ODP_PACKET_ATTR_ACTIONS]),
-				      nla_len(a[ODP_PACKET_ATTR_ACTIONS]));
+	if (!dp)
+		goto err_unlock;
+	err = execute_actions(dp, packet, &key,
+			      nla_data(a[ODP_PACKET_ATTR_ACTIONS]),
+			      nla_len(a[ODP_PACKET_ATTR_ACTIONS]));
 	rcu_read_unlock();
+	return err;
 
-exit:
+err_unlock:
+	rcu_read_unlock();
+err_kfree_skb:
+	kfree_skb(packet);
+err:
 	return err;
 }
 
