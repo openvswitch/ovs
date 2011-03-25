@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "3.0.0",
- "cksum": "705848946 15525",
+ "version": "3.0.1",
+ "cksum": "1940448373 15497",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -220,8 +220,7 @@
          "type": {
            "key": { "type": "uuid", "refTable": "Maintenance_Point"},
            "min": 0,
-           "max": "unlimited"},
-         "ephemeral": true},
+           "max": "unlimited"}},
        "unexpected_remote_mpids": {
          "type": {
            "key": { "type": "integer"},
