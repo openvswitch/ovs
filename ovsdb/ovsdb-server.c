@@ -40,7 +40,7 @@
 #include "stream-ssl.h"
 #include "stream.h"
 #include "stress.h"
-#include "svec.h"
+#include "sset.h"
 #include "table.h"
 #include "timeval.h"
 #include "transaction.h"
@@ -64,15 +64,15 @@ static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
-                          struct shash *remotes, char **unixctl_pathp,
+                          struct sset *remotes, char **unixctl_pathp,
                           char **run_command);
 static void usage(void) NO_RETURN;
 
 static void reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
-                                const struct ovsdb *db, struct shash *remotes);
+                                const struct ovsdb *db, struct sset *remotes);
 
 static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
-                                 const struct shash *remotes,
+                                 const struct sset *remotes,
                                  struct ovsdb *db);
 
 int
@@ -82,7 +82,7 @@ main(int argc, char *argv[])
     char *run_command = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
-    struct shash remotes;
+    struct sset remotes;
     struct ovsdb_error *error;
     struct ovsdb_file *file;
     struct ovsdb *db;
@@ -171,7 +171,7 @@ main(int argc, char *argv[])
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     ovsdb_destroy(db);
-    shash_destroy_free_data(&remotes);
+    sset_destroy(&remotes);
     unixctl_server_destroy(unixctl);
 
     if (run_process && process_exited(run_process)) {
@@ -551,14 +551,14 @@ update_remote_rows(const struct ovsdb *db, struct ovsdb_txn *txn,
 
 static void
 update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
-                     const struct shash *remotes, struct ovsdb *db)
+                     const struct sset *remotes, struct ovsdb *db)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    struct shash_node *remote;
     struct shash statuses;
     struct ovsdb_txn *txn;
     const bool durable_txn = false;
     struct ovsdb_error *error;
+    const char *remote;
 
     /* Get status of current connections. */
     ovsdb_jsonrpc_server_get_remote_status(jsonrpc, &statuses);
@@ -566,8 +566,8 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
     txn = ovsdb_txn_create(db);
 
     /* Iterate over --remote arguments given on command line. */
-    SHASH_FOR_EACH (remote, remotes) {
-        update_remote_rows(db, txn, remote->name, &statuses);
+    SSET_FOR_EACH (remote, remotes) {
+        update_remote_rows(db, txn, remote, &statuses);
     }
 
     error = ovsdb_txn_commit(txn, durable_txn);
@@ -582,16 +582,14 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
 /* Reconfigures ovsdb-server based on information in the database. */
 static void
 reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
-                    const struct ovsdb *db, struct shash *remotes)
+                    const struct ovsdb *db, struct sset *remotes)
 {
     struct shash resolved_remotes;
-    struct shash_node *node;
+    const char *name;
 
     /* Configure remotes. */
     shash_init(&resolved_remotes);
-    SHASH_FOR_EACH (node, remotes) {
-        const char *name = node->name;
-
+    SSET_FOR_EACH (name, remotes) {
         if (!strncmp(name, "db:", 3)) {
             query_db_remotes(name, db, &resolved_remotes);
         } else {
@@ -652,7 +650,7 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 
 static void
 parse_options(int argc, char *argv[], char **file_namep,
-              struct shash *remotes, char **unixctl_pathp,
+              struct sset *remotes, char **unixctl_pathp,
               char **run_command)
 {
     enum {
@@ -684,7 +682,7 @@ parse_options(int argc, char *argv[], char **file_namep,
     };
     char *short_options = long_options_to_short_options(long_options);
 
-    shash_init(remotes);
+    sset_init(remotes);
     for (;;) {
         int c;
 
@@ -695,7 +693,7 @@ parse_options(int argc, char *argv[], char **file_namep,
 
         switch (c) {
         case OPT_REMOTE:
-            shash_add_once(remotes, optarg, NULL);
+            sset_add(remotes, optarg);
             break;
 
         case OPT_UNIXCTL:

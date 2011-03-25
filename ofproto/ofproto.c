@@ -55,6 +55,7 @@
 #include "poll-loop.h"
 #include "rconn.h"
 #include "shash.h"
+#include "sset.h"
 #include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
@@ -1026,25 +1027,25 @@ static void
 reinit_ports(struct ofproto *p)
 {
     struct dpif_port_dump dump;
-    struct shash_node *node;
-    struct shash devnames;
+    struct sset devnames;
     struct ofport *ofport;
     struct dpif_port dpif_port;
+    const char *devname;
 
     COVERAGE_INC(ofproto_reinit_ports);
 
-    shash_init(&devnames);
+    sset_init(&devnames);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        shash_add_once (&devnames, ofport->opp.name, NULL);
+        sset_add(&devnames, ofport->opp.name);
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, p->dpif) {
-        shash_add_once (&devnames, dpif_port.name, NULL);
+        sset_add(&devnames, dpif_port.name);
     }
 
-    SHASH_FOR_EACH (node, &devnames) {
-        update_port(p, node->name);
+    SSET_FOR_EACH (devname, &devnames) {
+        update_port(p, devname);
     }
-    shash_destroy(&devnames);
+    sset_destroy(&devnames);
 }
 
 static struct ofport *

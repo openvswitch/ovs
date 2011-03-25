@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include "poll-loop.h"
 #include "shash.h"
+#include "sset.h"
 #include "socket-util.h"
 #include "util.h"
 #include "vlog.h"
@@ -194,8 +195,8 @@ call_hooks(int sig_nr)
     }
 }
 
-/* Files to delete on exit.  (The 'data' member of each node is unused.) */
-static struct shash files = SHASH_INITIALIZER(&files);
+/* Files to delete on exit. */
+static struct sset files = SSET_INITIALIZER(&files);
 
 /* Has a hook function been registered with fatal_signal_add_hook() (and not
  * cleared by fatal_signal_fork())? */
@@ -215,7 +216,7 @@ fatal_signal_add_file_to_unlink(const char *file)
         fatal_signal_add_hook(unlink_files, cancel_files, NULL, true);
     }
 
-    shash_add_once(&files, file, NULL);
+    sset_add(&files, file);
 }
 
 /* Unregisters 'file' from being unlinked when the program terminates via
@@ -223,12 +224,7 @@ fatal_signal_add_file_to_unlink(const char *file)
 void
 fatal_signal_remove_file_to_unlink(const char *file)
 {
-    struct shash_node *node;
-
-    node = shash_find(&files, file);
-    if (node) {
-        shash_delete(&files, node);
-    }
+    sset_find_and_delete(&files, file);
 }
 
 /* Like fatal_signal_remove_file_to_unlink(), but also unlinks 'file'.
@@ -255,17 +251,17 @@ unlink_files(void *aux OVS_UNUSED)
 static void
 cancel_files(void *aux OVS_UNUSED)
 {
-    shash_clear(&files);
+    sset_clear(&files);
     added_hook = false;
 }
 
 static void
 do_unlink_files(void)
 {
-    struct shash_node *node;
+    const char *file;
 
-    SHASH_FOR_EACH (node, &files) {
-        unlink(node->name);
+    SSET_FOR_EACH (file, &files) {
+        unlink(file);
     }
 }
 

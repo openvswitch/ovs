@@ -37,6 +37,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
+#include "sset.h"
 #include "svec.h"
 #include "vlog.h"
 
@@ -1444,7 +1445,7 @@ netdev_notifier_init(struct netdev_notifier *notifier, struct netdev *netdev,
 /* Tracks changes in the status of a set of network devices. */
 struct netdev_monitor {
     struct shash polled_netdevs;
-    struct shash changed_netdevs;
+    struct sset changed_netdevs;
 };
 
 /* Creates and returns a new structure for monitor changes in the status of
@@ -1454,7 +1455,7 @@ netdev_monitor_create(void)
 {
     struct netdev_monitor *monitor = xmalloc(sizeof *monitor);
     shash_init(&monitor->polled_netdevs);
-    shash_init(&monitor->changed_netdevs);
+    sset_init(&monitor->changed_netdevs);
     return monitor;
 }
 
@@ -1472,7 +1473,7 @@ netdev_monitor_destroy(struct netdev_monitor *monitor)
         }
 
         shash_destroy(&monitor->polled_netdevs);
-        shash_destroy(&monitor->changed_netdevs);
+        sset_destroy(&monitor->changed_netdevs);
         free(monitor);
     }
 }
@@ -1482,7 +1483,7 @@ netdev_monitor_cb(struct netdev_notifier *notifier)
 {
     struct netdev_monitor *monitor = notifier->aux;
     const char *name = netdev_get_name(notifier->netdev);
-    shash_add_once(&monitor->changed_netdevs, name, NULL);
+    sset_add(&monitor->changed_netdevs, name);
 }
 
 /* Attempts to add 'netdev' as a netdev monitored by 'monitor'.  Returns 0 if
@@ -1526,10 +1527,7 @@ netdev_monitor_remove(struct netdev_monitor *monitor, struct netdev *netdev)
         shash_delete(&monitor->polled_netdevs, node);
 
         /* Drop any pending notification. */
-        node = shash_find(&monitor->changed_netdevs, netdev_name);
-        if (node) {
-            shash_delete(&monitor->changed_netdevs, node);
-        }
+        sset_find_and_delete(&monitor->changed_netdevs, netdev_name);
     }
 }
 
@@ -1543,12 +1541,11 @@ netdev_monitor_remove(struct netdev_monitor *monitor, struct netdev *netdev)
 int
 netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
 {
-    struct shash_node *node = shash_first(&monitor->changed_netdevs);
-    if (!node) {
+    if (sset_is_empty(&monitor->changed_netdevs)) {
         *devnamep = NULL;
         return EAGAIN;
     } else {
-        *devnamep = shash_steal(&monitor->changed_netdevs, node);
+        *devnamep = sset_pop(&monitor->changed_netdevs);
         return 0;
     }
 }
@@ -1559,7 +1556,7 @@ netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
 void
 netdev_monitor_poll_wait(const struct netdev_monitor *monitor)
 {
-    if (!shash_is_empty(&monitor->changed_netdevs)) {
+    if (!sset_is_empty(&monitor->changed_netdevs)) {
         poll_immediate_wake();
     } else {
         /* XXX Nothing needed here for netdev_linux, but maybe other netdev

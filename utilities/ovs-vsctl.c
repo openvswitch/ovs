@@ -38,6 +38,7 @@
 #include "process.h"
 #include "stream.h"
 #include "stream-ssl.h"
+#include "sset.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
 #include "table.h"
@@ -757,7 +758,7 @@ static void
 get_info(struct vsctl_context *ctx, struct vsctl_info *info)
 {
     const struct ovsrec_open_vswitch *ovs = ctx->ovs;
-    struct shash bridges, ports;
+    struct sset bridges, ports;
     size_t i;
 
     info->ctx = ctx;
@@ -765,14 +766,14 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
     shash_init(&info->ports);
     shash_init(&info->ifaces);
 
-    shash_init(&bridges);
-    shash_init(&ports);
+    sset_init(&bridges);
+    sset_init(&ports);
     for (i = 0; i < ovs->n_bridges; i++) {
         struct ovsrec_bridge *br_cfg = ovs->bridges[i];
         struct vsctl_bridge *br;
         size_t j;
 
-        if (!shash_add_once(&bridges, br_cfg->name, NULL)) {
+        if (!sset_add(&bridges, br_cfg->name)) {
             VLOG_WARN("%s: database contains duplicate bridge name",
                       br_cfg->name);
             continue;
@@ -785,29 +786,29 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
         for (j = 0; j < br_cfg->n_ports; j++) {
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
 
-            if (!shash_add_once(&ports, port_cfg->name, NULL)) {
+            if (!sset_add(&ports, port_cfg->name)) {
                 VLOG_WARN("%s: database contains duplicate port name",
                           port_cfg->name);
                 continue;
             }
 
             if (port_is_fake_bridge(port_cfg)
-                && shash_add_once(&bridges, port_cfg->name, NULL)) {
+                && sset_add(&bridges, port_cfg->name)) {
                 add_bridge(info, NULL, port_cfg->name, br, *port_cfg->tag);
             }
         }
     }
-    shash_destroy(&bridges);
-    shash_destroy(&ports);
+    sset_destroy(&bridges);
+    sset_destroy(&ports);
 
-    shash_init(&bridges);
-    shash_init(&ports);
+    sset_init(&bridges);
+    sset_init(&ports);
     for (i = 0; i < ovs->n_bridges; i++) {
         struct ovsrec_bridge *br_cfg = ovs->bridges[i];
         struct vsctl_bridge *br;
         size_t j;
 
-        if (!shash_add_once(&bridges, br_cfg->name, NULL)) {
+        if (!sset_add(&bridges, br_cfg->name)) {
             continue;
         }
         br = shash_find_data(&info->bridges, br_cfg->name);
@@ -816,12 +817,12 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
             struct vsctl_port *port;
             size_t k;
 
-            if (!shash_add_once(&ports, port_cfg->name, NULL)) {
+            if (!sset_add(&ports, port_cfg->name)) {
                 continue;
             }
 
             if (port_is_fake_bridge(port_cfg)
-                && !shash_add_once(&bridges, port_cfg->name, NULL)) {
+                && !sset_add(&bridges, port_cfg->name)) {
                 continue;
             }
 
@@ -855,8 +856,8 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
             }
         }
     }
-    shash_destroy(&bridges);
-    shash_destroy(&ports);
+    sset_destroy(&bridges);
+    sset_destroy(&ports);
 }
 
 static void

@@ -61,6 +61,7 @@
 #include "shash.h"
 #include "socket-util.h"
 #include "stream-ssl.h"
+#include "sset.h"
 #include "svec.h"
 #include "system-stats.h"
 #include "timeval.h"
@@ -142,8 +143,8 @@ struct mirror {
     struct uuid uuid;           /* UUID of this "mirror" record in database. */
 
     /* Selection criteria. */
-    struct shash src_ports;     /* Name is port name; data is always NULL. */
-    struct shash dst_ports;     /* Name is port name; data is always NULL. */
+    struct sset src_ports;      /* Source port names. */
+    struct sset dst_ports;      /* Destination port names. */
     int *vlans;
     size_t n_vlans;
 
@@ -506,30 +507,29 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
 {
     struct sockaddr_in *managers = NULL;
     size_t n_managers = 0;
-    struct shash targets;
+    struct sset targets;
     size_t i;
 
     /* Collect all of the potential targets from the "targets" columns of the
      * rows pointed to by "manager_options", excluding any that are
      * out-of-band. */
-    shash_init(&targets);
+    sset_init(&targets);
     for (i = 0; i < ovs_cfg->n_manager_options; i++) {
         struct ovsrec_manager *m = ovs_cfg->manager_options[i];
 
         if (m->connection_mode && !strcmp(m->connection_mode, "out-of-band")) {
-            shash_find_and_delete(&targets, m->target);
+            sset_find_and_delete(&targets, m->target);
         } else {
-            shash_add_once(&targets, m->target, NULL);
+            sset_add(&targets, m->target);
         }
     }
 
     /* Now extract the targets' IP addresses. */
-    if (!shash_is_empty(&targets)) {
-        struct shash_node *node;
+    if (!sset_is_empty(&targets)) {
+        const char *target;
 
-        managers = xmalloc(shash_count(&targets) * sizeof *managers);
-        SHASH_FOR_EACH (node, &targets) {
-            const char *target = node->name;
+        managers = xmalloc(sset_count(&targets) * sizeof *managers);
+        SSET_FOR_EACH (target, &targets) {
             struct sockaddr_in *sin = &managers[n_managers];
 
             if ((!strncmp(target, "tcp:", 4)
@@ -540,7 +540,7 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
             }
         }
     }
-    shash_destroy(&targets);
+    sset_destroy(&targets);
 
     *managersp = managers;
     *n_managersp = n_managers;
@@ -3947,24 +3947,24 @@ static void
 port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
 {
     struct iface *iface, *next;
-    struct shash new_ifaces;
+    struct sset new_ifaces;
     size_t i;
 
     /* Collect list of new interfaces. */
-    shash_init(&new_ifaces);
+    sset_init(&new_ifaces);
     for (i = 0; i < cfg->n_interfaces; i++) {
         const char *name = cfg->interfaces[i]->name;
-        shash_add_once(&new_ifaces, name, NULL);
+        sset_add(&new_ifaces, name);
     }
 
     /* Get rid of deleted interfaces. */
     LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
-        if (!shash_find(&new_ifaces, iface->name)) {
+        if (!sset_contains(&new_ifaces, iface->name)) {
             iface_destroy(iface);
         }
     }
 
-    shash_destroy(&new_ifaces);
+    sset_destroy(&new_ifaces);
 }
 
 /* Expires all MAC learning entries associated with 'port' and forces ofproto
@@ -3988,7 +3988,7 @@ static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
     const char *detect_mode;
-    struct shash new_ifaces;
+    struct sset new_ifaces;
     long long int next_rebalance, miimon_next_update, lacp_priority;
     bool need_flush = false;
     unsigned long *trunks;
@@ -4056,12 +4056,12 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     }
 
     /* Add new interfaces and update 'cfg' member of existing ones. */
-    shash_init(&new_ifaces);
+    sset_init(&new_ifaces);
     for (i = 0; i < cfg->n_interfaces; i++) {
         const struct ovsrec_interface *if_cfg = cfg->interfaces[i];
         struct iface *iface;
 
-        if (!shash_add_once(&new_ifaces, if_cfg->name, NULL)) {
+        if (!sset_add(&new_ifaces, if_cfg->name)) {
             VLOG_WARN("port %s: %s specified twice as port interface",
                       port->name, if_cfg->name);
             iface_set_ofport(if_cfg, -1);
@@ -4098,7 +4098,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
             iface->lacp_priority = lacp_priority;
         }
     }
-    shash_destroy(&new_ifaces);
+    sset_destroy(&new_ifaces);
 
     port->lacp_fast = !strcmp(get_port_other_config(cfg, "lacp-time", "slow"),
                              "fast");
@@ -4753,8 +4753,8 @@ mirror_create(struct bridge *br, struct ovsrec_mirror *cfg)
     m->bridge = br;
     m->idx = i;
     m->name = xstrdup(cfg->name);
-    shash_init(&m->src_ports);
-    shash_init(&m->dst_ports);
+    sset_init(&m->src_ports);
+    sset_init(&m->dst_ports);
     m->vlans = NULL;
     m->n_vlans = 0;
     m->out_vlan = -1;
@@ -4775,8 +4775,8 @@ mirror_destroy(struct mirror *m)
             port->dst_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
         }
 
-        shash_destroy(&m->src_ports);
-        shash_destroy(&m->dst_ports);
+        sset_destroy(&m->src_ports);
+        sset_destroy(&m->dst_ports);
         free(m->vlans);
 
         m->bridge->mirrors[m->idx] = NULL;
@@ -4790,14 +4790,14 @@ mirror_destroy(struct mirror *m)
 
 static void
 mirror_collect_ports(struct mirror *m, struct ovsrec_port **ports, int n_ports,
-                     struct shash *names)
+                     struct sset *names)
 {
     size_t i;
 
     for (i = 0; i < n_ports; i++) {
         const char *name = ports[i]->name;
         if (port_lookup(m->bridge, name)) {
-            shash_add_once(names, name, NULL);
+            sset_add(names, name);
         } else {
             VLOG_WARN("bridge %s: mirror %s cannot match on nonexistent "
                       "port %s", m->bridge->name, m->name, name);
@@ -4855,7 +4855,7 @@ port_trunks_any_mirrored_vlan(const struct mirror *m, const struct port *p)
 static void
 mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
 {
-    struct shash src_ports, dst_ports;
+    struct sset src_ports, dst_ports;
     mirror_mask_t mirror_bit;
     struct port *out_port;
     struct port *port;
@@ -4895,12 +4895,12 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
         return;
     }
 
-    shash_init(&src_ports);
-    shash_init(&dst_ports);
+    sset_init(&src_ports);
+    sset_init(&dst_ports);
     if (cfg->select_all) {
         HMAP_FOR_EACH (port, hmap_node, &m->bridge->ports) {
-            shash_add_once(&src_ports, port->name, NULL);
-            shash_add_once(&dst_ports, port->name, NULL);
+            sset_add(&src_ports, port->name);
+            sset_add(&dst_ports, port->name);
         }
         vlans = NULL;
         n_vlans = 0;
@@ -4916,8 +4916,8 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     }
 
     /* Update mirror data. */
-    if (!shash_equal_keys(&m->src_ports, &src_ports)
-        || !shash_equal_keys(&m->dst_ports, &dst_ports)
+    if (!sset_equals(&m->src_ports, &src_ports)
+        || !sset_equals(&m->dst_ports, &dst_ports)
         || m->n_vlans != n_vlans
         || memcmp(m->vlans, vlans, sizeof *vlans * n_vlans)
         || m->out_port != out_port
@@ -4925,8 +4925,8 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
         bridge_flush(m->bridge);
         mac_learning_flush(m->bridge->ml);
     }
-    shash_swap(&m->src_ports, &src_ports);
-    shash_swap(&m->dst_ports, &dst_ports);
+    sset_swap(&m->src_ports, &src_ports);
+    sset_swap(&m->dst_ports, &dst_ports);
     free(m->vlans);
     m->vlans = vlans;
     m->n_vlans = n_vlans;
@@ -4936,7 +4936,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
     HMAP_FOR_EACH (port, hmap_node, &m->bridge->ports) {
-        if (shash_find(&m->src_ports, port->name)
+        if (sset_contains(&m->src_ports, port->name)
             || (m->n_vlans
                 && (!port->vlan
                     ? port_trunks_any_mirrored_vlan(m, port)
@@ -4946,7 +4946,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
             port->src_mirrors &= ~mirror_bit;
         }
 
-        if (shash_find(&m->dst_ports, port->name)) {
+        if (sset_contains(&m->dst_ports, port->name)) {
             port->dst_mirrors |= mirror_bit;
         } else {
             port->dst_mirrors &= ~mirror_bit;
@@ -4954,6 +4954,6 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     }
 
     /* Clean up. */
-    shash_destroy(&src_ports);
-    shash_destroy(&dst_ports);
+    sset_destroy(&src_ports);
+    sset_destroy(&dst_ports);
 }

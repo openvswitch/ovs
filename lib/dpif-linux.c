@@ -45,6 +45,7 @@
 #include "rtnetlink.h"
 #include "rtnetlink-link.h"
 #include "shash.h"
+#include "sset.h"
 #include "svec.h"
 #include "unaligned.h"
 #include "util.h"
@@ -125,7 +126,7 @@ struct dpif_linux {
     unsigned int listen_mask;
 
     /* Change notification. */
-    struct shash changed_ports;  /* Ports that have changed. */
+    struct sset changed_ports;  /* Ports that have changed. */
     struct rtnetlink_notifier port_notifier;
     bool change_error;
 };
@@ -231,7 +232,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     }
     dpif->listen_mask = 0;
     dpif->dp_ifindex = dp->dp_ifindex;
-    shash_init(&dpif->changed_ports);
+    sset_init(&dpif->changed_ports);
     dpif->change_error = false;
     *dpifp = &dpif->dpif;
 
@@ -247,7 +248,7 @@ dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     rtnetlink_link_notifier_unregister(&dpif->port_notifier);
-    shash_destroy(&dpif->changed_ports);
+    sset_destroy(&dpif->changed_ports);
     free(dpif);
 }
 
@@ -483,11 +484,10 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
 
     if (dpif->change_error) {
         dpif->change_error = false;
-        shash_clear(&dpif->changed_ports);
+        sset_clear(&dpif->changed_ports);
         return ENOBUFS;
-    } else if (!shash_is_empty(&dpif->changed_ports)) {
-        struct shash_node *node = shash_first(&dpif->changed_ports);
-        *devnamep = shash_steal(&dpif->changed_ports, node);
+    } else if (!sset_is_empty(&dpif->changed_ports)) {
+        *devnamep = sset_pop(&dpif->changed_ports);
         return 0;
     } else {
         return EAGAIN;
@@ -498,7 +498,7 @@ static void
 dpif_linux_port_poll_wait(const struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (!shash_is_empty(&dpif->changed_ports) || dpif->change_error) {
+    if (!sset_is_empty(&dpif->changed_ports) || dpif->change_error) {
         poll_immediate_wake();
     } else {
         rtnetlink_link_notifier_wait();
@@ -1041,7 +1041,7 @@ dpif_linux_port_changed(const struct rtnetlink_link_change *change,
         {
             /* Our datapath changed, either adding a new port or deleting an
              * existing one. */
-            shash_add_once(&dpif->changed_ports, change->ifname, NULL);
+            sset_add(&dpif->changed_ports, change->ifname);
         }
     } else {
         dpif->change_error = true;
