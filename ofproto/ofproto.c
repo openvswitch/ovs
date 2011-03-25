@@ -57,7 +57,6 @@
 #include "shash.h"
 #include "sset.h"
 #include "stream-ssl.h"
-#include "svec.h"
 #include "tag.h"
 #include "timer.h"
 #include "timeval.h"
@@ -544,7 +543,7 @@ ofproto_set_desc(struct ofproto *p,
 }
 
 int
-ofproto_set_snoops(struct ofproto *ofproto, const struct svec *snoops)
+ofproto_set_snoops(struct ofproto *ofproto, const struct sset *snoops)
 {
     return connmgr_set_snoops(ofproto->connmgr, snoops);
 }
@@ -553,7 +552,7 @@ int
 ofproto_set_netflow(struct ofproto *ofproto,
                     const struct netflow_options *nf_options)
 {
-    if (nf_options && nf_options->collectors.n) {
+    if (nf_options && !sset_is_empty(&nf_options->collectors)) {
         if (!ofproto->netflow) {
             ofproto->netflow = netflow_create();
         }
@@ -668,8 +667,14 @@ ofproto_get_fail_mode(const struct ofproto *p)
     return connmgr_get_fail_mode(p->connmgr);
 }
 
+bool
+ofproto_has_snoops(const struct ofproto *ofproto)
+{
+    return connmgr_has_snoops(ofproto->connmgr);
+}
+
 void
-ofproto_get_snoops(const struct ofproto *ofproto, struct svec *snoops)
+ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
 {
     connmgr_get_snoops(ofproto->connmgr, snoops);
 }

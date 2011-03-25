@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <unistd.h>
 
 #include "socket-util.h"
-#include "svec.h"
+#include "sset.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -47,24 +47,19 @@ struct collectors {
  * added, otherwise to a new collectors object if at least one was successfully
  * added.  Thus, even on a failure return, it is possible that '*collectorsp'
  * is nonnull, and even on a successful return, it is possible that
- * '*collectorsp' is null, if 'target's is an empty svec. */
+ * '*collectorsp' is null, if 'target's is an empty sset. */
 int
-collectors_create(const struct svec *targets_, uint16_t default_port,
+collectors_create(const struct sset *targets, uint16_t default_port,
                   struct collectors **collectorsp)
 {
     struct collectors *c;
-    struct svec targets;
+    const char *name;
     int retval = 0;
-    size_t i;
-
-    svec_clone(&targets, targets_);
-    svec_sort_unique(&targets);
 
     c = xmalloc(sizeof *c);
-    c->fds = xmalloc(sizeof *c->fds * targets.n);
+    c->fds = xmalloc(sizeof *c->fds * sset_count(targets));
     c->n_fds = 0;
-    for (i = 0; i < targets.n; i++) {
-        const char *name = targets.names[i];
+    SSET_FOR_EACH (name, targets) {
         int error;
         int fd;
 
@@ -81,7 +76,6 @@ collectors_create(const struct svec *targets_, uint16_t default_port,
             }
         }
     }
-    svec_destroy(&targets);
 
     if (c->n_fds) {
         *collectorsp = c;

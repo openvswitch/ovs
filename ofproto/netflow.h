@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 #include "flow.h"
-#include "svec.h"
+#include "sset.h"
 
 /* Default active timeout interval, in seconds.
  *
@@ -31,7 +31,7 @@
 struct ofexpired;
 
 struct netflow_options {
-    struct svec collectors;
+    struct sset collectors;
     uint8_t engine_type;
     uint8_t engine_id;
     int active_timeout;

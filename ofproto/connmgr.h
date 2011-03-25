@@ -26,6 +26,7 @@
 struct dpif_upcall;
 struct ofconn;
 struct ofputil_flow_removed;
+struct sset;
 
 /* ofproto supports two kinds of OpenFlow connections:
  *
@@ -66,8 +67,9 @@ void connmgr_set_controllers(struct connmgr *,
                              const struct ofproto_controller[], size_t n);
 void connmgr_reconnect(const struct connmgr *);
 
-int connmgr_set_snoops(struct connmgr *, const struct svec *snoops);
-void connmgr_get_snoops(const struct connmgr *, struct svec *snoops);
+int connmgr_set_snoops(struct connmgr *, const struct sset *snoops);
+bool connmgr_has_snoops(const struct connmgr *);
+void connmgr_get_snoops(const struct connmgr *, struct sset *snoops);
 
 /* Individual connections to OpenFlow controllers. */
 enum ofconn_type ofconn_get_type(const struct ofconn *);

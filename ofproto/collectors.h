@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 #ifndef COLLECTORS_H
 #define COLLECTORS_H 1
 
+#include <stddef.h>
 #include <stdint.h>
-#include "svec.h"
 
 struct collectors;
+struct sset;
 
-int collectors_create(const struct svec *targets, uint16_t default_port,
+int collectors_create(const struct sset *targets, uint16_t default_port,
                       struct collectors **);
 void collectors_destroy(struct collectors *);
 

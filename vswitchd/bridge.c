@@ -820,12 +820,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 }
             }
 
-            opts.collectors.n = nf_cfg->n_targets;
-            opts.collectors.names = nf_cfg->targets;
+            sset_init(&opts.collectors);
+            sset_add_array(&opts.collectors,
+                           nf_cfg->targets, nf_cfg->n_targets);
             if (ofproto_set_netflow(br->ofproto, &opts)) {
                 VLOG_ERR("bridge %s: problem setting netflow collectors",
                          br->name);
             }
+            sset_destroy(&opts.collectors);
         } else {
             ofproto_set_netflow(br->ofproto, NULL);
         }
@@ -839,8 +841,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             memset(&oso, 0, sizeof oso);
 
-            oso.targets.n = sflow_cfg->n_targets;
-            oso.targets.names = sflow_cfg->targets;
+            sset_init(&oso.targets);
+            sset_add_array(&oso.targets,
+                           sflow_cfg->targets, sflow_cfg->n_targets);
 
             oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
             if (sflow_cfg->sampling) {
@@ -870,7 +873,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
             ofproto_set_sflow(br->ofproto, &oso);
 
-            /* Do not destroy oso.targets because it is owned by sflow_cfg. */
+            sset_destroy(&oso.targets);
         } else {
             ofproto_set_sflow(br->ofproto, NULL);
         }
@@ -1812,7 +1815,6 @@ static void
 bridge_reconfigure_one(struct bridge *br)
 {
     enum ofproto_fail_mode fail_mode;
-    struct svec snoops, old_snoops;
     struct port *port, *next;
     struct shash_node *node;
     struct shash new_ports;
@@ -1892,16 +1894,15 @@ bridge_reconfigure_one(struct bridge *br)
      * controller to another?) */
 
     /* Configure OpenFlow controller connection snooping. */
-    svec_init(&snoops);
-    svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
-                                       ovs_rundir(), br->name));
-    svec_init(&old_snoops);
-    ofproto_get_snoops(br->ofproto, &old_snoops);
-    if (!svec_equal(&snoops, &old_snoops)) {
+    if (!ofproto_has_snoops(br->ofproto)) {
+        struct sset snoops;
+
+        sset_init(&snoops);
+        sset_add_and_free(&snoops, xasprintf("punix:%s/%s.snoop",
+                                             ovs_rundir(), br->name));
         ofproto_set_snoops(br->ofproto, &snoops);
+        sset_destroy(&snoops);
     }
-    svec_destroy(&snoops);
-    svec_destroy(&old_snoops);
 
     mirror_reconfigure(br);
 }

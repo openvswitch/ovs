@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include "flow.h"
 #include "netflow.h"
+#include "sset.h"
 #include "tag.h"
 
 #ifdef  __cplusplus
@@ -35,7 +36,6 @@ struct nlattr;
 struct ofhooks;
 struct ofproto;
 struct shash;
-struct svec;
 
 struct ofproto_controller_info {
     bool is_connected;
@@ -55,7 +55,7 @@ struct ofexpired {
 };
 
 struct ofproto_sflow_options {
-    struct svec targets;
+    struct sset targets;
     uint32_t sampling_rate;
     uint32_t polling_interval;
     uint32_t header_len;
@@ -118,7 +118,7 @@ void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,
                       const char *dp_desc);
-int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
+int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
@@ -136,8 +136,9 @@ const struct cfm *ofproto_iface_get_cfm(struct ofproto *, uint32_t port_no);
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
 bool ofproto_has_primary_controller(const struct ofproto *);
 enum ofproto_fail_mode ofproto_get_fail_mode(const struct ofproto *);
-void ofproto_get_listeners(const struct ofproto *, struct svec *);
-void ofproto_get_snoops(const struct ofproto *, struct svec *);
+void ofproto_get_listeners(const struct ofproto *, struct sset *);
+bool ofproto_has_snoops(const struct ofproto *);
+void ofproto_get_snoops(const struct ofproto *, struct sset *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 
 /* Functions for use by ofproto implementation modules, not by clients. */

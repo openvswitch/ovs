@@ -73,13 +73,13 @@ struct ofsettings {
     const char *dp_desc;        /* Datapath description. */
 
     /* Related vconns and network devices. */
-    struct svec snoops;          /* Listen for controller snooping conns. */
+    struct sset snoops;          /* Listen for controller snooping conns. */
 
     /* Failure behavior. */
     int max_idle;             /* Idle time for flows in fail-open mode. */
 
     /* NetFlow. */
-    struct svec netflow;        /* NetFlow targets. */
+    struct sset netflow;        /* NetFlow targets. */
 };
 
 static unixctl_cb_func ovs_openflowd_exit;
@@ -291,9 +291,9 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->serial_desc = NULL;
     s->dp_desc = NULL;
     svec_init(&controllers);
-    svec_init(&s->snoops);
+    sset_init(&s->snoops);
     s->max_idle = 0;
-    svec_init(&s->netflow);
+    sset_init(&s->netflow);
     svec_init(&s->ports);
     for (;;) {
         int c;
@@ -398,7 +398,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_NETFLOW:
-            svec_add(&s->netflow, optarg);
+            sset_add(&s->netflow, optarg);
             break;
 
         case 'l':
@@ -406,7 +406,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_SNOOP:
-            svec_add(&s->snoops, optarg);
+            sset_add(&s->snoops, optarg);
             break;
 
         case OPT_PORTS:

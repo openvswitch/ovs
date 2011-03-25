@@ -319,7 +319,7 @@ static struct ofconn *find_controller_by_target(struct connmgr *,
                                                 const char *target);
 static void update_fail_open(struct connmgr *);
 static int set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
-                       const struct svec *);
+                       const struct sset *);
 
 /* Returns true if 'mgr' has any configured primary controllers.
  *
@@ -470,20 +470,27 @@ connmgr_reconnect(const struct connmgr *mgr)
  * A "snoop" is a pvconn to which every OpenFlow message to or from the most
  * important controller on 'mgr' is mirrored. */
 int
-connmgr_set_snoops(struct connmgr *mgr, const struct svec *snoops)
+connmgr_set_snoops(struct connmgr *mgr, const struct sset *snoops)
 {
     return set_pvconns(&mgr->snoops, &mgr->n_snoops, snoops);
 }
 
 /* Adds each of the snoops currently configured on 'mgr' to 'snoops'. */
 void
-connmgr_get_snoops(const struct connmgr *mgr, struct svec *snoops)
+connmgr_get_snoops(const struct connmgr *mgr, struct sset *snoops)
 {
     size_t i;
 
     for (i = 0; i < mgr->n_snoops; i++) {
-        svec_add(snoops, pvconn_get_name(mgr->snoops[i]));
+        sset_add(snoops, pvconn_get_name(mgr->snoops[i]));
     }
+}
+
+/* Returns true if 'mgr' has at least one snoop, false if it has none. */
+bool
+connmgr_has_snoops(const struct connmgr *mgr)
+{
+    return mgr->n_snoops > 0;
 }
 
 /* Creates a new controller for 'target' in 'mgr'.  update_controller() needs
@@ -583,10 +590,11 @@ update_fail_open(struct connmgr *mgr)
 
 static int
 set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
-            const struct svec *svec)
+            const struct sset *sset)
 {
     struct pvconn **pvconns = *pvconnsp;
     size_t n_pvconns = *n_pvconnsp;
+    const char *name;
     int retval = 0;
     size_t i;
 
@@ -595,10 +603,9 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
     }
     free(pvconns);
 
-    pvconns = xmalloc(svec->n * sizeof *pvconns);
+    pvconns = xmalloc(sset_count(sset) * sizeof *pvconns);
     n_pvconns = 0;
-    for (i = 0; i < svec->n; i++) {
-        const char *name = svec->names[i];
+    SSET_FOR_EACH (name, sset) {
         struct pvconn *pvconn;
         int error;
 

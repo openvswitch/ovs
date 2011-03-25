@@ -72,7 +72,7 @@ static bool
 ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
                             const struct ofproto_sflow_options *b)
 {
-    return (svec_equal(&a->targets, &b->targets)
+    return (sset_equals(&a->targets, &b->targets)
             && a->sampling_rate == b->sampling_rate
             && a->polling_interval == b->polling_interval
             && a->header_len == b->header_len
@@ -85,7 +85,7 @@ static struct ofproto_sflow_options *
 ofproto_sflow_options_clone(const struct ofproto_sflow_options *old)
 {
     struct ofproto_sflow_options *new = xmemdup(old, sizeof *old);
-    svec_clone(&new->targets, &old->targets);
+    sset_clone(&new->targets, &old->targets);
     new->agent_device = old->agent_device ? xstrdup(old->agent_device) : NULL;
     new->control_ip = old->control_ip ? xstrdup(old->control_ip) : NULL;
     return new;
@@ -95,7 +95,7 @@ static void
 ofproto_sflow_options_destroy(struct ofproto_sflow_options *options)
 {
     if (options) {
-        svec_destroy(&options->targets);
+        sset_destroy(&options->targets);
         free(options->agent_device);
         free(options->control_ip);
         free(options);
@@ -395,7 +395,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     SFLAddress agentIP;
     time_t now;
 
-    if (!options->targets.n || !options->sampling_rate) {
+    if (sset_is_empty(&options->targets) || !options->sampling_rate) {
         /* No point in doing any work if there are no targets or nothing to
          * sample. */
         ofproto_sflow_clear(os);
@@ -409,7 +409,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
      * collectors (which indicates that opening one or more of the configured
      * collectors failed, so that we should retry). */
     if (options_changed
-        || collectors_count(os->collectors) < options->targets.n) {
+        || collectors_count(os->collectors) < sset_count(&options->targets)) {
         collectors_destroy(os->collectors);
         collectors_create(&options->targets, SFL_DEFAULT_COLLECTOR_PORT,
                           &os->collectors);
