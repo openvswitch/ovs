@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
@@ -81,7 +82,7 @@ ms_to_ccm_interval(int interval_ms)
 }
 
 static struct cfm_internal *
-cfm_to_internal(struct cfm *cfm)
+cfm_to_internal(const struct cfm *cfm)
 {
     return CONTAINER_OF(cfm, struct cfm_internal, cfm);
 }
@@ -448,5 +449,42 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         if (rmp->fault) {
             cfm->fault = true;
         }
+    }
+}
+
+static void
+put_remote_mp(struct ds *ds, const char *header,
+              const struct remote_mp *rmp)
+{
+    ds_put_format(ds, "%s %"PRIu16": %s\n", header, rmp->mpid,
+                  rmp->fault ? "fault" : "");
+    ds_put_format(ds, "\ttime since CCM rx: %lldms\n",
+                  time_msec() - rmp->recv_time);
+}
+
+void
+cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
+{
+    const struct cfm_internal *cfmi = cfm_to_internal(cfm);
+    long long int now = time_msec();
+    struct remote_mp *rmp;
+
+    ds_put_format(ds, "MPID %"PRIu16": %s\n", cfm->mpid,
+                  cfm->fault ? "fault" : "");
+
+    ds_put_format(ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
+    ds_put_format(ds, "\ttime since CCM tx: %lldms\n", now - cfmi->ccm_sent);
+    ds_put_format(ds, "\ttime since fault check: %lldms\n",
+                  now - cfmi->fault_check);
+    ds_put_format(ds, "\tunexpected remote MAIDS: %s\n",
+                  !hmap_is_empty(&cfmi->x_remote_maids) ? "true" : "false");
+
+    ds_put_cstr(ds, "\n");
+    HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
+        put_remote_mp(ds, "Remote MPID", rmp);
+    }
+
+    HMAP_FOR_EACH (rmp, node, &cfmi->x_remote_mps) {
+        put_remote_mp(ds, "Unexpected Remote MPID", rmp);
     }
 }

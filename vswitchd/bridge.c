@@ -267,6 +267,7 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static unixctl_cb_func bridge_unixctl_fdb_show;
+static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func qos_unixctl_show;
 
 static void bond_init(void);
@@ -345,6 +346,7 @@ bridge_init(const char *remote)
 
     /* Register unixctl commands. */
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    unixctl_command_register("cfm/show", cfm_unixctl_show, NULL);
     unixctl_command_register("qos/show", qos_unixctl_show, NULL);
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
                              NULL);
@@ -1511,6 +1513,33 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
                       port_get_an_iface(port)->dp_ifidx,
                       e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
     }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+/* CFM unixctl user interface functions. */
+static void
+cfm_unixctl_show(struct unixctl_conn *conn,
+                 const char *args, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct iface *iface;
+    const struct cfm *cfm;
+
+    iface = iface_find(args);
+    if (!iface) {
+        unixctl_command_reply(conn, 501, "no such interface");
+        return;
+    }
+
+    cfm = ofproto_iface_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+
+    if (!cfm) {
+        unixctl_command_reply(conn, 501, "CFM not enabled");
+        return;
+    }
+
+    cfm_dump_ds(cfm, &ds);
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
 }

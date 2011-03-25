@@ -24,6 +24,7 @@
 
 struct flow;
 struct ofpbuf;
+struct ds;
 
 /* Ethernet destination address of CCM packets. */
 static const uint8_t eth_addr_ccm[6] OVS_UNUSED
@@ -105,5 +106,7 @@ bool cfm_generate_maid(const char *md_name, const char *ma_name,
 bool cfm_should_process_flow(const struct flow *);
 
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
+
+void cfm_dump_ds(const struct cfm *, struct ds *);
 
 #endif /* cfm.h */
