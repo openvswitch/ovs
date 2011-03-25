@@ -59,8 +59,6 @@ struct cfm {
 
     /* Statistics. */
     struct hmap remote_mps;     /* Expected remote MPs. */
-    struct hmap x_remote_mps;   /* Unexpected remote MPs. */
-    struct hmap x_remote_maids; /* Unexpected remote MAIDs. */
     bool fault;                 /* Indicates connectivity vaults. */
 };
 

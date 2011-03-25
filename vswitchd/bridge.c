@@ -1220,55 +1220,6 @@ iface_refresh_cfm_stats(struct iface *iface)
         ovsrec_maintenance_point_set_fault(mp, &rmp->fault, 1);
     }
 
-    if (hmap_is_empty(&cfm->x_remote_mps)) {
-        ovsrec_monitor_set_unexpected_remote_mpids(mon, NULL, 0);
-    } else {
-        size_t length;
-        struct remote_mp *rmp;
-        int64_t *x_remote_mps;
-
-        length = hmap_count(&cfm->x_remote_mps);
-        x_remote_mps = xzalloc(length * sizeof *x_remote_mps);
-
-        i = 0;
-        HMAP_FOR_EACH (rmp, node, &cfm->x_remote_mps) {
-            x_remote_mps[i++] = rmp->mpid;
-        }
-
-        ovsrec_monitor_set_unexpected_remote_mpids(mon, x_remote_mps, length);
-        free(x_remote_mps);
-    }
-
-    if (hmap_is_empty(&cfm->x_remote_maids)) {
-        ovsrec_monitor_set_unexpected_remote_maids(mon, NULL, 0);
-    } else {
-        size_t length;
-        char **x_remote_maids;
-        struct remote_maid *rmaid;
-
-        length = hmap_count(&cfm->x_remote_maids);
-        x_remote_maids = xzalloc(length * sizeof *x_remote_maids);
-
-        i = 0;
-        HMAP_FOR_EACH (rmaid, node, &cfm->x_remote_maids) {
-            size_t j;
-
-            x_remote_maids[i] = xzalloc(CCM_MAID_LEN * 2 + 1);
-
-            for (j = 0; j < CCM_MAID_LEN; j++) {
-                 snprintf(&x_remote_maids[i][j * 2], 3, "%02hhx",
-                          rmaid->maid[j]);
-            }
-            i++;
-        }
-        ovsrec_monitor_set_unexpected_remote_maids(mon, x_remote_maids, length);
-
-        for (i = 0; i < length; i++) {
-            free(x_remote_maids[i]);
-        }
-        free(x_remote_maids);
-    }
-
     ovsrec_monitor_set_fault(mon, &cfm->fault, 1);
 }
 

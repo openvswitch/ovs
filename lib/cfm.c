@@ -43,6 +43,9 @@ struct cfm_internal {
 
     long long ccm_sent;    /* The time we last sent a CCM. */
     long long fault_check; /* The time we last checked for faults. */
+
+    struct hmap x_remote_mps;   /* Unexpected remote MPs. */
+    struct hmap x_remote_maids; /* Unexpected remote MAIDs. */
 };
 
 static int
@@ -138,14 +141,15 @@ cfm_create(void)
     cfm  = &cfmi->cfm;
 
     hmap_init(&cfm->remote_mps);
-    hmap_init(&cfm->x_remote_mps);
-    hmap_init(&cfm->x_remote_maids);
+    hmap_init(&cfmi->x_remote_mps);
+    hmap_init(&cfmi->x_remote_maids);
     return cfm;
 }
 
 void
 cfm_destroy(struct cfm *cfm)
 {
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
     struct remote_mp *rmp, *rmp_next;
     struct remote_maid *rmaid, *rmaid_next;
 
@@ -158,20 +162,20 @@ cfm_destroy(struct cfm *cfm)
         free(rmp);
     }
 
-    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->x_remote_mps) {
-        hmap_remove(&cfm->x_remote_mps, &rmp->node);
+    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfmi->x_remote_mps) {
+        hmap_remove(&cfmi->x_remote_mps, &rmp->node);
         free(rmp);
     }
 
-    HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfm->x_remote_maids) {
-        hmap_remove(&cfm->x_remote_maids, &rmaid->node);
+    HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfmi->x_remote_maids) {
+        hmap_remove(&cfmi->x_remote_maids, &rmaid->node);
         free(rmaid);
     }
 
     hmap_destroy(&cfm->remote_mps);
-    hmap_destroy(&cfm->x_remote_mps);
-    hmap_destroy(&cfm->x_remote_maids);
-    free(cfm_to_internal(cfm));
+    hmap_destroy(&cfmi->x_remote_mps);
+    hmap_destroy(&cfmi->x_remote_maids);
+    free(cfmi);
 }
 
 /* Should be run periodically to update fault statistics messages. */
@@ -202,22 +206,22 @@ cfm_run(struct cfm *cfm)
             fault      = rmp->fault || fault;
         }
 
-        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->x_remote_mps) {
+        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfmi->x_remote_mps) {
             if (cfmi->fault_check > rmp->recv_time) {
-                hmap_remove(&cfm->x_remote_mps, &rmp->node);
+                hmap_remove(&cfmi->x_remote_mps, &rmp->node);
                 free(rmp);
             }
         }
 
-        HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfm->x_remote_maids) {
+        HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfmi->x_remote_maids) {
             if (cfmi->fault_check > rmaid->recv_time) {
-                hmap_remove(&cfm->x_remote_maids, &rmaid->node);
+                hmap_remove(&cfmi->x_remote_maids, &rmaid->node);
                 free(rmaid);
             }
         }
 
-        fault = (fault || !hmap_is_empty(&cfm->x_remote_mps)
-                 || !hmap_is_empty(&cfm->x_remote_maids));
+        fault = (fault || !hmap_is_empty(&cfmi->x_remote_mps)
+                 || !hmap_is_empty(&cfmi->x_remote_maids));
 
         cfm->fault        = fault;
         cfmi->fault_check = now;
@@ -289,6 +293,7 @@ cfm_configure(struct cfm *cfm)
 void
 cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
 {
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
     size_t i;
     struct hmap new_rmps;
     struct remote_mp *rmp, *rmp_next;
@@ -305,8 +310,8 @@ cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
 
         if ((rmp = lookup_remote_mp(&cfm->remote_mps, mpid))) {
             hmap_remove(&cfm->remote_mps, &rmp->node);
-        } else if ((rmp = lookup_remote_mp(&cfm->x_remote_mps, mpid))) {
-            hmap_remove(&cfm->x_remote_mps, &rmp->node);
+        } else if ((rmp = lookup_remote_mp(&cfmi->x_remote_mps, mpid))) {
+            hmap_remove(&cfmi->x_remote_mps, &rmp->node);
         } else {
             rmp = xzalloc(sizeof *rmp);
             rmp->mpid = mpid;
@@ -409,14 +414,14 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
         struct remote_maid *rmaid;
 
-        rmaid = lookup_remote_maid(&cfm->x_remote_maids, ccm->maid);
+        rmaid = lookup_remote_maid(&cfmi->x_remote_maids, ccm->maid);
         if (rmaid) {
             rmaid->recv_time = time_msec();
         } else {
             rmaid = xzalloc(sizeof *rmaid);
             rmaid->recv_time = time_msec();
             memcpy(rmaid->maid, ccm->maid, sizeof rmaid->maid);
-            hmap_insert(&cfm->x_remote_maids, &rmaid->node,
+            hmap_insert(&cfmi->x_remote_maids, &rmaid->node,
                         hash_bytes(ccm->maid, CCM_MAID_LEN, 0));
         }
         cfm->fault = true;
@@ -428,13 +433,13 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
 
         if (!rmp) {
-            rmp = lookup_remote_mp(&cfm->x_remote_mps, ccm_mpid);
+            rmp = lookup_remote_mp(&cfmi->x_remote_mps, ccm_mpid);
         }
 
         if (!rmp) {
             rmp = xzalloc(sizeof *rmp);
             rmp->mpid = ccm_mpid;
-            hmap_insert(&cfm->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
+            hmap_insert(&cfmi->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
             rmp->fault = true;
         }
 
