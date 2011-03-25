@@ -51,7 +51,7 @@
 #include "poll-loop.h"
 #include "process.h"
 #include "signals.h"
-#include "svec.h"
+#include "sset.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -230,7 +230,7 @@ execute_appctl_command(const char *unixctl_command, char **output)
 }
 
 static void
-do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
+do_get_bridge_parts(const struct ovsrec_bridge *br, struct sset *parts,
                     int vlan, bool break_down_bonds)
 {
     size_t i, j;
@@ -247,10 +247,10 @@ do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
         if (break_down_bonds) {
             for (j = 0; j < port->n_interfaces; j++) {
                 const struct ovsrec_interface *iface = port->interfaces[j];
-                svec_add(parts, iface->name);
+                sset_add(parts, iface->name);
             }
         } else {
-            svec_add(parts, port->name);
+            sset_add(parts, port->name);
         }
     }
 }
@@ -263,7 +263,7 @@ do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
  * reported.  If 'vlan' > 0, only interfaces with implicit VLAN 'vlan' are
  * reported.  */
 static void
-get_bridge_ifaces(const struct ovsrec_bridge *br, struct svec *ifaces,
+get_bridge_ifaces(const struct ovsrec_bridge *br, struct sset *ifaces,
                   int vlan)
 {
     do_get_bridge_parts(br, ifaces, vlan, true);
@@ -276,7 +276,7 @@ get_bridge_ifaces(const struct ovsrec_bridge *br, struct svec *ifaces,
  * only trunk ports or ports with implicit VLAN 0 are reported.  If 'vlan' > 0,
  * only port with implicit VLAN 'vlan' are reported.  */
 static void
-get_bridge_ports(const struct ovsrec_bridge *br, struct svec *ports,
+get_bridge_ports(const struct ovsrec_bridge *br, struct sset *ports,
                  int vlan)
 {
     do_get_bridge_parts(br, ports, vlan, false);
@@ -813,9 +813,10 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
     const char *linux_name;   /* Name used by brctl. */
     const struct ovsrec_bridge *ovs_bridge;  /* Bridge used by ovs-vswitchd. */
     int br_vlan;                /* VLAN tag. */
-    struct svec ifaces;
+    struct sset ifaces;
 
     struct ofpbuf query_data;
+    const char *iface_name;
     struct ofpbuf *reply;
     char *unixctl_command;
     uint64_t count, skip;
@@ -849,12 +850,11 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
 
     /* Fetch the MAC address for each interface on the bridge, so that we can
      * fill in the is_local field in the response. */
-    svec_init(&ifaces);
+    sset_init(&ifaces);
     get_bridge_ifaces(ovs_bridge, &ifaces, br_vlan);
-    local_macs = xmalloc(ifaces.n * sizeof *local_macs);
+    local_macs = xmalloc(sset_count(&ifaces) * sizeof *local_macs);
     n_local_macs = 0;
-    for (i = 0; i < ifaces.n; i++) {
-        const char *iface_name = ifaces.names[i];
+    SSET_FOR_EACH (iface_name, &ifaces) {
         struct mac *mac = &local_macs[n_local_macs];
         struct netdev *netdev;
 
@@ -866,7 +866,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
             netdev_close(netdev);
         }
     }
-    svec_destroy(&ifaces);
+    sset_destroy(&ifaces);
 
     /* Parse the response from ovs-appctl and convert it to binary format to
      * pass back to the kernel. */
@@ -937,22 +937,17 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-send_ifindex_reply(uint32_t seq, struct svec *ifaces)
+send_ifindex_reply(uint32_t seq, struct sset *ifaces)
 {
     struct ofpbuf *reply;
     const char *iface;
     size_t n_indices;
     int *indices;
-    size_t i;
-
-    /* Make sure that any given interface only occurs once.  This shouldn't
-     * happen, but who knows what people put into their configuration files. */
-    svec_sort_unique(ifaces);
 
     /* Convert 'ifaces' into ifindexes. */
     n_indices = 0;
-    indices = xmalloc(ifaces->n * sizeof *indices);
-    SVEC_FOR_EACH (i, iface, ifaces) {
+    indices = xmalloc(sset_count(ifaces) * sizeof *indices);
+    SSET_FOR_EACH (iface, ifaces) {
         int ifindex = if_nametoindex(iface);
         if (ifindex) {
             indices[n_indices++] = ifindex;
@@ -973,7 +968,7 @@ static int
 handle_get_bridges_cmd(const struct ovsrec_open_vswitch *ovs,
                        struct ofpbuf *buffer)
 {
-    struct svec bridges;
+    struct sset bridges;
     size_t i, j;
 
     uint32_t seq;
@@ -990,22 +985,22 @@ handle_get_bridges_cmd(const struct ovsrec_open_vswitch *ovs,
     }
 
     /* Get all the real bridges and all the fake ones. */
-    svec_init(&bridges);
+    sset_init(&bridges);
     for (i = 0; i < ovs->n_bridges; i++) {
         const struct ovsrec_bridge *br = ovs->bridges[i];
 
-        svec_add(&bridges, br->name);
+        sset_add(&bridges, br->name);
         for (j = 0; j < br->n_ports; j++) {
             const struct ovsrec_port *port = br->ports[j];
 
             if (port->fake_bridge) {
-                svec_add(&bridges, port->name);
+                sset_add(&bridges, port->name);
             }
         }
     }
 
     send_ifindex_reply(seq, &bridges);
-    svec_destroy(&bridges);
+    sset_destroy(&bridges);
 
     return 0;
 }
@@ -1020,7 +1015,7 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
     const struct ovsrec_bridge *ovs_bridge;
     int br_vlan;
 
-    struct svec ports;
+    struct sset ports;
 
     int error;
 
@@ -1037,12 +1032,11 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
         return error;
     }
 
-    svec_init(&ports);
+    sset_init(&ports);
     get_bridge_ports(ovs_bridge, &ports, br_vlan);
-    svec_sort(&ports);
-    svec_del(&ports, linux_name);
+    sset_find_and_delete(&ports, linux_name);
     send_ifindex_reply(seq, &ports); /* XXX bonds won't show up */
-    svec_destroy(&ports);
+    sset_destroy(&ports);
 
     return 0;
 }
