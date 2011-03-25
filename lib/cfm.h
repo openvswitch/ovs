@@ -20,13 +20,33 @@
 #include <stdint.h>
 
 #include "hmap.h"
-#include "packets.h"
+#include "openvswitch/types.h"
 
 struct flow;
+struct ofpbuf;
 
 /* Ethernet destination address of CCM packets. */
-static const uint8_t eth_addr_ccm[ETH_ADDR_LEN] OVS_UNUSED
+static const uint8_t eth_addr_ccm[6] OVS_UNUSED
     = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
+
+#define ETH_TYPE_CFM 0x8902
+
+/* A 'ccm' represents a Continuity Check Message from the 802.1ag
+ * specification.  Continuity Check Messages are broadcast periodically so that
+ * hosts can determine who they have connectivity to. */
+#define CCM_LEN 74
+#define CCM_MAID_LEN 48
+struct ccm {
+    uint8_t  mdlevel_version; /* MD Level and Version */
+    uint8_t  opcode;
+    uint8_t  flags;
+    uint8_t  tlv_offset;
+    ovs_be32 seq;
+    ovs_be16 mpid;
+    uint8_t  maid[CCM_MAID_LEN];
+    uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 /* A 'cfm' represent a local Maintenance Point (MP) and its Connectivity Fault
  * Management (CFM) state machine.  Its configuration variables should be set
