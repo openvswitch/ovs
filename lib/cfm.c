@@ -110,6 +110,21 @@ lookup_remote_mp(const struct hmap *hmap, uint16_t mpid)
     return NULL;
 }
 
+static struct remote_maid *
+lookup_remote_maid(const struct hmap *hmap, uint8_t maid[CCM_MAID_LEN])
+{
+    uint32_t hash;
+    struct remote_maid *rmaid;
+
+    hash = hash_bytes(maid, CCM_MAID_LEN, 0);
+    HMAP_FOR_EACH_WITH_HASH (rmaid, node, hash, hmap) {
+        if (memcmp(rmaid->maid, maid, CCM_MAID_LEN) == 0) {
+            return rmaid;
+        }
+    }
+    return NULL;
+}
+
 /* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
  * 'eth_src', and 'interval' filled out.  When changes are made to the 'cfm'
  * object, cfm_configure should be called before using it. */
@@ -392,42 +407,42 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     }
 
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
-        uint32_t hash;
         struct remote_maid *rmaid;
 
-        hash = hash_bytes(ccm->maid, sizeof ccm->maid, 0);
+        rmaid = lookup_remote_maid(&cfm->x_remote_maids, ccm->maid);
+        if (rmaid) {
+            rmaid->recv_time = time_msec();
+        } else {
+            rmaid = xzalloc(sizeof *rmaid);
+            rmaid->recv_time = time_msec();
+            memcpy(rmaid->maid, ccm->maid, sizeof rmaid->maid);
+            hmap_insert(&cfm->x_remote_maids, &rmaid->node,
+                        hash_bytes(ccm->maid, CCM_MAID_LEN, 0));
+        }
+        cfm->fault = true;
+    } else {
+        ccm_mpid = ntohs(ccm->mpid);
+        ccm_seq = ntohl(ccm->seq);
+        ccm_interval = ccm->flags & 0x7;
 
-        HMAP_FOR_EACH_IN_BUCKET (rmaid, node, hash, &cfm->x_remote_maids) {
-            if (memcmp(rmaid->maid, ccm->maid, sizeof rmaid->maid) == 0) {
-                rmaid->recv_time = time_msec();
-                return;
-            }
+        rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
+
+        if (!rmp) {
+            rmp = lookup_remote_mp(&cfm->x_remote_mps, ccm_mpid);
         }
 
-        rmaid            = xzalloc(sizeof *rmaid);
-        rmaid->recv_time = time_msec();
-        memcpy(rmaid->maid, ccm->maid, sizeof rmaid->maid);
-        hmap_insert(&cfm->x_remote_maids, &rmaid->node, hash);
-        return;
+        if (!rmp) {
+            rmp = xzalloc(sizeof *rmp);
+            rmp->mpid = ccm_mpid;
+            hmap_insert(&cfm->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
+            rmp->fault = true;
+        }
+
+        rmp->recv_time = time_msec();
+        rmp->fault = ccm_interval != cfmi->ccm_interval;
+
+        if (rmp->fault) {
+            cfm->fault = true;
+        }
     }
-
-    ccm_mpid     = ntohs(ccm->mpid);
-    ccm_seq      = ntohl(ccm->seq);
-    ccm_interval = ccm->flags & 0x7;
-
-    rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
-
-    if (!rmp) {
-        rmp = lookup_remote_mp(&cfm->x_remote_mps, ccm_mpid);
-    }
-
-    if (!rmp) {
-        rmp       = xzalloc(sizeof *rmp);
-        rmp->mpid = ccm_mpid;
-        hmap_insert(&cfm->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
-        cfm->fault = true;
-    }
-
-    rmp->recv_time = time_msec();
-    rmp->fault     = ccm_interval != cfmi->ccm_interval;
 }
