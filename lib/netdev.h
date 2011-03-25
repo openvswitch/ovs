@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ struct ofpbuf;
 struct in_addr;
 struct in6_addr;
 struct shash;
-struct svec;
+struct sset;
 
 enum netdev_flags {
     NETDEV_UP = 0x0001,         /* Device enabled? */
@@ -93,7 +93,7 @@ struct netdev_class;
 void netdev_run(void);
 void netdev_wait(void);
 
-void netdev_enumerate_types(struct svec *types);
+void netdev_enumerate_types(struct sset *types);
 
 /* Open and close. */
 int netdev_open(struct netdev_options *, struct netdev **);
@@ -103,7 +103,7 @@ void netdev_close(struct netdev *);
 bool netdev_exists(const char *name);
 bool netdev_is_open(const char *name);
 
-int netdev_enumerate(struct svec *);
+int netdev_enumerate(struct sset *);
 
 /* Options. */
 int netdev_set_config(struct netdev *, const struct shash *args);
@@ -173,7 +173,7 @@ struct netdev_queue_stats {
 int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
                         uint32_t kbits_burst);
 
-int netdev_get_qos_types(const struct netdev *, struct svec *types);
+int netdev_get_qos_types(const struct netdev *, struct sset *types);
 int netdev_get_qos_capabilities(const struct netdev *,
                                 const char *type,
                                 struct netdev_qos_capabilities *);

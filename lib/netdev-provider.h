@@ -166,7 +166,7 @@ struct netdev_class {
      *
      * If this netdev class does not support enumeration, this may be a null
      * pointer. */
-    int (*enumerate)(struct svec *all_names);
+    int (*enumerate)(struct sset *all_names);
 
     /* Attempts to receive a packet from 'netdev' into the 'size' bytes in
      * 'buffer'.  If successful, returns the number of bytes in the received
@@ -330,11 +330,11 @@ struct netdev_class {
      * this function must not add "" to 'types'.
      *
      * The caller is responsible for initializing 'types' (e.g. with
-     * svec_init()) before calling this function.  The caller takes ownership
-     * of the strings added to 'types'.
+     * sset_init()) before calling this function.  The caller retains ownership
+     * of 'types'.
      *
      * May be NULL if 'netdev' does not support QoS at all. */
-    int (*get_qos_types)(const struct netdev *netdev, struct svec *types);
+    int (*get_qos_types)(const struct netdev *netdev, struct sset *types);
 
     /* Queries 'netdev' for its capabilities regarding the specified 'type' of
      * QoS.  On success, initializes 'caps' with the QoS capabilities.

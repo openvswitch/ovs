@@ -64,7 +64,7 @@
 #include "rtnetlink-link.h"
 #include "socket-util.h"
 #include "shash.h"
-#include "svec.h"
+#include "sset.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
@@ -729,9 +729,9 @@ netdev_linux_close(struct netdev *netdev_)
     free(netdev);
 }
 
-/* Initializes 'svec' with a list of the names of all known network devices. */
+/* Initializes 'sset' with a list of the names of all known network devices. */
 static int
-netdev_linux_enumerate(struct svec *svec)
+netdev_linux_enumerate(struct sset *sset)
 {
     struct if_nameindex *names;
 
@@ -740,7 +740,7 @@ netdev_linux_enumerate(struct svec *svec)
         size_t i;
 
         for (i = 0; names[i].if_name != NULL; i++) {
-            svec_add(svec, names[i].if_name);
+            sset_add(sset, names[i].if_name);
         }
         if_freenameindex(names);
         return 0;
@@ -1510,14 +1510,14 @@ netdev_linux_set_policing(struct netdev *netdev,
 
 static int
 netdev_linux_get_qos_types(const struct netdev *netdev OVS_UNUSED,
-                           struct svec *types)
+                           struct sset *types)
 {
     const struct tc_ops **opsp;
 
     for (opsp = tcs; *opsp != NULL; opsp++) {
         const struct tc_ops *ops = *opsp;
         if (ops->tc_install && ops->ovs_name[0] != '\0') {
-            svec_add(types, ops->ovs_name);
+            sset_add(types, ops->ovs_name);
         }
     }
     return 0;

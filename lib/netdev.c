@@ -177,18 +177,18 @@ netdev_lookup_provider(const char *type)
 }
 
 /* Clears 'types' and enumerates the types of all currently registered netdev
- * providers into it.  The caller must first initialize the svec. */
+ * providers into it.  The caller must first initialize the sset. */
 void
-netdev_enumerate_types(struct svec *types)
+netdev_enumerate_types(struct sset *types)
 {
     struct shash_node *node;
 
     netdev_initialize();
-    svec_clear(types);
+    sset_clear(types);
 
     SHASH_FOR_EACH(node, &netdev_classes) {
         const struct netdev_class *netdev_class = node->data;
-        svec_add(types, netdev_class->type);
+        sset_add(types, netdev_class->type);
     }
 }
 
@@ -360,20 +360,20 @@ netdev_is_open(const char *name)
     return !!shash_find_data(&netdev_dev_shash, name);
 }
 
-/*  Clears 'svec' and enumerates the names of all known network devices. */
+/*  Clears 'sset' and enumerates the names of all known network devices. */
 int
-netdev_enumerate(struct svec *svec)
+netdev_enumerate(struct sset *sset)
 {
     struct shash_node *node;
     int error = 0;
 
     netdev_initialize();
-    svec_clear(svec);
+    sset_clear(sset);
 
     SHASH_FOR_EACH(node, &netdev_classes) {
         const struct netdev_class *netdev_class = node->data;
         if (netdev_class->enumerate) {
-            int retval = netdev_class->enumerate(svec);
+            int retval = netdev_class->enumerate(sset);
             if (retval) {
                 VLOG_WARN("failed to enumerate %s network devices: %s",
                           netdev_class->type, strerror(retval));
@@ -964,13 +964,13 @@ netdev_set_policing(struct netdev *netdev, uint32_t kbits_rate,
  * Every network device supports disabling QoS with a type of "", but this type
  * will not be added to 'types'.
  *
- * The caller must initialize 'types' (e.g. with svec_init()) before calling
+ * The caller must initialize 'types' (e.g. with sset_init()) before calling
  * this function.  The caller is responsible for destroying 'types' (e.g. with
- * svec_destroy()) when it is no longer needed.
+ * sset_destroy()) when it is no longer needed.
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-netdev_get_qos_types(const struct netdev *netdev, struct svec *types)
+netdev_get_qos_types(const struct netdev *netdev, struct sset *types)
 {
     const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
     return (class->get_qos_types
@@ -1258,12 +1258,11 @@ struct netdev *
 netdev_find_dev_by_in4(const struct in_addr *in4)
 {
     struct netdev *netdev;
-    struct svec dev_list = SVEC_EMPTY_INITIALIZER;
-    size_t i;
+    struct sset dev_list = SSET_INITIALIZER(&dev_list);
+    const char *name;
 
     netdev_enumerate(&dev_list);
-    for (i = 0; i < dev_list.n; i++) {
-        const char *name = dev_list.names[i];
+    SSET_FOR_EACH (name, &dev_list) {
         struct in_addr dev_in4;
 
         if (!netdev_open_default(name, &netdev)
@@ -1276,7 +1275,7 @@ netdev_find_dev_by_in4(const struct in_addr *in4)
     netdev = NULL;
 
 exit:
-    svec_destroy(&dev_list);
+    sset_destroy(&dev_list);
     return netdev;
 }
 
