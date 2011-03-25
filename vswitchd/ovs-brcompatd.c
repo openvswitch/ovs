@@ -233,14 +233,11 @@ static void
 do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
                     int vlan, bool break_down_bonds)
 {
-    struct svec ports;
     size_t i, j;
 
-    svec_init(&ports);
     for (i = 0; i < br->n_ports; i++) {
         const struct ovsrec_port *port = br->ports[i];
 
-        svec_add(&ports, port->name);
         if (vlan >= 0) {
             int port_vlan = port->n_tag ? *port->tag : 0;
             if (vlan != port_vlan) {
@@ -256,7 +253,6 @@ do_get_bridge_parts(const struct ovsrec_bridge *br, struct svec *parts,
             svec_add(parts, port->name);
         }
     }
-    svec_destroy(&ports);
 }
 
 /* Add all the interfaces for 'bridge' to 'ifaces', breaking bonded interfaces
