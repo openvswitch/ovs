@@ -215,6 +215,7 @@ ovsdb_file_open__(const char *file_name,
                                          &date, &txn);
         json_destroy(json);
         if (error) {
+            ovsdb_log_unread(log);
             break;
         }
 
@@ -223,7 +224,11 @@ ovsdb_file_open__(const char *file_name,
             oldest_commit = date;
         }
 
-        ovsdb_error_destroy(ovsdb_txn_commit(txn, false));
+        error = ovsdb_txn_commit(txn, false);
+        if (error) {
+            ovsdb_log_unread(log);
+            break;
+        }
     }
     if (error) {
         /* Log error but otherwise ignore it.  Probably the database just got

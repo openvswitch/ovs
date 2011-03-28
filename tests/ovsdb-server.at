@@ -38,6 +38,101 @@ cat stdout >> output
 
 EXECUTION_EXAMPLES
 
+AT_SETUP([truncating corrupted database log])
+AT_KEYWORDS([ovsdb server positive unix])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+dnl Do one transaction and save the output.
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "insert",
+   "table": "ordinals",
+   "row": {"number": 0, "name": "zero"}}]'
+]])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+cat stdout >> output
+dnl Add some crap to the database log and run another transaction, which should
+dnl ignore the crap and truncate it out of the log.
+echo 'xxx' >> db
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "insert",
+   "table": "ordinals",
+   "row": {"number": 1, "name": "one"}}]'
+]])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
+AT_CHECK([grep 'syntax error: db: parse error.* in header line "xxx"' stderr],
+  [0], [ignore])
+cat stdout >> output
+dnl Run a final transaction to verify that both transactions succeeeded.
+dnl The crap that we added should have been truncated by the previous run,
+dnl so ovsdb-server shouldn't log a warning this time.
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "select",
+   "table": "ordinals",
+   "where": [],
+   "sort": ["number"]}]'
+]])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+cat stdout >> output
+AT_CHECK([perl $srcdir/uuidfilt.pl output], [0],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"uuid":["uuid","<1>"]}]
+[{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<2>"],"name":"zero","number":0},{"_uuid":["uuid","<1>"],"_version":["uuid","<3>"],"name":"one","number":1}]}]
+]], [],
+         [test ! -e pid || kill `cat pid`])
+AT_CLEANUP
+
+AT_SETUP([truncating database log with bad transaction])
+AT_KEYWORDS([ovsdb server positive unix])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+dnl Do one transaction and save the output.
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "insert",
+   "table": "ordinals",
+   "row": {"number": 0, "name": "zero"}}]'
+]])
+AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+cat stdout >> output
+dnl Add some crap to the database log and run another transaction, which should
+dnl ignore the crap and truncate it out of the log.
+echo 'OVSDB JSON 15 ffbcdae4b0386265f9ea3280dd7c8f0b72a20e56
+{"invalid":{}}' >> db
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "insert",
+   "table": "ordinals",
+   "row": {"number": 1, "name": "one"}}]'
+]])
+AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
+AT_CHECK([grep 'syntax "{"invalid":{}}": unknown table: No table named invalid.' stderr],
+  [0], [ignore])
+cat stdout >> output
+dnl Run a final transaction to verify that both transactions succeeeded.
+dnl The crap that we added should have been truncated by the previous run,
+dnl so ovsdb-server shouldn't log a warning this time.
+AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
+'["ordinals",
+  {"op": "select",
+   "table": "ordinals",
+   "where": [],
+   "sort": ["number"]}]'
+]])
+AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+cat stdout >> output
+AT_CHECK([perl $srcdir/uuidfilt.pl output], [0],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"uuid":["uuid","<1>"]}]
+[{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<2>"],"name":"zero","number":0},{"_uuid":["uuid","<1>"],"_version":["uuid","<3>"],"name":"one","number":1}]}]
+]], [],
+         [test ! -e pid || kill `cat pid`])
+AT_CLEANUP
+
 AT_SETUP([ovsdb-client get-schema-version])
 AT_KEYWORDS([ovsdb server positive])
 AT_DATA([schema], [ORDINAL_SCHEMA

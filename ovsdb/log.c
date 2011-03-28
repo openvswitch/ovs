@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ enum ovsdb_log_mode {
 };
 
 struct ovsdb_log {
+    off_t prev_offset;
     off_t offset;
     char *name;
     struct lockfile *lockfile;
@@ -121,6 +122,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
     file->name = xstrdup(name);
     file->lockfile = lockfile;
     file->stream = stream;
+    file->prev_offset = 0;
     file->offset = 0;
     file->read_error = NULL;
     file->write_error = NULL;
@@ -284,6 +286,7 @@ ovsdb_log_read(struct ovsdb_log *file, struct json **jsonp)
         goto error;
     }
 
+    file->prev_offset = file->offset;
     file->offset = data_offset + data_length;
     *jsonp = json;
     return 0;
@@ -292,6 +295,22 @@ error:
     file->read_error = ovsdb_error_clone(error);
     json_destroy(json);
     return error;
+}
+
+/* Causes the log record read by the previous call to ovsdb_log_read() to be
+ * effectively discarded.  The next call to ovsdb_log_write() will overwrite
+ * that previously read record.
+ *
+ * Calling this function more than once has no additional effect.
+ *
+ * This function is useful when ovsdb_log_read() successfully reads a record
+ * but that record does not make sense at a higher level (e.g. it specifies an
+ * invalid transaction). */
+void
+ovsdb_log_unread(struct ovsdb_log *file)
+{
+    assert(file->mode == OVSDB_LOG_READ);
+    file->offset = file->prev_offset;
 }
 
 struct ovsdb_error *
