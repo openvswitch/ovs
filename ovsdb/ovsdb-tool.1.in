@@ -102,8 +102,8 @@ will print a blank line.
 Prints the checksum in the schema embedded within the database
 \fIdb\fR or of the standalone schema \fIschema\fR on stdout.
 .IP
-If \fIschema\fR or \fIdb\fR was created before schema versioning was
-introduced, then it will not have a version number and this command
+If \fIschema\fR or \fIdb\fR was created before schema checksums were
+introduced, then it will not have a checksum and this command
 will print a blank line.
 .
 .IP "\fBquery\fI db transaction\fR"
