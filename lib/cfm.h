@@ -73,15 +73,6 @@ struct remote_mp {
     bool fault;          /* Indicates a connectivity fault. */
 };
 
-/* Remote MAIDs keep track of incoming CCM messages which have a different MAID
- * than this CFM instance. */
-struct remote_maid {
-    uint8_t maid[CCM_MAID_LEN]; /* The remote MAID. */
-    struct hmap_node node;      /* In 'cfm' 'x_remote_maids'. */
-
-    long long recv_time; /* Most recent receive time for this 'remote_maid'. */
-};
-
 struct cfm *cfm_create(void);
 
 void cfm_destroy(struct cfm *);

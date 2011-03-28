@@ -45,8 +45,7 @@ struct cfm_internal {
     long long ccm_sent;    /* The time we last sent a CCM. */
     long long fault_check; /* The time we last checked for faults. */
 
-    struct hmap x_remote_mps;   /* Unexpected remote MPs. */
-    struct hmap x_remote_maids; /* Unexpected remote MAIDs. */
+    long long x_recv_time;
 };
 
 static int
@@ -114,21 +113,6 @@ lookup_remote_mp(const struct hmap *hmap, uint16_t mpid)
     return NULL;
 }
 
-static struct remote_maid *
-lookup_remote_maid(const struct hmap *hmap, uint8_t maid[CCM_MAID_LEN])
-{
-    uint32_t hash;
-    struct remote_maid *rmaid;
-
-    hash = hash_bytes(maid, CCM_MAID_LEN, 0);
-    HMAP_FOR_EACH_WITH_HASH (rmaid, node, hash, hmap) {
-        if (memcmp(rmaid->maid, maid, CCM_MAID_LEN) == 0) {
-            return rmaid;
-        }
-    }
-    return NULL;
-}
-
 /* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
  * 'eth_src', and 'interval' filled out.  When changes are made to the 'cfm'
  * object, cfm_configure should be called before using it. */
@@ -140,10 +124,9 @@ cfm_create(void)
 
     cfmi = xzalloc(sizeof *cfmi);
     cfm  = &cfmi->cfm;
+    cfmi->x_recv_time = LLONG_MIN;
 
     hmap_init(&cfm->remote_mps);
-    hmap_init(&cfmi->x_remote_mps);
-    hmap_init(&cfmi->x_remote_maids);
     return cfm;
 }
 
@@ -152,7 +135,6 @@ cfm_destroy(struct cfm *cfm)
 {
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
     struct remote_mp *rmp, *rmp_next;
-    struct remote_maid *rmaid, *rmaid_next;
 
     if (!cfm) {
         return;
@@ -163,19 +145,7 @@ cfm_destroy(struct cfm *cfm)
         free(rmp);
     }
 
-    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfmi->x_remote_mps) {
-        hmap_remove(&cfmi->x_remote_mps, &rmp->node);
-        free(rmp);
-    }
-
-    HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfmi->x_remote_maids) {
-        hmap_remove(&cfmi->x_remote_maids, &rmaid->node);
-        free(rmaid);
-    }
-
     hmap_destroy(&cfm->remote_mps);
-    hmap_destroy(&cfmi->x_remote_mps);
-    hmap_destroy(&cfmi->x_remote_maids);
     free(cfmi);
 }
 
@@ -185,6 +155,7 @@ cfm_run(struct cfm *cfm)
 {
     long long now = time_msec();
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
+    long long fault_interval;
 
     /* According to the 802.1ag specification we should assume every other MP
      * with the same MAID has the same transmission interval that we have.  If
@@ -194,34 +165,17 @@ cfm_run(struct cfm *cfm)
      *
      * According to the specification we should check when (ccm_interval_ms *
      * 3.5)ms have passed. */
-    if (now >= cfmi->fault_check + (cfmi->ccm_interval_ms * 7) / 2) {
+    fault_interval = (cfmi->ccm_interval_ms * 7) / 2;
+    if (now >= cfmi->fault_check + fault_interval) {
         bool fault;
-        struct remote_mp *rmp, *rmp_next;
-        struct remote_maid *rmaid, *rmaid_next;
+        struct remote_mp *rmp;
 
-        fault = false;
+        fault = now < cfmi->x_recv_time + fault_interval;
 
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
             rmp->fault = rmp->fault || cfmi->fault_check > rmp->recv_time;
             fault      = rmp->fault || fault;
         }
-
-        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfmi->x_remote_mps) {
-            if (cfmi->fault_check > rmp->recv_time) {
-                hmap_remove(&cfmi->x_remote_mps, &rmp->node);
-                free(rmp);
-            }
-        }
-
-        HMAP_FOR_EACH_SAFE (rmaid, rmaid_next, node, &cfmi->x_remote_maids) {
-            if (cfmi->fault_check > rmaid->recv_time) {
-                hmap_remove(&cfmi->x_remote_maids, &rmaid->node);
-                free(rmaid);
-            }
-        }
-
-        fault = (fault || !hmap_is_empty(&cfmi->x_remote_mps)
-                 || !hmap_is_empty(&cfmi->x_remote_maids));
 
         cfm->fault        = fault;
         cfmi->fault_check = now;
@@ -293,7 +247,6 @@ cfm_configure(struct cfm *cfm)
 void
 cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
 {
-    struct cfm_internal *cfmi = cfm_to_internal(cfm);
     size_t i;
     struct hmap new_rmps;
     struct remote_mp *rmp, *rmp_next;
@@ -310,8 +263,6 @@ cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
 
         if ((rmp = lookup_remote_mp(&cfm->remote_mps, mpid))) {
             hmap_remove(&cfm->remote_mps, &rmp->node);
-        } else if ((rmp = lookup_remote_mp(&cfmi->x_remote_mps, mpid))) {
-            hmap_remove(&cfmi->x_remote_mps, &rmp->node);
         } else {
             rmp = xzalloc(sizeof *rmp);
             rmp->mpid = mpid;
@@ -391,13 +342,14 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 {
     struct ccm *ccm;
     uint16_t ccm_mpid;
-    uint32_t ccm_seq;
     uint8_t ccm_interval;
     struct remote_mp *rmp;
+    struct eth_header *eth;
 
     struct cfm_internal *cfmi        = cfm_to_internal(cfm);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
+    eth = p->l2;
     ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_LEN);
 
     if (!ccm) {
@@ -412,54 +364,27 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     }
 
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
-        struct remote_maid *rmaid;
-
-        rmaid = lookup_remote_maid(&cfmi->x_remote_maids, ccm->maid);
-        if (rmaid) {
-            rmaid->recv_time = time_msec();
-        } else {
-            rmaid = xzalloc(sizeof *rmaid);
-            rmaid->recv_time = time_msec();
-            memcpy(rmaid->maid, ccm->maid, sizeof rmaid->maid);
-            hmap_insert(&cfmi->x_remote_maids, &rmaid->node,
-                        hash_bytes(ccm->maid, CCM_MAID_LEN, 0));
-        }
+        cfmi->x_recv_time = time_msec();
         cfm->fault = true;
+        VLOG_WARN_RL(&rl, "Received unexpected remote MAID from MAC "
+                     ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
     } else {
         ccm_mpid = ntohs(ccm->mpid);
-        ccm_seq = ntohl(ccm->seq);
         ccm_interval = ccm->flags & 0x7;
 
         rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
 
-        if (!rmp) {
-            rmp = lookup_remote_mp(&cfmi->x_remote_mps, ccm_mpid);
-        }
-
-        if (!rmp) {
-            rmp = xzalloc(sizeof *rmp);
-            rmp->mpid = ccm_mpid;
-            hmap_insert(&cfmi->x_remote_mps, &rmp->node, hash_mpid(ccm_mpid));
-            rmp->fault = true;
-        }
-
-        rmp->recv_time = time_msec();
-        rmp->fault = ccm_interval != cfmi->ccm_interval;
-
-        if (rmp->fault) {
+        if (rmp) {
+            rmp->recv_time = time_msec();
+            rmp->fault = ccm_interval != cfmi->ccm_interval;
+            cfm->fault = rmp->fault || cfm->fault;
+        } else {
+            cfmi->x_recv_time = time_msec();
             cfm->fault = true;
+            VLOG_WARN_RL(&rl, "Received unexpected remote MPID %d from MAC "
+                         ETH_ADDR_FMT, ccm_mpid, ETH_ADDR_ARGS(eth->eth_src));
         }
     }
-}
-
-static void
-put_remote_mp(struct ds *ds, const char *header,
-              const struct remote_mp *rmp)
-{
-    ds_put_format(ds, "%s %"PRIu16": %s\n", header, rmp->mpid,
-                  rmp->fault ? "fault" : "");
-    ds_put_format(ds, "\ttime since CCM rx: %lldms\n",
-                  time_msec() - rmp->recv_time);
 }
 
 void
@@ -474,17 +399,16 @@ cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
 
     ds_put_format(ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
     ds_put_format(ds, "\ttime since CCM tx: %lldms\n", now - cfmi->ccm_sent);
+    ds_put_format(ds, "\ttime since bad CCM rx: %lldms\n",
+                  now - cfmi->x_recv_time);
     ds_put_format(ds, "\ttime since fault check: %lldms\n",
                   now - cfmi->fault_check);
-    ds_put_format(ds, "\tunexpected remote MAIDS: %s\n",
-                  !hmap_is_empty(&cfmi->x_remote_maids) ? "true" : "false");
 
     ds_put_cstr(ds, "\n");
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-        put_remote_mp(ds, "Remote MPID", rmp);
-    }
-
-    HMAP_FOR_EACH (rmp, node, &cfmi->x_remote_mps) {
-        put_remote_mp(ds, "Unexpected Remote MPID", rmp);
+        ds_put_format(ds, "Remote MPID %"PRIu16": %s\n", rmp->mpid,
+                      rmp->fault ? "fault" : "");
+        ds_put_format(ds, "\ttime since CCM rx: %lldms\n",
+                      time_msec() - rmp->recv_time);
     }
 }
