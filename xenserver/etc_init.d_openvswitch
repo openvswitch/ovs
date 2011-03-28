@@ -109,6 +109,8 @@ esac
 : ${VSWITCHD_VALGRIND_LOG:=}
 : ${VSWITCHD_VALGRIND_OPT:=}
 
+: ${OVS_XAPI_SYNC_PIDFILE:=/var/run/openvswitch/ovs-xapi-sync.pid}
+
 # Full paths to executables & modules
 ovsdb_server="/usr/sbin/ovsdb-server"
 ovsdb_tool="/usr/bin/ovsdb-tool"
@@ -382,9 +384,7 @@ function start {
 function stop {
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
-    if [ -e /var/run/openvswitch/ovs-xapi-sync.pid ]; then
-        kill `cat /var/run/openvswitch/ovs-xapi-sync.pid`
-    fi
+    stop_daemon OVS_XAPI_SYNC ovs-xapi-sync
     rm -f /var/lock/subsys/openvswitch
 }
 
