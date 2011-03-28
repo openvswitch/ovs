@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -409,8 +409,9 @@ log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
     now = time_msec();
     interval = MIN(10000, now - last_wakeup) << 4;
 
-    /* Warn if we took too much time between polls. */
-    if (n_samples > 10 && interval > mean_interval * 8) {
+    /* Warn if we took too much time between polls: at least 50 ms and at least
+     * 8X the mean interval. */
+    if (n_samples > 10 && interval > mean_interval * 8 && interval > 50 * 16) {
         struct rusage rusage;
 
         getrusage(RUSAGE_SELF, &rusage);
