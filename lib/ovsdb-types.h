@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ ovsdb_atomic_type_is_valid(enum ovsdb_atomic_type atomic_type)
 static inline bool
 ovsdb_base_type_is_ref(const struct ovsdb_base_type *base)
 {
-    return base->type == OVSDB_TYPE_UUID && base->u.uuid.refTable;
+    return base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName;
 }
 
 static inline bool
