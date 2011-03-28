@@ -230,7 +230,7 @@ ovsdb_file_open__(const char *file_name,
          * truncated due to power failure etc. and we should use its current
          * contents. */
         char *msg = ovsdb_error_to_string(error);
-        VLOG_WARN("%s", msg);
+        VLOG_ERR("%s", msg);
         free(msg);
 
         ovsdb_error_destroy(error);
