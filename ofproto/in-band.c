@@ -377,10 +377,6 @@ bool
 in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
                     const struct ofpbuf *packet)
 {
-    if (!in_band) {
-        return false;
-    }
-
     /* Regardless of how the flow table is configured, we want to be
      * able to see replies to our DHCP requests. */
     if (flow->dl_type == htons(ETH_TYPE_IP)
@@ -409,13 +405,9 @@ in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
 /* Returns true if the rule that would match 'flow' with 'actions' is
  * allowed to be set up in the datapath. */
 bool
-in_band_rule_check(struct in_band *in_band, const struct flow *flow,
+in_band_rule_check(const struct flow *flow,
                    const struct nlattr *actions, size_t actions_len)
 {
-    if (!in_band) {
-        return true;
-    }
-
     /* Don't allow flows that would prevent DHCP replies from being seen
      * by the local port. */
     if (flow->dl_type == htons(ETH_TYPE_IP)
@@ -684,23 +676,14 @@ in_band_flushed(struct in_band *in_band)
 }
 
 int
-in_band_create(struct ofproto *ofproto, struct dpif *dpif,
+in_band_create(struct ofproto *ofproto, const char *local_name,
                struct in_band **in_bandp)
 {
     struct in_band *in_band;
-    char local_name[IF_NAMESIZE];
     struct netdev *local_netdev;
     int error;
 
     *in_bandp = NULL;
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
-                               local_name, sizeof local_name);
-    if (error) {
-        VLOG_ERR("failed to initialize in-band control: cannot get name "
-                 "of datapath local port (%s)", strerror(error));
-        return error;
-    }
-
     error = netdev_open_default(local_name, &local_netdev);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "

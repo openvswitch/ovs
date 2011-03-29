@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "classifier.h"
+#include "connmgr.h"
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
@@ -69,8 +70,7 @@ VLOG_DEFINE_THIS_MODULE(fail_open);
 
 struct fail_open {
     struct ofproto *ofproto;
-    struct rconn **controllers;
-    size_t n_controllers;
+    struct connmgr *connmgr;
     int last_disconn_secs;
     long long int next_bogus_packet_in;
     struct rconn_packet_counter *bogus_packet_counter;
@@ -83,7 +83,7 @@ static void fail_open_recover(struct fail_open *);
 static int
 trigger_duration(const struct fail_open *fo)
 {
-    if (!fo->n_controllers) {
+    if (!connmgr_has_controllers(fo->connmgr)) {
         /* Shouldn't ever arrive here, but if we do, never fail open. */
         return INT_MAX;
     } else {
@@ -100,36 +100,8 @@ trigger_duration(const struct fail_open *fo)
          *  - The third interval is the time allowed to reconnect after no
          *    response is received.
          */
-        int max_probe_interval;
-        size_t i;
-
-        max_probe_interval = 0;
-        for (i = 0; i < fo->n_controllers; i++) {
-            int probe_interval = rconn_get_probe_interval(fo->controllers[i]);
-            max_probe_interval = MAX(max_probe_interval, probe_interval);
-        }
-        return max_probe_interval * 3;
+        return connmgr_get_max_probe_interval(fo->connmgr) * 3;
     }
-}
-
-/* Returns the number of seconds for which all controllers have been
- * disconnected.  */
-static int
-failure_duration(const struct fail_open *fo)
-{
-    int min_failure_duration;
-    size_t i;
-
-    if (!fo->n_controllers) {
-        return 0;
-    }
-
-    min_failure_duration = INT_MAX;
-    for (i = 0; i < fo->n_controllers; i++) {
-        int failure_duration = rconn_failure_duration(fo->controllers[i]);
-        min_failure_duration = MIN(min_failure_duration, failure_duration);
-    }
-    return min_failure_duration;
 }
 
 /* Returns true if 'fo' is currently in fail-open mode, otherwise false. */
@@ -139,39 +111,8 @@ fail_open_is_active(const struct fail_open *fo)
     return fo->last_disconn_secs != 0;
 }
 
-/* Returns true if at least one controller is connected (regardless of whether
- * those controllers are believed to have authenticated and accepted this
- * switch), false if none of them are connected. */
-static bool
-any_controller_is_connected(const struct fail_open *fo)
-{
-    size_t i;
-
-    for (i = 0; i < fo->n_controllers; i++) {
-        if (rconn_is_connected(fo->controllers[i])) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* Returns true if at least one controller is believed to have authenticated
- * and accepted this switch, false otherwise. */
-static bool
-any_controller_is_admitted(const struct fail_open *fo)
-{
-    size_t i;
-
-    for (i = 0; i < fo->n_controllers; i++) {
-        if (rconn_is_admitted(fo->controllers[i])) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static void
-send_bogus_packet_in(struct fail_open *fo, struct rconn *rconn)
+send_bogus_packet_ins(struct fail_open *fo)
 {
     uint8_t mac[ETH_ADDR_LEN];
     struct ofpbuf *opi;
@@ -185,26 +126,14 @@ send_bogus_packet_in(struct fail_open *fo, struct rconn *rconn)
     ofpbuf_uninit(&b);
 
     /* Send. */
-    rconn_send_with_limit(rconn, opi, fo->bogus_packet_counter, 1);
-}
-
-static void
-send_bogus_packet_ins(struct fail_open *fo)
-{
-    size_t i;
-
-    for (i = 0; i < fo->n_controllers; i++) {
-        if (rconn_is_connected(fo->controllers[i])) {
-            send_bogus_packet_in(fo, fo->controllers[i]);
-        }
-    }
+    connmgr_broadcast(fo->connmgr, opi);
 }
 
 /* Enter fail-open mode if we should be in it. */
 void
 fail_open_run(struct fail_open *fo)
 {
-    int disconn_secs = failure_duration(fo);
+    int disconn_secs = connmgr_failure_duration(fo->connmgr);
 
     /* Enter fail-open mode if 'fo' is not in it but should be.  */
     if (disconn_secs >= trigger_duration(fo)) {
@@ -227,7 +156,7 @@ fail_open_run(struct fail_open *fo)
 
     /* Schedule a bogus packet-in if we're connected and in fail-open. */
     if (fail_open_is_active(fo)) {
-        if (any_controller_is_connected(fo)) {
+        if (connmgr_is_any_controller_connected(fo->connmgr)) {
             bool expired = time_msec() >= fo->next_bogus_packet_in;
             if (expired) {
                 send_bogus_packet_ins(fo);
@@ -247,7 +176,8 @@ fail_open_run(struct fail_open *fo)
 void
 fail_open_maybe_recover(struct fail_open *fo)
 {
-    if (any_controller_is_admitted(fo)) {
+    if (fail_open_is_active(fo)
+        && connmgr_is_any_controller_admitted(fo->connmgr)) {
         fail_open_recover(fo);
     }
 }
@@ -255,16 +185,14 @@ fail_open_maybe_recover(struct fail_open *fo)
 static void
 fail_open_recover(struct fail_open *fo)
 {
-    if (fail_open_is_active(fo)) {
-        struct cls_rule rule;
+    struct cls_rule rule;
 
-        VLOG_WARN("No longer in fail-open mode");
-        fo->last_disconn_secs = 0;
-        fo->next_bogus_packet_in = LLONG_MAX;
+    VLOG_WARN("No longer in fail-open mode");
+    fo->last_disconn_secs = 0;
+    fo->next_bogus_packet_in = LLONG_MAX;
 
-        cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
-        ofproto_delete_flow(fo->ofproto, &rule);
-    }
+    cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
+    ofproto_delete_flow(fo->ofproto, &rule);
 }
 
 void
@@ -278,7 +206,7 @@ fail_open_wait(struct fail_open *fo)
 void
 fail_open_flushed(struct fail_open *fo)
 {
-    int disconn_secs = failure_duration(fo);
+    int disconn_secs = connmgr_failure_duration(fo->connmgr);
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
         union ofp_action action;
@@ -296,37 +224,17 @@ fail_open_flushed(struct fail_open *fo)
     }
 }
 
-/* Creates and returns a new struct fail_open for 'ofproto'.
- *
- * The caller should register its set of controllers with
- * fail_open_set_controllers().  (There should be at least one controller,
- * otherwise there isn't any point in having the struct fail_open around.) */
+/* Creates and returns a new struct fail_open for 'ofproto' and 'mgr'. */
 struct fail_open *
-fail_open_create(struct ofproto *ofproto)
+fail_open_create(struct ofproto *ofproto, struct connmgr *mgr)
 {
     struct fail_open *fo = xmalloc(sizeof *fo);
     fo->ofproto = ofproto;
-    fo->controllers = NULL;
-    fo->n_controllers = 0;
+    fo->connmgr = mgr;
     fo->last_disconn_secs = 0;
     fo->next_bogus_packet_in = LLONG_MAX;
     fo->bogus_packet_counter = rconn_packet_counter_create();
     return fo;
-}
-
-/* Registers the 'n' rconns in 'rconns' as connections to the controller for
- * 'fo'.  The caller must ensure that all of the rconns remain valid until 'fo'
- * is destroyed or a new set is registered in a subsequent call.
- *
- * Takes ownership of the 'rconns' array, but not of the rconns that it points
- * to (of which the caller retains ownership). */
-void
-fail_open_set_controllers(struct fail_open *fo,
-                          struct rconn **rconns, size_t n)
-{
-    free(fo->controllers);
-    fo->controllers = rconns;
-    fo->n_controllers = n;
 }
 
 /* Destroys 'fo'. */
@@ -334,9 +242,10 @@ void
 fail_open_destroy(struct fail_open *fo)
 {
     if (fo) {
-        fail_open_recover(fo);
-        free(fo->controllers);
-        /* We don't own the rconns behind fo->controllers. */
+        if (fail_open_is_active(fo)) {
+            fail_open_recover(fo);
+        }
+        /* We don't own fo->connmgr. */
         rconn_packet_counter_destroy(fo->bogus_packet_counter);
         free(fo);
     }

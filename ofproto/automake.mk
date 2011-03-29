@@ -9,6 +9,8 @@ noinst_LIBRARIES += ofproto/libofproto.a
 ofproto_libofproto_a_SOURCES = \
 	ofproto/collectors.c \
 	ofproto/collectors.h \
+	ofproto/connmgr.c \
+	ofproto/connmgr.h \
 	ofproto/fail-open.c \
 	ofproto/fail-open.h \
 	ofproto/in-band.c \

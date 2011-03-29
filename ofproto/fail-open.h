@@ -21,9 +21,9 @@
 #include <stdint.h>
 #include "flow.h"
 
+struct connmgr;
 struct fail_open;
 struct ofproto;
-struct rconn;
 
 /* Priority of the rule added by the fail-open subsystem when a switch enters
  * fail-open mode.  This priority value uniquely identifies a fail-open flow
@@ -31,8 +31,7 @@ struct rconn;
  * creates flows with this priority).  And "f0" is mnemonic for "fail open"! */
 #define FAIL_OPEN_PRIORITY 0xf0f0f0
 
-struct fail_open *fail_open_create(struct ofproto *);
-void fail_open_set_controllers(struct fail_open *, struct rconn **, size_t n);
+struct fail_open *fail_open_create(struct ofproto *, struct connmgr *);
 void fail_open_destroy(struct fail_open *);
 void fail_open_wait(struct fail_open *);
 bool fail_open_is_active(const struct fail_open *);
