@@ -1644,7 +1644,6 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
         free(br);
         return NULL;
     }
-    dpif_flow_flush(br->dpif);
 
     error = ofproto_create(br_cfg->name, br_cfg->datapath_type, &bridge_ofhooks,
                            br, &br->ofproto);
