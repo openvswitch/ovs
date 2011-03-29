@@ -2799,11 +2799,9 @@ cmd_list(struct vsctl_context *ctx)
         }
     } else {
         const struct ovsdb_idl_row *row;
-        bool first;
 
-        for (row = ovsdb_idl_first_row(ctx->idl, table->class), first = true;
-             row != NULL;
-             row = ovsdb_idl_next_row(row), first = false) {
+        for (row = ovsdb_idl_first_row(ctx->idl, table->class); row != NULL;
+             row = ovsdb_idl_next_row(row)) {
             list_record(row, columns, n_columns, out);
         }
     }
