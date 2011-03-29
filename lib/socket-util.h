@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include "openvswitch/types.h"
 
 int set_nonblocking(int fd);
 int get_max_fds(void);
@@ -32,7 +33,7 @@ void drain_fd(int fd, size_t n_packets);
 int make_unix_socket(int style, bool nonblock, bool passcred,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(socklen_t sun_len);
-uint32_t guess_netmask(uint32_t ip);
+ovs_be32 guess_netmask(ovs_be32 ip);
 int get_null_fd(void);
 
 bool inet_parse_active(const char *target, uint16_t default_port,

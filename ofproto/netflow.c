@@ -41,17 +41,17 @@ VLOG_DEFINE_THIS_MODULE(netflow);
  * We only send a single record per NetFlow message.
  */
 struct netflow_v5_header {
-    uint16_t version;              /* NetFlow version is 5. */
-    uint16_t count;                /* Number of records in this message. */
-    uint32_t sysuptime;            /* System uptime in milliseconds. */
-    uint32_t unix_secs;            /* Number of seconds since Unix epoch. */
-    uint32_t unix_nsecs;           /* Number of residual nanoseconds
+    ovs_be16 version;              /* NetFlow version is 5. */
+    ovs_be16 count;                /* Number of records in this message. */
+    ovs_be32 sysuptime;            /* System uptime in milliseconds. */
+    ovs_be32 unix_secs;            /* Number of seconds since Unix epoch. */
+    ovs_be32 unix_nsecs;           /* Number of residual nanoseconds
                                       after epoch seconds. */
-    uint32_t flow_seq;             /* Number of flows since sending
+    ovs_be32 flow_seq;             /* Number of flows since sending
                                       messages began. */
     uint8_t  engine_type;          /* Engine type. */
     uint8_t  engine_id;            /* Engine id. */
-    uint16_t sampling_interval;    /* Set to zero. */
+    ovs_be16 sampling_interval;    /* Set to zero. */
 };
 BUILD_ASSERT_DECL(sizeof(struct netflow_v5_header) == 24);
 
@@ -59,29 +59,29 @@ BUILD_ASSERT_DECL(sizeof(struct netflow_v5_header) == 24);
  * NetFlow v5 header.
  */
 struct netflow_v5_record {
-    uint32_t src_addr;             /* Source IP address. */
-    uint32_t dst_addr;             /* Destination IP address. */
-    uint32_t nexthop;              /* IP address of next hop.  Set to 0. */
-    uint16_t input;                /* Input interface index. */
-    uint16_t output;               /* Output interface index. */
-    uint32_t packet_count;         /* Number of packets. */
-    uint32_t byte_count;           /* Number of bytes. */
-    uint32_t init_time;            /* Value of sysuptime on first packet. */
-    uint32_t used_time;            /* Value of sysuptime on last packet. */
+    ovs_be32 src_addr;             /* Source IP address. */
+    ovs_be32 dst_addr;             /* Destination IP address. */
+    ovs_be32 nexthop;              /* IP address of next hop.  Set to 0. */
+    ovs_be16 input;                /* Input interface index. */
+    ovs_be16 output;               /* Output interface index. */
+    ovs_be32 packet_count;         /* Number of packets. */
+    ovs_be32 byte_count;           /* Number of bytes. */
+    ovs_be32 init_time;            /* Value of sysuptime on first packet. */
+    ovs_be32 used_time;            /* Value of sysuptime on last packet. */
 
     /* The 'src_port' and 'dst_port' identify the source and destination
      * port, respectively, for TCP and UDP.  For ICMP, the high-order
      * byte identifies the type and low-order byte identifies the code
      * in the 'dst_port' field. */
-    uint16_t src_port;
-    uint16_t dst_port;
+    ovs_be16 src_port;
+    ovs_be16 dst_port;
 
     uint8_t  pad1;
     uint8_t  tcp_flags;            /* Union of seen TCP flags. */
     uint8_t  ip_proto;             /* IP protocol. */
     uint8_t  ip_tos;               /* IP TOS value. */
-    uint16_t src_as;               /* Source AS ID.  Set to 0. */
-    uint16_t dst_as;               /* Destination AS ID.  Set to 0. */
+    ovs_be16 src_as;               /* Source AS ID.  Set to 0. */
+    ovs_be16 dst_as;               /* Destination AS ID.  Set to 0. */
     uint8_t  src_mask;             /* Source mask bits.  Set to 0. */
     uint8_t  dst_mask;             /* Destination mask bits.  Set to 0. */
     uint8_t  pad[2];

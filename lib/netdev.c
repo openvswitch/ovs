@@ -846,7 +846,7 @@ netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
  * ENXIO indicates that there is no ARP table entry for 'ip' on 'netdev'. */
 int
 netdev_arp_lookup(const struct netdev *netdev,
-                  uint32_t ip, uint8_t mac[ETH_ADDR_LEN])
+                  ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
 {
     int error = (netdev_get_dev(netdev)->netdev_class->arp_lookup
                  ? netdev_get_dev(netdev)->netdev_class->arp_lookup(netdev,

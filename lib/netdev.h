@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/types.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -146,7 +147,7 @@ int netdev_add_router(struct netdev *, struct in_addr router);
 int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
                         struct in_addr *next_hop, char **);
 int netdev_get_status(const struct netdev *, struct shash *sh);
-int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
+int netdev_arp_lookup(const struct netdev *, ovs_be32 ip, uint8_t mac[6]);
 
 int netdev_get_flags(const struct netdev *, enum netdev_flags *);
 int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);

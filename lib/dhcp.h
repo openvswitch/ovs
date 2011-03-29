@@ -31,13 +31,13 @@ struct dhcp_header {
     uint8_t htype;              /* ARP_HRD_ETHERNET (typically). */
     uint8_t hlen;               /* ETH_ADDR_LEN (typically). */
     uint8_t hops;               /* Hop count; set to 0 by client. */
-    uint32_t xid;               /* Transaction ID. */
-    uint16_t secs;              /* Since client started address acquisition. */
-    uint16_t flags;             /* DHCP_FLAGS_*. */
-    uint32_t ciaddr;            /* Client IP, if it has a lease for one. */
-    uint32_t yiaddr;            /* Client ("your") IP address. */
-    uint32_t siaddr;            /* Next server IP address. */
-    uint32_t giaddr;            /* Relay agent IP address. */
+    ovs_be32 xid;               /* Transaction ID. */
+    ovs_be16 secs;              /* Since client started address acquisition. */
+    ovs_be16 flags;             /* DHCP_FLAGS_*. */
+    ovs_be32 ciaddr;            /* Client IP, if it has a lease for one. */
+    ovs_be32 yiaddr;            /* Client ("your") IP address. */
+    ovs_be32 siaddr;            /* Next server IP address. */
+    ovs_be32 giaddr;            /* Relay agent IP address. */
     uint8_t chaddr[16];         /* Client hardware address. */
     char sname[64];             /* Optional server host name. */
     char file[128];             /* Boot file name. */
