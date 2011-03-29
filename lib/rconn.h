@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include "openvswitch/types.h"
 
 /* A wrapper around vconn that provides queuing and optionally reliability.
  *
@@ -71,10 +72,10 @@ bool rconn_is_connected(const struct rconn *);
 bool rconn_is_admitted(const struct rconn *);
 int rconn_failure_duration(const struct rconn *);
 
-uint32_t rconn_get_remote_ip(const struct rconn *);
-uint16_t rconn_get_remote_port(const struct rconn *);
-uint32_t rconn_get_local_ip(const struct rconn *);
-uint16_t rconn_get_local_port(const struct rconn *);
+ovs_be32 rconn_get_remote_ip(const struct rconn *);
+ovs_be16 rconn_get_remote_port(const struct rconn *);
+ovs_be32 rconn_get_local_ip(const struct rconn *);
+ovs_be16 rconn_get_local_port(const struct rconn *);
 
 const char *rconn_get_state(const struct rconn *);
 unsigned int rconn_get_attempted_connections(const struct rconn *);

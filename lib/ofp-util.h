@@ -271,7 +271,7 @@ const union ofp_action *actions_next(struct actions_iterator *);
 
 int validate_actions(const union ofp_action *, size_t n_actions,
                      const struct flow *, int max_ports);
-bool action_outputs_to_port(const union ofp_action *, uint16_t port);
+bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
 
 int ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
                          union ofp_action **, size_t *);

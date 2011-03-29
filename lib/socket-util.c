@@ -420,10 +420,10 @@ get_unix_name_len(socklen_t sun_len)
             : 0);
 }
 
-uint32_t
-guess_netmask(uint32_t ip)
+ovs_be32
+guess_netmask(ovs_be32 ip_)
 {
-    ip = ntohl(ip);
+    uint32_t ip = ntohl(ip_);
     return ((ip >> 31) == 0 ? htonl(0xff000000)   /* Class A */
             : (ip >> 30) == 2 ? htonl(0xffff0000) /* Class B */
             : (ip >> 29) == 6 ? htonl(0xffffff00) /* Class C */

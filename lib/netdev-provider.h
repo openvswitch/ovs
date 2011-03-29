@@ -544,7 +544,8 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*arp_lookup)(const struct netdev *netdev, uint32_t ip, uint8_t mac[6]);
+    int (*arp_lookup)(const struct netdev *netdev, ovs_be32 ip,
+                      uint8_t mac[6]);
 
     /* Retrieves the current set of flags on 'netdev' into '*old_flags'.
      * Then, turns off the flags that are set to 1 in 'off' and turns on the

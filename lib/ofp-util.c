@@ -2115,10 +2115,9 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
     return 0;
 }
 
-/* Returns true if 'action' outputs to 'port' (which must be in network byte
- * order), false otherwise. */
+/* Returns true if 'action' outputs to 'port', false otherwise. */
 bool
-action_outputs_to_port(const union ofp_action *action, uint16_t port)
+action_outputs_to_port(const union ofp_action *action, ovs_be16 port)
 {
     switch (ntohs(action->type)) {
     case OFPAT_OUTPUT:

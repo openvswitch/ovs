@@ -722,7 +722,7 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
 }
 
 static void
-print_ip_netmask(struct ds *string, const char *leader, uint32_t ip,
+print_ip_netmask(struct ds *string, const char *leader, ovs_be32 ip,
                  uint32_t wild_bits, int verbosity)
 {
     if (wild_bits >= 32 && verbosity < 2) {

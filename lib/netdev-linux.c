@@ -2014,7 +2014,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
     while (fgets(line, sizeof line, stream)) {
         if (++ln >= 2) {
             char iface[17];
-            uint32_t dest, gateway, mask;
+            ovs_be32 dest, gateway, mask;
             int refcnt, metric, mtu;
             unsigned int flags, use, window, irtt;
 
@@ -2081,7 +2081,7 @@ netdev_linux_get_status(const struct netdev *netdev, struct shash *sh)
  * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
 static int
 netdev_linux_arp_lookup(const struct netdev *netdev,
-                        uint32_t ip, uint8_t mac[ETH_ADDR_LEN])
+                        ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
 {
     struct arpreq r;
     struct sockaddr_in sin;
