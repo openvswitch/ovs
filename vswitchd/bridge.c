@@ -444,9 +444,7 @@ set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
 
     /* Set MAC address of internal interfaces other than the local
      * interface. */
-    if (iface->dp_ifidx != ODPP_LOCAL && !strcmp(iface->type, "internal")) {
-        iface_set_mac(iface);
-    }
+    iface_set_mac(iface);
 
     return true;
 }
@@ -3347,13 +3345,15 @@ iface_set_mac(struct iface *iface)
 {
     uint8_t ea[ETH_ADDR_LEN];
 
-    if (iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
-        if (eth_addr_is_multicast(ea)) {
+    if (!strcmp(iface->type, "internal")
+        && iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
+        if (iface->dp_ifidx == ODPP_LOCAL) {
+            VLOG_ERR("interface %s: ignoring mac in Interface record "
+                     "(use Bridge record to set local port's mac)",
+                     iface->name);
+        } else if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("interface %s: cannot set MAC to multicast address",
                      iface->name);
-        } else if (iface->dp_ifidx == ODPP_LOCAL) {
-            VLOG_ERR("ignoring iface.%s.mac; use bridge.%s.mac instead",
-                     iface->name, iface->name);
         } else {
             int error = netdev_set_etheraddr(iface->netdev, ea);
             if (error) {
