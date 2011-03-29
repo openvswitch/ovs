@@ -440,7 +440,6 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         struct ofpbuf *buffer;
-        struct ofp_flow_mod *ofm;
         struct cls_rule rule;
 
         /* The output port is known, or we always flood everything, so add a
@@ -449,7 +448,6 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         buffer = make_add_flow(&rule, ntohl(opi->buffer_id),
                                sw->max_idle, actions_len);
         ofpbuf_put(buffer, actions, actions_len);
-        ofm = buffer->data;
         queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
