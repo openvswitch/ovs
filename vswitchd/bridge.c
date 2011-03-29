@@ -551,9 +551,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 && strcmp(dpif_port.name, br->name)) {
                 int retval = dpif_port_del(br->dpif, dpif_port.port_no);
                 if (retval) {
-                    VLOG_WARN("failed to remove %s interface from %s: %s",
-                              dpif_port.name, dpif_name(br->dpif),
-                              strerror(retval));
+                    VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
+                              br->name, dpif_port.name, strerror(retval));
                 }
             }
         }
@@ -646,13 +645,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                     if (error) {
                         netdev_close(netdev);
                         if (error == EFBIG) {
-                            VLOG_ERR("ran out of valid port numbers on %s",
-                                     dpif_name(br->dpif));
+                            VLOG_ERR("bridge %s: out of valid port numbers",
+                                     br->name);
                             break;
                         } else {
-                            VLOG_WARN("failed to add %s interface to %s: %s",
-                                      if_name, dpif_name(br->dpif),
-                                      strerror(error));
+                            VLOG_WARN("bridge %s: failed to add %s interface "
+                                      "(%s)",
+                                      br->name, if_name, strerror(error));
                             continue;
                         }
                     }
@@ -702,13 +701,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
                 if (iface->netdev && iface->dp_ifidx >= 0) {
-                    VLOG_DBG("%s has interface %s on port %d",
-                             dpif_name(br->dpif), iface->name,
-                             iface->dp_ifidx);
+                    VLOG_DBG("bridge %s: interface %s is on port %d",
+                             br->name, iface->name, iface->dp_ifidx);
                 } else {
                     if (iface->netdev) {
-                        VLOG_ERR("%s interface not in %s, dropping",
-                                 iface->name, dpif_name(br->dpif));
+                        VLOG_ERR("bridge %s: missing %s interface, dropping",
+                                 br->name, iface->name);
                     } else {
                         /* We already reported a related error, don't bother
                          * duplicating it. */
@@ -1670,7 +1668,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     list_push_back(&all_bridges, &br->node);
 
-    VLOG_INFO("created bridge %s on %s", br->name, dpif_name(br->dpif));
+    VLOG_INFO("bridge %s: created", br->name);
 
     return br;
 }
@@ -1693,8 +1691,8 @@ bridge_destroy(struct bridge *br)
         ofproto_destroy(br->ofproto);
         error = dpif_delete(br->dpif);
         if (error && error != ENOENT) {
-            VLOG_ERR("failed to delete %s: %s",
-                     dpif_name(br->dpif), strerror(error));
+            VLOG_ERR("bridge %s: failed to destroy (%s)",
+                     br->name, strerror(error));
         }
         dpif_close(br->dpif);
         mac_learning_destroy(br->ml);
@@ -2026,9 +2024,9 @@ bridge_reconfigure_remotes(struct bridge *br,
 
             /* Prevent remote ovsdb-server users from accessing arbitrary Unix
              * domain sockets and overwriting arbitrary local files. */
-            VLOG_ERR_RL(&rl, "%s: not adding Unix domain socket controller "
-                        "\"%s\" due to possibility for remote exploit",
-                        dpif_name(br->dpif), c->target);
+            VLOG_ERR_RL(&rl, "bridge %s: not adding Unix domain socket "
+                        "controller \"%s\" due to possibility for remote "
+                        "exploit", br->name, c->target);
             continue;
         }
 
@@ -2092,11 +2090,11 @@ bridge_fetch_dp_ifaces(struct bridge *br)
         struct iface *iface = iface_lookup(br, dpif_port.name);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
-                VLOG_WARN("%s reported interface %s twice",
-                          dpif_name(br->dpif), dpif_port.name);
+                VLOG_WARN("bridge %s: interface %s reported twice",
+                          br->name, dpif_port.name);
             } else if (iface_from_dp_ifidx(br, dpif_port.port_no)) {
-                VLOG_WARN("%s reported interface %"PRIu16" twice",
-                          dpif_name(br->dpif), dpif_port.port_no);
+                VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
+                          br->name, dpif_port.port_no);
             } else {
                 iface->dp_ifidx = dpif_port.port_no;
                 hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
