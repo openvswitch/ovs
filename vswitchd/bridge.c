@@ -1464,12 +1464,7 @@ bridge_wait(void)
         struct port *port;
 
         ofproto_wait(br->ofproto);
-        if (ofproto_has_primary_controller(br->ofproto)) {
-            continue;
-        }
-
         mac_learning_wait(br->ml);
-
         HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             port_wait(port);
         }
