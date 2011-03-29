@@ -2502,9 +2502,6 @@ parse_column_key_value(const char *arg,
         }
         *valuep = xstrdup(p + best_len);
     } else {
-        if (valuep) {
-            *valuep = NULL;
-        }
         if (*p != '\0') {
             error = xasprintf("%s: trailing garbage \"%s\" in argument",
                               arg, p);
