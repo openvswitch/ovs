@@ -2301,7 +2301,7 @@ htb_get__(const struct netdev *netdev)
     return CONTAINER_OF(netdev_dev->tc, struct htb, tc);
 }
 
-static struct htb *
+static void
 htb_install__(struct netdev *netdev, uint64_t max_rate)
 {
     struct netdev_dev_linux *netdev_dev =
@@ -2313,8 +2313,6 @@ htb_install__(struct netdev *netdev, uint64_t max_rate)
     htb->max_rate = max_rate;
 
     netdev_dev->tc = &htb->tc;
-
-    return htb;
 }
 
 /* Create an HTB qdisc.
@@ -2600,12 +2598,11 @@ htb_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
     struct ofpbuf msg;
     struct nl_dump dump;
     struct htb_class hc;
-    struct htb *htb;
 
     /* Get qdisc options. */
     hc.max_rate = 0;
     htb_query_class__(netdev, tc_make_handle(1, 0xfffe), 0, &hc, NULL);
-    htb = htb_install__(netdev, hc.max_rate);
+    htb_install__(netdev, hc.max_rate);
 
     /* Get queues. */
     if (!start_queue_dump(netdev, &dump)) {
@@ -2789,7 +2786,7 @@ hfsc_class_cast__(const struct tc_queue *queue)
     return CONTAINER_OF(queue, struct hfsc_class, tc_queue);
 }
 
-static struct hfsc *
+static void
 hfsc_install__(struct netdev *netdev, uint32_t max_rate)
 {
     struct netdev_dev_linux * netdev_dev;
@@ -2800,8 +2797,6 @@ hfsc_install__(struct netdev *netdev, uint32_t max_rate)
     tc_init(&hfsc->tc, &tc_ops_hfsc);
     hfsc->max_rate = max_rate;
     netdev_dev->tc = &hfsc->tc;
-
-    return hfsc;
 }
 
 static void
@@ -3100,13 +3095,12 @@ static int
 hfsc_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 {
     struct ofpbuf msg;
-    struct hfsc *hfsc;
     struct nl_dump dump;
     struct hfsc_class hc;
 
     hc.max_rate = 0;
     hfsc_query_class__(netdev, tc_make_handle(1, 0xfffe), 0, &hc, NULL);
-    hfsc = hfsc_install__(netdev, hc.max_rate);
+    hfsc_install__(netdev, hc.max_rate);
 
     if (!start_queue_dump(netdev, &dump)) {
         return ENODEV;
