@@ -71,5 +71,6 @@ void die_if_already_running(void);
 void ignore_existing_pidfile(void);
 void daemon_usage(void);
 pid_t read_pidfile(const char *name);
+pid_t read_pidfile_if_exists(const char *name);
 
 #endif /* daemon.h */

@@ -139,37 +139,17 @@ daemon_set_monitor(void)
     monitor = true;
 }
 
-/* If a pidfile has been configured and that pidfile already exists and is
- * locked by a running process, returns the pid of the running process.
- * Otherwise, returns 0. */
-static pid_t
-already_running(void)
-{
-    pid_t pid = 0;
-    if (pidfile) {
-        int fd = open(pidfile, O_RDWR);
-        if (fd >= 0) {
-            struct flock lck;
-            lck.l_type = F_WRLCK;
-            lck.l_whence = SEEK_SET;
-            lck.l_start = 0;
-            lck.l_len = 0;
-            if (fcntl(fd, F_GETLK, &lck) != -1 && lck.l_type != F_UNLCK) {
-                pid = lck.l_pid;
-            }
-            close(fd);
-        }
-    }
-    return pid;
-}
-
 /* If a locked pidfile exists, issue a warning message and, unless
  * ignore_existing_pidfile() has been called, terminate the program. */
 void
 die_if_already_running(void)
 {
-    pid_t pid = already_running();
-    if (pid) {
+    pid_t pid;
+    if (!pidfile) {
+        return;
+    }
+    pid = read_pidfile_if_exists(pidfile);
+    if (pid > 0) {
         if (!overwrite_pidfile) {
             VLOG_ERR("%s: %s already running as pid %ld, aborting",
                       get_pidfile(), program_name, (long int) pid);
@@ -509,10 +489,8 @@ daemon_usage(void)
         ovs_rundir(), program_name);
 }
 
-/* Opens and reads a PID from 'pidfile'.  Returns the nonnegative PID if
- * successful, otherwise a negative errno value. */
-pid_t
-read_pidfile(const char *pidfile)
+static pid_t
+read_pidfile__(const char *pidfile, bool must_exist)
 {
     char line[128];
     struct flock lck;
@@ -533,6 +511,9 @@ read_pidfile(const char *pidfile)
 
     file = fopen(pidfile, "r");
     if (!file) {
+        if (errno == ENOENT && !must_exist) {
+            return 0;
+        }
         error = errno;
         VLOG_WARN("%s: open: %s", pidfile, strerror(error));
         goto error;
@@ -580,4 +561,22 @@ error:
         fclose(file);
     }
     return -error;
+}
+
+/* Opens and reads a PID from 'pidfile'.  Returns the positive PID if
+ * successful, otherwise a negative errno value. */
+pid_t
+read_pidfile(const char *pidfile)
+{
+    return read_pidfile__(pidfile, true);
+}
+
+
+/* Opens and reads a PID from 'pidfile', if it exists.  Returns 0 if 'pidfile'
+ * doesn't exist, the positive PID if successful, otherwise a negative errno
+ * value. */
+pid_t
+read_pidfile_if_exists(const char *pidfile)
+{
+    return read_pidfile__(pidfile, false);
 }

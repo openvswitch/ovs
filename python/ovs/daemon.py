@@ -111,37 +111,15 @@ def set_monitor():
     global _monitor
     _monitor = True
 
-def _already_running():
-    """If a pidfile has been configured and that pidfile already exists and is
-    locked by a running process, returns True.  Otherwise, returns False."""
-    if _pidfile is not None:
-        try:
-            file = open(_pidfile, "r+")
-            try:
-                try:
-                    fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except IOError, e:
-                    if e.errno in [errno.EACCES, errno.EAGAIN]:
-                        return True
-                    logging.error("error locking %s (%s)"
-                                  % (_pidfile, os.strerror(e.errno)))
-                    return False
-            finally:
-                # This releases the lock, which we don't really want.
-                file.close()
-        except IOError, e:
-            if e.errno == errno.ENOENT:
-                return False
-            logging.error("error opening %s (%s)"
-                          % (_pidfile, os.strerror(e.errno)))
-    return False
-
 def die_if_already_running():
     """If a locked pidfile exists, issue a warning message and, unless
     ignore_existing_pidfile() has been called, terminate the program."""
-    if _already_running():
+    if _pidfile is None:
+        return
+    pid = read_pidfile_if_exists(_pidfile)
+    if pid > 0:
         if not _overwrite_pidfile:
-            msg = "%s: already running" % _pidfile
+            msg = "%s: already running as pid %d" % (_pidfile, pid)
             logging.error("%s, aborting" % msg)
             sys.stderr.write("%s\n" % msg)
             sys.exit(1)
@@ -382,9 +360,7 @@ Daemon options:
    --overwrite-pidfile     with --pidfile, start even if already running
 """ % (ovs.dirs.RUNDIR, ovs.util.PROGRAM_NAME))
 
-def read_pidfile(pidfile):
-    """Opens and reads a PID from 'pidfile'.  Returns the nonnegative PID if
-    successful, otherwise a negative errno value."""
+def __read_pidfile(pidfile, must_exist):
     if _pidfile_dev is not None:
         try:
             s = os.stat(pidfile)
@@ -401,6 +377,8 @@ def read_pidfile(pidfile):
     try:
         file = open(pidfile, "r")
     except IOError, e:
+        if e.errno == errno.ENOENT and not must_exist:
+            return 0
         logging.warning("%s: open: %s" % (pidfile, os.strerror(e.errno)))
         return -e.errno
 
@@ -436,6 +414,16 @@ def read_pidfile(pidfile):
             file.close()
         except IOError:
             pass
+
+def read_pidfile(pidfile):
+    """Opens and reads a PID from 'pidfile'.  Returns the positive PID if
+    successful, otherwise a negative errno value."""
+    return __read_pidfile(pidfile, True)
+
+def read_pidfile_if_exists(pidfile):
+    """Opens and reads a PID from 'pidfile'.  Returns 0 if 'pidfile' does not
+    exist, the positive PID if successful, otherwise a negative errno value."""
+    return __read_pidfile(pidfile, False)
 
 # XXX Python's getopt does not support options with optional arguments, so we
 # have to separate --pidfile (with no argument) from --pidfile-name (with an
