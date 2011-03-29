@@ -419,54 +419,6 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
     sset_destroy(&dpif_types);
 }
 
-/* Callback for iterate_and_prune_ifaces(). */
-static bool
-check_iface(struct bridge *br, struct iface *iface, void *aux OVS_UNUSED)
-{
-    if (!iface->netdev) {
-        /* We already reported a related error, don't bother duplicating it. */
-        return false;
-    }
-
-    if (iface->dp_ifidx < 0) {
-        VLOG_ERR("%s interface not in %s, dropping",
-                 iface->name, dpif_name(br->dpif));
-        return false;
-    }
-
-    VLOG_DBG("%s has interface %s on port %d", dpif_name(br->dpif),
-             iface->name, iface->dp_ifidx);
-    return true;
-}
-
-/* Calls 'cb' for each interfaces in 'br', passing along the 'aux' argument.
- * Deletes from 'br' all the interfaces for which 'cb' returns false, and then
- * deletes from 'br' any ports that no longer have any interfaces. */
-static void
-iterate_and_prune_ifaces(struct bridge *br,
-                         bool (*cb)(struct bridge *, struct iface *,
-                                    void *aux),
-                         void *aux)
-{
-    struct port *port, *next_port;
-
-    HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
-        struct iface *iface, *next_iface;
-
-        LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
-            if (!cb(br, iface, aux)) {
-                iface_set_ofport(iface->cfg, -1);
-                iface_destroy(iface);
-            }
-        }
-
-        if (list_is_empty(&port->ifaces)) {
-            VLOG_WARN("%s port has no interfaces, dropping", port->name);
-            port_destroy(port);
-        }
-    }
-}
-
 /* Looks at the list of managers in 'ovs_cfg' and extracts their remote IP
  * addresses and ports into '*managersp' and '*n_managersp'.  The caller is
  * responsible for freeing '*managersp' (with free()).
@@ -735,6 +687,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         uint8_t ea[ETH_ADDR_LEN];
         uint64_t dpid;
         struct iface *local_iface;
+        struct port *port, *next_port;
         struct iface *hw_addr_iface;
         char *dpid_string;
 
@@ -742,9 +695,35 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         /* Delete interfaces that cannot be opened.
          *
-         * From this point forward we are guaranteed that every "struct iface"
-         * has nonnull 'netdev' and correct 'dp_ifidx'. */
-        iterate_and_prune_ifaces(br, check_iface, NULL);
+         * Following this loop, every remaining "struct iface" has nonnull
+         * 'netdev' and correct 'dp_ifidx'. */
+        HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
+            struct iface *iface, *next_iface;
+
+            LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
+                if (iface->netdev && iface->dp_ifidx >= 0) {
+                    VLOG_DBG("%s has interface %s on port %d",
+                             dpif_name(br->dpif), iface->name,
+                             iface->dp_ifidx);
+                } else {
+                    if (iface->netdev) {
+                        VLOG_ERR("%s interface not in %s, dropping",
+                                 iface->name, dpif_name(br->dpif));
+                    } else {
+                        /* We already reported a related error, don't bother
+                         * duplicating it. */
+                    }
+
+                    iface_set_ofport(iface->cfg, -1);
+                    iface_destroy(iface);
+                }
+            }
+
+            if (list_is_empty(&port->ifaces)) {
+                VLOG_WARN("%s port has no interfaces, dropping", port->name);
+                port_destroy(port);
+            }
+        }
 
         /* Pick local port hardware address, datapath ID. */
         bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
