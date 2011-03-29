@@ -1522,6 +1522,12 @@
     </column>
 
     <group title="Selecting Packets for Mirroring">
+      <p>
+        To be selected for mirroring, a given packet must enter or leave the
+        bridge through a selected port and it must also be in one of the
+        selected VLANs.
+      </p>
+
       <column name="select_all">
         If true, every packet arriving or departing on any port is
         selected for mirroring.
@@ -1542,9 +1548,13 @@
     </group>
 
     <group title="Mirroring Destination Configuration">
+      <p>
+        These columns are mutually exclusive.  Exactly one of them must be
+        nonempty.
+      </p>
+
       <column name="output_port">
-        <p>Output port for selected packets, if nonempty.  Mutually exclusive
-          with <ref column="output_vlan"/>.</p>
+        <p>Output port for selected packets, if nonempty.</p>
         <p>Specifying a port for mirror output reserves that port exclusively
           for mirroring.  No frames other than those selected for mirroring
           will be forwarded to the port, and any frames received on the port
@@ -1553,8 +1563,7 @@
       </column>
 
       <column name="output_vlan">
-        <p>Output VLAN for selected packets, if nonempty.  Mutually exclusive
-          with <ref column="output_port"/>.</p>
+        <p>Output VLAN for selected packets, if nonempty.</p>
         <p>The frames will be sent out all ports that trunk
           <ref column="output_vlan"/>, as well as any ports with implicit VLAN
           <ref column="output_vlan"/>.  When a mirrored frame is sent out a
