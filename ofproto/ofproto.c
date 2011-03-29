@@ -101,7 +101,7 @@ struct rule;
 struct ofport {
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
-    struct ofp_phy_port opp;    /* In host byte order. */
+    struct ofp_phy_port opp;
     uint16_t odp_port;
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
 };
@@ -932,7 +932,7 @@ bool
 ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
 {
     struct ofport *ofport = get_port(ofproto, odp_port);
-    return ofport && !(ofport->opp.config & OFPPC_NO_FLOOD);
+    return ofport && !(ofport->opp.config & htonl(OFPPC_NO_FLOOD));
 }
 
 /* Sends 'packet' out of port 'port_no' within 'p'.  If 'vlan_tci' is zero the
@@ -1056,10 +1056,11 @@ reinit_ports(struct ofproto *p)
 }
 
 /* Opens and returns a netdev for 'dpif_port', or a null pointer if the netdev
- * cannot be opened.  On success, also fills in 'opp', in *HOST* byte order. */
+ * cannot be opened.  On success, also fills in 'opp'. */
 static struct netdev *
 ofport_open(const struct dpif_port *dpif_port, struct ofp_phy_port *opp)
 {
+    uint32_t curr, advertised, supported, peer;
     struct netdev_options netdev_options;
     enum netdev_flags flags;
     struct netdev *netdev;
@@ -1080,14 +1081,18 @@ ofport_open(const struct dpif_port *dpif_port, struct ofp_phy_port *opp)
     }
 
     netdev_get_flags(netdev, &flags);
+    netdev_get_features(netdev, &curr, &advertised, &supported, &peer);
 
-    opp->port_no = odp_port_to_ofp_port(dpif_port->port_no);
+    opp->port_no = htons(odp_port_to_ofp_port(dpif_port->port_no));
     netdev_get_etheraddr(netdev, opp->hw_addr);
     ovs_strzcpy(opp->name, dpif_port->name, sizeof opp->name);
-    opp->config = flags & NETDEV_UP ? 0 : OFPPC_PORT_DOWN;
-    opp->state = netdev_get_carrier(netdev) ? 0 : OFPPS_LINK_DOWN;
-    netdev_get_features(netdev, &opp->curr, &opp->advertised,
-                        &opp->supported, &opp->peer);
+    opp->config = flags & NETDEV_UP ? 0 : htonl(OFPPC_PORT_DOWN);
+    opp->state = netdev_get_carrier(netdev) ? 0 : htonl(OFPPS_LINK_DOWN);
+    opp->curr = htonl(curr);
+    opp->advertised = htonl(advertised);
+    opp->supported = htonl(supported);
+    opp->peer = htonl(peer);
+
     return netdev;
 }
 
@@ -1116,7 +1121,7 @@ ofport_equal(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
     BUILD_ASSERT_DECL(sizeof *a == 48); /* Detect ofp_phy_port changes. */
     return (!memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr)
             && a->state == b->state
-            && !((a->config ^ b->config) & OFPPC_PORT_DOWN)
+            && !((a->config ^ b->config) & htonl(OFPPC_PORT_DOWN))
             && a->curr == b->curr
             && a->advertised == b->advertised
             && a->supported == b->supported
@@ -1139,7 +1144,7 @@ ofport_install(struct ofproto *p,
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
     ofport->opp = *opp;
-    ofport->odp_port = ofp_port_to_odp_port(opp->port_no);
+    ofport->odp_port = ofp_port_to_odp_port(ntohs(opp->port_no));
     ofport->cfm = NULL;
 
     /* Add port to 'p'. */
@@ -1189,8 +1194,8 @@ ofport_modified(struct ofproto *ofproto, struct ofport *port,
                 struct netdev *netdev, struct ofp_phy_port *opp)
 {
     memcpy(port->opp.hw_addr, opp->hw_addr, ETH_ADDR_LEN);
-    port->opp.config = ((port->opp.config & ~OFPPC_PORT_DOWN)
-                        | (opp->config & OFPPC_PORT_DOWN));
+    port->opp.config = ((port->opp.config & ~htonl(OFPPC_PORT_DOWN))
+                        | (opp->config & htonl(OFPPC_PORT_DOWN)));
     port->opp.state = opp->state;
     port->opp.curr = opp->curr;
     port->opp.advertised = opp->advertised;
@@ -1922,7 +1927,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
                          (1u << OFPAT_ENQUEUE));
 
     HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
-        hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
+        ofpbuf_put(buf, &port->opp, sizeof port->opp);
     }
 
     ofconn_send_reply(ofconn, buf);
@@ -1987,7 +1992,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
     const struct ofport *ofport = get_port(ctx->ofproto, port);
 
     if (ofport) {
-        if (ofport->opp.config & OFPPC_NO_FWD) {
+        if (ofport->opp.config & htonl(OFPPC_NO_FWD)) {
             /* Forwarding disabled on port. */
             return;
         }
@@ -2042,7 +2047,7 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 }
 
 static void
-flood_packets(struct ofproto *ofproto, uint16_t odp_in_port, uint32_t mask,
+flood_packets(struct ofproto *ofproto, uint16_t odp_in_port, ovs_be32 mask,
               uint16_t *nf_output_iface, struct ofpbuf *odp_actions)
 {
     struct ofport *ofport;
@@ -2082,11 +2087,11 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         }
         break;
     case OFPP_FLOOD:
-        flood_packets(ctx->ofproto, ctx->flow.in_port, OFPPC_NO_FLOOD,
+        flood_packets(ctx->ofproto, ctx->flow.in_port, htonl(OFPPC_NO_FLOOD),
                       &ctx->nf_output_iface, ctx->odp_actions);
         break;
     case OFPP_ALL:
-        flood_packets(ctx->ofproto, ctx->flow.in_port, 0,
+        flood_packets(ctx->ofproto, ctx->flow.in_port, htonl(0),
                       &ctx->nf_output_iface, ctx->odp_actions);
         break;
     case OFPP_CONTROLLER:
@@ -2339,9 +2344,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     const struct ofport *port;
 
     port = get_port(ctx->ofproto, ctx->flow.in_port);
-    if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
+    if (port && port->opp.config & htonl(OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
         port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
-                            ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
+                            ? htonl(OFPPC_NO_RECV_STP)
+                            : htonl(OFPPC_NO_RECV))) {
         /* Drop this flow. */
         return;
     }
@@ -2583,11 +2589,11 @@ exit:
 
 static void
 update_port_config(struct ofproto *p, struct ofport *port,
-                   uint32_t config, uint32_t mask)
+                   ovs_be32 config, ovs_be32 mask)
 {
     mask &= config ^ port->opp.config;
-    if (mask & OFPPC_PORT_DOWN) {
-        if (config & OFPPC_PORT_DOWN) {
+    if (mask & htonl(OFPPC_PORT_DOWN)) {
+        if (config & htonl(OFPPC_PORT_DOWN)) {
             netdev_turn_flags_off(port->netdev, NETDEV_UP, true);
         } else {
             netdev_turn_flags_on(port->netdev, NETDEV_UP, true);
@@ -2595,14 +2601,14 @@ update_port_config(struct ofproto *p, struct ofport *port,
     }
 #define REVALIDATE_BITS (OFPPC_NO_RECV | OFPPC_NO_RECV_STP |    \
                          OFPPC_NO_FWD | OFPPC_NO_FLOOD)
-    if (mask & REVALIDATE_BITS) {
+    if (mask & htonl(REVALIDATE_BITS)) {
         COVERAGE_INC(ofproto_costly_flags);
-        port->opp.config ^= mask & REVALIDATE_BITS;
+        port->opp.config ^= mask & htonl(REVALIDATE_BITS);
         p->need_revalidate = true;
     }
 #undef REVALIDATE_BITS
-    if (mask & OFPPC_NO_PACKET_IN) {
-        port->opp.config ^= OFPPC_NO_PACKET_IN;
+    if (mask & htonl(OFPPC_NO_PACKET_IN)) {
+        port->opp.config ^= htonl(OFPPC_NO_PACKET_IN);
     }
 }
 
@@ -2625,7 +2631,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
         return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_HW_ADDR);
     } else {
-        update_port_config(p, port, ntohl(opm->config), ntohl(opm->mask));
+        update_port_config(p, port, opm->config, opm->mask);
         if (opm->advertise) {
             netdev_set_advertisements(port->netdev, ntohl(opm->advertise));
         }
@@ -2764,7 +2770,7 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
     netdev_get_stats(port->netdev, &stats);
 
     ops = append_ofp_stats_reply(sizeof *ops, ofconn, msgp);
-    ops->port_no = htons(port->opp.port_no);
+    ops->port_no = port->opp.port_no;
     memset(ops->pad, 0, sizeof ops->pad);
     put_32aligned_be64(&ops->rx_packets, htonll(stats.rx_packets));
     put_32aligned_be64(&ops->tx_packets, htonll(stats.tx_packets));
@@ -3120,7 +3126,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
     struct ofp_queue_stats *reply;
 
     reply = append_ofp_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
-    reply->port_no = htons(cbdata->ofport->opp.port_no);
+    reply->port_no = cbdata->ofport->opp.port_no;
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
     put_32aligned_be64(&reply->tx_bytes, htonll(stats->tx_bytes));
@@ -3788,7 +3794,7 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
             /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
             struct ofport *port = get_port(p, flow.in_port);
             if (port) {
-                if (port->opp.config & OFPPC_NO_PACKET_IN) {
+                if (port->opp.config & htonl(OFPPC_NO_PACKET_IN)) {
                     COVERAGE_INC(ofproto_no_packet_in);
                     /* XXX install 'drop' flow entry */
                     ofpbuf_delete(upcall->packet);
@@ -4431,7 +4437,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
     /* Determine output port. */
     dst_mac = mac_learning_lookup(ofproto->ml, flow->dl_dst, 0, tags);
     if (!dst_mac) {
-        flood_packets(ofproto, flow->in_port, OFPPC_NO_FLOOD,
+        flood_packets(ofproto, flow->in_port, htonl(OFPPC_NO_FLOOD),
                       nf_output_iface, odp_actions);
     } else {
         int out_port = dst_mac->port.i;

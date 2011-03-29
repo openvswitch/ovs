@@ -929,9 +929,7 @@ static void schedule_packet_in(struct ofconn *, const struct dpif_upcall *,
                                const struct flow *, struct ofpbuf *rw_packet);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
- * controllers managed by 'mgr'.
- *
- * 'opp' is in *HOST* byte order. */
+ * controllers managed by 'mgr'. */
 void
 connmgr_send_port_status(struct connmgr *mgr, const struct ofp_phy_port *opp,
                          uint8_t reason)
@@ -953,7 +951,6 @@ connmgr_send_port_status(struct connmgr *mgr, const struct ofp_phy_port *opp,
         ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
         ops->reason = reason;
         ops->desc = *opp;
-        hton_ofp_phy_port(&ops->desc);
         ofconn_send(ofconn, b, NULL);
     }
 }

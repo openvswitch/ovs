@@ -1864,19 +1864,6 @@ make_echo_reply(const struct ofp_header *rq)
     return out;
 }
 
-/* Converts the members of 'opp' from host to network byte order. */
-void
-hton_ofp_phy_port(struct ofp_phy_port *opp)
-{
-    opp->port_no = htons(opp->port_no);
-    opp->config = htonl(opp->config);
-    opp->state = htonl(opp->state);
-    opp->curr = htonl(opp->curr);
-    opp->advertised = htonl(opp->advertised);
-    opp->supported = htonl(opp->supported);
-    opp->peer = htonl(opp->peer);
-}
-
 static int
 check_action_exact_len(const union ofp_action *a, unsigned int len,
                        unsigned int required_len)

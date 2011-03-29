@@ -256,8 +256,6 @@ struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
                                           uint16_t in_port, uint16_t out_port);
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
-
-void hton_ofp_phy_port(struct ofp_phy_port *);
 
 /* Actions. */
 
