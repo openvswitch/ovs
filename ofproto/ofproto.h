@@ -31,6 +31,7 @@
 extern "C" {
 #endif
 
+struct cfm;
 struct cls_rule;
 struct nlattr;
 struct ofhooks;
@@ -124,8 +125,6 @@ int ofproto_set_netflow(struct ofproto *,
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 
 /* Configuration of individual interfaces. */
-struct cfm;
-
 void ofproto_iface_clear_cfm(struct ofproto *, uint32_t port_no);
 void ofproto_iface_set_cfm(struct ofproto *, uint32_t port_no,
                            const struct cfm *,
