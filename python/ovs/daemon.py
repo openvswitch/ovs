@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -141,7 +141,9 @@ def die_if_already_running():
     ignore_existing_pidfile() has been called, terminate the program."""
     if _already_running():
         if not _overwrite_pidfile:
-            sys.stderr.write("%s: already running\n" % get_pidfile())
+            msg = "%s: already running" % _pidfile
+            logging.error("%s, aborting" % msg)
+            sys.stderr.write("%s\n" % msg)
             sys.exit(1)
         else:
             logging.warn("%s: %s already running"

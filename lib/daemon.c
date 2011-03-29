@@ -171,6 +171,8 @@ die_if_already_running(void)
     pid_t pid = already_running();
     if (pid) {
         if (!overwrite_pidfile) {
+            VLOG_ERR("%s: %s already running as pid %ld, aborting",
+                      get_pidfile(), program_name, (long int) pid);
             ovs_fatal(0, "%s: already running as pid %ld",
                       get_pidfile(), (long int) pid);
         } else {
