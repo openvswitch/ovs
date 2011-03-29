@@ -743,7 +743,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
     sflow_bridge_number = 0;
     LIST_FOR_EACH (br, node, &all_bridges) {
-        uint8_t ea[8];
+        uint8_t ea[ETH_ADDR_LEN];
         uint64_t dpid;
         struct iface *local_iface;
         struct iface *hw_addr_iface;
