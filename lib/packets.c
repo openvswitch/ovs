@@ -221,7 +221,10 @@ ipv6_is_cidr(const struct in6_addr *netmask)
 /* Populates 'b' with an Ethernet II packet headed with the given 'eth_dst',
  * 'eth_src' and 'eth_type' parameters.  A payload of 'size' bytes is allocated
  * in 'b' and returned.  This payload may be populated with appropriate
- * information by the caller. */
+ * information by the caller.
+ *
+ * The returned packet has enough headroom to insert an 802.1Q VLAN header if
+ * desired. */
 void *
 eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
             const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
@@ -232,7 +235,8 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
 
     ofpbuf_clear(b);
 
-    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + size);
+    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + VLAN_HEADER_LEN + size);
+    ofpbuf_reserve(b, VLAN_HEADER_LEN);
     eth = ofpbuf_put_uninit(b, ETH_HEADER_LEN);
     data = ofpbuf_put_uninit(b, size);
 
@@ -246,7 +250,10 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
 /* Populates 'b' with an Ethernet LLC+SNAP packet headed with the given
  * 'eth_dst', 'eth_src', 'snap_org', and 'snap_type'.  A payload of 'size'
  * bytes is allocated in 'b' and returned.  This payload may be populated with
- * appropriate information by the caller. */
+ * appropriate information by the caller.
+ *
+ * The returned packet has enough headroom to insert an 802.1Q VLAN header if
+ * desired. */
 void *
 snap_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
              const uint8_t eth_src[ETH_ADDR_LEN],
@@ -259,7 +266,9 @@ snap_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     /* Compose basic packet structure.  (We need the payload size to stick into
      * the 802.2 header.) */
     ofpbuf_clear(b);
-    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + LLC_SNAP_HEADER_LEN + size);
+    ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + VLAN_HEADER_LEN
+                             + LLC_SNAP_HEADER_LEN + size);
+    ofpbuf_reserve(b, VLAN_HEADER_LEN);
     eth = ofpbuf_put_zeros(b, ETH_HEADER_LEN);
     llc_snap = ofpbuf_put_zeros(b, LLC_SNAP_HEADER_LEN);
     payload = ofpbuf_put_uninit(b, size);
