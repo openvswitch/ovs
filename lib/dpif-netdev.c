@@ -1136,36 +1136,6 @@ dp_netdev_wait(void)
 }
 
 
-/* Modify the TCI field of 'packet'.  If a VLAN tag is present, its TCI field
- * is replaced by 'tci'.  If a VLAN tag is not present, one is added with the
- * TCI field set to 'tci'.
- */
-static void
-dp_netdev_set_dl_tci(struct ofpbuf *packet, uint16_t tci)
-{
-    struct vlan_eth_header *veh;
-    struct eth_header *eh;
-
-    eh = packet->l2;
-    if (packet->size >= sizeof(struct vlan_eth_header)
-        && eh->eth_type == htons(ETH_TYPE_VLAN)) {
-        veh = packet->l2;
-        veh->veth_tci = tci;
-    } else {
-        /* Insert new 802.1Q header. */
-        struct vlan_eth_header tmp;
-        memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
-        memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
-        tmp.veth_type = htons(ETH_TYPE_VLAN);
-        tmp.veth_tci = tci;
-        tmp.veth_next_type = eh->eth_type;
-
-        veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);
-        memcpy(veh, &tmp, sizeof tmp);
-        packet->l2 = (char*)packet->l2 - VLAN_HEADER_LEN;
-    }
-}
-
 static void
 dp_netdev_strip_vlan(struct ofpbuf *packet)
 {
@@ -1368,7 +1338,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case ODP_ACTION_ATTR_SET_DL_TCI:
-            dp_netdev_set_dl_tci(packet, nl_attr_get_be16(a));
+            eth_set_vlan_tci(packet, nl_attr_get_be16(a));
             break;
 
         case ODP_ACTION_ATTR_STRIP_VLAN:

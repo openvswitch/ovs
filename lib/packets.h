@@ -131,6 +131,8 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
                            uint16_t snap_type,
                            const uint8_t eth_src[ETH_ADDR_LEN]);
 
+void eth_set_vlan_tci(struct ofpbuf *, ovs_be16 tci);
+
 /* Example:
  *
  * uint8_t mac[ETH_ADDR_LEN];
