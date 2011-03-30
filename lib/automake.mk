@@ -126,6 +126,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/socket-util.h \
 	lib/sort.c \
 	lib/sort.h \
+	lib/sset.c \
+	lib/sset.h \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
