@@ -682,6 +682,7 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct ethhdr *eth;
 	bool is_frag;
+	int len;
 	int err;
 
 	err = -EINVAL;
@@ -693,12 +694,14 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto err;
 
-	packet = skb_clone(skb, GFP_KERNEL);
+	len = nla_len(a[ODP_PACKET_ATTR_PACKET]);
+	packet = __dev_alloc_skb(NET_IP_ALIGN + len, GFP_KERNEL);
 	err = -ENOMEM;
 	if (!packet)
 		goto err;
-	packet->data = nla_data(a[ODP_PACKET_ATTR_PACKET]);
-	packet->len = nla_len(a[ODP_PACKET_ATTR_PACKET]);
+	skb_reserve(packet, NET_IP_ALIGN);
+
+	memcpy(__skb_put(packet, len), nla_data(a[ODP_PACKET_ATTR_PACKET]), len);
 
 	skb_reset_mac_header(packet);
 	eth = eth_hdr(packet);
