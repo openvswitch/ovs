@@ -335,15 +335,53 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_cur_cfg);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_statistics);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_external_ids);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_ovs_version);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_db_version);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_type);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
 
+    ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
     ovsdb_idl_omit(idl, &ovsrec_bridge_col_external_ids);
 
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_omit(idl, &ovsrec_port_col_fake_bridge);
 
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_admin_state);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_duplex);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_speed);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_state);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_mtu);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_statistics);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_status);
     ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
+
+    ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_is_connected);
+    ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_role);
+    ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_status);
+    ovsdb_idl_omit(idl, &ovsrec_controller_col_external_ids);
+
+    ovsdb_idl_omit_alert(idl, &ovsrec_maintenance_point_col_fault);
+
+    ovsdb_idl_omit_alert(idl, &ovsrec_monitor_col_fault);
+
+    ovsdb_idl_omit(idl, &ovsrec_qos_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_queue_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_mirror_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_netflow_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_sflow_col_external_ids);
+
+    ovsdb_idl_omit(idl, &ovsrec_manager_col_external_ids);
+    ovsdb_idl_omit(idl, &ovsrec_manager_col_inactivity_probe);
+    ovsdb_idl_omit(idl, &ovsrec_manager_col_is_connected);
+    ovsdb_idl_omit(idl, &ovsrec_manager_col_max_backoff);
+    ovsdb_idl_omit(idl, &ovsrec_manager_col_status);
+
+    ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
 
     /* Register unixctl commands. */
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
