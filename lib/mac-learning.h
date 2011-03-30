@@ -73,7 +73,7 @@ static inline void mac_entry_set_grat_arp_lock(struct mac_entry *mac)
  * has ever been asserted or if it has expired. */
 static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
 {
-    return time_now() >= mac->grat_arp_lock;
+    return time_now() < mac->grat_arp_lock;
 }
 
 /* MAC learning table. */
