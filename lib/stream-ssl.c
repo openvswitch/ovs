@@ -22,6 +22,8 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
