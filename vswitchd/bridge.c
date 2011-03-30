@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "bitmap.h"
+#include "bond.h"
 #include "cfm.h"
 #include "classifier.h"
 #include "coverage.h"
@@ -77,10 +78,7 @@ VLOG_DEFINE_THIS_MODULE(bridge);
 
 COVERAGE_DEFINE(bridge_flush);
 COVERAGE_DEFINE(bridge_process_flow);
-COVERAGE_DEFINE(bridge_process_cfm);
-COVERAGE_DEFINE(bridge_process_lacp);
 COVERAGE_DEFINE(bridge_reconfigure);
-COVERAGE_DEFINE(bridge_lacp_update);
 
 struct dst {
     uint16_t vlan;
@@ -103,30 +101,14 @@ struct iface {
     struct port *port;          /* Containing port. */
     char *name;                 /* Host network device name. */
     tag_type tag;               /* Tag associated with this interface. */
-    long long delay_expires;    /* Time after which 'enabled' may change. */
 
     /* These members are valid only after bridge_reconfigure() causes them to
      * be initialized. */
     struct hmap_node dp_ifidx_node; /* In struct bridge's "ifaces" hmap. */
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
-    bool enabled;               /* May be chosen for flows? */
-    bool up;                    /* Is the interface up? */
     const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
-};
-
-#define BOND_MASK 0xff
-struct bond_entry {
-    struct iface *iface;        /* Assigned iface, or NULL if none. */
-    uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
-    tag_type tag;               /* Tag for bond_entry<->iface association. */
-};
-
-enum bond_mode {
-    BM_TCP, /* Transport Layer Load Balance. */
-    BM_SLB, /* Source Load Balance. */
-    BM_AB   /* Active Backup. */
 };
 
 #define MAX_MIRRORS 32
@@ -161,31 +143,13 @@ struct port {
                                  * NULL if all VLANs are trunked. */
     const struct ovsrec_port *cfg;
 
-    /* Monitoring. */
-    struct netdev_monitor *monitor;   /* Tracks carrier. NULL if miimon. */
-    long long int miimon_interval;    /* Miimon status refresh interval. */
-    long long int miimon_next_update; /* Time of next miimon update. */
-
     /* An ordinary bridge port has 1 interface.
      * A bridge port for bonding has at least 2 interfaces. */
     struct list ifaces;         /* List of "struct iface"s. */
     size_t n_ifaces;            /* list_size(ifaces). */
 
     /* Bonding info. */
-    enum bond_mode bond_mode;   /* Type of the bond. BM_SLB is the default. */
-    struct iface *active_iface; /* iface on which bcasts accepted, or NULL. */
-    tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
-    int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
-    bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
-    long long int bond_next_fake_iface_update; /* Time of next update. */
-
-    /* LACP information. */
-    struct lacp *lacp;          /* LACP object. NULL if LACP is disabled. */
-
-    /* SLB specific bonding info. */
-    struct bond_entry *bond_hash; /* An array of (BOND_MASK + 1) elements. */
-    int bond_rebalance_interval; /* Interval between rebalances, in ms. */
-    long long int bond_next_rebalance; /* Next rebalancing time. */
+    struct bond *bond;
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
@@ -265,13 +229,6 @@ static unixctl_cb_func bridge_unixctl_fdb_show;
 static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func qos_unixctl_show;
 
-static void bond_init(void);
-static void bond_run(struct port *);
-static void bond_wait(struct port *);
-static void bond_rebalance_port(struct port *);
-static void bond_send_learning_packets(struct port *);
-static void bond_enable_slave(struct iface *iface, bool enable);
-
 static void port_run(struct port *);
 static void port_wait(struct port *);
 static struct port *port_create(struct bridge *, const char *name);
@@ -279,12 +236,11 @@ static void port_reconfigure(struct port *, const struct ovsrec_port *);
 static void port_del_ifaces(struct port *, const struct ovsrec_port *);
 static void port_destroy(struct port *);
 static struct port *port_lookup(const struct bridge *, const char *name);
-static struct iface *port_lookup_iface(const struct port *, const char *name);
 static struct iface *port_get_an_iface(const struct port *);
 static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
-static void port_update_bonding(struct port *);
-static void port_update_lacp(struct port *);
+static void port_reconfigure_bond(struct port *);
+static void port_send_learning_packets(struct port *);
 
 static void mirror_create(struct bridge *, struct ovsrec_mirror *);
 static void mirror_destroy(struct mirror *);
@@ -304,7 +260,6 @@ static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_update_cfm(struct iface *);
 static bool iface_refresh_cfm_stats(struct iface *iface);
-static void iface_update_carrier(struct iface *);
 static bool iface_get_carrier(const struct iface *);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
@@ -347,7 +302,6 @@ bridge_init(const char *remote)
                              NULL);
     unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
                              NULL);
-    lacp_init();
     bond_init();
 }
 
@@ -718,8 +672,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 /* Update 'iface'. */
                 if (iface) {
                     iface->netdev = netdev;
-                    iface->enabled = iface_get_carrier(iface);
-                    iface->up = iface->enabled;
                 }
             } else if (iface && iface->netdev) {
                 struct shash args;
@@ -751,6 +703,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         bridge_fetch_dp_ifaces(br);
 
+        /* Delete interfaces that cannot be opened.
+         *
+         * From this point forward we are guaranteed that every "struct iface"
+         * has nonnull 'netdev' and correct 'dp_ifidx'. */
         iterate_and_prune_ifaces(br, check_iface, NULL);
 
         /* Pick local port hardware address, datapath ID. */
@@ -885,19 +841,11 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, node, &all_bridges) {
         struct port *port;
 
+        br->has_bonded_ports = false;
         HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             struct iface *iface;
 
-            if (port->monitor) {
-                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                    netdev_monitor_add(port->monitor, iface->netdev);
-                }
-            } else {
-                port->miimon_next_update = 0;
-            }
-
-            port_update_lacp(port);
-            port_update_bonding(port);
+            port_reconfigure_bond(port);
 
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                 iface_update_qos(iface, port->cfg->qos);
@@ -2134,268 +2082,28 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 /* Bridge packet processing functions. */
 
 static bool
-bond_is_tcp_hash(const struct port *port)
-{
-    return port->bond_mode == BM_TCP && lacp_negotiated(port->lacp);
-}
-
-static int
-bond_hash_src(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
-{
-    return hash_bytes(mac, ETH_ADDR_LEN, vlan) & BOND_MASK;
-}
-
-static int bond_hash_tcp(const struct flow *flow, uint16_t vlan)
-{
-    struct flow hash_flow;
-
-    memcpy(&hash_flow, flow, sizeof hash_flow);
-    hash_flow.vlan_tci = 0;
-
-    /* The symmetric quality of this hash function is not required, but
-     * flow_hash_symmetric_l4 already exists, and is sufficient for our
-     * purposes, so we use it out of convenience. */
-    return flow_hash_symmetric_l4(&hash_flow, vlan) & BOND_MASK;
-}
-
-static struct bond_entry *
-lookup_bond_entry(const struct port *port, const struct flow *flow,
-                  uint16_t vlan)
-{
-    assert(port->bond_mode != BM_AB);
-
-    if (bond_is_tcp_hash(port)) {
-        return &port->bond_hash[bond_hash_tcp(flow, vlan)];
-    } else {
-        return &port->bond_hash[bond_hash_src(flow->dl_src, vlan)];
-    }
-}
-
-static struct iface *
-choose_output_iface(const struct port *port, const struct flow *flow,
-                    uint16_t vlan)
-{
-    assert(port->n_ifaces);
-    if (port->n_ifaces == 1) {
-        return port_get_an_iface(port);
-    } else if (port->bond_mode == BM_AB) {
-        return port->active_iface;
-    } else {
-        struct bond_entry *e = lookup_bond_entry(port, flow, vlan);
-        if (!e->iface || !e->iface->enabled) {
-            /* XXX select interface properly.  The current interface selection
-             * is only good for testing the rebalancing code. */
-            e->iface = port->active_iface;
-            e->tag = tag_create_random();
-        }
-        return e->iface;
-    }
-}
-
-static void
-bond_enable_slave(struct iface *iface, bool enable)
-{
-    iface->delay_expires = LLONG_MAX;
-    if (enable != iface->enabled) {
-        iface->enabled = enable;
-        if (!iface->enabled) {
-            VLOG_WARN("interface %s: disabled", iface->name);
-            ofproto_revalidate(iface->port->bridge->ofproto, iface->tag);
-        } else {
-            VLOG_WARN("interface %s: enabled", iface->name);
-            iface->tag = tag_create_random();
-        }
-    }
-}
-
-static void
-bond_link_status_update(struct iface *iface)
-{
-    struct port *port = iface->port;
-    bool up;
-
-    up = iface->up && lacp_slave_may_enable(port->lacp, iface);
-    if ((up == iface->enabled) != (iface->delay_expires == LLONG_MAX)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-        VLOG_INFO_RL(&rl, "interface %s: link state %s",
-                     iface->name, up ? "up" : "down");
-        if (up == iface->enabled) {
-            iface->delay_expires = LLONG_MAX;
-            VLOG_INFO_RL(&rl, "interface %s: will not be %s",
-                         iface->name, up ? "disabled" : "enabled");
-        } else {
-            int delay = (lacp_negotiated(port->lacp) ? 0
-                         : up ? port->updelay : port->downdelay);
-            iface->delay_expires = time_msec() + delay;
-            if (delay) {
-                VLOG_INFO_RL(&rl, "interface %s: will be %s if it stays %s "
-                             "for %d ms",
-                             iface->name,
-                             up ? "enabled" : "disabled",
-                             up ? "up" : "down",
-                             delay);
-            }
-        }
-    }
-
-    if (time_msec() >= iface->delay_expires) {
-        bond_enable_slave(iface, up);
-    }
-}
-
-static struct iface *
-bond_choose_iface(const struct port *port)
-{
-    struct iface *iface, *best;
-
-    /* Find an enabled iface. */
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        if (iface->enabled) {
-            return iface;
-        }
-    }
-
-    /* All interfaces are disabled.  Find an interface that will be enabled
-     * after its updelay expires.  */
-    best = NULL;
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        if (lacp_slave_may_enable(port->lacp, iface)
-            && (!best || iface->delay_expires < best->delay_expires)) {
-            best = iface;
-        }
-    }
-    return best;
-}
-
-static void
-bond_choose_active_iface(struct port *port)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    struct iface *old_active_iface = port->active_iface;
-
-    port->active_iface = bond_choose_iface(port);
-    if (port->active_iface) {
-        if (port->active_iface->enabled) {
-            VLOG_INFO_RL(&rl, "port %s: active interface is now %s",
-                         port->name, port->active_iface->name);
-        } else {
-            VLOG_INFO_RL(&rl, "port %s: active interface is now %s, skipping "
-                         "remaining %lld ms updelay (since no interface was "
-                         "enabled)", port->name, port->active_iface->name,
-                         port->active_iface->delay_expires - time_msec());
-            bond_enable_slave(port->active_iface, true);
-        }
-
-        if (!old_active_iface) {
-            ofproto_revalidate(port->bridge->ofproto, port->no_ifaces_tag);
-        }
-        bond_send_learning_packets(port);
-    } else {
-        VLOG_WARN_RL(&rl, "port %s: all ports disabled, no active interface",
-                     port->name);
-    }
-}
-
-/* Attempts to make the sum of the bond slaves' statistics appear on the fake
- * bond interface. */
-static void
-bond_update_fake_iface_stats(struct port *port)
-{
-    struct netdev_stats bond_stats;
-    struct netdev *bond_dev;
-    struct iface *iface;
-
-    memset(&bond_stats, 0, sizeof bond_stats);
-
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        struct netdev_stats slave_stats;
-
-        if (!netdev_get_stats(iface->netdev, &slave_stats)) {
-            /* XXX: We swap the stats here because they are swapped back when
-             * reported by the internal device.  The reason for this is
-             * internal devices normally represent packets going into the system
-             * but when used as fake bond device they represent packets leaving
-             * the system.  We really should do this in the internal device
-             * itself because changing it here reverses the counts from the
-             * perspective of the switch.  However, the internal device doesn't
-             * know what type of device it represents so we have to do it here
-             * for now. */
-            bond_stats.tx_packets += slave_stats.rx_packets;
-            bond_stats.tx_bytes += slave_stats.rx_bytes;
-            bond_stats.rx_packets += slave_stats.tx_packets;
-            bond_stats.rx_bytes += slave_stats.tx_bytes;
-        }
-    }
-
-    if (!netdev_open_default(port->name, &bond_dev)) {
-        netdev_set_stats(bond_dev, &bond_stats);
-        netdev_close(bond_dev);
-    }
-}
-
-static void
-bond_run(struct port *port)
-{
-    struct iface *iface;
-
-    if (port->n_ifaces < 2) {
-        return;
-    }
-
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        bond_link_status_update(iface);
-    }
-    if (!port->active_iface || !port->active_iface->enabled) {
-        bond_choose_active_iface(port);
-    }
-
-    if (port->bond_fake_iface
-        && time_msec() >= port->bond_next_fake_iface_update) {
-        bond_update_fake_iface_stats(port);
-        port->bond_next_fake_iface_update = time_msec() + 1000;
-    }
-}
-
-static void
-bond_wait(struct port *port)
-{
-    struct iface *iface;
-
-    if (port->n_ifaces < 2) {
-        return;
-    }
-
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        if (iface->delay_expires != LLONG_MAX) {
-            poll_timer_wait_until(iface->delay_expires);
-        }
-    }
-
-    if (port->bond_fake_iface) {
-        poll_timer_wait_until(port->bond_next_fake_iface_update);
-    }
-}
-
-static bool
 set_dst(struct dst *dst, const struct flow *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
     struct iface *iface;
+    uint16_t vlan;
 
-    dst->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
-              : in_port->vlan >= 0 ? in_port->vlan
-              : flow->vlan_tci == 0 ? OFP_VLAN_NONE
-              : vlan_tci_to_vid(flow->vlan_tci));
+    vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
+            : in_port->vlan >= 0 ? in_port->vlan
+            : flow->vlan_tci == 0 ? OFP_VLAN_NONE
+            : vlan_tci_to_vid(flow->vlan_tci));
 
-    iface = choose_output_iface(out_port, flow, dst->vlan);
+    iface = (!out_port->bond
+             ? port_get_an_iface(out_port)
+             : bond_choose_output_slave(out_port->bond, flow, vlan, tags));
     if (iface) {
-        *tags |= iface->tag;
+        dst->vlan = vlan;
         dst->dp_ifidx = iface->dp_ifidx;
+        return true;
     } else {
-        *tags |= out_port->no_ifaces_tag;
+        return false;
     }
-    return iface != NULL;
 }
 
 static void
@@ -2525,19 +2233,7 @@ port_is_floodable(const struct port *port)
     return true;
 }
 
-/* Returns the tag for 'port''s active iface, or 'port''s no_ifaces_tag if
- * there is no active iface. */
-static tag_type
-port_get_active_iface_tag(const struct port *port)
-{
-    return (port->active_iface
-            ? port->active_iface->tag
-            : port->no_ifaces_tag);
-}
-
-/* Returns an arbitrary interface within 'port'.
- *
- * 'port' must have at least one interface. */
+/* Returns an arbitrary interface within 'port'. */
 static struct iface *
 port_get_an_iface(const struct port *port)
 {
@@ -2831,35 +2527,25 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
         return false;
     }
 
-    /* When using LACP, do not accept packets from disabled interfaces. */
-    if (lacp_negotiated(in_port->lacp) && !in_iface->enabled) {
-        return false;
-    }
-
-    /* Packets received on non-LACP bonds need special attention to avoid
-     * duplicates. */
-    if (in_port->n_ifaces > 1 && !lacp_negotiated(in_port->lacp)) {
+    if (in_port->bond) {
         struct mac_entry *mac;
 
-        if (eth_addr_is_multicast(flow->dl_dst)) {
-            *tags |= port_get_active_iface_tag(in_port);
-            if (in_port->active_iface != in_iface) {
-                /* Drop all multicast packets on inactive slaves. */
+        switch (bond_check_admissibility(in_port->bond, in_iface,
+                                         flow->dl_dst, tags)) {
+        case BV_ACCEPT:
+            break;
+
+        case BV_DROP:
+            return false;
+
+        case BV_DROP_IF_MOVED:
+            mac = mac_learning_lookup(br->ml, flow->dl_src, vlan, NULL);
+            if (mac && mac->port.p != in_port &&
+                (!is_gratuitous_arp(flow)
+                 || mac_entry_is_grat_arp_locked(mac))) {
                 return false;
             }
-        }
-
-        /* Drop all packets for which we have learned a different input
-         * port, because we probably sent the packet on one slave and got
-         * it back on the other.  Gratuitous ARP packets are an exception
-         * to this rule: the host has moved to another switch.  The exception
-         * to the exception is if we locked the learning table to avoid
-         * reflections on bond slaves.  If this is the case, just drop the
-         * packet now. */
-        mac = mac_learning_lookup(br->ml, flow->dl_src, vlan, NULL);
-        if (mac && mac->port.p != in_port &&
-            (!is_gratuitous_arp(flow) || mac_entry_is_grat_arp_locked(mac))) {
-                return false;
+            break;
         }
     }
 
@@ -2940,14 +2626,8 @@ bridge_special_ofhook_cb(const struct flow *flow,
     iface = iface_from_dp_ifidx(br, flow->in_port);
 
     if (flow->dl_type == htons(ETH_TYPE_LACP)) {
-
-        if (iface && iface->port->lacp && packet) {
-            const struct lacp_pdu *pdu = parse_lacp_packet(packet);
-
-            if (pdu) {
-                COVERAGE_INC(bridge_process_lacp);
-                lacp_process_pdu(iface->port->lacp, iface, pdu);
-            }
+        if (iface && iface->port->bond && packet) {
+            bond_process_lacp(iface->port->bond, iface, packet);
         }
         return false;
     }
@@ -2986,13 +2666,11 @@ bridge_account_flow_ofhook_cb(const struct flow *flow, tag_type tags,
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
         if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT) {
             struct port *out_port = port_from_dp_ifidx(br, nl_attr_get_u32(a));
-            if (out_port && out_port->n_ifaces >= 2 &&
-                out_port->bond_mode != BM_AB) {
+            if (out_port && out_port->bond) {
                 uint16_t vlan = (flow->vlan_tci
                                  ? vlan_tci_to_vid(flow->vlan_tci)
                                  : OFP_VLAN_NONE);
-                struct bond_entry *e = lookup_bond_entry(out_port, flow, vlan);
-                e->tx_bytes += n_bytes;
+                bond_account(out_port->bond, flow, vlan, n_bytes);
             }
         }
     }
@@ -3003,18 +2681,11 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
 {
     struct bridge *br = br_;
     struct port *port;
-    long long int now;
 
-    if (!br->has_bonded_ports) {
-        return;
-    }
-
-    now = time_msec();
     HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-        if (port->n_ifaces > 1 && port->bond_mode != BM_AB
-            && now >= port->bond_next_rebalance) {
-            port->bond_next_rebalance = now + port->bond_rebalance_interval;
-            bond_rebalance_port(port);
+        if (port->bond) {
+            bond_rebalance(port->bond,
+                           ofproto_get_revalidate_set(br->ofproto));
         }
     }
 }
@@ -3026,826 +2697,26 @@ static struct ofhooks bridge_ofhooks = {
     bridge_account_checkpoint_ofhook_cb,
 };
 
-/* Bonding functions. */
-
-/* Statistics for a single interface on a bonded port, used for load-based
- * bond rebalancing.  */
-struct slave_balance {
-    struct iface *iface;        /* The interface. */
-    uint64_t tx_bytes;          /* Sum of hashes[*]->tx_bytes. */
-
-    /* All the "bond_entry"s that are assigned to this interface, in order of
-     * increasing tx_bytes. */
-    struct bond_entry **hashes;
-    size_t n_hashes;
-};
-
-static const char *
-bond_mode_to_string(enum bond_mode bm) {
-    static char *bm_slb = "balance-slb";
-    static char *bm_ab  = "active-backup";
-    static char *bm_tcp = "balance-tcp";
-
-    switch (bm) {
-    case BM_SLB: return bm_slb;
-    case BM_AB:  return bm_ab;
-    case BM_TCP: return bm_tcp;
-    }
-
-    NOT_REACHED();
-    return NULL;
-}
-
-/* Sorts pointers to pointers to bond_entries in ascending order by the
- * interface to which they are assigned, and within a single interface in
- * ascending order of bytes transmitted. */
-static int
-compare_bond_entries(const void *a_, const void *b_)
-{
-    const struct bond_entry *const *ap = a_;
-    const struct bond_entry *const *bp = b_;
-    const struct bond_entry *a = *ap;
-    const struct bond_entry *b = *bp;
-    if (a->iface != b->iface) {
-        return a->iface > b->iface ? 1 : -1;
-    } else if (a->tx_bytes != b->tx_bytes) {
-        return a->tx_bytes > b->tx_bytes ? 1 : -1;
-    } else {
-        return 0;
-    }
-}
-
-/* Sorts slave_balances so that enabled ports come first, and otherwise in
- * *descending* order by number of bytes transmitted. */
-static int
-compare_slave_balance(const void *a_, const void *b_)
-{
-    const struct slave_balance *a = a_;
-    const struct slave_balance *b = b_;
-    if (a->iface->enabled != b->iface->enabled) {
-        return a->iface->enabled ? -1 : 1;
-    } else if (a->tx_bytes != b->tx_bytes) {
-        return a->tx_bytes > b->tx_bytes ? -1 : 1;
-    } else {
-        return 0;
-    }
-}
-
-static void
-swap_bals(struct slave_balance *a, struct slave_balance *b)
-{
-    struct slave_balance tmp = *a;
-    *a = *b;
-    *b = tmp;
-}
-
-/* Restores the 'n_bals' slave_balance structures in 'bals' to sorted order
- * given that 'p' (and only 'p') might be in the wrong location.
- *
- * This function invalidates 'p', since it might now be in a different memory
- * location. */
-static void
-resort_bals(struct slave_balance *p,
-            struct slave_balance bals[], size_t n_bals)
-{
-    if (n_bals > 1) {
-        for (; p > bals && p->tx_bytes > p[-1].tx_bytes; p--) {
-            swap_bals(p, p - 1);
-        }
-        for (; p < &bals[n_bals - 1] && p->tx_bytes < p[1].tx_bytes; p++) {
-            swap_bals(p, p + 1);
-        }
-    }
-}
-
-static void
-log_bals(const struct slave_balance *bals, size_t n_bals, struct port *port)
-{
-    if (VLOG_IS_DBG_ENABLED()) {
-        struct ds ds = DS_EMPTY_INITIALIZER;
-        const struct slave_balance *b;
-
-        for (b = bals; b < bals + n_bals; b++) {
-            size_t i;
-
-            if (b > bals) {
-                ds_put_char(&ds, ',');
-            }
-            ds_put_format(&ds, " %s %"PRIu64"kB",
-                          b->iface->name, b->tx_bytes / 1024);
-
-            if (!b->iface->enabled) {
-                ds_put_cstr(&ds, " (disabled)");
-            }
-            if (b->n_hashes > 0) {
-                ds_put_cstr(&ds, " (");
-                for (i = 0; i < b->n_hashes; i++) {
-                    const struct bond_entry *e = b->hashes[i];
-                    if (i > 0) {
-                        ds_put_cstr(&ds, " + ");
-                    }
-                    ds_put_format(&ds, "h%td: %"PRIu64"kB",
-                                  e - port->bond_hash, e->tx_bytes / 1024);
-                }
-                ds_put_cstr(&ds, ")");
-            }
-        }
-        VLOG_DBG("bond %s:%s", port->name, ds_cstr(&ds));
-        ds_destroy(&ds);
-    }
-}
-
-/* Shifts 'hash' from 'from' to 'to' within 'port'. */
-static void
-bond_shift_load(struct slave_balance *from, struct slave_balance *to,
-                int hash_idx)
-{
-    struct bond_entry *hash = from->hashes[hash_idx];
-    struct port *port = from->iface->port;
-    uint64_t delta = hash->tx_bytes;
-
-    assert(port->bond_mode != BM_AB);
-
-    VLOG_INFO("bond %s: shift %"PRIu64"kB of load (with hash %td) "
-              "from %s to %s (now carrying %"PRIu64"kB and "
-              "%"PRIu64"kB load, respectively)",
-              port->name, delta / 1024, hash - port->bond_hash,
-              from->iface->name, to->iface->name,
-              (from->tx_bytes - delta) / 1024,
-              (to->tx_bytes + delta) / 1024);
-
-    /* Delete element from from->hashes.
-     *
-     * We don't bother to add the element to to->hashes because not only would
-     * it require more work, the only purpose it would be to allow that hash to
-     * be migrated to another slave in this rebalancing run, and there is no
-     * point in doing that.  */
-    if (hash_idx == 0) {
-        from->hashes++;
-    } else {
-        memmove(from->hashes + hash_idx, from->hashes + hash_idx + 1,
-                (from->n_hashes - (hash_idx + 1)) * sizeof *from->hashes);
-    }
-    from->n_hashes--;
-
-    /* Shift load away from 'from' to 'to'. */
-    from->tx_bytes -= delta;
-    to->tx_bytes += delta;
-
-    /* Arrange for flows to be revalidated. */
-    ofproto_revalidate(port->bridge->ofproto, hash->tag);
-    hash->iface = to->iface;
-    hash->tag = tag_create_random();
-}
-
-static void
-bond_rebalance_port(struct port *port)
-{
-    struct slave_balance *bals;
-    size_t n_bals;
-    struct bond_entry *hashes[BOND_MASK + 1];
-    struct slave_balance *b, *from, *to;
-    struct bond_entry *e;
-    struct iface *iface;
-    size_t i;
-
-    assert(port->bond_mode != BM_AB);
-
-    /* Sets up 'bals' to describe each of the port's interfaces, sorted in
-     * descending order of tx_bytes, so that bals[0] represents the most
-     * heavily loaded slave and bals[n_bals - 1] represents the least heavily
-     * loaded slave.
-     *
-     * The code is a bit tricky: to avoid dynamically allocating a 'hashes'
-     * array for each slave_balance structure, we sort our local array of
-     * hashes in order by slave, so that all of the hashes for a given slave
-     * become contiguous in memory, and then we point each 'hashes' members of
-     * a slave_balance structure to the start of a contiguous group. */
-    n_bals = port->n_ifaces;
-    b = bals = xmalloc(n_bals * sizeof *bals);
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        b->iface = iface;
-        b->tx_bytes = 0;
-        b->hashes = NULL;
-        b->n_hashes = 0;
-        b++;
-    }
-    assert(b == &bals[n_bals]);
-    for (i = 0; i <= BOND_MASK; i++) {
-        hashes[i] = &port->bond_hash[i];
-    }
-    qsort(hashes, BOND_MASK + 1, sizeof *hashes, compare_bond_entries);
-    for (i = 0; i <= BOND_MASK; i++) {
-        e = hashes[i];
-        if (!e->iface) {
-            continue;
-        }
-
-        for (b = bals; b < &bals[n_bals]; b++) {
-            if (b->iface == e->iface) {
-                b->tx_bytes += e->tx_bytes;
-                if (!b->hashes) {
-                    b->hashes = &hashes[i];
-                }
-                b->n_hashes++;
-                break;
-            }
-        }
-    }
-    qsort(bals, n_bals, sizeof *bals, compare_slave_balance);
-    log_bals(bals, n_bals, port);
-
-    /* Discard slaves that aren't enabled (which were sorted to the back of the
-     * array earlier). */
-    while (!bals[n_bals - 1].iface->enabled) {
-        n_bals--;
-        if (!n_bals) {
-            goto exit;
-        }
-    }
-
-    /* Shift load from the most-loaded slaves to the least-loaded slaves. */
-    to = &bals[n_bals - 1];
-    for (from = bals; from < to; ) {
-        uint64_t overload = from->tx_bytes - to->tx_bytes;
-        if (overload < to->tx_bytes >> 5 || overload < 100000) {
-            /* The extra load on 'from' (and all less-loaded slaves), compared
-             * to that of 'to' (the least-loaded slave), is less than ~3%, or
-             * it is less than ~1Mbps.  No point in rebalancing. */
-            break;
-        } else if (from->n_hashes == 1) {
-            /* 'from' only carries a single MAC hash, so we can't shift any
-             * load away from it, even though we want to. */
-            from++;
-        } else {
-            /* 'from' is carrying significantly more load than 'to', and that
-             * load is split across at least two different hashes.  Pick a hash
-             * to migrate to 'to' (the least-loaded slave), given that doing so
-             * must decrease the ratio of the load on the two slaves by at
-             * least 0.1.
-             *
-             * The sort order we use means that we prefer to shift away the
-             * smallest hashes instead of the biggest ones.  There is little
-             * reason behind this decision; we could use the opposite sort
-             * order to shift away big hashes ahead of small ones. */
-            bool order_swapped;
-
-            for (i = 0; i < from->n_hashes; i++) {
-                double old_ratio, new_ratio;
-                uint64_t delta = from->hashes[i]->tx_bytes;
-
-                if (delta == 0 || from->tx_bytes - delta == 0) {
-                    /* Pointless move. */
-                    continue;
-                }
-
-                order_swapped = from->tx_bytes - delta < to->tx_bytes + delta;
-
-                if (to->tx_bytes == 0) {
-                    /* Nothing on the new slave, move it. */
-                    break;
-                }
-
-                old_ratio = (double)from->tx_bytes / to->tx_bytes;
-                new_ratio = (double)(from->tx_bytes - delta) /
-                            (to->tx_bytes + delta);
-
-                if (new_ratio == 0) {
-                    /* Should already be covered but check to prevent division
-                     * by zero. */
-                    continue;
-                }
-
-                if (new_ratio < 1) {
-                    new_ratio = 1 / new_ratio;
-                }
-
-                if (old_ratio - new_ratio > 0.1) {
-                    /* Would decrease the ratio, move it. */
-                    break;
-                }
-            }
-            if (i < from->n_hashes) {
-                bond_shift_load(from, to, i);
-
-                /* If the result of the migration changed the relative order of
-                 * 'from' and 'to' swap them back to maintain invariants. */
-                if (order_swapped) {
-                    swap_bals(from, to);
-                }
-
-                /* Re-sort 'bals'.  Note that this may make 'from' and 'to'
-                 * point to different slave_balance structures.  It is only
-                 * valid to do these two operations in a row at all because we
-                 * know that 'from' will not move past 'to' and vice versa. */
-                resort_bals(from, bals, n_bals);
-                resort_bals(to, bals, n_bals);
-            } else {
-                from++;
-            }
-        }
-    }
-
-    /* Implement exponentially weighted moving average.  A weight of 1/2 causes
-     * historical data to decay to <1% in 7 rebalancing runs.  */
-    for (e = &port->bond_hash[0]; e <= &port->bond_hash[BOND_MASK]; e++) {
-        e->tx_bytes /= 2;
-        if (!e->tx_bytes) {
-            e->iface = NULL;
-        }
-    }
-
-exit:
-    free(bals);
-}
-
-static void
-bond_send_learning_packets(struct port *port)
-{
-    struct bridge *br = port->bridge;
-    struct mac_entry *e;
-    struct ofpbuf packet;
-    int error, n_packets, n_errors;
-
-    if (!port->n_ifaces || !port->active_iface || bond_is_tcp_hash(port)) {
-        return;
-    }
-
-    ofpbuf_init(&packet, 128);
-    error = n_packets = n_errors = 0;
-    LIST_FOR_EACH (e, lru_node, &br->ml->lrus) {
-        struct iface *iface;
-        struct flow flow;
-        int retval;
-
-        if (e->port.p == port) {
-            continue;
-        }
-
-        compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
-                              e->mac);
-        flow_extract(&packet, 0, ODPP_NONE, &flow);
-
-        iface = choose_output_iface(port, &flow, e->vlan);
-        if (!iface) {
-            continue;
-        }
-
-        /* Send packet. */
-        n_packets++;
-        retval = ofproto_send_packet(br->ofproto, iface->dp_ifidx, e->vlan,
-                                     &packet);
-        if (retval) {
-            error = retval;
-            n_errors++;
-        }
-    }
-    ofpbuf_uninit(&packet);
-
-    if (n_errors) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
-                     "packets, last error was: %s",
-                     port->name, n_errors, n_packets, strerror(error));
-    } else {
-        VLOG_DBG("bond %s: sent %d gratuitous learning packets",
-                 port->name, n_packets);
-    }
-}
-
-/* Bonding unixctl user interface functions. */
-
-static void
-bond_unixctl_list(struct unixctl_conn *conn,
-                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct bridge *br;
-
-    ds_put_cstr(&ds, "bridge\tbond\ttype\tslaves\n");
-
-    LIST_FOR_EACH (br, node, &all_bridges) {
-        struct port *port;
-
-        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-            if (port->n_ifaces > 1) {
-                struct iface *iface;
-
-                ds_put_format(&ds, "%s\t%s\t%s\t", br->name, port->name,
-                              bond_mode_to_string(port->bond_mode));
-                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                    if (&iface->port_elem != list_front(&port->ifaces)) {
-                        ds_put_cstr(&ds, ", ");
-                    }
-                    ds_put_cstr(&ds, iface->name);
-                }
-                ds_put_char(&ds, '\n');
-            }
-        }
-    }
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static struct port *
-bond_find(const char *name)
-{
-    const struct bridge *br;
-
-    LIST_FOR_EACH (br, node, &all_bridges) {
-        struct port *port;
-
-        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-            if (!strcmp(port->name, name) && port->n_ifaces > 1) {
-                return port;
-            }
-        }
-    }
-    return NULL;
-}
-
-static void
-bond_unixctl_show(struct unixctl_conn *conn,
-                  const char *args, void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct port *port;
-    struct iface *iface;
-
-    port = bond_find(args);
-    if (!port) {
-        unixctl_command_reply(conn, 501, "no such bond");
-        return;
-    }
-
-    ds_put_format(&ds, "bond_mode: %s\n",
-                  bond_mode_to_string(port->bond_mode));
-
-    if (port->lacp) {
-        ds_put_format(&ds, "lacp: %s\n",
-                      lacp_is_active(port->lacp) ? "active" : "passive");
-    } else {
-        ds_put_cstr(&ds, "lacp: off\n");
-    }
-
-    if (port->bond_mode != BM_AB) {
-        ds_put_format(&ds, "bond-hash-algorithm: %s\n",
-                      bond_is_tcp_hash(port) ? "balance-tcp" : "balance-slb");
-    }
-
-
-    ds_put_format(&ds, "bond-detect-mode: %s\n",
-                  port->monitor ? "carrier" : "miimon");
-
-    if (!port->monitor) {
-        ds_put_format(&ds, "bond-miimon-interval: %lld\n",
-                      port->miimon_interval);
-    }
-
-    ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
-    ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
-
-    if (port->bond_mode != BM_AB) {
-        ds_put_format(&ds, "next rebalance: %lld ms\n",
-                      port->bond_next_rebalance - time_msec());
-    }
-
-    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        struct bond_entry *be;
-        struct flow flow;
-
-        /* Basic info. */
-        ds_put_format(&ds, "\nslave %s: %s\n",
-                      iface->name, iface->enabled ? "enabled" : "disabled");
-        if (iface == port->active_iface) {
-            ds_put_cstr(&ds, "\tactive slave\n");
-        }
-        if (iface->delay_expires != LLONG_MAX) {
-            ds_put_format(&ds, "\t%s expires in %lld ms\n",
-                          iface->enabled ? "downdelay" : "updelay",
-                          iface->delay_expires - time_msec());
-        }
-
-        if (port->bond_mode == BM_AB) {
-            continue;
-        }
-
-        /* Hashes. */
-        memset(&flow, 0, sizeof flow);
-        for (be = port->bond_hash; be <= &port->bond_hash[BOND_MASK]; be++) {
-            int hash = be - port->bond_hash;
-            struct mac_entry *me;
-
-            if (be->iface != iface) {
-                continue;
-            }
-
-            ds_put_format(&ds, "\thash %d: %"PRIu64" kB load\n",
-                          hash, be->tx_bytes / 1024);
-
-            if (port->bond_mode != BM_SLB) {
-                continue;
-            }
-
-            /* MACs. */
-            LIST_FOR_EACH (me, lru_node, &port->bridge->ml->lrus) {
-                memcpy(flow.dl_src, me->mac, ETH_ADDR_LEN);
-                if (bond_hash_src(me->mac, me->vlan) == hash
-                    && me->port.p != port
-                    && choose_output_iface(port, &flow, me->vlan) == iface) {
-                    ds_put_format(&ds, "\t\t"ETH_ADDR_FMT"\n",
-                                  ETH_ADDR_ARGS(me->mac));
-                }
-            }
-        }
-    }
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static void
-bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
-                     void *aux OVS_UNUSED)
-{
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *hash_s, *slave_s;
-    struct port *port;
-    struct iface *iface;
-    struct bond_entry *entry;
-    int hash;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    hash_s = strtok_r(NULL, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        unixctl_command_reply(conn, 501,
-                              "usage: bond/migrate BOND HASH SLAVE");
-        return;
-    }
-
-    port = bond_find(bond_s);
-    if (!port) {
-        unixctl_command_reply(conn, 501, "no such bond");
-        return;
-    }
-
-    if (port->bond_mode != BM_SLB) {
-        unixctl_command_reply(conn, 501, "not an SLB bond");
-        return;
-    }
-
-    if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
-        hash = atoi(hash_s) & BOND_MASK;
-    } else {
-        unixctl_command_reply(conn, 501, "bad hash");
-        return;
-    }
-
-    iface = port_lookup_iface(port, slave_s);
-    if (!iface) {
-        unixctl_command_reply(conn, 501, "no such slave");
-        return;
-    }
-
-    if (!iface->enabled) {
-        unixctl_command_reply(conn, 501, "cannot migrate to disabled slave");
-        return;
-    }
-
-    entry = &port->bond_hash[hash];
-    ofproto_revalidate(port->bridge->ofproto, entry->tag);
-    entry->iface = iface;
-    entry->tag = tag_create_random();
-    unixctl_command_reply(conn, 200, "migrated");
-}
-
-static void
-bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
-                              void *aux OVS_UNUSED)
-{
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *slave_s;
-    struct port *port;
-    struct iface *iface;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        unixctl_command_reply(conn, 501,
-                              "usage: bond/set-active-slave BOND SLAVE");
-        return;
-    }
-
-    port = bond_find(bond_s);
-    if (!port) {
-        unixctl_command_reply(conn, 501, "no such bond");
-        return;
-    }
-
-    iface = port_lookup_iface(port, slave_s);
-    if (!iface) {
-        unixctl_command_reply(conn, 501, "no such slave");
-        return;
-    }
-
-    if (!iface->enabled) {
-        unixctl_command_reply(conn, 501, "cannot make disabled slave active");
-        return;
-    }
-
-    if (port->active_iface != iface) {
-        ofproto_revalidate(port->bridge->ofproto,
-                           port_get_active_iface_tag(port));
-        port->active_iface = iface;
-        VLOG_INFO("port %s: active interface is now %s",
-                  port->name, iface->name);
-        bond_send_learning_packets(port);
-        unixctl_command_reply(conn, 200, "done");
-    } else {
-        unixctl_command_reply(conn, 200, "no change");
-    }
-}
-
-static void
-enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
-{
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *slave_s;
-    struct port *port;
-    struct iface *iface;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        unixctl_command_reply(conn, 501,
-                              "usage: bond/enable/disable-slave BOND SLAVE");
-        return;
-    }
-
-    port = bond_find(bond_s);
-    if (!port) {
-        unixctl_command_reply(conn, 501, "no such bond");
-        return;
-    }
-
-    iface = port_lookup_iface(port, slave_s);
-    if (!iface) {
-        unixctl_command_reply(conn, 501, "no such slave");
-        return;
-    }
-
-    bond_enable_slave(iface, enable);
-    unixctl_command_reply(conn, 501, enable ? "enabled" : "disabled");
-}
-
-static void
-bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args,
-                          void *aux OVS_UNUSED)
-{
-    enable_slave(conn, args, true);
-}
-
-static void
-bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
-                           void *aux OVS_UNUSED)
-{
-    enable_slave(conn, args, false);
-}
-
-static void
-bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
-                  void *aux OVS_UNUSED)
-{
-    char *args = (char *) args_;
-    uint8_t mac[ETH_ADDR_LEN];
-    uint8_t hash;
-    char *hash_cstr;
-    unsigned int vlan;
-    char *mac_s, *vlan_s;
-    char *save_ptr = NULL;
-
-    mac_s  = strtok_r(args, " ", &save_ptr);
-    vlan_s = strtok_r(NULL, " ", &save_ptr);
-
-    if (vlan_s) {
-        if (sscanf(vlan_s, "%u", &vlan) != 1) {
-            unixctl_command_reply(conn, 501, "invalid vlan");
-            return;
-        }
-    } else {
-        vlan = OFP_VLAN_NONE;
-    }
-
-    if (sscanf(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-        == ETH_ADDR_SCAN_COUNT) {
-        hash = bond_hash_src(mac, vlan);
-
-        hash_cstr = xasprintf("%u", hash);
-        unixctl_command_reply(conn, 200, hash_cstr);
-        free(hash_cstr);
-    } else {
-        unixctl_command_reply(conn, 501, "invalid mac");
-    }
-}
-
-static void
-bond_init(void)
-{
-    unixctl_command_register("bond/list", bond_unixctl_list, NULL);
-    unixctl_command_register("bond/show", bond_unixctl_show, NULL);
-    unixctl_command_register("bond/migrate", bond_unixctl_migrate, NULL);
-    unixctl_command_register("bond/set-active-slave",
-                             bond_unixctl_set_active_slave, NULL);
-    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave,
-                             NULL);
-    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave,
-                             NULL);
-    unixctl_command_register("bond/hash", bond_unixctl_hash, NULL);
-}
-
 /* Port functions. */
-
-static void
-lacp_send_pdu_cb(void *aux, const struct lacp_pdu *pdu)
-{
-    struct iface *iface = aux;
-    uint8_t ea[ETH_ADDR_LEN];
-    int error;
-
-    error = netdev_get_etheraddr(iface->netdev, ea);
-    if (!error) {
-        struct ofpbuf packet;
-        struct lacp_pdu *packet_pdu;
-
-        ofpbuf_init(&packet, 0);
-        packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
-                                 sizeof *packet_pdu);
-        memcpy(packet_pdu, pdu, sizeof *packet_pdu);
-        ofproto_send_packet(iface->port->bridge->ofproto,
-                            iface->dp_ifidx, 0, &packet);
-        ofpbuf_uninit(&packet);
-    } else {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
-        VLOG_ERR_RL(&rl, "iface %s: failed to obtain Ethernet address "
-                    "(%s)", iface->name, strerror(error));
-    }
-}
 
 static void
 port_run(struct port *port)
 {
-    if (port->monitor) {
-        char *devname;
-
-        /* Track carrier going up and down on interfaces. */
-        while (!netdev_monitor_poll(port->monitor, &devname)) {
-            struct iface *iface;
-
-            iface = port_lookup_iface(port, devname);
-            if (iface) {
-                iface_update_carrier(iface);
-            }
-            free(devname);
+    if (port->bond) {
+        bond_run(port->bond,
+                 ofproto_get_revalidate_set(port->bridge->ofproto));
+        if (bond_should_send_learning_packets(port->bond)) {
+            port_send_learning_packets(port);
         }
-    } else if (time_msec() >= port->miimon_next_update) {
-        struct iface *iface;
-
-        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface_update_carrier(iface);
-        }
-        port->miimon_next_update = time_msec() + port->miimon_interval;
     }
-
-    if (port->lacp) {
-        struct iface *iface;
-
-        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            lacp_slave_enable(port->lacp, iface, iface->enabled);
-        }
-
-        lacp_run(port->lacp, lacp_send_pdu_cb);
-    }
-
-    bond_run(port);
 }
 
 static void
 port_wait(struct port *port)
 {
-    if (port->monitor) {
-        netdev_monitor_poll_wait(port->monitor);
-    } else {
-        poll_timer_wait_until(port->miimon_next_update);
+    if (port->bond) {
+        bond_wait(port->bond);
     }
-
-    if (port->lacp) {
-        lacp_wait(port->lacp);
-    }
-
-    bond_wait(port);
 }
 
 static struct port *
@@ -3858,7 +2729,6 @@ port_create(struct bridge *br, const char *name)
     port->vlan = -1;
     port->trunks = NULL;
     port->name = xstrdup(name);
-    port->active_iface = NULL;
     list_init(&port->ifaces);
 
     hmap_insert(&br->ports, &port->hmap_node, hash_string(port->name, 0));
@@ -3935,9 +2805,7 @@ port_flush_macs(struct port *port)
 static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
-    const char *detect_mode;
     struct sset new_ifaces;
-    long long int next_rebalance, miimon_next_update;
     bool need_flush = false;
     unsigned long *trunks;
     int vlan;
@@ -3945,63 +2813,6 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 
     port->cfg = cfg;
 
-    /* Update settings. */
-    port->updelay = cfg->bond_updelay;
-    if (port->updelay < 0) {
-        port->updelay = 0;
-    }
-    port->downdelay = cfg->bond_downdelay;
-    if (port->downdelay < 0) {
-        port->downdelay = 0;
-    }
-    port->bond_rebalance_interval = atoi(
-        get_port_other_config(cfg, "bond-rebalance-interval", "10000"));
-    if (port->bond_rebalance_interval < 1000) {
-        port->bond_rebalance_interval = 1000;
-    }
-    next_rebalance = time_msec() + port->bond_rebalance_interval;
-    if (port->bond_next_rebalance > next_rebalance) {
-        port->bond_next_rebalance = next_rebalance;
-    }
-
-    detect_mode = get_port_other_config(cfg, "bond-detect-mode",
-                                        "carrier");
-
-    netdev_monitor_destroy(port->monitor);
-    port->monitor = NULL;
-
-    if (strcmp(detect_mode, "miimon")) {
-        port->monitor = netdev_monitor_create();
-
-        if (strcmp(detect_mode, "carrier")) {
-            VLOG_WARN("port %s: unsupported bond-detect-mode %s, "
-                      "defaulting to carrier", port->name, detect_mode);
-        }
-    }
-
-    port->miimon_interval = atoi(
-        get_port_other_config(cfg, "bond-miimon-interval", "200"));
-    if (port->miimon_interval < 100) {
-        port->miimon_interval = 100;
-    }
-    miimon_next_update = time_msec() + port->miimon_interval;
-    if (port->miimon_next_update > miimon_next_update) {
-        port->miimon_next_update = miimon_next_update;
-    }
-
-    if (!port->cfg->bond_mode ||
-        !strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_SLB))) {
-        port->bond_mode = BM_SLB;
-    } else if (!strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_AB))) {
-        port->bond_mode = BM_AB;
-    } else if (!strcmp(port->cfg->bond_mode, bond_mode_to_string(BM_TCP))) {
-        port->bond_mode = BM_TCP;
-    } else {
-        port->bond_mode = BM_SLB;
-        VLOG_WARN("port %s: unknown bond_mode %s, defaulting to %s",
-                  port->name, port->cfg->bond_mode,
-                  bond_mode_to_string(port->bond_mode));
-    }
 
     /* Add new interfaces and update 'cfg' member of existing ones. */
     sset_init(&new_ifaces);
@@ -4127,10 +2938,7 @@ port_destroy(struct port *port)
 
         port_flush_macs(port);
 
-        lacp_destroy(port->lacp);
-        netdev_monitor_destroy(port->monitor);
         bitmap_free(port->trunks);
-        free(port->bond_hash);
         free(port->name);
         free(port);
     }
@@ -4157,13 +2965,6 @@ port_lookup(const struct bridge *br, const char *name)
     return NULL;
 }
 
-static struct iface *
-port_lookup_iface(const struct port *port, const char *name)
-{
-    struct iface *iface = iface_lookup(port->bridge, name);
-    return iface && iface->port == port ? iface : NULL;
-}
-
 static bool
 enable_lacp(struct port *port, bool *activep)
 {
@@ -4186,8 +2987,29 @@ enable_lacp(struct port *port, bool *activep)
     }
 }
 
+static struct lacp_settings *
+port_reconfigure_bond_lacp(struct port *port, struct lacp_settings *s)
+{
+    if (!enable_lacp(port, &s->active)) {
+        return NULL;
+    }
+
+    s->name = port->name;
+    memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
+    s->priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
+                                             "0"));
+    s->fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
+                      "fast");
+
+    if (s->priority <= 0 || s->priority > UINT16_MAX) {
+        /* Prefer bondable links if unspecified. */
+        s->priority = UINT16_MAX - (port->n_ifaces > 1);
+    }
+    return s;
+}
+
 static void
-iface_update_lacp(struct iface *iface)
+iface_reconfigure_bond(struct iface *iface)
 {
     struct lacp_slave_settings s;
     int priority;
@@ -4196,82 +3018,100 @@ iface_update_lacp(struct iface *iface)
     s.id = iface->dp_ifidx;
     priority = atoi(get_interface_other_config(
                         iface->cfg, "lacp-port-priority", "0"));
-    s.priority = (priority >= 0 && priority <= UINT16_MAX ? priority
-                  : UINT16_MAX);
-
-    lacp_slave_register(iface->port->lacp, iface, &s);
+    s.priority = (priority >= 0 && priority <= UINT16_MAX
+                  ? priority : UINT16_MAX);
+    bond_slave_register(iface->port->bond, iface, iface->netdev, &s);
 }
 
 static void
-port_update_lacp(struct port *port)
+port_reconfigure_bond(struct port *port)
 {
-    struct lacp_settings s;
+    struct lacp_settings lacp_settings;
+    struct bond_settings s;
+    const char *detect_s;
     struct iface *iface;
 
-    if (!enable_lacp(port, &s.active)) {
-        lacp_destroy(port->lacp);
-        port->lacp = NULL;
+    if (port->n_ifaces < 2) {
+        /* Not a bonded port. */
+        bond_destroy(port->bond);
+        port->bond = NULL;
         return;
     }
 
-    if (!port->lacp) {
-        port->lacp = lacp_create();
-    }
+    port->bridge->has_bonded_ports = true;
 
     s.name = port->name;
-    memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
-    s.priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
-                                          "0"));
-    s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
-                     "fast");
-
-    if (s.priority <= 0 || s.priority > UINT16_MAX) {
-        /* Prefer bondable links if unspecified. */
-        s.priority = UINT16_MAX - (port->n_ifaces > 1);
+    s.balance = BM_SLB;
+    if (port->cfg->bond_mode
+        && !bond_mode_from_string(&s.balance, port->cfg->bond_mode)) {
+        VLOG_WARN("port %s: unknown bond_mode %s, defaulting to %s",
+                  port->name, port->cfg->bond_mode,
+                  bond_mode_to_string(s.balance));
     }
 
-    lacp_configure(port->lacp, &s);
+    s.detect = BLSM_CARRIER;
+    detect_s = get_port_other_config(port->cfg, "bond-detect-mode", NULL);
+    if (detect_s && !bond_detect_mode_from_string(&s.detect, detect_s)) {
+        VLOG_WARN("port %s: unsupported bond-detect-mode %s, "
+                  "defaulting to %s",
+                  port->name, detect_s, bond_detect_mode_to_string(s.detect));
+    }
+
+    s.miimon_interval = atoi(
+        get_port_other_config(port->cfg, "bond-miimon-interval", "200"));
+    if (s.miimon_interval < 100) {
+        s.miimon_interval = 100;
+    }
+
+    s.up_delay = MAX(0, port->cfg->bond_updelay);
+    s.down_delay = MAX(0, port->cfg->bond_downdelay);
+    s.rebalance_interval = atoi(
+        get_port_other_config(port->cfg, "bond-rebalance-interval", "10000"));
+    if (s.rebalance_interval < 1000) {
+        s.rebalance_interval = 1000;
+    }
+
+    s.fake_iface = port->cfg->bond_fake_iface;
+    s.lacp = port_reconfigure_bond_lacp(port, &lacp_settings);
+
+    if (!port->bond) {
+        port->bond = bond_create(&s);
+    } else {
+        bond_reconfigure(port->bond, &s);
+    }
+
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        iface_update_lacp(iface);
+        iface_reconfigure_bond(iface);
     }
 }
 
 static void
-port_update_bonding(struct port *port)
+port_send_learning_packets(struct port *port)
 {
-    if (port->n_ifaces < 2) {
-        /* Not a bonded port. */
-        free(port->bond_hash);
-        port->bond_hash = NULL;
-        port->bond_fake_iface = false;
-        port->active_iface = NULL;
-        port->no_ifaces_tag = 0;
-    } else {
-        size_t i;
+    struct bridge *br = port->bridge;
+    int error, n_packets, n_errors;
+    struct mac_entry *e;
 
-        if (port->bond_mode != BM_AB && !port->bond_hash) {
-            port->bond_hash = xcalloc(BOND_MASK + 1, sizeof *port->bond_hash);
-            for (i = 0; i <= BOND_MASK; i++) {
-                struct bond_entry *e = &port->bond_hash[i];
-                e->iface = NULL;
-                e->tx_bytes = 0;
+    error = n_packets = n_errors = 0;
+    LIST_FOR_EACH (e, lru_node, &br->ml->lrus) {
+        if (e->port.p != port) {
+            int ret = bond_send_learning_packet(port->bond, e->mac, e->vlan);
+            if (ret) {
+                error = ret;
+                n_errors++;
             }
-            port->bond_next_rebalance
-                = time_msec() + port->bond_rebalance_interval;
-        } else if (port->bond_mode == BM_AB) {
-            free(port->bond_hash);
-            port->bond_hash = NULL;
+            n_packets++;
         }
+    }
 
-        if (!port->no_ifaces_tag) {
-            port->no_ifaces_tag = tag_create_random();
-        }
-
-        port->bond_fake_iface = port->cfg->bond_fake_iface;
-        if (port->bond_fake_iface) {
-            port->bond_next_fake_iface_update = time_msec();
-        }
-
+    if (n_errors) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
+                     "packets, last error was: %s",
+                     port->name, n_errors, n_packets, strerror(error));
+    } else {
+        VLOG_DBG("bond %s: sent %d gratuitous learning packets",
+                 port->name, n_packets);
     }
 }
 
@@ -4289,7 +3129,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->name = xstrdup(name);
     iface->dp_ifidx = -1;
     iface->tag = tag_create_random();
-    iface->delay_expires = LLONG_MAX;
     iface->netdev = NULL;
     iface->cfg = if_cfg;
 
@@ -4297,10 +3136,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 
     list_push_back(&port->ifaces, &iface->port_elem);
     port->n_ifaces++;
-
-    if (port->n_ifaces > 1) {
-        br->has_bonded_ports = true;
-    }
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
@@ -4316,21 +3151,8 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
 
-        if (port->bond_hash) {
-            struct bond_entry *e;
-            for (e = port->bond_hash; e <= &port->bond_hash[BOND_MASK]; e++) {
-                if (e->iface == iface) {
-                    e->iface = NULL;
-                }
-            }
-        }
-
-        if (iface->port->lacp) {
-            lacp_slave_unregister(iface->port->lacp, iface);
-        }
-
-        if (port->monitor && iface->netdev) {
-            netdev_monitor_remove(port->monitor, iface->netdev);
+        if (port->bond) {
+            bond_slave_unregister(port->bond, iface);
         }
 
         shash_find_and_delete_assert(&br->iface_by_name, iface->name);
@@ -4343,10 +3165,6 @@ iface_destroy(struct iface *iface)
         port->n_ifaces--;
 
         netdev_close(iface->netdev);
-
-        if (port->active_iface == iface) {
-            port->active_iface = NULL;
-        }
 
         free(iface->name);
         free(iface);
@@ -4497,20 +3315,6 @@ iface_delete_queues(unsigned int queue_id,
 }
 
 static void
-iface_update_carrier(struct iface *iface)
-{
-    bool carrier = iface_get_carrier(iface);
-    if (carrier == iface->up) {
-        return;
-    }
-
-    iface->up = carrier;
-    if (iface->port->lacp) {
-        lacp_slave_carrier_changed(iface->port->lacp, iface);
-    }
-}
-
-static void
 iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
 {
     if (!qos || qos->type[0] == '\0') {
@@ -4589,9 +3393,8 @@ iface_update_cfm(struct iface *iface)
 static bool
 iface_get_carrier(const struct iface *iface)
 {
-    return (iface->port->monitor
-            ? netdev_get_carrier(iface->netdev)
-            : netdev_get_miimon(iface->netdev));
+    /* XXX */
+    return netdev_get_carrier(iface->netdev);
 }
 
 /* Port mirroring. */
