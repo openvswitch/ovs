@@ -991,6 +991,7 @@ static struct rtable *find_route(struct vport *vport,
 		return cur_cache->rt;
 	} else {
 		struct rtable *rt;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
 		struct flowi fl = { .nl_u = { .ip4_u =
 					      { .daddr = mutable->daddr,
 						.saddr = mutable->saddr,
@@ -999,6 +1000,16 @@ static struct rtable *find_route(struct vport *vport,
 
 		if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
 			return NULL;
+#else
+		struct flowi4 fl = { .daddr = mutable->daddr,
+				     .saddr = mutable->saddr,
+				     .flowi4_tos = tos,
+				     .flowi4_proto = tnl_vport->tnl_ops->ipproto };
+
+		rt = ip_route_output_key(&init_net, &fl);
+		if (IS_ERR(rt))
+			return NULL;
+#endif
 
 		if (likely(tos == mutable->tos))
 			*cache = build_cache(vport, mutable, rt);
