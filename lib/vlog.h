@@ -21,6 +21,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
+#include "compiler.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -152,13 +153,13 @@ int vlog_reopen_log_file(void);
 void vlog_init(void);
 void vlog_exit(void);
 void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)
-    __attribute__((format(printf, 3, 4)));
+    PRINTF_FORMAT (3, 4);
 void vlog_valist(const struct vlog_module *, enum vlog_level,
                  const char *, va_list)
-    __attribute__((format(printf, 3, 0)));
+    PRINTF_FORMAT (3, 0);
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
-    __attribute__((format(printf, 4, 5)));
+    PRINTF_FORMAT (4, 5);
 
 /* Creates and initializes a global instance of a module named MODULE, and
  * defines a static variable named THIS_MODULE that points to it, for use with
