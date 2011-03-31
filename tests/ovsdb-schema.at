@@ -23,6 +23,38 @@ OVSDB_CHECK_POSITIVE_CPY([schema with valid refTables],
                     "type": "uuid",
                     "refTable": "a"}}}}}}}']],
   [[{"name":"mydb","tables":{"a":{"columns":{"map":{"type":{"key":{"refTable":"b","type":"uuid"},"value":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}}}},"version":"4.2.1"}]])
+
+dnl Ephemeral strong references to root set tables are OK.
+dnl Ephemeral strong references to non-root set tables are forced to be
+dnl persistent.
+OVSDB_CHECK_POSITIVE_CPY([schema with ephemeral strong references],
+  [[parse-schema \
+      '{"name": "mydb",
+        "version": "4.2.1",
+        "tables": {
+          "a": {
+            "columns": {
+              "x": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "b"}},
+                "ephemeral": true},
+              "y": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "a"}},
+                "ephemeral": true}}},
+          "b": {
+            "columns": {
+              "aRef": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "a"}}}},
+              "isRoot": true}}}']],
+  [[{"name":"mydb","tables":{"a":{"columns":{"x":{"ephemeral":true,"type":{"key":{"refTable":"b","type":"uuid"}}},"y":{"type":{"key":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}},"isRoot":true}},"version":"4.2.1"}]])
      
 dnl Schemas without version numbers are accepted for backward
 dnl compatibility, but this is a deprecated feature.

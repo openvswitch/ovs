@@ -184,12 +184,18 @@ is represented by <database-schema>, as described below.
         "ephemeral": <boolean>                    optional
         "mutable": <boolean>                      optional
 
-    The "type" specifies the type of data stored in this column.  If
-    "ephemeral" is specified as true, then this column's values are
+    The "type" specifies the type of data stored in this column.
+
+    If "ephemeral" is specified as true, then this column's values are
     not guaranteed to be durable; they may be lost when the database
-    restarts.  If "mutable" is specified as false, then this column's
-    values may not be modified after they are initially set with the
-    "insert" operation.
+    restarts.  A column whose type (either key or value) is a strong
+    reference to a table that is not part of the root set is always
+    durable, regardless of this value.  (Otherwise, restarting the
+    database could lose entire rows.)
+
+    If "mutable" is specified as false, then this column's values may
+    not be modified after they are initially set with the "insert"
+    operation.
 
 <type>
 
