@@ -399,10 +399,13 @@ cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
 
     ds_put_format(ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
     ds_put_format(ds, "\ttime since CCM tx: %lldms\n", now - cfmi->ccm_sent);
-    ds_put_format(ds, "\ttime since bad CCM rx: %lldms\n",
-                  now - cfmi->x_recv_time);
     ds_put_format(ds, "\ttime since fault check: %lldms\n",
                   now - cfmi->fault_check);
+
+    if (cfmi->x_recv_time != LLONG_MIN) {
+        ds_put_format(ds, "\ttime since bad CCM rx: %lldms\n",
+                      now - cfmi->x_recv_time);
+    }
 
     ds_put_cstr(ds, "\n");
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
