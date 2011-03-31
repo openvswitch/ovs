@@ -1151,8 +1151,6 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
 
                 fte_insert(cls, &fs.rule, version, index);
             }
-
-            osr = ofpbuf_at(reply, 0, sizeof *osr);
         } else {
             VLOG_DBG("received reply with xid %08"PRIx32" "
                      "!= expected %08"PRIx32, recv_xid, send_xid);
