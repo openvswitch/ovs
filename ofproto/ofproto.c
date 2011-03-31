@@ -58,6 +58,7 @@
 #include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
+#include "timer.h"
 #include "timeval.h"
 #include "unaligned.h"
 #include "unixctl.h"
@@ -296,7 +297,7 @@ struct ofproto {
 
     /* Flow table. */
     struct classifier cls;
-    long long int next_expiration;
+    struct timer next_expiration;
 
     /* Facets. */
     struct hmap facets;
@@ -404,7 +405,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     /* Initialize flow table. */
     classifier_init(&p->cls);
-    p->next_expiration = time_msec() + 1000;
+    timer_set_duration(&p->next_expiration, 1000);
 
     /* Initialize facet table. */
     hmap_init(&p->facets);
@@ -779,9 +780,9 @@ ofproto_run1(struct ofproto *p)
 
     connmgr_run(p->connmgr, handle_openflow);
 
-    if (time_msec() >= p->next_expiration) {
+    if (timer_expired(&p->next_expiration)) {
         int delay = ofproto_expire(p);
-        p->next_expiration = time_msec() + delay;
+        timer_set_duration(&p->next_expiration, delay);
         COVERAGE_INC(ofproto_expiration);
     }
 
@@ -844,8 +845,8 @@ ofproto_wait(struct ofproto *p)
         /* Shouldn't happen, but if it does just go around again. */
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
-    } else if (p->next_expiration != LLONG_MAX) {
-        poll_timer_wait_until(p->next_expiration);
+    } else {
+        timer_wait(&p->next_expiration);
     }
     connmgr_wait(p->connmgr);
 }
