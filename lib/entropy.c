@@ -47,8 +47,7 @@ get_entropy(void *buffer, size_t n)
     close(fd);
 
     if (error) {
-        VLOG_ERR("%s: read error (%s)", urandom,
-                 error == EOF ? "unexpected end of file" : strerror(error));
+        VLOG_ERR("%s: read error (%s)", urandom, ovs_retval_to_string(error));
     }
     return error;
 }

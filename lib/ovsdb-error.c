@@ -192,12 +192,6 @@ ovsdb_error_clone(const struct ovsdb_error *old)
     }
 }
 
-static const char *
-ovsdb_errno_string(int error)
-{
-    return error == EOF ? "unexpected end of file" : strerror(error);
-}
-
 struct json *
 ovsdb_error_to_json(const struct ovsdb_error *error)
 {
@@ -211,7 +205,7 @@ ovsdb_error_to_json(const struct ovsdb_error *error)
     }
     if (error->errno_) {
         json_object_put_string(json, "io-error",
-                               ovsdb_errno_string(error->errno_));
+                               ovs_retval_to_string(error->errno_));
     }
     return json;
 }
@@ -228,7 +222,7 @@ ovsdb_error_to_string(const struct ovsdb_error *error)
         ds_put_format(&ds, ": %s", error->details);
     }
     if (error->errno_) {
-        ds_put_format(&ds, " (%s)", ovsdb_errno_string(error->errno_));
+        ds_put_format(&ds, " (%s)", ovs_retval_to_string(error->errno_));
     }
     return ds_steal_cstr(&ds);
 }

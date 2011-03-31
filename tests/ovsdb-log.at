@@ -235,7 +235,7 @@ AT_CHECK(
   [[file: open successful
 file: read: [0]
 file: read: [1]
-file: read failed: I/O error: file: error reading 4 bytes starting at offset 170 (unexpected end of file)
+file: read failed: I/O error: file: error reading 4 bytes starting at offset 170 (End of file)
 file: write:["longer data"] successful
 ]], [ignore])
 AT_CHECK(

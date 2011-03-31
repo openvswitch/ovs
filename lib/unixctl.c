@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -568,8 +568,7 @@ unixctl_client_transact(struct unixctl_client *client,
         if (error) {
             VLOG_WARN("error reading reply from %s: %s",
                       client->connect_path,
-                      (error == EOF ? "unexpected end of file"
-                       : strerror(error)));
+                      ovs_retval_to_string(error));
             goto error;
         }
 
