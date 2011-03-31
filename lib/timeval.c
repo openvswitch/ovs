@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "fatal-signal.h"
+#include "signals.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -96,9 +97,7 @@ set_up_signal(int flags)
     sa.sa_handler = sigalrm_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = flags;
-    if (sigaction(SIGALRM, &sa, NULL)) {
-        ovs_fatal(errno, "sigaction(SIGALRM) failed");
-    }
+    xsigaction(SIGALRM, &sa, NULL);
 }
 
 /* Remove SA_RESTART from the flags for SIGALRM, so that any system call that
@@ -137,7 +136,7 @@ set_up_timer(void)
     struct itimerspec itimer;
 
     if (timer_create(monotonic_clock, NULL, &timer_id)) {
-        ovs_fatal(errno, "timer_create failed");
+        VLOG_FATAL("timer_create failed (%s)", strerror(errno));
     }
 
     itimer.it_interval.tv_sec = 0;
@@ -145,7 +144,7 @@ set_up_timer(void)
     itimer.it_value = itimer.it_interval;
 
     if (timer_settime(timer_id, 0, &itimer, NULL)) {
-        ovs_fatal(errno, "timer_settime failed");
+        VLOG_FATAL("timer_settime failed (%s)", strerror(errno));
     }
 }
 
@@ -364,17 +363,13 @@ block_sigalrm(sigset_t *oldsigs)
     sigset_t sigalrm;
     sigemptyset(&sigalrm);
     sigaddset(&sigalrm, SIGALRM);
-    if (sigprocmask(SIG_BLOCK, &sigalrm, oldsigs)) {
-        ovs_fatal(errno, "sigprocmask");
-    }
+    xsigprocmask(SIG_BLOCK, &sigalrm, oldsigs);
 }
 
 static void
 unblock_sigalrm(const sigset_t *oldsigs)
 {
-    if (sigprocmask(SIG_SETMASK, oldsigs, NULL)) {
-        ovs_fatal(errno, "sigprocmask");
-    }
+    xsigprocmask(SIG_SETMASK, oldsigs, NULL);
 }
 
 long long int
@@ -387,6 +382,14 @@ long long int
 timeval_to_msec(const struct timeval *tv)
 {
     return (long long int) tv->tv_sec * 1000 + tv->tv_usec / 1000;
+}
+
+void
+xgettimeofday(struct timeval *tv)
+{
+    if (gettimeofday(tv, NULL) == -1) {
+        VLOG_FATAL("gettimeofday failed (%s)", strerror(errno));
+    }
 }
 
 static long long int

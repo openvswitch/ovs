@@ -27,6 +27,7 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "sset.h"
+#include "signals.h"
 #include "socket-util.h"
 #include "util.h"
 #include "vlog.h"
@@ -67,9 +68,7 @@ fatal_signal_init(void)
 
         inited = true;
 
-        if (pipe(signal_fds)) {
-            ovs_fatal(errno, "could not create pipe");
-        }
+        xpipe(signal_fds);
         set_nonblocking(signal_fds[0]);
         set_nonblocking(signal_fds[1]);
 
@@ -79,12 +78,10 @@ fatal_signal_init(void)
             struct sigaction old_sa;
 
             sigaddset(&fatal_signal_set, sig_nr);
-            if (sigaction(sig_nr, NULL, &old_sa)) {
-                ovs_fatal(errno, "sigaction");
-            }
+            xsigaction(sig_nr, NULL, &old_sa);
             if (old_sa.sa_handler == SIG_DFL
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
-                ovs_fatal(errno, "signal");
+                VLOG_FATAL("signal failed (%s)", strerror(errno));
             }
         }
         atexit(atexit_handler);

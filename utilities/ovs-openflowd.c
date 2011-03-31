@@ -119,7 +119,7 @@ main(int argc, char *argv[])
 
     error = dpif_create_and_open(s.dp_name, s.dp_type, &dpif);
     if (error) {
-        ovs_fatal(error, "could not create datapath");
+        VLOG_FATAL("could not create datapath (%s)", strerror(error));
     }
 
     /* Add ports to the datapath if requested by the user. */
@@ -128,12 +128,14 @@ main(int argc, char *argv[])
 
         error = netdev_open_default(port, &netdev);
         if (error) {
-            ovs_fatal(error, "%s: failed to open network device", port);
+            VLOG_FATAL("%s: failed to open network device (%s)",
+                       port, strerror(error));
         }
 
         error = dpif_port_add(dpif, netdev, NULL);
         if (error) {
-            ovs_fatal(error, "failed to add %s as a port", port);
+            VLOG_FATAL("failed to add %s as a port (%s)",
+                       port, strerror(error));
         }
 
         netdev_close(netdev);
@@ -142,7 +144,8 @@ main(int argc, char *argv[])
     /* Start OpenFlow processing. */
     error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
     if (error) {
-        ovs_fatal(error, "could not initialize openflow switch");
+        VLOG_FATAL("could not initialize openflow switch (%s)",
+                   strerror(error));
     }
     if (s.datapath_id) {
         ofproto_set_datapath_id(ofproto, s.datapath_id);
@@ -151,14 +154,15 @@ main(int argc, char *argv[])
                      s.serial_desc, s.dp_desc);
     error = ofproto_set_snoops(ofproto, &s.snoops);
     if (error) {
-        ovs_fatal(error,
-                  "failed to configure controller snooping connections");
+        VLOG_FATAL("failed to configure controller snooping connections (%s)",
+                   strerror(error));
     }
     memset(&nf_options, 0, sizeof nf_options);
     nf_options.collectors = s.netflow;
     error = ofproto_set_netflow(ofproto, &nf_options);
     if (error) {
-        ovs_fatal(error, "failed to configure NetFlow collectors");
+        VLOG_FATAL("failed to configure NetFlow collectors (%s)",
+                   strerror(error));
     }
     ofproto_set_controllers(ofproto, s.controllers, s.n_controllers);
     ofproto_set_fail_mode(ofproto, s.fail_mode);
@@ -169,7 +173,7 @@ main(int argc, char *argv[])
     while (!exiting && (s.run_forever || ofproto_is_alive(ofproto))) {
         error = ofproto_run(ofproto);
         if (error) {
-            ovs_fatal(error, "unrecoverable datapath error");
+            VLOG_FATAL("unrecoverable datapath error (%s)", strerror(error));
         }
         unixctl_server_run(unixctl);
         dp_run();
@@ -317,8 +321,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         switch (c) {
         case OPT_DATAPATH_ID:
             if (!dpid_from_string(optarg, &s->datapath_id)) {
-                ovs_fatal(0, "argument to --datapath-id must be "
-                          "exactly 16 hex digits and may not be all-zero");
+                VLOG_FATAL("argument to --datapath-id must be exactly 16 hex "
+                           "digits and may not be all-zero");
             }
             break;
 
@@ -349,15 +353,15 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
                        || !strcmp(optarg, "secure")) {
                 s->fail_mode = OFPROTO_FAIL_SECURE;
             } else {
-                ovs_fatal(0, "--fail argument must be \"standalone\" "
-                          "or \"secure\"");
+                VLOG_FATAL("--fail argument must be \"standalone\" "
+                           "or \"secure\"");
             }
             break;
 
         case OPT_INACTIVITY_PROBE:
             controller_opts.probe_interval = atoi(optarg);
             if (controller_opts.probe_interval < 5) {
-                ovs_fatal(0, "--inactivity-probe argument must be at least 5");
+                VLOG_FATAL("--inactivity-probe argument must be at least 5");
             }
             break;
 
@@ -367,8 +371,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             } else {
                 s->max_idle = atoi(optarg);
                 if (s->max_idle < 1 || s->max_idle > 65535) {
-                    ovs_fatal(0, "--max-idle argument must be between 1 and "
-                              "65535 or the word 'permanent'");
+                    VLOG_FATAL("--max-idle argument must be between 1 and "
+                               "65535 or the word 'permanent'");
                 }
             }
             break;
@@ -376,7 +380,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         case OPT_MAX_BACKOFF:
             controller_opts.max_backoff = atoi(optarg);
             if (controller_opts.max_backoff < 1) {
-                ovs_fatal(0, "--max-backoff argument must be at least 1");
+                VLOG_FATAL("--max-backoff argument must be at least 1");
             } else if (controller_opts.max_backoff > 3600) {
                 controller_opts.max_backoff = 3600;
             }
@@ -386,7 +390,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             if (optarg) {
                 controller_opts.rate_limit = atoi(optarg);
                 if (controller_opts.rate_limit < 1) {
-                    ovs_fatal(0, "--rate-limit argument must be at least 1");
+                    VLOG_FATAL("--rate-limit argument must be at least 1");
                 }
             } else {
                 controller_opts.rate_limit = 1000;
@@ -396,7 +400,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         case OPT_BURST_LIMIT:
             controller_opts.burst_limit = atoi(optarg);
             if (controller_opts.burst_limit < 1) {
-                ovs_fatal(0, "--burst-limit argument must be at least 1");
+                VLOG_FATAL("--burst-limit argument must be at least 1");
             }
             break;
 
@@ -465,8 +469,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     argc -= optind;
     argv += optind;
     if (argc < 2) {
-        ovs_fatal(0, "need at least two non-option arguments; "
-                  "use --help for usage");
+        VLOG_FATAL("need at least two non-option arguments; "
+                   "use --help for usage");
     }
 
     /* Rate limiting. */

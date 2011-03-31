@@ -239,9 +239,7 @@ fork_and_wait_for_startup(int *fdp)
     int fds[2];
     pid_t pid;
 
-    if (pipe(fds) < 0) {
-        ovs_fatal(errno, "pipe failed");
-    }
+    xpipe(fds);
 
     pid = fork();
     if (pid > 0) {
@@ -266,7 +264,8 @@ fork_and_wait_for_startup(int *fdp)
                 exit(WEXITSTATUS(status));
             }
 
-            ovs_fatal(errno, "fork child failed to signal startup");
+            VLOG_FATAL("fork child failed to signal startup (%s)",
+                       strerror(errno));
         }
         close(fds[0]);
         *fdp = -1;
@@ -277,7 +276,7 @@ fork_and_wait_for_startup(int *fdp)
         lockfile_postfork();
         *fdp = fds[1];
     } else {
-        ovs_fatal(errno, "could not fork");
+        VLOG_FATAL("fork failed (%s)", strerror(errno));
     }
 
     return pid;
@@ -292,7 +291,7 @@ fork_notify_startup(int fd)
 
         error = write_fully(fd, "", 1, &bytes_written);
         if (error) {
-            ovs_fatal(error, "could not write to pipe");
+            VLOG_FATAL("pipe write failed (%s)", strerror(error));
         }
 
         close(fd);
@@ -346,7 +345,7 @@ monitor_daemon(pid_t daemon_pid)
         } while (retval == -1 && errno == EINTR);
 
         if (retval == -1) {
-            ovs_fatal(errno, "waitpid failed");
+            VLOG_FATAL("waitpid failed (%s)", strerror(errno));
         } else if (retval == daemon_pid) {
             char *s = process_status_msg(status);
             if (should_restart(status)) {

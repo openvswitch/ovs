@@ -827,9 +827,9 @@ do_ping(int argc, char *argv[])
                                OFPT_ECHO_REQUEST, &request);
         random_bytes(rq_hdr + 1, payload);
 
-        gettimeofday(&start, NULL);
+        xgettimeofday(&start);
         run(vconn_transact(vconn, ofpbuf_clone(request), &reply), "transact");
-        gettimeofday(&end, NULL);
+        xgettimeofday(&end);
 
         rpy_hdr = reply->data;
         if (reply->size != request->size
@@ -874,7 +874,7 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
            count, message_size, count * message_size);
 
     open_vconn(argv[1], &vconn);
-    gettimeofday(&start, NULL);
+    xgettimeofday(&start);
     for (i = 0; i < count; i++) {
         struct ofpbuf *request, *reply;
         struct ofp_header *rq_hdr;
@@ -884,7 +884,7 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
         run(vconn_transact(vconn, request, &reply), "transact");
         ofpbuf_delete(reply);
     }
-    gettimeofday(&end, NULL);
+    xgettimeofday(&end);
     vconn_close(vconn);
 
     duration = ((1000*(double)(end.tv_sec - start.tv_sec))

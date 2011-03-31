@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -677,6 +677,31 @@ vlog(const struct vlog_module *module, enum vlog_level level,
 
     va_start(args, message);
     vlog_valist(module, level, message, args);
+    va_end(args);
+}
+
+void
+vlog_fatal_valist(const struct vlog_module *module_, enum vlog_level level,
+                  const char *message, va_list args)
+{
+    struct vlog_module *module = (struct vlog_module *) module_;
+
+    /* Don't log this message to the console to avoid redundancy with the
+     * message written by the later ovs_fatal_valist(). */
+    module->levels[VLF_CONSOLE] = VLL_EMER;
+
+    vlog_valist(module, level, message, args);
+    ovs_fatal_valist(0, message, args);
+}
+
+void
+vlog_fatal(const struct vlog_module *module, enum vlog_level level,
+           const char *message, ...)
+{
+    va_list args;
+
+    va_start(args, message);
+    vlog_fatal_valist(module, level, message, args);
     va_end(args);
 }
 

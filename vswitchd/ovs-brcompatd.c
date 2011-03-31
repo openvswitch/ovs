@@ -1298,8 +1298,8 @@ main(int argc, char *argv[])
     }
 
     if (brc_open(&brc_sock)) {
-        ovs_fatal(0, "could not open brcompat socket.  Check "
-                "\"brcompat\" kernel module.");
+        VLOG_FATAL("could not open brcompat socket.  Check "
+                   "\"brcompat\" kernel module.");
     }
 
     if (prune_timeout) {
@@ -1307,12 +1307,14 @@ main(int argc, char *argv[])
 
         error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
         if (error) {
-            ovs_fatal(error, "could not create rtnetlink socket");
+            VLOG_FATAL("could not create rtnetlink socket (%s)",
+                       strerror(error));
         }
 
         error = nl_sock_join_mcgroup(rtnl_sock, RTNLGRP_LINK);
         if (error) {
-            ovs_fatal(error, "could not join RTNLGRP_LINK multicast group");
+            VLOG_FATAL("could not join RTNLGRP_LINK multicast group (%s)",
+                       strerror(error));
         }
     }
 
@@ -1378,11 +1380,11 @@ validate_appctl_command(void)
         } else if (p[1] == 's') {
             n++;
         } else {
-            ovs_fatal(0, "only '%%s' and '%%%%' allowed in --appctl-command");
+            VLOG_FATAL("only '%%s' and '%%%%' allowed in --appctl-command");
         }
     }
     if (n != 1) {
-        ovs_fatal(0, "'%%s' must appear exactly once in --appctl-command");
+        VLOG_FATAL("'%%s' must appear exactly once in --appctl-command");
     }
 }
 
@@ -1453,8 +1455,8 @@ parse_options(int argc, char *argv[])
     argv += optind;
 
     if (argc != 1) {
-        ovs_fatal(0, "database socket is non-option argument; "
-                "use --help for usage");
+        VLOG_FATAL("database socket is non-option argument; "
+                   "use --help for usage");
     }
 
     return argv[0];
