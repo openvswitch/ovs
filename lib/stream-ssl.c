@@ -1044,8 +1044,7 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
             if (!dh->dh) {
                 dh->dh = dh->constructor();
                 if (!dh->dh) {
-                    ovs_fatal(ENOMEM, "out of memory constructing "
-                              "Diffie-Hellman parameters");
+                    out_of_memory();
                 }
             }
             return dh->dh;
