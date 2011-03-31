@@ -155,6 +155,8 @@ void ovs_abort(int err_no, const char *format, ...)
     PRINTF_FORMAT(2, 3) NO_RETURN;
 void ovs_fatal(int err_no, const char *format, ...)
     PRINTF_FORMAT(2, 3) NO_RETURN;
+void ovs_fatal_valist(int err_no, const char *format, va_list)
+    PRINTF_FORMAT(2, 0) NO_RETURN;
 void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
 void ovs_error_valist(int err_no, const char *format, va_list)
     PRINTF_FORMAT(2, 0);

@@ -146,17 +146,8 @@ static void run(int retval, const char *message, ...)
     if (retval) {
         va_list args;
 
-        fprintf(stderr, "%s: ", program_name);
         va_start(args, message);
-        vfprintf(stderr, message, args);
-        va_end(args);
-        if (retval == EOF) {
-            fputs(": unexpected end of file\n", stderr);
-        } else {
-            fprintf(stderr, ": %s\n", strerror(retval));
-        }
-
-        exit(EXIT_FAILURE);
+        ovs_fatal_valist(retval, message, args);
     }
 }
 
