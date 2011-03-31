@@ -683,10 +683,8 @@ ofproto_destroy(struct ofproto *p)
 
     shash_find_and_delete(&all_ofprotos, dpif_name(p->dpif));
 
-    /* Destroy connmgr early, since it touches the classifier. */
-    connmgr_destroy(p->connmgr);
-
     ofproto_flush_flows(p);
+    connmgr_destroy(p->connmgr);
     classifier_destroy(&p->cls);
     hmap_destroy(&p->facets);
 
