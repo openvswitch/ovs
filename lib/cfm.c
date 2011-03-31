@@ -28,6 +28,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "timer.h"
 #include "timeval.h"
 #include "vlog.h"
 
@@ -42,8 +43,8 @@ struct cfm_internal {
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
 
-    long long ccm_sent;    /* The time we last sent a CCM. */
-    long long fault_check; /* The time we last checked for faults. */
+    struct timer tx_timer;    /* Send CCM when expired. */
+    struct timer fault_timer; /* Check for faults when expired. */
 
     long long x_recv_time;
 };
@@ -166,19 +167,24 @@ cfm_run(struct cfm *cfm)
      * According to the specification we should check when (ccm_interval_ms *
      * 3.5)ms have passed. */
     fault_interval = (cfmi->ccm_interval_ms * 7) / 2;
-    if (now >= cfmi->fault_check + fault_interval) {
+    if (timer_expired(&cfmi->fault_timer)) {
         bool fault;
         struct remote_mp *rmp;
 
         fault = now < cfmi->x_recv_time + fault_interval;
 
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-            rmp->fault = rmp->fault || cfmi->fault_check > rmp->recv_time;
-            fault      = rmp->fault || fault;
+            if (timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
+                rmp->fault = true;
+            }
+
+            if (rmp->fault) {
+                fault = true;
+            }
         }
 
-        cfm->fault        = fault;
-        cfmi->fault_check = now;
+        cfm->fault = fault;
+        timer_set_duration(&cfmi->fault_timer, fault_interval);
     }
 }
 
@@ -189,7 +195,7 @@ cfm_should_send_ccm(struct cfm *cfm)
 {
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
-    return time_msec() >= cfmi->ccm_sent + cfmi->ccm_interval_ms;
+    return timer_expired(&cfmi->tx_timer);
 }
 
 /* Composes a CCM message into 'ccm'.  Messages generated with this function
@@ -199,7 +205,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ccm *ccm)
 {
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
-    cfmi->ccm_sent = time_msec();
+    timer_set_duration(&cfmi->tx_timer, cfmi->ccm_interval_ms);
 
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
@@ -213,12 +219,10 @@ cfm_compose_ccm(struct cfm *cfm, struct ccm *ccm)
 void
 cfm_wait(struct cfm *cfm)
 {
-    long long wait;
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
-    wait = MIN(cfmi->ccm_sent + cfmi->ccm_interval_ms,
-               cfmi->fault_check + cfmi->ccm_interval_ms * 4);
-    poll_timer_wait_until(wait);
+    timer_wait(&cfmi->tx_timer);
+    timer_wait(&cfmi->fault_timer);
 }
 
 /* Should be called whenever a client of the cfm library changes the internals
@@ -237,8 +241,8 @@ cfm_configure(struct cfm *cfm)
     cfmi->ccm_interval_ms = ccm_interval_to_ms(cfmi->ccm_interval);
 
     /* Force a resend and check in case anything changed. */
-    cfmi->ccm_sent    = 0;
-    cfmi->fault_check = 0;
+    timer_set_expired(&cfmi->tx_timer);
+    timer_set_expired(&cfmi->fault_timer);
     return true;
 }
 
@@ -398,9 +402,10 @@ cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
                   cfm->fault ? "fault" : "");
 
     ds_put_format(ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
-    ds_put_format(ds, "\ttime since CCM tx: %lldms\n", now - cfmi->ccm_sent);
-    ds_put_format(ds, "\ttime since fault check: %lldms\n",
-                  now - cfmi->fault_check);
+    ds_put_format(ds, "\tnext CCM tx: %lldms\n",
+                  timer_msecs_until_expired(&cfmi->tx_timer));
+    ds_put_format(ds, "\tnext fault check: %lldms\n",
+                  timer_msecs_until_expired(&cfmi->fault_timer));
 
     if (cfmi->x_recv_time != LLONG_MIN) {
         ds_put_format(ds, "\ttime since bad CCM rx: %lldms\n",
