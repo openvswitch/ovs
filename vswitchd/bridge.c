@@ -1690,13 +1690,13 @@ bridge_destroy(struct bridge *br)
             port_destroy(port);
         }
         list_remove(&br->node);
+        ofproto_destroy(br->ofproto);
         error = dpif_delete(br->dpif);
         if (error && error != ENOENT) {
             VLOG_ERR("failed to delete %s: %s",
                      dpif_name(br->dpif), strerror(error));
         }
         dpif_close(br->dpif);
-        ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
