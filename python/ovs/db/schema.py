@@ -27,13 +27,6 @@ class DbSchema(object):
         self.version = version
         self.tables = tables
 
-        # Validate that all ref_tables refer to the names of tables
-        # that exist.
-        for table in self.tables.itervalues():
-            for column in table.columns.itervalues():
-                self.__check_ref_table(column, column.type.key, "key")
-                self.__check_ref_table(column, column.type.value, "value")
-
         # "isRoot" was not part of the original schema definition.  Before it
         # was added, there was no support for garbage collection.  So, for
         # backward compatibility, if the root set is empty then assume that
@@ -41,6 +34,17 @@ class DbSchema(object):
         if self.__root_set_size() == 0:
             for table in self.tables.itervalues():
                 table.is_root = True
+
+        # Validate that all ref_tables refer to the names of tables
+        # that exist.
+        #
+        # Also force certain columns to be persistent, as explained in
+        # __check_ref_table().  This requires 'is_root' to be known, so this
+        # must follow the loop updating 'is_root' above.
+        for table in self.tables.itervalues():
+            for column in table.columns.itervalues():
+                self.__check_ref_table(column, column.type.key, "key")
+                self.__check_ref_table(column, column.type.value, "value")
 
     def __root_set_size(self):
         """Returns the number of tables in the schema's root set."""
@@ -91,11 +95,24 @@ class DbSchema(object):
         return json
 
     def __check_ref_table(self, column, base, base_name):
-        if (base and base.type == types.UuidType and base.ref_table and
-            base.ref_table not in self.tables):
+        if not base or base.type != types.UuidType or not base.ref_table:
+            return
+
+        ref_table = self.tables.get(base.ref_table)
+        if not ref_table:
             raise error.Error("column %s %s refers to undefined table %s"
                               % (column.name, base_name, base.ref_table),
                               tag="syntax error")
+
+        if base.is_strong_ref() and not ref_table.is_root:
+            # We cannot allow a strong reference to a non-root table to be
+            # ephemeral: if it is the only reference to a row, then replaying
+            # the database log from disk will cause the referenced row to be
+            # deleted, even though it did exist in memory.  If there are
+            # references to that row later in the log (to modify it, to delete
+            # it, or just to point to it), then this will yield a transaction
+            # error.
+            column.persistent = True
 
 class IdlSchema(DbSchema):
     def __init__(self, name, version, tables, idlPrefix, idlHeader):

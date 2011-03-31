@@ -103,20 +103,36 @@ ovsdb_schema_from_file(const char *file_name, struct ovsdb_schema **schemap)
 }
 
 static struct ovsdb_error * WARN_UNUSED_RESULT
-ovsdb_schema_check_ref_table(const struct ovsdb_column *column,
+ovsdb_schema_check_ref_table(struct ovsdb_column *column,
                              const struct shash *tables,
                              const struct ovsdb_base_type *base,
                              const char *base_name)
 {
-    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName
-        && !shash_find(tables, base->u.uuid.refTableName)) {
+    struct ovsdb_table_schema *refTable;
+
+    if (base->type != OVSDB_TYPE_UUID || !base->u.uuid.refTableName) {
+        return NULL;
+    }
+
+    refTable = shash_find_data(tables, base->u.uuid.refTableName);
+    if (!refTable) {
         return ovsdb_syntax_error(NULL, NULL,
                                   "column %s %s refers to undefined table %s",
                                   column->name, base_name,
                                   base->u.uuid.refTableName);
-    } else {
-        return NULL;
     }
+
+    if (ovsdb_base_type_is_strong_ref(base) && !refTable->is_root) {
+        /* We cannot allow a strong reference to a non-root table to be
+         * ephemeral: if it is the only reference to a row, then replaying the
+         * database log from disk will cause the referenced row to be deleted,
+         * even though it did exist in memory.  If there are references to that
+         * row later in the log (to modify it, to delete it, or just to point
+         * to it), then this will yield a transaction error. */
+        column->persistent = true;
+    }
+
+    return NULL;
 }
 
 static bool
@@ -198,7 +214,23 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
         shash_add(&schema->tables, table->name, table);
     }
 
-    /* Validate that all refTables refer to the names of tables that exist. */
+    /* "isRoot" was not part of the original schema definition.  Before it was
+     * added, there was no support for garbage collection.  So, for backward
+     * compatibility, if the root set is empty then assume that every table is
+     * in the root set. */
+    if (root_set_size(schema) == 0) {
+        SHASH_FOR_EACH (node, &schema->tables) {
+            struct ovsdb_table_schema *table = node->data;
+
+            table->is_root = true;
+        }
+    }
+
+    /* Validate that all refTables refer to the names of tables that exist.
+     *
+     * Also force certain columns to be persistent, as explained in
+     * ovsdb_schema_check_ref_table().  This requires 'is_root' to be known, so
+     * this must follow the loop updating 'is_root' above. */
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *table = node->data;
         struct shash_node *node2;
@@ -217,18 +249,6 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
                 ovsdb_schema_destroy(schema);
                 return error;
             }
-        }
-    }
-
-    /* "isRoot" was not part of the original schema definition.  Before it was
-     * added, there was no support for garbage collection.  So, for backward
-     * compatibility, if the root set is empty then assume that every table is
-     * in the root set. */
-    if (root_set_size(schema) == 0) {
-        SHASH_FOR_EACH (node, &schema->tables) {
-            struct ovsdb_table_schema *table = node->data;
-
-            table->is_root = true;
         }
     }
 
