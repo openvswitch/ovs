@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ get_entropy_or_die(void *buffer, size_t n)
 {
     int error = get_entropy(buffer, n);
     if (error) {
-        ovs_fatal(error, "%s: read error", urandom);
+        VLOG_FATAL("%s: read error (%s)",
+                   urandom, ovs_retval_to_string(error));
     }
 }

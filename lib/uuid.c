@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "aes128.h"
 #include "entropy.h"
 #include "sha1.h"
+#include "timeval.h"
 #include "util.h"
 
 static struct aes128 key;
@@ -212,9 +213,7 @@ do_init(void)
 
     /* Get seed data. */
     get_entropy_or_die(random_seed, sizeof random_seed);
-    if (gettimeofday(&now, NULL)) {
-        ovs_fatal(errno, "gettimeofday failed");
-    }
+    xgettimeofday(&now);
     pid = getpid();
     ppid = getppid();
     uid = getuid();

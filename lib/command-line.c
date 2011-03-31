@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 #include <limits.h>
 #include <stdlib.h>
 #include "util.h"
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(command_line);
 
 /* Given the GNU-style long options in 'options', returns a string that may be
  * passed to getopt() with the corresponding short options.  The caller is
@@ -66,25 +69,25 @@ run_command(int argc, char *argv[], const struct command commands[])
         if (!strcmp(p->name, argv[0])) {
             int n_arg = argc - 1;
             if (n_arg < p->min_args) {
-                ovs_fatal(0, "'%s' command requires at least %d arguments",
-                          p->name, p->min_args);
+                VLOG_FATAL( "'%s' command requires at least %d arguments",
+                            p->name, p->min_args);
             } else if (n_arg > p->max_args) {
-                ovs_fatal(0, "'%s' command takes at most %d arguments",
-                          p->name, p->max_args);
+                VLOG_FATAL("'%s' command takes at most %d arguments",
+                           p->name, p->max_args);
             } else {
                 p->handler(argc, argv);
                 if (ferror(stdout)) {
-                    ovs_fatal(0, "write to stdout failed");
+                    VLOG_FATAL("write to stdout failed");
                 }
                 if (ferror(stderr)) {
-                    ovs_fatal(0, "write to stderr failed");
+                    VLOG_FATAL("write to stderr failed");
                 }
                 return;
             }
         }
     }
 
-    ovs_fatal(0, "unknown command '%s'; use --help for help", argv[0]);
+    VLOG_FATAL("unknown command '%s'; use --help for help", argv[0]);
 }
 
 /* Process title. */

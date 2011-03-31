@@ -148,14 +148,24 @@ const char *vlog_get_log_file(void);
 int vlog_set_log_file(const char *file_name);
 int vlog_reopen_log_file(void);
 
-/* Function for actual logging. */
+/* Initialization. */
 void vlog_init(void);
 void vlog_exit(void);
+
+/* Functions for actual logging. */
 void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)
     __attribute__((format(printf, 3, 4)));
 void vlog_valist(const struct vlog_module *, enum vlog_level,
                  const char *, va_list)
     __attribute__((format(printf, 3, 0)));
+
+void vlog_fatal(const struct vlog_module *, enum vlog_level,
+                const char *format, ...)
+    PRINTF_FORMAT (3, 4) NO_RETURN;
+void vlog_fatal_valist(const struct vlog_module *, enum vlog_level,
+                       const char *, va_list)
+    PRINTF_FORMAT (3, 0) NO_RETURN;
+
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
     __attribute__((format(printf, 4, 5)));
@@ -173,6 +183,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
  *
  * Guaranteed to preserve errno.
  */
+#define VLOG_FATAL(...) vlog_fatal(THIS_MODULE, VLL_ERR, __VA_ARGS__)
 #define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)
 #define VLOG_ERR(...) VLOG(VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN(...) VLOG(VLL_WARN, __VA_ARGS__)

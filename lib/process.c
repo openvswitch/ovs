@@ -82,9 +82,7 @@ process_init(void)
     inited = true;
 
     /* Create notification pipe. */
-    if (pipe(fds)) {
-        ovs_fatal(errno, "could not create pipe");
-    }
+    xpipe(fds);
     set_nonblocking(fds[0]);
     set_nonblocking(fds[1]);
 
@@ -93,9 +91,7 @@ process_init(void)
     sa.sa_handler = sigchld_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_NOCLDSTOP | SA_RESTART;
-    if (sigaction(SIGCHLD, &sa, NULL)) {
-        ovs_fatal(errno, "sigaction(SIGCHLD) failed");
-    }
+    xsigaction(SIGCHLD, &sa, NULL);
 }
 
 char *
@@ -638,9 +634,8 @@ static bool
 sigchld_is_blocked(void)
 {
     sigset_t sigs;
-    if (sigprocmask(SIG_SETMASK, NULL, &sigs)) {
-        ovs_fatal(errno, "sigprocmask");
-    }
+
+    xsigprocmask(SIG_SETMASK, NULL, &sigs);
     return sigismember(&sigs, SIGCHLD);
 }
 
@@ -648,17 +643,14 @@ static void
 block_sigchld(sigset_t *oldsigs)
 {
     sigset_t sigchld;
+
     sigemptyset(&sigchld);
     sigaddset(&sigchld, SIGCHLD);
-    if (sigprocmask(SIG_BLOCK, &sigchld, oldsigs)) {
-        ovs_fatal(errno, "sigprocmask");
-    }
+    xsigprocmask(SIG_BLOCK, &sigchld, oldsigs);
 }
 
 static void
 unblock_sigchld(const sigset_t *oldsigs)
 {
-    if (sigprocmask(SIG_SETMASK, oldsigs, NULL)) {
-        ovs_fatal(errno, "sigprocmask");
-    }
+    xsigprocmask(SIG_SETMASK, oldsigs, NULL);
 }

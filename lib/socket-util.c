@@ -767,3 +767,10 @@ get_mtime(const char *file_name, struct timespec *mtime)
     }
 }
 
+void
+xpipe(int fds[2])
+{
+    if (pipe(fds)) {
+        VLOG_FATAL("failed to create pipe (%s)", strerror(errno));
+    }
+}

@@ -25,6 +25,9 @@
 #include "socket-util.h"
 #include "type-props.h"
 #include "util.h"
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(signals);
 
 #if defined(_NSIG)
 #define N_SIGNALS _NSIG
@@ -58,9 +61,7 @@ signal_init(void)
     static bool inited;
     if (!inited) {
         inited = true;
-        if (pipe(fds)) {
-            ovs_fatal(errno, "could not create pipe");
-        }
+        xpipe(fds);
         set_nonblocking(fds[0]);
         set_nonblocking(fds[1]);
     }
@@ -83,9 +84,7 @@ signal_register(int signr)
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    if (sigaction(signr, &sa, NULL)) {
-        ovs_fatal(errno, "sigaction(%d) failed", signr);
-    }
+    xsigaction(signr, &sa, NULL);
 
     /* Return structure. */
     s = xmalloc(sizeof *s);
@@ -147,4 +146,21 @@ signal_name(int signum)
         name = buffer;
     }
     return name;
+}
+
+void
+xsigaction(int signum, const struct sigaction *new, struct sigaction *old)
+{
+    if (sigaction(signum, new, old)) {
+        VLOG_FATAL("sigaction(%s) failed (%s)",
+                   signal_name(signum), strerror(errno));
+    }
+}
+
+void
+xsigprocmask(int how, const sigset_t *new, sigset_t *old)
+{
+    if (sigprocmask(how, new, old)) {
+        VLOG_FATAL("sigprocmask failed (%s)", strerror(errno));
+    }
 }

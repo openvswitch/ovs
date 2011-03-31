@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <sys/time.h>
 
 #include "entropy.h"
+#include "timeval.h"
 #include "util.h"
 
 /* This is the 32-bit PRNG recommended in G. Marsaglia, "Xorshift RNGs",
@@ -48,9 +49,7 @@ random_init(void)
         struct timeval tv;
         uint32_t entropy;
 
-        if (gettimeofday(&tv, NULL) < 0) {
-            ovs_fatal(errno, "gettimeofday");
-        }
+        xgettimeofday(&tv);
         get_entropy_or_die(&entropy, 4);
 
         seed = tv.tv_sec ^ tv.tv_usec ^ entropy;

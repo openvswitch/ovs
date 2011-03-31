@@ -199,8 +199,8 @@ parse_options(int argc, char *argv[])
     argv += optind;
 
     if (argc != 1) {
-        ovs_fatal(0, "database socket is only non-option argument; "
-                "use --help for usage");
+        VLOG_FATAL("database socket is only non-option argument; "
+                   "use --help for usage");
     }
 
     return argv[0];

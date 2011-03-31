@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ gettimeofday_in_msec(void)
 {
     struct timeval tv;
 
-    assert(!gettimeofday(&tv, NULL));
+    xgettimeofday(&tv);
     return timeval_to_msec(&tv);
 }
 

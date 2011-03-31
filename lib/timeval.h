@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,8 @@ int time_poll(struct pollfd *, int n_pollfds, int timeout);
 
 long long int timespec_to_msec(const struct timespec *);
 long long int timeval_to_msec(const struct timeval *);
+
+void xgettimeofday(struct timeval *);
 
 #ifdef  __cplusplus
 }
