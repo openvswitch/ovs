@@ -25,6 +25,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "vlog.h"
@@ -66,8 +67,8 @@ struct slave {
     bool enabled;                 /* Enabled. Traffic is flowing. */
     struct lacp_info partner;     /* Partner information. */
     struct lacp_info ntt_actor;   /* Used to decide if we Need To Transmit. */
-    long long int tx;             /* Next message transmission time. */
-    long long int rx;             /* Expected message receive time. */
+    struct timer tx;              /* Next message transmission timer. */
+    struct timer rx;              /* Expected message receive timer. */
 };
 
 static struct list all_lacps = LIST_INITIALIZER(&all_lacps);
@@ -151,9 +152,9 @@ lacp_process_pdu(struct lacp *lacp, const void *slave_,
     struct slave *slave = slave_lookup(lacp, slave_);
 
     slave->status = LACP_CURRENT;
-    slave->rx = time_msec() + (lacp->fast
-                               ? LACP_FAST_TIME_RX
-                               : LACP_SLOW_TIME_RX);
+    timer_set_duration(&slave->rx, (lacp->fast
+                                    ? LACP_FAST_TIME_RX
+                                    : LACP_SLOW_TIME_RX));
 
     slave->ntt_actor = pdu->partner;
 
@@ -274,7 +275,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
     struct slave *slave;
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-        if (time_msec() >= slave->rx) {
+        if (timer_expired(&slave->rx)) {
             if (slave->status == LACP_CURRENT) {
                 slave_set_expired(slave);
             } else if (slave->status == LACP_EXPIRED) {
@@ -297,17 +298,17 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
 
         slave_get_actor(slave, &actor);
 
-        if (time_msec() >= slave->tx
+        if (timer_expired(&slave->tx)
             || !info_tx_equal(&actor, &slave->ntt_actor)) {
 
             slave->ntt_actor = actor;
             compose_lacp_pdu(&actor, &slave->partner, &pdu);
             send_pdu(slave->aux, &pdu);
 
-            slave->tx = time_msec() +
-                (slave->partner.state & LACP_STATE_TIME
-                 ? LACP_FAST_TIME_TX
-                 : LACP_SLOW_TIME_TX);
+            timer_set_duration(&slave->tx,
+                               (slave->partner.state & LACP_STATE_TIME
+                                ? LACP_FAST_TIME_TX
+                                : LACP_SLOW_TIME_TX));
         }
     }
 }
@@ -320,11 +321,11 @@ lacp_wait(struct lacp *lacp)
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         if (slave_may_tx(slave)) {
-            poll_timer_wait_until(slave->tx);
+            timer_wait(&slave->tx);
         }
 
         if (slave->status != LACP_DEFAULTED) {
-            poll_timer_wait_until(slave->rx);
+            timer_wait(&slave->rx);
         }
     }
 }
@@ -422,8 +423,7 @@ slave_set_expired(struct slave *slave)
     slave->status = LACP_EXPIRED;
     slave->partner.state |= LACP_STATE_TIME;
     slave->partner.state &= ~LACP_STATE_SYNC;
-
-    slave->rx = time_msec() + LACP_FAST_TIME_RX;
+    timer_set_duration(&slave->rx, LACP_FAST_TIME_RX);
 }
 
 static void
