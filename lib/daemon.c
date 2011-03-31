@@ -244,11 +244,12 @@ fork_and_wait_for_startup(int *fdp)
     pid = fork();
     if (pid > 0) {
         /* Running in parent process. */
+        size_t bytes_read;
         char c;
 
         close(fds[1]);
         fatal_signal_fork();
-        if (read(fds[0], &c, 1) != 1) {
+        if (read_fully(fds[0], &c, 1, &bytes_read) != 0) {
             int retval;
             int status;
 
