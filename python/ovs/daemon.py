@@ -89,9 +89,9 @@ def is_chdir_enabled():
     return _chdir
 
 def ignore_existing_pidfile():
-    """Normally, die_if_already_running() will terminate the program with a
-    message if a locked pidfile already exists.  If this function is called,
-    die_if_already_running() will merely log a warning."""
+    """Normally, daemonize() or daemonize_start() will terminate the program
+    with a message if a locked pidfile already exists.  If this function is
+    called, an existing pidfile will be replaced, with a warning."""
     global _overwrite_pidfile
     _overwrite_pidfile = True
 
@@ -111,7 +111,7 @@ def set_monitor():
     global _monitor
     _monitor = True
 
-def die_if_already_running():
+def _die_if_already_running():
     """If a locked pidfile exists, issue a warning message and, unless
     ignore_existing_pidfile() has been called, terminate the program."""
     if _pidfile is None:
@@ -343,6 +343,7 @@ def daemonize_start():
             _monitor_daemon(daemon_pid)
         # Running in daemon process
     
+    _die_if_already_running()
     _make_pidfile()
 
 def daemonize_complete():

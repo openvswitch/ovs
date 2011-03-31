@@ -103,7 +103,6 @@ main(int argc, char *argv[])
     parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 
-    die_if_already_running();
     daemonize_start();
 
     /* Start listening for ovs-appctl requests. */

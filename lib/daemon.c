@@ -107,9 +107,9 @@ is_chdir_enabled(void)
     return chdir_;
 }
 
-/* Normally, die_if_already_running() will terminate the program with a message
- * if a locked pidfile already exists.  If this function is called,
- * die_if_already_running() will merely log a warning. */
+/* Normally, daemonize() or damonize_start() will terminate the program with a
+ * message if a locked pidfile already exists.  If this function is called, an
+ * existing pidfile will be replaced, with a warning. */
 void
 ignore_existing_pidfile(void)
 {
@@ -141,7 +141,7 @@ daemon_set_monitor(void)
 
 /* If a locked pidfile exists, issue a warning message and, unless
  * ignore_existing_pidfile() has been called, terminate the program. */
-void
+static void
 die_if_already_running(void)
 {
     pid_t pid;
@@ -449,6 +449,7 @@ daemonize_start(void)
         /* Running in daemon process. */
     }
 
+    die_if_already_running();
     make_pidfile();
 
     /* Make sure that the unixctl commands for vlog get registered in a

@@ -254,8 +254,6 @@ def main(argv):
                          "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
         sys.exit(1)
 
-    ovs.daemon.die_if_already_running()
-
     remote = args[0]
     idl = ovs.db.idl.Idl(remote, "Open_vSwitch", monitor_uuid_schema_cb)
 
