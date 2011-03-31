@@ -144,6 +144,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/table.h \
 	lib/tag.c \
 	lib/tag.h \
+	lib/timer.c \
+	lib/timer.h \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
