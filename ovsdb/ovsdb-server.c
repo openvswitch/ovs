@@ -101,7 +101,6 @@ main(int argc, char *argv[])
     parse_options(argc, argv, &file_name, &remotes, &unixctl_path,
                   &run_command);
 
-    die_if_already_running();
     daemonize_start();
 
     error = ovsdb_file_open(file_name, false, &db, &file);

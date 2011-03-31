@@ -182,8 +182,6 @@ do_listen(int argc OVS_UNUSED, char *argv[])
     bool done;
     int error;
 
-    die_if_already_running();
-
     error = jsonrpc_pstream_open(argv[1], &pstream);
     if (error) {
         ovs_fatal(error, "could not listen on \"%s\"", argv[1]);

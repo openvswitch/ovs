@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,8 +49,6 @@ def handle_rpc(rpc, msg):
     return done
 
 def do_listen(name):
-    ovs.daemon.die_if_already_running()
-
     error, pstream = ovs.stream.PassiveStream.open(name)
     if error:
         sys.stderr.write("could not listen on \"%s\": %s\n"

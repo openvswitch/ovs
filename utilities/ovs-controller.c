@@ -139,7 +139,6 @@ main(int argc, char *argv[])
         ovs_fatal(0, "no active or passive switch connections");
     }
 
-    die_if_already_running();
     daemonize_start();
 
     retval = unixctl_server_create(unixctl_path, &unixctl);

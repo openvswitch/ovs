@@ -67,7 +67,6 @@ void daemon_set_monitor(void);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);
-void die_if_already_running(void);
 void ignore_existing_pidfile(void);
 void daemon_usage(void);
 pid_t read_pidfile(const char *name);
