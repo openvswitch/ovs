@@ -1164,7 +1164,7 @@ connmgr_broadcast(struct connmgr *mgr, struct ofpbuf *packet)
         }
     }
     if (prev) {
-        ofconn_send_reply(ofconn, packet);
+        ofconn_send_reply(prev, packet);
     } else {
         ofpbuf_delete(packet);
     }
