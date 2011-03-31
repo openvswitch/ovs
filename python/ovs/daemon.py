@@ -213,10 +213,15 @@ def _fork_and_wait_for_startup():
         # Running in parent process.
         os.close(wfd)
         ovs.fatal_signal.fork()
-        try:
-            s = os.read(rfd, 1)
-        except OSError, e:
-            s = ""
+        while True:
+            try:
+                s = os.read(rfd, 1)
+                error = 0
+            except OSError, e:
+                s = ""
+                error = e.errno
+            if error != errno.EINTR:
+                break
         if len(s) != 1:
             retval, status = _waitpid(pid, 0)
             if (retval == pid and
