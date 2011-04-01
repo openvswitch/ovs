@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 
 #include <config.h>
 #include "type-props.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define MUST_SUCCEED(EXPRESSION)                    \
     if (!(EXPRESSION)) {                            \
@@ -30,11 +32,18 @@
     MUST_SUCCEED(TYPE_IS_INTEGER(type));                \
     MUST_SUCCEED(TYPE_IS_SIGNED(type) == is_signed);    \
     MUST_SUCCEED(TYPE_MAXIMUM(type) == maximum);        \
-    MUST_SUCCEED(TYPE_MINIMUM(type) == minimum);
+    MUST_SUCCEED(TYPE_MINIMUM(type) == minimum);        \
+    sprintf(max_s, "%"PRIuMAX, (uintmax_t) (maximum));  \
+    MUST_SUCCEED(strlen(max_s) <= INT_STRLEN(type));    \
+    sprintf(min_s, "%"PRIdMAX, (intmax_t) (minimum));   \
+    MUST_SUCCEED(strlen(min_s) <= INT_STRLEN(type));
 
 int
 main (void)
 {
+    char max_s[128];
+    char min_s[128];
+
     TEST_TYPE(char, CHAR_MIN, CHAR_MAX, (CHAR_MIN < 0));
 
     TEST_TYPE(signed char, SCHAR_MIN, SCHAR_MAX, 1);
