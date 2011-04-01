@@ -1436,9 +1436,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                                                         &class->columns[idx];
 
                     if (row->old
-                        ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
-                                              &column->type)
-                        : !ovsdb_datum_is_default(&row->new[idx],
+                        || !ovsdb_datum_is_default(&row->new[idx],
                                                   &column->type)) {
                         json_object_put(row_json, column->name,
                                         substitute_uuids(
@@ -1632,6 +1630,21 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
     assert(column_idx < class->n_columns);
     assert(row->old == NULL ||
            row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
+
+    /* If this is a write-only column and the datum being written is the same
+     * as the one already there, just skip the update entirely.  This is worth
+     * optimizing because we have a lot of columns that get periodically
+     * refreshed into the database but don't actually change that often.
+     *
+     * We don't do this for read/write columns because that would break
+     * atomicity of transactions--some other client might have written a
+     * different value in that column since we read it. */
+    if (row->table->modes[column_idx] == OVSDB_IDL_MONITOR
+        && ovsdb_datum_equals(ovsdb_idl_read(row, column),
+                              datum, &column->type)) {
+        ovsdb_datum_destroy(datum, &column->type);
+        return;
+    }
 
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
