@@ -99,6 +99,7 @@ static void dst_set_free(struct dst_set *);
 struct iface {
     /* These members are always valid. */
     struct list port_elem;      /* Element in struct port's "ifaces" list. */
+    struct hmap_node name_node; /* In struct bridge's "iface_by_name" hmap. */
     struct port *port;          /* Containing port. */
     char *name;                 /* Host network device name. */
     tag_type tag;               /* Tag associated with this interface. */
@@ -176,7 +177,7 @@ struct bridge {
 
     /* Bridge ports. */
     struct hmap ports;          /* "struct port"s indexed by name. */
-    struct shash iface_by_name; /* "struct iface"s indexed by name. */
+    struct hmap iface_by_name;  /* "struct iface"s indexed by name. */
 
     /* Bonding. */
     bool has_bonded_ports;
@@ -1662,7 +1663,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     hmap_init(&br->ports);
     hmap_init(&br->ifaces);
-    shash_init(&br->iface_by_name);
+    hmap_init(&br->iface_by_name);
 
     br->flush = false;
 
@@ -1698,7 +1699,7 @@ bridge_destroy(struct bridge *br)
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
-        shash_destroy(&br->iface_by_name);
+        hmap_destroy(&br->iface_by_name);
         free(br->synth_local_iface.type);
         free(br->name);
         free(br);
@@ -3235,7 +3236,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->netdev = NULL;
     iface->cfg = if_cfg;
 
-    shash_add_assert(&br->iface_by_name, iface->name, iface);
+    hmap_insert(&br->iface_by_name, &iface->name_node, hash_string(name, 0));
 
     list_push_back(&port->ifaces, &iface->port_elem);
 
@@ -3261,13 +3262,12 @@ iface_destroy(struct iface *iface)
             lacp_slave_unregister(port->lacp, iface);
         }
 
-        shash_find_and_delete_assert(&br->iface_by_name, iface->name);
-
         if (iface->dp_ifidx >= 0) {
             hmap_remove(&br->ifaces, &iface->dp_ifidx_node);
         }
 
         list_remove(&iface->port_elem);
+        hmap_remove(&br->iface_by_name, &iface->name_node);
 
         netdev_close(iface->netdev);
 
@@ -3281,7 +3281,16 @@ iface_destroy(struct iface *iface)
 static struct iface *
 iface_lookup(const struct bridge *br, const char *name)
 {
-    return shash_find_data(&br->iface_by_name, name);
+    struct iface *iface;
+
+    HMAP_FOR_EACH_WITH_HASH (iface, name_node, hash_string(name, 0),
+                             &br->iface_by_name) {
+        if (!strcmp(iface->name, name)) {
+            return iface;
+        }
+    }
+
+    return NULL;
 }
 
 static struct iface *
