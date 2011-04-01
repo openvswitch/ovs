@@ -368,8 +368,9 @@ struct netdev_linux {
     int fd;
 };
 
-/* An AF_INET socket (used for ioctl operations). */
-static int af_inet_sock = -1;
+/* Sockets used for ioctl operations. */
+static int af_inet_sock = -1;   /* AF_INET, SOCK_DGRAM. */
+static int af_packet_sock = -1; /* AF_PACKET, SOCK_RAW. */
 
 /* A Netlink routing socket that is not subscribed to any multicast groups. */
 static struct nl_sock *rtnl_sock;
@@ -443,6 +444,14 @@ netdev_linux_init(void)
         status = af_inet_sock >= 0 ? 0 : errno;
         if (status) {
             VLOG_ERR("failed to create inet socket: %s", strerror(status));
+        } else {
+            /* Create AF_PACKET socket. */
+            af_packet_sock = socket(AF_PACKET, SOCK_RAW, 0);
+            status = af_packet_sock >= 0 ? 0 : errno;
+            if (status) {
+                VLOG_ERR("failed to create packet socket: %s",
+                         strerror(status));
+            }
         }
 
         /* Create rtnetlink socket. */
@@ -819,16 +828,36 @@ netdev_linux_drain(struct netdev *netdev_)
 static int
 netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct sockaddr_ll sll;
+    struct msghdr msg;
+    struct iovec iov;
+    int ifindex;
+    int error;
 
-    /* XXX should support sending even if 'ethertype' was NETDEV_ETH_TYPE_NONE.
-     */
-    if (netdev->fd < 0) {
-        return EPIPE;
+    error = get_ifindex(netdev_, &ifindex);
+    if (error) {
+        return error;
     }
 
+    /* We don't bother setting most fields in sockaddr_ll because the kernel
+     * ignores them for SOCK_RAW. */
+    memset(&sll, 0, sizeof sll);
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifindex;
+
+    iov.iov_base = (void *) data;
+    iov.iov_len = size;
+
+    msg.msg_name = &sll;
+    msg.msg_namelen = sizeof sll;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
+
     for (;;) {
-        ssize_t retval = write(netdev->fd, data, size);
+        ssize_t retval = sendmsg(af_packet_sock, &msg, 0);
         if (retval < 0) {
             /* The Linux AF_PACKET implementation never blocks waiting for room
              * for packets, instead returning ENOBUFS.  Translate this into

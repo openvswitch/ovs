@@ -210,7 +210,8 @@ struct netdev_class {
      * transmission through this interface.  This function may be set to null
      * if it would always return EOPNOTSUPP anyhow.  (This will prevent the
      * network device from being usefully used by the netdev-based "userspace
-     * datapath".) */
+     * datapath".  It will also prevent the OVS implementation of bonding from
+     * working properly over 'netdev'.) */
     int (*send)(struct netdev *netdev, const void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
