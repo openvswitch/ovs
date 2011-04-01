@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,5 +28,12 @@
 #define TYPE_MAXIMUM(TYPE) (TYPE_IS_SIGNED(TYPE) \
                             ? ~(~(TYPE)0 << TYPE_VALUE_BITS(TYPE)) \
                             : (TYPE)-1)
+
+/* Number of decimal digits required to format an integer of the given TYPE.
+ * Includes space for a sign, if TYPE is signed, but not for a null
+ * terminator.
+ *
+ * The value is an overestimate. */
+#define INT_STRLEN(TYPE) (TYPE_IS_SIGNED(TYPE) + TYPE_VALUE_BITS(TYPE) / 3 + 1)
 
 #endif /* type-props.h */
