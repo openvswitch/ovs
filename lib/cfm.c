@@ -230,19 +230,24 @@ cfm_wait(struct cfm *cfm)
 bool
 cfm_configure(struct cfm *cfm)
 {
-    struct cfm_internal *cfmi;
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
+    uint8_t interval;
 
     if (!cfm_is_valid_mpid(cfm->mpid) || !cfm->interval) {
         return false;
     }
 
-    cfmi                  = cfm_to_internal(cfm);
-    cfmi->ccm_interval    = ms_to_ccm_interval(cfm->interval);
-    cfmi->ccm_interval_ms = ccm_interval_to_ms(cfmi->ccm_interval);
+    interval = ms_to_ccm_interval(cfm->interval);
 
-    /* Force a resend and check in case anything changed. */
-    timer_set_expired(&cfmi->tx_timer);
-    timer_set_expired(&cfmi->fault_timer);
+    if (interval != cfmi->ccm_interval) {
+        cfmi->ccm_interval = interval;
+        cfmi->ccm_interval_ms = ccm_interval_to_ms(interval);
+
+        /* Force a resend and check in case anything changed. */
+        timer_set_expired(&cfmi->tx_timer);
+        timer_set_expired(&cfmi->fault_timer);
+    }
+
     return true;
 }
 
