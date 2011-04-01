@@ -1027,6 +1027,34 @@ dpif_linux_is_internal_device(const char *name)
     return reply.type == ODP_VPORT_TYPE_INTERNAL;
 }
 
+int
+dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
+                      const void *data, size_t size)
+{
+    struct odp_header *execute;
+    struct ofpbuf *buf;
+    size_t actions_ofs;
+    int error;
+
+    buf = ofpbuf_new(128 + size);
+
+    nl_msg_put_genlmsghdr(buf, 0, odp_packet_family, NLM_F_REQUEST,
+                          ODP_PACKET_CMD_EXECUTE, 1);
+
+    execute = ofpbuf_put_uninit(buf, sizeof *execute);
+    execute->dp_ifindex = dp_ifindex;
+
+    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, data, size);
+
+    actions_ofs = nl_msg_start_nested(buf, ODP_PACKET_ATTR_ACTIONS);
+    nl_msg_put_u32(buf, ODP_ACTION_ATTR_OUTPUT, port_no);
+    nl_msg_end_nested(buf, actions_ofs);
+
+    error = nl_sock_transact(genl_sock, buf, NULL);
+    ofpbuf_delete(buf);
+    return error;
+}
+
 static void
 dpif_linux_port_changed(const struct rtnetlink_link_change *change,
                         void *dpif_)

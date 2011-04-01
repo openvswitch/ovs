@@ -56,6 +56,8 @@ struct netdev_vport_notifier {
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
     struct ofpbuf *options;
+    int dp_ifindex;             /* -1 if unknown. */
+    uint32_t port_no;           /* UINT32_MAX if unknown. */
 };
 
 struct netdev_vport {
@@ -185,10 +187,14 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
     struct ofpbuf *options = NULL;
     struct shash fetched_args;
+    int dp_ifindex;
+    uint32_t port_no;
     int error;
 
     shash_init(&fetched_args);
 
+    dp_ifindex = -1;
+    port_no = UINT32_MAX;
     if (!shash_is_empty(args)) {
         /* Parse the provided configuration. */
         options = ofpbuf_new(64);
@@ -215,6 +221,8 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
                             name, strerror(error));
             } else {
                 options = ofpbuf_clone_data(reply.options, reply.options_len);
+                dp_ifindex = reply.dp_ifindex;
+                port_no = reply.port_no;
             }
             ofpbuf_delete(buf);
         } else {
@@ -231,6 +239,8 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
                         shash_is_empty(&fetched_args) ? args : &fetched_args,
                         netdev_class);
         dev->options = options;
+        dev->dp_ifindex = dp_ifindex;
+        dev->port_no = port_no;
 
         *netdev_devp = &dev->netdev_dev;
         route_table_register();
@@ -309,6 +319,32 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
     ofpbuf_delete(options);
 
     return error;
+}
+
+static int
+netdev_vport_send(struct netdev *netdev, const void *data, size_t size)
+{
+    struct netdev_dev *dev_ = netdev_get_dev(netdev);
+    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
+
+    if (dev->dp_ifindex == -1) {
+        const char *name = netdev_get_name(netdev);
+        struct dpif_linux_vport reply;
+        struct ofpbuf *buf;
+        int error;
+
+        error = dpif_linux_vport_get(name, &reply, &buf);
+        if (error) {
+            VLOG_ERR_RL(&rl, "%s: failed to query vport for send (%s)",
+                        name, strerror(error));
+            return error;
+        }
+        dev->dp_ifindex = reply.dp_ifindex;
+        dev->port_no = reply.port_no;
+        ofpbuf_delete(buf);
+    }
+
+    return dpif_linux_vport_send(dev->dp_ifindex, dev->port_no, data, size);
 }
 
 static int
@@ -936,7 +972,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     NULL,                       /* recv_wait */             \
     NULL,                       /* drain */                 \
                                                             \
-    NULL,                       /* send */                  \
+    netdev_vport_send,          /* send */                  \
     NULL,                       /* send_wait */             \
                                                             \
     netdev_vport_set_etheraddr,                             \
