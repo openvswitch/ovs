@@ -67,6 +67,20 @@ ccm_interval_to_ms(uint8_t interval)
     NOT_REACHED();
 }
 
+static long long int
+cfm_fault_interval(struct cfm_internal *cfmi)
+{
+    /* According to the 802.1ag specification we should assume every other MP
+     * with the same MAID has the same transmission interval that we have.  If
+     * an MP has a different interval, cfm_process_heartbeat will register it
+     * as a fault (likely due to a configuration error).  Thus we can check all
+     * MPs at once making this quite a bit simpler.
+     *
+     * According to the specification we should check when (ccm_interval_ms *
+     * 3.5)ms have passed. */
+    return (cfmi->ccm_interval_ms * 7) / 2;
+}
+
 static uint8_t
 ms_to_ccm_interval(int interval_ms)
 {
@@ -156,22 +170,12 @@ cfm_run(struct cfm *cfm)
 {
     long long now = time_msec();
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
-    long long fault_interval;
 
-    /* According to the 802.1ag specification we should assume every other MP
-     * with the same MAID has the same transmission interval that we have.  If
-     * an MP has a different interval, cfm_process_heartbeat will register it
-     * as a fault (likely due to a configuration error).  Thus we can check all
-     * MPs at once making this quite a bit simpler.
-     *
-     * According to the specification we should check when (ccm_interval_ms *
-     * 3.5)ms have passed. */
-    fault_interval = (cfmi->ccm_interval_ms * 7) / 2;
     if (timer_expired(&cfmi->fault_timer)) {
         bool fault;
         struct remote_mp *rmp;
 
-        fault = now < cfmi->x_recv_time + fault_interval;
+        fault = now < cfmi->x_recv_time + cfm_fault_interval(cfmi);
 
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
             if (timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
@@ -184,7 +188,7 @@ cfm_run(struct cfm *cfm)
         }
 
         cfm->fault = fault;
-        timer_set_duration(&cfmi->fault_timer, fault_interval);
+        timer_set_duration(&cfmi->fault_timer, cfm_fault_interval(cfmi));
     }
 }
 
@@ -243,9 +247,8 @@ cfm_configure(struct cfm *cfm)
         cfmi->ccm_interval = interval;
         cfmi->ccm_interval_ms = ccm_interval_to_ms(interval);
 
-        /* Force a resend and check in case anything changed. */
         timer_set_expired(&cfmi->tx_timer);
-        timer_set_expired(&cfmi->fault_timer);
+        timer_set_duration(&cfmi->fault_timer, cfm_fault_interval(cfmi));
     }
 
     return true;
