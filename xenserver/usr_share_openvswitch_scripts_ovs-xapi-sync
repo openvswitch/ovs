@@ -176,11 +176,13 @@ def update_bridge_id(name, ids):
 
     if ids.get("bridge-id") != primary_id:
         set_external_id("Bridge", name, "bridge-id", primary_id)
+        ids["bridge-id"] = primary_id
 
 def update_iface_id(name, ids):
     id = get_iface_id(name, ids.get("xs-vif-uuid"))
     if ids.get("iface-id") != id and id:
         set_external_id("Interface", name, "iface-id", id)
+        ids["iface-id"] = id
 
 def keep_table_columns(schema, table_name, column_types):
     table = schema.tables.get(table_name)
@@ -285,13 +287,17 @@ def main(argv):
         for rec in idl.data["Bridge"].itervalues():
             name = rec.name.as_scalar()
             xs_network_uuids = rec.external_ids.get("xs-network-uuids")
-            new_bridges[name] = {"xs-network-uuids": xs_network_uuids}
+            bridge_id = rec.external_ids.get("bridge-id")
+            new_bridges[name] = {"xs-network-uuids": xs_network_uuids,
+                                 "bridge-id": bridge_id}
 
         new_interfaces = {}
         for rec in idl.data["Interface"].itervalues():
             name = rec.name.as_scalar()
             xs_vif_uuid = rec.external_ids.get("xs-vif-uuid")
-            new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid}
+            iface_id = rec.external_ids.get("iface-id")
+            new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid,
+                                    "iface-id": iface_id}
 
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
