@@ -24,4 +24,6 @@ struct signal *signal_register(int signr);
 bool signal_poll(struct signal *);
 void signal_wait(struct signal *);
 
+const char *signal_name(int signum);
+
 #endif /* signals.h */
