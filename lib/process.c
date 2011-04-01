@@ -30,6 +30,7 @@
 #include "fatal-signal.h"
 #include "list.h"
 #include "poll-loop.h"
+#include "signals.h"
 #include "socket-util.h"
 #include "util.h"
 #include "vlog.h"
@@ -353,17 +354,10 @@ process_status_msg(int status)
     struct ds ds = DS_EMPTY_INITIALIZER;
     if (WIFEXITED(status)) {
         ds_put_format(&ds, "exit status %d", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status) || WIFSTOPPED(status)) {
-        int signr = WIFSIGNALED(status) ? WTERMSIG(status) : WSTOPSIG(status);
-        const char *name = NULL;
-#ifdef HAVE_STRSIGNAL
-        name = strsignal(signr);
-#endif
-        ds_put_format(&ds, "%s by signal %d",
-                      WIFSIGNALED(status) ? "killed" : "stopped", signr);
-        if (name) {
-            ds_put_format(&ds, " (%s)", name);
-        }
+    } else if (WIFSIGNALED(status)) {
+        ds_put_format(&ds, "killed (%s)", signal_name(WTERMSIG(status)));
+    } else if (WIFSTOPPED(status)) {
+        ds_put_format(&ds, "stopped (%s)", signal_name(WSTOPSIG(status)));
     } else {
         ds_put_format(&ds, "terminated abnormally (%x)", status);
     }

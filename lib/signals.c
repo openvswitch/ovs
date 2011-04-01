@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include "poll-loop.h"
 #include "socket-util.h"
+#include "type-props.h"
 #include "util.h"
 
 #if defined(_NSIG)
@@ -125,4 +126,25 @@ signal_handler(int signr)
         ignore(write(fds[1], "", 1));
         signaled[signr] = true;
     }
+}
+
+/* Returns the name of signal 'signum' as a string.  The string may be in a
+ * static buffer that is reused from one call to the next.
+ *
+ * The string is probably a (possibly multi-word) description of the signal
+ * (e.g. "Hangup") instead of just the stringified version of the macro
+ * (e.g. "SIGHUP"). */
+const char *
+signal_name(int signum)
+{
+    const char *name = NULL;
+#ifdef HAVE_STRSIGNAL
+    name = strsignal(signum);
+#endif
+    if (!name) {
+        static char buffer[7 + INT_STRLEN(int) + 1];
+        sprintf(buffer, "signal %d", signum);
+        name = buffer;
+    }
+    return name;
 }
