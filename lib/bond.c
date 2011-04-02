@@ -1379,9 +1379,11 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
     case BM_TCP:
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
-            /* XXX select interface properly.  The current interface selection
-             * is only good for testing the rebalancing code. */
-            e->slave = bond->active_slave;
+            e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),
+                                    struct bond_slave, hmap_node);
+            if (!e->slave->enabled) {
+                e->slave = bond->active_slave;
+            }
             e->tag = tag_create_random();
         }
         return e->slave;
