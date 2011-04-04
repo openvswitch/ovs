@@ -61,6 +61,9 @@ static int daemonize_fd = -1;
  * it dies due to an error signal? */
 static bool monitor;
 
+static void check_already_running(void);
+static int lock_pidfile(FILE *, int command);
+
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
 char *
@@ -139,87 +142,77 @@ daemon_set_monitor(void)
     monitor = true;
 }
 
-/* If a locked pidfile exists, issue a warning message and, unless
- * ignore_existing_pidfile() has been called, terminate the program. */
-static void
-die_if_already_running(void)
-{
-    pid_t pid;
-    if (!pidfile) {
-        return;
-    }
-    pid = read_pidfile_if_exists(pidfile);
-    if (pid > 0) {
-        if (!overwrite_pidfile) {
-            VLOG_ERR("%s: %s already running as pid %ld, aborting",
-                      get_pidfile(), program_name, (long int) pid);
-            ovs_fatal(0, "%s: already running as pid %ld",
-                      get_pidfile(), (long int) pid);
-        } else {
-            VLOG_WARN("%s: %s already running as pid %ld",
-                      get_pidfile(), program_name, (long int) pid);
-        }
-    }
-}
-
 /* If a pidfile has been configured, creates it and stores the running
  * process's pid in it.  Ensures that the pidfile will be deleted when the
  * process exits. */
 static void
 make_pidfile(void)
 {
-    if (pidfile) {
-        /* Create pidfile via temporary file, so that observers never see an
-         * empty pidfile or an unlocked pidfile. */
-        long int pid = getpid();
-        char *tmpfile;
-        int fd;
+    long int pid = getpid();
+    struct stat s;
+    char *tmpfile;
+    FILE *file;
+    int error;
 
-        tmpfile = xasprintf("%s.tmp%ld", pidfile, pid);
-        fatal_signal_add_file_to_unlink(tmpfile);
-        fd = open(tmpfile, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-        if (fd >= 0) {
-            struct flock lck;
-            lck.l_type = F_WRLCK;
-            lck.l_whence = SEEK_SET;
-            lck.l_start = 0;
-            lck.l_len = 0;
-            if (fcntl(fd, F_SETLK, &lck) != -1) {
-                char *text = xasprintf("%ld\n", pid);
-                if (write(fd, text, strlen(text)) == strlen(text)) {
-                    fatal_signal_add_file_to_unlink(pidfile);
-                    if (rename(tmpfile, pidfile) < 0) {
-                        VLOG_ERR("failed to rename \"%s\" to \"%s\": %s",
-                                 tmpfile, pidfile, strerror(errno));
-                        fatal_signal_remove_file_to_unlink(pidfile);
-                        close(fd);
-                    } else {
-                        /* Keep 'fd' open to retain the lock. */
-                        struct stat s;
-
-                        if (!fstat(fd, &s)) {
-                            pidfile_dev = s.st_dev;
-                            pidfile_ino = s.st_ino;
-                        } else {
-                            VLOG_ERR("%s: fstat failed: %s",
-                                     pidfile, strerror(errno));
-                        }
-                    }
-                } else {
-                    VLOG_ERR("%s: write failed: %s", tmpfile, strerror(errno));
-                    close(fd);
-                }
-                free(text);
-            } else {
-                VLOG_ERR("%s: fcntl failed: %s", tmpfile, strerror(errno));
-                close(fd);
-            }
-        } else {
-            VLOG_ERR("%s: create failed: %s", tmpfile, strerror(errno));
-        }
-        fatal_signal_remove_file_to_unlink(tmpfile);
-        free(tmpfile);
+    /* Create a temporary pidfile. */
+    tmpfile = xasprintf("%s.tmp%ld", pidfile, pid);
+    fatal_signal_add_file_to_unlink(tmpfile);
+    file = fopen(tmpfile, "w+");
+    if (!file) {
+        VLOG_FATAL("%s: create failed (%s)", tmpfile, strerror(errno));
     }
+
+    if (fstat(fileno(file), &s) == -1) {
+        VLOG_FATAL("%s: fstat failed (%s)", tmpfile, strerror(errno));
+    }
+
+    fprintf(file, "%ld\n", pid);
+    if (fflush(file) == EOF) {
+        VLOG_FATAL("%s: write failed (%s)", tmpfile, strerror(errno));
+    }
+
+    error = lock_pidfile(file, F_SETLK);
+    if (error) {
+        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", tmpfile, strerror(error));
+    }
+
+    /* Rename or link it to the correct name. */
+    if (overwrite_pidfile) {
+        if (rename(tmpfile, pidfile) < 0) {
+            VLOG_FATAL("failed to rename \"%s\" to \"%s\" (%s)",
+                       tmpfile, pidfile, strerror(errno));
+        }
+    } else {
+        do {
+            error = link(tmpfile, pidfile) == -1 ? errno : 0;
+            if (error == EEXIST) {
+                check_already_running();
+            }
+        } while (error == EINTR || error == EEXIST);
+        if (error) {
+            VLOG_FATAL("failed to link \"%s\" as \"%s\" (%s)",
+                       tmpfile, pidfile, strerror(error));
+        }
+    }
+
+    /* Ensure that the pidfile will get deleted on exit. */
+    fatal_signal_add_file_to_unlink(pidfile);
+
+    /* Delete the temporary pidfile if it still exists. */
+    if (!overwrite_pidfile) {
+        error = fatal_signal_unlink_file_now(tmpfile);
+        if (error) {
+            VLOG_FATAL("%s: unlink failed (%s)", tmpfile, strerror(error));
+        }
+    }
+
+    /* Clean up.
+     *
+     * We don't close 'file' because its file descriptor must remain open to
+     * hold the lock. */
+    pidfile_dev = s.st_dev;
+    pidfile_ino = s.st_ino;
+    free(tmpfile);
     free(pidfile);
     pidfile = NULL;
 }
@@ -449,8 +442,9 @@ daemonize_start(void)
         /* Running in daemon process. */
     }
 
-    die_if_already_running();
-    make_pidfile();
+    if (pidfile) {
+        make_pidfile();
+    }
 
     /* Make sure that the unixctl commands for vlog get registered in a
      * daemon, even before the first log message. */
@@ -490,12 +484,37 @@ daemon_usage(void)
         ovs_rundir(), program_name);
 }
 
-static pid_t
-read_pidfile__(const char *pidfile, bool must_exist)
+static int
+lock_pidfile__(FILE *file, int command, struct flock *lck)
 {
-    char line[128];
+    int error;
+
+    lck->l_type = F_WRLCK;
+    lck->l_whence = SEEK_SET;
+    lck->l_start = 0;
+    lck->l_len = 0;
+    lck->l_pid = 0;
+
+    do {
+        error = fcntl(fileno(file), command, lck) == -1 ? errno : 0;
+    } while (error == EINTR);
+    return error;
+}
+
+static int
+lock_pidfile(FILE *file, int command)
+{
     struct flock lck;
-    struct stat s;
+
+    return lock_pidfile__(file, command, &lck);
+}
+
+static pid_t
+read_pidfile__(const char *pidfile, bool delete_if_stale)
+{
+    struct stat s, s2;
+    struct flock lck;
+    char line[128];
     FILE *file;
     int error;
 
@@ -510,9 +529,9 @@ read_pidfile__(const char *pidfile, bool must_exist)
         return getpid();
     }
 
-    file = fopen(pidfile, "r");
+    file = fopen(pidfile, "r+");
     if (!file) {
-        if (errno == ENOENT && !must_exist) {
+        if (errno == ENOENT && delete_if_stale) {
             return 0;
         }
         error = errno;
@@ -520,20 +539,53 @@ read_pidfile__(const char *pidfile, bool must_exist)
         goto error;
     }
 
-    lck.l_type = F_WRLCK;
-    lck.l_whence = SEEK_SET;
-    lck.l_start = 0;
-    lck.l_len = 0;
-    lck.l_pid = 0;
-    if (fcntl(fileno(file), F_GETLK, &lck)) {
-        error = errno;
+    error = lock_pidfile__(file, F_GETLK, &lck);
+    if (error) {
         VLOG_WARN("%s: fcntl: %s", pidfile, strerror(error));
         goto error;
     }
     if (lck.l_type == F_UNLCK) {
-        error = ESRCH;
-        VLOG_WARN("%s: pid file is not locked", pidfile);
-        goto error;
+        /* pidfile exists but it isn't locked by anyone.  We need to delete it
+         * so that a new pidfile can go in its place.  But just calling
+         * unlink(pidfile) makes a nasty race: what if someone else unlinks it
+         * before we do and then replaces it by a valid pidfile?  We'd unlink
+         * their valid pidfile.  We do a little dance to avoid the race, by
+         * locking the invalid pidfile.  Only one process can have the invalid
+         * pidfile locked, and only that process has the right to unlink it. */
+        if (!delete_if_stale) {
+            error = ESRCH;
+            VLOG_WARN("%s: pid file is stale", pidfile);
+            goto error;
+        }
+
+        /* Get the lock. */
+        error = lock_pidfile(file, F_SETLK);
+        if (error) {
+            /* We lost a race with someone else doing the same thing. */
+            VLOG_WARN("%s: lost race to lock pidfile", pidfile);
+            goto error;
+        }
+
+        /* Is the file we have locked still named 'pidfile'? */
+        if (stat(pidfile, &s) || fstat(fileno(file), &s2)
+            || s.st_ino != s2.st_ino || s.st_dev != s2.st_dev) {
+            /* No.  We lost a race with someone else who got the lock before
+             * us, deleted the pidfile, and closed it (releasing the lock). */
+            error = EALREADY;
+            VLOG_WARN("%s: lost race to delete pidfile", pidfile);
+            goto error;
+        }
+
+        /* We won the right to delete the stale pidfile. */
+        if (unlink(pidfile)) {
+            error = errno;
+            VLOG_WARN("%s: failed to delete stale pidfile (%s)",
+                      pidfile, strerror(error));
+            goto error;
+        }
+        VLOG_DBG("%s: deleted stale pidfile", pidfile);
+        fclose(file);
+        return 0;
     }
 
     if (!fgets(line, sizeof line, file)) {
@@ -548,9 +600,12 @@ read_pidfile__(const char *pidfile, bool must_exist)
     }
 
     if (lck.l_pid != strtoul(line, NULL, 10)) {
+        /* The process that has the pidfile locked is not the process that
+         * created it.  It must be stale, with the process that has it locked
+         * preparing to delete it. */
         error = ESRCH;
-        VLOG_WARN("l_pid (%ld) != %s pid (%s)",
-                   (long int) lck.l_pid, pidfile, line);
+        VLOG_WARN("%s: stale pidfile for pid %s being deleted by pid %ld",
+                  pidfile, line, (long int) lck.l_pid);
         goto error;
     }
 
@@ -569,15 +624,19 @@ error:
 pid_t
 read_pidfile(const char *pidfile)
 {
-    return read_pidfile__(pidfile, true);
+    return read_pidfile__(pidfile, false);
 }
 
-
-/* Opens and reads a PID from 'pidfile', if it exists.  Returns 0 if 'pidfile'
- * doesn't exist, the positive PID if successful, otherwise a negative errno
- * value. */
-pid_t
-read_pidfile_if_exists(const char *pidfile)
+/* Checks whether a process with the given 'pidfile' is already running and,
+ * if so, aborts.  If 'pidfile' is stale, deletes it. */
+static void
+check_already_running(void)
 {
-    return read_pidfile__(pidfile, false);
+    long int pid = read_pidfile__(pidfile, true);
+    if (pid > 0) {
+        VLOG_FATAL("%s: already running as pid %ld, aborting", pidfile, pid);
+    } else if (pid < 0) {
+        VLOG_FATAL("%s: pidfile check failed (%s), aborting",
+                   pidfile, strerror(-pid));
+    }
 }

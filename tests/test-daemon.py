@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import getopt
+import logging
 import signal
 import sys
 import time
@@ -24,6 +25,7 @@ def handler(signum, frame):
     raise Exception("Signal handler called with %d" % signum)
 
 def main(argv):
+    logging.basicConfig(level=logging.DEBUG)
 
     signal.signal(signal.SIGHUP, handler)
 
