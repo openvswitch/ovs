@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "bitmap.h"
 #include "dpif-provider.h"
 #include "netdev.h"
 #include "netdev-vport.h"
@@ -51,6 +52,10 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
+
+enum { LRU_MAX_PORTS = 1024 };
+enum { LRU_MASK = LRU_MAX_PORTS - 1};
+BUILD_ASSERT_DECL(IS_POW2(LRU_MAX_PORTS));
 
 struct dpif_linux_dp {
     /* Generic Netlink header. */
@@ -128,6 +133,12 @@ struct dpif_linux {
     struct sset changed_ports;  /* Ports that have changed. */
     struct rtnetlink_notifier port_notifier;
     bool change_error;
+
+    /* Queue of unused ports. */
+    unsigned long *lru_bitmap;
+    uint16_t lru_ports[LRU_MAX_PORTS];
+    size_t lru_head;
+    size_t lru_tail;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -156,6 +167,29 @@ dpif_linux_cast(const struct dpif *dpif)
 {
     dpif_assert_class(dpif, &dpif_linux_class);
     return CONTAINER_OF(dpif, struct dpif_linux, dpif);
+}
+
+static void
+dpif_linux_push_port(struct dpif_linux *dp, uint16_t port)
+{
+    if (port < LRU_MAX_PORTS && !bitmap_is_set(dp->lru_bitmap, port)) {
+        bitmap_set1(dp->lru_bitmap, port);
+        dp->lru_ports[dp->lru_head++ & LRU_MASK] = port;
+    }
+}
+
+static uint32_t
+dpif_linux_pop_port(struct dpif_linux *dp)
+{
+    uint16_t port;
+
+    if (dp->lru_head == dp->lru_tail) {
+        return UINT32_MAX;
+    }
+
+    port = dp->lru_ports[dp->lru_tail++ & LRU_MASK];
+    bitmap_set0(dp->lru_bitmap, port);
+    return port;
 }
 
 static int
@@ -235,6 +269,12 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif->change_error = false;
     *dpifp = &dpif->dpif;
 
+    dpif->lru_head = dpif->lru_tail = 0;
+    dpif->lru_bitmap = bitmap_allocate(LRU_MAX_PORTS);
+    bitmap_set1(dpif->lru_bitmap, ODPP_LOCAL);
+    for (i = 1; i < LRU_MAX_PORTS; i++) {
+        dpif_linux_push_port(dpif, i);
+    }
     return 0;
 
 error_free:
@@ -248,6 +288,7 @@ dpif_linux_close(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     rtnetlink_link_notifier_unregister(&dpif->port_notifier);
     sset_destroy(&dpif->changed_ports);
+    free(dpif->lru_bitmap);
     free(dpif);
 }
 
@@ -336,11 +377,17 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         request.options_len = options->size;
     }
 
-    error = dpif_linux_vport_transact(&request, &reply, &buf);
-    if (!error) {
-        *port_nop = reply.port_no;
+    /* Loop until we find a port that isn't used. */
+    do {
+        request.port_no = dpif_linux_pop_port(dpif);
+        error = dpif_linux_vport_transact(&request, &reply, &buf);
+
+        if (!error) {
+            *port_nop = reply.port_no;
+        }
         ofpbuf_delete(buf);
-    }
+    } while (request.port_no != UINT32_MAX
+             && (error == EBUSY || error == EFBIG));
 
     return error;
 }
@@ -350,12 +397,18 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_vport vport;
+    int error;
 
     dpif_linux_vport_init(&vport);
     vport.cmd = ODP_VPORT_CMD_DEL;
     vport.dp_ifindex = dpif->dp_ifindex;
     vport.port_no = port_no;
-    return dpif_linux_vport_transact(&vport, NULL, NULL);
+    error = dpif_linux_vport_transact(&vport, NULL, NULL);
+
+    if (!error) {
+        dpif_linux_push_port(dpif, port_no);
+    }
+    return error;
 }
 
 static int
