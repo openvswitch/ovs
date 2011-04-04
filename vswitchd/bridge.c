@@ -161,7 +161,7 @@ struct port {
 };
 
 struct bridge {
-    struct list node;           /* Node in global list of bridges. */
+    struct hmap_node node;      /* In 'all_bridges'. */
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
     uint8_t ea[ETH_ADDR_LEN];   /* Bridge Ethernet Address. */
@@ -191,8 +191,8 @@ struct bridge {
     struct ovsrec_interface *synth_local_ifacep;
 };
 
-/* List of all bridges. */
-static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
+/* All bridges, indexed by name. */
+static struct hmap all_bridges = HMAP_INITIALIZER(&all_bridges);
 
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
@@ -357,7 +357,7 @@ bridge_exit(void)
 {
     struct bridge *br, *next_br;
 
-    LIST_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
+    HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
         bridge_destroy(br);
     }
     ovsdb_idl_destroy(idl);
@@ -476,10 +476,10 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
 static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
-    struct shash old_br, new_br;
     struct shash_node *node;
     struct bridge *br, *next;
     struct sockaddr_in *managers;
+    struct shash new_br;
     size_t n_managers;
     size_t i;
     int sflow_bridge_number;
@@ -489,11 +489,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     collect_in_band_managers(ovs_cfg, &managers, &n_managers);
 
     /* Collect old and new bridges. */
-    shash_init(&old_br);
     shash_init(&new_br);
-    LIST_FOR_EACH (br, node, &all_bridges) {
-        shash_add(&old_br, br->name, br);
-    }
     for (i = 0; i < ovs_cfg->n_bridges; i++) {
         const struct ovsrec_bridge *br_cfg = ovs_cfg->bridges[i];
         if (!shash_add_once(&new_br, br_cfg->name, br_cfg)) {
@@ -502,18 +498,15 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
 
     /* Get rid of deleted bridges and add new bridges. */
-    LIST_FOR_EACH_SAFE (br, next, node, &all_bridges) {
-        struct ovsrec_bridge *br_cfg = shash_find_data(&new_br, br->name);
-        if (br_cfg) {
-            br->cfg = br_cfg;
-        } else {
+    HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
+        br->cfg = shash_find_data(&new_br, br->name);
+        if (!br->cfg) {
             bridge_destroy(br);
         }
     }
     SHASH_FOR_EACH (node, &new_br) {
-        const char *br_name = node->name;
         const struct ovsrec_bridge *br_cfg = node->data;
-        br = shash_find_data(&old_br, br_name);
+        struct bridge *br = bridge_lookup(node->name);
         if (br) {
             /* If the bridge datapath type has changed, we need to tear it
              * down and recreate. */
@@ -525,11 +518,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             bridge_create(br_cfg);
         }
     }
-    shash_destroy(&old_br);
     shash_destroy(&new_br);
 
     /* Reconfigure all bridges. */
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         bridge_reconfigure_one(br);
     }
 
@@ -538,7 +530,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * The kernel will reject any attempt to add a given port to a datapath if
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions. */
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct ofproto_port ofproto_port;
         struct ofproto_port_dump dump;
         struct shash want_ifaces;
@@ -557,7 +549,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         }
         shash_destroy(&want_ifaces);
     }
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct shash cur_ifaces, want_ifaces;
         struct ofproto_port ofproto_port;
         struct ofproto_port_dump dump;
@@ -682,7 +674,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_destroy(&cur_ifaces);
     }
     sflow_bridge_number = 0;
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         uint8_t ea[ETH_ADDR_LEN];
         uint64_t dpid;
         struct iface *local_iface;
@@ -853,7 +845,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
          * the datapath ID before the controller. */
         bridge_reconfigure_remotes(br, managers, n_managers);
     }
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct port *port;
 
         br->has_bonded_ports = false;
@@ -875,7 +867,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     /* Some reconfiguration operations require the bridge to have been run at
      * least once.  */
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct iface *iface;
 
         bridge_run_one(br);
@@ -1351,7 +1343,7 @@ bridge_run(void)
 
     /* Let each bridge do the work that it needs to do. */
     datapath_destroyed = false;
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         int error = bridge_run_one(br);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1403,7 +1395,7 @@ bridge_run(void)
             struct ovsdb_idl_txn *txn;
 
             txn = ovsdb_idl_txn_create(idl);
-            LIST_FOR_EACH (br, node, &all_bridges) {
+            HMAP_FOR_EACH (br, node, &all_bridges) {
                 struct port *port;
 
                 HMAP_FOR_EACH (port, hmap_node, &br->ports) {
@@ -1429,7 +1421,7 @@ bridge_run(void)
         bool changed = false;
 
         txn = ovsdb_idl_txn_create(idl);
-        LIST_FOR_EACH (br, node, &all_bridges) {
+        HMAP_FOR_EACH (br, node, &all_bridges) {
             struct port *port;
 
             HMAP_FOR_EACH (port, hmap_node, &br->ports) {
@@ -1456,7 +1448,7 @@ bridge_wait(void)
 {
     struct bridge *br;
 
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct port *port;
 
         ofproto_wait(br->ofproto);
@@ -1658,7 +1650,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     br->flush = false;
 
-    list_push_back(&all_bridges, &br->node);
+    hmap_insert(&all_bridges, &br->node, hash_string(br->name, 0));
 
     VLOG_INFO("bridge %s: created", br->name);
 
@@ -1678,7 +1670,7 @@ bridge_destroy(struct bridge *br)
         for (i = 0; i < MAX_MIRRORS; i++) {
             mirror_destroy(br->mirrors[i]);
         }
-        list_remove(&br->node);
+        hmap_remove(&all_bridges, &br->node);
         ofproto_destroy_and_delete(br->ofproto);
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
@@ -1695,7 +1687,7 @@ bridge_lookup(const char *name)
 {
     struct bridge *br;
 
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH_WITH_HASH (br, node, hash_string(name, 0), &all_bridges) {
         if (!strcmp(br->name, name)) {
             return br;
         }
@@ -1741,7 +1733,7 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn,
         }
         ofproto_reconnect_controllers(br->ofproto);
     } else {
-        LIST_FOR_EACH (br, node, &all_bridges) {
+        HMAP_FOR_EACH (br, node, &all_bridges) {
             ofproto_reconnect_controllers(br->ofproto);
         }
     }
@@ -3286,7 +3278,7 @@ iface_find(const char *name)
 {
     const struct bridge *br;
 
-    LIST_FOR_EACH (br, node, &all_bridges) {
+    HMAP_FOR_EACH (br, node, &all_bridges) {
         struct iface *iface = iface_lookup(br, name);
 
         if (iface) {
