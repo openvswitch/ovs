@@ -111,75 +111,80 @@ def set_monitor():
     global _monitor
     _monitor = True
 
-def _die_if_already_running():
-    """If a locked pidfile exists, issue a warning message and, unless
-    ignore_existing_pidfile() has been called, terminate the program."""
-    if _pidfile is None:
-        return
-    pid = read_pidfile_if_exists(_pidfile)
-    if pid > 0:
-        if not _overwrite_pidfile:
-            msg = "%s: already running as pid %d" % (_pidfile, pid)
-            logging.error("%s, aborting" % msg)
-            sys.stderr.write("%s\n" % msg)
-            sys.exit(1)
-        else:
-            logging.warn("%s: %s already running"
-                         % (get_pidfile(), ovs.util.PROGRAM_NAME))
+def _fatal(msg):
+    logging.error(msg)
+    sys.stderr.write("%s\n" % msg)
+    sys.exit(1)
 
 def _make_pidfile():
     """If a pidfile has been configured, creates it and stores the running
     process's pid in it.  Ensures that the pidfile will be deleted when the
     process exits."""
-    if _pidfile is not None:
-        # Create pidfile via temporary file, so that observers never see an
-        # empty pidfile or an unlocked pidfile.
-        pid = os.getpid()
-        tmpfile = "%s.tmp%d" % (_pidfile, pid)
-        ovs.fatal_signal.add_file_to_unlink(tmpfile)
+    pid = os.getpid()
 
-        try:
-            # This is global to keep Python from garbage-collecting and
-            # therefore closing our file after this function exits.  That would
-            # unlock the lock for us, and we don't want that.
-            global file
+    # Create a temporary pidfile.
+    tmpfile = "%s.tmp%d" % (_pidfile, pid)
+    ovs.fatal_signal.add_file_to_unlink(tmpfile)
+    try:
+        # This is global to keep Python from garbage-collecting and
+        # therefore closing our file after this function exits.  That would
+        # unlock the lock for us, and we don't want that.
+        global file
 
-            file = open(tmpfile, "w")
-        except IOError, e:
-            logging.error("%s: create failed: %s"
-                          % (tmpfile, os.strerror(e.errno)))
-            return
+        file = open(tmpfile, "w")
+    except IOError, e:
+        _fatal("%s: create failed (%s)" % (tmpfile, e.strerror))
 
-        try:
-            fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError, e:
-            logging.error("%s: fcntl failed: %s"
-                          % (tmpfile, os.strerror(e.errno)))
-            file.close()
-            return
+    try:
+        s = os.fstat(file.fileno())
+    except IOError, e:
+        _fatal("%s: fstat failed (%s)" % (tmpfile, e.strerror))
 
-        try:
-            file.write("%s\n" % pid)
-            file.flush()
-            ovs.fatal_signal.add_file_to_unlink(_pidfile)
-        except OSError, e:
-            logging.error("%s: write failed: %s"
-                          % (tmpfile, os.strerror(e.errno)))
-            file.close()
-            return
-            
+    try:
+        file.write("%s\n" % pid)
+        file.flush()
+    except OSError, e:
+        _fatal("%s: write failed: %s" % (tmpfile, e.strerror))
+
+    try:
+        fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError, e:
+        _fatal("%s: fcntl failed: %s" % (tmpfile, e.strerror))
+
+    # Rename or link it to the correct name.
+    if _overwrite_pidfile:
         try:
             os.rename(tmpfile, _pidfile)
         except OSError, e:
-            ovs.fatal_signal.remove_file_to_unlink(_pidfile)
-            logging.error("failed to rename \"%s\" to \"%s\": %s"
-                          % (tmpfile, _pidfile, os.strerror(e.errno)))
-            file.close()
-            return
+            _fatal("failed to rename \"%s\" to \"%s\" (%s)"
+                   % (tmpfile, _pidfile, e.strerror))
+    else:
+        while True:
+            try:
+                os.link(tmpfile, _pidfile)
+                error = 0
+            except OSError, e:
+                error = e.errno
+            if error == errno.EEXIST:
+                _check_already_running()
+            elif error != errno.EINTR:
+                break
+        if error:
+            _fatal("failed to link \"%s\" as \"%s\" (%s)"
+                   % (tmpfile, _pidfile, os.strerror(error)))
 
-        s = os.fstat(file.fileno())
-        _pidfile_dev = s.st_dev
-        _pidfile_ino = s.st_ino
+
+    # Ensure that the pidfile will get deleted on exit.
+    ovs.fatal_signal.add_file_to_unlink(_pidfile)
+
+    # Delete the temporary pidfile if it still exists.
+    if not _overwrite_pidfile:
+        error = ovs.fatal_signal.unlink_file_now(tmpfile)
+        if error:
+            _fatal("%s: unlink failed (%s)" % (tmpfile, os.strerror(error)))
+
+    _pidfile_dev = s.st_dev
+    _pidfile_ino = s.st_ino
 
 def daemonize():
     """If configured with set_pidfile() or set_detach(), creates the pid file
@@ -343,8 +348,8 @@ def daemonize_start():
             _monitor_daemon(daemon_pid)
         # Running in daemon process
     
-    _die_if_already_running()
-    _make_pidfile()
+    if _pidfile:
+        _make_pidfile()
 
 def daemonize_complete():
     """If daemonization is configured, then this function notifies the parent
@@ -366,7 +371,7 @@ Daemon options:
    --overwrite-pidfile     with --pidfile, start even if already running
 """ % (ovs.dirs.RUNDIR, ovs.util.PROGRAM_NAME))
 
-def __read_pidfile(pidfile, must_exist):
+def __read_pidfile(pidfile, delete_if_stale):
     if _pidfile_dev is not None:
         try:
             s = os.stat(pidfile)
@@ -381,31 +386,54 @@ def __read_pidfile(pidfile, must_exist):
             pass
 
     try:
-        file = open(pidfile, "r")
+        file = open(pidfile, "r+")
     except IOError, e:
-        if e.errno == errno.ENOENT and not must_exist:
+        if e.errno == errno.ENOENT and delete_if_stale:
             return 0
-        logging.warning("%s: open: %s" % (pidfile, os.strerror(e.errno)))
+        logging.warning("%s: open: %s" % (pidfile, e.strerror))
         return -e.errno
 
     # Python fcntl doesn't directly support F_GETLK so we have to just try
-    # to lock it.  If we get a conflicting lock that's "success"; otherwise
-    # the file is not locked.
+    # to lock it.
     try:
         fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        # File isn't locked if we get here, so treat that as an error.
-        logging.warning("%s: pid file is not locked" % pidfile)
-        try:
-            # As a side effect, this drops the lock.
+
+        # pidfile exists but wasn't locked by anyone.  Now we have the lock.
+        if not delete_if_stale:
             file.close()
+            logging.warning("%s: pid file is stale" % pidfile)
+            return -errno.ESRCH
+
+        # Is the file we have locked still named 'pidfile'?
+        try:
+            raced = False
+            s = os.stat(pidfile)
+            s2 = os.fstat(file.fileno())
+            if s.st_ino != s2.st_ino or s.st_dev != s2.st_dev:
+                raced = True
         except IOError:
-            pass
-        return -errno.ESRCH
-    except IOError, e:
-        if e.errno not in [errno.EACCES, errno.EAGAIN]:
-            logging.warn("%s: fcntl: %s" % (pidfile, os.strerror(e.errno)))
+            raced = True
+        if raced:
+            logging.warning("%s: lost race to delete pidfile" % pidfile)
+            return -errno.ALREADY
+
+        # We won the right to delete the stale pidfile.
+        try:
+            os.unlink(pidfile)
+        except IOError, e:
+            logging.warning("%s: failed to delete stale pidfile"
+                            % (pidfile, e.strerror))
             return -e.errno
 
+        logging.debug("%s: deleted stale pidfile" % pidfile)
+        file.close()
+        return 0
+    except IOError, e:
+        if e.errno not in [errno.EACCES, errno.EAGAIN]:
+            logging.warn("%s: fcntl: %s" % (pidfile, e.strerror))
+            return -e.errno
+
+    # Someone else has the pidfile locked.
     try:
         try:
             return int(file.readline())
@@ -424,12 +452,15 @@ def __read_pidfile(pidfile, must_exist):
 def read_pidfile(pidfile):
     """Opens and reads a PID from 'pidfile'.  Returns the positive PID if
     successful, otherwise a negative errno value."""
-    return __read_pidfile(pidfile, True)
-
-def read_pidfile_if_exists(pidfile):
-    """Opens and reads a PID from 'pidfile'.  Returns 0 if 'pidfile' does not
-    exist, the positive PID if successful, otherwise a negative errno value."""
     return __read_pidfile(pidfile, False)
+
+def _check_already_running():
+    pid = __read_pidfile(_pidfile, True)
+    if pid > 0:
+        _fatal("%s: already running as pid %d, aborting" % (_pidfile, pid))
+    elif pid < 0:
+        _fatal("%s: pidfile check failed (%s), aborting"
+               % (_pidfile, os.strerror(pid)))
 
 # XXX Python's getopt does not support options with optional arguments, so we
 # have to separate --pidfile (with no argument) from --pidfile-name (with an
