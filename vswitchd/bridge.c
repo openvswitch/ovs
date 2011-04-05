@@ -1253,7 +1253,7 @@ iface_refresh_cfm_stats(struct iface *iface)
     size_t i;
 
     mon = iface->cfg->monitor;
-    cfm = ofproto_iface_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
 
     if (!cfm || !mon) {
         return false;
@@ -1591,7 +1591,7 @@ cfm_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    cfm = ofproto_iface_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
 
     if (!cfm) {
         unixctl_command_reply(conn, 501, "CFM not enabled");
@@ -3447,7 +3447,7 @@ iface_configure_cfm(struct iface *iface)
     mon = iface->cfg->monitor;
 
     if (!mon) {
-        ofproto_iface_clear_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+        ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
         return;
     }
 
@@ -3466,8 +3466,8 @@ iface_configure_cfm(struct iface *iface)
         remote_mps[i] = mon->remote_mps[i]->mpid;
     }
 
-    ofproto_iface_set_cfm(iface->port->bridge->ofproto, iface->dp_ifidx,
-                          &cfm, remote_mps, mon->n_remote_mps);
+    ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->dp_ifidx,
+                         &cfm, remote_mps, mon->n_remote_mps);
     free(remote_mps);
 }
 

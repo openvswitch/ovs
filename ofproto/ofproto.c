@@ -593,7 +593,7 @@ ofproto_set_sflow(struct ofproto *ofproto,
 
 /* Clears the CFM configuration from 'port_no' on 'ofproto'. */
 void
-ofproto_iface_clear_cfm(struct ofproto *ofproto, uint32_t port_no)
+ofproto_port_clear_cfm(struct ofproto *ofproto, uint32_t port_no)
 {
     struct ofport *ofport = get_port(ofproto, port_no);
     if (ofport && ofport->cfm){
@@ -609,9 +609,9 @@ ofproto_iface_clear_cfm(struct ofproto *ofproto, uint32_t port_no)
  *
  * This function has no effect if 'ofproto' does not have a port 'port_no'. */
 void
-ofproto_iface_set_cfm(struct ofproto *ofproto, uint32_t port_no,
-                      const struct cfm *cfm,
-                      const uint16_t *remote_mps, size_t n_remote_mps)
+ofproto_port_set_cfm(struct ofproto *ofproto, uint32_t port_no,
+                     const struct cfm *cfm,
+                     const uint16_t *remote_mps, size_t n_remote_mps)
 {
     struct ofport *ofport;
 
@@ -646,7 +646,7 @@ ofproto_iface_set_cfm(struct ofproto *ofproto, uint32_t port_no,
  * 'port_no' or if that port does not have CFM configured.  The caller must not
  * modify or destroy the returned object. */
 const struct cfm *
-ofproto_iface_get_cfm(struct ofproto *ofproto, uint32_t port_no)
+ofproto_port_get_cfm(struct ofproto *ofproto, uint32_t port_no)
 {
     struct ofport *ofport = get_port(ofproto, port_no);
     return ofport ? ofport->cfm : NULL;

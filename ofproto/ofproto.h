@@ -166,11 +166,11 @@ int ofproto_set_netflow(struct ofproto *,
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 
 /* Configuration of individual interfaces. */
-void ofproto_iface_clear_cfm(struct ofproto *, uint32_t port_no);
-void ofproto_iface_set_cfm(struct ofproto *, uint32_t port_no,
-                           const struct cfm *,
-                           const uint16_t *remote_mps, size_t n_remote_mps);
-const struct cfm *ofproto_iface_get_cfm(struct ofproto *, uint32_t port_no);
+void ofproto_port_clear_cfm(struct ofproto *, uint32_t port_no);
+void ofproto_port_set_cfm(struct ofproto *, uint32_t port_no,
+                          const struct cfm *,
+                          const uint16_t *remote_mps, size_t n_remote_mps);
+const struct cfm *ofproto_port_get_cfm(struct ofproto *, uint32_t port_no);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
