@@ -554,7 +554,7 @@ read_pidfile__(const char *pidfile, bool delete_if_stale)
          * pidfile locked, and only that process has the right to unlink it. */
         if (!delete_if_stale) {
             error = ESRCH;
-            VLOG_WARN("%s: pid file is stale", pidfile);
+            VLOG_DBG("%s: pid file is stale", pidfile);
             goto error;
         }
 
