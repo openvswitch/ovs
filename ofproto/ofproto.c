@@ -325,6 +325,7 @@ static const struct ofhooks default_ofhooks;
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 
+static void ofproto_flush_flows__(struct ofproto *);
 static int ofproto_expire(struct ofproto *);
 static void flow_push_stats(struct ofproto *, const struct rule *,
                             struct flow *, uint64_t packets, uint64_t bytes,
@@ -690,7 +691,7 @@ ofproto_destroy(struct ofproto *p)
 
     shash_find_and_delete(&all_ofprotos, dpif_name(p->dpif));
 
-    ofproto_flush_flows(p);
+    ofproto_flush_flows__(p);
     connmgr_destroy(p->connmgr);
     classifier_destroy(&p->cls);
     hmap_destroy(&p->facets);
@@ -999,8 +1000,8 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
     }
 }
 
-void
-ofproto_flush_flows(struct ofproto *ofproto)
+static void
+ofproto_flush_flows__(struct ofproto *ofproto)
 {
     struct facet *facet, *next_facet;
     struct rule *rule, *next_rule;
@@ -1025,6 +1026,12 @@ ofproto_flush_flows(struct ofproto *ofproto)
     }
 
     dpif_flow_flush(ofproto->dpif);
+}
+
+void
+ofproto_flush_flows(struct ofproto *ofproto)
+{
+    ofproto_flush_flows__(ofproto);
     connmgr_flushed(ofproto->connmgr);
 }
 
