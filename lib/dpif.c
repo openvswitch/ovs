@@ -260,9 +260,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
 
     dp_initialize();
 
-    if (!type || *type == '\0') {
-        type = "system";
-    }
+    type = dpif_normalize_type(type);
 
     registered_class = shash_find_data(&dpif_classes, type);
     if (!registered_class) {
@@ -361,6 +359,16 @@ const char *
 dpif_base_name(const struct dpif *dpif)
 {
     return dpif->base_name;
+}
+
+/* Returns the fully spelled out name for the given datapath 'type'.
+ *
+ * Normalized type string can be compared with strcmp().  Unnormalized type
+ * string might be the same even if they have different spellings. */
+const char *
+dpif_normalize_type(const char *type)
+{
+    return type && type[0] ? type : "system";
 }
 
 /* Destroys the datapath that 'dpif' is connected to, first removing all of its

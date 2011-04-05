@@ -55,6 +55,8 @@ void dpif_close(struct dpif *);
 const char *dpif_name(const struct dpif *);
 const char *dpif_base_name(const struct dpif *);
 
+const char *dpif_normalize_type(const char *);
+
 int dpif_delete(struct dpif *);
 
 int dpif_get_dp_stats(const struct dpif *, struct odp_stats *);
