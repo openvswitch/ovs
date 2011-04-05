@@ -4793,6 +4793,7 @@ mirror_create(struct bridge *br, struct ovsrec_mirror *cfg)
     mac_learning_flush(br->ml);
 
     br->mirrors[i] = m = xzalloc(sizeof *m);
+    m->uuid = cfg->header_.uuid;
     m->bridge = br;
     m->idx = i;
     m->name = xstrdup(cfg->name);
