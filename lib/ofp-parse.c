@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "autopath.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "netdev.h"
@@ -453,6 +454,10 @@ str_to_action(char *str, struct ofpbuf *b)
             struct nx_action_multipath *nam;
             nam = ofpbuf_put_uninit(b, sizeof *nam);
             multipath_parse(nam, arg);
+        } else if (!strcasecmp(act, "autopath")) {
+            struct nx_action_autopath *naa;
+            naa = ofpbuf_put_uninit(b, sizeof *naa);
+            autopath_parse(naa, arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

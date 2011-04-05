@@ -219,6 +219,7 @@ nx_action_len(enum nx_action_subtype subtype)
     case NXAST_NOTE: return -1;
     case NXAST_SET_TUNNEL64: return sizeof(struct nx_action_set_tunnel64);
     case NXAST_MULTIPATH: return sizeof(struct nx_action_multipath);
+    case NXAST_AUTOPATH: return sizeof (struct nx_action_autopath);
     default: return -1;
     }
 }
@@ -244,6 +245,7 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         const struct nx_action_reg_move *move;
         const struct nx_action_reg_load *load;
         const struct nx_action_multipath *nam;
+        const struct nx_action_autopath *naa;
 
         switch ((enum nx_action_subtype) subtype) {
         case NXAST_RESUBMIT:
@@ -293,6 +295,15 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         case NXAST_MULTIPATH:
             nam = (const struct nx_action_multipath *) nah;
             multipath_format(nam, string);
+            return;
+
+        case NXAST_AUTOPATH:
+            naa = (const struct nx_action_autopath *)nah;
+            ds_put_format(string, "autopath(%u,", ntohl(naa->id));
+            nxm_format_field_bits(string, ntohl(naa->dst),
+                                  nxm_decode_ofs(naa->ofs_nbits),
+                                  nxm_decode_n_bits(naa->ofs_nbits));
+            ds_put_char(string, ')');
             return;
 
         case NXAST_SNAT__OBSOLETE:

@@ -2694,11 +2694,37 @@ bridge_account_checkpoint_ofhook_cb(void *br_)
     }
 }
 
+static uint16_t
+bridge_autopath_ofhook_cb(const struct flow *flow, uint32_t ofp_port,
+                          tag_type *tags, void *br_)
+{
+    struct bridge *br = br_;
+    uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
+    struct port *port = port_from_dp_ifidx(br, odp_port);
+    uint16_t ret;
+
+    if (!port) {
+        ret = ODPP_NONE;
+    } else if (list_is_short(&port->ifaces)) {
+        ret = odp_port;
+    } else {
+        struct iface *iface;
+
+        /* Autopath does not support VLAN hashing. */
+        iface = bond_choose_output_slave(port->bond, flow,
+                                         OFP_VLAN_NONE, tags);
+        ret = iface ? iface->dp_ifidx : ODPP_NONE;
+    }
+
+    return odp_port_to_ofp_port(ret);
+}
+
 static struct ofhooks bridge_ofhooks = {
     bridge_normal_ofhook_cb,
     bridge_special_ofhook_cb,
     bridge_account_flow_ofhook_cb,
     bridge_account_checkpoint_ofhook_cb,
+    bridge_autopath_ofhook_cb,
 };
 
 /* Port functions. */

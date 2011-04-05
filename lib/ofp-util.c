@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include "autopath.h"
 #include "byte-order.h"
 #include "classifier.h"
 #include "dynamic-string.h"
@@ -2013,6 +2014,14 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
             return error;
         }
         return multipath_check((const struct nx_action_multipath *) a);
+
+    case NXAST_AUTOPATH:
+        error = check_nx_action_exact_len(
+            nah, len, sizeof(struct nx_action_autopath));
+        if (error) {
+            return error;
+        }
+        return autopath_check((const struct nx_action_autopath *) a);
 
     case NXAST_SNAT__OBSOLETE:
     default:

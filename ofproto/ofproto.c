@@ -24,6 +24,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "autopath.h"
 #include "byte-order.h"
 #include "cfm.h"
 #include "classifier.h"
@@ -2222,8 +2223,11 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_set_tunnel *nast;
     const struct nx_action_set_queue *nasq;
     const struct nx_action_multipath *nam;
+    const struct nx_action_autopath *naa;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
+    const struct ofhooks *ofhooks = ctx->ofproto->ofhooks;
     struct xlate_reg_state state;
+    uint16_t autopath_port;
     ovs_be64 tun_id;
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -2283,6 +2287,15 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     case NXAST_MULTIPATH:
         nam = (const struct nx_action_multipath *) nah;
         multipath_execute(nam, &ctx->flow);
+        break;
+
+    case NXAST_AUTOPATH:
+        naa = (const struct nx_action_autopath *) nah;
+        autopath_port = (ofhooks->autopath_cb
+                         ? ofhooks->autopath_cb(&ctx->flow, ntohl(naa->id),
+                                                &ctx->tags, ctx->ofproto->aux)
+                         : OFPP_NONE);
+        autopath_execute(naa, &ctx->flow, autopath_port);
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
@@ -4413,6 +4426,7 @@ default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
 
 static const struct ofhooks default_ofhooks = {
     default_normal_ofhook_cb,
+    NULL,
     NULL,
     NULL,
     NULL

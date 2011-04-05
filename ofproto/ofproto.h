@@ -161,6 +161,9 @@ struct ofhooks {
                             size_t actions_len,
                             uint64_t n_bytes, void *aux);
     void (*account_checkpoint_cb)(void *aux);
+
+    uint16_t (*autopath_cb)(const struct flow *, uint32_t id,
+                            tag_type *, void *aux);
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
 struct tag_set *ofproto_get_revalidate_set(struct ofproto *);
