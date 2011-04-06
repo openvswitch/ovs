@@ -6,8 +6,8 @@ What is Open vSwitch?
 Open vSwitch is a multilayer software switch licensed under the open
 source Apache 2 license.  Our goal is to implement a production
 quality switch platform that supports standard management interfaces
-(e.g. NetFlow, sFlow(R), RSPAN, ERSPAN, IOS-like CLI), and opens the
-forwarding functions to programmatic extension and control.
+and opens the forwarding functions to programmatic extension and
+control.
 
 Open vSwitch is well suited to function as a virtual switch in VM
 environments.  In addition to exposing standard control and visibility
@@ -20,19 +20,20 @@ The bulk of the code is written in platform-independent C and is
 easily ported to other environments.  The current release of Open
 vSwitch supports the following features:
 
-    * Visibility into inter-VM communication via NetFlow, sFlow, SPAN,
-      and RSPAN
-    * Standard 802.1Q VLAN model with trunking
-    * Per VM policing
-    * NIC bonding with source-MAC load balancing
-    * Kernel-based forwarding
-    * Support for OpenFlow
-    * Compatibility layer for the Linux bridging code
+    * Standard 802.1Q VLAN model with trunk and access ports
+    * NIC bonding with or without LACP on upstream switch
+    * NetFlow, sFlow(R), SPAN, RSPAN, and ERSPAN for increased visibility
+    * QoS (Quality of Service) configuration, plus policing
+    * GRE, GRE over IPSEC, and CAPWAP tunneling
+    * 802.1ag connectivity fault management
+    * OpenFlow 1.0 plus numerous extensions
+    * Transactional configuration database with C and Python bindings
+    * Compatibility layer for Linux bridging code
+    * High-performance forwarding using a Linux kernel module
 
 The included Linux kernel module supports Linux 2.6.18 and up, with
-testing focused on 2.6.18 with Centos and Xen patches and version
-2.6.26 from kernel.org.  Open vSwitch also has special support for
-Citrix XenServer hosts.
+testing focused on 2.6.32 with Centos and Xen patches.  Open vSwitch
+also has special support for Citrix XenServer hosts.
 
 Open vSwitch can also operate, at a cost in performance, entirely in
 userspace, without assistance from a kernel module.  This userspace

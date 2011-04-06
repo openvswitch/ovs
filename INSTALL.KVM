@@ -3,7 +3,7 @@
 
 This document describes how to use Open vSwitch with the Kernel-based
 Virtual Machine (KVM). This document assumes that you have read and
-followed INSTALL.Linux to get Open vSwitch setup on your Linux system
+followed INSTALL.Linux to get Open vSwitch setup on your Linux system.
 
 Setup
 -----
