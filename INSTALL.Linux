@@ -54,6 +54,9 @@ INSTALL.userspace for more information.
       be compiled with IPv6 support (CONFIG_IPV6).  This allows for
       special handling (such as path MTU discovery) of IPv6 packets.
 
+      To configure HTB or HFSC quality of service with Open vSwitch,
+      you must enable the respective configuration options.
+
       To use Open vSwitch support for TAP devices, you must enable
       CONFIG_TUN.
 
@@ -67,8 +70,8 @@ INSTALL.userspace for more information.
       infrastructure.
 
 If you are working from a Git tree or snapshot (instead of from a
-distribution tarball), or if you modify the Open vSwitch build system,
-you will also need the following software:
+distribution tarball), or if you modify the Open vSwitch build system
+or the database schema, you will also need the following software:
 
     - Autoconf version 2.64 or later.
 
@@ -81,11 +84,21 @@ following:
 
     - pyuic4 from PyQt4 (http://www.riverbankcomputing.co.uk).
 
+To run the unit tests, you also need:
+
+    - Perl.  Version 5.10.1 is known to work.  Earlier versions should
+      also work.
+
 If you modify the vswitchd database schema, then the E-R diagram in
 the ovs-vswitchd.conf.db(5) manpage will be updated properly only if
 you have the following:
 
     - "dot" from graphviz (http://www.graphviz.org/).
+
+    - Perl.  Version 5.10.1 is known to work.  Earlier versions should
+      also work.
+
+    - Python 2.x, for x >= 4.
 
 Installation Requirements
 -------------------------

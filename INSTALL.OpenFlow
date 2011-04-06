@@ -58,10 +58,10 @@ OpenFlow switch.
 
       % insmod datapath/linux-2.6/openvswitch_mod.ko
 
-   This kernel module cannot be loaded if the Linux bridge module is
-   already loaded.  Thus, you may need to remove any existing bridges
-   and unload the bridge module with "rmmod bridge" before you can do
-   this.
+   If your Linux kernel is earlier than 2.6.36, this kernel module
+   cannot be loaded if the Linux bridge module is already loaded.
+   Thus, you may need to remove any existing bridges and unload the
+   bridge module with "rmmod bridge" before you can do this.
 
 3. Create a datapath instance.  The command below creates a datapath
    identified as dp0 (see ovs-dpctl(8) for more detailed usage
