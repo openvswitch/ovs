@@ -210,9 +210,9 @@
       </p>
 
       <column name="ovs_version">
-        The Open vSwitch version number, e.g. <code>1.1.0pre2</code>.
+        The Open vSwitch version number, e.g. <code>1.1.0</code>.
         If Open vSwitch was configured with a build number, then it is
-        also included, e.g. <code>1.1.0pre2+build4948</code>.
+        also included, e.g. <code>1.1.0+build6579</code>.
       </column>
 
       <column name="db_version">
