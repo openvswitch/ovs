@@ -855,8 +855,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
+    /* Some reconfiguration operations require the bridge to have been run at
+     * least once.  */
     LIST_FOR_EACH (br, node, &all_bridges) {
         struct iface *iface;
+
+        bridge_run_one(br);
+
         HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
             iface_update_cfm(iface);
         }
