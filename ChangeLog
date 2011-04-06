@@ -1,3 +1,85 @@
+v1.1.0 - 05 Apr 2011
+------------------------
+    - Ability to define policies over IPv6
+    - LACP
+    - 802.1ag CCM
+    - Support for extensible match extensions to OpenFlow
+    - QoS:
+      - Support for HFSC qdisc.
+      - Queue used by in-band control can now be configured.
+    - Kernel:
+      - Kernel<->userspace interface has been reworked and should be
+        close to a stable ABI now.
+      - "Port group" concept has been dropped.
+    - GRE over IPSEC tunnels
+    - Bonding:
+      - New active backup bonding mode.
+      - New L4 hashing support when LACP is enabled.
+      - Source MAC hash now includes VLAN field also.
+      - miimon support.
+    - Greatly improved handling of large flow tables
+    - ovs-dpctl:
+      - "show" command now prints full vport configuration.
+      - "dump-groups" command removed since kernel support for
+        port groups was dropped.
+    - ovs-vsctl:
+      - New commands for working with the new Managers table.
+      - "list" command enhanced with new formatting options and --columns
+        option.
+      - "get" command now accepts new --id option.
+      - New "find" command.
+    - ovs-ofctl:
+      - New "queue-stats" command for printing queue stats.
+      - New commands "replace-flows" and "diff-flows".
+      - Commands to add and remove flows can now read from files.
+      - New --flow-format option to enable or disable NXM.
+      - New --more option to increase OpenFlow message verbosity.
+      - Removed "tun-cookie" command, which is no longer useful.
+    - ovs-controller enhancements for testing various features.
+    - New ovs-vlan-test command for testing for Linux kernel driver VLAN
+      bugs.  New ovs-vlan-bug-workaround command for enabling and
+      disabling a workaround for these driver bugs.
+    - OpenFlow support:
+      - "Resubmit" actions now update flow statistics. 
+      - New "register" extension for use in matching and actions, via NXM.
+      - New "multipath" experimental action extension.
+      - New support for matching multicast Ethernet frames, via NXM.
+      - New extension for OpenFlow vendor error codes.
+      - New extension to set the QoS output queue without actually
+        sending to an output port.
+      - Open vSwitch now reports a single flow table, instead of
+        separate hash and wildcard tables.  This better models the
+        current implementation.
+      - New experimental "note" action.
+      - New "ofproto/trace" ovs-appctl command and associated utilities
+        to ease debugging complex flow tables.
+    - Database:
+      - Schema documentation now includes an entity-relationship diagram.
+      - The database is now garbage collected.  In most tables,
+        unreferenced rows will be deleted automatically.
+      - Many tables now include statistics updated periodically by
+        ovs-vswitchd or ovsdb-server.
+      - Every table now has an "external-ids" column for use by OVS
+        integrators.
+      - There is no default controller anymore.  Each bridge must have its
+        controller individually specified.
+      - The "fail-mode" is now a property of a Bridge instead of a Controller.
+      - New versioning and checksum features.
+      - New Managers table and manager_options column in Open_vSwitch table
+        for specifying managers.  The old "managers" column in the
+        Open_vSwitch table has been removed.
+      - Many "name" columns are now immutable.
+    - Feature removals:
+      - Dropped support for XenServer pre-5.6.100.
+      - Dropped support for Linux pre-2.6.18.
+      - Dropped controller discovery support.
+      - Dropped "ovs-ofctl status" and the OpenFlow extension that it used.
+        Statistics reporting in the database is a rough equivalent.
+      - Dropped the "corekeeper" package (now separate, at
+        http://openvswitch.org/cgi-bin/gitweb.cgi?p=corekeeper).
+    - Performance and scalability improvements
+    - Bug fixes
+
 v1.1.0pre2 - 13 Sep 2010
 ------------------------
     - Bug fixes
