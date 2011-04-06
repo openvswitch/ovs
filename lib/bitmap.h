@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,12 @@ static inline unsigned long *
 bitmap_allocate(size_t n_bits)
 {
     return xzalloc(bitmap_n_bytes(n_bits));
+}
+
+static inline unsigned long *
+bitmap_clone(const unsigned long *bitmap, size_t n_bits)
+{
+    return xmemdup(bitmap, bitmap_n_bytes(n_bits));
 }
 
 static inline void

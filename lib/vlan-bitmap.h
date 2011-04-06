@@ -37,4 +37,11 @@ vlan_bitmap_contains(const unsigned long *vlans, uint16_t vid)
     return !vlans || bitmap_is_set(vlans, vid);
 }
 
+/* Returns a new copy of 'vlans'. */
+static inline unsigned long *
+vlan_bitmap_clone(const unsigned long *vlans)
+{
+    return vlans ? bitmap_clone(vlans, 4096) : NULL;
+}
+
 #endif /* lib/vlan-bitmap.h */

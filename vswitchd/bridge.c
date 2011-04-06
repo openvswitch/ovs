@@ -3621,6 +3621,7 @@ mirror_reconfigure(struct bridge *br)
         bridge_flush(br);
         mac_learning_flush(br->ml);
     }
+    free(rspan_vlans);
 }
 
 static void

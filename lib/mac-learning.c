@@ -139,17 +139,19 @@ mac_learning_destroy(struct mac_learning *ml)
 }
 
 /* Provides a bitmap of VLANs which have learning disabled, that is, VLANs on
- * which all packets are flooded.  It takes ownership of the bitmap.  Returns
- * true if the set has changed from the previous value. */
+ * which all packets are flooded.  Returns true if the set has changed from the
+ * previous value. */
 bool
-mac_learning_set_flood_vlans(struct mac_learning *ml, unsigned long *bitmap)
+mac_learning_set_flood_vlans(struct mac_learning *ml,
+                             const unsigned long *bitmap)
 {
-    bool ret = vlan_bitmap_equal(ml->flood_vlans, bitmap);
-
-    bitmap_free(ml->flood_vlans);
-    ml->flood_vlans = bitmap;
-
-    return ret;
+    if (vlan_bitmap_equal(ml->flood_vlans, bitmap)) {
+        return false;
+    } else {
+        bitmap_free(ml->flood_vlans);
+        ml->flood_vlans = vlan_bitmap_clone(bitmap);
+        return true;
+    }
 }
 
 static bool
