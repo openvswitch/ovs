@@ -38,7 +38,23 @@ MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
 
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+/* Called with rcu_read_lock and bottom-halves disabled. */
+static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
+{
+	struct sk_buff *skb = *pskb;
+	struct vport *vport;
+
+	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
+		return RX_HANDLER_PASS;
+
+	vport = netdev_get_vport(skb->dev);
+
+	netdev_port_receive(vport, skb);
+
+	return RX_HANDLER_CONSUMED;
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
 {
