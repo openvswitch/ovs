@@ -174,11 +174,14 @@ cfm_run(struct cfm *cfm)
     if (timer_expired(&cfmi->fault_timer)) {
         bool fault;
         struct remote_mp *rmp;
+        long long int interval;
 
-        fault = now < cfmi->x_recv_time + cfm_fault_interval(cfmi);
+        interval = cfm_fault_interval(cfmi);
+        fault = now < cfmi->x_recv_time + interval;
 
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-            if (timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
+            if (rmp->recv_time < timer_enabled_at(&cfmi->fault_timer, interval)
+                || timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
                 rmp->fault = true;
             }
 
@@ -188,7 +191,7 @@ cfm_run(struct cfm *cfm)
         }
 
         cfm->fault = fault;
-        timer_set_duration(&cfmi->fault_timer, cfm_fault_interval(cfmi));
+        timer_set_duration(&cfmi->fault_timer, interval);
     }
 }
 

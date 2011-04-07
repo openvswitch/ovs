@@ -40,3 +40,16 @@ timer_wait(const struct timer *timer)
         poll_timer_wait_until(timer->t);
     }
 }
+
+/* Returns the time at which 'timer' was set with 'duration'.  Infinite timers
+ * were enabled at time LLONG_MAX.  Manually expired timers were enabled at
+ * LLONG_MIN. */
+long long int
+timer_enabled_at(const struct timer *timer, long long int duration)
+{
+    switch (timer->t) {
+    case LLONG_MAX: return LLONG_MAX;
+    case LLONG_MIN: return LLONG_MIN;
+    default: return timer->t - duration;
+    }
+}
