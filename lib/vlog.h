@@ -234,16 +234,18 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 void vlog_usage(void);
 
 /* Implementation details. */
-#define VLOG(LEVEL, ...)                            \
-    do {                                            \
-        if (THIS_MODULE->min_level >= LEVEL) {      \
-            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);  \
-        }                                           \
+#define VLOG(LEVEL, ...)                                \
+    do {                                                \
+        enum vlog_level level__ = LEVEL;                \
+        if (THIS_MODULE->min_level >= level__) {        \
+            vlog(THIS_MODULE, level__, __VA_ARGS__);    \
+        }                                               \
     } while (0)
 #define VLOG_RL(RL, LEVEL, ...)                                     \
     do {                                                            \
-        if (THIS_MODULE->min_level >= LEVEL) {                      \
-            vlog_rate_limit(THIS_MODULE, LEVEL, RL, __VA_ARGS__);   \
+        enum vlog_level level__ = LEVEL;                            \
+        if (THIS_MODULE->min_level >= level__) {                    \
+            vlog_rate_limit(THIS_MODULE, level__, RL, __VA_ARGS__); \
         }                                                           \
     } while (0)
 #define VLOG_ONCE(LEVEL, ...)                       \
