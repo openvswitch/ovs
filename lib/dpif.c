@@ -533,11 +533,14 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     } else {
         memset(port, 0, sizeof *port);
 
-        /* Log level is DBG here because all the current callers are interested
-         * in whether 'dpif' actually has a port 'devname', so that it's not an
-         * issue worth logging if it doesn't. */
-        VLOG_DBG_RL(&error_rl, "%s: failed to query port %s: %s",
-                    dpif_name(dpif), devname, strerror(error));
+        /* For ENOENT or ENODEV we use DBG level because the caller is probably
+         * interested in whether 'dpif' actually has a port 'devname', so that
+         * it's not an issue worth logging if it doesn't.  Other errors are
+         * uncommon and more likely to indicate a real problem. */
+        VLOG_RL(&error_rl,
+                error == ENOENT || error == ENODEV ? VLL_DBG : VLL_WARN,
+                "%s: failed to query port %s: %s",
+                dpif_name(dpif), devname, strerror(error));
     }
     return error;
 }
