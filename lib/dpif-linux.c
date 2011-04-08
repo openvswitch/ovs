@@ -1072,7 +1072,7 @@ dpif_linux_is_internal_device(const char *name)
     error = dpif_linux_vport_get(name, &reply, &buf);
     if (!error) {
         ofpbuf_delete(buf);
-    } else if (error != ENODEV) {
+    } else if (error != ENODEV && error != ENOENT) {
         VLOG_WARN_RL(&error_rl, "%s: vport query failed (%s)",
                      name, strerror(error));
     }
