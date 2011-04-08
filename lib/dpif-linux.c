@@ -1254,6 +1254,15 @@ dpif_linux_vport_transact(const struct dpif_linux_vport *request,
 
     assert((reply != NULL) == (bufp != NULL));
 
+    error = dpif_linux_init();
+    if (error) {
+        if (reply) {
+            *bufp = NULL;
+            dpif_linux_vport_init(reply);
+        }
+        return error;
+    }
+
     request_buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(request, request_buf);
     error = nl_sock_transact(genl_sock, request_buf, bufp);
