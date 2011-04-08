@@ -829,36 +829,49 @@ netdev_linux_drain(struct netdev *netdev_)
 static int
 netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
 {
-    struct sockaddr_ll sll;
-    struct msghdr msg;
-    struct iovec iov;
-    int ifindex;
-    int error;
-
-    error = get_ifindex(netdev_, &ifindex);
-    if (error) {
-        return error;
-    }
-
-    /* We don't bother setting most fields in sockaddr_ll because the kernel
-     * ignores them for SOCK_RAW. */
-    memset(&sll, 0, sizeof sll);
-    sll.sll_family = AF_PACKET;
-    sll.sll_ifindex = ifindex;
-
-    iov.iov_base = (void *) data;
-    iov.iov_len = size;
-
-    msg.msg_name = &sll;
-    msg.msg_namelen = sizeof sll;
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
-
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     for (;;) {
-        ssize_t retval = sendmsg(af_packet_sock, &msg, 0);
+        ssize_t retval;
+
+        if (netdev->fd < 0) {
+            /* Use our AF_PACKET socket to send to this device. */
+            struct sockaddr_ll sll;
+            struct msghdr msg;
+            struct iovec iov;
+            int ifindex;
+            int error;
+
+            error = get_ifindex(netdev_, &ifindex);
+            if (error) {
+                return error;
+            }
+
+            /* We don't bother setting most fields in sockaddr_ll because the
+             * kernel ignores them for SOCK_RAW. */
+            memset(&sll, 0, sizeof sll);
+            sll.sll_family = AF_PACKET;
+            sll.sll_ifindex = ifindex;
+
+            iov.iov_base = (void *) data;
+            iov.iov_len = size;
+
+            msg.msg_name = &sll;
+            msg.msg_namelen = sizeof sll;
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1;
+            msg.msg_control = NULL;
+            msg.msg_controllen = 0;
+            msg.msg_flags = 0;
+
+            retval = sendmsg(af_packet_sock, &msg, 0);
+        } else {
+            /* Use the netdev's own fd to send to this device.  This is
+             * essential for tap devices, because packets sent to a tap device
+             * with an AF_PACKET socket will loop back to be *received* again
+             * on the tap device. */
+            retval = write(netdev->fd, data, size);
+        }
+
         if (retval < 0) {
             /* The Linux AF_PACKET implementation never blocks waiting for room
              * for packets, instead returning ENOBUFS.  Translate this into
