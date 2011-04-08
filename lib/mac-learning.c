@@ -134,8 +134,8 @@ mac_learning_destroy(struct mac_learning *ml)
 {
     if (ml) {
         bitmap_free(ml->flood_vlans);
+        free(ml);
     }
-    free(ml);
 }
 
 /* Provides a bitmap of VLANs which have learning disabled, that is, VLANs on
