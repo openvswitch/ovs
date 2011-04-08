@@ -55,6 +55,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/hash.h \
 	lib/hmap.c \
 	lib/hmap.h \
+	lib/hmapx.c \
+	lib/hmapx.h \
 	lib/json.c \
 	lib/json.h \
 	lib/jsonrpc.c \
