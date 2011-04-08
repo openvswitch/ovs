@@ -73,6 +73,7 @@
 #include "xenserver.h"
 #include "vlog.h"
 #include "sflow_api.h"
+#include "vlan-bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(bridge);
 
@@ -2225,8 +2226,7 @@ dst_is_duplicate(const struct dst_set *set, const struct dst *test)
 static bool
 port_trunks_vlan(const struct port *port, uint16_t vlan)
 {
-    return (port->vlan < 0
-            && (!port->trunks || bitmap_is_set(port->trunks, vlan)));
+    return (port->vlan < 0 || vlan_bitmap_contains(port->trunks, vlan));
 }
 
 static bool
@@ -2980,35 +2980,16 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     /* Get trunked VLANs. */
     trunks = NULL;
     if (vlan < 0 && cfg->n_trunks) {
-        size_t n_errors;
-
-        trunks = bitmap_allocate(4096);
-        n_errors = 0;
-        for (i = 0; i < cfg->n_trunks; i++) {
-            int trunk = cfg->trunks[i];
-            if (trunk >= 0) {
-                bitmap_set1(trunks, trunk);
-            } else {
-                n_errors++;
-            }
-        }
-        if (n_errors) {
-            VLOG_ERR("port %s: invalid values for %zu trunk VLANs",
-                     port->name, cfg->n_trunks);
-        }
-        if (n_errors == cfg->n_trunks) {
+        trunks = vlan_bitmap_from_array(cfg->trunks, cfg->n_trunks);
+        if (!trunks) {
             VLOG_ERR("port %s: no valid trunks, trunking all VLANs",
                      port->name);
-            bitmap_free(trunks);
-            trunks = NULL;
         }
     } else if (vlan >= 0 && cfg->n_trunks) {
         VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
                  port->name);
     }
-    if (trunks == NULL
-        ? port->trunks != NULL
-        : port->trunks == NULL || !bitmap_equal(trunks, port->trunks, 4096)) {
+    if (!vlan_bitmap_equal(trunks, port->trunks)) {
         need_flush = true;
     }
     bitmap_free(port->trunks);
@@ -3633,19 +3614,8 @@ mirror_reconfigure(struct bridge *br)
     /* Update flooded vlans (for RSPAN). */
     rspan_vlans = NULL;
     if (br->cfg->n_flood_vlans) {
-        rspan_vlans = bitmap_allocate(4096);
-
-        for (i = 0; i < br->cfg->n_flood_vlans; i++) {
-            int64_t vlan = br->cfg->flood_vlans[i];
-            if (vlan >= 0 && vlan < 4096) {
-                bitmap_set1(rspan_vlans, vlan);
-                VLOG_INFO("bridge %s: disabling learning on vlan %"PRId64,
-                          br->name, vlan);
-            } else {
-                VLOG_ERR("bridge %s: invalid value %"PRId64 "for flood VLAN",
-                         br->name, vlan);
-            }
-        }
+        rspan_vlans = vlan_bitmap_from_array(br->cfg->flood_vlans,
+                                             br->cfg->n_flood_vlans);
     }
     if (mac_learning_set_flood_vlans(br->ml, rspan_vlans)) {
         bridge_flush(br);

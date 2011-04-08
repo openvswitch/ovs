@@ -29,6 +29,7 @@
 #include "tag.h"
 #include "timeval.h"
 #include "util.h"
+#include "vlan-bitmap.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(mac_learning);
@@ -143,10 +144,7 @@ mac_learning_destroy(struct mac_learning *ml)
 bool
 mac_learning_set_flood_vlans(struct mac_learning *ml, unsigned long *bitmap)
 {
-    bool ret = (bitmap == NULL
-                ? ml->flood_vlans != NULL
-                : (ml->flood_vlans == NULL
-                   || !bitmap_equal(bitmap, ml->flood_vlans, 4096)));
+    bool ret = vlan_bitmap_equal(ml->flood_vlans, bitmap);
 
     bitmap_free(ml->flood_vlans);
     ml->flood_vlans = bitmap;
@@ -157,7 +155,7 @@ mac_learning_set_flood_vlans(struct mac_learning *ml, unsigned long *bitmap)
 static bool
 is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
 {
-    return !(ml->flood_vlans && bitmap_is_set(ml->flood_vlans, vlan));
+    return vlan_bitmap_contains(ml->flood_vlans, vlan);
 }
 
 /* Returns true if 'src_mac' may be learned on 'vlan' for 'ml'.

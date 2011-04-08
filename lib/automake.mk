@@ -169,6 +169,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vconn-stream.c \
 	lib/vconn.c \
 	lib/vconn.h \
+	lib/vlan-bitmap.c \
+	lib/vlan-bitmap.h \
 	lib/vlog.c \
 	lib/vlog.h
 nodist_lib_libopenvswitch_a_SOURCES = \
