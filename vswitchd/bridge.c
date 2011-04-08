@@ -1923,15 +1923,7 @@ bridge_reconfigure_one(struct bridge *br)
                 || !strcmp(br->cfg->fail_mode, "standalone")
                     ? OFPROTO_FAIL_STANDALONE
                     : OFPROTO_FAIL_SECURE;
-    if (ofproto_get_fail_mode(br->ofproto) != fail_mode
-        && !ofproto_has_primary_controller(br->ofproto)) {
-        ofproto_flush_flows(br->ofproto);
-    }
     ofproto_set_fail_mode(br->ofproto, fail_mode);
-
-    /* Delete all flows if we're switching from connected to standalone or vice
-     * versa.  (XXX Should we delete all flows if we are switching from one
-     * controller to another?) */
 
     /* Configure OpenFlow controller connection snooping. */
     if (!ofproto_has_snoops(br->ofproto)) {
@@ -2033,7 +2025,6 @@ bridge_reconfigure_remotes(struct bridge *br,
 
     struct ovsrec_controller **controllers;
     size_t n_controllers;
-    bool had_primary;
 
     struct ofproto_controller *ocs;
     size_t n_ocs;
@@ -2055,7 +2046,6 @@ bridge_reconfigure_remotes(struct bridge *br,
     } else {
         ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
     }
-    had_primary = ofproto_has_primary_controller(br->ofproto);
 
     n_controllers = bridge_get_controllers(br, &controllers);
 
@@ -2089,28 +2079,6 @@ bridge_reconfigure_remotes(struct bridge *br,
     ofproto_set_controllers(br->ofproto, ocs, n_ocs);
     free(ocs[0].target); /* From bridge_ofproto_controller_for_mgmt(). */
     free(ocs);
-
-    if (had_primary != ofproto_has_primary_controller(br->ofproto)) {
-        ofproto_flush_flows(br->ofproto);
-    }
-
-    /* If there are no controllers and the bridge is in standalone
-     * mode, set up a flow that matches every packet and directs
-     * them to OFPP_NORMAL (which goes to us).  Otherwise, the
-     * switch is in secure mode and we won't pass any traffic until
-     * a controller has been defined and it tells us to do so. */
-    if (!n_controllers
-        && ofproto_get_fail_mode(br->ofproto) == OFPROTO_FAIL_STANDALONE) {
-        union ofp_action action;
-        struct cls_rule rule;
-
-        memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
-        action.output.len = htons(sizeof action);
-        action.output.port = htons(OFPP_NORMAL);
-        cls_rule_init_catchall(&rule, 0);
-        ofproto_add_flow(br->ofproto, &rule, &action, 1);
-    }
 }
 
 static void

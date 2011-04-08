@@ -134,7 +134,6 @@ const struct cfm *ofproto_iface_get_cfm(struct ofproto *, uint32_t port_no);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-bool ofproto_has_primary_controller(const struct ofproto *);
 enum ofproto_fail_mode ofproto_get_fail_mode(const struct ofproto *);
 void ofproto_get_listeners(const struct ofproto *, struct sset *);
 bool ofproto_has_snoops(const struct ofproto *);

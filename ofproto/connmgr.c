@@ -390,6 +390,7 @@ connmgr_set_controllers(struct connmgr *mgr,
                         const struct ofproto_controller *controllers,
                         size_t n_controllers)
 {
+    bool had_controllers = connmgr_has_controllers(mgr);
     struct shash new_controllers;
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice, *next_ofservice;
@@ -451,6 +452,9 @@ connmgr_set_controllers(struct connmgr *mgr,
 
     update_in_band_remotes(mgr);
     update_fail_open(mgr);
+    if (had_controllers != connmgr_has_controllers(mgr)) {
+        ofproto_flush_flows(mgr->ofproto);
+    }
 }
 
 /* Drops the connections between 'mgr' and all of its primary and secondary
@@ -1081,8 +1085,13 @@ connmgr_get_fail_mode(const struct connmgr *mgr)
 void
 connmgr_set_fail_mode(struct connmgr *mgr, enum ofproto_fail_mode fail_mode)
 {
-    mgr->fail_mode = fail_mode;
-    update_fail_open(mgr);
+    if (mgr->fail_mode != fail_mode) {
+        mgr->fail_mode = fail_mode;
+        update_fail_open(mgr);
+        if (!connmgr_has_controllers(mgr)) {
+            ofproto_flush_flows(mgr->ofproto);
+        }
+    }
 }
 
 /* Fail-open implementation. */
@@ -1264,6 +1273,23 @@ connmgr_flushed(struct connmgr *mgr)
     }
     if (mgr->fail_open) {
         fail_open_flushed(mgr->fail_open);
+    }
+
+    /* If there are no controllers and we're in standalone mode, set up a flow
+     * that matches every packet and directs them to OFPP_NORMAL (which goes to
+     * us).  Otherwise, the switch is in secure mode and we won't pass any
+     * traffic until a controller has been defined and it tells us to do so. */
+    if (!connmgr_has_controllers(mgr)
+        && mgr->fail_mode == OFPROTO_FAIL_STANDALONE) {
+        union ofp_action action;
+        struct cls_rule rule;
+
+        memset(&action, 0, sizeof action);
+        action.type = htons(OFPAT_OUTPUT);
+        action.output.len = htons(sizeof action);
+        action.output.port = htons(OFPP_NORMAL);
+        cls_rule_init_catchall(&rule, 0);
+        ofproto_add_flow(mgr->ofproto, &rule, &action, 1);
     }
 }
 

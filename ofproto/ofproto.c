@@ -657,12 +657,6 @@ ofproto_get_datapath_id(const struct ofproto *ofproto)
     return ofproto->datapath_id;
 }
 
-bool
-ofproto_has_primary_controller(const struct ofproto *ofproto)
-{
-    return connmgr_has_controllers(ofproto->connmgr);
-}
-
 enum ofproto_fail_mode
 ofproto_get_fail_mode(const struct ofproto *p)
 {
