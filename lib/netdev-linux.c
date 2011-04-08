@@ -1144,9 +1144,9 @@ netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
 static void
 swap_uint64(uint64_t *a, uint64_t *b)
 {
-    *a ^= *b;
-    *b ^= *a;
-    *a ^= *b;
+    uint64_t tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
 
 /* Retrieves current device stats for 'netdev'. */
