@@ -277,6 +277,9 @@ static void send_packet_in(struct ofproto *, struct dpif_upcall *,
                            const struct flow *, bool clone);
 
 struct ofproto {
+    char *name;                 /* Datapath name. */
+    struct hmap_node hmap_node; /* In global 'all_ofprotos' hmap. */
+
     /* Settings. */
     uint64_t datapath_id;       /* Datapath ID. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
@@ -318,7 +321,7 @@ struct ofproto {
 };
 
 /* Map from dpif name to struct ofproto, for use by unixctl commands. */
-static struct shash all_ofprotos = SHASH_INITIALIZER(&all_ofprotos);
+static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -387,6 +390,8 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     /* Initialize settings. */
     p = xzalloc(sizeof *p);
+    p->name = xstrdup(dpif_name(dpif));
+    hmap_insert(&all_ofprotos, &p->hmap_node, hash_string(p->name, 0));
     p->fallback_dpid = pick_fallback_dpid();
     p->datapath_id = p->fallback_dpid;
     p->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
@@ -429,8 +434,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
     VLOG_INFO("using datapath ID %016"PRIx64, p->datapath_id);
-
-    shash_add_once(&all_ofprotos, dpif_name(p->dpif), p);
 
     /* Initialize OpenFlow connections. */
     p->connmgr = connmgr_create(p, datapath, local_name);
@@ -618,7 +621,7 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint32_t port_no,
     ofport = get_port(ofproto, port_no);
     if (!ofport) {
         VLOG_WARN("%s: cannot configure CFM on nonexistent port %"PRIu32,
-                  dpif_name(ofproto->dpif), port_no);
+                  ofproto->name, port_no);
         return;
     }
 
@@ -634,7 +637,7 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint32_t port_no,
 
     if (!cfm_configure(ofport->cfm)) {
         VLOG_WARN("%s: CFM configuration on port %"PRIu32" (%s) failed",
-                  dpif_name(ofproto->dpif), port_no,
+                  ofproto->name, port_no,
                   netdev_get_name(ofport->netdev));
         cfm_destroy(ofport->cfm);
         ofport->cfm = NULL;
@@ -685,7 +688,7 @@ ofproto_destroy__(struct ofproto *p, bool delete)
         return;
     }
 
-    shash_find_and_delete(&all_ofprotos, dpif_name(p->dpif));
+    hmap_remove(&all_ofprotos, &p->hmap_node);
 
     ofproto_flush_flows__(p);
     connmgr_destroy(p->connmgr);
@@ -696,7 +699,7 @@ ofproto_destroy__(struct ofproto *p, bool delete)
         int error = dpif_delete(p->dpif);
         if (error && error != ENOENT) {
             VLOG_ERR("bridge %s: failed to destroy (%s)",
-                     dpif_name(p->dpif), strerror(error));
+                     p->name, strerror(error));
         }
     }
     dpif_close(p->dpif);
@@ -721,6 +724,7 @@ ofproto_destroy__(struct ofproto *p, bool delete)
 
     hmap_destroy(&p->ports);
 
+    free(p->name);
     free(p);
 }
 
@@ -780,7 +784,7 @@ ofproto_run1(struct ofproto *p)
                  * spin from here on out. */
                 static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl2, "%s: datapath was destroyed externally",
-                            dpif_name(p->dpif));
+                            p->name);
                 return ENODEV;
             }
             break;
@@ -1062,7 +1066,7 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
     error = dpif_port_del(ofproto->dpif, odp_port);
     if (error) {
         VLOG_ERR("%s: failed to remove port %"PRIu16" (%s) interface (%s)",
-                 dpif_name(ofproto->dpif), odp_port, name, strerror(error));
+                 ofproto->name, odp_port, name, strerror(error));
     } else if (ofport) {
         /* 'name' is the netdev's name and update_port() is going to close the
          * netdev.  Just in case update_port() refers to 'name' after it
@@ -1109,7 +1113,7 @@ ofproto_send_packet(struct ofproto *ofproto,
 
     if (error) {
         VLOG_WARN_RL(&rl, "%s: failed to send packet on port %"PRIu32" (%s)",
-                     dpif_name(ofproto->dpif), port_no, strerror(error));
+                     ofproto->name, port_no, strerror(error));
     }
     return error;
 }
@@ -4217,8 +4221,7 @@ ofproto_dp_max_idle(const struct ofproto *ofproto)
                 ds_put_format(&s, " %d:%d", i * BUCKET_WIDTH, buckets[i]);
             }
         }
-        VLOG_INFO("%s: %s (msec:count)",
-                  dpif_name(ofproto->dpif), ds_cstr(&s));
+        VLOG_INFO("%s: %s (msec:count)", ofproto->name, ds_cstr(&s));
         ds_destroy(&s);
     }
 
@@ -4392,16 +4395,30 @@ pick_fallback_dpid(void)
     return eth_addr_to_uint64(ea);
 }
 
+static struct ofproto *
+ofproto_lookup(const char *name)
+{
+    struct ofproto *ofproto;
+
+    HMAP_FOR_EACH_WITH_HASH (ofproto, hmap_node, hash_string(name, 0),
+                             &all_ofprotos) {
+        if (!strcmp(ofproto->name, name)) {
+            return ofproto;
+        }
+    }
+    return NULL;
+}
+
 static void
 ofproto_unixctl_list(struct unixctl_conn *conn, const char *arg OVS_UNUSED,
                      void *aux OVS_UNUSED)
 {
-    const struct shash_node *node;
+    struct ofproto *ofproto;
     struct ds results;
 
     ds_init(&results);
-    SHASH_FOR_EACH (node, &all_ofprotos) {
-        ds_put_format(&results, "%s\n", node->name);
+    HMAP_FOR_EACH (ofproto, hmap_node, &all_ofprotos) {
+        ds_put_format(&results, "%s\n", ofproto->name);
     }
     unixctl_command_reply(conn, 200, ds_cstr(&results));
     ds_destroy(&results);
@@ -4488,7 +4505,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         goto exit;
     }
 
-    ofproto = shash_find_data(&all_ofprotos, dpname);
+    ofproto = ofproto_lookup(dpname);
     if (!ofproto) {
         unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
                               "for help)");
