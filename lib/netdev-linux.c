@@ -452,6 +452,7 @@ netdev_linux_init(void)
                 VLOG_ERR("failed to create packet socket: %s",
                          strerror(status));
             }
+            set_nonblocking(af_packet_sock);
         }
 
         /* Create rtnetlink socket. */
