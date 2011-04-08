@@ -3724,19 +3724,6 @@ vlan_is_mirrored(const struct mirror *m, int vlan)
     return false;
 }
 
-static bool
-port_trunks_any_mirrored_vlan(const struct mirror *m, const struct port *p)
-{
-    size_t i;
-
-    for (i = 0; i < m->n_vlans; i++) {
-        if (port_trunks_vlan(p, m->vlans[i])) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static void
 mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
 {
@@ -3821,11 +3808,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
     HMAP_FOR_EACH (port, hmap_node, &m->bridge->ports) {
-        if (sset_contains(&m->src_ports, port->name)
-            || (m->n_vlans
-                && (!port->vlan
-                    ? port_trunks_any_mirrored_vlan(m, port)
-                    : vlan_is_mirrored(m, port->vlan)))) {
+        if (sset_contains(&m->src_ports, port->name)) {
             port->src_mirrors |= mirror_bit;
         } else {
             port->src_mirrors &= ~mirror_bit;
