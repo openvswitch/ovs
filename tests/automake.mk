@@ -15,6 +15,7 @@ TESTSUITE_AT = \
 	tests/ofp-print.at \
 	tests/ovs-ofctl.at \
 	tests/multipath.at \
+	tests/autopath.at \
 	tests/vconn.at \
 	tests/file_name.at \
 	tests/aes128.at \

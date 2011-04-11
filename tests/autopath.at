@@ -1,0 +1,35 @@
+AT_BANNER([autopath link selection])
+
+AT_SETUP([autopath basic])
+AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(1, NXM_NX_REG0[[]])'], [0],
+  [OFPT_FLOW_MOD (xid=0x1): ADD actions=autopath(1,NXM_NX_REG0[[]])
+], [ignore])
+AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(2, NXM_NX_REG0[[2..30]])'], [0],
+  [OFPT_FLOW_MOD (xid=0x1): ADD actions=autopath(2,NXM_NX_REG0[[2..30]])
+], [ignore])
+AT_CLEANUP
+
+AT_SETUP([autopath action missing argument])
+AT_CHECK([ovs-ofctl parse-flow actions=autopath], [1], [],
+  [ovs-ofctl: : not enough arguments to autopath action
+])
+AT_CLEANUP
+
+AT_SETUP([autopath action bad port])
+AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(bad, NXM_NX_REG0[[]])'], [1], [],
+  [ovs-ofctl: bad, NXM_NX_REG0[[]]: autopath id 0 is not in valid range 1 to 4294967295
+])
+AT_CLEANUP
+
+AT_SETUP([autopath action bad destination])
+AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(1, NXM_OF_VLAN_TCI[[]])'], [1], [],
+  [ovs-ofctl: 1, NXM_OF_VLAN_TCI[[]]: destination field must be a register
+])
+AT_CLEANUP
+
+AT_SETUP([autopath action destination too narrow])
+AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(1,NXM_NX_REG0[[0..7]])'], [1], [],
+  [ovs-ofctl: 1,NXM_NX_REG0[[0..7]]: 8-bit destination field has 256 possible values, less than required 65536
+])
+AT_CLEANUP
+
