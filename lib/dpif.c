@@ -200,8 +200,10 @@ dp_enumerate_names(const char *type, struct sset *names)
     return error;
 }
 
-/* Parses 'datapath name', which is of the form type@name into its
- * component pieces.  'name' and 'type' must be freed by the caller. */
+/* Parses 'datapath_name_', which is of the form [type@]name into its
+ * component pieces.  'name' and 'type' must be freed by the caller.
+ *
+ * The returned 'type' is normalized, as if by dpif_normalize_type(). */
 void
 dp_parse_name(const char *datapath_name_, char **name, char **type)
 {
@@ -212,10 +214,10 @@ dp_parse_name(const char *datapath_name_, char **name, char **type)
     if (separator) {
         *separator = '\0';
         *type = datapath_name;
-        *name = xstrdup(separator + 1);
+        *name = xstrdup(dpif_normalize_type(separator + 1));
     } else {
         *name = datapath_name;
-        *type = NULL;
+        *type = xstrdup(dpif_normalize_type(NULL));
     }
 }
 
