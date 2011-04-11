@@ -15,6 +15,7 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/fail-open.h \
 	ofproto/in-band.c \
 	ofproto/in-band.h \
+	ofproto/names.c \
 	ofproto/netflow.c \
 	ofproto/netflow.h \
 	ofproto/ofproto.c \

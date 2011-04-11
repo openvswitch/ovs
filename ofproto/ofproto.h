@@ -93,6 +93,8 @@ struct ofproto_controller {
 #define DEFAULT_SERIAL_DESC "None"
 #define DEFAULT_DP_DESC "None"
 
+void ofproto_parse_name(const char *name, char **dp_name, char **dp_type);
+
 int ofproto_create(const char *datapath, const char *datapath_type,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);

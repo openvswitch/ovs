@@ -28,7 +28,6 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dummy.h"
 #include "leak-checker.h"
 #include "list.h"
@@ -472,7 +471,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     }
 
     /* Local vconns. */
-    dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
+    ofproto_parse_name(argv[0], &s->dp_name, &s->dp_type);
 
     /* Figure out controller names. */
     s->run_forever = false;
