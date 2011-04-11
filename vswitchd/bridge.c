@@ -1696,9 +1696,13 @@ bridge_destroy(struct bridge *br)
     if (br) {
         struct port *port, *next;
         int error;
+        int i;
 
         HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
             port_destroy(port);
+        }
+        for (i = 0; i < MAX_MIRRORS; i++) {
+            mirror_destroy(br->mirrors[i]);
         }
         list_remove(&br->node);
         ofproto_destroy(br->ofproto);
