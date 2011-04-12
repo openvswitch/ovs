@@ -1397,12 +1397,16 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         if (row->old == row->new) {
             continue;
         } else if (!row->new) {
-            struct json *op = json_object_create();
-            json_object_put_string(op, "op", "delete");
-            json_object_put_string(op, "table", class->name);
-            json_object_put(op, "where", where_uuid_equals(&row->uuid));
-            json_array_add(operations, op);
-            any_updates = true;
+            if (class->is_root) {
+                struct json *op = json_object_create();
+                json_object_put_string(op, "op", "delete");
+                json_object_put_string(op, "table", class->name);
+                json_object_put(op, "where", where_uuid_equals(&row->uuid));
+                json_array_add(operations, op);
+                any_updates = true;
+            } else {
+                /* Let ovsdb-server decide whether to really delete it. */
+            }
         } else {
             struct json *row_json;
             struct json *op;
