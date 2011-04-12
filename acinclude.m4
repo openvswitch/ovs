@@ -14,6 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl OVS_ENABLE_WERROR
+AC_DEFUN([OVS_ENABLE_WERROR],
+  [AC_ARG_ENABLE(
+     [Werror],
+     [AC_HELP_STRING([--enable-Werror], [Add -Werror to CFLAGS])],
+     [], [enable_Werror=no])
+   AC_CONFIG_COMMANDS_PRE(
+     [if test "X$enable_Werror" = Xyes; then
+        CFLAGS="$CFLAGS -Werror"
+      fi])])
+
 dnl OVS_CHECK_LINUX26
 dnl
 dnl Configure linux kernel source tree 

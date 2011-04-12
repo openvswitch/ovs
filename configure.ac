@@ -84,6 +84,7 @@ OVS_ENABLE_OPTION([-Wmissing-field-initializers])
 OVS_ENABLE_OPTION([-Wno-override-init])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused-parameter], [HAVE_WNO_UNUSED_PARAMETER])
+OVS_ENABLE_WERROR
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
