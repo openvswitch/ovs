@@ -231,7 +231,7 @@ if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
     printf "\nYou MUST reboot the server NOW to complete the change to\n"
     printf "Open vSwitch.  Attempts to modify networking on the server\n"
     printf "or any hosted VM will fail until after the reboot and could\n"
-    printf "leave the server in an state requiring manual recovery.\n\n"
+    printf "leave the server in a state requiring manual recovery.\n\n"
 else
 
     mode=$(cat /etc/xensource/network.conf)
