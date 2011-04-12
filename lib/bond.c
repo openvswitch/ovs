@@ -357,7 +357,8 @@ bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev,
         slave->aux = slave_;
         slave->delay_expires = LLONG_MAX;
         slave->up = bond_is_link_up(bond, netdev);
-        slave->enabled = slave->up;
+        slave->enabled = false;
+        bond_enable_slave(slave, slave->up, NULL);
     }
 
     slave->netdev = netdev;
@@ -383,6 +384,8 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
     if (!slave) {
         return;
     }
+
+    bond_enable_slave(slave, false, NULL);
 
     del_active = bond->active_slave == slave;
     if (bond->hash) {
@@ -1321,7 +1324,9 @@ bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
         slave->enabled = enable;
         if (!slave->enabled) {
             VLOG_WARN("interface %s: disabled", slave->name);
-            tag_set_add(tags, slave->tag);
+            if (tags) {
+                tag_set_add(tags, slave->tag);
+            }
         } else {
             VLOG_WARN("interface %s: enabled", slave->name);
             slave->tag = tag_create_random();
