@@ -39,6 +39,23 @@ function start {
         printf "openvswitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
         exit 1
     fi
+
+    if test -e /etc/xensource/network.conf; then
+        NETWORK_MODE=$(cat /etc/xensource/network.conf)
+    fi
+
+    case ${NETWORK_MODE:=openvswitch} in
+        vswitch|openvswitch)
+            ;;
+        bridge)
+            exit 0
+            ;;
+        *)
+            echo "Open vSwitch disabled (/etc/xensource/network.conf is invalid)" >&2
+            exit 0
+            ;;
+    esac
+
     source /etc/xensource-inventory
     action "Updating configuration" do_host_call
 }
