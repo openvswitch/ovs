@@ -682,23 +682,20 @@ bond_process_lacp(struct bond *bond, void *slave_, const struct ofpbuf *packet)
 
 /* Rebalancing. */
 
+static bool
+bond_is_balanced(const struct bond *bond)
+{
+    return bond->balance == BM_SLB || bond->balance == BM_TCP;
+}
+
 /* Notifies 'bond' that 'n_bytes' bytes were sent in 'flow' within 'vlan'. */
 void
 bond_account(struct bond *bond, const struct flow *flow, uint16_t vlan,
              uint64_t n_bytes)
 {
-    switch (bond->balance) {
-    case BM_AB:
-        /* Nothing to do. */
-        break;
 
-    case BM_SLB:
-    case BM_TCP:
+    if (bond_is_balanced(bond)) {
         lookup_bond_entry(bond, flow, vlan)->tx_bytes += n_bytes;
-        break;
-
-    default:
-        NOT_REACHED();
     }
 }
 
@@ -844,7 +841,7 @@ bond_rebalance(struct bond *bond, struct tag_set *tags)
     struct bond_entry *e;
     struct list bals;
 
-    if (bond->balance == BM_AB || time_msec() < bond->next_rebalance) {
+    if (!bond_is_balanced(bond) || time_msec() < bond->next_rebalance) {
         return;
     }
     bond->next_rebalance = time_msec() + bond->rebalance_interval;
@@ -1020,7 +1017,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "updelay: %d ms\n", bond->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", bond->downdelay);
 
-    if (bond->balance != BM_AB) {
+    if (bond_is_balanced(bond)) {
         ds_put_format(&ds, "next rebalance: %lld ms\n",
                       bond->next_rebalance - time_msec());
     }
@@ -1041,7 +1038,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
                           slave->delay_expires - time_msec());
         }
 
-        if (bond->balance == BM_AB) {
+        if (!bond_is_balanced(bond)) {
             continue;
         }
 
