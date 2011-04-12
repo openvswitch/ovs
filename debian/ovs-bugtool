@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 # Copyright (c) 2005, 2007 XenSource Ltd.
-# Copyright (c) 2010, Nicira Networks.
+# Copyright (c) 2010, 2011 Nicira Networks.
 
 #
 # To add new entries to the bugtool, you need to:
@@ -518,7 +518,6 @@ exclude those logs from the archive.
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show'])
         for d in dp_list():
             cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'show', d])
-            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'status', d])
             cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'dump-flows', d])
             cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', d])
         try:
