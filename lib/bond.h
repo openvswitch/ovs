@@ -32,6 +32,7 @@ struct ofpbuf;
 enum bond_mode {
     BM_TCP, /* Transport Layer Load Balance. */
     BM_SLB, /* Source Load Balance. */
+    BM_STABLE, /* Stable. */
     BM_AB   /* Active Backup. */
 };
 

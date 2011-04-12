@@ -74,6 +74,11 @@ struct bond_slave {
     struct list bal_node;       /* In bond_rebalance()'s 'bals' list. */
     struct list entries;        /* 'struct bond_entry's assigned here. */
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
+
+    /* BM_STABLE specific bonding info. */
+    size_t stb_idx;             /* Index in 'bond''s 'stb_slaves' array.
+                                   Undefined value if participating in a
+                                   BTM_STABLE bond or not enabled. */
 };
 
 /* A bond, that is, a set of network devices grouped to improve performance or
@@ -96,6 +101,12 @@ struct bond {
     int rebalance_interval;      /* Interval between rebalances, in ms. */
     long long int next_rebalance; /* Next rebalancing time. */
     bool send_learning_packets;
+
+    /* BM_STABLE specific bonding info. */
+    struct bond_slave **stb_slaves; /* Ordered list of enabled slaves. */
+    size_t n_stb_slaves;            /* Number of slaves in 'stb_slaves'. */
+    size_t len_stb_slaves;          /* Slaves allocated in 'stb_slaves'. */
+    bool stb_need_sort;             /* True if stb_slaves is not sorted. */
 
     /* LACP. */
     struct lacp *lacp;          /* LACP object. NULL if LACP is disabled. */
@@ -122,6 +133,8 @@ static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_);
 static bool bond_is_link_up(struct bond *, struct netdev *);
 static void bond_enable_slave(struct bond_slave *, bool enable,
                               struct tag_set *);
+static bool bond_stb_sort(struct bond *);
+static void bond_stb_enable_slave(struct bond_slave *);
 static void bond_link_status_update(struct bond_slave *, struct tag_set *);
 static void bond_choose_active_slave(struct bond *, struct tag_set *);
 static bool bond_is_tcp_hash(const struct bond *);
@@ -147,6 +160,8 @@ bond_mode_from_string(enum bond_mode *balance, const char *s)
         *balance = BM_TCP;
     } else if (!strcmp(s, bond_mode_to_string(BM_SLB))) {
         *balance = BM_SLB;
+    } else if (!strcmp(s, bond_mode_to_string(BM_STABLE))) {
+        *balance = BM_STABLE;
     } else if (!strcmp(s, bond_mode_to_string(BM_AB))) {
         *balance = BM_AB;
     } else {
@@ -163,6 +178,8 @@ bond_mode_to_string(enum bond_mode balance) {
         return "balance-tcp";
     case BM_SLB:
         return "balance-slb";
+    case BM_STABLE:
+        return "stable";
     case BM_AB:
         return "active-backup";
     }
@@ -322,6 +339,23 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         }
     } else {
         bond->next_fake_iface_update = LLONG_MAX;
+    }
+
+    if (bond->balance != BM_STABLE) {
+        free(bond->stb_slaves);
+        bond->stb_slaves = NULL;
+    } else if (!bond->stb_slaves) {
+        struct bond_slave *slave;
+
+        bond->n_stb_slaves = 0;
+        bond->len_stb_slaves = 0;
+        bond->stb_slaves = NULL;
+
+        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+            if (slave->enabled) {
+                bond_stb_enable_slave(slave);
+            }
+        }
     }
 
     if (bond->balance == BM_AB || !bond->hash || revalidate) {
@@ -487,7 +521,7 @@ bond_run(struct bond *bond, struct tag_set *tags)
         bond->next_fake_iface_update = time_msec() + 1000;
     }
 
-    if (is_tcp_hash != bond_is_tcp_hash(bond)) {
+    if (bond_stb_sort(bond) || is_tcp_hash != bond_is_tcp_hash(bond)) {
         struct bond_slave *slave;
 
         bond_entry_reset(bond);
@@ -1313,6 +1347,74 @@ bond_is_link_up(struct bond *bond, struct netdev *netdev)
             : netdev_get_miimon(netdev));
 }
 
+static int
+bond_stb_sort_cmp__(const void *a_, const void *b_)
+{
+    const struct bond_slave *const *ap = a_;
+    const struct bond_slave *const *bp = b_;
+    const struct bond_slave *a = *ap;
+    const struct bond_slave *b = *bp;
+    struct lacp *lacp = a->bond->lacp;
+    int a_id, b_id;
+
+    if (lacp) {
+        a_id = lacp_slave_get_port_id(lacp, a);
+        b_id = lacp_slave_get_port_id(lacp, b);
+    } else {
+        a_id = netdev_get_ifindex(a->netdev);
+        b_id = netdev_get_ifindex(b->netdev);
+    }
+
+    return (a_id == b_id ? 0 : (a_id < b_id ? -1 : 1));
+}
+
+static bool
+bond_stb_sort(struct bond *bond)
+{
+    size_t i;
+
+    if (!bond->stb_slaves || !bond->stb_need_sort) {
+        return false;
+    }
+    bond->stb_need_sort = false;
+
+    qsort(bond->stb_slaves, bond->n_stb_slaves, sizeof *bond->stb_slaves,
+          bond_stb_sort_cmp__);
+
+    for (i = 0; i < bond->n_stb_slaves; i++) {
+        bond->stb_slaves[i]->stb_idx = i;
+    }
+
+    return true;
+}
+
+static void
+bond_stb_enable_slave(struct bond_slave *slave)
+{
+    struct bond *bond = slave->bond;
+
+    if (!bond->stb_slaves) {
+        return;
+    }
+
+    bond->stb_need_sort = true;
+
+    if (slave->enabled) {
+        if (bond->len_stb_slaves <= bond->n_stb_slaves) {
+            bond->stb_slaves = x2nrealloc(bond->stb_slaves,
+                                          &bond->len_stb_slaves,
+                                          sizeof *bond->stb_slaves);
+        }
+
+        slave->stb_idx = bond->n_stb_slaves++;
+        bond->stb_slaves[slave->stb_idx] = slave;
+    } else {
+        size_t index = slave->stb_idx;
+        bond->stb_slaves[index] = bond->stb_slaves[--bond->n_stb_slaves];
+        bond->stb_slaves[index]->stb_idx = index;
+    }
+}
+
 static void
 bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
 {
@@ -1328,6 +1430,7 @@ bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
             VLOG_WARN("interface %s: enabled", slave->name);
             slave->tag = tag_create_random();
         }
+        bond_stb_enable_slave(slave);
     }
 }
 
@@ -1369,7 +1472,8 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
 static bool
 bond_is_tcp_hash(const struct bond *bond)
 {
-    return bond->balance == BM_TCP && lacp_negotiated(bond->lacp);
+    return (bond->balance == BM_TCP || bond->balance == BM_STABLE)
+        && lacp_negotiated(bond->lacp);
 }
 
 static unsigned int
@@ -1390,14 +1494,21 @@ bond_hash_tcp(const struct flow *flow, uint16_t vlan)
     return flow_hash_symmetric_l4(&hash_flow, 0);
 }
 
+static unsigned int
+bond_hash(const struct bond *bond, const struct flow *flow, uint16_t vlan)
+{
+    assert(bond->balance != BM_AB);
+
+    return (bond_is_tcp_hash(bond)
+            ? bond_hash_tcp(flow, vlan)
+            : bond_hash_src(flow->dl_src, vlan));
+}
+
 static struct bond_entry *
 lookup_bond_entry(const struct bond *bond, const struct flow *flow,
                   uint16_t vlan)
 {
-    assert(bond->balance != BM_AB);
-    return &bond->hash[(bond_is_tcp_hash(bond)
-                        ? bond_hash_tcp(flow, vlan)
-                        : bond_hash_src(flow->dl_src, vlan)) & BOND_MASK];
+    return &bond->hash[bond_hash(bond, flow, vlan) & BOND_MASK];
 }
 
 static struct bond_slave *
@@ -1409,6 +1520,14 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
     switch (bond->balance) {
     case BM_AB:
         return bond->active_slave;
+
+    case BM_STABLE:
+        if (bond->n_stb_slaves) {
+            return bond->stb_slaves[bond_hash(bond, flow, vlan)
+                % bond->n_stb_slaves];
+        } else {
+            return bond->active_slave;
+        }
 
     case BM_SLB:
     case BM_TCP:

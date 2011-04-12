@@ -516,9 +516,9 @@
       </dl>
 
       <p>
-        The following mode requires the upstream switch to support 802.3ad with
+        The following modes require the upstream switch to support 802.3ad with
         successful LACP negotiation.  If LACP negotiation fails then
-        <code>balance-slb</code> mode is used as a fallback:
+        <code>balance-slb</code> style flow hashing is used as a fallback:
       </p>
 
       <dl>
@@ -527,6 +527,21 @@
           Balances flows among slaves based on L2, L3, and L4 protocol
           information such as destination MAC address, IP address, and TCP
           port.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>stable</code></dt>
+        <dd>
+          <p>Attempts to always assign a given flow to the same slave
+            consistently.  In an effort to maintain stability, no load
+            balancing is done.  Uses a similar hashing strategy to
+            <code>balance-tcp</code>, falling back to <code>balance-slb</code>
+            style hashing when LACP negotiations are unsuccessful.</p>
+          <p>Slave selection decisions are made based on LACP port ID when LACP
+            negotiations are successful, falling back to openflow port number
+            when unsuccessful.  Thus, decisions are consistent across all
+            ovs-vswitchd instances with equivalent port IDs.</p>
         </dd>
       </dl>
 
