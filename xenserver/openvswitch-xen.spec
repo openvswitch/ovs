@@ -233,8 +233,17 @@ if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
     printf "or any hosted VM will fail until after the reboot and could\n"
     printf "leave the server in an state requiring manual recovery.\n\n"
 else
-    printf "\nTo use the new Open vSwitch install, you should reboot the\n" 
-    printf "server now.  Failure to do so may result in incorrect operation."
+
+    mode=$(cat /etc/xensource/network.conf)
+    if [ "$mode" != "vswitch" ] && [ "$mode" != "openvswitch" ]; then
+        printf "\nThe server is not configured to run Open vSwitch.  To run in\n"
+        printf "vswitch mode, you must run the following command:\n\n"
+        printf "\txe-switch-network-backend vswitch"
+    else
+        printf "\nTo use the new Open vSwitch install, you should reboot the\n"
+        printf "server now.  Failure to do so may result in incorrect operation."
+    fi
+
     printf "\n\n"
 fi
 
