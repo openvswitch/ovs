@@ -657,12 +657,13 @@ this.
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 \fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
 .IP
-It is often unnecessary to specify explicit \fBdestroy\fR commands,
-because (except for records in the \fBQoS\fR or \fBQueue\fR tables)
-records that are not reachable from the \fBOpen_vSwitch\fR table are
-automatically deleted from the database.  This means that deleting the
-last reference to a record is sufficient for deleting the record
-itself.  See the \fBEXAMPLES\fR section below for more information.
+The \fBdestroy\fR command is only useful for records in the \fBQoS\fR
+or \fBQueue\fR tables.  Records in other tables are automatically
+deleted from the database when they become unreachable from the
+\fBOpen_vSwitch\fR table.  This means that deleting the last reference
+to a record is sufficient for deleting the record itself.  For records
+in these tables, \fBdestroy\fR is silently ignored.  See the
+\fBEXAMPLES\fR section below for more information.
 .
 .IP "\fBwait\-until \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
 Waits until \fItable\fR contains a record named \fIrecord\fR whose
