@@ -100,7 +100,7 @@ pcap_write_header(FILE *file)
     ph.sigfigs = 0;
     ph.snaplen = 1518;
     ph.network = 1;             /* Ethernet */
-    fwrite(&ph, sizeof ph, 1, file);
+    ignore(fwrite(&ph, sizeof ph, 1, file));
 }
 
 int
@@ -159,6 +159,6 @@ pcap_write(FILE *file, struct ofpbuf *buf)
     prh.ts_usec = 0;
     prh.incl_len = buf->size;
     prh.orig_len = buf->size;
-    fwrite(&prh, sizeof prh, 1, file);
-    fwrite(buf->data, buf->size, 1, file);
+    ignore(fwrite(&prh, sizeof prh, 1, file));
+    ignore(fwrite(buf->data, buf->size, 1, file));
 }
