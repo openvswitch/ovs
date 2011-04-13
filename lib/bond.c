@@ -117,6 +117,7 @@ struct bond {
 
 static struct hmap all_bonds = HMAP_INITIALIZER(&all_bonds);
 
+static void bond_entry_reset(struct bond *);
 static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_);
 static bool bond_is_link_up(struct bond *, struct netdev *);
 static void bond_enable_slave(struct bond_slave *, bool enable,
@@ -286,18 +287,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         revalidate = true;
     }
 
-    if (bond->balance != BM_AB) {
-        if (!bond->hash) {
-            bond->hash = xcalloc(BOND_MASK + 1, sizeof *bond->hash);
-            bond->next_rebalance = time_msec() + bond->rebalance_interval;
-        }
-    } else {
-        if (bond->hash) {
-            free(bond->hash);
-            bond->hash = NULL;
-        }
-    }
-
     if (bond->detect == BLSM_CARRIER) {
         struct bond_slave *slave;
 
@@ -333,6 +322,10 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         }
     } else {
         bond->next_fake_iface_update = LLONG_MAX;
+    }
+
+    if (bond->balance == BM_AB || !bond->hash || revalidate) {
+        bond_entry_reset(bond);
     }
 
     return revalidate;
@@ -494,6 +487,7 @@ bond_run(struct bond *bond, struct tag_set *tags)
     if (is_tcp_hash != bond_is_tcp_hash(bond)) {
         struct bond_slave *slave;
 
+        bond_entry_reset(bond);
         HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
             tag_set_add(tags, slave->tag);
         }
@@ -1278,6 +1272,24 @@ bond_init(void)
     unixctl_command_register("bond/hash", bond_unixctl_hash, NULL);
 }
 
+static void
+bond_entry_reset(struct bond *bond)
+{
+    if (bond->balance != BM_AB) {
+        size_t hash_len = (BOND_MASK + 1) * sizeof *bond->hash;
+
+        if (!bond->hash) {
+            bond->hash = xmalloc(hash_len);
+        }
+        memset(bond->hash, 0, hash_len);
+
+        bond->next_rebalance = time_msec() + bond->rebalance_interval;
+    } else {
+        free(bond->hash);
+        bond->hash = NULL;
+    }
+}
+
 static struct bond_slave *
 bond_slave_lookup(struct bond *bond, const void *slave_)
 {
