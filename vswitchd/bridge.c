@@ -226,6 +226,11 @@ struct bridge {
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
+
+    /* Synthetic local port if necessary. */
+    struct ovsrec_port synth_local_port;
+    struct ovsrec_interface synth_local_iface;
+    struct ovsrec_interface *synth_local_ifacep;
 };
 
 /* List of all bridges. */
@@ -312,6 +317,7 @@ static void iface_update_cfm(struct iface *);
 static bool iface_refresh_cfm_stats(struct iface *iface);
 static void iface_update_carrier(struct iface *);
 static bool iface_get_carrier(const struct iface *);
+static bool iface_is_synthetic(const struct iface *);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
@@ -1193,6 +1199,10 @@ iface_refresh_status(struct iface *iface)
     int64_t mtu_64;
     int error;
 
+    if (iface_is_synthetic(iface)) {
+        return;
+    }
+
     shash_init(&sh);
 
     if (!netdev_get_status(iface->netdev, &sh)) {
@@ -1313,6 +1323,10 @@ iface_refresh_stats(struct iface *iface)
     int n;
 
     struct netdev_stats stats;
+
+    if (iface_is_synthetic(iface)) {
+        return;
+    }
 
     /* Intentionally ignore return value, since errors will set 'stats' to
      * all-1s, and we will deal with that correctly below. */
@@ -1748,6 +1762,7 @@ bridge_destroy(struct bridge *br)
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
         shash_destroy(&br->iface_by_name);
+        free(br->synth_local_iface.type);
         free(br->name);
         free(br);
     }
@@ -1873,22 +1888,28 @@ bridge_reconfigure_one(struct bridge *br)
                       br->name, name);
         }
     }
+    if (!shash_find(&new_ports, br->name)) {
+        struct dpif_port dpif_port;
+        char *type;
 
-    /* If we have a controller, then we need a local port.  Complain if the
-     * user didn't specify one.
-     *
-     * XXX perhaps we should synthesize a port ourselves in this case. */
-    if (bridge_get_controllers(br, NULL)) {
-        char local_name[IF_NAMESIZE];
-        int error;
+        VLOG_WARN("bridge %s: no port named %s, synthesizing one",
+                  br->name, br->name);
 
-        error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
-                                   local_name, sizeof local_name);
-        if (!error && !shash_find(&new_ports, local_name)) {
-            VLOG_WARN("bridge %s: controller specified but no local port "
-                      "(port named %s) defined",
-                      br->name, local_name);
-        }
+        dpif_port_query_by_number(br->dpif, ODPP_LOCAL, &dpif_port);
+        type = xstrdup(dpif_port.type ? dpif_port.type : "internal");
+        dpif_port_destroy(&dpif_port);
+
+        br->synth_local_port.interfaces = &br->synth_local_ifacep;
+        br->synth_local_port.n_interfaces = 1;
+        br->synth_local_port.name = br->name;
+
+        br->synth_local_iface.name = br->name;
+        free(br->synth_local_iface.type);
+        br->synth_local_iface.type = type;
+
+        br->synth_local_ifacep = &br->synth_local_iface;
+
+        shash_add(&new_ports, br->name, &br->synth_local_port);
     }
 
     /* Get rid of deleted ports.
@@ -4516,7 +4537,7 @@ iface_set_mac(struct iface *iface)
 static void
 iface_set_ofport(const struct ovsrec_interface *if_cfg, int64_t ofport)
 {
-    if (if_cfg) {
+    if (if_cfg && !ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
         ovsrec_interface_set_ofport(if_cfg, &ofport, 1);
     }
 }
@@ -4690,6 +4711,14 @@ iface_get_carrier(const struct iface *iface)
     return (iface->port->monitor
             ? netdev_get_carrier(iface->netdev)
             : netdev_get_miimon(iface->netdev));
+}
+
+/* Returns true if 'iface' is synthetic, that is, if we constructed it locally
+ * instead of obtaining it from the database. */
+static bool
+iface_is_synthetic(const struct iface *iface)
+{
+    return ovsdb_idl_row_is_synthetic(&iface->cfg->header_);
 }
 
 /* Port mirroring. */

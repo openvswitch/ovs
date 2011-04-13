@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks.
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,8 @@ const struct ovsdb_datum *ovsdb_idl_get(const struct ovsdb_idl_row *,
                                         const struct ovsdb_idl_column *,
                                         enum ovsdb_atomic_type key_type,
                                         enum ovsdb_atomic_type value_type);
+
+bool ovsdb_idl_row_is_synthetic(const struct ovsdb_idl_row *);
 
 /* Transactions. */
 
