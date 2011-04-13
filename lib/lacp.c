@@ -272,6 +272,14 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
     }
 }
 
+/* Returns the port ID used for 'slave_' in LACP communications. */
+uint16_t
+lacp_slave_get_port_id(const struct lacp *lacp, const void *slave_)
+{
+    struct slave *slave = slave_lookup(lacp, slave_);
+    return slave->port_id;
+}
+
 /* This function should be called periodically to update 'lacp'. */
 void
 lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
