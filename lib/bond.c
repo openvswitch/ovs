@@ -456,6 +456,7 @@ void
 bond_run(struct bond *bond, struct tag_set *tags)
 {
     struct bond_slave *slave;
+    bool is_tcp_hash = bond_is_tcp_hash(bond);
 
     /* Update link status. */
     if (bond->detect == BLSM_CARRIER
@@ -488,6 +489,14 @@ bond_run(struct bond *bond, struct tag_set *tags)
     if (time_msec() >= bond->next_fake_iface_update) {
         bond_update_fake_slave_stats(bond);
         bond->next_fake_iface_update = time_msec() + 1000;
+    }
+
+    if (is_tcp_hash != bond_is_tcp_hash(bond)) {
+        struct bond_slave *slave;
+
+        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+            tag_set_add(tags, slave->tag);
+        }
     }
 
     /* Invalidate any tags required by  */
