@@ -1108,6 +1108,15 @@ ovsdb_idl_get(const struct ovsdb_idl_row *row,
 
     return ovsdb_idl_read(row, column);
 }
+
+/* Returns false if 'row' was obtained from the IDL, true if it was initialized
+ * to all-zero-bits by some other entity.  If 'row' was set up some other way
+ * then the return value is indeterminate. */
+bool
+ovsdb_idl_row_is_synthetic(const struct ovsdb_idl_row *row)
+{
+    return row->table == NULL;
+}
 
 /* Transactions. */
 
