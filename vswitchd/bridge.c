@@ -1233,6 +1233,27 @@ iface_refresh_cfm_stats(struct iface *iface)
     return changed;
 }
 
+static bool
+iface_refresh_lacp_stats(struct iface *iface)
+{
+    bool *db_current = iface->cfg->lacp_current;
+    bool changed = false;
+
+    if (iface->port->lacp) {
+        bool current = lacp_slave_is_current(iface->port->lacp, iface);
+
+        if (!db_current || *db_current != current) {
+            changed = true;
+            ovsrec_interface_set_lacp_current(iface->cfg, &current, 1);
+        }
+    } else if (db_current) {
+        changed = true;
+        ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
+    }
+
+    return changed;
+}
+
 static void
 iface_refresh_stats(struct iface *iface)
 {
@@ -1434,6 +1455,7 @@ bridge_run(void)
 
                 LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                     changed = iface_refresh_cfm_stats(iface) || changed;
+                    changed = iface_refresh_lacp_stats(iface) || changed;
                 }
             }
         }

@@ -1211,6 +1211,13 @@
         Connectivity monitor configuration for this interface.
       </column>
 
+      <column name="lacp_current">
+        Boolean value indicating LACP status for this interface.  If true, this
+        interface has current LACP information about its LACP partner.  This
+        information may be used to monitor the health of interfaces in a LACP
+        enabled port. This column will be empty if LACP is not enabled.
+      </column>
+
       <column name="external_ids">
         Key-value pairs for use by external frameworks that integrate
         with Open vSwitch, rather than by Open vSwitch itself.  System
