@@ -3107,7 +3107,9 @@ port_reconfigure_bond(struct port *port)
     if (!port->bond) {
         port->bond = bond_create(&s);
     } else {
-        bond_reconfigure(port->bond, &s);
+        if (bond_reconfigure(port->bond, &s)) {
+            bridge_flush(port->bridge);
+        }
     }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {

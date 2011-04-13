@@ -256,10 +256,16 @@ bond_destroy(struct bond *bond)
  * bond_slave_register().  This is optional if none of the slaves'
  * configuration has changed, except that it is mandatory if 's' enables LACP
  * and 'bond' previously didn't have LACP enabled.  In any case it can't
- * hurt. */
-void
+ * hurt.
+ *
+ * Returns true if the configuration has changed in such a way that requires
+ * flow revalidation.
+ * */
+bool
 bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 {
+    bool revalidate = false;
+
     if (!bond->name || strcmp(bond->name, s->name)) {
         if (bond->name) {
             hmap_remove(&all_bonds, &bond->hmap_node);
@@ -269,12 +275,16 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         hmap_insert(&all_bonds, &bond->hmap_node, hash_string(bond->name, 0));
     }
 
-    bond->balance = s->balance;
     bond->detect = s->detect;
     bond->miimon_interval = s->miimon_interval;
     bond->updelay = s->up_delay;
     bond->downdelay = s->down_delay;
     bond->rebalance_interval = s->rebalance_interval;
+
+    if (bond->balance != s->balance) {
+        bond->balance = s->balance;
+        revalidate = true;
+    }
 
     if (bond->balance != BM_AB) {
         if (!bond->hash) {
@@ -324,6 +334,8 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     } else {
         bond->next_fake_iface_update = LLONG_MAX;
     }
+
+    return revalidate;
 }
 
 /* Registers 'slave_' as a slave of 'bond'.  The 'slave_' pointer is an

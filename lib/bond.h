@@ -75,7 +75,7 @@ void bond_init(void);
 struct bond *bond_create(const struct bond_settings *);
 void bond_destroy(struct bond *);
 
-void bond_reconfigure(struct bond *, const struct bond_settings *);
+bool bond_reconfigure(struct bond *, const struct bond_settings *);
 void bond_slave_register(struct bond *, void *slave_, struct netdev *,
                          const struct lacp_slave_settings *);
 void bond_slave_unregister(struct bond *, const void *slave);
