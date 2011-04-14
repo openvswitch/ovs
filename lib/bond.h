@@ -24,7 +24,6 @@
 #include "tag.h"
 
 struct flow;
-struct lacp_slave_settings;
 struct netdev;
 struct ofpbuf;
 
@@ -65,8 +64,7 @@ struct bond_settings {
     /* Legacy compatibility. */
     bool fake_iface;            /* Update fake stats for netdev 'name'? */
 
-    /* LACP. */
-    struct lacp_settings *lacp; /* NULL to disable LACP. */
+    const struct lacp *lacp;    /* LACP for this bond.  May be NULL. */
 };
 
 /* Program startup. */
@@ -77,8 +75,7 @@ struct bond *bond_create(const struct bond_settings *);
 void bond_destroy(struct bond *);
 
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
-void bond_slave_register(struct bond *, void *slave_, struct netdev *,
-                         const struct lacp_slave_settings *);
+void bond_slave_register(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 
 void bond_run(struct bond *, struct tag_set *);
@@ -101,8 +98,6 @@ enum bond_verdict bond_check_admissibility(struct bond *, const void *slave_,
                                            tag_type *);
 void *bond_choose_output_slave(struct bond *,
                                const struct flow *, uint16_t vlan, tag_type *);
-void bond_process_lacp(struct bond *, void *slave,
-                       const struct ofpbuf *packet);
 
 /* Rebalancing. */
 void bond_account(struct bond *, const struct flow *, uint16_t vlan,

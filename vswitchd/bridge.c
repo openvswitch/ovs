@@ -147,6 +147,8 @@ struct port {
      * A bridge port for bonding has at least 2 interfaces. */
     struct list ifaces;         /* List of "struct iface"s. */
 
+    struct lacp *lacp;          /* NULL if LACP is not enabled. */
+
     /* Bonding info. */
     struct bond *bond;
 
@@ -238,6 +240,7 @@ static struct port *port_lookup(const struct bridge *, const char *name);
 static struct iface *port_get_an_iface(const struct port *);
 static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
+static void port_reconfigure_lacp(struct port *);
 static void port_reconfigure_bond(struct port *);
 static void port_send_learning_packets(struct port *);
 
@@ -339,6 +342,7 @@ bridge_init(const char *remote)
                              NULL);
     unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
                              NULL);
+    lacp_init();
     bond_init();
 }
 
@@ -882,6 +886,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             struct iface *iface;
 
+            port_reconfigure_lacp(port);
             port_reconfigure_bond(port);
 
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
@@ -2630,8 +2635,11 @@ bridge_special_ofhook_cb(const struct flow *flow,
     iface = iface_from_dp_ifidx(br, flow->in_port);
 
     if (flow->dl_type == htons(ETH_TYPE_LACP)) {
-        if (iface && iface->port->bond && packet) {
-            bond_process_lacp(iface->port->bond, iface, packet);
+        if (iface && iface->port->lacp && packet) {
+            const struct lacp_pdu *pdu = parse_lacp_packet(packet);
+            if (pdu) {
+                lacp_process_pdu(iface->port->lacp, iface, pdu);
+            }
         }
         return false;
     }
@@ -2730,8 +2738,43 @@ static struct ofhooks bridge_ofhooks = {
 /* Port functions. */
 
 static void
+lacp_send_pdu_cb(void *iface_, const struct lacp_pdu *pdu)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
+    struct iface *iface = iface_;
+    uint8_t ea[ETH_ADDR_LEN];
+    int error;
+
+    error = netdev_get_etheraddr(iface->netdev, ea);
+    if (!error) {
+        struct lacp_pdu *packet_pdu;
+        struct ofpbuf packet;
+
+        ofpbuf_init(&packet, 0);
+        packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
+                                 sizeof *packet_pdu);
+        *packet_pdu = *pdu;
+        error = netdev_send(iface->netdev, &packet);
+        if (error) {
+            VLOG_WARN_RL(&rl, "port %s: sending LACP PDU on iface %s failed "
+                         "(%s)", iface->port->name, iface->name,
+                         strerror(error));
+        }
+        ofpbuf_uninit(&packet);
+    } else {
+        VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
+                    "%s (%s)", iface->port->name, iface->name,
+                    strerror(error));
+    }
+}
+
+static void
 port_run(struct port *port)
 {
+    if (port->lacp) {
+        lacp_run(port->lacp, lacp_send_pdu_cb);
+    }
+
     if (port->bond) {
         bond_run(port->bond,
                  ofproto_get_revalidate_set(port->bridge->ofproto));
@@ -2744,6 +2787,10 @@ port_run(struct port *port)
 static void
 port_wait(struct port *port)
 {
+    if (port->lacp) {
+        lacp_wait(port->lacp);
+    }
+
     if (port->bond) {
         bond_wait(port->bond);
     }
@@ -2966,6 +3013,7 @@ port_destroy(struct port *port)
 
         VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
 
+        lacp_destroy(port->lacp);
         port_flush_macs(port);
 
         bitmap_free(port->trunks);
@@ -3017,29 +3065,8 @@ enable_lacp(struct port *port, bool *activep)
     }
 }
 
-static struct lacp_settings *
-port_reconfigure_bond_lacp(struct port *port, struct lacp_settings *s)
-{
-    if (!enable_lacp(port, &s->active)) {
-        return NULL;
-    }
-
-    s->name = port->name;
-    memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
-    s->priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
-                                             "0"));
-    s->fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
-                      "fast");
-
-    if (s->priority <= 0 || s->priority > UINT16_MAX) {
-        /* Prefer bondable links if unspecified. */
-        s->priority = UINT16_MAX - !list_is_short(&port->ifaces);
-    }
-    return s;
-}
-
 static void
-iface_reconfigure_bond(struct iface *iface)
+iface_reconfigure_lacp(struct iface *iface)
 {
     struct lacp_slave_settings s;
     int priority;
@@ -3050,13 +3077,47 @@ iface_reconfigure_bond(struct iface *iface)
                         iface->cfg, "lacp-port-priority", "0"));
     s.priority = (priority >= 0 && priority <= UINT16_MAX
                   ? priority : UINT16_MAX);
-    bond_slave_register(iface->port->bond, iface, iface->netdev, &s);
+    lacp_slave_register(iface->port->lacp, iface, &s);
+}
+
+static void
+port_reconfigure_lacp(struct port *port)
+{
+    static struct lacp_settings s;
+    struct iface *iface;
+
+    if (!enable_lacp(port, &s.active)) {
+        lacp_destroy(port->lacp);
+        port->lacp = NULL;
+        return;
+    }
+
+    s.name = port->name;
+    memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
+    s.priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
+                                            "0"));
+    s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
+                     "fast");
+
+    if (s.priority <= 0 || s.priority > UINT16_MAX) {
+        /* Prefer bondable links if unspecified. */
+        s.priority = UINT16_MAX - !list_is_short(&port->ifaces);
+    }
+
+    if (!port->lacp) {
+        port->lacp = lacp_create();
+    }
+
+    lacp_configure(port->lacp, &s);
+
+    LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+        iface_reconfigure_lacp(iface);
+    }
 }
 
 static void
 port_reconfigure_bond(struct port *port)
 {
-    struct lacp_settings lacp_settings;
     struct bond_settings s;
     const char *detect_s;
     struct iface *iface;
@@ -3102,7 +3163,7 @@ port_reconfigure_bond(struct port *port)
     }
 
     s.fake_iface = port->cfg->bond_fake_iface;
-    s.lacp = port_reconfigure_bond_lacp(port, &lacp_settings);
+    s.lacp = port->lacp;
 
     if (!port->bond) {
         port->bond = bond_create(&s);
@@ -3113,7 +3174,7 @@ port_reconfigure_bond(struct port *port)
     }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        iface_reconfigure_bond(iface);
+        bond_slave_register(iface->port->bond, iface, iface->netdev);
     }
 }
 
@@ -3184,6 +3245,10 @@ iface_destroy(struct iface *iface)
 
         if (port->bond) {
             bond_slave_unregister(port->bond, iface);
+        }
+
+        if (port->lacp) {
+            lacp_slave_unregister(port->lacp, iface);
         }
 
         shash_find_and_delete_assert(&br->iface_by_name, iface->name);

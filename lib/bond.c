@@ -40,8 +40,6 @@
 
 VLOG_DEFINE_THIS_MODULE(bond);
 
-COVERAGE_DEFINE(bond_process_lacp);
-
 /* Bit-mask for hashing a flow down to a bucket.
  * There are (BOND_MASK + 1) buckets. */
 #define BOND_MASK 0xff
@@ -109,7 +107,7 @@ struct bond {
     bool stb_need_sort;             /* True if stb_slaves is not sorted. */
 
     /* LACP. */
-    struct lacp *lacp;          /* LACP object. NULL if LACP is disabled. */
+    const struct lacp *lacp;        /* Client provided LACP handle. */
 
     /* Monitoring. */
     enum bond_detect_mode detect;     /* Link status mode, one of BLSM_*. */
@@ -260,8 +258,6 @@ bond_destroy(struct bond *bond)
 
     free(bond->hash);
 
-    lacp_destroy(bond->lacp);
-
     netdev_monitor_destroy(bond->monitor);
 
     free(bond->name);
@@ -293,6 +289,7 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         hmap_insert(&all_bonds, &bond->hmap_node, hash_string(bond->name, 0));
     }
 
+    bond->lacp = s->lacp;
     bond->detect = s->detect;
     bond->miimon_interval = s->miimon_interval;
     bond->updelay = s->up_delay;
@@ -321,16 +318,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         if (bond->miimon_next_update == LLONG_MAX) {
             bond->miimon_next_update = time_msec() + bond->miimon_interval;
         }
-    }
-
-    if (s->lacp) {
-        if (!bond->lacp) {
-            bond->lacp = lacp_create();
-        }
-        lacp_configure(bond->lacp, s->lacp);
-    } else {
-        lacp_destroy(bond->lacp);
-        bond->lacp = NULL;
     }
 
     if (s->fake_iface) {
@@ -374,12 +361,10 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
  * by the client, so the client must not close it before either unregistering
  * 'slave_' or destroying 'bond'.
  *
- * If 'bond' has a LACP configuration then 'lacp_settings' must point to LACP
- * settings for 'slave_'; otherwise 'lacp_settings' is ignored.
- */
+ * If 'bond' has a LACP configuration then 'slave_' should be the same handle
+ * used in the LACP module. */
 void
-bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev,
-                    const struct lacp_slave_settings *lacp_settings)
+bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
 
@@ -398,11 +383,6 @@ bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev,
     slave->netdev = netdev;
     free(slave->name);
     slave->name = xstrdup(netdev_get_name(netdev));
-
-    if (bond->lacp) {
-        assert(lacp_settings != NULL);
-        lacp_slave_register(bond->lacp, slave, lacp_settings);
-    }
 }
 
 /* Unregisters 'slave_' from 'bond'.  If 'bond' does not contain such a slave
@@ -446,38 +426,6 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
     }
 }
 
-/* Callback for lacp_run(). */
-static void
-bond_send_pdu_cb(void *slave_, const struct lacp_pdu *pdu)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
-    struct bond_slave *slave = slave_;
-    uint8_t ea[ETH_ADDR_LEN];
-    int error;
-
-    error = netdev_get_etheraddr(slave->netdev, ea);
-    if (!error) {
-        struct lacp_pdu *packet_pdu;
-        struct ofpbuf packet;
-
-        ofpbuf_init(&packet, 0);
-        packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
-                                 sizeof *packet_pdu);
-        *packet_pdu = *pdu;
-        error = netdev_send(slave->netdev, &packet);
-        if (error) {
-            VLOG_WARN_RL(&rl, "bond %s: sending LACP PDU on slave %s failed "
-                         "(%s)",
-                         slave->bond->name, slave->name, strerror(error));
-        }
-        ofpbuf_uninit(&packet);
-    } else {
-        VLOG_ERR_RL(&rl, "bond %s: cannot obtain Ethernet address of slave "
-                    "%s (%s)",
-                    slave->bond->name, slave->name, strerror(error));
-    }
-}
-
 /* Performs periodic maintenance on 'bond'.  The caller must provide 'tags' to
  * allow tagged flows to be invalidated.
  *
@@ -496,11 +444,6 @@ bond_run(struct bond *bond, struct tag_set *tags)
             slave->up = bond_is_link_up(bond, slave->netdev);
         }
         bond->miimon_next_update = time_msec() + bond->miimon_interval;
-    }
-
-    /* Update LACP. */
-    if (bond->lacp) {
-        lacp_run(bond->lacp, bond_send_pdu_cb);
     }
 
     /* Enable slaves based on link status and LACP feedback. */
@@ -689,24 +632,6 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
     } else {
         *tags |= bond->no_slaves_tag;
         return NULL;
-    }
-}
-
-/* Processes LACP packet 'packet', which was received on 'slave_' within
- * 'bond'.
- *
- * The client should use this function to pass along LACP messages received on
- * any of 'bond''s slaves. */
-void
-bond_process_lacp(struct bond *bond, void *slave_, const struct ofpbuf *packet)
-{
-    if (bond->lacp) {
-        struct bond_slave *slave = bond_slave_lookup(bond, slave_);
-        const struct lacp_pdu *pdu = parse_lacp_packet(packet);
-        if (slave && pdu) {
-            COVERAGE_INC(bond_process_lacp);
-            lacp_process_pdu(bond->lacp, slave, pdu);
-        }
     }
 }
 
@@ -1288,8 +1213,6 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
 void
 bond_init(void)
 {
-    lacp_init();
-
     unixctl_command_register("bond/list", bond_unixctl_list, NULL);
     unixctl_command_register("bond/show", bond_unixctl_show, NULL);
     unixctl_command_register("bond/migrate", bond_unixctl_migrate, NULL);
@@ -1350,12 +1273,12 @@ bond_stb_sort_cmp__(const void *a_, const void *b_)
     const struct bond_slave *const *bp = b_;
     const struct bond_slave *a = *ap;
     const struct bond_slave *b = *bp;
-    struct lacp *lacp = a->bond->lacp;
+    const struct lacp *lacp = a->bond->lacp;
     int a_id, b_id;
 
     if (lacp) {
-        a_id = lacp_slave_get_port_id(lacp, a);
-        b_id = lacp_slave_get_port_id(lacp, b);
+        a_id = lacp_slave_get_port_id(lacp, a->aux);
+        b_id = lacp_slave_get_port_id(lacp, b->aux);
     } else {
         a_id = netdev_get_ifindex(a->netdev);
         b_id = netdev_get_ifindex(b->netdev);
@@ -1436,7 +1359,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
     struct bond *bond = slave->bond;
     bool up;
 
-    up = slave->up && lacp_slave_may_enable(bond->lacp, slave);
+    up = slave->up && lacp_slave_may_enable(bond->lacp, slave->aux);
     if ((up == slave->enabled) != (slave->delay_expires == LLONG_MAX)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
         VLOG_INFO_RL(&rl, "interface %s: link state %s",
@@ -1560,7 +1483,7 @@ bond_choose_slave(const struct bond *bond)
     best = NULL;
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->delay_expires != LLONG_MAX
-            && lacp_slave_may_enable(bond->lacp, slave)
+            && lacp_slave_may_enable(bond->lacp, slave->aux)
             && (!best || slave->delay_expires < best->delay_expires)) {
             best = slave;
         }
