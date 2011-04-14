@@ -1770,7 +1770,8 @@
         number of seconds, it will send a probe.  If a response is not
         received for the same additional amount of time, Open vSwitch
         assumes the connection has been broken and attempts to reconnect.
-        Default is implementation-specific.
+        Default is implementation-specific.  A value of 0 disables
+        inactivity probes.
       </column>
     </group>
 
@@ -2023,6 +2024,7 @@
         will send a probe.  If a response is not received for the same
         additional amount of time, Open vSwitch assumes the connection has been
         broken and attempts to reconnect.  Default is implementation-specific.
+        A value of 0 disables inactivity probes.
       </column>
     </group>
 
