@@ -24,6 +24,7 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
 	ofproto/pinsched.c \
-	ofproto/pinsched.h
+	ofproto/pinsched.h \
+	ofproto/private.h
 
 EXTRA_DIST += ofproto/ofproto-unixctl.man

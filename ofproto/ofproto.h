@@ -182,12 +182,6 @@ void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
 
-/* Functions for use by ofproto implementation modules, not by clients. */
-void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
-                      const union ofp_action *, size_t n_actions);
-void ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
-void ofproto_flush_flows(struct ofproto *);
-
 /* Hooks for ovs-vswitchd. */
 struct ofhooks {
     bool (*normal_cb)(const struct flow *, const struct ofpbuf *packet,

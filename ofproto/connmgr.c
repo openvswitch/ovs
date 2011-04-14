@@ -31,6 +31,7 @@
 #include "pinsched.h"
 #include "poll-loop.h"
 #include "pktbuf.h"
+#include "private.h"
 #include "rconn.h"
 #include "shash.h"
 #include "timeval.h"

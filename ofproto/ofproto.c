@@ -54,6 +54,7 @@
 #include "pinsched.h"
 #include "pktbuf.h"
 #include "poll-loop.h"
+#include "private.h"
 #include "rconn.h"
 #include "shash.h"
 #include "sset.h"
