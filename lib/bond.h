@@ -63,8 +63,6 @@ struct bond_settings {
 
     /* Legacy compatibility. */
     bool fake_iface;            /* Update fake stats for netdev 'name'? */
-
-    const struct lacp *lacp;    /* LACP for this bond.  May be NULL. */
 };
 
 /* Program startup. */
@@ -79,8 +77,12 @@ void bond_slave_register(struct bond *, void *slave_,
                          uint16_t stable_id, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 
-void bond_run(struct bond *, struct tag_set *);
+void bond_run(struct bond *, struct tag_set *, bool lacp_negotiated);
 void bond_wait(struct bond *);
+
+/* LACP. */
+void bond_slave_set_lacp_may_enable(struct bond *, void *slave_,
+                                    bool may_enable);
 
 /* Special MAC learning support for SLB bonding. */
 bool bond_should_send_learning_packets(struct bond *);

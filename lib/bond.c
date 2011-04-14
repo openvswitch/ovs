@@ -26,7 +26,6 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hmap.h"
-#include "lacp.h"
 #include "list.h"
 #include "netdev.h"
 #include "odp-util.h"
@@ -66,6 +65,7 @@ struct bond_slave {
     long long delay_expires;    /* Time after which 'enabled' may change. */
     bool up;                    /* Last link status read from netdev. */
     bool enabled;               /* May be chosen for flows? */
+    bool lacp_may_enable;       /* LACP considers this interface bondable. */
     tag_type tag;               /* Tag associated with this slave. */
 
     /* Rebalancing info.  Used only by bond_rebalance(). */
@@ -94,6 +94,7 @@ struct bond {
     struct bond_slave *active_slave;
     tag_type no_slaves_tag;     /* Tag for flows when all slaves disabled. */
     int updelay, downdelay;     /* Delay before slave goes up/down, in ms. */
+    bool lacp_negotiated;       /* LACP negotiations were successful. */
 
     /* SLB specific bonding info. */
     struct bond_entry *hash;     /* An array of (BOND_MASK + 1) elements. */
@@ -107,8 +108,6 @@ struct bond {
     size_t len_stb_slaves;          /* Slaves allocated in 'stb_slaves'. */
     bool stb_need_sort;             /* True if stb_slaves is not sorted. */
 
-    /* LACP. */
-    const struct lacp *lacp;        /* Client provided LACP handle. */
 
     /* Monitoring. */
     enum bond_detect_mode detect;     /* Link status mode, one of BLSM_*. */
@@ -269,9 +268,7 @@ bond_destroy(struct bond *bond)
  *
  * The caller should register each slave on 'bond' by calling
  * bond_slave_register().  This is optional if none of the slaves'
- * configuration has changed, except that it is mandatory if 's' enables LACP
- * and 'bond' previously didn't have LACP enabled.  In any case it can't
- * hurt.
+ * configuration has changed.  In any case it can't hurt.
  *
  * Returns true if the configuration has changed in such a way that requires
  * flow revalidation.
@@ -290,7 +287,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         hmap_insert(&all_bonds, &bond->hmap_node, hash_string(bond->name, 0));
     }
 
-    bond->lacp = s->lacp;
     bond->detect = s->detect;
     bond->miimon_interval = s->miimon_interval;
     bond->updelay = s->up_delay;
@@ -365,9 +361,7 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
  * 'netdev' must be the network device that 'slave_' represents.  It is owned
  * by the client, so the client must not close it before either unregistering
  * 'slave_' or destroying 'bond'.
- *
- * If 'bond' has a LACP configuration then 'slave_' should be the same handle
- * used in the LACP module. */
+ */
 void
 bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
                     struct netdev *netdev)
@@ -437,15 +431,26 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
     }
 }
 
+/* Should be called on each slave in 'bond' before bond_run() to indicate the
+ * results of lacp_slave_may_enable() on 'slave_'. */
+void
+bond_slave_set_lacp_may_enable(struct bond *bond, void *slave_,
+                               bool may_enable)
+{
+    bond_slave_lookup(bond, slave_)->lacp_may_enable = may_enable;
+}
+
 /* Performs periodic maintenance on 'bond'.  The caller must provide 'tags' to
  * allow tagged flows to be invalidated.
  *
  * The caller should check bond_should_send_learning_packets() afterward. */
 void
-bond_run(struct bond *bond, struct tag_set *tags)
+bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
 {
     struct bond_slave *slave;
     bool is_tcp_hash = bond_is_tcp_hash(bond);
+
+    bond->lacp_negotiated = lacp_negotiated;
 
     /* Update link status. */
     if (bond->detect == BLSM_CARRIER
@@ -523,7 +528,7 @@ bond_wait(struct bond *bond)
 static bool
 may_send_learning_packets(const struct bond *bond)
 {
-    return !lacp_negotiated(bond->lacp) && bond->balance != BM_AB;
+    return !bond->lacp_negotiated && bond->balance != BM_AB;
 }
 
 /* Returns true if 'bond' needs the client to send out packets to assist with
@@ -600,7 +605,7 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
 {
     /* Admit all packets if LACP has been negotiated, because that means that
      * the remote switch is aware of the bond and will "do the right thing". */
-    if (lacp_negotiated(bond->lacp)) {
+    if (bond->lacp_negotiated) {
         return BV_ACCEPT;
     }
 
@@ -960,13 +965,6 @@ bond_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "bond_mode: %s\n",
                   bond_mode_to_string(bond->balance));
 
-    if (bond->lacp) {
-        ds_put_format(&ds, "lacp: %s\n",
-                      lacp_is_active(bond->lacp) ? "active" : "passive");
-    } else {
-        ds_put_cstr(&ds, "lacp: off\n");
-    }
-
     if (bond->balance != BM_AB) {
         ds_put_format(&ds, "bond-hash-algorithm: %s\n",
                       bond_is_tcp_hash(bond) ? "balance-tcp" : "balance-slb");
@@ -988,6 +986,9 @@ bond_unixctl_show(struct unixctl_conn *conn,
                       bond->next_rebalance - time_msec());
     }
 
+    ds_put_format(&ds, "lacp_negotiated: %s\n",
+                  bond->lacp_negotiated ? "true" : "false");
+
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         struct bond_entry *be;
         struct flow flow;
@@ -1003,6 +1004,9 @@ bond_unixctl_show(struct unixctl_conn *conn,
                           slave->enabled ? "downdelay" : "updelay",
                           slave->delay_expires - time_msec());
         }
+
+        ds_put_format(&ds, "lacp_may_enable: %s\n",
+                      slave->lacp_may_enable ? "true" : "false");
 
         if (!bond_is_balanced(bond)) {
             continue;
@@ -1362,7 +1366,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
     struct bond *bond = slave->bond;
     bool up;
 
-    up = slave->up && lacp_slave_may_enable(bond->lacp, slave->aux);
+    up = slave->up && slave->lacp_may_enable;
     if ((up == slave->enabled) != (slave->delay_expires == LLONG_MAX)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
         VLOG_INFO_RL(&rl, "interface %s: link state %s",
@@ -1372,7 +1376,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
             VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                          slave->name, up ? "disabled" : "enabled");
         } else {
-            int delay = (lacp_negotiated(bond->lacp) ? 0
+            int delay = (bond->lacp_negotiated ? 0
                          : up ? bond->updelay : bond->downdelay);
             slave->delay_expires = time_msec() + delay;
             if (delay) {
@@ -1395,7 +1399,7 @@ static bool
 bond_is_tcp_hash(const struct bond *bond)
 {
     return (bond->balance == BM_TCP || bond->balance == BM_STABLE)
-        && lacp_negotiated(bond->lacp);
+        && bond->lacp_negotiated;
 }
 
 static unsigned int
@@ -1486,7 +1490,7 @@ bond_choose_slave(const struct bond *bond)
     best = NULL;
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->delay_expires != LLONG_MAX
-            && lacp_slave_may_enable(bond->lacp, slave->aux)
+            && slave->lacp_may_enable
             && (!best || slave->delay_expires < best->delay_expires)) {
             best = slave;
         }

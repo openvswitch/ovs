@@ -2776,8 +2776,16 @@ port_run(struct port *port)
     }
 
     if (port->bond) {
+        struct iface *iface;
+
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+            bool may_enable = lacp_slave_may_enable(port->lacp, iface);
+            bond_slave_set_lacp_may_enable(port->bond, iface, may_enable);
+        }
+
         bond_run(port->bond,
-                 ofproto_get_revalidate_set(port->bridge->ofproto));
+                 ofproto_get_revalidate_set(port->bridge->ofproto),
+                 lacp_negotiated(port->lacp));
         if (bond_should_send_learning_packets(port->bond)) {
             port_send_learning_packets(port);
         }
@@ -3163,7 +3171,6 @@ port_reconfigure_bond(struct port *port)
     }
 
     s.fake_iface = port->cfg->bond_fake_iface;
-    s.lacp = port->lacp;
 
     if (!port->bond) {
         port->bond = bond_create(&s);
