@@ -940,7 +940,7 @@ ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
  * will be sent with the VLAN TCI specified by 'vlan_tci & ~VLAN_CFI'.
  *
  * Returns 0 if successful, otherwise a positive errno value. */
-int
+static int
 ofproto_send_packet(struct ofproto *ofproto,
                     uint32_t port_no, uint16_t vlan_tci,
                     const struct ofpbuf *packet)
