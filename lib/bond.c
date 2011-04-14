@@ -500,10 +500,6 @@ bond_run(struct bond *bond, struct tag_set *tags)
 
     /* Update LACP. */
     if (bond->lacp) {
-        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-            lacp_slave_enable(bond->lacp, slave, slave->enabled);
-        }
-
         lacp_run(bond->lacp, bond_send_pdu_cb);
     }
 

@@ -49,7 +49,6 @@ struct lacp_slave_settings {
 void lacp_slave_register(struct lacp *, void *slave_,
                          const struct lacp_slave_settings *);
 void lacp_slave_unregister(struct lacp *, const void *slave);
-void lacp_slave_enable(struct lacp *lacp, void *slave_, bool enabled);
 void lacp_slave_carrier_changed(const struct lacp *, const void *slave);
 bool lacp_slave_may_enable(const struct lacp *, const void *slave);
 uint16_t lacp_slave_get_port_id(const struct lacp *, const void *slave);

@@ -64,7 +64,6 @@ struct slave {
 
     enum slave_status status;     /* Slave status. */
     bool attached;                /* Attached. Traffic may flow. */
-    bool enabled;                 /* Enabled. Traffic is flowing. */
     struct lacp_info partner;     /* Partner information. */
     struct lacp_info ntt_actor;   /* Used to decide if we Need To Transmit. */
     struct timer tx;              /* Next message transmission timer. */
@@ -227,16 +226,6 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
     if (slave) {
         slave_destroy(slave);
     }
-}
-
-/* Should be called regularly to indicate whether 'slave_' is enabled.  An
- * enabled slave is allowed to send and receive traffic.  Generally a slave
- * should not be enabled if its carrier is down, or lacp_slave_may_enable()
- * indicates it should not be enabled. */
-void
-lacp_slave_enable(struct lacp *lacp, void *slave_, bool enabled)
-{
-   slave_lookup(lacp, slave_)->enabled = enabled;
 }
 
 /* This function should be called whenever the carrier status of 'slave_' has
@@ -467,7 +456,7 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_AGG;
     }
 
-    if (slave->enabled) {
+    if (slave->attached || !slave->lacp->negotiated) {
         state |= LACP_STATE_COL | LACP_STATE_DIST;
     }
 
@@ -648,9 +637,8 @@ lacp_unixctl_show(struct unixctl_conn *conn,
             NOT_REACHED();
         }
 
-        ds_put_format(&ds, "\nslave: %s: %s %s %s\n", slave->name, status,
-                      slave->attached ? "attached" : "detached",
-                      slave->enabled ? "enabled" : "disabled");
+        ds_put_format(&ds, "\nslave: %s: %s %s\n", slave->name, status,
+                      slave->attached ? "attached" : "detached");
         ds_put_format(&ds, "\tport_id: %u\n", slave->port_id);
         ds_put_format(&ds, "\tport_priority: %u\n", slave->port_priority);
 
