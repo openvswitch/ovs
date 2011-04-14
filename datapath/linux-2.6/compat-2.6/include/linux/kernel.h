@@ -54,4 +54,8 @@
 #define SHRT_MIN	((s16)(-SHRT_MAX - 1))
 #endif
 
+#ifndef DIV_ROUND_UP
+#define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
+#endif
+
 #endif /* linux/kernel.h */
