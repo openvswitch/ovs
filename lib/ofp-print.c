@@ -603,7 +603,7 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
 
     memcpy(name, port->name, sizeof name);
     for (j = 0; j < sizeof name - 1; j++) {
-        if (!isprint(name[j])) {
+        if (!isprint((unsigned char) name[j])) {
             break;
         }
     }

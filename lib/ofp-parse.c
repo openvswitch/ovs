@@ -820,7 +820,8 @@ parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
                 } else {
                     parse_field_value(&fm->cr, f->index, value);
                 }
-            } else if (!strncmp(name, "reg", 3) && isdigit(name[3])) {
+            } else if (!strncmp(name, "reg", 3)
+                       && isdigit((unsigned char) name[3])) {
                 unsigned int reg_idx = atoi(name + 3);
                 if (reg_idx >= FLOW_N_REGS) {
                     ovs_fatal(0, "only %d registers supported", FLOW_N_REGS);
