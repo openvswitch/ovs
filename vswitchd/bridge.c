@@ -3021,6 +3021,7 @@ port_destroy(struct port *port)
 
         VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
 
+        bond_destroy(port->bond);
         lacp_destroy(port->lacp);
         port_flush_macs(port);
 
