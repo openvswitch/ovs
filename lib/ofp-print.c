@@ -227,7 +227,7 @@ nx_action_len(enum nx_action_subtype subtype)
 static void
 ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
 {
-    uint16_t subtype = ntohs(nah->subtype);
+    int subtype = ntohs(nah->subtype);
     int required_len = nx_action_len(subtype);
     int len = ntohs(nah->len);
 
@@ -312,7 +312,7 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         }
     }
 
-    ds_put_format(string, "***unknown Nicira action:%"PRIu16"***", subtype);
+    ds_put_format(string, "***unknown Nicira action:%d***", subtype);
 }
 
 static int

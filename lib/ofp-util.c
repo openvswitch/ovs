@@ -1959,7 +1959,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
                     const struct flow *flow)
 {
     const struct nx_action_header *nah;
-    uint16_t subtype;
+    int subtype;
     int error;
 
     if (len < 16) {
@@ -1971,7 +1971,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
 
     subtype = ntohs(nah->subtype);
     if (subtype > TYPE_MAXIMUM(enum nx_action_subtype)) {
-        /* This is necessary because enum nx_action_subtype is probably an
+        /* This is necessary because enum nx_action_subtype may be an
          * 8-bit type, so the cast below throws away the top 8 bits. */
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }
@@ -2026,8 +2026,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     case NXAST_SNAT__OBSOLETE:
     default:
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "unknown Nicira vendor action subtype %"PRIu16,
-                     ntohs(nah->subtype));
+                     "unknown Nicira vendor action subtype %d", subtype);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
     }
 }
