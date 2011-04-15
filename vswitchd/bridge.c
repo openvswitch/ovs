@@ -3094,6 +3094,7 @@ port_reconfigure_lacp(struct port *port)
 {
     static struct lacp_settings s;
     struct iface *iface;
+    int priority;
 
     if (!enable_lacp(port, &s.active)) {
         lacp_destroy(port->lacp);
@@ -3103,15 +3104,16 @@ port_reconfigure_lacp(struct port *port)
 
     s.name = port->name;
     memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
-    s.priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
-                                            "0"));
+
+    /* Prefer bondable links if unspecified. */
+    priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
+                                          "0"));
+    s.priority = (priority > 0 && priority <= UINT16_MAX
+                  ? priority
+                  : UINT16_MAX - !list_is_short(&port->ifaces));
+
     s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
                      "fast");
-
-    if (s.priority <= 0 || s.priority > UINT16_MAX) {
-        /* Prefer bondable links if unspecified. */
-        s.priority = UINT16_MAX - !list_is_short(&port->ifaces);
-    }
 
     if (!port->lacp) {
         port->lacp = lacp_create();
