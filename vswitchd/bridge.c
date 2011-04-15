@@ -198,10 +198,11 @@ static struct ovsdb_idl *idl;
 #define STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 static long long int stats_timer = LLONG_MIN;
 
-/* Stores the time after which CFM statistics may be written to the database.
- * Only updated when changes to the database require rate limiting. */
-#define CFM_LIMIT_INTERVAL (1 * 1000) /* In milliseconds. */
-static long long int cfm_limiter = LLONG_MIN;
+/* Stores the time after which rate limited statistics may be written to the
+ * database.  Only updated when changes to the database require rate limiting.
+ */
+#define DB_LIMIT_INTERVAL (1 * 1000) /* In milliseconds. */
+static long long int db_limiter = LLONG_MIN;
 
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
@@ -1420,7 +1421,7 @@ bridge_run(void)
         stats_timer = time_msec() + STATS_INTERVAL;
     }
 
-    if (time_msec() >= cfm_limiter) {
+    if (time_msec() >= db_limiter) {
         struct ovsdb_idl_txn *txn;
         bool changed = false;
 
@@ -1438,7 +1439,7 @@ bridge_run(void)
         }
 
         if (changed) {
-            cfm_limiter = time_msec() + CFM_LIMIT_INTERVAL;
+            db_limiter = time_msec() + DB_LIMIT_INTERVAL;
         }
 
         ovsdb_idl_txn_commit(txn);
@@ -1463,8 +1464,8 @@ bridge_wait(void)
     ovsdb_idl_wait(idl);
     poll_timer_wait_until(stats_timer);
 
-    if (cfm_limiter > time_msec()) {
-        poll_timer_wait_until(cfm_limiter);
+    if (db_limiter > time_msec()) {
+        poll_timer_wait_until(db_limiter);
     }
 }
 
