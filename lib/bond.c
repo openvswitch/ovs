@@ -74,6 +74,7 @@ struct bond_slave {
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
 
     /* BM_STABLE specific bonding info. */
+    uint16_t stb_id;            /* ID used for 'stb_slaves' ordering. */
     size_t stb_idx;             /* Index in 'bond''s 'stb_slaves' array.
                                    Undefined value if participating in a
                                    BTM_STABLE bond or not enabled. */
@@ -357,6 +358,10 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
  * bond.  If 'slave_' already exists within 'bond' then this function
  * reconfigures the existing slave.
  *
+ * 'stb_id' is used in BM_STABLE bonds to guarantee consistent slave choices
+ * across restarts and distributed vswitch instances.  It should be unique per
+ * slave, and preferably consistent across restarts and reconfigurations.
+ *
  * 'netdev' must be the network device that 'slave_' represents.  It is owned
  * by the client, so the client must not close it before either unregistering
  * 'slave_' or destroying 'bond'.
@@ -364,7 +369,8 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
  * If 'bond' has a LACP configuration then 'slave_' should be the same handle
  * used in the LACP module. */
 void
-bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev)
+bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
+                    struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
 
@@ -378,6 +384,11 @@ bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev)
         slave->up = bond_is_link_up(bond, netdev);
         slave->enabled = false;
         bond_enable_slave(slave, slave->up, NULL);
+    }
+
+    if (slave->stb_id != stb_id) {
+        bond->stb_need_sort = true;
+        slave->stb_id = stb_id;
     }
 
     slave->netdev = netdev;
@@ -1273,18 +1284,10 @@ bond_stb_sort_cmp__(const void *a_, const void *b_)
     const struct bond_slave *const *bp = b_;
     const struct bond_slave *a = *ap;
     const struct bond_slave *b = *bp;
-    const struct lacp *lacp = a->bond->lacp;
-    int a_id, b_id;
+    uint16_t aid = a->stb_id;
+    uint16_t bid = b->stb_id;
 
-    if (lacp) {
-        a_id = lacp_slave_get_port_id(lacp, a->aux);
-        b_id = lacp_slave_get_port_id(lacp, b->aux);
-    } else {
-        a_id = netdev_get_ifindex(a->netdev);
-        b_id = netdev_get_ifindex(b->netdev);
-    }
-
-    return (a_id == b_id ? 0 : (a_id < b_id ? -1 : 1));
+    return aid < bid ? -1 : aid > bid;
 }
 
 static bool

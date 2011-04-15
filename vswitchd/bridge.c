@@ -3174,7 +3174,11 @@ port_reconfigure_bond(struct port *port)
     }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        bond_slave_register(iface->port->bond, iface, iface->netdev);
+        uint16_t stable_id = (port->lacp
+                              ? lacp_slave_get_port_id(port->lacp, iface)
+                              : iface->dp_ifidx);
+        bond_slave_register(iface->port->bond, iface, stable_id,
+                            iface->netdev);
     }
 }
 
