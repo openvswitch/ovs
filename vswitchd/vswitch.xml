@@ -647,6 +647,10 @@
           <dd> The number of milliseconds between successive attempts to
             poll each interface's MII.  Only relevant on ports which use
             <code>miimon</code> to detect failures. </dd>
+          <dt><code>lacp-system-id</code></dt>
+          <dd> The LACP system ID of this <ref table="Port"/>.  The system ID
+            of a LACP bond is used to identify itself to its partners.  Must
+            be a nonzero MAC address.</dd>
           <dt><code>lacp-system-priority</code></dt>
           <dd> The LACP system priority of this <ref table="Port"/>.  In
             LACP negotiations, link status decisions are made by the system
@@ -1266,6 +1270,11 @@
       <column name="other_config">
         Key-value pairs for rarely used interface features.
         <dl>
+          <dt><code>lacp-port-id</code></dt>
+          <dd> The LACP port ID of this <ref table="Interface"/>.  Port IDs are
+            used in LACP negotiations to identify individual ports
+            participating in a bond.  Must be a number between 1 and
+            65535.</dd>
           <dt><code>lacp-port-priority</code></dt>
           <dd> The LACP port priority of this <ref table="Interface"/>.  In
             LACP negotiations <ref table="Interface"/>s with numerically lower

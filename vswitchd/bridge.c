@@ -3099,14 +3099,23 @@ static void
 iface_reconfigure_lacp(struct iface *iface)
 {
     struct lacp_slave_settings s;
-    int priority;
+    int priority, portid;
+
+    portid = atoi(get_interface_other_config(iface->cfg, "lacp-port-id", "0"));
+    priority = atoi(get_interface_other_config(iface->cfg,
+                                               "lacp-port-priority", "0"));
+
+    if (portid <= 0 || portid > UINT16_MAX) {
+        portid = iface->dp_ifidx;
+    }
+
+    if (priority <= 0 || priority > UINT16_MAX) {
+        priority = UINT16_MAX;
+    }
 
     s.name = iface->name;
-    s.id = iface->dp_ifidx;
-    priority = atoi(get_interface_other_config(
-                        iface->cfg, "lacp-port-priority", "0"));
-    s.priority = (priority >= 0 && priority <= UINT16_MAX
-                  ? priority : UINT16_MAX);
+    s.id = portid;
+    s.priority = priority;
     lacp_slave_register(iface->port->lacp, iface, &s);
 }
 
@@ -3115,6 +3124,8 @@ port_reconfigure_lacp(struct port *port)
 {
     static struct lacp_settings s;
     struct iface *iface;
+    uint8_t sysid[ETH_ADDR_LEN];
+    const char *sysid_str;
     int priority;
 
     if (!enable_lacp(port, &s.active)) {
@@ -3123,8 +3134,14 @@ port_reconfigure_lacp(struct port *port)
         return;
     }
 
+    sysid_str = get_port_other_config(port->cfg, "lacp-system-id", NULL);
+    if (sysid_str && eth_addr_from_string(sysid_str, sysid)) {
+        memcpy(s.id, sysid, ETH_ADDR_LEN);
+    } else {
+        memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
+    }
+
     s.name = port->name;
-    memcpy(s.id, port->bridge->ea, ETH_ADDR_LEN);
 
     /* Prefer bondable links if unspecified. */
     priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
