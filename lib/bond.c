@@ -1005,7 +1005,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
                           slave->delay_expires - time_msec());
         }
 
-        ds_put_format(&ds, "lacp_may_enable: %s\n",
+        ds_put_format(&ds, "\tlacp_may_enable: %s\n",
                       slave->lacp_may_enable ? "true" : "false");
 
         if (!bond_is_balanced(bond)) {
