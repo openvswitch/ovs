@@ -132,8 +132,13 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
         lacp->name = xstrdup(s->name);
     }
 
-    memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
-    lacp->sys_priority = s->priority;
+    if (!eth_addr_equals(lacp->sys_id, s->id)
+        || lacp->sys_priority != s->priority) {
+        memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
+        lacp->sys_priority = s->priority;
+        lacp->update = true;
+    }
+
     lacp->active = s->active;
     lacp->fast = s->fast;
 }
@@ -225,6 +230,7 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
 
     if (slave) {
         slave_destroy(slave);
+        lacp->update = true;
     }
 }
 
