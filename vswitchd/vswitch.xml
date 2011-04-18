@@ -657,12 +657,23 @@
             with the numerically lower priority.  Must be a number between 1
             and 65535.</dd>
           <dt><code>lacp-time</code></dt>
-          <dd> The LACP timing which should be used on this
-            <ref table="Port"/>.  Possible values are <code>fast</code> and
-            <code>slow</code>.  By default <code>slow</code> is used.  When
-            configured to be <code>fast</code> more frequent LACP heartbeats
-            will be requested causing connectivity problems to be detected more
-            quickly.</dd>
+          <dd>
+            <p>The LACP timing which should be used on this
+              <ref table="Port"/>.  Possible values are <code>fast</code>,
+              <code>slow</code> and a positive number of milliseconds.  By
+              default <code>slow</code> is used.  When configured to be
+              <code>fast</code> LACP heartbeats are requested at a rate of once
+              per second causing connectivity problems to be detected more
+              quickly.  In <code>slow</code> mode, heartbeats are requested at
+              a rate of once every 30 seconds.</p>
+
+            <p>Users may manually set a heartbeat transmission rate to increase
+              the fault detection speed further.  When manually set, OVS
+              expects the partner switch to be configured with the same
+              transmission rate.  Manually setting <code>lacp-time</code> to
+              something other than <code>fast</code> or <code>slow</code> is
+              not supported by the LACP specification.</p>
+          </dd>
           <dt><code>lacp-strict</code></dt>
           <dd> When <code>true</code>, configures this <ref table="Port"/> to
             require successful LACP negotiations to enable any slaves.

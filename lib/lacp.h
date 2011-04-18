@@ -75,12 +75,19 @@ const struct lacp_pdu *parse_lacp_packet(const struct ofpbuf *);
 
 /* LACP Protocol Implementation. */
 
+enum lacp_time {
+    LACP_TIME_FAST,
+    LACP_TIME_SLOW,
+    LACP_TIME_CUSTOM
+};
+
 struct lacp_settings {
     char *name;
     uint8_t id[ETH_ADDR_LEN];
     uint16_t priority;
     bool active;
-    bool fast;
+    enum lacp_time lacp_time;
+    long long int custom_time;
     bool strict;
 };
 

@@ -3126,6 +3126,8 @@ port_reconfigure_lacp(struct port *port)
     struct iface *iface;
     uint8_t sysid[ETH_ADDR_LEN];
     const char *sysid_str;
+    const char *lacp_time;
+    long long int custom_time;
     int priority;
 
     if (!enable_lacp(port, &s.active)) {
@@ -3150,11 +3152,22 @@ port_reconfigure_lacp(struct port *port)
                   ? priority
                   : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
-                     "fast");
     s.strict = !strcmp(get_port_other_config(port->cfg, "lacp-strict",
                                              "false"),
                        "true");
+
+    lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");
+    custom_time = atoi(lacp_time);
+    if (!strcmp(lacp_time, "fast")) {
+        s.lacp_time = LACP_TIME_FAST;
+    } else if (!strcmp(lacp_time, "slow")) {
+        s.lacp_time = LACP_TIME_SLOW;
+    } else if (custom_time > 0) {
+        s.lacp_time = LACP_TIME_CUSTOM;
+        s.custom_time = custom_time;
+    } else {
+        s.lacp_time = LACP_TIME_SLOW;
+    }
 
     if (!port->lacp) {
         port->lacp = lacp_create();
