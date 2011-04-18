@@ -376,6 +376,8 @@ bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
         slave->aux = slave_;
         slave->delay_expires = LLONG_MAX;
         slave->up = bond_is_link_up(bond, netdev);
+        slave->name = xstrdup(netdev_get_name(netdev));
+
         slave->enabled = false;
         bond_enable_slave(slave, slave->up, NULL);
     }
