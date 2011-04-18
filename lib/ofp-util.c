@@ -137,7 +137,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
 
     if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(ofpfw & NXFW_TUN_ID)) {
-        rule->flow.tun_id = htonll(ntohll(cookie) >> 32);
+        cls_rule_set_tun_id(rule, htonll(ntohll(cookie) >> 32));
     }
 
     if (ofpfw & OFPFW_DL_DST) {
