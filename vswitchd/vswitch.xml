@@ -577,8 +577,8 @@
 
       <column name="lacp">
         <p>Configures LACP on this port.  LACP allows directly connected
-          switches to negotiate which links may be bonded.  LACP may be enabled
-          on non-bonded ports for the benefit of any switches they may be
+          switchs to negotiate which links may be bonded.  LACP may be enabled
+          on non-bonded ports for the benefit of any switchs they may be
           connected to.  <code>active</code> ports are allowed to initiate LACP
           negotiations.  <code>passive</code> ports are allowed to participate
           in LACP negotiations initiated by a remote switch, but not allowed to
@@ -659,6 +659,11 @@
             configured to be <code>fast</code> more frequent LACP heartbeats
             will be requested causing connectivity problems to be detected more
             quickly.</dd>
+          <dt><code>lacp-strict</code></dt>
+          <dd> When <code>true</code>, configures this <ref table="Port"/> to
+            require successful LACP negotiations to enable any slaves.
+            Defaults to <code>false</code> which safely allows LACP to be used
+            with switchs that do not support the protocol.</dd>
         </dl>
       </column>
     </group>

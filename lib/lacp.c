@@ -49,6 +49,7 @@ struct lacp {
     struct slave *key_slave; /* Slave whose ID will be the aggregation key. */
 
     bool fast;                /* Fast or Slow LACP time. */
+    bool strict;             /* True if in strict mode. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
 };
@@ -133,9 +134,11 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
     }
 
     if (!eth_addr_equals(lacp->sys_id, s->id)
-        || lacp->sys_priority != s->priority) {
+        || lacp->sys_priority != s->priority
+        || lacp->strict != s->strict) {
         memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
         lacp->sys_priority = s->priority;
+        lacp->strict = s->strict;
         lacp->update = true;
     }
 
@@ -348,7 +351,7 @@ lacp_wait(struct lacp *lacp)
 
 /* Static Helpers. */
 
-/* Updates the attached status of all slaves controlled b 'lacp' and sets its
+/* Updates the attached status of all slaves controlled by 'lacp' and sets its
  * negotiated parameter to true if any slaves are attachable. */
 static void
 lacp_update_attached(struct lacp *lacp)
@@ -396,6 +399,10 @@ lacp_update_attached(struct lacp *lacp)
                                     slave->partner.sys_id)) {
                 slave->attached = false;
             }
+        }
+    } else if (lacp->strict) {
+        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
+            slave->attached = false;
         }
     }
 }
@@ -620,9 +627,16 @@ lacp_unixctl_show(struct unixctl_conn *conn,
     }
 
     ds_put_format(&ds, "lacp: %s\n", lacp->name);
-    ds_put_format(&ds, "\tstatus: %s %s\n",
-                  lacp->active ? "active" : "passive",
-                  lacp->negotiated ? "negotiated" : "");
+
+    ds_put_format(&ds, "\tstatus: %s", lacp->active ? "active" : "passive");
+    if (lacp->strict) {
+        ds_put_cstr(&ds, " strict");
+    }
+    if (lacp->negotiated) {
+        ds_put_cstr(&ds, " negotiated");
+    }
+    ds_put_cstr(&ds, "\n");
+
     ds_put_format(&ds, "\tsys_id: " ETH_ADDR_FMT "\n", ETH_ADDR_ARGS(lacp->sys_id));
     ds_put_format(&ds, "\tsys_priority: %u\n", lacp->sys_priority);
     ds_put_cstr(&ds, "\taggregation key: ");

@@ -27,6 +27,7 @@ struct lacp_settings {
     uint16_t priority;
     bool active;
     bool fast;
+    bool strict;
 };
 
 void lacp_init(void);

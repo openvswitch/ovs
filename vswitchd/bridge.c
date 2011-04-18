@@ -3135,6 +3135,9 @@ port_reconfigure_lacp(struct port *port)
 
     s.fast = !strcmp(get_port_other_config(port->cfg, "lacp-time", "slow"),
                      "fast");
+    s.strict = !strcmp(get_port_other_config(port->cfg, "lacp-strict",
+                                             "false"),
+                       "true");
 
     if (!port->lacp) {
         port->lacp = lacp_create();
