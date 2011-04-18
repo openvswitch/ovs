@@ -302,6 +302,24 @@ make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
     }
 }
 
+/* Binds Unix domain socket 'fd' to a file with permissions 0700. */
+static int
+bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
+{
+#ifdef __linux__
+    /* On Linux, calling fchmod() *before* bind() sets permissions for the file
+     * about to be created.  Calling fchmod() *after* bind has no effect on the
+     * file that was created.) */
+    return fchmod(fd, 0700) || bind(fd, sun, sun_len) ? errno : 0;
+#else
+    /* According to _Unix Network Programming_, umask should affect bind(). */
+    mode_t old_umask = umask(0077);
+    int error = bind(fd, sun, sun_len) ? errno : 0;
+    umask(old_umask);
+    return error;
+#endif
+}
+
 /* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
  * SOCK_STREAM) that is bound to '*bind_path' (if 'bind_path' is non-null) and
  * connected to '*connect_path' (if 'connect_path' is non-null).  If 'nonblock'
@@ -348,9 +366,8 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
         fatal_signal_add_file_to_unlink(bind_path);
 
         error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd);
-        if (!error && (bind(fd, (struct sockaddr*) &un, un_len)
-                       || fchmod(fd, S_IRWXU))) {
-            error = errno;
+        if (!error) {
+            error = bind_unix_socket(fd, (struct sockaddr *) &un, un_len);
         }
         if (dirfd >= 0) {
             close(dirfd);
