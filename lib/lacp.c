@@ -209,9 +209,8 @@ lacp_process_pdu(struct lacp *lacp, const void *slave_,
     struct slave *slave = slave_lookup(lacp, slave_);
 
     slave->status = LACP_CURRENT;
-    timer_set_duration(&slave->rx, (lacp->fast
-                                    ? LACP_FAST_TIME_RX
-                                    : LACP_SLOW_TIME_RX));
+    timer_set_duration(&slave->rx, LACP_RX_MULTIPLIER *
+                       (lacp->fast ? LACP_FAST_TIME_TX : LACP_SLOW_TIME_TX));
 
     slave->ntt_actor = pdu->partner;
 
@@ -491,7 +490,7 @@ slave_set_expired(struct slave *slave)
     slave->status = LACP_EXPIRED;
     slave->partner.state |= LACP_STATE_TIME;
     slave->partner.state &= ~LACP_STATE_SYNC;
-    timer_set_duration(&slave->rx, LACP_FAST_TIME_RX);
+    timer_set_duration(&slave->rx, LACP_RX_MULTIPLIER * LACP_FAST_TIME_TX);
 }
 
 static void

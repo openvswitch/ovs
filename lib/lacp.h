@@ -33,8 +33,7 @@
 
 #define LACP_FAST_TIME_TX 1000  /* Fast transmission rate. */
 #define LACP_SLOW_TIME_TX 30000 /* Slow transmission rate. */
-#define LACP_FAST_TIME_RX (LACP_FAST_TIME_TX * 3) /* Fast receive rate. */
-#define LACP_SLOW_TIME_RX (LACP_SLOW_TIME_TX * 3) /* Slow receive rate. */
+#define LACP_RX_MULTIPLIER 3    /* Multiply by TX rate to get RX rate. */
 
 #define LACP_INFO_LEN 15
 struct lacp_info {
