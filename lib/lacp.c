@@ -87,6 +87,51 @@ static bool info_tx_equal(struct lacp_info *, struct lacp_info *);
 static void lacp_unixctl_show(struct unixctl_conn *, const char *args,
                               void *aux);
 
+/* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */
+void
+compose_lacp_pdu(const struct lacp_info *actor,
+                 const struct lacp_info *partner, struct lacp_pdu *pdu)
+{
+    memset(pdu, 0, sizeof *pdu);
+
+    pdu->subtype = 1;
+    pdu->version = 1;
+
+    pdu->actor_type = 1;
+    pdu->actor_len = 20;
+    pdu->actor = *actor;
+
+    pdu->partner_type = 2;
+    pdu->partner_len = 20;
+    pdu->partner = *partner;
+
+    pdu->collector_type = 3;
+    pdu->collector_len = 16;
+    pdu->collector_delay = htons(0);
+}
+
+/* Parses 'b' which represents a packet containing a LACP PDU.  This function
+ * returns NULL if 'b' is malformed, or does not represent a LACP PDU format
+ * supported by OVS.  Otherwise, it returns a pointer to the lacp_pdu contained
+ * within 'b'. */
+const struct lacp_pdu *
+parse_lacp_packet(const struct ofpbuf *b)
+{
+    const struct lacp_pdu *pdu;
+
+    pdu = ofpbuf_at(b, (uint8_t *)b->l3 - (uint8_t *)b->data, LACP_PDU_LEN);
+
+    if (pdu && pdu->subtype == 1
+        && pdu->actor_type == 1 && pdu->actor_len == 20
+        && pdu->partner_type == 2 && pdu->partner_len == 20) {
+        return pdu;
+    } else {
+        return NULL;
+    }
+}
+
+/* LACP Protocol Implementation. */
+
 /* Initializes the lacp module. */
 void
 lacp_init(void)
