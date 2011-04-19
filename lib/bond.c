@@ -1321,7 +1321,7 @@ bond_stb_enable_slave(struct bond_slave *slave)
 {
     struct bond *bond = slave->bond;
 
-    if (!bond->stb_slaves) {
+    if (bond->balance != BM_STABLE) {
         return;
     }
 
