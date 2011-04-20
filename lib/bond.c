@@ -95,6 +95,7 @@ struct bond {
     tag_type no_slaves_tag;     /* Tag for flows when all slaves disabled. */
     int updelay, downdelay;     /* Delay before slave goes up/down, in ms. */
     bool lacp_negotiated;       /* LACP negotiations were successful. */
+    bool bond_revalidate;       /* True if flows need revalidation. */
 
     /* SLB specific bonding info. */
     struct bond_entry *hash;     /* An array of (BOND_MASK + 1) elements. */
@@ -131,7 +132,7 @@ static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_);
 static bool bond_is_link_up(struct bond *, struct netdev *);
 static void bond_enable_slave(struct bond_slave *, bool enable,
                               struct tag_set *);
-static bool bond_stb_sort(struct bond *);
+static void bond_stb_sort(struct bond *);
 static void bond_stb_enable_slave(struct bond_slave *);
 static void bond_link_status_update(struct bond_slave *, struct tag_set *);
 static void bond_choose_active_slave(struct bond *, struct tag_set *);
@@ -346,6 +347,11 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         }
     }
 
+    if (bond->bond_revalidate) {
+        revalidate = true;
+        bond->bond_revalidate = false;
+    }
+
     if (bond->balance == BM_AB || !bond->hash || revalidate) {
         bond_entry_reset(bond);
     }
@@ -482,7 +488,14 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
         bond->next_fake_iface_update = time_msec() + 1000;
     }
 
-    if (bond_stb_sort(bond) || is_tcp_hash != bond_is_tcp_hash(bond)) {
+    bond_stb_sort(bond);
+
+    if (is_tcp_hash != bond_is_tcp_hash(bond)) {
+        bond->bond_revalidate = true;
+    }
+
+    if (bond->bond_revalidate) {
+        bond->bond_revalidate = false;
 
         bond_entry_reset(bond);
         if (bond->balance != BM_STABLE) {
@@ -1306,15 +1319,17 @@ bond_stb_sort_cmp__(const void *a_, const void *b_)
     return aid < bid ? -1 : aid > bid;
 }
 
-static bool
+static void
 bond_stb_sort(struct bond *bond)
 {
     size_t i;
 
     if (!bond->stb_slaves || !bond->stb_need_sort) {
-        return false;
+        return;
     }
+
     bond->stb_need_sort = false;
+    bond->bond_revalidate = true;
 
     qsort(bond->stb_slaves, bond->n_stb_slaves, sizeof *bond->stb_slaves,
           bond_stb_sort_cmp__);
@@ -1322,8 +1337,6 @@ bond_stb_sort(struct bond *bond)
     for (i = 0; i < bond->n_stb_slaves; i++) {
         bond->stb_slaves[i]->stb_idx = i;
     }
-
-    return true;
 }
 
 static void
