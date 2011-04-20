@@ -438,6 +438,8 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Initialize OpenFlow connections. */
     p->connmgr = connmgr_create(p, datapath, local_name);
 
+    init_ports(p);
+
     *ofprotop = p;
     return 0;
 }
@@ -768,10 +770,6 @@ ofproto_run1(struct ofproto *p)
     char *devname;
     int error;
     int i;
-
-    if (shash_is_empty(&p->port_by_name)) {
-        init_ports(p);
-    }
 
     for (i = 0; i < 50; i++) {
         struct dpif_upcall packet;
