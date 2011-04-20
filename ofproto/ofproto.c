@@ -1018,6 +1018,9 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
     int error;
 
     error = dpif_port_add(ofproto->dpif, netdev, &odp_port);
+    if (!error) {
+        update_port(ofproto, netdev_get_name(netdev));
+    }
     if (ofp_portp) {
         *ofp_portp = error ? OFPP_NONE : odp_port_to_ofp_port(odp_port);
     }
