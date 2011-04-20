@@ -494,6 +494,7 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
         } else {
             tag_set_add(tags, bond->stb_tag);
         }
+        tag_set_add(tags, bond->no_slaves_tag);
     }
 
     /* Invalidate any tags required by  */
