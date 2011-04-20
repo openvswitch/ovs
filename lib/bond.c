@@ -107,7 +107,7 @@ struct bond {
     size_t n_stb_slaves;            /* Number of slaves in 'stb_slaves'. */
     size_t len_stb_slaves;          /* Slaves allocated in 'stb_slaves'. */
     bool stb_need_sort;             /* True if stb_slaves is not sorted. */
-
+    tag_type stb_tag;               /* Tag associated with this bond. */
 
     /* Monitoring. */
     enum bond_detect_mode detect;     /* Link status mode, one of BLSM_*. */
@@ -328,9 +328,13 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     if (bond->balance != BM_STABLE) {
         free(bond->stb_slaves);
         bond->stb_slaves = NULL;
-    } else if (!bond->stb_slaves) {
+        bond->stb_tag = 0;
+    } else if (!bond->stb_tag) {
         struct bond_slave *slave;
 
+        bond->stb_tag = tag_create_random();
+
+        assert(!bond->stb_slaves);
         bond->n_stb_slaves = 0;
         bond->len_stb_slaves = 0;
         bond->stb_slaves = NULL;
@@ -479,11 +483,16 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
     }
 
     if (bond_stb_sort(bond) || is_tcp_hash != bond_is_tcp_hash(bond)) {
-        struct bond_slave *slave;
 
         bond_entry_reset(bond);
-        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-            tag_set_add(tags, slave->tag);
+        if (bond->balance != BM_STABLE) {
+            struct bond_slave *slave;
+
+            HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+                tag_set_add(tags, slave->tag);
+            }
+        } else {
+            tag_set_add(tags, bond->stb_tag);
         }
     }
 
@@ -645,7 +654,7 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
 {
     struct bond_slave *slave = choose_output_slave(bond, flow, vlan);
     if (slave) {
-        *tags |= slave->tag;
+        *tags |= bond->balance == BM_STABLE ? bond->stb_tag : slave->tag;
         return slave->aux;
     } else {
         *tags |= bond->no_slaves_tag;
