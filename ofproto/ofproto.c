@@ -912,7 +912,7 @@ int
 ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
 {
     struct ofport *ofport = get_port(ofproto, odp_port);
-    const char *name = ofport ? ofport->opp.name : "<unknown>";
+    const char *name = ofport ? netdev_get_name(ofport->netdev) : "<unknown>";
     int error;
 
     error = dpif_port_del(ofproto->dpif, odp_port);
@@ -920,8 +920,8 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
         VLOG_ERR("%s: failed to remove port %"PRIu16" (%s) interface (%s)",
                  dpif_name(ofproto->dpif), odp_port, name, strerror(error));
     } else if (ofport) {
-        /* 'name' is ofport->opp.name and update_port() is going to destroy
-         * 'ofport'.  Just in case update_port() refers to 'name' after it
+        /* 'name' is the netdev's name and update_port() is going to close the
+         * netdev.  Just in case update_port() refers to 'name' after it
          * destroys 'ofport', make a copy of it around the update_port()
          * call. */
         char *devname = xstrdup(name);
@@ -1048,7 +1048,7 @@ reinit_ports(struct ofproto *p)
 
     sset_init(&devnames);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        sset_add(&devnames, ofport->opp.name);
+        sset_add(&devnames, netdev_get_name(ofport->netdev));
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, p->dpif) {
         sset_add(&devnames, dpif_port.name);
@@ -1138,7 +1138,7 @@ ofport_equal(const struct ofport *a_, const struct ofport *b_)
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
-    const char *netdev_name = ofport->opp.name;
+    const char *netdev_name = netdev_get_name(ofport->netdev);
 
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->odp_port, 0));
@@ -1154,7 +1154,8 @@ ofport_remove(struct ofproto *p, struct ofport *ofport)
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
     hmap_remove(&p->ports, &ofport->hmap_node);
     shash_delete(&p->port_by_name,
-                 shash_find(&p->port_by_name, ofport->opp.name));
+                 shash_find(&p->port_by_name,
+                            netdev_get_name(ofport->netdev)));
     if (p->sflow) {
         ofproto_sflow_del_port(p->sflow, ofport->odp_port);
     }
