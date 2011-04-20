@@ -1060,12 +1060,13 @@ reinit_ports(struct ofproto *p)
     sset_destroy(&devnames);
 }
 
-static struct ofport *
-make_ofport(const struct dpif_port *dpif_port)
+/* Opens and returns a netdev for 'dpif_port', or a null pointer if the netdev
+ * cannot be opened.  On success, also fills in 'opp', in *HOST* byte order. */
+static struct netdev *
+ofport_open(const struct dpif_port *dpif_port, struct ofp_phy_port *opp)
 {
     struct netdev_options netdev_options;
     enum netdev_flags flags;
-    struct ofport *ofport;
     struct netdev *netdev;
     int error;
 
@@ -1083,22 +1084,16 @@ make_ofport(const struct dpif_port *dpif_port)
         return NULL;
     }
 
-    ofport = xzalloc(sizeof *ofport);
-    ofport->netdev = netdev;
-    ofport->odp_port = dpif_port->port_no;
-    ofport->opp.port_no = odp_port_to_ofp_port(dpif_port->port_no);
-    netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
-    ovs_strlcpy(ofport->opp.name, dpif_port->name, sizeof ofport->opp.name);
-
     netdev_get_flags(netdev, &flags);
-    ofport->opp.config = flags & NETDEV_UP ? 0 : OFPPC_PORT_DOWN;
 
-    ofport->opp.state = netdev_get_carrier(netdev) ? 0 : OFPPS_LINK_DOWN;
-
-    netdev_get_features(netdev,
-                        &ofport->opp.curr, &ofport->opp.advertised,
-                        &ofport->opp.supported, &ofport->opp.peer);
-    return ofport;
+    opp->port_no = odp_port_to_ofp_port(dpif_port->port_no);
+    netdev_get_etheraddr(netdev, opp->hw_addr);
+    ovs_strzcpy(opp->name, dpif_port->name, sizeof opp->name);
+    opp->config = flags & NETDEV_UP ? 0 : OFPPC_PORT_DOWN;
+    opp->state = netdev_get_carrier(netdev) ? 0 : OFPPS_LINK_DOWN;
+    netdev_get_features(netdev, &opp->curr, &opp->advertised,
+                        &opp->supported, &opp->peer);
+    return netdev;
 }
 
 static bool
@@ -1117,29 +1112,42 @@ ofport_conflicts(const struct ofproto *p, const struct dpif_port *dpif_port)
     }
 }
 
-static int
-ofport_equal(const struct ofport *a_, const struct ofport *b_)
+/* Returns true if most fields of 'a' and 'b' are equal.  Differences in name,
+ * port number, and 'config' bits other than OFPPC_PORT_DOWN are
+ * disregarded. */
+static bool
+ofport_equal(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
 {
-    const struct ofp_phy_port *a = &a_->opp;
-    const struct ofp_phy_port *b = &b_->opp;
-
     BUILD_ASSERT_DECL(sizeof *a == 48); /* Detect ofp_phy_port changes. */
-    return (a->port_no == b->port_no
-            && !memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr)
-            && !strcmp(a->name, b->name)
+    return (!memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr)
             && a->state == b->state
-            && a->config == b->config
+            && !((a->config ^ b->config) & OFPPC_PORT_DOWN)
             && a->curr == b->curr
             && a->advertised == b->advertised
             && a->supported == b->supported
             && a->peer == b->peer);
 }
 
+/* Adds an ofport to 'p' initialized based on the given 'netdev' and 'opp'.
+ * The caller must ensure that 'p' does not have a conflicting ofport (that is,
+ * one with the same name or port number). */
 static void
-ofport_install(struct ofproto *p, struct ofport *ofport)
+ofport_install(struct ofproto *p,
+               struct netdev *netdev, const struct ofp_phy_port *opp)
 {
-    const char *netdev_name = netdev_get_name(ofport->netdev);
+    const char *netdev_name = netdev_get_name(netdev);
+    struct ofport *ofport;
 
+    connmgr_send_port_status(p->connmgr, opp, OFPPR_ADD);
+
+    /* Create ofport. */
+    ofport = xmalloc(sizeof *ofport);
+    ofport->netdev = netdev;
+    ofport->opp = *opp;
+    ofport->odp_port = ofp_port_to_odp_port(opp->port_no);
+    ofport->cfm = NULL;
+
+    /* Add port to 'p'. */
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->odp_port, 0));
     shash_add(&p->port_by_name, netdev_name, ofport);
@@ -1148,9 +1156,12 @@ ofport_install(struct ofproto *p, struct ofport *ofport)
     }
 }
 
+/* Removes 'ofport' from 'p' and destroys it. */
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
+    connmgr_send_port_status(p->connmgr, &ofport->opp, OFPPR_DELETE);
+
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
     hmap_remove(&p->ports, &ofport->hmap_node);
     shash_delete(&p->port_by_name,
@@ -1159,6 +1170,42 @@ ofport_remove(struct ofproto *p, struct ofport *ofport)
     if (p->sflow) {
         ofproto_sflow_del_port(p->sflow, ofport->odp_port);
     }
+
+    ofport_free(ofport);
+}
+
+/* If 'ofproto' contains an ofport named 'name', removes it from 'ofproto' and
+ * destroys it. */
+static void
+ofport_remove_with_name(struct ofproto *ofproto, const char *name)
+{
+    struct ofport *port = shash_find_data(&ofproto->port_by_name, name);
+    if (port) {
+        ofport_remove(ofproto, port);
+    }
+}
+
+/* Updates 'port' within 'ofproto' with the new 'netdev' and 'opp'.
+ *
+ * Does not handle a name or port number change.  The caller must implement
+ * such a change as a delete followed by an add.  */
+static void
+ofport_modified(struct ofproto *ofproto, struct ofport *port,
+                struct netdev *netdev, struct ofp_phy_port *opp)
+{
+    memcpy(port->opp.hw_addr, opp->hw_addr, ETH_ADDR_LEN);
+    port->opp.config = ((port->opp.config & ~OFPPC_PORT_DOWN)
+                        | (opp->config & OFPPC_PORT_DOWN));
+    port->opp.state = opp->state;
+    port->opp.curr = opp->curr;
+    port->opp.advertised = opp->advertised;
+    port->opp.supported = opp->supported;
+    port->opp.peer = opp->peer;
+
+    netdev_close(port->netdev);
+    port->netdev = netdev;
+
+    connmgr_send_port_status(ofproto->connmgr, &port->opp, OFPPR_MODIFY);
 }
 
 static void
@@ -1214,75 +1261,42 @@ get_port(const struct ofproto *ofproto, uint16_t odp_port)
 }
 
 static void
-update_port(struct ofproto *p, const char *devname)
+update_port(struct ofproto *ofproto, const char *name)
 {
     struct dpif_port dpif_port;
-    struct ofport *old_ofport;
-    struct ofport *new_ofport;
-    int error;
+    struct ofp_phy_port opp;
+    struct netdev *netdev;
+    struct ofport *port;
 
     COVERAGE_INC(ofproto_update_port);
 
-    /* Query the datapath for port information. */
-    error = dpif_port_query_by_name(p->dpif, devname, &dpif_port);
-
-    /* Find the old ofport. */
-    old_ofport = shash_find_data(&p->port_by_name, devname);
-    if (!error) {
-        if (!old_ofport) {
-            /* There's no port named 'devname' but there might be a port with
-             * the same port number.  This could happen if a port is deleted
-             * and then a new one added in its place very quickly, or if a port
-             * is renamed.  In the former case we want to send an OFPPR_DELETE
-             * and an OFPPR_ADD, and in the latter case we want to send a
-             * single OFPPR_MODIFY.  We can distinguish the cases by comparing
-             * the old port's ifindex against the new port, or perhaps less
-             * reliably but more portably by comparing the old port's MAC
-             * against the new port's MAC.  However, this code isn't that smart
-             * and always sends an OFPPR_MODIFY (XXX). */
-            old_ofport = get_port(p, dpif_port.port_no);
+    /* Fetch 'name''s location and properties from the datapath. */
+    netdev = (!dpif_port_query_by_name(ofproto->dpif, name, &dpif_port)
+              ? ofport_open(&dpif_port, &opp)
+              : NULL);
+    if (netdev) {
+        port = get_port(ofproto, dpif_port.port_no);
+        if (port && !strcmp(netdev_get_name(port->netdev), name)) {
+            /* 'name' hasn't changed location.  Any properties changed? */
+            if (!ofport_equal(&port->opp, &opp)) {
+                ofport_modified(ofproto, port, netdev, &opp);
+            } else {
+                netdev_close(netdev);
+            }
+        } else {
+            /* If 'port' is nonnull then its name differs from 'name' and thus
+             * we should delete it.  If we think there's a port named 'name'
+             * then its port number must be wrong now so delete it too. */
+            if (port) {
+                ofport_remove(ofproto, port);
+            }
+            ofport_remove_with_name(ofproto, name);
+            ofport_install(ofproto, netdev, &opp);
         }
-    } else if (error != ENOENT && error != ENODEV) {
-        VLOG_WARN_RL(&rl, "dpif_port_query_by_name returned unexpected error "
-                     "%s", strerror(error));
-        goto exit;
+    } else {
+        /* Any port named 'name' is gone now. */
+        ofport_remove_with_name(ofproto, name);
     }
-
-    /* Create a new ofport. */
-    new_ofport = !error ? make_ofport(&dpif_port) : NULL;
-
-    /* Eliminate a few pathological cases. */
-    if (!old_ofport && !new_ofport) {
-        goto exit;
-    } else if (old_ofport && new_ofport) {
-        /* Most of the 'config' bits are OpenFlow soft state, but
-         * OFPPC_PORT_DOWN is maintained by the kernel.  So transfer the
-         * OpenFlow bits from old_ofport.  (make_ofport() only sets
-         * OFPPC_PORT_DOWN and leaves the other bits 0.)  */
-        new_ofport->opp.config |= old_ofport->opp.config & ~OFPPC_PORT_DOWN;
-
-        if (ofport_equal(old_ofport, new_ofport)) {
-            /* False alarm--no change. */
-            ofport_free(new_ofport);
-            goto exit;
-        }
-    }
-
-    /* Now deal with the normal cases. */
-    if (old_ofport) {
-        ofport_remove(p, old_ofport);
-    }
-    if (new_ofport) {
-        ofport_install(p, new_ofport);
-    }
-    connmgr_send_port_status(p->connmgr,
-                             new_ofport ? &new_ofport->opp : &old_ofport->opp,
-                             (!old_ofport ? OFPPR_ADD
-                              : !new_ofport ? OFPPR_DELETE
-                              : OFPPR_MODIFY));
-    ofport_free(old_ofport);
-
-exit:
     dpif_port_destroy(&dpif_port);
 }
 
@@ -1294,9 +1308,12 @@ init_ports(struct ofproto *p)
 
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, p->dpif) {
         if (!ofport_conflicts(p, &dpif_port)) {
-            struct ofport *ofport = make_ofport(&dpif_port);
-            if (ofport) {
-                ofport_install(p, ofport);
+            struct ofp_phy_port opp;
+            struct netdev *netdev;
+
+            netdev = ofport_open(&dpif_port, &opp);
+            if (netdev) {
+                ofport_install(p, netdev, &opp);
             }
         }
     }
