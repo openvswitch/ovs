@@ -75,9 +75,6 @@ struct bond_slave {
 
     /* BM_STABLE specific bonding info. */
     uint16_t stb_id;            /* ID used for 'stb_slaves' ordering. */
-    size_t stb_idx;             /* Index in 'bond''s 'stb_slaves' array.
-                                   Undefined value if participating in a
-                                   BTM_STABLE bond or not enabled. */
 };
 
 /* A bond, that is, a set of network devices grouped to improve performance or
@@ -104,10 +101,6 @@ struct bond {
     bool send_learning_packets;
 
     /* BM_STABLE specific bonding info. */
-    struct bond_slave **stb_slaves; /* Ordered list of enabled slaves. */
-    size_t n_stb_slaves;            /* Number of slaves in 'stb_slaves'. */
-    size_t len_stb_slaves;          /* Slaves allocated in 'stb_slaves'. */
-    bool stb_need_sort;             /* True if stb_slaves is not sorted. */
     tag_type stb_tag;               /* Tag associated with this bond. */
 
     /* Monitoring. */
@@ -132,8 +125,6 @@ static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_);
 static bool bond_is_link_up(struct bond *, struct netdev *);
 static void bond_enable_slave(struct bond_slave *, bool enable,
                               struct tag_set *);
-static void bond_stb_sort(struct bond *);
-static void bond_stb_enable_slave(struct bond_slave *);
 static void bond_link_status_update(struct bond_slave *, struct tag_set *);
 static void bond_choose_active_slave(struct bond *, struct tag_set *);
 static bool bond_is_tcp_hash(const struct bond *);
@@ -227,6 +218,7 @@ bond_create(const struct bond_settings *s)
     bond = xzalloc(sizeof *bond);
     hmap_init(&bond->slaves);
     bond->no_slaves_tag = tag_create_random();
+    bond->stb_tag = tag_create_random();
     bond->miimon_next_update = LLONG_MAX;
     bond->next_fake_iface_update = LLONG_MAX;
 
@@ -326,27 +318,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         bond->next_fake_iface_update = LLONG_MAX;
     }
 
-    if (bond->balance != BM_STABLE) {
-        free(bond->stb_slaves);
-        bond->stb_slaves = NULL;
-        bond->stb_tag = 0;
-    } else if (!bond->stb_tag) {
-        struct bond_slave *slave;
-
-        bond->stb_tag = tag_create_random();
-
-        assert(!bond->stb_slaves);
-        bond->n_stb_slaves = 0;
-        bond->len_stb_slaves = 0;
-        bond->stb_slaves = NULL;
-
-        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-            if (slave->enabled) {
-                bond_stb_enable_slave(slave);
-            }
-        }
-    }
-
     if (bond->bond_revalidate) {
         revalidate = true;
         bond->bond_revalidate = false;
@@ -387,14 +358,15 @@ bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
         slave->delay_expires = LLONG_MAX;
         slave->up = bond_is_link_up(bond, netdev);
         slave->name = xstrdup(netdev_get_name(netdev));
+        bond->bond_revalidate = true;
 
         slave->enabled = false;
         bond_enable_slave(slave, slave->up, NULL);
     }
 
     if (slave->stb_id != stb_id) {
-        bond->stb_need_sort = true;
         slave->stb_id = stb_id;
+        bond->bond_revalidate = true;
     }
 
     slave->netdev = netdev;
@@ -487,8 +459,6 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
         bond_update_fake_slave_stats(bond);
         bond->next_fake_iface_update = time_msec() + 1000;
     }
-
-    bond_stb_sort(bond);
 
     if (is_tcp_hash != bond_is_tcp_hash(bond)) {
         bond->bond_revalidate = true;
@@ -1306,69 +1276,10 @@ bond_is_link_up(struct bond *bond, struct netdev *netdev)
             : netdev_get_miimon(netdev));
 }
 
-static int
-bond_stb_sort_cmp__(const void *a_, const void *b_)
-{
-    const struct bond_slave *const *ap = a_;
-    const struct bond_slave *const *bp = b_;
-    const struct bond_slave *a = *ap;
-    const struct bond_slave *b = *bp;
-    uint16_t aid = a->stb_id;
-    uint16_t bid = b->stb_id;
-
-    return aid < bid ? -1 : aid > bid;
-}
-
-static void
-bond_stb_sort(struct bond *bond)
-{
-    size_t i;
-
-    if (!bond->stb_slaves || !bond->stb_need_sort) {
-        return;
-    }
-
-    bond->stb_need_sort = false;
-    bond->bond_revalidate = true;
-
-    qsort(bond->stb_slaves, bond->n_stb_slaves, sizeof *bond->stb_slaves,
-          bond_stb_sort_cmp__);
-
-    for (i = 0; i < bond->n_stb_slaves; i++) {
-        bond->stb_slaves[i]->stb_idx = i;
-    }
-}
-
-static void
-bond_stb_enable_slave(struct bond_slave *slave)
-{
-    struct bond *bond = slave->bond;
-
-    if (bond->balance != BM_STABLE) {
-        return;
-    }
-
-    bond->stb_need_sort = true;
-
-    if (slave->enabled) {
-        if (bond->len_stb_slaves <= bond->n_stb_slaves) {
-            bond->stb_slaves = x2nrealloc(bond->stb_slaves,
-                                          &bond->len_stb_slaves,
-                                          sizeof *bond->stb_slaves);
-        }
-
-        slave->stb_idx = bond->n_stb_slaves++;
-        bond->stb_slaves[slave->stb_idx] = slave;
-    } else {
-        size_t index = slave->stb_idx;
-        bond->stb_slaves[index] = bond->stb_slaves[--bond->n_stb_slaves];
-        bond->stb_slaves[index]->stb_idx = index;
-    }
-}
-
 static void
 bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
 {
+    struct bond *bond = slave->bond;
     slave->delay_expires = LLONG_MAX;
     if (enable != slave->enabled) {
         slave->enabled = enable;
@@ -1381,7 +1292,10 @@ bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
             VLOG_WARN("interface %s: enabled", slave->name);
             slave->tag = tag_create_random();
         }
-        bond_stb_enable_slave(slave);
+
+        if (bond->balance == BM_STABLE) {
+            bond->bond_revalidate = true;
+        }
     }
 }
 
@@ -1462,6 +1376,37 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
     return &bond->hash[bond_hash(bond, flow, vlan) & BOND_MASK];
 }
 
+/* This function uses Highest Random Weight hashing to choose an output slave.
+ * This approach only reassigns a minimal number of flows when slaves are
+ * enabled or disabled.  Unfortunately, it has O(n) performance against the
+ * number of slaves.  There exist algorithms which are O(1), but have slightly
+ * more complex implementations and require the use of memory.  This may need
+ * to be reimplemented if it becomes a performance bottleneck. */
+static struct bond_slave *
+choose_stb_slave(const struct bond *bond, const struct flow *flow,
+                 uint16_t vlan)
+{
+    struct bond_slave *best, *slave;
+    uint32_t best_hash, flow_hash;
+
+    best = NULL;
+    best_hash = 0;
+    flow_hash = bond_hash(bond, flow, vlan);
+    HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+        if (slave->enabled) {
+            uint32_t hash;
+
+            hash = hash_2words(flow_hash, slave->stb_id);
+            if (!best || hash > best_hash) {
+                best = slave;
+                best_hash = hash;
+            }
+        }
+    }
+
+    return best;
+}
+
 static struct bond_slave *
 choose_output_slave(const struct bond *bond, const struct flow *flow,
                     uint16_t vlan)
@@ -1473,13 +1418,7 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         return bond->active_slave;
 
     case BM_STABLE:
-        if (bond->n_stb_slaves) {
-            return bond->stb_slaves[bond_hash(bond, flow, vlan)
-                % bond->n_stb_slaves];
-        } else {
-            return bond->active_slave;
-        }
-
+        return choose_stb_slave(bond, flow, vlan);
     case BM_SLB:
     case BM_TCP:
         e = lookup_bond_entry(bond, flow, vlan);
