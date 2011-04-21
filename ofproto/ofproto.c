@@ -1203,6 +1203,9 @@ ofport_modified(struct ofproto *ofproto, struct ofport *port,
     port->opp.supported = opp->supported;
     port->opp.peer = opp->peer;
 
+    netdev_monitor_remove(ofproto->netdev_monitor, port->netdev);
+    netdev_monitor_add(ofproto->netdev_monitor, netdev);
+
     netdev_close(port->netdev);
     port->netdev = netdev;
 
