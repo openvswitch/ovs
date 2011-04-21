@@ -306,18 +306,11 @@ make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
 static int
 bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
 {
-#ifdef __linux__
-    /* On Linux, calling fchmod() *before* bind() sets permissions for the file
-     * about to be created.  Calling fchmod() *after* bind has no effect on the
-     * file that was created.) */
-    return fchmod(fd, 0700) || bind(fd, sun, sun_len) ? errno : 0;
-#else
     /* According to _Unix Network Programming_, umask should affect bind(). */
     mode_t old_umask = umask(0077);
     int error = bind(fd, sun, sun_len) ? errno : 0;
     umask(old_umask);
     return error;
-#endif
 }
 
 /* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
