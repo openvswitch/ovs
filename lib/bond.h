@@ -50,6 +50,7 @@ const char *bond_detect_mode_to_string(enum bond_detect_mode);
 /* Configuration for a bond as a whole. */
 struct bond_settings {
     char *name;                 /* Bond's name, for log messages. */
+    uint32_t basis;             /* Flow hashing basis. */
 
     /* Balancing configuration. */
     enum bond_mode balance;

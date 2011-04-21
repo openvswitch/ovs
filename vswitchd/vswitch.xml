@@ -647,6 +647,10 @@
           <dd> The number of milliseconds between successive attempts to
             poll each interface's MII.  Only relevant on ports which use
             <code>miimon</code> to detect failures. </dd>
+          <dt><code>bond-hash-basis</code></dt>
+          <dd> An integer hashed along with flows when choosing output slaves.
+            When changed, all flows will be assigned different hash values
+            possibly causing slave selection decisions to change.</dd>
           <dt><code>lacp-system-id</code></dt>
           <dd> The LACP system ID of this <ref table="Port"/>.  The system ID
             of a LACP bond is used to identify itself to its partners.  Must

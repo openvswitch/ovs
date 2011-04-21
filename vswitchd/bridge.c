@@ -3258,6 +3258,8 @@ port_reconfigure_bond(struct port *port)
 
     s.up_delay = MAX(0, port->cfg->bond_updelay);
     s.down_delay = MAX(0, port->cfg->bond_downdelay);
+    s.basis = atoi(get_port_other_config(port->cfg, "bond-hash-basis", "0"));
+
     s.rebalance_interval = atoi(
         get_port_other_config(port->cfg, "bond-rebalance-interval", "10000"));
     if (s.rebalance_interval < 1000) {
