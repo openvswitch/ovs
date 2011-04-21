@@ -664,6 +664,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                     dpif_port = NULL;
                 }
                 if (iface) {
+                    if (iface->port->bond) {
+                        /* The bond has a pointer to the netdev, so remove it
+                         * from the bond before closing the netdev.  The slave
+                         * will get added back to the bond later, after a new
+                         * netdev is available. */
+                        bond_slave_unregister(iface->port->bond, iface);
+                    }
                     netdev_close(iface->netdev);
                     iface->netdev = NULL;
                 }
