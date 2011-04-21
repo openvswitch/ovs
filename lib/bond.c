@@ -369,7 +369,16 @@ bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
         bond->bond_revalidate = true;
     }
 
-    slave->netdev = netdev;
+    if (slave->netdev != netdev) {
+        if (bond->monitor) {
+            if (slave->netdev) {
+                netdev_monitor_remove(bond->monitor, slave->netdev);
+            }
+            netdev_monitor_add(bond->monitor, netdev);
+        }
+        slave->netdev = netdev;
+    }
+
     free(slave->name);
     slave->name = xstrdup(netdev_get_name(netdev));
 }
@@ -386,6 +395,10 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
 
     if (!slave) {
         return;
+    }
+
+    if (bond->monitor) {
+        netdev_monitor_remove(bond->monitor, slave->netdev);
     }
 
     bond_enable_slave(slave, false, NULL);
