@@ -113,6 +113,7 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
 
 valgrind_wrappers = \
 	tests/valgrind/ovs-appctl \
+	tests/valgrind/ovs-openflowd \
 	tests/valgrind/ovs-vsctl \
 	tests/valgrind/ovsdb-client \
 	tests/valgrind/ovsdb-server \
