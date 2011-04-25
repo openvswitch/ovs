@@ -2951,12 +2951,12 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 
     port->cfg = cfg;
 
-
     /* Add new interfaces and update 'cfg' member of existing ones. */
     sset_init(&new_ifaces);
     for (i = 0; i < cfg->n_interfaces; i++) {
         const struct ovsrec_interface *if_cfg = cfg->interfaces[i];
         struct iface *iface;
+        const char *type;
 
         if (!sset_add(&new_ifaces, if_cfg->name)) {
             VLOG_WARN("port %s: %s specified twice as port interface",
@@ -2965,8 +2965,18 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
             continue;
         }
 
+        /* Determine interface type.  The local port always has type
+         * "internal".  Other ports take their type from the database and
+         * default to "system" if none is specified. */
+        type = (!strcmp(if_cfg->name, port->bridge->name) ? "internal"
+                : if_cfg->type[0] ? if_cfg->type
+                : "system");
+
         iface = iface_lookup(port->bridge, if_cfg->name);
-        if (iface) {
+        if (!strcmp(type, "null")) {
+            iface_destroy(iface);
+            continue;
+        } else if (iface) {
             if (iface->port != port) {
                 VLOG_ERR("bridge %s: %s interface is on multiple ports, "
                          "removing from %s",
@@ -2978,12 +2988,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
             iface = iface_create(port, if_cfg);
         }
 
-        /* Determine interface type.  The local port always has type
-         * "internal".  Other ports take their type from the database and
-         * default to "system" if none is specified. */
-        iface->type = (!strcmp(if_cfg->name, port->bridge->name) ? "internal"
-                       : if_cfg->type[0] ? if_cfg->type
-                       : "system");
+        iface->type = type;
     }
     sset_destroy(&new_ifaces);
 

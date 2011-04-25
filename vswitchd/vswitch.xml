@@ -1047,6 +1047,8 @@
               </dd>
             </dl>
           </dd>
+          <dt><code>null</code></dt>
+          <dd>An ignored interface.</dd>
         </dl>
       </column>
 
