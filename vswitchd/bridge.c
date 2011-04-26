@@ -3136,11 +3136,13 @@ static void
 iface_reconfigure_lacp(struct iface *iface)
 {
     struct lacp_slave_settings s;
-    int priority, portid;
+    int priority, portid, key;
 
     portid = atoi(get_interface_other_config(iface->cfg, "lacp-port-id", "0"));
     priority = atoi(get_interface_other_config(iface->cfg,
                                                "lacp-port-priority", "0"));
+    key = atoi(get_interface_other_config(iface->cfg, "lacp-aggregation-key",
+                                          "0"));
 
     if (portid <= 0 || portid > UINT16_MAX) {
         portid = iface->dp_ifidx;
@@ -3150,9 +3152,14 @@ iface_reconfigure_lacp(struct iface *iface)
         priority = UINT16_MAX;
     }
 
+    if (key < 0 || key > UINT16_MAX) {
+        key = 0;
+    }
+
     s.name = iface->name;
     s.id = portid;
     s.priority = priority;
+    s.key = key;
     lacp_slave_register(iface->port->lacp, iface, &s);
 }
 

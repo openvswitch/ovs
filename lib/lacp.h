@@ -107,6 +107,7 @@ struct lacp_slave_settings {
     char *name;
     uint16_t id;
     uint16_t priority;
+    uint16_t key;
 };
 
 void lacp_slave_register(struct lacp *, void *slave_,

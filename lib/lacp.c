@@ -63,6 +63,7 @@ struct slave {
     struct lacp *lacp;            /* LACP object containing this slave. */
     uint16_t port_id;             /* Port ID. */
     uint16_t port_priority;       /* Port Priority. */
+    uint16_t key;                 /* Aggregation Key. 0 if default. */
     char *name;                   /* Name of this slave. */
 
     enum slave_status status;     /* Slave status. */
@@ -274,9 +275,12 @@ lacp_slave_register(struct lacp *lacp, void *slave_,
         slave->name = xstrdup(s->name);
     }
 
-    if (slave->port_id != s->id || slave->port_priority != s->priority) {
+    if (slave->port_id != s->id
+        || slave->port_priority != s->priority
+        || slave->key != s->key) {
         slave->port_id = s->id;
         slave->port_priority = s->priority;
+        slave->key = s->key;
 
         lacp->update = true;
 
@@ -528,6 +532,7 @@ static void
 slave_get_actor(struct slave *slave, struct lacp_info *actor)
 {
     struct lacp *lacp = slave->lacp;
+    uint16_t key;
     uint8_t state = 0;
 
     if (lacp->active) {
@@ -558,8 +563,13 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_COL | LACP_STATE_DIST;
     }
 
+    key = lacp->key_slave->key;
+    if (!key) {
+        key = lacp->key_slave->port_id;
+    }
+
     actor->state = state;
-    actor->key = htons(lacp->key_slave->port_id);
+    actor->key = htons(key);
     actor->port_priority = htons(slave->port_priority);
     actor->port_id = htons(slave->port_id);
     actor->sys_priority = htons(lacp->sys_priority);

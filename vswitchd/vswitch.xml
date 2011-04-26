@@ -1301,6 +1301,11 @@
             LACP negotiations <ref table="Interface"/>s with numerically lower
             priorities are preferred for aggregation.  Must be a number between
             1 and 65535.</dd>
+          <dt><code>lacp-aggregation-key</code></dt>
+          <dd> The LACP aggregation key of this <ref table="Interface"/>.
+            <ref table="Interface"/>s with different aggregation keys may not
+            be active within a given <ref table="Port"/> at the same time. Must
+            be a number between 1 and 65535.</dd>
         </dl>
       </column>
 
