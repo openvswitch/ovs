@@ -1297,12 +1297,6 @@ rule_has_out_port(const struct rule *rule, ovs_be16 out_port)
     return false;
 }
 
-struct rule *
-ofproto_rule_lookup(struct ofproto *ofproto, const struct flow *flow)
-{
-    return rule_from_cls_rule(classifier_lookup(&ofproto->cls, flow));
-}
-
 /* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
  * statistics appropriately.  'packet' must have at least sizeof(struct
  * ofp_packet_in) bytes of headroom.

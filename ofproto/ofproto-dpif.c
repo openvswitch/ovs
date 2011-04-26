@@ -2427,7 +2427,8 @@ flow_push_stats(const struct rule_dpif *rule,
 static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
 {
-    return rule_dpif_cast(ofproto_rule_lookup(&ofproto->up, flow));
+    return rule_dpif_cast(rule_from_cls_rule(
+                              classifier_lookup(&ofproto->up.cls, flow)));
 }
 
 static struct rule *
