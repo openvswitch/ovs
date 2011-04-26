@@ -23,9 +23,9 @@
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
-struct dpif_upcall;
 struct ofconn;
 struct ofputil_flow_removed;
+struct ofputil_packet_in;
 struct sset;
 
 /* ofproto supports two kinds of OpenFlow connections:
@@ -93,7 +93,7 @@ void connmgr_send_port_status(struct connmgr *, const struct ofp_phy_port *,
                               uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
-void connmgr_send_packet_in(struct connmgr *, const struct dpif_upcall *,
+void connmgr_send_packet_in(struct connmgr *, const struct ofputil_packet_in *,
                             const struct flow *, struct ofpbuf *rw_packet);
 
 /* Fail-open settings. */

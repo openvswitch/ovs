@@ -22,7 +22,6 @@
 #include <stdlib.h>
 
 #include "coverage.h"
-#include "dpif.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"
@@ -926,7 +925,7 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
 
 /* Sending asynchronous messages. */
 
-static void schedule_packet_in(struct ofconn *, const struct dpif_upcall *,
+static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in,
                                const struct flow *, struct ofpbuf *rw_packet);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
@@ -981,15 +980,15 @@ connmgr_send_flow_removed(struct connmgr *mgr,
     }
 }
 
-/* Given 'upcall', of type DPIF_UC_ACTION or DPIF_UC_MISS, sends an
- * OFPT_PACKET_IN message to each OpenFlow controller as necessary according to
- * their individual configurations.
+/* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
+ * necessary according to their individual configurations.
  *
  * 'rw_packet' may be NULL.  Otherwise, 'rw_packet' must contain the same data
- * as upcall->packet.  (rw_packet == upcall->packet is also valid.)  Ownership
- * of 'rw_packet' is transferred to this function. */
+ * as pin->packet.  (rw_packet == pin->packet is also valid.)  Ownership of
+ * 'rw_packet' is transferred to this function. */
 void
-connmgr_send_packet_in(struct connmgr *mgr, const struct dpif_upcall *upcall,
+connmgr_send_packet_in(struct connmgr *mgr,
+                       const struct ofputil_packet_in *pin,
                        const struct flow *flow, struct ofpbuf *rw_packet)
 {
     struct ofconn *ofconn, *prev;
@@ -998,13 +997,13 @@ connmgr_send_packet_in(struct connmgr *mgr, const struct dpif_upcall *upcall,
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
-                schedule_packet_in(prev, upcall, flow, NULL);
+                schedule_packet_in(prev, *pin, flow, NULL);
             }
             prev = ofconn;
         }
     }
     if (prev) {
-        schedule_packet_in(prev, upcall, flow, rw_packet);
+        schedule_packet_in(prev, *pin, flow, rw_packet);
     } else {
         ofpbuf_delete(rw_packet);
     }
@@ -1020,50 +1019,45 @@ do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
                           ofconn->packet_in_counter, 100);
 }
 
-/* Takes 'upcall', whose packet has the flow specified by 'flow', composes an
+/* Takes 'pin', whose packet has the flow specified by 'flow', composes an
  * OpenFlow packet-in message from it, and passes it to 'ofconn''s packet
  * scheduler for sending.
  *
  * 'rw_packet' may be NULL.  Otherwise, 'rw_packet' must contain the same data
- * as upcall->packet.  (rw_packet == upcall->packet is also valid.)  Ownership
- * of 'rw_packet' is transferred to this function. */
+ * as pin->packet.  (rw_packet == pin->packet is also valid.)  Ownership of
+ * 'rw_packet' is transferred to this function. */
 static void
-schedule_packet_in(struct ofconn *ofconn, const struct dpif_upcall *upcall,
+schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
                    const struct flow *flow, struct ofpbuf *rw_packet)
 {
     struct connmgr *mgr = ofconn->connmgr;
-    struct ofputil_packet_in pin;
-
-    /* Figure out the easy parts. */
-    pin.packet = upcall->packet;
-    pin.in_port = flow->in_port;
-    pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
 
     /* Get OpenFlow buffer_id. */
-    if (upcall->type == DPIF_UC_ACTION) {
+    if (pin.reason == OFPR_ACTION) {
         pin.buffer_id = UINT32_MAX;
     } else if (mgr->fail_open && fail_open_is_active(mgr->fail_open)) {
         pin.buffer_id = pktbuf_get_null();
     } else if (!ofconn->pktbuf) {
         pin.buffer_id = UINT32_MAX;
     } else {
-        pin.buffer_id = pktbuf_save(ofconn->pktbuf, upcall->packet,
-                                    flow->in_port);
+        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet, flow->in_port);
     }
 
     /* Figure out how much of the packet to send. */
-    pin.send_len = upcall->packet->size;
+    if (pin.reason == OFPR_NO_MATCH) {
+        pin.send_len = pin.packet->size;
+    } else {
+        /* Caller should have initialized 'send_len' to 'max_len' specified in
+         * struct ofp_action_output. */
+    }
     if (pin.buffer_id != UINT32_MAX) {
         pin.send_len = MIN(pin.send_len, ofconn->miss_send_len);
-    }
-    if (upcall->type == DPIF_UC_ACTION) {
-        pin.send_len = MIN(pin.send_len, upcall->userdata);
     }
 
     /* Make OFPT_PACKET_IN and hand over to packet scheduler.  It might
      * immediately call into do_send_packet_in() or it might buffer it for a
      * while (until a later call to pinsched_run()). */
-    pinsched_send(ofconn->schedulers[upcall->type == DPIF_UC_MISS ? 0 : 1],
+    pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
                   flow->in_port, ofputil_encode_packet_in(&pin, rw_packet),
                   do_send_packet_in, ofconn);
 }

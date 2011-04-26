@@ -1498,7 +1498,7 @@ send_packet_in(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall,
     pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = upcall->userdata;
-    connmgr_send_packet_in(ofproto->up.connmgr, upcall, flow,
+    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
                            clone ? NULL : upcall->packet);
 }
 
