@@ -780,9 +780,6 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
             skip_type = false;
         }
     }
-    if (w & NXFW_TUN_ID) {
-        ds_put_cstr(&f, "tun_id_wild,");
-    }
     print_wild(&f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
     print_wild(&f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
@@ -837,7 +834,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     bool need_priority;
     int error;
 
-    error = ofputil_decode_flow_mod(&fm, oh, NXFF_OPENFLOW10);
+    error = ofputil_decode_flow_mod(&fm, oh);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -934,7 +931,7 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
     struct ofputil_flow_removed fr;
     int error;
 
-    error = ofputil_decode_flow_removed(&fr, oh, NXFF_OPENFLOW10);
+    error = ofputil_decode_flow_removed(&fr, oh);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1070,7 +1067,7 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
     struct flow_stats_request fsr;
     int error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, oh, NXFF_OPENFLOW10);
+    error = ofputil_decode_flow_stats_request(&fsr, oh);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1103,7 +1100,7 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         struct ofputil_flow_stats fs;
         int retval;
 
-        retval = ofputil_decode_flow_stats_reply(&fs, &b, NXFF_OPENFLOW10);
+        retval = ofputil_decode_flow_stats_reply(&fs, &b);
         if (retval) {
             if (retval != EOF) {
                 ds_put_cstr(string, " ***parse error***");
@@ -1332,13 +1329,6 @@ ofp_print_echo(struct ds *string, const struct ofp_header *oh, int verbosity)
 }
 
 static void
-ofp_print_nxt_tun_id_from_cookie(struct ds *string,
-                                 const struct nxt_tun_id_cookie *ntic)
-{
-    ds_put_format(string, " set=%"PRIu8, ntic->set);
-}
-
-static void
 ofp_print_nxt_role_message(struct ds *string,
                            const struct nx_role_request *nrr)
 {
@@ -1505,10 +1495,6 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_aggregate_reply(string, oh);
-        break;
-
-    case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
-        ofp_print_nxt_tun_id_from_cookie(string, msg);
         break;
 
     case OFPUTIL_NXT_ROLE_REQUEST:

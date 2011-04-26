@@ -764,11 +764,6 @@ increasing capability:
 This is the standard OpenFlow 1.0 flow format.  It should be supported
 by all OpenFlow switches.
 .
-.IP "\fBtun_id_from_cookie\fR"
-This Nicira extension to OpenFlow adds minimal and limited support for
-\fBtun_id\fR, but it does not support any other Nicira flow
-extensions.  (This flow format is deprecated.)
-.
 .IP "\fBnxm\fR (Nicira Extended Match)"
 This Nicira extension to OpenFlow is flexible and extensible.  It
 supports all of the Nicira flow extensions, such as \fBtun_id\fR and

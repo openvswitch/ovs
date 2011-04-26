@@ -515,8 +515,6 @@ negotiate_highest_flow_format(struct vconn *vconn,
 
         if (try_set_flow_format(vconn, NXFF_NXM)) {
             flow_format = NXFF_NXM;
-        } else if (try_set_flow_format(vconn, NXFF_TUN_ID_FROM_COOKIE)) {
-            flow_format = NXFF_TUN_ID_FROM_COOKIE;
         } else {
             flow_format = NXFF_OPENFLOW10;
         }
@@ -544,7 +542,7 @@ do_dump_flows__(int argc, char *argv[], bool aggregate)
     parse_ofp_flow_stats_request_str(&fsr, aggregate, argc > 2 ? argv[2] : "");
 
     open_vconn(argv[1], &vconn);
-    min_flow_format = ofputil_min_flow_format(&fsr.match, false, 0);
+    min_flow_format = ofputil_min_flow_format(&fsr.match);
     flow_format = negotiate_highest_flow_format(vconn, min_flow_format);
     request = ofputil_encode_flow_stats_request(&fsr, flow_format);
     dump_stats_transaction(argv[1], request);
@@ -1056,7 +1054,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->n_actions = actions.size / sizeof *version->actions;
         version->actions = ofpbuf_steal_data(&actions);
 
-        min_ff = ofputil_min_flow_format(&fm.cr, true, fm.cookie);
+        min_ff = ofputil_min_flow_format(&fm.cr);
         min_flow_format = MAX(min_flow_format, min_ff);
         check_final_format_for_flow_mod(min_flow_format);
 
@@ -1122,8 +1120,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
                 struct ofputil_flow_stats fs;
                 int retval;
 
-                retval = ofputil_decode_flow_stats_reply(&fs, reply,
-                                                         flow_format);
+                retval = ofputil_decode_flow_stats_reply(&fs, reply);
                 if (retval) {
                     if (retval != EOF) {
                         ovs_fatal(0, "parse error in reply");

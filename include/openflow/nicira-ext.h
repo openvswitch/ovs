@@ -136,10 +136,7 @@ enum nicira_type {
     NXT_FLOW_END_CONFIG__OBSOLETE,
     NXT_FLOW_END__OBSOLETE,
     NXT_MGMT__OBSOLETE,
-
-    /* Use the high 32 bits of the cookie field as the tunnel ID in the flow
-     * match. */
-    NXT_TUN_ID_FROM_COOKIE,
+    NXT_TUN_ID_FROM_COOKIE__OBSOLETE,
 
     /* Controller role support.  The request body is struct nx_role_request.
      * The reply echos the request. */
@@ -169,16 +166,6 @@ enum nicira_stats_type {
     NXST_FLOW,                  /* Analogous to OFPST_FLOW. */
     NXST_AGGREGATE              /* Analogous to OFPST_AGGREGATE. */
 };
-
-/* NXT_TUN_ID_FROM_COOKIE request. */
-struct nxt_tun_id_cookie {
-    struct ofp_header header;
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* NXT_TUN_ID_FROM_COOKIE */
-    uint8_t set;                /* Nonzero to enable, zero to disable. */
-    uint8_t pad[7];
-};
-OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
 
 /* Configures the "role" of the sending controller.  The default role is:
  *
@@ -604,12 +591,6 @@ enum nx_mp_algorithm {
      */
     NX_MP_ALG_ITER_HASH         /* Iterative Hash. */
 };
-
-/* Wildcard for tunnel ID. */
-#define NXFW_TUN_ID  (1 << 25)
-
-#define NXFW_ALL NXFW_TUN_ID
-#define OVSFW_ALL (OFPFW_ALL | NXFW_ALL)
 
 /* Action structure for NXAST_AUTOPATH.
  *
@@ -1165,8 +1146,6 @@ OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
 
 enum nx_flow_format {
     NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
-    NXFF_TUN_ID_FROM_COOKIE = 1, /* OpenFlow 1.0, plus obtain tunnel ID from
-                                  * cookie. */
     NXFF_NXM = 2                 /* Nicira extended match. */
 };
 

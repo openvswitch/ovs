@@ -2746,8 +2746,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     ots = append_ofp_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     strcpy(ots->name, "classifier");
-    ots->wildcards = (ofconn_get_flow_format(ofconn) == NXFF_OPENFLOW10
-                      ? htonl(OFPFW_ALL) : htonl(OVSFW_ALL));
+    ots->wildcards = htonl(OFPFW_ALL);
     ots->max_entries = htonl(1024 * 1024); /* An arbitrary big number. */
     ots->active_count = htonl(classifier_count(&p->cls));
     put_32aligned_be64(&ots->lookup_count, htonll(0));  /* XXX */
@@ -2835,7 +2834,6 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
 {
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
-    ovs_be64 cookie;
     size_t act_len, len;
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
@@ -2851,9 +2849,8 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
     ofs->length = htons(len);
     ofs->table_id = 0;
     ofs->pad = 0;
-    ofputil_cls_rule_to_match(&rule->cr, ofconn_get_flow_format(ofconn),
-                              &ofs->match, rule->flow_cookie, &cookie);
-    put_32aligned_be64(&ofs->cookie, cookie);
+    ofputil_cls_rule_to_match(&rule->cr, &ofs->match);
+    put_32aligned_be64(&ofs->cookie, rule->flow_cookie);
     calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
@@ -2895,8 +2892,7 @@ handle_flow_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
         struct cls_rule target;
         struct rule *rule;
 
-        ofputil_cls_rule_from_match(&fsr->match, 0, NXFF_OPENFLOW10, 0,
-                                    &target);
+        ofputil_cls_rule_from_match(&fsr->match, 0, &target);
         cls_cursor_init(&cursor, &ofproto->cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             put_ofp_flow_stats(ofconn, rule, fsr->out_port, &reply);
@@ -3068,8 +3064,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct cls_rule target;
     struct ofpbuf *msg;
 
-    ofputil_cls_rule_from_match(&request->match, 0, NXFF_OPENFLOW10, 0,
-                                &target);
+    ofputil_cls_rule_from_match(&request->match, 0, &target);
 
     msg = start_ofp_stats_reply(oh, sizeof *reply);
     reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
@@ -3516,7 +3511,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_flow_format(ofconn));
+    error = ofputil_decode_flow_mod(&fm, oh);
     if (error) {
         return error;
     }
@@ -3559,19 +3554,6 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static int
-handle_tun_id_from_cookie(struct ofconn *ofconn, const struct ofp_header *oh)
-{
-    const struct nxt_tun_id_cookie *msg
-        = (const struct nxt_tun_id_cookie *) oh;
-    enum nx_flow_format flow_format;
-
-    flow_format = msg->set ? NXFF_TUN_ID_FROM_COOKIE : NXFF_OPENFLOW10;
-    ofconn_set_flow_format(ofconn, flow_format);
-
-    return 0;
-}
-
-static int
 handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct nx_role_request *nrr = (struct nx_role_request *) oh;
@@ -3611,7 +3593,6 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 
     format = ntohl(msg->format);
     if (format == NXFF_OPENFLOW10
-        || format == NXFF_TUN_ID_FROM_COOKIE
         || format == NXFF_NXM) {
         ofconn_set_flow_format(ofconn, format);
         return 0;
@@ -3676,9 +3657,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return 0;
 
         /* Nicira extension requests. */
-    case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
-        return handle_tun_id_from_cookie(ofconn, oh);
-
     case OFPUTIL_NXT_ROLE_REQUEST:
         return handle_role_request(ofconn, oh);
 

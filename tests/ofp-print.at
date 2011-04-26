@@ -601,16 +601,6 @@ OFPT_BARRIER_REPLY (xid=0x1):
 ])
 AT_CLEANUP
 
-AT_SETUP([NXT_TUN_ID_FROM_COOKIE])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
-01 04 00 18 00 00 00 02 00 00 23 20 00 00 00 09 \
-01 00 00 00 00 00 00 00 \
-"], [0], [dnl
-NXT_TUN_ID_FROM_COOKIE (xid=0x2): set=1
-])
-AT_CLEANUP
-
 AT_SETUP([NXT_ROLE_REQUEST])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

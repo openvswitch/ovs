@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,8 +70,7 @@ main(int argc OVS_UNUSED, char *argv[])
 
         flow_extract(packet, 0, 1, &flow);
         cls_rule_init_exact(&flow, 0, &rule);
-        ofputil_cls_rule_to_match(&rule, NXFF_OPENFLOW10, &extracted_match,
-                                  0, NULL);
+        ofputil_cls_rule_to_match(&rule, &extracted_match);
 
         if (memcmp(&expected_match, &extracted_match, sizeof expected_match)) {
             char *exp_s = ofp_match_to_string(&expected_match, 2);
