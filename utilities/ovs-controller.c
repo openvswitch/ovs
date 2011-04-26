@@ -227,6 +227,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     cfg.mode = (action_normal ? LSW_NORMAL
                 : learn_macs ? LSW_LEARN
                 : LSW_FLOOD);
+    cfg.exact_flows = exact_flows;
     cfg.max_idle = set_up_flows ? max_idle : -1;
     cfg.default_flows = &default_flows;
     cfg.default_queue = default_queue;
