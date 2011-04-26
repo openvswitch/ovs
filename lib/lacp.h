@@ -89,6 +89,7 @@ struct lacp_settings {
     enum lacp_time lacp_time;
     long long int custom_time;
     bool strict;
+    bool force_agg;
 };
 
 void lacp_init(void);

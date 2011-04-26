@@ -53,6 +53,7 @@ struct lacp {
     bool strict;             /* True if in strict mode. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
+    bool force_agg;          /* Forces LACP_STATE_AGG bit on all slaves. */
 };
 
 struct slave {
@@ -190,6 +191,7 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     lacp->active = s->active;
     lacp->lacp_time = s->lacp_time;
+    lacp->force_agg = s->force_agg;
     lacp->custom_time = MAX(TIME_UPDATE_INTERVAL, s->custom_time);
 }
 
@@ -525,13 +527,14 @@ slave_set_expired(struct slave *slave)
 static void
 slave_get_actor(struct slave *slave, struct lacp_info *actor)
 {
+    struct lacp *lacp = slave->lacp;
     uint8_t state = 0;
 
-    if (slave->lacp->active) {
+    if (lacp->active) {
         state |= LACP_STATE_ACT;
     }
 
-    if (slave->lacp->lacp_time != LACP_TIME_SLOW) {
+    if (lacp->lacp_time != LACP_TIME_SLOW) {
         state |= LACP_STATE_TIME;
     }
 
@@ -547,20 +550,20 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_EXP;
     }
 
-    if (hmap_count(&slave->lacp->slaves) > 1) {
+    if (lacp->force_agg || hmap_count(&lacp->slaves) > 1) {
         state |= LACP_STATE_AGG;
     }
 
-    if (slave->attached || !slave->lacp->negotiated) {
+    if (slave->attached || !lacp->negotiated) {
         state |= LACP_STATE_COL | LACP_STATE_DIST;
     }
 
     actor->state = state;
-    actor->key = htons(slave->lacp->key_slave->port_id);
+    actor->key = htons(lacp->key_slave->port_id);
     actor->port_priority = htons(slave->port_priority);
     actor->port_id = htons(slave->port_id);
-    actor->sys_priority = htons(slave->lacp->sys_priority);
-    memcpy(&actor->sys_id, slave->lacp->sys_id, ETH_ADDR_LEN);
+    actor->sys_priority = htons(lacp->sys_priority);
+    memcpy(&actor->sys_id, lacp->sys_id, ETH_ADDR_LEN);
 }
 
 /* Given 'slave', populates 'priority' with data representing its LACP link

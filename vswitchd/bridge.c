@@ -3193,6 +3193,10 @@ port_reconfigure_lacp(struct port *port)
                                              "false"),
                        "true");
 
+    s.force_agg = !strcmp(get_port_other_config(port->cfg,
+                                                "lacp-force-aggregatable",
+                                                "false"), "true");
+
     lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");
     custom_time = atoi(lacp_time);
     if (!strcmp(lacp_time, "fast")) {
