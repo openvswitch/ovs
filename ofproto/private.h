@@ -204,8 +204,30 @@ struct ofproto_class {
 /* ## Factory Functions ## */
 /* ## ----------------- ## */
 
+    /* Enumerates the types of all support ofproto types into 'types'.  The
+     * caller has already initialized 'types' and other ofproto classes might
+     * already have added names to it. */
     void (*enumerate_types)(struct sset *types);
+
+    /* Enumerates the names of all existing datapath of the specified 'type'
+     * into 'names' 'all_dps'.  The caller has already initialized 'names' as
+     * an empty sset.
+     *
+     * 'type' is one of the types enumerated by ->enumerate_types().
+     *
+     * Returns 0 if successful, otherwise a positive errno value.
+     */
     int (*enumerate_names)(const char *type, struct sset *names);
+
+    /* Deletes the datapath with the specified 'type' and 'name'.  The caller
+     * should have closed any open ofproto with this 'type' and 'name'; this
+     * function is allowed to fail if that is not the case.
+     *
+     * 'type' is one of the types enumerated by ->enumerate_types().
+     * 'name' is one of the names enumerated by ->enumerate_names() for 'type'.
+     *
+     * Returns 0 if successful, otherwise a positive errno value.
+     */
     int (*del)(const char *type, const char *name);
 
 /* ## --------------------------- ## */
@@ -224,7 +246,10 @@ struct ofproto_class {
      * Only one ofproto instance needs to be supported for any given datapath.
      * If a datapath is already open as part of one "ofproto", then another
      * attempt to "construct" the same datapath as part of another ofproto is
-     * allowed to fail with an error. */
+     * allowed to fail with an error.
+     *
+     * ->construct() returns 0 if successful, otherwise a positive errno
+     * value. */
     struct ofproto *(*alloc)(void);
     int (*construct)(struct ofproto *ofproto);
     void (*destruct)(struct ofproto *ofproto);
@@ -238,6 +263,10 @@ struct ofproto_class {
      *
      *   - Call ofproto_rule_expire() for each OpenFlow flow that has reached
      *     its hard_timeout or idle_timeout, to expire the flow.
+     *
+     * Returns 0 if successful, otherwise a positive errno value.  The ENODEV
+     * return value specifically means that the datapath underlying 'ofproto'
+     * has been destroyed (externally, e.g. by an admin running ovs-dpctl).
      */
     int (*run)(struct ofproto *ofproto);
 
@@ -284,6 +313,9 @@ struct ofproto_class {
      *     implementation's ports, in the same way as at ofproto
      *     initialization, and construct and destruct ofports to reflect all of
      *     the changes.
+     *
+     * ->port_construct() returns 0 if successful, otherwise a positive errno
+     * value.
      */
     struct ofport *(*port_alloc)(void);
     int (*port_construct)(struct ofport *ofport);
@@ -316,12 +348,22 @@ struct ofproto_class {
     int (*port_query_by_name)(const struct ofproto *ofproto,
                               const char *devname, struct ofproto_port *port);
 
-    /* Attempts to add 'netdev' as a port on 'ofproto'.  If successful, sets
-     * '*ofp_portp' to the new port's port number. */
+    /* Attempts to add 'netdev' as a port on 'ofproto'.  Returns 0 if
+     * successful, otherwise a positive errno value.  If successful, sets
+     * '*ofp_portp' to the new port's port number.
+     *
+     * It doesn't matter whether the new port will be returned by a later call
+     * to ->port_poll(); the implementation may do whatever is more
+     * convenient. */
     int (*port_add)(struct ofproto *ofproto, struct netdev *netdev,
                     uint16_t *ofp_portp);
 
-    /* Deletes port number 'ofp_port' from the datapath for 'ofproto'. */
+    /* Deletes port number 'ofp_port' from the datapath for 'ofproto'.  Returns
+     * 0 if successful, otherwise a positive errno value.
+     *
+     * It doesn't matter whether the new port will be returned by a later call
+     * to ->port_poll(); the implementation may do whatever is more
+     * convenient. */
     int (*port_del)(struct ofproto *ofproto, uint16_t ofp_port);
 
     /* Attempts to begin dumping the ports in 'ofproto'.  On success, returns 0
@@ -371,39 +413,165 @@ struct ofproto_class {
      *
      * If the set of ports in 'ofproto' has not changed, returns EAGAIN.  May
      * also return other positive errno values to indicate that something has
-     * gone wrong. */
+     * gone wrong.
+     *
+     * If the set of ports in a datapath is fixed, or if the only way that the
+     * set of ports in a datapath can change is through ->port_add() and
+     * ->port_del(), then this function may be a null pointer.
+     */
     int (*port_poll)(const struct ofproto *ofproto, char **devnamep);
 
-    /* Arranges for the poll loop to wake up when 'port_poll' will return a
-     * value other than EAGAIN. */
+    /* Arranges for the poll loop to wake up when ->port_poll() will return a
+     * value other than EAGAIN.
+     *
+     * If the set of ports in a datapath is fixed, or if the only way that the
+     * set of ports in a datapath can change is through ->port_add() and
+     * ->port_del(), or if the poll loop will always wake up anyway when
+     * ->port_poll() will return a value other than EAGAIN, then this function
+     * may be a null pointer.
+     */
     void (*port_poll_wait)(const struct ofproto *ofproto);
 
+    /* Checks the status of LACP negotiation for 'port'.  Returns 1 if LACP
+     * partner information for 'port' is up-to-date, 0 if LACP partner
+     * information is not current (generally indicating a connectivity
+     * problem), or -1 if LACP is not enabled on 'port'.
+     *
+     * This function may be a null pointer if the ofproto implementation does
+     * not support LACP. */
     int (*port_is_lacp_current)(const struct ofport *port);
 
+/* ## ----------------------- ## */
+/* ## OpenFlow Rule Functions ## */
+/* ## ----------------------- ## */
+
+    /* Life-cycle functions for a "struct rule" (see "Life Cycle" above).
+     *
+     * ->rule_construct() should first check whether the rule is acceptable:
+     *
+     *   - Validate that the matching rule in 'rule->cr' is supported by the
+     *     datapath.  If not, then return an OpenFlow error code (as returned
+     *     by ofp_mkerr()).
+     *
+     *     For example, if the datapath does not support registers, then it
+     *     should return an error if 'rule->cr' does not wildcard all
+     *     registers.
+     *
+     *   - Validate that 'rule->actions' and 'rule->n_actions' are well-formed
+     *     OpenFlow actions that can be correctly implemented by the datapath.
+     *     If not, then return an OpenFlow error code (as returned by
+     *     ofp_mkerr()).
+     *
+     *     The validate_actions() function (in ofp-util.c) can be useful as a
+     *     model for action validation, but it accepts all of the OpenFlow
+     *     actions that OVS understands.  If your ofproto implementation only
+     *     implements a subset of those, then you should implement your own
+     *     action validation.
+     *
+     * If the rule is acceptable, then ->rule_construct() should modify the
+     * flow table:
+     *
+     *   - If there was already a rule with exactly the same matching criteria
+     *     and priority in the classifier, then it should remove that rule from
+     *     the classifier and destroy it (with ofproto_rule_destroy()).
+     *
+     *   - Insert the new rule into the ofproto's 'cls' classifier, and into
+     *     the datapath flow table.
+     *
+     *     (The function classifier_insert() both inserts a rule into the
+     *     classifier and removes any rule with identical matching criteria, so
+     *     this single call implements parts of both steps above.)
+     *
+     * Other than inserting 'rule->cr' into the classifier, ->rule_construct()
+     * should not modify any base members of struct rule.
+     *
+     * When ->rule_destruct() is called, 'rule' has already been removed from
+     * the classifier and the datapath flow table (by calling ->rule_remove()),
+     * so ->rule_destruct() should not duplicate that behavior. */
     struct rule *(*rule_alloc)(void);
     int (*rule_construct)(struct rule *rule);
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
 
+    /* Removes 'rule' from 'rule->ofproto->cls' and from the datapath.
+     *
+     * 'rule' will be destructed, with ->rule_destruct(), soon after. */
     void (*rule_remove)(struct rule *rule);
 
+    /* Obtains statistics for 'rule', storing the number of packets that have
+     * matched it in '*packet_count' and the number of bytes in those packets
+     * in '*byte_count'. */
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
                            uint64_t *byte_count);
 
-    void (*rule_execute)(struct rule *rule, struct flow *flow,
-                         struct ofpbuf *packet);
+    /* Applies the actions in 'rule' to 'packet'.  (This implements sending
+     * buffered packets for OpenFlow OFPT_FLOW_MOD commands.)
+     *
+     * Takes ownership of 'packet' (so it should eventually free it, with
+     * ofpbuf_delete()).
+     *
+     * 'flow' reflects the flow information for 'packet'.  All of the
+     * information in 'flow' is extracted from 'packet', except for
+     * flow->tun_id and flow->in_port, which are assigned the correct values
+     * for the incoming packet.  The register values are zeroed.
+     *
+     * The statistics for 'packet' should be included in 'rule'.
+     *
+     * Returns 0 if successful, otherwise an OpenFlow error code (as returned
+     * by ofp_mkerr()). */
+    int (*rule_execute)(struct rule *rule, struct flow *flow,
+                        struct ofpbuf *packet);
 
+    /* Validates that the 'n' elements in 'actions' are well-formed OpenFlow
+     * actions that can be correctly implemented by the datapath.  If not, then
+     * return an OpenFlow error code (as returned by ofp_mkerr()).  If so,
+     * then update the datapath to implement the new actions and return 0.
+     *
+     * When this function runs, 'rule' still has its original actions.  If this
+     * function returns 0, then the caller will update 'rule' with the new
+     * actions and free the old ones. */
     int (*rule_modify_actions)(struct rule *rule,
                                const union ofp_action *actions, size_t n);
 
+    /* These functions implement the OpenFlow IP fragment handling policy.  By
+     * default ('drop_frags' == false), an OpenFlow switch should treat IP
+     * fragments the same way as other packets (although TCP and UDP port
+     * numbers cannot be determined).  With 'drop_frags' == true, the switch
+     * should drop all IP fragments without passing them through the flow
+     * table. */
     bool (*get_drop_frags)(struct ofproto *ofproto);
     void (*set_drop_frags)(struct ofproto *ofproto, bool drop_frags);
 
+    /* Implements the OpenFlow OFPT_PACKET_OUT command.  The datapath should
+     * execute the 'n_actions' in the 'actions' array on 'packet'.
+     *
+     * The caller retains ownership of 'packet', so ->packet_out() should not
+     * modify or free it.
+     *
+     * This function must validate that the 'n_actions' elements in 'actions'
+     * are well-formed OpenFlow actions that can be correctly implemented by
+     * the datapath.  If not, then it should return an OpenFlow error code (as
+     * returned by ofp_mkerr()).
+     *
+     * 'flow' reflects the flow information for 'packet'.  All of the
+     * information in 'flow' is extracted from 'packet', except for
+     * flow->in_port, which is taken from the OFPT_PACKET_OUT message.
+     * flow->tun_id and its register values are zeroed.
+     *
+     * 'packet' is not matched against the OpenFlow flow table, so its
+     * statistics should not be included in OpenFlow flow statistics.
+     *
+     * Returns 0 if successful, otherwise an OpenFlow error code (as returned
+     * by ofp_mkerr()). */
     int (*packet_out)(struct ofproto *ofproto, struct ofpbuf *packet,
                       const struct flow *flow,
                       const union ofp_action *actions,
                       size_t n_actions);
-
+
+/* ## ------------------------- ## */
+/* ## OFPP_NORMAL configuration ## */
+/* ## ------------------------- ## */
+
     /* Configures NetFlow on 'ofproto' according to the options in
      * 'netflow_options', or turns off NetFlow if 'netflow_options' is NULL.
      *

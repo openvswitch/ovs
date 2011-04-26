@@ -2450,6 +2450,13 @@ rule_construct(struct rule *rule_)
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct cls_rule *displaced_rule;
+    int error;
+
+    error = validate_actions(rule->up.actions, rule->up.n_actions,
+                             &rule->up.cr.flow, ofproto->max_ports);
+    if (error) {
+        return error;
+    }
 
     rule->used = rule->up.created;
     rule->packet_count = 0;
@@ -2508,7 +2515,7 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
     }
 }
 
-static void
+static int
 rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
@@ -2522,7 +2529,7 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
     facet = facet_lookup_valid(ofproto, flow);
     if (facet && facet->rule == rule) {
         facet_execute(ofproto, facet, packet);
-        return;
+        return 0;
     }
 
     /* Otherwise, if 'rule' is in fact the correct rule for 'packet', then
@@ -2531,7 +2538,7 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
         facet = facet_create(rule, flow, packet);
         facet_execute(ofproto, facet, packet);
         facet_install(ofproto, facet, true);
-        return;
+        return 0;
     }
 
     /* We can't account anything to a facet.  If we were to try, then that
@@ -2547,6 +2554,8 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
         flow_push_stats(rule, flow, 1, size, rule->used);
     }
     ofpbuf_delete(odp_actions);
+
+    return 0;
 }
 
 static int

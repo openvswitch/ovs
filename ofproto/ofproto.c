@@ -701,8 +701,10 @@ ofproto_run(struct ofproto *p)
         return ENODEV;
     }
 
-    while ((error = p->ofproto_class->port_poll(p, &devname)) != EAGAIN) {
-        process_port_change(p, error, devname);
+    if (p->ofproto_class->port_poll) {
+        while ((error = p->ofproto_class->port_poll(p, &devname)) != EAGAIN) {
+            process_port_change(p, error, devname);
+        }
     }
     while ((error = netdev_monitor_poll(p->netdev_monitor,
                                         &devname)) != EAGAIN) {
@@ -718,7 +720,9 @@ void
 ofproto_wait(struct ofproto *p)
 {
     p->ofproto_class->wait(p);
-    p->ofproto_class->port_poll_wait(p);
+    if (p->ofproto_class->port_poll_wait) {
+        p->ofproto_class->port_poll_wait(p);
+    }
     netdev_monitor_poll_wait(p->netdev_monitor);
     connmgr_wait(p->connmgr);
 }
@@ -1344,7 +1348,7 @@ ofproto_rule_lookup(struct ofproto *ofproto, const struct flow *flow)
  * with statistics for 'packet' either way.
  *
  * Takes ownership of 'packet'. */
-static void
+static int
 rule_execute(struct rule *rule, uint16_t in_port, struct ofpbuf *packet)
 {
     struct flow flow;
@@ -1352,7 +1356,7 @@ rule_execute(struct rule *rule, uint16_t in_port, struct ofpbuf *packet)
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
     flow_extract(packet, 0, in_port, &flow);
-    rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
+    return rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
 }
 
 /* Remove 'rule' from 'ofproto' and free up the associated memory:
@@ -2212,7 +2216,8 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
     }
 
     if (packet) {
-        rule_execute(rule, in_port, packet);
+        assert(!buf_err);
+        return rule_execute(rule, in_port, packet);
     }
     return buf_err;
 }
@@ -2240,9 +2245,7 @@ send_buffered_packet(struct ofconn *ofconn,
         return error;
     }
 
-    rule_execute(rule, in_port, packet);
-
-    return 0;
+    return rule_execute(rule, in_port, packet);
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
