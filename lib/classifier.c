@@ -760,10 +760,7 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow)
 
 /* Finds and returns a rule in 'cls' with exactly the same priority and
  * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
- * contain an exact match.
- *
- * Priority is ignored for exact-match rules (because OpenFlow 1.0 always
- * treats exact-match rules as highest priority). */
+ * contain an exact match. */
 struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
@@ -777,9 +774,6 @@ classifier_find_rule_exactly(const struct classifier *cls,
     }
 
     head = find_equal(table, &target->flow, flow_hash(&target->flow, 0));
-    if (flow_wildcards_is_exact(&target->wc)) {
-        return head;
-    }
     FOR_EACH_RULE_IN_LIST (rule, head) {
         if (target->priority >= rule->priority) {
             return target->priority == rule->priority ? rule : NULL;
