@@ -226,12 +226,7 @@ done
 
 if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
     # Configure system to use Open vSwitch
-    echo vswitch > /etc/xensource/network.conf
-
-    printf "\nYou MUST reboot the server NOW to complete the change to\n"
-    printf "Open vSwitch.  Attempts to modify networking on the server\n"
-    printf "or any hosted VM will fail until after the reboot and could\n"
-    printf "leave the server in a state requiring manual recovery.\n\n"
+    xe-switch-network-backend vswitch
 else
 
     mode=$(cat /etc/xensource/network.conf)
@@ -310,12 +305,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rmdir -p /usr/lib/openvswitch/xs-saved 2>/dev/null
 
     # Configure system to use bridge
-    echo bridge > /etc/xensource/network.conf
-
-    printf "\nYou MUST reboot the server now to complete the change to\n"
-    printf "standard Xen networking.  Attempts to modify networking on the\n"
-    printf "server or any hosted VM will fail until after the reboot and\n"
-    printf "could leave the server in a state requiring manual recovery.\n\n"
+    xe-switch-network-backend bridge
 fi
 
 %files
