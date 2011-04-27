@@ -4173,13 +4173,6 @@ static void
 send_packet_in(struct ofproto *ofproto, struct dpif_upcall *upcall,
                const struct flow *flow, bool clone)
 {
-    struct ofputil_packet_in pin;
-
-    pin.packet = upcall->packet;
-    pin.in_port = odp_port_to_ofp_port(flow->in_port);
-    pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
-    pin.buffer_id = 0;          /* not yet known */
-    pin.send_len = upcall->userdata;
     connmgr_send_packet_in(ofproto->connmgr, upcall, flow,
                            clone ? NULL : upcall->packet);
 }
