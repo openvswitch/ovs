@@ -235,6 +235,12 @@ useful examples during a port:
 Miscellaneous Notes
 -------------------
 
+Open vSwitch source code uses uint16_t, uint32_t, and uint64_t as
+fixed-width types in host byte order, and ovs_be16, ovs_be32, and
+ovs_be64 as fixed-width types in network byte order.  Each of the
+latter is equivalent to the one of the former, but the difference in
+name makes the intended use obvious.
+
 ovs-vswitchd is the most sophisticated of ofproto's clients, but
 ofproto can have other clients as well.  ovs-openflowd, in the
 utilities directory, is much simpler than ovs-vswitchd.  It may be
