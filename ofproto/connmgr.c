@@ -393,7 +393,6 @@ connmgr_set_controllers(struct connmgr *mgr,
     struct shash new_controllers;
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice, *next_ofservice;
-    bool ss_exists;
     size_t i;
 
     /* Create newly configured controllers and services.
@@ -421,7 +420,6 @@ connmgr_set_controllers(struct connmgr *mgr,
 
     /* Delete controllers that are no longer configured.
      * Update configuration of all now-existing controllers. */
-    ss_exists = false;
     HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, hmap_node, &mgr->controllers) {
         struct ofproto_controller *c;
 
