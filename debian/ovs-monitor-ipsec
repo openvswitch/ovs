@@ -83,6 +83,7 @@ path certificate "%s";
     cert_entry = """remote %s {
         exchange_mode main;
         nat_traversal on;
+        ike_frag on;
         certificate_type x509 "%s" "%s";
         my_identifier asn1dn;
         peers_identifier asn1dn;
