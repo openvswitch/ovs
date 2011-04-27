@@ -1362,7 +1362,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, oh->xid, &buf);
     osf->datapath_id = htonll(ofproto->datapath_id);
     osf->n_buffers = htonl(pktbuf_capacity());
-    osf->n_tables = 2;
+    osf->n_tables = 1;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
                               OFPC_PORT_STATS | OFPC_ARP_MATCH_IP);
     osf->actions = htonl((1u << OFPAT_OUTPUT) |
