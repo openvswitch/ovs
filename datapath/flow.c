@@ -196,6 +196,7 @@ struct sw_flow *flow_alloc(void)
 
 	spin_lock_init(&flow->lock);
 	atomic_set(&flow->refcnt, 1);
+	flow->sf_acts = NULL;
 	flow->dead = false;
 
 	return flow;
