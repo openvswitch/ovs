@@ -677,8 +677,9 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 {
 	struct odp_header *odp_header = info->userhdr;
 	struct nlattr **a = info->attrs;
+	struct sw_flow_actions *acts;
 	struct sk_buff *packet;
-	struct sw_flow_key key;
+	struct sw_flow *flow;
 	struct datapath *dp;
 	struct ethhdr *eth;
 	bool is_frag;
@@ -714,23 +715,42 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	else
 		packet->protocol = htons(ETH_P_802_2);
 
-	err = flow_extract(packet, -1, &key, &is_frag);
-	if (err)
+	/* Build an sw_flow for sending this packet. */
+	flow = flow_alloc();
+	err = PTR_ERR(flow);
+	if (IS_ERR(flow))
 		goto err_kfree_skb;
+
+	err = flow_extract(packet, -1, &flow->key, &is_frag);
+	if (err)
+		goto err_flow_put;
+	flow->tbl_node.hash = flow_hash(&flow->key);
+
+	acts = flow_actions_alloc(a[ODP_PACKET_ATTR_ACTIONS]);
+	err = PTR_ERR(acts);
+	if (IS_ERR(acts))
+		goto err_flow_put;
+	rcu_assign_pointer(flow->sf_acts, acts);
+
+	OVS_CB(packet)->flow = flow;
 
 	rcu_read_lock();
 	dp = get_dp(odp_header->dp_ifindex);
 	err = -ENODEV;
 	if (!dp)
 		goto err_unlock;
-	err = execute_actions(dp, packet, &key,
+	err = execute_actions(dp, packet, &flow->key,
 			      nla_data(a[ODP_PACKET_ATTR_ACTIONS]),
 			      nla_len(a[ODP_PACKET_ATTR_ACTIONS]));
 	rcu_read_unlock();
+
+	flow_put(flow);
 	return err;
 
 err_unlock:
 	rcu_read_unlock();
+err_flow_put:
+	flow_put(flow);
 err_kfree_skb:
 	kfree_skb(packet);
 err:
