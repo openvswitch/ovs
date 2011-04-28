@@ -32,6 +32,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "list.h"
+#include "netdev-linux.h"
 #include "netdev-provider.h"
 #include "netlink.h"
 #include "netlink-socket.h"
@@ -416,27 +417,7 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
         return EOPNOTSUPP;
     }
 
-    stats->rx_packets = reply.stats->rx_packets;
-    stats->tx_packets = reply.stats->tx_packets;
-    stats->rx_bytes = reply.stats->rx_bytes;
-    stats->tx_bytes = reply.stats->tx_bytes;
-    stats->rx_errors = reply.stats->rx_errors;
-    stats->tx_errors = reply.stats->tx_errors;
-    stats->rx_dropped = reply.stats->rx_dropped;
-    stats->tx_dropped = reply.stats->tx_dropped;
-    stats->multicast = reply.stats->multicast;
-    stats->collisions = reply.stats->collisions;
-    stats->rx_length_errors = reply.stats->rx_length_errors;
-    stats->rx_over_errors = reply.stats->rx_over_errors;
-    stats->rx_crc_errors = reply.stats->rx_crc_errors;
-    stats->rx_frame_errors = reply.stats->rx_frame_errors;
-    stats->rx_fifo_errors = reply.stats->rx_fifo_errors;
-    stats->rx_missed_errors = reply.stats->rx_missed_errors;
-    stats->tx_aborted_errors = reply.stats->tx_aborted_errors;
-    stats->tx_carrier_errors = reply.stats->tx_carrier_errors;
-    stats->tx_fifo_errors = reply.stats->tx_fifo_errors;
-    stats->tx_heartbeat_errors = reply.stats->tx_heartbeat_errors;
-    stats->tx_window_errors = reply.stats->tx_window_errors;
+    netdev_stats_from_rtnl_link_stats64(stats, reply.stats);
 
     ofpbuf_delete(buf);
 
@@ -450,27 +431,7 @@ netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
     struct dpif_linux_vport vport;
     int err;
 
-    rtnl_stats.rx_packets = stats->rx_packets;
-    rtnl_stats.tx_packets = stats->tx_packets;
-    rtnl_stats.rx_bytes = stats->rx_bytes;
-    rtnl_stats.tx_bytes = stats->tx_bytes;
-    rtnl_stats.rx_errors = stats->rx_errors;
-    rtnl_stats.tx_errors = stats->tx_errors;
-    rtnl_stats.rx_dropped = stats->rx_dropped;
-    rtnl_stats.tx_dropped = stats->tx_dropped;
-    rtnl_stats.multicast = stats->multicast;
-    rtnl_stats.collisions = stats->collisions;
-    rtnl_stats.rx_length_errors = stats->rx_length_errors;
-    rtnl_stats.rx_over_errors = stats->rx_over_errors;
-    rtnl_stats.rx_crc_errors = stats->rx_crc_errors;
-    rtnl_stats.rx_frame_errors = stats->rx_frame_errors;
-    rtnl_stats.rx_fifo_errors = stats->rx_fifo_errors;
-    rtnl_stats.rx_missed_errors = stats->rx_missed_errors;
-    rtnl_stats.tx_aborted_errors = stats->tx_aborted_errors;
-    rtnl_stats.tx_carrier_errors = stats->tx_carrier_errors;
-    rtnl_stats.tx_fifo_errors = stats->tx_fifo_errors;
-    rtnl_stats.tx_heartbeat_errors = stats->tx_heartbeat_errors;
-    rtnl_stats.tx_window_errors = stats->tx_window_errors;
+    netdev_stats_to_rtnl_link_stats64(&rtnl_stats, stats);
 
     dpif_linux_vport_init(&vport);
     vport.cmd = ODP_VPORT_CMD_SET;

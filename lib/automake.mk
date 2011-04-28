@@ -196,6 +196,7 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/dpif-linux.c \
 	lib/dpif-linux.h \
 	lib/netdev-linux.c \
+	lib/netdev-linux.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
 	lib/netlink-protocol.h \
