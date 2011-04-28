@@ -35,6 +35,7 @@
 #include "bitmap.h"
 #include "dpif-provider.h"
 #include "netdev.h"
+#include "netdev-linux.h"
 #include "netdev-vport.h"
 #include "netlink-socket.h"
 #include "netlink.h"
@@ -431,6 +432,12 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
         dpif_port->name = xstrdup(reply.name);
         dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
         dpif_port->port_no = reply.port_no;
+        if (reply.stats) {
+            netdev_stats_from_rtnl_link_stats64(&dpif_port->stats,
+                                                reply.stats);
+        } else {
+            memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
+        }
         ofpbuf_delete(buf);
     }
     return error;
@@ -526,6 +533,11 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
     dpif_port->name = (char *) vport.name;
     dpif_port->type = (char *) netdev_vport_get_netdev_type(&vport);
     dpif_port->port_no = vport.port_no;
+    if (vport.stats) {
+        netdev_stats_from_rtnl_link_stats64(&dpif_port->stats, vport.stats);
+    } else {
+        memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
+    }
     return 0;
 }
 

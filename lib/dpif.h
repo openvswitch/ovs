@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
+#include "netdev.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -31,7 +32,6 @@ extern "C" {
 
 struct dpif;
 struct ds;
-struct netdev;
 struct nlattr;
 struct ofpbuf;
 struct sset;
@@ -71,6 +71,7 @@ struct dpif_port {
     char *name;                 /* Network device name, e.g. "eth0". */
     char *type;                 /* Network device type, e.g. "system". */
     uint32_t port_no;           /* Port number within datapath. */
+    struct netdev_stats stats;  /* Port statistics. */
 };
 void dpif_port_clone(struct dpif_port *, const struct dpif_port *);
 void dpif_port_destroy(struct dpif_port *);

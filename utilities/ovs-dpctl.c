@@ -45,6 +45,9 @@
 
 VLOG_DEFINE_THIS_MODULE(dpctl);
 
+/* -s, --statistics: Print port statistics? */
+bool print_statistics;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
@@ -68,6 +71,7 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
+        {"statistics", no_argument, 0, 's'},
         {"timeout", required_argument, 0, 't'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
@@ -86,6 +90,10 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case 's':
+            print_statistics = true;
+            break;
+
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout <= 0) {
@@ -321,6 +329,33 @@ do_del_if(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+print_stat(const char *leader, uint64_t value)
+{
+    fputs(leader, stdout);
+    if (value != UINT64_MAX) {
+        printf("%"PRIu64, value);
+    } else {
+        putchar('?');
+    }
+}
+
+static void
+print_human_size(uint64_t value)
+{
+    if (value == UINT64_MAX) {
+        /* Nothing to do. */
+    } else if (value >= 1024ULL * 1024 * 1024 * 1024) {
+        printf(" (%.1f TiB)", value / (1024.0 * 1024 * 1024 * 1024));
+    } else if (value >= 1024ULL * 1024 * 1024) {
+        printf(" (%.1f GiB)", value / (1024.0 * 1024 * 1024));
+    } else if (value >= 1024ULL * 1024) {
+        printf(" (%.1f MiB)", value / (1024.0 * 1024));
+    } else if (value >= 1024) {
+        printf(" (%.1f KiB)", value / 1024.0);
+    }
+}
+
+static void
 show_dpif(struct dpif *dpif)
 {
     struct dpif_port_dump dump;
@@ -371,6 +406,33 @@ show_dpif(struct dpif *dpif)
             putchar(')');
         }
         putchar('\n');
+
+        if (print_statistics) {
+            const struct netdev_stats *s = &dpif_port.stats;
+
+            print_stat("\t\tRX packets:", s->rx_packets);
+            print_stat(" errors:", s->rx_errors);
+            print_stat(" dropped:", s->rx_dropped);
+            print_stat(" overruns:", s->rx_over_errors);
+            print_stat(" frame:", s->rx_frame_errors);
+            printf("\n");
+
+            print_stat("\t\tTX packets:", s->tx_packets);
+            print_stat(" errors:", s->tx_errors);
+            print_stat(" dropped:", s->tx_dropped);
+            print_stat(" aborted:", s->tx_aborted_errors);
+            print_stat(" carrier:", s->tx_carrier_errors);
+            printf("\n");
+
+            print_stat("\t\tcollisions:", s->collisions);
+            printf("\n");
+
+            print_stat("\t\tRX bytes:", s->rx_bytes);
+            print_human_size(s->rx_bytes);
+            print_stat("  TX bytes:", s->tx_bytes);
+            print_human_size(s->tx_bytes);
+            printf("\n");
+        }
     }
     dpif_close(dpif);
 }
