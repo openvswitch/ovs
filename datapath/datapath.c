@@ -442,13 +442,7 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 {
 	u32 group = packet_mc_group(dp, upcall_info->cmd);
 	struct sk_buff *nskb;
-	int port_no;
 	int err;
-
-	if (OVS_CB(skb)->vport)
-		port_no = OVS_CB(skb)->vport->port_no;
-	else
-		port_no = ODPP_LOCAL;
 
 	do {
 		struct odp_header *upcall;
