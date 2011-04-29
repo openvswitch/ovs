@@ -33,6 +33,6 @@ main(void)
     char *token1, *token2;
     token1 = strtok_r(string, ":", &save_ptr);
     token2 = strtok_r(NULL, ":", &save_ptr);
-    printf ("%s %s\n", token1, token2);
+    printf ("%s %s\n", token1 ? token1 : "NULL", token2 ? token2 : "NULL");
     return 0;
 }
