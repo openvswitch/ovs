@@ -451,11 +451,12 @@ netdev_linux_init(void)
             /* Create AF_PACKET socket. */
             af_packet_sock = socket(AF_PACKET, SOCK_RAW, 0);
             status = af_packet_sock >= 0 ? 0 : errno;
-            if (status) {
+            if (!status) {
+                set_nonblocking(af_packet_sock);
+            } else {
                 VLOG_ERR("failed to create packet socket: %s",
                          strerror(status));
             }
-            set_nonblocking(af_packet_sock);
         }
 
         /* Create rtnetlink socket. */
