@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -15,12 +15,13 @@
 
 #include "loop_counter.h"
 
-void loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
+int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
 {
 	if (net_ratelimit())
 		pr_warn("%s: flow looped %d times, dropping\n",
 			dp_name(dp), MAX_LOOPS);
 	actions->actions_len = 0;
+	return -ELOOP;
 }
 
 #ifndef CONFIG_PREEMPT_RT

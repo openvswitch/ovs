@@ -49,7 +49,6 @@
 #include "datapath.h"
 #include "actions.h"
 #include "flow.h"
-#include "loop_counter.h"
 #include "table.h"
 #include "vlan.h"
 #include "vport-internal_dev.h"
@@ -267,8 +266,6 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
 	int stats_counter_off;
-	struct sw_flow_actions *acts;
-	struct loop_counter *loop;
 	int error;
 
 	OVS_CB(skb)->vport = p;
@@ -313,32 +310,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 	flow_used(OVS_CB(skb)->flow, skb);
-
-	acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
-
-	/* Check whether we've looped too much. */
-	loop = loop_get_counter();
-	if (unlikely(++loop->count > MAX_LOOPS))
-		loop->looping = true;
-	if (unlikely(loop->looping)) {
-		loop_suppress(dp, acts);
-		kfree_skb(skb);
-		goto out_loop;
-	}
-
-	/* Execute actions. */
-	execute_actions(dp, skb, &OVS_CB(skb)->flow->key, acts->actions,
-			acts->actions_len);
-
-	/* Check whether sub-actions looped too much. */
-	if (unlikely(loop->looping))
-		loop_suppress(dp, acts);
-
-out_loop:
-	/* Decrement loop counter. */
-	if (!--loop->count)
-		loop->looping = false;
-	loop_put_counter();
+	execute_actions(dp, skb);
 
 out:
 	/* Update datapath statistics. */
@@ -739,9 +711,7 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = -ENODEV;
 	if (!dp)
 		goto err_unlock;
-	err = execute_actions(dp, packet, &flow->key,
-			      nla_data(a[ODP_PACKET_ATTR_ACTIONS]),
-			      nla_len(a[ODP_PACKET_ATTR_ACTIONS]));
+	err = execute_actions(dp, packet);
 	rcu_read_unlock();
 
 	flow_put(flow);
