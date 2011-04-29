@@ -18,7 +18,7 @@ actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt
-], [0], [stdout], [stderr])
+], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], 
 [[OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD: ADD in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -36,23 +36,6 @@ OFPT_FLOW_MOD: ADD actions=drop
 NXT_SET_FLOW_FORMAT: format=nxm
 NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ]])
-AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
-normalization changed ofp_match, details:
- pre: wildcards=  0x3820f8  in_port=65534  dl_src=00:0a:e4:25:6b:b0  dl_dst=00:00:00:00:00:00  dl_vlan=    9  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards=  0x3ffff8  in_port=65534  dl_src=00:0a:e4:25:6b:b0  dl_dst=00:00:00:00:00:00  dl_vlan=    9  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-normalization changed ofp_match, details:
- pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-normalization changed ofp_match, details:
- pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-normalization changed ofp_match, details:
- pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-normalization changed ofp_match, details:
- pre: wildcards= 0x23820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards= 0x23fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-])
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl -F nxm parse-flows])
