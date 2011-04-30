@@ -65,8 +65,10 @@ enum {
 #define TNL_F_CSUM		(1 << 0) /* Checksum packets. */
 #define TNL_F_TOS_INHERIT	(1 << 1) /* Inherit the ToS from the inner packet. */
 #define TNL_F_TTL_INHERIT	(1 << 2) /* Inherit the TTL from the inner packet. */
-#define TNL_F_PMTUD		(1 << 3) /* Enable path MTU discovery. */
-#define TNL_F_HDR_CACHE		(1 << 4) /* Enable tunnel header caching. */
-#define TNL_F_IPSEC		(1 << 5) /* Traffic is IPsec encrypted. */
+#define TNL_F_DF_INHERIT	(1 << 3) /* Inherit the DF bit from the inner packet. */
+#define TNL_F_DF_DEFAULT	(1 << 4) /* Set the DF bit if inherit off or not IP. */
+#define TNL_F_PMTUD		(1 << 5) /* Enable path MTU discovery. */
+#define TNL_F_HDR_CACHE		(1 << 6) /* Enable tunnel header caching. */
+#define TNL_F_IPSEC		(1 << 7) /* Traffic is IPsec encrypted. */
 
 #endif /* openvswitch/tunnel.h */

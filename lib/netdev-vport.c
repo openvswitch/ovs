@@ -667,7 +667,7 @@ parse_tunnel_config(const char *name, const char *type,
     ovs_be32 daddr = htonl(0);
     uint32_t flags;
 
-    flags = TNL_F_PMTUD | TNL_F_HDR_CACHE;
+    flags = TNL_F_DF_DEFAULT | TNL_F_PMTUD | TNL_F_HDR_CACHE;
     if (!strcmp(type, "gre")) {
         is_gre = true;
     } else if (!strcmp(type, "ipsec_gre")) {
@@ -708,6 +708,14 @@ parse_tunnel_config(const char *name, const char *type,
         } else if (!strcmp(node->name, "csum") && is_gre) {
             if (!strcmp(node->data, "true")) {
                 flags |= TNL_F_CSUM;
+            }
+        } else if (!strcmp(node->name, "df_inherit")) {
+            if (!strcmp(node->data, "true")) {
+                flags |= TNL_F_DF_INHERIT;
+            }
+        } else if (!strcmp(node->name, "df_default")) {
+            if (!strcmp(node->data, "false")) {
+                flags &= ~TNL_F_DF_DEFAULT;
             }
         } else if (!strcmp(node->name, "pmtud")) {
             if (!strcmp(node->data, "false")) {
@@ -890,6 +898,12 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 
     if (flags & TNL_F_CSUM) {
         smap_add(args, "csum", "true");
+    }
+    if (flags & TNL_F_DF_INHERIT) {
+        smap_add(args, "df_inherit", "true");
+    }
+    if (!(flags & TNL_F_DF_DEFAULT)) {
+        smap_add(args, "df_default", "false");
     }
     if (!(flags & TNL_F_PMTUD)) {
         smap_add(args, "pmtud", "false");

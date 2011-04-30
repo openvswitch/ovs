@@ -725,8 +725,9 @@ static bool check_mtu(struct sk_buff *skb,
 		      const struct tnl_mutable_config *mutable,
 		      const struct rtable *rt, __be16 *frag_offp)
 {
+	bool df_inherit = mutable->flags & TNL_F_DF_INHERIT;
 	bool pmtud = mutable->flags & TNL_F_PMTUD;
-	__be16 frag_off = 0;
+	__be16 frag_off = mutable->flags & TNL_F_DF_DEFAULT ? htons(IP_DF) : 0;
 	int mtu = 0;
 	unsigned int packet_length = skb->len - ETH_HLEN;
 
@@ -737,8 +738,6 @@ static bool check_mtu(struct sk_buff *skb,
 
 	if (pmtud) {
 		int vlan_header = 0;
-
-		frag_off = htons(IP_DF);
 
 		/* The tag needs to go in packet regardless of where it
 		 * currently is, so subtract it from the MTU.
@@ -756,7 +755,8 @@ static bool check_mtu(struct sk_buff *skb,
 	if (skb->protocol == htons(ETH_P_IP)) {
 		struct iphdr *iph = ip_hdr(skb);
 
-		frag_off |= iph->frag_off & htons(IP_DF);
+		if (df_inherit)
+			frag_off = iph->frag_off & htons(IP_DF);
 
 		if (pmtud && iph->frag_off & htons(IP_DF)) {
 			mtu = max(mtu, IP_MIN_MTU);
@@ -769,8 +769,10 @@ static bool check_mtu(struct sk_buff *skb,
 	}
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else if (skb->protocol == htons(ETH_P_IPV6)) {
-		/* IPv6 requires PMTUD if the packet is above the minimum MTU. */
-		if (packet_length > IPV6_MIN_MTU)
+		/* IPv6 requires end hosts to do fragmentation
+		 * if the packet is above the minimum MTU.
+		 */
+		if (df_inherit && packet_length > IPV6_MIN_MTU)
 			frag_off = htons(IP_DF);
 
 		if (pmtud) {

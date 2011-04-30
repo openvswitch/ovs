@@ -831,18 +831,30 @@
                 Default is disabled, set to <code>true</code> to enable.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
             <dl>
               <dt><code>header_cache</code></dt>
@@ -957,18 +969,30 @@
                 Default is disabled, set to <code>true</code> to enable.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
           </dd>
           <dt><code>capwap</code></dt>
@@ -1012,18 +1036,30 @@
                 Default is the system default TTL.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
             <dl>
               <dt><code>header_cache</code></dt>
