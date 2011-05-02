@@ -8,7 +8,13 @@ m4_define([OFPROTO_START],
    AT_CAPTURE_FILE([ovs-openflowd.log])
    AT_CHECK(
      [ovs-openflowd --detach --pidfile --enable-dummy --log-file dummy@br0 none --datapath-id=fedcba9876543210 $1],
-     [0], [ignore], [ignore])
+     [0], [], [stderr])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/openflowd|INFO|Open vSwitch version/d
+/openflowd|INFO|OpenFlow protocol version/d
+/ofproto|INFO|using datapath ID/d
+/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
 ])
 
 m4_define([OFPROTO_STOP],
