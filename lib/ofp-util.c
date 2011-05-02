@@ -36,6 +36,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
 
+static void normalize_match(struct ofp_match *);
+
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -2028,7 +2030,7 @@ actions_next(struct actions_iterator *iter)
     }
 }
 
-void
+static void
 normalize_match(struct ofp_match *m)
 {
     enum { OFPFW_NW = (OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL | OFPFW_NW_PROTO
@@ -2038,73 +2040,29 @@ normalize_match(struct ofp_match *m)
 
     wc = ntohl(m->wildcards) & OFPFW_ALL;
     if (wc & OFPFW_DL_TYPE) {
-        m->dl_type = 0;
-
         /* Can't sensibly match on network or transport headers if the
          * data link type is unknown. */
         wc |= OFPFW_NW | OFPFW_TP;
-        m->nw_src = m->nw_dst = m->nw_proto = m->nw_tos = 0;
-        m->tp_src = m->tp_dst = 0;
     } else if (m->dl_type == htons(ETH_TYPE_IP)) {
         if (wc & OFPFW_NW_PROTO) {
-            m->nw_proto = 0;
-
             /* Can't sensibly match on transport headers if the network
              * protocol is unknown. */
             wc |= OFPFW_TP;
-            m->tp_src = m->tp_dst = 0;
-        } else if (m->nw_proto == IPPROTO_TCP ||
-                   m->nw_proto == IPPROTO_UDP ||
-                   m->nw_proto == IPPROTO_ICMP) {
-            if (wc & OFPFW_TP_SRC) {
-                m->tp_src = 0;
-            }
-            if (wc & OFPFW_TP_DST) {
-                m->tp_dst = 0;
-            }
-        } else {
+        } else if (m->nw_proto != IPPROTO_TCP &&
+                   m->nw_proto != IPPROTO_UDP &&
+                   m->nw_proto != IPPROTO_ICMP) {
             /* Transport layer fields will always be extracted as zeros, so we
              * can do an exact-match on those values.  */
             wc &= ~OFPFW_TP;
             m->tp_src = m->tp_dst = 0;
         }
-        if (wc & OFPFW_NW_SRC_MASK) {
-            m->nw_src &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_SRC_SHIFT);
-        }
-        if (wc & OFPFW_NW_DST_MASK) {
-            m->nw_dst &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_DST_SHIFT);
-        }
-        if (wc & OFPFW_NW_TOS) {
-            m->nw_tos = 0;
-        } else {
-            m->nw_tos &= IP_DSCP_MASK;
-        }
-    } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
-        if (wc & OFPFW_NW_PROTO) {
-            m->nw_proto = 0;
-        }
-        if (wc & OFPFW_NW_SRC_MASK) {
-            m->nw_src &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_SRC_SHIFT);
-        }
-        if (wc & OFPFW_NW_DST_MASK) {
-            m->nw_dst &= ofputil_wcbits_to_netmask(wc >> OFPFW_NW_DST_SHIFT);
-        }
-        m->tp_src = m->tp_dst = m->nw_tos = 0;
-    } else if (m->dl_type == htons(ETH_TYPE_IPV6)) {
-        /* Don't normalize IPv6 traffic, since OpenFlow doesn't have a
-         * way to express it. */
-    } else {
+    } else if (m->dl_type != htons(ETH_TYPE_ARP) &&
+               m->dl_type != htons(ETH_TYPE_IPV6)) {
         /* Network and transport layer fields will always be extracted as
          * zeros, so we can do an exact-match on those values. */
         wc &= ~(OFPFW_NW | OFPFW_TP);
         m->nw_proto = m->nw_src = m->nw_dst = m->nw_tos = 0;
         m->tp_src = m->tp_dst = 0;
-    }
-    if (wc & OFPFW_DL_SRC) {
-        memset(m->dl_src, 0, sizeof m->dl_src);
-    }
-    if (wc & OFPFW_DL_DST) {
-        memset(m->dl_dst, 0, sizeof m->dl_dst);
     }
     m->wildcards = htonl(wc);
 }
