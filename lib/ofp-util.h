@@ -101,7 +101,6 @@ int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 void ofputil_cls_rule_from_match(const struct ofp_match *,
                                  unsigned int priority, struct cls_rule *);
 void ofputil_cls_rule_to_match(const struct cls_rule *, struct ofp_match *);
-char *ofp_match_to_literal_string(const struct ofp_match *match);
 
 /* dl_type translation between OpenFlow and 'struct flow' format. */
 ovs_be16 ofputil_dl_type_to_openflow(ovs_be16 flow_dl_type);

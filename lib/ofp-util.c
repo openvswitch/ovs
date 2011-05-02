@@ -36,7 +36,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
 
-static void normalize_match(struct ofp_match *);
+static ovs_be32 normalize_wildcards(const struct ofp_match *);
 
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */
@@ -870,8 +870,9 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
     ofputil_decode_msg_type(oh, &type);
     if (ofputil_msg_type_code(type) == OFPUTIL_OFPT_FLOW_MOD) {
         /* Standard OpenFlow flow_mod. */
-        struct ofp_match match, orig_match;
         const struct ofp_flow_mod *ofm;
+        uint16_t priority;
+        ovs_be32 wc;
         int error;
 
         /* Dissect the message. */
@@ -881,26 +882,37 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
             return error;
         }
 
+        /* Set priority based on original wildcards.  Normally we'd allow
+         * ofputil_cls_rule_from_match() to do this for us, but
+         * normalize_wildcards() can put wildcards where the original flow
+         * didn't have them. */
+        priority = ntohs(ofm->priority);
+        if (!(ofm->match.wildcards & htonl(OFPFW_ALL))) {
+            priority = UINT16_MAX;
+        }
+
         /* Normalize ofm->match.  If normalization actually changes anything,
          * then log the differences. */
-        match = ofm->match;
-        match.pad1[0] = match.pad2[0] = 0;
-        orig_match = match;
-        normalize_match(&match);
-        if (memcmp(&match, &orig_match, sizeof orig_match)) {
+        wc = normalize_wildcards(&ofm->match);
+        if (wc == ofm->match.wildcards) {
+            ofputil_cls_rule_from_match(&ofm->match, priority, &fm->cr);
+        } else {
+            struct ofp_match match = ofm->match;
+            match.wildcards = wc;
+            ofputil_cls_rule_from_match(&match, priority, &fm->cr);
+
             if (!VLOG_DROP_INFO(&bad_ofmsg_rl)) {
-                char *old = ofp_match_to_literal_string(&orig_match);
-                char *new = ofp_match_to_literal_string(&match);
+                char *pre = ofp_match_to_string(&ofm->match, 1);
+                char *post = ofp_match_to_string(&match, 1);
                 VLOG_INFO("normalization changed ofp_match, details:");
-                VLOG_INFO(" pre: %s", old);
-                VLOG_INFO("post: %s", new);
-                free(old);
-                free(new);
+                VLOG_INFO(" pre: %s", pre);
+                VLOG_INFO("post: %s", post);
+                free(pre);
+                free(post);
             }
         }
 
         /* Translate the message. */
-        ofputil_cls_rule_from_match(&match, ntohs(ofm->priority), &fm->cr);
         fm->cookie = ofm->cookie;
         fm->command = ntohs(ofm->command);
         fm->idle_timeout = ntohs(ofm->idle_timeout);
@@ -2030,79 +2042,29 @@ actions_next(struct actions_iterator *iter)
     }
 }
 
-static void
-normalize_match(struct ofp_match *m)
+static ovs_be32
+normalize_wildcards(const struct ofp_match *m)
 {
     enum { OFPFW_NW = (OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL | OFPFW_NW_PROTO
                        | OFPFW_NW_TOS) };
     enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
-    uint32_t wc;
+    ovs_be32 wc;
 
-    wc = ntohl(m->wildcards) & OFPFW_ALL;
-    if (wc & OFPFW_DL_TYPE) {
-        /* Can't sensibly match on network or transport headers if the
-         * data link type is unknown. */
-        wc |= OFPFW_NW | OFPFW_TP;
+    wc = m->wildcards;
+    if (wc & htonl(OFPFW_DL_TYPE)) {
+        wc |= htonl(OFPFW_NW | OFPFW_TP);
     } else if (m->dl_type == htons(ETH_TYPE_IP)) {
-        if (wc & OFPFW_NW_PROTO) {
-            /* Can't sensibly match on transport headers if the network
-             * protocol is unknown. */
-            wc |= OFPFW_TP;
-        } else if (m->nw_proto != IPPROTO_TCP &&
-                   m->nw_proto != IPPROTO_UDP &&
-                   m->nw_proto != IPPROTO_ICMP) {
-            /* Transport layer fields will always be extracted as zeros, so we
-             * can do an exact-match on those values.  */
-            wc &= ~OFPFW_TP;
-            m->tp_src = m->tp_dst = 0;
+        if (wc & htonl(OFPFW_NW_PROTO) || (m->nw_proto != IPPROTO_TCP &&
+                                           m->nw_proto != IPPROTO_UDP &&
+                                           m->nw_proto != IPPROTO_ICMP)) {
+            wc |= htonl(OFPFW_TP);
         }
-    } else if (m->dl_type != htons(ETH_TYPE_ARP) &&
-               m->dl_type != htons(ETH_TYPE_IPV6)) {
-        /* Network and transport layer fields will always be extracted as
-         * zeros, so we can do an exact-match on those values. */
-        wc &= ~(OFPFW_NW | OFPFW_TP);
-        m->nw_proto = m->nw_src = m->nw_dst = m->nw_tos = 0;
-        m->tp_src = m->tp_dst = 0;
+    } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
+        wc |= htonl(OFPFW_TP);
+    } else {
+        wc |= htonl(OFPFW_NW | OFPFW_TP);
     }
-    m->wildcards = htonl(wc);
-}
-
-/* Returns a string that describes 'match' in a very literal way, without
- * interpreting its contents except in a very basic fashion.  The returned
- * string is intended to be fixed-length, so that it is easy to see differences
- * between two such strings if one is put above another.  This is useful for
- * describing changes made by normalize_match().
- *
- * The caller must free the returned string (with free()). */
-char *
-ofp_match_to_literal_string(const struct ofp_match *match)
-{
-    return xasprintf("wildcards=%#10"PRIx32" "
-                     " in_port=%5"PRId16" "
-                     " dl_src="ETH_ADDR_FMT" "
-                     " dl_dst="ETH_ADDR_FMT" "
-                     " dl_vlan=%5"PRId16" "
-                     " dl_vlan_pcp=%3"PRId8" "
-                     " dl_type=%#6"PRIx16" "
-                     " nw_tos=%#4"PRIx8" "
-                     " nw_proto=%#4"PRIx16" "
-                     " nw_src=%#10"PRIx32" "
-                     " nw_dst=%#10"PRIx32" "
-                     " tp_src=%5"PRId16" "
-                     " tp_dst=%5"PRId16,
-                     ntohl(match->wildcards),
-                     ntohs(match->in_port),
-                     ETH_ADDR_ARGS(match->dl_src),
-                     ETH_ADDR_ARGS(match->dl_dst),
-                     ntohs(match->dl_vlan),
-                     match->dl_vlan_pcp,
-                     ntohs(match->dl_type),
-                     match->nw_tos,
-                     match->nw_proto,
-                     ntohl(match->nw_src),
-                     ntohl(match->nw_dst),
-                     ntohs(match->tp_src),
-                     ntohs(match->tp_dst));
+    return wc;
 }
 
 static uint32_t
