@@ -1,3 +1,4 @@
+# Copyright (c) 2011 Nicira Networks.
 # Copyright (c) 2010 Citrix Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +21,9 @@ from pprint import pprint
 globalForcePySide = False
 
 try:
-    import json
+    import ovs.json
 except Exception, e:
-    print('+++ Python JSON module is required\n')
+    print('+++ OVS JSON module is required\n')
     raise
 
 try:

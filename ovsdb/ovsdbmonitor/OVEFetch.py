@@ -1,3 +1,4 @@
+# Copyright (c) 2011 Nicira Networks.
 # Copyright (c) 2010 Citrix Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +16,7 @@
 from OVEStandard import *
 from OVEConfig import *
 from OVELogger import *
+import ovs.json
 
 # This sequence installs the qt4reactor before twisted gets a chance to install its reactor
 import qt4reactor
@@ -166,7 +168,7 @@ class OVECommandChannel(channel.SSHChannel, QtCore.QObject):
                 if self.commandType == 'JSON':
                     try:
                         # Decode the JSON data, to confirm that we have all of the data
-                        self._jsonValues = json.read(str(self._data)) # FIXME: Should handle unicode
+                        self._jsonValues = ovs.json.from_string(str(self._data)) # FIXME: Should handle unicode
                         self.sendResult()
                     except:
                         pass # Wait for more data

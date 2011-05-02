@@ -1,3 +1,4 @@
+# Copyright (c) 2011 Nicira Networks.
 # Copyright (c) 2010 Citrix Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +15,21 @@
 
 from OVEStandard import *
 from OVELogger import *
+import ovs.json
+
+def str_recursive(x):
+    t = type(x)
+    if t == unicode:
+        return str(x)
+    elif t == list:
+        return [str_recursive(_) for _ in x]
+    elif t == dict:
+        out = {}
+        for k,v in x.iteritems():
+            out[str_recursive(k)] = str_recursive(v)
+        return out
+    else:
+        return x
 
 class OVEConfig(QtCore.QObject):
     instance = None
@@ -40,21 +56,21 @@ class OVEConfig(QtCore.QObject):
 
     def saveConfig(self):
         settings = QtCore.QSettings()
-        settings.setValue('config/hosts', QVariant(json.JsonWriter().write(self.hosts)))
+        settings.setValue('config/hosts', QVariant(ovs.json.to_string((self.hosts))))
         settings.setValue('config/logTraffic', QVariant(self.logTraffic))
         settings.setValue('config/truncateUuids', QVariant(self.truncateUuids))
-        settings.setValue('config/ssgList', QVariant(json.JsonWriter().write(self.ssgList)))
+        settings.setValue('config/ssgList', QVariant(ovs.json.to_string(self.ssgList)))
         settings.sync()
         self.emitUpdated()
-        
+
     def loadConfig(self):
         settings = QtCore.QSettings()
         jsonText = unicode(settings.value('config/hosts', QVariant('[]')).toString())
-        self.hosts = json.JsonReader().read(str(jsonText))
+        self.hosts = str_recursive(ovs.json.from_string(str(jsonText)))
         self.logTraffic = settings.value('config/logTraffic', QVariant(False)).toBool()
         self.truncateUuids = settings.value('config/truncateUuids', QVariant(False)).toBool()
         jsonText = unicode(settings.value('config/ssgList', QVariant('[]')).toString())
-        self.ssgList = json.JsonReader().read(str(jsonText))
+        self.ssgList = ovs.json.from_string(str(jsonText))
         if len(self.ssgList) == 0:
             self.ssgList = [
                 r'in_port0000',
