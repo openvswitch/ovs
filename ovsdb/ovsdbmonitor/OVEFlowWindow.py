@@ -1,3 +1,4 @@
+# Copyright (c) 2011 Nicira Networks.
 # Copyright (c) 2010 Citrix Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +22,8 @@ from OVEUtil import *
 from OVECommonWindow import *
 
 from Ui_FlowWindow import *
+
+import re
 
 class OVEFlowWindow(QtGui.QMainWindow, OVECommonWindow):
     LOAD_KEY = 'FlowWindow/window'
@@ -231,7 +234,6 @@ class OVEFlowWindow(QtGui.QMainWindow, OVECommonWindow):
                         colour = Qt.black
                         
                     for colNum, data in enumerate(flow):
-                        
                         item = None
                         try:
                             item = table.takeItem(rowNum, colNum)
@@ -245,7 +247,7 @@ class OVEFlowWindow(QtGui.QMainWindow, OVECommonWindow):
                         elif colNum == srcMacColumn or colNum == destMacColumn:
                             cols = [int(x, 16) for x in data.split(':')]
                             item.setBackground(QtGui.QColor(255-cols[2]*cols[3] % 192, 255-cols[3]*cols[4] % 192, 255-cols[4]*cols[5] % 192))
-                        elif colNum == srcIPColumn or colNum == destIPColumn:
+                        elif re.match(r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', str(data)):
                             cols = [int(x) for x in data.split('.')]
                             item.setBackground(QtGui.QColor(255-cols[1]*cols[2] % 192, 255-cols[2]*cols[3] % 192, 255-cols[3]*cols[0] % 192))
                         else:

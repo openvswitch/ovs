@@ -1,3 +1,4 @@
+# Copyright (c) 2011 Nicira Networks.
 # Copyright (c) 2010 Citrix Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +16,7 @@
 from OVEStandard import *
 
 from OVEConfig import *
+import re
 
 class OVEUtil:
     UUID_RE = re.compile(r'([a-f0-9]{8}-[a-f0-9]{2})[a-f0-9]{2}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
@@ -87,48 +89,42 @@ class OVEUtil:
     @classmethod
     def decodeFlows(cls, srcLines):
         retVal = []
-        flowRe = re.compile(
-            # To fix this regexp:
-            #  Comment out lines, starting from the bottom, until it works, then fix the one you stopped at
-            '^' +
-            r'tunnel([^:]*):'+ # Tunnel: tunnel00000000
-            r'in_port([^:]+):' + # in_port: in_port0002
-            r'vlan([^:]+):' + #VLAN: vlan65535
-            r'([^ ]*) ' + # PCP: pcp0
-            r'mac(.{17})->' + # Source MAC: mac00:16:76:c8:1f:c9->
-            r'(.{17}) ' + # Dest MAC: mac00:16:76:c8:1f:c9
-            r'type([^ ]+) ' + #Type: type05ff
-            r'proto([^ ]+) ' + #Proto: proto0
-            r'(tos[^ ]+) ' + #Tos: tos0
-            r'ip(\d+\.\d+\.\d+\.\d+)->' + # Source IP: ip1.2.3.4->
-            r'(\d+\.\d+\.\d+\.\d+) ' + # Dest IP: 1.2.3.4
-            r'port(\d+)->' + # Source port: port0->
-            r'(\d+),\s*' + # Dest port: 0
-            r'packets:(\d*),\s*' + # Packets: packets:3423,
-            r'bytes:(\d*),\s*' + # Bytes: bytes:272024,
-            r'used:([^,]+),\s*' + # Used: used:0.870s,
-            r'actions:(\w+)\s*' + # Actions: actions:drop
-            ''
-            )
         for line in srcLines.split('\n'):
             if line != '':
-                match = flowRe.match(line)
-                if not match:
-                    OVELog("Could not decode flow record '"+line+"'.  Abandoning")
-                    return retVal
-                else:
-                    tunnel, inport, vlan, pcp, srcmac, destmac, type, proto, tos, srcip, destip, srcport, destport, packets, bytes, used, actions = match.groups()
-                    tunnel = int(tunnel)
-                    inport = int(inport)
-                    vlan = int(vlan)
-                    type = cls.ETHERTYPE_TRANS.get(type, type)
-                    proto = cls.ETHERPROTO_TRANS.get(proto, proto)
-                    srcport = int(srcport)
-                    destport = int(destport)
-                    packets = long(packets)
-                    bytes = long(bytes)
-                    # Order below needs to match that in flowDecodeHeadings
-                    retVal.append((type, proto, inport, vlan, srcmac, destmac, srcip, destip, srcport, destport, packets, bytes, used, tos, pcp, tunnel, actions))
+                fields = {}
+                for name, val in re.findall(r'([a-zA-Z0-9_+]+)\(([^)]+)\)', line):
+                    if '=' in val:
+                        for setting in val.split(','):
+                            k,v = setting.split('=')
+                            fields['%s.%s' % (name, k)] = v
+                    else:
+                        fields[name] = val
+                for setting in re.split(', ', line)[1:]:
+                    if ':' in setting:
+                        k,v = setting.split(':')
+                        fields[k] = v
+
+                tun_id = fields.get('tun_id', '')
+                in_port = int(fields.get('in_port', 0))
+                eth_src = fields.get('eth.src', '')
+                eth_dst = fields.get('eth.dst', '')
+                vlan_vid = int(fields.get('vlan.vid', 0))
+                vlan_pcp = int(fields.get('vlan.pcp', 0))
+                eth_type = fields.get('eth_type', '')
+                ip_src = fields.get('ipv4.src', fields.get('ipv6.src', ''))
+                ip_dst = fields.get('ipv4.dst', fields.get('ipv6.dst', ''))
+                ip_proto = fields.get('ipv4.proto', fields.get('ipv6.proto', ''))
+                ip_tos = fields.get('ipv4.tos', fields.get('ipv6.tos', ''))
+                tp_src = fields.get('tcp.src', fields.get('udp.src', fields.get('arp.sip', fields.get('icmp.type', fields.get('icmpv6.type', '')))))
+                tp_dst = fields.get('tcp.dst', fields.get('udp.dst', fields.get('arp.tip', fields.get('icmp.code', fields.get('icmpv6.code', '')))))
+
+                packets = fields.get('packets', '')
+                bytes = fields.get('bytes', '')
+                actions = fields.get('actions', '')
+                used = fields.get('used', '')
+
+                # Order below needs to match that in flowDecodeHeadings
+                retVal.append((eth_type, ip_proto, in_port, vlan_vid, eth_src, eth_dst, ip_src, ip_dst, tp_src, tp_dst, packets, bytes, used, ip_tos, vlan_pcp, tun_id, actions))
                     
         return retVal
         
