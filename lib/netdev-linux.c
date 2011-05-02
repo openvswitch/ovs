@@ -373,7 +373,6 @@ struct netdev_linux {
 
 /* Sockets used for ioctl operations. */
 static int af_inet_sock = -1;   /* AF_INET, SOCK_DGRAM. */
-static int af_packet_sock = -1; /* AF_PACKET, SOCK_RAW. */
 
 /* A Netlink routing socket that is not subscribed to any multicast groups. */
 static struct nl_sock *rtnl_sock;
@@ -411,6 +410,7 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
+static int af_packet_sock(void);
 
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
@@ -447,16 +447,6 @@ netdev_linux_init(void)
         status = af_inet_sock >= 0 ? 0 : errno;
         if (status) {
             VLOG_ERR("failed to create inet socket: %s", strerror(status));
-        } else {
-            /* Create AF_PACKET socket. */
-            af_packet_sock = socket(AF_PACKET, SOCK_RAW, 0);
-            status = af_packet_sock >= 0 ? 0 : errno;
-            if (!status) {
-                set_nonblocking(af_packet_sock);
-            } else {
-                VLOG_ERR("failed to create packet socket: %s",
-                         strerror(status));
-            }
         }
 
         /* Create rtnetlink socket. */
@@ -844,6 +834,12 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
             struct iovec iov;
             int ifindex;
             int error;
+            int sock;
+
+            sock = af_packet_sock();
+            if (sock < 0) {
+                return sock;
+            }
 
             error = get_ifindex(netdev_, &ifindex);
             if (error) {
@@ -867,7 +863,7 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
             msg.msg_controllen = 0;
             msg.msg_flags = 0;
 
-            retval = sendmsg(af_packet_sock, &msg, 0);
+            retval = sendmsg(sock, &msg, 0);
         } else {
             /* Use the netdev's own fd to send to this device.  This is
              * essential for tap devices, because packets sent to a tap device
@@ -4238,4 +4234,23 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
         *ip = sin->sin_addr;
     }
     return error;
+}
+
+/* Returns an AF_PACKET raw socket or a negative errno value. */
+static int
+af_packet_sock(void)
+{
+    static int sock = INT_MIN;
+
+    if (sock == INT_MIN) {
+        sock = socket(AF_PACKET, SOCK_RAW, 0);
+        if (sock >= 0) {
+            set_nonblocking(sock);
+        } else {
+            sock = -errno;
+            VLOG_ERR("failed to create packet socket: %s", strerror(errno));
+        }
+    }
+
+    return sock;
 }
