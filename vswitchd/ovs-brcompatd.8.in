@@ -52,6 +52,12 @@ pruned.  The default prune timeout is 5 seconds.
 .so lib/common.man
 .so lib/leak-checker.man
 .
+.SH BUGS
+.
+\fBovs\-brcompatd\fR requires the bridges that it manages to initially
+have no ports listed in their database records when it starts up.
+Otherwise, it may add duplicate ports to bridges.
+.
 .SH NOTES
 \fBovs\-brcompatd\fR requires the \fBbrcompat_mod.ko\fR kernel module to be
 loaded.
