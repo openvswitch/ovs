@@ -62,7 +62,7 @@ Architecture: all
 Depends:
  ${misc:Depends}, openvswitch-common (>= ${source:Version}),
  openvswitch-common (<< ${source:Version}.1~)
-Description: A dependency package for the Open vSwitch public key infrastructure
+Description: Open vSwitch public key infrastructure dependency package
  openvswitch-pki provides PKI (public key infrastructure) support for
  Open vSwitch switches and controllers, reducing the risk of
  man-in-the-middle attacks on the Open vSwitch network infrastructure.
