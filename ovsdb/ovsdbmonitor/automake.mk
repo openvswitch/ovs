@@ -25,7 +25,8 @@ EXTRA_DIST += \
 	ovsdb/ovsdbmonitor/HostWindow.ui \
 	ovsdb/ovsdbmonitor/LogWindow.ui \
 	ovsdb/ovsdbmonitor/MainWindow.ui \
-	ovsdb/ovsdbmonitor/ovsdbmonitor.in
+	ovsdb/ovsdbmonitor/ovsdbmonitor.in \
+	ovsdb/ovsdbmonitor/ovsdbmonitor.1
 
 ovsdbmonitordir = ${pkgdatadir}/ovsdbmonitor
 if BUILD_OVSDBMONITOR
@@ -39,6 +40,7 @@ install-exec-hook:
 DISTCLEANFILES += \
 	ovsdb/ovsdbmonitor/ovsdbmonitor \
 	ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
+man_MANS += ovsdb/ovsdbmonitor/ovsdbmonitor.1
 endif
 
 uninstall-local: ovsdbmonitor-uninstall-local
