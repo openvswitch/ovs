@@ -133,6 +133,7 @@ The following options controlling output formatting:
 .SS "Daemon Options"
 The daemon options apply only to the \fBmonitor\fR command.  With any
 other command, they have no effect.
+.ds DD
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man
