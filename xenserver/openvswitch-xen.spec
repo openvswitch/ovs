@@ -295,7 +295,6 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
     rm -f /etc/openvswitch/vswitchd.cacert
-    rm -f /var/xapi/network.dbcache
 
     # Remove saved XenServer scripts directory, but only if it's empty
     rmdir -p /usr/lib/openvswitch/xs-saved 2>/dev/null
