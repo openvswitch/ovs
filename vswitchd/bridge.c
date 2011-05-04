@@ -439,23 +439,6 @@ check_iface(struct bridge *br, struct iface *iface, void *aux OVS_UNUSED)
     return true;
 }
 
-/* Callback for iterate_and_prune_ifaces(). */
-static bool
-set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
-                     void *aux OVS_UNUSED)
-{
-    /* Set policing attributes. */
-    netdev_set_policing(iface->netdev,
-                        iface->cfg->ingress_policing_rate,
-                        iface->cfg->ingress_policing_burst);
-
-    /* Set MAC address of internal interfaces other than the local
-     * interface. */
-    iface_set_mac(iface);
-
-    return true;
-}
-
 /* Calls 'cb' for each interfaces in 'br', passing along the 'aux' argument.
  * Deletes from 'br' all the interfaces for which 'cb' returns false, and then
  * deletes from 'br' any ports that no longer have any interfaces. */
@@ -904,11 +887,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                 iface_update_qos(iface, port->cfg->qos);
+                netdev_set_policing(iface->netdev,
+                                    iface->cfg->ingress_policing_rate,
+                                    iface->cfg->ingress_policing_burst);
+                iface_set_mac(iface);
             }
         }
-    }
-    LIST_FOR_EACH (br, node, &all_bridges) {
-        iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
     /* Some reconfiguration operations require the bridge to have been run at
