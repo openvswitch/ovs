@@ -2533,7 +2533,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
  *
  * The log message mentions 'msg_type'. */
 static int
-reject_slave_controller(struct ofconn *ofconn, const const char *msg_type)
+reject_slave_controller(struct ofconn *ofconn, const char *msg_type)
 {
     if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
         && ofconn_get_role(ofconn) == NX_ROLE_SLAVE) {
