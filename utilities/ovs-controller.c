@@ -310,23 +310,23 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"hub",         no_argument, 0, 'H'},
-        {"noflow",      no_argument, 0, 'n'},
-        {"normal",      no_argument, 0, 'N'},
-        {"wildcard",    no_argument, 0, 'w'},
-        {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
-        {"mute",        no_argument, 0, OPT_MUTE},
-        {"queue",       required_argument, 0, 'q'},
-        {"port-queue",  required_argument, 0, 'Q'},
-        {"with-flows",  required_argument, 0, OPT_WITH_FLOWS},
-        {"unixctl",     required_argument, 0, OPT_UNIXCTL},
-        {"help",        no_argument, 0, 'h'},
-        {"version",     no_argument, 0, 'V'},
+        {"hub",         no_argument, NULL, 'H'},
+        {"noflow",      no_argument, NULL, 'n'},
+        {"normal",      no_argument, NULL, 'N'},
+        {"wildcard",    no_argument, NULL, 'w'},
+        {"max-idle",    required_argument, NULL, OPT_MAX_IDLE},
+        {"mute",        no_argument, NULL, OPT_MUTE},
+        {"queue",       required_argument, NULL, 'q'},
+        {"port-queue",  required_argument, NULL, 'Q'},
+        {"with-flows",  required_argument, NULL, OPT_WITH_FLOWS},
+        {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
+        {"help",        no_argument, NULL, 'h'},
+        {"version",     no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
-        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
-        {0, 0, 0, 0},
+        {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

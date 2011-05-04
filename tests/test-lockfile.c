@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ static const struct test tests[] = {
     TEST(lock_timeout_runs_out),
     TEST(lock_multiple),
     TEST(help),
-    { 0, 0 }
+    { NULL, NULL }
 #undef TEST
 };
 

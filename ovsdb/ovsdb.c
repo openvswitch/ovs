@@ -253,7 +253,7 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
     }
 
     *schemap = schema;
-    return 0;
+    return NULL;
 }
 
 struct json *

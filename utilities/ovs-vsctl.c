@@ -207,19 +207,19 @@ parse_options(int argc, char *argv[])
         TABLE_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"db", required_argument, 0, OPT_DB},
-        {"no-syslog", no_argument, 0, OPT_NO_SYSLOG},
-        {"no-wait", no_argument, 0, OPT_NO_WAIT},
-        {"dry-run", no_argument, 0, OPT_DRY_RUN},
-        {"oneline", no_argument, 0, OPT_ONELINE},
-        {"timeout", required_argument, 0, 't'},
-        {"help", no_argument, 0, 'h'},
-        {"version", no_argument, 0, 'V'},
+        {"db", required_argument, NULL, OPT_DB},
+        {"no-syslog", no_argument, NULL, OPT_NO_SYSLOG},
+        {"no-wait", no_argument, NULL, OPT_NO_WAIT},
+        {"dry-run", no_argument, NULL, OPT_DRY_RUN},
+        {"oneline", no_argument, NULL, OPT_ONELINE},
+        {"timeout", required_argument, NULL, 't'},
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
-        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
-        {0, 0, 0, 0},
+        {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
+        {NULL, 0, NULL, 0},
     };
     char *tmp, *short_options;
 
@@ -1111,7 +1111,7 @@ cmd_emer_reset(struct vsctl_context *ctx)
 static void
 cmd_add_br(struct vsctl_context *ctx)
 {
-    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     const char *br_name, *parent_name;
     struct vsctl_info info;
     int vlan;
@@ -1563,7 +1563,7 @@ add_port(struct vsctl_context *ctx,
 static void
 cmd_add_port(struct vsctl_context *ctx)
 {
-    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
 
     add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, false,
              &ctx->argv[2], 1, &ctx->argv[3], ctx->argc - 3);
@@ -1572,7 +1572,7 @@ cmd_add_port(struct vsctl_context *ctx)
 static void
 cmd_add_bond(struct vsctl_context *ctx)
 {
-    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     bool fake_iface = shash_find(&ctx->options, "--fake-iface");
     int n_ifaces;
     int i;

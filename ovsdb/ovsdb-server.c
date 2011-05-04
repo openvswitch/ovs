@@ -344,7 +344,7 @@ read_string_column(const struct ovsdb_row *row, const char *column_name,
     const union ovsdb_atom *atom;
 
     atom = read_column(row, column_name, OVSDB_TYPE_STRING);
-    *stringp = atom ? atom->string : 0;
+    *stringp = atom ? atom->string : NULL;
     return atom != NULL;
 }
 
@@ -659,19 +659,19 @@ parse_options(int argc, char *argv[], char **file_namep,
         DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"remote",      required_argument, 0, OPT_REMOTE},
-        {"unixctl",     required_argument, 0, OPT_UNIXCTL},
-        {"run",         required_argument, 0, OPT_RUN},
-        {"help",        no_argument, 0, 'h'},
-        {"version",     no_argument, 0, 'V'},
+        {"remote",      required_argument, NULL, OPT_REMOTE},
+        {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
+        {"run",         required_argument, NULL, OPT_RUN},
+        {"help",        no_argument, NULL, 'h'},
+        {"version",     no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
-        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-        {"private-key", required_argument, 0, 'p'},
-        {"certificate", required_argument, 0, 'c'},
-        {"ca-cert",     required_argument, 0, 'C'},
-        {0, 0, 0, 0},
+        {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
+        {"private-key", required_argument, NULL, 'p'},
+        {"certificate", required_argument, NULL, 'c'},
+        {"ca-cert",     required_argument, NULL, 'C'},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

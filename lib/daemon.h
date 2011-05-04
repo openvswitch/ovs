@@ -28,12 +28,12 @@
     OPT_PIDFILE,                                \
     OPT_MONITOR
 
-#define DAEMON_LONG_OPTIONS                                          \
-        {"detach",            no_argument, 0, OPT_DETACH},           \
-        {"no-chdir",          no_argument, 0, OPT_NO_CHDIR},         \
-        {"pidfile",           optional_argument, 0, OPT_PIDFILE},    \
-        {"overwrite-pidfile", no_argument, 0, OPT_OVERWRITE_PIDFILE},\
-        {"monitor",           no_argument, 0, OPT_MONITOR}
+#define DAEMON_LONG_OPTIONS                                             \
+        {"detach",            no_argument, NULL, OPT_DETACH},           \
+        {"no-chdir",          no_argument, NULL, OPT_NO_CHDIR},         \
+        {"pidfile",           optional_argument, NULL, OPT_PIDFILE},    \
+        {"overwrite-pidfile", no_argument, NULL, OPT_OVERWRITE_PIDFILE}, \
+        {"monitor",           no_argument, NULL, OPT_MONITOR}
 
 #define DAEMON_OPTION_HANDLERS                  \
         case OPT_DETACH:                        \

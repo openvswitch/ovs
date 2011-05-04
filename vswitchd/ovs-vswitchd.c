@@ -122,17 +122,17 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"help",        no_argument, 0, 'h'},
-        {"version",     no_argument, 0, 'V'},
-        {"mlockall",    no_argument, 0, OPT_MLOCKALL},
+        {"help",        no_argument, NULL, 'h'},
+        {"version",     no_argument, NULL, 'V'},
+        {"mlockall",    no_argument, NULL, OPT_MLOCKALL},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
-        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
-        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-        {"enable-dummy", no_argument, 0, OPT_ENABLE_DUMMY},
-        {0, 0, 0, 0},
+        {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
+        {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
+        {"enable-dummy", no_argument, NULL, OPT_ENABLE_DUMMY},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

@@ -222,8 +222,8 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 /* Command line processing. */
 #define VLOG_OPTION_ENUMS OPT_LOG_FILE
 #define VLOG_LONG_OPTIONS                                   \
-        {"verbose",     optional_argument, 0, 'v'},         \
-        {"log-file",    optional_argument, 0, OPT_LOG_FILE}
+        {"verbose",     optional_argument, NULL, 'v'},         \
+        {"log-file",    optional_argument, NULL, OPT_LOG_FILE}
 #define VLOG_OPTION_HANDLERS                    \
         case 'v':                               \
             vlog_set_verbosity(optarg);         \

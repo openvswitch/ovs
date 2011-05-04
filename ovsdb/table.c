@@ -157,7 +157,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
         add_column(ts, column);
     }
     *tsp = ts;
-    return 0;
+    return NULL;
 }
 
 /* Returns table schema 'ts' serialized into JSON.

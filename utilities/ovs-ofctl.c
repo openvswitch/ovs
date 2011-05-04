@@ -85,15 +85,15 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"timeout", required_argument, 0, 't'},
-        {"strict", no_argument, 0, OPT_STRICT},
-        {"flow-format", required_argument, 0, 'F'},
-        {"more", no_argument, 0, 'm'},
-        {"help", no_argument, 0, 'h'},
-        {"version", no_argument, 0, 'V'},
+        {"timeout", required_argument, NULL, 't'},
+        {"strict", no_argument, NULL, OPT_STRICT},
+        {"flow-format", required_argument, NULL, 'F'},
+        {"more", no_argument, NULL, 'm'},
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
-        {0, 0, 0, 0},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

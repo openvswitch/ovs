@@ -1398,14 +1398,14 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"help",             no_argument, 0, 'h'},
-        {"version",          no_argument, 0, 'V'},
-        {"prune-timeout",    required_argument, 0, OPT_PRUNE_TIMEOUT},
-        {"appctl-command",   required_argument, 0, OPT_APPCTL_COMMAND},
+        {"help",             no_argument, NULL, 'h'},
+        {"version",          no_argument, NULL, 'V'},
+        {"prune-timeout",    required_argument, NULL, OPT_PRUNE_TIMEOUT},
+        {"appctl-command",   required_argument, NULL, OPT_APPCTL_COMMAND},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
-        {0, 0, 0, 0},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

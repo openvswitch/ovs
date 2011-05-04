@@ -289,7 +289,7 @@ ovsdb_log_read(struct ovsdb_log *file, struct json **jsonp)
     file->prev_offset = file->offset;
     file->offset = data_offset + data_length;
     *jsonp = json;
-    return 0;
+    return NULL;
 
 error:
     file->read_error = ovsdb_error_clone(error);
@@ -372,7 +372,7 @@ ovsdb_log_write(struct ovsdb_log *file, struct json *json)
 
     file->offset += strlen(header) + length;
     free(json_string);
-    return 0;
+    return NULL;
 
 error:
     file->write_error = ovsdb_error_clone(error);
@@ -386,7 +386,7 @@ ovsdb_log_commit(struct ovsdb_log *file)
     if (fsync(fileno(file->stream))) {
         return ovsdb_io_error(errno, "%s: fsync failed", file->name);
     }
-    return 0;
+    return NULL;
 }
 
 /* Returns the current offset into the file backing 'log', in bytes.  This

@@ -55,7 +55,7 @@ rtnetlink_create(int multicast_group, rtnetlink_parse_func *parse,
     struct rtnetlink *rtn;
 
     rtn                  = xzalloc(sizeof *rtn);
-    rtn->notify_sock     = 0;
+    rtn->notify_sock     = NULL;
     rtn->multicast_group = multicast_group;
     rtn->parse           = parse;
     rtn->change          = change;

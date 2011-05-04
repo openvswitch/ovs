@@ -85,12 +85,12 @@ struct table_style {
     OPT_PRETTY,                                 \
     OPT_BARE
 
-#define TABLE_LONG_OPTIONS                                  \
-        {"format", required_argument, 0, 'f'},              \
-        {"data", required_argument, 0, 'd'},                \
-        {"no-headings", no_argument, 0, OPT_NO_HEADINGS},   \
-        {"pretty", no_argument, 0, OPT_PRETTY},             \
-        {"bare", no_argument, 0, OPT_BARE}
+#define TABLE_LONG_OPTIONS                                      \
+        {"format", required_argument, NULL, 'f'},               \
+        {"data", required_argument, NULL, 'd'},                 \
+        {"no-headings", no_argument, NULL, OPT_NO_HEADINGS},    \
+        {"pretty", no_argument, NULL, OPT_PRETTY},              \
+        {"bare", no_argument, NULL, OPT_BARE}
 
 #define TABLE_OPTION_HANDLERS(STYLE)                \
         case 'f':                                   \

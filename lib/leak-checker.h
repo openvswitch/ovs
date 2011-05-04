@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@
     OPT_CHECK_LEAKS,                            \
     OPT_LEAK_LIMIT
 #define LEAK_CHECKER_LONG_OPTIONS                           \
-    {"check-leaks", required_argument, 0, OPT_CHECK_LEAKS}, \
-    {"leak-limit", required_argument, 0, OPT_LEAK_LIMIT}
+    {"check-leaks", required_argument, NULL, OPT_CHECK_LEAKS}, \
+    {"leak-limit", required_argument, NULL, OPT_LEAK_LIMIT}
 #define LEAK_CHECKER_OPTION_HANDLERS                \
         case OPT_CHECK_LEAKS:                       \
             leak_checker_start(optarg);             \

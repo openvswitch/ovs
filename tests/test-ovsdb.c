@@ -68,10 +68,10 @@ static void
 parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
-        {"timeout", required_argument, 0, 't'},
-        {"verbose", optional_argument, 0, 'v'},
-        {"help", no_argument, 0, 'h'},
-        {0, 0, 0, 0},
+        {"timeout", required_argument, NULL, 't'},
+        {"verbose", optional_argument, NULL, 'v'},
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
 

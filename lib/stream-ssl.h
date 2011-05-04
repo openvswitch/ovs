@@ -27,9 +27,9 @@ void stream_ssl_set_key_and_cert(const char *private_key_file,
                                  const char *certificate_file);
 
 #define STREAM_SSL_LONG_OPTIONS                     \
-        {"private-key", required_argument, 0, 'p'}, \
-        {"certificate", required_argument, 0, 'c'}, \
-        {"ca-cert",     required_argument, 0, 'C'}
+        {"private-key", required_argument, NULL, 'p'}, \
+        {"certificate", required_argument, NULL, 'c'}, \
+        {"ca-cert",     required_argument, NULL, 'C'}
 
 #define STREAM_SSL_OPTION_HANDLERS                      \
         case 'p':                                       \
