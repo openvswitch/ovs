@@ -93,7 +93,6 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
-    struct dpif *dpif;
     struct netflow_options nf_options;
     const char *port;
     bool exiting;
@@ -116,9 +115,10 @@ main(int argc, char *argv[])
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
-    error = dpif_create_and_open(s.dp_name, s.dp_type, &dpif);
+    error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
     if (error) {
-        VLOG_FATAL("could not create datapath (%s)", strerror(error));
+        VLOG_FATAL("could not initialize OpenFlow switch (%s)",
+                   strerror(error));
     }
 
     /* Add ports to the datapath if requested by the user. */
@@ -131,7 +131,7 @@ main(int argc, char *argv[])
                        port, strerror(error));
         }
 
-        error = dpif_port_add(dpif, netdev, NULL);
+        error = ofproto_port_add(ofproto, netdev, NULL);
         if (error) {
             VLOG_FATAL("failed to add %s as a port (%s)",
                        port, strerror(error));
@@ -140,12 +140,7 @@ main(int argc, char *argv[])
         netdev_close(netdev);
     }
 
-    /* Start OpenFlow processing. */
-    error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
-    if (error) {
-        VLOG_FATAL("could not initialize openflow switch (%s)",
-                   strerror(error));
-    }
+    /* Configure OpenFlow switch. */
     if (s.datapath_id) {
         ofproto_set_datapath_id(ofproto, s.datapath_id);
     }
@@ -188,7 +183,7 @@ main(int argc, char *argv[])
         poll_block();
     }
 
-    dpif_close(dpif);
+    ofproto_destroy(ofproto);
 
     return 0;
 }

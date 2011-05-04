@@ -171,12 +171,9 @@ struct bridge {
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
-    /* Kernel datapath information. */
-    struct dpif *dpif;          /* Datapath. */
-    struct hmap ifaces;         /* "struct iface"s indexed by dp_ifidx. */
-
     /* Bridge ports. */
     struct hmap ports;          /* "struct port"s indexed by name. */
+    struct hmap ifaces;         /* "struct iface"s indexed by dp_ifidx. */
     struct hmap iface_by_name;  /* "struct iface"s indexed by name. */
 
     /* Bonding. */
@@ -542,18 +539,19 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions. */
     LIST_FOR_EACH (br, node, &all_bridges) {
-        struct dpif_port_dump dump;
+        struct ofproto_port ofproto_port;
+        struct ofproto_port_dump dump;
         struct shash want_ifaces;
-        struct dpif_port dpif_port;
 
         bridge_get_all_ifaces(br, &want_ifaces);
-        DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
-            if (!shash_find(&want_ifaces, dpif_port.name)
-                && strcmp(dpif_port.name, br->name)) {
-                int retval = dpif_port_del(br->dpif, dpif_port.port_no);
+        OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
+            if (!shash_find(&want_ifaces, ofproto_port.name)
+                && strcmp(ofproto_port.name, br->name)) {
+                int retval = ofproto_port_del(br->ofproto,
+                                              ofproto_port.ofp_port);
                 if (retval) {
                     VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
-                              br->name, dpif_port.name, strerror(retval));
+                              br->name, ofproto_port.name, strerror(retval));
                 }
             }
         }
@@ -561,15 +559,15 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
     LIST_FOR_EACH (br, node, &all_bridges) {
         struct shash cur_ifaces, want_ifaces;
-        struct dpif_port_dump dump;
-        struct dpif_port dpif_port;
+        struct ofproto_port ofproto_port;
+        struct ofproto_port_dump dump;
 
         /* Get the set of interfaces currently in this datapath. */
         shash_init(&cur_ifaces);
-        DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
-            struct dpif_port *port_info = xmalloc(sizeof *port_info);
-            dpif_port_clone(port_info, &dpif_port);
-            shash_add(&cur_ifaces, dpif_port.name, port_info);
+        OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
+            struct ofproto_port *port_info = xmalloc(sizeof *port_info);
+            ofproto_port_clone(port_info, &ofproto_port);
+            shash_add(&cur_ifaces, ofproto_port.name, port_info);
         }
 
         /* Get the set of interfaces we want on this datapath. */
@@ -579,25 +577,26 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         SHASH_FOR_EACH (node, &want_ifaces) {
             const char *if_name = node->name;
             struct iface *iface = node->data;
-            struct dpif_port *dpif_port;
+            struct ofproto_port *ofproto_port;
             const char *type;
             int error;
 
             type = iface ? iface->type : "internal";
-            dpif_port = shash_find_data(&cur_ifaces, if_name);
+            ofproto_port = shash_find_data(&cur_ifaces, if_name);
 
             /* If we have a port or a netdev already, and it's not the type we
              * want, then delete the port (if any) and close the netdev (if
              * any). */
-            if ((dpif_port && strcmp(dpif_port->type, type))
+            if ((ofproto_port && strcmp(ofproto_port->type, type))
                 || (iface && iface->netdev
                     && strcmp(type, netdev_get_type(iface->netdev)))) {
-                if (dpif_port) {
-                    error = ofproto_port_del(br->ofproto, dpif_port->port_no);
+                if (ofproto_port) {
+                    error = ofproto_port_del(br->ofproto,
+                                             ofproto_port->ofp_port);
                     if (error) {
                         continue;
                     }
-                    dpif_port = NULL;
+                    ofproto_port = NULL;
                 }
                 if (iface) {
                     if (iface->port->bond) {
@@ -614,7 +613,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             /* If the port doesn't exist or we don't have the netdev open,
              * we need to do more work. */
-            if (!dpif_port || (iface && !iface->netdev)) {
+            if (!ofproto_port || (iface && !iface->netdev)) {
                 struct netdev_options options;
                 struct netdev *netdev;
                 struct shash args;
@@ -641,8 +640,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 }
 
                 /* Then add the port if we haven't already. */
-                if (!dpif_port) {
-                    error = dpif_port_add(br->dpif, netdev, NULL);
+                if (!ofproto_port) {
+                    error = ofproto_port_add(br->ofproto, netdev, NULL);
                     if (error) {
                         netdev_close(netdev);
                         if (error == EFBIG) {
@@ -676,8 +675,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_destroy(&want_ifaces);
 
         SHASH_FOR_EACH (node, &cur_ifaces) {
-            struct dpif_port *port_info = node->data;
-            dpif_port_destroy(port_info);
+            struct ofproto_port *port_info = node->data;
+            ofproto_port_destroy(port_info);
             free(port_info);
         }
         shash_destroy(&cur_ifaces);
@@ -752,7 +751,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             memset(&opts, 0, sizeof opts);
 
-            dpif_get_netflow_ids(br->dpif, &opts.engine_type, &opts.engine_id);
+            ofproto_get_netflow_ids(br->ofproto,
+                                    &opts.engine_type, &opts.engine_id);
             if (nf_cfg->engine_type) {
                 opts.engine_type = *nf_cfg->engine_type;
             }
@@ -1638,20 +1638,11 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     assert(!bridge_lookup(br_cfg->name));
     br = xzalloc(sizeof *br);
 
-    error = dpif_create_and_open(br_cfg->name, br_cfg->datapath_type,
-                                 &br->dpif);
-    if (error) {
-        free(br);
-        return NULL;
-    }
-
     error = ofproto_create(br_cfg->name, br_cfg->datapath_type, &bridge_ofhooks,
                            br, &br->ofproto);
     if (error) {
         VLOG_ERR("failed to create switch %s: %s", br_cfg->name,
                  strerror(error));
-        dpif_delete(br->dpif);
-        dpif_close(br->dpif);
         free(br);
         return NULL;
     }
@@ -1679,7 +1670,6 @@ bridge_destroy(struct bridge *br)
 {
     if (br) {
         struct port *port, *next;
-        int error;
         int i;
 
         HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
@@ -1689,13 +1679,7 @@ bridge_destroy(struct bridge *br)
             mirror_destroy(br->mirrors[i]);
         }
         list_remove(&br->node);
-        ofproto_destroy(br->ofproto);
-        error = dpif_delete(br->dpif);
-        if (error && error != ENOENT) {
-            VLOG_ERR("bridge %s: failed to destroy (%s)",
-                     br->name, strerror(error));
-        }
-        dpif_close(br->dpif);
+        ofproto_destroy_and_delete(br->ofproto);
         mac_learning_destroy(br->ml);
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
@@ -1826,16 +1810,18 @@ bridge_reconfigure_one(struct bridge *br)
                       br->name, name);
         }
     }
-    if (!shash_find(&new_ports, br->name)) {
-        struct dpif_port dpif_port;
+    if (bridge_get_controllers(br, NULL)
+        && !shash_find(&new_ports, br->name)) {
+        struct ofproto_port local_port;
         char *type;
+        int error;
 
         VLOG_WARN("bridge %s: no port named %s, synthesizing one",
                   br->name, br->name);
 
-        dpif_port_query_by_number(br->dpif, ODPP_LOCAL, &dpif_port);
-        type = xstrdup(dpif_port.type ? dpif_port.type : "internal");
-        dpif_port_destroy(&dpif_port);
+        error = ofproto_port_query_by_name(br->ofproto, br->name, &local_port);
+        type = xstrdup(error ? "internal" : local_port.type);
+        ofproto_port_destroy(&local_port);
 
         br->synth_local_port.interfaces = &br->synth_local_ifacep;
         br->synth_local_port.n_interfaces = 1;
@@ -2073,8 +2059,8 @@ bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 static void
 bridge_fetch_dp_ifaces(struct bridge *br)
 {
-    struct dpif_port_dump dump;
-    struct dpif_port dpif_port;
+    struct ofproto_port ofproto_port;
+    struct ofproto_port_dump dump;
     struct port *port;
 
     /* Reset all interface numbers. */
@@ -2087,17 +2073,19 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     hmap_clear(&br->ifaces);
 
-    DPIF_PORT_FOR_EACH (&dpif_port, &dump, br->dpif) {
-        struct iface *iface = iface_lookup(br, dpif_port.name);
+    OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
+        struct iface *iface = iface_lookup(br, ofproto_port.name);
         if (iface) {
+            uint32_t odp_port = ofp_port_to_odp_port(ofproto_port.ofp_port);
+
             if (iface->dp_ifidx >= 0) {
                 VLOG_WARN("bridge %s: interface %s reported twice",
-                          br->name, dpif_port.name);
-            } else if (iface_from_dp_ifidx(br, dpif_port.port_no)) {
+                          br->name, ofproto_port.name);
+            } else if (iface_from_dp_ifidx(br, odp_port)) {
                 VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
-                          br->name, dpif_port.port_no);
+                          br->name, odp_port);
             } else {
-                iface->dp_ifidx = dpif_port.port_no;
+                iface->dp_ifidx = odp_port;
                 hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
                             hash_int(iface->dp_ifidx, 0));
             }

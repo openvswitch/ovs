@@ -33,6 +33,8 @@ extern "C" {
 
 struct cfm;
 struct cls_rule;
+struct dpif_port;
+struct netdev;
 struct nlattr;
 struct ofhooks;
 struct ofproto;
@@ -97,14 +99,53 @@ int ofproto_create(const char *datapath, const char *datapath_type,
                    const struct ofhooks *, void *aux,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);
+void ofproto_destroy_and_delete(struct ofproto *);
 int ofproto_run(struct ofproto *);
 int ofproto_run1(struct ofproto *);
 int ofproto_run2(struct ofproto *, bool revalidate_all);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
 
-int ofproto_port_del(struct ofproto *, uint16_t odp_port);
+/* A port within an OpenFlow switch.
+ *
+ * 'name' and 'type' are suitable for passing to netdev_open(). */
+struct ofproto_port {
+    char *name;                 /* Network device name, e.g. "eth0". */
+    char *type;                 /* Network device type, e.g. "system". */
+    uint16_t ofp_port;          /* OpenFlow port number. */
+};
+void ofproto_port_clone(struct ofproto_port *, const struct ofproto_port *);
+void ofproto_port_destroy(struct ofproto_port *);
+
+struct ofproto_port_dump {
+    const struct ofproto *ofproto;
+    int error;
+    void *state;
+};
+void ofproto_port_dump_start(struct ofproto_port_dump *,
+                             const struct ofproto *);
+bool ofproto_port_dump_next(struct ofproto_port_dump *, struct ofproto_port *);
+int ofproto_port_dump_done(struct ofproto_port_dump *);
+
+/* Iterates through each DPIF_PORT in OFPROTO, using DUMP as state.
+ *
+ * Arguments all have pointer type.
+ *
+ * If you break out of the loop, then you need to free the dump structure by
+ * hand using ofproto_port_dump_done(). */
+#define OFPROTO_PORT_FOR_EACH(OFPROTO_PORT, DUMP, OFPROTO)  \
+    for (ofproto_port_dump_start(DUMP, OFPROTO);            \
+         (ofproto_port_dump_next(DUMP, OFPROTO_PORT)        \
+          ? true                                            \
+          : (ofproto_port_dump_done(DUMP), false));         \
+        )
+
+int ofproto_port_add(struct ofproto *, struct netdev *, uint16_t *ofp_portp);
+int ofproto_port_del(struct ofproto *, uint16_t ofp_port);
 bool ofproto_port_is_floodable(struct ofproto *, uint16_t odp_port);
+
+int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
+                               struct ofproto_port *);
 
 /* Top-level configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
@@ -138,6 +179,8 @@ void ofproto_get_listeners(const struct ofproto *, struct sset *);
 bool ofproto_has_snoops(const struct ofproto *);
 void ofproto_get_snoops(const struct ofproto *, struct sset *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);
+void ofproto_get_netflow_ids(const struct ofproto *,
+                             uint8_t *engine_type, uint8_t *engine_id);
 
 /* Functions for use by ofproto implementation modules, not by clients. */
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,

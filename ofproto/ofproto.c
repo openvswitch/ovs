@@ -358,7 +358,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     ofproto_unixctl_init();
 
     /* Connect to datapath and start listening for messages. */
-    error = dpif_open(datapath, datapath_type, &dpif);
+    error = dpif_create_and_open(datapath, datapath_type, &dpif);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
@@ -675,8 +675,8 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
     connmgr_get_snoops(ofproto->connmgr, snoops);
 }
 
-void
-ofproto_destroy(struct ofproto *p)
+static void
+ofproto_destroy__(struct ofproto *p, bool delete)
 {
     struct ofport *ofport, *next_ofport;
 
@@ -691,7 +691,15 @@ ofproto_destroy(struct ofproto *p)
     classifier_destroy(&p->cls);
     hmap_destroy(&p->facets);
 
+    if (delete) {
+        int error = dpif_delete(p->dpif);
+        if (error && error != ENOENT) {
+            VLOG_ERR("bridge %s: failed to destroy (%s)",
+                     dpif_name(p->dpif), strerror(error));
+        }
+    }
     dpif_close(p->dpif);
+
     netdev_monitor_destroy(p->netdev_monitor);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
         hmap_remove(&p->ports, &ofport->hmap_node);
@@ -713,6 +721,18 @@ ofproto_destroy(struct ofproto *p)
     hmap_destroy(&p->ports);
 
     free(p);
+}
+
+void
+ofproto_destroy(struct ofproto *p)
+{
+    ofproto_destroy__(p, false);
+}
+
+void
+ofproto_destroy_and_delete(struct ofproto *p)
+{
+    ofproto_destroy__(p, true);
 }
 
 int
@@ -893,7 +913,134 @@ ofproto_free_ofproto_controller_info(struct shash *info)
     shash_destroy(info);
 }
 
-/* Deletes port number 'odp_port' from the datapath for 'ofproto'.
+/* Makes a deep copy of 'old' into 'port'. */
+void
+ofproto_port_clone(struct ofproto_port *port, const struct ofproto_port *old)
+{
+    port->name = xstrdup(old->name);
+    port->type = xstrdup(old->type);
+    port->ofp_port = old->ofp_port;
+}
+
+/* Frees memory allocated to members of 'ofproto_port'.
+ *
+ * Do not call this function on an ofproto_port obtained from
+ * ofproto_port_dump_next(): that function retains ownership of the data in the
+ * ofproto_port. */
+void
+ofproto_port_destroy(struct ofproto_port *ofproto_port)
+{
+    free(ofproto_port->name);
+    free(ofproto_port->type);
+}
+
+/* Converts a dpif_port into an ofproto_port.
+ *
+ * This only makes a shallow copy, so make sure that the dpif_port doesn't get
+ * freed while the ofproto_port is still in use.  You can choose to free the
+ * ofproto_port instead of the dpif_port. */
+static void
+ofproto_port_from_dpif_port(struct ofproto_port *ofproto_port,
+                            struct dpif_port *dpif_port)
+{
+    ofproto_port->name = dpif_port->name;
+    ofproto_port->type = dpif_port->type;
+    ofproto_port->ofp_port = odp_port_to_ofp_port(dpif_port->port_no);
+}
+
+/* Initializes 'dump' to begin dumping the ports in an ofproto.
+ *
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling
+ * ofproto_port_dump_done().
+ */
+void
+ofproto_port_dump_start(struct ofproto_port_dump *dump,
+                        const struct ofproto *ofproto)
+{
+    struct dpif_port_dump *dpif_dump;
+
+    dump->state = dpif_dump = xmalloc(sizeof *dpif_dump);
+    dpif_port_dump_start(dpif_dump, ofproto->dpif);
+}
+
+/* Attempts to retrieve another port from 'dump', which must have been created
+ * with ofproto_port_dump_start().  On success, stores a new ofproto_port into
+ * 'port' and returns true.  On failure, returns false.
+ *
+ * Failure might indicate an actual error or merely that the last port has been
+ * dumped.  An error status for the entire dump operation is provided when it
+ * is completed by calling ofproto_port_dump_done().
+ *
+ * The ofproto owns the data stored in 'port'.  It will remain valid until at
+ * least the next time 'dump' is passed to ofproto_port_dump_next() or
+ * ofproto_port_dump_done(). */
+bool
+ofproto_port_dump_next(struct ofproto_port_dump *dump,
+                       struct ofproto_port *port)
+{
+    struct dpif_port_dump *dpif_dump = dump->state;
+    struct dpif_port dpif_port;
+    bool ok;
+
+    ok = dpif_port_dump_next(dpif_dump, &dpif_port);
+    if (ok) {
+        ofproto_port_from_dpif_port(port, &dpif_port);
+    }
+    return ok;
+}
+
+/* Completes port table dump operation 'dump', which must have been created
+ * with ofproto_port_dump_start().  Returns 0 if the dump operation was
+ * error-free, otherwise a positive errno value describing the problem. */
+int
+ofproto_port_dump_done(struct ofproto_port_dump *dump)
+{
+    struct dpif_port_dump *dpif_dump = dump->state;
+    int error = dpif_port_dump_done(dpif_dump);
+    free(dpif_dump);
+    return error;
+}
+
+/* Attempts to add 'netdev' as a port on 'ofproto'.  If successful, returns 0
+ * and sets '*ofp_portp' to the new port's port OpenFlow number (if 'ofp_portp'
+ * is non-null).  On failure, returns a positive errno value and sets
+ * '*ofp_portp' to OFPP_NONE (if 'ofp_portp' is non-null). */
+int
+ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
+                 uint16_t *ofp_portp)
+{
+    uint16_t odp_port;
+    int error;
+
+    error = dpif_port_add(ofproto->dpif, netdev, &odp_port);
+    if (ofp_portp) {
+        *ofp_portp = error ? OFPP_NONE : odp_port_to_ofp_port(odp_port);
+    }
+    return error;
+}
+
+/* Looks up a port named 'devname' in 'ofproto'.  On success, returns 0 and
+ * initializes '*port' appropriately; on failure, returns a positive errno
+ * value.
+ *
+ * The caller owns the data in 'port' and must free it with
+ * ofproto_port_destroy() when it is no longer needed. */
+int
+ofproto_port_query_by_name(const struct ofproto *ofproto, const char *devname,
+                           struct ofproto_port *port)
+{
+    struct dpif_port dpif_port;
+    int error;
+
+    error = dpif_port_query_by_name(ofproto->dpif, devname, &dpif_port);
+    if (!error) {
+        ofproto_port_from_dpif_port(port, &dpif_port);
+    }
+    return error;
+}
+
+/* Deletes port number 'ofp_port' from the datapath for 'ofproto'.
  *
  * This is almost the same as calling dpif_port_del() directly on the
  * datapath, but it also makes 'ofproto' close its open netdev for the port
@@ -904,8 +1051,9 @@ ofproto_free_ofproto_controller_info(struct shash *info)
  *
  * Returns 0 if successful, otherwise a positive errno. */
 int
-ofproto_port_del(struct ofproto *ofproto, uint16_t odp_port)
+ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
 {
+    uint32_t odp_port = ofp_port_to_odp_port(ofp_port);
     struct ofport *ofport = get_port(ofproto, odp_port);
     const char *name = ofport ? netdev_get_name(ofport->netdev) : "<unknown>";
     int error;
@@ -3020,6 +3168,15 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
         flow_stats_ds(rule, results);
     }
+}
+
+/* Obtains the NetFlow engine type and engine ID for 'ofproto' into
+ * '*engine_type' and '*engine_id', respectively. */
+void
+ofproto_get_netflow_ids(const struct ofproto *ofproto,
+                        uint8_t *engine_type, uint8_t *engine_id)
+{
+    dpif_get_netflow_ids(ofproto->dpif, engine_type, engine_id);
 }
 
 static void
