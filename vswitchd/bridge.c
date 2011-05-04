@@ -220,8 +220,6 @@ static void bridge_reconfigure_one(struct bridge *);
 static void bridge_reconfigure_remotes(struct bridge *,
                                        const struct sockaddr_in *managers,
                                        size_t n_managers);
-static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
-static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
 static void bridge_pick_local_hw_addr(struct bridge *,
                                       uint8_t ea[ETH_ADDR_LEN],
@@ -230,6 +228,9 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
+static bool bridge_has_bond_fake_iface(const struct bridge *,
+                                       const char *name);
+static bool port_is_bond_fake_iface(const struct port *);
 
 static unixctl_cb_func bridge_unixctl_fdb_show;
 static unixctl_cb_func cfm_unixctl_show;
@@ -531,167 +532,137 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions. */
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        struct ofproto_port ofproto_port;
         struct ofproto_port_dump dump;
-        struct shash want_ifaces;
-
-        bridge_get_all_ifaces(br, &want_ifaces);
-        OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
-            if (!shash_find(&want_ifaces, ofproto_port.name)
-                && strcmp(ofproto_port.name, br->name)) {
-                int retval = ofproto_port_del(br->ofproto,
-                                              ofproto_port.ofp_port);
-                if (retval) {
-                    VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
-                              br->name, ofproto_port.name, strerror(retval));
-                }
-            }
-        }
-        shash_destroy(&want_ifaces);
-    }
-    HMAP_FOR_EACH (br, node, &all_bridges) {
-        struct shash cur_ifaces, want_ifaces;
         struct ofproto_port ofproto_port;
-        struct ofproto_port_dump dump;
 
-        /* Get the set of interfaces currently in this datapath. */
-        shash_init(&cur_ifaces);
         OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
-            struct ofproto_port *port_info = xmalloc(sizeof *port_info);
-            ofproto_port_clone(port_info, &ofproto_port);
-            shash_add(&cur_ifaces, ofproto_port.name, port_info);
-        }
-
-        /* Get the set of interfaces we want on this datapath. */
-        bridge_get_all_ifaces(br, &want_ifaces);
-
-        hmap_clear(&br->ifaces);
-        SHASH_FOR_EACH (node, &want_ifaces) {
-            const char *if_name = node->name;
-            struct iface *iface = node->data;
-            struct ofproto_port *ofproto_port;
+            const char *name = ofproto_port.name;
+            struct iface *iface;
             const char *type;
             int error;
 
-            type = iface ? iface->type : "internal";
-            ofproto_port = shash_find_data(&cur_ifaces, if_name);
-
-            /* If we have a port or a netdev already, and it's not the type we
-             * want, then delete the port (if any) and close the netdev (if
-             * any). */
-            if ((ofproto_port && strcmp(ofproto_port->type, type))
-                || (iface && iface->netdev
-                    && strcmp(type, netdev_get_type(iface->netdev)))) {
-                if (ofproto_port) {
-                    error = ofproto_port_del(br->ofproto,
-                                             ofproto_port->ofp_port);
-                    if (error) {
-                        continue;
-                    }
-                    ofproto_port = NULL;
-                }
-                if (iface) {
-                    if (iface->port->bond) {
-                        /* The bond has a pointer to the netdev, so remove it
-                         * from the bond before closing the netdev.  The slave
-                         * will get added back to the bond later, after a new
-                         * netdev is available. */
-                        bond_slave_unregister(iface->port->bond, iface);
-                    }
-                    netdev_close(iface->netdev);
-                    iface->netdev = NULL;
-                }
+            /* Ignore the local port.  We can't change it anyhow. */
+            if (!strcmp(name, br->name)) {
+                continue;
             }
 
-            /* If the port doesn't exist or we don't have the netdev open,
-             * we need to do more work. */
-            if (!ofproto_port || (iface && !iface->netdev)) {
-                struct netdev_options options;
-                struct netdev *netdev;
-                struct shash args;
+            /* Get the type that 'ofproto_port' should have (ordinarily the
+             * type of its corresponding iface) or NULL if it should be
+             * deleted. */
+            iface = iface_lookup(br, name);
+            type = (iface ? iface->type
+                    : bridge_has_bond_fake_iface(br, name) ? "internal"
+                    : NULL);
 
-                /* First open the network device. */
-                options.name = if_name;
-                options.type = type;
-                options.args = &args;
-                options.ethertype = NETDEV_ETH_TYPE_NONE;
-
-                shash_init(&args);
-                if (iface) {
-                    shash_from_ovs_idl_map(iface->cfg->key_options,
-                                           iface->cfg->value_options,
-                                           iface->cfg->n_options, &args);
+            /* If it's the wrong type then delete the ofproto port. */
+            if (type
+                && !strcmp(ofproto_port.type, type)
+                && (!iface || !iface->netdev
+                    || !strcmp(netdev_get_type(iface->netdev), type))) {
+                continue;
+            }
+            error = ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
+            if (error) {
+                VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
+                          br->name, name, strerror(error));
+            }
+            if (iface) {
+                if (iface->port->bond) {
+                    /* The bond has a pointer to the netdev, so remove it from
+                     * the bond before closing the netdev.  The slave will get
+                     * added back to the bond later, after a new netdev is
+                     * available. */
+                    bond_slave_unregister(iface->port->bond, iface);
                 }
-                error = netdev_open(&options, &netdev);
-                shash_destroy(&args);
-
-                if (error) {
-                    VLOG_WARN("could not open network device %s (%s)",
-                              if_name, strerror(error));
-                    continue;
-                }
-
-                /* Then add the port if we haven't already. */
-                if (!ofproto_port) {
-                    error = ofproto_port_add(br->ofproto, netdev, NULL);
-                    if (error) {
-                        netdev_close(netdev);
-                        if (error == EFBIG) {
-                            VLOG_ERR("bridge %s: out of valid port numbers",
-                                     br->name);
-                            break;
-                        } else {
-                            VLOG_WARN("bridge %s: failed to add %s interface "
-                                      "(%s)",
-                                      br->name, if_name, strerror(error));
-                            continue;
-                        }
-                    }
-                }
-
-                /* Update 'iface'. */
-                if (iface) {
-                    iface->netdev = netdev;
-                }
-            } else if (iface && iface->netdev) {
-                struct shash args;
-
-                shash_init(&args);
-                shash_from_ovs_idl_map(iface->cfg->key_options,
-                                       iface->cfg->value_options,
-                                       iface->cfg->n_options, &args);
-                netdev_set_config(iface->netdev, &args);
-                shash_destroy(&args);
+                netdev_close(iface->netdev);
+                iface->netdev = NULL;
             }
         }
-        shash_destroy(&want_ifaces);
-
-        SHASH_FOR_EACH (node, &cur_ifaces) {
-            struct ofproto_port *port_info = node->data;
-            ofproto_port_destroy(port_info);
-            free(port_info);
-        }
-        shash_destroy(&cur_ifaces);
     }
-    sflow_bridge_number = 0;
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        uint8_t ea[ETH_ADDR_LEN];
-        uint64_t dpid;
-        struct iface *local_iface;
+        struct ofproto_port ofproto_port;
+        struct ofproto_port_dump dump;
         struct port *port, *next_port;
-        struct iface *hw_addr_iface;
-        char *dpid_string;
 
-        bridge_fetch_dp_ifaces(br);
+        /* Clear all the "dp_ifidx"es. */
+        hmap_clear(&br->ifaces);
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+            struct iface *iface;
 
-        /* Delete interfaces that cannot be opened.
-         *
-         * Following this loop, every remaining "struct iface" has nonnull
-         * 'netdev' and correct 'dp_ifidx'. */
+            LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                iface->dp_ifidx = -1;
+            }
+        }
+
+        /* Obtain the correct "dp_ifidx"es from ofproto. */
+        OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
+            struct iface *iface = iface_lookup(br, ofproto_port.name);
+            if (iface) {
+                uint32_t odp_port;
+
+                odp_port = ofp_port_to_odp_port(ofproto_port.ofp_port);
+                if (iface->dp_ifidx >= 0) {
+                    VLOG_WARN("bridge %s: interface %s reported twice",
+                              br->name, ofproto_port.name);
+                } else if (iface_from_dp_ifidx(br, odp_port)) {
+                    VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
+                              br->name, odp_port);
+                } else {
+                    iface->dp_ifidx = odp_port;
+                    hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
+                                hash_int(iface->dp_ifidx, 0));
+                }
+            }
+        }
+
+        /* Add a dpif port for any "struct iface" that doesn't have one.
+         * Delete any "struct iface" for which this fails.
+         * Delete any "struct port" that thereby ends up with no ifaces. */
         HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
             struct iface *iface, *next_iface;
 
             LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
+                struct shash args;
+                int error;
+
+                /* Open the netdev or reconfigure it. */
+                shash_init(&args);
+                shash_from_ovs_idl_map(iface->cfg->key_options,
+                                       iface->cfg->value_options,
+                                       iface->cfg->n_options, &args);
+                if (!iface->netdev) {
+                    struct netdev_options options;
+                    options.name = iface->name;
+                    options.type = iface->type;
+                    options.args = &args;
+                    options.ethertype = NETDEV_ETH_TYPE_NONE;
+                    error = netdev_open(&options, &iface->netdev);
+                } else {
+                    error = netdev_set_config(iface->netdev, &args);
+                }
+                shash_destroy(&args);
+                if (error) {
+                    VLOG_WARN("could not %s network device %s (%s)",
+                              iface->netdev ? "reconfigure" : "open",
+                              iface->name, strerror(error));
+                }
+
+                /* Add the port, if necessary. */
+                if (iface->netdev && iface->dp_ifidx < 0) {
+                    uint16_t ofp_port;
+                    int error;
+
+                    error = ofproto_port_add(br->ofproto, iface->netdev,
+                                             &ofp_port);
+                    if (!error) {
+                        iface->dp_ifidx = ofp_port_to_odp_port(ofp_port);
+                    } else {
+                        netdev_close(iface->netdev);
+                        iface->netdev = NULL;
+                    }
+                }
+
+                /* Delete the iface if  */
                 if (iface->netdev && iface->dp_ifidx >= 0) {
                     VLOG_DBG("bridge %s: interface %s is on port %d",
                              br->name, iface->name, iface->dp_ifidx);
@@ -703,17 +674,50 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                         /* We already reported a related error, don't bother
                          * duplicating it. */
                     }
-
                     iface_set_ofport(iface->cfg, -1);
                     iface_destroy(iface);
                 }
             }
-
             if (list_is_empty(&port->ifaces)) {
                 VLOG_WARN("%s port has no interfaces, dropping", port->name);
                 port_destroy(port);
+                continue;
+            }
+
+            /* Add bond fake iface if necessary. */
+            if (port_is_bond_fake_iface(port)) {
+                if (ofproto_port_query_by_name(br->ofproto, port->name,
+                                               &ofproto_port)) {
+                    struct netdev_options options;
+                    struct netdev *netdev;
+                    int error;
+
+                    options.name = port->name;
+                    options.type = "internal";
+                    options.args = NULL;
+                    options.ethertype = NETDEV_ETH_TYPE_NONE;
+                    error = netdev_open(&options, &netdev);
+                    if (!error) {
+                        ofproto_port_add(br->ofproto, netdev, NULL);
+                        netdev_close(netdev);
+                    } else {
+                        VLOG_WARN("could not open network device %s (%s)",
+                                  port->name, strerror(error));
+                    }
+                } else {
+                    /* Already exists, nothing to do. */
+                    ofproto_port_destroy(&ofproto_port);
+                }
             }
         }
+    }
+    sflow_bridge_number = 0;
+    HMAP_FOR_EACH (br, node, &all_bridges) {
+        uint8_t ea[ETH_ADDR_LEN];
+        uint64_t dpid;
+        struct iface *local_iface;
+        struct iface *hw_addr_iface;
+        char *dpid_string;
 
         /* Pick local port hardware address, datapath ID. */
         bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
@@ -882,6 +886,19 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     /* ovs-vswitchd has completed initialization, so allow the process that
      * forked us to exit successfully. */
     daemonize_complete();
+}
+
+static bool
+bridge_has_bond_fake_iface(const struct bridge *br, const char *name)
+{
+    const struct port *port = port_lookup(br, name);
+    return port && port_is_bond_fake_iface(port);
+}
+
+static bool
+port_is_bond_fake_iface(const struct port *port)
+{
+    return port->cfg->bond_fake_iface && !list_is_short(&port->ifaces);
 }
 
 static const char *
@@ -2020,74 +2037,6 @@ bridge_reconfigure_remotes(struct bridge *br,
     ofproto_set_controllers(br->ofproto, ocs, n_ocs);
     free(ocs[0].target); /* From bridge_ofproto_controller_for_mgmt(). */
     free(ocs);
-}
-
-static void
-bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
-{
-    struct port *port;
-
-    shash_init(ifaces);
-    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-        struct iface *iface;
-
-        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            shash_add_once(ifaces, iface->name, iface);
-        }
-        if (!list_is_short(&port->ifaces) && port->cfg->bond_fake_iface) {
-            shash_add_once(ifaces, port->name, NULL);
-        }
-    }
-}
-
-/* For robustness, in case the administrator moves around datapath ports behind
- * our back, we re-check all the datapath port numbers here.
- *
- * This function will set the 'dp_ifidx' members of interfaces that have
- * disappeared to -1, so only call this function from a context where those
- * 'struct iface's will be removed from the bridge.  Otherwise, the -1
- * 'dp_ifidx'es will cause trouble later when we try to send them to the
- * datapath, which doesn't support UINT16_MAX+1 ports. */
-static void
-bridge_fetch_dp_ifaces(struct bridge *br)
-{
-    struct ofproto_port ofproto_port;
-    struct ofproto_port_dump dump;
-    struct port *port;
-
-    /* Reset all interface numbers. */
-    HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-        struct iface *iface;
-
-        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface->dp_ifidx = -1;
-        }
-    }
-    hmap_clear(&br->ifaces);
-
-    OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
-        struct iface *iface = iface_lookup(br, ofproto_port.name);
-        if (iface) {
-            uint32_t odp_port = ofp_port_to_odp_port(ofproto_port.ofp_port);
-
-            if (iface->dp_ifidx >= 0) {
-                VLOG_WARN("bridge %s: interface %s reported twice",
-                          br->name, ofproto_port.name);
-            } else if (iface_from_dp_ifidx(br, odp_port)) {
-                VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
-                          br->name, odp_port);
-            } else {
-                iface->dp_ifidx = odp_port;
-                hmap_insert(&br->ifaces, &iface->dp_ifidx_node,
-                            hash_int(iface->dp_ifidx, 0));
-            }
-
-            iface_set_ofport(iface->cfg,
-                             (iface->dp_ifidx >= 0
-                              ? odp_port_to_ofp_port(iface->dp_ifidx)
-                              : -1));
-        }
-    }
 }
 
 /* Bridge packet processing functions. */
