@@ -919,7 +919,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
     int new_fd;
     int error;
 
-    new_fd = accept(pssl->fd, &sin, &sin_len);
+    new_fd = accept(pssl->fd, (struct sockaddr *) &sin, &sin_len);
     if (new_fd < 0) {
         error = errno;
         if (error != EAGAIN) {
