@@ -217,6 +217,9 @@ static int bridge_run_one(struct bridge *);
 static size_t bridge_get_controllers(const struct bridge *br,
                                      struct ovsrec_controller ***controllersp);
 static void bridge_reconfigure_one(struct bridge *);
+static void bridge_configure_datapath_id(struct bridge *);
+static void bridge_configure_netflow(struct bridge *);
+static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_reconfigure_remotes(struct bridge *,
                                        const struct sockaddr_in *managers,
                                        size_t n_managers);
@@ -487,8 +490,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     COVERAGE_INC(bridge_reconfigure);
 
-    collect_in_band_managers(ovs_cfg, &managers, &n_managers);
-
     /* Collect old and new bridges. */
     shash_init(&new_br);
     for (i = 0; i < ovs_cfg->n_bridges; i++) {
@@ -711,132 +712,13 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
         }
     }
+
     sflow_bridge_number = 0;
+    collect_in_band_managers(ovs_cfg, &managers, &n_managers);
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        uint8_t ea[ETH_ADDR_LEN];
-        uint64_t dpid;
-        struct iface *local_iface;
-        struct iface *hw_addr_iface;
-        char *dpid_string;
-
-        /* Pick local port hardware address, datapath ID. */
-        bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
-        local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
-        if (local_iface) {
-            int error = netdev_set_etheraddr(local_iface->netdev, ea);
-            if (error) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "bridge %s: failed to set bridge "
-                            "Ethernet address: %s",
-                            br->name, strerror(error));
-            }
-        }
-        memcpy(br->ea, ea, ETH_ADDR_LEN);
-
-        dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
-        ofproto_set_datapath_id(br->ofproto, dpid);
-
-        dpid_string = xasprintf("%016"PRIx64, dpid);
-        ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
-        free(dpid_string);
-
-        /* Set NetFlow configuration on this bridge. */
-        if (br->cfg->netflow) {
-            struct ovsrec_netflow *nf_cfg = br->cfg->netflow;
-            struct netflow_options opts;
-
-            memset(&opts, 0, sizeof opts);
-
-            ofproto_get_netflow_ids(br->ofproto,
-                                    &opts.engine_type, &opts.engine_id);
-            if (nf_cfg->engine_type) {
-                opts.engine_type = *nf_cfg->engine_type;
-            }
-            if (nf_cfg->engine_id) {
-                opts.engine_id = *nf_cfg->engine_id;
-            }
-
-            opts.active_timeout = nf_cfg->active_timeout;
-            if (!opts.active_timeout) {
-                opts.active_timeout = -1;
-            } else if (opts.active_timeout < 0) {
-                VLOG_WARN("bridge %s: active timeout interval set to negative "
-                          "value, using default instead (%d seconds)", br->name,
-                          NF_ACTIVE_TIMEOUT_DEFAULT);
-                opts.active_timeout = -1;
-            }
-
-            opts.add_id_to_iface = nf_cfg->add_id_to_interface;
-            if (opts.add_id_to_iface) {
-                if (opts.engine_id > 0x7f) {
-                    VLOG_WARN("bridge %s: netflow port mangling may conflict "
-                              "with another vswitch, choose an engine id less "
-                              "than 128", br->name);
-                }
-                if (hmap_count(&br->ports) > 508) {
-                    VLOG_WARN("bridge %s: netflow port mangling will conflict "
-                              "with another port when more than 508 ports are "
-                              "used", br->name);
-                }
-            }
-
-            sset_init(&opts.collectors);
-            sset_add_array(&opts.collectors,
-                           nf_cfg->targets, nf_cfg->n_targets);
-            if (ofproto_set_netflow(br->ofproto, &opts)) {
-                VLOG_ERR("bridge %s: problem setting netflow collectors",
-                         br->name);
-            }
-            sset_destroy(&opts.collectors);
-        } else {
-            ofproto_set_netflow(br->ofproto, NULL);
-        }
-
-        /* Set sFlow configuration on this bridge. */
-        if (br->cfg->sflow) {
-            const struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
-            struct ovsrec_controller **controllers;
-            struct ofproto_sflow_options oso;
-            size_t n_controllers;
-
-            memset(&oso, 0, sizeof oso);
-
-            sset_init(&oso.targets);
-            sset_add_array(&oso.targets,
-                           sflow_cfg->targets, sflow_cfg->n_targets);
-
-            oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
-            if (sflow_cfg->sampling) {
-                oso.sampling_rate = *sflow_cfg->sampling;
-            }
-
-            oso.polling_interval = SFL_DEFAULT_POLLING_INTERVAL;
-            if (sflow_cfg->polling) {
-                oso.polling_interval = *sflow_cfg->polling;
-            }
-
-            oso.header_len = SFL_DEFAULT_HEADER_SIZE;
-            if (sflow_cfg->header) {
-                oso.header_len = *sflow_cfg->header;
-            }
-
-            oso.sub_id = sflow_bridge_number++;
-            oso.agent_device = sflow_cfg->agent;
-
-            oso.control_ip = NULL;
-            n_controllers = bridge_get_controllers(br, &controllers);
-            for (i = 0; i < n_controllers; i++) {
-                if (controllers[i]->local_ip) {
-                    oso.control_ip = controllers[i]->local_ip;
-                    break;
-                }
-            }
-            ofproto_set_sflow(br->ofproto, &oso);
-
-            sset_destroy(&oso.targets);
-        } else {
-            ofproto_set_sflow(br->ofproto, NULL);
-        }
+        bridge_configure_datapath_id(br);
+        bridge_configure_netflow(br);
+        bridge_configure_sflow(br, &sflow_bridge_number);
 
         /* Update the controller and related settings.  It would be more
          * straightforward to call this from bridge_reconfigure_one(), but we
@@ -849,6 +731,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
          * the datapath ID before the controller. */
         bridge_reconfigure_remotes(br, managers, n_managers);
     }
+    free(managers);
+
     HMAP_FOR_EACH (br, node, &all_bridges) {
         struct port *port;
 
@@ -881,11 +765,152 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         }
     }
 
-    free(managers);
-
     /* ovs-vswitchd has completed initialization, so allow the process that
      * forked us to exit successfully. */
     daemonize_complete();
+}
+
+/* Pick local port hardware address and datapath ID for 'br'. */
+static void
+bridge_configure_datapath_id(struct bridge *br)
+{
+    uint8_t ea[ETH_ADDR_LEN];
+    uint64_t dpid;
+    struct iface *local_iface;
+    struct iface *hw_addr_iface;
+    char *dpid_string;
+
+    bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
+    local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
+    if (local_iface) {
+        int error = netdev_set_etheraddr(local_iface->netdev, ea);
+        if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_ERR_RL(&rl, "bridge %s: failed to set bridge "
+                        "Ethernet address: %s",
+                        br->name, strerror(error));
+        }
+    }
+    memcpy(br->ea, ea, ETH_ADDR_LEN);
+
+    dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
+    ofproto_set_datapath_id(br->ofproto, dpid);
+
+    dpid_string = xasprintf("%016"PRIx64, dpid);
+    ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
+    free(dpid_string);
+}
+
+/* Set NetFlow configuration on 'br'. */
+static void
+bridge_configure_netflow(struct bridge *br)
+{
+    struct ovsrec_netflow *cfg = br->cfg->netflow;
+    struct netflow_options opts;
+
+    if (!cfg) {
+        ofproto_set_netflow(br->ofproto, NULL);
+        return;
+    }
+
+    memset(&opts, 0, sizeof opts);
+
+    /* Get default NetFlow configuration from datapath.
+     * Apply overrides from 'cfg'. */
+    ofproto_get_netflow_ids(br->ofproto, &opts.engine_type, &opts.engine_id);
+    if (cfg->engine_type) {
+        opts.engine_type = *cfg->engine_type;
+    }
+    if (cfg->engine_id) {
+        opts.engine_id = *cfg->engine_id;
+    }
+
+    /* Configure active timeout interval. */
+    opts.active_timeout = cfg->active_timeout;
+    if (!opts.active_timeout) {
+        opts.active_timeout = -1;
+    } else if (opts.active_timeout < 0) {
+        VLOG_WARN("bridge %s: active timeout interval set to negative "
+                  "value, using default instead (%d seconds)", br->name,
+                  NF_ACTIVE_TIMEOUT_DEFAULT);
+        opts.active_timeout = -1;
+    }
+
+    /* Add engine ID to interface number to disambiguate bridgs? */
+    opts.add_id_to_iface = cfg->add_id_to_interface;
+    if (opts.add_id_to_iface) {
+        if (opts.engine_id > 0x7f) {
+            VLOG_WARN("bridge %s: NetFlow port mangling may conflict with "
+                      "another vswitch, choose an engine id less than 128",
+                      br->name);
+        }
+        if (hmap_count(&br->ports) > 508) {
+            VLOG_WARN("bridge %s: NetFlow port mangling will conflict with "
+                      "another port when more than 508 ports are used",
+                      br->name);
+        }
+    }
+
+    /* Collectors. */
+    sset_init(&opts.collectors);
+    sset_add_array(&opts.collectors, cfg->targets, cfg->n_targets);
+
+    /* Configure. */
+    if (ofproto_set_netflow(br->ofproto, &opts)) {
+        VLOG_ERR("bridge %s: problem setting netflow collectors", br->name);
+    }
+    sset_destroy(&opts.collectors);
+}
+
+/* Set sFlow configuration on 'br'. */
+static void
+bridge_configure_sflow(struct bridge *br, int *sflow_bridge_number)
+{
+    const struct ovsrec_sflow *cfg = br->cfg->sflow;
+    struct ovsrec_controller **controllers;
+    struct ofproto_sflow_options oso;
+    size_t n_controllers;
+    size_t i;
+
+    if (!cfg) {
+        ofproto_set_sflow(br->ofproto, NULL);
+        return;
+    }
+
+    memset(&oso, 0, sizeof oso);
+
+    sset_init(&oso.targets);
+    sset_add_array(&oso.targets, cfg->targets, cfg->n_targets);
+
+    oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
+    if (cfg->sampling) {
+        oso.sampling_rate = *cfg->sampling;
+    }
+
+    oso.polling_interval = SFL_DEFAULT_POLLING_INTERVAL;
+    if (cfg->polling) {
+        oso.polling_interval = *cfg->polling;
+    }
+
+    oso.header_len = SFL_DEFAULT_HEADER_SIZE;
+    if (cfg->header) {
+        oso.header_len = *cfg->header;
+    }
+
+    oso.sub_id = (*sflow_bridge_number)++;
+    oso.agent_device = cfg->agent;
+
+    oso.control_ip = NULL;
+    n_controllers = bridge_get_controllers(br, &controllers);
+    for (i = 0; i < n_controllers; i++) {
+        if (controllers[i]->local_ip) {
+            oso.control_ip = controllers[i]->local_ip;
+            break;
+        }
+    }
+    ofproto_set_sflow(br->ofproto, &oso);
+
+    sset_destroy(&oso.targets);
 }
 
 static bool
