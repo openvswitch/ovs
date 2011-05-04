@@ -75,6 +75,7 @@ void bond_destroy(struct bond *);
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
 void bond_slave_register(struct bond *, void *slave_,
                          uint16_t stable_id, struct netdev *);
+void bond_slave_set_netdev(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 
 void bond_run(struct bond *, struct tag_set *, bool lacp_negotiated);
