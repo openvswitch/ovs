@@ -942,24 +942,17 @@ ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
     return ofport && !(ofport->opp.config & OFPPC_NO_FLOOD);
 }
 
-/* Sends 'packet' out of port 'port_no' within 'p'.  If 'vlan_tci' is zero the
- * packet will not have any 802.1Q hader; if it is nonzero, then the packet
- * will be sent with the VLAN TCI specified by 'vlan_tci & ~VLAN_CFI'.
+/* Sends 'packet' out of port 'port_no' within 'p'.
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 ofproto_send_packet(struct ofproto *ofproto,
-                    uint32_t port_no, uint16_t vlan_tci,
-                    const struct ofpbuf *packet)
+                    uint32_t port_no, const struct ofpbuf *packet)
 {
     struct ofpbuf odp_actions;
     int error;
 
     ofpbuf_init(&odp_actions, 32);
-    if (vlan_tci != 0) {
-        nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
-                       ntohs(vlan_tci & ~VLAN_CFI));
-    }
     nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, port_no);
     error = dpif_execute(ofproto->dpif, odp_actions.data, odp_actions.size,
                          packet);
@@ -1227,7 +1220,7 @@ ofport_run(struct ofproto *ofproto, struct ofport *ofport)
             ccm = eth_compose(&packet, eth_addr_ccm, ofport->opp.hw_addr,
                               ETH_TYPE_CFM,  sizeof *ccm);
             cfm_compose_ccm(ofport->cfm, ccm);
-            ofproto_send_packet(ofproto, ofport->odp_port, 0, &packet);
+            ofproto_send_packet(ofproto, ofport->odp_port, &packet);
             ofpbuf_uninit(&packet);
         }
     }
@@ -3794,7 +3787,7 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (connmgr_msg_in_hook(p->connmgr, &flow, upcall->packet)) {
-        ofproto_send_packet(p, ODPP_LOCAL, 0, upcall->packet);
+        ofproto_send_packet(p, ODPP_LOCAL, upcall->packet);
     }
 
     facet = facet_lookup_valid(p, &flow);
