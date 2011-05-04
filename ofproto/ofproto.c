@@ -100,6 +100,7 @@ COVERAGE_DEFINE(ofproto_update_port);
 struct rule;
 
 struct ofport {
+    struct ofproto *ofproto;    /* Owning ofproto. */
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
     struct ofp_phy_port opp;
@@ -108,7 +109,7 @@ struct ofport {
 };
 
 static void ofport_free(struct ofport *);
-static void ofport_run(struct ofproto *, struct ofport *);
+static void ofport_run(struct ofport *);
 static void ofport_wait(struct ofport *);
 
 struct action_xlate_ctx {
@@ -800,7 +801,7 @@ ofproto_run1(struct ofproto *p)
     }
 
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
-        ofport_run(p, ofport);
+        ofport_run(ofport);
     }
 
     connmgr_run(p->connmgr, handle_openflow);
@@ -1293,6 +1294,7 @@ ofport_install(struct ofproto *p,
 
     /* Create ofport. */
     ofport = xmalloc(sizeof *ofport);
+    ofport->ofproto = p;
     ofport->netdev = netdev;
     ofport->opp = *opp;
     ofport->odp_port = ofp_port_to_odp_port(ntohs(opp->port_no));
@@ -1309,8 +1311,10 @@ ofport_install(struct ofproto *p,
 
 /* Removes 'ofport' from 'p' and destroys it. */
 static void
-ofport_remove(struct ofproto *p, struct ofport *ofport)
+ofport_remove(struct ofport *ofport)
 {
+    struct ofproto *p = ofport->ofproto;
+
     connmgr_send_port_status(p->connmgr, &ofport->opp, OFPPR_DELETE);
 
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
@@ -1332,7 +1336,7 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
 {
     struct ofport *port = shash_find_data(&ofproto->port_by_name, name);
     if (port) {
-        ofport_remove(ofproto, port);
+        ofport_remove(port);
     }
 }
 
@@ -1341,9 +1345,11 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
  * Does not handle a name or port number change.  The caller must implement
  * such a change as a delete followed by an add.  */
 static void
-ofport_modified(struct ofproto *ofproto, struct ofport *port,
+ofport_modified(struct ofport *port,
                 struct netdev *netdev, struct ofp_phy_port *opp)
 {
+    struct ofproto *ofproto = port->ofproto;
+
     memcpy(port->opp.hw_addr, opp->hw_addr, ETH_ADDR_LEN);
     port->opp.config = ((port->opp.config & ~htonl(OFPPC_PORT_DOWN))
                         | (opp->config & htonl(OFPPC_PORT_DOWN)));
@@ -1363,7 +1369,7 @@ ofport_modified(struct ofproto *ofproto, struct ofport *port,
 }
 
 static void
-ofport_run(struct ofproto *ofproto, struct ofport *ofport)
+ofport_run(struct ofport *ofport)
 {
     if (ofport->cfm) {
         cfm_run(ofport->cfm);
@@ -1376,7 +1382,7 @@ ofport_run(struct ofproto *ofproto, struct ofport *ofport)
             ccm = eth_compose(&packet, eth_addr_ccm, ofport->opp.hw_addr,
                               ETH_TYPE_CFM,  sizeof *ccm);
             cfm_compose_ccm(ofport->cfm, ccm);
-            ofproto_send_packet(ofproto, ofport->odp_port, 0, &packet);
+            ofproto_send_packet(ofport->ofproto, ofport->odp_port, 0, &packet);
             ofpbuf_uninit(&packet);
         }
     }
@@ -1433,7 +1439,7 @@ update_port(struct ofproto *ofproto, const char *name)
         if (port && !strcmp(netdev_get_name(port->netdev), name)) {
             /* 'name' hasn't changed location.  Any properties changed? */
             if (!ofport_equal(&port->opp, &opp)) {
-                ofport_modified(ofproto, port, netdev, &opp);
+                ofport_modified(port, netdev, &opp);
             } else {
                 netdev_close(netdev);
             }
@@ -1442,7 +1448,7 @@ update_port(struct ofproto *ofproto, const char *name)
              * we should delete it.  If we think there's a port named 'name'
              * then its port number must be wrong now so delete it too. */
             if (port) {
-                ofport_remove(ofproto, port);
+                ofport_remove(port);
             }
             ofport_remove_with_name(ofproto, name);
             ofport_install(ofproto, netdev, &opp);
