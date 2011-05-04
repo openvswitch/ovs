@@ -2053,7 +2053,7 @@ check_action(const union ofp_action *a, unsigned int len,
         if (error) {
             return error;
         }
-        if (a->vlan_vid.vlan_vid & ~7) {
+        if (a->vlan_pcp.vlan_pcp & ~7) {
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
         }
         return 0;
