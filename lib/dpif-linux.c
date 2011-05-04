@@ -1473,7 +1473,7 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
 }
 
 /* Clears 'dp' to "empty" values. */
-void
+static void
 dpif_linux_dp_init(struct dpif_linux_dp *dp)
 {
     memset(dp, 0, sizeof *dp);
@@ -1500,7 +1500,7 @@ dpif_linux_dp_dump_start(struct nl_dump *dump)
  * result of the command is expected to be of the same form, which is decoded
  * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
  * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
-int
+static int
 dpif_linux_dp_transact(const struct dpif_linux_dp *request,
                        struct dpif_linux_dp *reply, struct ofpbuf **bufp)
 {
@@ -1530,7 +1530,7 @@ dpif_linux_dp_transact(const struct dpif_linux_dp *request,
 /* Obtains information about 'dpif_' and stores it into '*reply' and '*bufp'.
  * The caller must free '*bufp' when the reply is no longer needed ('reply'
  * will contain pointers into '*bufp').  */
-int
+static int
 dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
                   struct ofpbuf **bufp)
 {
@@ -1640,7 +1640,7 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
 }
 
 /* Clears 'flow' to "empty" values. */
-void
+static void
 dpif_linux_flow_init(struct dpif_linux_flow *flow)
 {
     memset(flow, 0, sizeof *flow);
@@ -1652,7 +1652,7 @@ dpif_linux_flow_init(struct dpif_linux_flow *flow)
  * result of the command is expected to be a flow also, which is decoded and
  * stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the reply
  * is no longer needed ('reply' will contain pointers into '*bufp'). */
-int
+static int
 dpif_linux_flow_transact(const struct dpif_linux_flow *request,
                          struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {

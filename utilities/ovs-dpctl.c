@@ -46,7 +46,7 @@
 VLOG_DEFINE_THIS_MODULE(dpctl);
 
 /* -s, --statistics: Print port statistics? */
-bool print_statistics;
+static bool print_statistics;
 
 static const struct command all_commands[];
 

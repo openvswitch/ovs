@@ -200,7 +200,7 @@ exit:
     return results;
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_commit(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result OVS_UNUSED)
 {
@@ -270,7 +270,7 @@ parse_row(const struct json *json, const struct ovsdb_table *table,
     }
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
@@ -341,7 +341,7 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     return error;
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
@@ -408,7 +408,7 @@ update_row_cb(const struct ovsdb_row *row, void *ur_)
     return true;
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
@@ -465,7 +465,7 @@ mutate_row_cb(const struct ovsdb_row *row, void *mr_)
     return true;
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
@@ -522,7 +522,7 @@ delete_row_cb(const struct ovsdb_row *row, void *dr_)
     return true;
 }
 
-struct ovsdb_error *
+static struct ovsdb_error *
 ovsdb_execute_delete(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
 {
