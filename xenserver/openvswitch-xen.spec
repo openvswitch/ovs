@@ -224,10 +224,10 @@ for s in openvswitch openvswitch-xapi-update; do
     chkconfig $s on || printf "Could not enable $s init script."
 done
 
-if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
+if [ "$1" = "1" ]; then    # $1 = 1 for install
     # Configure system to use Open vSwitch
     xe-switch-network-backend vswitch
-else
+else    # $1 = 2 for upgrade
 
     mode=$(cat /etc/xensource/network.conf)
     if [ "$mode" != "vswitch" ] && [ "$mode" != "openvswitch" ]; then
@@ -247,7 +247,7 @@ fi
 depmod %{xen_version}
 
 %preun
-if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     for s in openvswitch openvswitch-xapi-update; do
         chkconfig --del $s || printf "Could not remove $s init script."
     done
@@ -285,7 +285,7 @@ do
     fi
 done
 
-if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
 
