@@ -3196,12 +3196,8 @@ port_reconfigure_lacp(struct port *port)
                   ? priority
                   : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    s.strict = !strcmp(get_port_other_config(port->cfg, "lacp-strict",
-                                             "false"),
-                       "true");
-
-    s.force_agg = !strcmp(get_port_other_config(port->cfg,
-                                                "lacp-force-aggregatable",
+    s.heartbeat = !strcmp(get_port_other_config(port->cfg,
+                                                "lacp-heartbeat",
                                                 "false"), "true");
 
     lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");

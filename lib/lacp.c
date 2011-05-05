@@ -50,10 +50,9 @@ struct lacp {
 
     enum lacp_time lacp_time;  /* Fast, Slow or Custom LACP time. */
     long long int custom_time; /* LACP_TIME_CUSTOM transmission rate. */
-    bool strict;             /* True if in strict mode. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
-    bool force_agg;          /* Forces LACP_STATE_AGG bit on all slaves. */
+    bool heartbeat;          /* LACP heartbeat mode. */
 };
 
 struct slave {
@@ -183,16 +182,15 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     if (!eth_addr_equals(lacp->sys_id, s->id)
         || lacp->sys_priority != s->priority
-        || lacp->strict != s->strict) {
+        || lacp->heartbeat != s->heartbeat) {
         memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
         lacp->sys_priority = s->priority;
-        lacp->strict = s->strict;
+        lacp->heartbeat = s->heartbeat;
         lacp->update = true;
     }
 
     lacp->active = s->active;
     lacp->lacp_time = s->lacp_time;
-    lacp->force_agg = s->force_agg;
     lacp->custom_time = MAX(TIME_UPDATE_INTERVAL, s->custom_time);
 }
 
@@ -431,6 +429,13 @@ lacp_update_attached(struct lacp *lacp)
     struct lacp_info lead_pri;
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
 
+    if (lacp->heartbeat) {
+        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
+            slave->attached = slave->status != LACP_DEFAULTED;
+        }
+        return;
+    }
+
     lacp->update = false;
 
     lead = NULL;
@@ -470,10 +475,6 @@ lacp_update_attached(struct lacp *lacp)
                                     slave->partner.sys_id)) {
                 slave->attached = false;
             }
-        }
-    } else if (lacp->strict) {
-        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-            slave->attached = false;
         }
     }
 }
@@ -555,7 +556,7 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_EXP;
     }
 
-    if (lacp->force_agg || hmap_count(&lacp->slaves) > 1) {
+    if (lacp->heartbeat || hmap_count(&lacp->slaves) > 1) {
         state |= LACP_STATE_AGG;
     }
 
@@ -715,8 +716,8 @@ lacp_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "lacp: %s\n", lacp->name);
 
     ds_put_format(&ds, "\tstatus: %s", lacp->active ? "active" : "passive");
-    if (lacp->strict) {
-        ds_put_cstr(&ds, " strict");
+    if (lacp->heartbeat) {
+        ds_put_cstr(&ds, " heartbeat");
     }
     if (lacp->negotiated) {
         ds_put_cstr(&ds, " negotiated");

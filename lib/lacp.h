@@ -88,8 +88,7 @@ struct lacp_settings {
     bool active;
     enum lacp_time lacp_time;
     long long int custom_time;
-    bool strict;
-    bool force_agg;
+    bool heartbeat;
 };
 
 void lacp_init(void);

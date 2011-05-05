@@ -678,15 +678,10 @@
               something other than <code>fast</code> or <code>slow</code> is
               not supported by the LACP specification.</p>
           </dd>
-          <dt><code>lacp-strict</code></dt>
-          <dd> When <code>true</code>, configures this <ref table="Port"/> to
-            require successful LACP negotiations to enable any slaves.
-            Defaults to <code>false</code> which safely allows LACP to be used
-            with switches that do not support the protocol.</dd>
-          <dt><code>lacp-force-aggregatable</code></dt>
-          <dd> When <code>true</code>, forces all slaves managed by this
-            <ref table="Port"/> to advertise themselves as aggregatable even if
-            they normally wouldn't.  Defaults to <code>false</code>.</dd>
+          <dt><code>lacp-heartbeat</code></dt>
+          <dd> Treats LACP like a simple heartbeat protocol for link state
+            monitoring.  Most features of the LACP protocol are disabled when
+            this mode is in use.</dd>
         </dl>
       </column>
     </group>
