@@ -74,7 +74,7 @@ struct bond_slave {
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
 
     /* BM_STABLE specific bonding info. */
-    uint16_t stb_id;            /* ID used for 'stb_slaves' ordering. */
+    uint32_t stb_id;            /* ID used for 'stb_slaves' ordering. */
 };
 
 /* A bond, that is, a set of network devices grouped to improve performance or
@@ -351,7 +351,7 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
  * 'slave_' or destroying 'bond'.
  */
 void
-bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
+bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
                     struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
