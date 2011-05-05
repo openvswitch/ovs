@@ -1067,6 +1067,7 @@ static bool
 update_ssl_config(struct ssl_config_file *config, const char *file_name)
 {
     struct timespec mtime;
+    int error;
 
     if (ssl_init() || !file_name) {
         return false;
@@ -1074,7 +1075,10 @@ update_ssl_config(struct ssl_config_file *config, const char *file_name)
 
     /* If the file name hasn't changed and neither has the file contents, stop
      * here. */
-    get_mtime(file_name, &mtime);
+    error = get_mtime(file_name, &mtime);
+    if (error && error != ENOENT) {
+        VLOG_ERR_RL(&rl, "%s: stat failed (%s)", file_name, strerror(error));
+    }
     if (config->file_name
         && !strcmp(config->file_name, file_name)
         && mtime.tv_sec == config->mtime.tv_sec
