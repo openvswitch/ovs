@@ -538,10 +538,10 @@
             balancing is done.  Uses a similar hashing strategy to
             <code>balance-tcp</code>, falling back to <code>balance-slb</code>
             style hashing when LACP negotiations are unsuccessful.</p>
-          <p>Slave selection decisions are made based on LACP port ID when LACP
-            negotiations are successful, falling back to openflow port number
-            when unsuccessful.  Thus, decisions are consistent across all
-            ovs-vswitchd instances with equivalent port IDs.</p>
+          <p>Slave selection decisions are made based on
+            <code>bond-stable-id</code> if set.  Otherwise, OpenFlow port
+            number is used.  Decisions are consistent across all ovs-vswitchd
+            instances with equivalent <code>bond-stable-id</code>s.</p>
         </dd>
       </dl>
 
@@ -1327,6 +1327,13 @@
       <column name="other_config">
         Key-value pairs for rarely used interface features.
         <dl>
+          <dt><code>bond-stable-id</code></dt>
+          <dd> A positive integer using in <code>stable</code> bond mode to
+            make slave selection decisions.  Allocating
+            <code>bond-stable-id</code>s consistently across interfaces
+            participating in a bond will guarantee consistent slave selection
+            decisions across ovs-vswitchd instances when using
+            <code>stable</code> bonding mode.</dd>
           <dt><code>lacp-port-id</code></dt>
           <dd> The LACP port ID of this <ref table="Interface"/>.  Port IDs are
             used in LACP negotiations to identify individual ports

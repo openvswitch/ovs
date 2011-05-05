@@ -3288,9 +3288,15 @@ port_reconfigure_bond(struct port *port)
     }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        uint16_t stable_id = (port->lacp
-                              ? lacp_slave_get_port_id(port->lacp, iface)
-                              : iface->dp_ifidx);
+        long long stable_id;
+
+        stable_id = atoll(get_interface_other_config(iface->cfg,
+                                                     "bond-stable-id", "0"));
+
+        if (stable_id <= 0 || stable_id >= UINT32_MAX) {
+            stable_id = odp_port_to_ofp_port(iface->dp_ifidx);
+        }
+
         bond_slave_register(iface->port->bond, iface, stable_id,
                             iface->netdev);
     }
