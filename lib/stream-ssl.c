@@ -196,9 +196,10 @@ static int interpret_ssl_error(const char *function, int ret, int error,
 static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
 static void stream_ssl_set_ca_cert_file__(const char *file_name,
-                                          bool bootstrap);
+                                          bool bootstrap, bool force);
 static void ssl_protocol_cb(int write_p, int version, int content_type,
                             const void *, size_t, SSL *, void *sslv_);
+static bool update_ssl_config(struct ssl_config_file *, const char *file_name);
 
 static short int
 want_to_poll_events(int want)
@@ -385,9 +386,9 @@ do_ca_cert_bootstrap(struct stream *stream)
     fd = open(ca_cert.file_name, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
         if (errno == EEXIST) {
-            VLOG_INFO("reading CA cert %s created by another process",
-                      ca_cert.file_name);
-            stream_ssl_set_ca_cert_file(ca_cert.file_name, true);
+            VLOG_INFO_RL(&rl, "reading CA cert %s created by another process",
+                         ca_cert.file_name);
+            stream_ssl_set_ca_cert_file__(ca_cert.file_name, true, true);
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
@@ -1279,11 +1280,16 @@ log_ca_cert(const char *file_name, X509 *cert)
 }
 
 static void
-stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
+stream_ssl_set_ca_cert_file__(const char *file_name,
+                              bool bootstrap, bool force)
 {
     X509 **certs;
     size_t n_certs;
     struct stat s;
+
+    if (!update_ssl_config(&ca_cert, file_name) && !force) {
+        return;
+    }
 
     if (!strcmp(file_name, "none")) {
         verify_peer_cert = false;
@@ -1329,11 +1335,7 @@ stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
 void
 stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
 {
-    if (!update_ssl_config(&ca_cert, file_name)) {
-        return;
-    }
-
-    stream_ssl_set_ca_cert_file__(file_name, bootstrap);
+    stream_ssl_set_ca_cert_file__(file_name, bootstrap, false);
 }
 
 /* SSL protocol logging. */
