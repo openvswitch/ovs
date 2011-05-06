@@ -33,7 +33,10 @@
 #endif
 #endif
 
-#ifndef __cplusplus
+#ifdef __CHECKER__
+#define BUILD_ASSERT(EXPR) ((void) 0)
+#define BUILD_ASSERT_DECL(EXPR) extern int (*build_assert(void))[1]
+#elif !defined(__cplusplus)
 /* Build-time assertion building block. */
 #define BUILD_ASSERT__(EXPR) \
         sizeof(struct { unsigned int build_assert_failed : (EXPR) ? 1 : -1; })
