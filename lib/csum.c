@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
  * consists of a packet in network byte order, then the return value is a value
  * in network byte order, and if 'data' consists of a data structure in host
  * byte order, then the return value is in host byte order. */
-uint16_t
+ovs_be16
 csum(const void *data, size_t n)
 {
     return csum_finish(csum_continue(0, data, n));
@@ -34,7 +34,7 @@ csum(const void *data, size_t n)
  * the updated checksum.  (To start a new checksum, pass 0 for 'partial'.  To
  * obtain the finished checksum, pass the return value to csum_finish().) */
 uint32_t
-csum_add16(uint32_t partial, uint16_t new)
+csum_add16(uint32_t partial, ovs_be16 new)
 {
     return partial + new;
 }
@@ -43,7 +43,7 @@ csum_add16(uint32_t partial, uint16_t new)
  * the updated checksum.  (To start a new checksum, pass 0 for 'partial'.  To
  * obtain the finished checksum, pass the return value to csum_finish().) */
 uint32_t
-csum_add32(uint32_t partial, uint32_t new)
+csum_add32(uint32_t partial, ovs_be32 new)
 {
     return partial + (new >> 16) + (new & 0xffff);
 }
@@ -56,10 +56,10 @@ csum_add32(uint32_t partial, uint32_t new)
 uint32_t
 csum_continue(uint32_t partial, const void *data_, size_t n)
 {
-    const uint16_t *data = data_;
+    const ovs_be16 *data = data_;
 
     for (; n > 1; n -= 2, data++) {
-        partial = csum_add16(partial, get_unaligned_u16(data));
+        partial = csum_add16(partial, get_unaligned_be16(data));
     }
     if (n) {
         partial += *(uint8_t *) data;
@@ -74,7 +74,7 @@ csum_continue(uint32_t partial, const void *data_, size_t n)
  * if the data consist of a packet in network byte order, then the return value
  * is a value in network byte order, and if the data are a data structure in
  * host byte order, then the return value is in host byte order. */
-uint16_t
+ovs_be16
 csum_finish(uint32_t partial)
 {
     while (partial >> 16) {
@@ -86,8 +86,8 @@ csum_finish(uint32_t partial)
 /* Returns the new checksum for a packet in which the checksum field previously
  * contained 'old_csum' and in which a field that contained 'old_u16' was
  * changed to contain 'new_u16'. */
-uint16_t
-recalc_csum16(uint16_t old_csum, uint16_t old_u16, uint16_t new_u16)
+ovs_be16
+recalc_csum16(ovs_be16 old_csum, ovs_be16 old_u16, ovs_be16 new_u16)
 {
     /* Ones-complement arithmetic is endian-independent, so this code does not
      * use htons() or ntohs().
@@ -103,8 +103,8 @@ recalc_csum16(uint16_t old_csum, uint16_t old_u16, uint16_t new_u16)
 /* Returns the new checksum for a packet in which the checksum field previously
  * contained 'old_csum' and in which a field that contained 'old_u32' was
  * changed to contain 'new_u32'. */
-uint16_t
-recalc_csum32(uint16_t old_csum, uint32_t old_u32, uint32_t new_u32)
+ovs_be16
+recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32)
 {
     return recalc_csum16(recalc_csum16(old_csum, old_u32, new_u32),
                          old_u32 >> 16, new_u32 >> 16);

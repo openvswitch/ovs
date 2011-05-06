@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,14 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/types.h"
 
-uint16_t csum(const void *, size_t);
-uint32_t csum_add16(uint32_t partial, uint16_t);
-uint32_t csum_add32(uint32_t partial, uint32_t);
+ovs_be16 csum(const void *, size_t);
+uint32_t csum_add16(uint32_t partial, ovs_be16);
+uint32_t csum_add32(uint32_t partial, ovs_be32);
 uint32_t csum_continue(uint32_t partial, const void *, size_t);
-uint16_t csum_finish(uint32_t partial);
-uint16_t recalc_csum16(uint16_t old_csum, uint16_t old_u16, uint16_t new_u16);
-uint16_t recalc_csum32(uint16_t old_csum, uint32_t old_u32, uint32_t new_u32);
+ovs_be16 csum_finish(uint32_t partial);
+ovs_be16 recalc_csum16(ovs_be16 old_csum, ovs_be16 old_u16, ovs_be16 new_u16);
+ovs_be16 recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32);
 
 #endif /* csum.h */
