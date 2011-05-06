@@ -1384,7 +1384,7 @@ static unsigned int
 bond_hash_tcp(const struct flow *flow, uint16_t vlan, uint32_t basis)
 {
     struct flow hash_flow = *flow;
-    hash_flow.vlan_tci = vlan;
+    hash_flow.vlan_tci = htons(vlan);
 
     /* The symmetric quality of this hash function is not required, but
      * flow_hash_symmetric_l4 already exists, and is sufficient for our

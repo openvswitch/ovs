@@ -119,8 +119,8 @@ struct rconn {
      *
      * We don't cache the local port, because that changes from one connection
      * attempt to the next. */
-    uint32_t local_ip, remote_ip;
-    uint16_t remote_port;
+    ovs_be32 local_ip, remote_ip;
+    ovs_be16 remote_port;
 
     /* Messages sent or received are copied to the monitor connections. */
 #define MAX_MONITORS 8

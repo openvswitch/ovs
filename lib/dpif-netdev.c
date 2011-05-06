@@ -114,7 +114,7 @@ struct dp_netdev_flow {
     long long int used;         /* Last used time, in monotonic msecs. */
     long long int packet_count; /* Number of packets matched. */
     long long int byte_count;   /* Number of bytes matched. */
-    uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
+    ovs_be16 tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
 
     /* Actions. */
     struct nlattr *actions;
@@ -1182,7 +1182,7 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
         struct ip_header *nh = packet->l3;
         ovs_be32 ip = nl_attr_get_be32(a);
         uint16_t type = nl_attr_type(a);
-        uint32_t *field;
+        ovs_be32 *field;
 
         field = type == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
         if (key->nw_proto == IPPROTO_TCP && packet->l7) {
@@ -1193,7 +1193,7 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
             if (uh->udp_csum) {
                 uh->udp_csum = recalc_csum32(uh->udp_csum, *field, ip);
                 if (!uh->udp_csum) {
-                    uh->udp_csum = 0xffff;
+                    uh->udp_csum = htons(0xffff);
                 }
             }
         }
@@ -1226,7 +1226,7 @@ dp_netdev_set_tp_port(struct ofpbuf *packet, const struct flow *key,
 	if (is_ip(packet, key)) {
         uint16_t type = nl_attr_type(a);
         ovs_be16 port = nl_attr_get_be16(a);
-        uint16_t *field;
+        ovs_be16 *field;
 
         if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;

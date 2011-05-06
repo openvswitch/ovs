@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ static const struct test_case test_cases[] = {
     /* RFC 1071 section 3. */
     TEST_CASE("\x00\x01\xf2\x03"
               "\xf4\xf5\xf6\xf7",
-              (uint16_t) ~0xddf2),
+              0xffff - 0xddf2 /* ~0xddf2 */),
 
     /* http://www.sbprojects.com/projects/tcpip/theory/theory14.htm */
     TEST_CASE("\x45\x00\x00\x28"
@@ -99,7 +99,7 @@ test_rfc1624(void)
         "\x66\x64\xfc\x96\x63\x97\x64\xee\x12\x53\x1d\xa9\x2d\xa9\x55\x55";
 
     /* "...the one's complement sum of all other header octets is 0xCD7A." */
-    assert(ntohs(csum(data, sizeof data - 2)) == (uint16_t) ~0xcd7a);
+    assert(ntohs(csum(data, sizeof data - 2)) == 0xffff - 0xcd7a);
 
     /* "...the header checksum would be:
 
@@ -127,7 +127,8 @@ test_rfc1624(void)
               = ~(0x22D0 + ~0x5555 + 0x3285)
               = ~0xFFFF
               =  0x0000" */
-    assert(recalc_csum16(0xdd2f, 0x5555, 0x3285) == 0x0000);
+    assert(recalc_csum16(htons(0xdd2f), htons(0x5555), htons(0x3285))
+           == htons(0x0000));
 
     mark('#');
 }
@@ -139,8 +140,8 @@ main(void)
     int i;
 
     for (tc = test_cases; tc < &test_cases[ARRAY_SIZE(test_cases)]; tc++) {
-        const uint16_t *data16 = (const uint16_t *) tc->data;
-        const uint32_t *data32 = (const uint32_t *) tc->data;
+        const ovs_be16 *data16 = (OVS_FORCE const ovs_be16 *) tc->data;
+        const ovs_be32 *data32 = (OVS_FORCE const ovs_be32 *) tc->data;
         uint32_t partial;
 
         /* Test csum(). */
@@ -150,7 +151,7 @@ main(void)
         /* Test csum_add16(). */
         partial = 0;
         for (i = 0; i < tc->size / 2; i++) {
-            partial = csum_add16(partial, get_unaligned_u16(&data16[i]));
+            partial = csum_add16(partial, get_unaligned_be16(&data16[i]));
         }
         assert(ntohs(csum_finish(partial)) == tc->csum);
         mark('.');
@@ -158,7 +159,7 @@ main(void)
         /* Test csum_add32(). */
         partial = 0;
         for (i = 0; i < tc->size / 4; i++) {
-            partial = csum_add32(partial, get_unaligned_u32(&data32[i]));
+            partial = csum_add32(partial, get_unaligned_be32(&data32[i]));
         }
         assert(ntohs(csum_finish(partial)) == tc->csum);
         mark('.');
@@ -167,10 +168,10 @@ main(void)
         partial = 0;
         for (i = 0; i < tc->size / 4; i++) {
             if (i % 2) {
-                partial = csum_add32(partial, get_unaligned_u32(&data32[i]));
+                partial = csum_add32(partial, get_unaligned_be32(&data32[i]));
             } else {
-                uint16_t u0 = get_unaligned_u16(&data16[i * 2]);
-                uint16_t u1 = get_unaligned_u16(&data16[i * 2 + 1]);
+                ovs_be16 u0 = get_unaligned_be16(&data16[i * 2]);
+                ovs_be16 u1 = get_unaligned_be16(&data16[i * 2 + 1]);
                 partial = csum_add16(partial, u0);
                 partial = csum_add16(partial, u1);
             }
@@ -196,18 +197,18 @@ main(void)
 
     /* Test recalc_csum16(). */
     for (i = 0; i < 32; i++) {
-        uint16_t old_u16, new_u16;
-        uint16_t old_csum;
-        uint16_t data[16];
+        ovs_be16 old_u16, new_u16;
+        ovs_be16 old_csum;
+        ovs_be16 data[16];
         int j, index;
 
         for (j = 0; j < ARRAY_SIZE(data); j++) {
-            data[j] = random_uint32();
+            data[j] = (OVS_FORCE ovs_be16) random_uint32();
         }
         old_csum = csum(data, sizeof data);
         index = random_range(ARRAY_SIZE(data));
         old_u16 = data[index];
-        new_u16 = data[index] = random_uint32();
+        new_u16 = data[index] = (OVS_FORCE ovs_be16) random_uint32();
         assert(csum(data, sizeof data)
                == recalc_csum16(old_csum, old_u16, new_u16));
         mark('.');
@@ -216,18 +217,18 @@ main(void)
 
     /* Test recalc_csum32(). */
     for (i = 0; i < 32; i++) {
-        uint32_t old_u32, new_u32;
-        uint16_t old_csum;
-        uint32_t data[16];
+        ovs_be32 old_u32, new_u32;
+        ovs_be16 old_csum;
+        ovs_be32 data[16];
         int j, index;
 
         for (j = 0; j < ARRAY_SIZE(data); j++) {
-            data[j] = random_uint32();
+            data[j] = (OVS_FORCE ovs_be32) random_uint32();
         }
         old_csum = csum(data, sizeof data);
         index = random_range(ARRAY_SIZE(data));
         old_u32 = data[index];
-        new_u32 = data[index] = random_uint32();
+        new_u32 = data[index] = (OVS_FORCE ovs_be32) random_uint32();
         assert(csum(data, sizeof data)
                == recalc_csum32(old_csum, old_u32, new_u32));
         mark('.');

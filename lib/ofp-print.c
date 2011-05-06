@@ -123,7 +123,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
 
     data_len = len - offsetof(struct ofp_packet_in, data);
     ds_put_format(string, " data_len=%zu", data_len);
-    if (htonl(op->buffer_id) == UINT32_MAX) {
+    if (op->buffer_id == htonl(UINT32_MAX)) {
         ds_put_format(string, " (unbuffered)");
         if (ntohs(op->total_len) != data_len)
             ds_put_format(string, " (***total_len != data_len***)");

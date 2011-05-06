@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,7 +203,7 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
        if (retval == sizeof hello) {
            CHECK(hello.version, OFP_VERSION);
            CHECK(hello.type, OFPT_HELLO);
-           CHECK(hello.length, htons(sizeof hello));
+           CHECK(ntohs(hello.length), sizeof hello);
            break;
        } else {
            CHECK_ERRNO(retval, -EAGAIN);
@@ -269,7 +269,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            if (retval == sizeof hello) {
                CHECK(hello.version, OFP_VERSION);
                CHECK(hello.type, OFPT_HELLO);
-               CHECK(hello.length, htons(sizeof hello));
+               CHECK(ntohs(hello.length), sizeof hello);
                read_hello = true;
            } else {
                CHECK_ERRNO(retval, -EAGAIN);

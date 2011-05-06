@@ -70,7 +70,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, nd_target) == FLOW_SIG_SIZE - 16);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nd_target) == 16);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
-int flow_extract(struct ofpbuf *, uint64_t tun_id, uint16_t in_port,
+int flow_extract(struct ofpbuf *, ovs_be64 tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
                         struct dpif_flow_stats *);

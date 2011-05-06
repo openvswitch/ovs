@@ -556,7 +556,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
     }
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if (wc->reg_masks[i] != htonl(UINT32_MAX)) {
+        if (wc->reg_masks[i] != UINT32_MAX) {
             return false;
         }
     }

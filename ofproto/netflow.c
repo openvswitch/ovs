@@ -133,7 +133,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
     nf_rec = ofpbuf_put_zeros(&nf->packet, sizeof *nf_rec);
     nf_rec->src_addr = expired->flow.nw_src;
     nf_rec->dst_addr = expired->flow.nw_dst;
-    nf_rec->nexthop = htons(0);
+    nf_rec->nexthop = htonl(0);
     if (nf->add_id_to_iface) {
         uint16_t iface = (nf->engine_id & 0x7f) << 9;
         nf_rec->input = htons(iface | (expired->flow.in_port & 0x1ff));

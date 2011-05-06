@@ -555,7 +555,7 @@ static const char *
 netdev_vport_get_tnl_iface(const struct netdev *netdev)
 {
     struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
-    uint32_t route;
+    ovs_be32 route;
     struct netdev_dev_vport *ndv;
     static char name[IFNAMSIZ];
 

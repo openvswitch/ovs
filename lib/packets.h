@@ -328,8 +328,8 @@ BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 #define TCP_ACK 0x10
 #define TCP_URG 0x20
 
-#define TCP_FLAGS(tcp_ctl) (htons(tcp_ctl) & 0x003f)
-#define TCP_OFFSET(tcp_ctl) (htons(tcp_ctl) >> 12)
+#define TCP_FLAGS(tcp_ctl) (ntohs(tcp_ctl) & 0x003f)
+#define TCP_OFFSET(tcp_ctl) (ntohs(tcp_ctl) >> 12)
 
 #define TCP_HEADER_LEN 20
 struct tcp_header {
