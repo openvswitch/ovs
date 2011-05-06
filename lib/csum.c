@@ -18,6 +18,8 @@
 #include "csum.h"
 #include "unaligned.h"
 
+#ifndef __CHECKER__
+
 /* Returns the IP checksum of the 'n' bytes in 'data'.
  *
  * The return value has the same endianness as the data.  That is, if 'data'
@@ -109,3 +111,8 @@ recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32)
     return recalc_csum16(recalc_csum16(old_csum, old_u32, new_u32),
                          old_u32 >> 16, new_u32 >> 16);
 }
+
+#else  /* __CHECKER__ */
+/* Making sparse happy with these functions also makes them unreadable, so
+ * don't bother to show it their implementations. */
+#endif

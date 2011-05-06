@@ -252,7 +252,7 @@ sflow_choose_agent_address(const char *agent_device, const char *control_ip,
     return false;
 
 success:
-    agent_addr->address.ip_v4.addr = in4.s_addr;
+    agent_addr->address.ip_v4.addr = (OVS_FORCE uint32_t) in4.s_addr;
     return true;
 }
 

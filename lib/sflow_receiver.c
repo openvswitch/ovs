@@ -1,6 +1,8 @@
 /* Copyright (c) 2002-2009 InMon Corp. Licensed under the terms of the InMon sFlow licence: */
 /* http://www.inmon.com/technology/sflowlicense.txt */
 
+#ifndef __CHECKER__            /* Don't run sparse on anything in this file. */
+
 #include <assert.h>
 #include "sflow_api.h"
 
@@ -830,3 +832,5 @@ static void sflError(SFLReceiver *receiver, char *msg)
     sfl_agent_error(receiver->agent, "receiver", msg);
     resetSampleCollector(receiver);
 }
+
+#endif  /* !__CHECKER__ */

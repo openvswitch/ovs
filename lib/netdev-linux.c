@@ -673,7 +673,8 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
         protocol = (ethertype == NETDEV_ETH_TYPE_ANY ? ETH_P_ALL
                     : ethertype == NETDEV_ETH_TYPE_802_2 ? ETH_P_802_2
                     : ethertype);
-        netdev->fd = socket(PF_PACKET, SOCK_RAW, htons(protocol));
+        netdev->fd = socket(PF_PACKET, SOCK_RAW,
+                            (OVS_FORCE int) htons(protocol));
         if (netdev->fd < 0) {
             error = errno;
             goto error;

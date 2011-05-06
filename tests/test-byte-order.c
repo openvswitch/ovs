@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 int
 main(void)
 {
+#ifndef __CHECKER__
     /* I picked some random numbers. */
     const uint16_t s = 0xc9bd;
     const uint32_t l = 0xffe56ae8;
@@ -44,6 +45,9 @@ main(void)
     assert(ntohll(htonll(ll)) == ll);
     assert(CONSTANT_HTONLL(ntohll(ll)) == ll);
     assert(ntohll(CONSTANT_HTONLL(ll)));
+#else  /* __CHECKER__ */
+/* Making sparse happy with this code makes it unreadable, so don't bother. */
+#endif
 
     return 0;
 }

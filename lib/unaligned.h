@@ -156,6 +156,7 @@ put_32aligned_u64(ovs_32aligned_u64 *x, uint64_t value)
 	x->lo = value;
 }
 
+#ifndef __CHECKER__
 /* Returns the value of 'x'. */
 static inline ovs_be64
 get_32aligned_be64(const ovs_32aligned_be64 *x)
@@ -179,5 +180,11 @@ put_32aligned_be64(ovs_32aligned_be64 *x, ovs_be64 value)
     x->lo = value >> 32;
 #endif
 }
+#else  /* __CHECKER__ */
+/* Making sparse happy with these functions also makes them unreadable, so
+ * don't bother to show it their implementations. */
+ovs_be64 get_32aligned_be64(const ovs_32aligned_be64 *);
+void put_32aligned_be64(ovs_32aligned_be64 *, ovs_be64);
+#endif
 
 #endif /* unaligned.h */

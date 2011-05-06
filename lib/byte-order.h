@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include "openvswitch/types.h"
 
+#ifndef __CHECKER__
 static inline ovs_be64
 htonll(uint64_t n)
 {
@@ -32,14 +33,21 @@ ntohll(ovs_be64 n)
 {
     return htonl(1) == 1 ? n : ((uint64_t) ntohl(n) << 32) | ntohl(n >> 32);
 }
+#else
+/* Making sparse happy with these functions also makes them unreadable, so
+ * don't bother to show it their implementations. */
+ovs_be64 htonll(uint64_t);
+uint64_t ntohll(ovs_be64);
+#endif
 
 /* These macros may substitute for htons(), htonl(), and htonll() in contexts
  * where function calls are not allowed, such as case labels.  They should not
  * be used elsewhere because all of them evaluate their argument many times. */
-#ifdef WORDS_BIGENDIAN
-#define CONSTANT_HTONS(VALUE) ((ovs_be16) (VALUE))
-#define CONSTANT_HTONL(VALUE) ((ovs_be32) (VALUE))
-#define CONSTANT_HTONLL(VALUE) ((ovs_be64) (VALUE))
+#if defined(WORDS_BIGENDIAN) || __CHECKER__
+#define CONSTANT_HTONS(VALUE) ((OVS_FORCE ovs_be16) ((VALUE) & 0xffff))
+#define CONSTANT_HTONL(VALUE) ((OVS_FORCE ovs_be32) ((VALUE) & 0xffffffff))
+#define CONSTANT_HTONLL(VALUE) \
+        ((OVS_FORCE ovs_be64) ((VALUE) & UINT64_C(0xffffffffffffffff)))
 #else
 #define CONSTANT_HTONS(VALUE)                       \
         (((((ovs_be16) (VALUE)) & 0xff00) >> 8) |   \
