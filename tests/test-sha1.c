@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,9 +127,12 @@ test_big_vector(void)
         { 0x34, 0xAA, 0x97, 0x3C, 0xD4, 0xC4, 0xDA, 0xA4, 0xF6, 0x1E,
           0xEB, 0x2B, 0xDB, 0xAD, 0x27, 0x31, 0x65, 0x34, 0x01, 0x6F }
     };
+    size_t i;
 
     vec.data = xmalloc(SIZE);
-    memset(vec.data, 'a', SIZE);
+    for (i = 0; i < SIZE; i++) {
+        vec.data[i] = 'a';
+    }
     test_one(&vec);
     free(vec.data);
 }
