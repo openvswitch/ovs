@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ struct stress_option {
 #if USE_LINKER_SECTIONS
 #define STRESS_OPTION(NAME, DESCRIPTION, RECOMMENDED, MIN, MAX, DEFAULT) \
         STRESS_OPTION__(NAME, DESCRIPTION, RECOMMENDED, MIN, MAX, DEFAULT); \
+        extern struct stress_option *stress_option_ptr_##NAME;          \
         struct stress_option *stress_option_ptr_##NAME                  \
             __attribute__((section("stress_options"))) = &stress_##NAME
 #else
@@ -76,6 +77,7 @@ void stress_init_command(void);
 /* Implementation details. */
 
 #define STRESS_OPTION__(NAME, DESCRIPTION, RECOMMENDED, MIN, MAX, DEFAULT) \
+        extern struct stress_option stress_##NAME;                      \
         struct stress_option stress_##NAME =                            \
         { #NAME, DESCRIPTION, RECOMMENDED, MIN, MAX, DEFAULT,           \
           DEFAULT ? DEFAULT : 0,                /* period */            \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ struct coverage_counter {
 #if USE_LINKER_SECTIONS
 #define COVERAGE_DEFINE(COUNTER)                                        \
         COVERAGE_DEFINE__(COUNTER);                                     \
+        extern struct coverage_counter *counter_ptr_##COUNTER;          \
         struct coverage_counter *counter_ptr_##COUNTER                  \
             __attribute__((section("coverage"))) = &counter_##COUNTER
 #else
@@ -60,6 +61,7 @@ void coverage_clear(void);
 
 /* Implementation detail. */
 #define COVERAGE_DEFINE__(COUNTER)                              \
+        extern struct coverage_counter counter_##COUNTER;       \
         struct coverage_counter counter_##COUNTER = { #COUNTER, 0, 0 }
 
 #endif /* coverage.h */
