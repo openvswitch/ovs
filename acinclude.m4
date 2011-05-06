@@ -347,3 +347,38 @@ AC_DEFUN([OVS_CHECK_XENSERVER_VERSION],
       AC_MSG_ERROR([This appears to be XenServer $ovs_cv_xsversion, but only XenServer 5.6.100 or later is supported.  (If you are really using a supported version of XenServer, you may override this error message by specifying 'ovs_cv_xsversion=5.6.100' on the "configure" command line.)])
       ;;
   esac])
+
+dnl OVS_MAKE_HAS_IF([if-true], [if-false])
+dnl
+dnl Checks whether make has the GNU make $(if condition,then,else) extension.
+dnl Runs 'if-true' if so, 'if-false' otherwise.
+AC_DEFUN([OVS_MAKE_HAS_IF],
+  [AC_CACHE_CHECK(
+     [whether ${MAKE-make} has GNU make \$(if) extension],
+     [ovs_cv_gnu_make_if],
+     [cat <<'EOF' > conftest.mk
+conftest.out:
+	echo $(if x,y,z) > conftest.out
+.PHONY: all
+EOF
+      rm -f conftest.out
+      AS_ECHO(["$as_me:$LINENO: invoking ${MAKE-make} -f conftest.mk all:"]) >&AS_MESSAGE_LOG_FD 2>&1
+      ${MAKE-make} -f conftest.mk conftest.out >&AS_MESSAGE_LOG_FD 2>&1
+      AS_ECHO(["$as_me:$LINENO: conftest.out contains:"]) >&AS_MESSAGE_LOG_FD 2>&1
+      cat conftest.out >&AS_MESSAGE_LOG_FD 2>&1
+      result=`cat conftest.out`
+      rm -f conftest.mk conftest.out
+      if test "X$result" = "Xy"; then
+        ovs_cv_gnu_make_if=yes
+      else
+        ovs_cv_gnu_make_if=no
+      fi])
+   AS_IF([test $ovs_cv_gnu_make_if = yes], [$1], [$2])])
+
+dnl OVS_ENABLE_SPARSE
+AC_DEFUN([OVS_ENABLE_SPARSE],
+  [OVS_MAKE_HAS_IF(
+     [AC_CONFIG_COMMANDS_PRE(
+        [: ${SPARSE=sparse}
+         AC_SUBST([SPARSE])
+         CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse" cgcc,'"$CC"')'])])])
