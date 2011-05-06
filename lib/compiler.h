@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #ifndef COMPILER_H
 #define COMPILER_H 1
 
-#ifdef __GNUC__
+#if __GNUC__ && !__CHECKER__
 #define NO_RETURN __attribute__((__noreturn__))
 #define OVS_UNUSED __attribute__((__unused__))
 #define PRINTF_FORMAT(FMT, ARG1) __attribute__((__format__(printf, FMT, ARG1)))
