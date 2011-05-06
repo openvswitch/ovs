@@ -96,12 +96,11 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 
 /* WC_INVARIANTS is the invariant bits (as defined on WC_INVARIANT_LIST) all
  * OR'd together. */
-enum {
-    WC_INVARIANTS = 0
+static const flow_wildcards_t WC_INVARIANTS = 0
 #define WC_INVARIANT_BIT(NAME) | FWW_##NAME
     WC_INVARIANT_LIST
 #undef WC_INVARIANT_BIT
-};
+;
 
 /* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
  * 'priority'. */
@@ -110,7 +109,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
                             unsigned int priority, struct cls_rule *rule)
 {
     struct flow_wildcards *wc = &rule->wc;
-    unsigned int ofpfw;
+    uint32_t ofpfw;
     ovs_be16 vid, pcp;
 
     /* Initialize rule->priority. */
@@ -119,7 +118,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
-    wc->wildcards = ofpfw & WC_INVARIANTS;
+    wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
     wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET);
@@ -202,10 +201,10 @@ void
 ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
 {
     const struct flow_wildcards *wc = &rule->wc;
-    unsigned int ofpfw;
+    uint32_t ofpfw;
 
     /* Figure out most OpenFlow wildcards. */
-    ofpfw = wc->wildcards & WC_INVARIANTS;
+    ofpfw = (OVS_FORCE uint32_t) (wc->wildcards & WC_INVARIANTS);
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
     if (wc->wildcards & FWW_NW_TOS) {

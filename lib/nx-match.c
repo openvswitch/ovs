@@ -680,7 +680,7 @@ nxm_put_eth(struct ofpbuf *b, uint32_t header,
 
 static void
 nxm_put_eth_dst(struct ofpbuf *b,
-                uint32_t wc, const uint8_t value[ETH_ADDR_LEN])
+                flow_wildcards_t wc, const uint8_t value[ETH_ADDR_LEN])
 {
     switch (wc & (FWW_DL_DST | FWW_ETH_MCAST)) {
     case FWW_DL_DST | FWW_ETH_MCAST:
