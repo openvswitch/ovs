@@ -101,38 +101,6 @@ dp_initialize(void)
     }
 }
 
-/* Performs periodic work needed by all the various kinds of dpifs.
- *
- * If your program opens any dpifs, it must call both this function and
- * netdev_run() within its main poll loop. */
-void
-dp_run(void)
-{
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &dpif_classes) {
-        const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class->run) {
-            registered_class->dpif_class->run();
-        }
-    }
-}
-
-/* Arranges for poll_block() to wake up when dp_run() needs to be called.
- *
- * If your program opens any dpifs, it must call both this function and
- * netdev_wait() within its main poll loop. */
-void
-dp_wait(void)
-{
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &dpif_classes) {
-        const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class->wait) {
-            registered_class->dpif_class->wait();
-        }
-    }
-}
-
 /* Registers a new datapath provider.  After successful registration, new
  * datapaths of that type can be opened using dpif_open(). */
 int
@@ -342,6 +310,25 @@ dpif_close(struct dpif *dpif)
 
         registered_class->refcount--;
         dpif_uninit(dpif, true);
+    }
+}
+
+/* Performs periodic work needed by 'dpif'. */
+void
+dpif_run(struct dpif *dpif)
+{
+    if (dpif->dpif_class->run) {
+        dpif->dpif_class->run(dpif);
+    }
+}
+
+/* Arranges for poll_block() to wake up when dp_run() needs to be called for
+ * 'dpif'. */
+void
+dpif_wait(struct dpif *dpif)
+{
+    if (dpif->dpif_class->wait) {
+        dpif->dpif_class->wait(dpif);
     }
 }
 

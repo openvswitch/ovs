@@ -170,12 +170,10 @@ main(int argc, char *argv[])
             VLOG_FATAL("unrecoverable datapath error (%s)", strerror(error));
         }
         unixctl_server_run(unixctl);
-        dp_run();
         netdev_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
-        dp_wait();
         netdev_wait();
         if (exiting) {
             poll_immediate_wake();

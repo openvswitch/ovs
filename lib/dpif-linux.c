@@ -994,12 +994,12 @@ dpif_linux_recv_purge(struct dpif *dpif_)
 
 const struct dpif_class dpif_linux_class = {
     "system",
-    NULL,                       /* run */
-    NULL,                       /* wait */
     dpif_linux_enumerate,
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_destroy,
+    NULL,                       /* run */
+    NULL,                       /* wait */
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,
     dpif_linux_set_drop_frags,

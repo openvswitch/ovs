@@ -69,14 +69,6 @@ struct dpif_class {
      * the type assumed if no type is specified when opening a dpif. */
     const char *type;
 
-    /* Performs periodic work needed by dpifs of this class, if any is
-     * necessary. */
-    void (*run)(void);
-
-    /* Arranges for poll_block() to wake up if the "run" member function needs
-     * to be called. */
-    void (*wait)(void);
-
     /* Enumerates the names of all known created datapaths, if possible, into
      * 'all_dps'.  The caller has already initialized 'all_dps' and other dpif
      * classes might already have added names to it.
@@ -107,6 +99,13 @@ struct dpif_class {
      * If successful, 'dpif' will not be used again except as an argument for
      * the 'close' member function. */
     int (*destroy)(struct dpif *dpif);
+
+    /* Performs periodic work needed by 'dpif', if any is necessary. */
+    void (*run)(struct dpif *dpif);
+
+    /* Arranges for poll_block() to wake up if the "run" member function needs
+     * to be called for 'dpif'. */
+    void (*wait)(struct dpif *dpif);
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct odp_stats *stats);
