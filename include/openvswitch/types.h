@@ -17,7 +17,6 @@
 #ifndef OPENVSWITCH_TYPES_H
 #define OPENVSWITCH_TYPES_H 1
 
-#include <arpa/inet.h>
 #include <sys/types.h>
 #include <stdint.h>
 
