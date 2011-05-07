@@ -4632,7 +4632,7 @@ iface_update_carrier(struct iface *iface)
 static void
 iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
 {
-    if (!qos || qos->type[0] == '\0') {
+    if (!qos || qos->type[0] == '\0' || qos->n_queues < 1) {
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
         struct iface_delete_queues_cbdata cbdata;
