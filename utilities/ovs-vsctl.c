@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "command-line.h"
 #include "compiler.h"
@@ -2547,9 +2548,19 @@ pre_parse_column_key_value(struct vsctl_context *ctx,
 static void
 pre_cmd_get(struct vsctl_context *ctx)
 {
+    const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     int i;
+
+    /* Using "get" without --id or a column name could possibly make sense.
+     * Maybe, for example, a ovs-vsctl run wants to assert that a row exists.
+     * But it is unlikely that an interactive user would want to do that, so
+     * issue a warning if we're running on a terminal. */
+    if (!id && ctx->argc <= 3 && isatty(STDOUT_FILENO)) {
+        VLOG_WARN("\"get\" command without row arguments or \"--id\" is "
+                  "possibly erroneous");
+    }
 
     table = pre_get_table(ctx, table_name);
     for (i = 3; i < ctx->argc; i++) {

@@ -596,6 +596,11 @@ For a map column, without \fB\-\-if\-exists\fR it is an error if
 If \fB@\fIname\fR is specified, then the UUID for \fIrecord\fR may be
 referred to by that name later in the same \fBovs\-vsctl\fR
 invocation in contexts where a UUID is expected.
+.IP
+Both \fB\-\-id\fR and the \fIcolumn\fR arguments are optional, but
+usually at least one or the other should be specified.  If both are
+omitted, then \fBget\fR has no effect except to verify that
+\fIrecord\fR exists in \fItable\fR.
 .
 .IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Sets the value of each specified \fIcolumn\fR in the given
