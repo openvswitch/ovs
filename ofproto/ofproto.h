@@ -92,11 +92,17 @@ struct ofproto_controller {
 #define DEFAULT_SERIAL_DESC "None"
 #define DEFAULT_DP_DESC "None"
 
+void ofproto_enumerate_types(struct sset *types);
+const char *ofproto_normalize_type(const char *);
+
+int ofproto_enumerate_names(const char *type, struct sset *names);
 void ofproto_parse_name(const char *name, char **dp_name, char **dp_type);
 
 int ofproto_create(const char *datapath, const char *datapath_type,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);
+int ofproto_delete(const char *name, const char *type);
+
 int ofproto_run(struct ofproto *);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);

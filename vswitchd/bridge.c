@@ -38,7 +38,6 @@
 #include "coverage.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
@@ -158,8 +157,8 @@ static long long int stats_timer = LLONG_MIN;
 static long long int db_limiter = LLONG_MIN;
 
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
-static void bridge_del_dps(void);
-static bool bridge_add_dp(struct bridge *);
+static void bridge_del_ofprotos(void);
+static bool bridge_add_ofprotos(struct bridge *);
 static void bridge_create(const struct ovsrec_bridge *);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
@@ -395,7 +394,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * that port already belongs to a different datapath, so we must do all
      * port deletions before any port additions.  A datapath always has a
      * "local port" so we must delete not-configured datapaths too. */
-    bridge_del_dps();
+    bridge_del_ofprotos();
     HMAP_FOR_EACH (br, node, &all_bridges) {
         if (br->ofproto) {
             bridge_del_ofproto_ports(br);
@@ -409,7 +408,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * has at least one iface, every "struct iface" has a valid ofp_port and
      * netdev. */
     HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
-        if (!br->ofproto && !bridge_add_dp(br)) {
+        if (!br->ofproto && !bridge_add_ofprotos(br)) {
             bridge_destroy(br);
         }
     }
@@ -448,40 +447,35 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     daemonize_complete();
 }
 
-/* Iterate over all system dpifs and delete any of them that do not have a
+/* Iterate over all ofprotos and delete any of them that do not have a
  * configured bridge or that are the wrong type. */
 static void
-bridge_del_dps(void)
+bridge_del_ofprotos(void)
 {
-    struct sset dpif_names;
-    struct sset dpif_types;
+    struct sset names;
+    struct sset types;
     const char *type;
 
-    sset_init(&dpif_names);
-    sset_init(&dpif_types);
-    dp_enumerate_types(&dpif_types);
-    SSET_FOR_EACH (type, &dpif_types) {
+    sset_init(&names);
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
         const char *name;
 
-        dp_enumerate_names(type, &dpif_names);
-        SSET_FOR_EACH (name, &dpif_names) {
+        ofproto_enumerate_names(type, &names);
+        SSET_FOR_EACH (name, &names) {
             struct bridge *br = bridge_lookup(name);
             if (!br || strcmp(type, br->type)) {
-                struct dpif *dpif;
-
-                if (!dpif_open(name, type, &dpif)) {
-                    dpif_delete(dpif);
-                    dpif_close(dpif);
-                }
+                ofproto_delete(name, type);
             }
         }
     }
-    sset_destroy(&dpif_names);
-    sset_destroy(&dpif_types);
+    sset_destroy(&names);
+    sset_destroy(&types);
 }
 
 static bool
-bridge_add_dp(struct bridge *br)
+bridge_add_ofprotos(struct bridge *br)
 {
     int error = ofproto_create(br->name, br->type, &br->ofproto);
     if (error) {
@@ -740,8 +734,8 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
      * Update 'cfg' of bridges that still exist. */
     HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
         br->cfg = shash_find_data(&new_br, br->name);
-        if (!br->cfg || strcmp(br->type,
-                               dpif_normalize_type(br->cfg->datapath_type))) {
+        if (!br->cfg || strcmp(br->type, ofproto_normalize_type(
+                                   br->cfg->datapath_type))) {
             bridge_destroy(br);
         }
     }
@@ -854,7 +848,7 @@ bridge_refresh_ofp_port(struct bridge *br)
     }
 }
 
-/* Add a dpif port for any "struct iface" that doesn't have one.
+/* Add an ofproto port for any "struct iface" that doesn't have one.
  * Delete any "struct iface" for which this fails.
  * Delete any "struct port" that thereby ends up with no ifaces. */
 static void
@@ -1654,7 +1648,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br = xzalloc(sizeof *br);
 
     br->name = xstrdup(br_cfg->name);
-    br->type = xstrdup(dpif_normalize_type(br_cfg->datapath_type));
+    br->type = xstrdup(ofproto_normalize_type(br_cfg->datapath_type));
     br->cfg = br_cfg;
     eth_addr_nicira_random(br->default_ea);
 

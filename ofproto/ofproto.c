@@ -409,6 +409,36 @@ static bool is_admissible(struct ofproto *, const struct flow *,
 
 static void ofproto_unixctl_init(void);
 
+/* Clears 'types' and enumerates all registered ofproto types into it.  The
+ * caller must first initialize the sset. */
+void
+ofproto_enumerate_types(struct sset *types)
+{
+    dp_enumerate_types(types);
+}
+
+/* Returns the fully spelled out name for the given ofproto 'type'.
+ *
+ * Normalized type string can be compared with strcmp().  Unnormalized type
+ * string might be the same even if they have different spellings. */
+const char *
+ofproto_normalize_type(const char *type)
+{
+    return dpif_normalize_type(type);
+}
+
+/* Clears 'names' and enumerates the names of all known created ofprotos with
+ * the given 'type'.  The caller must first initialize the sset.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Some kinds of datapaths might not be practically enumerable.  This is not
+ * considered an error. */
+int
+ofproto_enumerate_names(const char *type, struct sset *names)
+{
+    return dp_enumerate_names(type, names);
+}
+
 int
 ofproto_create(const char *datapath, const char *datapath_type,
                struct ofproto **ofprotop)
@@ -1329,6 +1359,26 @@ ofproto_destroy(struct ofproto *p)
 
     free(p->name);
     free(p);
+}
+
+/* Destroys the datapath with the respective 'name' and 'type'.  With the Linux
+ * kernel datapath, for example, this destroys the datapath in the kernel, and
+ * with the netdev-based datapath, it tears down the data structures that
+ * represent the datapath.
+ *
+ * The datapath should not be currently open as an ofproto. */
+int
+ofproto_delete(const char *name, const char *type)
+{
+    struct dpif *dpif;
+    int error;
+
+    error = dpif_open(name, type, &dpif);
+    if (!error) {
+        error = dpif_delete(dpif);
+        dpif_close(dpif);
+    }
+    return error;
 }
 
 static void
