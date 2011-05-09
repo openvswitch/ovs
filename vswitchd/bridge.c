@@ -89,8 +89,8 @@ struct iface {
 
     /* These members are valid only after bridge_reconfigure() causes them to
      * be initialized. */
-    struct hmap_node dp_ifidx_node; /* In struct bridge's "ifaces" hmap. */
-    int dp_ifidx;               /* Index within kernel datapath. */
+    struct hmap_node ofp_port_node; /* In struct bridge's "ifaces" hmap. */
+    int ofp_port;               /* OpenFlow port number, -1 if unknown. */
     struct netdev *netdev;      /* Network device. */
     const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
@@ -128,7 +128,7 @@ struct bridge {
 
     /* Bridge ports. */
     struct hmap ports;          /* "struct port"s indexed by name. */
-    struct hmap ifaces;         /* "struct iface"s indexed by dp_ifidx. */
+    struct hmap ifaces;         /* "struct iface"s indexed by ofp_port. */
     struct hmap iface_by_name;  /* "struct iface"s indexed by name. */
 
     /* Port mirroring. */
@@ -170,7 +170,7 @@ static size_t bridge_get_controllers(const struct bridge *br,
 static void bridge_add_del_ports(struct bridge *);
 static void bridge_add_ofproto_ports(struct bridge *);
 static void bridge_del_ofproto_ports(struct bridge *);
-static void bridge_refresh_dp_ifidx(struct bridge *);
+static void bridge_refresh_ofp_port(struct bridge *);
 static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
@@ -213,8 +213,8 @@ static struct iface *iface_create(struct port *port,
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_find(const char *name);
-static struct iface *iface_from_dp_ifidx(const struct bridge *,
-                                         uint16_t dp_ifidx);
+static struct iface *iface_from_ofp_port(const struct bridge *,
+                                         uint16_t ofp_port);
 static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
@@ -406,7 +406,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      *
      * After this is done, we have our final set of bridges, ports, and
      * interfaces.  Every "struct bridge" has an ofproto, every "struct port"
-     * has at least one iface, every "struct iface" has a valid dp_ifidx and
+     * has at least one iface, every "struct iface" has a valid ofp_port and
      * netdev. */
     HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
         if (!br->ofproto && !bridge_add_dp(br)) {
@@ -414,7 +414,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         }
     }
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        bridge_refresh_dp_ifidx(br);
+        bridge_refresh_ofp_port(br);
         bridge_add_ofproto_ports(br);
     }
 
@@ -429,7 +429,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             port_configure(port);
 
-            HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
+            HMAP_FOR_EACH (iface, ofp_port_node, &br->ifaces) {
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
                 iface_set_mac(iface);
@@ -507,7 +507,7 @@ port_configure(struct port *port)
     s.n_slaves = 0;
     s.slaves = xmalloc(list_size(&port->ifaces) * sizeof *s.slaves);
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        s.slaves[s.n_slaves++] = iface->dp_ifidx;
+        s.slaves[s.n_slaves++] = iface->ofp_port;
     }
 
     /* Get VLAN tag. */
@@ -575,7 +575,7 @@ bridge_configure_datapath_id(struct bridge *br)
     char *dpid_string;
 
     bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
-    local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
+    local_iface = iface_from_ofp_port(br, OFPP_LOCAL);
     if (local_iface) {
         int error = netdev_set_etheraddr(local_iface->netdev, ea);
         if (error) {
@@ -810,46 +810,45 @@ bridge_del_ofproto_ports(struct bridge *br)
 }
 
 static void
-iface_set_dp_ifidx(struct iface *iface, int dp_ifidx)
+iface_set_ofp_port(struct iface *iface, int ofp_port)
 {
     struct bridge *br = iface->port->bridge;
 
-    assert(iface->dp_ifidx < 0 && dp_ifidx >= 0);
-    iface->dp_ifidx = dp_ifidx;
-    hmap_insert(&br->ifaces, &iface->dp_ifidx_node, hash_int(dp_ifidx, 0));
+    assert(iface->ofp_port < 0 && ofp_port >= 0);
+    iface->ofp_port = ofp_port;
+    hmap_insert(&br->ifaces, &iface->ofp_port_node, hash_int(ofp_port, 0));
 
 }
 
 static void
-bridge_refresh_dp_ifidx(struct bridge *br)
+bridge_refresh_ofp_port(struct bridge *br)
 {
     struct ofproto_port_dump dump;
     struct ofproto_port ofproto_port;
     struct port *port;
 
-    /* Clear all the "dp_ifidx"es. */
+    /* Clear all the "ofp_port"es. */
     hmap_clear(&br->ifaces);
     HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         struct iface *iface;
 
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface->dp_ifidx = -1;
+            iface->ofp_port = -1;
         }
     }
 
-    /* Obtain the correct "dp_ifidx"es from ofproto. */
+    /* Obtain the correct "ofp_port"s from ofproto. */
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
-        uint32_t odp_port = ofp_port_to_odp_port(ofproto_port.ofp_port);
         struct iface *iface = iface_lookup(br, ofproto_port.name);
         if (iface) {
-            if (iface->dp_ifidx >= 0) {
+            if (iface->ofp_port >= 0) {
                 VLOG_WARN("bridge %s: interface %s reported twice",
                           br->name, ofproto_port.name);
-            } else if (iface_from_dp_ifidx(br, odp_port)) {
+            } else if (iface_from_ofp_port(br, ofproto_port.ofp_port)) {
                 VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
-                          br->name, odp_port);
+                          br->name, ofproto_port.ofp_port);
             } else {
-                iface_set_dp_ifidx(iface, odp_port);
+                iface_set_ofp_port(iface, ofproto_port.ofp_port);
             }
         }
     }
@@ -862,10 +861,10 @@ static void
 bridge_add_ofproto_ports(struct bridge *br)
 {
     struct port *port, *next_port;
-    struct ofproto_port ofproto_port;
 
     HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
         struct iface *iface, *next_iface;
+        struct ofproto_port ofproto_port;
 
         LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
             struct shash args;
@@ -894,14 +893,14 @@ bridge_add_ofproto_ports(struct bridge *br)
             }
 
             /* Add the port, if necessary. */
-            if (iface->netdev && iface->dp_ifidx < 0) {
+            if (iface->netdev && iface->ofp_port < 0) {
                 uint16_t ofp_port;
                 int error;
 
                 error = ofproto_port_add(br->ofproto, iface->netdev,
                                          &ofp_port);
                 if (!error) {
-                    iface_set_dp_ifidx(iface, ofp_port_to_odp_port(ofp_port));
+                    iface_set_ofp_port(iface, ofp_port);
                 } else {
                     netdev_close(iface->netdev);
                     iface->netdev = NULL;
@@ -909,9 +908,9 @@ bridge_add_ofproto_ports(struct bridge *br)
             }
 
             /* Delete the iface if  */
-            if (iface->netdev && iface->dp_ifidx >= 0) {
+            if (iface->netdev && iface->ofp_port >= 0) {
                 VLOG_DBG("bridge %s: interface %s is on port %d",
-                         br->name, iface->name, iface->dp_ifidx);
+                         br->name, iface->name, iface->ofp_port);
             } else {
                 if (iface->netdev) {
                     VLOG_ERR("bridge %s: missing %s interface, dropping",
@@ -954,6 +953,7 @@ bridge_add_ofproto_ports(struct bridge *br)
                 /* Already exists, nothing to do. */
                 ofproto_port_destroy(&ofproto_port);
             }
+            ofproto_port_destroy(&ofproto_port);
         }
     }
 }
@@ -1043,7 +1043,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
             /* The local port doesn't count (since we're trying to choose its
              * MAC address anyway). */
-            if (iface->dp_ifidx == ODPP_LOCAL) {
+            if (iface->ofp_port == OFPP_LOCAL) {
                 continue;
             }
 
@@ -1249,7 +1249,7 @@ iface_refresh_cfm_stats(struct iface *iface)
     size_t i;
 
     mon = iface->cfg->monitor;
-    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->ofp_port);
 
     if (!cfm || !mon) {
         return false;
@@ -1280,9 +1280,8 @@ static bool
 iface_refresh_lacp_stats(struct iface *iface)
 {
     struct ofproto *ofproto = iface->port->bridge->ofproto;
-    uint16_t ofp_port = odp_port_to_ofp_port(iface->dp_ifidx);
     int old = iface->cfg->lacp_current ? *iface->cfg->lacp_current : -1;
-    int new = ofproto_port_is_lacp_current(ofproto, ofp_port);
+    int new = ofproto_port_is_lacp_current(ofproto, iface->ofp_port);
 
     if (old != new) {
         bool current = new;
@@ -1540,7 +1539,7 @@ cfm_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->ofp_port);
 
     if (!cfm) {
         unixctl_command_reply(conn, 501, "CFM not enabled");
@@ -1881,7 +1880,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
     struct in_addr ip;
 
     /* If there's no local interface or no IP address, give up. */
-    local_iface = iface_from_dp_ifidx(br, ODPP_LOCAL);
+    local_iface = iface_from_ofp_port(br, OFPP_LOCAL);
     if (!local_iface || !c->local_ip || !inet_aton(c->local_ip, &ip)) {
         return;
     }
@@ -2220,7 +2219,7 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
                                                "lacp-port-priority", "0"));
 
     if (portid <= 0 || portid > UINT16_MAX) {
-        portid = iface->dp_ifidx;
+        portid = iface->ofp_port;
     }
 
     if (priority <= 0 || priority > UINT16_MAX) {
@@ -2228,7 +2227,6 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
     }
 
     s->name = iface->name;
-    s->id = iface->dp_ifidx;
     s->id = portid;
     s->priority = priority;
 }
@@ -2284,7 +2282,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface = xzalloc(sizeof *iface);
     iface->port = port;
     iface->name = xstrdup(name);
-    iface->dp_ifidx = -1;
+    iface->ofp_port = -1;
     iface->tag = tag_create_random();
     iface->netdev = NULL;
     iface->cfg = if_cfg;
@@ -2305,12 +2303,12 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
 
-        if (br->ofproto && iface->dp_ifidx >= 0) {
-            ofproto_port_unregister(br->ofproto, iface->dp_ifidx);
+        if (br->ofproto && iface->ofp_port >= 0) {
+            ofproto_port_unregister(br->ofproto, iface->ofp_port);
         }
 
-        if (iface->dp_ifidx >= 0) {
-            hmap_remove(&br->ifaces, &iface->dp_ifidx_node);
+        if (iface->ofp_port >= 0) {
+            hmap_remove(&br->ifaces, &iface->ofp_port_node);
         }
 
         list_remove(&iface->port_elem);
@@ -2354,13 +2352,13 @@ iface_find(const char *name)
 }
 
 static struct iface *
-iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
+iface_from_ofp_port(const struct bridge *br, uint16_t ofp_port)
 {
     struct iface *iface;
 
-    HMAP_FOR_EACH_IN_BUCKET (iface, dp_ifidx_node,
-                             hash_int(dp_ifidx, 0), &br->ifaces) {
-        if (iface->dp_ifidx == dp_ifidx) {
+    HMAP_FOR_EACH_IN_BUCKET (iface, ofp_port_node,
+                             hash_int(ofp_port, 0), &br->ifaces) {
+        if (iface->ofp_port == ofp_port) {
             return iface;
         }
     }
@@ -2376,7 +2374,7 @@ iface_set_mac(struct iface *iface)
 
     if (!strcmp(iface->type, "internal")
         && iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
-        if (iface->dp_ifidx == ODPP_LOCAL) {
+        if (iface->ofp_port == OFPP_LOCAL) {
             VLOG_ERR("interface %s: ignoring mac in Interface record "
                      "(use Bridge record to set local port's mac)",
                      iface->name);
@@ -2527,7 +2525,7 @@ iface_configure_cfm(struct iface *iface)
     mon = iface->cfg->monitor;
 
     if (!mon) {
-        ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->dp_ifidx);
+        ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->ofp_port);
         return;
     }
 
@@ -2546,7 +2544,7 @@ iface_configure_cfm(struct iface *iface)
         remote_mps[i] = mon->remote_mps[i]->mpid;
     }
 
-    ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->dp_ifidx,
+    ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port,
                          &cfm, remote_mps, mon->n_remote_mps);
     free(remote_mps);
 }

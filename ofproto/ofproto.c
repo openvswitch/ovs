@@ -653,34 +653,34 @@ ofproto_set_sflow(struct ofproto *ofproto,
 
 /* Connectivity Fault Management configuration. */
 
-/* Clears the CFM configuration from 'port_no' on 'ofproto'. */
+/* Clears the CFM configuration from 'ofp_port' on 'ofproto'. */
 void
-ofproto_port_clear_cfm(struct ofproto *ofproto, uint32_t port_no)
+ofproto_port_clear_cfm(struct ofproto *ofproto, uint16_t ofp_port)
 {
-    struct ofport *ofport = get_port(ofproto, port_no);
+    struct ofport *ofport = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
     if (ofport && ofport->cfm){
         cfm_destroy(ofport->cfm);
         ofport->cfm = NULL;
     }
 }
 
-/* Configures connectivity fault management on 'port_no' in 'ofproto'.  Takes
+/* Configures connectivity fault management on 'ofp_port' in 'ofproto'.  Takes
  * basic configuration from the configuration members in 'cfm', and the set of
  * remote maintenance points from the 'n_remote_mps' elements in 'remote_mps'.
  * Ignores the statistics members of 'cfm'.
  *
- * This function has no effect if 'ofproto' does not have a port 'port_no'. */
+ * This function has no effect if 'ofproto' does not have a port 'ofp_port'. */
 void
-ofproto_port_set_cfm(struct ofproto *ofproto, uint32_t port_no,
+ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
                      const struct cfm *cfm,
                      const uint16_t *remote_mps, size_t n_remote_mps)
 {
     struct ofport *ofport;
 
-    ofport = get_port(ofproto, port_no);
+    ofport = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
     if (!ofport) {
-        VLOG_WARN("%s: cannot configure CFM on nonexistent port %"PRIu32,
-                  ofproto->name, port_no);
+        VLOG_WARN("%s: cannot configure CFM on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
         return;
     }
 
@@ -695,22 +695,22 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint32_t port_no,
     cfm_update_remote_mps(ofport->cfm, remote_mps, n_remote_mps);
 
     if (!cfm_configure(ofport->cfm)) {
-        VLOG_WARN("%s: CFM configuration on port %"PRIu32" (%s) failed",
-                  ofproto->name, port_no,
+        VLOG_WARN("%s: CFM configuration on port %"PRIu16" (%s) failed",
+                  ofproto->name, ofp_port,
                   netdev_get_name(ofport->netdev));
         cfm_destroy(ofport->cfm);
         ofport->cfm = NULL;
     }
 }
 
-/* Returns the connectivity fault management object associated with 'port_no'
+/* Returns the connectivity fault management object associated with 'ofp_port'
  * within 'ofproto', or a null pointer if 'ofproto' does not have a port
- * 'port_no' or if that port does not have CFM configured.  The caller must not
- * modify or destroy the returned object. */
+ * 'ofp_port' or if that port does not have CFM configured.  The caller must
+ * not modify or destroy the returned object. */
 const struct cfm *
-ofproto_port_get_cfm(struct ofproto *ofproto, uint32_t port_no)
+ofproto_port_get_cfm(struct ofproto *ofproto, uint16_t ofp_port)
 {
-    struct ofport *ofport = get_port(ofproto, port_no);
+    struct ofport *ofport = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
     return ofport ? ofport->cfm : NULL;
 }
 
@@ -1575,7 +1575,7 @@ ofproto_port_dump_done(struct ofproto_port_dump *dump)
 }
 
 /* Attempts to add 'netdev' as a port on 'ofproto'.  If successful, returns 0
- * and sets '*ofp_portp' to the new port's port OpenFlow number (if 'ofp_portp'
+ * and sets '*ofp_portp' to the new port's OpenFlow port number (if 'ofp_portp'
  * is non-null).  On failure, returns a positive errno value and sets
  * '*ofp_portp' to OFPP_NONE (if 'ofp_portp' is non-null). */
 int
@@ -1616,14 +1616,6 @@ ofproto_port_query_by_name(const struct ofproto *ofproto, const char *devname,
 }
 
 /* Deletes port number 'ofp_port' from the datapath for 'ofproto'.
- *
- * This is almost the same as calling dpif_port_del() directly on the
- * datapath, but it also makes 'ofproto' close its open netdev for the port
- * (if any).  This makes it possible to create a new netdev of a different
- * type under the same name, which otherwise the netdev library would refuse
- * to do because of the conflict.  (The netdev would eventually get closed on
- * the next trip through ofproto_run(), but this interface is more direct.)
- *
  * Returns 0 if successful, otherwise a positive errno. */
 int
 ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
@@ -1634,10 +1626,7 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
     int error;
 
     error = dpif_port_del(ofproto->dpif, odp_port);
-    if (error) {
-        VLOG_ERR("%s: failed to remove port %"PRIu16" (%s) interface (%s)",
-                 ofproto->name, odp_port, name, strerror(error));
-    } else if (ofport) {
+    if (!error && ofport) {
         /* 'name' is the netdev's name and update_port() is going to close the
          * netdev.  Just in case update_port() refers to 'name' after it
          * destroys 'ofport', make a copy of it around the update_port()
@@ -1973,7 +1962,7 @@ ofport_unregister(struct ofport *port)
 }
 
 void
-ofproto_port_unregister(struct ofproto *ofproto, uint32_t ofp_port)
+ofproto_port_unregister(struct ofproto *ofproto, uint16_t ofp_port)
 {
     struct ofport *port = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
     if (port) {

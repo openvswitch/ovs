@@ -33,7 +33,6 @@ extern "C" {
 
 struct cfm;
 struct cls_rule;
-struct dpif_port;
 struct netdev;
 struct ofproto;
 struct shash;
@@ -123,7 +122,7 @@ void ofproto_port_dump_start(struct ofproto_port_dump *,
 bool ofproto_port_dump_next(struct ofproto_port_dump *, struct ofproto_port *);
 int ofproto_port_dump_done(struct ofproto_port_dump *);
 
-/* Iterates through each DPIF_PORT in OFPROTO, using DUMP as state.
+/* Iterates through each OFPROTO_PORT in OFPROTO, using DUMP as state.
  *
  * Arguments all have pointer type.
  *
@@ -162,20 +161,20 @@ void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 
 /* Configuration of ports. */
 
-void ofproto_port_unregister(struct ofproto *, uint32_t port_no);
+void ofproto_port_unregister(struct ofproto *, uint16_t ofp_port);
 
-void ofproto_port_clear_cfm(struct ofproto *, uint32_t port_no);
-void ofproto_port_set_cfm(struct ofproto *, uint32_t port_no,
+void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
+void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
                           const struct cfm *,
                           const uint16_t *remote_mps, size_t n_remote_mps);
-const struct cfm *ofproto_port_get_cfm(struct ofproto *, uint32_t port_no);
+const struct cfm *ofproto_port_get_cfm(struct ofproto *, uint16_t ofp_port);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
 
 /* Configuration of bundles. */
 struct ofproto_bundle_settings {
     char *name;                 /* For use in log messages. */
 
-    uint32_t *slaves;           /* OpenFlow port numbers for slaves. */
+    uint16_t *slaves;           /* OpenFlow port numbers for slaves. */
     size_t n_slaves;
 
     int vlan;                   /* VLAN if access port, -1 if trunk port. */
