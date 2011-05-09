@@ -2097,7 +2097,7 @@ normalize_wildcards(const struct ofp_match *m)
             wc |= htonl(OFPFW_TP);
         }
     } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
-        wc |= htonl(OFPFW_TP);
+        wc |= htonl(OFPFW_TP | OFPFW_NW_TOS);
     } else {
         wc |= htonl(OFPFW_NW | OFPFW_TP);
     }
