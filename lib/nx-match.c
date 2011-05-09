@@ -833,19 +833,25 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
             case IPPROTO_ICMPV6:
                 if (!(wc & FWW_TP_SRC)) {
                     nxm_put_8(b, NXM_NX_ICMPV6_TYPE, ntohs(flow->tp_src));
+
+                    if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                        flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                        if (!(wc & FWW_ND_TARGET)) {
+                            nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
+                                         &in6addr_exact);
+                        }
+                        if (!(wc & FWW_ARP_SHA)
+                            && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
+                            nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
+                        }
+                        if (!(wc & FWW_ARP_THA)
+                            && flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                            nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
+                        }
+                    }
                 }
                 if (!(wc & FWW_TP_DST)) {
                     nxm_put_8(b, NXM_NX_ICMPV6_CODE, ntohs(flow->tp_dst));
-                }
-                if (!(wc & FWW_ND_TARGET)) {
-                    nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
-                            &in6addr_exact);
-                }
-                if (!(wc & FWW_ARP_SHA)) {
-                    nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
-                }
-                if (!(wc & FWW_ARP_THA)) {
-                    nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
                 }
                 break;
             }
