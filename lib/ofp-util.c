@@ -18,6 +18,7 @@
 #include "ofp-print.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <netinet/icmp6.h>
 #include <stdlib.h>
 #include "autopath.h"
 #include "byte-order.h"
@@ -35,8 +36,6 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
-
-static ovs_be32 normalize_wildcards(const struct ofp_match *);
 
 /* Rate limit for OpenFlow message parse errors.  These always indicate a bug
  * in the peer and so there's not much point in showing a lot of them. */
@@ -905,7 +904,6 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
         /* Standard OpenFlow flow_mod. */
         const struct ofp_flow_mod *ofm;
         uint16_t priority;
-        ovs_be32 wc;
         int error;
 
         /* Dissect the message. */
@@ -917,33 +915,16 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
 
         /* Set priority based on original wildcards.  Normally we'd allow
          * ofputil_cls_rule_from_match() to do this for us, but
-         * normalize_wildcards() can put wildcards where the original flow
+         * ofputil_normalize_rule() can put wildcards where the original flow
          * didn't have them. */
         priority = ntohs(ofm->priority);
         if (!(ofm->match.wildcards & htonl(OFPFW_ALL))) {
             priority = UINT16_MAX;
         }
 
-        /* Normalize ofm->match.  If normalization actually changes anything,
-         * then log the differences. */
-        wc = normalize_wildcards(&ofm->match);
-        if (wc == ofm->match.wildcards) {
-            ofputil_cls_rule_from_match(&ofm->match, priority, &fm->cr);
-        } else {
-            struct ofp_match match = ofm->match;
-            match.wildcards = wc;
-            ofputil_cls_rule_from_match(&match, priority, &fm->cr);
-
-            if (!VLOG_DROP_INFO(&bad_ofmsg_rl)) {
-                char *pre = ofp_match_to_string(&ofm->match, 1);
-                char *post = ofp_match_to_string(&match, 1);
-                VLOG_INFO("normalization changed ofp_match, details:");
-                VLOG_INFO(" pre: %s", pre);
-                VLOG_INFO("post: %s", post);
-                free(pre);
-                free(post);
-            }
-        }
+        /* Translate the rule. */
+        ofputil_cls_rule_from_match(&ofm->match, priority, &fm->cr);
+        ofputil_normalize_rule(&fm->cr, NXFF_OPENFLOW10);
 
         /* Translate the message. */
         fm->cookie = ofm->cookie;
@@ -2079,29 +2060,115 @@ actions_next(struct actions_iterator *iter)
     }
 }
 
-static ovs_be32
-normalize_wildcards(const struct ofp_match *m)
+/* "Normalizes" the wildcards in 'rule'.  That means:
+ *
+ *    1. If the type of level N is known, then only the valid fields for that
+ *       level may be specified.  For example, ARP does not have a TOS field,
+ *       so nw_tos must be wildcarded if 'rule' specifies an ARP flow.
+ *       Similarly, IPv4 does not have any IPv6 addresses, so ipv6_src and
+ *       ipv6_dst (and other fields) must be wildcarded if 'rule' specifies an
+ *       IPv4 flow.
+ *
+ *    2. If the type of level N is not known (or not understood by Open
+ *       vSwitch), then no fields at all for that level may be specified.  For
+ *       example, Open vSwitch does not understand SCTP, an L4 protocol, so the
+ *       L4 fields tp_src and tp_dst must be wildcarded if 'rule' specifies an
+ *       SCTP flow.
+ *
+ * 'flow_format' specifies the format of the flow as received or as intended to
+ * be sent.  This is important for IPv6 and ARP, for which NXM supports more
+ * detailed matching. */
+void
+ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
 {
-    enum { OFPFW_NW = (OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL | OFPFW_NW_PROTO
-                       | OFPFW_NW_TOS) };
-    enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
-    ovs_be32 wc;
+    enum {
+        MAY_NW_ADDR     = 1 << 0, /* nw_src, nw_dst */
+        MAY_TP_ADDR     = 1 << 1, /* tp_src, tp_dst */
+        MAY_NW_PROTO    = 1 << 2, /* nw_proto */
+        MAY_NW_TOS      = 1 << 3, /* nw_tos */
+        MAY_ARP_SHA     = 1 << 4, /* arp_sha */
+        MAY_ARP_THA     = 1 << 5, /* arp_tha */
+        MAY_IPV6_ADDR   = 1 << 6, /* ipv6_src, ipv6_dst */
+        MAY_ND_TARGET   = 1 << 7  /* nd_target */
+    } may_match;
 
-    wc = m->wildcards;
-    if (wc & htonl(OFPFW_DL_TYPE)) {
-        wc |= htonl(OFPFW_NW | OFPFW_TP);
-    } else if (m->dl_type == htons(ETH_TYPE_IP)) {
-        if (wc & htonl(OFPFW_NW_PROTO) || (m->nw_proto != IPPROTO_TCP &&
-                                           m->nw_proto != IPPROTO_UDP &&
-                                           m->nw_proto != IPPROTO_ICMP)) {
-            wc |= htonl(OFPFW_TP);
+    struct flow_wildcards wc;
+
+    /* Figure out what fields may be matched. */
+    if (rule->flow.dl_type == htons(ETH_TYPE_IP)) {
+        may_match = MAY_NW_PROTO | MAY_NW_TOS | MAY_NW_ADDR;
+        if (rule->flow.nw_proto == IPPROTO_TCP ||
+            rule->flow.nw_proto == IPPROTO_UDP ||
+            rule->flow.nw_proto == IPPROTO_ICMP) {
+            may_match |= MAY_TP_ADDR;
         }
-    } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
-        wc |= htonl(OFPFW_TP | OFPFW_NW_TOS);
+    } else if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)
+               && flow_format == NXFF_NXM) {
+        may_match = MAY_NW_PROTO | MAY_NW_TOS | MAY_IPV6_ADDR;
+        if (rule->flow.nw_proto == IPPROTO_TCP ||
+            rule->flow.nw_proto == IPPROTO_UDP) {
+            may_match |= MAY_TP_ADDR;
+        } else if (rule->flow.nw_proto == IPPROTO_ICMPV6) {
+            may_match |= MAY_TP_ADDR;
+            if (rule->flow.tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
+                may_match |= MAY_ND_TARGET | MAY_ARP_SHA;
+            } else if (rule->flow.tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                may_match |= MAY_ND_TARGET | MAY_ARP_THA;
+            }
+        }
+    } else if (rule->flow.dl_type == htons(ETH_TYPE_ARP)) {
+        may_match = MAY_NW_PROTO | MAY_NW_ADDR;
+        if (flow_format == NXFF_NXM) {
+            may_match |= MAY_ARP_SHA | MAY_ARP_THA;
+        }
     } else {
-        wc |= htonl(OFPFW_NW | OFPFW_TP);
+        may_match = 0;
     }
-    return wc;
+
+    /* Clear the fields that may not be matched. */
+    wc = rule->wc;
+    if (!(may_match & MAY_NW_ADDR)) {
+        wc.nw_src_mask = wc.nw_dst_mask = htonl(0);
+    }
+    if (!(may_match & MAY_TP_ADDR)) {
+        wc.wildcards |= FWW_TP_SRC | FWW_TP_DST;
+    }
+    if (!(may_match & MAY_NW_PROTO)) {
+        wc.wildcards |= FWW_NW_PROTO;
+    }
+    if (!(may_match & MAY_NW_TOS)) {
+        wc.wildcards |= FWW_NW_TOS;
+    }
+    if (!(may_match & MAY_ARP_SHA)) {
+        wc.wildcards |= FWW_ARP_SHA;
+    }
+    if (!(may_match & MAY_ARP_THA)) {
+        wc.wildcards |= FWW_ARP_THA;
+    }
+    if (!(may_match & MAY_IPV6_ADDR)) {
+        wc.ipv6_src_mask = wc.ipv6_dst_mask = in6addr_any;
+    }
+    if (!(may_match & MAY_ND_TARGET)) {
+        wc.wildcards |= FWW_ND_TARGET;
+    }
+
+    /* Log any changes. */
+    if (!flow_wildcards_equal(&wc, &rule->wc)) {
+        bool log = !VLOG_DROP_INFO(&bad_ofmsg_rl);
+        char *pre = log ? cls_rule_to_string(rule) : NULL;
+
+        rule->wc = wc;
+        cls_rule_zero_wildcarded_fields(rule);
+
+        if (log) {
+            char *post = cls_rule_to_string(rule);
+            VLOG_INFO("normalization changed ofp_match, details:");
+            VLOG_INFO(" pre: %s", pre);
+            VLOG_INFO("post: %s", post);
+            free(pre);
+            free(post);
+        }
+    }
 }
 
 static uint32_t
