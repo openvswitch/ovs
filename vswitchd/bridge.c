@@ -1696,7 +1696,11 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->name = xstrdup(br_cfg->name);
     br->cfg = br_cfg;
     br->ml = mac_learning_create();
-    eth_addr_nicira_random(br->default_ea);
+
+    /* Derive the default Ethernet address from the bridge's UUID.  This should
+     * be unique and it will be stable between ovs-vswitchd runs.  */
+    memcpy(br->default_ea, &br_cfg->header_.uuid, ETH_ADDR_LEN);
+    eth_addr_mark_random(br->default_ea);
 
     hmap_init(&br->ports);
     hmap_init(&br->ifaces);
