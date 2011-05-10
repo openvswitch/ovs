@@ -277,10 +277,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
-#ifdef HAVE_OPENSSL
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -448,13 +446,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         LEAK_CHECKER_OPTION_HANDLERS
 
-#ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
             break;
-#endif
 
         case '?':
             exit(EXIT_FAILURE);

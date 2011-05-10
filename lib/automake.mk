@@ -220,6 +220,8 @@ lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
 	 openssl dhparam -C -in $(srcdir)/lib/dh4096.pem -noout)	\
 	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp
 	mv lib/dhparams.c.tmp lib/dhparams.c
+else
+lib_libopenvswitch_a_SOURCES += lib/stream-nossl.c
 endif
 
 EXTRA_DIST += \

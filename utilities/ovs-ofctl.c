@@ -92,7 +92,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);

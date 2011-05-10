@@ -1401,7 +1401,7 @@ bridge_run(void)
     /* (Re)configure if necessary. */
     database_changed = ovsdb_idl_run(idl);
     cfg = ovsrec_open_vswitch_first(idl);
-#ifdef HAVE_OPENSSL
+
     /* Re-configure SSL.  We do this on every trip through the main loop,
      * instead of just when the database changes, because the contents of the
      * key and certificate files can change without the database changing.
@@ -1414,7 +1414,7 @@ bridge_run(void)
         stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
-#endif
+
     if (database_changed || datapath_destroyed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);

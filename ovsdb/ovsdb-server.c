@@ -51,13 +51,11 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
-#if HAVE_OPENSSL
 /* SSL configuration. */
 static char *private_key_file;
 static char *certificate_file;
 static char *ca_cert_file;
 static bool bootstrap_ca_cert;
-#endif
 
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
@@ -598,13 +596,11 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
     shash_destroy_free_data(&resolved_remotes);
 
-#if HAVE_OPENSSL
     /* Configure SSL. */
     stream_ssl_set_key_and_cert(query_db_string(db, private_key_file),
                                 query_db_string(db, certificate_file));
     stream_ssl_set_ca_cert_file(query_db_string(db, ca_cert_file),
                                 bootstrap_ca_cert);
-#endif
 }
 
 static void
@@ -671,12 +667,10 @@ parse_options(int argc, char *argv[], char **file_namep,
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
-#ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
         {"private-key", required_argument, 0, 'p'},
         {"certificate", required_argument, 0, 'c'},
         {"ca-cert",     required_argument, 0, 'C'},
-#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -714,7 +708,6 @@ parse_options(int argc, char *argv[], char **file_namep,
         DAEMON_OPTION_HANDLERS
         LEAK_CHECKER_OPTION_HANDLERS
 
-#ifdef HAVE_OPENSSL
         case 'p':
             private_key_file = optarg;
             break;
@@ -732,7 +725,6 @@ parse_options(int argc, char *argv[], char **file_namep,
             ca_cert_file = optarg;
             bootstrap_ca_cert = true;
             break;
-#endif
 
         case '?':
             exit(EXIT_FAILURE);

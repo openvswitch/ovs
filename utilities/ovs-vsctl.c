@@ -217,10 +217,8 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
-#ifdef HAVE_OPENSSL
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
-#endif
         {0, 0, 0, 0},
     };
     char *tmp, *short_options;
@@ -278,13 +276,11 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
 
-#ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_PEER_CA_CERT:
             stream_ssl_set_peer_ca_cert_file(optarg);
             break;
-#endif
 
         case '?':
             exit(EXIT_FAILURE);

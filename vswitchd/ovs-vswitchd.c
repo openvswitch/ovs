@@ -128,11 +128,9 @@ parse_options(int argc, char *argv[])
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
-#ifdef HAVE_OPENSSL
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-#endif
         {"enable-dummy", no_argument, 0, OPT_ENABLE_DUMMY},
         {0, 0, 0, 0},
     };
@@ -168,8 +166,6 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_HANDLERS
         DAEMON_OPTION_HANDLERS
         LEAK_CHECKER_OPTION_HANDLERS
-
-#ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_PEER_CA_CERT:
@@ -179,7 +175,6 @@ parse_options(int argc, char *argv[])
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
             break;
-#endif
 
         case OPT_ENABLE_DUMMY:
             dummy_enable();
