@@ -39,29 +39,35 @@
 static struct kmem_cache *flow_cache;
 static unsigned int hash_seed __read_mostly;
 
+static int check_header(struct sk_buff *skb, int len)
+{
+	if (unlikely(skb->len < len))
+		return -EINVAL;
+	if (unlikely(!pskb_may_pull(skb, len)))
+		return -ENOMEM;
+	return 0;
+}
+
 static inline bool arphdr_ok(struct sk_buff *skb)
 {
-	return skb->len >= skb_network_offset(skb) + sizeof(struct arp_eth_header);
+	return pskb_may_pull(skb, skb_network_offset(skb) +
+				  sizeof(struct arp_eth_header));
 }
 
 static inline int check_iphdr(struct sk_buff *skb)
 {
 	unsigned int nh_ofs = skb_network_offset(skb);
 	unsigned int ip_len;
+	int err;
 
-	if (skb->len < nh_ofs + sizeof(struct iphdr))
-		return -EINVAL;
+	err = check_header(skb, nh_ofs + sizeof(struct iphdr));
+	if (unlikely(err))
+		return err;
 
 	ip_len = ip_hdrlen(skb);
-	if (ip_len < sizeof(struct iphdr) || skb->len < nh_ofs + ip_len)
+	if (unlikely(ip_len < sizeof(struct iphdr) ||
+		     skb->len < nh_ofs + ip_len))
 		return -EINVAL;
-
-	/*
-	 * Pull enough header bytes to account for the IP header plus the
-	 * longest transport header that we parse, currently 20 bytes for TCP.
-	 */
-	if (!pskb_may_pull(skb, min(nh_ofs + ip_len + 20, skb->len)))
-		return -ENOMEM;
 
 	skb_set_transport_header(skb, nh_ofs + ip_len);
 	return 0;
@@ -70,22 +76,29 @@ static inline int check_iphdr(struct sk_buff *skb)
 static inline bool tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
-	if (skb->len >= th_ofs + sizeof(struct tcphdr)) {
-		int tcp_len = tcp_hdrlen(skb);
-		return (tcp_len >= sizeof(struct tcphdr)
-			&& skb->len >= th_ofs + tcp_len);
-	}
-	return false;
+	int tcp_len;
+
+	if (unlikely(!pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))))
+		return false;
+
+	tcp_len = tcp_hdrlen(skb);
+	if (unlikely(tcp_len < sizeof(struct tcphdr) ||
+		     skb->len < th_ofs + tcp_len))
+		return false;
+
+	return true;
 }
 
 static inline bool udphdr_ok(struct sk_buff *skb)
 {
-	return skb->len >= skb_transport_offset(skb) + sizeof(struct udphdr);
+	return pskb_may_pull(skb, skb_transport_offset(skb) +
+				  sizeof(struct udphdr));
 }
 
 static inline bool icmphdr_ok(struct sk_buff *skb)
 {
-	return skb->len >= skb_transport_offset(skb) + sizeof(struct icmphdr);
+	return pskb_may_pull(skb, skb_transport_offset(skb) +
+				  sizeof(struct icmphdr));
 }
 
 u64 flow_used_time(unsigned long flow_jiffies)
@@ -108,9 +121,11 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 	int payload_ofs;
 	struct ipv6hdr *nh;
 	uint8_t nexthdr;
+	int err;
 
-	if (unlikely(skb->len < nh_ofs + sizeof(*nh)))
-		return -EINVAL;
+	err = check_header(skb, nh_ofs + sizeof(*nh));
+	if (unlikely(err))
+		return err;
 
 	nh = ipv6_hdr(skb);
 	nexthdr = nh->nexthdr;
@@ -126,15 +141,6 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 		return -EINVAL;
 
 	nh_len = payload_ofs - nh_ofs;
-
-	/* Pull enough header bytes to account for the IP header plus the
-	 * longest transport header that we parse, currently 20 bytes for TCP.
-	 * To dig deeper than the transport header, transport parsers may need
-	 * to pull more header bytes.
-	 */
-	if (unlikely(!pskb_may_pull(skb, min(nh_ofs + nh_len + 20, skb->len))))
-		return -ENOMEM;
-
 	skb_set_transport_header(skb, nh_ofs + nh_len);
 	key->nw_proto = nexthdr;
 	return nh_len;
@@ -142,7 +148,8 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key)
 
 static bool icmp6hdr_ok(struct sk_buff *skb)
 {
-	return skb->len >= skb_transport_offset(skb) + sizeof(struct icmp6hdr);
+	return pskb_may_pull(skb, skb_transport_offset(skb) +
+				  sizeof(struct icmp6hdr));
 }
 
 #define TCP_FLAGS_OFFSET 13
@@ -257,7 +264,7 @@ void flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
 	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
 }
 
-static void parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
+static int parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 {
 	struct qtag_prefix {
 		__be16 eth_type; /* ETH_P_8021Q */
@@ -265,12 +272,15 @@ static void parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 	};
 	struct qtag_prefix *qp;
 
-	if (skb->len < sizeof(struct qtag_prefix) + sizeof(__be16))
-		return;
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct qtag_prefix) +
+					 sizeof(__be16))))
+		return -ENOMEM;
 
 	qp = (struct qtag_prefix *) skb->data;
 	key->dl_tci = qp->tci | htons(VLAN_TAG_PRESENT);
 	__skb_pull(skb, sizeof(struct qtag_prefix));
+
+	return 0;
 }
 
 static __be16 parse_ethertype(struct sk_buff *skb)
@@ -291,8 +301,11 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	if (ntohs(proto) >= 1536)
 		return proto;
 
-	if (unlikely(skb->len < sizeof(struct llc_snap_hdr)))
+	if (skb->len < sizeof(struct llc_snap_hdr))
 		return htons(ETH_P_802_2);
+
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct llc_snap_hdr))))
+		return htons(0);
 
 	llc = (struct llc_snap_hdr *) skb->data;
 	if (llc->dsap != LLC_SAP_SNAP ||
@@ -410,45 +423,28 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 	key->in_port = in_port;
 	*is_frag = false;
 
-	/*
-	 * We would really like to pull as many bytes as we could possibly
-	 * want to parse into the linear data area.  Currently, for IPv4,
-	 * that is:
-	 *
-	 *    14     Ethernet header
-	 *     4     VLAN header
-	 *    60     max IP header with options
-	 *    20     max TCP/UDP/ICMP header (don't care about options)
-	 *    --
-	 *    98
-	 *
-	 * But Xen only allocates 64 or 72 bytes for the linear data area in
-	 * netback, which means that we would reallocate and copy the skb's
-	 * linear data on every packet if we did that.  So instead just pull 64
-	 * bytes, which is always sufficient without IP options, and then check
-	 * whether we need to pull more later when we look at the IP header.
-	 */
-	if (!pskb_may_pull(skb, min(skb->len, 64u)))
-		return -ENOMEM;
-
 	skb_reset_mac_header(skb);
 
-	/* Link layer. */
+	/* Link layer.  We are guaranteed to have at least the 14 byte Ethernet
+	 * header in the linear data area.
+	 */
 	eth = eth_hdr(skb);
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);
 	memcpy(key->dl_dst, eth->h_dest, ETH_ALEN);
-
-	/* dl_type, dl_vlan, dl_vlan_pcp. */
 	__skb_pull(skb, 2 * ETH_ALEN);
 
 	if (vlan_tx_tag_present(skb))
 		key->dl_tci = htons(vlan_get_tci(skb));
 	else if (eth->h_proto == htons(ETH_P_8021Q))
-		parse_vlan(skb, key);
+		if (unlikely(parse_vlan(skb, key)))
+			return -ENOMEM;
 
 	key->dl_type = parse_ethertype(skb);
+	if (unlikely(key->dl_type == htons(0)))
+		return -ENOMEM;
+
 	skb_reset_network_header(skb);
-	__skb_push(skb, skb->data - (unsigned char *)eth);
+	__skb_push(skb, skb->data - skb_mac_header(skb));
 
 	/* Network layer. */
 	if (key->dl_type == htons(ETH_P_IP)) {
