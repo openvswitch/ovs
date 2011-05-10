@@ -1,5 +1,6 @@
 m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
+m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
 m4_define([OFPROTO_START],
   [OVS_RUNDIR=$PWD; export OVS_RUNDIR

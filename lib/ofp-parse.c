@@ -845,6 +845,7 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
 {
     bool is_del = command == OFPFC_DELETE || command == OFPFC_DELETE_STRICT;
     enum nx_flow_format min_format, next_format;
+    struct cls_rule rule_copy;
     struct ofpbuf actions;
     struct ofpbuf *ofm;
     struct flow_mod fm;
@@ -860,6 +861,12 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
         list_push_back(packets, &sff->list_node);
         *cur_format = next_format;
     }
+
+    /* Normalize a copy of the rule.  This ensures that non-normalized flows
+     * get logged but doesn't affect what gets sent to the switch, so that the
+     * switch can do whatever it likes with the flow. */
+    rule_copy = fm.cr;
+    ofputil_normalize_rule(&rule_copy, next_format);
 
     if (fm.table_id != 0xff && !*flow_mod_table_id) {
         struct ofpbuf *sff = ofputil_make_flow_mod_table_id(true);
