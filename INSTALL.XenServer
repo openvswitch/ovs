@@ -69,6 +69,74 @@ To uninstall Open vSwitch from a XenServer host, remove the packages:
 After installing or uninstalling Open vSwitch, the XenServer should be
 rebooted as soon as possible.
 
+Open vSwitch Boot Sequence on XenServer
+---------------------------------------
+
+When Open vSwitch is installed on XenServer, its startup script
+/etc/init.d/openvswitch runs early in boot.  It does roughly the
+following:
+
+        * Loads the OVS kernel module, openvswitch_mod.
+
+        * Starts ovsdb-server, the OVS configuration database.
+
+        * XenServer expects there to be no bridges configured at
+          startup, but the OVS configuration database likely still has
+          bridges configured from before reboot.  To match XenServer
+          expectations, the startup script deletes all configured
+          bridges from the database.
+
+        * Starts ovs-vswitchd, the OVS switching daemon.
+
+At this point in the boot process, then, there are no Open vSwitch
+bridges, even though all of the Open vSwitch daemons are running.
+Later on in boot, /etc/init.d/management-interface (part of XenServer,
+not Open vSwitch) creates the bridge for the XAPI management interface
+by invoking /opt/xensource/libexec/interface-reconfigure.  Normally
+this program consults XAPI's database to obtain information about how
+to configure the bridge, but XAPI is not running yet[*] so it instead
+consults /var/xapi/network.dbcache, which is a cached copy of the most
+recent network configuration.
+
+[*] Even if XAPI were running, if this XenServer node is a pool slave
+    then the query would have to consult the master, which requires
+    network access, which begs the question of how to configure the
+    management interface.
+
+XAPI starts later on in the boot process.  XAPI can then create other
+bridges on demand using /opt/xensource/libexec/interface-reconfigure.
+Now that XAPI is running, that program consults XAPI directly instead
+of reading the cache.
+
+As part of its own startup, XAPI invokes the Open vSwitch XAPI plugin
+script /etc/xapi.d/openvswitch-cfg-update passing the "update"
+command.  The plugin script does roughly the following:
+
+        * Calls /opt/xensource/libexec/interface-reconfigure with the
+          "rewrite" command, to ensure that the network cache is
+          up-to-date.
+
+        * Queries the Open vSwitch manager setting (named
+          "vswitch_controller") from the XAPI database for the
+          XenServer pool.
+
+        * If XAPI and OVS are configured for different managers, or if
+          OVS is configured for a manager but XAPI is not, runs
+          "ovs-vsctl emer-reset" to bring the Open vSwitch
+          configuration to a known state.  One effect of emer-reset is
+          to deconfigure any manager from the OVS database.
+
+        * If XAPI is configured for a manger, configures the OVS
+          manager to match with "ovs-vsctl set-manager".
+
+The Open vSwitch boot sequence only configures an OVS configuration
+database manager.  There is no way to directly configure an OpenFlow
+controller on XenServer and, as a consequence of the step above that
+deletes all of the bridges at boot time, controller configuration only
+persists until XenServer reboot.  The configuration database manager
+can, however, configure controllers for bridges.  See the BUGS section
+of ovs-controller(8) for more information on this topic.
+
 Reporting Bugs
 --------------
 
