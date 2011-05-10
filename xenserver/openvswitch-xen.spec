@@ -226,7 +226,7 @@ done
 
 if [ "$1" = "1" ]; then    # $1 = 1 for install
     # Configure system to use Open vSwitch
-    xe-switch-network-backend vswitch
+    /opt/xensource/bin/xe-switch-network-backend vswitch
 else    # $1 = 2 for upgrade
 
     mode=$(cat /etc/xensource/network.conf)
@@ -248,8 +248,15 @@ depmod %{xen_version}
 
 %preun
 if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
+    # Configure system to use bridge
+    /opt/xensource/bin/xe-switch-network-backend bridge
+
+    # The "openvswitch" service should have been removed from
+    # "xe-switch-network-backend bridge".
     for s in openvswitch openvswitch-xapi-update; do
-        chkconfig --del $s || printf "Could not remove $s init script."
+        if chkconfig --list $s >/dev/null 2>&1; then
+            chkconfig --del $s || printf "Could not remove $s init script."
+        fi
     done
 fi
 
@@ -303,10 +310,9 @@ if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
 
     # Remove saved XenServer scripts directory, but only if it's empty
     rmdir -p /usr/lib/openvswitch/xs-saved 2>/dev/null
-
-    # Configure system to use bridge
-    xe-switch-network-backend bridge
 fi
+
+exit 0
 
 %files
 %defattr(-,root,root)
