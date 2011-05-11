@@ -102,7 +102,7 @@ static const struct ofproto_class **ofproto_classes;
 static size_t n_ofproto_classes;
 static size_t allocated_ofproto_classes;
 
-/* Map from dpif name to struct ofproto, for use by unixctl commands. */
+/* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1278,8 +1278,7 @@ ofproto_rule_destroy__(struct rule *rule)
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
-/* Destroys 'rule' and iterates through all of its facets and revalidates them,
- * destroying any that no longer has a rule (which is probably all of them).
+/* Destroys 'rule' and removes it from the datapath.
  *
  * The caller must have already removed 'rule' from the classifier. */
 void
@@ -1317,8 +1316,8 @@ ofproto_rule_lookup(struct ofproto *ofproto, const struct flow *flow)
 }
 
 /* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
- * statistics (or the statistics for one of its facets) appropriately.
- * 'packet' must have at least sizeof(struct ofp_packet_in) bytes of headroom.
+ * statistics appropriately.  'packet' must have at least sizeof(struct
+ * ofp_packet_in) bytes of headroom.
  *
  * 'packet' doesn't necessarily have to match 'rule'.  'rule' will be credited
  * with statistics for 'packet' either way.
@@ -1335,13 +1334,8 @@ rule_execute(struct rule *rule, uint16_t in_port, struct ofpbuf *packet)
     return rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
 }
 
-/* Remove 'rule' from 'ofproto' and free up the associated memory:
- *
- *   - Removes 'rule' from the classifier.
- *
- *   - If 'rule' has facets, revalidates them (and possibly uninstalls and
- *     destroys them), via rule_destroy().
- */
+/* Removes 'rule' from 'ofproto' and frees up the associated memory.  Removes
+ * 'rule' from the classifier.  */
 void
 ofproto_rule_remove(struct rule *rule)
 {

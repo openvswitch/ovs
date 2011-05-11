@@ -209,9 +209,9 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         /* Otherwise queue it up for the periodic callback to drain out. */
         struct pinqueue *q;
 
-        /* We are called with a buffer obtained from dpif_recv() that has much
-         * more allocated space than actual content most of the time.  Since
-         * we're going to store the packet for some time, free up that
+        /* We might be called with a buffer obtained from dpif_recv() that has
+         * much more allocated space than actual content most of the time.
+         * Since we're going to store the packet for some time, free up that
          * otherwise wasted space. */
         ofpbuf_trim(packet);
 
