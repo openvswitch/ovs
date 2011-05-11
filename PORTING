@@ -7,6 +7,22 @@ are most likely to be necessary in porting OVS to Unix-like platforms.
 (Porting OVS to other kinds of platforms is likely to be more
 difficult.)
 
+Vocabulary
+----------
+
+For historical reasons, different words are used for essentially the
+same concept in different areas of the Open vSwitch source tree.  Here
+is a concordance, indexed by the area of the source tree:
+
+        datapath/       vport           ---
+        vswitchd/       iface           port
+        ofproto/        port            bundle
+        lib/bond.c      slave           bond
+        lib/lacp.c      slave           lacp
+        lib/netdev.c    netdev          ---
+        database        Interface       Port
+
+
 Open vSwitch Architectural Overview
 -----------------------------------
 

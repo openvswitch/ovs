@@ -115,7 +115,7 @@ main(int argc, char *argv[])
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
-    error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
+    error = ofproto_create(s.dp_name, s.dp_type, &ofproto);
     if (error) {
         VLOG_FATAL("could not initialize OpenFlow switch (%s)",
                    strerror(error));

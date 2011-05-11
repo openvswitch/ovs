@@ -25,6 +25,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "autopath.h"
+#include "bitmap.h"
+#include "bond.h"
 #include "byte-order.h"
 #include "cfm.h"
 #include "classifier.h"
@@ -35,7 +37,9 @@
 #include "fail-open.h"
 #include "hash.h"
 #include "hmap.h"
+#include "hmapx.h"
 #include "in-band.h"
+#include "lacp.h"
 #include "mac-learning.h"
 #include "multipath.h"
 #include "netdev.h"
@@ -65,6 +69,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "vconn.h"
+#include "vlan-bitmap.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
@@ -99,13 +104,67 @@ COVERAGE_DEFINE(ofproto_update_port);
 
 struct rule;
 
+#define MAX_MIRRORS 32
+typedef uint32_t mirror_mask_t;
+#define MIRROR_MASK_C(X) UINT32_C(X)
+BUILD_ASSERT_DECL(sizeof(mirror_mask_t) * CHAR_BIT >= MAX_MIRRORS);
+struct ofmirror {
+    struct ofproto *ofproto;    /* Owning ofproto. */
+    size_t idx;                 /* In ofproto's "mirrors" array. */
+    void *aux;                  /* Key supplied by ofproto's client. */
+    char *name;                 /* Identifier for log messages. */
+
+    /* Selection criteria. */
+    struct hmapx srcs;          /* Contains "struct ofbundle *"s. */
+    struct hmapx dsts;          /* Contains "struct ofbundle *"s. */
+    unsigned long *vlans;       /* Bitmap of chosen VLANs, NULL selects all. */
+
+    /* Output (mutually exclusive). */
+    struct ofbundle *out;       /* Output port or NULL. */
+    int out_vlan;               /* Output VLAN or -1. */
+};
+
+static void ofproto_mirror_destroy(struct ofmirror *);
+
+/* A group of one or more OpenFlow ports. */
+#define OFBUNDLE_FLOOD ((struct ofbundle *) 1)
+struct ofbundle {
+    struct ofproto *ofproto;    /* Owning ofproto. */
+    struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
+    void *aux;                  /* Key supplied by ofproto's client. */
+    char *name;                 /* Identifier for log messages. */
+
+    /* Configuration. */
+    struct list ports;          /* Contains "struct ofport"s. */
+    int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
+    unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
+                                 * NULL if all VLANs are trunked. */
+    struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
+    struct bond *bond;          /* Bonding setup if more than one port,
+                                 * otherwise NULL. */
+
+    /* Status. */
+    bool floodable;             /* True if no port has OFPPC_NO_FLOOD set. */
+
+    /* Port mirroring info. */
+    mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
+    mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
+    mirror_mask_t mirror_out;   /* Mirrors that output to this bundle. */
+};
+
+/* An OpenFlow port. */
 struct ofport {
     struct ofproto *ofproto;    /* Owning ofproto. */
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
     struct ofp_phy_port opp;
     uint16_t odp_port;
+
+    /* Bridging. */
+    struct ofbundle *bundle;    /* Bundle that contains this port, if any. */
+    struct list bundle_node;    /* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
+    tag_type tag;               /* Tag associated with this port. */
 };
 
 static void ofport_free(struct ofport *);
@@ -251,7 +310,7 @@ struct facet {
                                   * be reassessed for every packet. */
     size_t actions_len;          /* Number of bytes in actions[]. */
     struct nlattr *actions;      /* Datapath actions. */
-    tag_type tags;               /* Tags (set only by hooks). */
+    tag_type tags;               /* Tags. */
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
 };
 
@@ -297,9 +356,13 @@ struct ofproto {
     struct shash port_by_name;
     uint32_t max_ports;
 
-    /* Configuration. */
+    /* Bridging. */
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
+    struct hmap bundles;        /* Contains "struct ofbundle"s. */
+    struct mac_learning *ml;
+    struct ofmirror *mirrors[MAX_MIRRORS];
+    bool has_bonded_bundles;
 
     /* Flow table. */
     struct classifier cls;
@@ -312,21 +375,12 @@ struct ofproto {
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
-
-    /* Hooks for ovs-vswitchd. */
-    const struct ofhooks *ofhooks;
-    void *aux;
-
-    /* Used by default ofhooks. */
-    struct mac_learning *ml;
 };
 
 /* Map from dpif name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-static const struct ofhooks default_ofhooks;
 
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
@@ -346,17 +400,24 @@ static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
+static void update_learning_table(struct ofproto *,
+                                  const struct flow *, int vlan,
+                                  struct ofbundle *);
+static bool is_admissible(struct ofproto *, const struct flow *,
+                          bool have_packet, tag_type *, int *vlanp,
+                          struct ofbundle **in_bundlep);
+
 static void ofproto_unixctl_init(void);
 
 int
 ofproto_create(const char *datapath, const char *datapath_type,
-               const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
     char local_name[IF_NAMESIZE];
     struct ofproto *p;
     struct dpif *dpif;
     int error;
+    int i;
 
     *ofprotop = NULL;
 
@@ -408,9 +469,15 @@ ofproto_create(const char *datapath, const char *datapath_type,
     shash_init(&p->port_by_name);
     p->max_ports = dpif_get_max_ports(dpif);
 
-    /* Initialize submodules. */
+    /* Initialize bridging. */
     p->netflow = NULL;
     p->sflow = NULL;
+    hmap_init(&p->bundles);
+    p->ml = mac_learning_create();
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        p->mirrors[i] = NULL;
+    }
+    p->has_bonded_bundles = false;
 
     /* Initialize flow table. */
     classifier_init(&p->cls);
@@ -420,17 +487,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     hmap_init(&p->facets);
     p->need_revalidate = false;
     tag_set_init(&p->revalidate_set);
-
-    /* Initialize hooks. */
-    if (ofhooks) {
-        p->ofhooks = ofhooks;
-        p->aux = aux;
-        p->ml = NULL;
-    } else {
-        p->ofhooks = &default_ofhooks;
-        p->aux = p;
-        p->ml = mac_learning_create();
-    }
 
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
@@ -657,19 +713,568 @@ ofproto_port_get_cfm(struct ofproto *ofproto, uint32_t port_no)
     struct ofport *ofport = get_port(ofproto, port_no);
     return ofport ? ofport->cfm : NULL;
 }
+
+/* Checks the status of LACP negotiation for 'ofp_port' within ofproto.
+ * Returns 1 if LACP partner information for 'ofp_port' is up-to-date,
+ * 0 if LACP partner information is not current (generally indicating a
+ * connectivity problem), or -1 if LACP is not enabled on 'ofp_port'. */
+int
+ofproto_port_is_lacp_current(struct ofproto *ofproto, uint16_t ofp_port)
+{
+    struct ofport *ofport = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
+    return (ofport && ofport->bundle && ofport->bundle->lacp
+            ? lacp_slave_is_current(ofport->bundle->lacp, ofport)
+            : -1);
+}
 
-uint64_t
-ofproto_get_datapath_id(const struct ofproto *ofproto)
+/* Bundles. */
+
+/* Expires all MAC learning entries associated with 'port' and forces ofproto
+ * to revalidate every flow. */
+static void
+ofproto_bundle_flush_macs(struct ofbundle *bundle)
 {
-    return ofproto->datapath_id;
+    struct ofproto *ofproto = bundle->ofproto;
+    struct mac_learning *ml = ofproto->ml;
+    struct mac_entry *mac, *next_mac;
+
+    ofproto->need_revalidate = true;
+    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+        if (mac->port.p == bundle) {
+            mac_learning_expire(ml, mac);
+        }
+    }
 }
 
-enum ofproto_fail_mode
-ofproto_get_fail_mode(const struct ofproto *p)
+static struct ofbundle *
+ofproto_bundle_lookup(const struct ofproto *ofproto, void *aux)
 {
-    return connmgr_get_fail_mode(p->connmgr);
+    struct ofbundle *bundle;
+
+    HMAP_FOR_EACH_IN_BUCKET (bundle, hmap_node, hash_pointer(aux, 0),
+                             &ofproto->bundles) {
+        if (bundle->aux == aux) {
+            return bundle;
+        }
+    }
+    return NULL;
 }
 
+/* Looks up each of the 'n_auxes' pointers in 'auxes' as bundles and adds the
+ * ones that are found to 'bundles'. */
+static void
+ofproto_bundle_lookup_multiple(struct ofproto *ofproto,
+                               void **auxes, size_t n_auxes,
+                               struct hmapx *bundles)
+{
+    size_t i;
+
+    hmapx_init(bundles);
+    for (i = 0; i < n_auxes; i++) {
+        struct ofbundle *bundle = ofproto_bundle_lookup(ofproto, auxes[i]);
+        if (bundle) {
+            hmapx_add(bundles, bundle);
+        }
+    }
+}
+
+static void
+ofproto_bundle_del_port(struct ofport *port)
+{
+    struct ofbundle *bundle = port->bundle;
+
+    list_remove(&port->bundle_node);
+    port->bundle = NULL;
+
+    if (bundle->lacp) {
+        lacp_slave_unregister(bundle->lacp, port);
+    }
+    if (bundle->bond) {
+        bond_slave_unregister(bundle->bond, port);
+    }
+
+    bundle->floodable = true;
+    LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
+        if (port->opp.config & htonl(OFPPC_NO_FLOOD)) {
+            bundle->floodable = false;
+        }
+    }
+}
+
+static bool
+ofproto_bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
+                        struct lacp_slave_settings *lacp)
+{
+    struct ofport *port;
+
+    port = get_port(bundle->ofproto, ofp_port_to_odp_port(ofp_port));
+    if (!port) {
+        return false;
+    }
+
+    if (port->bundle != bundle) {
+        if (port->bundle) {
+            ofproto_bundle_del_port(port);
+        }
+
+        port->bundle = bundle;
+        list_push_back(&bundle->ports, &port->bundle_node);
+        if (port->opp.config & htonl(OFPPC_NO_FLOOD)) {
+            bundle->floodable = false;
+        }
+    }
+
+    if (lacp) {
+        lacp_slave_register(bundle->lacp, port, lacp);
+    }
+
+    return true;
+}
+
+void
+ofproto_bundle_register(struct ofproto *ofproto, void *aux,
+                        const struct ofproto_bundle_settings *s)
+{
+    bool need_flush = false;
+    const unsigned long *trunks;
+    struct ofbundle *bundle;
+    struct ofport *port;
+    size_t i;
+    bool ok;
+
+    assert(s->n_slaves == 1 || s->bond != NULL);
+    assert((s->lacp != NULL) == (s->lacp_slaves != NULL));
+
+    bundle = ofproto_bundle_lookup(ofproto, aux);
+    if (!bundle) {
+        bundle = xmalloc(sizeof *bundle);
+
+        bundle->ofproto = ofproto;
+        hmap_insert(&ofproto->bundles, &bundle->hmap_node,
+                    hash_pointer(aux, 0));
+        bundle->aux = aux;
+        bundle->name = NULL;
+
+        list_init(&bundle->ports);
+        bundle->vlan = -1;
+        bundle->trunks = NULL;
+        bundle->bond = NULL;
+        bundle->lacp = NULL;
+
+        bundle->floodable = true;
+
+        bundle->src_mirrors = 0;
+        bundle->dst_mirrors = 0;
+        bundle->mirror_out = 0;
+    }
+
+    if (!bundle->name || strcmp(s->name, bundle->name)) {
+        free(bundle->name);
+        bundle->name = xstrdup(s->name);
+    }
+
+    /* LACP. */
+    if (s->lacp) {
+        if (!bundle->lacp) {
+            bundle->lacp = lacp_create();
+        }
+        lacp_configure(bundle->lacp, s->lacp);
+    } else {
+        lacp_destroy(bundle->lacp);
+        bundle->lacp = NULL;
+    }
+
+    /* Update set of ports. */
+    ok = true;
+    for (i = 0; i < s->n_slaves; i++) {
+        if (!ofproto_bundle_add_port(bundle, s->slaves[i],
+                                     s->lacp ? &s->lacp_slaves[i] : NULL)) {
+            ok = false;
+        }
+    }
+    if (!ok || list_size(&bundle->ports) != s->n_slaves) {
+        struct ofport *next_port;
+
+        LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+            for (i = 0; i < s->n_slaves; i++) {
+                if (s->slaves[i] == odp_port_to_ofp_port(port->odp_port)) {
+                    goto found;
+                }
+            }
+
+            ofproto_bundle_del_port(port);
+        found: ;
+        }
+    }
+    assert(list_size(&bundle->ports) <= s->n_slaves);
+
+    if (list_is_empty(&bundle->ports)) {
+        ofproto_bundle_unregister(ofproto, aux);
+        return;
+    }
+
+    /* Set VLAN tag. */
+    if (s->vlan != bundle->vlan) {
+        bundle->vlan = s->vlan;
+        need_flush = true;
+    }
+
+    /* Get trunked VLANs. */
+    trunks = s->vlan == -1 ? NULL : s->trunks;
+    if (!vlan_bitmap_equal(trunks, bundle->trunks)) {
+        free(bundle->trunks);
+        bundle->trunks = vlan_bitmap_clone(trunks);
+        need_flush = true;
+    }
+
+    /* Bonding. */
+    if (!list_is_short(&bundle->ports)) {
+        bundle->ofproto->has_bonded_bundles = true;
+        if (bundle->bond) {
+            if (bond_reconfigure(bundle->bond, s->bond)) {
+                ofproto->need_revalidate = true;
+            }
+        } else {
+            bundle->bond = bond_create(s->bond);
+        }
+
+        LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
+            uint16_t stable_id = (bundle->lacp
+                                  ? lacp_slave_get_port_id(bundle->lacp, port)
+                                  : port->odp_port);
+            bond_slave_register(bundle->bond, port, stable_id, port->netdev);
+        }
+    } else {
+        bond_destroy(bundle->bond);
+        bundle->bond = NULL;
+    }
+
+    /* If we changed something that would affect MAC learning, un-learn
+     * everything on this port and force flow revalidation. */
+    if (need_flush) {
+        ofproto_bundle_flush_macs(bundle);
+    }
+}
+
+static void
+ofproto_bundle_destroy(struct ofbundle *bundle)
+{
+    struct ofproto *ofproto;
+    struct ofport *port, *next_port;
+    int i;
+
+    if (!bundle) {
+        return;
+    }
+
+    ofproto = bundle->ofproto;
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        struct ofmirror *m = ofproto->mirrors[i];
+        if (m) {
+            if (m->out == bundle) {
+                ofproto_mirror_destroy(m);
+            } else if (hmapx_find_and_delete(&m->srcs, bundle)
+                       || hmapx_find_and_delete(&m->dsts, bundle)) {
+                ofproto->need_revalidate = true;
+            }
+        }
+    }
+
+    LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+        ofproto_bundle_del_port(port);
+    }
+
+    ofproto_bundle_flush_macs(bundle);
+    hmap_remove(&ofproto->bundles, &bundle->hmap_node);
+    free(bundle->name);
+    free(bundle->trunks);
+    bond_destroy(bundle->bond);
+    lacp_destroy(bundle->lacp);
+    free(bundle);
+}
+
+void
+ofproto_bundle_unregister(struct ofproto *ofproto, void *aux)
+{
+    ofproto_bundle_destroy(ofproto_bundle_lookup(ofproto, aux));
+}
+
+static void
+send_pdu_cb(void *port_, const struct lacp_pdu *pdu)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
+    struct ofport *port = port_;
+    uint8_t ea[ETH_ADDR_LEN];
+    int error;
+
+    error = netdev_get_etheraddr(port->netdev, ea);
+    if (!error) {
+        struct lacp_pdu *packet_pdu;
+        struct ofpbuf packet;
+
+        ofpbuf_init(&packet, 0);
+        packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
+                                 sizeof *packet_pdu);
+        *packet_pdu = *pdu;
+        error = netdev_send(port->netdev, &packet);
+        if (error) {
+            VLOG_WARN_RL(&rl, "port %s: sending LACP PDU on iface %s failed "
+                         "(%s)", port->bundle->name,
+                         netdev_get_name(port->netdev), strerror(error));
+        }
+        ofpbuf_uninit(&packet);
+    } else {
+        VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
+                    "%s (%s)", port->bundle->name,
+                    netdev_get_name(port->netdev), strerror(error));
+    }
+}
+
+static void
+ofproto_bundle_send_learning_packets(struct ofbundle *bundle)
+{
+    struct ofproto *ofproto = bundle->ofproto;
+    int error, n_packets, n_errors;
+    struct mac_entry *e;
+
+    error = n_packets = n_errors = 0;
+    LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
+        if (e->port.p != bundle) {
+            int ret = bond_send_learning_packet(bundle->bond, e->mac, e->vlan);
+            if (ret) {
+                error = ret;
+                n_errors++;
+            }
+            n_packets++;
+        }
+    }
+
+    if (n_errors) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
+                     "packets, last error was: %s",
+                     bundle->name, n_errors, n_packets, strerror(error));
+    } else {
+        VLOG_DBG("bond %s: sent %d gratuitous learning packets",
+                 bundle->name, n_packets);
+    }
+}
+
+static void
+ofproto_bundle_run(struct ofbundle *bundle)
+{
+    if (bundle->lacp) {
+        lacp_run(bundle->lacp, send_pdu_cb);
+    }
+    if (bundle->bond) {
+        struct ofport *port;
+
+        LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
+            bool may_enable = lacp_slave_may_enable(bundle->lacp, port);
+            bond_slave_set_lacp_may_enable(bundle->bond, port, may_enable);
+        }
+
+        bond_run(bundle->bond, &bundle->ofproto->revalidate_set,
+                 lacp_negotiated(bundle->lacp));
+        if (bond_should_send_learning_packets(bundle->bond)) {
+            ofproto_bundle_send_learning_packets(bundle);
+        }
+    }
+}
+
+static void
+ofproto_bundle_wait(struct ofbundle *bundle)
+{
+    if (bundle->lacp) {
+        lacp_wait(bundle->lacp);
+    }
+    if (bundle->bond) {
+        bond_wait(bundle->bond);
+    }
+}
+
+static int
+ofproto_mirror_scan(struct ofproto *ofproto)
+{
+    int idx;
+
+    for (idx = 0; idx < MAX_MIRRORS; idx++) {
+        if (!ofproto->mirrors[idx]) {
+            return idx;
+        }
+    }
+    return -1;
+}
+
+static struct ofmirror *
+ofproto_mirror_lookup(struct ofproto *ofproto, void *aux)
+{
+    int i;
+
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        struct ofmirror *mirror = ofproto->mirrors[i];
+        if (mirror && mirror->aux == aux) {
+            return mirror;
+        }
+    }
+
+    return NULL;
+}
+
+void
+ofproto_mirror_register(struct ofproto *ofproto, void *aux,
+                        const struct ofproto_mirror_settings *s)
+{
+    mirror_mask_t mirror_bit;
+    struct ofbundle *bundle;
+    struct ofmirror *mirror;
+    struct ofbundle *out;
+    struct hmapx srcs;          /* Contains "struct ofbundle *"s. */
+    struct hmapx dsts;          /* Contains "struct ofbundle *"s. */
+    int out_vlan;
+
+    mirror = ofproto_mirror_lookup(ofproto, aux);
+    if (!mirror) {
+        int idx;
+
+        idx = ofproto_mirror_scan(ofproto);
+        if (idx < 0) {
+            VLOG_WARN("bridge %s: maximum of %d port mirrors reached, "
+                      "cannot create %s",
+                      ofproto->name, MAX_MIRRORS, s->name);
+            return;
+        }
+
+        mirror = ofproto->mirrors[idx] = xzalloc(sizeof *mirror);
+        mirror->ofproto = ofproto;
+        mirror->idx = idx;
+        mirror->out_vlan = -1;
+        mirror->name = NULL;
+    }
+
+    if (!mirror->name || strcmp(s->name, mirror->name)) {
+        free(mirror->name);
+        mirror->name = xstrdup(s->name);
+    }
+
+    /* Get the new configuration. */
+    if (s->out_bundle) {
+        out = ofproto_bundle_lookup(ofproto, s->out_bundle);
+        if (!out) {
+            ofproto_mirror_destroy(mirror);
+            return;
+        }
+        out_vlan = -1;
+    } else {
+        out = NULL;
+        out_vlan = s->out_vlan;
+    }
+    ofproto_bundle_lookup_multiple(ofproto, s->srcs, s->n_srcs, &srcs);
+    ofproto_bundle_lookup_multiple(ofproto, s->dsts, s->n_dsts, &dsts);
+
+    /* If the configuration has not changed, do nothing. */
+    if (hmapx_equals(&srcs, &mirror->srcs)
+        && hmapx_equals(&dsts, &mirror->dsts)
+        && vlan_bitmap_equal(mirror->vlans, s->src_vlans)
+        && mirror->out == out
+        && mirror->out_vlan == out_vlan)
+    {
+        hmapx_destroy(&srcs);
+        hmapx_destroy(&dsts);
+        return;
+    }
+
+    hmapx_swap(&srcs, &mirror->srcs);
+    hmapx_destroy(&srcs);
+
+    hmapx_swap(&dsts, &mirror->dsts);
+    hmapx_destroy(&dsts);
+
+    free(mirror->vlans);
+    mirror->vlans = vlan_bitmap_clone(s->src_vlans);
+
+    mirror->out = out;
+    mirror->out_vlan = out_vlan;
+
+    /* Update bundles. */
+    mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
+    HMAP_FOR_EACH (bundle, hmap_node, &mirror->ofproto->bundles) {
+        if (hmapx_contains(&mirror->srcs, bundle)) {
+            bundle->src_mirrors |= mirror_bit;
+        } else {
+            bundle->src_mirrors &= ~mirror_bit;
+        }
+
+        if (hmapx_contains(&mirror->dsts, bundle)) {
+            bundle->dst_mirrors |= mirror_bit;
+        } else {
+            bundle->dst_mirrors &= ~mirror_bit;
+        }
+
+        if (mirror->out == bundle) {
+            bundle->mirror_out |= mirror_bit;
+        } else {
+            bundle->mirror_out &= ~mirror_bit;
+        }
+    }
+
+    ofproto->need_revalidate = true;
+    mac_learning_flush(ofproto->ml);
+}
+
+static void
+ofproto_mirror_destroy(struct ofmirror *mirror)
+{
+    mirror_mask_t mirror_bit;
+    struct ofbundle *bundle;
+    struct ofproto *ofproto;
+
+    if (!mirror) {
+        return;
+    }
+
+    ofproto = mirror->ofproto;
+    ofproto->need_revalidate = true;
+    mac_learning_flush(ofproto->ml);
+
+    mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
+    HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+        bundle->src_mirrors &= ~mirror_bit;
+        bundle->dst_mirrors &= ~mirror_bit;
+        bundle->mirror_out &= ~mirror_bit;
+    }
+
+    hmapx_destroy(&mirror->srcs);
+    hmapx_destroy(&mirror->dsts);
+    free(mirror->vlans);
+
+    ofproto->mirrors[mirror->idx] = NULL;
+    free(mirror->name);
+    free(mirror);
+}
+
+void
+ofproto_mirror_unregister(struct ofproto *ofproto, void *aux)
+{
+    ofproto_mirror_destroy(ofproto_mirror_lookup(ofproto, aux));
+}
+
+void
+ofproto_set_flood_vlans(struct ofproto *ofproto, unsigned long *flood_vlans)
+{
+    if (mac_learning_set_flood_vlans(ofproto->ml, flood_vlans)) {
+        ofproto->need_revalidate = true;
+        mac_learning_flush(ofproto->ml);
+    }
+}
+
+bool
+ofproto_is_mirror_output_bundle(struct ofproto *ofproto, void *aux)
+{
+    struct ofbundle *bundle = ofproto_bundle_lookup(ofproto, aux);
+    return bundle && bundle->mirror_out != 0;
+}
+
 bool
 ofproto_has_snoops(const struct ofproto *ofproto)
 {
@@ -682,10 +1287,11 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
     connmgr_get_snoops(ofproto->connmgr, snoops);
 }
 
-static void
-ofproto_destroy__(struct ofproto *p, bool delete)
+void
+ofproto_destroy(struct ofproto *p)
 {
     struct ofport *ofport, *next_ofport;
+    int i;
 
     if (!p) {
         return;
@@ -693,18 +1299,14 @@ ofproto_destroy__(struct ofproto *p, bool delete)
 
     hmap_remove(&all_ofprotos, &p->hmap_node);
 
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        ofproto_mirror_destroy(p->mirrors[i]);
+    }
     ofproto_flush_flows__(p);
     connmgr_destroy(p->connmgr);
     classifier_destroy(&p->cls);
     hmap_destroy(&p->facets);
 
-    if (delete) {
-        int error = dpif_delete(p->dpif);
-        if (error && error != ENOENT) {
-            VLOG_ERR("bridge %s: failed to destroy (%s)",
-                     p->name, strerror(error));
-        }
-    }
     dpif_close(p->dpif);
 
     netdev_monitor_destroy(p->netdev_monitor);
@@ -717,8 +1319,6 @@ ofproto_destroy__(struct ofproto *p, bool delete)
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
 
-    mac_learning_destroy(p->ml);
-
     free(p->mfr_desc);
     free(p->hw_desc);
     free(p->sw_desc);
@@ -729,28 +1329,6 @@ ofproto_destroy__(struct ofproto *p, bool delete)
 
     free(p->name);
     free(p);
-}
-
-void
-ofproto_destroy(struct ofproto *p)
-{
-    ofproto_destroy__(p, false);
-}
-
-void
-ofproto_destroy_and_delete(struct ofproto *p)
-{
-    ofproto_destroy__(p, true);
-}
-
-int
-ofproto_run(struct ofproto *p)
-{
-    int error = ofproto_run1(p);
-    if (!error) {
-        error = ofproto_run2(p, false);
-    }
-    return error;
 }
 
 static void
@@ -765,8 +1343,9 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
 }
 
 int
-ofproto_run1(struct ofproto *p)
+ofproto_run(struct ofproto *p)
 {
+    struct ofbundle *bundle;
     struct ofport *ofport;
     char *devname;
     int error;
@@ -804,6 +1383,10 @@ ofproto_run1(struct ofproto *p)
         ofport_run(ofport);
     }
 
+    HMAP_FOR_EACH (bundle, hmap_node, &p->bundles) {
+        ofproto_bundle_run(bundle);
+    }
+
     connmgr_run(p->connmgr, handle_openflow);
 
     if (timer_expired(&p->next_expiration)) {
@@ -819,25 +1402,15 @@ ofproto_run1(struct ofproto *p)
         ofproto_sflow_run(p->sflow);
     }
 
-    return 0;
-}
-
-int
-ofproto_run2(struct ofproto *p, bool revalidate_all)
-{
-    /* Figure out what we need to revalidate now, if anything. */
-    struct tag_set revalidate_set = p->revalidate_set;
-    if (p->need_revalidate) {
-        revalidate_all = true;
-    }
-
-    /* Clear the revalidation flags. */
-    tag_set_init(&p->revalidate_set);
-    p->need_revalidate = false;
-
     /* Now revalidate if there's anything to do. */
-    if (revalidate_all || !tag_set_is_empty(&revalidate_set)) {
+    if (p->need_revalidate || !tag_set_is_empty(&p->revalidate_set)) {
+        struct tag_set revalidate_set = p->revalidate_set;
+        bool revalidate_all = p->need_revalidate;
         struct facet *facet, *next;
+
+        /* Clear the revalidation flags. */
+        tag_set_init(&p->revalidate_set);
+        p->need_revalidate = false;
 
         HMAP_FOR_EACH_SAFE (facet, next, hmap_node, &p->facets) {
             if (revalidate_all
@@ -853,10 +1426,14 @@ ofproto_run2(struct ofproto *p, bool revalidate_all)
 void
 ofproto_wait(struct ofproto *p)
 {
+    struct ofbundle *bundle;
     struct ofport *ofport;
 
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         ofport_wait(ofport);
+    }
+    HMAP_FOR_EACH (bundle, hmap_node, &p->bundles) {
+        ofproto_bundle_wait(bundle);
     }
     dpif_recv_wait(p->dpif);
     dpif_port_poll_wait(p->dpif);
@@ -875,18 +1452,6 @@ ofproto_wait(struct ofproto *p)
         timer_wait(&p->next_expiration);
     }
     connmgr_wait(p->connmgr);
-}
-
-void
-ofproto_revalidate(struct ofproto *ofproto, tag_type tag)
-{
-    tag_set_add(&ofproto->revalidate_set, tag);
-}
-
-struct tag_set *
-ofproto_get_revalidate_set(struct ofproto *ofproto)
-{
-    return &ofproto->revalidate_set;
 }
 
 bool
@@ -1079,15 +1644,6 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
         free(devname);
     }
     return error;
-}
-
-/* Checks if 'ofproto' thinks 'odp_port' should be included in floods.  Returns
- * true if 'odp_port' exists and should be included, false otherwise. */
-bool
-ofproto_port_is_floodable(struct ofproto *ofproto, uint16_t odp_port)
-{
-    struct ofport *ofport = get_port(ofproto, odp_port);
-    return ofport && !(ofport->opp.config & htonl(OFPPC_NO_FLOOD));
 }
 
 /* Sends 'packet' out of port 'port_no' within 'p'.  If 'vlan_tci' is zero the
@@ -1301,7 +1857,9 @@ ofport_install(struct ofproto *p,
     ofport->netdev = netdev;
     ofport->opp = *opp;
     ofport->odp_port = ofp_port_to_odp_port(ntohs(opp->port_no));
+    ofport->bundle = NULL;
     ofport->cfm = NULL;
+    ofport->tag = tag_create_random();
 
     /* Add port to 'p'. */
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
@@ -1316,19 +1874,8 @@ ofport_install(struct ofproto *p,
 static void
 ofport_remove(struct ofport *ofport)
 {
-    struct ofproto *p = ofport->ofproto;
-
-    connmgr_send_port_status(p->connmgr, &ofport->opp, OFPPR_DELETE);
-
-    netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
-    hmap_remove(&p->ports, &ofport->hmap_node);
-    shash_delete(&p->port_by_name,
-                 shash_find(&p->port_by_name,
-                            netdev_get_name(ofport->netdev)));
-    if (p->sflow) {
-        ofproto_sflow_del_port(p->sflow, ofport->odp_port);
-    }
-
+    connmgr_send_port_status(ofport->ofproto->connmgr, &ofport->opp,
+                             OFPPR_DELETE);
     ofport_free(ofport);
 }
 
@@ -1352,6 +1899,10 @@ ofport_modified(struct ofport *port,
                 struct netdev *netdev, struct ofp_phy_port *opp)
 {
     struct ofproto *ofproto = port->ofproto;
+
+    if (port->bundle && port->bundle->bond) {
+        bond_slave_set_netdev(port->bundle->bond, port, netdev);
+    }
 
     memcpy(port->opp.hw_addr, opp->hw_addr, ETH_ADDR_LEN);
     port->opp.config = ((port->opp.config & ~htonl(OFPPC_PORT_DOWN))
@@ -1400,12 +1951,52 @@ ofport_wait(struct ofport *ofport)
 }
 
 static void
-ofport_free(struct ofport *ofport)
+ofport_unregister(struct ofport *port)
 {
-    if (ofport) {
-        cfm_destroy(ofport->cfm);
-        netdev_close(ofport->netdev);
-        free(ofport);
+    struct ofbundle *bundle = port->bundle;
+
+    if (bundle) {
+        ofproto_bundle_del_port(port);
+        if (list_is_empty(&bundle->ports)) {
+            ofproto_bundle_destroy(bundle);
+        } else if (list_is_short(&bundle->ports)) {
+            bond_destroy(bundle->bond);
+            bundle->bond = NULL;
+        }
+    }
+
+    cfm_destroy(port->cfm);
+    port->cfm = NULL;
+}
+
+void
+ofproto_port_unregister(struct ofproto *ofproto, uint32_t ofp_port)
+{
+    struct ofport *port = get_port(ofproto, ofp_port_to_odp_port(ofp_port));
+    if (port) {
+        ofport_unregister(port);
+    }
+}
+
+static void
+ofport_free(struct ofport *port)
+{
+    if (port) {
+        struct ofproto *ofproto = port->ofproto;
+        const char *name = netdev_get_name(port->netdev);
+
+        ofport_unregister(port);
+
+        netdev_monitor_remove(ofproto->netdev_monitor, port->netdev);
+        hmap_remove(&ofproto->ports, &port->hmap_node);
+        shash_delete(&ofproto->port_by_name,
+                     shash_find(&ofproto->port_by_name, name));
+        if (ofproto->sflow) {
+            ofproto_sflow_del_port(ofproto->sflow, port->odp_port);
+        }
+
+        netdev_close(port->netdev);
+        free(port);
     }
 }
 
@@ -1829,21 +2420,49 @@ facet_install(struct ofproto *p, struct facet *facet, bool zero_stats)
     }
 }
 
-/* Ensures that the bytes in 'facet', plus 'extra_bytes', have been passed up
- * to the accounting hook function in the ofhooks structure. */
 static void
 facet_account(struct ofproto *ofproto,
               struct facet *facet, uint64_t extra_bytes)
 {
-    uint64_t total_bytes = facet->byte_count + extra_bytes;
+    uint64_t total_bytes, n_bytes;
+    struct ofbundle *in_bundle;
+    const struct nlattr *a;
+    tag_type dummy = 0;
+    unsigned int left;
+    int vlan;
 
-    if (ofproto->ofhooks->account_flow_cb
-        && total_bytes > facet->accounted_bytes)
-    {
-        ofproto->ofhooks->account_flow_cb(
-            &facet->flow, facet->tags, facet->actions, facet->actions_len,
-            total_bytes - facet->accounted_bytes, ofproto->aux);
-        facet->accounted_bytes = total_bytes;
+    total_bytes = facet->byte_count + extra_bytes;
+    if (total_bytes <= facet->accounted_bytes) {
+        return;
+    }
+    n_bytes = total_bytes - facet->accounted_bytes;
+    facet->accounted_bytes = total_bytes;
+
+    /* Test that 'tags' is nonzero to ensure that only flows that include an
+     * OFPP_NORMAL action are used for learning and bond slave rebalancing.
+     * This works because OFPP_NORMAL always sets a nonzero tag value.
+     *
+     * Feed information from the active flows back into the learning table to
+     * ensure that table is always in sync with what is actually flowing
+     * through the datapath. */
+    if (!facet->tags
+        || !is_admissible(ofproto, &facet->flow, false, &dummy,
+                          &vlan, &in_bundle)) {
+        return;
+    }
+
+    update_learning_table(ofproto, &facet->flow, vlan, in_bundle);
+
+    if (!ofproto->has_bonded_bundles) {
+        return;
+    }
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, facet->actions, facet->actions_len) {
+        if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT) {
+            struct ofport *port = get_port(ofproto, nl_attr_get_u32(a));
+            if (port && port->bundle && port->bundle->bond) {
+                bond_account(port->bundle->bond, &facet->flow, vlan, n_bytes);
+            }
+        }
     }
 }
 
@@ -2037,6 +2656,507 @@ facet_revalidate(struct ofproto *ofproto, struct facet *facet)
     }
 
     ofpbuf_delete(odp_actions);
+
+    return true;
+}
+
+/* Bridge packet processing functions. */
+
+struct dst {
+    struct ofport *port;
+    uint16_t vlan;
+};
+
+struct dst_set {
+    struct dst builtin[32];
+    struct dst *dsts;
+    size_t n, allocated;
+};
+
+static void dst_set_init(struct dst_set *);
+static void dst_set_add(struct dst_set *, const struct dst *);
+static void dst_set_free(struct dst_set *);
+
+static struct ofport *ofbundle_get_a_port(const struct ofbundle *);
+
+static bool
+set_dst(struct action_xlate_ctx *ctx, struct dst *dst,
+        const struct ofbundle *in_bundle, const struct ofbundle *out_bundle)
+{
+    dst->vlan = (out_bundle->vlan >= 0 ? OFP_VLAN_NONE
+                 : in_bundle->vlan >= 0 ? in_bundle->vlan
+                 : ctx->flow.vlan_tci == 0 ? OFP_VLAN_NONE
+                 : vlan_tci_to_vid(ctx->flow.vlan_tci));
+
+    dst->port = (!out_bundle->bond
+                 ? ofbundle_get_a_port(out_bundle)
+                 : bond_choose_output_slave(out_bundle->bond, &ctx->flow,
+                                            dst->vlan, &ctx->tags));
+
+    return dst->port != NULL;
+}
+
+static int
+mirror_mask_ffs(mirror_mask_t mask)
+{
+    BUILD_ASSERT_DECL(sizeof(unsigned int) >= sizeof(mask));
+    return ffs(mask);
+}
+
+static void
+dst_set_init(struct dst_set *set)
+{
+    set->dsts = set->builtin;
+    set->n = 0;
+    set->allocated = ARRAY_SIZE(set->builtin);
+}
+
+static void
+dst_set_add(struct dst_set *set, const struct dst *dst)
+{
+    if (set->n >= set->allocated) {
+        size_t new_allocated;
+        struct dst *new_dsts;
+
+        new_allocated = set->allocated * 2;
+        new_dsts = xmalloc(new_allocated * sizeof *new_dsts);
+        memcpy(new_dsts, set->dsts, set->n * sizeof *new_dsts);
+
+        dst_set_free(set);
+
+        set->dsts = new_dsts;
+        set->allocated = new_allocated;
+    }
+    set->dsts[set->n++] = *dst;
+}
+
+static void
+dst_set_free(struct dst_set *set)
+{
+    if (set->dsts != set->builtin) {
+        free(set->dsts);
+    }
+}
+
+static bool
+dst_is_duplicate(const struct dst_set *set, const struct dst *test)
+{
+    size_t i;
+    for (i = 0; i < set->n; i++) {
+        if (set->dsts[i].vlan == test->vlan
+            && set->dsts[i].port == test->port) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool
+ofbundle_trunks_vlan(const struct ofbundle *bundle, uint16_t vlan)
+{
+    return bundle->vlan < 0 && vlan_bitmap_contains(bundle->trunks, vlan);
+}
+
+static bool
+ofbundle_includes_vlan(const struct ofbundle *bundle, uint16_t vlan)
+{
+    return vlan == bundle->vlan || ofbundle_trunks_vlan(bundle, vlan);
+}
+
+/* Returns an arbitrary interface within 'bundle'. */
+static struct ofport *
+ofbundle_get_a_port(const struct ofbundle *bundle)
+{
+    return CONTAINER_OF(list_front(&bundle->ports),
+                        struct ofport, bundle_node);
+}
+
+static void
+compose_dsts(struct action_xlate_ctx *ctx, uint16_t vlan,
+             const struct ofbundle *in_bundle,
+             const struct ofbundle *out_bundle, struct dst_set *set)
+{
+    struct dst dst;
+
+    if (out_bundle == OFBUNDLE_FLOOD) {
+        struct ofbundle *bundle;
+
+        HMAP_FOR_EACH (bundle, hmap_node, &ctx->ofproto->bundles) {
+            if (bundle != in_bundle
+                && ofbundle_includes_vlan(bundle, vlan)
+                && bundle->floodable
+                && !bundle->mirror_out
+                && set_dst(ctx, &dst, in_bundle, bundle)) {
+                dst_set_add(set, &dst);
+            }
+        }
+        ctx->nf_output_iface = NF_OUT_FLOOD;
+    } else if (out_bundle && set_dst(ctx, &dst, in_bundle, out_bundle)) {
+        dst_set_add(set, &dst);
+        ctx->nf_output_iface = dst.port->odp_port;
+    }
+}
+
+static bool
+vlan_is_mirrored(const struct ofmirror *m, int vlan)
+{
+    return vlan_bitmap_contains(m->vlans, vlan);
+}
+
+static void
+compose_mirror_dsts(struct action_xlate_ctx *ctx,
+                    uint16_t vlan, const struct ofbundle *in_bundle,
+                    struct dst_set *set)
+{
+    struct ofproto *ofproto = ctx->ofproto;
+    mirror_mask_t mirrors;
+    int flow_vlan;
+    size_t i;
+
+    mirrors = in_bundle->src_mirrors;
+    for (i = 0; i < set->n; i++) {
+        mirrors |= set->dsts[i].port->bundle->dst_mirrors;
+    }
+
+    if (!mirrors) {
+        return;
+    }
+
+    flow_vlan = vlan_tci_to_vid(ctx->flow.vlan_tci);
+    if (flow_vlan == 0) {
+        flow_vlan = OFP_VLAN_NONE;
+    }
+
+    while (mirrors) {
+        struct ofmirror *m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
+        if (vlan_is_mirrored(m, vlan)) {
+            struct dst dst;
+
+            if (m->out) {
+                if (set_dst(ctx, &dst, in_bundle, m->out)
+                    && !dst_is_duplicate(set, &dst)) {
+                    dst_set_add(set, &dst);
+                }
+            } else {
+                struct ofbundle *bundle;
+
+                HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+                    if (ofbundle_includes_vlan(bundle, m->out_vlan)
+                        && set_dst(ctx, &dst, in_bundle, bundle))
+                    {
+                        if (bundle->vlan < 0) {
+                            dst.vlan = m->out_vlan;
+                        }
+                        if (dst_is_duplicate(set, &dst)) {
+                            continue;
+                        }
+
+                        /* Use the vlan tag on the original flow instead of
+                         * the one passed in the vlan parameter.  This ensures
+                         * that we compare the vlan from before any implicit
+                         * tagging tags place. This is necessary because
+                         * dst->vlan is the final vlan, after removing implicit
+                         * tags. */
+                        if (bundle == in_bundle && dst.vlan == flow_vlan) {
+                            /* Don't send out input port on same VLAN. */
+                            continue;
+                        }
+                        dst_set_add(set, &dst);
+                    }
+                }
+            }
+        }
+        mirrors &= mirrors - 1;
+    }
+}
+
+static void
+compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
+                const struct ofbundle *in_bundle,
+                const struct ofbundle *out_bundle)
+{
+    uint16_t initial_vlan, cur_vlan;
+    const struct dst *dst;
+    struct dst_set set;
+
+    dst_set_init(&set);
+    compose_dsts(ctx, vlan, in_bundle, out_bundle, &set);
+    compose_mirror_dsts(ctx, vlan, in_bundle, &set);
+
+    /* Output all the packets we can without having to change the VLAN. */
+    initial_vlan = vlan_tci_to_vid(ctx->flow.vlan_tci);
+    if (initial_vlan == 0) {
+        initial_vlan = OFP_VLAN_NONE;
+    }
+    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
+        if (dst->vlan != initial_vlan) {
+            continue;
+        }
+        nl_msg_put_u32(ctx->odp_actions,
+                       ODP_ACTION_ATTR_OUTPUT, dst->port->odp_port);
+    }
+
+    /* Then output the rest. */
+    cur_vlan = initial_vlan;
+    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
+        if (dst->vlan == initial_vlan) {
+            continue;
+        }
+        if (dst->vlan != cur_vlan) {
+            if (dst->vlan == OFP_VLAN_NONE) {
+                nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
+            } else {
+                ovs_be16 tci;
+                tci = htons(dst->vlan & VLAN_VID_MASK);
+                tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
+                nl_msg_put_be16(ctx->odp_actions,
+                                ODP_ACTION_ATTR_SET_DL_TCI, tci);
+            }
+            cur_vlan = dst->vlan;
+        }
+        nl_msg_put_u32(ctx->odp_actions,
+                       ODP_ACTION_ATTR_OUTPUT, dst->port->odp_port);
+    }
+
+    dst_set_free(&set);
+}
+
+/* Returns the effective vlan of a packet, taking into account both the
+ * 802.1Q header and implicitly tagged ports.  A value of 0 indicates that
+ * the packet is untagged and -1 indicates it has an invalid header and
+ * should be dropped. */
+static int
+flow_get_vlan(struct ofproto *ofproto, const struct flow *flow,
+              struct ofbundle *in_bundle, bool have_packet)
+{
+    int vlan = vlan_tci_to_vid(flow->vlan_tci);
+    if (in_bundle->vlan >= 0) {
+        if (vlan) {
+            if (have_packet) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
+                             "packet received on port %s configured with "
+                             "implicit VLAN %"PRIu16,
+                             ofproto->name, vlan,
+                             in_bundle->name, in_bundle->vlan);
+            }
+            return -1;
+        }
+        vlan = in_bundle->vlan;
+    } else {
+        if (!ofbundle_includes_vlan(in_bundle, vlan)) {
+            if (have_packet) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
+                             "packet received on port %s not configured for "
+                             "trunking VLAN %d",
+                             ofproto->name, vlan, in_bundle->name, vlan);
+            }
+            return -1;
+        }
+    }
+
+    return vlan;
+}
+
+/* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
+ * migration.  Older Citrix-patched Linux DomU used gratuitous ARP replies to
+ * indicate this; newer upstream kernels use gratuitous ARP requests. */
+static bool
+is_gratuitous_arp(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_ARP)
+            && eth_addr_is_broadcast(flow->dl_dst)
+            && (flow->nw_proto == ARP_OP_REPLY
+                || (flow->nw_proto == ARP_OP_REQUEST
+                    && flow->nw_src == flow->nw_dst)));
+}
+
+static void
+update_learning_table(struct ofproto *ofproto,
+                      const struct flow *flow, int vlan,
+                      struct ofbundle *in_bundle)
+{
+    struct mac_entry *mac;
+
+    if (!mac_learning_may_learn(ofproto->ml, flow->dl_src, vlan)) {
+        return;
+    }
+
+    mac = mac_learning_insert(ofproto->ml, flow->dl_src, vlan);
+    if (is_gratuitous_arp(flow)) {
+        /* We don't want to learn from gratuitous ARP packets that are
+         * reflected back over bond slaves so we lock the learning table. */
+        if (!in_bundle->bond) {
+            mac_entry_set_grat_arp_lock(mac);
+        } else if (mac_entry_is_grat_arp_locked(mac)) {
+            return;
+        }
+    }
+
+    if (mac_entry_is_new(mac) || mac->port.p != in_bundle) {
+        /* The log messages here could actually be useful in debugging,
+         * so keep the rate limit relatively high. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+        VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
+                    "on port %s in VLAN %d",
+                    ofproto->name, ETH_ADDR_ARGS(flow->dl_src),
+                    in_bundle->name, vlan);
+
+        mac->port.p = in_bundle;
+        tag_set_add(&ofproto->revalidate_set,
+                    mac_learning_changed(ofproto->ml, mac));
+    }
+}
+
+/* Determines whether packets in 'flow' within 'br' should be forwarded or
+ * dropped.  Returns true if they may be forwarded, false if they should be
+ * dropped.
+ *
+ * If 'have_packet' is true, it indicates that the caller is processing a
+ * received packet.  If 'have_packet' is false, then the caller is just
+ * revalidating an existing flow because configuration has changed.  Either
+ * way, 'have_packet' only affects logging (there is no point in logging errors
+ * during revalidation).
+ *
+ * Sets '*in_portp' to the input port.  This will be a null pointer if
+ * flow->in_port does not designate a known input port (in which case
+ * is_admissible() returns false).
+ *
+ * When returning true, sets '*vlanp' to the effective VLAN of the input
+ * packet, as returned by flow_get_vlan().
+ *
+ * May also add tags to '*tags', although the current implementation only does
+ * so in one special case.
+ */
+static bool
+is_admissible(struct ofproto *ofproto, const struct flow *flow,
+              bool have_packet,
+              tag_type *tags, int *vlanp, struct ofbundle **in_bundlep)
+{
+    struct ofport *in_port;
+    struct ofbundle *in_bundle;
+    int vlan;
+
+    /* Find the port and bundle for the received packet. */
+    in_port = get_port(ofproto, flow->in_port);
+    *in_bundlep = in_bundle = in_port->bundle;
+    if (!in_port || !in_bundle) {
+        /* No interface?  Something fishy... */
+        if (have_packet) {
+            /* Odd.  A few possible reasons here:
+             *
+             * - We deleted a port but there are still a few packets queued up
+             *   from it.
+             *
+             * - Someone externally added a port (e.g. "ovs-dpctl add-if") that
+             *   we don't know about.
+             *
+             * - Packet arrived on the local port but the local port is not
+             *   part of a bundle.
+             */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "bridge %s: received packet on unknown "
+                         "port %"PRIu16,
+                         ofproto->name, flow->in_port);
+        }
+        return false;
+    }
+    *vlanp = vlan = flow_get_vlan(ofproto, flow, in_bundle, have_packet);
+    if (vlan < 0) {
+        return false;
+    }
+
+    /* Drop frames for reserved multicast addresses. */
+    if (eth_addr_is_reserved(flow->dl_dst)) {
+        return false;
+    }
+
+    /* Drop frames on bundles reserved for mirroring. */
+    if (in_bundle->mirror_out) {
+        if (have_packet) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
+                         "%s, which is reserved exclusively for mirroring",
+                         ofproto->name, in_bundle->name);
+        }
+        return false;
+    }
+
+    if (in_bundle->bond) {
+        struct mac_entry *mac;
+
+        switch (bond_check_admissibility(in_bundle->bond, in_port,
+                                         flow->dl_dst, tags)) {
+        case BV_ACCEPT:
+            break;
+
+        case BV_DROP:
+            return false;
+
+        case BV_DROP_IF_MOVED:
+            mac = mac_learning_lookup(ofproto->ml, flow->dl_src, vlan, NULL);
+            if (mac && mac->port.p != in_bundle &&
+                (!is_gratuitous_arp(flow)
+                 || mac_entry_is_grat_arp_locked(mac))) {
+                return false;
+            }
+            break;
+        }
+    }
+
+    return true;
+}
+
+/* If the composed actions may be applied to any packet in the given 'flow',
+ * returns true.  Otherwise, the actions should only be applied to 'packet', or
+ * not at all, if 'packet' was NULL. */
+static bool
+xlate_normal(struct action_xlate_ctx *ctx)
+{
+    struct ofbundle *in_bundle;
+    struct ofbundle *out_bundle;
+    struct mac_entry *mac;
+    int vlan;
+
+    /* Check whether we should drop packets in this flow. */
+    if (!is_admissible(ctx->ofproto, &ctx->flow, ctx->packet != NULL,
+                       &ctx->tags, &vlan, &in_bundle)) {
+        out_bundle = NULL;
+        goto done;
+    }
+
+    /* Learn source MAC (but don't try to learn from revalidation). */
+    if (ctx->packet) {
+        update_learning_table(ctx->ofproto, &ctx->flow, vlan, in_bundle);
+    }
+
+    /* Determine output bundle. */
+    mac = mac_learning_lookup(ctx->ofproto->ml, ctx->flow.dl_dst, vlan,
+                              &ctx->tags);
+    if (mac) {
+        out_bundle = mac->port.p;
+    } else if (!ctx->packet && !eth_addr_is_multicast(ctx->flow.dl_dst)) {
+        /* If we are revalidating but don't have a learning entry then eject
+         * the flow.  Installing a flow that floods packets opens up a window
+         * of time where we could learn from a packet reflected on a bond and
+         * blackhole packets before the learning table is updated to reflect
+         * the correct port. */
+        return false;
+    } else {
+        out_bundle = OFBUNDLE_FLOOD;
+    }
+
+    /* Don't send packets out their input bundles. */
+    if (in_bundle == out_bundle) {
+        out_bundle = NULL;
+    }
+
+done:
+    if (in_bundle) {
+        compose_actions(ctx, vlan, in_bundle, out_bundle);
+    }
 
     return true;
 }
@@ -2238,13 +3358,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         xlate_table_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_NORMAL:
-        if (!ctx->ofproto->ofhooks->normal_cb(&ctx->flow, ctx->packet,
-                                              ctx->odp_actions, &ctx->tags,
-                                              &ctx->nf_output_iface,
-                                              ctx->ofproto->aux)) {
-            COVERAGE_INC(ofproto_uninstallable);
-            ctx->may_set_up_flow = false;
-        }
+        xlate_normal(ctx);
         break;
     case OFPP_FLOOD:
         flood_packets(ctx->ofproto, ctx->flow.in_port, htonl(OFPPC_NO_FLOOD),
@@ -2403,6 +3517,27 @@ update_reg_state(struct action_xlate_ctx *ctx,
 }
 
 static void
+xlate_autopath(struct action_xlate_ctx *ctx,
+               const struct nx_action_autopath *naa)
+{
+    uint16_t ofp_port = ntohl(naa->id);
+    struct ofport *port;
+
+    port = get_port(ctx->ofproto, ofp_port_to_odp_port(ofp_port));
+    if (!port || !port->bundle) {
+        ofp_port = OFPP_NONE;
+    } else if (port->bundle->bond) {
+        /* Autopath does not support VLAN hashing. */
+        struct ofport *slave = bond_choose_output_slave(
+            port->bundle->bond, &ctx->flow, OFP_VLAN_NONE, &ctx->tags);
+        if (slave) {
+            ofp_port = odp_port_to_ofp_port(slave->odp_port);
+        }
+    }
+    autopath_execute(naa, &ctx->flow, ofp_port);
+}
+
+static void
 xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
@@ -2412,9 +3547,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_multipath *nam;
     const struct nx_action_autopath *naa;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
-    const struct ofhooks *ofhooks = ctx->ofproto->ofhooks;
     struct xlate_reg_state state;
-    uint16_t autopath_port;
     ovs_be64 tun_id;
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -2478,11 +3611,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_AUTOPATH:
         naa = (const struct nx_action_autopath *) nah;
-        autopath_port = (ofhooks->autopath_cb
-                         ? ofhooks->autopath_cb(&ctx->flow, ntohl(naa->id),
-                                                &ctx->tags, ctx->ofproto->aux)
-                         : OFPP_NONE);
-        autopath_execute(naa, &ctx->flow, autopath_port);
+        xlate_autopath(ctx, naa);
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
@@ -2610,16 +3739,27 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->check_special = true;
 }
 
-static void
-ofproto_process_cfm(struct ofproto *ofproto, const struct flow *flow,
-                    const struct ofpbuf *packet)
+static bool
+ofproto_process_special(struct ofproto *ofproto, const struct flow *flow,
+                        const struct ofpbuf *packet)
 {
-    struct ofport *ofport;
-
-    ofport = get_port(ofproto, flow->in_port);
-    if (ofport && ofport->cfm) {
-        cfm_process_heartbeat(ofport->cfm, packet);
+    if (cfm_should_process_flow(flow)) {
+        struct ofport *ofport = get_port(ofproto, flow->in_port);
+        if (ofport && ofport->cfm) {
+            cfm_process_heartbeat(ofport->cfm, packet);
+        }
+        return true;
+    } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
+        struct ofport *port = get_port(ofproto, flow->in_port);
+        if (port && port->bundle && port->bundle->lacp) {
+            const struct lacp_pdu *pdu = parse_lacp_packet(packet);
+            if (pdu) {
+                lacp_process_pdu(port->bundle->lacp, port, pdu);
+            }
+            return true;
+        }
     }
+    return false;
 }
 
 static struct ofpbuf *
@@ -2635,15 +3775,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->recurse = 0;
     ctx->last_pop_priority = -1;
 
-    if (ctx->check_special && cfm_should_process_flow(&ctx->flow)) {
-        if (ctx->packet) {
-            ofproto_process_cfm(ctx->ofproto, &ctx->flow, ctx->packet);
-        }
-        ctx->may_set_up_flow = false;
-    } else if (ctx->check_special
-               && ctx->ofproto->ofhooks->special_cb
-               && !ctx->ofproto->ofhooks->special_cb(&ctx->flow, ctx->packet,
-                                                     ctx->ofproto->aux)) {
+    if (ctx->check_special
+        && ofproto_process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
     } else {
         do_xlate_actions(in, n_in, ctx);
@@ -3940,12 +5073,8 @@ handle_miss_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     /* Set header pointers in 'flow'. */
     flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
 
-    if (cfm_should_process_flow(&flow)) {
-        ofproto_process_cfm(p, &flow, upcall->packet);
-        ofpbuf_delete(upcall->packet);
-        return;
-    } else if (p->ofhooks->special_cb
-               && !p->ofhooks->special_cb(&flow, upcall->packet, p->aux)) {
+    /* Handle 802.1ag and LACP. */
+    if (ofproto_process_special(p, &flow, upcall->packet)) {
         ofpbuf_delete(upcall->packet);
         return;
     }
@@ -4068,12 +5197,16 @@ ofproto_expire(struct ofproto *ofproto)
         rule_expire(ofproto, rule);
     }
 
-    /* Let the hook know that we're at a stable point: all outstanding data
-     * in existing flows has been accounted to the account_cb.  Thus, the
-     * hook can now reasonably do operations that depend on having accurate
-     * flow volume accounting (currently, that's just bond rebalancing). */
-    if (ofproto->ofhooks->account_checkpoint_cb) {
-        ofproto->ofhooks->account_checkpoint_cb(ofproto->aux);
+    /* All outstanding data in existing flows has been accounted, so it's a
+     * good time to do bond rebalancing. */
+    if (ofproto->has_bonded_bundles) {
+        struct ofbundle *bundle;
+
+        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+            if (bundle->bond) {
+                bond_rebalance(bundle->bond, &ofproto->revalidate_set);
+            }
+        }
     }
 
     return MIN(dp_max_idle, 1000);
@@ -4572,6 +5705,31 @@ exit:
 }
 
 static void
+ofproto_unixctl_fdb_show(struct unixctl_conn *conn,
+                         const char *args, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct ofproto *ofproto;
+    const struct mac_entry *e;
+
+    ofproto = ofproto_lookup(args);
+    if (!ofproto) {
+        unixctl_command_reply(conn, 501, "no such bridge");
+        return;
+    }
+
+    ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
+    LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
+        struct ofbundle *bundle = e->port.p;
+        ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
+                      ofbundle_get_a_port(bundle)->odp_port,
+                      e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
 ofproto_unixctl_init(void)
 {
     static bool registered;
@@ -4582,62 +5740,5 @@ ofproto_unixctl_init(void)
 
     unixctl_command_register("ofproto/list", ofproto_unixctl_list, NULL);
     unixctl_command_register("ofproto/trace", ofproto_unixctl_trace, NULL);
+    unixctl_command_register("fdb/show", ofproto_unixctl_fdb_show, NULL);
 }
-
-static bool
-default_normal_ofhook_cb(const struct flow *flow, const struct ofpbuf *packet,
-                         struct ofpbuf *odp_actions, tag_type *tags,
-                         uint16_t *nf_output_iface, void *ofproto_)
-{
-    struct ofproto *ofproto = ofproto_;
-    struct mac_entry *dst_mac;
-
-    /* Drop frames for reserved multicast addresses. */
-    if (eth_addr_is_reserved(flow->dl_dst)) {
-        return true;
-    }
-
-    /* Learn source MAC (but don't try to learn from revalidation). */
-    if (packet != NULL
-        && mac_learning_may_learn(ofproto->ml, flow->dl_src, 0)) {
-        struct mac_entry *src_mac;
-
-        src_mac = mac_learning_insert(ofproto->ml, flow->dl_src, 0);
-        if (mac_entry_is_new(src_mac) || src_mac->port.i != flow->in_port) {
-            /* The log messages here could actually be useful in debugging,
-             * so keep the rate limit relatively high. */
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
-            VLOG_DBG_RL(&rl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
-                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
-
-            ofproto_revalidate(ofproto,
-                               mac_learning_changed(ofproto->ml, src_mac));
-            src_mac->port.i = flow->in_port;
-        }
-    }
-
-    /* Determine output port. */
-    dst_mac = mac_learning_lookup(ofproto->ml, flow->dl_dst, 0, tags);
-    if (!dst_mac) {
-        flood_packets(ofproto, flow->in_port, htonl(OFPPC_NO_FLOOD),
-                      nf_output_iface, odp_actions);
-    } else {
-        int out_port = dst_mac->port.i;
-        if (out_port != flow->in_port) {
-            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT, out_port);
-            *nf_output_iface = out_port;
-        } else {
-            /* Drop. */
-        }
-    }
-
-    return true;
-}
-
-static const struct ofhooks default_ofhooks = {
-    default_normal_ofhook_cb,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
