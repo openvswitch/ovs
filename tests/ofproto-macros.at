@@ -7,7 +7,7 @@ m4_define([OFPROTO_START],
    trap 'kill `cat ovs-openflowd.pid`' 0
    AT_CAPTURE_FILE([ovs-openflowd.log])
    AT_CHECK(
-     [ovs-openflowd --detach --pidfile --enable-dummy --log-file dummy@br0 none --datapath-id=fedcba9876543210 $1],
+     [ovs-openflowd --detach --pidfile --enable-dummy --log-file --fail=closed dummy@br0 none --datapath-id=fedcba9876543210 $1],
      [0], [ignore], [ignore])
 ])
 

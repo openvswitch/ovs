@@ -403,7 +403,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         nl_msg_put_be64(buf, ODP_KEY_ATTR_TUN_ID, flow->tun_id);
     }
 
-    nl_msg_put_u32(buf, ODP_KEY_ATTR_IN_PORT, flow->in_port);
+    nl_msg_put_u32(buf, ODP_KEY_ATTR_IN_PORT,
+                   ofp_port_to_odp_port(flow->in_port));
 
     eth_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ETHERNET,
                                        sizeof *eth_key);
@@ -551,7 +552,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             if (nl_attr_get_u32(nla) >= UINT16_MAX) {
                 return EINVAL;
             }
-            flow->in_port = nl_attr_get_u32(nla);
+            flow->in_port = odp_port_to_ofp_port(nl_attr_get_u32(nla));
             break;
 
         case TRANSITION(ODP_KEY_ATTR_IN_PORT, ODP_KEY_ATTR_ETHERNET):

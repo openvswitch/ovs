@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,6 +173,11 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
     struct packet *p;
     int error;
 
+    if (id == UINT32_MAX) {
+        error = 0;
+        goto error;
+    }
+
     if (!pb) {
         VLOG_WARN_RL(&rl, "attempt to send buffered packet via connection "
                      "without buffers");
@@ -204,6 +209,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
                      "if the switch was recently in fail-open mode)", id);
         error = 0;
     }
+error:
     *bufferp = NULL;
     *in_port = UINT16_MAX;
     return error;

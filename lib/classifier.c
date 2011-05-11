@@ -142,10 +142,10 @@ cls_rule_set_tun_id_masked(struct cls_rule *rule,
 }
 
 void
-cls_rule_set_in_port(struct cls_rule *rule, uint16_t odp_port)
+cls_rule_set_in_port(struct cls_rule *rule, uint16_t ofp_port)
 {
     rule->wc.wildcards &= ~FWW_IN_PORT;
-    rule->flow.in_port = odp_port;
+    rule->flow.in_port = ofp_port;
 }
 
 void
@@ -506,8 +506,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         break;
     }
     if (!(w & FWW_IN_PORT)) {
-        ds_put_format(s, "in_port=%"PRIu16",",
-                      odp_port_to_ofp_port(f->in_port));
+        ds_put_format(s, "in_port=%"PRIu16",", f->in_port);
     }
     if (wc->vlan_tci_mask) {
         ovs_be16 vid_mask = wc->vlan_tci_mask & htons(VLAN_VID_MASK);

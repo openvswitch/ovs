@@ -608,9 +608,6 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
         if (!parse_port_name(value, &port_no)) {
             port_no = atoi(value);
         }
-        if (port_no == OFPP_LOCAL) {
-            port_no = ODPP_LOCAL;
-        }
         cls_rule_set_in_port(rule, port_no);
         break;
 

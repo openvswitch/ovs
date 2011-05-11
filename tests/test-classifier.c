@@ -251,7 +251,7 @@ static ovs_be32 nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
 static ovs_be64 tun_id_values[] = {
     0,
     CONSTANT_HTONLL(UINT64_C(0xfedcba9876543210)) };
-static uint16_t in_port_values[] = { 1, ODPP_LOCAL };
+static uint16_t in_port_values[] = { 1, OFPP_LOCAL };
 static ovs_be16 vlan_tci_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
 static ovs_be16 dl_type_values[]
             = { CONSTANT_HTONS(ETH_TYPE_IP), CONSTANT_HTONS(ETH_TYPE_ARP) };

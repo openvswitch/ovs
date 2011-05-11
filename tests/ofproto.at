@@ -52,8 +52,8 @@ dnl Tests for a bug in which ofproto ignored tun_id in tun_id_from_cookie
 dnl flow_mod commands.
 AT_CHECK([ovs-ofctl add-flow -F tun_id_from_cookie br0 tun_id=1,actions=mod_vlan_vid:4])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=0 actions=output:1
  cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
- cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=65534 actions=output:1
  cookie=0x100000000, duration=?s, table_id=0, n_packets=0, n_bytes=0, tun_id=0x1 actions=mod_vlan_vid:4
 NXST_FLOW reply:
 ])

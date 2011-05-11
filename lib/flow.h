@@ -45,7 +45,7 @@ struct flow {
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */
-    uint16_t in_port;           /* Input switch port. */
+    uint16_t in_port;           /* OpenFlow port number of input port. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 tp_src;            /* TCP/UDP source port. */

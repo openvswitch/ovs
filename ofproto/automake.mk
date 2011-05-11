@@ -20,6 +20,7 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/netflow.h \
 	ofproto/ofproto.c \
 	ofproto/ofproto.h \
+	ofproto/ofproto-dpif.c \
 	ofproto/ofproto-sflow.c \
 	ofproto/ofproto-sflow.h \
 	ofproto/pktbuf.c \

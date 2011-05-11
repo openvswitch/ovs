@@ -7,6 +7,7 @@ are most likely to be necessary in porting OVS to Unix-like platforms.
 (Porting OVS to other kinds of platforms is likely to be more
 difficult.)
 
+
 Vocabulary
 ----------
 
@@ -26,164 +27,65 @@ is a concordance, indexed by the area of the source tree:
 Open vSwitch Architectural Overview
 -----------------------------------
 
-The following diagram shows the conceptual architecture of Open
+The following diagram shows the very high-level architecture of Open
 vSwitch from a porter's perspective.
-                _                         _
-               |   +-------------------+   |
-               |   |   ovs-vswitchd    |   |Generic
-               |   +-------------------+   |code
-     userspace |   |      ofproto      |  _|
-               |   +---------+---------+  _
-               |   | netdev  |dpif/wdp |   |
-               |_  +---||----+----||---+   |Code that
-                _      ||         ||       |may need
-               |   +---||-----+---||---+   |porting
-               |   |          |datapath|  _|
-        kernel |   |          +--------+
-               |   |                   |
-               |_  +-------||----------+
-                           ||
-                        physical
-                          NIC
 
-Some of the components are generic.  Modulo bugs, these components
-should not need to be modified as part of a port:
+                   +-------------------+
+                   |    ovs-vswitchd   |<-->ovsdb-server
+                   +-------------------+
+                   |      ofproto      |<-->OpenFlow controllers
+                   +--------+-+--------+
+                   | netdev | | ofproto|
+                   +--------+ |provider|
+                   | netdev | +--------+
+                   |provider|
+                   +--------+
 
-    - Near the top of the diagram, "ofproto" is the library in Open vSwitch
-      that contains the core OpenFlow protocol implementation and switching
-      functionality.  It is built from source files in the "ofproto"
-      directory.
+Some of the components are generic.  Modulo bugs or inadequacies,
+these components should not need to be modified as part of a port:
 
-    - Above ofproto, "ovs-vswitchd", the main Open vSwitch userspace
-      program, is the primary client for ofproto.  It is built
-      from source files in the "vswitchd" directory of the Open
-      vSwitch distribution.
+    - "ovs-vswitchd" is the main Open vSwitch userspace program, in
+      vswitchd/.  It reads the desired Open vSwitch configuration from
+      the ovsdb-server program over an IPC channel and passes this
+      configuration down to the "ofproto" library.  It also passes
+      certain status and statistical information from ofproto back
+      into the database.
 
-      ovs-vswitchd is the most sophisticated of ofproto's clients, but
-      ofproto can have other clients as well.  Notably, ovs-openflowd,
-      in the utilities directory, is much simpler (though less
-      capable) than ovs-vswitchd, and it may be easier to get up and
-      running as part of a port.
+    - "ofproto" is the Open vSwitch library, in ofproto/, that
+      implements an OpenFlow switch.  It talks to OpenFlow controllers
+      over the network and to switch hardware or software to an
+      "ofproto provider", explained further below.
 
-The other components require attention during a port:
+    - "netdev" is the Open vSwitch library, in lib/netdev.c, that
+      abstracts interacting with network devices, that is, Ethernet
+      interfaces.  The netdev library is a thin layer over "netdev
+      provider" code, explained further below.
 
-    - "dpif" or "wdp" is what ofproto uses to directly monitor and
-      control a "datapath", which is the term used in OVS for a
-      collection of physical or virtual ports that are exposed over
-      OpenFlow as a single switch.  A datapath implements a flow
-      table.
-
-    - "netdev" is the interface to "network devices", e.g. eth0 on
-      Linux.  ofproto expects that every port exposed by a datapath
-      has a corresponding netdev that it can open with netdev_open().
+The other components may need attention during a port.  You will
+almost certainly have to implement a "netdev provider".  Depending on
+the type of port you are doing and the desired performance, you may
+also have to implement an "ofproto provider" or a lower-level
+component called a "dpif" provider.
 
 The following sections talk about these components in more detail.
 
-Which Branch?
--------------
 
-The architectural diagram shows "dpif" and "wdp" as alternatives.
-These alternatives correspond to the "master" and "wdp" branches,
-respectively, of the Open vSwitch Git repository at
-git://openvswitch.org/openvswitch.  Both of these branches currently
-represent reasonable porting targets for different purposes:
+Writing a netdev Provider
+-------------------------
 
-    - The "master" branch is more mature and better tested.  Open
-      vSwitch releases are made from this branch, and most OVS
-      development and testing occurs on this branch.
+A "netdev provider" implements an operating system and hardware
+specific interface to "network devices", e.g. eth0 on Linux.  Open
+vSwitch must be able to open each port on a switch as a netdev, so you
+will need to implement a "netdev provider" that works with your switch
+hardware and software.
 
-    - The "wdp" branch has a software architecture that can take
-      advantage of hardware with support for wildcards (e.g. TCAMs or
-      similar).  This branch has known important bugs, but is the basis
-      of a few ongoing hardware projects, so we expect the quality to
-      improve rapidly.
+struct netdev_class, in lib/netdev-provider.h, defines the interfaces
+required to implement a netdev.  That structure contains many function
+pointers, each of which has a comment that is meant to describe its
+behavior in detail.  If the requirements are unclear, please report
+this as a bug.
 
-Since its architecture is better, in the medium to long term we will
-fix the problems in the "wdp" branch and merge it into "master".
-
-In porting OVS, the major difference between the two branches is the
-form of the flow table in the datapath:
-
-    - On "master", the "dpif" datapath interface maintains a simple
-      flow table, one that does not support any kind of wildcards.
-      This flow table essentially acts as a cache.  When a packet
-      arrives on an interface, the datapath looks for it in this
-      exact-match table.  If there is a match, then it performs the
-      associated actions.  If there is no match, the datapath passes
-      the packet up to "ofproto", which maintains a flow table that
-      supports wildcards.  If the packet matches in this flow table,
-      then ofproto executes its actions and inserts a new exact-match
-      entry into the dpif flow table.  (Otherwise, ofproto sends the
-      packet to the OpenFlow controller, if one is configured.)
-
-      Thus, on the "master" branch, the datapath has little
-      opportunity to take advantage of hardware support for wildcards,
-      since it is only ever presented with exact-match flow entries.
-
-    - On "wdp", the "wdp" datapath interface maintains a flow table
-      similar to that of OpenFlow, one that supports wildcards.  Thus,
-      a wdp datapath can take advantage of hardware support for
-      wildcards, since it is free to implement the flow table any way
-      it likes.
-      
-The following sections describe the two datapath interfaces in a
-little more detail.
-
-dpif: The "master" Branch Datapath
-----------------------------------
-
-struct dpif_class, in lib/dpif-provider.h, defines the
-interfaces required to implement a dpif for new hardware or
-software.  That structure contains many function pointers, each
-of which has a comment that is meant to describe its behavior in
-detail.  If the requirements are unclear, please report this as
-a bug and we will clarify.
-
-There are two existing dpif implementations that may serve as
-useful examples during a port:
-
-    * lib/dpif-linux.c is a Linux-specific dpif implementation that
-      talks to an Open vSwitch-specific kernel module (whose sources
-      are in the "datapath" directory).  The kernel module performs
-      all of the switching work, passing packets that do not match any
-      flow table entry up to userspace.  This dpif implementation is
-      essentially a wrapper around calls to "ioctl".
-
-    * lib/dpif-netdev.c is a generic dpif implementation that performs
-      all switching internally.  It delegates most of its work to the
-      "netdev" library (described below).  Using dpif-netdev, instead
-      of writing a new dpif, can be a simple way to get OVS up and
-      running on new platforms, but other solutions are likely to
-      yield higher performance.
-
-"wdp": The "wdp" Branch Datapath
---------------------------------
-
-struct wdp_class, in ofproto/wdp-provider.h, defines the interfaces
-required to implement a wdp ("wildcarded datapath") for new hardware
-or software.  That structure contains many function pointers, each of
-which has a comment that is meant to describe its behavior in detail.
-If the requirements are unclear, please report this as a bug and we
-will clarify.
-
-The wdp interface is preliminary.  Please let us know if it seems
-unsuitable for your purpose.  We will try to improve it.
-
-There is currently only one wdp implementation:
-
-    * ofproto/wdp-xflow.c is an adaptation of "master" branch code
-      that breaks wildcarded flows up into exact-match flows in the
-      same way that ofproto always does on the "master" branch.  It
-      delegates its work to exact-match datapath implementations whose
-      interfaces are identical to "master" branch datapaths, except
-      that names have been changed from "dpif" to "xfif" ("exact-match
-      flow interface") and similar.
-
-"netdev": Interface to network devices
---------------------------------------
-
-The netdev interface can be roughly divided into functionality for the
-following purposes:
+The netdev interface can be divided into a few rough categories:
 
     * Functions required to properly implement OpenFlow features.  For
       example, OpenFlow requires the ability to report the Ethernet
@@ -196,15 +98,9 @@ following purposes:
       table.  These functions must be implemented if the corresponding
       OVS features are to work, but may be omitted initially.
 
-    * Functions that may be needed in some implementations but not
-      others.  The dpif-netdev described above, for example, needs to
-      be able to send and receive packets on a netdev.
-
-struct netdev_class, in lib/netdev-provider.h, defines the interfaces
-required to implement a netdev.  That structure contains many function
-pointers, each of which has a comment that is meant to describe its
-behavior in detail.  If the requirements are unclear, please report
-this as a bug and we will clarify.
+    * Functions needed in some implementations but not in others.  For
+      example, most kinds of ports (see below) do not need
+      functionality to receive packets from a network device.
 
 The existing netdev implementations may serve as useful examples
 during a port:
@@ -213,13 +109,136 @@ during a port:
       network devices, using Linux kernel calls.  It may be a good
       place to start for full-featured netdev implementations.
 
-    * lib/netdev-vport.c provides support for "virtual ports" 
+    * lib/netdev-vport.c provides support for "virtual ports"
       implemented by the Open vSwitch datapath module for the Linux
       kernel.  This may serve as a model for minimal netdev
       implementations.
 
+    * lib/netdev-dummy.c is a fake netdev implementation useful only
+      for testing.
+
+
+Porting Strategies
+------------------
+
+After a netdev provider has been implemented for a system's network
+devices, you may choose among three basic porting strategies.
+
+The lowest-effort strategy is to use the "userspace switch"
+implementation built into Open vSwitch.  This ought to work, without
+writing any more code, as long as the netdev provider that you
+implemented supports receiving packets.  It yields poor performance,
+however, because every packet passes through the ovs-vswitchd process.
+See INSTALL.userspace for instructions on how to configure a userspace
+switch.
+
+If the userspace switch is not the right choice for your port, then
+you will have to write more code.  You may implement either an
+"ofproto provider" or a "dpif provider".  Which you should choose
+depends on a few different factors:
+
+    * Only an ofproto provider can take full advantage of hardware
+      with built-in support for wildcards (e.g. an ACL table or a
+      TCAM).
+
+    * A dpif provider can take advantage of the Open vSwitch built-in
+      implementations of bonding, LACP, 802.1ag, 802.1Q VLANs, and
+      other features.  An ofproto provider has to provide its own
+      implementations, if the hardware can support them at all.
+
+    * A dpif provider is usually easier to implement.
+
+The following sections describe how to implement each kind of port.
+
+
+ofproto Providers
+-----------------
+
+An "ofproto provider" is what ofproto uses to directly monitor and
+control an OpenFlow-capable switch.  struct ofproto_class, in
+ofproto/private.h, defines the interfaces to implement a ofproto
+provider for new hardware or software.  That structure contains many
+function pointers, each of which has a comment that is meant to
+describe its behavior in detail.  If the requirements are unclear,
+please report this as a bug.
+
+The ofproto provider interface is preliminary.  Please let us know if
+it seems unsuitable for your purpose.  We will try to improve it.
+
+
+Writing a dpif Provider
+-----------------------
+
+Open vSwitch has a built-in ofproto provider named "ofproto-dpif",
+which is built on top of a library for manipulating datapaths, called
+"dpif".  A "datapath" is a simple flow table, one that supports only
+exact-match flows, that is, flows without wildcards.  When a packet
+arrives on a network device, the datapath looks for it in this
+exact-match table.  If there is a match, then it performs the
+associated actions.  If there is no match, the datapath passes the
+packet up to ofproto-dpif, which maintains an OpenFlow flow table
+(that supports wildcards).  If the packet matches in this flow table,
+then ofproto-dpif executes its actions and inserts a new exact-match
+entry into the dpif flow table.  (Otherwise, ofproto-dpif passes the
+packet up to ofproto to send the packet to the OpenFlow controller, if
+one is configured.)
+
+The "dpif" library in turn delegates much of its functionality to a
+"dpif provider".  The following diagram shows how dpif providers fit
+into the Open vSwitch architecture:
+
+                _
+               |   +-------------------+
+               |   |    ovs-vswitchd   |<-->ovsdb-server
+               |   +-------------------+
+               |   |      ofproto      |<-->OpenFlow controllers
+               |   +--------+-+--------+
+               |   | netdev | |ofproto-|
+     userspace |   +--------+ |  dpif  |
+               |   | netdev | +--------+
+               |   |provider| |  dpif  |
+               |   +---||---+ +--------+
+               |       ||     |  dpif  |
+               |       ||     |provider|
+               |_      ||     +---||---+
+                       ||         ||
+                _  +---||-----+---||---+
+               |   |          |datapath|
+        kernel |   |          +--------+
+               |   |                   |
+               |_  +--------||---------+
+                            ||
+                         physical
+                           NIC
+
+struct dpif_class, in lib/dpif-provider.h, defines the interfaces
+required to implement a dpif provider for new hardware or software.
+That structure contains many function pointers, each of which has a
+comment that is meant to describe its behavior in detail.  If the
+requirements are unclear, please report this as a bug.
+
+There are two existing dpif implementations that may serve as
+useful examples during a port:
+
+    * lib/dpif-linux.c is a Linux-specific dpif implementation that
+      talks to an Open vSwitch-specific kernel module (whose sources
+      are in the "datapath" directory).  The kernel module performs
+      all of the switching work, passing packets that do not match any
+      flow table entry up to userspace.  This dpif implementation is
+      essentially a wrapper around calls into the kernel module.
+
+    * lib/dpif-netdev.c is a generic dpif implementation that performs
+      all switching internally.  This is how the Open vSwitch
+      userspace switch is implemented.
+
+
 Miscellaneous Notes
 -------------------
+
+ovs-vswitchd is the most sophisticated of ofproto's clients, but
+ofproto can have other clients as well.  ovs-openflowd, in the
+utilities directory, is much simpler than ovs-vswitchd.  It may be
+easier to initially bring up ovs-openflowd as part of a port.
 
 lib/entropy.c assumes that it can obtain high-quality random number
 seeds at startup by reading from /dev/urandom.  You will need to
@@ -227,6 +246,7 @@ modify it if this is not true on your platform.
 
 vswitchd/system-stats.c only knows how to obtain some statistics on
 Linux.  Optionally you may implement them for your platform as well.
+
 
 Questions
 ---------

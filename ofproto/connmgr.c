@@ -1036,7 +1036,7 @@ schedule_packet_in(struct ofconn *ofconn, const struct dpif_upcall *upcall,
 
     /* Figure out the easy parts. */
     pin.packet = upcall->packet;
-    pin.in_port = odp_port_to_ofp_port(flow->in_port);
+    pin.in_port = flow->in_port;
     pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
 
     /* Get OpenFlow buffer_id. */

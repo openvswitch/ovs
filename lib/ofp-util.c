@@ -150,8 +150,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     /* Initialize most of rule->flow. */
     rule->flow.nw_src = match->nw_src;
     rule->flow.nw_dst = match->nw_dst;
-    rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
-                     : ntohs(match->in_port));
+    rule->flow.in_port = ntohs(match->in_port);
     rule->flow.dl_type = ofputil_dl_type_from_openflow(match->dl_type);
     rule->flow.tp_src = match->tp_src;
     rule->flow.tp_dst = match->tp_dst;
@@ -272,8 +271,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
 
     /* Compose most of the match structure. */
     match->wildcards = htonl(ofpfw);
-    match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
-                           : rule->flow.in_port);
+    match->in_port = htons(rule->flow.in_port);
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
     match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);

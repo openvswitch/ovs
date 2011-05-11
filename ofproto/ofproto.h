@@ -163,7 +163,7 @@ void ofproto_set_desc(struct ofproto *,
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
-void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
+int ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 
 /* Configuration of ports. */
 
@@ -192,9 +192,9 @@ struct ofproto_bundle_settings {
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */
 };
 
-void ofproto_bundle_register(struct ofproto *, void *aux,
-                             const struct ofproto_bundle_settings *);
-void ofproto_bundle_unregister(struct ofproto *, void *aux);
+int ofproto_bundle_register(struct ofproto *, void *aux,
+                            const struct ofproto_bundle_settings *);
+int ofproto_bundle_unregister(struct ofproto *, void *aux);
 
 /* Configuration of mirrors. */
 struct ofproto_mirror_settings {
@@ -217,11 +217,11 @@ struct ofproto_mirror_settings {
     uint16_t out_vlan;          /* Output VLAN, only if out_bundle is NULL. */
 };
 
-void ofproto_mirror_register(struct ofproto *, void *aux,
-                             const struct ofproto_mirror_settings *);
-void ofproto_mirror_unregister(struct ofproto *, void *aux);
+int ofproto_mirror_register(struct ofproto *, void *aux,
+                            const struct ofproto_mirror_settings *);
+int ofproto_mirror_unregister(struct ofproto *, void *aux);
 
-void ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
+int ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
 bool ofproto_is_mirror_output_bundle(struct ofproto *, void *aux);
 
 /* Configuration querying. */
