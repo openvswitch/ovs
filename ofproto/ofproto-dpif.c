@@ -171,11 +171,6 @@ struct action_xlate_ctx {
      * calling action_xlate_ctx_init(). */
     void (*resubmit_hook)(struct action_xlate_ctx *, struct rule_dpif *);
 
-    /* If true, the speciality of 'flow' should be checked before executing
-     * its actions.  If special_cb returns false on 'flow' rendered
-     * uninstallable and no actions will be executed. */
-    bool check_special;
-
 /* xlate_actions() initializes and uses these members.  The client might want
  * to look at them after it returns. */
 
@@ -3114,7 +3109,6 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->flow = *flow;
     ctx->packet = packet;
     ctx->resubmit_hook = NULL;
-    ctx->check_special = true;
 }
 
 static struct ofpbuf *
@@ -3130,8 +3124,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->recurse = 0;
     ctx->last_pop_priority = -1;
 
-    if (ctx->check_special
-        && process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
+    if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
     } else {
         do_xlate_actions(in, n_in, ctx);
