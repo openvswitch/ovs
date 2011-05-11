@@ -1000,7 +1000,7 @@ fte_insert(struct classifier *cls, const struct cls_rule *rule,
     fte->rule = *rule;
     fte->versions[index] = version;
 
-    old = fte_from_cls_rule(classifier_insert(cls, &fte->rule));
+    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule));
     if (old) {
         fte_version_free(old->versions[index]);
         fte->versions[!index] = old->versions[!index];

@@ -78,7 +78,6 @@ static void ofproto_flush_flows__(struct ofproto *);
 
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
-static void ofproto_rule_remove(struct rule *);
 
 static void handle_openflow(struct ofconn *, struct ofpbuf *);
 
@@ -888,9 +887,7 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
 
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&ofproto->cls,
                                                            target));
-    if (rule) {
-        ofproto_rule_remove(rule);
-    }
+    ofproto_rule_destroy(rule);
 }
 
 static void
@@ -907,7 +904,7 @@ ofproto_flush_flows__(struct ofproto *ofproto)
 
     cls_cursor_init(&cursor, &ofproto->cls, NULL);
     CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
-        ofproto_rule_remove(rule);
+        ofproto_rule_destroy(rule);
     }
 }
 
@@ -1269,14 +1266,14 @@ ofproto_rule_destroy__(struct rule *rule)
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
-/* Destroys 'rule' and removes it from the datapath.
- *
- * The caller must have already removed 'rule' from the classifier. */
+/* Destroys 'rule' and removes it from the flow table and the datapath. */
 void
 ofproto_rule_destroy(struct rule *rule)
 {
-    rule->ofproto->ofproto_class->rule_destruct(rule);
-    ofproto_rule_destroy__(rule);
+    if (rule) {
+        rule->ofproto->ofproto_class->rule_destruct(rule);
+        ofproto_rule_destroy__(rule);
+    }
 }
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
@@ -1323,15 +1320,6 @@ rule_execute(struct rule *rule, uint16_t in_port, struct ofpbuf *packet)
 
     flow_extract(packet, 0, in_port, &flow);
     return rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
-}
-
-/* Removes 'rule' from 'ofproto' and frees up the associated memory.  Removes
- * 'rule' from the classifier.  */
-void
-ofproto_rule_remove(struct rule *rule)
-{
-    rule->ofproto->ofproto_class->rule_remove(rule);
-    ofproto_rule_destroy(rule);
 }
 
 /* Returns true if 'rule' should be hidden from the controller.
@@ -2360,7 +2348,7 @@ delete_flow(struct rule *rule, ovs_be16 out_port)
     }
 
     ofproto_rule_send_removed(rule, OFPRR_DELETE);
-    ofproto_rule_remove(rule);
+    ofproto_rule_destroy(rule);
 }
 
 static void
@@ -2394,7 +2382,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 {
     assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT);
     ofproto_rule_send_removed(rule, reason);
-    ofproto_rule_remove(rule);
+    ofproto_rule_destroy(rule);
 }
 
 static int

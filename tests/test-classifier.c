@@ -526,7 +526,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
 
         tcls_rule = tcls_insert(&tcls, rule);
-        assert(!classifier_insert(&cls, &rule->cls_rule));
+        classifier_insert(&cls, &rule->cls_rule);
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
 
@@ -562,7 +562,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         classifier_init(&cls);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
-        assert(!classifier_insert(&cls, &rule1->cls_rule));
+        classifier_insert(&cls, &rule1->cls_rule);
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
@@ -570,7 +570,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
         tcls_insert(&tcls, rule2);
         assert(test_rule_from_cls_rule(
-                   classifier_insert(&cls, &rule2->cls_rule)) == rule1);
+                   classifier_replace(&cls, &rule2->cls_rule)) == rule1);
         free(rule1);
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
@@ -681,7 +681,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
                     tcls_rules[j] = tcls_insert(&tcls, rules[j]);
                     displaced_rule = test_rule_from_cls_rule(
-                        classifier_insert(&cls, &rules[j]->cls_rule));
+                        classifier_replace(&cls, &rules[j]->cls_rule));
                     if (pri_rules[pris[j]] >= 0) {
                         int k = pri_rules[pris[j]];
                         assert(displaced_rule != NULL);
@@ -781,7 +781,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
             rules[i] = make_rule(wcf, priority, value_pats[i]);
             tcls_rules[i] = tcls_insert(&tcls, rules[i]);
-            assert(!classifier_insert(&cls, &rules[i]->cls_rule));
+            classifier_insert(&cls, &rules[i]->cls_rule);
 
             check_tables(&cls, 1, i + 1, 0);
             compare_classifiers(&cls, &tcls);
@@ -839,7 +839,7 @@ test_many_rules_in_n_tables(int n_tables)
             int value_pat = rand() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);
             tcls_insert(&tcls, rule);
-            assert(!classifier_insert(&cls, &rule->cls_rule));
+            classifier_insert(&cls, &rule->cls_rule);
             check_tables(&cls, -1, i + 1, -1);
             compare_classifiers(&cls, &tcls);
         }

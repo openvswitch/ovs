@@ -2449,7 +2449,7 @@ rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct cls_rule *displaced_rule;
+    struct rule_dpif *old_rule;
     int error;
 
     error = validate_actions(rule->up.actions, rule->up.n_actions,
@@ -2458,15 +2458,19 @@ rule_construct(struct rule *rule_)
         return error;
     }
 
+    old_rule = rule_dpif_cast(rule_from_cls_rule(classifier_find_rule_exactly(
+                                                     &ofproto->up.cls,
+                                                     &rule->up.cr)));
+    if (old_rule) {
+        ofproto_rule_destroy(&old_rule->up);
+    }
+
     rule->used = rule->up.created;
     rule->packet_count = 0;
     rule->byte_count = 0;
     list_init(&rule->facets);
+    classifier_insert(&ofproto->up.cls, &rule->up.cr);
 
-    displaced_rule = classifier_insert(&ofproto->up.cls, &rule->up.cr);
-    if (displaced_rule) {
-        ofproto_rule_destroy(rule_from_cls_rule(displaced_rule));
-    }
     ofproto->need_revalidate = true;
 
     return 0;
@@ -2479,20 +2483,11 @@ rule_destruct(struct rule *rule_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct facet *facet, *next_facet;
 
-    ofproto->need_revalidate = true;
+    classifier_remove(&ofproto->up.cls, &rule->up.cr);
     LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
         facet_revalidate(ofproto, facet);
     }
-}
-
-static void
-rule_remove(struct rule *rule_)
-{
-    struct rule_dpif *rule = rule_dpif_cast(rule_);
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
     ofproto->need_revalidate = true;
-    classifier_remove(&ofproto->up.cls, &rule->up.cr);
 }
 
 static void
@@ -3877,7 +3872,6 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_construct,
     rule_destruct,
     rule_dealloc,
-    rule_remove,
     rule_get_stats,
     rule_execute,
     rule_modify_actions,

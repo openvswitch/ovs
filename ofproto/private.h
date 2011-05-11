@@ -472,31 +472,30 @@ struct ofproto_class {
      * flow table:
      *
      *   - If there was already a rule with exactly the same matching criteria
-     *     and priority in the classifier, then it should remove that rule from
-     *     the classifier and destroy it (with ofproto_rule_destroy()).
+     *     and priority in the classifier, then it should destroy it (with
+     *     ofproto_rule_destroy()).
+     *
+     *     To the greatest extent possible, the old rule should be destroyed
+     *     only if inserting the new rule succeeds; that is, ->rule_construct()
+     *     should be transactional.
+     *
+     *     The function classifier_find_rule_exactly() can locate such a rule.
      *
      *   - Insert the new rule into the ofproto's 'cls' classifier, and into
      *     the datapath flow table.
      *
-     *     (The function classifier_insert() both inserts a rule into the
-     *     classifier and removes any rule with identical matching criteria, so
-     *     this single call implements parts of both steps above.)
+     *     The function classifier_insert() inserts a rule into the classifier.
      *
      * Other than inserting 'rule->cr' into the classifier, ->rule_construct()
      * should not modify any base members of struct rule.
      *
-     * When ->rule_destruct() is called, 'rule' has already been removed from
-     * the classifier and the datapath flow table (by calling ->rule_remove()),
-     * so ->rule_destruct() should not duplicate that behavior. */
+     * ->rule_destruct() should remove 'rule' from the ofproto's 'cls'
+     * classifier (e.g. with classifier_remove()) and from the datapath flow
+     * table. */
     struct rule *(*rule_alloc)(void);
     int (*rule_construct)(struct rule *rule);
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
-
-    /* Removes 'rule' from 'rule->ofproto->cls' and from the datapath.
-     *
-     * 'rule' will be destructed, with ->rule_destruct(), soon after. */
-    void (*rule_remove)(struct rule *rule);
 
     /* Obtains statistics for 'rule', storing the number of packets that have
      * matched it in '*packet_count' and the number of bytes in those packets

@@ -692,7 +692,7 @@ classifier_count(const struct classifier *cls)
  * rule, even rules that cannot have any effect because the new rule matches a
  * superset of their flows and has higher priority. */
 struct cls_rule *
-classifier_insert(struct classifier *cls, struct cls_rule *rule)
+classifier_replace(struct classifier *cls, struct cls_rule *rule)
 {
     struct cls_rule *old_rule;
     struct cls_table *table;
@@ -708,6 +708,19 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
         cls->n_rules++;
     }
     return old_rule;
+}
+
+/* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
+ * must not modify or free it.
+ *
+ * 'cls' must not contain an identical rule (including wildcards, values of
+ * fixed fields, and priority).  Use classifier_find_rule_exactly() to find
+ * such a rule. */
+void
+classifier_insert(struct classifier *cls, struct cls_rule *rule)
+{
+    struct cls_rule *displaced_rule = classifier_replace(cls, rule);
+    assert(!displaced_rule);
 }
 
 /* Removes 'rule' from 'cls'.  It is the caller's responsibility to free

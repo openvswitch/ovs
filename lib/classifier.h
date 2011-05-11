@@ -121,7 +121,8 @@ void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
-struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
+void classifier_insert(struct classifier *, struct cls_rule *);
+struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
                                    const struct flow *);
