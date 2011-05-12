@@ -378,6 +378,15 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         return;
     }
 
+    /* According to the 802.1ag specification, reception of a CCM with an
+     * incorrect ccm_interval should trigger a fault.  We ignore this
+     * requirement for several reasons.
+     *
+     * Faults can cause a controller or Open vSwitch to make potentially
+     * expensive changes to the network topology.  It seems prudent to trigger
+     * them judiciously, especially when CFM is used to check slave status of
+     * bonds. Furthermore, faults can be maliciously triggered by crafting
+     * invalid CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
         cfmi->x_recv_time = time_msec();
         cfm->fault = true;
@@ -391,8 +400,12 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
         if (rmp) {
             rmp->recv_time = time_msec();
-            rmp->fault = ccm_interval != cfmi->ccm_interval;
-            cfm->fault = rmp->fault || cfm->fault;
+
+            if (ccm_interval != cfmi->ccm_interval) {
+                VLOG_WARN_RL(&rl, "received a CCM with an invalid interval"
+                             " (%"PRIu8") from RMP %"PRIu16, ccm_interval,
+                             rmp->mpid);
+            }
         } else {
             cfmi->x_recv_time = time_msec();
             cfm->fault = true;
