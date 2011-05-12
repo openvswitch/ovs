@@ -118,7 +118,7 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 #define FWW_TP_DST      ((OVS_FORCE flow_wildcards_t) (1 << 7))
 /* Same meanings as corresponding OFPFW_* bits, but differ in value. */
 #define FWW_NW_TOS      ((OVS_FORCE flow_wildcards_t) (1 << 1))
-/* No corresponding OFPFW_* or OVSFW_* bits. */
+/* No corresponding OFPFW_* bits. */
 #define FWW_ETH_MCAST   ((OVS_FORCE flow_wildcards_t) (1 << 8))
                                                        /* multicast bit only */
 #define FWW_ARP_SHA     ((OVS_FORCE flow_wildcards_t) (1 << 9))

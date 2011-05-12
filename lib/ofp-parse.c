@@ -853,7 +853,7 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
     parse_ofp_str(&fm, is_del ? NULL : &actions, string);
     fm.command = command;
 
-    min_format = ofputil_min_flow_format(&fm.cr, true, fm.cookie);
+    min_format = ofputil_min_flow_format(&fm.cr);
     next_format = MAX(*cur_format, min_format);
     if (next_format != *cur_format) {
         struct ofpbuf *sff = ofputil_make_set_flow_format(next_format);

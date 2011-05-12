@@ -78,10 +78,12 @@ Removes each \fInetdev\fR from the list of network devices datapath
 Prints the name of each configured datapath on a separate line.
 .
 .TP
-\fBshow \fR[\fIdp\fR...]
+[\fB\-s\fR | \fB\-\-statistics\fR] \fBshow \fR[\fIdp\fR...]
 Prints a summary of configured datapaths, including their datapath
 numbers and a list of ports connected to each datapath.  (The local
-port is identified as port 0.)
+port is identified as port 0.)  If \fB\-s\fR or \fB\-\-statistics\fR
+is specified, then packet and byte counters are also printed for each
+port.
 .IP
 If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
@@ -104,6 +106,9 @@ not OpenFlow flow entries.  By deleting them, the process that set them
 up may be confused about their disappearance.
 .
 .SH OPTIONS
+.IP "\fB\-s\fR, \fB\-\-statistics\fR"
+Causes the \fBshow\fR command to print packet and byte counters for
+each port within the datapaths that it shows.
 .TP
 \fB\-t\fR, \fB\-\-timeout=\fIsecs\fR
 Limits \fBovs\-dpctl\fR runtime to approximately \fIsecs\fR seconds.  If

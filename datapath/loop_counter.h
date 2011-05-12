@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -23,6 +23,6 @@ struct loop_counter {
 
 struct loop_counter *loop_get_counter(void);
 void loop_put_counter(void);
-void loop_suppress(struct datapath *, struct sw_flow_actions *);
+int loop_suppress(struct datapath *, struct sw_flow_actions *);
 
 #endif /* loop_counter.h */

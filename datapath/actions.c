@@ -23,13 +23,13 @@
 #include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
+#include "loop_counter.h"
 #include "openvswitch/datapath-protocol.h"
 #include "vlan.h"
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *, struct sk_buff *,
-			      const struct sw_flow_key *,
-			      const struct nlattr *actions, u32 actions_len);
+			      struct sw_flow_actions *acts);
 
 static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
 {
@@ -112,35 +112,34 @@ static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, __be16 tci)
 	return skb;
 }
 
-static bool is_ip(struct sk_buff *skb, const struct sw_flow_key *key)
+static bool is_ip(struct sk_buff *skb)
 {
-	return (key->dl_type == htons(ETH_P_IP) &&
+	return (OVS_CB(skb)->flow->key.dl_type == htons(ETH_P_IP) &&
 		skb->transport_header > skb->network_header);
 }
 
-static __sum16 *get_l4_checksum(struct sk_buff *skb, const struct sw_flow_key *key)
+static __sum16 *get_l4_checksum(struct sk_buff *skb)
 {
+	u8 nw_proto = OVS_CB(skb)->flow->key.nw_proto;
 	int transport_len = skb->len - skb_transport_offset(skb);
-	if (key->nw_proto == IPPROTO_TCP) {
+	if (nw_proto == IPPROTO_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			return &tcp_hdr(skb)->check;
-	} else if (key->nw_proto == IPPROTO_UDP) {
+	} else if (nw_proto == IPPROTO_UDP) {
 		if (likely(transport_len >= sizeof(struct udphdr)))
 			return &udp_hdr(skb)->check;
 	}
 	return NULL;
 }
 
-static struct sk_buff *set_nw_addr(struct sk_buff *skb,
-				   const struct sw_flow_key *key,
-				   const struct nlattr *a)
+static struct sk_buff *set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
 {
 	__be32 new_nwaddr = nla_get_be32(a);
 	struct iphdr *nh;
 	__sum16 *check;
 	__be32 *nwaddr;
 
-	if (unlikely(!is_ip(skb, key)))
+	if (unlikely(!is_ip(skb)))
 		return skb;
 
 	skb = make_writable(skb, 0);
@@ -150,7 +149,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	nh = ip_hdr(skb);
 	nwaddr = nla_type(a) == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
 
-	check = get_l4_checksum(skb, key);
+	check = get_l4_checksum(skb);
 	if (likely(check))
 		inet_proto_csum_replace4(check, skb, *nwaddr, new_nwaddr, 1);
 	csum_replace4(&nh->check, *nwaddr, new_nwaddr);
@@ -162,11 +161,9 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *set_nw_tos(struct sk_buff *skb,
-				  const struct sw_flow_key *key,
-				  u8 nw_tos)
+static struct sk_buff *set_nw_tos(struct sk_buff *skb, u8 nw_tos)
 {
-	if (unlikely(!is_ip(skb, key)))
+	if (unlikely(!is_ip(skb)))
 		return skb;
 
 	skb = make_writable(skb, 0);
@@ -185,15 +182,13 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *set_tp_port(struct sk_buff *skb,
-				   const struct sw_flow_key *key,
-				   const struct nlattr *a)
+static struct sk_buff *set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 {
 	struct udphdr *th;
 	__sum16 *check;
 	__be16 *port;
 
-	if (unlikely(!is_ip(skb, key)))
+	if (unlikely(!is_ip(skb)))
 		return skb;
 
 	skb = make_writable(skb, 0);
@@ -201,7 +196,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
 		return NULL;
 
 	/* Must follow make_writable() since that can move the skb data. */
-	check = get_l4_checksum(skb, key);
+	check = get_l4_checksum(skb);
 	if (unlikely(!check))
 		return skb;
 
@@ -226,17 +221,16 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb,
  *
  * @skb: skbuff containing an Ethernet packet, with network header pointing
  * just past the Ethernet and optional 802.1Q header.
- * @key: flow key extracted from @skb by flow_extract()
  *
  * Returns true if @skb is an invalid Ethernet+IPv4 ARP packet: one with screwy
  * or truncated header fields or one whose inner and outer Ethernet address
  * differ.
  */
-static bool is_spoofed_arp(struct sk_buff *skb, const struct sw_flow_key *key)
+static bool is_spoofed_arp(struct sk_buff *skb)
 {
 	struct arp_eth_header *arp;
 
-	if (key->dl_type != htons(ETH_P_ARP))
+	if (OVS_CB(skb)->flow->key.dl_type != htons(ETH_P_ARP))
 		return false;
 
 	if (skb_network_offset(skb) + sizeof(struct arp_eth_header) > skb->len)
@@ -268,8 +262,7 @@ error:
 	kfree_skb(skb);
 }
 
-static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg,
-			  const struct sw_flow_key *key)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg)
 {
 	struct dp_upcall_info upcall;
 
@@ -278,7 +271,7 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg,
 		return -ENOMEM;
 
 	upcall.cmd = ODP_PACKET_CMD_ACTION;
-	upcall.key = key;
+	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = arg;
 	upcall.sample_pool = 0;
 	upcall.actions = NULL;
@@ -288,8 +281,7 @@ static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg,
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			      const struct sw_flow_key *key,
-			      const struct nlattr *actions, u32 actions_len)
+			      struct sw_flow_actions *acts)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -300,7 +292,8 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	const struct nlattr *a;
 	int rem, err;
 
-	for (a = actions, rem = actions_len; rem > 0; a = nla_next(a, &rem)) {
+	for (a = acts->actions, rem = acts->actions_len; rem > 0;
+	     a = nla_next(a, &rem)) {
 		if (prev_port != -1) {
 			do_output(dp, skb_clone(skb, GFP_ATOMIC), prev_port);
 			prev_port = -1;
@@ -312,7 +305,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODP_ACTION_ATTR_CONTROLLER:
-			err = output_control(dp, skb, nla_get_u64(a), key);
+			err = output_control(dp, skb, nla_get_u64(a));
 			if (err) {
 				kfree_skb(skb);
 				return err;
@@ -347,16 +340,16 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case ODP_ACTION_ATTR_SET_NW_SRC:
 		case ODP_ACTION_ATTR_SET_NW_DST:
-			skb = set_nw_addr(skb, key, a);
+			skb = set_nw_addr(skb, a);
 			break;
 
 		case ODP_ACTION_ATTR_SET_NW_TOS:
-			skb = set_nw_tos(skb, key, nla_get_u8(a));
+			skb = set_nw_tos(skb, nla_get_u8(a));
 			break;
 
 		case ODP_ACTION_ATTR_SET_TP_SRC:
 		case ODP_ACTION_ATTR_SET_TP_DST:
-			skb = set_tp_port(skb, key, a);
+			skb = set_tp_port(skb, a);
 			break;
 
 		case ODP_ACTION_ATTR_SET_PRIORITY:
@@ -368,7 +361,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
-			if (unlikely(is_spoofed_arp(skb, key)))
+			if (unlikely(is_spoofed_arp(skb)))
 				goto exit;
 			break;
 		}
@@ -384,8 +377,7 @@ exit:
 }
 
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 const struct sw_flow_key *key,
-			 const struct nlattr *a, u32 actions_len)
+			 struct sw_flow_actions *acts)
 {
 	struct sk_buff *nskb;
 	struct vport *p = OVS_CB(skb)->vport;
@@ -403,23 +395,46 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 		return;
 
 	upcall.cmd = ODP_PACKET_CMD_SAMPLE;
-	upcall.key = key;
+	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = 0;
 	upcall.sample_pool = atomic_read(&p->sflow_pool);
-	upcall.actions = a;
-	upcall.actions_len = actions_len;
+	upcall.actions = acts->actions;
+	upcall.actions_len = acts->actions_len;
 	dp_upcall(dp, nskb, &upcall);
 }
 
 /* Execute a list of actions against 'skb'. */
-int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    const struct sw_flow_key *key,
-		    const struct nlattr *actions, u32 actions_len)
+int execute_actions(struct datapath *dp, struct sk_buff *skb)
 {
+	struct sw_flow_actions *acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
+	struct loop_counter *loop;
+	int error;
+
+	/* Check whether we've looped too much. */
+	loop = loop_get_counter();
+	if (unlikely(++loop->count > MAX_LOOPS))
+		loop->looping = true;
+	if (unlikely(loop->looping)) {
+		error = loop_suppress(dp, acts);
+		kfree_skb(skb);
+		goto out_loop;
+	}
+
+	/* Really execute actions. */
 	if (dp->sflow_probability)
-		sflow_sample(dp, skb, key, actions, actions_len);
-
+		sflow_sample(dp, skb, acts);
 	OVS_CB(skb)->tun_id = 0;
+	error = do_execute_actions(dp, skb, acts);
 
-	return do_execute_actions(dp, skb, key, actions, actions_len);
+	/* Check whether sub-actions looped too much. */
+	if (unlikely(loop->looping))
+		error = loop_suppress(dp, acts);
+
+out_loop:
+	/* Decrement loop counter. */
+	if (!--loop->count)
+		loop->looping = false;
+	loop_put_counter();
+
+	return error;
 }

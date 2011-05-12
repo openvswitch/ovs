@@ -74,7 +74,7 @@ struct bond_slave {
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
 
     /* BM_STABLE specific bonding info. */
-    uint16_t stb_id;            /* ID used for 'stb_slaves' ordering. */
+    uint32_t stb_id;            /* ID used for 'stb_slaves' ordering. */
 };
 
 /* A bond, that is, a set of network devices grouped to improve performance or
@@ -93,6 +93,7 @@ struct bond {
     int updelay, downdelay;     /* Delay before slave goes up/down, in ms. */
     bool lacp_negotiated;       /* LACP negotiations were successful. */
     bool bond_revalidate;       /* True if flows need revalidation. */
+    uint32_t basis;             /* Basis for flow hash function. */
 
     /* SLB specific bonding info. */
     struct bond_entry *hash;     /* An array of (BOND_MASK + 1) elements. */
@@ -129,8 +130,9 @@ static void bond_link_status_update(struct bond_slave *, struct tag_set *);
 static void bond_choose_active_slave(struct bond *, struct tag_set *);
 static bool bond_is_tcp_hash(const struct bond *);
 static unsigned int bond_hash_src(const uint8_t mac[ETH_ADDR_LEN],
-                                  uint16_t vlan);
-static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan);
+                                  uint16_t vlan, uint32_t basis);
+static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan,
+                                  uint32_t basis);
 static struct bond_entry *lookup_bond_entry(const struct bond *,
                                             const struct flow *,
                                             uint16_t vlan);
@@ -291,6 +293,11 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         revalidate = true;
     }
 
+    if (bond->basis != s->basis) {
+        bond->basis = s->basis;
+        revalidate = true;
+    }
+
     if (bond->detect == BLSM_CARRIER) {
         struct bond_slave *slave;
 
@@ -359,7 +366,7 @@ bond_slave_set_netdev__(struct bond *bond, struct bond_slave *slave,
  * 'slave_' or destroying 'bond'.
  */
 void
-bond_slave_register(struct bond *bond, void *slave_, uint16_t stb_id,
+bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
                     struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
@@ -999,6 +1006,8 @@ bond_unixctl_show(struct unixctl_conn *conn,
                       bond_is_tcp_hash(bond) ? "balance-tcp" : "balance-slb");
     }
 
+    ds_put_format(&ds, "bond-hash-basis: %"PRIu32"\n", bond->basis);
+
     ds_put_format(&ds, "bond-detect-mode: %s\n",
                   bond->monitor ? "carrier" : "miimon");
 
@@ -1227,11 +1236,13 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
     uint8_t hash;
     char *hash_cstr;
     unsigned int vlan;
-    char *mac_s, *vlan_s;
+    uint32_t basis;
+    char *mac_s, *vlan_s, *basis_s;
     char *save_ptr = NULL;
 
     mac_s  = strtok_r(args, " ", &save_ptr);
     vlan_s = strtok_r(NULL, " ", &save_ptr);
+    basis_s = strtok_r(NULL, " ", &save_ptr);
 
     if (vlan_s) {
         if (sscanf(vlan_s, "%u", &vlan) != 1) {
@@ -1242,9 +1253,18 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
         vlan = OFP_VLAN_NONE;
     }
 
+    if (basis_s) {
+        if (sscanf(basis_s, "%"PRIu32, &basis) != 1) {
+            unixctl_command_reply(conn, 501, "invalid basis");
+            return;
+        }
+    } else {
+        basis = 0;
+    }
+
     if (sscanf(mac_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
         == ETH_ADDR_SCAN_COUNT) {
-        hash = bond_hash_src(mac, vlan) & BOND_MASK;
+        hash = bond_hash_src(mac, vlan, basis) & BOND_MASK;
 
         hash_cstr = xasprintf("%u", hash);
         unixctl_command_reply(conn, 200, hash_cstr);
@@ -1376,13 +1396,13 @@ bond_is_tcp_hash(const struct bond *bond)
 }
 
 static unsigned int
-bond_hash_src(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
+bond_hash_src(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan, uint32_t basis)
 {
-    return hash_bytes(mac, ETH_ADDR_LEN, vlan);
+    return hash_3words(hash_bytes(mac, ETH_ADDR_LEN, 0), vlan, basis);
 }
 
 static unsigned int
-bond_hash_tcp(const struct flow *flow, uint16_t vlan)
+bond_hash_tcp(const struct flow *flow, uint16_t vlan, uint32_t basis)
 {
     struct flow hash_flow = *flow;
     hash_flow.vlan_tci = vlan;
@@ -1390,7 +1410,7 @@ bond_hash_tcp(const struct flow *flow, uint16_t vlan)
     /* The symmetric quality of this hash function is not required, but
      * flow_hash_symmetric_l4 already exists, and is sufficient for our
      * purposes, so we use it out of convenience. */
-    return flow_hash_symmetric_l4(&hash_flow, 0);
+    return flow_hash_symmetric_l4(&hash_flow, basis);
 }
 
 static unsigned int
@@ -1399,8 +1419,8 @@ bond_hash(const struct bond *bond, const struct flow *flow, uint16_t vlan)
     assert(bond->balance != BM_AB);
 
     return (bond_is_tcp_hash(bond)
-            ? bond_hash_tcp(flow, vlan)
-            : bond_hash_src(flow->dl_src, vlan));
+            ? bond_hash_tcp(flow, vlan, bond->basis)
+            : bond_hash_src(flow->dl_src, vlan, bond->basis));
 }
 
 static struct bond_entry *

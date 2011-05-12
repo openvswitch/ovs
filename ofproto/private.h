@@ -316,7 +316,7 @@ struct ofproto_class {
      *
      *   - 'name' to "table#" where # is the table ID.
      *
-     *   - 'wildcards' to OVSFW_ALL.
+     *   - 'wildcards' to OFPFW_ALL.
      *
      *   - 'max_entries' to 1,000,000.
      *

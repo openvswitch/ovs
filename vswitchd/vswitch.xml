@@ -538,10 +538,10 @@
             balancing is done.  Uses a similar hashing strategy to
             <code>balance-tcp</code>, falling back to <code>balance-slb</code>
             style hashing when LACP negotiations are unsuccessful.</p>
-          <p>Slave selection decisions are made based on LACP port ID when LACP
-            negotiations are successful, falling back to openflow port number
-            when unsuccessful.  Thus, decisions are consistent across all
-            ovs-vswitchd instances with equivalent port IDs.</p>
+          <p>Slave selection decisions are made based on
+            <code>bond-stable-id</code> if set.  Otherwise, OpenFlow port
+            number is used.  Decisions are consistent across all ovs-vswitchd
+            instances with equivalent <code>bond-stable-id</code>s.</p>
         </dd>
       </dl>
 
@@ -577,8 +577,8 @@
 
       <column name="lacp">
         <p>Configures LACP on this port.  LACP allows directly connected
-          switchs to negotiate which links may be bonded.  LACP may be enabled
-          on non-bonded ports for the benefit of any switchs they may be
+          switches to negotiate which links may be bonded.  LACP may be enabled
+          on non-bonded ports for the benefit of any switches they may be
           connected to.  <code>active</code> ports are allowed to initiate LACP
           negotiations.  <code>passive</code> ports are allowed to participate
           in LACP negotiations initiated by a remote switch, but not allowed to
@@ -647,6 +647,10 @@
           <dd> The number of milliseconds between successive attempts to
             poll each interface's MII.  Only relevant on ports which use
             <code>miimon</code> to detect failures. </dd>
+          <dt><code>bond-hash-basis</code></dt>
+          <dd> An integer hashed along with flows when choosing output slaves.
+            When changed, all flows will be assigned different hash values
+            possibly causing slave selection decisions to change.</dd>
           <dt><code>lacp-system-id</code></dt>
           <dd> The LACP system ID of this <ref table="Port"/>.  The system ID
             of a LACP bond is used to identify itself to its partners.  Must
@@ -674,11 +678,10 @@
               something other than <code>fast</code> or <code>slow</code> is
               not supported by the LACP specification.</p>
           </dd>
-          <dt><code>lacp-strict</code></dt>
-          <dd> When <code>true</code>, configures this <ref table="Port"/> to
-            require successful LACP negotiations to enable any slaves.
-            Defaults to <code>false</code> which safely allows LACP to be used
-            with switchs that do not support the protocol.</dd>
+          <dt><code>lacp-heartbeat</code></dt>
+          <dd> Treats LACP like a simple heartbeat protocol for link state
+            monitoring.  Most features of the LACP protocol are disabled when
+            this mode is in use.</dd>
         </dl>
       </column>
     </group>
@@ -823,18 +826,30 @@
                 Default is disabled, set to <code>true</code> to enable.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
             <dl>
               <dt><code>header_cache</code></dt>
@@ -949,18 +964,30 @@
                 Default is disabled, set to <code>true</code> to enable.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
           </dd>
           <dt><code>capwap</code></dt>
@@ -1004,18 +1031,30 @@
                 Default is the system default TTL.</dd>
             </dl>
             <dl>
+              <dt><code>df_inherit</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be copied
+                from the inner IP headers (those of the encapsulated traffic)
+                to the outer (tunnel) headers.  Default is disabled; set to
+                <code>true</code> to enable.</dd>
+            </dl>
+            <dl>
+              <dt><code>df_default</code></dt>
+              <dd>Optional.  If enabled, the Don't Fragment bit will be set by
+                default on tunnel headers if the <code>df_inherit</code> option
+                is not set, or if the encapsulated packet is not IP.  Default
+                is enabled; set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
               <dt><code>pmtud</code></dt>
               <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
-                ``ICMP destination unreachable - fragmentation'' needed
+                ``ICMP Destination Unreachable - Fragmentation Needed''
                 messages will be generated for IPv4 packets with the DF bit set
                 and IPv6 packets above the minimum MTU if the packet size
-                exceeds the path MTU minus the size of the tunnel headers.  It
-                also forces the encapsulating packet DF bit to be set (it is
-                always set if the inner packet implies path MTU discovery).
+                exceeds the path MTU minus the size of the tunnel headers.
                 Note that this option causes behavior that is typically
                 reserved for routers and therefore is not entirely in
                 compliance with the IEEE 802.1D specification for bridges.
-                Default is enabled, set to <code>false</code> to disable.</dd>
+                Default is enabled; set to <code>false</code> to disable.</dd>
             </dl>
             <dl>
               <dt><code>header_cache</code></dt>
@@ -1047,6 +1086,8 @@
               </dd>
             </dl>
           </dd>
+          <dt><code>null</code></dt>
+          <dd>An ignored interface.</dd>
         </dl>
       </column>
 
@@ -1281,6 +1322,13 @@
       <column name="other_config">
         Key-value pairs for rarely used interface features.
         <dl>
+          <dt><code>bond-stable-id</code></dt>
+          <dd> A positive integer using in <code>stable</code> bond mode to
+            make slave selection decisions.  Allocating
+            <code>bond-stable-id</code>s consistently across interfaces
+            participating in a bond will guarantee consistent slave selection
+            decisions across ovs-vswitchd instances when using
+            <code>stable</code> bonding mode.</dd>
           <dt><code>lacp-port-id</code></dt>
           <dd> The LACP port ID of this <ref table="Interface"/>.  Port IDs are
             used in LACP negotiations to identify individual ports
@@ -1291,6 +1339,11 @@
             LACP negotiations <ref table="Interface"/>s with numerically lower
             priorities are preferred for aggregation.  Must be a number between
             1 and 65535.</dd>
+          <dt><code>lacp-aggregation-key</code></dt>
+          <dd> The LACP aggregation key of this <ref table="Interface"/>.
+            <ref table="Interface"/>s with different aggregation keys may not
+            be active within a given <ref table="Port"/> at the same time. Must
+            be a number between 1 and 65535.</dd>
         </dl>
       </column>
 

@@ -35,6 +35,7 @@
 #include "bitmap.h"
 #include "dpif-provider.h"
 #include "netdev.h"
+#include "netdev-linux.h"
 #include "netdev-vport.h"
 #include "netlink-socket.h"
 #include "netlink.h"
@@ -431,6 +432,12 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
         dpif_port->name = xstrdup(reply.name);
         dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
         dpif_port->port_no = reply.port_no;
+        if (reply.stats) {
+            netdev_stats_from_rtnl_link_stats64(&dpif_port->stats,
+                                                reply.stats);
+        } else {
+            memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
+        }
         ofpbuf_delete(buf);
     }
     return error;
@@ -472,6 +479,8 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 
 struct dpif_linux_port_state {
     struct nl_dump dump;
+    unsigned long *port_bitmap; /* Ports in the datapath. */
+    bool complete;              /* Dump completed without error. */
 };
 
 static int
@@ -483,6 +492,8 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
     struct ofpbuf *buf;
 
     *statep = state = xmalloc(sizeof *state);
+    state->port_bitmap = bitmap_allocate(LRU_MAX_PORTS);
+    state->complete = false;
 
     dpif_linux_vport_init(&request);
     request.cmd = ODP_DP_CMD_GET;
@@ -506,6 +517,7 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
     int error;
 
     if (!nl_dump_next(&state->dump, &buf)) {
+        state->complete = true;
         return EOF;
     }
 
@@ -514,17 +526,39 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
         return error;
     }
 
+    if (vport.port_no < LRU_MAX_PORTS) {
+        bitmap_set1(state->port_bitmap, vport.port_no);
+    }
+
     dpif_port->name = (char *) vport.name;
     dpif_port->type = (char *) netdev_vport_get_netdev_type(&vport);
     dpif_port->port_no = vport.port_no;
+    if (vport.stats) {
+        netdev_stats_from_rtnl_link_stats64(&dpif_port->stats, vport.stats);
+    } else {
+        memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
+    }
     return 0;
 }
 
 static int
-dpif_linux_port_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
+dpif_linux_port_dump_done(const struct dpif *dpif_, void *state_)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_port_state *state = state_;
     int error = nl_dump_done(&state->dump);
+
+    if (state->complete) {
+        uint16_t i;
+
+        for (i = 0; i < LRU_MAX_PORTS; i++) {
+            if (!bitmap_is_set(state->port_bitmap, i)) {
+                dpif_linux_push_port(dpif, i);
+            }
+        }
+    }
+
+    free(state->port_bitmap);
     free(state);
     return error;
 }

@@ -71,7 +71,6 @@ enum ofputil_msg_code {
     OFPUTIL_OFPST_AGGREGATE_REPLY,
 
     /* NXT_* messages. */
-    OFPUTIL_NXT_TUN_ID_FROM_COOKIE,
     OFPUTIL_NXT_ROLE_REQUEST,
     OFPUTIL_NXT_ROLE_REPLY,
     OFPUTIL_NXT_SET_FLOW_FORMAT,
@@ -101,11 +100,8 @@ int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 
 /* Work with OpenFlow 1.0 ofp_match. */
 void ofputil_cls_rule_from_match(const struct ofp_match *,
-                                 unsigned int priority, enum nx_flow_format,
-                                 ovs_be64 cookie, struct cls_rule *);
-void ofputil_cls_rule_to_match(const struct cls_rule *, enum nx_flow_format,
-                               struct ofp_match *,
-                               ovs_be64 cookie_in, ovs_be64 *cookie_out);
+                                 unsigned int priority, struct cls_rule *);
+void ofputil_cls_rule_to_match(const struct cls_rule *, struct ofp_match *);
 void normalize_match(struct ofp_match *);
 char *ofp_match_to_literal_string(const struct ofp_match *match);
 
@@ -117,9 +113,7 @@ ovs_be16 ofputil_dl_type_from_openflow(ovs_be16 ofp_dl_type);
 bool ofputil_flow_format_is_valid(enum nx_flow_format);
 const char *ofputil_flow_format_to_string(enum nx_flow_format);
 int ofputil_flow_format_from_string(const char *);
-enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *,
-                                            bool cookie_support,
-                                            ovs_be64 cookie);
+enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *);
 
 struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
 
@@ -142,7 +136,7 @@ struct flow_mod {
 };
 
 int ofputil_decode_flow_mod(struct flow_mod *, const struct ofp_header *,
-                            enum nx_flow_format, bool flow_mod_table_id);
+                            bool flow_mod_table_id);
 struct ofpbuf *ofputil_encode_flow_mod(const struct flow_mod *,
                                        enum nx_flow_format,
                                        bool flow_mod_table_id);
@@ -156,8 +150,7 @@ struct flow_stats_request {
 };
 
 int ofputil_decode_flow_stats_request(struct flow_stats_request *,
-                                      const struct ofp_header *,
-                                      enum nx_flow_format);
+                                      const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct flow_stats_request *, enum nx_flow_format);
 
@@ -177,8 +170,7 @@ struct ofputil_flow_stats {
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
-                                    struct ofpbuf *msg,
-                                    enum nx_flow_format);
+                                    struct ofpbuf *msg);
 
 /* Flow removed message, independent of flow format. */
 struct ofputil_flow_removed {
@@ -193,8 +185,7 @@ struct ofputil_flow_removed {
 };
 
 int ofputil_decode_flow_removed(struct ofputil_flow_removed *,
-                                const struct ofp_header *,
-                                enum nx_flow_format);
+                                const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum nx_flow_format);
 

@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "command-line.h"
 #include "compiler.h"
@@ -216,10 +217,8 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
-#ifdef HAVE_OPENSSL
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
-#endif
         {0, 0, 0, 0},
     };
     char *tmp, *short_options;
@@ -277,13 +276,11 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
 
-#ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_PEER_CA_CERT:
             stream_ssl_set_peer_ca_cert_file(optarg);
             break;
-#endif
 
         case '?':
             exit(EXIT_FAILURE);
@@ -2547,9 +2544,19 @@ pre_parse_column_key_value(struct vsctl_context *ctx,
 static void
 pre_cmd_get(struct vsctl_context *ctx)
 {
+    const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     int i;
+
+    /* Using "get" without --id or a column name could possibly make sense.
+     * Maybe, for example, a ovs-vsctl run wants to assert that a row exists.
+     * But it is unlikely that an interactive user would want to do that, so
+     * issue a warning if we're running on a terminal. */
+    if (!id && ctx->argc <= 3 && isatty(STDOUT_FILENO)) {
+        VLOG_WARN("\"get\" command without row arguments or \"--id\" is "
+                  "possibly erroneous");
+    }
 
     table = pre_get_table(ctx, table_name);
     for (i = 3; i < ctx->argc; i++) {

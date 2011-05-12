@@ -15,6 +15,9 @@
  */
 
 #include <config.h>
+
+#include "netdev-linux.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -3925,7 +3928,55 @@ tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
     unsigned int min_burst = tc_buffer_per_jiffy(Bps) + mtu;
     return tc_bytes_to_ticks(Bps, MAX(burst_bytes, min_burst));
 }
+
+/* Public utility functions. */
 
+#define COPY_NETDEV_STATS                                   \
+    dst->rx_packets = src->rx_packets;                      \
+    dst->tx_packets = src->tx_packets;                      \
+    dst->rx_bytes = src->rx_bytes;                          \
+    dst->tx_bytes = src->tx_bytes;                          \
+    dst->rx_errors = src->rx_errors;                        \
+    dst->tx_errors = src->tx_errors;                        \
+    dst->rx_dropped = src->rx_dropped;                      \
+    dst->tx_dropped = src->tx_dropped;                      \
+    dst->multicast = src->multicast;                        \
+    dst->collisions = src->collisions;                      \
+    dst->rx_length_errors = src->rx_length_errors;          \
+    dst->rx_over_errors = src->rx_over_errors;              \
+    dst->rx_crc_errors = src->rx_crc_errors;                \
+    dst->rx_frame_errors = src->rx_frame_errors;            \
+    dst->rx_fifo_errors = src->rx_fifo_errors;              \
+    dst->rx_missed_errors = src->rx_missed_errors;          \
+    dst->tx_aborted_errors = src->tx_aborted_errors;        \
+    dst->tx_carrier_errors = src->tx_carrier_errors;        \
+    dst->tx_fifo_errors = src->tx_fifo_errors;              \
+    dst->tx_heartbeat_errors = src->tx_heartbeat_errors;    \
+    dst->tx_window_errors = src->tx_window_errors
+
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+void
+netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
+                                  const struct rtnl_link_stats *src)
+{
+    COPY_NETDEV_STATS;
+}
+
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+void
+netdev_stats_from_rtnl_link_stats64(struct netdev_stats *dst,
+                                    const struct rtnl_link_stats64 *src)
+{
+    COPY_NETDEV_STATS;
+}
+
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+void
+netdev_stats_to_rtnl_link_stats64(struct rtnl_link_stats64 *dst,
+                                  const struct netdev_stats *src)
+{
+    COPY_NETDEV_STATS;
+}
 
 /* Utility functions. */
 
@@ -3945,7 +3996,6 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct ifinfomsg *ifi;
-    const struct rtnl_link_stats *rtnl_stats;
     struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
     int error;
 
@@ -3973,28 +4023,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
         return EPROTO;
     }
 
-    rtnl_stats = nl_attr_get(attrs[IFLA_STATS]);
-    stats->rx_packets = rtnl_stats->rx_packets;
-    stats->tx_packets = rtnl_stats->tx_packets;
-    stats->rx_bytes = rtnl_stats->rx_bytes;
-    stats->tx_bytes = rtnl_stats->tx_bytes;
-    stats->rx_errors = rtnl_stats->rx_errors;
-    stats->tx_errors = rtnl_stats->tx_errors;
-    stats->rx_dropped = rtnl_stats->rx_dropped;
-    stats->tx_dropped = rtnl_stats->tx_dropped;
-    stats->multicast = rtnl_stats->multicast;
-    stats->collisions = rtnl_stats->collisions;
-    stats->rx_length_errors = rtnl_stats->rx_length_errors;
-    stats->rx_over_errors = rtnl_stats->rx_over_errors;
-    stats->rx_crc_errors = rtnl_stats->rx_crc_errors;
-    stats->rx_frame_errors = rtnl_stats->rx_frame_errors;
-    stats->rx_fifo_errors = rtnl_stats->rx_fifo_errors;
-    stats->rx_missed_errors = rtnl_stats->rx_missed_errors;
-    stats->tx_aborted_errors = rtnl_stats->tx_aborted_errors;
-    stats->tx_carrier_errors = rtnl_stats->tx_carrier_errors;
-    stats->tx_fifo_errors = rtnl_stats->tx_fifo_errors;
-    stats->tx_heartbeat_errors = rtnl_stats->tx_heartbeat_errors;
-    stats->tx_window_errors = rtnl_stats->tx_window_errors;
+    netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(attrs[IFLA_STATS]));
 
     ofpbuf_delete(reply);
 

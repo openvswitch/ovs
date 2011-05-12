@@ -42,7 +42,8 @@
 
 /* All public tunnel flags. */
 #define TNL_F_PUBLIC (TNL_F_CSUM | TNL_F_TOS_INHERIT | TNL_F_TTL_INHERIT | \
-		      TNL_F_PMTUD | TNL_F_HDR_CACHE | TNL_F_IPSEC)
+		      TNL_F_DF_INHERIT | TNL_F_DF_DEFAULT | TNL_F_PMTUD | \
+		      TNL_F_HDR_CACHE | TNL_F_IPSEC)
 
 /**
  * struct tnl_mutable_config - modifiable configuration for a tunnel.

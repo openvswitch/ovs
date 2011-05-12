@@ -50,9 +50,9 @@ struct lacp {
 
     enum lacp_time lacp_time;  /* Fast, Slow or Custom LACP time. */
     long long int custom_time; /* LACP_TIME_CUSTOM transmission rate. */
-    bool strict;             /* True if in strict mode. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
+    bool heartbeat;          /* LACP heartbeat mode. */
 };
 
 struct slave {
@@ -62,6 +62,7 @@ struct slave {
     struct lacp *lacp;            /* LACP object containing this slave. */
     uint16_t port_id;             /* Port ID. */
     uint16_t port_priority;       /* Port Priority. */
+    uint16_t key;                 /* Aggregation Key. 0 if default. */
     char *name;                   /* Name of this slave. */
 
     enum slave_status status;     /* Slave status. */
@@ -181,10 +182,10 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     if (!eth_addr_equals(lacp->sys_id, s->id)
         || lacp->sys_priority != s->priority
-        || lacp->strict != s->strict) {
+        || lacp->heartbeat != s->heartbeat) {
         memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
         lacp->sys_priority = s->priority;
-        lacp->strict = s->strict;
+        lacp->heartbeat = s->heartbeat;
         lacp->update = true;
     }
 
@@ -272,9 +273,12 @@ lacp_slave_register(struct lacp *lacp, void *slave_,
         slave->name = xstrdup(s->name);
     }
 
-    if (slave->port_id != s->id || slave->port_priority != s->priority) {
+    if (slave->port_id != s->id
+        || slave->port_priority != s->priority
+        || slave->key != s->key) {
         slave->port_id = s->id;
         slave->port_priority = s->priority;
+        slave->key = s->key;
 
         lacp->update = true;
 
@@ -425,6 +429,13 @@ lacp_update_attached(struct lacp *lacp)
     struct lacp_info lead_pri;
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
 
+    if (lacp->heartbeat) {
+        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
+            slave->attached = slave->status != LACP_DEFAULTED;
+        }
+        return;
+    }
+
     lacp->update = false;
 
     lead = NULL;
@@ -464,10 +475,6 @@ lacp_update_attached(struct lacp *lacp)
                                     slave->partner.sys_id)) {
                 slave->attached = false;
             }
-        }
-    } else if (lacp->strict) {
-        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-            slave->attached = false;
         }
     }
 }
@@ -525,13 +532,15 @@ slave_set_expired(struct slave *slave)
 static void
 slave_get_actor(struct slave *slave, struct lacp_info *actor)
 {
+    struct lacp *lacp = slave->lacp;
+    uint16_t key;
     uint8_t state = 0;
 
-    if (slave->lacp->active) {
+    if (lacp->active) {
         state |= LACP_STATE_ACT;
     }
 
-    if (slave->lacp->lacp_time != LACP_TIME_SLOW) {
+    if (lacp->lacp_time != LACP_TIME_SLOW) {
         state |= LACP_STATE_TIME;
     }
 
@@ -547,20 +556,25 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_EXP;
     }
 
-    if (hmap_count(&slave->lacp->slaves) > 1) {
+    if (lacp->heartbeat || hmap_count(&lacp->slaves) > 1) {
         state |= LACP_STATE_AGG;
     }
 
-    if (slave->attached || !slave->lacp->negotiated) {
+    if (slave->attached || !lacp->negotiated) {
         state |= LACP_STATE_COL | LACP_STATE_DIST;
     }
 
+    key = lacp->key_slave->key;
+    if (!key) {
+        key = lacp->key_slave->port_id;
+    }
+
     actor->state = state;
-    actor->key = htons(slave->lacp->key_slave->port_id);
+    actor->key = htons(key);
     actor->port_priority = htons(slave->port_priority);
     actor->port_id = htons(slave->port_id);
-    actor->sys_priority = htons(slave->lacp->sys_priority);
-    memcpy(&actor->sys_id, slave->lacp->sys_id, ETH_ADDR_LEN);
+    actor->sys_priority = htons(lacp->sys_priority);
+    memcpy(&actor->sys_id, lacp->sys_id, ETH_ADDR_LEN);
 }
 
 /* Given 'slave', populates 'priority' with data representing its LACP link
@@ -702,8 +716,8 @@ lacp_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "lacp: %s\n", lacp->name);
 
     ds_put_format(&ds, "\tstatus: %s", lacp->active ? "active" : "passive");
-    if (lacp->strict) {
-        ds_put_cstr(&ds, " strict");
+    if (lacp->heartbeat) {
+        ds_put_cstr(&ds, " heartbeat");
     }
     if (lacp->negotiated) {
         ds_put_cstr(&ds, " negotiated");

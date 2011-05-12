@@ -50,6 +50,7 @@ const char *bond_detect_mode_to_string(enum bond_detect_mode);
 /* Configuration for a bond as a whole. */
 struct bond_settings {
     char *name;                 /* Bond's name, for log messages. */
+    uint32_t basis;             /* Flow hashing basis. */
 
     /* Balancing configuration. */
     enum bond_mode balance;
@@ -74,7 +75,7 @@ void bond_destroy(struct bond *);
 
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
 void bond_slave_register(struct bond *, void *slave_,
-                         uint16_t stable_id, struct netdev *);
+                         uint32_t stable_id, struct netdev *);
 void bond_slave_set_netdev(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 

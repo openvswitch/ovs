@@ -80,9 +80,9 @@ parse_options(int argc, char *argv[])
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-        TABLE_LONG_OPTIONS,
-        STREAM_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS,
 #endif
+        TABLE_LONG_OPTIONS,
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -111,13 +111,11 @@ parse_options(int argc, char *argv[])
 
         TABLE_OPTION_HANDLERS(&table_style)
 
-#ifdef HAVE_OPENSSL
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
             break;
-#endif
 
         case '?':
             exit(EXIT_FAILURE);

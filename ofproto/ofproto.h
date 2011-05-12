@@ -187,6 +187,7 @@ struct ofproto_bundle_settings {
     unsigned long *trunks;      /* vlan_bitmap, NULL to trunk all VLANs. */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
+    uint32_t *bond_stable_ids;  /* Array of n_slaves elements. */
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */

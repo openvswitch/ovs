@@ -88,7 +88,7 @@ struct lacp_settings {
     bool active;
     enum lacp_time lacp_time;
     long long int custom_time;
-    bool strict;
+    bool heartbeat;
 };
 
 void lacp_init(void);
@@ -106,6 +106,7 @@ struct lacp_slave_settings {
     char *name;
     uint16_t id;
     uint16_t priority;
+    uint16_t key;
 };
 
 void lacp_slave_register(struct lacp *, void *slave_,

@@ -112,8 +112,8 @@ install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
 
-install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch \;
+install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch
+find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch \;
 install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 # Get rid of stuff we don't want to make RPM happy.
@@ -224,15 +224,10 @@ for s in openvswitch openvswitch-xapi-update; do
     chkconfig $s on || printf "Could not enable $s init script."
 done
 
-if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
+if [ "$1" = "1" ]; then    # $1 = 1 for install
     # Configure system to use Open vSwitch
-    echo vswitch > /etc/xensource/network.conf
-
-    printf "\nYou MUST reboot the server NOW to complete the change to\n"
-    printf "Open vSwitch.  Attempts to modify networking on the server\n"
-    printf "or any hosted VM will fail until after the reboot and could\n"
-    printf "leave the server in a state requiring manual recovery.\n\n"
-else
+    /opt/xensource/bin/xe-switch-network-backend vswitch
+else    # $1 = 2 for upgrade
 
     mode=$(cat /etc/xensource/network.conf)
     if [ "$mode" != "vswitch" ] && [ "$mode" != "openvswitch" ]; then
@@ -252,9 +247,16 @@ fi
 depmod %{xen_version}
 
 %preun
-if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
+    # Configure system to use bridge
+    /opt/xensource/bin/xe-switch-network-backend bridge
+
+    # The "openvswitch" service should have been removed from
+    # "xe-switch-network-backend bridge".
     for s in openvswitch openvswitch-xapi-update; do
-        chkconfig --del $s || printf "Could not remove $s init script."
+        if chkconfig --list $s >/dev/null 2>&1; then
+            chkconfig --del $s || printf "Could not remove $s init script."
+        fi
     done
 fi
 
@@ -290,7 +292,7 @@ do
     fi
 done
 
-if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
 
@@ -305,19 +307,12 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
     rm -f /etc/openvswitch/vswitchd.cacert
-    rm -f /var/xapi/network.dbcache
 
     # Remove saved XenServer scripts directory, but only if it's empty
     rmdir -p /usr/lib/openvswitch/xs-saved 2>/dev/null
-
-    # Configure system to use bridge
-    echo bridge > /etc/xensource/network.conf
-
-    printf "\nYou MUST reboot the server now to complete the change to\n"
-    printf "standard Xen networking.  Attempts to modify networking on the\n"
-    printf "server or any hosted VM will fail until after the reboot and\n"
-    printf "could leave the server in a state requiring manual recovery.\n\n"
 fi
+
+exit 0
 
 %files
 %defattr(-,root,root)
@@ -397,5 +392,5 @@ fi
 %exclude /usr/share/openvswitch/python/ovs/db/*.py[co]
 
 %files %{module_package}
-/lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
-%exclude /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
+/lib/modules/%{xen_version}/extra/openvswitch/openvswitch_mod.ko
+%exclude /lib/modules/%{xen_version}/extra/openvswitch/brcompat_mod.ko

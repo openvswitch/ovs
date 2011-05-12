@@ -102,25 +102,17 @@ enum {
 };
 
 /* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
- * 'priority'.
- *
- * 'flow_format' must either NXFF_OPENFLOW10 or NXFF_TUN_ID_FROM_COOKIE.  In
- * the latter case only, 'flow''s tun_id field will be taken from the high bits
- * of 'cookie', if 'match''s wildcards do not indicate that tun_id is
- * wildcarded. */
+ * 'priority'. */
 void
 ofputil_cls_rule_from_match(const struct ofp_match *match,
-                            unsigned int priority,
-                            enum nx_flow_format flow_format,
-                            ovs_be64 cookie, struct cls_rule *rule)
+                            unsigned int priority, struct cls_rule *rule)
 {
     struct flow_wildcards *wc = &rule->wc;
     unsigned int ofpfw;
     ovs_be16 vid, pcp;
 
     /* Initialize rule->priority. */
-    ofpfw = ntohl(match->wildcards);
-    ofpfw &= flow_format == NXFF_TUN_ID_FROM_COOKIE ? OVSFW_ALL : OFPFW_ALL;
+    ofpfw = ntohl(match->wildcards) & OFPFW_ALL;
     rule->priority = !ofpfw ? UINT16_MAX : priority;
 
     /* Initialize most of rule->wc. */
@@ -135,10 +127,6 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     }
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
-
-    if (flow_format == NXFF_TUN_ID_FROM_COOKIE && !(ofpfw & NXFW_TUN_ID)) {
-        cls_rule_set_tun_id(rule, htonll(ntohll(cookie) >> 32));
-    }
 
     if (ofpfw & OFPFW_DL_DST) {
         /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
@@ -206,21 +194,9 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     cls_rule_zero_wildcarded_fields(rule);
 }
 
-/* Convert 'rule' into the OpenFlow match structure 'match'.  'flow_format'
- * must either NXFF_OPENFLOW10 or NXFF_TUN_ID_FROM_COOKIE.
- *
- * The NXFF_TUN_ID_FROM_COOKIE flow format requires modifying the flow cookie.
- * This function can help with that, if 'cookie_out' is nonnull.  For
- * NXFF_OPENFLOW10, or if the tunnel ID is wildcarded, 'cookie_in' will be
- * copied directly to '*cookie_out'.  For NXFF_TUN_ID_FROM_COOKIE when tunnel
- * ID is matched, 'cookie_in' will be modified appropriately before setting
- * '*cookie_out'.
- */
+/* Convert 'rule' into the OpenFlow match structure 'match'. */
 void
-ofputil_cls_rule_to_match(const struct cls_rule *rule,
-                          enum nx_flow_format flow_format,
-                          struct ofp_match *match,
-                          ovs_be64 cookie_in, ovs_be64 *cookie_out)
+ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
 {
     const struct flow_wildcards *wc = &rule->wc;
     unsigned int ofpfw;
@@ -231,20 +207,6 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule,
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
     if (wc->wildcards & FWW_NW_TOS) {
         ofpfw |= OFPFW_NW_TOS;
-    }
-
-    /* Tunnel ID. */
-    if (flow_format == NXFF_TUN_ID_FROM_COOKIE) {
-        if (wc->tun_id_mask == htonll(0)) {
-            ofpfw |= NXFW_TUN_ID;
-        } else {
-            uint32_t cookie_lo = ntohll(cookie_in);
-            uint32_t cookie_hi = ntohll(rule->flow.tun_id);
-            cookie_in = htonll(cookie_lo | ((uint64_t) cookie_hi << 32));
-        }
-    }
-    if (cookie_out) {
-        *cookie_out = cookie_in;
     }
 
     /* Translate VLANs. */
@@ -412,10 +374,6 @@ ofputil_decode_vendor(const struct ofp_header *oh,
                       != sizeof(struct nxt_flow_mod_table_id));
 
     static const struct ofputil_msg_type nxt_messages[] = {
-        { OFPUTIL_NXT_TUN_ID_FROM_COOKIE,
-          NXT_TUN_ID_FROM_COOKIE, "NXT_TUN_ID_FROM_COOKIE",
-          sizeof(struct nxt_tun_id_cookie), 0 },
-
         { OFPUTIL_NXT_ROLE_REQUEST,
           NXT_ROLE_REQUEST, "NXT_ROLE_REQUEST",
           sizeof(struct nx_role_request), 0 },
@@ -816,7 +774,6 @@ ofputil_flow_format_is_valid(enum nx_flow_format flow_format)
 {
     switch (flow_format) {
     case NXFF_OPENFLOW10:
-    case NXFF_TUN_ID_FROM_COOKIE:
     case NXFF_NXM:
         return true;
     }
@@ -830,8 +787,6 @@ ofputil_flow_format_to_string(enum nx_flow_format flow_format)
     switch (flow_format) {
     case NXFF_OPENFLOW10:
         return "openflow10";
-    case NXFF_TUN_ID_FROM_COOKIE:
-        return "tun_id_from_cookie";
     case NXFF_NXM:
         return "nxm";
     default:
@@ -843,7 +798,6 @@ int
 ofputil_flow_format_from_string(const char *s)
 {
     return (!strcmp(s, "openflow10") ? NXFF_OPENFLOW10
-            : !strcmp(s, "tun_id_from_cookie") ? NXFF_TUN_ID_FROM_COOKIE
             : !strcmp(s, "nxm") ? NXFF_NXM
             : -1);
 }
@@ -861,100 +815,43 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     return true;
 }
 
-static inline bool
-is_nxm_required(const struct cls_rule *rule, bool cookie_support,
-                ovs_be64 cookie)
+/* Returns the minimum nx_flow_format to use for sending 'rule' to a switch
+ * (e.g. to add or remove a flow).  Only NXM can handle tunnel IDs, registers,
+ * or fixing the Ethernet multicast bit.  Otherwise, it's better to use
+ * NXFF_OPENFLOW10 for backward compatibility. */
+enum nx_flow_format
+ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
-    uint32_t cookie_hi;
-    uint64_t tun_id;
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
-        return true;
+        return NXFF_NXM;
     }
 
     /* Only NXM supports matching ARP hardware addresses. */
     if (!(wc->wildcards & FWW_ARP_SHA) || !(wc->wildcards & FWW_ARP_THA)) {
-        return true;
+        return NXFF_NXM;
     }
 
     /* Only NXM supports matching IPv6 traffic. */
     if (!(wc->wildcards & FWW_DL_TYPE)
             && (rule->flow.dl_type == htons(ETH_TYPE_IPV6))) {
-        return true;
+        return NXFF_NXM;
     }
 
     /* Only NXM supports matching registers. */
     if (!regs_fully_wildcarded(wc)) {
-        return true;
+        return NXFF_NXM;
     }
 
-    switch (wc->tun_id_mask) {
-    case CONSTANT_HTONLL(0):
-        /* Other formats can fully wildcard tun_id. */
-        break;
-
-    case CONSTANT_HTONLL(UINT64_MAX):
-        /* Only NXM supports tunnel ID matching without a cookie. */
-        if (!cookie_support) {
-            return true;
-        }
-
-        /* Only NXM supports 64-bit tunnel IDs. */
-        tun_id = ntohll(rule->flow.tun_id);
-        if (tun_id > UINT32_MAX) {
-            return true;
-        }
-
-        /* Only NXM supports a cookie whose top 32 bits conflict with the
-         * tunnel ID. */
-        cookie_hi = ntohll(cookie) >> 32;
-        if (cookie_hi && cookie_hi != tun_id) {
-            return true;
-        }
-        break;
-
-    default:
-        /* Only NXM supports partial matches on tunnel ID. */
-        return true;
+    /* Only NXM supports matching tun_id. */
+    if (wc->tun_id_mask != htonll(0)) {
+        return NXFF_NXM;
     }
 
     /* Other formats can express this rule. */
-    return false;
-}
-
-/* Returns the minimum nx_flow_format to use for sending 'rule' to a switch
- * (e.g. to add or remove a flow).  'cookie_support' should be true if the
- * command to be sent includes a flow cookie (as OFPT_FLOW_MOD does, for
- * example) or false if the command does not (OFPST_FLOW and OFPST_AGGREGATE do
- * not, for example).  If 'cookie_support' is true, then 'cookie' should be the
- * cookie to be sent; otherwise its value is ignored.
- *
- * The "best" flow format is chosen on this basis:
- *
- *   - It must be capable of expressing the rule.  NXFF_OPENFLOW10 flows can't
- *     handle tunnel IDs.  NXFF_TUN_ID_FROM_COOKIE flows can't handle registers
- *     or fixing the Ethernet multicast bit, and can't handle tunnel IDs that
- *     conflict with the high 32 bits of the cookie or commands that don't
- *     support cookies.
- *
- *   - Otherwise, the chosen format should be as backward compatible as
- *     possible.  (NXFF_OPENFLOW10 is more backward compatible than
- *     NXFF_TUN_ID_FROM_COOKIE, which is more backward compatible than
- *     NXFF_NXM.)
- */
-enum nx_flow_format
-ofputil_min_flow_format(const struct cls_rule *rule, bool cookie_support,
-                        ovs_be64 cookie)
-{
-    if (is_nxm_required(rule, cookie_support, cookie)) {
-        return NXFF_NXM;
-    } else if (rule->wc.tun_id_mask != htonll(0)) {
-        return NXFF_TUN_ID_FROM_COOKIE;
-    } else {
-        return NXFF_OPENFLOW10;
-    }
+    return NXFF_OPENFLOW10;
 }
 
 /* Returns an OpenFlow message that can be used to set the flow format to
@@ -962,20 +859,11 @@ ofputil_min_flow_format(const struct cls_rule *rule, bool cookie_support,
 struct ofpbuf *
 ofputil_make_set_flow_format(enum nx_flow_format flow_format)
 {
+    struct nxt_set_flow_format *sff;
     struct ofpbuf *msg;
 
-    if (flow_format == NXFF_OPENFLOW10
-        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
-        struct nxt_tun_id_cookie *tic;
-
-        tic = make_nxmsg(sizeof *tic, NXT_TUN_ID_FROM_COOKIE, &msg);
-        tic->set = flow_format == NXFF_TUN_ID_FROM_COOKIE;
-    } else {
-        struct nxt_set_flow_format *sff;
-
-        sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
-        sff->format = htonl(flow_format);
-    }
+    sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
+    sff->format = htonl(flow_format);
 
     return msg;
 }
@@ -997,17 +885,12 @@ ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
  * flow_mod in 'fm'.  Returns 0 if successful, otherwise an OpenFlow error
  * code.
  *
- * For OFPT_FLOW_MOD messages, 'flow_format' should be the current flow format
- * at the time when the message was received.  Otherwise 'flow_format' is
- * ignored.
- *
  * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
  * enabled, false otherwise.
  *
  * Does not validate the flow_mod actions. */
 int
 ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
-                        enum nx_flow_format flow_format,
                         bool flow_mod_table_id)
 {
     const struct ofputil_msg_type *type;
@@ -1049,8 +932,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
         }
 
         /* Translate the message. */
-        ofputil_cls_rule_from_match(&match, ntohs(ofm->priority), flow_format,
-                                    ofm->cookie, &fm->cr);
+        ofputil_cls_rule_from_match(&match, ntohs(ofm->priority), &fm->cr);
         fm->cookie = ofm->cookie;
         command = ntohs(ofm->command);
         fm->idle_timeout = ntohs(ofm->idle_timeout);
@@ -1116,15 +998,13 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
                ? (fm->command & 0xff) | (fm->table_id << 8)
                : fm->command);
 
-    if (flow_format == NXFF_OPENFLOW10
-        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+    if (flow_format == NXFF_OPENFLOW10) {
         struct ofp_flow_mod *ofm;
 
         msg = ofpbuf_new(sizeof *ofm + actions_len);
         ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
-        ofputil_cls_rule_to_match(&fm->cr, flow_format, &ofm->match,
-                                  fm->cookie, &ofm->cookie);
-        ofm->command = htons(command);
+        ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
+        ofm->command = htons(fm->command);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);
         ofm->priority = htons(fm->cr.priority);
@@ -1161,13 +1041,12 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
 static int
 ofputil_decode_ofpst_flow_request(struct flow_stats_request *fsr,
                                   const struct ofp_header *oh,
-                                  enum nx_flow_format flow_format,
                                   bool aggregate)
 {
     const struct ofp_flow_stats_request *ofsr = ofputil_stats_body(oh);
 
     fsr->aggregate = aggregate;
-    ofputil_cls_rule_from_match(&ofsr->match, 0, flow_format, 0, &fsr->match);
+    ofputil_cls_rule_from_match(&ofsr->match, 0, &fsr->match);
     fsr->out_port = ntohs(ofsr->out_port);
     fsr->table_id = ofsr->table_id;
 
@@ -1202,17 +1081,11 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
 }
 
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
- * request 'oh', received when the current flow format was 'flow_format', into
- * an abstract flow_stats_request in 'fsr'.  Returns 0 if successful, otherwise
- * an OpenFlow error code.
- *
- * For OFPST_FLOW and OFPST_AGGREGATE messages, 'flow_format' should be the
- * current flow format at the time when the message was received.  Otherwise
- * 'flow_format' is ignored. */
+ * request 'oh', into an abstract flow_stats_request in 'fsr'.  Returns 0 if
+ * successful, otherwise an OpenFlow error code. */
 int
 ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
-                                  const struct ofp_header *oh,
-                                  enum nx_flow_format flow_format)
+                                  const struct ofp_header *oh)
 {
     const struct ofputil_msg_type *type;
     struct ofpbuf b;
@@ -1224,10 +1097,10 @@ ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
     code = ofputil_msg_type_code(type);
     switch (code) {
     case OFPUTIL_OFPST_FLOW_REQUEST:
-        return ofputil_decode_ofpst_flow_request(fsr, oh, flow_format, false);
+        return ofputil_decode_ofpst_flow_request(fsr, oh, false);
 
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
-        return ofputil_decode_ofpst_flow_request(fsr, oh, flow_format, true);
+        return ofputil_decode_ofpst_flow_request(fsr, oh, true);
 
     case OFPUTIL_NXST_FLOW_REQUEST:
         return ofputil_decode_nxst_flow_request(fsr, oh, false);
@@ -1250,8 +1123,7 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
 {
     struct ofpbuf *msg;
 
-    if (flow_format == NXFF_OPENFLOW10
-        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+    if (flow_format == NXFF_OPENFLOW10) {
         struct ofp_flow_stats_request *ofsr;
         int type;
 
@@ -1260,8 +1132,7 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
 
         type = fsr->aggregate ? OFPST_AGGREGATE : OFPST_FLOW;
         ofsr = ofputil_make_stats_request(sizeof *ofsr, type, &msg);
-        ofputil_cls_rule_to_match(&fsr->match, flow_format, &ofsr->match,
-                                  0, NULL);
+        ofputil_cls_rule_to_match(&fsr->match, &ofsr->match);
         ofsr->table_id = fsr->table_id;
         ofsr->out_port = htons(fsr->out_port);
     } else if (flow_format == NXFF_NXM) {
@@ -1285,9 +1156,7 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
 }
 
 /* Converts an OFPST_FLOW or NXST_FLOW reply in 'msg' into an abstract
- * ofputil_flow_stats in 'fs'.  For OFPST_FLOW messages, 'flow_format' should
- * be the current flow format at the time when the request corresponding to the
- * reply in 'msg' was sent.  Otherwise 'flow_format' is ignored.
+ * ofputil_flow_stats in 'fs'.
  *
  * Multiple OFPST_FLOW or NXST_FLOW replies can be packed into a single
  * OpenFlow message.  Calling this function multiple times for a single 'msg'
@@ -1298,8 +1167,7 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
  * otherwise a positive errno value. */
 int
 ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
-                                struct ofpbuf *msg,
-                                enum nx_flow_format flow_format)
+                                struct ofpbuf *msg)
 {
     const struct ofputil_msg_type *type;
     int code;
@@ -1344,7 +1212,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
         fs->cookie = get_32aligned_be64(&ofs->cookie);
         ofputil_cls_rule_from_match(&ofs->match, ntohs(ofs->priority),
-                                    flow_format, fs->cookie, &fs->rule);
+                                    &fs->rule);
         fs->table_id = ofs->table_id;
         fs->duration_sec = ntohl(ofs->duration_sec);
         fs->duration_nsec = ntohl(ofs->duration_nsec);
@@ -1395,18 +1263,12 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     return 0;
 }
 
-/* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh', received
- * when the current flow format was 'flow_format', into an abstract
- * ofputil_flow_removed in 'fr'.  Returns 0 if successful, otherwise an
- * OpenFlow error code.
- *
- * For OFPT_FLOW_REMOVED messages, 'flow_format' should be the current flow
- * format at the time when the message was received.  Otherwise 'flow_format'
- * is ignored. */
+/* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh' into an
+ * abstract ofputil_flow_removed in 'fr'.  Returns 0 if successful, otherwise
+ * an OpenFlow error code. */
 int
 ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
-                            const struct ofp_header *oh,
-                            enum nx_flow_format flow_format)
+                            const struct ofp_header *oh)
 {
     const struct ofputil_msg_type *type;
     enum ofputil_msg_code code;
@@ -1418,7 +1280,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 
         ofr = (const struct ofp_flow_removed *) oh;
         ofputil_cls_rule_from_match(&ofr->match, ntohs(ofr->priority),
-                                    flow_format, ofr->cookie, &fr->rule);
+                                    &fr->rule);
         fr->cookie = ofr->cookie;
         fr->reason = ofr->reason;
         fr->duration_sec = ntohl(ofr->duration_sec);
@@ -1466,14 +1328,12 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 {
     struct ofpbuf *msg;
 
-    if (flow_format == NXFF_OPENFLOW10
-        || flow_format == NXFF_TUN_ID_FROM_COOKIE) {
+    if (flow_format == NXFF_OPENFLOW10) {
         struct ofp_flow_removed *ofr;
 
         ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0),
                                 &msg);
-        ofputil_cls_rule_to_match(&fr->rule, flow_format, &ofr->match,
-                                  fr->cookie, &ofr->cookie);
+        ofputil_cls_rule_to_match(&fr->rule, &ofr->match);
         ofr->priority = htons(fr->rule.priority);
         ofr->reason = fr->reason;
         ofr->duration_sec = htonl(fr->duration_sec);
@@ -1768,7 +1628,7 @@ make_flow_mod(uint16_t command, const struct cls_rule *rule,
     ofm->header.length = htons(size);
     ofm->cookie = 0;
     ofm->priority = htons(MIN(rule->priority, UINT16_MAX));
-    ofputil_cls_rule_to_match(rule, NXFF_OPENFLOW10, &ofm->match, 0, NULL);
+    ofputil_cls_rule_to_match(rule, &ofm->match);
     ofm->command = htons(command);
     return out;
 }
@@ -2099,7 +1959,7 @@ check_action(const union ofp_action *a, unsigned int len,
         if (error) {
             return error;
         }
-        if (a->vlan_vid.vlan_vid & ~7) {
+        if (a->vlan_pcp.vlan_pcp & ~7) {
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
         }
         return 0;
@@ -2212,7 +2072,7 @@ normalize_match(struct ofp_match *m)
     enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
     uint32_t wc;
 
-    wc = ntohl(m->wildcards) & OVSFW_ALL;
+    wc = ntohl(m->wildcards) & OFPFW_ALL;
     if (wc & OFPFW_DL_TYPE) {
         m->dl_type = 0;
 

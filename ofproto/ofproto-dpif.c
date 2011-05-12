@@ -284,6 +284,7 @@ struct ofport_dpif {
     struct list bundle_node;    /* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     tag_type tag;               /* Tag associated with this port. */
+    uint32_t bond_stable_id;    /* stable_id to use as bond slave, or 0. */
 };
 
 static struct ofport_dpif *
@@ -849,7 +850,8 @@ bundle_del_port(struct ofport_dpif *port)
 
 static bool
 bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
-                struct lacp_slave_settings *lacp)
+                struct lacp_slave_settings *lacp,
+                uint32_t bond_stable_id)
 {
     struct ofport_dpif *port;
 
@@ -872,6 +874,8 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
     if (lacp) {
         lacp_slave_register(bundle->lacp, port, lacp);
     }
+
+    port->bond_stable_id = bond_stable_id;
 
     return true;
 }
@@ -976,7 +980,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     ok = true;
     for (i = 0; i < s->n_slaves; i++) {
         if (!bundle_add_port(bundle, s->slaves[i],
-                             s->lacp ? &s->lacp_slaves[i] : NULL)) {
+                             s->lacp ? &s->lacp_slaves[i] : NULL,
+                             s->bond_stable_ids ? s->bond_stable_ids[i] : 0)) {
             ok = false;
         }
     }
@@ -1027,10 +1032,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-            uint16_t stable_id = (bundle->lacp
-                                  ? lacp_slave_get_port_id(bundle->lacp, port)
-                                  : port->odp_port);
-            bond_slave_register(bundle->bond, port, stable_id,
+            bond_slave_register(bundle->bond, port, port->bond_stable_id,
                                 port->up.netdev);
         }
     } else {

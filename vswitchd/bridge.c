@@ -1392,7 +1392,7 @@ bridge_run(void)
     /* (Re)configure if necessary. */
     database_changed = ovsdb_idl_run(idl);
     cfg = ovsrec_open_vswitch_first(idl);
-#ifdef HAVE_OPENSSL
+
     /* Re-configure SSL.  We do this on every trip through the main loop,
      * instead of just when the database changes, because the contents of the
      * key and certificate files can change without the database changing.
@@ -1405,7 +1405,7 @@ bridge_run(void)
         stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
-#endif
+
     if (database_changed || datapath_destroyed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
@@ -2021,7 +2021,10 @@ port_del_ifaces(struct port *port)
     sset_init(&new_ifaces);
     for (i = 0; i < port->cfg->n_interfaces; i++) {
         const char *name = port->cfg->interfaces[i]->name;
-        sset_add(&new_ifaces, name);
+        const char *type = port->cfg->interfaces[i]->name;
+        if (strcmp(type, "null")) {
+            sset_add(&new_ifaces, name);
+        }
     }
 
     /* Get rid of deleted interfaces. */
@@ -2047,7 +2050,8 @@ port_add_ifaces(struct port *port)
     shash_init(&new_ifaces);
     for (i = 0; i < port->cfg->n_interfaces; i++) {
         const struct ovsrec_interface *cfg = port->cfg->interfaces[i];
-        if (!shash_add_once(&new_ifaces, cfg->name, cfg)) {
+        if (strcmp(cfg->type, "null")
+            && !shash_add_once(&new_ifaces, cfg->name, cfg)) {
             VLOG_WARN("port %s: %s specified twice as port interface",
                       port->name, cfg->name);
             iface_set_ofport(cfg, -1);
@@ -2159,9 +2163,10 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
                    ? priority
                    : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    s->strict = !strcmp(get_port_other_config(port->cfg, "lacp-strict",
-                                              "false"),
-                        "true");
+    s->heartbeat = !strcmp(get_port_other_config(port->cfg,
+                                                 "lacp-heartbeat",
+                                                 "false"), "true");
+
 
     lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");
     custom_time = atoi(lacp_time);
@@ -2182,11 +2187,13 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 static void
 iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
 {
-    int priority, portid;
+    int priority, portid, key;
 
     portid = atoi(get_interface_other_config(iface->cfg, "lacp-port-id", "0"));
     priority = atoi(get_interface_other_config(iface->cfg,
                                                "lacp-port-priority", "0"));
+    key = atoi(get_interface_other_config(iface->cfg, "lacp-aggregation-key",
+                                          "0"));
 
     if (portid <= 0 || portid > UINT16_MAX) {
         portid = iface->ofp_port;
@@ -2196,9 +2203,14 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
         priority = UINT16_MAX;
     }
 
+    if (key < 0 || key > UINT16_MAX) {
+        key = 0;
+    }
+
     s->name = iface->name;
     s->id = portid;
     s->priority = priority;
+    s->key = key;
 }
 
 static void
@@ -2231,6 +2243,7 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     s->up_delay = MAX(0, port->cfg->bond_updelay);
     s->down_delay = MAX(0, port->cfg->bond_downdelay);
+    s->basis = atoi(get_port_other_config(port->cfg, "bond-hash-basis", "0"));
     s->rebalance_interval = atoi(
         get_port_other_config(port->cfg, "bond-rebalance-interval", "10000"));
     if (s->rebalance_interval < 1000) {
@@ -2446,7 +2459,7 @@ iface_delete_queues(unsigned int queue_id,
 static void
 iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
 {
-    if (!qos || qos->type[0] == '\0') {
+    if (!qos || qos->type[0] == '\0' || qos->n_queues < 1) {
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
         struct iface_delete_queues_cbdata cbdata;
