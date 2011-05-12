@@ -69,7 +69,7 @@ struct remote_mp {
     uint16_t mpid;         /* The Maintenance Point ID of this 'remote_mp'. */
     struct hmap_node node; /* In 'cfm' 'remote_mps' or 'x_remote_mps'. */
 
-    long long recv_time; /* Time the most recent CCM was received. */
+    bool recv;           /* CCM was received since last fault check. */
     bool fault;          /* Indicates a connectivity fault. */
 };
 

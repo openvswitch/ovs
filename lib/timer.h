@@ -26,7 +26,6 @@ struct timer {
 };
 
 long long int timer_msecs_until_expired(const struct timer *);
-long long int timer_enabled_at(const struct timer *, long long int duration);
 void timer_wait(const struct timer *);
 
 /* Causes 'timer' to expire when 'duration' milliseconds have passed.

@@ -47,6 +47,8 @@ struct cfm_internal {
     struct timer fault_timer; /* Check for faults when expired. */
 };
 
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+
 static int
 ccm_interval_to_ms(uint8_t interval)
 {
@@ -173,14 +175,18 @@ cfm_run(struct cfm *cfm)
 
         cfm->fault = false;
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-            if (rmp->recv_time < timer_enabled_at(&cfmi->fault_timer, interval)
-                || timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
-                rmp->fault = true;
-            }
+            rmp->fault = !rmp->recv;
+            rmp->recv = false;
 
             if (rmp->fault) {
                 cfm->fault = true;
+                VLOG_DBG("No CCM from RMP %"PRIu16" in the last %lldms",
+                         rmp->mpid, interval);
             }
+        }
+
+        if (!cfm->fault) {
+            VLOG_DBG("All RMPs received CCMs in the last %lldms", interval);
         }
 
         timer_set_duration(&cfmi->fault_timer, interval);
@@ -352,9 +358,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     uint8_t ccm_interval;
     struct remote_mp *rmp;
     struct eth_header *eth;
-
-    struct cfm_internal *cfmi        = cfm_to_internal(cfm);
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
     eth = p->l2;
     ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_LEN);
@@ -389,7 +393,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
 
         if (rmp) {
-            rmp->recv_time = time_msec();
+            rmp->recv = true;
 
             if (ccm_interval != cfmi->ccm_interval) {
                 VLOG_WARN_RL(&rl, "received a CCM with an invalid interval"
@@ -422,7 +426,7 @@ cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
         ds_put_format(ds, "Remote MPID %"PRIu16": %s\n", rmp->mpid,
                       rmp->fault ? "fault" : "");
-        ds_put_format(ds, "\ttime since CCM rx: %lldms\n",
-                      time_msec() - rmp->recv_time);
+        ds_put_format(ds, "\trecv since check: %s",
+                      rmp->recv ? "true" : "false");
     }
 }
