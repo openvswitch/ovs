@@ -53,7 +53,6 @@ BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 struct cfm {
     /* Configuration Variables. */
     uint16_t mpid;              /* The MPID of this CFM. */
-    uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
     int interval;               /* The requested transmission interval. */
     const char *name;           /* Name of this CFM object. */
 
@@ -91,9 +90,6 @@ bool cfm_configure(struct cfm *);
 void cfm_update_remote_mps(struct cfm *, const uint16_t *mpid, size_t n_mpids);
 
 const struct remote_mp *cfm_get_remote_mp(const struct cfm *, uint16_t mpid);
-
-bool cfm_generate_maid(const char *md_name, const char *ma_name,
-                       uint8_t maid[CCM_MAID_LEN]);
 
 bool cfm_should_process_flow(const struct flow *);
 

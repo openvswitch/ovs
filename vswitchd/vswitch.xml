@@ -1550,9 +1550,8 @@
     <group title="Monitor Configuration">
       <column name="mpid">
         A Maintenance Point ID (MPID) uniquely identifies each endpoint within
-        a Maintenance Association (see <ref column="ma_name"/>).  The MPID is
-        used to identify this <ref table="Monitor"/> to other endpoints in the
-        MA.
+        a Maintenance Association.  The MPID is used to identify this
+        <ref table="Monitor"/> to other endpoints in the MA.
       </column>
 
       <column name="remote_mps">
@@ -1561,18 +1560,6 @@
         <ref table="Monitor"/> does not have connectivity to any MPs in this
         set, or has connectivity to any MPs not in this set, a fault is
         signaled.
-      </column>
-
-      <column name="ma_name">
-        A Maintenance Association (MA) name pairs with a Maintenance Domain
-        (MD) name to uniquely identify a MA.  A MA is a group of endpoints who
-        have complete and exclusive interconnectivity. Defaults to
-        <code>ovs</code> if unset.
-      </column>
-
-      <column name="md_name">
-        A Maintenance Domain name pairs with a Maintenance Association name to
-        uniquely identify a MA. Defaults to <code>ovs</code> if unset.
       </column>
 
       <column name="interval">

@@ -2505,7 +2505,6 @@ iface_configure_cfm(struct iface *iface)
     struct cfm cfm;
     uint16_t *remote_mps;
     struct ovsrec_monitor *mon;
-    uint8_t maid[CCM_MAID_LEN];
 
     mon = iface->cfg->monitor;
 
@@ -2514,16 +2513,9 @@ iface_configure_cfm(struct iface *iface)
         return;
     }
 
-    if (!cfm_generate_maid(mon->md_name, mon->ma_name, maid)) {
-        VLOG_WARN("interface %s: Failed to generate MAID.", iface->name);
-        return;
-    }
-
     cfm.mpid     = mon->mpid;
     cfm.interval = mon->interval ? *mon->interval : 1000;
     cfm.name = iface->name;
-
-    memcpy(cfm.maid, maid, sizeof cfm.maid);
 
     remote_mps = xzalloc(mon->n_remote_mps * sizeof *remote_mps);
     for(i = 0; i < mon->n_remote_mps; i++) {

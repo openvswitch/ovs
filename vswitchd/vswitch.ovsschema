@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "3.4.2",
- "cksum": "976911089 15276",
+ "version": "3.5.0",
+ "cksum": "1684955806 14964",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -204,16 +204,6 @@
        "mpid": {
          "type" : {
            "key": { "type": "integer", "minInteger": 1, "maxInteger": 8191}}},
-       "md_name": {
-         "type" : {
-           "key": { "type": "string", "minLength": 1, "maxLength": 43},
-           "min": 0,
-           "max": 1}},
-       "ma_name": {
-         "type" : {
-           "key": { "type": "string", "minLength": 1, "maxLength": 43},
-           "min": 0,
-           "max": 1}},
        "interval": {
          "type": {
            "key": { "type": "integer", "minInteger": 100},

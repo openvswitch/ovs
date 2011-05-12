@@ -17,6 +17,7 @@
 #include <config.h>
 #include "cfm.h"
 
+#include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,7 @@ struct cfm_internal {
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
+    uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
 
     struct timer tx_timer;    /* Send CCM when expired. */
     struct timer fault_timer; /* Check for faults when expired. */
@@ -54,6 +56,31 @@ static struct list all_cfms = LIST_INITIALIZER(&all_cfms);
 
 static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
                              void *aux);
+
+static void
+cfm_generate_maid(struct cfm_internal *cfmi)
+{
+    const char *ovs_md_name = "ovs_md";
+    const char *ovs_ma_name = "ovs_ma";
+    uint8_t *ma_p;
+    size_t md_len, ma_len;
+
+    memset(cfmi->maid, 0, CCM_MAID_LEN);
+
+    md_len = strlen(ovs_md_name);
+    ma_len = strlen(ovs_ma_name);
+
+    assert(md_len && ma_len && md_len + ma_len + 4 <= CCM_MAID_LEN);
+
+    cfmi->maid[0] = 4;                           /* MD name string format. */
+    cfmi->maid[1] = md_len;                      /* MD name size. */
+    memcpy(&cfmi->maid[2], ovs_md_name, md_len); /* MD name. */
+
+    ma_p = cfmi->maid + 2 + md_len;
+    ma_p[0] = 2;                           /* MA name string format. */
+    ma_p[1] = ma_len;                      /* MA name size. */
+    memcpy(&ma_p[2], ovs_ma_name, ma_len); /* MA name. */
+}
 
 static int
 ccm_interval_to_ms(uint8_t interval)
@@ -154,6 +181,7 @@ cfm_create(void)
     cfm  = &cfmi->cfm;
 
     hmap_init(&cfm->remote_mps);
+    cfm_generate_maid(cfmi);
     list_push_back(&all_cfms, &cfmi->list_node);
     return cfm;
 }
@@ -233,7 +261,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ccm *ccm)
     ccm->seq = htonl(++cfmi->seq);
     ccm->mpid = htons(cfmi->cfm.mpid);
     ccm->flags = cfmi->ccm_interval;
-    memcpy(ccm->maid, cfmi->cfm.maid, sizeof ccm->maid);
+    memcpy(ccm->maid, cfmi->maid, sizeof ccm->maid);
 }
 
 void
@@ -317,43 +345,6 @@ cfm_get_remote_mp(const struct cfm *cfm, uint16_t mpid)
     return lookup_remote_mp(&cfm->remote_mps, mpid);
 }
 
-/* Generates 'maid' from 'md_name' and 'ma_name'.  A NULL parameter indicates
- * the default should be used. Returns false if unsuccessful. */
-bool
-cfm_generate_maid(const char *md_name, const char *ma_name,
-                  uint8_t maid[CCM_MAID_LEN])
-{
-    uint8_t *ma_p;
-    size_t md_len, ma_len;
-
-    if (!md_name) {
-        md_name = "ovs";
-    }
-
-    if (!ma_name) {
-        ma_name = "ovs";
-    }
-
-    memset(maid, 0, CCM_MAID_LEN);
-
-    md_len = strlen(md_name);
-    ma_len = strlen(ma_name);
-
-    if (!md_len || !ma_len || md_len + ma_len + 4 > CCM_MAID_LEN) {
-        return false;
-    }
-
-    maid[0] = 4;                       /* MD name string format. */
-    maid[1] = md_len;                  /* MD name size. */
-    memcpy(&maid[2], md_name, md_len); /* MD name. */
-
-    ma_p    = maid + 2 + md_len;
-    ma_p[0] = 2;                       /* MA name string format. */
-    ma_p[1] = ma_len;                  /* MA name size. */
-    memcpy(&ma_p[2], ma_name, ma_len); /* MA name. */
-    return true;
-}
-
 /* Returns true if the CFM library should process packets from 'flow'. */
 bool
 cfm_should_process_flow(const struct flow *flow)
@@ -398,7 +389,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * them judiciously, especially when CFM is used to check slave status of
      * bonds. Furthermore, faults can be maliciously triggered by crafting
      * invalid CCMs. */
-    if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
+    if (memcmp(ccm->maid, cfmi->maid, sizeof ccm->maid)) {
         VLOG_WARN_RL(&rl, "Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
     } else {

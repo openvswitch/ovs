@@ -751,7 +751,6 @@ set_cfm(struct ofport *ofport_, const struct cfm *cfm,
         ofport->cfm->mpid = cfm->mpid;
         ofport->cfm->interval = cfm->interval;
         ofport->cfm->name = cfm->name;
-        memcpy(ofport->cfm->maid, cfm->maid, CCM_MAID_LEN);
 
         cfm_update_remote_mps(ofport->cfm, remote_mps, n_remote_mps);
 
