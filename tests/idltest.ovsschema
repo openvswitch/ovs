@@ -60,7 +60,7 @@
         "ba": {
           "type": {
             "key": "boolean", 
-            "max": "unlimited", 
+            "max": 1,
             "min": 0
           }
         }, 

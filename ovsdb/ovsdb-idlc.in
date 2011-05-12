@@ -27,6 +27,8 @@ def constify(cType, const):
 
 def cMembers(prefix, columnName, column, const):
     type = column.type
+    if is_optional_bool(type):
+        const = True
     if type.n_min == 1 and type.n_max == 1:
         singleton = True
         pointer = ''
@@ -165,6 +167,10 @@ def printEnum(members):
     print "    %s" % members[-1]
     print "};"
 
+def is_optional_bool(type):
+    return (type.key.type == ovs.db.types.BooleanType and not type.value
+            and type.n_min == 0 and type.n_max == 1)
+
 def printCIDLSource(schemaFile):
     schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
@@ -215,7 +221,23 @@ static void
                 keyVar = "row->%s" % columnName
                 valueVar = None
 
-            if (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
+            if is_optional_bool(type):
+                # Special case for an optional bool.  This is only here because
+                # sparse does not like the "normal" case below ("warning:
+                # expression using sizeof bool").
+                print
+                print "    assert(inited);"
+                print "    if (datum->n >= 1) {"
+                print "        static const bool false_value = false;"
+                print "        static const bool true_value = true;"
+                print
+                print "        row->n_%s = 1;" % columnName
+                print "        %s = datum->keys[0].boolean ? &true_value : &false_value;" % keyVar
+                print "    } else {"
+                print "        row->n_%s = 0;" % columnName
+                print "        %s = NULL;" % keyVar
+                print "    }"
+            elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
                 print "    assert(inited);"
                 print "    if (datum->n >= 1) {"
@@ -283,7 +305,15 @@ static void
         # Unparse functions.
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
-            if (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
+            if (type.key.type == ovs.db.types.BooleanType and not type.value
+                and type.n_min == 0 and type.n_max == 1):
+                print '''
+static void
+%(s)s_unparse_%(c)s(struct ovsdb_idl_row *row OVS_UNUSED)
+{
+    /* Nothing to do. */
+}''' % {'s': structName, 'c': columnName}
+            elif (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
