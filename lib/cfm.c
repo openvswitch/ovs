@@ -404,6 +404,9 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             VLOG_WARN_RL(&rl, "Received unexpected remote MPID %d from MAC "
                          ETH_ADDR_FMT, ccm_mpid, ETH_ADDR_ARGS(eth->eth_src));
         }
+
+        VLOG_DBG("Received CCM (mpid %"PRIu16") (interval %"PRIu8")", ccm_mpid,
+                 ccm_interval);
     }
 }
 
