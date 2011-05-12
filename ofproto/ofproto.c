@@ -624,7 +624,6 @@ ofproto_destroy(struct ofproto *p)
 
     ofproto_flush_flows__(p);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
-        hmap_remove(&p->ports, &ofport->hmap_node);
         ofport_destroy(ofport);
     }
 
