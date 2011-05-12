@@ -80,6 +80,9 @@ void ofconn_set_role(struct ofconn *, enum nx_role);
 enum nx_flow_format ofconn_get_flow_format(struct ofconn *);
 void ofconn_set_flow_format(struct ofconn *, enum nx_flow_format);
 
+bool ofconn_get_flow_mod_table_id(const struct ofconn *);
+void ofconn_set_flow_mod_table_id(struct ofconn *, bool enable);
+
 int ofconn_get_miss_send_len(const struct ofconn *);
 void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 

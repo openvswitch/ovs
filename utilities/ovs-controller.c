@@ -261,6 +261,7 @@ static void
 read_flow_file(const char *name)
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     FILE *stream;
 
     stream = fopen(optarg, "r");
@@ -269,8 +270,10 @@ read_flow_file(const char *name)
     }
 
     flow_format = NXFF_OPENFLOW10;
-    while (parse_ofp_flow_mod_file(&default_flows, &flow_format, stream,
-                                   OFPFC_ADD)) {
+    flow_mod_table_id = false;
+    while (parse_ofp_flow_mod_file(&default_flows,
+                                   &flow_format, &flow_mod_table_id,
+                                   stream, OFPFC_ADD)) {
         continue;
     }
 

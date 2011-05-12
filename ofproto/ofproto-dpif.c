@@ -43,6 +43,7 @@
 #include "ofproto-sflow.h"
 #include "poll-loop.h"
 #include "timer.h"
+#include "unaligned.h"
 #include "unixctl.h"
 #include "vlan-bitmap.h"
 #include "vlog.h"
@@ -307,6 +308,9 @@ struct ofproto_dpif {
     struct dpif *dpif;
     int max_ports;
 
+    /* Statistics. */
+    uint64_t n_matches;
+
     /* Bridging. */
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
@@ -417,6 +421,7 @@ construct(struct ofproto *ofproto_)
     }
 
     ofproto->max_ports = dpif_get_max_ports(ofproto->dpif);
+    ofproto->n_matches = 0;
 
     error = dpif_recv_set_mask(ofproto->dpif,
                                ((1u << DPIF_UC_MISS) |
@@ -444,6 +449,10 @@ construct(struct ofproto *ofproto_)
     hmap_init(&ofproto->facets);
     ofproto->need_revalidate = false;
     tag_set_init(&ofproto->revalidate_set);
+
+    ofproto->up.tables = xmalloc(sizeof *ofproto->up.tables);
+    classifier_init(&ofproto->up.tables[0]);
+    ofproto->up.n_tables = 1;
 
     ofproto_dpif_unixctl_init();
 
@@ -584,6 +593,39 @@ flush(struct ofproto *ofproto_)
         facet_remove(ofproto, facet);
     }
     dpif_flow_flush(ofproto->dpif);
+}
+
+static void
+get_features(struct ofproto *ofproto_ OVS_UNUSED,
+             bool *arp_match_ip, uint32_t *actions)
+{
+    *arp_match_ip = true;
+    *actions = ((1u << OFPAT_OUTPUT) |
+                (1u << OFPAT_SET_VLAN_VID) |
+                (1u << OFPAT_SET_VLAN_PCP) |
+                (1u << OFPAT_STRIP_VLAN) |
+                (1u << OFPAT_SET_DL_SRC) |
+                (1u << OFPAT_SET_DL_DST) |
+                (1u << OFPAT_SET_NW_SRC) |
+                (1u << OFPAT_SET_NW_DST) |
+                (1u << OFPAT_SET_NW_TOS) |
+                (1u << OFPAT_SET_TP_SRC) |
+                (1u << OFPAT_SET_TP_DST) |
+                (1u << OFPAT_ENQUEUE));
+}
+
+static void
+get_tables(struct ofproto *ofproto_, struct ofp_table_stats *ots)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct odp_stats s;
+
+    strcpy(ots->name, "classifier");
+
+    dpif_get_dp_stats(ofproto->dpif, &s);
+    put_32aligned_be64(&ots->lookup_count, htonll(s.n_hit + s.n_missed));
+    put_32aligned_be64(&ots->matched_count,
+                       htonll(s.n_hit + ofproto->n_matches));
 }
 
 static int
@@ -1540,6 +1582,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
     /* Handle 802.1ag and LACP. */
     if (process_special(ofproto, &flow, upcall->packet)) {
         ofpbuf_delete(upcall->packet);
+        ofproto->n_matches++;
         return;
     }
 
@@ -1594,6 +1637,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
 
     facet_execute(ofproto, facet, upcall->packet);
     facet_install(ofproto, facet, false);
+    ofproto->n_matches++;
 }
 
 static void
@@ -1655,7 +1699,7 @@ expire(struct ofproto_dpif *ofproto)
     expire_facets(ofproto, dp_max_idle);
 
     /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
-    cls_cursor_init(&cursor, &ofproto->up.cls, NULL);
+    cls_cursor_init(&cursor, &ofproto->up.tables[0], NULL);
     CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
         rule_expire(rule);
     }
@@ -2428,7 +2472,8 @@ static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
 {
     return rule_dpif_cast(rule_from_cls_rule(
-                              classifier_lookup(&ofproto->up.cls, flow)));
+                              classifier_lookup(&ofproto->up.tables[0],
+                                                flow)));
 }
 
 static struct rule *
@@ -2460,7 +2505,7 @@ rule_construct(struct rule *rule_)
     }
 
     old_rule = rule_dpif_cast(rule_from_cls_rule(classifier_find_rule_exactly(
-                                                     &ofproto->up.cls,
+                                                     &ofproto->up.tables[0],
                                                      &rule->up.cr)));
     if (old_rule) {
         ofproto_rule_destroy(&old_rule->up);
@@ -2470,7 +2515,7 @@ rule_construct(struct rule *rule_)
     rule->packet_count = 0;
     rule->byte_count = 0;
     list_init(&rule->facets);
-    classifier_insert(&ofproto->up.cls, &rule->up.cr);
+    classifier_insert(&ofproto->up.tables[0], &rule->up.cr);
 
     ofproto->need_revalidate = true;
 
@@ -2484,7 +2529,7 @@ rule_destruct(struct rule *rule_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct facet *facet, *next_facet;
 
-    classifier_remove(&ofproto->up.cls, &rule->up.cr);
+    classifier_remove(&ofproto->up.tables[0], &rule->up.cr);
     LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
         facet_revalidate(ofproto, facet);
     }
@@ -3854,6 +3899,8 @@ const struct ofproto_class ofproto_dpif_class = {
     run,
     wait,
     flush,
+    get_features,
+    get_tables,
     port_alloc,
     port_construct,
     port_destruct,

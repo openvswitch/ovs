@@ -365,6 +365,25 @@ specified as a decimal number between 0 and 255, inclusive.
 When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
 .
+.IP \fBtable=\fInumber\fR
+If specified, limits the flow manipulation and flow dump commands to
+only apply to the table with the given \fInumber\fR.
+\fInumber\fR is a number between 0 and 254, inclusive.
+.
+Behavior varies if \fBtable\fR is not specified.  For flow table
+modification commands without \fB\-\-strict\fR, the switch will choose
+the table for these commands to operate on.  For flow table
+modification commands with \fB\-\-strict\fR, the command will operate
+on any single matching flow in any table; it will do nothing if there
+are matches in more than one table.  The \fBdump-flows\fR and
+\fBdump-aggregate\fR commands will gather statistics about flows from
+all tables.
+.IP
+When this field is specified in \fBadd-flow\fR, \fBadd-flows\fR,
+\fBmod-flows\fR and \fBdel-flows\fR commands, it activates a Nicira
+extension to OpenFlow, which as of this writing is only known to be
+implemented by Open vSwitch.
+.
 .PP
 The following shorthand notations are also available:
 .
@@ -712,14 +731,6 @@ If set, a matching flow must include an output action to \fIport\fR.
 .PP
 The \fBdump\-flows\fR and \fBdump\-aggregate\fR commands support an
 additional optional field:
-.
-.IP \fBtable=\fInumber\fR
-If specified, limits the flows about which statistics are gathered to
-those in the table with the given \fInumber\fR.  Tables are numbered
-as shown by the \fBdump\-tables\fR command.
-.
-If this field is not specified, or if \fInumber\fR is given as
-\fB255\fR, statistics are gathered about flows from all tables.
 .
 .SS "Table Entry Output"
 .

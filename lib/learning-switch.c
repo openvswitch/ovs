@@ -241,6 +241,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_NXT_TUN_ID_FROM_COOKIE:
     case OFPUTIL_NXT_ROLE_REQUEST:
     case OFPUTIL_NXT_ROLE_REPLY:
+    case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
     case OFPUTIL_NXT_SET_FLOW_FORMAT:
     case OFPUTIL_NXT_FLOW_MOD:
     case OFPUTIL_NXT_FLOW_REMOVED:

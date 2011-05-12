@@ -75,6 +75,7 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_ROLE_REQUEST,
     OFPUTIL_NXT_ROLE_REPLY,
     OFPUTIL_NXT_SET_FLOW_FORMAT,
+    OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
     OFPUTIL_NXT_FLOW_MOD,
     OFPUTIL_NXT_FLOW_REMOVED,
 
@@ -122,10 +123,14 @@ enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *,
 
 struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
 
+/* NXT_FLOW_MOD_TABLE_ID extension. */
+struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
+
 /* Flow format independent flow_mod. */
 struct flow_mod {
     struct cls_rule cr;
     ovs_be64 cookie;
+    uint8_t table_id;
     uint16_t command;
     uint16_t idle_timeout;
     uint16_t hard_timeout;
@@ -137,9 +142,10 @@ struct flow_mod {
 };
 
 int ofputil_decode_flow_mod(struct flow_mod *, const struct ofp_header *,
-                            enum nx_flow_format);
+                            enum nx_flow_format, bool flow_mod_table_id);
 struct ofpbuf *ofputil_encode_flow_mod(const struct flow_mod *,
-                                       enum nx_flow_format);
+                                       enum nx_flow_format,
+                                       bool flow_mod_table_id);
 
 /* Flow stats or aggregate stats request, independent of flow format. */
 struct flow_stats_request {

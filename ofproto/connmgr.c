@@ -49,6 +49,7 @@ struct ofconn {
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
     enum nx_flow_format flow_format; /* Currently selected flow format. */
+    bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
@@ -724,6 +725,24 @@ ofconn_set_flow_format(struct ofconn *ofconn, enum nx_flow_format flow_format)
     ofconn->flow_format = flow_format;
 }
 
+/* Returns true if the NXT_FLOW_MOD_TABLE_ID extension is enabled, false
+ * otherwise.
+ *
+ * By default the extension is not enabled. */
+bool
+ofconn_get_flow_mod_table_id(const struct ofconn *ofconn)
+{
+    return ofconn->flow_mod_table_id;
+}
+
+/* Enables or disables (according to 'enable') the NXT_FLOW_MOD_TABLE_ID
+ * extension on 'ofconn'. */
+void
+ofconn_set_flow_mod_table_id(struct ofconn *ofconn, bool enable)
+{
+    ofconn->flow_mod_table_id = enable;
+}
+
 /* Returns the default miss send length for 'ofconn'. */
 int
 ofconn_get_miss_send_len(const struct ofconn *ofconn)
@@ -773,6 +792,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     ofconn->rconn = rconn;
     ofconn->type = type;
     ofconn->flow_format = NXFF_OPENFLOW10;
+    ofconn->flow_mod_table_id = false;
     ofconn->role = NX_ROLE_OTHER;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->pktbuf = NULL;

@@ -14,7 +14,7 @@ actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
 actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
-actions=drop
+table=1,actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -32,9 +32,10 @@ NXT_TUN_ID_FROM_COOKIE: set=1
 OFPT_FLOW_MOD: ADD cookie:0x123400005678 actions=FLOOD
 OFPT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
 OFPT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
-OFPT_FLOW_MOD: ADD actions=drop
+NXT_FLOW_MOD_TABLE_ID: enable
+OFPT_FLOW_MOD: ADD table_id:1 actions=drop
 NXT_SET_FLOW_FORMAT: format=nxm
-NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD: ADD table_id:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ]])
 AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
 normalization changed ofp_match, details:

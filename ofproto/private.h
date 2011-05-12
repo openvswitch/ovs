@@ -49,8 +49,9 @@ struct ofproto {
     struct hmap ports;          /* Contains "struct ofport"s. */
     struct shash port_by_name;
 
-    /* Flow table. */
-    struct classifier cls;      /* Contains "struct rule"s. */
+    /* Flow tables. */
+    struct classifier *tables;  /* Each classifier contains "struct rule"s. */
+    int n_tables;
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
@@ -84,6 +85,7 @@ struct rule {
     long long int created;       /* Creation time. */
     uint16_t idle_timeout;       /* In seconds from time of last use. */
     uint16_t hard_timeout;       /* In seconds from time of creation. */
+    uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
 
     union ofp_action *actions;   /* OpenFlow actions. */
@@ -235,12 +237,17 @@ struct ofproto_class {
 
     /* Life-cycle functions for an "ofproto" (see "Life Cycle" above).
      *
-     * ->construct() should not modify any base members of the ofproto, even
-     * though it may be tempting in a few cases.  In particular, the client
-     * will initialize the ofproto's 'ports' member after construction is
-     * complete.  An ofproto's flow table should be initially empty, so
-     * ->construct() should delete flows from the underlying datapath, if
-     * necessary, rather than populating the ofproto's 'cls'.
+     * ->construct() should not modify most base members of the ofproto.  In
+     * particular, the client will initialize the ofproto's 'ports' member
+     * after construction is complete.
+     *
+     * ->construct() should initialize the base 'n_tables' member to the number
+     * of flow tables supported by the datapath (between 1 and 254, inclusive),
+     * initialize the base 'tables' member with space for one classifier per
+     * table, and initialize each classifier with classifier_init.  Each flow
+     * table should be initially empty, so ->construct() should delete flows
+     * from the underlying datapath, if necessary, rather than populating the
+     * tables.
      *
      * Only one ofproto instance needs to be supported for any given datapath.
      * If a datapath is already open as part of one "ofproto", then another
@@ -283,6 +290,61 @@ struct ofproto_class {
      * it's cheaper to delete all the flows from your hardware in a single pass
      * than to do it one by one. */
     void (*flush)(struct ofproto *ofproto);
+
+    /* Helper for the OpenFlow OFPT_FEATURES_REQUEST request.
+     *
+     * The implementation should store true in '*arp_match_ip' if the switch
+     * supports matching IP addresses inside ARP requests and replies, false
+     * otherwise.
+     *
+     * The implementation should store in '*actions' a bitmap of the supported
+     * OpenFlow actions: the bit with value (1 << n) should be set to 1 if the
+     * implementation supports the action with value 'n', and to 0 otherwise.
+     * For example, if the implementation supports the OFPAT_OUTPUT and
+     * OFPAT_ENQUEUE actions, but no others, it would set '*actions' to (1 <<
+     * OFPAT_OUTPUT) | (1 << OFPAT_ENQUEUE).  Vendor actions are not included
+     * in '*actions'. */
+    void (*get_features)(struct ofproto *ofproto,
+                         bool *arp_match_ip, uint32_t *actions);
+
+    /* Helper for the OpenFlow OFPST_TABLE statistics request.
+     *
+     * The 'ots' array contains 'ofproto->n_tables' elements.  Each element is
+     * initialized as:
+     *
+     *   - 'table_id' to the array index.
+     *
+     *   - 'name' to "table#" where # is the table ID.
+     *
+     *   - 'wildcards' to OVSFW_ALL.
+     *
+     *   - 'max_entries' to 1,000,000.
+     *
+     *   - 'active_count' to the classifier_count() for the table.
+     *
+     *   - 'lookup_count' and 'matched_count' to 0.
+     *
+     * The implementation should update any members in each element for which
+     * it has better values:
+     *
+     *   - 'name' to a more meaningful name.
+     *
+     *   - 'wildcards' to the set of wildcards actually supported by the table
+     *     (if it doesn't support all OpenFlow wildcards).
+     *
+     *   - 'max_entries' to the maximum number of flows actually supported by
+     *     the hardware.
+     *
+     *   - 'lookup_count' to the number of packets looked up in this flow table
+     *     so far.
+     *
+     *   - 'matched_count' to the number of packets looked up in this flow
+     *     table so far that matched one of the flow entries.
+     *
+     * Keep in mind that all of the members of struct ofp_table_stats are in
+     * network byte order.
+     */
+    void (*get_tables)(struct ofproto *ofproto, struct ofp_table_stats *ots);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */

@@ -729,17 +729,14 @@ parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
  * man page) into 'pf'.  If 'actions' is specified, an action must be in
  * 'string' and may be expanded or reallocated. */
 void
-parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
-              struct ofpbuf *actions, char *string)
+parse_ofp_str(struct flow_mod *fm, struct ofpbuf *actions, char *string)
 {
     char *save_ptr = NULL;
     char *name;
 
-    if (table_idx) {
-        *table_idx = 0xff;
-    }
     cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
     fm->cookie = htonll(0);
+    fm->table_id = 0xff;
     fm->command = UINT16_MAX;
     fm->idle_timeout = OFP_FLOW_PERMANENT;
     fm->hard_timeout = OFP_FLOW_PERMANENT;
@@ -785,8 +782,8 @@ parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
                 ovs_fatal(0, "field %s missing value", name);
             }
 
-            if (table_idx && !strcmp(name, "table")) {
-                *table_idx = atoi(value);
+            if (!strcmp(name, "table")) {
+                fm->table_id = atoi(value);
             } else if (!strcmp(name, "out_port")) {
                 fm->out_port = atoi(value);
             } else if (!strcmp(name, "priority")) {
@@ -844,7 +841,7 @@ parse_ofp_str(struct flow_mod *fm, uint8_t *table_idx,
  * flow. */
 void
 parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
-                       char *string, uint16_t command)
+                       bool *flow_mod_table_id, char *string, uint16_t command)
 {
     bool is_del = command == OFPFC_DELETE || command == OFPFC_DELETE_STRICT;
     enum nx_flow_format min_format, next_format;
@@ -853,7 +850,7 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
     struct flow_mod fm;
 
     ofpbuf_init(&actions, 64);
-    parse_ofp_str(&fm, NULL, is_del ? NULL : &actions, string);
+    parse_ofp_str(&fm, is_del ? NULL : &actions, string);
     fm.command = command;
 
     min_format = ofputil_min_flow_format(&fm.cr, true, fm.cookie);
@@ -864,7 +861,13 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
         *cur_format = next_format;
     }
 
-    ofm = ofputil_encode_flow_mod(&fm, *cur_format);
+    if (fm.table_id != 0xff && !*flow_mod_table_id) {
+        struct ofpbuf *sff = ofputil_make_flow_mod_table_id(true);
+        list_push_back(packets, &sff->list_node);
+        *flow_mod_table_id = true;
+    }
+
+    ofm = ofputil_encode_flow_mod(&fm, *cur_format, *flow_mod_table_id);
     list_push_back(packets, &ofm->list_node);
 
     ofpbuf_uninit(&actions);
@@ -874,7 +877,8 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
  * 'stream' and the command is always OFPFC_ADD.  Returns false if end-of-file
  * is reached before reading a flow, otherwise true. */
 bool
-parse_ofp_flow_mod_file(struct list *packets, enum nx_flow_format *cur,
+parse_ofp_flow_mod_file(struct list *packets,
+                        enum nx_flow_format *cur, bool *flow_mod_table_id,
                         FILE *stream, uint16_t command)
 {
     struct ds s;
@@ -883,7 +887,8 @@ parse_ofp_flow_mod_file(struct list *packets, enum nx_flow_format *cur,
     ds_init(&s);
     ok = ds_get_preprocessed_line(&s, stream) == 0;
     if (ok) {
-        parse_ofp_flow_mod_str(packets, cur, ds_cstr(&s), command);
+        parse_ofp_flow_mod_str(packets, cur, flow_mod_table_id,
+                               ds_cstr(&s), command);
     }
     ds_destroy(&s);
 
@@ -895,11 +900,10 @@ parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
                                  bool aggregate, char *string)
 {
     struct flow_mod fm;
-    uint8_t table_id;
 
-    parse_ofp_str(&fm, &table_id, NULL, string);
+    parse_ofp_str(&fm, NULL, string);
     fsr->aggregate = aggregate;
     fsr->match = fm.cr;
     fsr->out_port = fm.out_port;
-    fsr->table_id = table_id;
+    fsr->table_id = fm.table_id;
 }
