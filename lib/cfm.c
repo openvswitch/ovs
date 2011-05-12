@@ -45,8 +45,6 @@ struct cfm_internal {
 
     struct timer tx_timer;    /* Send CCM when expired. */
     struct timer fault_timer; /* Check for faults when expired. */
-
-    long long x_recv_time;
 };
 
 static int
@@ -139,7 +137,6 @@ cfm_create(void)
 
     cfmi = xzalloc(sizeof *cfmi);
     cfm  = &cfmi->cfm;
-    cfmi->x_recv_time = LLONG_MIN;
 
     hmap_init(&cfm->remote_mps);
     return cfm;
@@ -168,17 +165,13 @@ cfm_destroy(struct cfm *cfm)
 void
 cfm_run(struct cfm *cfm)
 {
-    long long now = time_msec();
     struct cfm_internal *cfmi = cfm_to_internal(cfm);
 
     if (timer_expired(&cfmi->fault_timer)) {
-        bool fault;
+        long long int interval = cfm_fault_interval(cfmi);
         struct remote_mp *rmp;
-        long long int interval;
 
-        interval = cfm_fault_interval(cfmi);
-        fault = now < cfmi->x_recv_time + interval;
-
+        cfm->fault = false;
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
             if (rmp->recv_time < timer_enabled_at(&cfmi->fault_timer, interval)
                 || timer_expired_at(&cfmi->fault_timer, rmp->recv_time)) {
@@ -186,11 +179,10 @@ cfm_run(struct cfm *cfm)
             }
 
             if (rmp->fault) {
-                fault = true;
+                cfm->fault = true;
             }
         }
 
-        cfm->fault = fault;
         timer_set_duration(&cfmi->fault_timer, interval);
     }
 }
@@ -379,8 +371,8 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     }
 
     /* According to the 802.1ag specification, reception of a CCM with an
-     * incorrect ccm_interval should trigger a fault.  We ignore this
-     * requirement for several reasons.
+     * incorrect ccm_interval, unexpected MAID, or unexpected MPID should
+     * trigger a fault.  We ignore this requirement for several reasons.
      *
      * Faults can cause a controller or Open vSwitch to make potentially
      * expensive changes to the network topology.  It seems prudent to trigger
@@ -388,8 +380,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * bonds. Furthermore, faults can be maliciously triggered by crafting
      * invalid CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
-        cfmi->x_recv_time = time_msec();
-        cfm->fault = true;
         VLOG_WARN_RL(&rl, "Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
     } else {
@@ -407,8 +397,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                              rmp->mpid);
             }
         } else {
-            cfmi->x_recv_time = time_msec();
-            cfm->fault = true;
             VLOG_WARN_RL(&rl, "Received unexpected remote MPID %d from MAC "
                          ETH_ADDR_FMT, ccm_mpid, ETH_ADDR_ARGS(eth->eth_src));
         }
@@ -419,7 +407,6 @@ void
 cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
 {
     const struct cfm_internal *cfmi = cfm_to_internal(cfm);
-    long long int now = time_msec();
     struct remote_mp *rmp;
 
     ds_put_format(ds, "MPID %"PRIu16": %s\n", cfm->mpid,
@@ -430,11 +417,6 @@ cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
                   timer_msecs_until_expired(&cfmi->tx_timer));
     ds_put_format(ds, "\tnext fault check: %lldms\n",
                   timer_msecs_until_expired(&cfmi->fault_timer));
-
-    if (cfmi->x_recv_time != LLONG_MIN) {
-        ds_put_format(ds, "\ttime since bad CCM rx: %lldms\n",
-                      now - cfmi->x_recv_time);
-    }
 
     ds_put_cstr(ds, "\n");
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
