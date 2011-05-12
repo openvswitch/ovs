@@ -242,7 +242,7 @@ struct ofproto_class {
      * after construction is complete.
      *
      * ->construct() should initialize the base 'n_tables' member to the number
-     * of flow tables supported by the datapath (between 1 and 254, inclusive),
+     * of flow tables supported by the datapath (between 1 and 255, inclusive),
      * initialize the base 'tables' member with space for one classifier per
      * table, and initialize each classifier with classifier_init.  Each flow
      * table should be initially empty, so ->construct() should delete flows
