@@ -437,15 +437,14 @@ ofproto_port_clear_cfm(struct ofproto *ofproto, uint16_t ofp_port)
 }
 
 /* Configures connectivity fault management on 'ofp_port' in 'ofproto'.  Takes
- * basic configuration from the configuration members in 'cfm', and the set of
- * remote maintenance points from the 'n_remote_mps' elements in 'remote_mps'.
- * Ignores the statistics members of 'cfm'.
+ * basic configuration from the configuration members in 'cfm', and the remote
+ * maintenance point ID from  remote_mpid.  Ignores the statistics members of
+ * 'cfm'.
  *
  * This function has no effect if 'ofproto' does not have a port 'ofp_port'. */
 void
 ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
-                     const struct cfm *cfm,
-                     const uint16_t *remote_mps, size_t n_remote_mps)
+                     const struct cfm *cfm, uint16_t remote_mpid)
 {
     struct ofport *ofport;
     int error;
@@ -457,9 +456,11 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
         return;
     }
 
+    /* XXX: For configuration simplicity, we only support one remote_mpid
+     * outside of the CFM module.  It's not clear if this is the correct long
+     * term solution or not. */
     error = (ofproto->ofproto_class->set_cfm
-             ? ofproto->ofproto_class->set_cfm(ofport, cfm,
-                                               remote_mps, n_remote_mps)
+             ? ofproto->ofproto_class->set_cfm(ofport, cfm, &remote_mpid, 1)
              : EOPNOTSUPP);
     if (error) {
         VLOG_WARN("%s: CFM configuration on port %"PRIu16" (%s) failed (%s)",

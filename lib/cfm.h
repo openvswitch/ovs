@@ -57,18 +57,7 @@ struct cfm {
     const char *name;           /* Name of this CFM object. */
 
     /* Statistics. */
-    struct hmap remote_mps;     /* Expected remote MPs. */
     bool fault;                 /* Indicates connectivity vaults. */
-};
-
-/* Remote MPs represent foreign network entities that are configured to have
- * the same MAID as this CFM instance. */
-struct remote_mp {
-    uint16_t mpid;         /* The Maintenance Point ID of this 'remote_mp'. */
-    struct hmap_node node; /* In 'cfm' 'remote_mps' or 'x_remote_mps'. */
-
-    bool recv;           /* CCM was received since last fault check. */
-    bool fault;          /* Indicates a connectivity fault. */
 };
 
 void cfm_init(void);
@@ -88,8 +77,6 @@ void cfm_wait(struct cfm *);
 bool cfm_configure(struct cfm *);
 
 void cfm_update_remote_mps(struct cfm *, const uint16_t *mpid, size_t n_mpids);
-
-const struct remote_mp *cfm_get_remote_mp(const struct cfm *, uint16_t mpid);
 
 bool cfm_should_process_flow(const struct flow *);
 

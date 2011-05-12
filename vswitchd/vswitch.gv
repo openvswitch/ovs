@@ -11,8 +11,6 @@ digraph Open_vSwitch {
 	Bridge -> NetFlow [label="netflow"];
 	QoS [style=bold];
 	QoS -> Queue [label="queues value"];
-	Monitor [];
-	Monitor -> Maintenance_Point [label="remote_mps"];
 	sFlow [];
 	Open_vSwitch [style=bold];
 	Open_vSwitch -> Bridge [label="bridges"];
@@ -29,9 +27,7 @@ digraph Open_vSwitch {
 	Mirror -> Port [style=dotted, constraint=false, label="output_port"];
 	Mirror -> Port [style=dotted, constraint=false, label="select_dst_port"];
 	Interface [];
-	Interface -> Monitor [label="monitor"];
 	NetFlow [];
-	Maintenance_Point [];
 	Port [];
 	Port -> QoS [label="qos"];
 	Port -> Interface [label="interfaces"];

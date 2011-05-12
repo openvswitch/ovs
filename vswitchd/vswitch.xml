@@ -1266,11 +1266,38 @@
       </column>
     </group>
 
-    <group title="Other Features">
+    <group title="Connectivity Fault Management">
+      <p>
+        802.1ag Connectivity Fault Management (CFM) allows a group of
+        Maintenance Points (MPs) called a Maintenance Association (MA) to
+        detect connectivity problems with each other.  MPs within a MA should
+        have complete and exclusive interconnectivity.  This is verified by
+        occasionally broadcasting Continuity Check Messages (CCMs) at a
+        configurable transmission interval.
+      </p>
 
-      <column name="monitor">
-        Connectivity monitor configuration for this interface.
+      <column name="cfm_mpid">
+        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
+        a Maintenance Association.  The MPID is used to identify this endpoint
+        to other Maintenance Points in the MA.  Each end of a link being
+        monitored should have a different MPID.  Must be configured to enable
+        CFM on this <ref table="Interface"/>.
       </column>
+
+      <column name="cfm_remote_mpid">
+        The MPID of the remote endpoint being monitored.  If this
+        <ref table="Interface"/> does not have connectivity to an endpoint
+        advertising the configured MPID, a fault is signalled.  Must be
+        configured to enable CFM on this <ref table="Interface"/>
+      </column>
+
+      <column name="cfm_fault">
+        Indicates a connectivity fault triggered by an inability to receive
+        heartbeats from the remote endpoint.
+      </column>
+    </group>
+
+    <group title="Other Features">
 
       <column name="lacp_current">
         Boolean value indicating LACP status for this interface.  If true, this
@@ -1322,6 +1349,10 @@
       <column name="other_config">
         Key-value pairs for rarely used interface features.
         <dl>
+          <dt><code>cfm_interval</code></dt>
+          <dd> The transmission interval of CFM heartbeats in milliseconds.
+            Three missed heartbeat receptions indicate a connectivity fault.
+            Defaults to 1000ms. </dd>
           <dt><code>bond-stable-id</code></dt>
           <dd> A positive integer using in <code>stable</code> bond mode to
             make slave selection decisions.  Allocating
@@ -1532,69 +1563,6 @@
       common key-value definitions, or choose key names that are likely to be
       unique.  No common key-value pairs are currently defined.
     </column>
-  </table>
-
-  <table name="Monitor" title="Connectivity Monitor configuration">
-    <p>
-      A <ref table="Monitor"/> attaches to an <ref table="Interface"/> to
-      implement 802.1ag Connectivity Fault Management (CFM).  CFM allows a
-      group of Maintenance Points (MPs) called a Maintenance Association (MA)
-      to detect connectivity problems with each other.  MPs within a MA should
-      have complete and exclusive interconnectivity.  This is verified by
-      occasionally broadcasting Continuity Check Messages (CCMs) at a
-      configurable transmission interval.  A <ref table="Monitor"/> is
-      responsible for collecting data about other MPs in its MA and
-      broadcasting CCMs.
-    </p>
-
-    <group title="Monitor Configuration">
-      <column name="mpid">
-        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
-        a Maintenance Association.  The MPID is used to identify this
-        <ref table="Monitor"/> to other endpoints in the MA.
-      </column>
-
-      <column name="remote_mps">
-        A set of <ref table="Maintenance_Points"/> which this
-        <ref table="Monitor"/> should have connectivity to.  If this
-        <ref table="Monitor"/> does not have connectivity to any MPs in this
-        set, or has connectivity to any MPs not in this set, a fault is
-        signaled.
-      </column>
-
-      <column name="interval">
-        The transmission interval of CCMs in milliseconds.  Three missed CCMs
-        indicate a connectivity fault.  Defaults to 1000ms.
-      </column>
-    </group>
-
-    <group title="Monitor Status">
-      <column name="fault">
-        Indicates a Connectivity Fault caused by a configuration error, a down
-        remote MP, or unexpected connectivity to a remote MAID or remote MP.
-      </column>
-    </group>
-  </table>
-
-  <table name="Maintenance_Point" title="Maintenance Point configuration">
-    <p>
-      A <ref table="Maintenance_Point"/> represents a MP which a
-      <ref table="Monitor"/> has or should have connectivity to.
-    </p>
-
-    <group title="Maintenance_Point Configuration">
-      <column name="mpid">
-        A Maintenance Point ID (MPID) uniquely identifies each endpoint within
-        a Maintenance Association. All MPs within a MA should have a unique
-        MPID.
-      </column>
-    </group>
-
-    <group title="Maintenance_Point Status">
-      <column name="fault">
-        Indicates a connectivity fault.
-      </column>
-    </group>
   </table>
 
   <table name="Mirror" title="Port mirroring (SPAN/RSPAN).">

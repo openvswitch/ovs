@@ -5,6 +5,8 @@ post v1.1.0
     - Feature removals:
       - Dropped support for "tun_id_from_cookie" OpenFlow extension.
 	(Use the extensible match extensions instead.)
+      - Removed the Maintenance_Point and Monitor tables in an effort
+        to simplify 802.1ag configuration.
 
 v1.1.0 - 05 Apr 2011
 ------------------------

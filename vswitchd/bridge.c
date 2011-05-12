@@ -244,10 +244,6 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_status);
     ovsdb_idl_omit(idl, &ovsrec_controller_col_external_ids);
 
-    ovsdb_idl_omit_alert(idl, &ovsrec_maintenance_point_col_fault);
-
-    ovsdb_idl_omit_alert(idl, &ovsrec_monitor_col_fault);
-
     ovsdb_idl_omit(idl, &ovsrec_qos_col_external_ids);
 
     ovsdb_idl_omit(idl, &ovsrec_queue_col_external_ids);
@@ -1219,33 +1215,18 @@ iface_refresh_status(struct iface *iface)
 static bool
 iface_refresh_cfm_stats(struct iface *iface)
 {
-    const struct ovsrec_monitor *mon;
+    const struct ovsrec_interface *cfg = iface->cfg;
     const struct cfm *cfm;
     bool changed = false;
-    size_t i;
 
-    mon = iface->cfg->monitor;
     cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->ofp_port);
 
-    if (!cfm || !mon) {
+    if (!cfm) {
         return false;
     }
 
-    for (i = 0; i < mon->n_remote_mps; i++) {
-        const struct ovsrec_maintenance_point *mp;
-        const struct remote_mp *rmp;
-
-        mp = mon->remote_mps[i];
-        rmp = cfm_get_remote_mp(cfm, mp->mpid);
-
-        if (mp->n_fault != 1 || mp->fault[0] != rmp->fault) {
-            ovsrec_maintenance_point_set_fault(mp, &rmp->fault, 1);
-            changed = true;
-        }
-    }
-
-    if (mon->n_fault != 1 || mon->fault[0] != cfm->fault) {
-        ovsrec_monitor_set_fault(mon, &cfm->fault, 1);
+    if (cfg->n_cfm_fault != 1 || cfg->cfm_fault[0] != cfm->fault) {
+        ovsrec_interface_set_cfm_fault(cfg, &cfm->fault, 1);
         changed = true;
     }
 
@@ -2501,30 +2482,25 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
 static void
 iface_configure_cfm(struct iface *iface)
 {
-    size_t i;
+    const struct ovsrec_interface *cfg = iface->cfg;
     struct cfm cfm;
-    uint16_t *remote_mps;
-    struct ovsrec_monitor *mon;
 
-    mon = iface->cfg->monitor;
-
-    if (!mon) {
+    if (!cfg->n_cfm_mpid || !cfg->n_cfm_remote_mpid) {
         ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->ofp_port);
         return;
     }
 
-    cfm.mpid     = mon->mpid;
-    cfm.interval = mon->interval ? *mon->interval : 1000;
+    cfm.mpid = *cfg->cfm_mpid;
     cfm.name = iface->name;
+    cfm.interval = atoi(get_interface_other_config(iface->cfg,
+                                                   "cfm_interval", "0"));
 
-    remote_mps = xzalloc(mon->n_remote_mps * sizeof *remote_mps);
-    for(i = 0; i < mon->n_remote_mps; i++) {
-        remote_mps[i] = mon->remote_mps[i]->mpid;
+    if (cfm.interval <= 0) {
+        cfm.interval = 1000;
     }
 
     ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port,
-                         &cfm, remote_mps, mon->n_remote_mps);
-    free(remote_mps);
+                         &cfm, *cfg->cfm_remote_mpid);
 }
 
 /* Read carrier or miimon status directly from 'iface''s netdev, according to

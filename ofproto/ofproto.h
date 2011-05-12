@@ -171,8 +171,7 @@ void ofproto_port_unregister(struct ofproto *, uint16_t ofp_port);
 
 void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
 void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
-                          const struct cfm *,
-                          const uint16_t *remote_mps, size_t n_remote_mps);
+                          const struct cfm *, uint16_t remote_mpid);
 const struct cfm *ofproto_port_get_cfm(struct ofproto *, uint16_t ofp_port);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
 

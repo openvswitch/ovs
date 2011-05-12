@@ -49,6 +49,18 @@ struct cfm_internal {
 
     struct timer tx_timer;    /* Send CCM when expired. */
     struct timer fault_timer; /* Check for faults when expired. */
+
+    struct hmap remote_mps; /* Expected remote MPs. */
+};
+
+/* Remote MPs represent foreign network entities that are configured to have
+ * the same MAID as this CFM instance. */
+struct remote_mp {
+    uint16_t mpid;         /* The Maintenance Point ID of this 'remote_mp'. */
+    struct hmap_node node; /* Node in 'remote_mps' map. */
+
+    bool recv;           /* CCM was received since last fault check. */
+    bool fault;          /* Indicates a connectivity fault. */
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -180,7 +192,7 @@ cfm_create(void)
     cfmi = xzalloc(sizeof *cfmi);
     cfm  = &cfmi->cfm;
 
-    hmap_init(&cfm->remote_mps);
+    hmap_init(&cfmi->remote_mps);
     cfm_generate_maid(cfmi);
     list_push_back(&all_cfms, &cfmi->list_node);
     return cfm;
@@ -196,12 +208,12 @@ cfm_destroy(struct cfm *cfm)
         return;
     }
 
-    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
-        hmap_remove(&cfm->remote_mps, &rmp->node);
+    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfmi->remote_mps) {
+        hmap_remove(&cfmi->remote_mps, &rmp->node);
         free(rmp);
     }
 
-    hmap_destroy(&cfm->remote_mps);
+    hmap_destroy(&cfmi->remote_mps);
     list_remove(&cfmi->list_node);
     free(cfmi);
 }
@@ -217,7 +229,7 @@ cfm_run(struct cfm *cfm)
         struct remote_mp *rmp;
 
         cfm->fault = false;
-        HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
+        HMAP_FOR_EACH (rmp, node, &cfmi->remote_mps) {
             rmp->fault = !rmp->recv;
             rmp->recv = false;
 
@@ -303,6 +315,7 @@ cfm_configure(struct cfm *cfm)
 void
 cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
 {
+    struct cfm_internal *cfmi = cfm_to_internal(cfm);
     size_t i;
     struct hmap new_rmps;
     struct remote_mp *rmp, *rmp_next;
@@ -317,8 +330,8 @@ cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
             continue;
         }
 
-        if ((rmp = lookup_remote_mp(&cfm->remote_mps, mpid))) {
-            hmap_remove(&cfm->remote_mps, &rmp->node);
+        if ((rmp = lookup_remote_mp(&cfmi->remote_mps, mpid))) {
+            hmap_remove(&cfmi->remote_mps, &rmp->node);
         } else {
             rmp = xzalloc(sizeof *rmp);
             rmp->mpid = mpid;
@@ -327,7 +340,7 @@ cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
         hmap_insert(&new_rmps, &rmp->node, hash_mpid(mpid));
     }
 
-    hmap_swap(&new_rmps, &cfm->remote_mps);
+    hmap_swap(&new_rmps, &cfmi->remote_mps);
 
     HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &new_rmps) {
         hmap_remove(&new_rmps, &rmp->node);
@@ -335,14 +348,6 @@ cfm_update_remote_mps(struct cfm *cfm, const uint16_t *mpids, size_t n_mpids)
     }
 
     hmap_destroy(&new_rmps);
-}
-
-/* Finds a 'remote_mp' with 'mpid' in 'cfm'.  If no such 'remote_mp' exists
- * returns NULL. */
-const struct remote_mp *
-cfm_get_remote_mp(const struct cfm *cfm, uint16_t mpid)
-{
-    return lookup_remote_mp(&cfm->remote_mps, mpid);
 }
 
 /* Returns true if the CFM library should process packets from 'flow'. */
@@ -396,7 +401,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         ccm_mpid = ntohs(ccm->mpid);
         ccm_interval = ccm->flags & 0x7;
 
-        rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
+        rmp = lookup_remote_mp(&cfmi->remote_mps, ccm_mpid);
 
         if (rmp) {
             rmp->recv = true;
@@ -453,7 +458,7 @@ cfm_unixctl_show(struct unixctl_conn *conn,
                   timer_msecs_until_expired(&cfmi->fault_timer));
 
     ds_put_cstr(&ds, "\n");
-    HMAP_FOR_EACH (rmp, node, &cfmi->cfm.remote_mps) {
+    HMAP_FOR_EACH (rmp, node, &cfmi->remote_mps) {
         ds_put_format(&ds, "Remote MPID %"PRIu16": %s\n", rmp->mpid,
                       rmp->fault ? "fault" : "");
         ds_put_format(&ds, "\trecv since check: %s",

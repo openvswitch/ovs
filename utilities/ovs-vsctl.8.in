@@ -483,11 +483,6 @@ identified by port name.
 .IP "\fBQueue\fR"
 Configuration for one queue within a \fBQoS\fR configuration.  Records
 may only be identified by UUID.
-.IP "\fBMonitor\fR"
-Connectivity Monitoring attached to an \fBInterface\fR.  Records may be
-identified by \fBInterface\fR name.
-.IP "\fBMaintenance_Point\fR"
-Maintenance Point managed by a \fBMonitor\fR.
 .IP "\fBMirror\fR"
 A port mirroring configuration attached to a bridge.  Records may be
 identified by mirror name.
@@ -783,19 +778,13 @@ their UUIDs, then "\fBovs\-vsctl destroy Queue \fIuuid1\fR
 \fIuuid2\fR" to destroy each of them.)
 .SS "Connectivity Monitoring"
 .PP
-Create a Monitor which manages a couple of remote Maintenance Points on eth0.
+Monitor connectivity to a remote maintenance point on eth0.
 .IP
-.B "ovs\-vsctl \-\- set Interface eth0 Monitor=@newmon \(rs"
-.IP
-.B "\-\- \-\-id=@newmon create Monitor mpid=1 remote_mps=@mp2,@mp3 \(rs"
-.IP
-.B "\-\- \-\-id=@mp2 create Maintenance_Point mpid=2 \(rs"
-.IP
-.B "\-\- \-\-id=@mp3 create Maintenance_Point mpid=3"
+.B "ovs\-vsctl set Interface eth0 cfm_mpid=1 cfm_remote_mpid=2"
 .PP
-Deconfigure the Monitor record from above:
+Deconfigure connectivity monitoring from above:
 .IP
-.B "ovs\-vsctl clear Interface eth0 Monitor"
+.B "ovs\-vsctl clear Interface eth0 cfm_mpid cfm_remote_mpid"
 .SS "NetFlow"
 .PP
 Configure bridge \fBbr0\fR to send NetFlow records to UDP port 5566 on
