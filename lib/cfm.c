@@ -129,8 +129,9 @@ lookup_remote_mp(const struct hmap *hmap, uint16_t mpid)
 }
 
 /* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
- * 'eth_src', and 'interval' filled out.  When changes are made to the 'cfm'
- * object, cfm_configure should be called before using it. */
+ * 'eth_src', and 'interval' filled out.  cfm_configure() should be called
+ * whenever changes are made to 'cfm', and before cfm_run() is called for the
+ * first time. */
 struct cfm *
 cfm_create(void)
 {
