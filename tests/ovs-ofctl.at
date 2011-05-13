@@ -32,8 +32,9 @@ NXT_SET_FLOW_FORMAT: format=nxm
 NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
 NXT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
-NXT_FLOW_MOD: ADD actions=drop
-NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD_TABLE_ID: enable
+NXT_FLOW_MOD: ADD table_id:1 actions=drop
+NXT_FLOW_MOD: ADD table_id:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ]])
 AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
 normalization changed ofp_match, details:
@@ -43,8 +44,8 @@ normalization changed ofp_match, details:
  pre: wildcards=  0x3820ff  in_port=    0  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
 post: wildcards=  0x3fffff  in_port=    0  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
 normalization changed ofp_match, details:
- pre: wildcards=  0x3820ff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
-post: wildcards=  0x3fffff  in_port=65534  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+ pre: wildcards=  0x3820ff  in_port=    0  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
+post: wildcards=  0x3fffff  in_port=    0  dl_src=00:00:00:00:00:00  dl_dst=00:00:00:00:00:00  dl_vlan=    0  dl_vlan_pcp=  0  dl_type=     0  nw_tos=   0  nw_proto=   0  nw_src=         0  nw_dst=         0  tp_src=    0  tp_dst=    0
 ])
 AT_CLEANUP
 

@@ -51,7 +51,6 @@ AT_CHECK([ovs-ofctl add-flow br0 in_port=0,actions=1])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
  cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=0 actions=output:1
  cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
- cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=65534 actions=output:1
 NXST_FLOW reply:
 ])
 AT_CHECK([ovs-ofctl del-flows br0])

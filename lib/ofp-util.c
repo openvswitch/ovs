@@ -339,26 +339,15 @@ ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
                                 const struct ofputil_msg_type **typep)
 {
     const struct ofputil_msg_type *type;
-    bool found;
 
-    found = false;
     for (type = cat->types; type < &cat->types[cat->n_types]; type++) {
         if (type->value == value) {
-            if (ofputil_length_ok(cat, type, size)) {
-                *typep = type;
-                return 0;
+            if (!ofputil_length_ok(cat, type, size)) {
+                return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
             }
-
-            /* We found a matching command type but it had the wrong length.
-             * Probably this is just an error.  However, a screwup means that
-             * NXT_SET_FLOW_FORMAT and NXT_FLOW_MOD_TABLE_ID have the same
-             * value.  They do have different lengths, so we can distinguish
-             * them that way. */
-            found = true;
+            *typep = type;
+            return 0;
         }
-    }
-    if (found) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     VLOG_WARN_RL(&bad_ofmsg_rl, "received %s of unknown type %"PRIu32,
@@ -385,10 +374,6 @@ ofputil_decode_vendor(const struct ofp_header *oh,
         { OFPUTIL_NXT_SET_FLOW_FORMAT,
           NXT_SET_FLOW_FORMAT, "NXT_SET_FLOW_FORMAT",
           sizeof(struct nxt_set_flow_format), 0 },
-
-        { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
-          NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
-          sizeof(struct nxt_flow_mod_table_id), 0 },
 
         { OFPUTIL_NXT_FLOW_MOD,
           NXT_FLOW_MOD, "NXT_FLOW_MOD",
@@ -423,6 +408,21 @@ ofputil_decode_vendor(const struct ofp_header *oh,
     }
 
     nh = (const struct nicira_header *) oh;
+
+    if (nh->subtype == htonl(NXT_FLOW_MOD_TABLE_ID)
+        && oh->length == htons(sizeof(struct nxt_flow_mod_table_id))) {
+        /* NXT_SET_FLOW_FORMAT and NXT_FLOW_MOD_TABLE_ID accidentally have the
+         * same value but different lengths.  ofputil_lookup_openflow_message()
+         * doesn't support this case, so special case it here. */
+        static const struct ofputil_msg_type nxt_flow_mod_table_id =
+            { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
+              NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
+              sizeof(struct nxt_flow_mod_table_id), 0 };
+
+        *typep = &nxt_flow_mod_table_id;
+        return 0;
+    }
+
     return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
                                            ntohs(oh->length), typep);
 }
@@ -1004,6 +1004,7 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
         msg = ofpbuf_new(sizeof *ofm + actions_len);
         ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
+        ofm->cookie = fm->cookie;
         ofm->command = htons(fm->command);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);
