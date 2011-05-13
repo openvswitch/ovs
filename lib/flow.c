@@ -456,7 +456,7 @@ void
 flow_format(struct ds *ds, const struct flow *flow)
 {
     ds_put_format(ds, "tunnel%#"PRIx64":in_port%04"PRIx16":tci(",
-                  flow->tun_id, flow->in_port);
+                  ntohll(flow->tun_id), flow->in_port);
     if (flow->vlan_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",
                       vlan_tci_to_vid(flow->vlan_tci),
