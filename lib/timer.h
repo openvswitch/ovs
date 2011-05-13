@@ -20,13 +20,15 @@
 #include <stdbool.h>
 
 #include "timeval.h"
+#include "util.h"
 
 struct timer {
     long long int t;
 };
 
 long long int timer_msecs_until_expired(const struct timer *);
-void timer_wait(const struct timer *);
+void timer_wait(const struct timer *, const char *where);
+#define timer_wait(timer) timer_wait(timer, SOURCE_LOCATOR)
 
 /* Causes 'timer' to expire when 'duration' milliseconds have passed.
  *

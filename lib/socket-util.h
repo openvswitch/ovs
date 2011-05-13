@@ -50,4 +50,6 @@ int get_mtime(const char *file_name, struct timespec *mtime);
 
 void xpipe(int fds[2]);
 
+char *describe_fd(int fd);
+
 #endif /* socket-util.h */

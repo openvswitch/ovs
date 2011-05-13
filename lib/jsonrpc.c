@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,7 +293,7 @@ void
 jsonrpc_recv_wait(struct jsonrpc *rpc)
 {
     if (rpc->status || rpc->received || !byteq_is_empty(&rpc->input)) {
-        poll_immediate_wake();
+        (poll_immediate_wake)(rpc->name);
     } else {
         stream_recv_wait(rpc->stream);
     }

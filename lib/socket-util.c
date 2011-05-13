@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <poll.h>
 #include <stddef.h>
@@ -30,9 +31,18 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include "dynamic-string.h"
 #include "fatal-signal.h"
+#include "packets.h"
 #include "util.h"
 #include "vlog.h"
+#if AF_PACKET && __linux__
+#include <linux/if_packet.h>
+#endif
+#ifdef HAVE_NETLINK
+#include "netlink-protocol.h"
+#include "netlink-socket.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(socket_util);
 
@@ -783,4 +793,149 @@ xpipe(int fds[2])
     if (pipe(fds)) {
         VLOG_FATAL("failed to create pipe (%s)", strerror(errno));
     }
+}
+
+static int
+getsockopt_int(int fd, int level, int optname, int *valuep)
+{
+    socklen_t len = sizeof *valuep;
+
+    return (getsockopt(fd, level, optname, valuep, &len) ? errno
+            : len == sizeof *valuep ? 0
+            : EINVAL);
+}
+
+static void
+describe_sockaddr(struct ds *string, int fd,
+                  int (*getaddr)(int, struct sockaddr *, socklen_t *))
+{
+    struct sockaddr_storage ss;
+    socklen_t len = sizeof ss;
+
+    if (!getaddr(fd, (struct sockaddr *) &ss, &len)) {
+        if (ss.ss_family == AF_INET) {
+            struct sockaddr_in sin;
+
+            memcpy(&sin, &ss, sizeof sin);
+            ds_put_format(string, IP_FMT":%"PRIu16,
+                          IP_ARGS(&sin.sin_addr.s_addr), ntohs(sin.sin_port));
+        } else if (ss.ss_family == AF_UNIX) {
+            struct sockaddr_un sun;
+            const char *null;
+            size_t maxlen;
+
+            memcpy(&sun, &ss, sizeof sun);
+            maxlen = len - offsetof(struct sockaddr_un, sun_path);
+            null = memchr(sun.sun_path, '\0', maxlen);
+            ds_put_buffer(string, sun.sun_path,
+                          null ? null - sun.sun_path : maxlen);
+        }
+#ifdef HAVE_NETLINK
+        else if (ss.ss_family == AF_NETLINK) {
+            int protocol;
+
+/* SO_PROTOCOL was introduced in 2.6.32.  Support it regardless of the version
+ * of the Linux kernel headers in use at build time. */
+#ifndef SO_PROTOCOL
+#define SO_PROTOCOL 38
+#endif
+
+            if (!getsockopt_int(fd, SOL_SOCKET, SO_PROTOCOL, &protocol)) {
+                switch (protocol) {
+                case NETLINK_ROUTE:
+                    ds_put_cstr(string, "NETLINK_ROUTE");
+                    break;
+
+                case NETLINK_GENERIC:
+                    ds_put_cstr(string, "NETLINK_GENERIC");
+                    break;
+
+                default:
+                    ds_put_format(string, "AF_NETLINK family %d", protocol);
+                    break;
+                }
+            } else {
+                ds_put_cstr(string, "AF_NETLINK");
+            }
+        }
+#endif
+#if AF_PACKET && __linux__
+        else if (ss.ss_family == AF_PACKET) {
+            struct sockaddr_ll sll;
+
+            memcpy(&sll, &ss, sizeof sll);
+            ds_put_cstr(string, "AF_PACKET");
+            if (sll.sll_ifindex) {
+                char name[IFNAMSIZ];
+
+                if (if_indextoname(sll.sll_ifindex, name)) {
+                    ds_put_format(string, "(%s)", name);
+                } else {
+                    ds_put_format(string, "(ifindex=%d)", sll.sll_ifindex);
+                }
+            }
+            if (sll.sll_protocol) {
+                ds_put_format(string, "(protocol=0x%"PRIu16")",
+                              ntohs(sll.sll_protocol));
+            }
+        }
+#endif
+        else if (ss.ss_family == AF_UNSPEC) {
+            ds_put_cstr(string, "AF_UNSPEC");
+        } else {
+            ds_put_format(string, "AF_%d", (int) ss.ss_family);
+        }
+    }
+}
+
+
+#ifdef __linux__
+static void
+put_fd_filename(struct ds *string, int fd)
+{
+    char buf[1024];
+    char *linkname;
+    int n;
+
+    linkname = xasprintf("/proc/self/fd/%d", fd);
+    n = readlink(linkname, buf, sizeof buf);
+    if (n > 0) {
+        ds_put_char(string, ' ');
+        ds_put_buffer(string, buf, n);
+        if (n > sizeof buf) {
+            ds_put_cstr(string, "...");
+        }
+    }
+    free(linkname);
+}
+#endif
+
+/* Returns a malloc()'d string describing 'fd', for use in logging. */
+char *
+describe_fd(int fd)
+{
+    struct ds string;
+    struct stat s;
+
+    ds_init(&string);
+    if (fstat(fd, &s)) {
+        ds_put_format(&string, "fstat failed (%s)", strerror(errno));
+    } else if (S_ISSOCK(s.st_mode)) {
+        describe_sockaddr(&string, fd, getsockname);
+        ds_put_cstr(&string, "<->");
+        describe_sockaddr(&string, fd, getpeername);
+    } else {
+        ds_put_cstr(&string, (isatty(fd) ? "tty"
+                              : S_ISDIR(s.st_mode) ? "directory"
+                              : S_ISCHR(s.st_mode) ? "character device"
+                              : S_ISBLK(s.st_mode) ? "block device"
+                              : S_ISREG(s.st_mode) ? "file"
+                              : S_ISFIFO(s.st_mode) ? "FIFO"
+                              : S_ISLNK(s.st_mode) ? "symbolic link"
+                              : "unknown"));
+#ifdef __linux__
+        put_fd_filename(&string, fd);
+#endif
+    }
+    return ds_steal_cstr(&string);
 }

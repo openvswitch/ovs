@@ -77,6 +77,14 @@ extern const char *program_name;
 
 #define NOT_REACHED() abort()
 
+/* Expands to a string that looks like "<file>:<line>", e.g. "tmp.c:10".
+ *
+ * See http://c-faq.com/ansi/stringize.html for an explanation of STRINGIZE and
+ * STRINGIZE2. */
+#define SOURCE_LOCATOR __FILE__ ":" STRINGIZE(__LINE__)
+#define STRINGIZE(ARG) STRINGIZE2(ARG)
+#define STRINGIZE2(ARG) #ARG
+
 /* Given a pointer-typed lvalue OBJECT, expands to a pointer type that may be
  * assigned to OBJECT. */
 #ifdef __GNUC__

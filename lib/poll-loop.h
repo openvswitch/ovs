@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #define POLL_LOOP_H 1
 
 #include <poll.h>
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -35,11 +36,28 @@ extern "C" {
 
 struct poll_waiter;
 
-/* Schedule events to wake up the following poll_block(). */
-struct poll_waiter *poll_fd_wait(int fd, short int events);
-void poll_timer_wait(long long int msec);
-void poll_timer_wait_until(long long int msec);
-void poll_immediate_wake(void);
+/* Schedule events to wake up the following poll_block().
+ *
+ * The poll_loop logs the 'where' argument to each function at "debug" level
+ * when an event causes a wakeup.  Ordinarily, it is automatically filled in
+ * with the location in the source of the call, and caller should therefore
+ * omit it.  But, if the function you are implementing is very generic, so that
+ * its location in the source would not be very helpful for debugging, you can
+ * avoid the macro expansion and pass a different argument, e.g.:
+ *      (poll_fd_wait)(fd, events, where);
+ * See timer_wait() for an example.
+ */
+struct poll_waiter *poll_fd_wait(int fd, short int events, const char *where);
+#define poll_fd_wait(fd, events) poll_fd_wait(fd, events, SOURCE_LOCATOR)
+
+void poll_timer_wait(long long int msec, const char *where);
+#define poll_timer_wait(msec) poll_timer_wait(msec, SOURCE_LOCATOR)
+
+void poll_timer_wait_until(long long int msec, const char *where);
+#define poll_timer_wait_until(msec) poll_timer_wait_until(msec, SOURCE_LOCATOR)
+
+void poll_immediate_wake(const char *where);
+#define poll_immediate_wake() poll_immediate_wake(SOURCE_LOCATOR)
 
 /* Wait until an event occurs. */
 void poll_block(void);

@@ -34,9 +34,9 @@ timer_msecs_until_expired(const struct timer *timer)
 
 /* Causes poll_block() to wake when 'timer' expires. */
 void
-timer_wait(const struct timer *timer)
+(timer_wait)(const struct timer *timer, const char *where)
 {
     if (timer->t < LLONG_MAX) {
-        poll_timer_wait_until(timer->t);
+        (poll_timer_wait_until)(timer->t, where);
     }
 }
