@@ -1353,7 +1353,8 @@ is_mirror_output_bundle(struct ofproto *ofproto_, void *aux)
 static struct ofport_dpif *
 get_ofp_port(struct ofproto_dpif *ofproto, uint16_t ofp_port)
 {
-    return ofport_dpif_cast(ofproto_get_port(&ofproto->up, ofp_port));
+    struct ofport *ofport = ofproto_get_port(&ofproto->up, ofp_port);
+    return ofport ? ofport_dpif_cast(ofport) : NULL;
 }
 
 static struct ofport_dpif *
