@@ -1169,21 +1169,25 @@ update_port(struct ofproto *ofproto, const char *name)
     if (netdev) {
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
         if (port && !strcmp(netdev_get_name(port->netdev), name)) {
+            struct netdev *old_netdev = port->netdev;
+
             /* 'name' hasn't changed location.  Any properties changed? */
             if (!ofport_equal(&port->opp, &opp)) {
                 ofport_modified(port, &opp);
             }
 
-            /* Install the newly opened netdev in case it has changed. */
+            /* Install the newly opened netdev in case it has changed.
+             * Don't close the old netdev yet in case port_modified has to
+             * remove a retained reference to it.*/
             netdev_monitor_remove(ofproto->netdev_monitor, port->netdev);
             netdev_monitor_add(ofproto->netdev_monitor, netdev);
-
-            netdev_close(port->netdev);
             port->netdev = netdev;
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);
             }
+
+            netdev_close(old_netdev);
         } else {
             /* If 'port' is nonnull then its name differs from 'name' and thus
              * we should delete it.  If we think there's a port named 'name'
