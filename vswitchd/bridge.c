@@ -164,7 +164,6 @@ static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
 static bool port_is_bond_fake_iface(const struct port *);
 
-static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func qos_unixctl_show;
 
 static struct port *port_create(struct bridge *, const struct ovsrec_port *);
@@ -268,7 +267,6 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
 
     /* Register unixctl commands. */
-    unixctl_command_register("cfm/show", cfm_unixctl_show, NULL);
     unixctl_command_register("qos/show", qos_unixctl_show, NULL);
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
                              NULL);
@@ -276,6 +274,7 @@ bridge_init(const char *remote)
                              NULL);
     lacp_init();
     bond_init();
+    cfm_init();
 }
 
 void
@@ -1501,33 +1500,6 @@ bridge_wait(void)
     }
 }
 
-/* CFM unixctl user interface functions. */
-static void
-cfm_unixctl_show(struct unixctl_conn *conn,
-                 const char *args, void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    struct iface *iface;
-    const struct cfm *cfm;
-
-    iface = iface_find(args);
-    if (!iface) {
-        unixctl_command_reply(conn, 501, "no such interface");
-        return;
-    }
-
-    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->ofp_port);
-
-    if (!cfm) {
-        unixctl_command_reply(conn, 501, "CFM not enabled");
-        return;
-    }
-
-    cfm_dump_ds(cfm, &ds);
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
 /* QoS unixctl user interface functions. */
 
 struct qos_unixctl_show_cbdata {
@@ -2549,6 +2521,7 @@ iface_configure_cfm(struct iface *iface)
 
     cfm.mpid     = mon->mpid;
     cfm.interval = mon->interval ? *mon->interval : 1000;
+    cfm.name = iface->name;
 
     memcpy(cfm.maid, maid, sizeof cfm.maid);
 

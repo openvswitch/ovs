@@ -30,6 +30,7 @@
 #include "poll-loop.h"
 #include "timer.h"
 #include "timeval.h"
+#include "unixctl.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(cfm);
@@ -38,8 +39,9 @@ VLOG_DEFINE_THIS_MODULE(cfm);
 
 struct cfm_internal {
     struct cfm cfm;
-    uint32_t seq;          /* The sequence number of our last CCM. */
+    struct list list_node; /* Node in all_cfms list. */
 
+    uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
 
@@ -48,6 +50,10 @@ struct cfm_internal {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+static struct list all_cfms = LIST_INITIALIZER(&all_cfms);
+
+static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
+                             void *aux);
 
 static int
 ccm_interval_to_ms(uint8_t interval)
@@ -128,6 +134,12 @@ lookup_remote_mp(const struct hmap *hmap, uint16_t mpid)
     return NULL;
 }
 
+void
+cfm_init(void)
+{
+    unixctl_command_register("cfm/show", cfm_unixctl_show, NULL);
+}
+
 /* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
  * 'eth_src', and 'interval' filled out.  cfm_configure() should be called
  * whenever changes are made to 'cfm', and before cfm_run() is called for the
@@ -142,6 +154,7 @@ cfm_create(void)
     cfm  = &cfmi->cfm;
 
     hmap_init(&cfm->remote_mps);
+    list_push_back(&all_cfms, &cfmi->list_node);
     return cfm;
 }
 
@@ -161,6 +174,7 @@ cfm_destroy(struct cfm *cfm)
     }
 
     hmap_destroy(&cfm->remote_mps);
+    list_remove(&cfmi->list_node);
     free(cfmi);
 }
 
@@ -411,26 +425,50 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     }
 }
 
-void
-cfm_dump_ds(const struct cfm *cfm, struct ds *ds)
+static struct cfm_internal *
+cfm_find(const char *name)
 {
-    const struct cfm_internal *cfmi = cfm_to_internal(cfm);
+    struct cfm_internal *cfmi;
+
+    LIST_FOR_EACH (cfmi, list_node, &all_cfms) {
+        if (cfmi->cfm.name && !strcmp(cfmi->cfm.name, name)) {
+            return cfmi;
+        }
+    }
+    return NULL;
+}
+
+static void
+cfm_unixctl_show(struct unixctl_conn *conn,
+                 const char *args, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct cfm_internal *cfmi;
     struct remote_mp *rmp;
 
-    ds_put_format(ds, "MPID %"PRIu16": %s\n", cfm->mpid,
-                  cfm->fault ? "fault" : "");
+    cfmi = cfm_find(args);
+    if (!cfmi) {
+        unixctl_command_reply(conn, 501, "no such CFM object");
+        return;
+    }
 
-    ds_put_format(ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
-    ds_put_format(ds, "\tnext CCM tx: %lldms\n",
+    ds_put_format(&ds, "MPID %"PRIu16": %s\n", cfmi->cfm.mpid,
+                  cfmi->cfm.fault ? "fault" : "");
+
+    ds_put_format(&ds, "\tinterval: %dms\n", cfmi->ccm_interval_ms);
+    ds_put_format(&ds, "\tnext CCM tx: %lldms\n",
                   timer_msecs_until_expired(&cfmi->tx_timer));
-    ds_put_format(ds, "\tnext fault check: %lldms\n",
+    ds_put_format(&ds, "\tnext fault check: %lldms\n",
                   timer_msecs_until_expired(&cfmi->fault_timer));
 
-    ds_put_cstr(ds, "\n");
-    HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-        ds_put_format(ds, "Remote MPID %"PRIu16": %s\n", rmp->mpid,
+    ds_put_cstr(&ds, "\n");
+    HMAP_FOR_EACH (rmp, node, &cfmi->cfm.remote_mps) {
+        ds_put_format(&ds, "Remote MPID %"PRIu16": %s\n", rmp->mpid,
                       rmp->fault ? "fault" : "");
-        ds_put_format(ds, "\trecv since check: %s",
+        ds_put_format(&ds, "\trecv since check: %s",
                       rmp->recv ? "true" : "false");
     }
+
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
 }

@@ -1,5 +1,4 @@
-/*
- * Copyright (c) 2010 Nicira Networks.
+/* Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +23,6 @@
 
 struct flow;
 struct ofpbuf;
-struct ds;
 
 /* Ethernet destination address of CCM packets. */
 static const uint8_t eth_addr_ccm[6] OVS_UNUSED
@@ -57,6 +55,7 @@ struct cfm {
     uint16_t mpid;              /* The MPID of this CFM. */
     uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
     int interval;               /* The requested transmission interval. */
+    const char *name;           /* Name of this CFM object. */
 
     /* Statistics. */
     struct hmap remote_mps;     /* Expected remote MPs. */
@@ -72,6 +71,8 @@ struct remote_mp {
     bool recv;           /* CCM was received since last fault check. */
     bool fault;          /* Indicates a connectivity fault. */
 };
+
+void cfm_init(void);
 
 struct cfm *cfm_create(void);
 
@@ -97,7 +98,5 @@ bool cfm_generate_maid(const char *md_name, const char *ma_name,
 bool cfm_should_process_flow(const struct flow *);
 
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
-
-void cfm_dump_ds(const struct cfm *, struct ds *);
 
 #endif /* cfm.h */
