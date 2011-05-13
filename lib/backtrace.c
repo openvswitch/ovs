@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,34 @@
  */
 
 #include <config.h>
+
 #include "backtrace.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
+
 #include "compiler.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(backtrace);
 
-static uintptr_t OVS_UNUSED
+#ifdef HAVE_BACKTRACE
+#include <execinfo.h>
+void
+backtrace_capture(struct backtrace *b)
+{
+    void *frames[BACKTRACE_MAX_FRAMES];
+    int i;
+
+    b->n_frames = backtrace(frames, BACKTRACE_MAX_FRAMES);
+    for (i = 0; i < b->n_frames; i++) {
+        b->frames[i] = (uintptr_t) frames[i];
+    }
+}
+#elif __GNUC__
+static uintptr_t
 get_max_stack(void)
 {
     static const char file_name[] = "/proc/self/maps";
@@ -83,7 +100,6 @@ in_stack(void *p)
 void
 backtrace_capture(struct backtrace *backtrace)
 {
-#ifdef __GNUC__
     void **frame;
     size_t n;
 
@@ -96,7 +112,11 @@ backtrace_capture(struct backtrace *backtrace)
         backtrace->frames[n++] = (uintptr_t) frame[1];
     }
     backtrace->n_frames = n;
-#else
-    backtrace->n_frames = 0;
-#endif
 }
+#else  /* !HAVE_BACKTRACE && !__GNUC__ */
+void
+backtrace_capture(struct backtrace *backtrace)
+{
+    backtrace->n_frames = 0;
+}
+#endif
