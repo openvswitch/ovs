@@ -1,4 +1,4 @@
- /* Copyright (c) 2008, 2009, 2010 Nicira Networks
+ /* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,17 +111,12 @@ lockfile_lock(const char *file, int timeout, struct lockfile **lockfilep)
         }
     } while (error == EINTR && (timeout == INT_MAX || elapsed < timeout));
 
-    if (!error) {
-        if (elapsed) {
-            VLOG_WARN("%s: waited %lld ms for lock file",
-                      lock_name, elapsed);
-        }
-    } else if (error == EINTR) {
+    if (error == EINTR) {
         COVERAGE_INC(lockfile_timeout);
         VLOG_WARN("%s: giving up on lock file after %lld ms",
                   lock_name, elapsed);
         error = ETIMEDOUT;
-    } else {
+    } else if (error) {
         COVERAGE_INC(lockfile_error);
         if (error == EACCES) {
             error = EAGAIN;

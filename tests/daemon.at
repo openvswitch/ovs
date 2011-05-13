@@ -7,7 +7,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([ovsdb-server --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > expected], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > expected], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
 AT_CHECK(
   [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -27,7 +27,7 @@ AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([ovsdb-server --monitor --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > parent], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --monitor --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > parent], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
@@ -70,7 +70,7 @@ OVSDB_INIT([db])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
@@ -94,7 +94,7 @@ AT_CAPTURE_FILE([init])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/daemon --monitor --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/daemon --monitor --remote=punix:socket --unixctl=$PWD/unixctl db], [0])
 AT_CHECK([test -s daemon])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is a running process,
@@ -107,7 +107,7 @@ CHECK([test `cat init` = 1])
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
 CHECK([cp daemon olddaemon])
-CHECK([kill -SEGV `cat daemon`], [0], [ignore], [ignore])
+CHECK([kill -SEGV `cat daemon`], [0])
 OVS_WAIT_WHILE([kill -0 `cat olddaemon`], [kill `cat olddaemon daemon`])
 OVS_WAIT_UNTIL([test -s daemon && test `cat daemon` != `cat olddaemon`],
   [kill `cat olddaemon daemon`])

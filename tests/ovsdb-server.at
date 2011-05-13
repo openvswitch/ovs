@@ -50,7 +50,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "table": "ordinals",
    "row": {"number": 0, "name": "zero"}}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
 cat stdout >> output
 dnl Add some crap to the database log and run another transaction, which should
 dnl ignore the crap and truncate it out of the log.
@@ -61,7 +61,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "table": "ordinals",
    "row": {"number": 1, "name": "one"}}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
 AT_CHECK([grep 'syntax error: db: parse error.* in header line "xxx"' stderr],
   [0], [ignore])
 cat stdout >> output
@@ -75,7 +75,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "where": [],
    "sort": ["number"]}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
 cat stdout >> output
 AT_CHECK([perl $srcdir/uuidfilt.pl output], [0],
   [[[{"uuid":["uuid","<0>"]}]
@@ -97,7 +97,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "table": "ordinals",
    "row": {"number": 0, "name": "zero"}}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
 cat stdout >> output
 dnl Add some crap to the database log and run another transaction, which should
 dnl ignore the crap and truncate it out of the log.
@@ -109,7 +109,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "table": "ordinals",
    "row": {"number": 1, "name": "one"}}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [stderr])
 AT_CHECK([grep 'syntax "{"invalid":{}}": unknown table: No table named invalid.' stderr],
   [0], [ignore])
 cat stdout >> output
@@ -123,7 +123,7 @@ AT_DATA([txnfile], [[ovsdb-client transact unix:socket \
    "where": [],
    "sort": ["number"]}]'
 ]])
-AT_CHECK([ovsdb-server -vlockfile:ANY:EMER --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
+AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [])
 cat stdout >> output
 AT_CHECK([perl $srcdir/uuidfilt.pl output], [0],
   [[[{"uuid":["uuid","<0>"]}]
