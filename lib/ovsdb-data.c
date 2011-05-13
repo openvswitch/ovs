@@ -690,8 +690,7 @@ check_string_constraints(const char *s,
         struct ovsdb_error *error;
 
         error = ovsdb_error("constraint violation",
-                            "\"%s\" is not a valid UTF-8 string: %s",
-                            s, msg);
+                            "not a valid UTF-8 string: %s", msg);
         free(msg);
         return error;
     }
