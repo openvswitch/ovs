@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-struct cfm;
+struct cfm_settings;
 struct cls_rule;
 struct netdev;
 struct ofproto;
@@ -171,8 +171,7 @@ void ofproto_port_unregister(struct ofproto *, uint16_t ofp_port);
 
 void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
 void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
-                          const struct cfm *, uint16_t remote_mpid);
-const struct cfm *ofproto_port_get_cfm(struct ofproto *, uint16_t ofp_port);
+                          const struct cfm_settings *);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
 
 /* Configuration of bundles. */
@@ -230,6 +229,7 @@ void ofproto_get_snoops(const struct ofproto *, struct sset *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
+int ofproto_port_get_cfm_fault(const struct ofproto *, uint16_t ofp_port);
 
 void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
 void ofproto_free_ofproto_controller_info(struct shash *);

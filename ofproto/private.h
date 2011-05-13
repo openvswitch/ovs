@@ -653,25 +653,22 @@ struct ofproto_class {
 
     /* Configures connectivity fault management on 'ofport'.
      *
-     * If 'cfm' is nonnull, takes basic configuration from the configuration
-     * members in 'cfm', and the set of remote maintenance points from the
-     * 'n_remote_mps' elements in 'remote_mps'.  Ignores the statistics members
-     * of 'cfm'.
+     * If 'cfm_settings' is nonnull, configures CFM according to its members.
      *
-     * If 'cfm' is null, removes any connectivity fault management
+     * If 'cfm_settings' is null, removes any connectivity fault management
      * configuration from 'ofport'.
      *
      * EOPNOTSUPP as a return value indicates that this ofproto_class does not
      * support CFM, as does a null pointer. */
-    int (*set_cfm)(struct ofport *ofport, const struct cfm *cfm,
-                   const uint16_t *remote_mps, size_t n_remote_mps);
+    int (*set_cfm)(struct ofport *ofport, const struct cfm_settings *s);
 
-    /* Stores the connectivity fault management object associated with 'ofport'
-     * in '*cfmp'.  Stores a null pointer in '*cfmp' if CFM is not configured
-     * on 'ofport'.  The caller must not modify or destroy the returned object.
+    /* Checks the fault status of CFM configured on 'ofport'.  Returns 1 if CFM
+     * is faulted (generally indicating a connectivity problem), 0 if CFM is
+     * not faulted, or -1 if CFM is not enabled on 'port'
      *
-     * This function may be NULL if this ofproto_class does not support CFM. */
-    int (*get_cfm)(struct ofport *ofport, const struct cfm **cfmp);
+     * This function may be a null pointer if the ofproto implementation does
+     * not support CFM. */
+    int (*get_cfm_fault)(const struct ofport *ofport);
 
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as

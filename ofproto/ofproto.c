@@ -432,7 +432,7 @@ ofproto_port_clear_cfm(struct ofproto *ofproto, uint16_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     if (ofport && ofproto->ofproto_class->set_cfm) {
-        ofproto->ofproto_class->set_cfm(ofport, NULL, NULL, 0);
+        ofproto->ofproto_class->set_cfm(ofport, NULL);
     }
 }
 
@@ -444,7 +444,7 @@ ofproto_port_clear_cfm(struct ofproto *ofproto, uint16_t ofp_port)
  * This function has no effect if 'ofproto' does not have a port 'ofp_port'. */
 void
 ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
-                     const struct cfm *cfm, uint16_t remote_mpid)
+                     const struct cfm_settings *s)
 {
     struct ofport *ofport;
     int error;
@@ -460,29 +460,13 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
      * outside of the CFM module.  It's not clear if this is the correct long
      * term solution or not. */
     error = (ofproto->ofproto_class->set_cfm
-             ? ofproto->ofproto_class->set_cfm(ofport, cfm, &remote_mpid, 1)
+             ? ofproto->ofproto_class->set_cfm(ofport, s)
              : EOPNOTSUPP);
     if (error) {
         VLOG_WARN("%s: CFM configuration on port %"PRIu16" (%s) failed (%s)",
                   ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
                   strerror(error));
     }
-}
-
-/* Returns the connectivity fault management object associated with 'ofp_port'
- * within 'ofproto', or a null pointer if 'ofproto' does not have a port
- * 'ofp_port' or if that port does not have CFM configured.  The caller must
- * not modify or destroy the returned object. */
-const struct cfm *
-ofproto_port_get_cfm(struct ofproto *ofproto, uint16_t ofp_port)
-{
-    struct ofport *ofport;
-    const struct cfm *cfm;
-
-    ofport = ofproto_get_port(ofproto, ofp_port);
-    return (ofport
-            && ofproto->ofproto_class->get_cfm
-            && !ofproto->ofproto_class->get_cfm(ofport, &cfm)) ? cfm : NULL;
 }
 
 /* Checks the status of LACP negotiation for 'ofp_port' within ofproto.
@@ -1107,7 +1091,7 @@ ofproto_port_unregister(struct ofproto *ofproto, uint16_t ofp_port)
     struct ofport *port = ofproto_get_port(ofproto, ofp_port);
     if (port) {
         if (port->ofproto->ofproto_class->set_cfm) {
-            port->ofproto->ofproto_class->set_cfm(port, NULL, NULL, 0);
+            port->ofproto->ofproto_class->set_cfm(port, NULL);
         }
         if (port->ofproto->ofproto_class->bundle_remove) {
             port->ofproto->ofproto_class->bundle_remove(port);
@@ -2001,6 +1985,18 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
                         uint8_t *engine_type, uint8_t *engine_id)
 {
     ofproto->ofproto_class->get_netflow_ids(ofproto, engine_type, engine_id);
+}
+
+/* Checks the fault status of CFM for 'ofp_port' within 'ofproto'.  Returns 1
+ * if CFM is faulted (generally indiciating a connectivity problem), 0 if CFM
+ * is not faulted, and -1 if CFM is not enabled on 'ofp_port'. */
+int
+ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->get_cfm_fault
+            ? ofproto->ofproto_class->get_cfm_fault(ofport)
+            : -1);
 }
 
 static void

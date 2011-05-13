@@ -1216,17 +1216,19 @@ static bool
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    const struct cfm *cfm;
     bool changed = false;
+    int fault;
 
-    cfm = ofproto_port_get_cfm(iface->port->bridge->ofproto, iface->ofp_port);
+    fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
+                                       iface->ofp_port);
 
-    if (!cfm) {
+    if (fault < 0) {
         return false;
     }
 
-    if (cfg->n_cfm_fault != 1 || cfg->cfm_fault[0] != cfm->fault) {
-        ovsrec_interface_set_cfm_fault(cfg, &cfm->fault, 1);
+    if (cfg->n_cfm_fault != 1 || cfg->cfm_fault[0] != fault) {
+        bool fault_bool = fault;
+        ovsrec_interface_set_cfm_fault(cfg, &fault_bool, 1);
         changed = true;
     }
 
@@ -2483,24 +2485,27 @@ static void
 iface_configure_cfm(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    struct cfm cfm;
+    struct cfm_settings s;
+    uint16_t remote_mpid;
 
     if (!cfg->n_cfm_mpid || !cfg->n_cfm_remote_mpid) {
         ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->ofp_port);
         return;
     }
 
-    cfm.mpid = *cfg->cfm_mpid;
-    cfm.name = iface->name;
-    cfm.interval = atoi(get_interface_other_config(iface->cfg,
-                                                   "cfm_interval", "0"));
+    s.name = iface->name;
+    s.mpid = *cfg->cfm_mpid;
+    remote_mpid = *cfg->cfm_remote_mpid;
+    s.remote_mpids = &remote_mpid;
+    s.n_remote_mpids = 1;
 
-    if (cfm.interval <= 0) {
-        cfm.interval = 1000;
+    s.interval = atoi(get_interface_other_config(iface->cfg, "cfm_interval",
+                                                 "0"));
+    if (s.interval <= 0) {
+        s.interval = 1000;
     }
 
-    ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port,
-                         &cfm, *cfg->cfm_remote_mpid);
+    ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port, &s);
 }
 
 /* Read carrier or miimon status directly from 'iface''s netdev, according to

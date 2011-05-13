@@ -296,8 +296,7 @@ ofport_dpif_cast(const struct ofport *ofport)
 
 static void port_run(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
-static int set_cfm(struct ofport *, const struct cfm *,
-                   const uint16_t *remote_mps, size_t n_remote_mps);
+static int set_cfm(struct ofport *, const struct cfm_settings *);
 
 struct ofproto_dpif {
     struct ofproto up;
@@ -681,7 +680,7 @@ port_destruct(struct ofport *port_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
     bundle_remove(port_);
-    set_cfm(port_, NULL, NULL, 0);
+    set_cfm(port_, NULL);
     if (ofproto->sflow) {
         ofproto_sflow_del_port(ofproto->sflow, port->odp_port);
     }
@@ -735,26 +734,19 @@ set_sflow(struct ofproto *ofproto_,
 }
 
 static int
-set_cfm(struct ofport *ofport_, const struct cfm *cfm,
-        const uint16_t *remote_mps, size_t n_remote_mps)
+set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     int error;
 
-    if (!cfm) {
+    if (!s) {
         error = 0;
     } else {
         if (!ofport->cfm) {
             ofport->cfm = cfm_create();
         }
 
-        ofport->cfm->mpid = cfm->mpid;
-        ofport->cfm->interval = cfm->interval;
-        ofport->cfm->name = cfm->name;
-
-        cfm_update_remote_mps(ofport->cfm, remote_mps, n_remote_mps);
-
-        if (cfm_configure(ofport->cfm)) {
+        if (cfm_configure(ofport->cfm, s)) {
             return 0;
         }
 
@@ -766,11 +758,11 @@ set_cfm(struct ofport *ofport_, const struct cfm *cfm,
 }
 
 static int
-get_cfm(struct ofport *ofport_, const struct cfm **cfmp)
+get_cfm_fault(const struct ofport *ofport_)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-    *cfmp = ofport->cfm;
-    return 0;
+
+    return ofport->cfm ? cfm_get_fault(ofport->cfm) : -1;
 }
 
 /* Bundles. */
@@ -3947,7 +3939,7 @@ const struct ofproto_class ofproto_dpif_class = {
     get_netflow_ids,
     set_sflow,
     set_cfm,
-    get_cfm,
+    get_cfm_fault,
     bundle_set,
     bundle_remove,
     mirror_set,

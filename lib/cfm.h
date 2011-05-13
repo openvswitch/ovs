@@ -47,17 +47,13 @@ struct ccm {
 } __attribute__((packed));
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
-/* A 'cfm' represent a local Maintenance Point (MP) and its Connectivity Fault
- * Management (CFM) state machine.  Its configuration variables should be set
- * by clients of the CFM library. */
-struct cfm {
-    /* Configuration Variables. */
+struct cfm_settings {
     uint16_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
     const char *name;           /* Name of this CFM object. */
 
-    /* Statistics. */
-    bool fault;                 /* Indicates connectivity vaults. */
+    const uint16_t *remote_mpids; /* Array of remote MPIDs */
+    size_t n_remote_mpids;        /* Number of MPIDs in 'remote_mpids'. */
 };
 
 void cfm_init(void);
@@ -74,12 +70,12 @@ void cfm_compose_ccm(struct cfm *, struct ccm *);
 
 void cfm_wait(struct cfm *);
 
-bool cfm_configure(struct cfm *);
-
-void cfm_update_remote_mps(struct cfm *, const uint16_t *mpid, size_t n_mpids);
+bool cfm_configure(struct cfm *, const struct cfm_settings *);
 
 bool cfm_should_process_flow(const struct flow *);
 
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
+
+bool cfm_get_fault(const struct cfm *);
 
 #endif /* cfm.h */
