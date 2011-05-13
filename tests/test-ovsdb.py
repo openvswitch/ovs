@@ -98,7 +98,7 @@ def do_parse_atoms(type_string, *atom_strings):
             atom = data.Atom.from_json(base, atom_json)
             print ovs.json.to_string(atom.to_json())
         except error.Error, e:
-            print e
+            print unicode(e)
 
 def do_parse_data(type_string, *data_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
@@ -290,10 +290,6 @@ The following options are also available:
     sys.exit(0)
 
 def main(argv):
-    # Make stdout and stderr UTF-8, even if they are redirected to a file.
-    sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
-    sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
-
     try:
         options, args = getopt.gnu_getopt(argv[1:], 't:h',
                                           ['timeout',

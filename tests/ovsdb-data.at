@@ -231,14 +231,28 @@ OVSDB_CHECK_POSITIVE_CPY([real not acceptable integer JSON atom],
 
 dnl <C0> is not allowed anywhere in a UTF-8 string.
 dnl <ED A0 80> is a surrogate and not allowed in UTF-8.
-OVSDB_CHECK_POSITIVE_CPY([no invalid UTF-8 sequences in strings],
+OVSDB_CHECK_POSITIVE([no invalid UTF-8 sequences in strings],
   [parse-atoms '[["string"]]' \
      '@<:@"m4_esyscmd([printf "\300"])"@:>@' \
      '@<:@"m4_esyscmd([printf "\355\240\200"])"@:>@' \
 ],
-  [constraint violation: "m4_esyscmd([printf "\300"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xc0
-constraint violation: "m4_esyscmd([printf "\355\240\200"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0xa0],
-  [], [], [xfail])
+  [constraint violation: not a valid UTF-8 string: invalid UTF-8 sequence 0xc0
+constraint violation: not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0xa0])
+
+dnl Python won't let invalid UTF-8 (its idea of invalid UTF-8, anyway) into it
+dnl at all, so this test never gets as far as a constraint violation.  It's
+dnl just a JSON parse error.
+dnl
+dnl <C0> is not allowed anywhere in a UTF-8 string.
+dnl (<ED A0 80> is not allowed in UTF-8 but Python doesn't care.)
+dnl <ED 80 7F> is not allowed in UTF-8.
+OVSDB_CHECK_POSITIVE_PY([no invalid UTF-8 sequences in strings - Python],
+  [parse-atoms '[["string"]]' \
+     '@<:@"m4_esyscmd([printf "\300"])"@:>@' \
+     '@<:@"m4_esyscmd([printf "\355\200\177"])"@:>@' \
+],
+  ["not a valid UTF-8 string: invalid UTF-8 sequence 0xc0"
+"not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0x80"])
 
 OVSDB_CHECK_NEGATIVE([real not acceptable integer string atom],
   [[parse-atom-strings '["integer"]' '0.5' ]],
@@ -452,8 +466,7 @@ OVSDB_CHECK_POSITIVE_CPY([strings at least 2 characters long],
 constraint violation: "a" length 1 is less than minimum allowed length 2
 "ab"
 "abc"
-constraint violation: "𝄞" length 1 is less than minimum allowed length 2]],
-  [], [], [xfail])
+constraint violation: "𝄞" length 1 is less than minimum allowed length 2]])
 
 OVSDB_CHECK_POSITIVE_CPY([strings no more than 2 characters long],
   [[parse-atoms '{"type": "string", "maxLength": 2}' \
