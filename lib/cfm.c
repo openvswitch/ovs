@@ -36,7 +36,28 @@
 
 VLOG_DEFINE_THIS_MODULE(cfm);
 
-#define CCM_OPCODE 1              /* CFM message opcode meaning CCM. */
+/* Ethernet destination address of CCM packets. */
+static const uint8_t eth_addr_ccm[6] = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
+
+#define ETH_TYPE_CFM 0x8902
+
+/* A 'ccm' represents a Continuity Check Message from the 802.1ag
+ * specification.  Continuity Check Messages are broadcast periodically so that
+ * hosts can determine whom they have connectivity to. */
+#define CCM_LEN 74
+#define CCM_MAID_LEN 48
+#define CCM_OPCODE 1 /* CFM message opcode meaning CCM. */
+struct ccm {
+    uint8_t  mdlevel_version; /* MD Level and Version */
+    uint8_t  opcode;
+    uint8_t  flags;
+    uint8_t  tlv_offset;
+    ovs_be32 seq;
+    ovs_be16 mpid;
+    uint8_t  maid[CCM_MAID_LEN];
+    uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 struct cfm {
     uint16_t mpid;
@@ -249,13 +270,18 @@ cfm_should_send_ccm(struct cfm *cfm)
     return timer_expired(&cfm->tx_timer);
 }
 
-/* Composes a CCM message into 'ccm'.  Messages generated with this function
+/* Composes a CCM message into 'packet'.  Messages generated with this function
  * should be sent whenever cfm_should_send_ccm() indicates. */
 void
-cfm_compose_ccm(struct cfm *cfm, struct ccm *ccm)
+cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
+                uint8_t eth_src[ETH_ADDR_LEN])
 {
+    struct ccm *ccm;
+
     timer_set_duration(&cfm->tx_timer, cfm->ccm_interval_ms);
 
+    ccm = eth_compose(packet, eth_addr_ccm, eth_src, ETH_TYPE_CFM,
+                      sizeof *ccm);
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
     ccm->tlv_offset = 70;

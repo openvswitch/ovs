@@ -1375,12 +1375,9 @@ port_run(struct ofport_dpif *ofport)
 
         if (cfm_should_send_ccm(ofport->cfm)) {
             struct ofpbuf packet;
-            struct ccm *ccm;
 
             ofpbuf_init(&packet, 0);
-            ccm = eth_compose(&packet, eth_addr_ccm, ofport->up.opp.hw_addr,
-                              ETH_TYPE_CFM, sizeof *ccm);
-            cfm_compose_ccm(ofport->cfm, ccm);
+            cfm_compose_ccm(ofport->cfm, &packet, ofport->up.opp.hw_addr);
             send_packet(ofproto_dpif_cast(ofport->up.ofproto),
                         ofport->odp_port, &packet);
             ofpbuf_uninit(&packet);

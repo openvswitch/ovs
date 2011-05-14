@@ -24,29 +24,6 @@
 struct flow;
 struct ofpbuf;
 
-/* Ethernet destination address of CCM packets. */
-static const uint8_t eth_addr_ccm[6] OVS_UNUSED
-    = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
-
-#define ETH_TYPE_CFM 0x8902
-
-/* A 'ccm' represents a Continuity Check Message from the 802.1ag
- * specification.  Continuity Check Messages are broadcast periodically so that
- * hosts can determine who they have connectivity to. */
-#define CCM_LEN 74
-#define CCM_MAID_LEN 48
-struct ccm {
-    uint8_t  mdlevel_version; /* MD Level and Version */
-    uint8_t  opcode;
-    uint8_t  flags;
-    uint8_t  tlv_offset;
-    ovs_be32 seq;
-    ovs_be16 mpid;
-    uint8_t  maid[CCM_MAID_LEN];
-    uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
-} __attribute__((packed));
-BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
-
 struct cfm_settings {
     uint16_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
@@ -57,25 +34,15 @@ struct cfm_settings {
 };
 
 void cfm_init(void);
-
 struct cfm *cfm_create(void);
-
 void cfm_destroy(struct cfm *);
-
 void cfm_run(struct cfm *);
-
 bool cfm_should_send_ccm(struct cfm *);
-
-void cfm_compose_ccm(struct cfm *, struct ccm *);
-
+void cfm_compose_ccm(struct cfm *, struct ofpbuf *packet, uint8_t eth_src[6]);
 void cfm_wait(struct cfm *);
-
 bool cfm_configure(struct cfm *, const struct cfm_settings *);
-
 bool cfm_should_process_flow(const struct flow *);
-
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
-
 bool cfm_get_fault(const struct cfm *);
 
 #endif /* cfm.h */
