@@ -38,15 +38,6 @@ enum bond_mode {
 bool bond_mode_from_string(enum bond_mode *, const char *);
 const char *bond_mode_to_string(enum bond_mode);
 
-/* How to detect link status. */
-enum bond_detect_mode {
-    BLSM_CARRIER,               /* Use carrier. */
-    BLSM_MIIMON                 /* Poll MII status. */
-};
-
-bool bond_detect_mode_from_string(enum bond_detect_mode *, const char *);
-const char *bond_detect_mode_to_string(enum bond_detect_mode);
-
 /* Configuration for a bond as a whole. */
 struct bond_settings {
     char *name;                 /* Bond's name, for log messages. */
@@ -57,8 +48,6 @@ struct bond_settings {
     int rebalance_interval;     /* Milliseconds between rebalances. */
 
     /* Link status detection. */
-    enum bond_detect_mode detect; /* BLSM_CARRIER or BLSM_MIIMON. */
-    int miimon_interval;        /* Used only for BLSM_MIIMON. */
     int up_delay;               /* ms before enabling an up slave. */
     int down_delay;             /* ms before disabling a down slave. */
 

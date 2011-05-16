@@ -68,6 +68,7 @@
 #include "socket-util.h"
 #include "shash.h"
 #include "sset.h"
+#include "timer.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
@@ -346,6 +347,10 @@ struct netdev_dev_linux {
     struct shash_node *shash_node;
     unsigned int cache_valid;
 
+    bool miimon;                    /* Link status of last poll. */
+    long long int miimon_interval;  /* Miimon Poll rate. Disabled if <= 0. */
+    struct timer miimon_timer;
+
     /* The following are figured out "on demand" only.  They are only valid
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
@@ -411,6 +416,9 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 static int af_packet_sock(void);
+static void poll_notify(struct list *);
+static void netdev_linux_miimon_run(void);
+static void netdev_linux_miimon_wait(void);
 
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
@@ -465,12 +473,14 @@ static void
 netdev_linux_run(void)
 {
     rtnetlink_link_notifier_run();
+    netdev_linux_miimon_run();
 }
 
 static void
 netdev_linux_wait(void)
 {
     rtnetlink_link_notifier_wait();
+    netdev_linux_miimon_wait();
 }
 
 static void
@@ -1004,6 +1014,11 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
     char *fn = NULL;
     int fd = -1;
 
+    if (netdev_dev->miimon_interval > 0) {
+        *carrier = netdev_dev->miimon;
+        return 0;
+    }
+
     if (!(netdev_dev->cache_valid & VALID_CARRIER)) {
         char line[8];
         int retval;
@@ -1054,36 +1069,34 @@ exit:
 }
 
 static int
-netdev_linux_do_miimon(const struct netdev *netdev, int cmd,
-                       const char *cmd_name, struct mii_ioctl_data *data)
+netdev_linux_do_miimon(const char *name, int cmd, const char *cmd_name,
+                       struct mii_ioctl_data *data)
 {
     struct ifreq ifr;
     int error;
 
     memset(&ifr, 0, sizeof ifr);
     memcpy(&ifr.ifr_data, data, sizeof *data);
-    error = netdev_linux_do_ioctl(netdev_get_name(netdev),
-                                  &ifr, cmd, cmd_name);
+    error = netdev_linux_do_ioctl(name, &ifr, cmd, cmd_name);
     memcpy(data, &ifr.ifr_data, sizeof *data);
 
     return error;
 }
 
 static int
-netdev_linux_get_miimon(const struct netdev *netdev, bool *miimon)
+netdev_linux_get_miimon(const char *name, bool *miimon)
 {
-    const char *name = netdev_get_name(netdev);
     struct mii_ioctl_data data;
     int error;
 
     *miimon = false;
 
     memset(&data, 0, sizeof data);
-    error = netdev_linux_do_miimon(netdev, SIOCGMIIPHY, "SIOCGMIIPHY", &data);
+    error = netdev_linux_do_miimon(name, SIOCGMIIPHY, "SIOCGMIIPHY", &data);
     if (!error) {
         /* data.phy_id is filled out by previous SIOCGMIIPHY miimon call. */
         data.reg_num = MII_BMSR;
-        error = netdev_linux_do_miimon(netdev, SIOCGMIIREG, "SIOCGMIIREG",
+        error = netdev_linux_do_miimon(name, SIOCGMIIREG, "SIOCGMIIREG",
                                        &data);
 
         if (!error) {
@@ -1111,6 +1124,75 @@ netdev_linux_get_miimon(const struct netdev *netdev, bool *miimon)
     }
 
     return error;
+}
+
+static int
+netdev_linux_set_miimon_interval(struct netdev *netdev_,
+                                 long long int interval)
+{
+    struct netdev_dev_linux *netdev_dev;
+
+    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
+    interval = interval > 0 ? MAX(interval, 100) : 0;
+    if (netdev_dev->miimon_interval != interval) {
+        netdev_dev->miimon_interval = interval;
+        timer_set_expired(&netdev_dev->miimon_timer);
+    }
+
+    return 0;
+}
+
+static void
+netdev_linux_miimon_run(void)
+{
+    struct shash device_shash;
+    struct shash_node *node;
+
+    shash_init(&device_shash);
+    netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+    SHASH_FOR_EACH (node, &device_shash) {
+        struct netdev_dev_linux *dev = node->data;
+        bool miimon;
+
+        if (dev->miimon_interval <= 0 || !timer_expired(&dev->miimon_timer)) {
+            continue;
+        }
+
+        netdev_linux_get_miimon(dev->netdev_dev.name, &miimon);
+        if (miimon != dev->miimon) {
+            struct list *list;
+
+            dev->miimon = miimon;
+            list = shash_find_data(&netdev_linux_notifiers,
+                                   dev->netdev_dev.name);
+            if (list) {
+                poll_notify(list);
+            }
+        }
+
+        timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
+    }
+
+    shash_destroy(&device_shash);
+}
+
+static void
+netdev_linux_miimon_wait(void)
+{
+    struct shash device_shash;
+    struct shash_node *node;
+
+    shash_init(&device_shash);
+    netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+    SHASH_FOR_EACH (node, &device_shash) {
+        struct netdev_dev_linux *dev = node->data;
+
+        if (dev->miimon_interval > 0) {
+            timer_wait(&dev->miimon_timer);
+        }
+    }
+    shash_destroy(&device_shash);
 }
 
 /* Check whether we can we use RTM_GETLINK to get network device statistics.
@@ -2265,7 +2347,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     netdev_linux_get_mtu,                                       \
     netdev_linux_get_ifindex,                                   \
     netdev_linux_get_carrier,                                   \
-    netdev_linux_get_miimon,                                    \
+    netdev_linux_set_miimon_interval,                           \
     netdev_linux_get_stats,                                     \
     SET_STATS,                                                  \
                                                                 \

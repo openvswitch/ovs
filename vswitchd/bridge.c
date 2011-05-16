@@ -528,6 +528,10 @@ port_configure(struct port *port)
     } else {
         s.bond = NULL;
         s.bond_stable_ids = NULL;
+
+        LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+            netdev_set_miimon_interval(iface->netdev, 0);
+        }
     }
 
     /* Register. */
@@ -2226,6 +2230,7 @@ port_configure_bond(struct port *port, struct bond_settings *s,
 {
     const char *detect_s;
     struct iface *iface;
+    int miimon_interval;
     size_t i;
 
     s->name = port->name;
@@ -2237,18 +2242,19 @@ port_configure_bond(struct port *port, struct bond_settings *s,
                   bond_mode_to_string(s->balance));
     }
 
-    s->detect = BLSM_CARRIER;
-    detect_s = get_port_other_config(port->cfg, "bond-detect-mode", NULL);
-    if (detect_s && !bond_detect_mode_from_string(&s->detect, detect_s)) {
-        VLOG_WARN("port %s: unsupported bond-detect-mode %s, "
-                  "defaulting to %s",
-                  port->name, detect_s, bond_detect_mode_to_string(s->detect));
+    miimon_interval = atoi(get_port_other_config(port->cfg,
+                                                 "bond-miimon-interval", "0"));
+    if (miimon_interval <= 0) {
+        miimon_interval = 200;
     }
 
-    s->miimon_interval = atoi(
-        get_port_other_config(port->cfg, "bond-miimon-interval", "200"));
-    if (s->miimon_interval < 100) {
-        s->miimon_interval = 100;
+    detect_s = get_port_other_config(port->cfg, "bond-detect-mode", "carrier");
+    if (!strcmp(detect_s, "carrier")) {
+        miimon_interval = 0;
+    } else if (strcmp(detect_s, "miimon")) {
+        VLOG_WARN("port %s: unsupported bond-detect-mode %s, "
+                  "defaulting to carrier", port->name, detect_s);
+        miimon_interval = 0;
     }
 
     s->up_delay = MAX(0, port->cfg->bond_updelay);
@@ -2272,6 +2278,8 @@ port_configure_bond(struct port *port, struct bond_settings *s,
             stable_id = iface->ofp_port;
         }
         bond_stable_ids[i++] = stable_id;
+
+        netdev_set_miimon_interval(iface->netdev, miimon_interval);
     }
 }
 

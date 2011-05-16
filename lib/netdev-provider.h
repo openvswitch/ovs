@@ -263,13 +263,17 @@ struct netdev_class {
      */
     int (*get_carrier)(const struct netdev *netdev, bool *carrier);
 
-    /* Sets 'miimon' to true if 'netdev' is up according to its MII.  If
-     * 'netdev' does not support MII, may fall back to another method or return
-     * EOPNOTSUPP.
+    /* Forces ->get_carrier() to poll 'netdev''s MII registers for link status
+     * instead of checking 'netdev''s carrier.  'netdev''s MII registers will
+     * be polled once ever 'interval' milliseconds.  If 'netdev' does not
+     * support MII, another method may be used as a fallback.  If 'interval' is
+     * less than or equal to zero, reverts ->get_carrier() to its normal
+     * behavior.
      *
-     * This function may be set to null if it would always return EOPNOTSUPP.
+     * Most network devices won't support this feature and will set this
+     * function pointer to NULL, which is equivalent to returning EOPNOTSUPP.
      */
-    int (*get_miimon)(const struct netdev *netdev, bool *miimon);
+    int (*set_miimon_interval)(struct netdev *netdev, long long int interval);
 
     /* Retrieves current device stats for 'netdev' into 'stats'.
      *

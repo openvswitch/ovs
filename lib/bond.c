@@ -105,10 +105,7 @@ struct bond {
     tag_type stb_tag;               /* Tag associated with this bond. */
 
     /* Monitoring. */
-    enum bond_detect_mode detect;     /* Link status mode, one of BLSM_*. */
     struct netdev_monitor *monitor;   /* detect == BLSM_CARRIER only. */
-    long long int miimon_interval;    /* Miimon status refresh interval. */
-    long long int miimon_next_update; /* Time of next miimon update. */
 
     /* Legacy compatibility. */
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
@@ -123,7 +120,6 @@ static struct hmap all_bonds = HMAP_INITIALIZER(&all_bonds);
 
 static void bond_entry_reset(struct bond *);
 static struct bond_slave *bond_slave_lookup(struct bond *, const void *slave_);
-static bool bond_is_link_up(struct bond *, struct netdev *);
 static void bond_enable_slave(struct bond_slave *, bool enable,
                               struct tag_set *);
 static void bond_link_status_update(struct bond_slave *, struct tag_set *);
@@ -178,34 +174,6 @@ bond_mode_to_string(enum bond_mode balance) {
     NOT_REACHED();
 }
 
-/* Attempts to parse 's' as the name of a bond link status detection mode.  If
- * successful, stores the mode in '*detect' and returns true.  Otherwise
- * returns false without modifying '*detect'. */
-bool
-bond_detect_mode_from_string(enum bond_detect_mode *detect, const char *s)
-{
-    if (!strcmp(s, bond_detect_mode_to_string(BLSM_CARRIER))) {
-        *detect = BLSM_CARRIER;
-    } else if (!strcmp(s, bond_detect_mode_to_string(BLSM_MIIMON))) {
-        *detect = BLSM_MIIMON;
-    } else {
-        return false;
-    }
-    return true;
-}
-
-/* Returns a string representing 'detect'. */
-const char *
-bond_detect_mode_to_string(enum bond_detect_mode detect)
-{
-    switch (detect) {
-    case BLSM_CARRIER:
-        return "carrier";
-    case BLSM_MIIMON:
-        return "miimon";
-    }
-    NOT_REACHED();
-}
 
 /* Creates and returns a new bond whose configuration is initially taken from
  * 's'.
@@ -221,8 +189,8 @@ bond_create(const struct bond_settings *s)
     hmap_init(&bond->slaves);
     bond->no_slaves_tag = tag_create_random();
     bond->stb_tag = tag_create_random();
-    bond->miimon_next_update = LLONG_MAX;
     bond->next_fake_iface_update = LLONG_MAX;
+    bond->monitor = netdev_monitor_create();
 
     bond_reconfigure(bond, s);
 
@@ -282,8 +250,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         hmap_insert(&all_bonds, &bond->hmap_node, hash_string(bond->name, 0));
     }
 
-    bond->detect = s->detect;
-    bond->miimon_interval = s->miimon_interval;
     bond->updelay = s->up_delay;
     bond->downdelay = s->down_delay;
     bond->rebalance_interval = s->rebalance_interval;
@@ -296,25 +262,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     if (bond->basis != s->basis) {
         bond->basis = s->basis;
         revalidate = true;
-    }
-
-    if (bond->detect == BLSM_CARRIER) {
-        struct bond_slave *slave;
-
-        if (!bond->monitor) {
-            bond->monitor = netdev_monitor_create();
-        }
-
-        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-            netdev_monitor_add(bond->monitor, slave->netdev);
-        }
-    } else {
-        netdev_monitor_destroy(bond->monitor);
-        bond->monitor = NULL;
-
-        if (bond->miimon_next_update == LLONG_MAX) {
-            bond->miimon_next_update = time_msec() + bond->miimon_interval;
-        }
     }
 
     if (s->fake_iface) {
@@ -342,12 +289,10 @@ bond_slave_set_netdev__(struct bond *bond, struct bond_slave *slave,
                         struct netdev *netdev)
 {
     if (slave->netdev != netdev) {
-        if (bond->monitor) {
-            if (slave->netdev) {
-                netdev_monitor_remove(bond->monitor, slave->netdev);
-            }
-            netdev_monitor_add(bond->monitor, netdev);
+        if (slave->netdev) {
+            netdev_monitor_remove(bond->monitor, slave->netdev);
         }
+        netdev_monitor_add(bond->monitor, netdev);
         slave->netdev = netdev;
     }
 }
@@ -378,7 +323,7 @@ bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
         slave->bond = bond;
         slave->aux = slave_;
         slave->delay_expires = LLONG_MAX;
-        slave->up = bond_is_link_up(bond, netdev);
+        slave->up = netdev_get_carrier(netdev);
         slave->name = xstrdup(netdev_get_name(netdev));
         bond->bond_revalidate = true;
 
@@ -425,10 +370,7 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
         return;
     }
 
-    if (bond->monitor) {
-        netdev_monitor_remove(bond->monitor, slave->netdev);
-    }
-
+    netdev_monitor_remove(bond->monitor, slave->netdev);
     bond_enable_slave(slave, false, NULL);
 
     del_active = bond->active_slave == slave;
@@ -478,13 +420,8 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
     bond->lacp_negotiated = lacp_negotiated;
 
     /* Update link status. */
-    if (bond->detect == BLSM_CARRIER
-        || time_msec() >= bond->miimon_next_update)
-    {
-        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-            slave->up = bond_is_link_up(bond, slave->netdev);
-        }
-        bond->miimon_next_update = time_msec() + bond->miimon_interval;
+    HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+        slave->up = netdev_get_carrier(slave->netdev);
     }
 
     if (bond->monitor) {
@@ -536,11 +473,7 @@ bond_wait(struct bond *bond)
 {
     struct bond_slave *slave;
 
-    if (bond->detect == BLSM_CARRIER) {
-        netdev_monitor_poll_wait(bond->monitor);
-    } else {
-        poll_timer_wait_until(bond->miimon_next_update);
-    }
+    netdev_monitor_poll_wait(bond->monitor);
 
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->delay_expires != LLONG_MAX) {
@@ -1012,14 +945,6 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
     ds_put_format(&ds, "bond-hash-basis: %"PRIu32"\n", bond->basis);
 
-    ds_put_format(&ds, "bond-detect-mode: %s\n",
-                  bond->monitor ? "carrier" : "miimon");
-
-    if (!bond->monitor) {
-        ds_put_format(&ds, "bond-miimon-interval: %lld\n",
-                      bond->miimon_interval);
-    }
-
     ds_put_format(&ds, "updelay: %d ms\n", bond->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", bond->downdelay);
 
@@ -1322,14 +1247,6 @@ bond_slave_lookup(struct bond *bond, const void *slave_)
     }
 
     return NULL;
-}
-
-static bool
-bond_is_link_up(struct bond *bond, struct netdev *netdev)
-{
-    return (bond->detect == BLSM_CARRIER
-            ? netdev_get_carrier(netdev)
-            : netdev_get_miimon(netdev));
 }
 
 static void
