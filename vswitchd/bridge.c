@@ -927,7 +927,6 @@ bridge_add_ofproto_ports(struct bridge *br)
                 /* Already exists, nothing to do. */
                 ofproto_port_destroy(&ofproto_port);
             }
-            ofproto_port_destroy(&ofproto_port);
         }
     }
 }
