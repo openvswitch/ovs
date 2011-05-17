@@ -24,10 +24,6 @@
 # bump this when breaking compatibility with userspace
 %define module_abi_version 0
 
-# extract kernel type (xen or kdump)
-%define binsuffix -%(echo '%{xen_version}' | sed -r 's/^.*[0-9]+//')
-# kernel version string w/o kernel type
-%define kernel_version %(echo '%{xen_version}' | sed -r 's/[a-z]+$//')
 # build-supplemental-pack.sh requires this naming for kernel module packages
 %define module_package modules-%{kernel_flavor}-%{kernel_version}
 
