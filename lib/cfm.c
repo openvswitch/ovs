@@ -47,6 +47,7 @@ static const uint8_t eth_addr_ccm[6] = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
 #define CCM_LEN 74
 #define CCM_MAID_LEN 48
 #define CCM_OPCODE 1 /* CFM message opcode meaning CCM. */
+#define CCM_RDI_MASK 0x80
 struct ccm {
     uint8_t  mdlevel_version; /* MD Level and Version */
     uint8_t  opcode;
@@ -64,6 +65,7 @@ struct cfm {
     struct list list_node; /* Node in all_cfms list. */
 
     bool fault;            /* Indicates connectivity fault. */
+    bool recv_fault;       /* Indicates an inability to receive CCMs. */
     char *name;            /* Name of this CFM object. */
 
     uint32_t seq;          /* The sequence number of our last CCM. */
@@ -85,6 +87,8 @@ struct remote_mp {
 
     bool recv;           /* CCM was received since last fault check. */
     bool fault;          /* Indicates a connectivity fault. */
+    bool rdi;            /* Remote Defect Indicator. Indicates remote_mp isn't
+                            receiving CCMs that it's expecting to. */
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -236,24 +240,29 @@ cfm_destroy(struct cfm *cfm)
 void
 cfm_run(struct cfm *cfm)
 {
-
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp;
 
         cfm->fault = false;
+        cfm->recv_fault = false;
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
             rmp->fault = !rmp->recv;
             rmp->recv = false;
 
             if (rmp->fault) {
-                cfm->fault = true;
+                cfm->recv_fault = true;
                 VLOG_DBG("No CCM from RMP %"PRIu16" in the last %lldms",
                          rmp->mpid, interval);
+            } else if (rmp->rdi) {
+                cfm->fault = true;
+                VLOG_DBG("RDI bit flagged from RMP %"PRIu16, rmp->mpid);
             }
         }
 
-        if (!cfm->fault) {
+        if (cfm->recv_fault) {
+            cfm->fault = true;
+        } else {
             VLOG_DBG("All RMPs received CCMs in the last %lldms", interval);
         }
 
@@ -266,7 +275,6 @@ cfm_run(struct cfm *cfm)
 bool
 cfm_should_send_ccm(struct cfm *cfm)
 {
-
     return timer_expired(&cfm->tx_timer);
 }
 
@@ -289,6 +297,10 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     ccm->mpid = htons(cfm->mpid);
     ccm->flags = cfm->ccm_interval;
     memcpy(ccm->maid, cfm->maid, sizeof ccm->maid);
+
+    if (cfm->recv_fault) {
+        ccm->flags |= CCM_RDI_MASK;
+    }
 }
 
 void
@@ -373,6 +385,7 @@ void
 cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 {
     struct ccm *ccm;
+    bool ccm_rdi;
     uint16_t ccm_mpid;
     uint8_t ccm_interval;
     struct remote_mp *rmp;
@@ -407,11 +420,13 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     } else {
         ccm_mpid = ntohs(ccm->mpid);
         ccm_interval = ccm->flags & 0x7;
+        ccm_rdi = ccm->flags & CCM_RDI_MASK;
 
         rmp = lookup_remote_mp(&cfm->remote_mps, ccm_mpid);
 
         if (rmp) {
             rmp->recv = true;
+            rmp->rdi = ccm_rdi;
 
             if (ccm_interval != cfm->ccm_interval) {
                 VLOG_WARN_RL(&rl, "received a CCM with an invalid interval"
@@ -423,8 +438,8 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                          ETH_ADDR_FMT, ccm_mpid, ETH_ADDR_ARGS(eth->eth_src));
         }
 
-        VLOG_DBG("Received CCM (mpid %"PRIu16") (interval %"PRIu8")", ccm_mpid,
-                 ccm_interval);
+        VLOG_DBG("Received CCM (mpid %"PRIu16") (interval %"PRIu8") (RDI %s)",
+                 ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
     }
 }
 
@@ -463,8 +478,9 @@ cfm_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    ds_put_format(&ds, "MPID %"PRIu16": %s\n", cfm->mpid,
-                  cfm->fault ? "fault" : "");
+    ds_put_format(&ds, "MPID %"PRIu16":%s%s\n", cfm->mpid,
+                  cfm->fault ? " fault" : "",
+                  cfm->recv_fault ? " recv_fault" : "");
 
     ds_put_format(&ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
     ds_put_format(&ds, "\tnext CCM tx: %lldms\n",
