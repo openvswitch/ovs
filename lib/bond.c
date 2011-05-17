@@ -466,6 +466,10 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
         bond->miimon_next_update = time_msec() + bond->miimon_interval;
     }
 
+    if (bond->monitor) {
+        netdev_monitor_flush(bond->monitor);
+    }
+
     /* Enable slaves based on link status and LACP feedback. */
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         bond_link_status_update(slave, tags);

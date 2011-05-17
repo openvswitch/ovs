@@ -1549,6 +1549,15 @@ netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
     }
 }
 
+/* Clears all notifications from 'monitor'.  May be called instead of
+ * netdev_monitor_poll() by clients which don't care specifically which netdevs
+ * have changed.  */
+void
+netdev_monitor_flush(struct netdev_monitor *monitor)
+{
+    sset_clear(&monitor->changed_netdevs);
+}
+
 /* Registers with the poll loop to wake up from the next call to poll_block()
  * when netdev_monitor_poll(monitor) would indicate that a device has
  * changed. */
