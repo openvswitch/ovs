@@ -1133,7 +1133,11 @@ bundle_run(struct ofbundle *bundle)
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
             bool may_enable = lacp_slave_may_enable(bundle->lacp, port);
-            bond_slave_set_lacp_may_enable(bundle->bond, port, may_enable);
+
+            if (may_enable && port->cfm) {
+                may_enable = !cfm_get_fault(port->cfm);
+            }
+            bond_slave_set_may_enable(bundle->bond, port, may_enable);
         }
 
         bond_run(bundle->bond, &bundle->ofproto->revalidate_set,

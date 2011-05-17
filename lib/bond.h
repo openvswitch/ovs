@@ -71,9 +71,7 @@ void bond_slave_unregister(struct bond *, const void *slave);
 void bond_run(struct bond *, struct tag_set *, bool lacp_negotiated);
 void bond_wait(struct bond *);
 
-/* LACP. */
-void bond_slave_set_lacp_may_enable(struct bond *, void *slave_,
-                                    bool may_enable);
+void bond_slave_set_may_enable(struct bond *, void *slave_, bool may_enable);
 
 /* Special MAC learning support for SLB bonding. */
 bool bond_should_send_learning_packets(struct bond *);

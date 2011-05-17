@@ -64,7 +64,7 @@ struct bond_slave {
     /* Link status. */
     long long delay_expires;    /* Time after which 'enabled' may change. */
     bool enabled;               /* May be chosen for flows? */
-    bool lacp_may_enable;       /* LACP considers this interface bondable. */
+    bool may_enable;            /* Client considers this slave bondable. */
     tag_type tag;               /* Tag associated with this slave. */
 
     /* Rebalancing info.  Used only by bond_rebalance(). */
@@ -396,13 +396,15 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
     }
 }
 
-/* Should be called on each slave in 'bond' before bond_run() to indicate the
- * results of lacp_slave_may_enable() on 'slave_'. */
+/* Should be called on each slave in 'bond' before bond_run() to indicate
+ * whether or not 'slave_' may be enabled. This function is intended to allow
+ * other protocols to have some impact on bonding decisions.  For example LACP
+ * or high level link monitoring protocols may decide that a given slave should
+ * not be able to send traffic. */
 void
-bond_slave_set_lacp_may_enable(struct bond *bond, void *slave_,
-                               bool may_enable)
+bond_slave_set_may_enable(struct bond *bond, void *slave_, bool may_enable)
 {
-    bond_slave_lookup(bond, slave_)->lacp_may_enable = may_enable;
+    bond_slave_lookup(bond, slave_)->may_enable = may_enable;
 }
 
 /* Performs periodic maintenance on 'bond'.  The caller must provide 'tags' to
@@ -964,8 +966,8 @@ bond_unixctl_show(struct unixctl_conn *conn,
                           slave->delay_expires - time_msec());
         }
 
-        ds_put_format(&ds, "\tlacp_may_enable: %s\n",
-                      slave->lacp_may_enable ? "true" : "false");
+        ds_put_format(&ds, "\tmay_enable: %s\n",
+                      slave->may_enable ? "true" : "false");
 
         if (!bond_is_balanced(bond)) {
             continue;
@@ -1271,7 +1273,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
     struct bond *bond = slave->bond;
     bool up;
 
-    up = netdev_get_carrier(slave->netdev) && slave->lacp_may_enable;
+    up = netdev_get_carrier(slave->netdev) && slave->may_enable;
     if ((up == slave->enabled) != (slave->delay_expires == LLONG_MAX)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
         VLOG_INFO_RL(&rl, "interface %s: link state %s",
@@ -1420,7 +1422,7 @@ bond_choose_slave(const struct bond *bond)
     best = NULL;
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->delay_expires != LLONG_MAX
-            && slave->lacp_may_enable
+            && slave->may_enable
             && (!best || slave->delay_expires < best->delay_expires)) {
             best = slave;
         }

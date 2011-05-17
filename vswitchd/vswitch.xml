@@ -1293,7 +1293,9 @@
 
       <column name="cfm_fault">
         Indicates a connectivity fault triggered by an inability to receive
-        heartbeats from the remote endpoint.
+        heartbeats from the remote endpoint.  When a fault is triggered on
+        <ref table="Interface"/>s participating in bonds, they will be
+        disabled.
       </column>
     </group>
 
