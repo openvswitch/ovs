@@ -8,12 +8,18 @@
 # without warranty of any kind.
 
 # When building, the rpmbuild command line should define
-# openvswitch_version, xen_version, and build_number using -D arguments.
+# openvswitch_version, kernel_name, kernel_version, kernel_flavor,
+# and build_number using -D arguments.
 # for example:
 #
-#    rpmbuild -D "openvswitch_version 0.8.9~1+build123" -D "xen_version 2.6.18-128.1.1.el5.xs5.1.0.483.1000xen" -D "build_number --with-build-number=123" -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
+#    rpmbuild -D "openvswitch_version 1.1.0+build123"
+#      -D "kernel_name  NAME-xen"
+#      -D "kernel_version 2.6.32.12-0.7.1.xs5.6.100.323.170596"
+#      -D "kernel_flavor xen"
+#      -D "build_number --with-build-number=123"
+#      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
 
-%define version %{openvswitch_version}-%{xen_version}
+%define xen_version %{kernel_version}%{kernel_flavor}
 
 # bump this when breaking compatibility with userspace
 %define module_abi_version 0
@@ -23,7 +29,7 @@
 # kernel version string w/o kernel type
 %define kernel_version %(echo '%{xen_version}' | sed -r 's/[a-z]+$//')
 # build-supplemental-pack.sh requires this naming for kernel module packages
-%define module_package modules%{binsuffix}-%{kernel_version}
+%define module_package modules-%{kernel_flavor}-%{kernel_version}
 
 Name: openvswitch
 Summary: Open vSwitch daemon/database/utilities
@@ -47,8 +53,8 @@ traffic.
 Summary: Open vSwitch kernel module
 Group: System Environment/Kernel
 License: GPLv2
-Provides: %{name}-modules = %{kernel_version}, openvswitch_mod.ko.%{module_abi_version}
-Requires: kernel%{binsuffix} = %{kernel_version}
+Provides: %{name}-modules-%{kernel_flavor} = %{kernel_version}, openvswitch_mod.ko.%{module_abi_version}
+Requires: kernel-%{kernel_name} = %{kernel_version}
 
 %description %{module_package}
 Open vSwitch Linux kernel module compiled against kernel version
