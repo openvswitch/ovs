@@ -23,12 +23,16 @@ Once you have a distribution tarball, copy it into
 /usr/src/redhat/SOURCES inside the VM.  Then execute the following:
 
    VERSION=<Open vSwitch version>
-   XENKERNEL=<Xen kernel version>
+   KERNEL_NAME=<Xen Kernel name>
+   KERNEL_VERSION=<Xen Kernel version>
+   KERNEL_FLAVOR=<Xen Kernel flavor(suffix) >
    cd /tmp
    tar xfz /usr/src/redhat/SOURCES/openvswitch-$VERSION.tar.gz
    rpmbuild \
         -D "openvswitch_version $VERSION" \
-        -D "xen_version $XENKERNEL" \
+        -D "kernel_name $KERNEL_NAME" \
+        -D "kernel_version $KERNEL_VERSION" \
+        -D "kernel_flavor $KERNEL_FLAVOR" \
         -bb openvswitch-$VERSION/xenserver/openvswitch-xen.spec
 
 where:
@@ -36,13 +40,25 @@ where:
     <openvswitch version> is the version number that appears in the
     name of the Open vSwitch tarball, e.g. 0.90.0.
 
-    <Xen kernel version> is the version number of the Xen kernel,
-    e.g. 2.6.32.12-0.7.1.xs5.6.100.307.170586xen.  This version number
-    appears as the name of a directory in /lib/modules inside the VM.
-    It always ends in "xen".
+    <Xen Kernel name> is the name of the Xen Kernel,
+    e.g. kernel-xen or kernel-NAME-xen. By convention, the name
+    starts with "kernel-" and ends with "-xen".
+    This can be obtained by executing 
+        'rpm -q --queryformat "%{Name}" kernel.*xen'
+    with the "kernel-" stripped out using  sed 's/kernel-//'
+    e.g. kernel-NAME-xen => NAME-xen
+
+    <Xen Kernel version> is the output of:
+    rpm -q --queryformat "%{Version}-%{Release}" kernel.*xen-devel
+    e.g. 2.6.32.12-0.7.1.xs5.6.100.323.170596
+
+    <Xen Kernel flavor (suffix) > is either "xen" or "kdump".
+    The "xen" flavor is the main running kernel flavor and the "kdump" flavor is
+    the crashdump kernel flavor. Commonly, one would specify "xen" here.
 
 Three RPMs will be output into /usr/src/redhat/RPMS/i386, whose names begin
-with "openvswitch", "openvswitch-modules-xen", and "openvswitch-debuginfo".
+with "openvswitch", "openvswitch-modules-xen" (if building for kernel_flavor=xen),
+and "openvswitch-debuginfo".
 
 Installing Open vSwitch for XenServer
 -------------------------------------
