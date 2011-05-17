@@ -990,7 +990,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 
         LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
             for (i = 0; i < s->n_slaves; i++) {
-                if (s->slaves[i] == odp_port_to_ofp_port(port->odp_port)) {
+                if (s->slaves[i] == port->up.ofp_port) {
                     goto found;
                 }
             }
