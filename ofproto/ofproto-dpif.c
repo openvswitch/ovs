@@ -3526,7 +3526,7 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     /* Find the port and bundle for the received packet. */
     in_port = get_ofp_port(ofproto, flow->in_port);
-    *in_bundlep = in_bundle = in_port->bundle;
+    *in_bundlep = in_bundle = in_port ? in_port->bundle : NULL;
     if (!in_port || !in_bundle) {
         /* No interface?  Something fishy... */
         if (have_packet) {
