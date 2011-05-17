@@ -830,6 +830,8 @@ bundle_del_port(struct ofport_dpif *port)
 {
     struct ofbundle *bundle = port->bundle;
 
+    bundle->ofproto->need_revalidate = true;
+
     list_remove(&port->bundle_node);
     port->bundle = NULL;
 
@@ -861,6 +863,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
     }
 
     if (port->bundle != bundle) {
+        bundle->ofproto->need_revalidate = true;
         if (port->bundle) {
             bundle_del_port(port);
         }
@@ -1029,6 +1032,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
             }
         } else {
             bundle->bond = bond_create(s->bond);
+            ofproto->need_revalidate = true;
         }
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
