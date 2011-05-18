@@ -2129,6 +2129,12 @@ facet_install(struct ofproto_dpif *p, struct facet *facet, bool zero_stats)
     }
 }
 
+static int
+vlan_tci_to_openflow_vlan(ovs_be16 vlan_tci)
+{
+    return vlan_tci != htons(0) ? vlan_tci_to_vid(vlan_tci) : OFP_VLAN_NONE;
+}
+
 static void
 facet_account(struct ofproto_dpif *ofproto,
               struct facet *facet, uint64_t extra_bytes)
@@ -2138,6 +2144,7 @@ facet_account(struct ofproto_dpif *ofproto,
     const struct nlattr *a;
     tag_type dummy = 0;
     unsigned int left;
+    ovs_be16 vlan_tci;
     int vlan;
 
     total_bytes = facet->byte_count + extra_bytes;
@@ -2165,14 +2172,32 @@ facet_account(struct ofproto_dpif *ofproto,
     if (!ofproto->has_bonded_bundles) {
         return;
     }
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, facet->actions, facet->actions_len) {
-        if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT) {
-            struct ofport_dpif *port;
 
+    /* This loop feeds byte counters to bond_account() for rebalancing to use
+     * as a basis.  We also need to track the actual VLAN on which the packet
+     * is going to be sent to ensure that it matches the one passed to
+     * bond_choose_output_slave().  (Otherwise, we will account to the wrong
+     * hash bucket.) */
+    vlan_tci = facet->flow.vlan_tci;
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, facet->actions, facet->actions_len) {
+        struct ofport_dpif *port;
+
+        switch (nl_attr_type(a)) {
+        case ODP_ACTION_ATTR_OUTPUT:
             port = get_odp_port(ofproto, nl_attr_get_u32(a));
             if (port && port->bundle && port->bundle->bond) {
-                bond_account(port->bundle->bond, &facet->flow, vlan, n_bytes);
+                bond_account(port->bundle->bond, &facet->flow,
+                             vlan_tci_to_openflow_vlan(vlan_tci), n_bytes);
             }
+            break;
+
+        case ODP_ACTION_ATTR_STRIP_VLAN:
+            vlan_tci = htons(0);
+            break;
+
+        case ODP_ACTION_ATTR_SET_DL_TCI:
+            vlan_tci = nl_attr_get_be16(a);
+            break;
         }
     }
 }
