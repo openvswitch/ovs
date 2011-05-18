@@ -266,6 +266,7 @@ static void facet_update_time(struct ofproto_dpif *, struct facet *,
                               long long int used);
 static void facet_update_stats(struct ofproto_dpif *, struct facet *,
                                const struct dpif_flow_stats *);
+static void facet_reset_dp_stats(struct facet *, struct dpif_flow_stats *);
 static void facet_push_stats(struct facet *);
 static void facet_account(struct ofproto_dpif *, struct facet *,
                           uint64_t extra_bytes);
@@ -2084,6 +2085,12 @@ facet_make_actions(struct ofproto_dpif *p, struct facet *facet,
     ofpbuf_delete(odp_actions);
 }
 
+/* Updates 'facet''s flow in the datapath setting its actions to 'actions_len'
+ * bytes of actions in 'actions'.  If 'stats' is non-null, statistics counters
+ * in the datapath will be zeroed and 'stats' will be updated with traffic new
+ * since 'facet' was last updated.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
 static int
 facet_put__(struct ofproto_dpif *ofproto, struct facet *facet,
             const struct nlattr *actions, size_t actions_len,
@@ -2092,19 +2099,24 @@ facet_put__(struct ofproto_dpif *ofproto, struct facet *facet,
     struct odputil_keybuf keybuf;
     enum dpif_flow_put_flags flags;
     struct ofpbuf key;
+    int ret;
 
     flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
     if (stats) {
         flags |= DPIF_FP_ZERO_STATS;
-        facet->dp_packet_count = 0;
-        facet->dp_byte_count = 0;
     }
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &facet->flow);
 
-    return dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
-                         actions, actions_len, stats);
+    ret = dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
+                        actions, actions_len, stats);
+
+    if (stats) {
+        facet_reset_dp_stats(facet, stats);
+    }
+
+    return ret;
 }
 
 /* If 'facet' is installable, inserts or re-inserts it into 'p''s datapath.  If
@@ -2203,16 +2215,17 @@ facet_uninstall(struct ofproto_dpif *p, struct facet *facet)
         struct odputil_keybuf keybuf;
         struct dpif_flow_stats stats;
         struct ofpbuf key;
+        int error;
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, &facet->flow);
 
-        if (!dpif_flow_del(p->dpif, key.data, key.size, &stats)) {
+        error = dpif_flow_del(p->dpif, key.data, key.size, &stats);
+        facet_reset_dp_stats(facet, &stats);
+        if (!error) {
             facet_update_stats(p, facet, &stats);
         }
         facet->installed = false;
-        facet->dp_packet_count = 0;
-        facet->dp_byte_count = 0;
     } else {
         assert(facet->dp_packet_count == 0);
         assert(facet->dp_byte_count == 0);
@@ -2229,6 +2242,24 @@ facet_is_controller_flow(struct facet *facet)
             && facet->rule->up.n_actions == 1
             && action_outputs_to_port(&facet->rule->up.actions[0],
                                       htons(OFPP_CONTROLLER)));
+}
+
+/* Resets 'facet''s datapath statistics counters.  This should be called when
+ * 'facet''s statistics are cleared in the datapath.  If 'stats' is non-null,
+ * it should contain the statistics returned by dpif when 'facet' was reset in
+ * the datapath.  'stats' will be modified to only included statistics new
+ * since 'facet' was last updated. */
+static void
+facet_reset_dp_stats(struct facet *facet, struct dpif_flow_stats *stats)
+{
+    if (stats && facet->dp_packet_count <= stats->n_packets
+        && facet->dp_byte_count <= stats->n_bytes) {
+        stats->n_packets -= facet->dp_packet_count;
+        stats->n_bytes -= facet->dp_byte_count;
+    }
+
+    facet->dp_packet_count = 0;
+    facet->dp_byte_count = 0;
 }
 
 /* Folds all of 'facet''s statistics into its rule.  Also updates the
