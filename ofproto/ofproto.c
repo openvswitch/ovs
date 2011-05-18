@@ -1744,8 +1744,8 @@ facet_is_controller_flow(struct facet *facet)
 static void
 facet_reset_dp_stats(struct facet *facet, struct dpif_flow_stats *stats)
 {
-    if (stats && facet->dp_packet_count < stats->n_packets
-        && facet->dp_byte_count < stats->n_bytes) {
+    if (stats && facet->dp_packet_count <= stats->n_packets
+        && facet->dp_byte_count <= stats->n_bytes) {
         stats->n_packets -= facet->dp_packet_count;
         stats->n_bytes -= facet->dp_byte_count;
     }
