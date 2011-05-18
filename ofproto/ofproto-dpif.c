@@ -1590,7 +1590,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (connmgr_msg_in_hook(ofproto->up.connmgr, &flow, upcall->packet)) {
-        send_packet(ofproto, OFPP_LOCAL, upcall->packet);
+        send_packet(ofproto, ODPP_LOCAL, upcall->packet);
     }
 
     facet = facet_lookup_valid(ofproto, &flow);
