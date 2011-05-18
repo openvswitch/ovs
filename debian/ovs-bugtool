@@ -389,7 +389,7 @@ def main(argv = None):
             return 0
 
         if k == '--output':
-            if  v in ['tar', 'tar.bz2', 'zip']:
+            if  v in ['tar', 'tar.bz2', 'tar.gz', 'zip']:
                 output_type = v
             else:
                 print >>sys.stderr, "Invalid output format '%s'" % v
@@ -780,6 +780,8 @@ def make_tar(subdir, suffix, output_fd):
     mode = 'w'
     if suffix == 'tar.bz2':
         mode = 'w:bz2'
+    elif suffix == 'tar.gz':
+        mode = 'w:gz'
     filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
 
     if output_fd == -1:
