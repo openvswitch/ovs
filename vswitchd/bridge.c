@@ -791,7 +791,7 @@ iface_set_ofp_port(struct iface *iface, int ofp_port)
     assert(iface->ofp_port < 0 && ofp_port >= 0);
     iface->ofp_port = ofp_port;
     hmap_insert(&br->ifaces, &iface->ofp_port_node, hash_int(ofp_port, 0));
-
+    iface_set_ofport(iface->cfg, ofp_port);
 }
 
 static void
