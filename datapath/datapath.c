@@ -273,10 +273,11 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	if (!OVS_CB(skb)->flow) {
 		struct sw_flow_key key;
 		struct tbl_node *flow_node;
+		int key_len;
 		bool is_frag;
 
 		/* Extract flow from 'skb' into 'key'. */
-		error = flow_extract(skb, p->port_no, &key, &is_frag);
+		error = flow_extract(skb, p->port_no, &key, &key_len, &is_frag);
 		if (unlikely(error)) {
 			kfree_skb(skb);
 			return;
@@ -289,8 +290,8 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		}
 
 		/* Look up flow. */
-		flow_node = tbl_lookup(rcu_dereference(dp->table), &key,
-					flow_hash(&key), flow_cmp);
+		flow_node = tbl_lookup(rcu_dereference(dp->table), &key, key_len,
+				       flow_hash(&key, key_len), flow_cmp);
 		if (unlikely(!flow_node)) {
 			struct dp_upcall_info upcall;
 
@@ -651,6 +652,7 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	bool is_frag;
 	int len;
 	int err;
+	int key_len;
 
 	err = -EINVAL;
 	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_ACTIONS] ||
@@ -687,10 +689,10 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(flow))
 		goto err_kfree_skb;
 
-	err = flow_extract(packet, -1, &flow->key, &is_frag);
+	err = flow_extract(packet, -1, &flow->key, &key_len, &is_frag);
 	if (err)
 		goto err_flow_put;
-	flow->tbl_node.hash = flow_hash(&flow->key);
+	flow->tbl_node.hash = flow_hash(&flow->key, key_len);
 
 	acts = flow_actions_alloc(a[ODP_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
@@ -935,12 +937,13 @@ static int odp_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	struct tbl *table;
 	u32 hash;
 	int error;
+	int key_len;
 
 	/* Extract key. */
 	error = -EINVAL;
 	if (!a[ODP_FLOW_ATTR_KEY])
 		goto error;
-	error = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	error = flow_from_nlattrs(&key, &key_len, a[ODP_FLOW_ATTR_KEY]);
 	if (error)
 		goto error;
 
@@ -959,9 +962,9 @@ static int odp_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	if (!dp)
 		goto error;
 
-	hash = flow_hash(&key);
+	hash = flow_hash(&key, key_len);
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &key, hash, flow_cmp);
+	flow_node = tbl_lookup(table, &key, key_len, hash, flow_cmp);
 	if (!flow_node) {
 		struct sw_flow_actions *acts;
 
@@ -1071,10 +1074,11 @@ static int odp_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct tbl *table;
 	int err;
+	int key_len;
 
 	if (!a[ODP_FLOW_ATTR_KEY])
 		return -EINVAL;
-	err = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	err = flow_from_nlattrs(&key, &key_len, a[ODP_FLOW_ATTR_KEY]);
 	if (err)
 		return err;
 
@@ -1083,7 +1087,8 @@ static int odp_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 		return -ENODEV;
 
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
+	flow_node = tbl_lookup(table, &key, key_len, flow_hash(&key, key_len),
+			       flow_cmp);
 	if (!flow_node)
 		return -ENOENT;
 
@@ -1106,10 +1111,11 @@ static int odp_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct tbl *table;
 	int err;
+	int key_len;
 
 	if (!a[ODP_FLOW_ATTR_KEY])
 		return flush_flows(odp_header->dp_ifindex);
-	err = flow_from_nlattrs(&key, a[ODP_FLOW_ATTR_KEY]);
+	err = flow_from_nlattrs(&key, &key_len, a[ODP_FLOW_ATTR_KEY]);
 	if (err)
 		return err;
 
@@ -1118,7 +1124,8 @@ static int odp_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
  		return -ENODEV;
 
 	table = get_table_protected(dp);
-	flow_node = tbl_lookup(table, &key, flow_hash(&key), flow_cmp);
+	flow_node = tbl_lookup(table, &key, key_len, flow_hash(&key, key_len),
+			       flow_cmp);
 	if (!flow_node)
 		return -ENOENT;
 	flow = flow_cast(flow_node);

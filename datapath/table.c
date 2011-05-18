@@ -178,14 +178,14 @@ static struct tbl_bucket __rcu **find_bucket(struct tbl *table, u32 hash)
 	return &table->buckets[l1][l2];
 }
 
-static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash,
-			 int (*cmp)(const struct tbl_node *, void *))
+static int search_bucket(const struct tbl_bucket *bucket, void *target, int len, u32 hash,
+			 int (*cmp)(const struct tbl_node *, void *, int len))
 {
 	int i;
 
 	for (i = 0; i < bucket->n_objs; i++) {
 		struct tbl_node *obj = bucket->objs[i];
-		if (obj->hash == hash && likely(cmp(obj, target)))
+		if (obj->hash == hash && likely(cmp(obj, target, len)))
 			return i;
 	}
 
@@ -197,6 +197,8 @@ static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash
  * @table: hash table to search
  * @target: identifier for the object that is being searched for, will be
  * provided as an argument to @cmp when making comparisions
+ * @len: length of @target in bytes, will be provided as an argument to @cmp
+ * when making comparisons
  * @hash: hash of @target
  * @cmp: comparision function to match objects with the given hash, returns
  * nonzero if the objects match, zero otherwise
@@ -204,8 +206,8 @@ static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash
  * Searches @table for an object identified by @target.  Returns the tbl_node
  * contained in the object if successful, otherwise %NULL.
  */
-struct tbl_node *tbl_lookup(struct tbl *table, void *target, u32 hash,
-			    int (*cmp)(const struct tbl_node *, void *))
+struct tbl_node *tbl_lookup(struct tbl *table, void *target, int len, u32 hash,
+			    int (*cmp)(const struct tbl_node *, void *, int))
 {
 	struct tbl_bucket __rcu **bucketp = find_bucket(table, hash);
 	struct tbl_bucket *bucket = get_bucket(*bucketp);
@@ -214,7 +216,7 @@ struct tbl_node *tbl_lookup(struct tbl *table, void *target, u32 hash,
 	if (!bucket)
 		return NULL;
 
-	index = search_bucket(bucket, target, hash, cmp);
+	index = search_bucket(bucket, target, len, hash, cmp);
 	if (index < 0)
 		return NULL;
 

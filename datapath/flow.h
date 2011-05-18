@@ -31,29 +31,51 @@ struct sw_flow_actions {
 };
 
 struct sw_flow_key {
-	__be64	tun_id;     /* Encapsulating tunnel ID. */
+	struct {
+		__be64 tun_id;		/* Encapsulating tunnel ID. */
+		u16    in_port;		/* Input switch port. */
+		u8     src[ETH_ALEN];	/* Ethernet source address. */
+		u8     dst[ETH_ALEN];	/* Ethernet destination address. */
+		__be16 tci;		/* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
+		__be16 type;		/* Ethernet frame type. */
+	} eth;
+	struct {
+		u8     nw_proto;	/* IP protocol or lower 8 bits of ARP opcode. */
+		u8     nw_tos;		/* IP ToS (DSCP field, 6 bits). */
+	} ip;
 	union {
 		struct {
-			__be32	ipv4_src;	 /* IPv4 source address. */
-			__be32	ipv4_dst;	 /* IPv4 destination address. */
-		};
+			struct {
+				__be32 src;	/* IP source address. */
+				__be32 dst;	/* IP destination address. */
+			} addr;
+			union {
+				struct {
+					__be16 src;		/* TCP/UDP source port. */
+					__be16 dst;		/* TCP/UDP destination port. */
+				} tp;
+				struct {
+					u8 sha[ETH_ALEN];	/* ARP source hardware address. */
+					u8 tha[ETH_ALEN];	/* ARP target hardware address. */
+				} arp;
+			};
+		} ipv4;
 		struct {
-			struct in6_addr	ipv6_src; /* IPv6 source address. */
-			struct in6_addr ipv6_dst; /* IPv6 source address. */
-		};
+			struct {
+				struct in6_addr src;	/* IPv6 source address. */
+				struct in6_addr dst;	/* IPv6 destination address. */
+			} addr;
+			struct {
+				__be16 src;		/* TCP/UDP source port. */
+				__be16 dst;		/* TCP/UDP destination port. */
+			} tp;
+			struct {
+				struct in6_addr target;	/* ND target address. */
+				u8 sll[ETH_ALEN];	/* ND source link layer address. */
+				u8 tll[ETH_ALEN];	/* ND target link layer address. */
+			} nd;
+		} ipv6;
 	};
-	struct in6_addr	nd_target; /* IPv6 ND target address. */
-	u16	in_port;    /* Input switch port. */
-	__be16	dl_tci;	    /* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
-	__be16	dl_type;    /* Ethernet frame type. */
-	__be16	tp_src;	    /* TCP/UDP source port. */
-	__be16	tp_dst;	    /* TCP/UDP destination port. */
-	u8	dl_src[ETH_ALEN]; /* Ethernet source address. */
-	u8	dl_dst[ETH_ALEN]; /* Ethernet destination address. */
-	u8	nw_proto;   /* IP protocol or lower 8 bits of ARP opcode. */
-	u8	nw_tos;	    /* IP ToS (DSCP field, 6 bits). */
-	u8	arp_sha[ETH_ALEN]; /* ARP/ND source hardware address. */
-	u8	arp_tha[ETH_ALEN]; /* ARP/ND target hardware address. */
 };
 
 struct sw_flow {
@@ -101,12 +123,13 @@ void flow_deferred_free_acts(struct sw_flow_actions *);
 void flow_hold(struct sw_flow *);
 void flow_put(struct sw_flow *);
 
-int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *, bool *is_frag);
+int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
+		 int *key_lenp, bool *is_frag);
 void flow_used(struct sw_flow *, struct sk_buff *);
 u64 flow_used_time(unsigned long flow_jiffies);
 
-u32 flow_hash(const struct sw_flow_key *);
-int flow_cmp(const struct tbl_node *, void *target);
+u32 flow_hash(const struct sw_flow_key *, int key_lenp);
+int flow_cmp(const struct tbl_node *, void *target, int len);
 
 /* Upper bound on the length of a nlattr-formatted flow key.  The longest
  * nlattr-formatted flow key would be:
@@ -127,7 +150,8 @@ int flow_cmp(const struct tbl_node *, void *target);
 #define FLOW_BUFSIZE 132
 
 int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
-int flow_from_nlattrs(struct sw_flow_key *swkey, const struct nlattr *);
+int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
+		      const struct nlattr *);
 
 static inline struct sw_flow *flow_cast(const struct tbl_node *node)
 {

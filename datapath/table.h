@@ -55,8 +55,8 @@ struct tbl {
 
 struct tbl *tbl_create(unsigned int n_buckets);
 void tbl_destroy(struct tbl *, void (*destructor)(struct tbl_node *));
-struct tbl_node *tbl_lookup(struct tbl *, void *target, u32 hash,
-			    int (*cmp)(const struct tbl_node *, void *target));
+struct tbl_node *tbl_lookup(struct tbl *, void *target, int len, u32 hash,
+			    int (*cmp)(const struct tbl_node *, void *target, int len));
 int tbl_insert(struct tbl *, struct tbl_node *, u32 hash);
 int tbl_remove(struct tbl *, struct tbl_node *);
 unsigned int tbl_count(struct tbl *);

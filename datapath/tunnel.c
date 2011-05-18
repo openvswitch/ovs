@@ -186,7 +186,7 @@ struct port_lookup_key {
  * Modifies 'target' to store the rcu_dereferenced pointer that was used to do
  * the comparision.
  */
-static int port_cmp(const struct tbl_node *node, void *target)
+static int port_cmp(const struct tbl_node *node, void *target, int unused)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_table_cast(node);
 	struct port_lookup_key *lookup = target;
@@ -337,7 +337,8 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_MATCH;
 
 		if (key_local_remote_ports) {
-			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
+			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
+					      port_hash(&lookup), port_cmp);
 			if (tbl_node)
 				goto found;
 		}
@@ -345,7 +346,8 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		if (key_remote_ports) {
 			lookup.saddr = 0;
 
-			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
+			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
+					      port_hash(&lookup), port_cmp);
 			if (tbl_node)
 				goto found;
 
@@ -358,7 +360,8 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_EXACT;
 
 		if (local_remote_ports) {
-			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
+			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
+					      port_hash(&lookup), port_cmp);
 			if (tbl_node)
 				goto found;
 		}
@@ -366,7 +369,8 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		if (remote_ports) {
 			lookup.saddr = 0;
 
-			tbl_node = tbl_lookup(table, &lookup, port_hash(&lookup), port_cmp);
+			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
+					      port_hash(&lookup), port_cmp);
 			if (tbl_node)
 				goto found;
 		}
@@ -940,6 +944,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		struct sk_buff *skb;
 		bool is_frag;
 		int err;
+		int flow_key_len;
 
 		dst_vport = internal_dev_get_vport(rt_dst(rt).dev);
 		if (!dst_vport)
@@ -952,14 +957,16 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		__skb_put(skb, cache->len);
 		memcpy(skb->data, get_cached_header(cache), cache->len);
 
-		err = flow_extract(skb, dst_vport->port_no, &flow_key, &is_frag);
+		err = flow_extract(skb, dst_vport->port_no, &flow_key,
+				   &flow_key_len, &is_frag);
 
 		kfree_skb(skb);
 		if (err || is_frag)
 			goto done;
 
 		flow_node = tbl_lookup(rcu_dereference(dst_vport->dp->table),
-				       &flow_key, flow_hash(&flow_key),
+				       &flow_key, flow_key_len,
+				       flow_hash(&flow_key, flow_key_len),
 				       flow_cmp);
 		if (flow_node) {
 			struct sw_flow *flow = flow_cast(flow_node);

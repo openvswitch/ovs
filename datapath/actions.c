@@ -114,13 +114,13 @@ static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, __be16 tci)
 
 static bool is_ip(struct sk_buff *skb)
 {
-	return (OVS_CB(skb)->flow->key.dl_type == htons(ETH_P_IP) &&
+	return (OVS_CB(skb)->flow->key.eth.type == htons(ETH_P_IP) &&
 		skb->transport_header > skb->network_header);
 }
 
 static __sum16 *get_l4_checksum(struct sk_buff *skb)
 {
-	u8 nw_proto = OVS_CB(skb)->flow->key.nw_proto;
+	u8 nw_proto = OVS_CB(skb)->flow->key.ip.nw_proto;
 	int transport_len = skb->len - skb_transport_offset(skb);
 	if (nw_proto == IPPROTO_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
@@ -230,7 +230,7 @@ static bool is_spoofed_arp(struct sk_buff *skb)
 {
 	struct arp_eth_header *arp;
 
-	if (OVS_CB(skb)->flow->key.dl_type != htons(ETH_P_ARP))
+	if (OVS_CB(skb)->flow->key.eth.type != htons(ETH_P_ARP))
 		return false;
 
 	if (skb_network_offset(skb) + sizeof(struct arp_eth_header) > skb->len)
