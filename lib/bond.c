@@ -1033,7 +1033,6 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         struct bond_entry *be;
-        struct flow flow;
 
         /* Basic info. */
         ds_put_format(&ds, "\nslave %s: %s\n",
@@ -1055,7 +1054,6 @@ bond_unixctl_show(struct unixctl_conn *conn,
         }
 
         /* Hashes. */
-        memset(&flow, 0, sizeof flow);
         for (be = bond->hash; be <= &bond->hash[BOND_MASK]; be++) {
             int hash = be - bond->hash;
 
