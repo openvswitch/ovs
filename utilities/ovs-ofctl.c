@@ -32,7 +32,6 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "netlink.h"
 #include "nx-match.h"
@@ -41,6 +40,7 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "random.h"
@@ -220,12 +220,17 @@ static void
 open_vconn__(const char *name, const char *default_suffix,
              struct vconn **vconnp)
 {
-    struct dpif *dpif;
+    char *datapath_name, *datapath_type, *socket_name;
+    char *bridge_path;
     struct stat s;
-    char *bridge_path, *datapath_name, *datapath_type;
 
     bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, default_suffix);
-    dp_parse_name(name, &datapath_name, &datapath_type);
+
+    ofproto_parse_name(name, &datapath_name, &datapath_type);
+    socket_name = xasprintf("%s/%s.%s",
+                            ovs_rundir(), datapath_name, default_suffix);
+    free(datapath_name);
+    free(datapath_type);
 
     if (strstr(name, ":")) {
         run(vconn_open_block(name, OFP_VERSION, vconnp),
@@ -234,36 +239,18 @@ open_vconn__(const char *name, const char *default_suffix,
         open_vconn_socket(name, vconnp);
     } else if (!stat(bridge_path, &s) && S_ISSOCK(s.st_mode)) {
         open_vconn_socket(bridge_path, vconnp);
-    } else if (!dpif_open(datapath_name, datapath_type, &dpif)) {
-        char dpif_name[IF_NAMESIZE + 1];
-        char *socket_name;
-
-        run(dpif_port_get_name(dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
-            "obtaining name of %s", dpif_name);
-        dpif_close(dpif);
-        if (strcmp(dpif_name, name)) {
-            VLOG_DBG("datapath %s is named %s", name, dpif_name);
-        }
-
-        socket_name = xasprintf("%s/%s.%s",
-                                ovs_rundir(), dpif_name, default_suffix);
-        if (stat(socket_name, &s)) {
-            ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
-                      name, socket_name);
-        } else if (!S_ISSOCK(s.st_mode)) {
+    } else if (!stat(socket_name, &s)) {
+        if (!S_ISSOCK(s.st_mode)) {
             ovs_fatal(0, "cannot connect to %s: %s is not a socket",
                       name, socket_name);
         }
-
         open_vconn_socket(socket_name, vconnp);
-        free(socket_name);
     } else {
         ovs_fatal(0, "%s is not a valid connection method", name);
     }
 
-    free(datapath_name);
-    free(datapath_type);
     free(bridge_path);
+    free(socket_name);
 }
 
 static void
@@ -626,6 +613,7 @@ static void
 do_flow_mod_file__(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     struct list requests;
     struct vconn *vconn;
     FILE *file;
@@ -637,9 +625,11 @@ do_flow_mod_file__(int argc OVS_UNUSED, char *argv[], uint16_t command)
 
     list_init(&requests);
     flow_format = set_initial_format_for_flow_mod(&requests);
+    flow_mod_table_id = false;
 
     open_vconn(argv[1], &vconn);
-    while (parse_ofp_flow_mod_file(&requests, &flow_format, file, command)) {
+    while (parse_ofp_flow_mod_file(&requests, &flow_format, &flow_mod_table_id,
+                                   file, command)) {
         check_final_format_for_flow_mod(flow_format);
         transact_multiple_noreply(vconn, &requests);
     }
@@ -654,6 +644,7 @@ static void
 do_flow_mod__(int argc, char *argv[], uint16_t command)
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     struct list requests;
     struct vconn *vconn;
 
@@ -664,9 +655,10 @@ do_flow_mod__(int argc, char *argv[], uint16_t command)
 
     list_init(&requests);
     flow_format = set_initial_format_for_flow_mod(&requests);
+    flow_mod_table_id = false;
 
-    parse_ofp_flow_mod_str(&requests, &flow_format, argc > 2 ? argv[2] : "",
-                           command);
+    parse_ofp_flow_mod_str(&requests, &flow_format, &flow_mod_table_id,
+                           argc > 2 ? argv[2] : "", command);
     check_final_format_for_flow_mod(flow_format);
 
     open_vconn(argv[1], &vconn);
@@ -1011,7 +1003,7 @@ fte_insert(struct classifier *cls, const struct cls_rule *rule,
     fte->rule = *rule;
     fte->versions[index] = version;
 
-    old = fte_from_cls_rule(classifier_insert(cls, &fte->rule));
+    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule));
     if (old) {
         fte_version_free(old->versions[index]);
         fte->versions[!index] = old->versions[!index];
@@ -1041,10 +1033,9 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         enum nx_flow_format min_ff;
         struct ofpbuf actions;
         struct flow_mod fm;
-        uint8_t table_idx;
 
         ofpbuf_init(&actions, 64);
-        parse_ofp_str(&fm, &table_idx, &actions, ds_cstr(&s));
+        parse_ofp_str(&fm, &actions, ds_cstr(&s));
 
         version = xmalloc(sizeof *version);
         version->cookie = fm.cookie;
@@ -1157,6 +1148,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
 
     fm.cr = fte->rule;
     fm.cookie = version->cookie;
+    fm.table_id = 0xff;
     fm.command = command;
     fm.idle_timeout = version->idle_timeout;
     fm.hard_timeout = version->hard_timeout;
@@ -1172,7 +1164,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         fm.n_actions = 0;
     }
 
-    ofm = ofputil_encode_flow_mod(&fm, flow_format);
+    ofm = ofputil_encode_flow_mod(&fm, flow_format, false);
     list_push_back(packets, &ofm->list_node);
 }
 
@@ -1305,15 +1297,18 @@ static void
 do_parse_flow(int argc OVS_UNUSED, char *argv[])
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     struct list packets;
 
     flow_format = NXFF_OPENFLOW10;
     if (preferred_flow_format > 0) {
         flow_format = preferred_flow_format;
     }
+    flow_mod_table_id = false;
 
     list_init(&packets);
-    parse_ofp_flow_mod_str(&packets, &flow_format, argv[1], OFPFC_ADD);
+    parse_ofp_flow_mod_str(&packets, &flow_format, &flow_mod_table_id,
+                           argv[1], OFPFC_ADD);
     print_packet_list(&packets);
 }
 
@@ -1323,6 +1318,7 @@ static void
 do_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     struct list packets;
     FILE *file;
 
@@ -1335,9 +1331,11 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
     if (preferred_flow_format > 0) {
         flow_format = preferred_flow_format;
     }
+    flow_mod_table_id = false;
 
     list_init(&packets);
-    while (parse_ofp_flow_mod_file(&packets, &flow_format, file, OFPFC_ADD)) {
+    while (parse_ofp_flow_mod_file(&packets, &flow_format, &flow_mod_table_id,
+                                   file, OFPFC_ADD)) {
         print_packet_list(&packets);
     }
     fclose(file);

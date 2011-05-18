@@ -3974,6 +3974,8 @@ netdev_stats_to_rtnl_link_stats64(struct rtnl_link_stats64 *dst,
                                   const struct netdev_stats *src)
 {
     COPY_NETDEV_STATS;
+    dst->rx_compressed = 0;
+    dst->tx_compressed = 0;
 }
 
 /* Utility functions. */

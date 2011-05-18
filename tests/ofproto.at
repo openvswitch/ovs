@@ -11,7 +11,7 @@ OFPROTO_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
-n_tables:2, n_buffers:256
+n_tables:1, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: 0x1, state:0x1
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
@@ -33,7 +33,7 @@ do
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
-n_tables:2, n_buffers:256
+n_tables:1, n_buffers:256
 features: capabilities:0x87, actions:0xfff
  LOCAL(br0): addr:aa:55:aa:55:00:00, config: $config, state:$state
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
@@ -49,8 +49,8 @@ AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
 AT_CHECK([echo 'in_port=1,actions=0' | ovs-ofctl add-flows br0 -])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=0,actions=1])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=0 actions=output:1
  cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
- cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=65534 actions=output:1
 NXST_FLOW reply:
 ])
 AT_CHECK([ovs-ofctl del-flows br0])

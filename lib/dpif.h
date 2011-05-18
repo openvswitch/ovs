@@ -37,12 +37,10 @@ struct ofpbuf;
 struct sset;
 struct dpif_class;
 
-void dp_run(void);
-void dp_wait(void);
-
 int dp_register_provider(const struct dpif_class *);
 int dp_unregister_provider(const char *type);
 void dp_enumerate_types(struct sset *types);
+const char *dpif_normalize_type(const char *);
 
 int dp_enumerate_names(const char *type, struct sset *names);
 void dp_parse_name(const char *datapath_name, char **name, char **type);
@@ -51,6 +49,9 @@ int dpif_open(const char *name, const char *type, struct dpif **);
 int dpif_create(const char *name, const char *type, struct dpif **);
 int dpif_create_and_open(const char *name, const char *type, struct dpif **);
 void dpif_close(struct dpif *);
+
+void dpif_run(struct dpif *);
+void dpif_wait(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
 const char *dpif_base_name(const struct dpif *);

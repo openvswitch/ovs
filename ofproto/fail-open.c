@@ -28,6 +28,7 @@
 #include "ofproto.h"
 #include "pktbuf.h"
 #include "poll-loop.h"
+#include "private.h"
 #include "rconn.h"
 #include "timeval.h"
 #include "vconn.h"

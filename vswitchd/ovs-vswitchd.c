@@ -30,7 +30,6 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "dpif.h"
 #include "dummy.h"
 #include "leak-checker.h"
 #include "netdev.h"
@@ -90,13 +89,11 @@ main(int argc, char *argv[])
         }
         bridge_run();
         unixctl_server_run(unixctl);
-        dp_run();
         netdev_run();
 
         signal_wait(sighup);
         bridge_wait();
         unixctl_server_wait(unixctl);
-        dp_wait();
         netdev_wait();
         if (exiting) {
             poll_immediate_wake();

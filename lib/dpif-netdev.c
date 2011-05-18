@@ -1090,51 +1090,43 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
 }
 
 static void
-dp_netdev_run(void)
+dpif_netdev_run(struct dpif *dpif)
 {
-    struct shash_node *node;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_port *port;
     struct ofpbuf packet;
 
     ofpbuf_init(&packet, DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + max_mtu);
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev *dp = node->data;
-        struct dp_netdev_port *port;
 
-        LIST_FOR_EACH (port, node, &dp->port_list) {
-            int error;
+    LIST_FOR_EACH (port, node, &dp->port_list) {
+        int error;
 
-            /* Reset packet contents. */
-            ofpbuf_clear(&packet);
-            ofpbuf_reserve(&packet, DP_NETDEV_HEADROOM);
+        /* Reset packet contents. */
+        ofpbuf_clear(&packet);
+        ofpbuf_reserve(&packet, DP_NETDEV_HEADROOM);
 
-            error = netdev_recv(port->netdev, &packet);
-            if (!error) {
-                dp_netdev_port_input(dp, port, &packet);
-            } else if (error != EAGAIN && error != EOPNOTSUPP) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                            netdev_get_name(port->netdev), strerror(error));
-            }
+        error = netdev_recv(port->netdev, &packet);
+        if (!error) {
+            dp_netdev_port_input(dp, port, &packet);
+        } else if (error != EAGAIN && error != EOPNOTSUPP) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
+                        netdev_get_name(port->netdev), strerror(error));
         }
     }
     ofpbuf_uninit(&packet);
 }
 
 static void
-dp_netdev_wait(void)
+dpif_netdev_wait(struct dpif *dpif)
 {
-    struct shash_node *node;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_port *port;
 
-    SHASH_FOR_EACH (node, &dp_netdevs) {
-        struct dp_netdev *dp = node->data;
-        struct dp_netdev_port *port;
-
-        LIST_FOR_EACH (port, node, &dp->port_list) {
-            netdev_recv_wait(port->netdev);
-        }
+    LIST_FOR_EACH (port, node, &dp->port_list) {
+        netdev_recv_wait(port->netdev);
     }
 }
-
 
 static void
 dp_netdev_strip_vlan(struct ofpbuf *packet)
@@ -1378,12 +1370,12 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
 const struct dpif_class dpif_netdev_class = {
     "netdev",
-    dp_netdev_run,
-    dp_netdev_wait,
     NULL,                       /* enumerate */
     dpif_netdev_open,
     dpif_netdev_close,
     dpif_netdev_destroy,
+    dpif_netdev_run,
+    dpif_netdev_wait,
     dpif_netdev_get_stats,
     dpif_netdev_get_drop_frags,
     dpif_netdev_set_drop_frags,

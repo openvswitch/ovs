@@ -101,38 +101,6 @@ dp_initialize(void)
     }
 }
 
-/* Performs periodic work needed by all the various kinds of dpifs.
- *
- * If your program opens any dpifs, it must call both this function and
- * netdev_run() within its main poll loop. */
-void
-dp_run(void)
-{
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &dpif_classes) {
-        const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class->run) {
-            registered_class->dpif_class->run();
-        }
-    }
-}
-
-/* Arranges for poll_block() to wake up when dp_run() needs to be called.
- *
- * If your program opens any dpifs, it must call both this function and
- * netdev_wait() within its main poll loop. */
-void
-dp_wait(void)
-{
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &dpif_classes) {
-        const struct registered_dpif_class *registered_class = node->data;
-        if (registered_class->dpif_class->wait) {
-            registered_class->dpif_class->wait();
-        }
-    }
-}
-
 /* Registers a new datapath provider.  After successful registration, new
  * datapaths of that type can be opened using dpif_open(). */
 int
@@ -232,8 +200,10 @@ dp_enumerate_names(const char *type, struct sset *names)
     return error;
 }
 
-/* Parses 'datapath name', which is of the form type@name into its
- * component pieces.  'name' and 'type' must be freed by the caller. */
+/* Parses 'datapath_name_', which is of the form [type@]name into its
+ * component pieces.  'name' and 'type' must be freed by the caller.
+ *
+ * The returned 'type' is normalized, as if by dpif_normalize_type(). */
 void
 dp_parse_name(const char *datapath_name_, char **name, char **type)
 {
@@ -244,10 +214,10 @@ dp_parse_name(const char *datapath_name_, char **name, char **type)
     if (separator) {
         *separator = '\0';
         *type = datapath_name;
-        *name = xstrdup(separator + 1);
+        *name = xstrdup(dpif_normalize_type(separator + 1));
     } else {
         *name = datapath_name;
-        *type = NULL;
+        *type = xstrdup(dpif_normalize_type(NULL));
     }
 }
 
@@ -260,9 +230,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
 
     dp_initialize();
 
-    if (!type || *type == '\0') {
-        type = "system";
-    }
+    type = dpif_normalize_type(type);
 
     registered_class = shash_find_data(&dpif_classes, type);
     if (!registered_class) {
@@ -347,6 +315,25 @@ dpif_close(struct dpif *dpif)
     }
 }
 
+/* Performs periodic work needed by 'dpif'. */
+void
+dpif_run(struct dpif *dpif)
+{
+    if (dpif->dpif_class->run) {
+        dpif->dpif_class->run(dpif);
+    }
+}
+
+/* Arranges for poll_block() to wake up when dp_run() needs to be called for
+ * 'dpif'. */
+void
+dpif_wait(struct dpif *dpif)
+{
+    if (dpif->dpif_class->wait) {
+        dpif->dpif_class->wait(dpif);
+    }
+}
+
 /* Returns the name of datapath 'dpif' prefixed with the type
  * (for use in log messages). */
 const char *
@@ -361,6 +348,16 @@ const char *
 dpif_base_name(const struct dpif *dpif)
 {
     return dpif->base_name;
+}
+
+/* Returns the fully spelled out name for the given datapath 'type'.
+ *
+ * Normalized type string can be compared with strcmp().  Unnormalized type
+ * string might be the same even if they have different spellings. */
+const char *
+dpif_normalize_type(const char *type)
+{
+    return type && type[0] ? type : "system";
 }
 
 /* Destroys the datapath that 'dpif' is connected to, first removing all of its
@@ -526,11 +523,14 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     } else {
         memset(port, 0, sizeof *port);
 
-        /* Log level is DBG here because all the current callers are interested
-         * in whether 'dpif' actually has a port 'devname', so that it's not an
-         * issue worth logging if it doesn't. */
-        VLOG_DBG_RL(&error_rl, "%s: failed to query port %s: %s",
-                    dpif_name(dpif), devname, strerror(error));
+        /* For ENOENT or ENODEV we use DBG level because the caller is probably
+         * interested in whether 'dpif' actually has a port 'devname', so that
+         * it's not an issue worth logging if it doesn't.  Other errors are
+         * uncommon and more likely to indicate a real problem. */
+        VLOG_RL(&error_rl,
+                error == ENOENT || error == ENODEV ? VLL_DBG : VLL_WARN,
+                "%s: failed to query port %s: %s",
+                dpif_name(dpif), devname, strerror(error));
     }
     return error;
 }

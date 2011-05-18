@@ -227,6 +227,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     cfg.mode = (action_normal ? LSW_NORMAL
                 : learn_macs ? LSW_LEARN
                 : LSW_FLOOD);
+    cfg.exact_flows = exact_flows;
     cfg.max_idle = set_up_flows ? max_idle : -1;
     cfg.default_flows = &default_flows;
     cfg.default_queue = default_queue;
@@ -260,6 +261,7 @@ static void
 read_flow_file(const char *name)
 {
     enum nx_flow_format flow_format;
+    bool flow_mod_table_id;
     FILE *stream;
 
     stream = fopen(optarg, "r");
@@ -268,8 +270,10 @@ read_flow_file(const char *name)
     }
 
     flow_format = NXFF_OPENFLOW10;
-    while (parse_ofp_flow_mod_file(&default_flows, &flow_format, stream,
-                                   OFPFC_ADD)) {
+    flow_mod_table_id = false;
+    while (parse_ofp_flow_mod_file(&default_flows,
+                                   &flow_format, &flow_mod_table_id,
+                                   stream, OFPFC_ADD)) {
         continue;
     }
 

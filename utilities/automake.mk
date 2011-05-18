@@ -78,7 +78,10 @@ utilities_ovs_dpctl_SOURCES = utilities/ovs-dpctl.c
 utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
-utilities_ovs_ofctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+utilities_ovs_ofctl_LDADD = \
+	ofproto/libofproto.a \
+	lib/libopenvswitch.a \
+	$(SSL_LIBS)
 
 utilities_ovs_openflowd_SOURCES = utilities/ovs-openflowd.c
 utilities_ovs_openflowd_LDADD = \

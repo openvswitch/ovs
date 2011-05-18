@@ -139,8 +139,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     /* Initialize most of rule->flow. */
     rule->flow.nw_src = match->nw_src;
     rule->flow.nw_dst = match->nw_dst;
-    rule->flow.in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
-                     : ntohs(match->in_port));
+    rule->flow.in_port = ntohs(match->in_port);
     rule->flow.dl_type = ofputil_dl_type_from_openflow(match->dl_type);
     rule->flow.tp_src = match->tp_src;
     rule->flow.tp_dst = match->tp_dst;
@@ -235,8 +234,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
 
     /* Compose most of the match structure. */
     match->wildcards = htonl(ofpfw);
-    match->in_port = htons(rule->flow.in_port == ODPP_LOCAL ? OFPP_LOCAL
-                           : rule->flow.in_port);
+    match->in_port = htons(rule->flow.in_port);
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
     match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
@@ -362,6 +360,9 @@ static int
 ofputil_decode_vendor(const struct ofp_header *oh,
                       const struct ofputil_msg_type **typep)
 {
+    BUILD_ASSERT_DECL(sizeof(struct nxt_set_flow_format)
+                      != sizeof(struct nxt_flow_mod_table_id));
+
     static const struct ofputil_msg_type nxt_messages[] = {
         { OFPUTIL_NXT_ROLE_REQUEST,
           NXT_ROLE_REQUEST, "NXT_ROLE_REQUEST",
@@ -408,6 +409,21 @@ ofputil_decode_vendor(const struct ofp_header *oh,
     }
 
     nh = (const struct nicira_header *) oh;
+
+    if (nh->subtype == htonl(NXT_FLOW_MOD_TABLE_ID)
+        && oh->length == htons(sizeof(struct nxt_flow_mod_table_id))) {
+        /* NXT_SET_FLOW_FORMAT and NXT_FLOW_MOD_TABLE_ID accidentally have the
+         * same value but different lengths.  ofputil_lookup_openflow_message()
+         * doesn't support this case, so special case it here. */
+        static const struct ofputil_msg_type nxt_flow_mod_table_id =
+            { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
+              NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
+              sizeof(struct nxt_flow_mod_table_id), 0 };
+
+        *typep = &nxt_flow_mod_table_id;
+        return 0;
+    }
+
     return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
                                            ntohs(oh->length), typep);
 }
@@ -853,15 +869,33 @@ ofputil_make_set_flow_format(enum nx_flow_format flow_format)
     return msg;
 }
 
+/* Returns an OpenFlow message that can be used to turn the flow_mod_table_id
+ * extension on or off (according to 'flow_mod_table_id'). */
+struct ofpbuf *
+ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
+{
+    struct nxt_flow_mod_table_id *nfmti;
+    struct ofpbuf *msg;
+
+    nfmti = make_nxmsg(sizeof *nfmti, NXT_FLOW_MOD_TABLE_ID, &msg);
+    nfmti->set = flow_mod_table_id;
+    return msg;
+}
+
 /* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh' into an abstract
  * flow_mod in 'fm'.  Returns 0 if successful, otherwise an OpenFlow error
  * code.
  *
+ * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
+ * enabled, false otherwise.
+ *
  * Does not validate the flow_mod actions. */
 int
-ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
+ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
+                        bool flow_mod_table_id)
 {
     const struct ofputil_msg_type *type;
+    uint16_t command;
     struct ofpbuf b;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
@@ -913,7 +947,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
 
         /* Translate the message. */
         fm->cookie = ofm->cookie;
-        fm->command = ntohs(ofm->command);
+        command = ntohs(ofm->command);
         fm->idle_timeout = ntohs(ofm->idle_timeout);
         fm->hard_timeout = ntohs(ofm->hard_timeout);
         fm->buffer_id = ntohl(ofm->buffer_id);
@@ -938,7 +972,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
 
         /* Translate the message. */
         fm->cookie = nfm->cookie;
-        fm->command = ntohs(nfm->command);
+        command = ntohs(nfm->command);
         fm->idle_timeout = ntohs(nfm->idle_timeout);
         fm->hard_timeout = ntohs(nfm->hard_timeout);
         fm->buffer_id = ntohl(nfm->buffer_id);
@@ -948,17 +982,34 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh)
         NOT_REACHED();
     }
 
+    if (flow_mod_table_id) {
+        fm->command = command & 0xff;
+        fm->table_id = command >> 8;
+    } else {
+        fm->command = command;
+        fm->table_id = 0xff;
+    }
+
     return 0;
 }
 
 /* Converts 'fm' into an OFPT_FLOW_MOD or NXT_FLOW_MOD message according to
- * 'flow_format' and returns the message. */
+ * 'flow_format' and returns the message.
+ *
+ * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
+ * enabled, false otherwise. */
 struct ofpbuf *
 ofputil_encode_flow_mod(const struct flow_mod *fm,
-                        enum nx_flow_format flow_format)
+                        enum nx_flow_format flow_format,
+                        bool flow_mod_table_id)
 {
     size_t actions_len = fm->n_actions * sizeof *fm->actions;
     struct ofpbuf *msg;
+    uint16_t command;
+
+    command = (flow_mod_table_id
+               ? (fm->command & 0xff) | (fm->table_id << 8)
+               : fm->command);
 
     if (flow_format == NXFF_OPENFLOW10) {
         struct ofp_flow_mod *ofm;
@@ -984,7 +1035,7 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
 
         nfm = msg->data;
         nfm->cookie = fm->cookie;
-        nfm->command = htons(fm->command);
+        nfm->command = htons(command);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);

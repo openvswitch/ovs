@@ -337,6 +337,21 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     return revalidate;
 }
 
+static void
+bond_slave_set_netdev__(struct bond *bond, struct bond_slave *slave,
+                        struct netdev *netdev)
+{
+    if (slave->netdev != netdev) {
+        if (bond->monitor) {
+            if (slave->netdev) {
+                netdev_monitor_remove(bond->monitor, slave->netdev);
+            }
+            netdev_monitor_add(bond->monitor, netdev);
+        }
+        slave->netdev = netdev;
+    }
+}
+
 /* Registers 'slave_' as a slave of 'bond'.  The 'slave_' pointer is an
  * arbitrary client-provided pointer that uniquely identifies a slave within a
  * bond.  If 'slave_' already exists within 'bond' then this function
@@ -376,18 +391,24 @@ bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
         bond->bond_revalidate = true;
     }
 
-    if (slave->netdev != netdev) {
-        if (bond->monitor) {
-            if (slave->netdev) {
-                netdev_monitor_remove(bond->monitor, slave->netdev);
-            }
-            netdev_monitor_add(bond->monitor, netdev);
-        }
-        slave->netdev = netdev;
-    }
+    bond_slave_set_netdev__(bond, slave, netdev);
 
     free(slave->name);
     slave->name = xstrdup(netdev_get_name(netdev));
+}
+
+/* Updates the network device to be used with 'slave_' to 'netdev'.
+ *
+ * This is useful if the caller closes and re-opens the network device
+ * registered with bond_slave_register() but doesn't need to change anything
+ * else. */
+void
+bond_slave_set_netdev(struct bond *bond, void *slave_, struct netdev *netdev)
+{
+    struct bond_slave *slave = bond_slave_lookup(bond, slave_);
+    if (slave) {
+        bond_slave_set_netdev__(bond, slave, netdev);
+    }
 }
 
 /* Unregisters 'slave_' from 'bond'.  If 'bond' does not contain such a slave

@@ -96,7 +96,7 @@ void mac_learning_wait(struct mac_learning *);
 
 /* Configuration. */
 bool mac_learning_set_flood_vlans(struct mac_learning *,
-                                  unsigned long *bitmap);
+                                  const unsigned long *bitmap);
 
 /* Learning. */
 bool mac_learning_may_learn(const struct mac_learning *,

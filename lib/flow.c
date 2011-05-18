@@ -306,7 +306,7 @@ invalid:
 
 }
 
-/* Initializes 'flow' members from 'packet', 'tun_id', and 'in_port.
+/* Initializes 'flow' members from 'packet', 'tun_id', and 'ofp_in_port'.
  * Initializes 'packet' header pointers as follows:
  *
  *    - packet->l2 to the start of the Ethernet header.
@@ -322,7 +322,7 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 int
-flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
+flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t ofp_in_port,
              struct flow *flow)
 {
     struct ofpbuf b = *packet;
@@ -333,7 +333,7 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t in_port,
 
     memset(flow, 0, sizeof *flow);
     flow->tun_id = tun_id;
-    flow->in_port = in_port;
+    flow->in_port = ofp_in_port;
 
     packet->l2 = b.data;
     packet->l3 = NULL;

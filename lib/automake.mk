@@ -55,6 +55,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/hash.h \
 	lib/hmap.c \
 	lib/hmap.h \
+	lib/hmapx.c \
+	lib/hmapx.h \
 	lib/json.c \
 	lib/json.h \
 	lib/jsonrpc.c \
@@ -169,6 +171,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vconn-stream.c \
 	lib/vconn.c \
 	lib/vconn.h \
+	lib/vlan-bitmap.c \
+	lib/vlan-bitmap.h \
 	lib/vlog.c \
 	lib/vlog.h
 nodist_lib_libopenvswitch_a_SOURCES = \

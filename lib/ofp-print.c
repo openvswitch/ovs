@@ -834,7 +834,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     bool need_priority;
     int error;
 
-    error = ofputil_decode_flow_mod(&fm, oh);
+    error = ofputil_decode_flow_mod(&fm, oh, true);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -859,6 +859,9 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
         break;
     default:
         ds_put_format(s, "cmd:%d", fm.command);
+    }
+    if (fm.table_id != 0) {
+        ds_put_format(s, " table_id:%d", fm.table_id);
     }
 
     ds_put_char(s, ' ');
@@ -1347,6 +1350,13 @@ ofp_print_nxt_role_message(struct ds *string,
 }
 
 static void
+ofp_print_nxt_flow_mod_table_id(struct ds *string,
+                                const struct nxt_flow_mod_table_id *nfmti)
+{
+    ds_put_format(string, " %s", nfmti->set ? "enable" : "disable");
+}
+
+static void
 ofp_print_nxt_set_flow_format(struct ds *string,
                               const struct nxt_set_flow_format *nsff)
 {
@@ -1500,6 +1510,10 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFPUTIL_NXT_ROLE_REQUEST:
     case OFPUTIL_NXT_ROLE_REPLY:
         ofp_print_nxt_role_message(string, msg);
+        break;
+
+    case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
+        ofp_print_nxt_flow_mod_table_id(string, msg);
         break;
 
     case OFPUTIL_NXT_SET_FLOW_FORMAT:

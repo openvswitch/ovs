@@ -15,15 +15,18 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/fail-open.h \
 	ofproto/in-band.c \
 	ofproto/in-band.h \
+	ofproto/names.c \
 	ofproto/netflow.c \
 	ofproto/netflow.h \
 	ofproto/ofproto.c \
 	ofproto/ofproto.h \
+	ofproto/ofproto-dpif.c \
 	ofproto/ofproto-sflow.c \
 	ofproto/ofproto-sflow.h \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
 	ofproto/pinsched.c \
-	ofproto/pinsched.h
+	ofproto/pinsched.h \
+	ofproto/private.h
 
 EXTRA_DIST += ofproto/ofproto-unixctl.man

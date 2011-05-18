@@ -176,9 +176,6 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         /* Metadata. */
     case NFI_NXM_OF_IN_PORT:
         flow->in_port = ntohs(get_unaligned_be16(value));
-        if (flow->in_port == OFPP_LOCAL) {
-            flow->in_port = ODPP_LOCAL;
-        }
         return 0;
 
         /* Ethernet header. */
@@ -739,9 +736,6 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
         uint16_t in_port = flow->in_port;
-        if (in_port == ODPP_LOCAL) {
-            in_port = OFPP_LOCAL;
-        }
         nxm_put_16(b, NXM_OF_IN_PORT, htons(in_port));
     }
 
@@ -1272,7 +1266,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 {
     switch (src->index) {
     case NFI_NXM_OF_IN_PORT:
-        return flow->in_port == ODPP_LOCAL ? OFPP_LOCAL : flow->in_port;
+        return flow->in_port;
 
     case NFI_NXM_OF_ETH_DST:
         return eth_addr_to_uint64(flow->dl_dst);
