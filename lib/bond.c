@@ -63,7 +63,6 @@ struct bond_slave {
 
     /* Link status. */
     long long delay_expires;    /* Time after which 'enabled' may change. */
-    bool up;                    /* Last link status read from netdev. */
     bool enabled;               /* May be chosen for flows? */
     bool lacp_may_enable;       /* LACP considers this interface bondable. */
     tag_type tag;               /* Tag associated with this slave. */
@@ -323,12 +322,11 @@ bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
         slave->bond = bond;
         slave->aux = slave_;
         slave->delay_expires = LLONG_MAX;
-        slave->up = netdev_get_carrier(netdev);
         slave->name = xstrdup(netdev_get_name(netdev));
         bond->bond_revalidate = true;
 
         slave->enabled = false;
-        bond_enable_slave(slave, slave->up, NULL);
+        bond_enable_slave(slave, netdev_get_carrier(netdev), NULL);
     }
 
     if (slave->stb_id != stb_id) {
@@ -418,11 +416,6 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
     bool is_tcp_hash = bond_is_tcp_hash(bond);
 
     bond->lacp_negotiated = lacp_negotiated;
-
-    /* Update link status. */
-    HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-        slave->up = netdev_get_carrier(slave->netdev);
-    }
 
     if (bond->monitor) {
         netdev_monitor_flush(bond->monitor);
@@ -1278,7 +1271,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
     struct bond *bond = slave->bond;
     bool up;
 
-    up = slave->up && slave->lacp_may_enable;
+    up = netdev_get_carrier(slave->netdev) && slave->lacp_may_enable;
     if ((up == slave->enabled) != (slave->delay_expires == LLONG_MAX)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
         VLOG_INFO_RL(&rl, "interface %s: link state %s",
