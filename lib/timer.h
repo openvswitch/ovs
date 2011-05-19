@@ -57,18 +57,11 @@ timer_set_expired(struct timer *timer)
     timer->t = LLONG_MIN;
 }
 
-/* True if 'timer' had (or will have) expired at 'time'. */
-static inline bool
-timer_expired_at(const struct timer *timer, long long int time)
-{
-    return time >= timer->t;
-}
-
 /* True if 'timer' has expired. */
 static inline bool
 timer_expired(const struct timer *timer)
 {
-    return timer_expired_at(timer, time_msec());
+    return time_msec() >= timer->t;
 }
 
 /* Returns ture if 'timer' will never expire. */
