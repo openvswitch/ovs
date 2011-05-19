@@ -571,6 +571,12 @@ class DatapathVswitch(Datapath):
         # when they are added, and a network device that is down
         # always reports "no carrier".
         physical_devices = datapath_get_physical_pifs(self._dp)
+
+        if pif_is_bond(self._dp):
+            brec = db().get_pif_record(self._dp)
+            bond_mtu = mtu_setting(brec['network'], "PIF", brec['other_config'])
+        else:
+            bond_mtu = None
         
         for p in physical_devices:
             prec = db().get_pif_record(p)
@@ -578,7 +584,10 @@ class DatapathVswitch(Datapath):
 
             dev = pif_netdev_name(p)
 
-            mtu = mtu_setting(prec['network'], "PIF", oc)
+            if bond_mtu:
+                mtu = bond_mtu
+            else:
+                mtu = mtu_setting(prec['network'], "PIF", oc)
 
             netdev_up(dev, mtu)
 
