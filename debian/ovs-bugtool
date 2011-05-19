@@ -361,6 +361,7 @@ def main(argv = None):
         print >>sys.stderr, "Error: ovs-bugtool must be run as root"
         return 1
 
+    output_file = None
     output_type = 'tar.bz2'
     output_fd = -1
 
@@ -370,7 +371,8 @@ def main(argv = None):
     try:
         (options, params) = getopt.gnu_getopt(
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
-                         'output=', 'outfd=', 'all', 'unlimited', 'debug'])
+                         'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
+                         'debug'])
     except getopt.GetoptError, opterr:
         print >>sys.stderr, opterr
         return 2
@@ -417,6 +419,9 @@ def main(argv = None):
                 print >>sys.stderr, "Invalid output file descriptor", output_fd
                 return 2
 
+        if k == '--outfile':
+            output_file = v
+
         elif k == '--all':
             entries = caps.keys()
         elif k == '--unlimited':
@@ -431,6 +436,10 @@ def main(argv = None):
 
     if output_fd != -1 and output_type != 'tar':
         print >>sys.stderr, "Option '--outfd' only valid with '--output=tar'"
+        return 2
+
+    if output_fd != -1 and output_file is not None:
+        print >>sys.stderr, "Cannot set both '--outfd' and '--outfile'"
         return 2
 
     if ANSWER_YES_TO_ALL:
@@ -574,19 +583,24 @@ exclude those logs from the archive.
     data['inventory.xml'] = {'cap': None, 'output': StringIOmtime(make_inventory(data, subdir))}
 
     # create archive
-    if output_fd == -1 and not os.path.exists(BUG_DIR):
-        try:
-            os.makedirs(BUG_DIR)
-        except:
-            pass
+    if output_fd == -1:
+        if output_file is None:
+            dirname = BUG_DIR
+        else:
+            dirname = os.path.dirname(output_file)
+        if dirname and not os.path.exists(dirname):
+            try:
+                os.makedirs(dirname)
+            except:
+                pass
 
     if output_fd == -1:
         output_ts('Creating output file')
 
     if output_type.startswith('tar'):
-        make_tar(subdir, output_type, output_fd)
+        make_tar(subdir, output_type, output_fd, output_file)
     else:
-        make_zip(subdir)
+        make_zip(subdir, output_file)
 
     clean_tapdisk_logs()
 
@@ -774,7 +788,7 @@ def load_plugins(just_capabilities = False):
                     if label == '': label = None
                     cmd_output(dir, getText(el.childNodes), label)
 
-def make_tar(subdir, suffix, output_fd):
+def make_tar(subdir, suffix, output_fd, output_file):
     global SILENT_MODE, data
 
     mode = 'w'
@@ -782,9 +796,12 @@ def make_tar(subdir, suffix, output_fd):
         mode = 'w:bz2'
     elif suffix == 'tar.gz':
         mode = 'w:gz'
-    filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
 
     if output_fd == -1:
+        if output_file is None:
+            filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
+        else:
+            filename = output_file
         tf = tarfile.open(filename, mode)
     else:
         tf = tarfile.open(None, 'w', os.fdopen(output_fd, 'a'))
@@ -819,10 +836,13 @@ def make_tar(subdir, suffix, output_fd):
             print filename
 
 
-def make_zip(subdir):
+def make_zip(subdir, output_file):
     global SILENT_MODE, data
 
-    filename = "%s/%s.zip" % (BUG_DIR, subdir)
+    if output_file is None:
+        filename = "%s/%s.zip" % (BUG_DIR, subdir)
+    else:
+        filename = output_file
     zf = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
 
     try:
