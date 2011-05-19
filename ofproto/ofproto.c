@@ -64,7 +64,8 @@ COVERAGE_DEFINE(ofproto_update_port);
 static void ofport_destroy__(struct ofport *);
 static void ofport_destroy(struct ofport *);
 
-static int rule_create(struct ofproto *, const struct cls_rule *,
+static int rule_create(struct ofproto *,
+                       const struct cls_rule *, uint8_t table_id,
                        const union ofp_action *, size_t n_actions,
                        uint16_t idle_timeout, uint16_t hard_timeout,
                        ovs_be64 flow_cookie, bool send_flow_removed,
@@ -871,7 +872,7 @@ ofproto_add_flow(struct ofproto *p, const struct cls_rule *cls_rule,
                  const union ofp_action *actions, size_t n_actions)
 {
     struct rule *rule;
-    rule_create(p, cls_rule, actions, n_actions, 0, 0, 0, false, &rule);
+    rule_create(p, cls_rule, 0, actions, n_actions, 0, 0, 0, false, &rule);
 }
 
 /* Searches for a rule with matching criteria exactly equal to 'target' in
@@ -1222,7 +1223,8 @@ init_ports(struct ofproto *p)
  * flow table, and stores the new rule into '*rulep'.  Returns 0 on success,
  * otherwise a positive errno value or OpenFlow error code. */
 static int
-rule_create(struct ofproto *ofproto, const struct cls_rule *cls_rule,
+rule_create(struct ofproto *ofproto,
+            const struct cls_rule *cls_rule, uint8_t table_id,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout,
             ovs_be64 flow_cookie, bool send_flow_removed,
@@ -1230,6 +1232,20 @@ rule_create(struct ofproto *ofproto, const struct cls_rule *cls_rule,
 {
     struct rule *rule;
     int error;
+
+    if (table_id == 0xff) {
+        if (ofproto->n_tables > 1) {
+            error = ofproto->ofproto_class->rule_choose_table(ofproto,
+                                                              cls_rule,
+                                                              &table_id);
+            if (error) {
+                return error;
+            }
+            assert(table_id < ofproto->n_tables);
+        } else {
+            table_id = 0;
+        }
+    }
 
     rule = ofproto->ofproto_class->rule_alloc();
     if (!rule) {
@@ -1239,6 +1255,7 @@ rule_create(struct ofproto *ofproto, const struct cls_rule *cls_rule,
 
     rule->ofproto = ofproto;
     rule->cr = *cls_rule;
+    rule->table_id = table_id;
     rule->flow_cookie = flow_cookie;
     rule->created = time_msec();
     rule->idle_timeout = idle_timeout;
@@ -2209,7 +2226,7 @@ add_flow(struct ofconn *ofconn, struct flow_mod *fm)
     }
 
     buf_err = ofconn_pktbuf_retrieve(ofconn, fm->buffer_id, &packet, &in_port);
-    error = rule_create(p, &fm->cr, fm->actions, fm->n_actions,
+    error = rule_create(p, &fm->cr, fm->table_id, fm->actions, fm->n_actions,
                         fm->idle_timeout, fm->hard_timeout, fm->cookie,
                         fm->flags & OFPFF_SEND_FLOW_REM, &rule);
     if (error) {

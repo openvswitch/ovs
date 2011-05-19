@@ -506,6 +506,25 @@ struct ofproto_class {
 /* ## OpenFlow Rule Functions ## */
 /* ## ----------------------- ## */
 
+    /* Chooses an appropriate table for 'cls_rule' within 'ofproto'.  On
+     * success, stores the table ID into '*table_idp' and returns 0.  On
+     * failure, returns an OpenFlow error code (as returned by ofp_mkerr()).
+     *
+     * The choice of table should be a function of 'cls_rule' and 'ofproto''s
+     * datapath capabilities.  It should not depend on the flows already in
+     * 'ofproto''s flow tables.  Failure implies that an OpenFlow rule with
+     * 'cls_rule' as its matching condition can never be inserted into
+     * 'ofproto', even starting from an empty flow table.
+     *
+     * If multiple tables are candidates for inserting the flow, the function
+     * should choose one arbitrarily (but deterministically).
+     *
+     * This function will never be called for an ofproto that has only one
+     * table, so it may be NULL in that case. */
+    int (*rule_choose_table)(const struct ofproto *ofproto,
+                             const struct cls_rule *cls_rule,
+                             uint8_t *table_idp);
+
     /* Life-cycle functions for a "struct rule" (see "Life Cycle" above).
      *
      * ->rule_construct() should first check whether the rule is acceptable:

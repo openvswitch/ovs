@@ -3926,6 +3926,7 @@ const struct ofproto_class ofproto_dpif_class = {
     port_poll,
     port_poll_wait,
     port_is_lacp_current,
+    NULL,                       /* rule_choose_table */
     rule_alloc,
     rule_construct,
     rule_destruct,
