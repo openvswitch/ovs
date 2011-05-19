@@ -1678,7 +1678,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     ots = ofpbuf_put_zeros(msg, sizeof *ots * p->n_tables);
     for (i = 0; i < p->n_tables; i++) {
         ots[i].table_id = i;
-        sprintf(ots[i].name, "table%d", i);
+        sprintf(ots[i].name, "table%zu", i);
         ots[i].wildcards = htonl(OFPFW_ALL);
         ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
         ots[i].active_count = htonl(classifier_count(&p->tables[i]));
