@@ -268,6 +268,11 @@ int netdev_get_mtu(const struct vport *vport)
 /* Must be called with rcu_read_lock. */
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 {
+	if (unlikely(!vport)) {
+		kfree_skb(skb);
+		return;
+	}
+
 	/* Make our own copy of the packet.  Otherwise we will mangle the
 	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
 	 * (No one comes after us, since we tell handle_bridge() that we took
