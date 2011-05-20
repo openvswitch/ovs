@@ -1348,6 +1348,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0),
                                 &msg);
         ofputil_cls_rule_to_match(&fr->rule, &ofr->match);
+        ofr->cookie = fr->cookie;
         ofr->priority = htons(fr->rule.priority);
         ofr->reason = fr->reason;
         ofr->duration_sec = htonl(fr->duration_sec);
