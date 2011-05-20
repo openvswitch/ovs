@@ -1903,7 +1903,7 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
     reply = *replyp;
 
     nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
-    nfs->table_id = 0;
+    nfs->table_id = rule->table_id;
     nfs->pad = 0;
     calc_flow_duration(rule->created, &nfs->duration_sec, &nfs->duration_nsec);
     nfs->cookie = rule->flow_cookie;
