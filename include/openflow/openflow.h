@@ -706,7 +706,7 @@ enum ofp_stats_types {
     OFPST_FLOW,
 
     /* Aggregate flow statistics.
-     * The request body is struct ofp_aggregate_stats_request.
+     * The request body is struct ofp_flow_stats_request.
      * The reply body is struct ofp_aggregate_stats_reply. */
     OFPST_AGGREGATE,
 
@@ -759,7 +759,7 @@ struct ofp_desc_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
 
-/* Body for stats request of type OFPST_FLOW. */
+/* Body for stats request of type OFPST_FLOW or OFPST_AGGREGATE. */
 struct ofp_flow_stats_request {
     struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
@@ -791,18 +791,6 @@ struct ofp_flow_stats {
     struct ofp_action_header actions[0]; /* Actions. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
-
-/* Body for stats request of type OFPST_AGGREGATE. */
-struct ofp_aggregate_stats_request {
-    struct ofp_match match;   /* Fields to match. */
-    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
-                                 or 0xff for all tables. */
-    uint8_t pad;              /* Align to 32 bits. */
-    ovs_be16 out_port;        /* Require matching entries to include this
-                                 as an output port.  A value of OFPP_NONE
-                                 indicates no restriction. */
-};
-OFP_ASSERT(sizeof(struct ofp_aggregate_stats_request) == 44);
 
 /* Body of reply to OFPST_AGGREGATE request. */
 struct ofp_aggregate_stats_reply {

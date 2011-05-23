@@ -512,7 +512,7 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh,
 
         { OFPUTIL_OFPST_AGGREGATE_REQUEST,
           OFPST_AGGREGATE, "OFPST_AGGREGATE request",
-          OSM_SIZE + sizeof(struct ofp_aggregate_stats_request), 0 },
+          OSM_SIZE + sizeof(struct ofp_flow_stats_request), 0 },
 
         { OFPUTIL_OFPST_TABLE_REQUEST,
           OFPST_TABLE, "OFPST_TABLE request",
@@ -1098,9 +1098,6 @@ ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
     if (flow_format == NXFF_OPENFLOW10) {
         struct ofp_flow_stats_request *ofsr;
         int type;
-
-        BUILD_ASSERT_DECL(sizeof(struct ofp_flow_stats_request)
-                          == sizeof(struct ofp_aggregate_stats_request));
 
         type = fsr->aggregate ? OFPST_AGGREGATE : OFPST_FLOW;
         ofsr = ofputil_make_stats_request(sizeof *ofsr, type, &msg);

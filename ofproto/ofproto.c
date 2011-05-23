@@ -2066,7 +2066,7 @@ static int
 handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_header *oh)
 {
-    const struct ofp_aggregate_stats_request *request = ofputil_stats_body(oh);
+    const struct ofp_flow_stats_request *request = ofputil_stats_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofp_aggregate_stats_reply *reply;
     struct cls_rule target;
