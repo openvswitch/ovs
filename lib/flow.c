@@ -750,10 +750,13 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     }
     fields.vlan_tci = flow->vlan_tci & htons(VLAN_VID_MASK);
     fields.eth_type = flow->dl_type;
+
+    /* UDP source and destination port are not taken into account because they
+     * will not necessarily be symmetric in a bidirectional flow. */
     if (fields.eth_type == htons(ETH_TYPE_IP)) {
         fields.ipv4_addr = flow->nw_src ^ flow->nw_dst;
         fields.ip_proto = flow->nw_proto;
-        if (fields.ip_proto == IPPROTO_TCP || fields.ip_proto == IPPROTO_UDP) {
+        if (fields.ip_proto == IPPROTO_TCP) {
             fields.tp_addr = flow->tp_src ^ flow->tp_dst;
         }
     } else if (fields.eth_type == htons(ETH_TYPE_IPV6)) {
@@ -765,7 +768,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
             ipv6_addr[i] = a[i] ^ b[i];
         }
         fields.ip_proto = flow->nw_proto;
-        if (fields.ip_proto == IPPROTO_TCP || fields.ip_proto == IPPROTO_UDP) {
+        if (fields.ip_proto == IPPROTO_TCP) {
             fields.tp_addr = flow->tp_src ^ flow->tp_dst;
         }
     }
