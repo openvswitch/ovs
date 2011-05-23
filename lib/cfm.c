@@ -61,12 +61,12 @@ struct ccm {
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 struct cfm {
-    uint16_t mpid;
-    struct list list_node; /* Node in all_cfms list. */
+    char *name;                 /* Name of this CFM object. */
+    struct hmap_node hmap_node; /* Node in all_cfms list. */
 
+    uint16_t mpid;
     bool fault;            /* Indicates connectivity fault. */
     bool recv_fault;       /* Indicates an inability to receive CCMs. */
-    char *name;            /* Name of this CFM object. */
 
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
@@ -92,7 +92,7 @@ struct remote_mp {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-static struct list all_cfms = LIST_INITIALIZER(&all_cfms);
+static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
 static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
                              void *aux);
@@ -201,19 +201,18 @@ cfm_init(void)
     unixctl_command_register("cfm/show", cfm_unixctl_show, NULL);
 }
 
-/* Allocates a 'cfm' object.  This object should have its 'mpid', 'maid',
- * 'eth_src', and 'interval' filled out.  cfm_configure() should be called
- * whenever changes are made to 'cfm', and before cfm_run() is called for the
- * first time. */
+/* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
+ * cfm_configure() before use. */
 struct cfm *
-cfm_create(void)
+cfm_create(const char *name)
 {
     struct cfm *cfm;
 
     cfm = xzalloc(sizeof *cfm);
+    cfm->name = xstrdup(name);
     hmap_init(&cfm->remote_mps);
     cfm_generate_maid(cfm);
-    list_push_back(&all_cfms, &cfm->list_node);
+    hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
     return cfm;
 }
 
@@ -232,7 +231,8 @@ cfm_destroy(struct cfm *cfm)
     }
 
     hmap_destroy(&cfm->remote_mps);
-    list_remove(&cfm->list_node);
+    hmap_remove(&all_cfms, &cfm->hmap_node);
+    free(cfm->name);
     free(cfm);
 }
 
@@ -327,11 +327,6 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
 
     cfm->mpid = s->mpid;
     interval = ms_to_ccm_interval(s->interval);
-
-    if (!cfm->name || strcmp(s->name, cfm->name)) {
-        free(cfm->name);
-        cfm->name = xstrdup(s->name);
-    }
 
     if (interval != cfm->ccm_interval) {
         cfm->ccm_interval = interval;
@@ -456,8 +451,8 @@ cfm_find(const char *name)
 {
     struct cfm *cfm;
 
-    LIST_FOR_EACH (cfm, list_node, &all_cfms) {
-        if (cfm->name && !strcmp(cfm->name, name)) {
+    HMAP_FOR_EACH_WITH_HASH (cfm, hmap_node, hash_string(name, 0), &all_cfms) {
+        if (!strcmp(cfm->name, name)) {
             return cfm;
         }
     }

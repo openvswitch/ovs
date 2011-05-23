@@ -744,7 +744,7 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
         error = 0;
     } else {
         if (!ofport->cfm) {
-            ofport->cfm = cfm_create();
+            ofport->cfm = cfm_create(netdev_get_name(ofport->up.netdev));
         }
 
         if (cfm_configure(ofport->cfm, s)) {

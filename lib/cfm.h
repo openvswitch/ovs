@@ -27,14 +27,13 @@ struct ofpbuf;
 struct cfm_settings {
     uint16_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
-    const char *name;           /* Name of this CFM object. */
 
     const uint16_t *remote_mpids; /* Array of remote MPIDs */
     size_t n_remote_mpids;        /* Number of MPIDs in 'remote_mpids'. */
 };
 
 void cfm_init(void);
-struct cfm *cfm_create(void);
+struct cfm *cfm_create(const char *name);
 void cfm_destroy(struct cfm *);
 void cfm_run(struct cfm *);
 bool cfm_should_send_ccm(struct cfm *);

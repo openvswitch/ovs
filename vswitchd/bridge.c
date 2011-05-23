@@ -2493,7 +2493,6 @@ iface_configure_cfm(struct iface *iface)
         return;
     }
 
-    s.name = iface->name;
     s.mpid = *cfg->cfm_mpid;
     remote_mpid = *cfg->cfm_remote_mpid;
     s.remote_mpids = &remote_mpid;
