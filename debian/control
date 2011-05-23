@@ -6,7 +6,8 @@ Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
  libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
- python-support (>= 0.8.4), procps
+ python-support (>= 0.8.4), procps, python-qt4,
+ python-zopeinterface, python-twisted-conch
 Standards-Version: 3.9.1
 Homepage: http://openvswitch.org/
 
@@ -97,7 +98,21 @@ Description: Debug symbols for Open vSwitch packages
 Package: python-openvswitch
 Architecture: all
 Section: python
-Depends: ${python:Depends}, openvswitch-switch (= ${binary:Version})
+Depends: ${python:Depends}
 Provides: ${python:Provides}
 Description: Python bindings for Open vSwitch
  This package contains the full Python bindings for Open vSwitch database.
+
+Package: ovsdbmonitor
+Architecture: all
+Section: utils
+Depends: ${python:Depends}, python-openvswitch
+Provides: ${python:Provides}
+Description: Open vSwitch graphical monitoring tool
+ This package is a GUI tool for monitoring and troubleshooting local
+ or remote Open vSwitch installations.  It presents GUI tables that
+ graphically represent an Open vSwitch kernel flow table (similar to
+ "ovs-dpctl dump-flows") and Open vSwitch database contents (similar
+ to "ovs-vsctl list <table>").
+ .
+ Open vSwitch is a full-featured software-based Ethernet switch.

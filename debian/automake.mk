@@ -34,6 +34,8 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
+	debian/ovsdbmonitor.install \
+	debian/ovsdbmonitor.manpages \
 	debian/ovs-bugtool \
 	debian/ovs-bugtool.8 \
 	debian/ovs-monitor-ipsec \
