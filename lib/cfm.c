@@ -437,9 +437,9 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                          ETH_ADDR_ARGS(eth->eth_src));
         }
 
-        VLOG_DBG("%s: Received CCM (mpid %"PRIu16") (interval %"PRIu8")"
-                 " (RDI %s)", cfm->name, ccm_mpid, ccm_interval,
-                 ccm_rdi ? "true" : "false");
+        VLOG_DBG("%s: Received CCM (seq %"PRIu32") (mpid %"PRIu16")"
+                 " (interval %"PRIu8") (RDI %s)", cfm->name, ntohl(ccm->seq),
+                 ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
     }
 }
 
