@@ -536,8 +536,8 @@
           <p>Attempts to always assign a given flow to the same slave
             consistently.  In an effort to maintain stability, no load
             balancing is done.  Uses a similar hashing strategy to
-            <code>balance-tcp</code>, falling back to <code>balance-slb</code>
-            style hashing when LACP negotiations are unsuccessful.</p>
+            <code>balance-tcp</code>, always taking into account L3 and L4
+            fields even if LACP negotiations are unsuccessful. </p>
           <p>Slave selection decisions are made based on
             <code>bond-stable-id</code> if set.  Otherwise, OpenFlow port
             number is used.  Decisions are consistent across all ovs-vswitchd

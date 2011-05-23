@@ -1305,8 +1305,8 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
 static bool
 bond_is_tcp_hash(const struct bond *bond)
 {
-    return (bond->balance == BM_TCP || bond->balance == BM_STABLE)
-        && bond->lacp_negotiated;
+    return (bond->balance == BM_TCP && bond->lacp_negotiated)
+        || bond->balance == BM_STABLE;
 }
 
 static unsigned int
