@@ -252,18 +252,20 @@ cfm_run(struct cfm *cfm)
 
             if (rmp->fault) {
                 cfm->recv_fault = true;
-                VLOG_DBG("No CCM from RMP %"PRIu16" in the last %lldms",
-                         rmp->mpid, interval);
+                VLOG_DBG("%s: No CCM from RMP %"PRIu16" in the last %lldms",
+                         cfm->name, rmp->mpid, interval);
             } else if (rmp->rdi) {
                 cfm->fault = true;
-                VLOG_DBG("RDI bit flagged from RMP %"PRIu16, rmp->mpid);
+                VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu16, cfm->name,
+                         rmp->mpid);
             }
         }
 
         if (cfm->recv_fault) {
             cfm->fault = true;
         } else {
-            VLOG_DBG("All RMPs received CCMs in the last %lldms", interval);
+            VLOG_DBG("%s: All RMPs received CCMs in the last %lldms",
+                     cfm->name, interval);
         }
 
         timer_set_duration(&cfm->fault_timer, interval);
@@ -390,13 +392,14 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_LEN);
 
     if (!ccm) {
-        VLOG_INFO_RL(&rl, "Received an un-parseable 802.1ag CCM heartbeat.");
+        VLOG_INFO_RL(&rl, "%s: Received an unparseable 802.1ag CCM heartbeat.",
+                     cfm->name);
         return;
     }
 
     if (ccm->opcode != CCM_OPCODE) {
-        VLOG_INFO_RL(&rl, "Received an unsupported 802.1ag message. "
-                     "(opcode %u)", ccm->opcode);
+        VLOG_INFO_RL(&rl, "%s: Received an unsupported 802.1ag message. "
+                     "(opcode %u)", cfm->name, ccm->opcode);
         return;
     }
 
@@ -410,8 +413,8 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * bonds. Furthermore, faults can be maliciously triggered by crafting
      * invalid CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
-        VLOG_WARN_RL(&rl, "Received unexpected remote MAID from MAC "
-                     ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
+        VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
+                     ETH_ADDR_FMT, cfm->name, ETH_ADDR_ARGS(eth->eth_src));
     } else {
         ccm_mpid = ntohs(ccm->mpid);
         ccm_interval = ccm->flags & 0x7;
@@ -424,17 +427,19 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             rmp->rdi = ccm_rdi;
 
             if (ccm_interval != cfm->ccm_interval) {
-                VLOG_WARN_RL(&rl, "received a CCM with an invalid interval"
-                             " (%"PRIu8") from RMP %"PRIu16, ccm_interval,
-                             rmp->mpid);
+                VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
+                             " (%"PRIu8") from RMP %"PRIu16, cfm->name,
+                             ccm_interval, rmp->mpid);
             }
         } else {
-            VLOG_WARN_RL(&rl, "Received unexpected remote MPID %d from MAC "
-                         ETH_ADDR_FMT, ccm_mpid, ETH_ADDR_ARGS(eth->eth_src));
+            VLOG_WARN_RL(&rl, "%s: Received unexpected remote MPID %d from"
+                         " MAC " ETH_ADDR_FMT, cfm->name, ccm_mpid,
+                         ETH_ADDR_ARGS(eth->eth_src));
         }
 
-        VLOG_DBG("Received CCM (mpid %"PRIu16") (interval %"PRIu8") (RDI %s)",
-                 ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
+        VLOG_DBG("%s: Received CCM (mpid %"PRIu16") (interval %"PRIu8")"
+                 " (RDI %s)", cfm->name, ccm_mpid, ccm_interval,
+                 ccm_rdi ? "true" : "false");
     }
 }
 
