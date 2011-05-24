@@ -10,10 +10,25 @@ import sys
 
 argv0 = sys.argv[0]
 
-def printEdge(tableName, baseType, label):
+def printEdge(tableName, type, baseType, label):
     if baseType.ref_table:
+        if type.n_min == 0:
+            if type.n_max == 1:
+                arity = "?"
+            elif type.n_max == sys.maxint:
+                arity = "*"
+            else:
+                arity = "{,%d}" % type.n_max
+        elif type.n_min == 1:
+            if type.n_max == 1:
+                arity = ""
+            elif type.n_max == sys.maxint:
+                arity = "+"
+            else:
+                arity = "{1,%d}" % type.n_max
+
         options = {}
-        options['label'] = '"%s"' % label
+        options['label'] = '"%s%s"' % (label, arity)
         if baseType.ref_type == 'weak':
             options['constraint'] = 'false'
             options['style'] = 'dotted'
@@ -39,10 +54,10 @@ def schemaToDot(schemaFile):
             ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
         for columnName, column in table.columns.iteritems():
             if column.type.value:
-                printEdge(tableName, column.type.key, "%s key" % columnName)
-                printEdge(tableName, column.type.value, "%s value" % columnName)
+                printEdge(tableName, column.type, column.type.key, "%s key" % columnName)
+                printEdge(tableName, column.type, column.type.value, "%s value" % columnName)
             else:
-                printEdge(tableName, column.type.key, columnName)
+                printEdge(tableName, column.type, column.type.key, columnName)
     print "}";
 
 def usage():

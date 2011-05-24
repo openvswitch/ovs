@@ -293,7 +293,9 @@ The following diagram shows the relationship among tables in the
 database.  Each node represents a table.  Tables that are part of the
 ``root set'' are shown with double borders.  Each edge leads from the
 table that contains it and points to the table that its value
-represents.  Edges are labeled with their column names.  Thick lines
+represents.  Edges are labeled with their column names, followed by a
+constraint on the number of allowed values: \\fB?\\fR for zero or one,
+\\fB*\\fR for zero or more, \\fB+\\fR for one or more.  Thick lines
 represent strong references; thin lines represent weak references.
 .RS -1in
 """
