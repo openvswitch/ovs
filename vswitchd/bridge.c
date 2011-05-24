@@ -1252,30 +1252,25 @@ iface_refresh_lacp_stats(struct iface *iface)
 static void
 iface_refresh_stats(struct iface *iface)
 {
-    struct iface_stat {
-        char *name;
-        int offset;
-    };
-    static const struct iface_stat iface_stats[] = {
-        { "rx_packets", offsetof(struct netdev_stats, rx_packets) },
-        { "tx_packets", offsetof(struct netdev_stats, tx_packets) },
-        { "rx_bytes", offsetof(struct netdev_stats, rx_bytes) },
-        { "tx_bytes", offsetof(struct netdev_stats, tx_bytes) },
-        { "rx_dropped", offsetof(struct netdev_stats, rx_dropped) },
-        { "tx_dropped", offsetof(struct netdev_stats, tx_dropped) },
-        { "rx_errors", offsetof(struct netdev_stats, rx_errors) },
-        { "tx_errors", offsetof(struct netdev_stats, tx_errors) },
-        { "rx_frame_err", offsetof(struct netdev_stats, rx_frame_errors) },
-        { "rx_over_err", offsetof(struct netdev_stats, rx_over_errors) },
-        { "rx_crc_err", offsetof(struct netdev_stats, rx_crc_errors) },
-        { "collisions", offsetof(struct netdev_stats, collisions) },
-    };
-    enum { N_STATS = ARRAY_SIZE(iface_stats) };
-    const struct iface_stat *s;
+#define IFACE_STATS                             \
+    IFACE_STAT(rx_packets,      "rx_packets")   \
+    IFACE_STAT(tx_packets,      "tx_packets")   \
+    IFACE_STAT(rx_bytes,        "rx_bytes")     \
+    IFACE_STAT(tx_bytes,        "tx_bytes")     \
+    IFACE_STAT(rx_dropped,      "rx_dropped")   \
+    IFACE_STAT(tx_dropped,      "tx_dropped")   \
+    IFACE_STAT(rx_errors,       "rx_errors")    \
+    IFACE_STAT(tx_errors,       "tx_errors")    \
+    IFACE_STAT(rx_frame_errors, "rx_frame_err") \
+    IFACE_STAT(rx_over_errors,  "rx_over_err")  \
+    IFACE_STAT(rx_crc_errors,   "rx_crc_err")   \
+    IFACE_STAT(collisions,      "collisions")
 
-    char *keys[N_STATS];
-    int64_t values[N_STATS];
-    int n;
+#define IFACE_STAT(MEMBER, NAME) NAME,
+    static char *keys[] = { IFACE_STATS };
+#undef IFACE_STAT
+    int64_t values[ARRAY_SIZE(keys)];
+    int i;
 
     struct netdev_stats stats;
 
@@ -1287,17 +1282,15 @@ iface_refresh_stats(struct iface *iface)
      * all-1s, and we will deal with that correctly below. */
     netdev_get_stats(iface->netdev, &stats);
 
-    n = 0;
-    for (s = iface_stats; s < &iface_stats[N_STATS]; s++) {
-        uint64_t value = *(uint64_t *) (((char *) &stats) + s->offset);
-        if (value != UINT64_MAX) {
-            keys[n] = s->name;
-            values[n] = value;
-            n++;
-        }
-    }
+    /* Copy statistics into values[] array. */
+    i = 0;
+#define IFACE_STAT(MEMBER, NAME) values[i++] = stats.MEMBER;
+    IFACE_STATS;
+#undef IFACE_STAT
+    assert(i == ARRAY_SIZE(keys));
 
-    ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
+    ovsrec_interface_set_statistics(iface->cfg, keys, values, ARRAY_SIZE(keys));
+#undef IFACE_STATS
 }
 
 static void
