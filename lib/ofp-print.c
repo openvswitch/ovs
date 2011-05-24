@@ -1151,7 +1151,9 @@ static void
 ofp_print_nxst_aggregate_reply(struct ds *string,
                                const struct nx_aggregate_stats_reply *nasr)
 {
-    ofp_print_ofp_aggregate_stats_reply(string, &nasr->asr);
+    ds_put_format(string, " packet_count=%"PRIu64, ntohll(nasr->packet_count));
+    ds_put_format(string, " byte_count=%"PRIu64, ntohll(nasr->byte_count));
+    ds_put_format(string, " flow_count=%"PRIu32, ntohl(nasr->flow_count));
 }
 
 static void print_port_stat(struct ds *string, const char *leader,

@@ -1307,14 +1307,13 @@ struct nx_aggregate_stats_request {
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 32);
 
 /* Body for nicira_stats_msg reply of type NXST_AGGREGATE (analogous to
- * OFPST_AGGREGATE reply).
- *
- * ofp_aggregate_stats_reply does not contain an ofp_match structure, so we
- * reuse it entirely.  (It would be very odd to use OFPST_AGGREGATE to reply to
- * an NXST_AGGREGATE request, so we don't do that.) */
+ * OFPST_AGGREGATE reply). */
 struct nx_aggregate_stats_reply {
     struct nicira_stats_msg nsm;
-    struct ofp_aggregate_stats_reply asr;
+    ovs_be64 packet_count;         /* Number of packets in flows. */
+    ovs_be64 byte_count;           /* Number of bytes in flows. */
+    ovs_be32 flow_count;           /* Number of flows. */
+    uint8_t pad[4];                /* Align to 64 bits. */
 };
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
 

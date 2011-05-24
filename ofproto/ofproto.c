@@ -2027,7 +2027,8 @@ ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
 static void
 query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
                       ovs_be16 out_port, uint8_t table_id,
-                      struct ofp_aggregate_stats_reply *oasr)
+                      uint64_t *total_packetsp, uint64_t *total_bytesp,
+                      uint32_t *n_flowsp)
 {
     uint64_t total_packets = 0;
     uint64_t total_bytes = 0;
@@ -2056,10 +2057,9 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
         }
     }
 
-    oasr->flow_count = htonl(n_flows);
-    put_32aligned_be64(&oasr->packet_count, htonll(total_packets));
-    put_32aligned_be64(&oasr->byte_count, htonll(total_bytes));
-    memset(oasr->pad, 0, sizeof oasr->pad);
+    *total_packetsp = total_packets;
+    *total_bytesp = total_bytes;
+    *n_flowsp = n_flows;
 }
 
 static int
@@ -2069,31 +2069,44 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     const struct ofp_flow_stats_request *request = ofputil_stats_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofp_aggregate_stats_reply *reply;
+    uint64_t total_packets, total_bytes;
     struct cls_rule target;
     struct ofpbuf *msg;
+    uint32_t n_flows;
 
     ofputil_cls_rule_from_match(&request->match, 0, &target);
 
     msg = start_ofp_stats_reply(oh, sizeof *reply);
     reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
     query_aggregate_stats(ofproto, &target, request->out_port,
-                          request->table_id, reply);
+                          request->table_id,
+                          &total_packets, &total_bytes, &n_flows);
+
+    reply->flow_count = htonl(n_flows);
+    put_32aligned_be64(&reply->packet_count, htonll(total_packets));
+    put_32aligned_be64(&reply->byte_count, htonll(total_bytes));
+    memset(reply->pad, 0, sizeof reply->pad);
+
     ofconn_send_reply(ofconn, msg);
+
     return 0;
 }
 
 static int
-handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_nxst_aggregate(struct ofconn *ofconn,
+                      const struct nx_aggregate_stats_request *nasr)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct nx_aggregate_stats_request *request;
-    struct ofp_aggregate_stats_reply *reply;
+    struct nx_aggregate_stats_reply *reply;
+    uint64_t total_packets, total_bytes;
     struct cls_rule target;
     struct ofpbuf b;
     struct ofpbuf *buf;
+    uint32_t n_flows;
     int error;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpbuf_use_const(&b, nasr, ntohs(nasr->nsm.header.length));
 
     /* Dissect the message. */
     request = ofpbuf_pull(&b, sizeof *request);
@@ -2105,12 +2118,19 @@ handle_nxst_aggregate(struct ofconn *ofconn, const struct ofp_header *oh)
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
+    /* Count statistics. */
+    query_aggregate_stats(ofproto, &target, request->out_port,
+                          request->table_id,
+                          &total_packets, &total_bytes, &n_flows);
+
     /* Reply. */
     COVERAGE_INC(ofproto_flows_req);
     buf = start_nxstats_reply(&request->nsm, sizeof *reply);
     reply = ofpbuf_put_uninit(buf, sizeof *reply);
-    query_aggregate_stats(ofproto, &target, request->out_port,
-                          request->table_id, reply);
+    reply->flow_count = htonl(n_flows);
+    reply->packet_count = htonll(total_packets);
+    reply->byte_count = htonll(total_bytes);
+    memset(reply->pad, 0, sizeof reply->pad);
     ofconn_send_reply(ofconn, buf);
 
     return 0;
@@ -2710,7 +2730,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_nxst_flow(ofconn, oh);
 
     case OFPUTIL_NXST_AGGREGATE_REQUEST:
-        return handle_nxst_aggregate(ofconn, oh);
+        return handle_nxst_aggregate(ofconn, msg->data);
 
     case OFPUTIL_INVALID:
     case OFPUTIL_OFPT_HELLO:
