@@ -140,8 +140,9 @@ main(void)
     int i;
 
     for (tc = test_cases; tc < &test_cases[ARRAY_SIZE(test_cases)]; tc++) {
-        const ovs_be16 *data16 = (OVS_FORCE const ovs_be16 *) tc->data;
-        const ovs_be32 *data32 = (OVS_FORCE const ovs_be32 *) tc->data;
+        const void *data = tc->data;
+        const ovs_be16 *data16 = (OVS_FORCE const ovs_be16 *) data;
+        const ovs_be32 *data32 = (OVS_FORCE const ovs_be32 *) data;
         uint32_t partial;
 
         /* Test csum(). */
