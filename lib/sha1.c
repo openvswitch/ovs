@@ -33,6 +33,7 @@
 #include "sha1.h"
 #include <ctype.h>
 #include <string.h>
+#include "compiler.h"
 #include "util.h"
 
 /* a bit faster & bigger, if defined */
@@ -150,12 +151,12 @@ sha_transform(struct sha1_ctx *sha_info)
 
 /* 'count' is the number of bytes to do an endian flip. */
 static void
-maybe_byte_reverse(uint32_t *buffer, int count)
+maybe_byte_reverse(uint32_t *buffer OVS_UNUSED, int count OVS_UNUSED)
 {
+#if !WORDS_BIGENDIAN
     int i;
     uint8_t ct[4], *cp;
 
-#if !WORDS_BIGENDIAN
 	count /= sizeof(uint32_t);
 	cp = (uint8_t *) buffer;
 	for (i = 0; i < count; i++) {
