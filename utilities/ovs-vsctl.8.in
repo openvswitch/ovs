@@ -153,6 +153,9 @@ Any successful \fBovs\-vsctl\fR command automatically initializes the
 Open vSwitch database if it is empty.  This command is provided to
 initialize the database without executing any other command.
 .
+.IP "\fBshow\fR"
+Prints a brief overview of the database contents.
+.
 .IP "\fBemer\-reset\fR"
 Reset the configuration into a clean state.  It deconfigures OpenFlow
 controllers, OVSDB servers, and SSL, and deletes port mirroring,

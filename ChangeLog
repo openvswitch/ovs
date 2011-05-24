@@ -2,6 +2,8 @@ post v1.1.0
 ------------------------
     - The new "-s" option for "ovs-dpctl show" prints packet and byte
       counters for each port.
+    - ovs-vsctl:
+      - New "show" command to print an overview of configuration.
     - Feature removals:
       - Dropped support for "tun_id_from_cookie" OpenFlow extension.
 	(Use the extensible match extensions instead.)
