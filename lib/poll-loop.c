@@ -146,23 +146,65 @@ poll_immediate_wake(const char *where)
     poll_timer_wait(0, where);
 }
 
-static void PRINTF_FORMAT(2, 3)
-log_wakeup(const char *where, const char *format, ...)
+/* Logs, if appropriate, that the poll loop was awakened by an event
+ * registered at 'where' (typically a source file and line number).  The other
+ * arguments have two possible interpretations:
+ *
+ *   - If 'pollfd' is nonnull then it should be the "struct pollfd" that caused
+ *     the wakeup.  In this case, 'timeout' is ignored.
+ *
+ *   - If 'pollfd' is nonnull then 'timeout' is the number of milliseconds
+ *     after which the poll loop woke up.
+ */
+static void
+log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 {
-    struct ds ds;
-    va_list args;
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(120, 120);
+    enum vlog_level level;
+    int cpu_usage;
+    struct ds s;
 
-    ds_init(&ds);
-    va_start(args, format);
-    ds_put_format_valist(&ds, format, args);
-    va_end(args);
-
-    if (where) {
-        ds_put_format(&ds, " at %s", where);
+    cpu_usage = get_cpu_usage();
+    if (VLOG_IS_DBG_ENABLED()) {
+        level = VLL_DBG;
+    } else if (cpu_usage > 50 && !VLOG_DROP_WARN(&rl)) {
+        level = VLL_WARN;
+    } else {
+        return;
     }
 
-    VLOG_DBG("%s", ds_cstr(&ds));
-    ds_destroy(&ds);
+    ds_init(&s);
+    ds_put_cstr(&s, "wakeup due to ");
+    if (pollfd) {
+        char *description = describe_fd(pollfd->fd);
+        if (pollfd->revents & POLLIN) {
+            ds_put_cstr(&s, "[POLLIN]");
+        }
+        if (pollfd->revents & POLLOUT) {
+            ds_put_cstr(&s, "[POLLOUT]");
+        }
+        if (pollfd->revents & POLLERR) {
+            ds_put_cstr(&s, "[POLLERR]");
+        }
+        if (pollfd->revents & POLLHUP) {
+            ds_put_cstr(&s, "[POLLHUP]");
+        }
+        if (pollfd->revents & POLLNVAL) {
+            ds_put_cstr(&s, "[POLLNVAL]");
+        }
+        ds_put_format(&s, " on fd %d (%s)", pollfd->fd, description);
+        free(description);
+    } else {
+        ds_put_format(&s, "%d-ms timeout", timeout);
+    }
+    if (where) {
+        ds_put_format(&s, " at %s", where);
+    }
+    if (cpu_usage >= 0) {
+        ds_put_format(&s, " (%d%% CPU usage)", cpu_usage);
+    }
+    VLOG(level, "%s", ds_cstr(&s));
+    ds_destroy(&s);
 }
 
 /* Blocks until one or more of the events registered with poll_fd_wait()
@@ -203,21 +245,13 @@ poll_block(void)
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "poll: %s", strerror(-retval));
-    } else if (!retval && VLOG_IS_DBG_ENABLED()) {
-        log_wakeup(timeout_where, "%d-ms timeout", timeout);
+    } else if (!retval) {
+        log_wakeup(timeout_where, NULL, timeout);
     }
 
     LIST_FOR_EACH_SAFE (pw, next, node, &waiters) {
-        if (pw->pollfd->revents && VLOG_IS_DBG_ENABLED()) {
-            char *description = describe_fd(pw->fd);
-            log_wakeup(pw->where, "%s%s%s%s%s on fd %d (%s)",
-                       pw->pollfd->revents & POLLIN ? "[POLLIN]" : "",
-                       pw->pollfd->revents & POLLOUT ? "[POLLOUT]" : "",
-                       pw->pollfd->revents & POLLERR ? "[POLLERR]" : "",
-                       pw->pollfd->revents & POLLHUP ? "[POLLHUP]" : "",
-                       pw->pollfd->revents & POLLNVAL ? "[POLLNVAL]" : "",
-                       pw->fd, description);
-            free(description);
+        if (pw->pollfd->revents) {
+            log_wakeup(pw->where, pw->pollfd, 0);
         }
         poll_cancel(pw);
     }

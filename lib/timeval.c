@@ -59,8 +59,9 @@ static void refresh_monotonic_if_ticked(void);
 static time_t time_add(time_t, time_t);
 static void block_sigalrm(sigset_t *);
 static void unblock_sigalrm(const sigset_t *);
-static void log_poll_interval(long long int last_wakeup,
-                              const struct rusage *last_rusage);
+static void log_poll_interval(long long int last_wakeup);
+static struct rusage *get_recent_rusage(void);
+static void refresh_rusage(void);
 
 /* Initializes the timetracking module.
  *
@@ -280,14 +281,13 @@ int
 time_poll(struct pollfd *pollfds, int n_pollfds, int timeout)
 {
     static long long int last_wakeup;
-    static struct rusage last_rusage;
     long long int start;
     sigset_t oldsigs;
     bool blocked;
     int retval;
 
     time_refresh();
-    log_poll_interval(last_wakeup, &last_rusage);
+    log_poll_interval(last_wakeup);
     coverage_clear();
     start = time_msec();
     blocked = false;
@@ -318,7 +318,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, int timeout)
         unblock_sigalrm(&oldsigs);
     }
     last_wakeup = time_msec();
-    getrusage(RUSAGE_SELF, &last_rusage);
+    refresh_rusage();
     return retval;
 }
 
@@ -399,7 +399,7 @@ timeval_diff_msec(const struct timeval *a, const struct timeval *b)
 }
 
 static void
-log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
+log_poll_interval(long long int last_wakeup)
 {
     static unsigned int mean_interval; /* In 16ths of a millisecond. */
     static unsigned int n_samples;
@@ -415,6 +415,7 @@ log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
     /* Warn if we took too much time between polls: at least 50 ms and at least
      * 8X the mean interval. */
     if (n_samples > 10 && interval > mean_interval * 8 && interval > 50 * 16) {
+        const struct rusage *last_rusage = get_recent_rusage();
         struct rusage rusage;
 
         getrusage(RUSAGE_SELF, &rusage);
@@ -459,4 +460,56 @@ log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
     } else {
         mean_interval = interval;
     }
+}
+
+/* CPU usage tracking. */
+
+struct cpu_usage {
+    long long int when;         /* Time that this sample was taken. */
+    unsigned long long int cpu; /* Total user+system CPU usage when sampled. */
+};
+
+static struct rusage recent_rusage;
+static struct cpu_usage older = { LLONG_MIN, 0 };
+static struct cpu_usage newer = { LLONG_MIN, 0 };
+static int cpu_usage = -1;
+
+static struct rusage *
+get_recent_rusage(void)
+{
+    return &recent_rusage;
+}
+
+static void
+refresh_rusage(void)
+{
+    long long int now;
+
+    now = time_msec();
+    getrusage(RUSAGE_SELF, &recent_rusage);
+
+    if (now >= newer.when + 3 * 1000) {
+        older = newer;
+        newer.when = now;
+        newer.cpu = (timeval_to_msec(&recent_rusage.ru_utime) +
+                     timeval_to_msec(&recent_rusage.ru_stime));
+
+        if (older.when != LLONG_MIN && newer.cpu > older.cpu) {
+            unsigned int dividend = newer.cpu - older.cpu;
+            unsigned int divisor = (newer.when - older.when) / 100;
+            cpu_usage = divisor > 0 ? dividend / divisor : -1;
+        } else {
+            cpu_usage = -1;
+        }
+    }
+}
+
+/* Returns an estimate of this process's CPU usage, as a percentage, over the
+ * past few seconds of wall-clock time.  Returns -1 if no estimate is available
+ * (which will happen if the process has not been running long enough to have
+ * an estimate, and can happen for other reasons as well). */
+int
+get_cpu_usage(void)
+{
+    return cpu_usage;
 }

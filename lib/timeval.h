@@ -62,6 +62,8 @@ long long int timeval_to_msec(const struct timeval *);
 
 void xgettimeofday(struct timeval *);
 
+int get_cpu_usage(void);
+
 #ifdef  __cplusplus
 }
 #endif
