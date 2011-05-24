@@ -1545,19 +1545,19 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
 {
     if (cfm_should_process_flow(flow)) {
         struct ofport_dpif *ofport = get_ofp_port(ofproto, flow->in_port);
-        if (ofport && ofport->cfm) {
+        if (packet && ofport && ofport->cfm) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }
         return true;
     } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
         struct ofport_dpif *port = get_ofp_port(ofproto, flow->in_port);
-        if (port && port->bundle && port->bundle->lacp) {
+        if (packet && port && port->bundle && port->bundle->lacp) {
             const struct lacp_pdu *pdu = parse_lacp_packet(packet);
             if (pdu) {
                 lacp_process_pdu(port->bundle->lacp, port, pdu);
             }
-            return true;
         }
+        return true;
     }
     return false;
 }
