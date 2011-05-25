@@ -401,7 +401,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             port_configure(port);
 
-            HMAP_FOR_EACH (iface, ofp_port_node, &br->ifaces) {
+            LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
                 iface_set_mac(iface);
