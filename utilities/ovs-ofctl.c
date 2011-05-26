@@ -262,8 +262,8 @@ open_vconn(const char *name, struct vconn **vconnp)
 static void *
 alloc_stats_request(size_t body_len, uint16_t type, struct ofpbuf **bufferp)
 {
-    struct ofp_stats_request *rq;
-    rq = make_openflow((offsetof(struct ofp_stats_request, body)
+    struct ofp_stats_msg *rq;
+    rq = make_openflow((offsetof(struct ofp_stats_msg, body)
                         + body_len), OFPT_STATS_REQUEST, bufferp);
     rq->type = htons(type);
     rq->flags = htons(0);
@@ -314,12 +314,12 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            struct ofp_stats_reply *osr;
+            struct ofp_stats_msg *osm;
 
             ofp_print(stdout, reply->data, reply->size, verbosity + 1);
 
-            osr = ofpbuf_at(reply, 0, sizeof *osr);
-            done = !osr || !(ntohs(osr->flags) & OFPSF_REPLY_MORE);
+            osm = ofpbuf_at(reply, 0, sizeof *osm);
+            done = !osm || !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
         } else {
             VLOG_DBG("received reply with xid %08"PRIx32" "
                      "!= expected %08"PRIx32, recv_xid, send_xid);
@@ -1089,7 +1089,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
             const struct ofputil_msg_type *type;
-            const struct ofp_stats_reply *osr;
+            const struct ofp_stats_msg *osm;
             enum ofputil_msg_code code;
 
             ofputil_decode_msg_type(reply->data, &type);
@@ -1101,8 +1101,8 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
                                         verbosity + 1));
             }
 
-            osr = reply->data;
-            if (!(osr->flags & htons(OFPSF_REPLY_MORE))) {
+            osm = reply->data;
+            if (!(osm->flags & htons(OFPSF_REPLY_MORE))) {
                 done = true;
             }
 

@@ -29,7 +29,7 @@ struct ofpbuf;
 struct ofp_action_header;
 struct ofp_header;
 struct ofp_match;
-struct ofp_stats_reply;
+struct ofp_stats_msg;
 struct pvconn;
 struct vconn;
 

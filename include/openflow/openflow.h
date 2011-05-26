@@ -630,9 +630,9 @@ enum ofp_hello_failed_code {
 enum ofp_bad_request_code {
     OFPBRC_BAD_VERSION,         /* ofp_header.version not supported. */
     OFPBRC_BAD_TYPE,            /* ofp_header.type not supported. */
-    OFPBRC_BAD_STAT,            /* ofp_stats_request.type not supported. */
+    OFPBRC_BAD_STAT,            /* ofp_stats_msg.type not supported. */
     OFPBRC_BAD_VENDOR,          /* Vendor not supported (in ofp_vendor_header
-                                 * or ofp_stats_request or ofp_stats_reply). */
+                                 * or ofp_stats_msg). */
     OFPBRC_BAD_SUBTYPE,         /* Vendor subtype not supported. */
     OFPBRC_EPERM,               /* Permissions error. */
     OFPBRC_BAD_LEN,             /* Wrong request length for type. */
@@ -732,25 +732,19 @@ enum ofp_stats_types {
     OFPST_VENDOR = 0xffff
 };
 
-struct ofp_stats_request {
+/* Statistics request or reply message. */
+struct ofp_stats_msg {
     struct ofp_header header;
     ovs_be16 type;              /* One of the OFPST_* constants. */
-    ovs_be16 flags;             /* OFPSF_REQ_* flags (none yet defined). */
+    ovs_be16 flags;             /* Requests: always 0.
+                                 * Replies: 0 or OFPSF_REPLY_MORE. */
     uint8_t body[0];            /* Body of the request. */
 };
-OFP_ASSERT(sizeof(struct ofp_stats_request) == 12);
+OFP_ASSERT(sizeof(struct ofp_stats_msg) == 12);
 
 enum ofp_stats_reply_flags {
     OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow. */
 };
-
-struct ofp_stats_reply {
-    struct ofp_header header;
-    ovs_be16 type;              /* One of the OFPST_* constants. */
-    ovs_be16 flags;             /* OFPSF_REPLY_* flags. */
-    uint8_t body[0];            /* Body of the reply. */
-};
-OFP_ASSERT(sizeof(struct ofp_stats_reply) == 12);
 
 #define DESC_STR_LEN   256
 #define SERIAL_NUM_LEN 32
@@ -766,7 +760,7 @@ struct ofp_desc_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
 
-/* Body for ofp_stats_request of type OFPST_FLOW. */
+/* Body for stats request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {
     struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
@@ -799,7 +793,7 @@ struct ofp_flow_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
 
-/* Body for ofp_stats_request of type OFPST_AGGREGATE. */
+/* Body for stats request of type OFPST_AGGREGATE. */
 struct ofp_aggregate_stats_request {
     struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
@@ -835,7 +829,7 @@ struct ofp_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
-/* Body for ofp_stats_request of type OFPST_PORT. */
+/* Body for stats request of type OFPST_PORT. */
 struct ofp_port_stats_request {
     ovs_be16 port_no;        /* OFPST_PORT message may request statistics
                                 for a single port (specified with port_no)
@@ -871,7 +865,7 @@ OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 /* All ones is used to indicate all queues in a port (for stats retrieval). */
 #define OFPQ_ALL      0xffffffff
 
-/* Body for ofp_stats_request of type OFPST_QUEUE. */
+/* Body for stats request of type OFPST_QUEUE. */
 struct ofp_queue_stats_request {
     ovs_be16 port_no;        /* All ports if OFPP_ALL. */
     uint8_t pad[2];          /* Align to 32-bits. */
@@ -879,7 +873,7 @@ struct ofp_queue_stats_request {
 };
 OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 8);
 
-/* Body for ofp_stats_reply of type OFPST_QUEUE consists of an array of this
+/* Body for stats reply of type OFPST_QUEUE consists of an array of this
  * structure type. */
 struct ofp_queue_stats {
     ovs_be16 port_no;

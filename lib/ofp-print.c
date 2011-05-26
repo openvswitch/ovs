@@ -1287,8 +1287,7 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
 static void
 ofp_print_stats_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_stats_request *srq
-        = (const struct ofp_stats_request *) oh;
+    const struct ofp_stats_msg *srq = (const struct ofp_stats_msg *) oh;
 
     if (srq->flags) {
         ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***",
@@ -1299,7 +1298,7 @@ ofp_print_stats_request(struct ds *string, const struct ofp_header *oh)
 static void
 ofp_print_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_stats_reply *srp = (const struct ofp_stats_reply *) oh;
+    const struct ofp_stats_msg *srp = (const struct ofp_stats_msg *) oh;
 
     if (srp->flags) {
         uint16_t flags = ntohs(srp->flags);

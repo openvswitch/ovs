@@ -1585,22 +1585,21 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 static struct ofpbuf *
 make_ofp_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
 {
-    struct ofp_stats_reply *osr;
+    struct ofp_stats_msg *reply;
     struct ofpbuf *msg;
 
-    msg = ofpbuf_new(MIN(sizeof *osr + body_len, UINT16_MAX));
-    osr = put_openflow_xid(sizeof *osr, OFPT_STATS_REPLY, xid, msg);
-    osr->type = type;
-    osr->flags = htons(0);
+    msg = ofpbuf_new(MIN(sizeof *reply + body_len, UINT16_MAX));
+    reply = put_openflow_xid(sizeof *reply, OFPT_STATS_REPLY, xid, msg);
+    reply->type = type;
+    reply->flags = htons(0);
     return msg;
 }
 
 static struct ofpbuf *
 start_ofp_stats_reply(const struct ofp_header *request, size_t body_len)
 {
-    const struct ofp_stats_request *osr
-        = (const struct ofp_stats_request *) request;
-    return make_ofp_stats_reply(osr->header.xid, osr->type, body_len);
+    const struct ofp_stats_msg *osm = (const struct ofp_stats_msg *) request;
+    return make_ofp_stats_reply(osm->header.xid, osm->type, body_len);
 }
 
 static void *
@@ -1608,9 +1607,9 @@ append_ofp_stats_reply(size_t nbytes, struct ofconn *ofconn,
                        struct ofpbuf **msgp)
 {
     struct ofpbuf *msg = *msgp;
-    assert(nbytes <= UINT16_MAX - sizeof(struct ofp_stats_reply));
+    assert(nbytes <= UINT16_MAX - sizeof(struct ofp_stats_msg));
     if (nbytes + msg->size > UINT16_MAX) {
-        struct ofp_stats_reply *reply = msg->data;
+        struct ofp_stats_msg *reply = msg->data;
         reply->flags = htons(OFPSF_REPLY_MORE);
         *msgp = make_ofp_stats_reply(reply->header.xid, reply->type, nbytes);
         ofconn_send_reply(ofconn, msg);
