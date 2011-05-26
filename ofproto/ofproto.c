@@ -259,7 +259,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->sw_desc = xstrdup(DEFAULT_SW_DESC);
     ofproto->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
     ofproto->dp_desc = xstrdup(DEFAULT_DP_DESC);
-    ofproto->netdev_monitor = netdev_monitor_create();
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
     ofproto->tables = NULL;
@@ -587,7 +586,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->sw_desc);
     free(ofproto->serial_desc);
     free(ofproto->dp_desc);
-    netdev_monitor_destroy(ofproto->netdev_monitor);
     hmap_destroy(&ofproto->ports);
     shash_destroy(&ofproto->port_by_name);
 
@@ -646,6 +644,7 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
 int
 ofproto_run(struct ofproto *p)
 {
+    struct ofport *ofport;
     char *devname;
     int error;
 
@@ -665,9 +664,13 @@ ofproto_run(struct ofproto *p)
             process_port_change(p, error, devname);
         }
     }
-    while ((error = netdev_monitor_poll(p->netdev_monitor,
-                                        &devname)) != EAGAIN) {
-        process_port_change(p, error, devname);
+
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        unsigned int change_seq = netdev_change_seq(ofport->netdev);
+        if (ofport->change_seq != change_seq) {
+            ofport->change_seq = change_seq;
+            update_port(p, netdev_get_name(ofport->netdev));
+        }
     }
 
     connmgr_run(p->connmgr, handle_openflow);
@@ -678,11 +681,18 @@ ofproto_run(struct ofproto *p)
 void
 ofproto_wait(struct ofproto *p)
 {
+    struct ofport *ofport;
+
     p->ofproto_class->wait(p);
     if (p->ofproto_class->port_poll_wait) {
         p->ofproto_class->port_poll_wait(p);
     }
-    netdev_monitor_poll_wait(p->netdev_monitor);
+
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        if (ofport->change_seq != netdev_change_seq(ofport->netdev)) {
+            poll_immediate_wake();
+        }
+    }
     connmgr_wait(p->connmgr);
 }
 
@@ -1021,11 +1031,11 @@ ofport_install(struct ofproto *p,
     }
     ofport->ofproto = p;
     ofport->netdev = netdev;
+    ofport->change_seq = netdev_change_seq(netdev);
     ofport->opp = *opp;
     ofport->ofp_port = ntohs(opp->port_no);
 
     /* Add port to 'p'. */
-    netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->ofp_port, 0));
     shash_add(&p->port_by_name, netdev_name, ofport);
 
@@ -1106,7 +1116,6 @@ ofport_destroy__(struct ofport *port)
     struct ofproto *ofproto = port->ofproto;
     const char *name = netdev_get_name(port->netdev);
 
-    netdev_monitor_remove(ofproto->netdev_monitor, port->netdev);
     hmap_remove(&ofproto->ports, &port->hmap_node);
     shash_delete(&ofproto->port_by_name,
                  shash_find(&ofproto->port_by_name, name));
@@ -1165,9 +1174,8 @@ update_port(struct ofproto *ofproto, const char *name)
             /* Install the newly opened netdev in case it has changed.
              * Don't close the old netdev yet in case port_modified has to
              * remove a retained reference to it.*/
-            netdev_monitor_remove(ofproto->netdev_monitor, port->netdev);
-            netdev_monitor_add(ofproto->netdev_monitor, netdev);
             port->netdev = netdev;
+            port->change_seq = netdev_change_seq(netdev);
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);

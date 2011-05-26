@@ -45,7 +45,6 @@ struct ofproto {
     char *dp_desc;              /* Datapath description. */
 
     /* Datapath. */
-    struct netdev_monitor *netdev_monitor;
     struct hmap ports;          /* Contains "struct ofport"s. */
     struct shash port_by_name;
 
@@ -70,6 +69,7 @@ struct ofport {
     struct netdev *netdev;
     struct ofp_phy_port opp;
     uint16_t ofp_port;          /* OpenFlow port number. */
+    unsigned int change_seq;
 };
 
 /* An OpenFlow flow within a "struct ofproto".
