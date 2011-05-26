@@ -738,7 +738,6 @@ struct ofp_stats_msg {
     ovs_be16 type;              /* One of the OFPST_* constants. */
     ovs_be16 flags;             /* Requests: always 0.
                                  * Replies: 0 or OFPSF_REPLY_MORE. */
-    uint8_t body[0];            /* Body of the request. */
 };
 OFP_ASSERT(sizeof(struct ofp_stats_msg) == 12);
 

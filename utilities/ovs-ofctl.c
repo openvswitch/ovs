@@ -263,11 +263,10 @@ static void *
 alloc_stats_request(size_t body_len, uint16_t type, struct ofpbuf **bufferp)
 {
     struct ofp_stats_msg *rq;
-    rq = make_openflow((offsetof(struct ofp_stats_msg, body)
-                        + body_len), OFPT_STATS_REQUEST, bufferp);
+    rq = make_openflow(sizeof *rq + body_len, OFPT_STATS_REQUEST, bufferp);
     rq->type = htons(type);
     rq->flags = htons(0);
-    return rq->body;
+    return rq + 1;
 }
 
 static void

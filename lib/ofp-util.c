@@ -413,7 +413,7 @@ check_nxstats_msg(const struct ofp_header *oh)
     const struct ofp_stats_msg *osm = (const struct ofp_stats_msg *) oh;
     ovs_be32 vendor;
 
-    memcpy(&vendor, osm->body, sizeof vendor);
+    memcpy(&vendor, osm + 1, sizeof vendor);
     if (vendor != htonl(NX_VENDOR_ID)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor stats message for "
                      "unknown vendor %"PRIx32, ntohl(vendor));
@@ -1524,15 +1524,14 @@ update_openflow_length(struct ofpbuf *buffer)
 }
 
 /* Creates an ofp_stats_msg with the given 'type' and 'body_len' bytes of space
- * allocated for the 'body' member.  Returns the first byte of the 'body'
- * member. */
+ * allocated following the ofp_stats_msg header. */
 void *
 ofputil_make_stats_request(size_t body_len, uint16_t type,
                            struct ofpbuf **bufferp)
 {
     struct ofp_stats_msg *request;
-    request = make_openflow(offsetof(struct ofp_stats_msg, body)
-                            + body_len, OFPT_STATS_REQUEST, bufferp);
+    request = make_openflow(sizeof *request + body_len, OFPT_STATS_REQUEST,
+                            bufferp);
     request->type = htons(type);
     request->flags = htons(0);
     return request + 1;
@@ -1554,7 +1553,7 @@ ofputil_make_nxstats_request(size_t openflow_len, uint32_t subtype,
     return nsm;
 }
 
-/* Returns the first byte of the body of the ofp_stats_msg in 'oh'. */
+/* Returns the first byte past the ofp_stats_msg header in 'oh'. */
 const void *
 ofputil_stats_body(const struct ofp_header *oh)
 {
@@ -1562,7 +1561,7 @@ ofputil_stats_body(const struct ofp_header *oh)
     return (const struct ofp_stats_msg *) oh + 1;
 }
 
-/* Returns the length of the body of the ofp_stats_msg in 'oh'. */
+/* Returns the number of bytes past the ofp_stats_msg header in 'oh'. */
 size_t
 ofputil_stats_body_len(const struct ofp_header *oh)
 {
@@ -1570,7 +1569,7 @@ ofputil_stats_body_len(const struct ofp_header *oh)
     return ntohs(oh->length) - sizeof(struct ofp_stats_msg);
 }
 
-/* Returns the first byte of the body of the nicira_stats_msg in 'oh'. */
+/* Returns the first byte past the nicira_stats_msg header in 'oh'. */
 const void *
 ofputil_nxstats_body(const struct ofp_header *oh)
 {
@@ -1578,7 +1577,7 @@ ofputil_nxstats_body(const struct ofp_header *oh)
     return ((const struct nicira_stats_msg *) oh) + 1;
 }
 
-/* Returns the length of the body of the nicira_stats_msg in 'oh'. */
+/* Returns the number of bytes past the nicira_stats_msg header in 'oh'. */
 size_t
 ofputil_nxstats_body_len(const struct ofp_header *oh)
 {
