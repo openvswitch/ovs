@@ -172,6 +172,17 @@ struct ofputil_flow_stats {
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
                                     struct ofpbuf *msg);
 
+/* Aggregate stats reply, independent of flow format. */
+struct ofputil_aggregate_stats {
+    uint64_t packet_count;
+    uint64_t byte_count;
+    uint32_t flow_count;
+};
+
+struct ofpbuf *ofputil_encode_aggregate_stats_reply(
+    const struct ofputil_aggregate_stats *stats,
+    const struct ofp_stats_msg *request);
+
 /* Flow removed message, independent of flow format. */
 struct ofputil_flow_removed {
     struct cls_rule rule;

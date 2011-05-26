@@ -49,7 +49,6 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
-COVERAGE_DEFINE(ofproto_agg_request);
 COVERAGE_DEFINE(ofproto_error);
 COVERAGE_DEFINE(ofproto_flows_req);
 COVERAGE_DEFINE(ofproto_flush);
@@ -1948,24 +1947,30 @@ ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
             : -1);
 }
 
-static void
-query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
-                      ovs_be16 out_port, uint8_t table_id,
-                      uint64_t *total_packetsp, uint64_t *total_bytesp,
-                      uint32_t *n_flowsp)
+static int
+handle_aggregate_stats_request(struct ofconn *ofconn,
+                               const struct ofp_stats_msg *osm)
 {
-    uint64_t total_packets = 0;
-    uint64_t total_bytes = 0;
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct flow_stats_request request;
+    struct ofputil_aggregate_stats stats;
     struct classifier *cls;
-    int n_flows = 0;
+    struct ofpbuf *reply;
+    ovs_be16 out_port;
+    int error;
 
-    COVERAGE_INC(ofproto_agg_request);
+    error = ofputil_decode_flow_stats_request(&request, &osm->header);
+    if (error) {
+        return error;
+    }
+    out_port = htons(request.out_port);
 
-    FOR_EACH_MATCHING_TABLE (cls, table_id, ofproto) {
+    memset(&stats, 0, sizeof stats);
+    FOR_EACH_MATCHING_TABLE (cls, request.table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, cls, target);
+        cls_cursor_init(&cursor, cls, &request.match);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)) {
                 uint64_t packet_count;
@@ -1974,85 +1979,15 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
                 ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
                                                        &byte_count);
 
-                total_packets += packet_count;
-                total_bytes += byte_count;
-                n_flows++;
+                stats.packet_count += packet_count;
+                stats.byte_count += byte_count;
+                stats.flow_count++;
             }
         }
     }
 
-    *total_packetsp = total_packets;
-    *total_bytesp = total_bytes;
-    *n_flowsp = n_flows;
-}
-
-static int
-handle_aggregate_stats_request(struct ofconn *ofconn,
-                               const struct ofp_flow_stats_request *request)
-{
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofp_aggregate_stats_reply *reply;
-    uint64_t total_packets, total_bytes;
-    struct cls_rule target;
-    struct ofpbuf *msg;
-    uint32_t n_flows;
-
-    ofputil_cls_rule_from_match(&request->match, 0, &target);
-    query_aggregate_stats(ofproto, &target, request->out_port,
-                          request->table_id,
-                          &total_packets, &total_bytes, &n_flows);
-
-    reply = ofputil_make_stats_reply(sizeof *reply, &request->osm, &msg);
-    reply->flow_count = htonl(n_flows);
-    put_32aligned_be64(&reply->packet_count, htonll(total_packets));
-    put_32aligned_be64(&reply->byte_count, htonll(total_bytes));
-    memset(reply->pad, 0, sizeof reply->pad);
-
-    ofconn_send_reply(ofconn, msg);
-
-    return 0;
-}
-
-static int
-handle_nxst_aggregate(struct ofconn *ofconn,
-                      const struct nx_aggregate_stats_request *nasr)
-{
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct nx_aggregate_stats_request *request;
-    struct nx_aggregate_stats_reply *reply;
-    uint64_t total_packets, total_bytes;
-    struct cls_rule target;
-    struct ofpbuf *msg;
-    uint32_t n_flows;
-    struct ofpbuf b;
-    int error;
-
-    ofpbuf_use_const(&b, nasr, ntohs(nasr->nsm.vsm.osm.header.length));
-
-    /* Dissect the message. */
-    request = ofpbuf_pull(&b, sizeof *request);
-    error = nx_pull_match(&b, ntohs(request->match_len), 0, &target);
-    if (error) {
-        return error;
-    }
-    if (b.size) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
-    /* Count statistics. */
-    query_aggregate_stats(ofproto, &target, request->out_port,
-                          request->table_id,
-                          &total_packets, &total_bytes, &n_flows);
-
-    /* Reply. */
-    COVERAGE_INC(ofproto_flows_req);
-    reply = ofputil_make_stats_reply(sizeof *reply, &request->nsm.vsm.osm,
-                                     &msg);
-    reply->flow_count = htonl(n_flows);
-    reply->packet_count = htonll(total_packets);
-    reply->byte_count = htonll(total_bytes);
-    memset(reply->pad, 0, sizeof reply->pad);
-    ofconn_send_reply(ofconn, msg);
+    reply = ofputil_encode_aggregate_stats_reply(&stats, osm);
+    ofconn_send_reply(ofconn, reply);
 
     return 0;
 }
@@ -2628,6 +2563,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_flow_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
+    case OFPUTIL_NXST_AGGREGATE_REQUEST:
         return handle_aggregate_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_TABLE_REQUEST:
@@ -2642,9 +2578,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         /* Nicira extension statistics requests. */
     case OFPUTIL_NXST_FLOW_REQUEST:
         return handle_nxst_flow(ofconn, msg->data);
-
-    case OFPUTIL_NXST_AGGREGATE_REQUEST:
-        return handle_nxst_aggregate(ofconn, msg->data);
 
     case OFPUTIL_INVALID:
     case OFPUTIL_OFPT_HELLO:

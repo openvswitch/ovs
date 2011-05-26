@@ -1231,6 +1231,37 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     return 0;
 }
 
+/* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
+ * NXST_AGGREGATE reply according to 'flow_format', and returns the message. */
+struct ofpbuf *
+ofputil_encode_aggregate_stats_reply(
+    const struct ofputil_aggregate_stats *stats,
+    const struct ofp_stats_msg *request)
+{
+    struct ofpbuf *msg;
+
+    if (request->type == htons(OFPST_AGGREGATE)) {
+        struct ofp_aggregate_stats_reply *asr;
+
+        asr = ofputil_make_stats_reply(sizeof *asr, request, &msg);
+        put_32aligned_be64(&asr->packet_count, htonll(stats->packet_count));
+        put_32aligned_be64(&asr->byte_count, htonll(stats->byte_count));
+        asr->flow_count = htonl(stats->flow_count);
+    } else if (request->type == htons(OFPST_VENDOR)) {
+        struct nx_aggregate_stats_reply *nasr;
+
+        nasr = ofputil_make_stats_reply(sizeof *nasr, request, &msg);
+        assert(nasr->nsm.subtype == htonl(NXST_AGGREGATE));
+        nasr->packet_count = htonll(stats->packet_count);
+        nasr->byte_count = htonll(stats->byte_count);
+        nasr->flow_count = htonl(stats->flow_count);
+    } else {
+        NOT_REACHED();
+    }
+
+    return msg;
+}
+
 /* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh' into an
  * abstract ofputil_flow_removed in 'fr'.  Returns 0 if successful, otherwise
  * an OpenFlow error code. */

@@ -1059,12 +1059,13 @@ ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_desc_stats *ods)
 }
 
 static void
-ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
+ofp_print_flow_stats_request(struct ds *string,
+                             const struct ofp_stats_msg *osm)
 {
     struct flow_stats_request fsr;
     int error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, oh);
+    error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1447,7 +1448,7 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
     case OFPUTIL_NXST_AGGREGATE_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_flow_stats_request(string, oh);
+        ofp_print_flow_stats_request(string, msg);
         break;
 
     case OFPUTIL_OFPST_TABLE_REQUEST:
