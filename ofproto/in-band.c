@@ -404,19 +404,18 @@ add_rule(struct in_band *ib, const struct cls_rule *rule)
 {
     struct {
         struct nx_action_set_queue nxsq;
-        struct ofp_action_output oao;
+        union ofp_action oa;
     } actions;
 
     memset(&actions, 0, sizeof actions);
 
-    actions.oao.type = htons(OFPAT_OUTPUT);
-    actions.oao.len = htons(sizeof actions.oao);
-    actions.oao.port = htons(OFPP_NORMAL);
-    actions.oao.max_len = htons(0);
+    actions.oa.output.type = htons(OFPAT_OUTPUT);
+    actions.oa.output.len = htons(sizeof actions.oa);
+    actions.oa.output.port = htons(OFPP_NORMAL);
+    actions.oa.output.max_len = htons(0);
 
     if (ib->queue_id < 0) {
-        ofproto_add_flow(ib->ofproto, rule,
-                         (union ofp_action *) &actions.oao, 1);
+        ofproto_add_flow(ib->ofproto, rule, &actions.oa, 1);
     } else {
         actions.nxsq.type = htons(OFPAT_VENDOR);
         actions.nxsq.len = htons(sizeof actions.nxsq);
