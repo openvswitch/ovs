@@ -172,8 +172,8 @@ Creates a new bridge named \fIbridge\fR.  Initially the bridge will
 have no ports (other than \fIbridge\fR itself).
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a bridge that
-exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
-already exist (but it must be a real bridge, not a VLAN bridge).
+exists is an error.  With \fB\-\-may\-exist\fR, this command does
+nothing if \fIbridge\fR already exists as a real bridge.
 .
 .IP "[\fB\-\-may\-exist\fR] \fBadd\-br \fIbridge parent vlan\fR"
 Creates a ``fake bridge'' named \fIbridge\fR within the existing Open
@@ -183,9 +183,9 @@ itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
 \fIbridge\fR will have no ports (other than \fIbridge\fR itself).
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a bridge that
-exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
-already exist (but it must have the specified \fIvlan\fR and
-\fIparent\fR).
+exists is an error.  With \fB\-\-may\-exist\fR, this command does
+nothing if \fIbridge\fR already exists as a VLAN bridge under
+\fIparent\fR for \fIvlan\fR.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-br \fIbridge\fR"
 Deletes \fIbridge\fR and all of its ports.  If \fIbridge\fR is a real
@@ -261,8 +261,8 @@ port for VLAN 9.  The syntax is the same as that for the \fBset\fR
 command (see \fBDatabase Commands\fR below).
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a port that exists
-is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
-(but it must be on \fIbridge\fR and not be a bonded port).
+is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
+\fIport\fR already exists on \fIbridge\fR and is not a bonded port.
 .
 .IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&... [\fIcolumn\fR[\fB:\fIkey\fR]\fR=\fIvalue\fR]\&...\fR"
 Creates on \fIbridge\fR a new port named \fIport\fR that bonds
@@ -278,9 +278,9 @@ created.  This should only be used for compatibility with legacy
 software that requires it.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a port that exists
-is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
-(but it must be on \fIbridge\fR and bond together exactly the
-specified interface).
+is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
+\fIport\fR already exists on \fIbridge\fR and bonds together exactly
+the specified interfaces.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
