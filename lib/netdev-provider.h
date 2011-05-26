@@ -121,7 +121,10 @@ struct netdev_class {
     void (*run)(void);
 
     /* Arranges for poll_block() to wake up if the "run" member function needs
-     * to be called.  May be null if nothing is needed here. */
+     * to be called.  Implementations are additionally required to wake
+     * whenever something changes in any of its netdevs which would cause their
+     * ->change_seq() function to change its result.  May be null if nothing is
+     * needed here. */
     void (*wait)(void);
 
     /* Attempts to create a network device named 'name' with initial 'args' in
@@ -572,6 +575,17 @@ struct netdev_class {
 
     /* Cancels poll notification for 'notifier'. */
     void (*poll_remove)(struct netdev_notifier *notifier);
+
+    /* Returns a sequence number which indicates changes in one of 'netdev''s
+     * properties.  The returned sequence number must be nonzero so that
+     * callers have a value which they may use as a reset when tracking
+     * 'netdev'.
+     *
+     * Minimally, the returned sequence number is required to change whenever
+     * 'netdev''s flags, features, ethernet address, or carrier changes.  The
+     * returned sequence number is allowed to change even when 'netdev' doesn't
+     * change, although implementations should try to avoid this. */
+    unsigned int (*change_seq)(const struct netdev *netdev);
 };
 
 int netdev_register_provider(const struct netdev_class *);

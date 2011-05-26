@@ -1223,6 +1223,19 @@ netdev_dump_queue_stats(const struct netdev *netdev,
             : EOPNOTSUPP);
 }
 
+/* Returns a sequence number which indicates changes in one of 'netdev''s
+ * properties.  The returned sequence will be nonzero so that callers have a
+ * value which they may use as a reset when tracking 'netdev'.
+ *
+ * The returned sequence number will change whenever 'netdev''s flags,
+ * features, ethernet address, or carrier changes.  It may change for other
+ * reasons as well, or no reason at all. */
+unsigned int
+netdev_change_seq(const struct netdev *netdev)
+{
+    return netdev_get_dev(netdev)->netdev_class->change_seq(netdev);
+}
+
 /* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
  * sets '*vlan_vid' to the VLAN VID associated with that device and returns 0.
  * Otherwise returns a errno value (specifically ENOENT if 'netdev_name' is the

@@ -40,6 +40,7 @@ struct netdev_dev_dummy {
     int mtu;
     struct netdev_stats stats;
     enum netdev_flags flags;
+    unsigned int change_seq;
 };
 
 struct netdev_dummy {
@@ -92,6 +93,7 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
     netdev_dev->hwaddr[5] = n;
     netdev_dev->mtu = 1500;
     netdev_dev->flags = 0;
+    netdev_dev->change_seq = 1;
 
     n++;
 
@@ -250,6 +252,12 @@ netdev_dummy_poll_remove(struct netdev_notifier *notifier_)
 
     free(notifier);
 }
+
+static unsigned int
+netdev_dummy_change_seq(const struct netdev *netdev)
+{
+    return netdev_dev_dummy_cast(netdev_get_dev(netdev))->change_seq;
+}
 
 /* Helper functions. */
 
@@ -258,6 +266,8 @@ netdev_dummy_poll_notify(const struct netdev *netdev)
 {
     const char *name = netdev_get_name(netdev);
     struct list *list = shash_find_data(&netdev_dummy_notifiers, name);
+    struct netdev_dev_dummy *dev =
+        netdev_dev_dummy_cast(netdev_get_dev(netdev));
 
     if (list) {
         struct netdev_dummy_notifier *notifier;
@@ -266,6 +276,11 @@ netdev_dummy_poll_notify(const struct netdev *netdev)
             struct netdev_notifier *n = &notifier->notifier;
             n->cb(n);
         }
+    }
+
+    dev->change_seq++;
+    if (!dev->change_seq) {
+        dev->change_seq++;
     }
 }
 
@@ -328,6 +343,7 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_poll_add,
     netdev_dummy_poll_remove,
+    netdev_dummy_change_seq
 };
 
 void

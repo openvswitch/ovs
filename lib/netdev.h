@@ -205,6 +205,8 @@ typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
 int netdev_dump_queue_stats(const struct netdev *,
                             netdev_dump_queue_stats_cb *, void *aux);
 
+unsigned int netdev_change_seq(const struct netdev *netdev);
+
 /* Linux stuff. */
 int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
 

@@ -346,6 +346,7 @@ struct netdev_dev_linux {
 
     struct shash_node *shash_node;
     unsigned int cache_valid;
+    unsigned int change_seq;
 
     bool miimon;                    /* Link status of last poll. */
     long long int miimon_interval;  /* Miimon Poll rate. Disabled if <= 0. */
@@ -484,6 +485,16 @@ netdev_linux_wait(void)
 }
 
 static void
+netdev_dev_linux_changed(struct netdev_dev_linux *dev)
+{
+    dev->change_seq++;
+    if (!dev->change_seq) {
+        dev->change_seq++;
+    }
+    dev->cache_valid = 0;
+}
+
+static void
 netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
                       void *aux OVS_UNUSED)
 {
@@ -496,7 +507,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             if (is_netdev_linux_class(netdev_class)) {
                 dev = netdev_dev_linux_cast(base_dev);
-                dev->cache_valid = 0;
+                netdev_dev_linux_changed(dev);
             }
         }
     } else {
@@ -507,7 +518,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         netdev_dev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
             dev = node->data;
-            dev->cache_valid = 0;
+            netdev_dev_linux_changed(dev);
         }
         shash_destroy(&device_shash);
     }
@@ -537,6 +548,7 @@ netdev_linux_create(const struct netdev_class *class,
     cache_notifier_refcount++;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
+    netdev_dev->change_seq = 1;
     netdev_dev_init(&netdev_dev->netdev_dev, name, args, class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
@@ -1169,6 +1181,7 @@ netdev_linux_miimon_run(void)
             if (list) {
                 poll_notify(list);
             }
+            netdev_dev_linux_changed(dev);
         }
 
         timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
@@ -2318,6 +2331,12 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     }
 }
 
+static unsigned int
+netdev_linux_change_seq(const struct netdev *netdev)
+{
+    return netdev_dev_linux_cast(netdev_get_dev(netdev))->change_seq;
+}
+
 #define NETDEV_LINUX_CLASS(NAME, CREATE, ENUMERATE, SET_STATS)  \
 {                                                               \
     NAME,                                                       \
@@ -2378,7 +2397,8 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
     netdev_linux_update_flags,                                  \
                                                                 \
     netdev_linux_poll_add,                                      \
-    netdev_linux_poll_remove                                    \
+    netdev_linux_poll_remove,                                   \
+    netdev_linux_change_seq                                     \
 }
 
 const struct netdev_class netdev_linux_class =

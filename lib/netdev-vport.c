@@ -59,6 +59,7 @@ struct netdev_dev_vport {
     struct ofpbuf *options;
     int dp_ifindex;             /* -1 if unknown. */
     uint32_t port_no;           /* UINT32_MAX if unknown. */
+    unsigned int change_seq;
 };
 
 struct netdev_vport {
@@ -242,6 +243,7 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
         dev->options = options;
         dev->dp_ifindex = dp_ifindex;
         dev->port_no = port_no;
+        dev->change_seq = 1;
 
         *netdev_devp = &dev->netdev_dev;
         route_table_register();
@@ -538,6 +540,12 @@ netdev_vport_poll_remove(struct netdev_notifier *notifier_)
     free(notifier);
 }
 
+static unsigned int
+netdev_vport_change_seq(const struct netdev *netdev)
+{
+    return netdev_dev_vport_cast(netdev_get_dev(netdev))->change_seq;
+}
+
 static void
 netdev_vport_run(void)
 {
@@ -581,6 +589,9 @@ netdev_vport_poll_notify(const struct netdev *netdev)
     char *poll_name = make_poll_name(netdev);
     struct list *list = shash_find_data(&netdev_vport_notifiers,
                                         poll_name);
+    struct netdev_dev_vport *ndv;
+
+    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
 
     if (list) {
         struct netdev_vport_notifier *notifier;
@@ -589,6 +600,11 @@ netdev_vport_poll_notify(const struct netdev *netdev)
             struct netdev_notifier *n = &notifier->notifier;
             n->cb(n);
         }
+    }
+
+    ndv->change_seq++;
+    if (!ndv->change_seq) {
+        ndv->change_seq++;
     }
 
     free(poll_name);
@@ -986,7 +1002,8 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     netdev_vport_update_flags,                              \
                                                             \
     netdev_vport_poll_add,                                  \
-    netdev_vport_poll_remove,
+    netdev_vport_poll_remove,                               \
+    netdev_vport_change_seq
 
 void
 netdev_vport_register(void)
