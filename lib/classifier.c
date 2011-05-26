@@ -969,7 +969,7 @@ find_table(const struct classifier *cls, const struct flow_wildcards *wc)
 {
     struct cls_table *table;
 
-    HMAP_FOR_EACH_IN_BUCKET (table, hmap_node, flow_wildcards_hash(wc),
+    HMAP_FOR_EACH_IN_BUCKET (table, hmap_node, flow_wildcards_hash(wc, 0),
                              &cls->tables) {
         if (flow_wildcards_equal(wc, &table->wc)) {
             return table;
@@ -986,7 +986,7 @@ insert_table(struct classifier *cls, const struct flow_wildcards *wc)
     table = xzalloc(sizeof *table);
     hmap_init(&table->rules);
     table->wc = *wc;
-    hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc));
+    hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc, 0));
 
     return table;
 }
