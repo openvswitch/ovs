@@ -286,6 +286,7 @@ Table	Purpose
 
     if erFile:
         s += """
+.if !'\*[.T]'ascii' \{
 .sp 1
 .SH "TABLE RELATIONSHIPS"
 .PP
@@ -303,7 +304,7 @@ represent strong references; thin lines represent weak references.
         for line in erStream:
             s += line + '\n'
         erStream.close()
-        s += ".RE\n"
+        s += ".RE\\}\n"
 
     for node in tableNodes:
         s += tableToNroff(schema, node) + "\n"
