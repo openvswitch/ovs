@@ -59,6 +59,7 @@ struct bond_slave {
     void *aux;                  /* Client-provided handle for this slave. */
 
     struct netdev *netdev;      /* Network device, owned by the client. */
+    unsigned int change_seq;    /* Tracks changes in 'netdev'. */
     char *name;                 /* Name (a copy of netdev_get_name(netdev)). */
 
     /* Link status. */
@@ -102,9 +103,6 @@ struct bond {
 
     /* BM_STABLE specific bonding info. */
     tag_type stb_tag;               /* Tag associated with this bond. */
-
-    /* Monitoring. */
-    struct netdev_monitor *monitor;   /* detect == BLSM_CARRIER only. */
 
     /* Legacy compatibility. */
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
@@ -189,7 +187,6 @@ bond_create(const struct bond_settings *s)
     bond->no_slaves_tag = tag_create_random();
     bond->stb_tag = tag_create_random();
     bond->next_fake_iface_update = LLONG_MAX;
-    bond->monitor = netdev_monitor_create();
 
     bond_reconfigure(bond, s);
 
@@ -219,9 +216,6 @@ bond_destroy(struct bond *bond)
     hmap_destroy(&bond->slaves);
 
     free(bond->hash);
-
-    netdev_monitor_destroy(bond->monitor);
-
     free(bond->name);
     free(bond);
 }
@@ -284,15 +278,11 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 }
 
 static void
-bond_slave_set_netdev__(struct bond *bond, struct bond_slave *slave,
-                        struct netdev *netdev)
+bond_slave_set_netdev__(struct bond_slave *slave, struct netdev *netdev)
 {
     if (slave->netdev != netdev) {
-        if (slave->netdev) {
-            netdev_monitor_remove(bond->monitor, slave->netdev);
-        }
-        netdev_monitor_add(bond->monitor, netdev);
         slave->netdev = netdev;
+        slave->change_seq = 0;
     }
 }
 
@@ -334,7 +324,7 @@ bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
         bond->bond_revalidate = true;
     }
 
-    bond_slave_set_netdev__(bond, slave, netdev);
+    bond_slave_set_netdev__(slave, netdev);
 
     free(slave->name);
     slave->name = xstrdup(netdev_get_name(netdev));
@@ -350,7 +340,7 @@ bond_slave_set_netdev(struct bond *bond, void *slave_, struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
     if (slave) {
-        bond_slave_set_netdev__(bond, slave, netdev);
+        bond_slave_set_netdev__(slave, netdev);
     }
 }
 
@@ -368,7 +358,6 @@ bond_slave_unregister(struct bond *bond, const void *slave_)
         return;
     }
 
-    netdev_monitor_remove(bond->monitor, slave->netdev);
     bond_enable_slave(slave, false, NULL);
 
     del_active = bond->active_slave == slave;
@@ -419,13 +408,10 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
 
     bond->lacp_negotiated = lacp_negotiated;
 
-    if (bond->monitor) {
-        netdev_monitor_flush(bond->monitor);
-    }
-
     /* Enable slaves based on link status and LACP feedback. */
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         bond_link_status_update(slave, tags);
+        slave->change_seq = netdev_change_seq(slave->netdev);
     }
     if (!bond->active_slave || !bond->active_slave->enabled) {
         bond_choose_active_slave(bond, tags);
@@ -468,11 +454,13 @@ bond_wait(struct bond *bond)
 {
     struct bond_slave *slave;
 
-    netdev_monitor_poll_wait(bond->monitor);
-
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->delay_expires != LLONG_MAX) {
             poll_timer_wait_until(slave->delay_expires);
+        }
+
+        if (slave->change_seq != netdev_change_seq(slave->netdev)) {
+            poll_immediate_wake();
         }
     }
 
