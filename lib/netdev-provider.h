@@ -81,19 +81,6 @@ static inline void netdev_assert_class(const struct netdev *netdev,
     netdev_dev_assert_class(netdev_get_dev(netdev), netdev_class);
 }
 
-/* A network device notifier.
- *
- * Network device implementations should use netdev_notifier_init() to
- * initialize this structure, but they may freely read its members after
- * initialization. */
-struct netdev_notifier {
-    struct netdev *netdev;
-    void (*cb)(struct netdev_notifier *);
-    void *aux;
-};
-void netdev_notifier_init(struct netdev_notifier *, struct netdev *,
-                          void (*cb)(struct netdev_notifier *), void *aux);
-
 /* Network device class structure, to be defined by each implementation of a
  * network device.
  *
@@ -563,18 +550,6 @@ struct netdev_class {
      * should not do anything that is not signal-safe (such as logging). */
     int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
-
-    /* Arranges for 'cb' to be called whenever one of the attributes of
-     * 'netdev' changes and sets '*notifierp' to a newly created
-     * netdev_notifier that represents this arrangement.  The created notifier
-     * will have its 'netdev', 'cb', and 'aux' members set to the values of the
-     * corresponding parameters. */
-    int (*poll_add)(struct netdev *netdev,
-                    void (*cb)(struct netdev_notifier *notifier), void *aux,
-                    struct netdev_notifier **notifierp);
-
-    /* Cancels poll notification for 'notifier'. */
-    void (*poll_remove)(struct netdev_notifier *notifier);
 
     /* Returns a sequence number which indicates changes in one of 'netdev''s
      * properties.  The returned sequence number must be nonzero so that

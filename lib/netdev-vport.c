@@ -48,12 +48,6 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
-struct netdev_vport_notifier {
-    struct netdev_notifier notifier;
-    struct list list_node;
-    struct shash_node *shash_node;
-};
-
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
     struct ofpbuf *options;
@@ -75,9 +69,6 @@ struct vport_class {
                           const struct nlattr *options, size_t options_len,
                           struct shash *args);
 };
-
-static struct shash netdev_vport_notifiers =
-                                    SHASH_INITIALIZER(&netdev_vport_notifiers);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
@@ -487,59 +478,6 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
     return 0;
 }
 
-static char *
-make_poll_name(const struct netdev *netdev)
-{
-    return xasprintf("%s:%s", netdev_get_type(netdev), netdev_get_name(netdev));
-}
-
-static int
-netdev_vport_poll_add(struct netdev *netdev,
-                      void (*cb)(struct netdev_notifier *), void *aux,
-                      struct netdev_notifier **notifierp)
-{
-    char *poll_name = make_poll_name(netdev);
-    struct netdev_vport_notifier *notifier;
-    struct list *list;
-    struct shash_node *shash_node;
-
-    shash_node = shash_find(&netdev_vport_notifiers, poll_name);
-    if (!shash_node) {
-        list = xmalloc(sizeof *list);
-        list_init(list);
-        shash_node = shash_add(&netdev_vport_notifiers, poll_name, list);
-    } else {
-        list = shash_node->data;
-    }
-
-    notifier = xmalloc(sizeof *notifier);
-    netdev_notifier_init(&notifier->notifier, netdev, cb, aux);
-    list_push_back(list, &notifier->list_node);
-    notifier->shash_node = shash_node;
-
-    *notifierp = &notifier->notifier;
-    free(poll_name);
-
-    return 0;
-}
-
-static void
-netdev_vport_poll_remove(struct netdev_notifier *notifier_)
-{
-    struct netdev_vport_notifier *notifier =
-                CONTAINER_OF(notifier_, struct netdev_vport_notifier, notifier);
-
-    struct list *list;
-
-    list = list_remove(&notifier->list_node);
-    if (list_is_empty(list)) {
-        shash_delete(&netdev_vport_notifiers, notifier->shash_node);
-        free(list);
-    }
-
-    free(notifier);
-}
-
 static unsigned int
 netdev_vport_change_seq(const struct netdev *netdev)
 {
@@ -586,28 +524,14 @@ netdev_vport_get_tnl_iface(const struct netdev *netdev)
 static void
 netdev_vport_poll_notify(const struct netdev *netdev)
 {
-    char *poll_name = make_poll_name(netdev);
-    struct list *list = shash_find_data(&netdev_vport_notifiers,
-                                        poll_name);
     struct netdev_dev_vport *ndv;
 
     ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
-
-    if (list) {
-        struct netdev_vport_notifier *notifier;
-
-        LIST_FOR_EACH (notifier, list_node, list) {
-            struct netdev_notifier *n = &notifier->notifier;
-            n->cb(n);
-        }
-    }
 
     ndv->change_seq++;
     if (!ndv->change_seq) {
         ndv->change_seq++;
     }
-
-    free(poll_name);
 }
 
 /* Code specific to individual vport types. */
@@ -1001,8 +925,6 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
                                                             \
     netdev_vport_update_flags,                              \
                                                             \
-    netdev_vport_poll_add,                                  \
-    netdev_vport_poll_remove,                               \
     netdev_vport_change_seq
 
 void

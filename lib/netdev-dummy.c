@@ -28,12 +28,6 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
-struct netdev_dummy_notifier {
-    struct netdev_notifier notifier;
-    struct list list_node;
-    struct shash_node *shash_node;
-};
-
 struct netdev_dev_dummy {
     struct netdev_dev netdev_dev;
     uint8_t hwaddr[ETH_ADDR_LEN];
@@ -46,9 +40,6 @@ struct netdev_dev_dummy {
 struct netdev_dummy {
     struct netdev netdev;
 };
-
-static struct shash netdev_dummy_notifiers =
-    SHASH_INITIALIZER(&netdev_dummy_notifiers);
 
 static int netdev_dummy_create(const struct netdev_class *, const char *,
                                const struct shash *, struct netdev_dev **);
@@ -207,52 +198,6 @@ netdev_dummy_update_flags(struct netdev *netdev,
     return 0;
 }
 
-static int
-netdev_dummy_poll_add(struct netdev *netdev,
-                      void (*cb)(struct netdev_notifier *), void *aux,
-                      struct netdev_notifier **notifierp)
-{
-    const char *name = netdev_get_name(netdev);
-    struct netdev_dummy_notifier *notifier;
-    struct list *list;
-    struct shash_node *shash_node;
-
-    shash_node = shash_find_data(&netdev_dummy_notifiers, name);
-    if (!shash_node) {
-        list = xmalloc(sizeof *list);
-        list_init(list);
-        shash_node = shash_add(&netdev_dummy_notifiers, name, list);
-    } else {
-        list = shash_node->data;
-    }
-
-    notifier = xmalloc(sizeof *notifier);
-    netdev_notifier_init(&notifier->notifier, netdev, cb, aux);
-    list_push_back(list, &notifier->list_node);
-    notifier->shash_node = shash_node;
-
-    *notifierp = &notifier->notifier;
-
-    return 0;
-}
-
-static void
-netdev_dummy_poll_remove(struct netdev_notifier *notifier_)
-{
-    struct netdev_dummy_notifier *notifier =
-        CONTAINER_OF(notifier_, struct netdev_dummy_notifier, notifier);
-
-    struct list *list;
-
-    list = list_remove(&notifier->list_node);
-    if (list_is_empty(list)) {
-        shash_delete(&netdev_dummy_notifiers, notifier->shash_node);
-        free(list);
-    }
-
-    free(notifier);
-}
-
 static unsigned int
 netdev_dummy_change_seq(const struct netdev *netdev)
 {
@@ -264,19 +209,8 @@ netdev_dummy_change_seq(const struct netdev *netdev)
 static void
 netdev_dummy_poll_notify(const struct netdev *netdev)
 {
-    const char *name = netdev_get_name(netdev);
-    struct list *list = shash_find_data(&netdev_dummy_notifiers, name);
     struct netdev_dev_dummy *dev =
         netdev_dev_dummy_cast(netdev_get_dev(netdev));
-
-    if (list) {
-        struct netdev_dummy_notifier *notifier;
-
-        LIST_FOR_EACH (notifier, list_node, list) {
-            struct netdev_notifier *n = &notifier->notifier;
-            n->cb(n);
-        }
-    }
 
     dev->change_seq++;
     if (!dev->change_seq) {
@@ -341,8 +275,6 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_update_flags,
 
-    netdev_dummy_poll_add,
-    netdev_dummy_poll_remove,
     netdev_dummy_change_seq
 };
 

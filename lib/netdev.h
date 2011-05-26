@@ -210,15 +210,6 @@ unsigned int netdev_change_seq(const struct netdev *netdev);
 /* Linux stuff. */
 int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
 
-/* Monitoring for changes in network device status. */
-struct netdev_monitor *netdev_monitor_create(void);
-void netdev_monitor_destroy(struct netdev_monitor *);
-int netdev_monitor_add(struct netdev_monitor *, struct netdev *);
-void netdev_monitor_remove(struct netdev_monitor *, struct netdev *);
-int netdev_monitor_poll(struct netdev_monitor *, char **devnamep);
-void netdev_monitor_flush(struct netdev_monitor *);
-void netdev_monitor_poll_wait(const struct netdev_monitor *);
-
 #ifdef  __cplusplus
 }
 #endif

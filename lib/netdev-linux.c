@@ -383,15 +383,6 @@ static int af_inet_sock = -1;   /* AF_INET, SOCK_DGRAM. */
 /* A Netlink routing socket that is not subscribed to any multicast groups. */
 static struct nl_sock *rtnl_sock;
 
-struct netdev_linux_notifier {
-    struct netdev_notifier notifier;
-    struct list node;
-};
-
-static struct shash netdev_linux_notifiers =
-    SHASH_INITIALIZER(&netdev_linux_notifiers);
-static struct rtnetlink_notifier netdev_linux_poll_notifier;
-
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -417,7 +408,6 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 static int af_packet_sock(void);
-static void poll_notify(struct list *);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
 
@@ -1173,14 +1163,7 @@ netdev_linux_miimon_run(void)
 
         netdev_linux_get_miimon(dev->netdev_dev.name, &miimon);
         if (miimon != dev->miimon) {
-            struct list *list;
-
             dev->miimon = miimon;
-            list = shash_find_data(&netdev_linux_notifiers,
-                                   dev->netdev_dev.name);
-            if (list) {
-                poll_notify(list);
-            }
             netdev_dev_linux_changed(dev);
         }
 
@@ -2247,90 +2230,6 @@ netdev_linux_update_flags(struct netdev *netdev, enum netdev_flags off,
     return error;
 }
 
-static void
-poll_notify(struct list *list)
-{
-    struct netdev_linux_notifier *notifier;
-    LIST_FOR_EACH (notifier, node, list) {
-        struct netdev_notifier *n = &notifier->notifier;
-        n->cb(n);
-    }
-}
-
-static void
-netdev_linux_poll_cb(const struct rtnetlink_link_change *change,
-                     void *aux OVS_UNUSED)
-{
-    if (change) {
-        struct list *list = shash_find_data(&netdev_linux_notifiers,
-                                            change->ifname);
-        if (list) {
-            poll_notify(list);
-        }
-    } else {
-        struct shash_node *node;
-        SHASH_FOR_EACH (node, &netdev_linux_notifiers) {
-            poll_notify(node->data);
-        }
-    }
-}
-
-static int
-netdev_linux_poll_add(struct netdev *netdev,
-                      void (*cb)(struct netdev_notifier *), void *aux,
-                      struct netdev_notifier **notifierp)
-{
-    const char *netdev_name = netdev_get_name(netdev);
-    struct netdev_linux_notifier *notifier;
-    struct list *list;
-
-    if (shash_is_empty(&netdev_linux_notifiers)) {
-        int error;
-        error = rtnetlink_link_notifier_register(&netdev_linux_poll_notifier,
-                                                 netdev_linux_poll_cb, NULL);
-        if (error) {
-            return error;
-        }
-    }
-
-    list = shash_find_data(&netdev_linux_notifiers, netdev_name);
-    if (!list) {
-        list = xmalloc(sizeof *list);
-        list_init(list);
-        shash_add(&netdev_linux_notifiers, netdev_name, list);
-    }
-
-    notifier = xmalloc(sizeof *notifier);
-    netdev_notifier_init(&notifier->notifier, netdev, cb, aux);
-    list_push_back(list, &notifier->node);
-    *notifierp = &notifier->notifier;
-    return 0;
-}
-
-static void
-netdev_linux_poll_remove(struct netdev_notifier *notifier_)
-{
-    struct netdev_linux_notifier *notifier =
-        CONTAINER_OF(notifier_, struct netdev_linux_notifier, notifier);
-    struct list *list;
-
-    /* Remove 'notifier' from its list. */
-    list = list_remove(&notifier->node);
-    if (list_is_empty(list)) {
-        /* The list is now empty.  Remove it from the hash and free it. */
-        const char *netdev_name = netdev_get_name(notifier->notifier.netdev);
-        shash_delete(&netdev_linux_notifiers,
-                     shash_find(&netdev_linux_notifiers, netdev_name));
-        free(list);
-    }
-    free(notifier);
-
-    /* If that was the last notifier, unregister. */
-    if (shash_is_empty(&netdev_linux_notifiers)) {
-        rtnetlink_link_notifier_unregister(&netdev_linux_poll_notifier);
-    }
-}
-
 static unsigned int
 netdev_linux_change_seq(const struct netdev *netdev)
 {
@@ -2396,8 +2295,6 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     netdev_linux_update_flags,                                  \
                                                                 \
-    netdev_linux_poll_add,                                      \
-    netdev_linux_poll_remove,                                   \
     netdev_linux_change_seq                                     \
 }
 
