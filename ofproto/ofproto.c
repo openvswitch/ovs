@@ -1359,17 +1359,6 @@ rule_is_hidden(const struct rule *rule)
     return rule->cr.priority > UINT16_MAX;
 }
 
-static void
-send_error_oh(const struct ofconn *ofconn, const struct ofp_header *oh,
-              int error)
-{
-    struct ofpbuf *buf = ofputil_encode_error_msg(error, oh);
-    if (buf) {
-        COVERAGE_INC(ofproto_error);
-        ofconn_send_reply(ofconn, buf);
-    }
-}
-
 static int
 handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
@@ -2513,7 +2502,7 @@ handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
 {
     int error = handle_openflow__(ofconn, ofp_msg);
     if (error) {
-        send_error_oh(ofconn, ofp_msg->data, error);
+        ofconn_send_error(ofconn, ofp_msg->data, error);
     }
     COVERAGE_INC(ofproto_recv_openflow);
 }
