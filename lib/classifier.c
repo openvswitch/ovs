@@ -406,6 +406,16 @@ cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
             && flow_equal(&a->flow, &b->flow));
 }
 
+/* Returns a hash value for the flow, wildcards, and priority in 'rule',
+ * starting from 'basis'. */
+uint32_t
+cls_rule_hash(const struct cls_rule *rule, uint32_t basis)
+{
+    uint32_t h0 = flow_hash(&rule->flow, basis);
+    uint32_t h1 = flow_wildcards_hash(&rule->wc, h0);
+    return hash_int(rule->priority, h1);
+}
+
 static void
 format_ip_netmask(struct ds *s, const char *name, ovs_be32 ip,
                   ovs_be32 netmask)

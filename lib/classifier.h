@@ -114,6 +114,7 @@ bool cls_rule_set_ipv6_dst_masked(struct cls_rule *, const struct in6_addr *,
 void cls_rule_set_nd_target(struct cls_rule *, const struct in6_addr);
 
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
+uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);
 
 void cls_rule_format(const struct cls_rule *, struct ds *);
 char *cls_rule_to_string(const struct cls_rule *);
