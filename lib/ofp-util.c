@@ -2565,3 +2565,16 @@ error:
     *n_actionsp = 0;
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
 }
+
+bool
+ofputil_actions_equal(const union ofp_action *a, size_t n_a,
+                      const union ofp_action *b, size_t n_b)
+{
+    return n_a == n_b && (!n_a || !memcmp(a, b, n_a * sizeof *a));
+}
+
+union ofp_action *
+ofputil_actions_clone(const union ofp_action *actions, size_t n)
+{
+    return n ? xmemdup(actions, n * sizeof *actions) : NULL;
+}

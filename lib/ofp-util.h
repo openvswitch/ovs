@@ -291,6 +291,10 @@ bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
 
 int ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
                          union ofp_action **, size_t *);
+
+bool ofputil_actions_equal(const union ofp_action *a, size_t n_a,
+                           const union ofp_action *b, size_t n_b);
+union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
 
 /* OpenFlow vendors.
  *
