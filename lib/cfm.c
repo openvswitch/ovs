@@ -100,8 +100,8 @@ static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
 static void
 cfm_generate_maid(struct cfm *cfm)
 {
-    const char *ovs_md_name = "ovs_md";
-    const char *ovs_ma_name = "ovs_ma";
+    const char *ovs_md_name = "ovs";
+    const char *ovs_ma_name = "ovs";
     uint8_t *ma_p;
     size_t md_len, ma_len;
 
