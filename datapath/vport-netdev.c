@@ -284,7 +284,11 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	skb_warn_if_lro(skb);
 
 	skb_push(skb, ETH_HLEN);
-	compute_ip_summed(skb, false);
+
+	if (unlikely(compute_ip_summed(skb, false))) {
+		kfree_skb(skb);
+		return;
+	}
 	vlan_copy_skb_tci(skb);
 
 	vport_receive(vport, skb);
@@ -309,21 +313,14 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 	int len;
 
 	skb->dev = netdev_vport->dev;
-	forward_ip_summed(skb);
+	forward_ip_summed(skb, true);
 
 	if (vlan_tx_tag_present(skb) && !dev_supports_vlan_tx(skb->dev)) {
-		int err;
 		int features = 0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 		features = skb->dev->features & skb->dev->vlan_features;
 #endif
-
-		err = vswitch_skb_checksum_setup(skb);
-		if (unlikely(err)) {
-			kfree_skb(skb);
-			return 0;
-		}
 
 		if (!vlan_tso)
 			features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |

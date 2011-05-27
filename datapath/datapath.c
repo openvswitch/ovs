@@ -399,11 +399,7 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 
 	WARN_ON_ONCE(skb_shared(skb));
 
-	forward_ip_summed(skb);
-
-	err = vswitch_skb_checksum_setup(skb);
-	if (err)
-		goto err_kfree_skb;
+	forward_ip_summed(skb, true);
 
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
@@ -424,8 +420,6 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 
 	return 0;
 
-err_kfree_skb:
-	kfree_skb(skb);
 err:
 	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());

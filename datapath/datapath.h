@@ -102,9 +102,11 @@ struct datapath {
  * struct ovs_skb_cb - OVS data in skb CB
  * @vport: The datapath port on which the skb entered the switch.
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
+ * @tun_id: ID of the tunnel that encapsulated this packet.  It is 0 if the
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
- * @tun_id: ID of the tunnel that encapsulated this packet.  It is 0 if the
+ * @csum_start: Stores the offset from which to start checksumming independent
+ * of the transport header on all kernel versions.
  * packet was not received on a tunnel.
  * @vlan_tci: Provides a substitute for the skb->vlan_tci field on kernels
  * before 2.6.27.
@@ -112,10 +114,11 @@ struct datapath {
 struct ovs_skb_cb {
 	struct vport		*vport;
 	struct sw_flow		*flow;
+	__be64			tun_id;
 #ifdef NEED_CSUM_NORMALIZE
 	enum csum_type		ip_summed;
+	u16			csum_start;
 #endif
-	__be64			tun_id;
 #ifdef NEED_VLAN_FIELD
 	u16			vlan_tci;
 #endif

@@ -73,7 +73,11 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	compute_ip_summed(skb, true);
+	if (unlikely(compute_ip_summed(skb, true))) {
+		kfree_skb(skb);
+		return 0;
+	}
+
 	vlan_copy_skb_tci(skb);
 	OVS_CB(skb)->flow = NULL;
 
@@ -252,6 +256,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	skb->dev = netdev;
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
+	forward_ip_summed(skb, false);
 
 	if (in_interrupt())
 		netif_rx(skb);

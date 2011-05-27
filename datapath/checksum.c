@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -16,7 +16,82 @@
 #include "checksum.h"
 #include "datapath.h"
 
- /* Types of checksums that we can receive (these all refer to L4 checksums):
+#ifdef NEED_CSUM_NORMALIZE
+
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+/* This code is based on skb_checksum_setup() from Xen's net/dev/core.c.  We
+ * can't call this function directly because it isn't exported in all
+ * versions. */
+static int vswitch_skb_checksum_setup(struct sk_buff *skb)
+{
+	struct iphdr *iph;
+	unsigned char *th;
+	int err = -EPROTO;
+	__u16 csum_start, csum_offset;
+
+	if (!skb->proto_csum_blank)
+		return 0;
+
+	if (skb->protocol != htons(ETH_P_IP))
+		goto out;
+
+	if (!pskb_may_pull(skb, skb_network_header(skb) + sizeof(struct iphdr) - skb->data))
+		goto out;
+
+	iph = ip_hdr(skb);
+	th = skb_network_header(skb) + 4 * iph->ihl;
+
+	csum_start = th - skb->head;
+	switch (iph->protocol) {
+	case IPPROTO_TCP:
+		csum_offset = offsetof(struct tcphdr, check);
+		break;
+	case IPPROTO_UDP:
+		csum_offset = offsetof(struct udphdr, check);
+		break;
+	default:
+		if (net_ratelimit())
+			pr_err("Attempting to checksum a non-TCP/UDP packet, "
+			       "dropping a protocol %d packet",
+			       iph->protocol);
+		goto out;
+	}
+
+	if (!pskb_may_pull(skb, th + csum_offset + 2 - skb->data))
+		goto out;
+
+	skb->proto_csum_blank = 0;
+	set_ip_summed(skb, OVS_CSUM_PARTIAL);
+	set_skb_csum_pointers(skb, csum_start, csum_offset);
+
+	err = 0;
+
+out:
+	return err;
+}
+#else
+static int vswitch_skb_checksum_setup(struct sk_buff *skb)
+{
+	return 0;
+}
+#endif /* not Xen old style checksums */
+
+/*
+ *	compute_ip_summed - map external checksum state onto OVS representation
+ *
+ * @skb: Packet to manipulate.
+ * @xmit: Whether we were on transmit path of network stack.  For example,
+ *	  this is true for the internal dev vport because it receives skbs
+ *	  that passed through dev_queue_xmit() but false for the netdev vport
+ *	  because its packets come from netif_receive_skb().
+ *
+ * Older kernels (and various versions of Xen) were not explicit enough about
+ * checksum offload parameters and rely on a combination of context and
+ * non standard fields.  This deals with all those variations so that we
+ * can internally manipulate checksum offloads without worrying about kernel
+ * version.
+ *
+ * Types of checksums that we can receive (these all refer to L4 checksums):
  * 1. CHECKSUM_NONE: Device that did not compute checksum, contains full
  *	(though not verified) checksum in packet but not in skb->csum.  Packets
  *	from the bridge local port will also have this type.
@@ -58,25 +133,24 @@
  * CHECKSUM_PARTIAL, it will be sent with the wrong checksum.  However, there
  * shouldn't be any devices that do this with bridging.
  */
-#ifdef NEED_CSUM_NORMALIZE
-void compute_ip_summed(struct sk_buff *skb, bool xmit)
+int compute_ip_summed(struct sk_buff *skb, bool xmit)
 {
 	/* For our convenience these defines change repeatedly between kernel
 	 * versions, so we can't just copy them over...
 	 */
 	switch (skb->ip_summed) {
 	case CHECKSUM_NONE:
-		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
+		set_ip_summed(skb, OVS_CSUM_NONE);
 		break;
 	case CHECKSUM_UNNECESSARY:
-		OVS_CB(skb)->ip_summed = OVS_CSUM_UNNECESSARY;
+		set_ip_summed(skb, OVS_CSUM_UNNECESSARY);
 		break;
 #ifdef CHECKSUM_HW
 	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
 	 * However, on the receive side we should only get CHECKSUM_PARTIAL
 	 * packets from Xen, which uses some special fields to represent this
-	 * (see below).  Since we can only make one type work, pick the one
-	 * that actually happens in practice.
+	 * (see vswitch_skb_checksum_setup()).  Since we can only make one type work,
+	 * pick the one that actually happens in practice.
 	 *
 	 * On the transmit side (basically after skb_checksum_setup()
 	 * has been run or on internal dev transmit), packets with
@@ -84,87 +158,101 @@ void compute_ip_summed(struct sk_buff *skb, bool xmit)
 	 */
 	case CHECKSUM_HW:
 		if (!xmit)
-			OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+			set_ip_summed(skb, OVS_CSUM_COMPLETE);
 		else
-			OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
-
+			set_ip_summed(skb, OVS_CSUM_PARTIAL);
 		break;
 #else
 	case CHECKSUM_COMPLETE:
-		OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+		set_ip_summed(skb, OVS_CSUM_COMPLETE);
 		break;
 	case CHECKSUM_PARTIAL:
-		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+		set_ip_summed(skb, OVS_CSUM_PARTIAL);
 		break;
 #endif
 	}
 
-#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
-	 * kernels. It should not be set on the transmit path though.
-	 */
-	if (skb->proto_csum_blank)
-		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+	OVS_CB(skb)->csum_start = skb_headroom(skb) + skb_transport_offset(skb);
 
-	WARN_ON_ONCE(skb->proto_csum_blank && xmit);
+	return vswitch_skb_checksum_setup(skb);
+}
+
+/*
+ *     forward_ip_summed - map internal checksum state back onto native kernel fields
+ *
+ * @skb: Packet to manipulate.
+ * @xmit: Whether we are about send on the transmit path the network stack.  This
+ *	  follows the same logic as the @xmit field in compute_ip_summed().
+ *	  Generally, a given vport will have opposite values for @xmit passed to these
+ *	  two functions.
+ *
+ * When a packet is about to egress from OVS take our internal fields (including
+ * any modifications we have made) and recreate the correct representation for
+ * this kernel.  This may do things like change the transport header offset.
+ */
+void forward_ip_summed(struct sk_buff *skb, bool xmit)
+{
+	switch(get_ip_summed(skb)) {
+	case OVS_CSUM_NONE:
+		skb->ip_summed = CHECKSUM_NONE;
+		break;
+	case OVS_CSUM_UNNECESSARY:
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+		skb->proto_data_valid = 1;
 #endif
+		break;
+#ifdef CHECKSUM_HW
+	case OVS_CSUM_COMPLETE:
+		if (!xmit)
+			skb->ip_summed = CHECKSUM_HW;
+		else
+			skb->ip_summed = CHECKSUM_NONE;
+		break;
+	case OVS_CSUM_PARTIAL:
+		if (!xmit) {
+			skb->ip_summed = CHECKSUM_UNNECESSARY;
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+			skb->proto_csum_blank = 1;
+#endif
+		} else {
+			skb->ip_summed = CHECKSUM_HW;
+		}
+		break;
+#else
+	case OVS_CSUM_COMPLETE:
+		skb->ip_summed = CHECKSUM_COMPLETE;
+		break;
+	case OVS_CSUM_PARTIAL:
+		skb->ip_summed = CHECKSUM_PARTIAL;
+		break;
+#endif
+	}
+
+	if (get_ip_summed(skb) == OVS_CSUM_PARTIAL)
+		skb_set_transport_header(skb, OVS_CB(skb)->csum_start - skb_headroom(skb));
 }
 
 u8 get_ip_summed(struct sk_buff *skb)
 {
 	return OVS_CB(skb)->ip_summed;
 }
-#endif /* NEED_CSUM_NORMALIZE */
 
-#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-/* This code is based on skb_checksum_setup() from Xen's net/dev/core.c.  We
- * can't call this function directly because it isn't exported in all
- * versions. */
-int vswitch_skb_checksum_setup(struct sk_buff *skb)
+void set_ip_summed(struct sk_buff *skb, u8 ip_summed)
 {
-	struct iphdr *iph;
-	unsigned char *th;
-	int err = -EPROTO;
-	__u16 csum_start, csum_offset;
-
-	if (!skb->proto_csum_blank)
-		return 0;
-
-	if (skb->protocol != htons(ETH_P_IP))
-		goto out;
-
-	if (!pskb_may_pull(skb, skb_network_header(skb) + sizeof(struct iphdr) - skb->data))
-		goto out;
-
-	iph = ip_hdr(skb);
-	th = skb_network_header(skb) + 4 * iph->ihl;
-
-	csum_start = th - skb->head;
-	switch (iph->protocol) {
-	case IPPROTO_TCP:
-		csum_offset = offsetof(struct tcphdr, check);
-		break;
-	case IPPROTO_UDP:
-		csum_offset = offsetof(struct udphdr, check);
-		break;
-	default:
-		if (net_ratelimit())
-			pr_err("Attempting to checksum a non-TCP/UDP packet, "
-			       "dropping a protocol %d packet",
-			       iph->protocol);
-		goto out;
-	}
-
-	if (!pskb_may_pull(skb, th + csum_offset + 2 - skb->data))
-		goto out;
-
-	skb->ip_summed = CHECKSUM_PARTIAL;
-	skb->proto_csum_blank = 0;
-	set_skb_csum_pointers(skb, csum_start, csum_offset);
-
-	err = 0;
-
-out:
-	return err;
+	OVS_CB(skb)->ip_summed = ip_summed;
 }
-#endif /* CONFIG_XEN && HAVE_PROTO_DATA_VALID */
+
+void get_skb_csum_pointers(const struct sk_buff *skb, u16 *csum_start,
+			   u16 *csum_offset)
+{
+	*csum_start = OVS_CB(skb)->csum_start;
+	*csum_offset = skb->csum;
+}
+
+void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start, u16 csum_offset)
+{
+	OVS_CB(skb)->csum_start = csum_start;
+	skb->csum = csum_offset;
+}
+#endif /* NEED_CSUM_NORMALIZE */

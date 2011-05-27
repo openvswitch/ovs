@@ -450,8 +450,12 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos)
 	secpath_reset(skb);
 
 	ecn_decapsulate(skb, tos);
-	compute_ip_summed(skb, false);
 	vlan_set_tci(skb, 0);
+
+	if (unlikely(compute_ip_summed(skb, false))) {
+		kfree_skb(skb);
+		return;
+	}
 
 	vport_receive(vport, skb);
 }
@@ -718,7 +722,11 @@ bool tnl_frag_needed(struct vport *vport, const struct tnl_mutable_config *mutab
 	    (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION))
 		OVS_CB(nskb)->tun_id = flow_key;
 
-	compute_ip_summed(nskb, false);
+	if (unlikely(compute_ip_summed(nskb, false))) {
+		kfree_skb(nskb);
+		return false;
+	}
+
 	vport_receive(vport, nskb);
 
 	return true;
@@ -1053,12 +1061,6 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 	int min_headroom;
 	int err;
 
-	forward_ip_summed(skb);
-
-	err = vswitch_skb_checksum_setup(skb);
-	if (unlikely(err))
-		goto error_free;
-
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ mutable->tunnel_hlen
 			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
@@ -1073,6 +1075,8 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 			goto error_free;
 	}
 
+	forward_ip_summed(skb, true);
+
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb;
 
@@ -1084,7 +1088,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		}
 
 		skb = nskb;
-	} else if (skb->ip_summed == CHECKSUM_PARTIAL) {
+	} else if (get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
 		/* Pages aren't locked and could change at any time.
 		 * If this happens after we compute the checksum, the
 		 * checksum will be wrong.  We linearize now to avoid
@@ -1099,8 +1103,9 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
 			goto error_free;
-	} else if (skb->ip_summed == CHECKSUM_COMPLETE)
-		skb->ip_summed = CHECKSUM_NONE;
+	}
+
+	set_ip_summed(skb, OVS_CSUM_NONE);
 
 	return skb;
 
@@ -1295,8 +1300,12 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 			ip_send_check(iph);
 
 			if (cache_vport) {
+				if (unlikely(compute_ip_summed(skb, true))) {
+					kfree_skb(skb);
+					goto next;
+				}
+
 				OVS_CB(skb)->flow = cache->flow;
-				compute_ip_summed(skb, true);
 				vport_receive(cache_vport, skb);
 				sent_len += orig_len;
 			} else {
