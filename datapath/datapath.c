@@ -1904,7 +1904,9 @@ static int odp_vport_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(reply))
 		goto exit_unlock;
 
-	err = genlmsg_reply(reply, info);
+	rcu_read_unlock();
+
+	return genlmsg_reply(reply, info);
 
 exit_unlock:
 	rcu_read_unlock();
