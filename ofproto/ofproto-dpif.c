@@ -184,9 +184,9 @@ struct action_xlate_ctx {
  * reason to look at them. */
 
     int recurse;                /* Recursion level, via xlate_table_action. */
-    int last_pop_priority;      /* Offset in 'odp_actions' just past most
-                                 * recent ODP_ACTION_ATTR_SET_PRIORITY. */
     uint32_t priority;          /* Current flow priority. 0 if none. */
+    struct flow base_flow;      /* Flow at the last commit. */
+    uint32_t base_priority;     /* Priority at the last commit. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -2710,6 +2710,71 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
 static bool xlate_normal(struct action_xlate_ctx *);
 
 static void
+commit_odp_actions(struct action_xlate_ctx *ctx)
+{
+    const struct flow *flow = &ctx->flow;
+    struct flow *base = &ctx->base_flow;
+    struct ofpbuf *odp_actions = ctx->odp_actions;
+
+    if (base->tun_id != flow->tun_id) {
+        nl_msg_put_be64(odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, flow->tun_id);
+        base->tun_id = flow->tun_id;
+    }
+
+    if (base->nw_src != flow->nw_src) {
+        nl_msg_put_be32(odp_actions, ODP_ACTION_ATTR_SET_NW_SRC, flow->nw_src);
+        base->nw_src = flow->nw_src;
+    }
+
+    if (base->nw_dst != flow->nw_dst) {
+        nl_msg_put_be32(odp_actions, ODP_ACTION_ATTR_SET_NW_DST, flow->nw_dst);
+        base->nw_dst = flow->nw_dst;
+    }
+
+    if (base->vlan_tci != flow->vlan_tci) {
+        if (!(flow->vlan_tci & htons(VLAN_CFI))) {
+            nl_msg_put_flag(odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
+        } else {
+            nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
+                            flow->vlan_tci & ~htons(VLAN_CFI));
+        }
+        base->vlan_tci = flow->vlan_tci;
+    }
+
+    if (base->tp_src != flow->tp_src) {
+        nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_TP_SRC, flow->tp_src);
+        base->tp_src = flow->tp_src;
+    }
+
+    if (base->tp_dst != flow->tp_dst) {
+        nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_TP_DST, flow->tp_dst);
+        base->tp_dst = flow->tp_dst;
+    }
+
+    if (!eth_addr_equals(base->dl_src, flow->dl_src)) {
+        nl_msg_put_unspec(odp_actions, ODP_ACTION_ATTR_SET_DL_SRC,
+                          flow->dl_src, ETH_ADDR_LEN);
+        memcpy(base->dl_src, flow->dl_src, ETH_ADDR_LEN);
+    }
+
+    if (!eth_addr_equals(base->dl_dst, flow->dl_dst)) {
+        nl_msg_put_unspec(odp_actions, ODP_ACTION_ATTR_SET_DL_DST,
+                          flow->dl_dst, ETH_ADDR_LEN);
+        memcpy(base->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
+    }
+
+    if (ctx->base_priority != ctx->priority) {
+        if (ctx->priority) {
+            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_SET_PRIORITY,
+                           ctx->priority);
+        } else {
+            nl_msg_put_flag(odp_actions, ODP_ACTION_ATTR_POP_PRIORITY);
+        }
+        ctx->base_priority = ctx->priority;
+    }
+}
+
+static void
 add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
@@ -2728,6 +2793,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
          */
     }
 
+    commit_odp_actions(ctx);
     nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_OUTPUT, odp_port);
     ctx->nf_output_iface = ofp_port;
 }
@@ -2765,20 +2831,20 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 }
 
 static void
-flood_packets(struct ofproto_dpif *ofproto,
-              uint16_t ofp_in_port, ovs_be32 mask,
-              uint16_t *nf_output_iface, struct ofpbuf *odp_actions)
+flood_packets(struct action_xlate_ctx *ctx, ovs_be32 mask)
 {
     struct ofport_dpif *ofport;
 
-    HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+    commit_odp_actions(ctx);
+    HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
         uint16_t ofp_port = ofport->up.ofp_port;
-        if (ofp_port != ofp_in_port && !(ofport->up.opp.config & mask)) {
-            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_OUTPUT,
+        if (ofp_port != ctx->flow.in_port && !(ofport->up.opp.config & mask)) {
+            nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_OUTPUT,
                            ofport->odp_port);
         }
     }
-    *nf_output_iface = NF_OUT_FLOOD;
+
+    ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
 static void
@@ -2800,14 +2866,13 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         xlate_normal(ctx);
         break;
     case OFPP_FLOOD:
-        flood_packets(ctx->ofproto, ctx->flow.in_port, htonl(OFPPC_NO_FLOOD),
-                      &ctx->nf_output_iface, ctx->odp_actions);
+        flood_packets(ctx,  htonl(OFPPC_NO_FLOOD));
         break;
     case OFPP_ALL:
-        flood_packets(ctx->ofproto, ctx->flow.in_port, htonl(0),
-                      &ctx->nf_output_iface, ctx->odp_actions);
+        flood_packets(ctx, htonl(0));
         break;
     case OFPP_CONTROLLER:
+        commit_odp_actions(ctx);
         nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_CONTROLLER, max_len);
         break;
     case OFPP_LOCAL:
@@ -2837,34 +2902,12 @@ xlate_output_action(struct action_xlate_ctx *ctx,
     xlate_output_action__(ctx, ntohs(oao->port), ntohs(oao->max_len));
 }
 
-/* If the final ODP action in 'ctx' is "pop priority", drop it, as an
- * optimization, because we're going to add another action that sets the
- * priority immediately after, or because there are no actions following the
- * pop.  */
-static void
-remove_pop_action(struct action_xlate_ctx *ctx)
-{
-    if (ctx->odp_actions->size == ctx->last_pop_priority) {
-        ctx->odp_actions->size -= NLA_ALIGN(NLA_HDRLEN);
-        ctx->last_pop_priority = -1;
-    }
-}
-
-static void
-add_pop_action(struct action_xlate_ctx *ctx)
-{
-    if (ctx->odp_actions->size != ctx->last_pop_priority) {
-        nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_POP_PRIORITY);
-        ctx->last_pop_priority = ctx->odp_actions->size;
-    }
-}
-
 static void
 xlate_enqueue_action(struct action_xlate_ctx *ctx,
                      const struct ofp_action_enqueue *oae)
 {
     uint16_t ofp_port, odp_port;
-    uint32_t priority;
+    uint32_t ctx_priority, priority;
     int error;
 
     error = dpif_queue_to_priority(ctx->ofproto->dpif, ntohl(oae->queue_id),
@@ -2883,16 +2926,10 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     odp_port = ofp_port_to_odp_port(ofp_port);
 
     /* Add ODP actions. */
-    remove_pop_action(ctx);
-    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
+    ctx_priority = ctx->priority;
+    ctx->priority = priority;
     add_output_action(ctx, odp_port);
-
-    if (ctx->priority) {
-        nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY,
-                       ctx->priority);
-    } else {
-        add_pop_action(ctx);
-    }
+    ctx->priority = ctx_priority;
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
@@ -2918,47 +2955,12 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
     }
 
     ctx->priority = priority;
-    remove_pop_action(ctx);
-    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
-}
-
-static void
-xlate_set_dl_tci(struct action_xlate_ctx *ctx)
-{
-    ovs_be16 tci = ctx->flow.vlan_tci;
-    if (!(tci & htons(VLAN_CFI))) {
-        nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
-    } else {
-        nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
-                        tci & ~htons(VLAN_CFI));
-    }
 }
 
 struct xlate_reg_state {
     ovs_be16 vlan_tci;
     ovs_be64 tun_id;
 };
-
-static void
-save_reg_state(const struct action_xlate_ctx *ctx,
-               struct xlate_reg_state *state)
-{
-    state->vlan_tci = ctx->flow.vlan_tci;
-    state->tun_id = ctx->flow.tun_id;
-}
-
-static void
-update_reg_state(struct action_xlate_ctx *ctx,
-                 const struct xlate_reg_state *state)
-{
-    if (ctx->flow.vlan_tci != state->vlan_tci) {
-        xlate_set_dl_tci(ctx);
-    }
-    if (ctx->flow.tun_id != state->tun_id) {
-        nl_msg_put_be64(ctx->odp_actions,
-                        ODP_ACTION_ATTR_SET_TUNNEL, ctx->flow.tun_id);
-    }
-}
 
 static void
 xlate_autopath(struct action_xlate_ctx *ctx,
@@ -2990,7 +2992,6 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     const struct nx_action_multipath *nam;
     const struct nx_action_autopath *naa;
     enum nx_action_subtype subtype = ntohs(nah->subtype);
-    struct xlate_reg_state state;
     ovs_be64 tun_id;
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -3003,12 +3004,16 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     case NXAST_SET_TUNNEL:
         nast = (const struct nx_action_set_tunnel *) nah;
         tun_id = htonll(ntohl(nast->tun_id));
-        nl_msg_put_be64(ctx->odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, tun_id);
         ctx->flow.tun_id = tun_id;
         break;
 
     case NXAST_DROP_SPOOFED_ARP:
         if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
+            /* XXX: It's not entirely clear whether or not we need to commit
+             * here.  The safer thing to do is commit of course.  Hopefully in
+             * the near future we can rip out NXAST_DROP_SPOOFED_ARP altogether
+             * and the point will be moot. */
+            commit_odp_actions(ctx);
             nl_msg_put_flag(ctx->odp_actions,
                             ODP_ACTION_ATTR_DROP_SPOOFED_ARP);
         }
@@ -3021,21 +3026,16 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_POP_QUEUE:
         ctx->priority = 0;
-        add_pop_action(ctx);
         break;
 
     case NXAST_REG_MOVE:
-        save_reg_state(ctx, &state);
         nxm_execute_reg_move((const struct nx_action_reg_move *) nah,
                              &ctx->flow);
-        update_reg_state(ctx, &state);
         break;
 
     case NXAST_REG_LOAD:
-        save_reg_state(ctx, &state);
         nxm_execute_reg_load((const struct nx_action_reg_load *) nah,
                              &ctx->flow);
-        update_reg_state(ctx, &state);
         break;
 
     case NXAST_NOTE:
@@ -3044,7 +3044,6 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
 
     case NXAST_SET_TUNNEL64:
         tun_id = ((const struct nx_action_set_tunnel64 *) nah)->tun_id;
-        nl_msg_put_be64(ctx->odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, tun_id);
         ctx->flow.tun_id = tun_id;
         break;
 
@@ -3098,62 +3097,45 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         case OFPAT_SET_VLAN_VID:
             ctx->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
             ctx->flow.vlan_tci |= ia->vlan_vid.vlan_vid | htons(VLAN_CFI);
-            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_SET_VLAN_PCP:
             ctx->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
             ctx->flow.vlan_tci |= htons(
                 (ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
-            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_STRIP_VLAN:
             ctx->flow.vlan_tci = htons(0);
-            xlate_set_dl_tci(ctx);
             break;
 
         case OFPAT_SET_DL_SRC:
             oada = ((struct ofp_action_dl_addr *) ia);
-            nl_msg_put_unspec(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_SRC,
-                              oada->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_src, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_DL_DST:
             oada = ((struct ofp_action_dl_addr *) ia);
-            nl_msg_put_unspec(ctx->odp_actions, ODP_ACTION_ATTR_SET_DL_DST,
-                              oada->dl_addr, ETH_ADDR_LEN);
             memcpy(ctx->flow.dl_dst, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_NW_SRC:
-            nl_msg_put_be32(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_SRC,
-                            ia->nw_addr.nw_addr);
             ctx->flow.nw_src = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
-            nl_msg_put_be32(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_DST,
-                            ia->nw_addr.nw_addr);
             ctx->flow.nw_dst = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
-            nl_msg_put_u8(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_TOS,
-                          ia->nw_tos.nw_tos);
             ctx->flow.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
-            nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_TP_SRC,
-                            ia->tp_port.tp_port);
             ctx->flow.tp_src = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
-            nl_msg_put_be16(ctx->odp_actions, ODP_ACTION_ATTR_SET_TP_DST,
-                            ia->tp_port.tp_port);
             ctx->flow.tp_dst = ia->tp_port.tp_port;
             break;
 
@@ -3194,16 +3176,15 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->may_set_up_flow = true;
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
-    ctx->last_pop_priority = -1;
     ctx->priority = 0;
+    ctx->base_priority = 0;
+    ctx->base_flow = ctx->flow;
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
     } else {
         do_xlate_actions(in, n_in, ctx);
     }
-
-    remove_pop_action(ctx);
 
     /* Check with in-band control to see if we're allowed to set up this
      * flow. */
