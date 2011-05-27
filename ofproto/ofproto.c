@@ -1990,6 +1990,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct flow_stats_request request;
     struct ofputil_aggregate_stats stats;
+    bool unknown_packets, unknown_bytes;
     struct ofpbuf *reply;
     struct list rules;
     struct rule *rule;
@@ -2007,6 +2008,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     }
 
     memset(&stats, 0, sizeof stats);
+    unknown_packets = unknown_bytes = false;
     LIST_FOR_EACH (rule, ofproto_node, &rules) {
         uint64_t packet_count;
         uint64_t byte_count;
@@ -2014,9 +2016,25 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
         ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
                                                &byte_count);
 
-        stats.packet_count += packet_count;
-        stats.byte_count += byte_count;
+        if (packet_count == UINT64_MAX) {
+            unknown_packets = true;
+        } else {
+            stats.packet_count += packet_count;
+        }
+
+        if (byte_count == UINT64_MAX) {
+            unknown_bytes = true;
+        } else {
+            stats.byte_count += byte_count;
+        }
+
         stats.flow_count++;
+    }
+    if (unknown_packets) {
+        stats.packet_count = UINT64_MAX;
+    }
+    if (unknown_bytes) {
+        stats.byte_count = UINT64_MAX;
     }
 
     reply = ofputil_encode_aggregate_stats_reply(&stats, osm);

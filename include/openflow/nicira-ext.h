@@ -1271,8 +1271,8 @@ struct nx_flow_stats {
     ovs_be16 match_len;       /* Length of nx_match. */
     uint8_t pad2[4];          /* Align to 64 bits. */
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
-    ovs_be64 packet_count;    /* Number of packets in flow. */
-    ovs_be64 byte_count;      /* Number of bytes in flow. */
+    ovs_be64 packet_count;    /* Number of packets, UINT64_MAX if unknown. */
+    ovs_be64 byte_count;      /* Number of bytes, UINT64_MAX if unknown. */
     /* Followed by:
      *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
      *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
@@ -1307,10 +1307,10 @@ OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 32);
  * OFPST_AGGREGATE reply). */
 struct nx_aggregate_stats_reply {
     struct nicira_stats_msg nsm;
-    ovs_be64 packet_count;         /* Number of packets in flows. */
-    ovs_be64 byte_count;           /* Number of bytes in flows. */
-    ovs_be32 flow_count;           /* Number of flows. */
-    uint8_t pad[4];                /* Align to 64 bits. */
+    ovs_be64 packet_count;     /* Number of packets, UINT64_MAX if unknown. */
+    ovs_be64 byte_count;       /* Number of bytes, UINT64_MAX if unknown. */
+    ovs_be32 flow_count;       /* Number of flows. */
+    uint8_t pad[4];            /* Align to 64 bits. */
 };
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
 

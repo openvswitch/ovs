@@ -690,7 +690,8 @@ struct ofproto_class {
 
     /* Obtains statistics for 'rule', storing the number of packets that have
      * matched it in '*packet_count' and the number of bytes in those packets
-     * in '*byte_count'. */
+     * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
+     * count is unknown. */
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
                            uint64_t *byte_count);
 

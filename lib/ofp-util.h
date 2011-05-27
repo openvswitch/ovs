@@ -163,8 +163,8 @@ struct ofputil_flow_stats {
     uint32_t duration_nsec;
     uint16_t idle_timeout;
     uint16_t hard_timeout;
-    uint64_t packet_count;
-    uint64_t byte_count;
+    uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
+    uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
     union ofp_action *actions;
     size_t n_actions;
 };
@@ -176,8 +176,8 @@ void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
 
 /* Aggregate stats reply, independent of flow format. */
 struct ofputil_aggregate_stats {
-    uint64_t packet_count;
-    uint64_t byte_count;
+    uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
+    uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
     uint32_t flow_count;
 };
 
@@ -193,8 +193,8 @@ struct ofputil_flow_removed {
     uint32_t duration_sec;
     uint32_t duration_nsec;
     uint16_t idle_timeout;
-    uint64_t packet_count;
-    uint64_t byte_count;
+    uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
+    uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
 };
 
 int ofputil_decode_flow_removed(struct ofputil_flow_removed *,

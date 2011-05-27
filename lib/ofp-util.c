@@ -1231,6 +1231,16 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     return 0;
 }
 
+/* Returns 'count' unchanged except that UINT64_MAX becomes 0.
+ *
+ * We use this in situations where OVS internally uses UINT64_MAX to mean
+ * "value unknown" but OpenFlow 1.0 does not define any unknown value. */
+static uint64_t
+unknown_to_zero(uint64_t count)
+{
+    return count != UINT64_MAX ? count : 0;
+}
+
 /* Appends an OFPST_FLOW or NXST_FLOW reply that contains the data in 'fs' to
  * those already present in the list of ofpbufs in 'replies'.  'replies' should
  * have been initialized with ofputil_start_stats_reply(). */
@@ -1258,8 +1268,10 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         ofs->hard_timeout = htons(fs->hard_timeout);
         memset(ofs->pad2, 0, sizeof ofs->pad2);
         put_32aligned_be64(&ofs->cookie, fs->cookie);
-        put_32aligned_be64(&ofs->packet_count, htonll(fs->packet_count));
-        put_32aligned_be64(&ofs->byte_count, htonll(fs->byte_count));
+        put_32aligned_be64(&ofs->packet_count,
+                           htonll(unknown_to_zero(fs->packet_count)));
+        put_32aligned_be64(&ofs->byte_count,
+                           htonll(unknown_to_zero(fs->byte_count)));
         memcpy(ofs->actions, fs->actions, act_len);
     } else if (osm->type == htons(OFPST_VENDOR)) {
         struct nx_flow_stats *nfs;
@@ -1303,8 +1315,10 @@ ofputil_encode_aggregate_stats_reply(
         struct ofp_aggregate_stats_reply *asr;
 
         asr = ofputil_make_stats_reply(sizeof *asr, request, &msg);
-        put_32aligned_be64(&asr->packet_count, htonll(stats->packet_count));
-        put_32aligned_be64(&asr->byte_count, htonll(stats->byte_count));
+        put_32aligned_be64(&asr->packet_count,
+                           htonll(unknown_to_zero(stats->packet_count)));
+        put_32aligned_be64(&asr->byte_count,
+                           htonll(unknown_to_zero(stats->byte_count)));
         asr->flow_count = htonl(stats->flow_count);
     } else if (request->type == htons(OFPST_VENDOR)) {
         struct nx_aggregate_stats_reply *nasr;
@@ -1398,8 +1412,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr->duration_sec = htonl(fr->duration_sec);
         ofr->duration_nsec = htonl(fr->duration_nsec);
         ofr->idle_timeout = htons(fr->idle_timeout);
-        ofr->packet_count = htonll(fr->packet_count);
-        ofr->byte_count = htonll(fr->byte_count);
+        ofr->packet_count = htonll(unknown_to_zero(fr->packet_count));
+        ofr->byte_count = htonll(unknown_to_zero(fr->byte_count));
     } else if (flow_format == NXFF_NXM) {
         struct nx_flow_removed *nfr;
         int match_len;
