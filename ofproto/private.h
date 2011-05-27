@@ -78,6 +78,7 @@ struct ofport {
  * should not modify them. */
 struct rule {
     struct ofproto *ofproto;     /* The ofproto that contains this rule. */
+    struct list ofproto_node;    /* Owned by ofproto base code. */
     struct cls_rule cr;          /* In owning ofproto's classifier. */
 
     ovs_be64 flow_cookie;        /* Controller-issued identifier. */
