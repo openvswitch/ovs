@@ -151,10 +151,10 @@ poll_immediate_wake(const char *where)
  * arguments have two possible interpretations:
  *
  *   - If 'pollfd' is nonnull then it should be the "struct pollfd" that caused
- *     the wakeup.  In this case, 'timeout' is ignored.
+ *     the wakeup.  'timeout' is ignored.
  *
- *   - If 'pollfd' is nonnull then 'timeout' is the number of milliseconds
- *     after which the poll loop woke up.
+ *   - If 'pollfd' is NULL then 'timeout' is the number of milliseconds after
+ *     which the poll loop woke up.
  */
 static void
 log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
