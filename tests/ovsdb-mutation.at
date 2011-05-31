@@ -502,6 +502,45 @@ row 2: no change
 row 3: {"i":["set",[0,1]]}
 ]], [mutation])
 
+OVSDB_CHECK_POSITIVE([executing mutations on integer sets with constraints],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": {"key": "integer",
+                                 "min": 1,
+                                 "max": 2}}}}' \
+    '[[["i", "insert", ["set", [1]]]],
+      [["i", "insert", ["set", [2]]]],
+      [["i", "delete", ["set", [1]]]],
+      [["i", "delete", ["set", [2]]]],
+      [["i", "delete", ["set", [0, 1]]]]]' \
+    '[{"i": ["set", [0]]},
+      {"i": ["set", [2]]},
+      {"i": ["set", [0, 1]]}']]],
+  [[mutation  0:
+row 0: {"i":["set",[0,1]]}
+row 1: {"i":["set",[1,2]]}
+row 2: no change
+
+mutation  1:
+row 0: {"i":["set",[0,2]]}
+row 1: no change
+row 2: constraint violation: Attempted to store 3 elements in set of 1 to 2 integers.
+
+mutation  2:
+row 0: no change
+row 1: no change
+row 2: {"i":0}
+
+mutation  3:
+row 0: no change
+row 1: constraint violation: Attempted to store 0 elements in set of 1 to 2 integers.
+row 2: no change
+
+mutation  4:
+row 0: constraint violation: Attempted to store 0 elements in set of 1 to 2 integers.
+row 1: no change
+row 2: constraint violation: Attempted to store 0 elements in set of 1 to 2 integers.
+]], [mutation])
+
 OVSDB_CHECK_POSITIVE([executing mutations on real sets],
   [[execute-mutations \
     '{"columns": {"r": {"type": {"key": {"type": "real",
