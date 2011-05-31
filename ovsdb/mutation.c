@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -327,7 +327,7 @@ ovsdb_mutation_check_count(struct ovsdb_datum *dst,
     if (!ovsdb_datum_conforms_to_type(dst, dst_type)) {
         char *s = ovsdb_type_to_english(dst_type);
         struct ovsdb_error *e = ovsdb_error(
-            "constaint violation",
+            "constraint violation",
             "Attempted to store %u elements in %s.", dst->n, s);
         free(s);
         return e;
