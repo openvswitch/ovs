@@ -1231,6 +1231,65 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     return 0;
 }
 
+/* Appends an OFPST_FLOW or NXST_FLOW reply that contains the data in 'fs' to
+ * those already present in the list of ofpbufs in 'replies'.  'replies' should
+ * have been initialized with ofputil_start_stats_reply(). */
+void
+ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
+                                struct list *replies)
+{
+    size_t act_len = fs->n_actions * sizeof *fs->actions;
+    const struct ofp_stats_msg *osm;
+
+    osm = ofpbuf_from_list(list_back(replies))->data;
+    if (osm->type == htons(OFPST_FLOW)) {
+        size_t len = offsetof(struct ofp_flow_stats, actions) + act_len;
+        struct ofp_flow_stats *ofs;
+
+        ofs = ofputil_append_stats_reply(len, replies);
+        ofs->length = htons(len);
+        ofs->table_id = fs->table_id;
+        ofs->pad = 0;
+        ofputil_cls_rule_to_match(&fs->rule, &ofs->match);
+        ofs->duration_sec = htonl(fs->duration_sec);
+        ofs->duration_nsec = htonl(fs->duration_nsec);
+        ofs->priority = htons(fs->rule.priority);
+        ofs->idle_timeout = htons(fs->idle_timeout);
+        ofs->hard_timeout = htons(fs->hard_timeout);
+        memset(ofs->pad2, 0, sizeof ofs->pad2);
+        put_32aligned_be64(&ofs->cookie, fs->cookie);
+        put_32aligned_be64(&ofs->packet_count, htonll(fs->packet_count));
+        put_32aligned_be64(&ofs->byte_count, htonll(fs->byte_count));
+        memcpy(ofs->actions, fs->actions, act_len);
+    } else if (osm->type == htons(OFPST_VENDOR)) {
+        struct nx_flow_stats *nfs;
+        struct ofpbuf *msg;
+        size_t start_len;
+
+        msg = ofputil_reserve_stats_reply(
+            sizeof *nfs + NXM_MAX_LEN + act_len, replies);
+        start_len = msg->size;
+
+        nfs = ofpbuf_put_uninit(msg, sizeof *nfs);
+        nfs->table_id = fs->table_id;
+        nfs->pad = 0;
+        nfs->duration_sec = htonl(fs->duration_sec);
+        nfs->duration_nsec = htonl(fs->duration_nsec);
+        nfs->priority = htons(fs->rule.priority);
+        nfs->idle_timeout = htons(fs->idle_timeout);
+        nfs->hard_timeout = htons(fs->hard_timeout);
+        nfs->match_len = htons(nx_put_match(msg, &fs->rule));
+        memset(nfs->pad2, 0, sizeof nfs->pad2);
+        nfs->cookie = fs->cookie;
+        nfs->packet_count = htonll(fs->packet_count);
+        nfs->byte_count = htonll(fs->byte_count);
+        ofpbuf_put(msg, fs->actions, act_len);
+        nfs->length = htons(msg->size - start_len);
+    } else {
+        NOT_REACHED();
+    }
+}
+
 /* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
  * NXST_AGGREGATE reply according to 'flow_format', and returns the message. */
 struct ofpbuf *

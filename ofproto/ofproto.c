@@ -50,7 +50,6 @@
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
 COVERAGE_DEFINE(ofproto_error);
-COVERAGE_DEFINE(ofproto_flows_req);
 COVERAGE_DEFINE(ofproto_flush);
 COVERAGE_DEFINE(ofproto_no_packet_in);
 COVERAGE_DEFINE(ofproto_packet_out);
@@ -1686,52 +1685,6 @@ calc_flow_duration__(long long int start, uint32_t *sec, uint32_t *nsec)
     *nsec = (msecs % 1000) * (1000 * 1000);
 }
 
-static void
-calc_flow_duration(long long int start, ovs_be32 *sec_be, ovs_be32 *nsec_be)
-{
-    uint32_t sec, nsec;
-
-    calc_flow_duration__(start, &sec, &nsec);
-    *sec_be = htonl(sec);
-    *nsec_be = htonl(nsec);
-}
-
-static void
-put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
-                   ovs_be16 out_port, struct list *replies)
-{
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofp_flow_stats *ofs;
-    uint64_t packet_count, byte_count;
-    size_t act_len, len;
-
-    if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
-        return;
-    }
-
-    act_len = sizeof *rule->actions * rule->n_actions;
-    len = offsetof(struct ofp_flow_stats, actions) + act_len;
-
-    ofproto->ofproto_class->rule_get_stats(rule, &packet_count, &byte_count);
-
-    ofs = ofputil_append_stats_reply(len, replies);
-    ofs->length = htons(len);
-    ofs->table_id = rule->table_id;
-    ofs->pad = 0;
-    ofputil_cls_rule_to_match(&rule->cr, &ofs->match);
-    put_32aligned_be64(&ofs->cookie, rule->flow_cookie);
-    calc_flow_duration(rule->created, &ofs->duration_sec, &ofs->duration_nsec);
-    ofs->priority = htons(rule->cr.priority);
-    ofs->idle_timeout = htons(rule->idle_timeout);
-    ofs->hard_timeout = htons(rule->hard_timeout);
-    memset(ofs->pad2, 0, sizeof ofs->pad2);
-    put_32aligned_be64(&ofs->packet_count, htonll(packet_count));
-    put_32aligned_be64(&ofs->byte_count, htonll(byte_count));
-    if (rule->n_actions > 0) {
-        memcpy(ofs->actions, rule->actions, act_len);
-    }
-}
-
 static struct classifier *
 first_matching_table(struct ofproto *ofproto, uint8_t table_id)
 {
@@ -1779,101 +1732,45 @@ next_matching_table(struct ofproto *ofproto,
 
 static int
 handle_flow_stats_request(struct ofconn *ofconn,
-                          const struct ofp_flow_stats_request *fsr)
+                          const struct ofp_stats_msg *osm)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct flow_stats_request fsr;
     struct classifier *cls;
-    struct cls_rule target;
     struct list replies;
-
-    COVERAGE_INC(ofproto_flows_req);
-    ofputil_start_stats_reply(&fsr->osm, &replies);
-    ofputil_cls_rule_from_match(&fsr->match, 0, &target);
-    FOR_EACH_MATCHING_TABLE (cls, fsr->table_id, ofproto) {
-        struct cls_cursor cursor;
-        struct rule *rule;
-
-        cls_cursor_init(&cursor, cls, &target);
-        CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            put_ofp_flow_stats(ofconn, rule, fsr->out_port, &replies);
-        }
-    }
-    ofconn_send_replies(ofconn, &replies);
-
-    return 0;
-}
-
-static void
-put_nx_flow_stats(struct rule *rule, ovs_be16 out_port, struct list *replies)
-{
-    struct nx_flow_stats *nfs;
-    uint64_t packet_count, byte_count;
-    size_t act_len, start_len;
-    struct ofpbuf *reply;
-
-    if (rule_is_hidden(rule) || !rule_has_out_port(rule, out_port)) {
-        return;
-    }
-
-    rule->ofproto->ofproto_class->rule_get_stats(rule,
-                                                 &packet_count, &byte_count);
-
-    act_len = sizeof *rule->actions * rule->n_actions;
-
-    reply = ofputil_reserve_stats_reply(sizeof *nfs + NXM_MAX_LEN + act_len,
-                                        replies);
-    start_len = reply->size;
-
-    nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
-    nfs->table_id = rule->table_id;
-    nfs->pad = 0;
-    calc_flow_duration(rule->created, &nfs->duration_sec, &nfs->duration_nsec);
-    nfs->cookie = rule->flow_cookie;
-    nfs->priority = htons(rule->cr.priority);
-    nfs->idle_timeout = htons(rule->idle_timeout);
-    nfs->hard_timeout = htons(rule->hard_timeout);
-    nfs->match_len = htons(nx_put_match(reply, &rule->cr));
-    memset(nfs->pad2, 0, sizeof nfs->pad2);
-    nfs->packet_count = htonll(packet_count);
-    nfs->byte_count = htonll(byte_count);
-    if (rule->n_actions > 0) {
-        ofpbuf_put(reply, rule->actions, act_len);
-    }
-    nfs->length = htons(reply->size - start_len);
-}
-
-static int
-handle_nxst_flow(struct ofconn *ofconn, const struct ofp_stats_msg *osm)
-{
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct nx_flow_stats_request *nfsr;
-    struct classifier *cls;
-    struct cls_rule target;
-    struct list replies;
-    struct ofpbuf b;
+    ovs_be16 out_port;
     int error;
 
-    ofpbuf_use_const(&b, osm, ntohs(osm->header.length));
-
-    /* Dissect the message. */
-    nfsr = ofpbuf_pull(&b, sizeof *nfsr);
-    error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &target);
+    error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
     if (error) {
         return error;
     }
-    if (b.size) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
+    out_port = htons(fsr.out_port);
 
-    COVERAGE_INC(ofproto_flows_req);
+    list_init(&replies);
     ofputil_start_stats_reply(osm, &replies);
-    FOR_EACH_MATCHING_TABLE (cls, nfsr->table_id, ofproto) {
+    FOR_EACH_MATCHING_TABLE (cls, fsr.table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, cls, &target);
+        cls_cursor_init(&cursor, cls, &fsr.match);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            put_nx_flow_stats(rule, nfsr->out_port, &replies);
+            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)) {
+                struct ofputil_flow_stats fs;
+
+                fs.rule = rule->cr;
+                fs.cookie = rule->flow_cookie;
+                fs.table_id = rule->table_id;
+                calc_flow_duration__(rule->created, &fs.duration_sec,
+                                     &fs.duration_nsec);
+                fs.idle_timeout = rule->idle_timeout;
+                fs.hard_timeout = rule->hard_timeout;
+                ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
+                                                       &fs.byte_count);
+                fs.actions = rule->actions;
+                fs.n_actions = rule->n_actions;
+                ofputil_append_flow_stats_reply(&fs, &replies);
+            }
         }
     }
     ofconn_send_replies(ofconn, &replies);
@@ -2555,11 +2452,12 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXT_FLOW_MOD:
         return handle_flow_mod(ofconn, oh);
 
-        /* OpenFlow statistics requests. */
+        /* Statistics requests. */
     case OFPUTIL_OFPST_DESC_REQUEST:
         return handle_desc_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_FLOW_REQUEST:
+    case OFPUTIL_NXST_FLOW_REQUEST:
         return handle_flow_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
@@ -2574,10 +2472,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPUTIL_OFPST_QUEUE_REQUEST:
         return handle_queue_stats_request(ofconn, msg->data);
-
-        /* Nicira extension statistics requests. */
-    case OFPUTIL_NXST_FLOW_REQUEST:
-        return handle_nxst_flow(ofconn, msg->data);
 
     case OFPUTIL_INVALID:
     case OFPUTIL_OFPT_HELLO:

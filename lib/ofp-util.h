@@ -171,6 +171,8 @@ struct ofputil_flow_stats {
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
                                     struct ofpbuf *msg);
+void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
+                                     struct list *replies);
 
 /* Aggregate stats reply, independent of flow format. */
 struct ofputil_aggregate_stats {
