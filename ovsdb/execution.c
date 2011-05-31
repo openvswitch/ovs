@@ -451,6 +451,7 @@ struct mutate_row_cbdata {
     size_t n_matches;
     struct ovsdb_txn *txn;
     const struct ovsdb_mutation_set *mutations;
+    struct ovsdb_error **error;
 };
 
 static bool
@@ -459,10 +460,9 @@ mutate_row_cb(const struct ovsdb_row *row, void *mr_)
     struct mutate_row_cbdata *mr = mr_;
 
     mr->n_matches++;
-    ovsdb_mutation_set_execute(ovsdb_txn_row_modify(mr->txn, row),
-                               mr->mutations);
-
-    return true;
+    *mr->error = ovsdb_mutation_set_execute(ovsdb_txn_row_modify(mr->txn, row),
+                                            mr->mutations);
+    return *mr->error == NULL;
 }
 
 struct ovsdb_error *
@@ -494,6 +494,7 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         mr.n_matches = 0;
         mr.txn = x->txn;
         mr.mutations = &mutations;
+        mr.error = &error;
         ovsdb_query(table, &condition, mutate_row_cb, &mr);
         json_object_put(result, "count", json_integer_create(mr.n_matches));
     }
