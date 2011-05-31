@@ -101,19 +101,12 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 #undef WC_INVARIANT_BIT
 ;
 
-/* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
- * 'priority'. */
-void
-ofputil_cls_rule_from_match(const struct ofp_match *match,
-                            unsigned int priority, struct cls_rule *rule)
+/* Converts the wildcard in 'ofpfw' into a flow_wildcards in 'wc' for use in
+ * struct cls_rule.  It is the caller's responsibility to handle the special
+ * case where the flow match's dl_vlan is set to OFP_VLAN_NONE. */
+static void
+ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    struct flow_wildcards *wc = &rule->wc;
-    uint32_t ofpfw;
-
-    /* Initialize rule->priority. */
-    ofpfw = ntohl(match->wildcards) & OFPFW_ALL;
-    rule->priority = !ofpfw ? UINT16_MAX : priority;
-
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
@@ -133,6 +126,27 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
          * and FWW_ETH_MCAST. */
         wc->wildcards |= FWW_ETH_MCAST;
     }
+
+    /* VLAN TCI mask. */
+    if (!(ofpfw & OFPFW_DL_VLAN_PCP)) {
+        wc->vlan_tci_mask |= htons(VLAN_PCP_MASK | VLAN_CFI);
+    }
+    if (!(ofpfw & OFPFW_DL_VLAN)) {
+        wc->vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
+    }
+}
+
+/* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
+ * 'priority'. */
+void
+ofputil_cls_rule_from_match(const struct ofp_match *match,
+                            unsigned int priority, struct cls_rule *rule)
+{
+    uint32_t ofpfw = ntohl(match->wildcards) & OFPFW_ALL;
+
+    /* Initialize rule->priority, rule->wc. */
+    rule->priority = !ofpfw ? UINT16_MAX : priority;
+    ofputil_wildcard_from_openflow(ofpfw, &rule->wc);
 
     /* Initialize most of rule->flow. */
     rule->flow.nw_src = match->nw_src;
@@ -157,24 +171,14 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
          * However, older versions of OVS treated this as matching packets
          * withut an 802.1Q header, so we do here too. */
         rule->flow.vlan_tci = htons(0);
-        wc->vlan_tci_mask = htons(0xffff);
+        rule->wc.vlan_tci_mask = htons(0xffff);
     } else {
         ovs_be16 vid, pcp, tci;
 
-        /* Compute mask. */
-        wc->vlan_tci_mask = htons(0);
-        if (!(ofpfw & OFPFW_DL_VLAN_PCP)) {
-            wc->vlan_tci_mask |= htons(VLAN_PCP_MASK | VLAN_CFI);
-        }
-        if (!(ofpfw & OFPFW_DL_VLAN)) {
-            wc->vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
-        }
-
-        /* Compute match value based on mask. */
         vid = match->dl_vlan & htons(VLAN_VID_MASK);
         pcp = htons((match->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
         tci = vid | pcp | htons(VLAN_CFI);
-        rule->flow.vlan_tci = tci & wc->vlan_tci_mask;
+        rule->flow.vlan_tci = tci & rule->wc.vlan_tci_mask;
     }
 
     /* Clean up. */
