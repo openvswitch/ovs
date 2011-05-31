@@ -109,7 +109,6 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
 {
     struct flow_wildcards *wc = &rule->wc;
     uint32_t ofpfw;
-    ovs_be16 vid, pcp;
 
     /* Initialize rule->priority. */
     ofpfw = ntohl(match->wildcards) & OFPFW_ALL;
@@ -148,46 +147,34 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     rule->flow.nw_proto = match->nw_proto;
 
     /* Translate VLANs. */
-    vid = match->dl_vlan & htons(VLAN_VID_MASK);
-    pcp = htons((match->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
-    switch (ofpfw & (OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP)) {
-    case OFPFW_DL_VLAN | OFPFW_DL_VLAN_PCP:
-        /* Wildcard everything. */
+    if (!(ofpfw & OFPFW_DL_VLAN) && match->dl_vlan == htons(OFP_VLAN_NONE)) {
+        /* Match only packets without 802.1Q header.
+         *
+         * When OFPFW_DL_VLAN_PCP is wildcarded, this is obviously correct.
+         *
+         * If OFPFW_DL_VLAN_PCP is matched, the flow match is contradictory,
+         * because we can't have a specific PCP without an 802.1Q header.
+         * However, older versions of OVS treated this as matching packets
+         * withut an 802.1Q header, so we do here too. */
         rule->flow.vlan_tci = htons(0);
-        rule->wc.vlan_tci_mask = htons(0);
-        break;
+        wc->vlan_tci_mask = htons(0xffff);
+    } else {
+        ovs_be16 vid, pcp, tci;
 
-    case OFPFW_DL_VLAN_PCP:
-        if (match->dl_vlan == htons(OFP_VLAN_NONE)) {
-            /* Match only packets without 802.1Q header. */
-            rule->flow.vlan_tci = htons(0);
-            rule->wc.vlan_tci_mask = htons(0xffff);
-        } else {
-            /* Wildcard PCP, specific VID. */
-            rule->flow.vlan_tci = vid | htons(VLAN_CFI);
-            rule->wc.vlan_tci_mask = htons(VLAN_VID_MASK | VLAN_CFI);
+        /* Compute mask. */
+        wc->vlan_tci_mask = htons(0);
+        if (!(ofpfw & OFPFW_DL_VLAN_PCP)) {
+            wc->vlan_tci_mask |= htons(VLAN_PCP_MASK | VLAN_CFI);
         }
-        break;
-
-    case OFPFW_DL_VLAN:
-        /* Wildcard VID, specific PCP. */
-        rule->flow.vlan_tci = pcp | htons(VLAN_CFI);
-        rule->wc.vlan_tci_mask = htons(VLAN_PCP_MASK | VLAN_CFI);
-        break;
-
-    case 0:
-        if (match->dl_vlan == htons(OFP_VLAN_NONE)) {
-            /* This case is odd, since we can't have a specific PCP without an
-             * 802.1Q header.  However, older versions of OVS treated this as
-             * matching packets withut an 802.1Q header, so we do here too. */
-            rule->flow.vlan_tci = htons(0);
-            rule->wc.vlan_tci_mask = htons(0xffff);
-        } else {
-            /* Specific VID and PCP. */
-            rule->flow.vlan_tci = vid | pcp | htons(VLAN_CFI);
-            rule->wc.vlan_tci_mask = htons(0xffff);
+        if (!(ofpfw & OFPFW_DL_VLAN)) {
+            wc->vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
         }
-        break;
+
+        /* Compute match value based on mask. */
+        vid = match->dl_vlan & htons(VLAN_VID_MASK);
+        pcp = htons((match->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
+        tci = vid | pcp | htons(VLAN_CFI);
+        rule->flow.vlan_tci = tci & wc->vlan_tci_mask;
     }
 
     /* Clean up. */
