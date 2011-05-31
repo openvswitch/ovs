@@ -186,6 +186,7 @@ struct action_xlate_ctx {
     int recurse;                /* Recursion level, via xlate_table_action. */
     int last_pop_priority;      /* Offset in 'odp_actions' just past most
                                  * recent ODP_ACTION_ATTR_SET_PRIORITY. */
+    uint32_t priority;          /* Current flow priority. 0 if none. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -2885,7 +2886,13 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     remove_pop_action(ctx);
     nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
     add_output_action(ctx, odp_port);
-    add_pop_action(ctx);
+
+    if (ctx->priority) {
+        nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY,
+                       ctx->priority);
+    } else {
+        add_pop_action(ctx);
+    }
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
@@ -2910,6 +2917,7 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
         return;
     }
 
+    ctx->priority = priority;
     remove_pop_action(ctx);
     nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_SET_PRIORITY, priority);
 }
@@ -3012,6 +3020,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         break;
 
     case NXAST_POP_QUEUE:
+        ctx->priority = 0;
         add_pop_action(ctx);
         break;
 
@@ -3186,6 +3195,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
     ctx->last_pop_priority = -1;
+    ctx->priority = 0;
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
