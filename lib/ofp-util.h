@@ -221,10 +221,16 @@ void *put_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
 
 void update_openflow_length(struct ofpbuf *);
 
-void *ofputil_make_stats_request(size_t body_len, uint16_t type,
-                                 struct ofpbuf **);
-void *ofputil_make_nxstats_request(size_t openflow_len, uint32_t subtype,
-                                   struct ofpbuf **);
+void *ofputil_make_stats_request(size_t openflow_len, uint16_t type,
+                                 uint32_t subtype, struct ofpbuf **);
+void *ofputil_make_stats_reply(size_t openflow_len,
+                               const struct ofp_stats_msg *request,
+                               struct ofpbuf **);
+
+void ofputil_start_stats_reply(const struct ofp_stats_msg *request,
+                               struct list *);
+struct ofpbuf *ofputil_reserve_stats_reply(size_t len, struct list *);
+void *ofputil_append_stats_reply(size_t len, struct list *);
 
 const void *ofputil_stats_body(const struct ofp_header *);
 size_t ofputil_stats_body_len(const struct ofp_header *);

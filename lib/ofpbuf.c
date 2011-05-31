@@ -289,6 +289,16 @@ ofpbuf_trim(struct ofpbuf *b)
     }
 }
 
+/* If 'b' is shorter than 'length' bytes, pads its tail out with zeros to that
+ * length. */
+void
+ofpbuf_padto(struct ofpbuf *b, size_t length)
+{
+    if (b->size < length) {
+        ofpbuf_put_zeros(b, length - b->size);
+    }
+}
+
 /* Appends 'size' bytes of data to the tail end of 'b', reallocating and
  * copying its data if necessary.  Returns a pointer to the first byte of the
  * new data, which is left uninitialized. */

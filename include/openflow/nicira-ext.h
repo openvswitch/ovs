@@ -154,10 +154,7 @@ enum nicira_type {
 
 /* Header for Nicira vendor stats request and reply messages. */
 struct nicira_stats_msg {
-    struct ofp_header header;   /* OFPT_STATS_REQUEST or OFPT_STATS_REPLY. */
-    ovs_be16 type;              /* OFPST_VENDOR. */
-    ovs_be16 flags;             /* OFPSF_{REQ,REPLY}_*. */
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    struct ofp_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
     ovs_be32 subtype;           /* One of NXST_* below. */
     uint8_t pad[4];             /* Align to 64-bits. */
 };

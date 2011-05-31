@@ -765,6 +765,19 @@ ofconn_send_reply(const struct ofconn *ofconn, struct ofpbuf *msg)
     ofconn_send(ofconn, msg, ofconn->reply_counter);
 }
 
+/* Sends each of the messages in list 'replies' on 'ofconn' in order,
+ * accounting them as replies. */
+void
+ofconn_send_replies(const struct ofconn *ofconn, struct list *replies)
+{
+    struct ofpbuf *reply, *next;
+
+    LIST_FOR_EACH_SAFE (reply, next, list_node, replies) {
+        list_remove(&reply->list_node);
+        ofconn_send_reply(ofconn, reply);
+    }
+}
+
 /* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */
 int
 ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,

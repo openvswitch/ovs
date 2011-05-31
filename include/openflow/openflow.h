@@ -696,39 +696,37 @@ OFP_ASSERT(sizeof(struct ofp_error_msg) == 12);
 
 enum ofp_stats_types {
     /* Description of this OpenFlow switch.
-     * The request body is empty.
-     * The reply body is struct ofp_desc_stats. */
+     * The request is struct ofp_stats_msg.
+     * The reply is struct ofp_desc_stats. */
     OFPST_DESC,
 
     /* Individual flow statistics.
-     * The request body is struct ofp_flow_stats_request.
+     * The request is struct ofp_flow_stats_request.
      * The reply body is an array of struct ofp_flow_stats. */
     OFPST_FLOW,
 
     /* Aggregate flow statistics.
-     * The request body is struct ofp_flow_stats_request.
-     * The reply body is struct ofp_aggregate_stats_reply. */
+     * The request is struct ofp_flow_stats_request.
+     * The reply is struct ofp_aggregate_stats_reply. */
     OFPST_AGGREGATE,
 
     /* Flow table statistics.
-     * The request body is empty.
+     * The request is struct ofp_stats_msg.
      * The reply body is an array of struct ofp_table_stats. */
     OFPST_TABLE,
 
     /* Physical port statistics.
-     * The request body is struct ofp_port_stats_request.
+     * The request is struct ofp_port_stats_request.
      * The reply body is an array of struct ofp_port_stats. */
     OFPST_PORT,
 
-    /* Queue statistics for a port
+    /* Queue statistics for a port.
      * The request body is struct ofp_queue_stats_request.
      * The reply body is an array of struct ofp_queue_stats. */
     OFPST_QUEUE,
 
     /* Vendor extension.
-     * The request and reply bodies begin with a 32-bit vendor ID, which takes
-     * the same form as in "struct ofp_vendor_header".  The request and reply
-     * bodies are otherwise vendor-defined. */
+     * The request and reply begin with "struct ofp_vendor_stats". */
     OFPST_VENDOR = 0xffff
 };
 
@@ -747,9 +745,10 @@ enum ofp_stats_reply_flags {
 
 #define DESC_STR_LEN   256
 #define SERIAL_NUM_LEN 32
-/* Body of reply to OFPST_DESC request.  Each entry is a NULL-terminated
- * ASCII string. */
+/* Reply to OFPST_DESC request.  Each entry is a NULL-terminated ASCII
+ * string. */
 struct ofp_desc_stats {
+    struct ofp_stats_msg osm;
     char mfr_desc[DESC_STR_LEN];       /* Manufacturer description. */
     char hw_desc[DESC_STR_LEN];        /* Hardware description. */
     char sw_desc[DESC_STR_LEN];        /* Software description. */
@@ -757,10 +756,11 @@ struct ofp_desc_stats {
     char dp_desc[DESC_STR_LEN];        /* Human readable description of
                                           the datapath. */
 };
-OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
+OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1068);
 
-/* Body for stats request of type OFPST_FLOW or OFPST_AGGREGATE. */
+/* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
 struct ofp_flow_stats_request {
+    struct ofp_stats_msg osm;
     struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
@@ -769,7 +769,7 @@ struct ofp_flow_stats_request {
                                  as an output port.  A value of OFPP_NONE
                                  indicates no restriction. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 44);
+OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 56);
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
@@ -792,14 +792,15 @@ struct ofp_flow_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
 
-/* Body of reply to OFPST_AGGREGATE request. */
+/* Reply to OFPST_AGGREGATE request. */
 struct ofp_aggregate_stats_reply {
+    struct ofp_stats_msg osm;
     ovs_32aligned_be64 packet_count; /* Number of packets in flows. */
     ovs_32aligned_be64 byte_count;   /* Number of bytes in flows. */
     ovs_be32 flow_count;      /* Number of flows. */
     uint8_t pad[4];           /* Align to 64 bits. */
 };
-OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
+OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 36);
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp_table_stats {
@@ -816,14 +817,15 @@ struct ofp_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
-/* Body for stats request of type OFPST_PORT. */
+/* Stats request of type OFPST_PORT. */
 struct ofp_port_stats_request {
+    struct ofp_stats_msg osm;
     ovs_be16 port_no;        /* OFPST_PORT message may request statistics
                                 for a single port (specified with port_no)
                                 or for all ports (port_no == OFPP_NONE). */
     uint8_t pad[6];
 };
-OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 8);
+OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 20);
 
 /* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
@@ -854,11 +856,12 @@ OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 
 /* Body for stats request of type OFPST_QUEUE. */
 struct ofp_queue_stats_request {
+    struct ofp_stats_msg osm;
     ovs_be16 port_no;        /* All ports if OFPP_ALL. */
     uint8_t pad[2];          /* Align to 32-bits. */
     ovs_be32 queue_id;       /* All queues if OFPQ_ALL. */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 8);
+OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 20);
 
 /* Body for stats reply of type OFPST_QUEUE consists of an array of this
  * structure type. */
@@ -871,6 +874,17 @@ struct ofp_queue_stats {
     ovs_32aligned_be64 tx_errors;  /* # of packets dropped due to overrun. */
 };
 OFP_ASSERT(sizeof(struct ofp_queue_stats) == 32);
+
+/* Vendor extension stats message. */
+struct ofp_vendor_stats_msg {
+    struct ofp_stats_msg osm;   /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Followed by vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp_vendor_stats_msg) == 16);
 
 /* Vendor extension. */
 struct ofp_vendor_header {

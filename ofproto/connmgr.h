@@ -87,6 +87,7 @@ int ofconn_get_miss_send_len(const struct ofconn *);
 void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 
 void ofconn_send_reply(const struct ofconn *, struct ofpbuf *);
+void ofconn_send_replies(const struct ofconn *, struct list *);
 
 int ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
                            struct ofpbuf **bufferp, uint16_t *in_port);

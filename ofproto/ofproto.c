@@ -1582,88 +1582,15 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static struct ofpbuf *
-make_ofp_stats_reply(ovs_be32 xid, ovs_be16 type, size_t body_len)
-{
-    struct ofp_stats_msg *reply;
-    struct ofpbuf *msg;
-
-    msg = ofpbuf_new(MIN(sizeof *reply + body_len, UINT16_MAX));
-    reply = put_openflow_xid(sizeof *reply, OFPT_STATS_REPLY, xid, msg);
-    reply->type = type;
-    reply->flags = htons(0);
-    return msg;
-}
-
-static struct ofpbuf *
-start_ofp_stats_reply(const struct ofp_header *request, size_t body_len)
-{
-    const struct ofp_stats_msg *osm = (const struct ofp_stats_msg *) request;
-    return make_ofp_stats_reply(osm->header.xid, osm->type, body_len);
-}
-
-static void *
-append_ofp_stats_reply(size_t nbytes, struct ofconn *ofconn,
-                       struct ofpbuf **msgp)
-{
-    struct ofpbuf *msg = *msgp;
-    assert(nbytes <= UINT16_MAX - sizeof(struct ofp_stats_msg));
-    if (nbytes + msg->size > UINT16_MAX) {
-        struct ofp_stats_msg *reply = msg->data;
-        reply->flags = htons(OFPSF_REPLY_MORE);
-        *msgp = make_ofp_stats_reply(reply->header.xid, reply->type, nbytes);
-        ofconn_send_reply(ofconn, msg);
-    }
-    return ofpbuf_put_uninit(*msgp, nbytes);
-}
-
-static struct ofpbuf *
-make_nxstats_reply(ovs_be32 xid, ovs_be32 subtype, size_t body_len)
-{
-    struct nicira_stats_msg *nsm;
-    struct ofpbuf *msg;
-
-    msg = ofpbuf_new(MIN(sizeof *nsm + body_len, UINT16_MAX));
-    nsm = put_openflow_xid(sizeof *nsm, OFPT_STATS_REPLY, xid, msg);
-    nsm->type = htons(OFPST_VENDOR);
-    nsm->flags = htons(0);
-    nsm->vendor = htonl(NX_VENDOR_ID);
-    nsm->subtype = subtype;
-    return msg;
-}
-
-static struct ofpbuf *
-start_nxstats_reply(const struct nicira_stats_msg *request, size_t body_len)
-{
-    return make_nxstats_reply(request->header.xid, request->subtype, body_len);
-}
-
-static void
-append_nxstats_reply(size_t nbytes, struct ofconn *ofconn,
-                     struct ofpbuf **msgp)
-{
-    struct ofpbuf *msg = *msgp;
-    assert(nbytes <= UINT16_MAX - sizeof(struct nicira_stats_msg));
-    if (nbytes + msg->size > UINT16_MAX) {
-        struct nicira_stats_msg *reply = msg->data;
-        reply->flags = htons(OFPSF_REPLY_MORE);
-        *msgp = make_nxstats_reply(reply->header.xid, reply->subtype, nbytes);
-        ofconn_send_reply(ofconn, msg);
-    }
-    ofpbuf_prealloc_tailroom(*msgp, nbytes);
-}
-
 static int
 handle_desc_stats_request(struct ofconn *ofconn,
-                          const struct ofp_header *request)
+                          const struct ofp_stats_msg *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp_desc_stats *ods;
     struct ofpbuf *msg;
 
-    msg = start_ofp_stats_reply(request, sizeof *ods);
-    ods = append_ofp_stats_reply(sizeof *ods, ofconn, &msg);
-    memset(ods, 0, sizeof *ods);
+    ods = ofputil_make_stats_reply(sizeof *ods, request, &msg);
     ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
     ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
     ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
@@ -1676,14 +1603,14 @@ handle_desc_stats_request(struct ofconn *ofconn,
 
 static int
 handle_table_stats_request(struct ofconn *ofconn,
-                           const struct ofp_header *request)
+                           const struct ofp_stats_msg *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
     size_t i;
 
-    msg = start_ofp_stats_reply(request, sizeof *ots * p->n_tables);
+    ofputil_make_stats_reply(sizeof(struct ofp_stats_msg), request, &msg);
 
     ots = ofpbuf_put_zeros(msg, sizeof *ots * p->n_tables);
     for (i = 0; i < p->n_tables; i++) {
@@ -1701,8 +1628,7 @@ handle_table_stats_request(struct ofconn *ofconn,
 }
 
 static void
-append_port_stat(struct ofport *port, struct ofconn *ofconn,
-                 struct ofpbuf **msgp)
+append_port_stat(struct ofport *port, struct list *replies)
 {
     struct netdev_stats stats;
     struct ofp_port_stats *ops;
@@ -1712,7 +1638,7 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
      * netdev_get_stats() will log errors. */
     netdev_get_stats(port->netdev, &stats);
 
-    ops = append_ofp_stats_reply(sizeof *ops, ofconn, msgp);
+    ops = ofputil_append_stats_reply(sizeof *ops, replies);
     ops->port_no = port->opp.port_no;
     memset(ops->pad, 0, sizeof ops->pad);
     put_32aligned_be64(&ops->rx_packets, htonll(stats.rx_packets));
@@ -1730,27 +1656,26 @@ append_port_stat(struct ofport *port, struct ofconn *ofconn,
 }
 
 static int
-handle_port_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_port_stats_request(struct ofconn *ofconn,
+                          const struct ofp_port_stats_request *psr)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    const struct ofp_port_stats_request *psr = ofputil_stats_body(oh);
-    struct ofp_port_stats *ops;
-    struct ofpbuf *msg;
     struct ofport *port;
+    struct list replies;
 
-    msg = start_ofp_stats_reply(oh, sizeof *ops * 16);
+    ofputil_start_stats_reply(&psr->osm, &replies);
     if (psr->port_no != htons(OFPP_NONE)) {
         port = ofproto_get_port(p, ntohs(psr->port_no));
         if (port) {
-            append_port_stat(port, ofconn, &msg);
+            append_port_stat(port, &replies);
         }
     } else {
         HMAP_FOR_EACH (port, hmap_node, &p->ports) {
-            append_port_stat(port, ofconn, &msg);
+            append_port_stat(port, &replies);
         }
     }
 
-    ofconn_send_reply(ofconn, msg);
+    ofconn_send_replies(ofconn, &replies);
     return 0;
 }
 
@@ -1774,7 +1699,7 @@ calc_flow_duration(long long int start, ovs_be32 *sec_be, ovs_be32 *nsec_be)
 
 static void
 put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
-                   ovs_be16 out_port, struct ofpbuf **replyp)
+                   ovs_be16 out_port, struct list *replies)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofp_flow_stats *ofs;
@@ -1790,7 +1715,7 @@ put_ofp_flow_stats(struct ofconn *ofconn, struct rule *rule,
 
     ofproto->ofproto_class->rule_get_stats(rule, &packet_count, &byte_count);
 
-    ofs = append_ofp_stats_reply(len, ofconn, replyp);
+    ofs = ofputil_append_stats_reply(len, replies);
     ofs->length = htons(len);
     ofs->table_id = rule->table_id;
     ofs->pad = 0;
@@ -1854,16 +1779,16 @@ next_matching_table(struct ofproto *ofproto,
          (CLS) = next_matching_table(OFPROTO, CLS, TABLE_ID))
 
 static int
-handle_flow_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_flow_stats_request(struct ofconn *ofconn,
+                          const struct ofp_flow_stats_request *fsr)
 {
-    const struct ofp_flow_stats_request *fsr = ofputil_stats_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct classifier *cls;
     struct cls_rule target;
-    struct ofpbuf *reply;
+    struct list replies;
 
     COVERAGE_INC(ofproto_flows_req);
-    reply = start_ofp_stats_reply(oh, 1024);
+    ofputil_start_stats_reply(&fsr->osm, &replies);
     ofputil_cls_rule_from_match(&fsr->match, 0, &target);
     FOR_EACH_MATCHING_TABLE (cls, fsr->table_id, ofproto) {
         struct cls_cursor cursor;
@@ -1871,17 +1796,16 @@ handle_flow_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
 
         cls_cursor_init(&cursor, cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            put_ofp_flow_stats(ofconn, rule, fsr->out_port, &reply);
+            put_ofp_flow_stats(ofconn, rule, fsr->out_port, &replies);
         }
     }
-    ofconn_send_reply(ofconn, reply);
+    ofconn_send_replies(ofconn, &replies);
 
     return 0;
 }
 
 static void
-put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
-                  ovs_be16 out_port, struct ofpbuf **replyp)
+put_nx_flow_stats(struct rule *rule, ovs_be16 out_port, struct list *replies)
 {
     struct nx_flow_stats *nfs;
     uint64_t packet_count, byte_count;
@@ -1897,9 +1821,9 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
 
     act_len = sizeof *rule->actions * rule->n_actions;
 
-    append_nxstats_reply(sizeof *nfs + NXM_MAX_LEN + act_len, ofconn, replyp);
-    start_len = (*replyp)->size;
-    reply = *replyp;
+    reply = ofputil_reserve_stats_reply(sizeof *nfs + NXM_MAX_LEN + act_len,
+                                        replies);
+    start_len = reply->size;
 
     nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
     nfs->table_id = rule->table_id;
@@ -1920,17 +1844,17 @@ put_nx_flow_stats(struct ofconn *ofconn, struct rule *rule,
 }
 
 static int
-handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_nxst_flow(struct ofconn *ofconn, const struct ofp_stats_msg *osm)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct nx_flow_stats_request *nfsr;
     struct classifier *cls;
     struct cls_rule target;
-    struct ofpbuf *reply;
+    struct list replies;
     struct ofpbuf b;
     int error;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpbuf_use_const(&b, osm, ntohs(osm->header.length));
 
     /* Dissect the message. */
     nfsr = ofpbuf_pull(&b, sizeof *nfsr);
@@ -1943,17 +1867,17 @@ handle_nxst_flow(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     COVERAGE_INC(ofproto_flows_req);
-    reply = start_nxstats_reply(&nfsr->nsm, 1024);
+    ofputil_start_stats_reply(osm, &replies);
     FOR_EACH_MATCHING_TABLE (cls, nfsr->table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
         cls_cursor_init(&cursor, cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            put_nx_flow_stats(ofconn, rule, nfsr->out_port, &reply);
+            put_nx_flow_stats(rule, nfsr->out_port, &replies);
         }
     }
-    ofconn_send_reply(ofconn, reply);
+    ofconn_send_replies(ofconn, &replies);
 
     return 0;
 }
@@ -2064,9 +1988,8 @@ query_aggregate_stats(struct ofproto *ofproto, struct cls_rule *target,
 
 static int
 handle_aggregate_stats_request(struct ofconn *ofconn,
-                               const struct ofp_header *oh)
+                               const struct ofp_flow_stats_request *request)
 {
-    const struct ofp_flow_stats_request *request = ofputil_stats_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofp_aggregate_stats_reply *reply;
     uint64_t total_packets, total_bytes;
@@ -2075,13 +1998,11 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     uint32_t n_flows;
 
     ofputil_cls_rule_from_match(&request->match, 0, &target);
-
-    msg = start_ofp_stats_reply(oh, sizeof *reply);
-    reply = append_ofp_stats_reply(sizeof *reply, ofconn, &msg);
     query_aggregate_stats(ofproto, &target, request->out_port,
                           request->table_id,
                           &total_packets, &total_bytes, &n_flows);
 
+    reply = ofputil_make_stats_reply(sizeof *reply, &request->osm, &msg);
     reply->flow_count = htonl(n_flows);
     put_32aligned_be64(&reply->packet_count, htonll(total_packets));
     put_32aligned_be64(&reply->byte_count, htonll(total_bytes));
@@ -2101,12 +2022,12 @@ handle_nxst_aggregate(struct ofconn *ofconn,
     struct nx_aggregate_stats_reply *reply;
     uint64_t total_packets, total_bytes;
     struct cls_rule target;
-    struct ofpbuf b;
-    struct ofpbuf *buf;
+    struct ofpbuf *msg;
     uint32_t n_flows;
+    struct ofpbuf b;
     int error;
 
-    ofpbuf_use_const(&b, nasr, ntohs(nasr->nsm.header.length));
+    ofpbuf_use_const(&b, nasr, ntohs(nasr->nsm.vsm.osm.header.length));
 
     /* Dissect the message. */
     request = ofpbuf_pull(&b, sizeof *request);
@@ -2125,21 +2046,20 @@ handle_nxst_aggregate(struct ofconn *ofconn,
 
     /* Reply. */
     COVERAGE_INC(ofproto_flows_req);
-    buf = start_nxstats_reply(&request->nsm, sizeof *reply);
-    reply = ofpbuf_put_uninit(buf, sizeof *reply);
+    reply = ofputil_make_stats_reply(sizeof *reply, &request->nsm.vsm.osm,
+                                     &msg);
     reply->flow_count = htonl(n_flows);
     reply->packet_count = htonll(total_packets);
     reply->byte_count = htonll(total_bytes);
     memset(reply->pad, 0, sizeof reply->pad);
-    ofconn_send_reply(ofconn, buf);
+    ofconn_send_reply(ofconn, msg);
 
     return 0;
 }
 
 struct queue_stats_cbdata {
-    struct ofconn *ofconn;
     struct ofport *ofport;
-    struct ofpbuf *msg;
+    struct list replies;
 };
 
 static void
@@ -2148,7 +2068,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
 {
     struct ofp_queue_stats *reply;
 
-    reply = append_ofp_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
+    reply = ofputil_append_stats_reply(sizeof *reply, &cbdata->replies);
     reply->port_no = cbdata->ofport->opp.port_no;
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
@@ -2185,24 +2105,18 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
 }
 
 static int
-handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_queue_stats_request(struct ofconn *ofconn,
+                           const struct ofp_queue_stats_request *qsr)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    const struct ofp_queue_stats_request *qsr;
     struct queue_stats_cbdata cbdata;
     struct ofport *port;
     unsigned int port_no;
     uint32_t queue_id;
 
-    qsr = ofputil_stats_body(oh);
-    if (!qsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-    }
-
     COVERAGE_INC(ofproto_queue_req);
 
-    cbdata.ofconn = ofconn;
-    cbdata.msg = start_ofp_stats_reply(oh, 128);
+    ofputil_start_stats_reply(&qsr->osm, &cbdata.replies);
 
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
@@ -2216,10 +2130,10 @@ handle_queue_stats_request(struct ofconn *ofconn, const struct ofp_header *oh)
             handle_queue_stats_for_port(port, queue_id, &cbdata);
         }
     } else {
-        ofpbuf_delete(cbdata.msg);
+        ofpbuf_list_delete(&cbdata.replies);
         return ofp_mkerr(OFPET_QUEUE_OP_FAILED, OFPQOFC_BAD_PORT);
     }
-    ofconn_send_reply(ofconn, cbdata.msg);
+    ofconn_send_replies(ofconn, &cbdata.replies);
 
     return 0;
 }
@@ -2708,26 +2622,26 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
         /* OpenFlow statistics requests. */
     case OFPUTIL_OFPST_DESC_REQUEST:
-        return handle_desc_stats_request(ofconn, oh);
+        return handle_desc_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_FLOW_REQUEST:
-        return handle_flow_stats_request(ofconn, oh);
+        return handle_flow_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_AGGREGATE_REQUEST:
-        return handle_aggregate_stats_request(ofconn, oh);
+        return handle_aggregate_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_TABLE_REQUEST:
-        return handle_table_stats_request(ofconn, oh);
+        return handle_table_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_PORT_REQUEST:
-        return handle_port_stats_request(ofconn, oh);
+        return handle_port_stats_request(ofconn, msg->data);
 
     case OFPUTIL_OFPST_QUEUE_REQUEST:
-        return handle_queue_stats_request(ofconn, oh);
+        return handle_queue_stats_request(ofconn, msg->data);
 
         /* Nicira extension statistics requests. */
     case OFPUTIL_NXST_FLOW_REQUEST:
-        return handle_nxst_flow(ofconn, oh);
+        return handle_nxst_flow(ofconn, msg->data);
 
     case OFPUTIL_NXST_AGGREGATE_REQUEST:
         return handle_nxst_aggregate(ofconn, msg->data);

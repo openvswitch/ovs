@@ -1043,10 +1043,8 @@ ofp_print_port_status(struct ds *string, const struct ofp_port_status *ops)
 }
 
 static void
-ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_header *oh)
+ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_desc_stats *ods)
 {
-    const struct ofp_desc_stats *ods = ofputil_stats_body(oh);
-
     ds_put_char(string, '\n');
     ds_put_format(string, "Manufacturer: %.*s\n",
             (int) sizeof ods->mfr_desc, ods->mfr_desc);
@@ -1131,20 +1129,14 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_ofp_aggregate_stats_reply (
-    struct ds *string, const struct ofp_aggregate_stats_reply *asr)
+ofp_print_ofpst_aggregate_reply(struct ds *string,
+                                const struct ofp_aggregate_stats_reply *asr)
 {
     ds_put_format(string, " packet_count=%"PRIu64,
                   ntohll(get_32aligned_be64(&asr->packet_count)));
     ds_put_format(string, " byte_count=%"PRIu64,
                   ntohll(get_32aligned_be64(&asr->byte_count)));
     ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
-}
-
-static void
-ofp_print_ofpst_aggregate_reply(struct ds *string, const struct ofp_header *oh)
-{
-    ofp_print_ofp_aggregate_stats_reply(string, ofputil_stats_body(oh));
 }
 
 static void
@@ -1175,9 +1167,9 @@ static void print_port_stat(struct ds *string, const char *leader,
 }
 
 static void
-ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
+ofp_print_ofpst_port_request(struct ds *string,
+                             const struct ofp_port_stats_request *psr)
 {
-    const struct ofp_port_stats_request *psr = ofputil_stats_body(oh);
     ds_put_format(string, " port_no=%"PRIu16, ntohs(psr->port_no));
 }
 
@@ -1251,10 +1243,9 @@ ofp_print_queue_name(struct ds *string, uint32_t queue_id)
 }
 
 static void
-ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
+ofp_print_ofpst_queue_request(struct ds *string,
+                              const struct ofp_queue_stats_request *qsr)
 {
-    const struct ofp_queue_stats_request *qsr = ofputil_stats_body(oh);
-
     ds_put_cstr(string, "port=");
     ofp_print_port_name(string, ntohs(qsr->port_no));
 
@@ -1465,17 +1456,17 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_OFPST_PORT_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_port_request(string, oh);
+        ofp_print_ofpst_port_request(string, msg);
         break;
 
     case OFPUTIL_OFPST_QUEUE_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_queue_request(string, oh);
+        ofp_print_ofpst_queue_request(string, msg);
         break;
 
     case OFPUTIL_OFPST_DESC_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_ofpst_desc_reply(string, oh);
+        ofp_print_ofpst_desc_reply(string, msg);
         break;
 
     case OFPUTIL_OFPST_FLOW_REPLY:
@@ -1501,7 +1492,7 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_ofpst_aggregate_reply(string, oh);
+        ofp_print_ofpst_aggregate_reply(string, msg);
         break;
 
     case OFPUTIL_NXT_ROLE_REQUEST:
