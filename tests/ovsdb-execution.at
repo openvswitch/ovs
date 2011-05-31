@@ -26,7 +26,8 @@ m4_define([CONSTRAINT_SCHEMA],
            "b2a": {"type": {"key": {"type": "uuid", "refTable": "a"},
                             "min": 0, "max": "unlimited"}},
            "b2b": {"type": {"key": {"type": "uuid", "refTable": "b"},
-                            "min": 0, "max": "unlimited"}}}},
+                            "min": 0, "max": "unlimited"}},
+           "x": {"type": {"key": "integer", "min": 1, "max": 2}}}},
        "constrained": {
          "columns": {
            "positive": {"type": {"key": {"type": "integer",
@@ -575,6 +576,12 @@ OVSDB_CHECK_EXECUTION([referential integrity -- simple],
       {"op": "delete",
        "table": "b",
        "where": []}]]],
+dnl Check that "mutate" honors number-of-elements constraints on sets and maps.
+   [[["constraints",
+      {"op": "mutate",
+       "table": "b",
+       "where": [],
+       "mutations": [["x", "delete", 0]]}]]],
    [[["constraints",
       {"op": "delete",
        "table": "a",
@@ -601,6 +608,7 @@ OVSDB_CHECK_EXECUTION([referential integrity -- simple],
        "where": []}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]
 [{"count":1},{"details":"cannot delete b row <0> because of 3 remaining reference(s)","error":"referential integrity violation"}]
+[{"details":"Attempted to store 0 elements in set of 1 to 2 integers.","error":"constraint violation"}]
 [{"count":1}]
 [{"count":1},{"details":"cannot delete b row <0> because of 2 remaining reference(s)","error":"referential integrity violation"}]
 [{"count":1}]
