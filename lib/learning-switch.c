@@ -131,7 +131,14 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
         const struct ofpbuf *b;
 
         LIST_FOR_EACH (b, list_node, cfg->default_flows) {
-            queue_tx(sw, rconn, ofpbuf_clone(b));
+            struct ofpbuf *copy = ofpbuf_clone(b);
+            int error = rconn_send(rconn, copy, NULL);
+            if (error) {
+                VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
+                             rconn_get_name(rconn), strerror(error));
+                ofpbuf_delete(copy);
+                break;
+            }
         }
     }
     
