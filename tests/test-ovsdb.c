@@ -975,6 +975,16 @@ do_execute_mutations(int argc OVS_UNUSED, char *argv[])
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 }
 
+/* Inserts a row, without bothering to update metadata such as refcounts. */
+static void
+put_row(struct ovsdb_table *table, struct ovsdb_row *row)
+{
+    const struct uuid *uuid = ovsdb_row_get_uuid(row);
+    if (!ovsdb_table_get_row(table, uuid)) {
+        hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
+    }
+}
+
 struct do_query_cbdata {
     struct uuid *row_uuids;
     int *counts;
@@ -1031,7 +1041,7 @@ do_query(int argc OVS_UNUSED, char *argv[])
                       UUID_ARGS(ovsdb_row_get_uuid(row)));
         }
         cbdata.row_uuids[i] = *ovsdb_row_get_uuid(row);
-        ovsdb_table_put_row(table, row);
+        put_row(table, row);
     }
     json_destroy(json);
 
@@ -1152,7 +1162,7 @@ do_query_distinct(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(0, "duplicate UUID "UUID_FMT" in table",
                       UUID_ARGS(ovsdb_row_get_uuid(row)));
         }
-        ovsdb_table_put_row(table, row);
+        put_row(table, row);
 
     }
     json_destroy(json);

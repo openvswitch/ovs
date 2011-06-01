@@ -251,17 +251,3 @@ ovsdb_table_get_row(const struct ovsdb_table *table, const struct uuid *uuid)
 
     return NULL;
 }
-
-/* This is probably not the function you want.  Use ovsdb_txn_row_modify()
- * instead. */
-bool
-ovsdb_table_put_row(struct ovsdb_table *table, struct ovsdb_row *row)
-{
-    const struct uuid *uuid = ovsdb_row_get_uuid(row);
-    if (!ovsdb_table_get_row(table, uuid)) {
-        hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
-        return true;
-    } else {
-        return false;
-    }
-}

@@ -62,6 +62,5 @@ void ovsdb_table_destroy(struct ovsdb_table *);
 
 const struct ovsdb_row *ovsdb_table_get_row(const struct ovsdb_table *,
                                             const struct uuid *);
-bool ovsdb_table_put_row(struct ovsdb_table *, struct ovsdb_row *);
 
 #endif /* ovsdb/table.h */
