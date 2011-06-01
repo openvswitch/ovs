@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,13 @@ enum lswitch_mode {
 struct lswitch_config {
     enum lswitch_mode mode;
 
-    /* Set up only exact-match flows? */
-    bool exact_flows;
+    /* 0 to use exact-match flow entries,
+     * a OFPFW_* bitmask to enable specific wildcards,
+     * or UINT32_MAX to use the default wildcards (wildcarding as many fields
+     * as possible.
+     *
+     * Ignored when max_idle < 0 (in which case no flows are set up). */
+    uint32_t wildcards;
 
     /* <0: Process every packet at the controller.
      * >=0: Expire flows after they are unused for 'max_idle' seconds.

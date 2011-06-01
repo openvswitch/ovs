@@ -99,6 +99,7 @@ ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
 int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 
 /* Work with OpenFlow 1.0 ofp_match. */
+void ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *);
 void ofputil_cls_rule_from_match(const struct ofp_match *,
                                  unsigned int priority, struct cls_rule *);
 void ofputil_normalize_rule(struct cls_rule *, enum nx_flow_format);

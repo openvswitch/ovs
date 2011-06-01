@@ -61,8 +61,9 @@ static bool set_up_flows = true;
 /* -N, --normal: Use "NORMAL" action instead of explicit port? */
 static bool action_normal = false;
 
-/* -w, --wildcard: Set up exact match or wildcard flow entries? */
-static bool exact_flows = true;
+/* -w, --wildcard: 0 to disable wildcard flow entries, a OFPFW_* bitmask to
+ * enable specific wildcards, or UINT32_MAX to use the default wildcards. */
+static uint32_t wildcards = 0;
 
 /* --max-idle: Maximum idle time, in seconds, before flows expire. */
 static int max_idle = 60;
@@ -227,7 +228,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     cfg.mode = (action_normal ? LSW_NORMAL
                 : learn_macs ? LSW_LEARN
                 : LSW_FLOOD);
-    cfg.exact_flows = exact_flows;
+    cfg.wildcards = wildcards;
     cfg.max_idle = set_up_flows ? max_idle : -1;
     cfg.default_flows = &default_flows;
     cfg.default_queue = default_queue;
@@ -317,7 +318,7 @@ parse_options(int argc, char *argv[])
         {"hub",         no_argument, NULL, 'H'},
         {"noflow",      no_argument, NULL, 'n'},
         {"normal",      no_argument, NULL, 'N'},
-        {"wildcard",    no_argument, NULL, 'w'},
+        {"wildcards",   optional_argument, NULL, 'w'},
         {"max-idle",    required_argument, NULL, OPT_MAX_IDLE},
         {"mute",        no_argument, NULL, OPT_MUTE},
         {"queue",       required_argument, NULL, 'q'},
@@ -361,7 +362,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'w':
-            exact_flows = false;
+            wildcards = optarg ? strtol(optarg, NULL, 16) : UINT32_MAX;
             break;
 
         case OPT_MAX_IDLE:
@@ -447,7 +448,7 @@ usage(void)
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
            "  -N, --normal            use OFPP_NORMAL action\n"
-           "  -w, --wildcard          use wildcards, not exact-match rules\n"
+           "  -w, --wildcards[=MASK]  wildcard (specified) bits in flows\n"
            "  -q, --queue=QUEUE-ID    OpenFlow queue ID to use for output\n"
            "  -Q PORT-NAME:QUEUE-ID   use QUEUE-ID for frames from PORT-NAME\n"
            "  --with-flows FILE       use the flows from FILE\n"

@@ -104,7 +104,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 /* Converts the wildcard in 'ofpfw' into a flow_wildcards in 'wc' for use in
  * struct cls_rule.  It is the caller's responsibility to handle the special
  * case where the flow match's dl_vlan is set to OFP_VLAN_NONE. */
-static void
+void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
     /* Initialize most of rule->wc. */

@@ -100,14 +100,21 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->action_normal = cfg->mode == LSW_NORMAL;
 
     flow_wildcards_init_exact(&sw->wc);
-    if (!cfg->exact_flows) {
-        /* We cannot wildcard all fields.
-         * We need in_port to detect moves.
-         * We need both SA and DA to do learning. */
-        sw->wc.wildcards = (FWW_DL_TYPE | FWW_NW_PROTO
-                            | FWW_TP_SRC | FWW_TP_DST);
-        sw->wc.nw_src_mask = htonl(0);
-        sw->wc.nw_dst_mask = htonl(0);
+    if (cfg->wildcards) {
+        uint32_t ofpfw;
+
+        if (cfg->wildcards == UINT32_MAX) {
+            /* Try to wildcard as many fields as possible, but we cannot
+             * wildcard all fields.  We need in_port to detect moves.  We need
+             * Ethernet source and dest and VLAN to do L2 learning. */
+            ofpfw = (OFPFW_DL_TYPE | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL
+                     | OFPFW_NW_TOS | OFPFW_NW_PROTO
+                     | OFPFW_TP_SRC | OFPFW_TP_DST);
+        } else {
+            ofpfw = cfg->wildcards;
+        }
+
+        ofputil_wildcard_from_openflow(ofpfw, &sw->wc);
     }
 
     sw->default_queue = cfg->default_queue;

@@ -65,12 +65,19 @@ through the controller and every packet is flooded.
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 .
-.IP "\fB\-w\fR"
-.IQ "\fB\-\-wildcard\fR"
+.IP "\fB\-w\fR[\fIwildcard_mask\fR]"
+.IQ "\fB\-\-wildcards\fR[\fB=\fIwildcard_mask\fR]\fR"
 By default, \fBovs\-controller\fR sets up exact-match flows.  This
 option allows it to set up wildcarded flows, which may reduce
-flow-setup latency by causing less traffic to be sent up to the
+flow setup latency by causing less traffic to be sent up to the
 controller.
+.IP
+The optional \fIwildcard_mask\fR is an OpenFlow wildcard bitmask in
+hexadecimal that specifies the fields to wildcard.  If no
+\fIwildcard_mask\fR is specified, the default value 0x2820F0 is used
+which specifies L2-only switching and wildcards L3 and L4 fields.
+Another interesting value is 0x2000EC, which specifies L3-only
+switching and wildcards L2 and L4 fields.
 .IP
 This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
