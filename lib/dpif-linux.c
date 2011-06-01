@@ -34,6 +34,7 @@
 
 #include "bitmap.h"
 #include "dpif-provider.h"
+#include "dynamic-string.h"
 #include "netdev.h"
 #include "netdev-linux.h"
 #include "netdev-vport.h"
@@ -784,6 +785,7 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 
 static int
 dpif_linux_execute(struct dpif *dpif_,
+                   const struct nlattr *key, size_t key_len,
                    const struct nlattr *actions, size_t actions_len,
                    const struct ofpbuf *packet)
 {
@@ -801,6 +803,7 @@ dpif_linux_execute(struct dpif *dpif_,
     execute->dp_ifindex = dpif->dp_ifindex;
 
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, packet->data, packet->size);
+    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_KEY, key, key_len);
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_ACTIONS, actions, actions_len);
 
     error = nl_sock_transact(genl_sock, buf, NULL);

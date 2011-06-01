@@ -148,8 +148,10 @@ bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
 
-int dpif_execute(struct dpif *, const struct nlattr *actions,
-                 size_t actions_len, const struct ofpbuf *);
+int dpif_execute(struct dpif *,
+                 const struct nlattr *key, size_t key_len,
+                 const struct nlattr *actions, size_t actions_len,
+                 const struct ofpbuf *);
 
 enum dpif_upcall_type {
     DPIF_UC_MISS,               /* Miss in flow table. */

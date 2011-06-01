@@ -944,6 +944,7 @@ dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 
 static int
 dpif_netdev_execute(struct dpif *dpif,
+                    const struct nlattr *key_attrs, size_t key_len,
                     const struct nlattr *actions, size_t actions_len,
                     const struct ofpbuf *packet)
 {
@@ -975,7 +976,10 @@ dpif_netdev_execute(struct dpif *dpif,
          * if we don't. */
         copy = *packet;
     }
+
     flow_extract(&copy, 0, -1, &key);
+    dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
+
     error = dp_netdev_execute_actions(dp, &copy, &key, actions, actions_len);
     if (mutates) {
         ofpbuf_uninit(&copy);

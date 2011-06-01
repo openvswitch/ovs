@@ -282,9 +282,14 @@ struct dpif_class {
     int (*flow_dump_done)(const struct dpif *dpif, void *state);
 
     /* Performs the 'actions_len' bytes of actions in 'actions' on the Ethernet
-     * frame specified in 'packet'. */
-    int (*execute)(struct dpif *dpif, const struct nlattr *actions,
-                   size_t actions_len, const struct ofpbuf *packet);
+     * frame specified in 'packet' taken from the flow specified in the
+     * 'key_len' bytes of 'key'.  ('key' is mostly redundant with 'packet', but
+     * it contains some metadata that cannot be recovered from 'packet', such
+     * as tun_id and in_port.) */
+    int (*execute)(struct dpif *dpif,
+                   const struct nlattr *key, size_t key_len,
+                   const struct nlattr *actions, size_t actions_len,
+                   const struct ofpbuf *packet);
 
     /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value
      * 2**X set in '*listen_mask' indicates that 'dpif' will receive messages

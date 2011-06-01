@@ -152,6 +152,8 @@ int flow_cmp(const struct tbl_node *, void *target, int len);
 int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *);
+int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
+			       const struct nlattr *);
 
 static inline struct sw_flow *flow_cast(const struct tbl_node *node)
 {

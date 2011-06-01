@@ -597,6 +597,23 @@ int flow_cmp(const struct tbl_node *node, void *key2_, int len)
 	return !memcmp(key1, key2, len);
 }
 
+/* The size of the argument for each %ODP_KEY_ATTR_* Netlink attribute.  */
+static const u32 key_lens[ODP_KEY_ATTR_MAX + 1] = {
+	[ODP_KEY_ATTR_TUN_ID] = 8,
+	[ODP_KEY_ATTR_IN_PORT] = 4,
+	[ODP_KEY_ATTR_ETHERNET] = sizeof(struct odp_key_ethernet),
+	[ODP_KEY_ATTR_8021Q] = sizeof(struct odp_key_8021q),
+	[ODP_KEY_ATTR_ETHERTYPE] = 2,
+	[ODP_KEY_ATTR_IPV4] = sizeof(struct odp_key_ipv4),
+	[ODP_KEY_ATTR_IPV6] = sizeof(struct odp_key_ipv6),
+	[ODP_KEY_ATTR_TCP] = sizeof(struct odp_key_tcp),
+	[ODP_KEY_ATTR_UDP] = sizeof(struct odp_key_udp),
+	[ODP_KEY_ATTR_ICMP] = sizeof(struct odp_key_icmp),
+	[ODP_KEY_ATTR_ICMPV6] = sizeof(struct odp_key_icmpv6),
+	[ODP_KEY_ATTR_ARP] = sizeof(struct odp_key_arp),
+	[ODP_KEY_ATTR_ND] = sizeof(struct odp_key_nd),
+};
+
 /**
  * flow_from_nlattrs - parses Netlink attributes into a flow key.
  * @swkey: receives the extracted flow key.
@@ -625,22 +642,6 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 	prev_type = ODP_KEY_ATTR_UNSPEC;
 	nla_for_each_nested(nla, attr, rem) {
-		static const u32 key_lens[ODP_KEY_ATTR_MAX + 1] = {
-			[ODP_KEY_ATTR_TUN_ID] = 8,
-			[ODP_KEY_ATTR_IN_PORT] = 4,
-			[ODP_KEY_ATTR_ETHERNET] = sizeof(struct odp_key_ethernet),
-			[ODP_KEY_ATTR_8021Q] = sizeof(struct odp_key_8021q),
-			[ODP_KEY_ATTR_ETHERTYPE] = 2,
-			[ODP_KEY_ATTR_IPV4] = sizeof(struct odp_key_ipv4),
-			[ODP_KEY_ATTR_IPV6] = sizeof(struct odp_key_ipv6),
-			[ODP_KEY_ATTR_TCP] = sizeof(struct odp_key_tcp),
-			[ODP_KEY_ATTR_UDP] = sizeof(struct odp_key_udp),
-			[ODP_KEY_ATTR_ICMP] = sizeof(struct odp_key_icmp),
-			[ODP_KEY_ATTR_ICMPV6] = sizeof(struct odp_key_icmpv6),
-			[ODP_KEY_ATTR_ARP] = sizeof(struct odp_key_arp),
-			[ODP_KEY_ATTR_ND] = sizeof(struct odp_key_nd),
-		};
-
 		const struct odp_key_ethernet *eth_key;
 		const struct odp_key_8021q *q_key;
 		const struct odp_key_ipv4 *ipv4_key;
@@ -866,6 +867,62 @@ ok:
 	WARN_ON_ONCE(!key_len && !error);
 	*key_lenp = key_len;
 	return error;
+}
+
+/**
+ * flow_metadata_from_nlattrs - parses Netlink attributes into a flow key.
+ * @in_port: receives the extracted input port.
+ * @tun_id: receives the extracted tunnel ID.
+ * @key: Netlink attribute holding nested %ODP_KEY_ATTR_* Netlink attribute
+ * sequence.
+ *
+ * This parses a series of Netlink attributes that form a flow key, which must
+ * take the same form accepted by flow_from_nlattrs(), but only enough of it to
+ * get the metadata, that is, the parts of the flow key that cannot be
+ * extracted from the packet itself.
+ */
+int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
+			       const struct nlattr *attr)
+{
+	const struct nlattr *nla;
+	u16 prev_type;
+	int rem;
+
+	*tun_id = 0;
+
+	prev_type = ODP_KEY_ATTR_UNSPEC;
+	nla_for_each_nested(nla, attr, rem) {
+                int type = nla_type(nla);
+
+                if (type > ODP_KEY_ATTR_MAX || nla_len(nla) != key_lens[type])
+                        return -EINVAL;
+
+		switch (TRANSITION(prev_type, type)) {
+		case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_TUN_ID):
+			*tun_id = nla_get_be64(nla);
+			break;
+
+		case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_IN_PORT):
+		case TRANSITION(ODP_KEY_ATTR_TUN_ID, ODP_KEY_ATTR_IN_PORT):
+			if (nla_get_u32(nla) >= DP_MAX_PORTS)
+				return -EINVAL;
+			*in_port = nla_get_u32(nla);
+			break;
+
+		default:
+			goto done;
+		}
+
+		prev_type = type;
+	}
+	if (rem)
+		return -EINVAL;
+
+done:
+	if (prev_type == ODP_KEY_ATTR_UNSPEC ||
+	    prev_type == ODP_KEY_ATTR_TUN_ID)
+		return -EINVAL;
+	return 0;
 }
 
 int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)

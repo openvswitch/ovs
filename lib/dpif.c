@@ -914,11 +914,15 @@ dpif_flow_dump_done(struct dpif_flow_dump *dump)
 }
 
 /* Causes 'dpif' to perform the 'actions_len' bytes of actions in 'actions' on
- * the Ethernet frame specified in 'packet'.
+ * the Ethernet frame specified in 'packet' taken from the flow specified in
+ * the 'key_len' bytes of 'key'.  ('key' is mostly redundant with 'packet', but
+ * it contains some metadata that cannot be recovered from 'packet', such as
+ * tun_id and in_port.)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_execute(struct dpif *dpif,
+             const struct nlattr *key, size_t key_len,
              const struct nlattr *actions, size_t actions_len,
              const struct ofpbuf *buf)
 {
@@ -926,7 +930,8 @@ dpif_execute(struct dpif *dpif,
 
     COVERAGE_INC(dpif_execute);
     if (actions_len > 0) {
-        error = dpif->dpif_class->execute(dpif, actions, actions_len, buf);
+        error = dpif->dpif_class->execute(dpif, key, key_len,
+                                          actions, actions_len, buf);
     } else {
         error = 0;
     }

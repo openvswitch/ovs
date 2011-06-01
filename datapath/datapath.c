@@ -655,7 +655,8 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	int key_len;
 
 	err = -EINVAL;
-	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_ACTIONS] ||
+	if (!a[ODP_PACKET_ATTR_PACKET] || !a[ODP_PACKET_ATTR_KEY] ||
+	    !a[ODP_PACKET_ATTR_ACTIONS] ||
 	    nla_len(a[ODP_PACKET_ATTR_PACKET]) < ETH_HLEN)
 		goto err;
 
@@ -694,6 +695,12 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 		goto err_flow_put;
 	flow->tbl_node.hash = flow_hash(&flow->key, key_len);
 
+	err = flow_metadata_from_nlattrs(&flow->key.eth.in_port,
+					 &flow->key.eth.tun_id,
+					 a[ODP_PACKET_ATTR_KEY]);
+	if (err)
+		goto err_flow_put;
+
 	acts = flow_actions_alloc(a[ODP_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
@@ -725,6 +732,7 @@ err:
 
 static const struct nla_policy packet_policy[ODP_PACKET_ATTR_MAX + 1] = {
 	[ODP_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
+	[ODP_PACKET_ATTR_KEY] = { .type = NLA_NESTED },
 	[ODP_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
 };
 

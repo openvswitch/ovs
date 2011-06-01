@@ -2007,9 +2007,16 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
 
         return true;
     } else {
+        struct odputil_keybuf keybuf;
+        struct ofpbuf key;
         int error;
 
-        error = dpif_execute(ofproto->dpif, odp_actions, actions_len, packet);
+        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+        odp_flow_key_from_flow(&key, flow);
+
+        error = dpif_execute(ofproto->dpif, key.data, key.size,
+                             odp_actions, actions_len, packet);
+
         ofpbuf_delete(packet);
         return !error;
     }
@@ -2671,12 +2678,20 @@ static int
 send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
             const struct ofpbuf *packet)
 {
-    struct ofpbuf odp_actions;
+    struct ofpbuf key, odp_actions;
+    struct odputil_keybuf keybuf;
+    struct flow flow;
     int error;
+
+    flow_extract((struct ofpbuf *) packet, 0, 0, &flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, &flow);
 
     ofpbuf_init(&odp_actions, 32);
     nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, odp_port);
-    error = dpif_execute(ofproto->dpif, odp_actions.data, odp_actions.size,
+    error = dpif_execute(ofproto->dpif,
+                         key.data, key.size,
+                         odp_actions.data, odp_actions.size,
                          packet);
     ofpbuf_uninit(&odp_actions);
 
@@ -3721,13 +3736,18 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     error = validate_actions(ofp_actions, n_ofp_actions, flow,
                              ofproto->max_ports);
     if (!error) {
+        struct odputil_keybuf keybuf;
         struct action_xlate_ctx ctx;
         struct ofpbuf *odp_actions;
+        struct ofpbuf key;
+
+        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+        odp_flow_key_from_flow(&key, flow);
 
         action_xlate_ctx_init(&ctx, ofproto, flow, packet);
         odp_actions = xlate_actions(&ctx, ofp_actions, n_ofp_actions);
-        dpif_execute(ofproto->dpif, odp_actions->data, odp_actions->size,
-                     packet);
+        dpif_execute(ofproto->dpif, key.data, key.size,
+                     odp_actions->data, odp_actions->size, packet);
         ofpbuf_delete(odp_actions);
     }
     return error;
