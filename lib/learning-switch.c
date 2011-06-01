@@ -99,15 +99,16 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->ml = cfg->mode == LSW_LEARN ? mac_learning_create() : NULL;
     sw->action_normal = cfg->mode == LSW_NORMAL;
 
-    flow_wildcards_init_exact(&sw->wc);
     if (!cfg->exact_flows) {
         /* We cannot wildcard all fields.
          * We need in_port to detect moves.
          * We need both SA and DA to do learning. */
-        sw->wc.wildcards = (FWW_DL_TYPE | FWW_NW_PROTO
-                            | FWW_TP_SRC | FWW_TP_DST);
-        sw->wc.nw_src_mask = htonl(0);
-        sw->wc.nw_dst_mask = htonl(0);
+        flow_wildcards_init_catchall(&sw->wc);
+        sw->wc.wildcards &= ~(FWW_IN_PORT | FWW_DL_SRC | FWW_DL_DST
+                              | FWW_ETH_MCAST);
+        sw->wc.vlan_tci_mask = htons(VLAN_CFI | VLAN_VID_MASK);
+    } else {
+        flow_wildcards_init_exact(&sw->wc);
     }
 
     sw->default_queue = cfg->default_queue;
