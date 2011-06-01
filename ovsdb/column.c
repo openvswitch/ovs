@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,14 +136,14 @@ ovsdb_column_set_clone(struct ovsdb_column_set *new,
 
 struct ovsdb_error *
 ovsdb_column_set_from_json(const struct json *json,
-                           const struct ovsdb_table *table,
+                           const struct ovsdb_table_schema *schema,
                            struct ovsdb_column_set *set)
 {
     ovsdb_column_set_init(set);
     if (!json) {
         struct shash_node *node;
 
-        SHASH_FOR_EACH (node, &table->schema->columns) {
+        SHASH_FOR_EACH (node, &schema->columns) {
             const struct ovsdb_column *column = node->data;
             ovsdb_column_set_add(set, column);
         }
@@ -167,7 +167,7 @@ ovsdb_column_set_from_json(const struct json *json,
             }
 
             s = json->u.array.elems[i]->u.string;
-            column = shash_find_data(&table->schema->columns, s);
+            column = shash_find_data(&schema->columns, s);
             if (!column) {
                 error = ovsdb_syntax_error(json, NULL, "%s is not a valid "
                                            "column name", s);

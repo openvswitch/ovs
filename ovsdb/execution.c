@@ -364,10 +364,11 @@ ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                                           &condition);
     }
     if (!error) {
-        error = ovsdb_column_set_from_json(columns_json, table, &columns);
+        error = ovsdb_column_set_from_json(columns_json, table->schema,
+                                           &columns);
     }
     if (!error) {
-        error = ovsdb_column_set_from_json(sort_json, table, &sort);
+        error = ovsdb_column_set_from_json(sort_json, table->schema, &sort);
     }
     if (!error) {
         struct ovsdb_row_set rows = OVSDB_ROW_SET_INITIALIZER;
@@ -606,7 +607,8 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                                           &condition);
     }
     if (!error) {
-        error = ovsdb_column_set_from_json(columns_json, table, &columns);
+        error = ovsdb_column_set_from_json(columns_json, table->schema,
+                                           &columns);
     }
     if (!error) {
         if (timeout) {

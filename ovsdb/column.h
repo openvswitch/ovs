@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "ovsdb-types.h"
 
 struct ovsdb_table;
+struct ovsdb_table_schema;
 
 /* A column or a column schema (currently there is no distinction). */
 struct ovsdb_column {
@@ -68,9 +69,9 @@ void ovsdb_column_set_init(struct ovsdb_column_set *);
 void ovsdb_column_set_destroy(struct ovsdb_column_set *);
 void ovsdb_column_set_clone(struct ovsdb_column_set *,
                             const struct ovsdb_column_set *);
-struct ovsdb_error *ovsdb_column_set_from_json(const struct json *,
-                                               const struct ovsdb_table *,
-                                               struct ovsdb_column_set *);
+struct ovsdb_error *ovsdb_column_set_from_json(
+    const struct json *, const struct ovsdb_table_schema *,
+    struct ovsdb_column_set *);
 struct json *ovsdb_column_set_to_json(const struct ovsdb_column_set *);
 
 void ovsdb_column_set_add(struct ovsdb_column_set *,
