@@ -45,6 +45,18 @@ files are:
         xen-bugtool extension to collect kernel information relevant to
         Open vSwitch.
 
+    etc_xensource_bugtool_system-configuration.xml
+
+        Custom xen-bugtool category to collect system configuration data.
+        This category is configured to collect up to 1Mb of data, take
+        up to 60 seconds to collect data, run every time and is hidden from
+        display in xencenter.
+
+    etc_xensource_bugtool_system-configuration_openvswitch.xml
+
+        xen-bugtool extension to collect system configuration information
+        relevant to Open vSwitch, including timezone.
+
     etc_xensource_scripts_vif
 
         Open vSwitch-aware replacement for Citrix script of the same name.

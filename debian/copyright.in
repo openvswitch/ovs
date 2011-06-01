@@ -55,6 +55,8 @@ License:
 	debian/ovs-bugtool
 	xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml [*]
 	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml [*]
+	xenserver/etc_xensource_bugtool_system-configuration.xml [*]
+	xenserver/etc_xensource_bugtool_system-configuration_openvswitch.xml [*]
 	xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show [*]
 
 	* These components are only distributed in the source package.

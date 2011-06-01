@@ -88,6 +88,11 @@ install -m 644 xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
 install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/kernel-info
 install -m 644 xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml \
          $RPM_BUILD_ROOT/etc/xensource/bugtool/kernel-info/openvswitch.xml
+install -m 644 xenserver/etc_xensource_bugtool_system-configuration.xml \
+         $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration.xml
+install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration
+install -m 644 xenserver/etc_xensource_bugtool_system-configuration_openvswitch.xml \
+         $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration/openvswitch.xml
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
 install -m 644 vswitchd/vswitch.ovsschema \
          $RPM_BUILD_ROOT/usr/share/openvswitch/vswitch.ovsschema
@@ -321,6 +326,8 @@ exit 0
 /etc/xapi.d/plugins/openvswitch-cfg-update
 /etc/xensource/bugtool/network-status/openvswitch.xml
 /etc/xensource/bugtool/kernel-info/openvswitch.xml
+/etc/xensource/bugtool/system-configuration.xml
+/etc/xensource/bugtool/system-configuration/openvswitch.xml
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /usr/share/openvswitch/python/ovs/__init__.py
