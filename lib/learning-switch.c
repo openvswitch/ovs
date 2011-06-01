@@ -106,8 +106,9 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
         if (cfg->wildcards == UINT32_MAX) {
             /* Try to wildcard as many fields as possible, but we cannot
              * wildcard all fields.  We need in_port to detect moves.  We need
-             * Ethernet source and dest and VLAN to do L2 learning. */
-            ofpfw = (OFPFW_DL_TYPE | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL
+             * Ethernet source and dest and VLAN VID to do L2 learning. */
+            ofpfw = (OFPFW_DL_TYPE | OFPFW_DL_VLAN_PCP
+                     | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL
                      | OFPFW_NW_TOS | OFPFW_NW_PROTO
                      | OFPFW_TP_SRC | OFPFW_TP_DST);
         } else {
