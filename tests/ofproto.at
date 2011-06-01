@@ -42,7 +42,7 @@ done
 OFPROTO_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - basic flow_mod commands])
+AT_SETUP([ofproto - basic flow_mod commands (NXM)])
 OFPROTO_START
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
 ])
@@ -53,8 +53,31 @@ AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [
  cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
 NXST_FLOW reply:
 ])
+AT_CHECK([ovs-ofctl dump-aggregate br0 | STRIP_XIDS], [0], [dnl
+NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
+])
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
+])
+OFPROTO_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - basic flow_mod commands (OpenFlow 1.0)])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS], [0], [OFPST_FLOW reply:
+])
+AT_CHECK([echo 'in_port=1,actions=0' | ovs-ofctl -F openflow10 add-flows br0 -])
+AT_CHECK([ovs-ofctl -F openflow10 add-flow br0 in_port=0,actions=1])
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=0 actions=output:1
+ cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+OFPST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl -F openflow10 dump-aggregate br0 | STRIP_XIDS], [0], [dnl
+OFPST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
+])
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0])
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS], [0], [OFPST_FLOW reply:
 ])
 OFPROTO_STOP
 AT_CLEANUP
