@@ -186,6 +186,8 @@ bool str_to_double(const char *, double *);
 int hexit_value(int c);
 unsigned int hexits_value(const char *s, size_t n, bool *ok);
 
+const char *english_list_delimiter(size_t index, size_t total);
+
 char *get_cwd(void);
 char *dir_name(const char *file_name);
 char *base_name(const char *file_name);

@@ -596,3 +596,14 @@ abs_file_name(const char *dir, const char *file_name)
  * its return value.  (Note that every scalar type can be implicitly
  * converted to bool.) */
 void ignore(bool x OVS_UNUSED) { }
+
+/* Returns an appropriate delimiter for inserting just before the 0-based item
+ * 'index' in a list that has 'total' items in it. */
+const char *
+english_list_delimiter(size_t index, size_t total)
+{
+    return (index == 0 ? ""
+            : index < total - 1 ? ", "
+            : total > 2 ? ", and "
+            : " and ");
+}
