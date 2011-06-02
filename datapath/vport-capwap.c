@@ -664,5 +664,6 @@ const struct vport_ops capwap_vport_ops = {
 	.get_operstate	= vport_gen_get_operstate,
 	.send		= tnl_send,
 };
-
-#endif /* Linux kernel >= 2.6.26 */
+#else
+#warning CAPWAP tunneling will not be available on kernels before 2.6.26
+#endif /* Linux kernel < 2.6.26 */
