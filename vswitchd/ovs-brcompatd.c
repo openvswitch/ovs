@@ -50,6 +50,8 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "rtnetlink.h"
+#include "rtnetlink-link.h"
 #include "signals.h"
 #include "sset.h"
 #include "timeval.h"
@@ -85,9 +87,6 @@ static int prune_timeout = 5000;
  * which is replaced by the control command. */
 static char *appctl_command;
 
-/* Netlink socket to listen for interface changes. */
-static struct nl_sock *rtnl_sock;
-
 /* Netlink socket to bridge compatibility kernel module. */
 static struct nl_sock *brc_sock;
 
@@ -96,11 +95,6 @@ static int brc_family;
 
 static const struct nl_policy brc_multicast_policy[] = {
     [BRC_GENL_A_MC_GROUP] = {.type = NL_A_U32 }
-};
-
-static const struct nl_policy rtnlgrp_link_policy[] = {
-    [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },
-    [IFLA_MASTER] = { .type = NL_A_U32, .optional = true },
 };
 
 static int
@@ -1146,135 +1140,112 @@ error:
     return;
 }
 
-/* Check for interface configuration changes announced through RTNL. */
 static void
-rtnl_recv_update(struct ovsdb_idl *idl,
-                 const struct ovsrec_open_vswitch *ovs)
+netdev_changed_cb(const struct rtnetlink_link_change *change, void *idl_)
 {
-    struct ofpbuf *buf;
+    struct ovsdb_idl *idl = idl_;
+    const struct ovsrec_open_vswitch *ovs;
+    const struct ovsrec_interface *iface;
+    struct ovsdb_idl_txn *txn;
+    struct ovsrec_port *port;
+    struct ovsrec_bridge *br;
+    char br_name[IFNAMSIZ];
+    const char *port_name;
 
-    int error = nl_sock_recv(rtnl_sock, &buf, false);
-    if (error == EAGAIN) {
-        /* Nothing to do. */
-    } else if (error == ENOBUFS) {
+    if (!change) {
         VLOG_WARN_RL(&rl, "network monitor socket overflowed");
-    } else if (error) {
-        VLOG_WARN_RL(&rl, "error on network monitor socket: %s",
-                strerror(error));
-    } else {
-        struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
-        struct nlmsghdr *nlh;
-        struct ifinfomsg *iim;
-
-        nlh = ofpbuf_at(buf, 0, NLMSG_HDRLEN);
-        iim = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *iim);
-        if (!iim) {
-            VLOG_WARN_RL(&rl, "received bad rtnl message (no ifinfomsg)");
-            ofpbuf_delete(buf);
-            return;
-        }
-
-        if (!nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                             rtnlgrp_link_policy,
-                             attrs, ARRAY_SIZE(rtnlgrp_link_policy))) {
-            VLOG_WARN_RL(&rl,"received bad rtnl message (policy)");
-            ofpbuf_delete(buf);
-            return;
-        }
-        if (nlh->nlmsg_type == RTM_DELLINK && attrs[IFLA_MASTER]) {
-            const char *port_name = nl_attr_get_string(attrs[IFLA_IFNAME]);
-            char br_name[IFNAMSIZ];
-            uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
-
-            if (!if_indextoname(br_idx, br_name)) {
-                ofpbuf_delete(buf);
-                return;
-            }
-
-            if (!netdev_exists(port_name)) {
-                /* Network device is really gone. */
-                struct ovsdb_idl_txn *txn;
-                const struct ovsrec_interface *iface;
-                struct ovsrec_port *port;
-                struct ovsrec_bridge *br;
-
-                VLOG_INFO("network device %s destroyed, "
-                          "removing from bridge %s", port_name, br_name);
-
-                br = find_bridge(ovs, br_name);
-                if (!br) {
-                    VLOG_WARN("no bridge named %s from which to remove %s",
-                            br_name, port_name);
-                    ofpbuf_delete(buf);
-                    return;
-                }
-
-                txn = ovsdb_idl_txn_create(idl);
-
-                iface = find_interface(br, port_name, &port);
-                if (iface) {
-                    del_interface(br, port, iface);
-                    ovsdb_idl_txn_add_comment(txn,
-                                              "ovs-brcompatd: destroy port %s",
-                                              port_name);
-                }
-
-                commit_txn(txn, false);
-            } else {
-                /* A network device by that name exists even though the kernel
-                 * told us it had disappeared.  Probably, what happened was
-                 * this:
-                 *
-                 *      1. Device destroyed.
-                 *      2. Notification sent to us.
-                 *      3. New device created with same name as old one.
-                 *      4. ovs-brcompatd notified, removes device from bridge.
-                 *
-                 * There's no a priori reason that in this situation that the
-                 * new device with the same name should remain in the bridge;
-                 * on the contrary, that would be unexpected.  *But* there is
-                 * one important situation where, if we do this, bad things
-                 * happen.  This is the case of XenServer Tools version 5.0.0,
-                 * which on boot of a Windows VM cause something like this to
-                 * happen on the Xen host:
-                 *
-                 *      i. Create tap1.0 and vif1.0.
-                 *      ii. Delete tap1.0.
-                 *      iii. Delete vif1.0.
-                 *      iv. Re-create vif1.0.
-                 *
-                 * (XenServer Tools 5.5.0 does not exhibit this behavior, and
-                 * neither does a VM without Tools installed at all.@.)
-                 *
-                 * Steps iii and iv happen within a few seconds of each other.
-                 * Step iv causes /etc/xensource/scripts/vif to run, which in
-                 * turn calls ovs-cfg-mod to add the new device to the bridge.
-                 * If step iv happens after step 4 (in our first list of
-                 * steps), then all is well, but if it happens between 3 and 4
-                 * (which can easily happen if ovs-brcompatd has to wait to
-                 * lock the configuration file), then we will remove the new
-                 * incarnation from the bridge instead of the old one!
-                 *
-                 * So, to avoid this problem, we do nothing here.  This is
-                 * strictly incorrect except for this one particular case, and
-                 * perhaps that will bite us someday.  If that happens, then we
-                 * will have to somehow track network devices by ifindex, since
-                 * a new device will have a new ifindex even if it has the same
-                 * name as an old device.
-                 */
-                VLOG_INFO("kernel reported network device %s removed but "
-                          "a device by that name exists (XS Tools 5.0.0?)",
-                          port_name);
-            }
-        }
-        ofpbuf_delete(buf);
+        return;
     }
+
+    if (change->nlmsg_type != RTM_DELLINK || !change->master_ifindex) {
+        return;
+    }
+
+    ovs = ovsrec_open_vswitch_first(idl);
+    if (!ovs) {
+        return;
+    }
+
+    port_name = change->ifname;
+    if (!if_indextoname(change->master_ifindex, br_name)) {
+        return;
+    }
+
+    if (netdev_exists(port_name)) {
+        /* A network device by that name exists even though the kernel
+         * told us it had disappeared.  Probably, what happened was
+         * this:
+         *
+         *      1. Device destroyed.
+         *      2. Notification sent to us.
+         *      3. New device created with same name as old one.
+         *      4. ovs-brcompatd notified, removes device from bridge.
+         *
+         * There's no a priori reason that in this situation that the
+         * new device with the same name should remain in the bridge;
+         * on the contrary, that would be unexpected.  *But* there is
+         * one important situation where, if we do this, bad things
+         * happen.  This is the case of XenServer Tools version 5.0.0,
+         * which on boot of a Windows VM cause something like this to
+         * happen on the Xen host:
+         *
+         *      i. Create tap1.0 and vif1.0.
+         *      ii. Delete tap1.0.
+         *      iii. Delete vif1.0.
+         *      iv. Re-create vif1.0.
+         *
+         * (XenServer Tools 5.5.0 does not exhibit this behavior, and
+         * neither does a VM without Tools installed at all.)
+         *
+         * Steps iii and iv happen within a few seconds of each other.
+         * Step iv causes /etc/xensource/scripts/vif to run, which in
+         * turn calls ovs-cfg-mod to add the new device to the bridge.
+         * If step iv happens after step 4 (in our first list of
+         * steps), then all is well, but if it happens between 3 and 4
+         * (which can easily happen if ovs-brcompatd has to wait to
+         * lock the configuration file), then we will remove the new
+         * incarnation from the bridge instead of the old one!
+         *
+         * So, to avoid this problem, we do nothing here.  This is
+         * strictly incorrect except for this one particular case, and
+         * perhaps that will bite us someday.  If that happens, then we
+         * will have to somehow track network devices by ifindex, since
+         * a new device will have a new ifindex even if it has the same
+         * name as an old device.
+         */
+        VLOG_INFO("kernel reported network device %s removed but "
+                  "a device by that name exists (XS Tools 5.0.0?)",
+                  port_name);
+        return;
+    }
+
+    VLOG_INFO("network device %s destroyed, removing from bridge %s",
+              port_name, br_name);
+
+    br = find_bridge(ovs, br_name);
+    if (!br) {
+        VLOG_WARN("no bridge named %s from which to remove %s",
+                  br_name, port_name);
+        return;
+    }
+
+    iface = find_interface(br, port_name, &port);
+    if (!iface) {
+        return;
+    }
+
+    txn = ovsdb_idl_txn_create(idl);
+    del_interface(br, port, iface);
+    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: destroy port %s",
+                              port_name);
+    commit_txn(txn, false);
 }
 
 int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
+    struct rtnetlink_notifier link_notifier;
     struct unixctl_server *unixctl;
     const char *remote;
     struct ovsdb_idl *idl;
@@ -1302,20 +1273,10 @@ main(int argc, char *argv[])
                    "\"brcompat\" kernel module.");
     }
 
+
     if (prune_timeout) {
-        int error;
-
-        error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
-        if (error) {
-            VLOG_FATAL("could not create rtnetlink socket (%s)",
-                       strerror(error));
-        }
-
-        error = nl_sock_join_mcgroup(rtnl_sock, RTNLGRP_LINK);
-        if (error) {
-            VLOG_FATAL("could not join RTNLGRP_LINK multicast group (%s)",
-                       strerror(error));
-        }
+        rtnetlink_link_notifier_register(&link_notifier,
+                                         netdev_changed_cb, NULL);
     }
 
     daemonize_complete();
@@ -1328,6 +1289,7 @@ main(int argc, char *argv[])
         ovsdb_idl_run(idl);
 
         unixctl_server_run(unixctl);
+        rtnetlink_link_notifier_run();
         brc_recv_update(idl);
 
         ovs = ovsrec_open_vswitch_first(idl);
@@ -1349,19 +1311,21 @@ main(int argc, char *argv[])
          *      to see if they no longer exist.
          */
         if (ovs && prune_timeout) {
-            rtnl_recv_update(idl, ovs);
-            nl_sock_wait(rtnl_sock, POLLIN);
+            rtnetlink_link_notifier_run();
             poll_timer_wait(prune_timeout);
         }
-
 
         nl_sock_wait(brc_sock, POLLIN);
         ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
+        rtnetlink_link_notifier_wait();
         netdev_wait();
         poll_block();
     }
 
+    if (prune_timeout) {
+        rtnetlink_link_notifier_unregister(&link_notifier);
+    }
     ovsdb_idl_destroy(idl);
 
     return 0;
