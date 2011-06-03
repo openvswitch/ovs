@@ -1096,6 +1096,26 @@ brc_recv_update(struct ovsdb_idl *idl)
         goto error;
     }
 
+    /* Service all pending network device notifications before executing the
+     * command.  This is very important to avoid a race in a scenario like the
+     * following, which is what happens with XenServer Tools version 5.0.0
+     * during boot of a Windows VM:
+     *
+     *      1. Create tap1.0 and vif1.0.
+     *      2. Delete tap1.0.
+     *      3. Delete vif1.0.
+     *      4. Re-create vif1.0.
+     *
+     * We must process the network device notification from step 3 before we
+     * process the brctl command from step 4.  If we process them in the
+     * reverse order, then step 4 completes as a no-op but step 3 then deletes
+     * the port that was just added.
+     *
+     * (XenServer Tools 5.5.0 does not exhibit this behavior, and neither does
+     * a VM without Tools installed at all.)
+     */
+    rtnetlink_link_notifier_run();
+
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
         handle_bridge_cmd(idl, ovs, buffer, true);
@@ -1164,54 +1184,6 @@ netdev_changed_cb(const struct rtnetlink_link_change *change, void *idl_)
 
     port_name = change->ifname;
     if (!if_indextoname(change->master_ifindex, br_name)) {
-        return;
-    }
-
-    if (netdev_exists(port_name)) {
-        /* A network device by that name exists even though the kernel
-         * told us it had disappeared.  Probably, what happened was
-         * this:
-         *
-         *      1. Device destroyed.
-         *      2. Notification sent to us.
-         *      3. New device created with same name as old one.
-         *      4. ovs-brcompatd notified, removes device from bridge.
-         *
-         * There's no a priori reason that in this situation that the
-         * new device with the same name should remain in the bridge;
-         * on the contrary, that would be unexpected.  *But* there is
-         * one important situation where, if we do this, bad things
-         * happen.  This is the case of XenServer Tools version 5.0.0,
-         * which on boot of a Windows VM cause something like this to
-         * happen on the Xen host:
-         *
-         *      i. Create tap1.0 and vif1.0.
-         *      ii. Delete tap1.0.
-         *      iii. Delete vif1.0.
-         *      iv. Re-create vif1.0.
-         *
-         * (XenServer Tools 5.5.0 does not exhibit this behavior, and
-         * neither does a VM without Tools installed at all.)
-         *
-         * Steps iii and iv happen within a few seconds of each other.
-         * Step iv causes /etc/xensource/scripts/vif to run, which in
-         * turn calls ovs-cfg-mod to add the new device to the bridge.
-         * If step iv happens after step 4 (in our first list of
-         * steps), then all is well, but if it happens between 3 and 4
-         * (which can easily happen if ovs-brcompatd has to wait to
-         * lock the configuration file), then we will remove the new
-         * incarnation from the bridge instead of the old one!
-         *
-         * So, to avoid this problem, we do nothing here.  This is
-         * strictly incorrect except for this one particular case, and
-         * perhaps that will bite us someday.  If that happens, then we
-         * will have to somehow track network devices by ifindex, since
-         * a new device will have a new ifindex even if it has the same
-         * name as an old device.
-         */
-        VLOG_INFO("kernel reported network device %s removed but "
-                  "a device by that name exists (XS Tools 5.0.0?)",
-                  port_name);
         return;
     }
 
