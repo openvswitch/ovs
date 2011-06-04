@@ -35,6 +35,7 @@
 #include "bitmap.h"
 #include "dpif-provider.h"
 #include "dynamic-string.h"
+#include "flow.h"
 #include "netdev.h"
 #include "netdev-linux.h"
 #include "netdev-vport.h"
@@ -784,12 +785,11 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 }
 
 static int
-dpif_linux_execute(struct dpif *dpif_,
-                   const struct nlattr *key, size_t key_len,
-                   const struct nlattr *actions, size_t actions_len,
-                   const struct ofpbuf *packet)
+dpif_linux_execute__(int dp_ifindex,
+                     const struct nlattr *key, size_t key_len,
+                     const struct nlattr *actions, size_t actions_len,
+                     const struct ofpbuf *packet)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct odp_header *execute;
     struct ofpbuf *buf;
     int error;
@@ -800,7 +800,7 @@ dpif_linux_execute(struct dpif *dpif_,
                           ODP_PACKET_CMD_EXECUTE, 1);
 
     execute = ofpbuf_put_uninit(buf, sizeof *execute);
-    execute->dp_ifindex = dpif->dp_ifindex;
+    execute->dp_ifindex = dp_ifindex;
 
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, packet->data, packet->size);
     nl_msg_put_unspec(buf, ODP_PACKET_ATTR_KEY, key, key_len);
@@ -809,6 +809,18 @@ dpif_linux_execute(struct dpif *dpif_,
     error = nl_sock_transact(genl_sock, buf, NULL);
     ofpbuf_delete(buf);
     return error;
+}
+
+static int
+dpif_linux_execute(struct dpif *dpif_,
+                   const struct nlattr *key, size_t key_len,
+                   const struct nlattr *actions, size_t actions_len,
+                   const struct ofpbuf *packet)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    return dpif_linux_execute__(dpif->dp_ifindex, key, key_len,
+                                actions, actions_len, packet);
 }
 
 static int
@@ -1121,28 +1133,22 @@ int
 dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
                       const void *data, size_t size)
 {
-    struct odp_header *execute;
-    struct ofpbuf *buf;
-    size_t actions_ofs;
-    int error;
+    struct ofpbuf actions, key, packet;
+    struct odputil_keybuf keybuf;
+    struct flow flow;
+    uint64_t action;
 
-    buf = ofpbuf_new(128 + size);
+    ofpbuf_use_const(&packet, data, size);
+    flow_extract(&packet, htonll(0), 0, &flow);
 
-    nl_msg_put_genlmsghdr(buf, 0, odp_packet_family, NLM_F_REQUEST,
-                          ODP_PACKET_CMD_EXECUTE, 1);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, &flow);
 
-    execute = ofpbuf_put_uninit(buf, sizeof *execute);
-    execute->dp_ifindex = dp_ifindex;
+    ofpbuf_use_stack(&actions, &action, sizeof action);
+    nl_msg_put_u32(&actions, ODP_ACTION_ATTR_OUTPUT, port_no);
 
-    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, data, size);
-
-    actions_ofs = nl_msg_start_nested(buf, ODP_PACKET_ATTR_ACTIONS);
-    nl_msg_put_u32(buf, ODP_ACTION_ATTR_OUTPUT, port_no);
-    nl_msg_end_nested(buf, actions_ofs);
-
-    error = nl_sock_transact(genl_sock, buf, NULL);
-    ofpbuf_delete(buf);
-    return error;
+    return dpif_linux_execute__(dp_ifindex, key.data, key.size,
+                                actions.data, actions.size, &packet);
 }
 
 static void
