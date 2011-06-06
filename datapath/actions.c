@@ -62,7 +62,7 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb)
 		return skb;
 	}
 
-	if (unlikely(vlan_eth_hdr(skb)->h_vlan_proto != htons(ETH_P_8021Q) ||
+	if (unlikely(skb->protocol != htons(ETH_P_8021Q) ||
 	    skb->len < VLAN_ETH_HLEN))
 		return skb;
 
@@ -86,30 +86,16 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb)
 
 static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, __be16 tci)
 {
-	struct vlan_ethhdr *vh;
-	__be16 old_tci;
+	if (!vlan_tx_tag_present(skb) && skb->protocol == htons(ETH_P_8021Q)) {
+		if (unlikely(skb->len < VLAN_ETH_HLEN))
+			return skb;
 
-	if (vlan_tx_tag_present(skb) || skb->protocol != htons(ETH_P_8021Q))
-		return __vlan_hwaccel_put_tag(skb, ntohs(tci));
-
-	skb = make_writable(skb, 0);
-	if (unlikely(!skb))
-		return NULL;
-
-	if (unlikely(skb->len < VLAN_ETH_HLEN))
-		return skb;
-
-	vh = vlan_eth_hdr(skb);
-
-	old_tci = vh->h_vlan_TCI;
-	vh->h_vlan_TCI = tci;
-
-	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE) {
-		__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
-		skb->csum = ~csum_partial((char *)diff, sizeof(diff), ~skb->csum);
+		skb = strip_vlan(skb);
+		if (unlikely(!skb))
+			return NULL;
 	}
 
-	return skb;
+	return __vlan_hwaccel_put_tag(skb, ntohs(tci));
 }
 
 static bool is_ip(struct sk_buff *skb)
