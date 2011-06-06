@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,8 @@ int ovsdb_row_compare_columns_3way(const struct ovsdb_row *,
                                    const struct ovsdb_column_set *);
 void ovsdb_row_update_columns(struct ovsdb_row *, const struct ovsdb_row *,
                               const struct ovsdb_column_set *);
-
+void ovsdb_row_columns_to_string(const struct ovsdb_row *,
+                                 const struct ovsdb_column_set *, struct ds *);
 struct ovsdb_error *ovsdb_row_from_json(struct ovsdb_row *,
                                         const struct json *,
                                         struct ovsdb_symbol_table *,

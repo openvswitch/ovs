@@ -73,6 +73,7 @@ struct ovsdb_error *ovsdb_column_set_from_json(
     const struct json *, const struct ovsdb_table_schema *,
     struct ovsdb_column_set *);
 struct json *ovsdb_column_set_to_json(const struct ovsdb_column_set *);
+char *ovsdb_column_set_to_string(const struct ovsdb_column_set *);
 
 void ovsdb_column_set_add(struct ovsdb_column_set *,
                           const struct ovsdb_column *);

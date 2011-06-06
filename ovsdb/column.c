@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include "column.h"
+#include "dynamic-string.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -201,6 +202,27 @@ ovsdb_column_set_to_json(const struct ovsdb_column_set *set)
         json_array_add(json, json_string_create(set->columns[i]->name));
     }
     return json;
+}
+
+/* Returns an English string listing the contents of 'set', e.g. "columns
+ * \"a\", \"b\", and \"c\"".  The caller must free the string. */
+char *
+ovsdb_column_set_to_string(const struct ovsdb_column_set *set)
+{
+    if (!set->n_columns) {
+        return xstrdup("no columns");
+    } else {
+        struct ds s;
+        size_t i;
+
+        ds_init(&s);
+        ds_put_format(&s, "column%s ", set->n_columns > 1 ? "s" : "");
+        for (i = 0; i < set->n_columns; i++) {
+            const char *delimiter = english_list_delimiter(i, set->n_columns);
+            ds_put_format(&s, "%s\"%s\"", delimiter, set->columns[i]->name);
+        }
+        return ds_steal_cstr(&s);
+    }
 }
 
 void

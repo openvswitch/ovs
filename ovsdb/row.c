@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include "dynamic-string.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "shash.h"
@@ -170,6 +171,23 @@ ovsdb_row_update_columns(struct ovsdb_row *dst,
         ovsdb_datum_clone(&dst->fields[column->index],
                           &src->fields[column->index],
                           &column->type);
+    }
+}
+
+/* Appends the string form of the value in 'row' of each of the columns in
+ * 'columns' to 'out', e.g. "1, \"xyz\", and [1, 2, 3]". */
+void
+ovsdb_row_columns_to_string(const struct ovsdb_row *row,
+                            const struct ovsdb_column_set *columns,
+                            struct ds *out)
+{
+    size_t i;
+
+    for (i = 0; i < columns->n_columns; i++) {
+        const struct ovsdb_column *column = columns->columns[i];
+
+        ds_put_cstr(out, english_list_delimiter(i, columns->n_columns));
+        ovsdb_datum_to_string(&row->fields[column->index], &column->type, out);
     }
 }
 
