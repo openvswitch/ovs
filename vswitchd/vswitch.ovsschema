@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "4.0.0",
- "cksum": "2606080158 14328",
+ "version": "5.0.0",
+ "cksum": "456700307 14434",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -92,7 +92,8 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
                           "maxInteger": 4095},
-                  "min": 0, "max": 4096}}}},
+                  "min": 0, "max": 4096}}},
+     "indexes": [["name"]]},
    "Port": {
      "columns": {
        "name": {
@@ -138,7 +139,8 @@
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}},
+     "indexes": [["name"]]},
    "Interface": {
      "columns": {
        "name": {
@@ -208,7 +210,8 @@
          "ephemeral": true},
        "mtu": {
          "type": {"key": "integer", "min": 0, "max": 1},
-         "ephemeral": true}}},
+         "ephemeral": true}},
+     "indexes": [["name"]]},
    "QoS": {
      "columns": {
        "type": {
@@ -241,8 +244,7 @@
        "name": {
          "type": "string"},
        "select_all": {
-         "type": "boolean"
-       },
+         "type": "boolean"},
        "select_src_port": {
          "type": {"key": {"type": "uuid",
                           "refTable": "Port",
@@ -376,7 +378,8 @@
          "ephemeral": true},
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
-         "ephemeral": true}}},
+         "ephemeral": true}},
+     "indexes": [["target"]]},
    "SSL": {
      "columns": {
        "private_key": {
