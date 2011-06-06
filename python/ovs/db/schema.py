@@ -165,7 +165,7 @@ class TableSchema(object):
     @staticmethod
     def from_json(json, name):
         parser = ovs.db.parser.Parser(json, "table schema for table %s" % name)
-        columnsJson = parser.get("columns", [dict])
+        columns_json = parser.get("columns", [dict])
         mutable = parser.get_optional("mutable", [bool], True)
         max_rows = parser.get_optional("maxRows", [int])
         is_root = parser.get_optional("isRoot", [bool], False)
@@ -177,18 +177,18 @@ class TableSchema(object):
         elif max_rows <= 0:
             raise error.Error("maxRows must be at least 1", json)
 
-        if not columnsJson:
+        if not columns_json:
             raise error.Error("table must have at least one column", json)
 
         columns = {}
-        for columnName, columnJson in columnsJson.iteritems():
-            if columnName.startswith('_'):
+        for column_name, column_json in columns_json.iteritems():
+            if column_name.startswith('_'):
                 raise error.Error("names beginning with \"_\" are reserved",
                                   json)
-            elif not ovs.db.parser.is_identifier(columnName):
+            elif not ovs.db.parser.is_identifier(column_name):
                 raise error.Error("name must be a valid id", json)
-            columns[columnName] = ColumnSchema.from_json(columnJson,
-                                                         columnName)
+            columns[column_name] = ColumnSchema.from_json(column_json,
+                                                          column_name)
 
         indexes = []
         for index_json in indexes_json:
