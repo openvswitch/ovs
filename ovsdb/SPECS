@@ -442,6 +442,16 @@ include at least the following:
         The number of rows in a table exceeds the maximum number
         permitted by the table's "maxRows" value (see <table-schema>).
 
+    "error": "constraint violation"
+
+        Two or more rows in a table had the same values in the columns
+        that comprise an index.
+
+    "error": "resources exhausted"
+    "error": "I/O error"
+
+        As described in the definition of <error> above.
+
 If "params" contains one or more "wait" operations, then the
 transaction may take an arbitrary amount of time to complete.  The
 database implementation must be capable of accepting, executing, and
