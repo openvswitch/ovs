@@ -16,6 +16,7 @@
 #include <config.h>
 #include <sys/types.h>
 #include "flow.h"
+#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -724,6 +725,83 @@ void
 flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
 {
     wc->reg_masks[idx] = mask;
+}
+
+/* Returns the wildcard bitmask for the Ethernet destination address
+ * that 'wc' specifies.  The bitmask has a 0 in each bit that is wildcarded
+ * and a 1 in each bit that must match.  */
+const uint8_t *
+flow_wildcards_to_dl_dst_mask(flow_wildcards_t wc)
+{
+    static const uint8_t    no_wild[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    static const uint8_t  addr_wild[] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
+    static const uint8_t mcast_wild[] = {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff};
+    static const uint8_t   all_wild[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+    switch (wc & (FWW_DL_DST | FWW_ETH_MCAST)) {
+    case 0:                             return no_wild;
+    case FWW_DL_DST:                    return addr_wild;
+    case FWW_ETH_MCAST:                 return mcast_wild;
+    case FWW_DL_DST | FWW_ETH_MCAST:    return all_wild;
+    }
+    NOT_REACHED();
+}
+
+/* Returns true if 'mask' is a valid wildcard bitmask for the Ethernet
+ * destination address.  Valid bitmasks are either all-bits-0 or all-bits-1,
+ * except that the multicast bit may differ from the rest of the bits.  So,
+ * there are four possible valid bitmasks:
+ *
+ *  - 00:00:00:00:00:00
+ *  - 01:00:00:00:00:00
+ *  - fe:ff:ff:ff:ff:ff
+ *  - ff:ff:ff:ff:ff:ff
+ *
+ * All other bitmasks are invalid. */
+bool
+flow_wildcards_is_dl_dst_mask_valid(const uint8_t mask[ETH_ADDR_LEN])
+{
+    switch (mask[0]) {
+    case 0x00:
+    case 0x01:
+        return (mask[1] | mask[2] | mask[3] | mask[4] | mask[5]) == 0x00;
+
+    case 0xfe:
+    case 0xff:
+        return (mask[1] & mask[2] & mask[3] & mask[4] & mask[5]) == 0xff;
+
+    default:
+        return false;
+    }
+}
+
+/* Returns 'wc' with the FWW_DL_DST and FWW_ETH_MCAST bits modified
+ * appropriately to match 'mask'.
+ *
+ * This function will assert-fail if 'mask' is invalid.  Only 'mask' values
+ * accepted by flow_wildcards_is_dl_dst_mask_valid() are allowed. */
+flow_wildcards_t
+flow_wildcards_set_dl_dst_mask(flow_wildcards_t wc,
+                               const uint8_t mask[ETH_ADDR_LEN])
+{
+    assert(flow_wildcards_is_dl_dst_mask_valid(mask));
+
+    switch (mask[0]) {
+    case 0x00:
+        return wc | FWW_DL_DST | FWW_ETH_MCAST;
+
+    case 0x01:
+        return (wc | FWW_DL_DST) & ~FWW_ETH_MCAST;
+
+    case 0xfe:
+        return (wc & ~FWW_DL_DST) | FWW_ETH_MCAST;
+
+    case 0xff:
+        return wc & ~(FWW_DL_DST | FWW_ETH_MCAST);
+
+    default:
+        NOT_REACHED();
+    }
 }
 
 /* Hashes 'flow' based on its L2 through L4 protocol information. */

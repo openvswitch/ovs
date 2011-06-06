@@ -167,4 +167,9 @@ bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
 uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 
+const uint8_t *flow_wildcards_to_dl_dst_mask(flow_wildcards_t);
+bool flow_wildcards_is_dl_dst_mask_valid(const uint8_t[6]);
+flow_wildcards_t flow_wildcards_set_dl_dst_mask(flow_wildcards_t,
+                                                const uint8_t mask[6]);
+
 #endif /* flow.h */

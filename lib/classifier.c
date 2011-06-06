@@ -162,11 +162,31 @@ cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
     memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
 }
 
+/* Modifies 'rule' so that the Ethernet address must match 'dl_dst' exactly. */
 void
 cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
     rule->wc.wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
+}
+
+/* Modifies 'rule' so that the Ethernet address must match 'dl_dst' after each
+ * byte is ANDed with the appropriate byte in 'mask'.
+ *
+ * This function will assert-fail if 'mask' is invalid.  Only 'mask' values
+ * accepted by flow_wildcards_is_dl_dst_mask_valid() are allowed. */
+void
+cls_rule_set_dl_dst_masked(struct cls_rule *rule,
+                           const uint8_t dl_dst[ETH_ADDR_LEN],
+                           const uint8_t mask[ETH_ADDR_LEN])
+{
+    flow_wildcards_t *wc = &rule->wc.wildcards;
+    size_t i;
+
+    *wc = flow_wildcards_set_dl_dst_mask(*wc, mask);
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        rule->flow.dl_dst[i] = dl_dst[i] & mask[i];
+    }
 }
 
 void

@@ -78,16 +78,6 @@ static struct nxm_field nxm_fields[N_NXM_FIELDS] = {
 /* Hash table of 'nxm_fields'. */
 static struct hmap all_nxm_fields = HMAP_INITIALIZER(&all_nxm_fields);
 
-/* Possible masks for NXM_OF_ETH_DST_W. */
-static const uint8_t eth_all_0s[ETH_ADDR_LEN]
-    = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t eth_all_1s[ETH_ADDR_LEN]
-    = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-static const uint8_t eth_mcast_1[ETH_ADDR_LEN]
-    = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t eth_mcast_0[ETH_ADDR_LEN]
-    = {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff};
-
 static void
 nxm_init(void)
 {
@@ -192,20 +182,8 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         if ((wc->wildcards & (FWW_DL_DST | FWW_ETH_MCAST))
             != (FWW_DL_DST | FWW_ETH_MCAST)) {
             return NXM_DUP_TYPE;
-        } else if (eth_addr_equals(mask, eth_mcast_1)) {
-            wc->wildcards &= ~FWW_ETH_MCAST;
-            flow->dl_dst[0] = *(uint8_t *) value & 0x01;
-            return 0;
-        } else if (eth_addr_equals(mask, eth_mcast_0)) {
-            wc->wildcards &= ~FWW_DL_DST;
-            memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
-            flow->dl_dst[0] &= 0xfe;
-            return 0;
-        } else if (eth_addr_equals(mask, eth_all_0s)) {
-            return 0;
-        } else if (eth_addr_equals(mask, eth_all_1s)) {
-            wc->wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
-            memcpy(flow->dl_dst, value, ETH_ADDR_LEN);
+        } else if (flow_wildcards_is_dl_dst_mask_valid(mask)) {
+            cls_rule_set_dl_dst_masked(rule, value, mask);
             return 0;
         } else {
             return NXM_BAD_MASK;
@@ -682,15 +660,10 @@ nxm_put_eth_dst(struct ofpbuf *b,
     switch (wc & (FWW_DL_DST | FWW_ETH_MCAST)) {
     case FWW_DL_DST | FWW_ETH_MCAST:
         break;
-    case FWW_DL_DST:
+    default:
         nxm_put_header(b, NXM_OF_ETH_DST_W);
         ofpbuf_put(b, value, ETH_ADDR_LEN);
-        ofpbuf_put(b, eth_mcast_1, ETH_ADDR_LEN);
-        break;
-    case FWW_ETH_MCAST:
-        nxm_put_header(b, NXM_OF_ETH_DST_W);
-        ofpbuf_put(b, value, ETH_ADDR_LEN);
-        ofpbuf_put(b, eth_mcast_0, ETH_ADDR_LEN);
+        ofpbuf_put(b, flow_wildcards_to_dl_dst_mask(wc), ETH_ADDR_LEN);
         break;
     case 0:
         nxm_put_eth(b, NXM_OF_ETH_DST, value);
