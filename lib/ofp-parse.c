@@ -537,7 +537,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
     FIELD(F_DL_VLAN,     "dl_vlan",     0)                  \
     FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", 0)                  \
     FIELD(F_DL_SRC,      "dl_src",      FWW_DL_SRC)         \
-    FIELD(F_DL_DST,      "dl_dst",      FWW_DL_DST)         \
+    FIELD(F_DL_DST,      "dl_dst",      FWW_DL_DST | FWW_ETH_MCAST) \
     FIELD(F_DL_TYPE,     "dl_type",     FWW_DL_TYPE)        \
     FIELD(F_NW_SRC,      "nw_src",      0)                  \
     FIELD(F_NW_DST,      "nw_dst",      0)                  \
