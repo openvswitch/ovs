@@ -31,8 +31,10 @@ static struct ovsdb_row *
 allocate_row(const struct ovsdb_table *table)
 {
     size_t n_fields = shash_count(&table->schema->columns);
+    size_t n_indexes = table->schema->n_indexes;
     size_t row_size = (offsetof(struct ovsdb_row, fields)
-                       + sizeof(struct ovsdb_datum) * n_fields);
+                       + sizeof(struct ovsdb_datum) * n_fields
+                       + sizeof(struct hmap_node) * n_indexes);
     struct ovsdb_row *row = xmalloc(row_size);
     row->table = (struct ovsdb_table *) table;
     row->txn_row = NULL;

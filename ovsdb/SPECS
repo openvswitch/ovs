@@ -132,6 +132,7 @@ is represented by <database-schema>, as described below.
         "columns": {<id>: <column-schema>, ...}   required
         "maxRows": <integer>                      optional
         "isRoot": <boolean>                       optional
+        "indexes": [<column-set>*]                optional
 
     The value of "columns" is a JSON object whose names are column
     names and whose values are <column-schema>s.
@@ -175,6 +176,15 @@ is represented by <database-schema>, as described below.
     available to the database server.  "maxRows" constraints are
     enforced after unreferenced rows are deleted from tables with a
     false "isRoot".
+
+    If "indexes" is specified, it must be an array of zero or more
+    <column-set>s.  A <column-set> is an array of one or more strings,
+    each of which names a column.  Each <column-set> is a set of
+    columns whose values, taken together within any given row, must be
+    unique within the table.  This is a "deferred" constraint,
+    enforced only at transaction commit time, after unreferenced rows
+    are deleted and dangling weak references are removed.  Ephemeral
+    columns may not be part of indexes.
 
 <column-schema>
 

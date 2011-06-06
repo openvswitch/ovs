@@ -31,6 +31,31 @@ OVSDB_CHECK_POSITIVE_CPY([table with maxRows of 2],
                           "maxRows": 2}']],
   [[{"columns":{"name":{"type":"string"}},"maxRows":2}]])
 
+OVSDB_CHECK_POSITIVE_CPY([table with index],
+  [[parse-table mytable '{"columns": {"a": {"type": "integer"},
+                                      "b": {"type": "string"}},
+                          "indexes": [["b", "a"]]}']],
+  [[{"columns":{"a":{"type":"integer"},"b":{"type":"string"}},"indexes":[["b","a"]]}]])
+
+OVSDB_CHECK_NEGATIVE_CPY([table with syntax error in index],
+  [[parse-table mytable '{"columns": {"a": {"type": "integer"},
+                                      "b": {"type": "string"}},
+                          "indexes": [["b", "a"], [0]]}']],
+  [[array of distinct column names expected]])
+
+OVSDB_CHECK_NEGATIVE_CPY([table with empty index],
+  [[parse-table mytable '{"columns": {"a": {"type": "integer"},
+                                      "b": {"type": "string"}},
+                          "indexes": [[]]}']],
+  [[index must have at least one column]])
+
+OVSDB_CHECK_NEGATIVE_CPY([table with index of ephemeral column],
+  [[parse-table mytable '{"columns": {"a": {"type": "integer",
+                                            "ephemeral": true},
+                                      "b": {"type": "string"}},
+                          "indexes": [["b", "a"]]}']],
+  [[ephemeral columns (such as a) may not be indexed]])
+
 OVSDB_CHECK_NEGATIVE_CPY([column names may not begin with _],
   [[parse-table mytable \
     '{"columns": {"_column": {"type": "integer"}}}']],

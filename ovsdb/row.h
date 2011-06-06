@@ -58,7 +58,13 @@ struct ovsdb_row {
      * commit. */
     size_t n_refs;
 
+    /* One datum for each column (shash_count(&table->schema->columns)
+     * elements). */
     struct ovsdb_datum fields[];
+
+    /* Followed by table->schema->n_indexes "struct hmap_node"s.  In rows that
+     * have have been committed as part of the database, the hmap_node with
+     * index 'i' is contained in hmap table->indexes[i].  */
 };
 
 struct ovsdb_row *ovsdb_row_create(const struct ovsdb_table *);

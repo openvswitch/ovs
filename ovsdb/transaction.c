@@ -43,6 +43,11 @@ struct ovsdb_txn_table {
     struct ovsdb_table *table;
     struct hmap txn_rows;       /* Contains "struct ovsdb_txn_row"s. */
 
+    /* This has the same form as the 'indexes' member of struct ovsdb_table,
+     * but it is only used or updated at transaction commit time, from
+     * check_index_uniqueness(). */
+    struct hmap *txn_indexes;
+
     /* Used by for_each_txn_row(). */
     unsigned int serial;        /* Serial number of in-progress iteration. */
     unsigned int n_processed;   /* Number of rows processed. */
@@ -132,6 +137,33 @@ ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
     free(txn_row);
 
     return NULL;
+}
+
+/* Returns the offset in bytes from the start of an ovsdb_row for 'table' to
+ * the hmap_node for the index numbered 'i'. */
+static size_t
+ovsdb_row_index_offset__(const struct ovsdb_table *table, size_t i)
+{
+    size_t n_fields = shash_count(&table->schema->columns);
+    return (offsetof(struct ovsdb_row, fields)
+            + n_fields * sizeof(struct ovsdb_datum)
+            + i * sizeof(struct hmap_node));
+}
+
+/* Returns the hmap_node in 'row' for the index numbered 'i'. */
+static struct hmap_node *
+ovsdb_row_get_index_node(struct ovsdb_row *row, size_t i)
+{
+    return (void *) ((char *) row + ovsdb_row_index_offset__(row->table, i));
+}
+
+/* Returns the ovsdb_row given 'index_node', which is a pointer to that row's
+ * hmap_node for the index numbered 'i' within 'table'. */
+static struct ovsdb_row *
+ovsdb_row_from_index_node(struct hmap_node *index_node,
+                          const struct ovsdb_table *table, size_t i)
+{
+    return (void *) ((char *) index_node - ovsdb_row_index_offset__(table, i));
 }
 
 void
@@ -374,6 +406,25 @@ static struct ovsdb_error *
 ovsdb_txn_row_commit(struct ovsdb_txn *txn OVS_UNUSED,
                      struct ovsdb_txn_row *txn_row)
 {
+    size_t n_indexes = txn_row->table->schema->n_indexes;
+
+    if (txn_row->old) {
+        size_t i;
+
+        for (i = 0; i < n_indexes; i++) {
+            struct hmap_node *node = ovsdb_row_get_index_node(txn_row->old, i);
+            hmap_remove(&txn_row->table->indexes[i], node);
+        }
+    }
+    if (txn_row->new) {
+        size_t i;
+
+        for (i = 0; i < n_indexes; i++) {
+            struct hmap_node *node = ovsdb_row_get_index_node(txn_row->new, i);
+            hmap_insert(&txn_row->table->indexes[i], node, node->hash);
+        }
+    }
+
     ovsdb_txn_row_prefree(txn_row);
     if (txn_row->new) {
         txn_row->new->n_refs = txn_row->n_refs;
@@ -574,6 +625,129 @@ check_max_rows(struct ovsdb_txn *txn)
     return NULL;
 }
 
+static struct ovsdb_row *
+ovsdb_index_search(struct hmap *index, struct ovsdb_row *row, size_t i,
+                   uint32_t hash)
+{
+    const struct ovsdb_table *table = row->table;
+    const struct ovsdb_column_set *columns = &table->schema->indexes[i];
+    struct hmap_node *node;
+
+    for (node = hmap_first_with_hash(index, hash); node;
+         node = hmap_next_with_hash(node)) {
+        struct ovsdb_row *irow = ovsdb_row_from_index_node(node, table, i);
+        if (ovsdb_row_equal_columns(row, irow, columns)) {
+            return irow;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+duplicate_index_row__(const struct ovsdb_column_set *index,
+                      const struct ovsdb_row *row,
+                      const char *title,
+                      struct ds *out)
+{
+    size_t n_columns = shash_count(&row->table->schema->columns);
+
+    ds_put_format(out, "%s row, with UUID "UUID_FMT", ",
+                  title, UUID_ARGS(ovsdb_row_get_uuid(row)));
+    if (!row->txn_row
+        || bitmap_scan(row->txn_row->changed, 0, n_columns) == n_columns) {
+        ds_put_cstr(out, "existed in the database before this "
+                    "transaction and was not modified by the transaction.");
+    } else if (!row->txn_row->old) {
+        ds_put_cstr(out, "was inserted by this transaction.");
+    } else if (ovsdb_row_equal_columns(row->txn_row->old,
+                                       row->txn_row->new, index)) {
+        ds_put_cstr(out, "existed in the database before this "
+                    "transaction, which modified some of the row's columns "
+                    "but not any columns in this index.");
+    } else {
+        ds_put_cstr(out, "had the following index values before the "
+                    "transaction: ");
+        ovsdb_row_columns_to_string(row->txn_row->old, index, out);
+        ds_put_char(out, '.');
+    }
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+duplicate_index_row(const struct ovsdb_column_set *index,
+                    const struct ovsdb_row *a,
+                    const struct ovsdb_row *b)
+{
+    struct ovsdb_column_set all_columns;
+    struct ovsdb_error *error;
+    char *index_s;
+    struct ds s;
+
+    /* Put 'a' and 'b' in a predictable order to make error messages
+     * reproducible for testing. */
+    ovsdb_column_set_init(&all_columns);
+    ovsdb_column_set_add_all(&all_columns, a->table);
+    if (ovsdb_row_compare_columns_3way(a, b, &all_columns) < 0) {
+        const struct ovsdb_row *tmp = a;
+        a = b;
+        b = tmp;
+    }
+    ovsdb_column_set_destroy(&all_columns);
+
+    index_s = ovsdb_column_set_to_string(index);
+
+    ds_init(&s);
+    ds_put_format(&s, "Transaction causes multiple rows in \"%s\" table to "
+                  "have identical values (", a->table->schema->name);
+    ovsdb_row_columns_to_string(a, index, &s);
+    ds_put_format(&s, ") for index on %s.  ", index_s);
+    duplicate_index_row__(index, a, "First", &s);
+    ds_put_cstr(&s, "  ");
+    duplicate_index_row__(index, b, "Second", &s);
+
+    free(index_s);
+
+    error = ovsdb_error("constraint violation", "%s", ds_cstr(&s));
+    ds_destroy(&s);
+    return error;
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
+                       struct ovsdb_txn_row *txn_row)
+{
+    struct ovsdb_txn_table *txn_table = txn_row->table->txn_table;
+    struct ovsdb_table *table = txn_row->table;
+    struct ovsdb_row *row = txn_row->new;
+    size_t i;
+
+    if (!row) {
+        return NULL;
+    }
+
+    for (i = 0; i < table->schema->n_indexes; i++) {
+        const struct ovsdb_column_set *index = &table->schema->indexes[i];
+        struct ovsdb_row *irow;
+        uint32_t hash;
+
+        hash = ovsdb_row_hash_columns(row, index, 0);
+        irow = ovsdb_index_search(&txn_table->txn_indexes[i], row, i, hash);
+        if (irow) {
+            return duplicate_index_row(index, irow, row);
+        }
+
+        irow = ovsdb_index_search(&table->indexes[i], row, i, hash);
+        if (irow && !irow->txn_row) {
+            return duplicate_index_row(index, irow, row);
+        }
+
+        hmap_insert(&txn_table->txn_indexes[i],
+                    ovsdb_row_get_index_node(row, i), hash);
+    }
+
+    return NULL;
+}
+
 struct ovsdb_error *
 ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
 {
@@ -612,9 +786,16 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
         return error;
     }
 
-    /* Check reference counts and remove bad reference for "weak" referential
+    /* Check reference counts and remove bad references for "weak" referential
      * integrity. */
     error = for_each_txn_row(txn, assess_weak_refs);
+    if (error) {
+        ovsdb_txn_abort(txn);
+        return error;
+    }
+
+    /* Verify that the indexes will still be unique post-transaction. */
+    error = for_each_txn_row(txn, check_index_uniqueness);
     if (error) {
         ovsdb_txn_abort(txn);
         return error;
@@ -662,11 +843,17 @@ ovsdb_txn_create_txn_table(struct ovsdb_txn *txn, struct ovsdb_table *table)
 {
     if (!table->txn_table) {
         struct ovsdb_txn_table *txn_table;
+        size_t i;
 
         table->txn_table = txn_table = xmalloc(sizeof *table->txn_table);
         txn_table->table = table;
         hmap_init(&txn_table->txn_rows);
         txn_table->serial = serial - 1;
+        txn_table->txn_indexes = xmalloc(table->schema->n_indexes
+                                         * sizeof *txn_table->txn_indexes);
+        for (i = 0; i < table->schema->n_indexes; i++) {
+            hmap_init(&txn_table->txn_indexes[i]);
+        }
         list_push_back(&txn->txn_tables, &txn_table->node);
     }
     return table->txn_table;
@@ -798,7 +985,14 @@ ovsdb_txn_row_prefree(struct ovsdb_txn_row *txn_row)
 static void
 ovsdb_txn_table_destroy(struct ovsdb_txn_table *txn_table)
 {
+    size_t i;
+
     assert(hmap_is_empty(&txn_table->txn_rows));
+
+    for (i = 0; i < txn_table->table->schema->n_indexes; i++) {
+        hmap_destroy(&txn_table->txn_indexes[i]);
+    }
+
     txn_table->table->txn_table = NULL;
     hmap_destroy(&txn_table->txn_rows);
     list_remove(&txn_table->node);

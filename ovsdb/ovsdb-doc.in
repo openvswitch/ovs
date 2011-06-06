@@ -136,6 +136,8 @@ def typeAndConstraintsToNroff(column):
     constraints = column.type.constraintsToEnglish(escapeNroffLiteral)
     if constraints:
         type += ", " + constraints
+    if column.unique:
+        type += " (must be unique within table)"
     return type
 
 def columnToNroff(columnName, column, node):

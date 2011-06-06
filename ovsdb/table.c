@@ -57,6 +57,9 @@ ovsdb_table_schema_create(const char *name, bool mutable,
     add_column(ts, version);
     assert(version->index == OVSDB_COL_VERSION);
 
+    ts->n_indexes = 0;
+    ts->indexes = NULL;
+
     return ts;
 }
 
@@ -65,6 +68,7 @@ ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
 {
     struct ovsdb_table_schema *new;
     struct shash_node *node;
+    size_t i;
 
     new = ovsdb_table_schema_create(old->name, old->mutable,
                                     old->max_rows, old->is_root);
@@ -78,6 +82,24 @@ ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
 
         add_column(new, ovsdb_column_clone(column));
     }
+
+    new->n_indexes = old->n_indexes;
+    new->indexes = xmalloc(new->n_indexes * sizeof *new->indexes);
+    for (i = 0; i < new->n_indexes; i++) {
+        const struct ovsdb_column_set *old_index = &old->indexes[i];
+        struct ovsdb_column_set *new_index = &new->indexes[i];
+        size_t j;
+
+        ovsdb_column_set_init(new_index);
+        for (j = 0; j < old_index->n_columns; j++) {
+            const struct ovsdb_column *old_column = old_index->columns[j];
+            const struct ovsdb_column *new_column;
+
+            new_column = ovsdb_table_schema_get_column(new, old_column->name);
+            ovsdb_column_set_add(new_index, new_column);
+        }
+    }
+
     return new;
 }
 
@@ -85,6 +107,12 @@ void
 ovsdb_table_schema_destroy(struct ovsdb_table_schema *ts)
 {
     struct shash_node *node;
+    size_t i;
+
+    for (i = 0; i < ts->n_indexes; i++) {
+        ovsdb_column_set_destroy(&ts->indexes[i]);
+    }
+    free(ts->indexes);
 
     SHASH_FOR_EACH (node, &ts->columns) {
         ovsdb_column_destroy(node->data);
@@ -99,7 +127,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
                              struct ovsdb_table_schema **tsp)
 {
     struct ovsdb_table_schema *ts;
-    const struct json *columns, *mutable, *max_rows, *is_root;
+    const struct json *columns, *mutable, *max_rows, *is_root, *indexes;
     struct shash_node *node;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
@@ -114,6 +142,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     max_rows = ovsdb_parser_member(&parser, "maxRows",
                                    OP_INTEGER | OP_OPTIONAL);
     is_root = ovsdb_parser_member(&parser, "isRoot", OP_BOOLEAN | OP_OPTIONAL);
+    indexes = ovsdb_parser_member(&parser, "indexes", OP_ARRAY | OP_OPTIONAL);
     error = ovsdb_parser_finish(&parser);
     if (error) {
         return error;
@@ -150,14 +179,51 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
             error = ovsdb_column_from_json(node->data, node->name, &column);
         }
         if (error) {
-            ovsdb_table_schema_destroy(ts);
-            return error;
+            goto error;
         }
 
         add_column(ts, column);
     }
+
+    if (indexes) {
+        size_t i;
+
+        ts->indexes = xmalloc(indexes->u.array.n * sizeof *ts->indexes);
+        for (i = 0; i < indexes->u.array.n; i++) {
+            struct ovsdb_column_set *index = &ts->indexes[i];
+            size_t j;
+
+            error = ovsdb_column_set_from_json(indexes->u.array.elems[i],
+                                               ts, index);
+            if (error) {
+                goto error;
+            }
+            if (index->n_columns == 0) {
+                error = ovsdb_syntax_error(json, NULL, "index must have "
+                                           "at least one column");
+                goto error;
+            }
+            ts->n_indexes++;
+
+            for (j = 0; j < index->n_columns; j++) {
+                const struct ovsdb_column *column = index->columns[j];
+
+                if (!column->persistent) {
+                    error = ovsdb_syntax_error(json, NULL, "ephemeral columns "
+                                               "(such as %s) may not be "
+                                               "indexed", column->name);
+                    goto error;
+                }
+            }
+        }
+    }
+
     *tsp = ts;
     return NULL;
+
+error:
+    ovsdb_table_schema_destroy(ts);
+    return error;
 }
 
 /* Returns table schema 'ts' serialized into JSON.
@@ -199,6 +265,18 @@ ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts,
         json_object_put(json, "maxRows", json_integer_create(ts->max_rows));
     }
 
+    if (ts->n_indexes) {
+        struct json **indexes;
+        size_t i;
+
+        indexes = xmalloc(ts->n_indexes * sizeof *indexes);
+        for (i = 0; i < ts->n_indexes; i++) {
+            indexes[i] = ovsdb_column_set_to_json(&ts->indexes[i]);
+        }
+        json_object_put(json, "indexes",
+                        json_array_create(indexes, ts->n_indexes));
+    }
+
     return json;
 }
 
@@ -213,10 +291,15 @@ struct ovsdb_table *
 ovsdb_table_create(struct ovsdb_table_schema *ts)
 {
     struct ovsdb_table *table;
+    size_t i;
 
     table = xmalloc(sizeof *table);
     table->schema = ts;
     table->txn_table = NULL;
+    table->indexes = xmalloc(ts->n_indexes * sizeof *table->indexes);
+    for (i = 0; i < ts->n_indexes; i++) {
+        hmap_init(&table->indexes[i]);
+    }
     hmap_init(&table->rows);
 
     return table;
@@ -227,11 +310,17 @@ ovsdb_table_destroy(struct ovsdb_table *table)
 {
     if (table) {
         struct ovsdb_row *row, *next;
+        size_t i;
 
         HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
             ovsdb_row_destroy(row);
         }
         hmap_destroy(&table->rows);
+
+        for (i = 0; i < table->schema->n_indexes; i++) {
+            hmap_destroy(&table->indexes[i]);
+        }
+        free(table->indexes);
 
         ovsdb_table_schema_destroy(table->schema);
         free(table);
