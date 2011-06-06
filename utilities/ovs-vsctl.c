@@ -3592,7 +3592,9 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         struct vsctl_context ctx;
 
         vsctl_context_init(&ctx, c, idl, txn, ovs, symtab);
-        (c->syntax->run)(&ctx);
+        if (c->syntax->run) {
+            (c->syntax->run)(&ctx);
+        }
         vsctl_context_done(&ctx, c);
 
         if (ctx.try_again) {
@@ -3786,7 +3788,8 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Switch commands. */
     {"emer-reset", 0, 0, pre_cmd_emer_reset, cmd_emer_reset, NULL, "", RW},
 
-    /* Parameter commands. */
+    /* Database commands. */
+    {"comment", 0, INT_MAX, NULL, NULL, NULL, "", RO},
     {"get", 2, INT_MAX, pre_cmd_get, cmd_get, NULL, "--if-exists,--id=", RO},
     {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL, "--columns=", RO},
     {"find", 1, INT_MAX, pre_cmd_find, cmd_find, NULL, "--columns=", RO},

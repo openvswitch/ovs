@@ -694,6 +694,9 @@ initially connects to the database.
 Consider specifying \fB\-\-timeout=0\fR along with
 \fB\-\-wait\-until\fR, to prevent \fBovs\-vsctl\fR from terminating
 after waiting only at most 5 seconds.
+.IP "\fBcomment \fR[\fIarg\fR]..."
+This command has no effect on behavior, but any database log record
+created by the command will include the command and its arguments.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP
