@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,7 @@ void process_wait(struct process *);
 
 char *process_search_path(const char *);
 
-#define PROCESS_MAX_CAPTURE 65536
 int process_run_capture(char **argv, char **stdout_log, char **stderr_log,
-                        int *status);
+                        size_t max_log, int *status);
 
 #endif /* process.h */

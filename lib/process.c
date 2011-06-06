@@ -403,13 +403,15 @@ process_search_path(const char *name)
 /* process_run_capture() and supporting functions. */
 
 struct stream {
+    size_t max_size;
     struct ds log;
     int fds[2];
 };
 
 static int
-stream_open(struct stream *s)
+stream_open(struct stream *s, size_t max_size)
 {
+    s->max_size = max_size;
     ds_init(&s->log);
     if (pipe(s->fds)) {
         VLOG_WARN("failed to create pipe: %s", strerror(errno));
@@ -443,9 +445,9 @@ stream_read(struct stream *s)
                 }
                 break;
             }
-        } else if (s->log.length > PROCESS_MAX_CAPTURE) {
-            VLOG_WARN("subprocess output overflowed %d-byte buffer",
-                      PROCESS_MAX_CAPTURE);
+        } else if (s->log.length > s->max_size) {
+            VLOG_WARN("subprocess output overflowed %zu-byte buffer",
+                      s->max_size);
             break;
         }
     }
@@ -480,7 +482,7 @@ stream_close(struct stream *s)
  * '*status'.
  *
  * If 'stdout_log' is nonnull, then the subprocess's output to stdout (up to a
- * limit of PROCESS_MAX_CAPTURE bytes) is captured in a memory buffer, which
+ * limit of 'log_max' bytes) is captured in a memory buffer, which
  * when this function returns 0 is stored as a null-terminated string in
  * '*stdout_log'.  The caller is responsible for freeing '*stdout_log' (by
  * passing it to free()).  When this function returns an error, '*stdout_log'
@@ -490,7 +492,7 @@ stream_close(struct stream *s)
  * that it captures the subprocess's output to stderr. */
 int
 process_run_capture(char **argv, char **stdout_log, char **stderr_log,
-                    int *status)
+                    size_t max_log, int *status)
 {
     struct stream s_stdout, s_stderr;
     sigset_t oldsigs;
@@ -510,12 +512,12 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
         return error;
     }
 
-    error = stream_open(&s_stdout);
+    error = stream_open(&s_stdout, max_log);
     if (error) {
         return error;
     }
 
-    error = stream_open(&s_stderr);
+    error = stream_open(&s_stderr, max_log);
     if (error) {
         stream_close(&s_stdout);
         return error;

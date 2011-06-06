@@ -200,7 +200,8 @@ execute_appctl_command(const char *unixctl_command, char **output)
     argv[3] = NULL;
 
     /* Run process and log status. */
-    error = process_run_capture(argv, &stdout_log, &stderr_log, &status);
+    error = process_run_capture(argv, &stdout_log, &stderr_log, 65536,
+                                &status);
     if (error) {
         VLOG_ERR("failed to execute %s command via ovs-appctl: %s",
                  unixctl_command, strerror(error));
