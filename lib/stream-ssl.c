@@ -47,9 +47,6 @@
 
 VLOG_DEFINE_THIS_MODULE(stream_ssl);
 
-COVERAGE_DEFINE(ssl_session);
-COVERAGE_DEFINE(ssl_session_reused);
-
 /* Active SSL. */
 
 enum ssl_state {
@@ -137,20 +134,6 @@ struct ssl_stream
 
 /* SSL context created by ssl_init(). */
 static SSL_CTX *ctx;
-
-/* Maps from stream target (e.g. "127.0.0.1:1234") to SSL_SESSION *.  The
- * sessions are those from the last SSL connection to the given target.
- * OpenSSL caches server-side sessions internally, so this cache is only used
- * for client connections.
- *
- * The stream_ssl module owns a reference to each of the sessions in this
- * table, so they must be freed with SSL_SESSION_free() when they are no
- * longer needed. */
-static struct shash client_sessions = SHASH_INITIALIZER(&client_sessions);
-
-/* Maximum number of client sessions to cache.  Ordinarily I'd expect that one
- * session would be sufficient but this should cover it. */
-#define MAX_CLIENT_SESSION_CACHE 16
 
 struct ssl_config_file {
     bool read;                  /* Whether the file was successfully read. */
@@ -279,13 +262,6 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     }
     if (!verify_peer_cert || (bootstrap_ca_cert && type == CLIENT)) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-    }
-    if (type == CLIENT) {
-        /* Grab SSL session information from the cache. */
-        SSL_SESSION *session = shash_find_data(&client_sessions, name);
-        if (session && SSL_set_session(ssl, session) != 1) {
-            interpret_queued_ssl_error("SSL_set_session");
-        }
     }
 
     /* Create and return the ssl_stream. */
@@ -443,58 +419,6 @@ do_ca_cert_bootstrap(struct stream *stream)
     return EPROTO;
 }
 
-static void
-ssl_delete_session(struct shash_node *node)
-{
-    SSL_SESSION *session = node->data;
-    SSL_SESSION_free(session);
-    shash_delete(&client_sessions, node);
-}
-
-/* Find and free any previously cached session for 'stream''s target. */
-static void
-ssl_flush_session(struct stream *stream)
-{
-    struct shash_node *node;
-
-    node = shash_find(&client_sessions, stream_get_name(stream));
-    if (node) {
-        ssl_delete_session(node);
-    }
-}
-
-/* Add 'stream''s session to the cache for its target, so that it will be
- * reused for future SSL connections to the same target. */
-static void
-ssl_cache_session(struct stream *stream)
-{
-    struct ssl_stream *sslv = ssl_stream_cast(stream);
-    SSL_SESSION *session;
-
-    /* Get session from stream. */
-    session = SSL_get1_session(sslv->ssl);
-    if (session) {
-        SSL_SESSION *old_session;
-
-        old_session = shash_replace(&client_sessions, stream_get_name(stream),
-                                    session);
-        if (old_session) {
-            /* Free the session that we replaced.  (We might actually have
-             * session == old_session, but either way we have to free it to
-             * avoid leaking a reference.) */
-            SSL_SESSION_free(old_session);
-        } else if (shash_count(&client_sessions) > MAX_CLIENT_SESSION_CACHE) {
-            for (;;) {
-                struct shash_node *node = shash_random_node(&client_sessions);
-                if (node->data != session) {
-                    ssl_delete_session(node);
-                    break;
-                }
-            }
-        }
-    }
-}
-
 static int
 ssl_connect(struct stream *stream)
 {
@@ -527,17 +451,6 @@ ssl_connect(struct stream *stream)
             } else {
                 int unused;
 
-                if (sslv->type == CLIENT) {
-                    /* Delete any cached session for this stream's target.
-                     * Otherwise a single error causes recurring errors that
-                     * don't resolve until the SSL client or server is
-                     * restarted.  (It can take dozens of reused connections to
-                     * see this behavior, so this is difficult to test.)  If we
-                     * delete the session on the first error, though, the error
-                     * only occurs once and then resolves itself. */
-                    ssl_flush_session(stream);
-                }
-
                 interpret_ssl_error((sslv->type == CLIENT ? "SSL_connect"
                                      : "SSL_accept"), retval, error, &unused);
                 shutdown(sslv->fd, SHUT_RDWR);
@@ -562,11 +475,6 @@ ssl_connect(struct stream *stream)
             VLOG_ERR("rejecting SSL connection during bootstrap race window");
             return EPROTO;
         } else {
-            /* Statistics. */
-            COVERAGE_INC(ssl_session);
-            if (SSL_session_reused(sslv->ssl)) {
-                COVERAGE_INC(ssl_session_reused);
-            }
             return 0;
         }
     }
@@ -586,8 +494,6 @@ ssl_close(struct stream *stream)
      * since we don't have any way to continue the close operation in the
      * background. */
     SSL_shutdown(sslv->ssl);
-
-    ssl_cache_session(stream);
 
     /* SSL_shutdown() might have signaled an error, in which case we need to
      * flush it out of the OpenSSL error queue or the next OpenSSL operation
@@ -1005,17 +911,6 @@ do_ssl_init(void)
     SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        NULL);
-
-    /* We have to set a session context ID string in 'ctx' because OpenSSL
-     * otherwise refuses to use a cached session on the server side when
-     * SSL_VERIFY_PEER is set.  And it not only refuses to use the cached
-     * session, it actually generates an error and kills the connection.
-     * According to a comment in ssl_get_prev_session() in OpenSSL's
-     * ssl/ssl_sess.c, this is intentional behavior.
-     *
-     * Any context string is OK, as long as one is set. */
-    SSL_CTX_set_session_id_context(ctx, (const unsigned char *) PACKAGE,
-                                   strlen(PACKAGE));
 
     return 0;
 }
