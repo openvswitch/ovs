@@ -121,10 +121,8 @@ install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 # Get rid of stuff we don't want to make RPM happy.
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-controller \
-    $RPM_BUILD_ROOT/usr/bin/ovs-openflowd \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch

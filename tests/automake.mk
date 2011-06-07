@@ -113,7 +113,6 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
 
 valgrind_wrappers = \
 	tests/valgrind/ovs-appctl \
-	tests/valgrind/ovs-openflowd \
 	tests/valgrind/ovs-vsctl \
 	tests/valgrind/ovsdb-client \
 	tests/valgrind/ovsdb-server \
@@ -131,6 +130,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-list \
 	tests/valgrind/test-lockfile \
 	tests/valgrind/test-multipath \
+	tests/valgrind/test-openflowd \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-packets \
 	tests/valgrind/test-random \
@@ -229,6 +229,18 @@ tests_test_lockfile_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-multipath
 tests_test_multipath_SOURCES = tests/test-multipath.c
 tests_test_multipath_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-openflowd
+EXTRA_DIST += tests/test-openflowd.8.in
+DISTCLEANFILES += tests/test-openflowd.8
+noinst_man_MANS += tests/ovs-openflowd.8
+tests_test_openflowd_SOURCES = tests/test-openflowd.c
+tests_test_openflowd_LDADD = \
+	ofproto/libofproto.a \
+	lib/libsflow.a \
+	lib/libopenvswitch.a \
+	$(SSL_LIBS)
+
 
 noinst_PROGRAMS += tests/test-packets
 tests_test_packets_SOURCES = tests/test-packets.c

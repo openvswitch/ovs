@@ -80,7 +80,7 @@ struct ofsettings {
     struct sset netflow;        /* NetFlow targets. */
 };
 
-static unixctl_cb_func ovs_openflowd_exit;
+static unixctl_cb_func test_openflowd_exit;
 
 static void parse_options(int argc, char *argv[], struct ofsettings *);
 static void usage(void) NO_RETURN;
@@ -109,7 +109,7 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    unixctl_command_register("exit", ovs_openflowd_exit, &exiting);
+    unixctl_command_register("exit", test_openflowd_exit, &exiting);
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
@@ -186,7 +186,7 @@ main(int argc, char *argv[])
 }
 
 static void
-ovs_openflowd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+test_openflowd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
                    void *exiting_)
 {
     bool *exiting = exiting_;

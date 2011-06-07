@@ -34,7 +34,6 @@ EXTRA_DIST = \
 	DESIGN \
 	INSTALL.KVM \
 	INSTALL.Linux \
-	INSTALL.OpenFlow \
 	INSTALL.SSL \
 	INSTALL.XenServer \
 	INSTALL.bridge \
@@ -58,6 +57,7 @@ man_MANS =
 noinst_DATA =
 noinst_HEADERS =
 noinst_LIBRARIES =
+noinst_man_MANS =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =

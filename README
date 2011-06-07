@@ -71,12 +71,7 @@ The main components of this distribution are:
     * ovsdbmonitor, a GUI tool for remotely viewing OVS databases and
       OpenFlow flow tables.
 
-Open vSwitch also provides an OpenFlow implementation and tools for
-those interested in OpenFlow but not additional Open vSwitch features:
-
-    * ovs-openflowd, an alternative to ovs-vswitchd that implements a
-      simple OpenFlow switch, without the special features provided by
-      ovs-vswitchd.
+Open vSwitch also provides some tools:
 
     * ovs-controller, a simple OpenFlow controller.
 

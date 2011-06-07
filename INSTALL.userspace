@@ -47,18 +47,6 @@ ovs-vswitchd will create a TAP device as the bridge's local interface,
 named the same as the bridge, as well as for each configured internal
 interface.
 
-Using the Userspace Datapath with ovs-openflowd
------------------------------------------------
-
-To use ovs-openflowd in userspace mode, specify a datapath name that
-begins with "netdev@", and specify --ports with the names of the ports
-that should be included in the datapath as argument.  For example:
-
-    ovs-openflowd netdev@br0 --ports=eth0,eth1,eth2
-
-ovs-openflowd will create a TAP device as the bridge's local
-interface, named the same as the bridge minus the "netdev@" prefix.
-
 Bug Reporting
 -------------
 

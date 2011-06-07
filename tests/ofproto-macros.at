@@ -5,10 +5,10 @@ m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 m4_define([OFPROTO_START],
   [OVS_RUNDIR=$PWD; export OVS_RUNDIR
    OVS_LOGDIR=$PWD; export OVS_LOGDIR
-   trap 'kill `cat ovs-openflowd.pid`' 0
-   AT_CAPTURE_FILE([ovs-openflowd.log])
+   trap 'kill `cat test-openflowd.pid`' 0
+   AT_CAPTURE_FILE([test-openflowd.log])
    AT_CHECK(
-     [ovs-openflowd --detach --pidfile --enable-dummy --log-file --fail=closed dummy@br0 none --datapath-id=fedcba9876543210 $1],
+     [test-openflowd --detach --pidfile --enable-dummy --log-file --fail=closed dummy@br0 none --datapath-id=fedcba9876543210 $1],
      [0], [], [stderr])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
@@ -19,5 +19,5 @@ m4_define([OFPROTO_START],
 ])
 
 m4_define([OFPROTO_STOP],
-  [AT_CHECK([ovs-appctl -t ovs-openflowd exit])
+  [AT_CHECK([ovs-appctl -t test-openflowd exit])
    trap '' 0])

@@ -1,22 +1,22 @@
-.TH ovs\-openflowd 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH test\-openflowd 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
-.ds PN ovs\-openflowd
+.ds PN test\-openflowd
 .\" SSL peer program's name:
 .ds SN ovs\-controller
 .
 .SH NAME
-ovs\-openflowd \- OpenFlow switch implementation
+test\-openflowd \- OpenFlow switch implementation
 .
 .SH SYNOPSIS
-.B ovs\-openflowd
+.B test\-openflowd
 [\fIoptions\fR] \fIdatapath\fR \fIcontroller\fR\&...
 .
 .SH DESCRIPTION
-The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
-flow-based datapath.  \fBovs\-openflowd\fR connects to one or more
+The \fBtest\-openflowd\fR program implements an OpenFlow switch using a
+flow-based datapath.  \fBtest\-openflowd\fR connects to one or more
 OpenFlow controllers over TCP or SSL.
 .PP
-For a more powerful alternative to \fBovs\-openflowd\fR, see
+For a more powerful alternative to \fBtest\-openflowd\fR, see
 \fBovs\-vswitchd\fR(8).  Do not run both daemons at the same time.
 .PP
 The mandatory \fIdatapath\fR argument argument specifies the local
@@ -39,7 +39,7 @@ Options\fR below, for another way to make OpenFlow connections to the
 switch.)
 .
 .PP
-When multiple controllers are configured, \fBovs\-openflowd\fR
+When multiple controllers are configured, \fBtest\-openflowd\fR
 connects to all of them simultaneously.  OpenFlow 1.0 does not specify
 how multiple controllers coordinate in interacting with a single
 switch, so more than one controller should be specified only if the
@@ -57,9 +57,9 @@ the data traffic that it controls, that is, the switch does not use
 any of the network devices added to the datapath with \fBovs\-dpctl
 add\-if\fR in its communication with the controller.
 .IP
-To use \fBovs\-openflowd\fR in a network with out-of-band control, specify
-\fB\-\-out\-of\-band\fR on the \fBovs\-openflowd\fR command line.  The control
-network must be configured separately, before or after \fBovs\-openflowd\fR
+To use \fBtest\-openflowd\fR in a network with out-of-band control, specify
+\fB\-\-out\-of\-band\fR on the \fBtest\-openflowd\fR command line.  The control
+network must be configured separately, before or after \fBtest\-openflowd\fR
 is started.
 .
 .IP in-band
@@ -70,32 +70,32 @@ add\-if\fR.  This configuration is often more convenient than
 out-of-band control, because it is not necessary to maintain two
 independent networks.
 .IP
-In-band control is the default for \fBovs\-openflowd\fR, so no special
+In-band control is the default for \fBtest\-openflowd\fR, so no special
 command-line option is required.
 
 Specify the location of the
-controller on the \fBovs\-openflowd\fR command line as the \fIcontroller\fR
+controller on the \fBtest\-openflowd\fR command line as the \fIcontroller\fR
 argument.  You must also configure the network device for the OpenFlow
-``local port'' to allow \fBovs\-openflowd\fR to connect to that controller.
-The OpenFlow local port is a virtual network port that \fBovs\-openflowd\fR
+``local port'' to allow \fBtest\-openflowd\fR to connect to that controller.
+The OpenFlow local port is a virtual network port that \fBtest\-openflowd\fR
 bridges to the physical switch ports.  The name of the local port for
 a given \fIdatapath\fR may be seen by running \fBovs\-dpctl show
 \fIdatapath\fR; the local port is listed as port 0 in \fBshow\fR's
 output.
 .
 .IP
-Before \fBovs\-openflowd\fR starts, the local port network device is not
+Before \fBtest\-openflowd\fR starts, the local port network device is not
 bridged to any physical network, so the next step depends on whether
 connectivity is required to configure the device's IP address.  If the
 switch has a static IP address, you may configure its IP address now
 with a command such as 
 .B ifconfig of0 192.168.1.1
-and then invoke \fBovs\-openflowd\fR.
+and then invoke \fBtest\-openflowd\fR.
 .IP
 On the other hand, if the switch does not have a static IP address,
 e.g. it obtains its IP address dynamically via DHCP, the DHCP client
 will not be able to contact the DHCP server until the OpenFlow switch
-has started up.  Thus, start \fBovs\-openflowd\fR without configuring
+has started up.  Thus, start \fBtest\-openflowd\fR without configuring
 the local port network device, and start the DHCP client afterward.
 .RE
 .
@@ -159,16 +159,16 @@ controller stays down long enough, no packets can pass through the
 switch at all.
 .IP
 If this option is set to \fBstandalone\fR (the default),
-\fBovs\-openflowd\fR will
+\fBtest\-openflowd\fR will
 take over responsibility for setting up flows in the local datapath
 when no message has been received from the controller for three times
 the inactivity probe interval (see below), or 45 seconds by default.
-In this ``fail open'' mode, \fBovs\-openflowd\fR causes the datapath to act
-like an ordinary MAC-learning switch.  \fBovs\-openflowd\fR will continue to
+In this ``fail open'' mode, \fBtest\-openflowd\fR causes the datapath to act
+like an ordinary MAC-learning switch.  \fBtest\-openflowd\fR will continue to
 retry connection to the controller in the background and, when the
 connection succeeds, it discontinues its standalone switching behavior.
 .IP
-If this option is set to \fBsecure\fR, then \fBovs\-openflowd\fR will not
+If this option is set to \fBsecure\fR, then \fBtest\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
 .
 .TP
@@ -254,7 +254,7 @@ problems.
 .
 .TP
 \fB\-\-in\-band\fR, \fB\-\-out\-of\-band\fR
-Configures \fBovs\-openflowd\fR to operate in in-band or out-of-band control
+Configures \fBtest\-openflowd\fR to operate in in-band or out-of-band control
 mode (see \fBContacting the Controller\fR above).  When neither option
 is given, the default is in-band control.
 .
@@ -298,13 +298,13 @@ This option takes effect only when \fB\-\-rate\-limit\fR is also specified.
 .SS "Datapath Options"
 .
 .IP "\fB\-\-ports=\fIport\fR[\fB,\fIport\fR...]"
-Ordinarily, \fBovs\-openflowd\fR expects the administrator to create
+Ordinarily, \fBtest\-openflowd\fR expects the administrator to create
 the specified \fIdatapath\fR and add ports to it externally with a
 utility such as \fBovs\-dpctl\fR.  However, the userspace switch
-datapath is implemented inside \fBovs\-openflowd\fR itself and does
+datapath is implemented inside \fBtest\-openflowd\fR itself and does
 not (currently) have any external interface for \fBovs\-dpctl\fR to
 access.  As a stopgap measure, this option specifies one or more ports
-to add to the datapath at \fBovs\-openflowd\fR startup time.  Multiple
+to add to the datapath at \fBtest\-openflowd\fR startup time.  Multiple
 ports may be specified as a comma-separated list or by specifying
 \fB\-\-ports\fR multiple times.
 .IP
@@ -327,12 +327,12 @@ switching.
 .
 .SH "RUNTIME MANAGEMENT COMMANDS"
 \fBovs\-appctl\fR(8) can send commands to a running
-\fBovs\-openflowd\fR process.  The currently supported commands are
+\fBtest\-openflowd\fR process.  The currently supported commands are
 described below.
-.SS "OVS\-OPENFLOWD COMMANDS"
-These commands are specific to \fBovs\-openflowd\fR.
+.SS "TEST\-OPENFLOWD COMMANDS"
+These commands are specific to \fBtest\-openflowd\fR.
 .IP "\fBexit\fR"
-Causes \fBovs\-openflowd\fR to gracefully terminate.
+Causes \fBtest\-openflowd\fR to gracefully terminate.
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man
 .

@@ -4,6 +4,9 @@ post v1.1.0
       counters for each port.
     - ovs-vsctl:
       - New "show" command to print an overview of configuration.
+    - ovs-openflowd has been renamed test-openflowd and moved into the
+      tests directory.  Its presence confused too many users.  Please
+      use ovs-vswitchd instead.
     - Feature removals:
       - Dropped support for "tun_id_from_cookie" OpenFlow extension.
 	(Use the extensible match extensions instead.)

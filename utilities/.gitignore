@@ -11,8 +11,6 @@
 /ovs-dpctl.8
 /ovs-ofctl
 /ovs-ofctl.8
-/ovs-openflowd
-/ovs-openflowd.8
 /ovs-parse-leaks
 /ovs-pcap
 /ovs-pcap.1

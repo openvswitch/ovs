@@ -11,8 +11,7 @@ ovs\-pcap \- print packets from a pcap file as hex
 The \fBovs\-pcap\fR program reads the pcap \fIfile\fR named on the
 command line and prints each packet's contents as a sequence of hex
 digits on a line of its own.  This format is suitable for use with the
-\fBofproto/trace\fR command supported by \fBovs\-vswitchd\fR(8) and
-\fBovs-openflowd\fR(8).
+\fBofproto/trace\fR command supported by \fBovs\-vswitchd\fR(8).
 .
 .SH "OPTIONS"
 .so lib/common.man
@@ -20,7 +19,6 @@ digits on a line of its own.  This format is suitable for use with the
 .SH "SEE ALSO"
 .
 .BR ovs\-vswitchd (8),
-.BR ovs\-openflowd (8),
 .BR ovs\-tcpundump (1),
 .BR tcpdump (8),
 .BR wireshark (8).

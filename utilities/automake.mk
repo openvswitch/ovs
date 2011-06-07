@@ -3,7 +3,6 @@ bin_PROGRAMS += \
 	utilities/ovs-controller \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
-	utilities/ovs-openflowd \
 	utilities/ovs-vsctl
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
 if HAVE_PYTHON
@@ -19,7 +18,6 @@ EXTRA_DIST += \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-ofctl.8.in \
-	utilities/ovs-openflowd.8.in \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pcap.1.in \
@@ -40,7 +38,6 @@ DISTCLEANFILES += \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-ofctl.8 \
-	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pcap \
 	utilities/ovs-pcap.1 \
@@ -59,7 +56,6 @@ man_MANS += \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-ofctl.8 \
-	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki.8 \
@@ -80,13 +76,6 @@ utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
 utilities_ovs_ofctl_LDADD = \
 	ofproto/libofproto.a \
-	lib/libopenvswitch.a \
-	$(SSL_LIBS)
-
-utilities_ovs_openflowd_SOURCES = utilities/ovs-openflowd.c
-utilities_ovs_openflowd_LDADD = \
-	ofproto/libofproto.a \
-	lib/libsflow.a \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
 

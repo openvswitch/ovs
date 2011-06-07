@@ -44,11 +44,6 @@ controller will remain in the switch's flow table without any matching
 packets being seen.  If \fBpermanent\fR is specified, which is not
 recommended, flows will never expire.  The default is 60 seconds.
 .IP
-This option affects only flows set up by the OpenFlow controller.  In
-some configurations, the switch can set up some flows
-on its own.  To set the idle time for those flows, pass
-\fB\-\-max\-idle\fR to \fBovs\-openflowd\fR (on the switch).
-.IP
 This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
 .
@@ -169,7 +164,6 @@ connection and set the controller, e.g.:
 \-\-peer\-ca\-cert=cacert.pem set\-controller ssl:\fIip\fR
 .SH "SEE ALSO"
 .
-.BR ovs\-openflowd (8),
 .BR ovs\-appctl (8),
 .BR ovs\-ofctl (8),
 .BR ovs\-dpctl (8)

@@ -67,9 +67,6 @@ Only a single instance of \fBovs\-vswitchd\fR is intended to run at a time.
 A single \fBovs\-vswitchd\fR can manage any number of switch instances, up
 to the maximum number of supported Open vSwitch datapaths.
 .PP
-\fBovs\-vswitchd\fR provides all the features of \fBovs-openflowd\fR,
-and more.  Do not run both daemons at the same time.
-.PP
 \fBovs\-vswitchd\fR does all the necessary management of Open vSwitch datapaths
 itself.  Thus, external tools, such \fBovs\-dpctl\fR(8), are not needed for
 managing datapaths in conjunction with \fBovs\-vswitchd\fR, and their use

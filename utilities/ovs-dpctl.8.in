@@ -118,34 +118,7 @@ signal.
 .so lib/vlog.man
 .so lib/common.man
 .
-.SH EXAMPLES
-.
-A typical \fBovs\-dpctl\fR command sequence for controlling an
-Open vSwitch kernel module:
-.
-.TP
-\fBovs\-dpctl add\-dp dp0\fR
-Creates datapath number 0.
-.
-.TP
-\fBovs\-dpctl add\-if dp0 eth0 eth1\fR
-Adds two network devices to the new datapath.
-.
-.PP
-At this point one would ordinarily start \fBovs\-openflowd\fR(8) on
-\fBdp0\fR, transforming \fBdp0\fR into an OpenFlow switch.  Then, when
-the switch and the datapath is no longer needed:
-.
-.TP
-\fBovs\-dpctl del\-if dp0 eth0 eth1\fR
-Removes network devices from the datapath.
-.
-.TP
-\fBovs\-dpctl del\-dp dp0\fR
-Deletes the datapath.
-.
 .SH "SEE ALSO"
 .
 .BR ovs\-appctl (8),
-.BR ovs\-openflowd (8),
 .BR ovs\-vswitchd (8)

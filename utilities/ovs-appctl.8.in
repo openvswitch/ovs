@@ -166,6 +166,5 @@ white space.
 .
 \fBovs\-appctl\fR can control the following daemons:
 .BR ovs\-vswitchd (8),
-.BR ovs\-openflowd (8),
 .BR ovs\-controller (8),
 .BR ovs\-brcompatd (8).
