@@ -533,6 +533,7 @@ port_configure(struct port *port)
     ofproto_bundle_register(port->bridge->ofproto, port, &s);
 
     /* Clean up. */
+    free(s.slaves);
     free(s.trunks);
     free(s.lacp_slaves);
     free(s.bond_stable_ids);
