@@ -21,7 +21,10 @@
 #include <stdbool.h>
 
 void signal_init(void);
+
 struct signal *signal_register(int signr);
+void signal_unregister(struct signal *);
+
 bool signal_poll(struct signal *);
 void signal_wait(struct signal *);
 

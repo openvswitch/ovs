@@ -102,6 +102,7 @@ main(int argc, char *argv[])
     }
     bridge_exit();
     unixctl_server_destroy(unixctl);
+    signal_unregister(sighup);
 
     return 0;
 }

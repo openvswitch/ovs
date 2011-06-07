@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -40,6 +41,7 @@ VLOG_DEFINE_THIS_MODULE(signals);
 #endif
 
 struct signal {
+    struct sigaction saved_sa;
     int signr;
 };
 
@@ -78,18 +80,29 @@ signal_register(int signr)
 
     signal_init();
 
+    s = xmalloc(sizeof *s);
+    s->signr = signr;
+
     /* Set up signal handler. */
     assert(signr >= 1 && signr < N_SIGNALS);
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    xsigaction(signr, &sa, NULL);
+    xsigaction(signr, &sa, &s->saved_sa);
 
-    /* Return structure. */
-    s = xmalloc(sizeof *s);
-    s->signr = signr;
     return s;
+}
+
+/* Unregisters the handler for 's', restores the signal handler that was in
+ * effect before signal_register() was called, and frees 's'. */
+void
+signal_unregister(struct signal *s)
+{
+    if (s) {
+        xsigaction(s->signr, &s->saved_sa, NULL);
+        free(s);
+    }
 }
 
 /* Returns true if signal 's' has been received since the last call to this
