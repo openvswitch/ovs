@@ -289,6 +289,7 @@ static void
 dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    nl_sock_destroy(dpif->mc_sock);
     rtnetlink_link_notifier_unregister(&dpif->port_notifier);
     sset_destroy(&dpif->changed_ports);
     free(dpif->lru_bitmap);
