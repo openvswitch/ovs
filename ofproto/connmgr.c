@@ -40,8 +40,6 @@
 VLOG_DEFINE_THIS_MODULE(connmgr);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-COVERAGE_DEFINE(ofconn_stuck);
-
 /* An OpenFlow connection. */
 struct ofconn {
     struct connmgr *connmgr;    /* Connection's manager. */
@@ -50,6 +48,11 @@ struct ofconn {
     enum ofconn_type type;      /* Type. */
     enum nx_flow_format flow_format; /* Currently selected flow format. */
     bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
+
+    /* Asynchronous flow table operation support. */
+    struct list opgroups;       /* Contains pending "ofopgroups", if any. */
+    struct ofpbuf *blocked;     /* Postponed OpenFlow message, if any. */
+    bool retry;                 /* True if 'blocked' is ready to try again. */
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
@@ -78,9 +81,9 @@ static void ofconn_reconfigure(struct ofconn *,
                                const struct ofproto_controller *);
 
 static void ofconn_run(struct ofconn *,
-                       void (*handle_openflow)(struct ofconn *,
+                       bool (*handle_openflow)(struct ofconn *,
                                                struct ofpbuf *ofp_msg));
-static void ofconn_wait(struct ofconn *);
+static void ofconn_wait(struct ofconn *, bool handling_openflow);
 
 static const char *ofconn_get_target(const struct ofconn *);
 static char *ofconn_make_name(const struct connmgr *, const char *target);
@@ -216,19 +219,29 @@ connmgr_destroy(struct connmgr *mgr)
     free(mgr);
 }
 
-/* Does all of the periodic maintenance required by 'mgr'.  Calls
- * 'handle_openflow' for each message received on an OpenFlow connection,
- * passing along the OpenFlow connection itself and the message that was sent.
- * The 'handle_openflow' callback must not free the message. */
+/* Does all of the periodic maintenance required by 'mgr'.
+ *
+ * If 'handle_openflow' is nonnull, calls 'handle_openflow' for each message
+ * received on an OpenFlow connection, passing along the OpenFlow connection
+ * itself and the message that was sent.  If 'handle_openflow' returns true,
+ * the message is considered to be fully processed.  If 'handle_openflow'
+ * returns false, the message is considered not to have been processed at all;
+ * it will be stored and re-presented to 'handle_openflow' following the next
+ * call to connmgr_retry().  'handle_openflow' must not modify or free the
+ * message.
+ *
+ * If 'handle_openflow' is NULL, no OpenFlow messages will be processed and
+ * other activities that could affect the flow table (in-band processing,
+ * fail-open processing) are suppressed too. */
 void
 connmgr_run(struct connmgr *mgr,
-            void (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
+            bool (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
 {
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice;
     size_t i;
 
-    if (mgr->in_band) {
+    if (handle_openflow && mgr->in_band) {
         if (time_msec() >= mgr->next_in_band_update) {
             update_in_band_remotes(mgr);
         }
@@ -241,7 +254,7 @@ connmgr_run(struct connmgr *mgr,
 
     /* Fail-open maintenance.  Do this after processing the ofconns since
      * fail-open checks the status of the controller rconn. */
-    if (mgr->fail_open) {
+    if (handle_openflow && mgr->fail_open) {
         fail_open_run(mgr->fail_open);
     }
 
@@ -280,22 +293,26 @@ connmgr_run(struct connmgr *mgr,
     }
 }
 
-/* Causes the poll loop to wake up when connmgr_run() needs to run. */
+/* Causes the poll loop to wake up when connmgr_run() needs to run.
+ *
+ * If 'handling_openflow' is true, arriving OpenFlow messages and other
+ * activities that affect the flow table will wake up the poll loop.  If
+ * 'handling_openflow' is false, they will not. */
 void
-connmgr_wait(struct connmgr *mgr)
+connmgr_wait(struct connmgr *mgr, bool handling_openflow)
 {
     struct ofservice *ofservice;
     struct ofconn *ofconn;
     size_t i;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        ofconn_wait(ofconn);
+        ofconn_wait(ofconn, handling_openflow);
     }
-    if (mgr->in_band) {
+    if (handling_openflow && mgr->in_band) {
         poll_timer_wait_until(mgr->next_in_band_update);
         in_band_wait(mgr->in_band);
     }
-    if (mgr->fail_open) {
+    if (handling_openflow && mgr->fail_open) {
         fail_open_wait(mgr->fail_open);
     }
     HMAP_FOR_EACH (ofservice, node, &mgr->services) {
@@ -311,6 +328,19 @@ struct ofproto *
 ofconn_get_ofproto(const struct ofconn *ofconn)
 {
     return ofconn->connmgr->ofproto;
+}
+
+/* If processing of OpenFlow messages was blocked on any 'mgr' ofconns by
+ * returning false to the 'handle_openflow' callback to connmgr_run(), this
+ * re-enables them. */
+void
+connmgr_retry(struct connmgr *mgr)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        ofconn->retry = true;
+    }
 }
 
 /* OpenFlow configuration. */
@@ -798,6 +828,35 @@ ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
 {
     return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
 }
+
+/* Returns true if 'ofconn' has any pending opgroups. */
+bool
+ofconn_has_pending_opgroups(const struct ofconn *ofconn)
+{
+    return !list_is_empty(&ofconn->opgroups);
+}
+
+/* Returns the number of pending opgroups on 'ofconn'. */
+size_t
+ofconn_n_pending_opgroups(const struct ofconn *ofconn)
+{
+    return list_size(&ofconn->opgroups);
+}
+
+/* Adds 'ofconn_node' to 'ofconn''s list of pending opgroups.
+ *
+ * If 'ofconn' is destroyed or its connection drops, then 'ofconn' will remove
+ * 'ofconn_node' from the list and re-initialize it with list_init().  The
+ * client may, therefore, use list_is_empty(ofconn_node) to determine whether
+ * 'ofconn_node' is still associated with an active ofconn.
+ *
+ * The client may also remove ofconn_node from the list itself, with
+ * list_remove(). */
+void
+ofconn_add_opgroup(struct ofconn *ofconn, struct list *ofconn_node)
+{
+    list_push_back(&ofconn->opgroups, ofconn_node);
+}
 
 /* Private ofconn functions. */
 
@@ -817,6 +876,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     ofconn->type = type;
     ofconn->flow_format = NXFF_OPENFLOW10;
     ofconn->flow_mod_table_id = false;
+    list_init(&ofconn->opgroups);
     ofconn->role = NX_ROLE_OTHER;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->pktbuf = NULL;
@@ -825,9 +885,27 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     return ofconn;
 }
 
+/* Disassociates 'ofconn' from all of the ofopgroups that it initiated that
+ * have not yet completed.  (Those ofopgroups will still run to completion in
+ * the usual way, but any errors that they run into will not be reported on any
+ * OpenFlow channel.)
+ *
+ * Also discards any blocked operation on 'ofconn'. */
+static void
+ofconn_flush(struct ofconn *ofconn)
+{
+    while (!list_is_empty(&ofconn->opgroups)) {
+        list_init(list_pop_front(&ofconn->opgroups));
+    }
+    ofpbuf_delete(ofconn->blocked);
+    ofconn->blocked = NULL;
+}
+
 static void
 ofconn_destroy(struct ofconn *ofconn)
 {
+    ofconn_flush(ofconn);
+
     if (ofconn->type == OFCONN_PRIMARY) {
         hmap_remove(&ofconn->connmgr->controllers, &ofconn->hmap_node);
     }
@@ -857,12 +935,20 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
     ofconn_set_rate_limit(ofconn, c->rate_limit, c->burst_limit);
 }
 
+/* Returns true if it makes sense for 'ofconn' to receive and process OpenFlow
+ * messages. */
+static bool
+ofconn_may_recv(const struct ofconn *ofconn)
+{
+    int count = rconn_packet_counter_read (ofconn->reply_counter);
+    return (!ofconn->blocked || ofconn->retry) && count < OFCONN_REPLY_MAX;
+}
+
 static void
 ofconn_run(struct ofconn *ofconn,
-           void (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
+           bool (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
 {
     struct connmgr *mgr = ofconn->connmgr;
-    int iteration;
     size_t i;
 
     for (i = 0; i < N_SCHEDULERS; i++) {
@@ -871,29 +957,40 @@ ofconn_run(struct ofconn *ofconn,
 
     rconn_run(ofconn->rconn);
 
-    if (rconn_packet_counter_read (ofconn->reply_counter) < OFCONN_REPLY_MAX) {
-        /* Limit the number of iterations to prevent other tasks from
-         * starving. */
-        for (iteration = 0; iteration < 50; iteration++) {
-            struct ofpbuf *of_msg = rconn_recv(ofconn->rconn);
+    if (handle_openflow) {
+        /* Limit the number of iterations to avoid starving other tasks. */
+        for (i = 0; i < 50 && ofconn_may_recv(ofconn); i++) {
+            struct ofpbuf *of_msg;
+
+            of_msg = (ofconn->blocked
+                      ? ofconn->blocked
+                      : rconn_recv(ofconn->rconn));
             if (!of_msg) {
                 break;
             }
             if (mgr->fail_open) {
                 fail_open_maybe_recover(mgr->fail_open);
             }
-            handle_openflow(ofconn, of_msg);
-            ofpbuf_delete(of_msg);
+
+            if (handle_openflow(ofconn, of_msg)) {
+                ofpbuf_delete(of_msg);
+                ofconn->blocked = NULL;
+            } else {
+                ofconn->blocked = of_msg;
+                ofconn->retry = false;
+            }
         }
     }
 
     if (!rconn_is_alive(ofconn->rconn)) {
         ofconn_destroy(ofconn);
+    } else if (!rconn_is_connected(ofconn->rconn)) {
+        ofconn_flush(ofconn);
     }
 }
 
 static void
-ofconn_wait(struct ofconn *ofconn)
+ofconn_wait(struct ofconn *ofconn, bool handling_openflow)
 {
     int i;
 
@@ -901,10 +998,8 @@ ofconn_wait(struct ofconn *ofconn)
         pinsched_wait(ofconn->schedulers[i]);
     }
     rconn_run_wait(ofconn->rconn);
-    if (rconn_packet_counter_read (ofconn->reply_counter) < OFCONN_REPLY_MAX) {
+    if (handling_openflow && ofconn_may_recv(ofconn)) {
         rconn_recv_wait(ofconn->rconn);
-    } else {
-        COVERAGE_INC(ofconn_stuck);
     }
 }
 
@@ -1300,13 +1395,12 @@ connmgr_may_set_up_flow(struct connmgr *mgr, const struct flow *flow,
 /* Fail-open and in-band implementation. */
 
 /* Called by 'ofproto' after all flows have been flushed, to allow fail-open
- * and in-band control to re-create their flows. */
+ * and standalone mode to re-create their flows.
+ *
+ * In-band control has more sophisticated code that manages flows itself. */
 void
 connmgr_flushed(struct connmgr *mgr)
 {
-    if (mgr->in_band) {
-        in_band_flushed(mgr->in_band);
-    }
     if (mgr->fail_open) {
         fail_open_flushed(mgr->fail_open);
     }

@@ -54,6 +54,11 @@ struct ofproto {
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
+
+    /* Flow table operation tracking. */
+    int state;                  /* Internal state. */
+    struct list pending;        /* List of "struct ofopgroup"s. */
+    struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
 };
 
 struct ofproto *ofproto_lookup(const char *name);
@@ -81,6 +86,8 @@ struct rule {
     struct list ofproto_node;    /* Owned by ofproto base code. */
     struct cls_rule cr;          /* In owning ofproto's classifier. */
 
+    struct ofoperation *pending; /* Operation now in progress, if nonnull. */
+
     ovs_be64 flow_cookie;        /* Controller-issued identifier. */
 
     long long int created;       /* Creation time. */
@@ -101,6 +108,9 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
 
 void ofproto_rule_expire(struct rule *, uint8_t reason);
 void ofproto_rule_destroy(struct rule *);
+
+void ofoperation_complete(struct ofoperation *, int status);
+struct rule *ofoperation_get_victim(struct ofoperation *);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
@@ -238,6 +248,10 @@ struct ofproto_class {
 
     /* Life-cycle functions for an "ofproto" (see "Life Cycle" above).
      *
+     *
+     * Construction
+     * ============
+     *
      * ->construct() should not modify most base members of the ofproto.  In
      * particular, the client will initialize the ofproto's 'ports' member
      * after construction is complete.
@@ -256,7 +270,19 @@ struct ofproto_class {
      * allowed to fail with an error.
      *
      * ->construct() returns 0 if successful, otherwise a positive errno
-     * value. */
+     * value.
+     *
+     *
+     * Destruction
+     * ===========
+     *
+     * ->destruct() must do at least the following:
+     *
+     *   - If 'ofproto' has any pending asynchronous operations, ->destruct()
+     *     must complete all of them by calling ofoperation_complete().
+     *
+     *   - If 'ofproto' has any rules left in any of its flow tables, ->
+     */
     struct ofproto *(*alloc)(void);
     int (*construct)(struct ofproto *ofproto);
     void (*destruct)(struct ofproto *ofproto);
@@ -507,6 +533,8 @@ struct ofproto_class {
 /* ## OpenFlow Rule Functions ## */
 /* ## ----------------------- ## */
 
+
+
     /* Chooses an appropriate table for 'cls_rule' within 'ofproto'.  On
      * success, stores the table ID into '*table_idp' and returns 0.  On
      * failure, returns an OpenFlow error code (as returned by ofp_mkerr()).
@@ -528,51 +556,133 @@ struct ofproto_class {
 
     /* Life-cycle functions for a "struct rule" (see "Life Cycle" above).
      *
-     * ->rule_construct() should first check whether the rule is acceptable:
+     *
+     * Asynchronous Operation Support
+     * ==============================
+     *
+     * The life-cycle operations on rules can operate asynchronously, meaning
+     * that ->rule_construct() and ->rule_destruct() only need to initiate
+     * their respective operations and do not need to wait for them to complete
+     * before they return.  ->rule_modify_actions() also operates
+     * asynchronously.
+     *
+     * An ofproto implementation reports the success or failure of an
+     * asynchronous operation on a rule using the rule's 'pending' member,
+     * which points to a opaque "struct ofoperation" that represents the
+     * ongoing opreation.  When the operation completes, the ofproto
+     * implementation calls ofoperation_complete(), passing the ofoperation and
+     * an error indication.
+     *
+     * Only the following contexts may call ofoperation_complete():
+     *
+     *   - The function called to initiate the operation,
+     *     e.g. ->rule_construct() or ->rule_destruct().  This is the best
+     *     choice if the operation completes quickly.
+     *
+     *   - The implementation's ->run() function.
+     *
+     *   - The implementation's ->destruct() function.
+     *
+     * The ofproto base code updates the flow table optimistically, assuming
+     * that the operation will probably succeed:
+     *
+     *   - ofproto adds or replaces the rule in the flow table before calling
+     *     ->rule_construct().
+     *
+     *   - ofproto updates the rule's actions before calling
+     *     ->rule_modify_actions().
+     *
+     *   - ofproto removes the rule before calling ->rule_destruct().
+     *
+     * With one exception, when an asynchronous operation completes with an
+     * error, ofoperation_complete() backs out the already applied changes:
+     *
+     *   - If adding or replacing a rule in the flow table fails, ofproto
+     *     removes the new rule or restores the original rule.
+     *
+     *   - If modifying a rule's actions fails, ofproto restores the original
+     *     actions.
+     *
+     *   - Removing a rule is not allowed to fail.  It must always succeed.
+     *
+     * The ofproto base code serializes operations: if any operation is in
+     * progress on a given rule, ofproto postpones initiating any new operation
+     * on that rule until the pending operation completes.  Therefore, every
+     * operation must eventually complete through a call to
+     * ofoperation_complete() to avoid delaying new operations indefinitely
+     * (including any OpenFlow request that affects the rule in question, even
+     * just to query its statistics).
+     *
+     *
+     * Construction
+     * ============
+     *
+     * When ->rule_construct() is called, the caller has already inserted
+     * 'rule' into 'rule->ofproto''s flow table numbered 'rule->table_id'.
+     * There are two cases:
+     *
+     *   - 'rule' is a new rule in its flow table.  In this case,
+     *     ofoperation_get_victim(rule) returns NULL.
+     *
+     *   - 'rule' is replacing an existing rule in its flow table that had the
+     *     same matching criteria and priority.  In this case,
+     *     ofoperation_get_victim(rule) returns the rule being replaced.
+     *
+     * ->rule_construct() should set the following in motion:
      *
      *   - Validate that the matching rule in 'rule->cr' is supported by the
-     *     datapath.  If not, then return an OpenFlow error code (as returned
-     *     by ofp_mkerr()).
-     *
-     *     For example, if the datapath does not support registers, then it
-     *     should return an error if 'rule->cr' does not wildcard all
+     *     datapath.  For example, if the rule's table does not support
+     *     registers, then it is an error if 'rule->cr' does not wildcard all
      *     registers.
      *
      *   - Validate that 'rule->actions' and 'rule->n_actions' are well-formed
-     *     OpenFlow actions that can be correctly implemented by the datapath.
-     *     If not, then return an OpenFlow error code (as returned by
-     *     ofp_mkerr()).
-     *
-     *     The validate_actions() function (in ofp-util.c) can be useful as a
-     *     model for action validation, but it accepts all of the OpenFlow
-     *     actions that OVS understands.  If your ofproto implementation only
+     *     OpenFlow actions that the datapath can correctly implement.  The
+     *     validate_actions() function (in ofp-util.c) can be useful as a model
+     *     for action validation, but it accepts all of the OpenFlow actions
+     *     that OVS understands.  If your ofproto implementation only
      *     implements a subset of those, then you should implement your own
      *     action validation.
      *
-     * If the rule is acceptable, then ->rule_construct() should modify the
-     * flow table:
+     *   - If the rule is valid, update the datapath flow table, adding the new
+     *     rule or replacing the existing one.
      *
-     *   - If there was already a rule with exactly the same matching criteria
-     *     and priority in the classifier, then it should destroy it (with
-     *     ofproto_rule_destroy()).
+     * (On failure, the ofproto code will roll back the insertion from the flow
+     * table, either removing 'rule' or replacing it by the flow that was
+     * originally in its place.)
      *
-     *     To the greatest extent possible, the old rule should be destroyed
-     *     only if inserting the new rule succeeds; that is, ->rule_construct()
-     *     should be transactional.
+     * ->rule_construct() must act in one of the following ways:
      *
-     *     The function classifier_find_rule_exactly() can locate such a rule.
+     *   - If it succeeds, it must call ofoperation_complete() and return 0.
      *
-     *   - Insert the new rule into the ofproto's 'cls' classifier, and into
-     *     the datapath flow table.
+     *   - If it fails, it must act in one of the following ways:
      *
-     *     The function classifier_insert() inserts a rule into the classifier.
+     *       * Call ofoperation_complete() and return 0.
      *
-     * Other than inserting 'rule->cr' into the classifier, ->rule_construct()
-     * should not modify any base members of struct rule.
+     *       * Return an OpenFlow error code (as returned by ofp_mkerr()).  (Do
+     *         not call ofoperation_complete() in this case.)
      *
-     * ->rule_destruct() should remove 'rule' from the ofproto's 'cls'
-     * classifier (e.g. with classifier_remove()) and from the datapath flow
-     * table. */
+     *     In the former case, ->rule_destruct() will be called; in the latter
+     *     case, it will not.  ->rule_dealloc() will be called in either case.
+     *
+     *   - If the operation is only partially complete, then it must return 0.
+     *     Later, when the operation is complete, the ->run() or ->destruct()
+     *     function must call ofoperation_complete() to report success or
+     *     failure.
+     *
+     * ->rule_construct() should not modify any base members of struct rule.
+     *
+     *
+     * Destruction
+     * ===========
+     *
+     * When ->rule_destruct() is called, the caller has already removed 'rule'
+     * from 'rule->ofproto''s flow table.  ->rule_destruct() should set in
+     * motion removing 'rule' from the datapath flow table.  If removal
+     * completes synchronously, it should call ofoperation_complete().
+     * Otherwise, the ->run() or ->destruct() function must later call
+     * ofoperation_complete() after the operation completes.
+     *
+     * Rule destruction must not fail. */
     struct rule *(*rule_alloc)(void);
     int (*rule_construct)(struct rule *rule);
     void (*rule_destruct)(struct rule *rule);
@@ -602,16 +712,28 @@ struct ofproto_class {
     int (*rule_execute)(struct rule *rule, struct flow *flow,
                         struct ofpbuf *packet);
 
-    /* Validates that the 'n' elements in 'actions' are well-formed OpenFlow
-     * actions that can be correctly implemented by the datapath.  If not, then
-     * return an OpenFlow error code (as returned by ofp_mkerr()).  If so,
-     * then update the datapath to implement the new actions and return 0.
+    /* When ->rule_modify_actions() is called, the caller has already replaced
+     * the OpenFlow actions in 'rule' by a new set.  (The original actions are
+     * in rule->pending->actions.)
      *
-     * When this function runs, 'rule' still has its original actions.  If this
-     * function returns 0, then the caller will update 'rule' with the new
-     * actions and free the old ones. */
-    int (*rule_modify_actions)(struct rule *rule,
-                               const union ofp_action *actions, size_t n);
+     * ->rule_modify_actions() should set the following in motion:
+     *
+     *   - Validate that the actions now in 'rule' are well-formed OpenFlow
+     *     actions that the datapath can correctly implement.
+     *
+     *   - Update the datapath flow table with the new actions.
+     *
+     * If the operation synchronously completes, ->rule_modify_actions() may
+     * call ofoperation_complete() before it returns.  Otherwise, ->run()
+     * should call ofoperation_complete() later, after the operation does
+     * complete.
+     *
+     * If the operation fails, then the base ofproto code will restore the
+     * original 'actions' and 'n_actions' of 'rule'.
+     *
+     * ->rule_modify_actions() should not modify any base members of struct
+     * rule. */
+    void (*rule_modify_actions)(struct rule *rule);
 
     /* These functions implement the OpenFlow IP fragment handling policy.  By
      * default ('drop_frags' == false), an OpenFlow switch should treat IP
@@ -754,7 +876,7 @@ int ofproto_class_unregister(const struct ofproto_class *);
 
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
                       const union ofp_action *, size_t n_actions);
-void ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
+bool ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
 void ofproto_flush_flows(struct ofproto *);
 
 #endif /* ofproto/private.h */

@@ -24,6 +24,7 @@
 #include "openvswitch/types.h"
 
 struct ofconn;
+struct ofopgroup;
 struct ofputil_flow_removed;
 struct ofputil_packet_in;
 struct sset;
@@ -54,11 +55,13 @@ struct connmgr *connmgr_create(struct ofproto *ofproto,
 void connmgr_destroy(struct connmgr *);
 
 void connmgr_run(struct connmgr *,
-                 void (*handle_openflow)(struct ofconn *,
+                 bool (*handle_openflow)(struct ofconn *,
                                          struct ofpbuf *ofp_msg));
-void connmgr_wait(struct connmgr *);
+void connmgr_wait(struct connmgr *, bool handling_openflow);
 
 struct ofproto *ofconn_get_ofproto(const struct ofconn *);
+
+void connmgr_retry(struct connmgr *);
 
 /* OpenFlow configuration. */
 bool connmgr_has_controllers(const struct connmgr *);
@@ -93,6 +96,12 @@ void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
 
 int ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
                            struct ofpbuf **bufferp, uint16_t *in_port);
+
+size_t ofconn_n_pending_opgroups(const struct ofconn *);
+bool ofconn_has_pending_opgroups(const struct ofconn *);
+void ofconn_add_opgroup(struct ofconn *, struct list *);
+void ofconn_remove_opgroup(struct ofconn *, struct list *,
+                           const struct ofp_header *request, int error);
 
 /* Sending asynchronous messages. */
 void connmgr_send_port_status(struct connmgr *, const struct ofp_phy_port *,

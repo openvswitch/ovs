@@ -300,6 +300,11 @@ static void port_run(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 
+struct dpif_completion {
+    struct list list_node;
+    struct ofoperation *op;
+};
+
 struct ofproto_dpif {
     struct ofproto up;
     struct dpif *dpif;
@@ -323,7 +328,14 @@ struct ofproto_dpif {
     struct hmap facets;
     bool need_revalidate;
     struct tag_set revalidate_set;
+
+    /* Support for debugging async flow mods. */
+    struct list completions;
 };
+
+/* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
+ * for debugging the asynchronous flow_mod implementation.) */
+static bool clogged;
 
 static void ofproto_dpif_unixctl_init(void);
 
@@ -446,6 +458,8 @@ construct(struct ofproto *ofproto_)
     ofproto->need_revalidate = false;
     tag_set_init(&ofproto->revalidate_set);
 
+    list_init(&ofproto->completions);
+
     ofproto->up.tables = xmalloc(sizeof *ofproto->up.tables);
     classifier_init(&ofproto->up.tables[0]);
     ofproto->up.n_tables = 1;
@@ -456,10 +470,31 @@ construct(struct ofproto *ofproto_)
 }
 
 static void
+complete_operations(struct ofproto_dpif *ofproto)
+{
+    struct dpif_completion *c, *next;
+
+    LIST_FOR_EACH_SAFE (c, next, list_node, &ofproto->completions) {
+        ofoperation_complete(c->op, 0);
+        list_remove(&c->list_node);
+        free(c);
+    }
+}
+
+static void
 destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct rule_dpif *rule, *next_rule;
+    struct cls_cursor cursor;
     int i;
+
+    complete_operations(ofproto);
+
+    cls_cursor_init(&cursor, &ofproto->up.tables[0], NULL);
+    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
+        ofproto_rule_destroy(&rule->up);
+    }
 
     for (i = 0; i < MAX_MIRRORS; i++) {
         mirror_destroy(ofproto->mirrors[i]);
@@ -483,6 +518,9 @@ run(struct ofproto *ofproto_)
     struct ofbundle *bundle;
     int i;
 
+    if (!clogged) {
+        complete_operations(ofproto);
+    }
     dpif_run(ofproto->dpif);
 
     for (i = 0; i < 50; i++) {
@@ -548,6 +586,10 @@ wait(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofport_dpif *ofport;
     struct ofbundle *bundle;
+
+    if (!clogged && !list_is_empty(&ofproto->completions)) {
+        poll_immediate_wake();
+    }
 
     dpif_wait(ofproto->dpif);
     dpif_recv_wait(ofproto->dpif);
@@ -2534,6 +2576,21 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
                                                 flow)));
 }
 
+static void
+complete_operation(struct rule_dpif *rule)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
+
+    ofproto->need_revalidate = true;
+    if (clogged) {
+        struct dpif_completion *c = xmalloc(sizeof *c);
+        c->op = rule->up.pending;
+        list_push_back(&ofproto->completions, &c->list_node);
+    } else {
+        ofoperation_complete(rule->up.pending, 0);
+    }
+}
+
 static struct rule *
 rule_alloc(void)
 {
@@ -2553,7 +2610,7 @@ rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct rule_dpif *old_rule;
+    struct rule_dpif *victim;
     int error;
 
     error = validate_actions(rule->up.actions, rule->up.n_actions,
@@ -2562,21 +2619,25 @@ rule_construct(struct rule *rule_)
         return error;
     }
 
-    old_rule = rule_dpif_cast(rule_from_cls_rule(classifier_find_rule_exactly(
-                                                     &ofproto->up.tables[0],
-                                                     &rule->up.cr)));
-    if (old_rule) {
-        ofproto_rule_destroy(&old_rule->up);
-    }
-
     rule->used = rule->up.created;
     rule->packet_count = 0;
     rule->byte_count = 0;
-    list_init(&rule->facets);
-    classifier_insert(&ofproto->up.tables[0], &rule->up.cr);
 
-    ofproto->need_revalidate = true;
+    victim = rule_dpif_cast(ofoperation_get_victim(rule->up.pending));
+    if (victim && !list_is_empty(&victim->facets)) {
+        struct facet *facet;
 
+        rule->facets = victim->facets;
+        list_moved(&rule->facets);
+        LIST_FOR_EACH (facet, list_node, &rule->facets) {
+            facet->rule = rule;
+        }
+    } else {
+        /* Must avoid list_moved() in this case. */
+        list_init(&rule->facets);
+    }
+
+    complete_operation(rule);
     return 0;
 }
 
@@ -2587,11 +2648,11 @@ rule_destruct(struct rule *rule_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct facet *facet, *next_facet;
 
-    classifier_remove(&ofproto->up.tables[0], &rule->up.cr);
     LIST_FOR_EACH_SAFE (facet, next_facet, list_node, &rule->facets) {
         facet_revalidate(ofproto, facet);
     }
-    ofproto->need_revalidate = true;
+
+    complete_operation(rule);
 }
 
 static void
@@ -2657,20 +2718,21 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
     return 0;
 }
 
-static int
-rule_modify_actions(struct rule *rule_,
-                    const union ofp_action *actions, size_t n_actions)
+static void
+rule_modify_actions(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     int error;
 
-    error = validate_actions(actions, n_actions, &rule->up.cr.flow,
-                             ofproto->max_ports);
-    if (!error) {
-        ofproto->need_revalidate = true;
+    error = validate_actions(rule->up.actions, rule->up.n_actions,
+                             &rule->up.cr.flow, ofproto->max_ports);
+    if (error) {
+        ofoperation_complete(rule->up.pending, error);
+        return;
     }
-    return error;
+
+    complete_operation(rule);
 }
 
 /* Sends 'packet' out of port 'odp_port' within 'p'.
@@ -3917,6 +3979,22 @@ exit:
 }
 
 static void
+ofproto_dpif_clog(struct unixctl_conn *conn OVS_UNUSED,
+                  const char *args_ OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    clogged = true;
+    unixctl_command_reply(conn, 200, NULL);
+}
+
+static void
+ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED,
+                    const char *args_ OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    clogged = false;
+    unixctl_command_reply(conn, 200, NULL);
+}
+
+static void
 ofproto_dpif_unixctl_init(void)
 {
     static bool registered;
@@ -3927,6 +4005,9 @@ ofproto_dpif_unixctl_init(void)
 
     unixctl_command_register("ofproto/trace", ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/show", ofproto_unixctl_fdb_show, NULL);
+
+    unixctl_command_register("ofproto/clog", ofproto_dpif_clog, NULL);
+    unixctl_command_register("ofproto/unclog", ofproto_dpif_unclog, NULL);
 }
 
 const struct ofproto_class ofproto_dpif_class = {
