@@ -581,6 +581,7 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
     free(ofproto->name);
+    free(ofproto->type);
     free(ofproto->mfr_desc);
     free(ofproto->hw_desc);
     free(ofproto->sw_desc);
