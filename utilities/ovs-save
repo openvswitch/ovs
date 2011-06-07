@@ -115,8 +115,9 @@ for dev in $devs; do
                         continue 2
                     fi
                     ;;
-                "$dev")
-                    # Omit because "ip" wants "dev" keyword in front.
+                "$dev"|"$dev:"*)
+                    # Address label string
+                    addrcmd="$addrcmd label $1"
                     shift
                     continue
                     ;;
