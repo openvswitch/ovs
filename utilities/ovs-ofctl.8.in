@@ -290,6 +290,26 @@ Matches an Ethernet source (or destination) address specified as 6
 pairs of hexadecimal digits delimited by colons
 (e.g. \fB00:0A:E4:25:6B:B0\fR).
 .
+.IP \fBdl_dst=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB/\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+Matches an Ethernet destination address specified as 6 pairs of
+hexadecimal digits delimited by colons (e.g. \fB00:0A:E4:25:6B:B0\fR),
+with a wildcard mask following the slash.  Only
+the following masks are allowed:
+.RS
+.IP \fB01:00:00:00:00:00\fR
+Match only the multicast bit.  Thus,
+\fBdl_dst=01:00:00:00:00:00/01:00:00:00:00:00\fR matches all multicast
+(including broadcast) Ethernet packets, and
+\fBdl_dst=00:00:00:00:00:00/01:00:00:00:00:00\fR matches all unicast
+Ethernet packets.
+.IP \fBfe:ff:ff:ff:ff:ff\fR
+Match all bits except the multicast bit.  This is probably not useful.
+.IP \fBff:ff:ff:ff:ff:ff\fR
+Exact match (equivalent to omitting the mask).
+.IP \fB00:00:00:00:00:00\fR
+Wildcard all bits (equivalent to \fBdl_dst=*\fR.)
+.RE
+.
 .IP \fBdl_type=\fIethertype\fR
 Matches Ethernet protocol type \fIethertype\fR, which is specified as an
 integer between 0 and 65535, inclusive, either in decimal or as a 

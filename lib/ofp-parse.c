@@ -84,6 +84,27 @@ str_to_mac(const char *str, uint8_t mac[6])
 }
 
 static void
+str_to_eth_dst(const char *str,
+               uint8_t mac[ETH_ADDR_LEN], uint8_t mask[ETH_ADDR_LEN])
+{
+    if (sscanf(str, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT,
+               ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask))
+        == ETH_ADDR_SCAN_COUNT * 2) {
+        if (!flow_wildcards_is_dl_dst_mask_valid(mask)) {
+            ovs_fatal(0, "%s: invalid Ethernet destination mask (only "
+                      "00:00:00:00:00:00, 01:00:00:00:00:00, "
+                      "fe:ff:ff:ff:ff:ff, and ff:ff:ff:ff:ff:ff are allowed)",
+                      str);
+        }
+    } else if (sscanf(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+               == ETH_ADDR_SCAN_COUNT) {
+        memset(mask, 0xff, ETH_ADDR_LEN);
+    } else {
+        ovs_fatal(0, "invalid mac address %s", str);
+    }
+}
+
+static void
 str_to_ip(const char *str_, ovs_be32 *ip, ovs_be32 *maskp)
 {
     char *str = xstrdup(str_);
@@ -592,7 +613,7 @@ static void
 parse_field_value(struct cls_rule *rule, enum field_index index,
                   const char *value)
 {
-    uint8_t mac[ETH_ADDR_LEN];
+    uint8_t mac[ETH_ADDR_LEN], mac_mask[ETH_ADDR_LEN];
     ovs_be64 tun_id, tun_mask;
     ovs_be32 ip, mask;
     struct in6_addr ipv6, ipv6_mask;
@@ -625,8 +646,8 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
         break;
 
     case F_DL_DST:
-        str_to_mac(value, mac);
-        cls_rule_set_dl_dst(rule, mac);
+        str_to_eth_dst(value, mac, mac_mask);
+        cls_rule_set_dl_dst_masked(rule, mac, mac_mask);
         break;
 
     case F_DL_TYPE:

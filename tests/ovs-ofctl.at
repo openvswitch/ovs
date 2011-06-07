@@ -62,6 +62,10 @@ actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
+dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=drop
+dl_dst=00:00:00:00:00:00/01:00:00:00:00:00,actions=drop
+dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff,actions=drop
+dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
@@ -86,6 +90,10 @@ NXT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00
 NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD actions=drop
 NXT_FLOW_MOD: ADD tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD: ADD dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
+NXT_FLOW_MOD: ADD dl_dst=00:00:00:00:00:00/01:00:00:00:00:00 actions=drop
+NXT_FLOW_MOD: ADD dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff actions=drop
+NXT_FLOW_MOD: ADD actions=drop
 ])
 AT_CLEANUP
 
