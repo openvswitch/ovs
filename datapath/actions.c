@@ -31,44 +31,31 @@
 static int do_execute_actions(struct datapath *, struct sk_buff *,
 			      struct sw_flow_actions *acts);
 
-static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom)
+static int make_writable(struct sk_buff *skb, int write_len)
 {
-	if (skb_cloned(skb)) {
-		struct sk_buff *nskb;
-		unsigned headroom = max(min_headroom, skb_headroom(skb));
+	if (!skb_cloned(skb) || skb_clone_writable(skb, write_len))
+		return 0;
 
-		nskb = skb_copy_expand(skb, headroom, skb_tailroom(skb), GFP_ATOMIC);
-		if (nskb) {
-			set_skb_csum_bits(skb, nskb);
-			kfree_skb(skb);
-			return nskb;
-		}
-	} else {
-		unsigned int hdr_len = (skb_transport_offset(skb)
-					+ sizeof(struct tcphdr));
-		if (pskb_may_pull(skb, min(hdr_len, skb->len)))
-			return skb;
-	}
-	kfree_skb(skb);
-	return NULL;
+	return pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
 }
 
-static struct sk_buff *strip_vlan(struct sk_buff *skb)
+static int strip_vlan(struct sk_buff *skb)
 {
 	struct ethhdr *eh;
+	int err;
 
 	if (vlan_tx_tag_present(skb)) {
 		vlan_set_tci(skb, 0);
-		return skb;
+		return 0;
 	}
 
 	if (unlikely(skb->protocol != htons(ETH_P_8021Q) ||
 	    skb->len < VLAN_ETH_HLEN))
-		return skb;
+		return 0;
 
-	skb = make_writable(skb, 0);
-	if (unlikely(!skb))
-		return NULL;
+	err = make_writable(skb, VLAN_ETH_HLEN);
+	if (unlikely(err))
+		return err;
 
 	if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
@@ -81,21 +68,25 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb)
 	skb->protocol = eh->h_proto;
 	skb->mac_header += VLAN_HLEN;
 
-	return skb;
+	return 0;
 }
 
-static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, __be16 tci)
+static int modify_vlan_tci(struct sk_buff *skb, __be16 tci)
 {
 	if (!vlan_tx_tag_present(skb) && skb->protocol == htons(ETH_P_8021Q)) {
-		if (unlikely(skb->len < VLAN_ETH_HLEN))
-			return skb;
+		int err;
 
-		skb = strip_vlan(skb);
-		if (unlikely(!skb))
-			return NULL;
+		if (unlikely(skb->len < VLAN_ETH_HLEN))
+			return 0;
+
+		err = strip_vlan(skb);
+		if (unlikely(err))
+			return err;
 	}
 
-	return __vlan_hwaccel_put_tag(skb, ntohs(tci));
+	__vlan_hwaccel_put_tag(skb, ntohs(tci));
+
+	return 0;
 }
 
 static bool is_ip(struct sk_buff *skb)
@@ -118,19 +109,21 @@ static __sum16 *get_l4_checksum(struct sk_buff *skb)
 	return NULL;
 }
 
-static struct sk_buff *set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
+static int set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
 {
 	__be32 new_nwaddr = nla_get_be32(a);
 	struct iphdr *nh;
 	__sum16 *check;
 	__be32 *nwaddr;
+	int err;
 
 	if (unlikely(!is_ip(skb)))
-		return skb;
+		return 0;
 
-	skb = make_writable(skb, 0);
-	if (unlikely(!skb))
-		return NULL;
+	err = make_writable(skb, skb_network_offset(skb) +
+				 sizeof(struct iphdr));
+	if (unlikely(err))
+		return err;
 
 	nh = ip_hdr(skb);
 	nwaddr = nla_type(a) == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
@@ -144,47 +137,52 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
 
 	*nwaddr = new_nwaddr;
 
-	return skb;
+	return 0;
 }
 
-static struct sk_buff *set_nw_tos(struct sk_buff *skb, u8 nw_tos)
+static int set_nw_tos(struct sk_buff *skb, u8 nw_tos)
 {
+	struct iphdr *nh = ip_hdr(skb);
+	u8 old, new;
+	int err;
+
 	if (unlikely(!is_ip(skb)))
-		return skb;
+		return 0;
 
-	skb = make_writable(skb, 0);
-	if (skb) {
-		struct iphdr *nh = ip_hdr(skb);
-		u8 *f = &nh->tos;
-		u8 old = *f;
-		u8 new;
+	err = make_writable(skb, skb_network_offset(skb) +
+				 sizeof(struct iphdr));
+	if (unlikely(err))
+		return err;
 
-		/* Set the DSCP bits and preserve the ECN bits. */
-		new = nw_tos | (nh->tos & INET_ECN_MASK);
-		csum_replace4(&nh->check, (__force __be32)old,
-					  (__force __be32)new);
-		*f = new;
-	}
-	return skb;
+	/* Set the DSCP bits and preserve the ECN bits. */
+	old = nh->tos;
+	new = nw_tos | (nh->tos & INET_ECN_MASK);
+	csum_replace4(&nh->check, (__force __be32)old,
+				  (__force __be32)new);
+	nh->tos = new;
+
+	return 0;
 }
 
-static struct sk_buff *set_tp_port(struct sk_buff *skb, const struct nlattr *a)
+static int set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 {
 	struct udphdr *th;
 	__sum16 *check;
 	__be16 *port;
+	int err;
 
 	if (unlikely(!is_ip(skb)))
-		return skb;
+		return 0;
 
-	skb = make_writable(skb, 0);
-	if (unlikely(!skb))
-		return NULL;
+	err = make_writable(skb, skb_transport_offset(skb) +
+				 sizeof(struct tcphdr));
+	if (unlikely(err))
+		return err;
 
 	/* Must follow make_writable() since that can move the skb data. */
 	check = get_l4_checksum(skb);
 	if (unlikely(!check))
-		return skb;
+		return 0;
 
 	/*
 	 * Update port and checksum.
@@ -199,7 +197,7 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 	*port = nla_get_be16(a);
 	skb_clear_rxhash(skb);
 
-	return skb;
+	return 0;
 }
 
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
@@ -248,10 +246,12 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	int prev_port = -1;
 	u32 priority = skb->priority;
 	const struct nlattr *a;
-	int rem, err;
+	int rem;
 
 	for (a = acts->actions, rem = acts->actions_len; rem > 0;
 	     a = nla_next(a, &rem)) {
+		int err = 0;
+
 		if (prev_port != -1) {
 			do_output(dp, skb_clone(skb, GFP_ATOMIC), prev_port);
 			prev_port = -1;
@@ -264,10 +264,6 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case ODP_ACTION_ATTR_CONTROLLER:
 			err = output_control(dp, skb, nla_get_u64(a));
-			if (err) {
-				kfree_skb(skb);
-				return err;
-			}
 			break;
 
 		case ODP_ACTION_ATTR_SET_TUNNEL:
@@ -275,39 +271,37 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODP_ACTION_ATTR_SET_DL_TCI:
-			skb = modify_vlan_tci(skb, nla_get_be16(a));
+			err = modify_vlan_tci(skb, nla_get_be16(a));
 			break;
 
 		case ODP_ACTION_ATTR_STRIP_VLAN:
-			skb = strip_vlan(skb);
+			err = strip_vlan(skb);
 			break;
 
 		case ODP_ACTION_ATTR_SET_DL_SRC:
-			skb = make_writable(skb, 0);
-			if (!skb)
-				return -ENOMEM;
-			memcpy(eth_hdr(skb)->h_source, nla_data(a), ETH_ALEN);
+			err = make_writable(skb, ETH_HLEN);
+			if (likely(!err))
+				memcpy(eth_hdr(skb)->h_source, nla_data(a), ETH_ALEN);
 			break;
 
 		case ODP_ACTION_ATTR_SET_DL_DST:
-			skb = make_writable(skb, 0);
-			if (!skb)
-				return -ENOMEM;
-			memcpy(eth_hdr(skb)->h_dest, nla_data(a), ETH_ALEN);
+			err = make_writable(skb, ETH_HLEN);
+			if (likely(!err))
+				memcpy(eth_hdr(skb)->h_dest, nla_data(a), ETH_ALEN);
 			break;
 
 		case ODP_ACTION_ATTR_SET_NW_SRC:
 		case ODP_ACTION_ATTR_SET_NW_DST:
-			skb = set_nw_addr(skb, a);
+			err = set_nw_addr(skb, a);
 			break;
 
 		case ODP_ACTION_ATTR_SET_NW_TOS:
-			skb = set_nw_tos(skb, nla_get_u8(a));
+			err = set_nw_tos(skb, nla_get_u8(a));
 			break;
 
 		case ODP_ACTION_ATTR_SET_TP_SRC:
 		case ODP_ACTION_ATTR_SET_TP_DST:
-			skb = set_tp_port(skb, a);
+			err = set_tp_port(skb, a);
 			break;
 
 		case ODP_ACTION_ATTR_SET_PRIORITY:
@@ -318,14 +312,18 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			skb->priority = priority;
 			break;
 		}
-		if (!skb)
-			return -ENOMEM;
+
+		if (unlikely(err)) {
+			kfree_skb(skb);
+			return err;
+		}
 	}
 
 	if (prev_port != -1)
 		do_output(dp, skb, prev_port);
 	else
 		kfree_skb(skb);
+
 	return 0;
 }
 
