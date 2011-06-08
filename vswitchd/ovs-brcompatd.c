@@ -363,25 +363,29 @@ handle_port_cmd(struct ofpbuf *buffer, bool add)
 }
 
 static char *
-linux_bridge_to_ovs_bridge(const char *linux_name)
+linux_bridge_to_ovs_bridge(const char *linux_name, int *br_vlanp)
 {
     char *save_ptr = NULL;
-    const char *br_name;
+    const char *br_name, *br_vlan;
     char *br_name_copy;
     char *output;
 
-    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS, "br-to-parent",
-                           linux_name, (char *) NULL);
+    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS,
+                           "--", "br-to-parent", linux_name,
+                           "--", "br-to-vlan", linux_name,
+                           (char *) NULL);
     if (!output) {
         return NULL;
     }
 
     br_name = strtok_r(output, " \t\r\n", &save_ptr);
-    if (!br_name) {
+    br_vlan = strtok_r(NULL, " \t\r\n", &save_ptr);
+    if (!br_name || !br_vlan) {
         free(output);
         return NULL;
     }
     br_name_copy = xstrdup(br_name);
+    *br_vlanp = atoi(br_vlan);
 
     free(output);
 
@@ -458,7 +462,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     }
 
     /* Figure out vswitchd bridge and VLAN. */
-    br_name = linux_bridge_to_ovs_bridge(linux_name);
+    br_name = linux_bridge_to_ovs_bridge(linux_name, &br_vlan);
     if (!br_name) {
         error = EINVAL;
         send_simple_reply(seq, error);
