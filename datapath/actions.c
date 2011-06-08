@@ -120,7 +120,7 @@ static bool is_ip(struct sk_buff *skb)
 
 static __sum16 *get_l4_checksum(struct sk_buff *skb)
 {
-	u8 nw_proto = OVS_CB(skb)->flow->key.ip.nw_proto;
+	u8 nw_proto = OVS_CB(skb)->flow->key.ip.proto;
 	int transport_len = skb->len - skb_transport_offset(skb);
 	if (nw_proto == IPPROTO_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))

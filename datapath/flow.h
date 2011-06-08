@@ -40,8 +40,8 @@ struct sw_flow_key {
 		__be16 type;		/* Ethernet frame type. */
 	} eth;
 	struct {
-		u8     nw_proto;	/* IP protocol or lower 8 bits of ARP opcode. */
-		u8     nw_tos;		/* IP ToS (DSCP field, 6 bits). */
+		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
+		u8     tos;		/* IP ToS (DSCP field, 6 bits). */
 	} ip;
 	union {
 		struct {
