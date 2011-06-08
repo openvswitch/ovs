@@ -1027,27 +1027,6 @@ static struct rtable *find_route(struct vport *vport,
 	}
 }
 
-static struct sk_buff *check_headroom(struct sk_buff *skb, int headroom)
-{
-	if (skb_headroom(skb) < headroom || skb_header_cloned(skb)) {
-		struct sk_buff *nskb = skb_realloc_headroom(skb, headroom + 16);
-		if (unlikely(!nskb)) {
-			kfree_skb(skb);
-			return ERR_PTR(-ENOMEM);
-		}
-
-		set_skb_csum_bits(skb, nskb);
-
-		if (skb->sk)
-			skb_set_owner_w(nskb, skb->sk);
-
-		kfree_skb(skb);
-		return nskb;
-	}
-
-	return skb;
-}
-
 static inline bool need_linearize(const struct sk_buff *skb)
 {
 	int i;
@@ -1084,10 +1063,14 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 			+ mutable->tunnel_hlen
 			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
 
-	skb = check_headroom(skb, min_headroom);
-	if (IS_ERR(skb)) {
-		err = PTR_ERR(skb);
-		goto error;
+	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
+		int head_delta = SKB_DATA_ALIGN(min_headroom -
+						skb_headroom(skb) +
+						16);
+		err = pskb_expand_head(skb, max_t(int, head_delta, 0),
+					0, GFP_ATOMIC);
+		if (unlikely(err))
+			goto error_free;
 	}
 
 	if (skb_is_gso(skb)) {
