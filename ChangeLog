@@ -4,6 +4,7 @@ post v1.1.0
       counters for each port.
     - ovs-vsctl:
       - New "show" command to print an overview of configuration.
+    - ovs-brcompatd has been rewritten to fix long-standing bugs.
     - ovs-openflowd has been renamed test-openflowd and moved into the
       tests directory.  Its presence confused too many users.  Please
       use ovs-vswitchd instead.

@@ -46,7 +46,6 @@
 #include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "openvswitch/brcompat-netlink.h"
-#include "ovsdb-idl.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
@@ -54,34 +53,29 @@
 #include "rtnetlink-link.h"
 #include "signals.h"
 #include "sset.h"
+#include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
-#include "vswitchd/vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(brcompatd);
 
-
 /* xxx Just hangs if datapath is rmmod/insmod.  Learn to reconnect? */
 
-/* Actions to modify bridge compatibility configuration. */
-enum bmc_action {
-    BMC_ADD_DP,
-    BMC_DEL_DP,
-    BMC_ADD_PORT,
-    BMC_DEL_PORT
-};
-
-static const char *parse_options(int argc, char *argv[]);
+static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
 
-/* Shell command to execute (via popen()) to send a control command to the
- * running ovs-vswitchd process.  The string must contain one instance of %s,
- * which is replaced by the control command. */
-static char *appctl_command;
+/* --appctl: Absolute path to ovs-appctl. */
+static char *appctl_program;
+
+/* --vsctl: Absolute path to ovs-vsctl. */
+static char *vsctl_program;
+
+/* Options that we should generally pass to ovs-vsctl. */
+#define VSCTL_OPTIONS "--timeout=5", "-vANY:console:WARN"
 
 /* Netlink socket to bridge compatibility kernel module. */
 static struct nl_sock *brc_sock;
@@ -92,6 +86,91 @@ static int brc_family;
 static const struct nl_policy brc_multicast_policy[] = {
     [BRC_GENL_A_MC_GROUP] = {.type = NL_A_U32 }
 };
+
+static char *
+capture_vsctl_valist(const char *arg0, va_list args)
+{
+    char *stdout_log, *stderr_log;
+    enum vlog_level log_level;
+    struct svec argv;
+    int status;
+    char *msg;
+
+    /* Compose arguments. */
+    svec_init(&argv);
+    svec_add(&argv, arg0);
+    for (;;) {
+        const char *arg = va_arg(args, const char *);
+        if (!arg) {
+            break;
+        }
+        svec_add(&argv, arg);
+    }
+    svec_terminate(&argv);
+
+    /* Run process. */
+    if (process_run_capture(argv.names, &stdout_log, &stderr_log, SIZE_MAX,
+                            &status)) {
+        svec_destroy(&argv);
+        return NULL;
+    }
+
+    /* Log results. */
+    if (WIFEXITED(status)) {
+        int code = WEXITSTATUS(status);
+        log_level = code == 0 ? VLL_DBG : code == 1 ? VLL_WARN : VLL_ERR;
+    } else {
+        log_level = VLL_ERR;
+    }
+    msg = process_status_msg(status);
+    VLOG(log_level, "ovs-vsctl exited (%s)", msg);
+    if (stdout_log && *stdout_log) {
+        VLOG(log_level, "ovs-vsctl wrote to stdout:\n%s\n", stdout_log);
+    }
+    if (stderr_log && *stderr_log) {
+        VLOG(log_level, "ovs-vsctl wrote to stderr:\n%s\n", stderr_log);
+    }
+    free(msg);
+
+    svec_destroy(&argv);
+
+    free(stderr_log);
+    if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+        return stdout_log;
+    } else {
+        free(stdout_log);
+        return NULL;
+    }
+}
+
+static char * SENTINEL(0)
+capture_vsctl(const char *arg0, ...)
+{
+    char *stdout_log;
+    va_list args;
+
+    va_start(args, arg0);
+    stdout_log = capture_vsctl_valist(arg0, args);
+    va_end(args);
+
+    return stdout_log;
+}
+
+static bool SENTINEL(0)
+run_vsctl(const char *arg0, ...)
+{
+    char *stdout_log;
+    va_list args;
+    bool ok;
+
+    va_start(args, arg0);
+    stdout_log = capture_vsctl_valist(arg0, args);
+    va_end(args);
+
+    ok = stdout_log != NULL;
+    free(stdout_log);
+    return ok;
+}
 
 static int
 lookup_brc_multicast_group(int *multicast_group)
@@ -162,425 +241,6 @@ brc_open(struct nl_sock **sock)
 static const struct nl_policy brc_dp_policy[] = {
     [BRC_GENL_A_DP_NAME] = { .type = NL_A_STRING },
 };
-
-static struct ovsrec_bridge *
-find_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
-{
-    size_t i;
-
-    for (i = 0; i < ovs->n_bridges; i++) {
-        if (!strcmp(br_name, ovs->bridges[i]->name)) {
-            return ovs->bridges[i];
-        }
-    }
-
-    return NULL;
-}
-
-static int
-execute_appctl_command(const char *unixctl_command, char **output)
-{
-    char *stdout_log, *stderr_log;
-    int error, status;
-    char *argv[5];
-
-    argv[0] = "/bin/sh";
-    argv[1] = "-c";
-    argv[2] = xasprintf(appctl_command, unixctl_command);
-    argv[3] = NULL;
-
-    /* Run process and log status. */
-    error = process_run_capture(argv, &stdout_log, &stderr_log, 65536,
-                                &status);
-    if (error) {
-        VLOG_ERR("failed to execute %s command via ovs-appctl: %s",
-                 unixctl_command, strerror(error));
-    } else if (status) {
-        char *msg = process_status_msg(status);
-        VLOG_ERR("ovs-appctl exited with error (%s)", msg);
-        free(msg);
-        error = ECHILD;
-    }
-
-    /* Deal with stdout_log. */
-    if (output) {
-        *output = stdout_log;
-    } else {
-        free(stdout_log);
-    }
-
-    /* Deal with stderr_log */
-    if (stderr_log && *stderr_log) {
-        VLOG_INFO("ovs-appctl wrote to stderr:\n%s", stderr_log);
-    }
-    free(stderr_log);
-
-    free(argv[2]);
-
-    return error;
-}
-
-static void
-do_get_bridge_parts(const struct ovsrec_bridge *br, struct sset *parts,
-                    int vlan, bool break_down_bonds)
-{
-    size_t i, j;
-
-    for (i = 0; i < br->n_ports; i++) {
-        const struct ovsrec_port *port = br->ports[i];
-
-        if (vlan >= 0) {
-            int port_vlan = port->n_tag ? *port->tag : 0;
-            if (vlan != port_vlan) {
-                continue;
-            }
-        }
-        if (break_down_bonds) {
-            for (j = 0; j < port->n_interfaces; j++) {
-                const struct ovsrec_interface *iface = port->interfaces[j];
-                sset_add(parts, iface->name);
-            }
-        } else {
-            sset_add(parts, port->name);
-        }
-    }
-}
-
-/* Add all the interfaces for 'bridge' to 'ifaces', breaking bonded interfaces
- * down into their constituent parts.
- *
- * If 'vlan' < 0, all interfaces on 'bridge' are reported.  If 'vlan' == 0,
- * then only interfaces for trunk ports or ports with implicit VLAN 0 are
- * reported.  If 'vlan' > 0, only interfaces with implicit VLAN 'vlan' are
- * reported.  */
-static void
-get_bridge_ifaces(const struct ovsrec_bridge *br, struct sset *ifaces,
-                  int vlan)
-{
-    do_get_bridge_parts(br, ifaces, vlan, true);
-}
-
-/* Add all the ports for 'bridge' to 'ports'.  Bonded ports are reported under
- * the bond name, not broken down into their constituent interfaces.
- *
- * If 'vlan' < 0, all ports on 'bridge' are reported.  If 'vlan' == 0, then
- * only trunk ports or ports with implicit VLAN 0 are reported.  If 'vlan' > 0,
- * only port with implicit VLAN 'vlan' are reported.  */
-static void
-get_bridge_ports(const struct ovsrec_bridge *br, struct sset *ports,
-                 int vlan)
-{
-    do_get_bridge_parts(br, ports, vlan, false);
-}
-
-static struct ovsdb_idl_txn *
-txn_from_openvswitch(const struct ovsrec_open_vswitch *ovs)
-{
-    return ovsdb_idl_txn_get(&ovs->header_);
-}
-
-static bool
-port_is_fake_bridge(const struct ovsrec_port *port)
-{
-    return (port->fake_bridge
-            && port->tag
-            && *port->tag >= 1 && *port->tag <= 4095);
-}
-
-static void
-ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
-                  struct ovsrec_bridge *bridge)
-{
-    struct ovsrec_bridge **bridges;
-    size_t i;
-
-    bridges = xmalloc(sizeof *ovs->bridges * (ovs->n_bridges + 1));
-    for (i = 0; i < ovs->n_bridges; i++) {
-        bridges[i] = ovs->bridges[i];
-    }
-    bridges[ovs->n_bridges] = bridge;
-    ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
-    free(bridges);
-}
-
-static struct json *
-where_uuid_equals(const struct uuid *uuid)
-{
-    return
-        json_array_create_1(
-            json_array_create_3(
-                json_string_create("_uuid"),
-                json_string_create("=="),
-                json_array_create_2(
-                    json_string_create("uuid"),
-                    json_string_create_nocopy(
-                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
-}
-
-/* Commits 'txn'.  If 'wait_for_reload' is true, also waits for Open vSwitch to
-   reload the configuration before returning.
-
-   Returns EAGAIN if the caller should try the operation again, 0 on success,
-   otherwise a positive errno value. */
-static int
-commit_txn(struct ovsdb_idl_txn *txn, bool wait_for_reload)
-{
-    struct ovsdb_idl *idl = ovsdb_idl_txn_get_idl (txn);
-    enum ovsdb_idl_txn_status status;
-    int64_t next_cfg = 0;
-
-    if (wait_for_reload) {
-        const struct ovsrec_open_vswitch *ovs = ovsrec_open_vswitch_first(idl);
-        struct json *where = where_uuid_equals(&ovs->header_.uuid);
-        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg", where);
-        json_destroy(where);
-    }
-    status = ovsdb_idl_txn_commit_block(txn);
-    if (wait_for_reload && status == TXN_SUCCESS) {
-        next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
-    }
-    ovsdb_idl_txn_destroy(txn);
-
-    switch (status) {
-    case TXN_INCOMPLETE:
-        NOT_REACHED();
-
-    case TXN_ABORTED:
-        VLOG_ERR_RL(&rl, "OVSDB transaction unexpectedly aborted");
-        return ECONNABORTED;
-
-    case TXN_UNCHANGED:
-        return 0;
-
-    case TXN_SUCCESS:
-        if (wait_for_reload) {
-            for (;;) {
-                /* We can't use 'ovs' any longer because ovsdb_idl_run() can
-                 * destroy it. */
-                const struct ovsrec_open_vswitch *ovs2;
-
-                ovsdb_idl_run(idl);
-                OVSREC_OPEN_VSWITCH_FOR_EACH (ovs2, idl) {
-                    if (ovs2->cur_cfg >= next_cfg) {
-                        goto done;
-                    }
-                }
-                ovsdb_idl_wait(idl);
-                poll_block();
-            }
-        done: ;
-        }
-        return 0;
-
-    case TXN_TRY_AGAIN:
-        VLOG_ERR_RL(&rl, "OVSDB transaction needs retry");
-        return EAGAIN;
-
-    case TXN_ERROR:
-        VLOG_ERR_RL(&rl, "OVSDB transaction failed: %s",
-                    ovsdb_idl_txn_get_error(txn));
-        return EBUSY;
-
-    default:
-        NOT_REACHED();
-    }
-}
-
-static int
-add_bridge(struct ovsdb_idl *idl, const struct ovsrec_open_vswitch *ovs,
-           const char *br_name)
-{
-    struct ovsrec_bridge *br;
-    struct ovsrec_port *port;
-    struct ovsrec_interface *iface;
-    struct ovsdb_idl_txn *txn;
-
-    if (find_bridge(ovs, br_name)) {
-        VLOG_WARN("addbr %s: bridge %s exists", br_name, br_name);
-        return EEXIST;
-    } else if (netdev_exists(br_name)) {
-        size_t i;
-
-        for (i = 0; i < ovs->n_bridges; i++) {
-            size_t j;
-            struct ovsrec_bridge *br_cfg = ovs->bridges[i];
-
-            for (j = 0; j < br_cfg->n_ports; j++) {
-                if (port_is_fake_bridge(br_cfg->ports[j])) {
-                    VLOG_WARN("addbr %s: %s exists as a fake bridge",
-                              br_name, br_name);
-                    return 0;
-                }
-            }
-        }
-
-        VLOG_WARN("addbr %s: cannot create bridge %s because a network "
-                  "device named %s already exists",
-                  br_name, br_name, br_name);
-        return EEXIST;
-    }
-
-    txn = ovsdb_idl_txn_create(idl);
-
-    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: addbr %s", br_name);
-
-    iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
-    ovsrec_interface_set_name(iface, br_name);
-
-    port = ovsrec_port_insert(txn_from_openvswitch(ovs));
-    ovsrec_port_set_name(port, br_name);
-    ovsrec_port_set_interfaces(port, &iface, 1);
-
-    br = ovsrec_bridge_insert(txn_from_openvswitch(ovs));
-    ovsrec_bridge_set_name(br, br_name);
-    ovsrec_bridge_set_ports(br, &port, 1);
-
-    ovs_insert_bridge(ovs, br);
-
-    return commit_txn(txn, true);
-}
-
-static void
-add_port(const struct ovsrec_open_vswitch *ovs,
-         const struct ovsrec_bridge *br, const char *port_name)
-{
-    struct ovsrec_interface *iface;
-    struct ovsrec_port *port;
-    struct ovsrec_port **ports;
-    size_t i;
-
-    /* xxx Check conflicts? */
-    iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
-    ovsrec_interface_set_name(iface, port_name);
-
-    port = ovsrec_port_insert(txn_from_openvswitch(ovs));
-    ovsrec_port_set_name(port, port_name);
-    ovsrec_port_set_interfaces(port, &iface, 1);
-
-    ports = xmalloc(sizeof *br->ports * (br->n_ports + 1));
-    for (i = 0; i < br->n_ports; i++) {
-        ports[i] = br->ports[i];
-    }
-    ports[br->n_ports] = port;
-    ovsrec_bridge_set_ports(br, ports, br->n_ports + 1);
-    free(ports);
-}
-
-/* Deletes 'port' from 'br'.
- *
- * After calling this function, 'port' must not be referenced again. */
-static void
-del_port(const struct ovsrec_bridge *br, const struct ovsrec_port *port)
-{
-    struct ovsrec_port **ports;
-    size_t i, n;
-
-    /* Remove 'port' from the bridge's list of ports. */
-    ports = xmalloc(sizeof *br->ports * br->n_ports);
-    for (i = n = 0; i < br->n_ports; i++) {
-        if (br->ports[i] != port) {
-            ports[n++] = br->ports[i];
-        }
-    }
-    ovsrec_bridge_set_ports(br, ports, n);
-    free(ports);
-}
-
-/* Delete 'iface' from 'port' (which must be within 'br').  If 'iface' was
- * 'port''s only interface, delete 'port' from 'br' also.
- *
- * After calling this function, 'iface' must not be referenced again. */
-static void
-del_interface(const struct ovsrec_bridge *br,
-              const struct ovsrec_port *port,
-              const struct ovsrec_interface *iface)
-{
-    if (port->n_interfaces == 1) {
-        del_port(br, port);
-    } else {
-        struct ovsrec_interface **ifaces;
-        size_t i, n;
-
-        ifaces = xmalloc(sizeof *port->interfaces * port->n_interfaces);
-        for (i = n = 0; i < port->n_interfaces; i++) {
-            if (port->interfaces[i] != iface) {
-                ifaces[n++] = port->interfaces[i];
-            }
-        }
-        ovsrec_port_set_interfaces(port, ifaces, n);
-        free(ifaces);
-    }
-}
-
-/* Find and return a port within 'br' named 'port_name'. */
-static const struct ovsrec_port *
-find_port(const struct ovsrec_bridge *br, const char *port_name)
-{
-    size_t i;
-
-    for (i = 0; i < br->n_ports; i++) {
-        struct ovsrec_port *port = br->ports[i];
-        if (!strcmp(port_name, port->name)) {
-            return port;
-        }
-    }
-    return NULL;
-}
-
-/* Find and return an interface within 'br' named 'iface_name'. */
-static const struct ovsrec_interface *
-find_interface(const struct ovsrec_bridge *br, const char *iface_name,
-               struct ovsrec_port **portp)
-{
-    size_t i;
-
-    for (i = 0; i < br->n_ports; i++) {
-        struct ovsrec_port *port = br->ports[i];
-        size_t j;
-
-        for (j = 0; j < port->n_interfaces; j++) {
-            struct ovsrec_interface *iface = port->interfaces[j];
-            if (!strcmp(iface->name, iface_name)) {
-                *portp = port;
-                return iface;
-            }
-        }
-    }
-
-    *portp = NULL;
-    return NULL;
-}
-
-static int
-del_bridge(struct ovsdb_idl *idl,
-           const struct ovsrec_open_vswitch *ovs, const char *br_name)
-{
-    struct ovsrec_bridge *br = find_bridge(ovs, br_name);
-    struct ovsrec_bridge **bridges;
-    struct ovsdb_idl_txn *txn;
-    size_t i, n;
-
-    if (!br) {
-        VLOG_WARN("delbr %s: no bridge named %s", br_name, br_name);
-        return ENXIO;
-    }
-
-    txn = ovsdb_idl_txn_create(idl);
-
-    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: delbr %s", br_name);
-
-    /* Remove 'br' from the vswitch's list of bridges. */
-    bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
-    for (i = n = 0; i < ovs->n_bridges; i++) {
-        if (ovs->bridges[i] != br) {
-            bridges[n++] = ovs->bridges[i];
-        }
-    }
-    ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
-    free(bridges);
-
-    return commit_txn(txn, true);
-}
 
 static int
 parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
@@ -654,9 +314,7 @@ send_simple_reply(uint32_t seq, int error)
 }
 
 static int
-handle_bridge_cmd(struct ovsdb_idl *idl,
-                  const struct ovsrec_open_vswitch *ovs,
-                  struct ofpbuf *buffer, bool add)
+handle_bridge_cmd(struct ofpbuf *buffer, bool add)
 {
     const char *br_name;
     uint32_t seq;
@@ -664,14 +322,14 @@ handle_bridge_cmd(struct ovsdb_idl *idl,
 
     error = parse_command(buffer, &seq, &br_name, NULL, NULL, NULL);
     if (!error) {
-        int retval;
-
-        do {
-            retval = (add ? add_bridge : del_bridge)(idl, ovs, br_name);
-            VLOG_INFO_RL(&rl, "%sbr %s: %s",
-                         add ? "add" : "del", br_name, strerror(retval));
-        } while (retval == EAGAIN);
-
+        const char *vsctl_cmd = add ? "add-br" : "del-br";
+        const char *brctl_cmd = add ? "addbr" : "delbr";
+        if (!run_vsctl(vsctl_program, VSCTL_OPTIONS,
+                       "--", vsctl_cmd, br_name,
+                       "--", "comment", "ovs-brcompatd:", brctl_cmd, br_name,
+                       (char *) NULL)) {
+            error = add ? EEXIST : ENXIO;
+        }
         send_simple_reply(seq, error);
     }
     return error;
@@ -683,97 +341,75 @@ static const struct nl_policy brc_port_policy[] = {
 };
 
 static int
-handle_port_cmd(struct ovsdb_idl *idl,
-                const struct ovsrec_open_vswitch *ovs,
-                struct ofpbuf *buffer, bool add)
+handle_port_cmd(struct ofpbuf *buffer, bool add)
 {
-    const char *cmd_name = add ? "add-if" : "del-if";
     const char *br_name, *port_name;
     uint32_t seq;
     int error;
 
     error = parse_command(buffer, &seq, &br_name, &port_name, NULL, NULL);
     if (!error) {
-        struct ovsrec_bridge *br = find_bridge(ovs, br_name);
-
-        if (!br) {
-            VLOG_WARN("%s %s %s: no bridge named %s",
-                      cmd_name, br_name, port_name, br_name);
+        const char *vsctl_cmd = add ? "add-port" : "del-port";
+        const char *brctl_cmd = add ? "addif" : "delif";
+        if (!run_vsctl(vsctl_program, VSCTL_OPTIONS,
+                       "--", vsctl_cmd, br_name, port_name,
+                       "--", "comment", "ovs-brcompatd:", brctl_cmd,
+                       br_name, port_name, (char *) NULL)) {
             error = EINVAL;
-        } else if (!netdev_exists(port_name)) {
-            VLOG_WARN("%s %s %s: no network device named %s",
-                      cmd_name, br_name, port_name, port_name);
-            error = EINVAL;
-        } else {
-            do {
-                struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
-
-                if (add) {
-                    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: add-if %s",
-                                              port_name);
-                    add_port(ovs, br, port_name);
-                } else {
-                    const struct ovsrec_port *port = find_port(br, port_name);
-                    if (port) {
-                        ovsdb_idl_txn_add_comment(txn,
-                                                  "ovs-brcompatd: del-if %s",
-                                                  port_name);
-                        del_port(br, port);
-                    }
-                }
-
-                error = commit_txn(txn, true);
-                VLOG_INFO_RL(&rl, "%s %s %s: %s",
-                             cmd_name, br_name, port_name, strerror(error));
-            } while (error == EAGAIN);
         }
         send_simple_reply(seq, error);
     }
-
     return error;
 }
 
-/* The caller is responsible for freeing '*ovs_name' if the call is
- * successful. */
-static int
-linux_bridge_to_ovs_bridge(const struct ovsrec_open_vswitch *ovs,
-                           const char *linux_name,
-                           const struct ovsrec_bridge **ovs_bridge,
-                           int *br_vlan)
+static char *
+linux_bridge_to_ovs_bridge(const char *linux_name)
 {
-    *ovs_bridge = find_bridge(ovs, linux_name);
-    if (*ovs_bridge) {
-        /* Bridge name is the same.  We are interested in VLAN 0. */
-        *br_vlan = 0;
-        return 0;
-    } else {
-        /* No such Open vSwitch bridge 'linux_name', but there might be an
-         * internal port named 'linux_name' on some other bridge
-         * 'ovs_bridge'.  If so then we are interested in the VLAN assigned to
-         * port 'linux_name' on the bridge named 'ovs_bridge'. */
-        size_t i, j;
+    char *save_ptr = NULL;
+    const char *br_name;
+    char *br_name_copy;
+    char *output;
 
-        for (i = 0; i < ovs->n_bridges; i++) {
-            const struct ovsrec_bridge *br = ovs->bridges[i];
-
-            for (j = 0; j < br->n_ports; j++) {
-                const struct ovsrec_port *port = br->ports[j];
-
-                if (!strcmp(port->name, linux_name)) {
-                    *ovs_bridge = br;
-                    *br_vlan = port->n_tag ? *port->tag : -1;
-                    return 0;
-                }
-            }
-
-        }
-        return ENODEV;
+    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS, "br-to-parent",
+                           linux_name, (char *) NULL);
+    if (!output) {
+        return NULL;
     }
+
+    br_name = strtok_r(output, " \t\r\n", &save_ptr);
+    if (!br_name) {
+        free(output);
+        return NULL;
+    }
+    br_name_copy = xstrdup(br_name);
+
+    free(output);
+
+    return br_name_copy;
+}
+
+static void
+get_bridge_ifaces(const char *br_name, struct sset *ifaces)
+{
+    char *save_ptr = NULL;
+    char *output;
+    char *iface;
+
+    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS, "list-ifaces",
+                           br_name, (char *) NULL);
+    if (!output) {
+        return;
+    }
+
+    for (iface = strtok_r(output, " \t\r\n", &save_ptr); iface;
+         iface = strtok_r(NULL, " \t\r\n", &save_ptr)) {
+        sset_add(ifaces, iface);
+    }
+    free(output);
 }
 
 static int
-handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
-                     struct ofpbuf *buffer)
+handle_fdb_query_cmd(struct ofpbuf *buffer)
 {
     /* This structure is copied directly from the Linux 2.6.30 header files.
      * It would be more straightforward to #include <linux/if_bridge.h>, but
@@ -802,15 +438,14 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
      * pretend that the former is the case even though the latter is the
      * implementation. */
     const char *linux_name;   /* Name used by brctl. */
-    const struct ovsrec_bridge *ovs_bridge;  /* Bridge used by ovs-vswitchd. */
     int br_vlan;                /* VLAN tag. */
     struct sset ifaces;
 
     struct ofpbuf query_data;
     const char *iface_name;
     struct ofpbuf *reply;
-    char *unixctl_command;
     uint64_t count, skip;
+    char *br_name;
     char *output;
     char *save_ptr;
     uint32_t seq;
@@ -823,18 +458,18 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
     }
 
     /* Figure out vswitchd bridge and VLAN. */
-    error = linux_bridge_to_ovs_bridge(ovs, linux_name,
-                                       &ovs_bridge, &br_vlan);
-    if (error) {
+    br_name = linux_bridge_to_ovs_bridge(linux_name);
+    if (!br_name) {
+        error = EINVAL;
         send_simple_reply(seq, error);
         return error;
     }
 
     /* Fetch the forwarding database using ovs-appctl. */
-    unixctl_command = xasprintf("fdb/show %s", ovs_bridge->name);
-    error = execute_appctl_command(unixctl_command, &output);
-    free(unixctl_command);
-    if (error) {
+    output = capture_vsctl(appctl_program, "fdb/show", br_name,
+                           (char *) NULL);
+    if (!output) {
+        error = ECHILD;
         send_simple_reply(seq, error);
         return error;
     }
@@ -842,7 +477,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
     /* Fetch the MAC address for each interface on the bridge, so that we can
      * fill in the is_local field in the response. */
     sset_init(&ifaces);
-    get_bridge_ifaces(ovs_bridge, &ifaces, br_vlan);
+    get_bridge_ifaces(linux_name, &ifaces);
     local_macs = xmalloc(sset_count(&ifaces) * sizeof *local_macs);
     n_local_macs = 0;
     SSET_FOR_EACH (iface_name, &ifaces) {
@@ -928,18 +563,26 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-send_ifindex_reply(uint32_t seq, struct sset *ifaces)
+send_ifindex_reply(uint32_t seq, char *output)
 {
+    size_t allocated_indices;
+    char *save_ptr = NULL;
     struct ofpbuf *reply;
     const char *iface;
     size_t n_indices;
     int *indices;
 
-    /* Convert 'ifaces' into ifindexes. */
-    n_indices = 0;
-    indices = xmalloc(sset_count(ifaces) * sizeof *indices);
-    SSET_FOR_EACH (iface, ifaces) {
-        int ifindex = if_nametoindex(iface);
+    indices = NULL;
+    n_indices = allocated_indices = 0;
+    for (iface = strtok_r(output, " \t\r\n", &save_ptr); iface;
+         iface = strtok_r(NULL, " \t\r\n", &save_ptr)) {
+        int ifindex;
+
+        if (n_indices >= allocated_indices) {
+            indices = x2nrealloc(indices, &allocated_indices, sizeof *indices);
+        }
+
+        ifindex = if_nametoindex(iface);
         if (ifindex) {
             indices[n_indices++] = ifindex;
         }
@@ -956,14 +599,10 @@ send_ifindex_reply(uint32_t seq, struct sset *ifaces)
 }
 
 static int
-handle_get_bridges_cmd(const struct ovsrec_open_vswitch *ovs,
-                       struct ofpbuf *buffer)
+handle_get_bridges_cmd(struct ofpbuf *buffer)
 {
-    struct sset bridges;
-    size_t i, j;
-
+    char *output;
     uint32_t seq;
-
     int error;
 
     /* Parse Netlink command.
@@ -975,39 +614,22 @@ handle_get_bridges_cmd(const struct ovsrec_open_vswitch *ovs,
         return error;
     }
 
-    /* Get all the real bridges and all the fake ones. */
-    sset_init(&bridges);
-    for (i = 0; i < ovs->n_bridges; i++) {
-        const struct ovsrec_bridge *br = ovs->bridges[i];
-
-        sset_add(&bridges, br->name);
-        for (j = 0; j < br->n_ports; j++) {
-            const struct ovsrec_port *port = br->ports[j];
-
-            if (port->fake_bridge) {
-                sset_add(&bridges, port->name);
-            }
-        }
+    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS, "list-br", (char *) NULL);
+    if (!output) {
+        return ENODEV;
     }
 
-    send_ifindex_reply(seq, &bridges);
-    sset_destroy(&bridges);
-
+    send_ifindex_reply(seq, output);
+    free(output);
     return 0;
 }
 
 static int
-handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
-                     struct ofpbuf *buffer)
+handle_get_ports_cmd(struct ofpbuf *buffer)
 {
-    uint32_t seq;
-
     const char *linux_name;
-    const struct ovsrec_bridge *ovs_bridge;
-    int br_vlan;
-
-    struct sset ports;
-
+    uint32_t seq;
+    char *output;
     int error;
 
     /* Parse Netlink command. */
@@ -1016,19 +638,14 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
         return error;
     }
 
-    error = linux_bridge_to_ovs_bridge(ovs, linux_name,
-                                       &ovs_bridge, &br_vlan);
-    if (error) {
-        send_simple_reply(seq, error);
-        return error;
+    output = capture_vsctl(vsctl_program, VSCTL_OPTIONS, "list-ports", linux_name,
+                           (char *) NULL);
+    if (!output) {
+        return ENODEV;
     }
 
-    sset_init(&ports);
-    get_bridge_ports(ovs_bridge, &ports, br_vlan);
-    sset_find_and_delete(&ports, linux_name);
-    send_ifindex_reply(seq, &ports); /* XXX bonds won't show up */
-    sset_destroy(&ports);
-
+    send_ifindex_reply(seq, output);
+    free(output);
     return 0;
 }
 
@@ -1063,11 +680,10 @@ brc_recv_update__(void)
 }
 
 static void
-brc_recv_update(struct ovsdb_idl *idl)
+brc_recv_update(void)
 {
     struct ofpbuf *buffer;
     struct genlmsghdr *genlmsghdr;
-    const struct ovsrec_open_vswitch *ovs;
 
     buffer = brc_recv_update__();
     if (!buffer) {
@@ -1083,16 +699,6 @@ brc_recv_update(struct ovsdb_idl *idl)
     if (nl_msg_nlmsghdr(buffer)->nlmsg_type != brc_family) {
         VLOG_DBG_RL(&rl, "received type (%"PRIu16") != brcompat family (%d)",
                 nl_msg_nlmsghdr(buffer)->nlmsg_type, brc_family);
-        goto error;
-    }
-
-    /* Get the Open vSwitch configuration.  Just drop the request on the floor
-     * if a valid configuration doesn't exist.  (We could check this earlier,
-     * but we want to drain pending Netlink messages even when there is no Open
-     * vSwitch configuration.) */
-    ovs = ovsrec_open_vswitch_first(idl);
-    if (!ovs) {
-        VLOG_WARN_RL(&rl, "could not find valid configuration to update");
         goto error;
     }
 
@@ -1118,31 +724,31 @@ brc_recv_update(struct ovsdb_idl *idl)
 
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
-        handle_bridge_cmd(idl, ovs, buffer, true);
+        handle_bridge_cmd(buffer, true);
         break;
 
     case BRC_GENL_C_DP_DEL:
-        handle_bridge_cmd(idl, ovs, buffer, false);
+        handle_bridge_cmd(buffer, false);
         break;
 
     case BRC_GENL_C_PORT_ADD:
-        handle_port_cmd(idl, ovs, buffer, true);
+        handle_port_cmd(buffer, true);
         break;
 
     case BRC_GENL_C_PORT_DEL:
-        handle_port_cmd(idl, ovs, buffer, false);
+        handle_port_cmd(buffer, false);
         break;
 
     case BRC_GENL_C_FDB_QUERY:
-        handle_fdb_query_cmd(ovs, buffer);
+        handle_fdb_query_cmd(buffer);
         break;
 
     case BRC_GENL_C_GET_BRIDGES:
-        handle_get_bridges_cmd(ovs, buffer);
+        handle_get_bridges_cmd(buffer);
         break;
 
     case BRC_GENL_C_GET_PORTS:
-        handle_get_ports_cmd(ovs, buffer);
+        handle_get_ports_cmd(buffer);
         break;
 
     default:
@@ -1153,18 +759,12 @@ brc_recv_update(struct ovsdb_idl *idl)
 
 error:
     ofpbuf_delete(buffer);
-    return;
 }
 
 static void
-netdev_changed_cb(const struct rtnetlink_link_change *change, void *idl_)
+netdev_changed_cb(const struct rtnetlink_link_change *change,
+                  void *aux OVS_UNUSED)
 {
-    struct ovsdb_idl *idl = idl_;
-    const struct ovsrec_open_vswitch *ovs;
-    const struct ovsrec_interface *iface;
-    struct ovsdb_idl_txn *txn;
-    struct ovsrec_port *port;
-    struct ovsrec_bridge *br;
     char br_name[IFNAMSIZ];
     const char *port_name;
 
@@ -1177,11 +777,6 @@ netdev_changed_cb(const struct rtnetlink_link_change *change, void *idl_)
         return;
     }
 
-    ovs = ovsrec_open_vswitch_first(idl);
-    if (!ovs) {
-        return;
-    }
-
     port_name = change->ifname;
     if (!if_indextoname(change->master_ifindex, br_name)) {
         return;
@@ -1190,23 +785,10 @@ netdev_changed_cb(const struct rtnetlink_link_change *change, void *idl_)
     VLOG_INFO("network device %s destroyed, removing from bridge %s",
               port_name, br_name);
 
-    br = find_bridge(ovs, br_name);
-    if (!br) {
-        VLOG_WARN("no bridge named %s from which to remove %s",
-                  br_name, port_name);
-        return;
-    }
-
-    iface = find_interface(br, port_name, &port);
-    if (!iface) {
-        return;
-    }
-
-    txn = ovsdb_idl_txn_create(idl);
-    del_interface(br, port, iface);
-    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: destroy port %s",
-                              port_name);
-    commit_txn(txn, false);
+    run_vsctl(vsctl_program, VSCTL_OPTIONS,
+              "--", "--if-exists", "del-port", br_name, port_name,
+              "--", "comment", "ovs-brcompatd:", port_name, "disappeared",
+              (char *) NULL);
 }
 
 int
@@ -1215,19 +797,15 @@ main(int argc, char *argv[])
     extern struct vlog_module VLM_reconnect;
     struct rtnetlink_notifier link_notifier;
     struct unixctl_server *unixctl;
-    const char *remote;
-    struct ovsdb_idl *idl;
     int retval;
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
 
-    remote = parse_options(argc, argv);
+    parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     process_init();
-    ovsrec_init();
 
     daemonize_start();
 
@@ -1246,27 +824,14 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    idl = ovsdb_idl_create(remote, &ovsrec_idl_class, true);
-
     for (;;) {
-        const struct ovsrec_open_vswitch *ovs;
-
-        ovsdb_idl_run(idl);
-
         unixctl_server_run(unixctl);
         rtnetlink_link_notifier_run();
-        brc_recv_update(idl);
+        brc_recv_update();
 
-        ovs = ovsrec_open_vswitch_first(idl);
-        if (!ovs && ovsdb_idl_has_ever_connected(idl)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "%s: database does not contain any Open vSwitch "
-                         "configuration", remote);
-        }
         netdev_run();
 
         nl_sock_wait(brc_sock, POLLIN);
-        ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
         rtnetlink_link_notifier_wait();
         netdev_wait();
@@ -1274,37 +839,16 @@ main(int argc, char *argv[])
     }
 
     rtnetlink_link_notifier_unregister(&link_notifier);
-    ovsdb_idl_destroy(idl);
 
     return 0;
 }
 
 static void
-validate_appctl_command(void)
-{
-    const char *p;
-    int n;
-
-    n = 0;
-    for (p = strchr(appctl_command, '%'); p; p = strchr(p + 2, '%')) {
-        if (p[1] == '%') {
-            /* Nothing to do. */
-        } else if (p[1] == 's') {
-            n++;
-        } else {
-            VLOG_FATAL("only '%%s' and '%%%%' allowed in --appctl-command");
-        }
-    }
-    if (n != 1) {
-        VLOG_FATAL("'%%s' must appear exactly once in --appctl-command");
-    }
-}
-
-static const char *
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_APPCTL_COMMAND,
+        OPT_APPCTL,
+        OPT_VSCTL,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
@@ -1312,15 +856,17 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"help",             no_argument, NULL, 'h'},
         {"version",          no_argument, NULL, 'V'},
-        {"appctl-command",   required_argument, NULL, OPT_APPCTL_COMMAND},
+        {"appctl",           required_argument, NULL, OPT_APPCTL},
+        {"vsctl",            required_argument, NULL, OPT_VSCTL},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
+    const char *appctl = "ovs-appctl";
+    const char *vsctl = "ovs-vsctl";
 
-    appctl_command = xasprintf("%s/ovs-appctl %%s", ovs_bindir());
     for (;;) {
         int c;
 
@@ -1338,8 +884,12 @@ parse_options(int argc, char *argv[])
             OVS_PRINT_VERSION(0, 0);
             exit(EXIT_SUCCESS);
 
-        case OPT_APPCTL_COMMAND:
-            appctl_command = optarg;
+        case OPT_APPCTL:
+            appctl = optarg;
+            break;
+
+        case OPT_VSCTL:
+            vsctl = optarg;
             break;
 
         VLOG_OPTION_HANDLERS
@@ -1355,28 +905,33 @@ parse_options(int argc, char *argv[])
     }
     free(short_options);
 
-    validate_appctl_command();
-
-    argc -= optind;
-    argv += optind;
-
-    if (argc != 1) {
-        VLOG_FATAL("database socket is non-option argument; "
-                   "use --help for usage");
+    appctl_program = process_search_path(appctl);
+    if (!appctl_program) {
+        VLOG_FATAL("%s: not found in $PATH (use --appctl to specify an "
+                   "alternate location)", appctl);
     }
 
-    return argv[0];
+    vsctl_program = process_search_path(vsctl);
+    if (!vsctl_program) {
+        VLOG_FATAL("%s: not found in $PATH (use --vsctl to specify an "
+                   "alternate location)", vsctl);
+    }
+
+    if (argc != optind) {
+        VLOG_FATAL("no non-option arguments are supported; "
+                   "use --help for usage");
+    }
 }
 
 static void
 usage(void)
 {
     printf("%s: bridge compatibility front-end for ovs-vswitchd\n"
-           "usage: %s [OPTIONS] CONFIG\n"
-           "CONFIG is the configuration file used by ovs-vswitchd.\n",
+           "usage: %s [OPTIONS]\n",
            program_name, program_name);
     printf("\nConfiguration options:\n"
-           "  --appctl-command=COMMAND  shell command to run ovs-appctl\n"
+           "  --appctl=PROGRAM        overrides $PATH for finding ovs-appctl\n"
+           "  --vsctl=PROGRAM         overrides $PATH for finding ovs-vsctl\n"
           );
     daemon_usage();
     vlog_usage();
@@ -1384,6 +939,5 @@ usage(void)
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     leak_checker_usage();
-    printf("\nThe default appctl command is:\n%s\n", appctl_command);
     exit(EXIT_SUCCESS);
 }
