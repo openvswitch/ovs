@@ -78,10 +78,6 @@ static void usage(void) NO_RETURN;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
 
-/* Maximum number of milliseconds to wait before pruning port entries that
- * no longer exist.  If set to zero, ports are never pruned. */
-static int prune_timeout = 5000;
-
 /* Shell command to execute (via popen()) to send a control command to the
  * running ovs-vswitchd process.  The string must contain one instance of %s,
  * which is replaced by the control command. */
@@ -1274,10 +1270,7 @@ main(int argc, char *argv[])
     }
 
 
-    if (prune_timeout) {
-        rtnetlink_link_notifier_register(&link_notifier,
-                                         netdev_changed_cb, NULL);
-    }
+    rtnetlink_link_notifier_register(&link_notifier, netdev_changed_cb, NULL);
 
     daemonize_complete();
 
@@ -1300,21 +1293,6 @@ main(int argc, char *argv[])
         }
         netdev_run();
 
-        /* If 'prune_timeout' is non-zero, we actively prune from the
-         * configuration of port entries that are no longer valid.  We
-         * use two methods:
-         *
-         *   1) The kernel explicitly notifies us of removed ports
-         *      through the RTNL messages.
-         *
-         *   2) We periodically check all ports associated with bridges
-         *      to see if they no longer exist.
-         */
-        if (ovs && prune_timeout) {
-            rtnetlink_link_notifier_run();
-            poll_timer_wait(prune_timeout);
-        }
-
         nl_sock_wait(brc_sock, POLLIN);
         ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
@@ -1323,9 +1301,7 @@ main(int argc, char *argv[])
         poll_block();
     }
 
-    if (prune_timeout) {
-        rtnetlink_link_notifier_unregister(&link_notifier);
-    }
+    rtnetlink_link_notifier_unregister(&link_notifier);
     ovsdb_idl_destroy(idl);
 
     return 0;
@@ -1356,7 +1332,6 @@ static const char *
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_PRUNE_TIMEOUT,
         OPT_APPCTL_COMMAND,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
@@ -1365,7 +1340,6 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"help",             no_argument, NULL, 'h'},
         {"version",          no_argument, NULL, 'V'},
-        {"prune-timeout",    required_argument, NULL, OPT_PRUNE_TIMEOUT},
         {"appctl-command",   required_argument, NULL, OPT_APPCTL_COMMAND},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -1391,10 +1365,6 @@ parse_options(int argc, char *argv[])
         case 'V':
             OVS_PRINT_VERSION(0, 0);
             exit(EXIT_SUCCESS);
-
-        case OPT_PRUNE_TIMEOUT:
-            prune_timeout = atoi(optarg) * 1000;
-            break;
 
         case OPT_APPCTL_COMMAND:
             appctl_command = optarg;
@@ -1435,7 +1405,6 @@ usage(void)
            program_name, program_name);
     printf("\nConfiguration options:\n"
            "  --appctl-command=COMMAND  shell command to run ovs-appctl\n"
-           "  --prune-timeout=SECS    wait at most SECS before pruning ports\n"
           );
     daemon_usage();
     vlog_usage();

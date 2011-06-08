@@ -39,13 +39,6 @@ can be listed by passing \fBhelp\fR to \fBovs\-appctl\fR with
 \fIcommand\fR must not redirect \fBovs\-appctl\fR's standard output or
 standard error streams, because \fBovs\-brcompatd\fR expects to read
 both of these streams separately.
-.TP
-\fB\-\-prune\-timeout=\fIsecs\fR
-.
-Sets the maximum time between pruning port entries to \fIsecs\fR seconds.
-Pruning ports is the process of removing port entries from \fIdatabase\fR
-that no longer exist.  If \fIsecs\fR is zero, then entries are never
-pruned.  The default prune timeout is 5 seconds.
 .
 .so lib/daemon.man
 .so lib/vlog.man
