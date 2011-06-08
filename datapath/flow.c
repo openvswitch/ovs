@@ -489,35 +489,35 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 		key->ip.nw_proto = nh->protocol;
 
 		/* Transport layer. */
-		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET)) &&
-		    !(skb_shinfo(skb)->gso_type & SKB_GSO_UDP)) {
-			if (key->ip.nw_proto == IPPROTO_TCP) {
-				key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
-				if (tcphdr_ok(skb)) {
-					struct tcphdr *tcp = tcp_hdr(skb);
-					key->ipv4.tp.src = tcp->source;
-					key->ipv4.tp.dst = tcp->dest;
-				}
-			} else if (key->ip.nw_proto == IPPROTO_UDP) {
-				key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
-				if (udphdr_ok(skb)) {
-					struct udphdr *udp = udp_hdr(skb);
-					key->ipv4.tp.src = udp->source;
-					key->ipv4.tp.dst = udp->dest;
-				}
-			} else if (key->ip.nw_proto == IPPROTO_ICMP) {
-				key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
-				if (icmphdr_ok(skb)) {
-					struct icmphdr *icmp = icmp_hdr(skb);
-					/* The ICMP type and code fields use the 16-bit
-					 * transport port fields, so we need to store them
-					 * in 16-bit network byte order. */
-					key->ipv4.tp.src = htons(icmp->type);
-					key->ipv4.tp.dst = htons(icmp->code);
-				}
-			}
-		} else
+		if ((nh->frag_off & htons(IP_MF | IP_OFFSET)) ||
+		    (skb_shinfo(skb)->gso_type & SKB_GSO_UDP))
 			*is_frag = true;
+
+		if (key->ip.nw_proto == IPPROTO_TCP) {
+			key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
+			if (!*is_frag && tcphdr_ok(skb)) {
+				struct tcphdr *tcp = tcp_hdr(skb);
+				key->ipv4.tp.src = tcp->source;
+				key->ipv4.tp.dst = tcp->dest;
+			}
+		} else if (key->ip.nw_proto == IPPROTO_UDP) {
+			key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
+			if (!*is_frag && udphdr_ok(skb)) {
+				struct udphdr *udp = udp_hdr(skb);
+				key->ipv4.tp.src = udp->source;
+				key->ipv4.tp.dst = udp->dest;
+			}
+		} else if (key->ip.nw_proto == IPPROTO_ICMP) {
+			key_len = SW_FLOW_KEY_OFFSET(ipv4.tp);
+			if (!*is_frag && icmphdr_ok(skb)) {
+				struct icmphdr *icmp = icmp_hdr(skb);
+				/* The ICMP type and code fields use the 16-bit
+				 * transport port fields, so we need to store them
+				 * in 16-bit network byte order. */
+				key->ipv4.tp.src = htons(icmp->type);
+				key->ipv4.tp.dst = htons(icmp->code);
+			}
+		}
 
 	} else if (key->eth.type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
 		struct arp_eth_header *arp;
