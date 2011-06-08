@@ -184,6 +184,35 @@ error:
 }
 
 static void
+str_to_vlan_tci(const char *str, ovs_be16 *vlan_tcip, ovs_be16 *maskp)
+{
+    uint16_t vlan_tci, mask;
+    char *tail;
+
+    errno = 0;
+    vlan_tci = strtol(str, &tail, 0);
+    if (errno || (*tail != '\0' && *tail != '/')) {
+        goto error;
+    }
+
+    if (*tail == '/') {
+        mask = strtol(tail + 1, &tail, 0);
+        if (errno || *tail != '\0') {
+            goto error;
+        }
+    } else {
+        mask = UINT16_MAX;
+    }
+
+    *vlan_tcip = htons(vlan_tci);
+    *maskp = htons(mask);
+    return;
+
+error:
+    ovs_fatal(0, "%s: bad syntax for vlan_tci", str);
+}
+
+static void
 str_to_ipv6(const char *str_, struct in6_addr *addrp, struct in6_addr *maskp)
 {
     char *str = xstrdup(str_);
@@ -552,6 +581,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
     FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \
     FIELD(F_DL_VLAN,     "dl_vlan",     0)                  \
     FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", 0)                  \
+    FIELD(F_VLAN_TCI,    "vlan_tci",    0)                  \
     FIELD(F_DL_SRC,      "dl_src",      FWW_DL_SRC)         \
     FIELD(F_DL_DST,      "dl_dst",      FWW_DL_DST | FWW_ETH_MCAST) \
     FIELD(F_DL_TYPE,     "dl_type",     FWW_DL_TYPE)        \
@@ -611,6 +641,7 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
     uint8_t mac[ETH_ADDR_LEN], mac_mask[ETH_ADDR_LEN];
     ovs_be64 tun_id, tun_mask;
     ovs_be32 ip, mask;
+    ovs_be16 tci, tci_mask;
     struct in6_addr ipv6, ipv6_mask;
     uint16_t port_no;
 
@@ -633,6 +664,11 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
 
     case F_DL_VLAN_PCP:
         cls_rule_set_dl_vlan_pcp(rule, str_to_u32(value));
+        break;
+
+    case F_VLAN_TCI:
+        str_to_vlan_tci(value, &tci, &tci_mask);
+        cls_rule_set_dl_tci_masked(rule, tci, tci_mask);
         break;
 
     case F_DL_SRC:
