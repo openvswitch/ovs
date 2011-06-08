@@ -160,6 +160,8 @@ enum dpif_upcall_type {
     DPIF_N_UC_TYPES
 };
 
+const char *dpif_upcall_type_to_string(enum dpif_upcall_type);
+
 /* A packet passed up from the datapath to userspace.
  *
  * If 'key' or 'actions' is nonnull, then it points into data owned by

@@ -952,6 +952,18 @@ dpif_execute(struct dpif *dpif,
     return error;
 }
 
+/* Returns a string that represents 'type', for use in log messages. */
+const char *
+dpif_upcall_type_to_string(enum dpif_upcall_type type)
+{
+    switch (type) {
+    case DPIF_UC_MISS: return "miss";
+    case DPIF_UC_ACTION: return "action";
+    case DPIF_UC_SAMPLE: return "sample";
+    case DPIF_N_UC_TYPES: default: return "<unknown>";
+    }
+}
+
 static bool OVS_UNUSED
 is_valid_listen_mask(int listen_mask)
 {
@@ -1045,20 +1057,22 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
 {
     int error = dpif->dpif_class->recv(dpif, upcall);
     if (!error && !VLOG_DROP_DBG(&dpmsg_rl)) {
-        struct flow flow;
-        char *s;
+        struct ds flow;
+        char *packet;
 
-        s = ofp_packet_to_string(upcall->packet->data,
-                                 upcall->packet->size, upcall->packet->size);
-        odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+        packet = ofp_packet_to_string(upcall->packet->data,
+                                      upcall->packet->size,
+                                      upcall->packet->size);
 
-        VLOG_DBG("%s: %s upcall on port %"PRIu16": %s", dpif_name(dpif),
-                 (upcall->type == DPIF_UC_MISS ? "miss"
-                  : upcall->type == DPIF_UC_ACTION ? "action"
-                  : upcall->type == DPIF_UC_SAMPLE ? "sample"
-                  : "<unknown>"),
-                 flow.in_port, s);
-        free(s);
+        ds_init(&flow);
+        odp_flow_key_format(upcall->key, upcall->key_len, &flow);
+
+        VLOG_DBG("%s: %s upcall:\n%s\n%s",
+                 dpif_name(dpif), dpif_upcall_type_to_string(upcall->type),
+                 ds_cstr(&flow), packet);
+
+        ds_destroy(&flow);
+        free(packet);
     }
     return error;
 }
