@@ -878,6 +878,12 @@ parse_ofp_str(struct flow_mod *fm, struct ofpbuf *actions, char *string)
                     ovs_fatal(0, "only %d registers supported", FLOW_N_REGS);
                 }
                 parse_reg_value(&fm->cr, reg_idx, value);
+            } else if (!strcmp(name, "duration")
+                       || !strcmp(name, "n_packets")
+                       || !strcmp(name, "n_bytes")) {
+                /* Ignore these, so that users can feed the output of
+                 * "ovs-ofctl dump-flows" back into commands that parse
+                 * flows. */
             } else {
                 ovs_fatal(0, "unknown keyword %s", name);
             }

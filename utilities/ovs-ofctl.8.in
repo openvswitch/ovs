@@ -548,6 +548,11 @@ Same as \fBdl_type=0x86dd,nw_proto=17\fR.
 Same as \fBdl_type=0x86dd,nw_proto=58\fR.
 .
 .PP
+Finally, field assignments to \fBduration\fR, \fBn_packets\fR, or
+\fBn_bytes\fR are ignored to allow output from the \fBdump\-flows\fR
+command to be used as input for other commands that parse flows.
+.
+.PP
 The \fBadd\-flow\fR and \fBadd\-flows\fR commands require an additional
 field, which must be the final field specified:
 .
