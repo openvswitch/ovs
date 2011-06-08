@@ -31,8 +31,8 @@ NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
 NXT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
 NXT_FLOW_MOD_TABLE_ID: enable
-NXT_FLOW_MOD: ADD table_id:1 actions=drop
-NXT_FLOW_MOD: ADD table_id:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD: ADD table:1 actions=drop
+NXT_FLOW_MOD: ADD table:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 ]])
 AT_CLEANUP
 
@@ -471,7 +471,7 @@ OFPROTO_START
 AT_CHECK([ovs-ofctl -F nxm add-flow br0 tun_id=0x12345678,actions=drop])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
 NXST_FLOW reply:
- cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0, tun_id=0x12345678 actions=drop
+ cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, tun_id=0x12345678 actions=drop
 ])
 OFPROTO_STOP
 AT_CLEANUP
@@ -483,7 +483,7 @@ OFPROTO_START
 AT_CHECK([ovs-ofctl add-flow br0 reg0=0x12345,actions=drop])
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
 OFPST_FLOW reply:
- cookie=0x0, duration=?s, table_id=0, n_packets=0, n_bytes=0,  actions=drop
+ cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0,  actions=drop
 ])
 OFPROTO_STOP
 AT_CLEANUP

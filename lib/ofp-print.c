@@ -857,7 +857,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
         ds_put_format(s, "cmd:%d", fm.command);
     }
     if (fm.table_id != 0) {
-        ds_put_format(s, " table_id:%d", fm.table_id);
+        ds_put_format(s, " table:%d", fm.table_id);
     }
 
     ds_put_char(s, ' ');
@@ -1072,7 +1072,7 @@ ofp_print_flow_stats_request(struct ds *string,
     }
 
     if (fsr.table_id != 0xff) {
-        ds_put_format(string, " table_id=%"PRIu8, fsr.table_id);
+        ds_put_format(string, " table=%"PRIu8, fsr.table_id);
     }
 
     if (fsr.out_port != OFPP_NONE) {
@@ -1111,7 +1111,7 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, " cookie=0x%"PRIx64", duration=",
                       ntohll(fs.cookie));
         ofp_print_duration(string, fs.duration_sec, fs.duration_nsec);
-        ds_put_format(string, ", table_id=%"PRIu8", ", fs.table_id);
+        ds_put_format(string, ", table=%"PRIu8", ", fs.table_id);
         ds_put_format(string, "n_packets=%"PRIu64", ", fs.packet_count);
         ds_put_format(string, "n_bytes=%"PRIu64", ", fs.byte_count);
         if (fs.idle_timeout != OFP_FLOW_PERMANENT) {
