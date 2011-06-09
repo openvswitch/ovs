@@ -121,6 +121,7 @@ actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=drop
 reg0=123,actions=move:NXM_NX_REG0[0..5]->NXM_NX_REG1[26..31],load:55->NXM_NX_REG2[0..31],move:NXM_NX_REG0[0..31]->NXM_NX_TUN_ID[0..31],move:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]
+actions=autopath(5,NXM_NX_REG0[])
 ]])
 AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
@@ -145,6 +146,7 @@ NXT_FLOW_MOD: ADD <any> actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06
 NXT_FLOW_MOD: ADD NXM_NX_TUN_ID(0000000000001234) cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD <any> actions=drop
 NXT_FLOW_MOD: ADD NXM_NX_REG0(0000007b) actions=move:NXM_NX_REG0[0..5]->NXM_NX_REG1[26..31],load:0x37->NXM_NX_REG2[],move:NXM_NX_REG0[]->NXM_NX_TUN_ID[0..31],move:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]
+NXT_FLOW_MOD: ADD <any> actions=autopath(5,NXM_NX_REG0[])
 ]])
 AT_CLEANUP
 
