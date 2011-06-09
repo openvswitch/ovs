@@ -257,7 +257,7 @@ enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,       /* No longer used. */
     NXAST_RESUBMIT,             /* struct nx_action_resubmit */
     NXAST_SET_TUNNEL,           /* struct nx_action_set_tunnel */
-    NXAST_DROP_SPOOFED_ARP,     /* struct nx_action_drop_spoofed_arp */
+    NXAST_DROP_SPOOFED_ARP__OBSOLETE,
     NXAST_SET_QUEUE,            /* struct nx_action_set_queue */
     NXAST_POP_QUEUE,            /* struct nx_action_pop_queue */
     NXAST_REG_MOVE,             /* struct nx_action_reg_move */
@@ -340,24 +340,6 @@ struct nx_action_set_tunnel64 {
     ovs_be64 tun_id;                /* Tunnel ID. */
 };
 OFP_ASSERT(sizeof(struct nx_action_set_tunnel64) == 24);
-
-/* Action structure for NXAST_DROP_SPOOFED_ARP.
- *
- * Stops processing further actions, if the packet being processed is an
- * Ethernet+IPv4 ARP packet for which the source Ethernet address inside the
- * ARP packet differs from the source Ethernet address in the Ethernet header.
- *
- * (This  action  is  deprecated in  favor of defining flows using the
- * NXM_NX_ARP_SHA flow match and will likely be removed in a future version
- * of Open vSwitch.) */
-struct nx_action_drop_spoofed_arp {
-    ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* Length is 16. */
-    ovs_be32 vendor;                /* NX_VENDOR_ID. */
-    ovs_be16 subtype;               /* NXAST_DROP_SPOOFED_ARP. */
-    uint8_t pad[6];
-};
-OFP_ASSERT(sizeof(struct nx_action_drop_spoofed_arp) == 16);
 
 /* Action structure for NXAST_SET_QUEUE.
  *

@@ -565,7 +565,6 @@ static int validate_actions(const struct nlattr *attr)
 			[ODP_ACTION_ATTR_SET_TUNNEL] = 8,
 			[ODP_ACTION_ATTR_SET_PRIORITY] = 4,
 			[ODP_ACTION_ATTR_POP_PRIORITY] = 0,
-			[ODP_ACTION_ATTR_DROP_SPOOFED_ARP] = 0,
 		};
 		int type = nla_type(a);
 
@@ -587,7 +586,6 @@ static int validate_actions(const struct nlattr *attr)
 		case ODP_ACTION_ATTR_SET_TUNNEL:
 		case ODP_ACTION_ATTR_SET_PRIORITY:
 		case ODP_ACTION_ATTR_POP_PRIORITY:
-		case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
 			/* No validation needed. */
 			break;
 

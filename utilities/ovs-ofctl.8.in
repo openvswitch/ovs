@@ -618,16 +618,6 @@ then this uses an action extension that is supported by Open vSwitch
 1.0 and later.  Otherwise, if \fIid\fR is a 64-bit value, it requires
 Open vSwitch 1.1 or later.
 .
-.IP \fBdrop_spoofed_arp\fR
-Stops processing further actions, if the packet being processed is an
-Ethernet+IPv4 ARP packet for which the source Ethernet address inside
-the ARP packet differs from the source Ethernet address in the
-Ethernet header.
-.IP
-This action is deprecated in favor of defining flows using the
-\fBarp_sha\fR match field described earlier and will likely be removed
-in a future version of Open vSwitch.
-.
 .IP \fBset_queue\fB:\fIqueue\fR
 Sets the queue that should be used to \fIqueue\fR when packets are
 output.  The number of supported queues depends on the switch; some

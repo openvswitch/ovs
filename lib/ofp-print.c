@@ -210,8 +210,7 @@ nx_action_len(enum nx_action_subtype subtype)
     case NXAST_SNAT__OBSOLETE: return -1;
     case NXAST_RESUBMIT: return sizeof(struct nx_action_resubmit);
     case NXAST_SET_TUNNEL: return sizeof(struct nx_action_set_tunnel);
-    case NXAST_DROP_SPOOFED_ARP:
-        return sizeof(struct nx_action_drop_spoofed_arp);
+    case NXAST_DROP_SPOOFED_ARP__OBSOLETE: return -1;
     case NXAST_SET_QUEUE: return sizeof(struct nx_action_set_queue);
     case NXAST_POP_QUEUE: return sizeof(struct nx_action_pop_queue);
     case NXAST_REG_MOVE: return sizeof(struct nx_action_reg_move);
@@ -259,10 +258,6 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
             ds_put_format(string, "set_tunnel:%#"PRIx32, ntohl(nast->tun_id));
             return;
 
-        case NXAST_DROP_SPOOFED_ARP:
-            ds_put_cstr(string, "drop_spoofed_arp");
-            return;
-
         case NXAST_SET_QUEUE:
             nasq = (struct nx_action_set_queue *)nah;
             ds_put_format(string, "set_queue:%u", ntohl(nasq->queue_id));
@@ -307,6 +302,7 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
             return;
 
         case NXAST_SNAT__OBSOLETE:
+        case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
         default:
             break;
         }

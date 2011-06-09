@@ -1864,7 +1864,6 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
     switch ((enum nx_action_subtype) subtype) {
     case NXAST_RESUBMIT:
     case NXAST_SET_TUNNEL:
-    case NXAST_DROP_SPOOFED_ARP:
     case NXAST_SET_QUEUE:
     case NXAST_POP_QUEUE:
         return check_nx_action_exact_len(nah, len, 16);
@@ -1909,6 +1908,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len,
         return autopath_check((const struct nx_action_autopath *) a);
 
     case NXAST_SNAT__OBSOLETE:
+    case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
     default:
         VLOG_WARN_RL(&bad_ofmsg_rl,
                      "unknown Nicira vendor action subtype %d", subtype);

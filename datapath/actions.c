@@ -216,34 +216,6 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 	return skb;
 }
 
-/**
- * is_spoofed_arp - check for invalid ARP packet
- *
- * @skb: skbuff containing an Ethernet packet, with network header pointing
- * just past the Ethernet and optional 802.1Q header.
- *
- * Returns true if @skb is an invalid Ethernet+IPv4 ARP packet: one with screwy
- * or truncated header fields or one whose inner and outer Ethernet address
- * differ.
- */
-static bool is_spoofed_arp(struct sk_buff *skb)
-{
-	struct arp_eth_header *arp;
-
-	if (OVS_CB(skb)->flow->key.eth.type != htons(ETH_P_ARP))
-		return false;
-
-	if (skb_network_offset(skb) + sizeof(struct arp_eth_header) > skb->len)
-		return true;
-
-	arp = (struct arp_eth_header *)skb_network_header(skb);
-	return (arp->ar_hrd != htons(ARPHRD_ETHER) ||
-		arp->ar_pro != htons(ETH_P_IP) ||
-		arp->ar_hln != ETH_ALEN ||
-		arp->ar_pln != 4 ||
-		compare_ether_addr(arp->ar_sha, eth_hdr(skb)->h_source));
-}
-
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
 	struct vport *p;
@@ -359,16 +331,11 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case ODP_ACTION_ATTR_POP_PRIORITY:
 			skb->priority = priority;
 			break;
-
-		case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
-			if (unlikely(is_spoofed_arp(skb)))
-				goto exit;
-			break;
 		}
 		if (!skb)
 			return -ENOMEM;
 	}
-exit:
+
 	if (prev_port != -1)
 		do_output(dp, skb, prev_port);
 	else

@@ -422,7 +422,6 @@ enum odp_action_type {
 	ODP_ACTION_ATTR_SET_TUNNEL,   /* Set the encapsulating tunnel ID. */
 	ODP_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
 	ODP_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
-	ODP_ACTION_ATTR_DROP_SPOOFED_ARP, /* Drop ARPs with spoofed source MAC. */
 	__ODP_ACTION_ATTR_MAX
 };
 

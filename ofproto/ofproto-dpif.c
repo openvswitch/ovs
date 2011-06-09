@@ -3007,18 +3007,6 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         ctx->flow.tun_id = tun_id;
         break;
 
-    case NXAST_DROP_SPOOFED_ARP:
-        if (ctx->flow.dl_type == htons(ETH_TYPE_ARP)) {
-            /* XXX: It's not entirely clear whether or not we need to commit
-             * here.  The safer thing to do is commit of course.  Hopefully in
-             * the near future we can rip out NXAST_DROP_SPOOFED_ARP altogether
-             * and the point will be moot. */
-            commit_odp_actions(ctx);
-            nl_msg_put_flag(ctx->odp_actions,
-                            ODP_ACTION_ATTR_DROP_SPOOFED_ARP);
-        }
-        break;
-
     case NXAST_SET_QUEUE:
         nasq = (const struct nx_action_set_queue *) nah;
         xlate_set_queue_action(ctx, nasq);
@@ -3061,6 +3049,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
      * update the flow key in ctx->flow at the same time. */
 
     case NXAST_SNAT__OBSOLETE:
+    case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
     default:
         VLOG_DBG_RL(&rl, "unknown Nicira action type %d", (int) subtype);
         break;

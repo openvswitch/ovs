@@ -54,7 +54,6 @@ odp_action_len(uint16_t type)
     case ODP_ACTION_ATTR_SET_TUNNEL: return 8;
     case ODP_ACTION_ATTR_SET_PRIORITY: return 4;
     case ODP_ACTION_ATTR_POP_PRIORITY: return 0;
-    case ODP_ACTION_ATTR_DROP_SPOOFED_ARP: return 0;
 
     case ODP_ACTION_ATTR_UNSPEC:
     case __ODP_ACTION_ATTR_MAX:
@@ -145,9 +144,6 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case ODP_ACTION_ATTR_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
-        break;
-    case ODP_ACTION_ATTR_DROP_SPOOFED_ARP:
-        ds_put_cstr(ds, "drop_spoofed_arp");
         break;
     default:
         format_generic_odp_action(ds, a);

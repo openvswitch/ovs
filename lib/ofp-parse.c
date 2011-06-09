@@ -410,11 +410,6 @@ str_to_action(char *str, struct ofpbuf *b)
                 nast->subtype = htons(NXAST_SET_TUNNEL);
                 nast->tun_id = htonl(tun_id);
             }
-        } else if (!strcasecmp(act, "drop_spoofed_arp")) {
-            struct nx_action_header *nah;
-            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
-            nah->vendor = htonl(NX_VENDOR_ID);
-            nah->subtype = htons(NXAST_DROP_SPOOFED_ARP);
         } else if (!strcasecmp(act, "set_queue")) {
             struct nx_action_set_queue *nasq;
             nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
