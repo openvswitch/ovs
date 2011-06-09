@@ -29,6 +29,7 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "sat-math.h"
+#include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -484,17 +485,27 @@ vlog_get_levels(void)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
     struct vlog_module **mp;
+    struct svec lines = SVEC_EMPTY_INITIALIZER;
+    char *line;
+    size_t i;
 
     ds_put_format(&s, "                 console    syslog    file\n");
     ds_put_format(&s, "                 -------    ------    ------\n");
 
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-        ds_put_format(&s, "%-16s  %4s       %4s       %4s\n",
+        line = xasprintf("%-16s  %4s       %4s       %4s\n",
            vlog_get_module_name(*mp),
            vlog_get_level_name(vlog_get_level(*mp, VLF_CONSOLE)),
            vlog_get_level_name(vlog_get_level(*mp, VLF_SYSLOG)),
            vlog_get_level_name(vlog_get_level(*mp, VLF_FILE)));
+        svec_add_nocopy(&lines, line);
     }
+
+    svec_sort(&lines);
+    SVEC_FOR_EACH (i, line, &lines) {
+        ds_put_cstr(&s, line);
+    }
+    svec_destroy(&lines);
 
     return ds_cstr(&s);
 }
