@@ -141,19 +141,15 @@ enum nicira_type {
     NXT_ROLE_REQUEST,
     NXT_ROLE_REPLY,
 
+    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
+    NXT_SET_FLOW_FORMAT,        /* Set flow format. */
+    NXT_FLOW_MOD,               /* Analogous to OFPT_FLOW_MOD. */
+    NXT_FLOW_REMOVED,           /* Analogous to OFPT_FLOW_REMOVED. */
+
     /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
      * designate the table to which a flow is to be added?  See the big comment
-     * on struct nxt_flow_mod_table_id for more information.
-     *
-     * A screwup caused this extension to be assigned the same value as
-     * NXT_SET_FLOW_FORMAT (see below).  The two extensions do have different
-     * lengths, so they can still be distinguished. */
-    NXT_FLOW_MOD_TABLE_ID,
-
-    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
-    NXT_SET_FLOW_FORMAT = NXT_FLOW_MOD_TABLE_ID, /* Set flow format. */
-    NXT_FLOW_MOD,               /* Analogous to OFPT_FLOW_MOD. */
-    NXT_FLOW_REMOVED            /* Analogous to OFPT_FLOW_REMOVED. */
+     * on struct nxt_flow_mod_table_id for more information. */
+    NXT_FLOW_MOD_TABLE_ID
 };
 
 /* Header for Nicira vendor stats request and reply messages. */

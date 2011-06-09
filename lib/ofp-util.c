@@ -373,6 +373,10 @@ ofputil_decode_vendor(const struct ofp_header *oh,
         { OFPUTIL_NXT_FLOW_REMOVED,
           NXT_FLOW_REMOVED, "NXT_FLOW_REMOVED",
           sizeof(struct nx_flow_removed), 8 },
+
+        { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
+          NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
+          sizeof(struct nxt_flow_mod_table_id), 0 },
     };
 
     static const struct ofputil_msg_category nxt_category = {
@@ -399,21 +403,6 @@ ofputil_decode_vendor(const struct ofp_header *oh,
     }
 
     nh = (const struct nicira_header *) oh;
-
-    if (nh->subtype == htonl(NXT_FLOW_MOD_TABLE_ID)
-        && oh->length == htons(sizeof(struct nxt_flow_mod_table_id))) {
-        /* NXT_SET_FLOW_FORMAT and NXT_FLOW_MOD_TABLE_ID accidentally have the
-         * same value but different lengths.  ofputil_lookup_openflow_message()
-         * doesn't support this case, so special case it here. */
-        static const struct ofputil_msg_type nxt_flow_mod_table_id =
-            { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
-              NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
-              sizeof(struct nxt_flow_mod_table_id), 0 };
-
-        *typep = &nxt_flow_mod_table_id;
-        return 0;
-    }
-
     return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
                                            ntohs(oh->length), typep);
 }
