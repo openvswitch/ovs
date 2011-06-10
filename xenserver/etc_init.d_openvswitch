@@ -266,31 +266,6 @@ function stop_daemon {
     fi
 }
 
-function restart_approval {
-    if test ! -t 0; then
-        # Don't prompt if invoked non-interactively.
-        return 0
-    fi
-    cat <<EOF
-
-WARNING!!!
-
-Restarting Open vSwitch on a live server is not guaranteed to work.  It is
-provided as a convenience for those situations in which it does work.
-
-EOF
-    read -s -r -n 1 -p "Continue with restart (y/N): " response
-    printf "\n"
-    case "$response" in
-        y|Y)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
 function set_system_ids {
     if [ -f /etc/xensource-inventory ]; then
         OVS_VERSION=`ovs-vswitchd --version | sed 's/.*) //;1q'`
@@ -388,13 +363,6 @@ function stop {
     rm -f /var/lock/subsys/openvswitch
 }
 
-function restart {
-    if restart_approval; then
-        stop
-        start
-    fi
-}
-
 function internal_interfaces {
     # Outputs a list of internal interfaces:
     #
@@ -448,7 +416,8 @@ case "$1" in
         stop
         ;;
     restart)
-        restart
+        stop
+        start
         ;;
     reload|force-reload)
         # Nothing to do to ovs-vswitchd and ovsdb-server as they keep their
