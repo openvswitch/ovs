@@ -127,8 +127,8 @@ else
 fi
 
 function hup_monitor_external_ids {
-    if [ -e /var/run/openvswitch/ovs-xapi-sync.pid ]; then
-        action "Configuring Open vSwitch external IDs" kill -HUP `cat /var/run/openvswitch/ovs-xapi-sync.pid`
+    if [ -e "$OVS_XAPI_SYNC_PIDFILE" ]; then
+        action "Configuring Open vSwitch external IDs" kill -HUP `cat "$OVS_XAPI_SYNC_PIDFILE"`
     fi
 }
 
