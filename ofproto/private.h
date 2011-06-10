@@ -655,7 +655,7 @@ struct ofproto_class {
      * 'netflow_options', or turns off NetFlow if 'netflow_options' is NULL.
      *
      * EOPNOTSUPP as a return value indicates that 'ofproto' does not support
-     * sFlow, as does a null pointer. */
+     * NetFlow, as does a null pointer. */
     int (*set_netflow)(struct ofproto *ofproto,
                        const struct netflow_options *netflow_options);
 
