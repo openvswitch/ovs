@@ -125,31 +125,31 @@ OFP_ASSERT(sizeof(struct nicira_header) == 16);
 /* Values for the 'subtype' member of struct nicira_header. */
 enum nicira_type {
     /* No longer used. */
-    NXT_STATUS_REQUEST__OBSOLETE,
-    NXT_STATUS_REPLY__OBSOLETE,
-    NXT_ACT_SET_CONFIG__OBSOLETE,
-    NXT_ACT_GET_CONFIG__OBSOLETE,
-    NXT_COMMAND_REQUEST__OBSOLETE,
-    NXT_COMMAND_REPLY__OBSOLETE,
-    NXT_FLOW_END_CONFIG__OBSOLETE,
-    NXT_FLOW_END__OBSOLETE,
-    NXT_MGMT__OBSOLETE,
-    NXT_TUN_ID_FROM_COOKIE__OBSOLETE,
+    NXT_STATUS_REQUEST__OBSOLETE = 0,
+    NXT_STATUS_REPLY__OBSOLETE = 1,
+    NXT_ACT_SET_CONFIG__OBSOLETE = 2,
+    NXT_ACT_GET_CONFIG__OBSOLETE = 3,
+    NXT_COMMAND_REQUEST__OBSOLETE = 4,
+    NXT_COMMAND_REPLY__OBSOLETE = 5,
+    NXT_FLOW_END_CONFIG__OBSOLETE = 6,
+    NXT_FLOW_END__OBSOLETE = 7,
+    NXT_MGMT__OBSOLETE = 8,
+    NXT_TUN_ID_FROM_COOKIE__OBSOLETE = 9,
 
     /* Controller role support.  The request body is struct nx_role_request.
      * The reply echos the request. */
-    NXT_ROLE_REQUEST,
-    NXT_ROLE_REPLY,
+    NXT_ROLE_REQUEST = 10,
+    NXT_ROLE_REPLY = 11,
 
     /* Flexible flow specification (aka NXM = Nicira Extended Match). */
-    NXT_SET_FLOW_FORMAT,        /* Set flow format. */
-    NXT_FLOW_MOD,               /* Analogous to OFPT_FLOW_MOD. */
-    NXT_FLOW_REMOVED,           /* Analogous to OFPT_FLOW_REMOVED. */
+    NXT_SET_FLOW_FORMAT = 12,   /* Set flow format. */
+    NXT_FLOW_MOD = 13,          /* Analogous to OFPT_FLOW_MOD. */
+    NXT_FLOW_REMOVED = 14,      /* Analogous to OFPT_FLOW_REMOVED. */
 
     /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
      * designate the table to which a flow is to be added?  See the big comment
      * on struct nxt_flow_mod_table_id for more information. */
-    NXT_FLOW_MOD_TABLE_ID
+    NXT_FLOW_MOD_TABLE_ID = 15
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
