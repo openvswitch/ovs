@@ -685,6 +685,16 @@ NXT_FLOW_REMOVED (xid=0x0): priority=65535,arp,in_port=3,vlan_tci=0x0000,dl_src=
 ])
 AT_CLEANUP
 
+AT_SETUP([NXT_FLOW_MOD_TABLE_ID])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 18 01 02 03 04 00 00 23 20 00 00 00 0f \
+01 00 00 00 00 00 00 00 \
+"], [0], [dnl
+NXT_FLOW_MOD_TABLE_ID (xid=0x1020304): enable
+])
+AT_CLEANUP
+
 AT_SETUP([NXST_FLOW request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
