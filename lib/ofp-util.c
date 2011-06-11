@@ -21,6 +21,7 @@
 #include <netinet/icmp6.h>
 #include <stdlib.h>
 #include "autopath.h"
+#include "bundle.h"
 #include "byte-order.h"
 #include "classifier.h"
 #include "dynamic-string.h"
@@ -2035,6 +2036,11 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             error = autopath_check((const struct nx_action_autopath *) a);
             break;
 
+        case OFPUTIL_NXAST_BUNDLE:
+            error = bundle_check((const struct nx_action_bundle *) a,
+                                 max_ports);
+            break;
+
         case OFPUTIL_OFPAT_STRIP_VLAN:
         case OFPUTIL_OFPAT_SET_NW_SRC:
         case OFPUTIL_OFPAT_SET_NW_DST:
@@ -2107,6 +2113,7 @@ static const struct ofputil_nxast_action nxast_actions[] = {
     { OFPUTIL_NXAST_SET_TUNNEL64, 24, 24 },
     { OFPUTIL_NXAST_MULTIPATH,    32, 32 },
     { OFPUTIL_NXAST_AUTOPATH,     24, 24 },
+    { OFPUTIL_NXAST_BUNDLE,       32, UINT_MAX },
 };
 
 static int

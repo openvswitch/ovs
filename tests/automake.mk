@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
 	tests/library.at \
+	tests/bundle.at \
 	tests/classifier.at \
 	tests/check-structs.at \
 	tests/daemon.at \
@@ -66,6 +67,7 @@ lcov_wrappers = \
 	tests/lcov/ovsdb-server \
 	tests/lcov/ovsdb-tool \
 	tests/lcov/test-aes128 \
+	tests/lcov/test-bundle \
 	tests/lcov/test-byte-order \
 	tests/lcov/test-classifier \
 	tests/lcov/test-csum \
@@ -118,6 +120,7 @@ valgrind_wrappers = \
 	tests/valgrind/ovsdb-server \
 	tests/valgrind/ovsdb-tool \
 	tests/valgrind/test-aes128 \
+	tests/valgrind/test-bundle \
 	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
 	tests/valgrind/test-csum \
@@ -184,6 +187,10 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 noinst_PROGRAMS += tests/test-aes128
 tests_test_aes128_SOURCES = tests/test-aes128.c
 tests_test_aes128_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-bundle
+tests_test_bundle_SOURCES = tests/test-bundle.c
+tests_test_bundle_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-classifier
 tests_test_classifier_SOURCES = tests/test-classifier.c

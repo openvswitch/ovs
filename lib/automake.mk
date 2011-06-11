@@ -18,6 +18,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/bitmap.h \
 	lib/bond.c \
 	lib/bond.h \
+	lib/bundle.c \
+	lib/bundle.h \
 	lib/byte-order.h \
 	lib/byteq.c \
 	lib/byteq.h \

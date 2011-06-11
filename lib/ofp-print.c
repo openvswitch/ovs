@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#include "bundle.h"
 #include "byte-order.h"
 #include "compiler.h"
 #include "dynamic-string.h"
@@ -340,6 +341,10 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
                               nxm_decode_ofs(naa->ofs_nbits),
                               nxm_decode_n_bits(naa->ofs_nbits));
         ds_put_char(s, ')');
+        break;
+
+    case OFPUTIL_NXAST_BUNDLE:
+        bundle_format((const struct nx_action_bundle *) a, s);
         break;
 
     default:

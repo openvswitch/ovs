@@ -22,6 +22,7 @@
 
 #include "autopath.h"
 #include "bond.h"
+#include "bundle.h"
 #include "byte-order.h"
 #include "connmgr.h"
 #include "coverage.h"
@@ -332,6 +333,8 @@ struct ofproto_dpif {
 
     /* Support for debugging async flow mods. */
     struct list completions;
+
+    bool has_bundle_action; /* True when the first bundle action appears. */
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -466,6 +469,8 @@ construct(struct ofproto *ofproto_)
     ofproto->up.n_tables = 1;
 
     ofproto_dpif_unixctl_init();
+
+    ofproto->has_bundle_action = false;
 
     return 0;
 }
@@ -1434,6 +1439,14 @@ port_run(struct ofport_dpif *ofport)
 
     if (ofport->bundle) {
         enable = enable && lacp_slave_may_enable(ofport->bundle->lacp, ofport);
+    }
+
+    if (ofport->may_enable != enable) {
+        struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+
+        if (ofproto->has_bundle_action) {
+            ofproto->need_revalidate = true;
+        }
     }
 
     ofport->may_enable = enable;
@@ -3047,6 +3060,28 @@ xlate_autopath(struct action_xlate_ctx *ctx,
     autopath_execute(naa, &ctx->flow, ofp_port);
 }
 
+static bool
+slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
+{
+    struct ofproto_dpif *ofproto = ofproto_;
+    struct ofport_dpif *port;
+
+    switch (ofp_port) {
+    case OFPP_IN_PORT:
+    case OFPP_TABLE:
+    case OFPP_NORMAL:
+    case OFPP_FLOOD:
+    case OFPP_ALL:
+    case OFPP_LOCAL:
+        return true;
+    case OFPP_CONTROLLER: /* Not supported by the bundle action. */
+        return false;
+    default:
+        port = get_ofp_port(ofproto, ofp_port);
+        return port ? port->may_enable : false;
+    }
+}
+
 static void
 do_xlate_actions(const union ofp_action *in, size_t n_in,
                  struct action_xlate_ctx *ctx)
@@ -3072,6 +3107,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         const struct nx_action_set_queue *nasq;
         const struct nx_action_multipath *nam;
         const struct nx_action_autopath *naa;
+        const struct nx_action_bundle *nab;
         enum ofputil_action_code code;
         ovs_be64 tun_id;
 
@@ -3177,6 +3213,14 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         case OFPUTIL_NXAST_AUTOPATH:
             naa = (const struct nx_action_autopath *) ia;
             xlate_autopath(ctx, naa);
+            break;
+
+        case OFPUTIL_NXAST_BUNDLE:
+            ctx->ofproto->has_bundle_action = true;
+            nab = (const struct nx_action_bundle *) ia;
+            xlate_output_action__(ctx, bundle_execute(nab, &ctx->flow,
+                                                      slave_enabled_cb,
+                                                      ctx->ofproto), 0);
             break;
         }
     }

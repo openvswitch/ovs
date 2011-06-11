@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "autopath.h"
+#include "bundle.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "netdev.h"
@@ -504,6 +505,8 @@ str_to_action(char *str, struct ofpbuf *b)
             struct nx_action_autopath *naa;
             naa = ofpbuf_put_uninit(b, sizeof *naa);
             autopath_parse(naa, arg);
+        } else if (!strcasecmp(act, "bundle")) {
+            bundle_parse(b, arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {

@@ -277,7 +277,8 @@ enum nx_action_subtype {
     NXAST_NOTE,                 /* struct nx_action_note */
     NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
     NXAST_MULTIPATH,            /* struct nx_action_multipath */
-    NXAST_AUTOPATH              /* struct nx_action_autopath */
+    NXAST_AUTOPATH,             /* struct nx_action_autopath */
+    NXAST_BUNDLE                /* struct nx_action_bundle */
 };
 
 /* Header for Nicira-defined actions. */
@@ -664,6 +665,77 @@ struct nx_action_autopath {
     ovs_be32 pad;
 };
 OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
+
+/* Action structure for NXAST_BUNDLE.
+ *
+ * NXAST_BUNDLE chooses a slave from a supplied list of options, and outputs to
+ * its selection.
+ *
+ * The list of possible slaves follows the nx_action_bundle structure. The size
+ * of each slave is governed by its type as indicated by the 'slave_type'
+ * parameter. The list of slaves should be padded at its end with zeros to make
+ * the total length of the action a multiple of 8.
+ *
+ * Switches infer from the 'slave_type' parameter the size of each slave.  All
+ * implementations must support the NXM_OF_IN_PORT 'slave_type' which indicates
+ * that the slaves are OpenFlow port numbers with NXM_LENGTH(NXM_OF_IN_PORT) ==
+ * 2 byte width.  Switches should reject actions which indicate unknown or
+ * unsupported slave types.
+ *
+ * Switches use a strategy dictated by the 'algorithm' parameter to choose a
+ * slave.  If the switch does not support the specified 'algorithm' parameter,
+ * it should reject the action.
+ *
+ * Some slave selection strategies require the use of a hash function, in which
+ * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
+ * parameter (one of NX_HASH_FIELDS_*) designates which parts of the flow to
+ * hash.  Refer to the definition of "enum nx_hash_fields" for details.  The
+ * 'basis' parameter is used as a universal hash parameter.  Different values
+ * of 'basis' yield different hash results.
+ *
+ * The 'zero' parameter at the end of the action structure is reserved for
+ * future use.  Switches are required to reject actions which have nonzero
+ * bytes in the 'zero' field. */
+struct nx_action_bundle {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* Length including slaves. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_BUNDLE. */
+
+    /* Slave choice algorithm to apply to hash value. */
+    ovs_be16 algorithm;         /* One of NX_BD_ALG_*. */
+
+    /* What fields to hash and how. */
+    ovs_be16 fields;            /* One of NX_BD_FIELDS_*. */
+    ovs_be16 basis;             /* Universal hash parameter. */
+
+    ovs_be32 slave_type;        /* NXM_OF_IN_PORT. */
+    ovs_be16 n_slaves;          /* Number of slaves. */
+
+    uint8_t zero[10];           /* Reserved. Must be zero. */
+};
+OFP_ASSERT(sizeof(struct nx_action_bundle) == 32);
+
+/* NXAST_BUNDLE: Bundle slave choice algorithm to apply.
+ *
+ * In the descriptions below, 'slaves' is the list of possible slaves in the
+ * order they appear in the OpenFlow action. */
+enum nx_bd_algorithm {
+    /* Chooses the first live slave listed in the bundle.
+     *
+     * O(n_slaves) performance. */
+    NX_BD_ALG_ACTIVE_BACKUP,
+
+    /* for i in [0,n_slaves):
+     *   weights[i] = hash(flow, i)
+     * slave = { slaves[i] such that weights[i] >= weights[j] for all j != i }
+     *
+     * Redistributes 1/n_slaves of traffic when a slave's liveness changes.
+     * O(n_slaves) performance.
+     *
+     * Uses the 'fields' and 'basis' parameters. */
+    NX_BD_ALG_HRW /* Highest Random Weight. */
+};
 
 /* Flexible flow specifications (aka NXM = Nicira Extended Match).
  *

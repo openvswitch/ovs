@@ -15,6 +15,10 @@ actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
 actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
 table=1,actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
+actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
+actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
+actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
+actions=output:1,bundle(eth_src,0,hrw,ofport,slaves:1),output:2
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt
 ], [0], [stdout])
@@ -33,6 +37,10 @@ NXT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multi
 NXT_FLOW_MOD_TABLE_ID: enable
 NXT_FLOW_MOD: ADD table:1 actions=drop
 NXT_FLOW_MOD: ADD table:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD: ADD table:255 actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
+NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle(eth_src,0,hrw,ofport,slaves:1),output:2
 ]])
 AT_CLEANUP
 

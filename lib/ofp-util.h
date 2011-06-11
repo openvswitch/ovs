@@ -301,7 +301,8 @@ enum ofputil_action_code {
     OFPUTIL_NXAST_NOTE,
     OFPUTIL_NXAST_SET_TUNNEL64,
     OFPUTIL_NXAST_MULTIPATH,
-    OFPUTIL_NXAST_AUTOPATH
+    OFPUTIL_NXAST_AUTOPATH,
+    OFPUTIL_NXAST_BUNDLE
 };
 
 int ofputil_decode_action(const union ofp_action *);
