@@ -347,7 +347,7 @@ lacp_slave_get_port_id(const struct lacp *lacp, const void *slave_)
 bool
 lacp_slave_is_current(const struct lacp *lacp, const void *slave_)
 {
-    return slave_lookup(lacp, slave_)->status == LACP_CURRENT;
+    return slave_lookup(lacp, slave_)->status != LACP_DEFAULTED;
 }
 
 /* This function should be called periodically to update 'lacp'. */
