@@ -54,6 +54,11 @@
 #include "vlan.h"
 #include "vport-internal_dev.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) || \
+    LINUX_VERSION_CODE > KERNEL_VERSION(2,6,38)
+#error Kernels before 2.6.18 or after 2.6.38 are not supported by this version of Open vSwitch.
+#endif
+
 int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
 
