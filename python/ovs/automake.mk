@@ -36,6 +36,9 @@ ovs-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs
 	$(INSTALL_DATA) python/ovs/dirs.py.tmp $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
 	rm python/ovs/dirs.py.tmp
+else
+ovs-install-data-local:
+	@:
 endif
 install-data-local: ovs-install-data-local
 
