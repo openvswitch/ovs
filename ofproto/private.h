@@ -454,27 +454,70 @@ struct ofproto_class {
      * convenient. */
     int (*port_del)(struct ofproto *ofproto, uint16_t ofp_port);
 
-    /* Attempts to begin dumping the ports in 'ofproto'.  On success, returns 0
-     * and initializes '*statep' with any data needed for iteration.  On
-     * failure, returns a positive errno value. */
-    int (*port_dump_start)(const struct ofproto *ofproto, void **statep);
-
-    /* Attempts to retrieve another port from 'ofproto' for 'state', which was
-     * initialized by a successful call to the 'port_dump_start' function for
-     * 'ofproto'.  On success, stores a new ofproto_port into 'port' and
-     * returns 0.  Returns EOF if the end of the port table has been reached,
-     * or a positive errno value on error.  This function will not be called
-     * again once it returns nonzero once for a given iteration (but the
-     * 'port_dump_done' function will be called afterward).
+    /* Port iteration functions.
      *
-     * The ofproto provider retains ownership of the data stored in 'port'.  It
-     * must remain valid until at least the next call to 'port_dump_next' or
-     * 'port_dump_done' for 'state'. */
+     * The client might not be entirely in control of the ports within an
+     * ofproto.  Some hardware implementations, for example, might have a fixed
+     * set of ports in a datapath, and the Linux datapath allows the system
+     * administrator to externally add and remove ports with ovs-dpctl.  For
+     * this reason, the client needs a way to iterate through all the ports
+     * that are actually in a datapath.  These functions provide that
+     * functionality.
+     *
+     * The 'state' pointer provides the implementation a place to
+     * keep track of its position.  Its format is opaque to the caller.
+     *
+     * The ofproto provider retains ownership of the data that it stores into
+     * ->port_dump_next()'s 'port' argument.  The data must remain valid until
+     * at least the next call to ->port_dump_next() or ->port_dump_done() for
+     * 'state'.  The caller will not modify or free it.
+     *
+     * Details
+     * =======
+     *
+     * ->port_dump_start() attempts to begin dumping the ports in 'ofproto'.
+     * On success, it should return 0 and initialize '*statep' with any data
+     * needed for iteration.  On failure, returns a positive errno value, and
+     * the client will not call ->port_dump_next() or ->port_dump_done().
+     *
+     * ->port_dump_next() attempts to retrieve another port from 'ofproto' for
+     * 'state'.  If there is another port, it should store the port's
+     * information into 'port' and return 0.  It should return EOF if all ports
+     * have already been iterated.  Otherwise, on error, it should return a
+     * positive errno value.  This function will not be called again once it
+     * returns nonzero once for a given iteration (but the 'port_dump_done'
+     * function will be called afterward).
+     *
+     * ->port_dump_done() allows the implementation to release resources used
+     * for iteration.  The caller might decide to stop iteration in the middle
+     * by calling this function before ->port_dump_next() returns nonzero.
+     *
+     * Usage Example
+     * =============
+     *
+     * int error;
+     * void *state;
+     *
+     * error = ofproto->ofproto_class->port_dump_start(ofproto, &state);
+     * if (!error) {
+     *     for (;;) {
+     *         struct ofproto_port port;
+     *
+     *         error = ofproto->ofproto_class->port_dump_next(
+     *                     ofproto, state, &port);
+     *         if (error) {
+     *             break;
+     *         }
+     *         // Do something with 'port' here (without modifying or freeing
+     *         // any of its data).
+     *     }
+     *     ofproto->ofproto_class->port_dump_done(ofproto, state);
+     * }
+     * // 'error' is now EOF (success) or a positive errno value (failure).
+     */
+    int (*port_dump_start)(const struct ofproto *ofproto, void **statep);
     int (*port_dump_next)(const struct ofproto *ofproto, void *state,
                           struct ofproto_port *port);
-
-    /* Releases resources from 'ofproto' for 'state', which was initialized by
-     * a successful call to the 'port_dump_start' function for 'ofproto'.  */
     int (*port_dump_done)(const struct ofproto *ofproto, void *state);
 
     /* Polls for changes in the set of ports in 'ofproto'.  If the set of ports
