@@ -247,8 +247,14 @@ else    # $1 = 2 for upgrade
     printf "\n\n"
 fi
 
-%post %{module_package}
+%posttrans %{module_package}
 # Ensure that modprobe will find our modules.
+#
+# This has to be in %posttrans instead of %post because older versions
+# installed modules into a different directory and "rpm -U" runs the
+# new version's %post before removing the old version's files, so if
+# we use %post then depmod may find the old versions that are about to
+# be removed.
 depmod %{xen_version}
 
 %preun
