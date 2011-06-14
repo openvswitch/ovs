@@ -3107,9 +3107,6 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         xlate_autopath(ctx, naa);
         break;
 
-    /* If you add a new action here that modifies flow data, don't forget to
-     * update the flow key in ctx->flow at the same time. */
-
     case NXAST_SNAT__OBSOLETE:
     case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
     default:
