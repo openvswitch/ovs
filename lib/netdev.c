@@ -243,7 +243,7 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         assert(netdev_dev->netdev_class == class);
 
     } else if (!shash_is_empty(options->args) &&
-               !smap_equal(&netdev_dev->args, options->args)) {
+               !netdev_dev_args_equal(netdev_dev, options->args)) {
 
         VLOG_WARN("%s: attempted to open already open netdev with "
                   "different arguments", options->name);
@@ -289,7 +289,7 @@ netdev_set_config(struct netdev *netdev, const struct shash *args)
     }
 
     if (netdev_dev->netdev_class->set_config) {
-        if (!smap_equal(&netdev_dev->args, args)) {
+        if (!netdev_dev_args_equal(netdev_dev, args)) {
             update_device_args(netdev_dev, args);
             return netdev_dev->netdev_class->set_config(netdev_dev, args);
         }
@@ -1379,6 +1379,19 @@ netdev_dev_get_devices(const struct netdev_class *netdev_class,
         if (dev->netdev_class == netdev_class) {
             shash_add(device_list, node->name, node->data);
         }
+    }
+}
+
+/* Returns true if 'args' is equivalent to the "args" field in
+ * 'netdev_dev', otherwise false. */
+bool
+netdev_dev_args_equal(const struct netdev_dev *netdev_dev,
+                      const struct shash *args)
+{
+    if (netdev_dev->netdev_class->config_equal) {
+        return netdev_dev->netdev_class->config_equal(netdev_dev, args);
+    } else {
+        return smap_equal(&netdev_dev->args, args);
     }
 }
 

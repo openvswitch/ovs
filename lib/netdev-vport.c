@@ -68,6 +68,7 @@ struct vport_class {
     int (*unparse_config)(const char *name, const char *type,
                           const struct nlattr *options, size_t options_len,
                           struct shash *args);
+    bool (*config_equal)(const struct shash *nd_args, const struct shash *args);
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -313,6 +314,20 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct shash *args)
     ofpbuf_delete(options);
 
     return error;
+}
+
+static bool
+netdev_vport_config_equal(const struct netdev_dev *dev_,
+                          const struct shash *args)
+{
+    const struct netdev_class *netdev_class = netdev_dev_get_class(dev_);
+    const struct vport_class *vport_class = vport_class_cast(netdev_class);
+
+    if (vport_class->config_equal) {
+        return vport_class->config_equal(&dev_->args, args);
+    } else {
+        return smap_equal(&dev_->args, args);
+    }
 }
 
 static int
@@ -868,6 +883,37 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     smap_add(args, "peer", nl_attr_get_string(a[ODP_PATCH_ATTR_PEER]));
     return 0;
 }
+
+/* Returns true if 'nd_args' is equivalent to 'args', otherwise false.
+ * Typically, 'nd_args' is the result of a call to unparse_tunnel_config()
+ * and 'args' is the original definition of the port.
+ *
+ * IPsec key configuration is handled by an external program, so it is not
+ * pushed down into the kernel module.  Thus, when the "unparse_config"
+ * method is called on an existing IPsec-based vport, a simple
+ * comparison with the returned data will not match the original
+ * configuration.  This function ignores configuration about keys when
+ * doing a comparison.
+ */
+static bool
+config_equal_ipsec(const struct shash *nd_args, const struct shash *args)
+{
+        struct shash tmp;
+        bool result;
+
+        smap_clone(&tmp, args);
+
+        shash_find_and_delete(&tmp, "psk");
+        shash_find_and_delete(&tmp, "peer_cert");
+        shash_find_and_delete(&tmp, "certificate");
+        shash_find_and_delete(&tmp, "private_key");
+        shash_find_and_delete(&tmp, "use_ssl_cert");
+
+        result = smap_equal(&tmp, nd_args);
+        smap_destroy(&tmp);
+ 
+        return result;
+}
 
 #define VPORT_FUNCTIONS(GET_STATUS)                         \
     NULL,                                                   \
@@ -877,6 +923,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     netdev_vport_create,                                    \
     netdev_vport_destroy,                                   \
     netdev_vport_set_config,                                \
+    netdev_vport_config_equal,                              \
                                                             \
     netdev_vport_open,                                      \
     netdev_vport_close,                                     \
@@ -933,19 +980,19 @@ netdev_vport_register(void)
     static const struct vport_class vport_classes[] = {
         { ODP_VPORT_TYPE_GRE,
           { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
+          parse_tunnel_config, unparse_tunnel_config, NULL },
 
         { ODP_VPORT_TYPE_GRE,
           { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
+          parse_tunnel_config, unparse_tunnel_config, config_equal_ipsec },
 
         { ODP_VPORT_TYPE_CAPWAP,
           { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
+          parse_tunnel_config, unparse_tunnel_config, NULL },
 
         { ODP_VPORT_TYPE_PATCH,
           { "patch", VPORT_FUNCTIONS(NULL) },
-          parse_patch_config, unparse_patch_config }
+          parse_patch_config, unparse_patch_config, NULL }
     };
 
     int i;

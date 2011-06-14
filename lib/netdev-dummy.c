@@ -226,7 +226,8 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_create,
     netdev_dummy_destroy,
-    NULL,
+    NULL,                       /* set_config */
+    NULL,                       /* config_equal */
 
     netdev_dummy_open,
     netdev_dummy_close,

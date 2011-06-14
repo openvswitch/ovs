@@ -52,6 +52,8 @@ const char *netdev_dev_get_name(const struct netdev_dev *);
 struct netdev_dev *netdev_dev_from_name(const char *name);
 void netdev_dev_get_devices(const struct netdev_class *,
                             struct shash *device_list);
+bool netdev_dev_args_equal(const struct netdev_dev *netdev_dev,
+                           const struct shash *args);
 
 static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
                                            const struct netdev_class *class_)
@@ -134,6 +136,15 @@ struct netdev_class {
      * device, this may be a null pointer.
      */
     int (*set_config)(struct netdev_dev *netdev_dev, const struct shash *args);
+
+    /* Returns true if 'args' is equivalent to the "args" field in
+     * 'netdev_dev', otherwise false.
+     *
+     * If no special processing needs to be done beyond a simple
+     * shash comparison, this may be a null pointer.
+     */
+    bool (*config_equal)(const struct netdev_dev *netdev_dev,
+                         const struct shash *args);
 
     /* Attempts to open a network device.  On success, sets 'netdevp'
      * to the new network device.

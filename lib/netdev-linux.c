@@ -2247,6 +2247,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     CREATE,                                                     \
     netdev_linux_destroy,                                       \
     NULL,                       /* set_config */                \
+    NULL,                       /* config_equal */              \
                                                                 \
     netdev_linux_open,                                          \
     netdev_linux_close,                                         \
