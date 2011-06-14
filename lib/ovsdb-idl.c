@@ -1429,6 +1429,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             } else {
                 struct ovsdb_idl_txn_insert *insert;
 
+                any_updates = true;
+
                 json_object_put(op, "uuid-name",
                                 json_string_create_nocopy(
                                     uuid_name_from_uuid(&row->uuid)));
@@ -1456,13 +1458,22 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                                             ovsdb_datum_to_json(&row->new[idx],
                                                                 &column->type),
                                             txn));
+
+                        /* If anything really changed, consider it an update.
+                         * We can't suppress not-really-changed values earlier
+                         * or transactions would become nonatomic (see the big
+                         * comment inside ovsdb_idl_txn_write()). */
+                        if (!any_updates && row->old &&
+                            !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
+                                                &column->type)) {
+                            any_updates = true;
+                        }
                     }
                 }
             }
 
             if (!row->old || !shash_is_empty(json_object(row_json))) {
                 json_array_add(operations, op);
-                any_updates = true;
             } else {
                 json_destroy(op);
             }
@@ -1651,7 +1662,10 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
      *
      * We don't do this for read/write columns because that would break
      * atomicity of transactions--some other client might have written a
-     * different value in that column since we read it. */
+     * different value in that column since we read it.  (But if a whole
+     * transaction only does writes of existing values, without making any real
+     * changes, we will drop the whole transaction later in
+     * ovsdb_idl_txn_commit().) */
     if (row->table->modes[column_idx] == OVSDB_IDL_MONITOR
         && ovsdb_datum_equals(ovsdb_idl_read(row, column),
                               datum, &column->type)) {
