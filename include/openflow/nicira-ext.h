@@ -655,7 +655,7 @@ struct nx_action_autopath {
     ovs_be16 type;              /* OFPAT_VENDOR. */
     ovs_be16 len;               /* Length is 20. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be16 subtype;           /* NXAST_MULTIPATH. */
+    ovs_be16 subtype;           /* NXAST_AUTOPATH. */
 
     /* Where to store the result. */
     ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
