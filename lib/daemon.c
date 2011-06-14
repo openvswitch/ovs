@@ -408,6 +408,9 @@ close_standard_fds(void)
         dup2(null_fd, STDOUT_FILENO);
         dup2(null_fd, STDERR_FILENO);
     }
+
+    /* Disable logging to stderr to avoid wasting CPU time. */
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_EMER);
 }
 
 /* If daemonization is configured, then starts daemonization, by forking and
