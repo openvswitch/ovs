@@ -1,5 +1,27 @@
+openvswitch (1.1.1-1) unstable; urgency=low
+
+  [ Open vSwitch team ]
+  * Bug fixes.
+
+  [ Simon Horman ]
+  * docs: Suppress warning marcro DD not defined
+    (upstream commit 58f870d0)
+  * debian: Make openvswitch depend on Python
+    (upstream commit aa41cb61)
+  * debian: Don't begin openvswitch-pki description with article.
+    (upstream commit bc6bb66)
+  * Debian: Add ${misc:Depends} dependency to python-openvswitch
+  * Debian: Update standards version from 3.9.1 to 3.9.2
+  * Debian: ${source:Version} dependency on python openvswitch
+  * Debian: ${source:Version} dependency for python openvswitch
+  * Switch to dpkg-source 3.0 (quilt) format
+    - For local non-debian/ patches (above)
+
+ -- Simon Horman <horms@debian.org>  Wed, 15 Jun 2011 10:46:15 +0900
+    
 openvswitch (1.1.0-1) unstable; urgency=low
 
+  [ Open vSwitch team ]
   * New upstream version
     - Ability to define policies over IPv6
     - LACP
@@ -81,7 +103,18 @@ openvswitch (1.1.0-1) unstable; urgency=low
     - Performance and scalability improvements
     - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 05 Apr 2011 21:30:00 +0000
+  [ Simon Horman ]
+  * Add the following fixes from upstream branch-1.1
+    - 7f1aca9 dpif-linux: Avoid logging error on ENOENT in
+              dpif_linux_is_internal_device().
+    - 8996f83 dpif-linux: Avoid segfault on netdev_get_stats() without kernel
+              module.
+    - 002d4a3 vswitch: Improve schema documentation.
+    - 58bd294 cfm: Fix broken fault logic.
+    - c042664 bridge: Run once before configuring CFM.
+   * Switch to dpkg-source 3.0 (quilt) format
+
+ -- Simon Horman <horms@debian.org>  Wed, 27 Apr 2011 17:11:10 +0900
 
 openvswitch (1.1.0~pre2.g2.ea763e0e-1) unstable; urgency=low
 
