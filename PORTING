@@ -197,7 +197,7 @@ into the Open vSwitch architecture:
      userspace |   +--------+ |  dpif  |   |
                |   | netdev | +--------+   |
                |   |provider| |  dpif  |   |
-               |   +---||---+ +--------+   | 
+               |   +---||---+ +--------+   |
                |       ||     |  dpif  |   | implementation of
                |       ||     |provider|   | ofproto provider
                |_      ||     +---||---+   |
