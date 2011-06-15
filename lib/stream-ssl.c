@@ -436,6 +436,7 @@ do_ca_cert_bootstrap(struct stream *stream)
     if (!cert) {
         out_of_memory();
     }
+    SSL_CTX_set_cert_store(ctx, X509_STORE_new());
     if (SSL_CTX_load_verify_locations(ctx, ca_cert.file_name, NULL) != 1) {
         VLOG_ERR("SSL_CTX_load_verify_locations: %s",
                  ERR_error_string(ERR_get_error(), NULL));
@@ -1311,6 +1312,7 @@ stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
 
         /* Set up CAs for OpenSSL to trust in verifying the peer's
          * certificate. */
+        SSL_CTX_set_cert_store(ctx, X509_STORE_new());
         if (SSL_CTX_load_verify_locations(ctx, file_name, NULL) != 1) {
             VLOG_ERR("SSL_CTX_load_verify_locations: %s",
                      ERR_error_string(ERR_get_error(), NULL));
