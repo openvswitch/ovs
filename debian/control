@@ -8,7 +8,7 @@ Build-Depends:
  libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
  python-support (>= 0.8.4), procps, python-qt4,
  python-zopeinterface, python-twisted-conch
-Standards-Version: 3.9.1
+Standards-Version: 3.9.2
 Homepage: http://openvswitch.org/
 
 Package: openvswitch-datapath-source
