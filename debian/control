@@ -7,7 +7,7 @@ Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
  libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
  python-support (>= 0.8.4), procps
-Standards-Version: 3.9.1
+Standards-Version: 3.9.2
 Homepage: http://openvswitch.org/
 
 Package: openvswitch-datapath-source
