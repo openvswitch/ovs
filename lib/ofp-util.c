@@ -974,7 +974,7 @@ ofputil_encode_flow_mod(const struct flow_mod *fm,
         ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
         ofm->cookie = fm->cookie;
-        ofm->command = htons(fm->command);
+        ofm->command = htons(command);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);
         ofm->priority = htons(fm->cr.priority);
