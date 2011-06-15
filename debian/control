@@ -50,7 +50,7 @@ Depends:
  racoon (>=0.8~alpha20101208),
  openvswitch-common (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version}),
- python-openvswitch (= ${binary:Version})
+ python-openvswitch (= ${source:Version})
 Description: Open vSwitch GRE-over-IPsec support
  The ovs-monitor-ipsec script provides support for encrypting GRE
  tunnels with IPsec.
