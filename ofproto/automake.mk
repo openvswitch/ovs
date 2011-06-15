@@ -21,8 +21,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto.c \
 	ofproto/ofproto.h \
 	ofproto/ofproto-dpif.c \
-	ofproto/ofproto-sflow.c \
-	ofproto/ofproto-sflow.h \
+	ofproto/ofproto-dpif-sflow.c \
+	ofproto/ofproto-dpif-sflow.h \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
 	ofproto/pinsched.c \

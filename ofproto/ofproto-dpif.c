@@ -40,7 +40,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofp-print.h"
-#include "ofproto-sflow.h"
+#include "ofproto-dpif-sflow.h"
 #include "poll-loop.h"
 #include "timer.h"
 #include "unaligned.h"
@@ -315,7 +315,7 @@ struct ofproto_dpif {
 
     /* Bridging. */
     struct netflow *netflow;
-    struct ofproto_sflow *sflow;
+    struct dpif_sflow *sflow;
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
     struct ofmirror *mirrors[MAX_MIRRORS];
@@ -501,7 +501,7 @@ destruct(struct ofproto *ofproto_)
     }
 
     netflow_destroy(ofproto->netflow);
-    ofproto_sflow_destroy(ofproto->sflow);
+    dpif_sflow_destroy(ofproto->sflow);
     hmap_destroy(&ofproto->bundles);
     mac_learning_destroy(ofproto->ml);
 
@@ -548,7 +548,7 @@ run(struct ofproto *ofproto_)
         netflow_run(ofproto->netflow);
     }
     if (ofproto->sflow) {
-        ofproto_sflow_run(ofproto->sflow);
+        dpif_sflow_run(ofproto->sflow);
     }
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
@@ -594,7 +594,7 @@ wait(struct ofproto *ofproto_)
     dpif_wait(ofproto->dpif);
     dpif_recv_wait(ofproto->dpif);
     if (ofproto->sflow) {
-        ofproto_sflow_wait(ofproto->sflow);
+        dpif_sflow_wait(ofproto->sflow);
     }
     if (!tag_set_is_empty(&ofproto->revalidate_set)) {
         poll_immediate_wake();
@@ -710,8 +710,8 @@ port_construct(struct ofport *port_)
     port->tag = tag_create_random();
 
     if (ofproto->sflow) {
-        ofproto_sflow_add_port(ofproto->sflow, port->odp_port,
-                               netdev_get_name(port->up.netdev));
+        dpif_sflow_add_port(ofproto->sflow, port->odp_port,
+                            netdev_get_name(port->up.netdev));
     }
 
     return 0;
@@ -726,7 +726,7 @@ port_destruct(struct ofport *port_)
     bundle_remove(port_);
     set_cfm(port_, NULL);
     if (ofproto->sflow) {
-        ofproto_sflow_del_port(ofproto->sflow, port->odp_port);
+        dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
 }
 
@@ -758,20 +758,20 @@ set_sflow(struct ofproto *ofproto_,
           const struct ofproto_sflow_options *sflow_options)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofproto_sflow *os = ofproto->sflow;
+    struct dpif_sflow *ds = ofproto->sflow;
     if (sflow_options) {
-        if (!os) {
+        if (!ds) {
             struct ofport_dpif *ofport;
 
-            os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
+            ds = ofproto->sflow = dpif_sflow_create(ofproto->dpif);
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                ofproto_sflow_add_port(os, ofport->odp_port,
-                                       netdev_get_name(ofport->up.netdev));
+                dpif_sflow_add_port(ds, ofport->odp_port,
+                                    netdev_get_name(ofport->up.netdev));
             }
         }
-        ofproto_sflow_set_options(os, sflow_options);
+        dpif_sflow_set_options(ds, sflow_options);
     } else {
-        ofproto_sflow_destroy(os);
+        dpif_sflow_destroy(ds);
         ofproto->sflow = NULL;
     }
     return 0;
@@ -1693,7 +1693,7 @@ handle_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
     case DPIF_UC_SAMPLE:
         if (ofproto->sflow) {
             odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-            ofproto_sflow_received(ofproto->sflow, upcall, &flow);
+            dpif_sflow_received(ofproto->sflow, upcall, &flow);
         }
         ofpbuf_delete(upcall->packet);
         break;
