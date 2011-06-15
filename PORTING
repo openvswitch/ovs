@@ -192,19 +192,19 @@ into the Open vSwitch architecture:
                |   |    ovs-vswitchd   |<-->ovsdb-server
                |   +-------------------+
                |   |      ofproto      |<-->OpenFlow controllers
-               |   +--------+-+--------+
-               |   | netdev | |ofproto-|
-     userspace |   +--------+ |  dpif  |
-               |   | netdev | +--------+
-               |   |provider| |  dpif  |
-               |   +---||---+ +--------+
-               |       ||     |  dpif  |
-               |       ||     |provider|
-               |_      ||     +---||---+
-                       ||         ||
-                _  +---||-----+---||---+
-               |   |          |datapath|
-        kernel |   |          +--------+
+               |   +--------+-+--------+  _
+               |   | netdev | |ofproto-|   |
+     userspace |   +--------+ |  dpif  |   |
+               |   | netdev | +--------+   |
+               |   |provider| |  dpif  |   |
+               |   +---||---+ +--------+   | 
+               |       ||     |  dpif  |   | implementation of
+               |       ||     |provider|   | ofproto provider
+               |_      ||     +---||---+   |
+                       ||         ||       |
+                _  +---||-----+---||---+   |
+               |   |          |datapath|   |
+        kernel |   |          +--------+  _|
                |   |                   |
                |_  +--------||---------+
                             ||
