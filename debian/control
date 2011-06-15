@@ -97,7 +97,7 @@ Description: Debug symbols for Open vSwitch packages
 Package: python-openvswitch
 Architecture: all
 Section: python
-Depends: ${misc:Depends}, ${python:Depends}, openvswitch-switch (= ${binary:Version})
+Depends: ${misc:Depends}, ${python:Depends}
 Provides: ${python:Provides}
 Description: Python bindings for Open vSwitch
  This package contains the full Python bindings for Open vSwitch database.
