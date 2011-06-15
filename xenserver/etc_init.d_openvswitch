@@ -262,7 +262,6 @@ function stop_daemon {
                 break
             fi
         done
-        rm -f "$pidfile"
     fi
 }
 
