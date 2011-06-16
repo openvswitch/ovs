@@ -228,4 +228,8 @@ static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 #endif /* NETIF_F_LRO */
 #endif /* HAVE_SKB_WARN_LRO */
 
+#ifndef HAVE_CONSUME_SKB
+#define consume_skb kfree_skb
+#endif
+
 #endif
