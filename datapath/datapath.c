@@ -289,7 +289,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 		}
 
 		if (is_frag && dp->drop_frags) {
-			kfree_skb(skb);
+			consume_skb(skb);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
 			goto out;
 		}
@@ -406,12 +406,13 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
 		
-		kfree_skb(skb);
-		skb = nskb;
-		if (IS_ERR(skb)) {
-			err = PTR_ERR(skb);
+		if (IS_ERR(nskb)) {
+			kfree_skb(skb);
+			err = PTR_ERR(nskb);
 			goto err;
 		}
+		consume_skb(skb);
+		skb = nskb;
 	}
 
 	err = queue_control_packets(dp, skb, upcall_info);
@@ -506,7 +507,7 @@ static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
 		if (err)
 			goto err_kfree_skbs;
 
-		kfree_skb(skb);
+		consume_skb(skb);
 		skb = nskb;
 	} while (skb);
 	return 0;

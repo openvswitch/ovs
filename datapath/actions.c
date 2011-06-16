@@ -322,7 +322,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	if (prev_port != -1)
 		do_output(dp, skb, prev_port);
 	else
-		kfree_skb(skb);
+		consume_skb(skb);
 
 	return 0;
 }

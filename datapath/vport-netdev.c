@@ -343,10 +343,12 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 				goto tag;
 			}
 
-			kfree_skb(skb);
-			skb = nskb;
-			if (IS_ERR(skb))
+			if (IS_ERR(nskb)) {
+				kfree_skb(skb);
 				return 0;
+			}
+			consume_skb(skb);
+			skb = nskb;
 
 			len = 0;
 			do {

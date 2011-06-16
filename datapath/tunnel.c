@@ -968,7 +968,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		err = flow_extract(skb, dst_vport->port_no, &flow_key,
 				   &flow_key_len, &is_frag);
 
-		kfree_skb(skb);
+		consume_skb(skb);
 		if (err || is_frag)
 			goto done;
 
@@ -1081,12 +1081,13 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 		struct sk_buff *nskb;
 
 		nskb = skb_gso_segment(skb, 0);
-		kfree_skb(skb);
 		if (IS_ERR(nskb)) {
+			kfree_skb(skb);
 			err = PTR_ERR(nskb);
 			goto error;
 		}
 
+		consume_skb(skb);
 		skb = nskb;
 	} else if (get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
 		/* Pages aren't locked and could change at any time.
