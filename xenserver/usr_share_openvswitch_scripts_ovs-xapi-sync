@@ -164,7 +164,7 @@ def update_in_band_mgmt(name):
     else:
         s_log.warning('"' + dib + '"'
                       "isn't a valid setting for other_config:disable-in-band on " +
-                      bridge)
+                      name)
 
 def update_bridge_id(name, ids):
     id = get_bridge_id(name, ids.get("xs-network-uuids"))
