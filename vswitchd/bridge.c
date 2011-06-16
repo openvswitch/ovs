@@ -1023,9 +1023,6 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             /* Grab MAC. */
             error = netdev_get_etheraddr(iface->netdev, iface_ea);
             if (error) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "failed to obtain Ethernet address of %s: %s",
-                            iface->name, strerror(error));
                 continue;
             }
         }
