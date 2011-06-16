@@ -99,7 +99,7 @@ def get_bridge_id(br_name, default=None):
 # "nicira-iface-id" key in the "other_config" field of the VIF
 # record of XAPI.
 def get_iface_id(if_name, xs_vif_uuid):
-    if not if_name.startswith("vif"):
+    if not if_name.startswith("vif") and not if_name.startswith("tap"):
         # Treat whatever was passed into 'xs_vif_uuid' as a default
         # value for non-VIFs.
         return xs_vif_uuid
@@ -296,6 +296,17 @@ def main(argv):
             iface_id = rec.external_ids.get("iface-id")
             new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid,
                                     "iface-id": iface_id}
+
+        #Tap devices take their xs-vif-uuid from their corresponding vif
+        for name in new_interfaces:
+            if not name.startswith("tap"):
+                continue
+
+            vif = name.replace("tap", "vif", 1)
+
+            if vif in new_interfaces:
+                xs_vif_uuid = new_interfaces[vif]["xs-vif-uuid"]
+                new_interfaces[name]["xs-vif-uuid"] = xs_vif_uuid
 
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
