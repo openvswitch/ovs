@@ -12,7 +12,7 @@ bin_SCRIPTS += \
 	utilities/ovs-vlan-test
 endif
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
-scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh
+scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh utilities/ovs-save
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \

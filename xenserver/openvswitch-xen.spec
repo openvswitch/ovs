@@ -112,8 +112,6 @@ install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
 install -m 755 xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
-install -m 755 utilities/ovs-save \
-         $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-save
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
