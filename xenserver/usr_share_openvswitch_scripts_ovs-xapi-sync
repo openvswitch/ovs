@@ -178,11 +178,15 @@ def update_bridge_id(name, ids):
         set_external_id("Bridge", name, "bridge-id", primary_id)
         ids["bridge-id"] = primary_id
 
-def update_iface_id(name, ids):
+def update_iface(name, ids):
     id = get_iface_id(name, ids.get("xs-vif-uuid"))
     if ids.get("iface-id") != id and id:
         set_external_id("Interface", name, "iface-id", id)
         ids["iface-id"] = id
+
+    status = ids.get("iface-status")
+    if status:
+        set_external_id("Interface", name, "iface-status", status)
 
 def keep_table_columns(schema, table_name, column_types):
     table = schema.tables.get(table_name)
@@ -297,7 +301,11 @@ def main(argv):
             new_interfaces[name] = {"xs-vif-uuid": xs_vif_uuid,
                                     "iface-id": iface_id}
 
-        #Tap devices take their xs-vif-uuid from their corresponding vif
+            if name.startswith("vif"):
+                new_interfaces[name]["iface-status"] = "active"
+
+        #Tap devices take their xs-vif-uuid from their corresponding vif and
+        #cause that vif to be labled inactive.
         for name in new_interfaces:
             if not name.startswith("tap"):
                 continue
@@ -307,6 +315,9 @@ def main(argv):
             if vif in new_interfaces:
                 xs_vif_uuid = new_interfaces[vif]["xs-vif-uuid"]
                 new_interfaces[name]["xs-vif-uuid"] = xs_vif_uuid
+
+                new_interfaces[vif]["iface-status"] = "inactive"
+                new_interfaces[name]["iface-status"] = "active"
 
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
@@ -322,7 +333,7 @@ def main(argv):
         if interfaces != new_interfaces:
             for name,ids in new_interfaces.items():
                 if (name not in interfaces) or (interfaces[name] != ids):
-                    update_iface_id(name, ids)
+                    update_iface(name, ids)
             interfaces = new_interfaces
 
 if __name__ == '__main__':
