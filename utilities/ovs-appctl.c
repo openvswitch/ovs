@@ -85,7 +85,7 @@ usage(void)
            "usage: %s [TARGET] COMMAND [ARG...]\n"
            "Targets:\n"
            "  -t, --target=TARGET  pidfile or socket to contact\n"
-           "Common commands:"
+           "Common commands:\n"
            "  help               List commands supported by the target\n"
            "  vlog/list          List current logging levels\n"
            "  vlog/set MODULE[:FACILITY[:LEVEL]]\n"
