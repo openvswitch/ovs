@@ -4152,8 +4152,12 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_hwaddr);
     if (ioctl(af_inet_sock, SIOCGIFHWADDR, &ifr) < 0) {
-        VLOG_ERR("ioctl(SIOCGIFHWADDR) on %s device failed: %s",
-                 netdev_name, strerror(errno));
+        /* ENODEV probably means that a vif disappeared asynchronously and
+         * hasn't been removed from the database yet, so reduce the log level
+         * to INFO for that case. */
+        VLOG(errno == ENODEV ? VLL_INFO : VLL_ERR,
+             "ioctl(SIOCGIFHWADDR) on %s device failed: %s",
+             netdev_name, strerror(errno));
         return errno;
     }
     hwaddr_family = ifr.ifr_hwaddr.sa_family;
