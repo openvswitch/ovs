@@ -61,6 +61,7 @@ noinst_man_MANS =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =
+pkgdata_DATA =
 scripts_SCRIPTS =
 SUFFIXES =
 check_DATA =

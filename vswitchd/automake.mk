@@ -42,6 +42,7 @@ OVSIDL_BUILT += \
 	vswitchd/vswitch-idl.ovsidl
 VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema vswitchd/vswitch-idl.ann
 EXTRA_DIST += $(VSWITCH_IDL_FILES)
+pkgdata_DATA += vswitchd/vswitch.ovsschema
 vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
 	mv $@.tmp $@

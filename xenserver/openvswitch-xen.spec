@@ -94,8 +94,6 @@ install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration
 install -m 644 xenserver/etc_xensource_bugtool_system-configuration_openvswitch.xml \
          $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration/openvswitch.xml
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
-install -m 644 vswitchd/vswitch.ovsschema \
-         $RPM_BUILD_ROOT/usr/share/openvswitch/vswitch.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/interface-reconfigure
 install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
