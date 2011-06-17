@@ -898,19 +898,26 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 static bool
 config_equal_ipsec(const struct shash *nd_args, const struct shash *args)
 {
-        struct shash tmp;
+        struct shash tmp1, tmp2;
         bool result;
 
-        smap_clone(&tmp, args);
+        smap_clone(&tmp1, nd_args);
+        smap_clone(&tmp2, args);
 
-        shash_find_and_delete(&tmp, "psk");
-        shash_find_and_delete(&tmp, "peer_cert");
-        shash_find_and_delete(&tmp, "certificate");
-        shash_find_and_delete(&tmp, "private_key");
-        shash_find_and_delete(&tmp, "use_ssl_cert");
+        shash_find_and_delete(&tmp1, "psk");
+        shash_find_and_delete(&tmp2, "psk");
+        shash_find_and_delete(&tmp1, "peer_cert");
+        shash_find_and_delete(&tmp2, "peer_cert");
+        shash_find_and_delete(&tmp1, "certificate");
+        shash_find_and_delete(&tmp2, "certificate");
+        shash_find_and_delete(&tmp1, "private_key");
+        shash_find_and_delete(&tmp2, "private_key");
+        shash_find_and_delete(&tmp1, "use_ssl_cert");
+        shash_find_and_delete(&tmp2, "use_ssl_cert");
 
-        result = smap_equal(&tmp, nd_args);
-        smap_destroy(&tmp);
+        result = smap_equal(&tmp1, &tmp2);
+        smap_destroy(&tmp1);
+        smap_destroy(&tmp2);
  
         return result;
 }
