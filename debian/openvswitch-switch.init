@@ -34,7 +34,7 @@ case $1 in
     start)
 	set $ovs_ctl start --system-id=random
 	if test X"$FORCE_COREFILES" != X; then
-	    set "$@" --force-oorefiles="$FORCE_COREFILES"
+	    set "$@" --force-corefiles="$FORCE_COREFILES"
 	fi
 
 	# Allow GRE traffic.

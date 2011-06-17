@@ -51,7 +51,7 @@ start () {
     set "$@" --external-id=xs-system-uuid="$INSTALLATION_UUID"
     set "$@" --daemon-cwd=/var/xen/openvswitch
     if test X"$FORCE_COREFILES" != X; then
-	set "$@" --force-oorefiles="$FORCE_COREFILES"
+	set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     if test X"$OVSDB_SERVER_PRIORITY" != X; then
 	set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
@@ -115,7 +115,7 @@ case $1 in
         $ovs_ctl version
         ;;
     force-reload-kmod)
-        $ovs_ctl force_reload_kmod
+        $ovs_ctl force-reload-kmod
         ;;
     help)
         printf "openvswitch [start|stop|restart|reload|force-reload|status|version]\n"
