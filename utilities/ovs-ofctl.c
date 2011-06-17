@@ -658,7 +658,7 @@ do_flow_mod__(int argc, char *argv[], uint16_t command)
     flow_mod_table_id = false;
 
     parse_ofp_flow_mod_str(&requests, &flow_format, &flow_mod_table_id,
-                           argc > 2 ? argv[2] : "", command);
+                           argc > 2 ? argv[2] : "", command, false);
     check_final_format_for_flow_mod(flow_format);
 
     open_vconn(argv[1], &vconn);
@@ -1035,7 +1035,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         struct flow_mod fm;
 
         ofpbuf_init(&actions, 64);
-        parse_ofp_str(&fm, &actions, ds_cstr(&s));
+        parse_ofp_str(&fm, &actions, ds_cstr(&s), true);
 
         version = xmalloc(sizeof *version);
         version->cookie = fm.cookie;
@@ -1308,7 +1308,7 @@ do_parse_flow(int argc OVS_UNUSED, char *argv[])
 
     list_init(&packets);
     parse_ofp_flow_mod_str(&packets, &flow_format, &flow_mod_table_id,
-                           argv[1], OFPFC_ADD);
+                           argv[1], OFPFC_ADD, false);
     print_packet_list(&packets);
 }
 

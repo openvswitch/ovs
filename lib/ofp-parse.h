@@ -29,11 +29,12 @@ struct flow_stats_request;
 struct list;
 struct ofpbuf;
 
-void parse_ofp_str(struct flow_mod *, struct ofpbuf *actions, char *string);
+void parse_ofp_str(struct flow_mod *, struct ofpbuf *actions, const char *str_,
+                   bool verbose);
 
 void parse_ofp_flow_mod_str(struct list *packets,
                             enum nx_flow_format *cur, bool *flow_mod_table_id,
-                            char *string, uint16_t command);
+                            char *string, uint16_t command, bool verbose);
 bool parse_ofp_flow_mod_file(struct list *packets,
                              enum nx_flow_format *cur, bool *flow_mod_table_id,
                              FILE *, uint16_t command);
