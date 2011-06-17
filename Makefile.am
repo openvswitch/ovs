@@ -61,8 +61,11 @@ noinst_man_MANS =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =
+scripts_SCRIPTS =
 SUFFIXES =
 check_DATA =
+
+scriptsdir = $(pkgdatadir)/scripts
 
 # This ensures that files added to EXTRA_DIST are always distributed,
 # even if they are inside an Automake if...endif conditional block that is
@@ -85,9 +88,12 @@ SUFFIXES += .in
                 -e 's,[@]PYTHON[@],$(PYTHON),g' \
                 -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
                 -e 's,[@]VERSION[@],$(VERSION),g' \
+                -e 's,[@]BUILDNR[@],$(BUILDNR),g' \
                 -e 's,[@]localstatedir[@],$(localstatedir),g' \
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+                -e 's,[@]bindir[@],$(bindir),g' \
+                -e 's,[@]sbindir[@],$(sbindir),g' \
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
                 -e 's,[@]ovsdbmonitordir[@],$(ovsdbmonitordir),g' \
             > $@.tmp

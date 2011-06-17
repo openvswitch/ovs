@@ -1,13 +1,18 @@
 #! /bin/sh
 #
-# /etc/init.d/openvswitch-switch
+# Copyright (C) 2011 Nicira Networks, Inc.
 #
-# Written by Miquel van Smoorenburg <miquels@cistron.nl>.
-# Modified for Debian by Ian Murdock <imurdock@gnu.ai.mit.edu>.
-# Further changes by Javier Fernandez-Sanguino <jfs@debian.org>
-# Modified for openvswitch-switch.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
 #
-# Version:	@(#)skeleton  1.9  26-Feb-2001  miquels@cistron.nl
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 ### BEGIN INIT INFO
 # Provides:          openvswitch-switch
@@ -18,359 +23,40 @@
 # Short-Description: Open vSwitch switch
 ### END INIT INFO
 
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-ovs_vswitchd=/usr/sbin/ovs-vswitchd
-ovsdb_server=/usr/bin/ovsdb-server
-
-(test -x $ovsdb_server && test -x $ovs_vswitchd) || exit 0
-
-DODTIME=1                   # Time to wait for the server to die, in seconds
-                            # If this value is set too low you might not
-                            # let some servers to die gracefully and
-                            # 'restart' will not work
-
-# Include openvswitch-switch defaults if available
-unset OVSDB_SERVER_OPTS
-unset OVS_VSWITCHD_OPTS
-unset CORE_LIMIT
-unset ENABLE_MONITOR
-default=/etc/default/openvswitch-switch
-if [ -f $default ] ; then
-    . $default
-fi
-
-: ${ENABLE_MONITOR:=y}
+(test -x /usr/sbin/ovs-vswitchd && test -x /usr/bin/ovsdb-server) || exit 0
 
 set -e
 
-# running_pid pid name
-#
-# Check if 'pid' is a process named 'name'
-running_pid()
-{
-    local pid=$1 name=$2
-    [ -z "$pid" ] && return 1 
-    [ ! -d /proc/$pid ] &&  return 1
-    cmd=`cat /proc/$pid/cmdline | tr "\000" "\n"|head -n 1 |cut -d : -f 1`
-    # Is this the expected child?
-    case $cmd in
-        $name|*/$name)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
-# running name
-#
-# Checks for a running process named 'name' by looking for a pidfile
-# named /var/run/openvswitch/${name}.pid
-running()
-{
-    local name=$1
-    local pidfile=/var/run/openvswitch/${name}.pid
-
-    # No pidfile, probably no daemon present
-    [ ! -f "$pidfile" ] && return 1
-
-    # Obtain the pid and check it against the binary name
-    pid=`cat $pidfile`
-    running_pid $pid $name || return 1
-    return 0
-}
-
-# force_stop name
-#
-# Checks for a running process named 'name', by looking for a pidfile
-# named /var/run/openvswitch/${name}.pid, and then kills it and waits 
-# for it to die.
-force_stop() {
-    local name=$1
-    local pidfile=/var/run/openvswitch/${name}.pid
-
-    [ ! -f "$pidfile" ] && return
-    if running $name; then
-        kill $pid
-        [ -n "$DODTIME" ] && sleep "$DODTIME"
-        if running $name; then
-            kill -KILL $pid
-            [ -n "$DODTIME" ] && sleep "$DODTIME"
-            if running $name; then
-                echo "Cannot kill $name (pid=$pid)!"
-                exit 1
-            fi
-        fi
-    fi
-    rm -f $pidfile
-    return 0
-}
-
-must_succeed() {
-    echo -n "$1: "
-    shift
-    if "$@"; then
-        echo "success."
-    else
-        echo " ERROR."
-        exit 1
-    fi
-}
-
-check_op() {
-    echo -n "$1: "
-    shift
-    if "$@"; then
-        echo "success."
-    else
-        echo " ERROR."
-    fi
-}
-
-# is_module_loaded module
-#
-# Returns 0 if 'module' is loaded, 1 otherwise.
-
-is_module_loaded() {
-    local module=$1
-    grep -q "^$module " /proc/modules
-}
-
-# load_module module
-#
-# Loads 'module' into the running kernel, if it is not already loaded.
-load_module() {
-    local module=$1
-    echo -n "Loading $module: "
-    if is_module_loaded $module; then
-        echo "already loaded, nothing to do."
-    elif modprobe $module; then
-        echo "success."
-    else
-        echo "ERROR."
-        echo "$module has probably not been built for this kernel."
-        if ! test -d /usr/share/doc/openvswitch-datapath-source; then
-            echo "Install the openvswitch-datapath-source package, then read"
-            echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
-        else
-            echo "For instructions, read"
-            echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
-        fi
-        exit 0
-    fi
-}
-
-# unload_module module
-#
-# Unloads 'module' from the running kernel, if it is loaded.
-unload_module() {
-    local module=$1
-    echo -n "Unloading $module: "
-    if is_module_loaded $module; then
-        if rmmod $module; then
-            echo "success."
-        else
-            echo "ERROR."
-            exit 1
-        fi
-    else
-        echo "not loaded, nothing to do."
-    fi
-}
-
-unload_modules() {
-    if is_module_loaded openvswitch_mod; then
-        for dp in $(ovs-dpctl dump-dps); do
-            echo -n "Deleting datapath $dp: "
-            if ovs-dpctl del-dp $dp; then
-                echo "success."
-            else
-                echo "ERROR."
-            fi
-        done
-    fi
-    unload_module openvswitch_mod
-}
-
-set_system_info() {
-    ovs_version=`ovs-vswitchd --version | sed 's/.*) //;1q'`
-    ovs-vsctl --no-wait --timeout=5 set Open_vSwitch . \
-        ovs-version="$ovs_version"
-
-    if (lsb_release --id) >/dev/null 2>&1; then
-        system_type=`lsb_release --id -s`
-        system_release=`lsb_release --release -s`
-        system_codename=`lsb_release --codename -s`
-        system_version="${system_release}-${system_codename}"
-
-        ovs-vsctl --no-wait --timeout=5 set Open_vSwitch . \
-            system-type="$system_type" \
-            system-version="$system_version"
-    fi
-}
-
-case "$1" in
+ovs_ctl=/usr/share/openvswitch/scripts/ovs-ctl
+case $1 in
     start)
-        conf_file=/etc/openvswitch/conf.db
-        schema_file=/usr/share/openvswitch/vswitch.ovsschema
-        schema_ver=`ovsdb-tool schema-version "$schema_file"`
+	set $ovs_ctl start --system-id=random
+	if test X"$FORCE_COREFILES" != X; then
+	    set "$@" --force-oorefiles="$FORCE_COREFILES"
+	fi
 
-        load_module openvswitch_mod
+	# Allow GRE traffic.
+        test ! -x /sbin/iptables || /sbin/iptables -I INPUT -p gre -j ACCEPT
 
-        if test -n "$CORE_LIMIT"; then
-            check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
-        fi
-
-        # Create an empty configuration database if it doesn't exist.
-        if test ! -e $conf_file; then
-            # Create configuration database.
-            ovsdb-tool -vANY:console:emer create $conf_file $schema_file
-        elif test "X`ovsdb-tool needs-conversion $conf_file $schema_file`" != Xno; then
-            # Back up the old version.
-            version=`ovsdb-tool db-version "$conf_file"`
-            cksum=`ovsdb-tool db-cksum "$conf_file" | awk '{print $1}'`
-            cp "$conf_file" "$conf_file.backup$version-$cksum"
-            
-            # Compact database.  This is important if the old schema did not
-            # enable garbage collection (i.e. if it did not have any tables
-            # with "isRoot": true) but the new schema does.  In that situation
-            # the old database may contain a transaction that creates a record
-            # followed by a transaction that creates the first use of the
-            # record.  Replaying that series of transactions against the new
-            # database schema (as "convert" does) would cause the record to be
-            # dropped by the first transaction, then the second transaction
-            # would cause a referential integrity failure (for a strong
-            # reference).
-            ovsdb-tool -vANY:console:emer compact $conf_file
-
-            # Upgrade or downgrade schema and compact database.
-            ovsdb-tool -vANY:console:emer convert $conf_file $schema_file
-        fi
-
-        if test "$ENABLE_MONITOR" = y; then
-            monitor_opt=--monitor
-        else
-            monitor_opt=
-        fi
-
-        if [ ! -d /var/run/openvswitch ]; then
-            install -d -m 755 -o root -g root /var/run/openvswitch
-        fi
-
-        if [ ! -d /var/log/openvswitch ]; then
-            install -d -m 755 -o root -g root /var/log/openvswitch
-        fi
-
-        if [ ! -d /var/log/openvswitch/cores ]; then
-            install -d -m 755 -o root -g root /var/log/openvswitch/cores
-        fi
-
-        # Start ovsdb-server.
-        set --
-        set -- "$@" $conf_file
-        set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
-        set -- "$@" --log-file=/var/log/openvswitch/ovsdb-server.log
-        set -- "$@" --detach --no-chdir --pidfile $monitor_opt
-        set -- "$@" --remote punix:/var/run/openvswitch/db.sock
-        set -- "$@" --remote db:Open_vSwitch,manager_options
-        set -- "$@" --private-key=db:SSL,private_key
-        set -- "$@" --certificate=db:SSL,certificate
-        set -- "$@" --bootstrap-ca-cert=db:SSL,ca_cert
-        set -- "$@" $OVSDB_SERVER_OPTS
-        echo -n "Starting ovsdb-server: "
-        start-stop-daemon --start --quiet --oknodo \
-            --pidfile /var/run/openvswitch/ovsdb-server.pid \
-            --chdir /var/log/openvswitch/cores              \
-            --exec $ovsdb_server -- "$@"
-        if running ovsdb-server; then
-            echo "ovsdb-server."
-        else
-            echo " ERROR."
-        fi
-
-        ovs-vsctl --no-wait --timeout=5 init -- set Open_vSwitch . db-version="$schema_ver"
-
-        set_system_info
-
-        # Start ovs-vswitchd.
-        set --
-        set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
-        set -- "$@" --log-file=/var/log/openvswitch/ovs-vswitchd.log
-        set -- "$@" --detach --no-chdir --pidfile $monitor_opt
-        set -- "$@" unix:/var/run/openvswitch/db.sock
-        set -- "$@" $OVS_VSWITCHD_OPTS
-        echo -n "Starting ovs-vswitchd: "
-        start-stop-daemon --start --quiet --oknodo \
-            --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
-            --chdir /var/log/openvswitch/cores              \
-            --exec $ovs_vswitchd -- "$@"
-        if running ovs-vswitchd; then
-            echo "ovs-vswitchd."
-        else
-            echo " ERROR."
-        fi
+	"$@"
         ;;
-    stop)
-        echo -n "Stopping ovs-vswitchd: "
-        start-stop-daemon --stop --quiet --oknodo --retry 5 \
-            --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
-            --chdir /var/log/openvswitch/cores              \
-            --exec $ovs_vswitchd
-        echo "ovs-vswitchd."
-
-        echo -n "Stopping ovsdb-server: "
-        start-stop-daemon --stop --quiet --oknodo --retry 5 \
-            --pidfile /var/run/openvswitch/ovsdb-server.pid \
-            --chdir /var/log/openvswitch/cores              \
-            --exec $ovsdb_server
-        echo "ovsdb-server."
+    stop | force-stop)
+        $ovs_ctl stop
         ;;
-    force-stop)
-        echo -n "Forcefully stopping ovs-vswitchd: "
-        force_stop ovs-vswitchd
-        if ! running ovs-vswitchd; then
-            echo "ovs-vswitchd."
-        else
-            echo " ERROR."
-        fi
-
-        echo -n "Forcefully stopping ovsdb-server: "
-        force_stop ovsdb-server
-        if ! running ovsdb-server; then
-            echo "ovsdb-server."
-        else
-            echo " ERROR."
-        fi
-        ;;
-    unload)
-        unload_modules
-        ;;
-    reload)
-        ;;
-    force-reload)
-        # Nothing to do, since ovs-vswitchd automatically reloads
-        # whenever its configuration changes, and ovsdb-server doesn't
-        # have anything to reload.
+    reload | force-reload)
+        # The OVS daemons keep up-to-date.
         ;;
     restart)
         $0 stop || true
         $0 start
         ;;
     status)
-        for daemon in ovs-vswitchd ovsdb-server; do
-            echo -n "$daemon is "
-            if running $daemon;  then
-                echo "running"
-            else
-                echo "not running."
-                exit 1
-            fi
-        done
+        $ovs_ctl status
         ;;
     *)
-        N=/etc/init.d/openvswitch-switch
-        echo "Usage: $N {start|stop|restart|force-reload|status|force-stop|unload}" >&2
+        echo "Usage: $0 {start|stop|restart|force-reload|status|force-stop}" >&2
         exit 1
         ;;
 esac

@@ -12,11 +12,14 @@ bin_SCRIPTS += \
 	utilities/ovs-vlan-test
 endif
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
+scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-controller.8.in \
+	utilities/ovs-ctl.in \
 	utilities/ovs-dpctl.8.in \
+	utilities/ovs-lib.sh.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-parse-leaks.in \
@@ -35,8 +38,10 @@ EXTRA_DIST += \
 	utilities/ovs-vsctl.8.in
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
+	utilities/ovs-ctl \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
+	utilities/ovs-lib.sh \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pcap \
@@ -63,6 +68,7 @@ man_MANS += \
 	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vsctl.8
+dist_man_MANS += utilities/ovs-ctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.a

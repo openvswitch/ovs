@@ -36,7 +36,7 @@ configure-stamp:
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-			--with-build-number=$(BUILD_NUMBER) \
+			--sysconfdir=/etc --with-build-number=$(BUILD_NUMBER) \
 			CFLAGS="$(CFLAGS)" $(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 

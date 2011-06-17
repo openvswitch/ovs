@@ -5,21 +5,5 @@
 # automatically at boot time.  It can be started immediately with
 #       /etc/init.d/openvswitch-switch start
 
-# OVSDB_SERVER_OPTS: Additional options to pass to ovsdb-server,
-# e.g. "--fail=open"
-OVSDB_SERVER_OPTS=
-
-# OVS_VSWITCHD_OPTS: Additional options to pass to ovs-vswitchd,
-# e.g. "--fail=open"
-OVS_VSWITCHD_OPTS=
-
-# CORE_LIMIT: Maximum size for core dumps.
-#
-# Leaving this unset will use the system default.  Setting it to 0
-# will disable core dumps.  Setting it to "unlimited" will dump all
-# core files regardless of size.
-#CORE_LIMIT=unlimited
-
-# ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
-#    if they die due to an error signal.
-# ENABLE_MONITOR=y
+# FORCE_COREFILES: If 'yes' then core files will be enabled.
+# FORCE_COREFILES=yes

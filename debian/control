@@ -36,7 +36,7 @@ Description: Open vSwitch common components
 Package: openvswitch-switch
 Architecture: linux-any
 Suggests: openvswitch-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps, uuid-runtime
 Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  

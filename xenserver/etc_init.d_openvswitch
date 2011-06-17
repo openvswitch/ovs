@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # openvswitch
 #
@@ -27,43 +27,11 @@
 # Short-Description: Open vSwitch switch
 ### END INIT INFO
 
-# source function library
-if [ -f /etc/init.d/functions ]; then
-    . /etc/init.d/functions
-elif [ -f /etc/rc.d/init.d/functions ]; then
-    . /etc/rc.d/init.d/functions
-elif [ -f /lib/lsb/init-functions ]; then
-    . /lib/lsb/init-functions
-else
-    echo "$0: missing LSB shell function library" >&2
-    exit 1
-fi
-
-if type action >/dev/null 2>&1; then
-    :
-else
-    # SUSE lacks action
-    action() {
-       STRING=$1
-       shift
-       "$@"
-       rc=$?
-       if [ $rc -eq 0 ] ; then
-            log_success_msg $"$STRING "
-       else
-            log_failure_msg $"$STRING "
-       fi
-       return $rc
-    }
-fi
-
-test -e /etc/xensource-inventory && . /etc/xensource-inventory
+. /usr/share/openvswitch/scripts/ovs-lib.sh || exit 1
+. /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
-if test -e /etc/xensource/network.conf; then
-    NETWORK_MODE=$(cat /etc/xensource/network.conf)
-fi
 
-case ${NETWORK_MODE:=openvswitch} in
+case `cat /etc/xensource/network.conf` in
     vswitch|openvswitch)
         ;;
     bridge)
@@ -75,339 +43,53 @@ case ${NETWORK_MODE:=openvswitch} in
         ;;
 esac
 
-: ${ENABLE_MONITOR:=y}
-: ${FORCE_COREFILES:=y}
-
-# Config variables specific to ovsdb-server
-: ${OVSDB_SERVER_REMOTES:=punix:/var/run/openvswitch/db.sock db:Open_vSwitch,manager_options}
-: ${OVSDB_SERVER_DB:=/etc/openvswitch/conf.db}
-: ${OVSDB_SERVER_PIDFILE:=/var/run/openvswitch/ovsdb-server.pid}
-: ${OVSDB_SERVER_RUN_DIR:=/var/xen/openvswitch}
-: ${OVSDB_SERVER_PRIORITY:=-10}
-: ${OVSDB_SERVER_LOGFILE:=/var/log/openvswitch/ovsdb-server.log}
-: ${OVSDB_SERVER_FILE_LOGLEVEL:=INFO}
-: ${OVSDB_SERVER_SYSLOG_LOGLEVEL:=ERR}
-: ${OVSDB_SERVER_MEMLEAK_LOGFILE:=}
-: ${OVSDB_SERVER_STRACE_LOG:=}
-: ${OVSDB_SERVER_STRACE_OPT:=}
-: ${OVSDB_SERVER_VALGRIND_LOG:=}
-: ${OVSDB_SERVER_VALGRIND_OPT:=}
-
-# Config variables specific to ovs-vswitchd
-: ${VSWITCHD_OVSDB_SERVER:=unix:/var/run/openvswitch/db.sock}
-: ${VSWITCHD_OVSDB_SCHEMA:=/usr/share/openvswitch/vswitch.ovsschema}
-: ${VSWITCHD_PIDFILE:=/var/run/openvswitch/ovs-vswitchd.pid}
-: ${VSWITCHD_RUN_DIR:=/var/xen/openvswitch}
-: ${VSWITCHD_PRIORITY:=-10}
-: ${VSWITCHD_MLOCKALL:=yes}
-: ${VSWITCHD_LOGFILE:=/var/log/openvswitch/ovs-vswitchd.log}
-: ${VSWITCHD_FILE_LOGLEVEL:=INFO}
-: ${VSWITCHD_SYSLOG_LOGLEVEL:=ERR}
-: ${VSWITCHD_MEMLEAK_LOGFILE:=}
-: ${VSWITCHD_STRACE_LOG:=}
-: ${VSWITCHD_STRACE_OPT:=}
-: ${VSWITCHD_VALGRIND_LOG:=}
-: ${VSWITCHD_VALGRIND_OPT:=}
-
-: ${OVS_XAPI_SYNC_PIDFILE:=/var/run/openvswitch/ovs-xapi-sync.pid}
-
-# Full paths to executables & modules
-ovsdb_server="/usr/sbin/ovsdb-server"
-ovsdb_tool="/usr/bin/ovsdb-tool"
-vswitchd="/usr/sbin/ovs-vswitchd"
-dpctl="/usr/bin/ovs-dpctl"
-appctl="/usr/bin/ovs-appctl"
-ofctl="/usr/bin/ovs-ofctl"
-vsctl="/usr/bin/ovs-vsctl"
-
-if test "$ENABLE_MONITOR" = "y"; then
-    monitor_opt="--monitor"
-else
-    monitor_opt=
-fi
-
-function hup_monitor_external_ids {
-    if [ -e "$OVS_XAPI_SYNC_PIDFILE" ]; then
-        action "Configuring Open vSwitch external IDs" kill -HUP `cat "$OVS_XAPI_SYNC_PIDFILE"`
+start () {
+    set $ovs_ctl start
+    set "$@" --system-id="$INSTALLATION_UUID"
+    set "$@" --system-type="$PRODUCT_BRAND"
+    set "$@" --system-version="$PRODUCT_VERSION-$BUILD_NUMBER"
+    set "$@" --external-id=xs-system-uuid="$INSTALLATION_UUID"
+    set "$@" --daemon-cwd=/var/xen/openvswitch
+    if test X"$FORCE_COREFILES" != X; then
+	set "$@" --force-oorefiles="$FORCE_COREFILES"
     fi
-}
-
-function turn_on_corefiles {
-    ulimit -Sc 67108864
-}
-
-function remove_all_dp {
-    for dp in $($dpctl dump-dps); do
-        action "Removing datapath: $dp" "$dpctl" del-dp "$dp"
-    done
-}
-
-function insert_modules_if_required {
-    if test -e /sys/module/bridge; then
-        bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
-        if test "$bridges" != "*"; then
-            log_warning_msg "not removing bridge module because bridges exist ($bridges)"
-        else
-            action "removing bridge module" rmmod bridge
-        fi
+    if test X"$OVSDB_SERVER_PRIORITY" != X; then
+	set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
     fi
-    if ! lsmod | grep -q "openvswitch_mod"; then
-        action "Inserting llc module" modprobe llc
-        action "Inserting openvswitch module" modprobe openvswitch_mod
+    if test X"$VSWITCHD_PRIORITY" != X; then
+	set "$@" --ovs-vswitchd-priority="$VSWITCHD_PRIORITY"
     fi
-}
-
-function remove_modules {
-    if lsmod | grep -q "openvswitch_mod"; then
-        action "Removing openvswitch module" rmmod openvswitch_mod.ko
+    if test X"$VSWITCHD_MLOCKALL" != X; then
+	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
-}
-
-function start_daemon {
-    local DAEMON=$1
-    shift
-    local BINARY=$1
-
-    # cd to daemon's run_dir so core files get dumped into a sensible place.
-    eval local run_dir=\$${DAEMON}_RUN_DIR
-    if [ ! -d "$run_dir" ]; then
-        install -d -m 755 -o root -g root "$run_dir"
+    if test ! -e /var/run/openvswitch.booted; then
+        touch /var/run/openvswitch.booted
+        set "$@" --delete-bridges
     fi
-    cd "$run_dir"
-    
-    # Configure log levels.
-    eval local syslog_loglevel=\$${DAEMON}_SYSLOG_LOGLEVEL
-    eval local file_loglevel=\$${DAEMON}_FILE_LOGLEVEL
-    eval local logfile=\$${DAEMON}_LOGFILE
-    set -- "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:"$syslog_loglevel"
-    if test -n "$file_loglevel" && test -n "$logfile"; then
-        install -d -m 755 -o root -g root `dirname "$logfile"`
-        set -- "$@" --log-file="$logfile" -vANY:FILE:"$file_loglevel"
-    fi
+    "$@"
 
-    # Configure leak checker.
-    eval local memleak_logfile=\$${DAEMON}_MEMLEAK_LOGFILE
-    if test -n "$memleak_logfile"; then
-        set -- "$@" --check-leaks="$memleak_logfile"
-        if test -e "$memleak_logfile"; then
-            mv "$memleak_logfile" "$memleak_logfile.prev"
-        fi
-    fi
-
-    # Configure debugging wrappers.
-    eval local strace_log=\$${DAEMON}_STRACE_LOG
-    eval local strace_opt=\$${DAEMON}_STRACE_OPT
-    eval local valgrind_log=\$${DAEMON}_VALGRIND_LOG
-    eval local valgrind_opt=\$${DAEMON}_VALGRIND_OPT
-    if test -n "$strace_log" && test -n "$valgrind_log"; then
-        printf "Can not start with both VALGRIND and STRACE\n"
-        exit 1
-    elif test -n "$strace_log"; then
-        local mode=strace
-        set -- strace -o "$strace_log" $strace_opt "$@"
-    elif test -n "$valgrind_log"; then
-        local mode=valgrind
-        set -- valgrind --log-file="$valgrind_log" $valgrind_opt "$@"
+    if daemon_is_running ovs-xapi-sync; then
+	log_success_msg "ovs-xapi-sync is already running"
     else
-        local mode=production
-        eval local pidfile=\$${DAEMON}_PIDFILE
-        install -d -m 755 -o root -g root `dirname $pidfile`
-        set -- "$@" --pidfile="$pidfile" --detach $monitor_opt --no-chdir
+	PYTHONPATH=/usr/share/openvswitch/python \
+            /usr/share/openvswitch/scripts/ovs-xapi-sync \
+            --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
     fi
-
-    # Configure niceness.
-    eval local priority=\$${DAEMON}_PRIORITY
-    if test -n "$priority"; then
-        set -- nice -n $priority "$@"
-    fi
-
-    if test $mode = production; then
-        action "Starting `basename $BINARY`" "$@"
-    else
-        # Start in background and force a "success" message
-        action "Starting `basename $BINARY` with $mode debugging" true
-        ("$@") &
-    fi
-}
-
-function start_ovsdb_server {
-    set -- "$ovsdb_server" "$OVSDB_SERVER_DB"
-    for remote in $OVSDB_SERVER_REMOTES; do
-        set -- "$@" --remote="$remote"
-    done
-    set -- "$@" --private-key=db:SSL,private_key --certificate=db:SSL,certificate --bootstrap-ca-cert=db:SSL,ca_cert
-    start_daemon OVSDB_SERVER "$@"
-}
-
-function start_vswitchd {
-    local mlockall_opt=
-    if [ "$VSWITCHD_MLOCKALL" != "no" ]; then
-        mlockall_opt="--mlockall"
-    fi
-
-    start_daemon VSWITCHD "$vswitchd" $mlockall_opt "$VSWITCHD_OVSDB_SERVER"
- }
-
-function stop_daemon {
-    local DAEMON=$1
-    local BINARY=$2
-    eval local pidfile=\$${DAEMON}_PIDFILE
-    if test -f "$pidfile"; then
-        local pid=$(cat "$pidfile")
-        action "Killing `basename $BINARY` ($pid)" kill $pid
-        for delay in .1 .25 .65 1 1 1 1; do
-            if kill -0 $pid >/dev/null 2>&1; then
-                sleep $delay
-            else
-                break
-            fi
-        done
-    fi
-}
-
-function set_system_ids {
-    if [ -f /etc/xensource-inventory ]; then
-        OVS_VERSION=`ovs-vswitchd --version | sed 's/.*) //;1q'`
-        action "Configuring Open vSwitch system IDs" true
-        $vsctl --no-wait --timeout=5 set Open_vSwitch . \
-            ovs-version="$OVS_VERSION" \
-            system-type="$PRODUCT_BRAND" \
-            system-version="$PRODUCT_VERSION-$BUILD_NUMBER" \
-            external-ids:system-id="$INSTALLATION_UUID" \
-            external-ids:xs-system-uuid="$INSTALLATION_UUID"
-    else
-        if test -f /etc/openvswitch/install_uuid.conf; then
-            . /etc/openvswitch/install_uuid.conf
-        elif INSTALLATION_UUID=`uuidgen`; then
-            echo "INSTALLATION_UUID=$INSTALLATION_UUID" > /etc/openvswitch/install_uuid.conf
-        else
-            log_failure_msg "missing uuidgen, could not generate system UUID"
-            return
-        fi
-        $vsctl --no-wait --timeout=5 set Open_vSwitch . \
-            external-ids:system-id="$INSTALLATION_UUID"
-        action "Configuring Open vSwitch system IDs" true
-    fi
-}
-
-function start {
-    if [ "$FORCE_COREFILES" = "y" ]; then
-        turn_on_corefiles
-    fi
-
-    insert_modules_if_required
-
-    # Increase the limit on the number of open file descriptors since
-    # ovs-vswitchd needs a few per bridge
-    ulimit -n 4096
 
     # Allow GRE traffic.
-    iptables -I INPUT -p gre -j ACCEPT
-
-    schemaver=`$ovsdb_tool schema-version "$VSWITCHD_OVSDB_SCHEMA"`
-    if [ ! -e "$OVSDB_SERVER_DB" ]; then
-        warning "$OVSDB_SERVER_DB does not exist"
-        install -d -m 755 -o root -g root `dirname $OVSDB_SERVER_DB`
-
-        action "Creating empty database $OVSDB_SERVER_DB" true
-        $ovsdb_tool -vANY:console:emer create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
-    elif test "X`$ovsdb_tool needs-conversion "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"`" != Xno; then
-        # Back up the old version.
-        version=`$ovsdb_tool db-version "$OVSDB_SERVER_DB"`
-        cksum=`$ovsdb_tool db-cksum "$OVSDB_SERVER_DB" | awk '{print $1}'`
-        cp "$OVSDB_SERVER_DB" "$OVSDB_SERVER_DB.backup$version-$cksum"
-
-        # Compact database.  This is important if the old schema did not enable
-        # garbage collection (i.e. if it did not have any tables with "isRoot":
-        # true) but the new schema does.  In that situation the old database
-        # may contain a transaction that creates a record followed by a
-        # transaction that creates the first use of the record.  Replaying that
-        # series of transactions against the new database schema (as "convert"
-        # does) would cause the record to be dropped by the first transaction,
-        # then the second transaction would cause a referential integrity
-        # failure (for a strong reference).
-        $ovsdb_tool -vANY:console:emer compact "$OVSDB_SERVER_DB"
-
-        # Upgrade or downgrade schema.
-        $ovsdb_tool -vANY:console:emer convert "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
-    fi
-
-    start_ovsdb_server
-    $vsctl --no-wait --timeout=5 init -- set Open_vSwitch . db-version="$schemaver"
-    if [ ! -e /var/run/openvswitch.booted ]; then
-        touch /var/run/openvswitch.booted
-        for bridge in $($vsctl list-br); do
-            $vsctl --no-wait --timeout=5 del-br $bridge
-        done
-    fi
-
-    set_system_ids
-
-    start_vswitchd
-
-    if [ -f /etc/xensource-inventory ]; then
-        # Start daemon to monitor external ids
-        PYTHONPATH=/usr/share/openvswitch/python \
-                   /usr/share/openvswitch/scripts/ovs-xapi-sync \
-                   --pidfile --detach $monitor_opt "$VSWITCHD_OVSDB_SERVER"
-    fi
+    /sbin/iptables -I INPUT -p gre -j ACCEPT
 
     touch /var/lock/subsys/openvswitch
 }
 
-function stop {
-    stop_daemon VSWITCHD "$vswitchd"
-    stop_daemon OVSDB_SERVER "$ovsdb_server"
-    stop_daemon OVS_XAPI_SYNC ovs-xapi-sync
+stop () {
+    $ovs_ctl stop
+    stop_daemon ovs-xapi-sync
     rm -f /var/lock/subsys/openvswitch
 }
 
-function internal_interfaces {
-    # Outputs a list of internal interfaces:
-    #
-    #   - There is an internal interface for every bridge, whether it has
-    #     an Interface record or not and whether the Interface record's
-    #     'type' is properly set.
-    #
-    #   - There is an internal interface for each Interface record whose
-    #     'type' is 'internal'.
-    #
-    # But ignore interfaces that don't really exist.
-    for d in `(ovs-vsctl --bare \
-                -- --columns=name find Interface type=internal \
-		-- list-br) | sort -u`
-    do
-        if test -e "/sys/class/net/$d"; then
-	    printf "%s " "$d"
-	fi
-    done
-}
-
-function force_reload_kmod {
-    ifaces=$(internal_interfaces)
-    action "Configured internal interfaces: $ifaces" true
-
-    stop
-
-    script=$(mktemp)
-    action "Save interface configuration to $script" true
-    if ! /usr/share/openvswitch/scripts/ovs-save $ifaces > $script; then
-        warning "Failed to save configuration, not replacing kernel module"
-        start
-        exit 1
-    fi
-    chmod +x $script
-
-    action "Destroy datapaths" remove_all_dp
-
-    remove_modules
-
-    start
-
-    action "Restore interface configuration from $script" $script
-}
-
-case "$1" in
+ovs_ctl=/usr/share/openvswitch/scripts/ovs-ctl
+case $1 in
     start)
         start
         ;;
@@ -419,25 +101,21 @@ case "$1" in
         start
         ;;
     reload|force-reload)
-        # Nothing to do to ovs-vswitchd and ovsdb-server as they keep their
-        # configuration up-to-date all the time.  HUP ovs-xapi-sync so it
-        # re-runs.
-        hup_monitor_external_ids
-        ;;
-    strace-vswitchd)
-        shift
-        strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
+        # The main OVS daemons keep up-to-date, but ovs-xapi-sync needs help.
+        pidfile=/var/run/openvswitch/ovs-xapi-sync.pid
+        if test -e "$pidfile"; then
+            pid=`cat "$pidfile"`
+            action "Configuring Open vSwitch external IDs" kill -HUP $pid
+        fi
         ;;
     status)
-        status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server &&
-        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
+        $ovs_ctl status && daemon_status ovs-xapi-sync
         ;;
     version)
-        /usr/sbin/ovsdb-server -V
-        /usr/sbin/ovs-vswitchd -V
+        $ovs_ctl version
         ;;
     force-reload-kmod)
-	force_reload_kmod
+        $ovs_ctl force_reload_kmod
         ;;
     help)
         printf "openvswitch [start|stop|restart|reload|force-reload|status|version]\n"

@@ -1,110 +1,15 @@
 ### Configuration options for openvswitch
 
 # Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+
+# FORCE_COREFILES: If 'yes' then core files will be enabled.
+# FORCE_COREFILES=yes
+
+# OVSDB_SERVER_PRIORITY: "nice" priority at which to run ovsdb-server.
 #
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.  This file is offered as-is,
-# without warranty of any kind.
-
-# ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
-#    if they die due to an error signal.
-# ENABLE_MONITOR=y
-
-# FORCE_COREFILES: If 'y' then core files will be enabled.
-# FORCE_COREFILES=y
-
-# COREFILE_PATTERN: Pattern used to determine path and filename for
-#     core files when FORCE_COREFILES is 'y'.  This is Linux specific.
-#     See the manpage for "core".
-# COREFILE_PATTERN="/var/xen/openvswitch/%e-%t"
-
-# OVSDB_SERVER_REMOTES: Space-separated list of methods on which to have
-#     ovsdb-server listen or connect for a JSON-RPC connection.
-# OVSDB_SERVER_REMOTES="punix:/var/run/openvswitch/db.sock db:Open_vSwitch,manager_options"
-
-# OVSDB_SERVER_DB: File for which ovsdb-server uses for storage.
-# OVSDB_SERVER_DB=/etc/openvswitch/conf.db
-
-# OVSDB_SERVER_PIDFILE: File in which to store the pid of the running
-#     ovsdb-server.
-# OVSDB_SERVER_PIDFILE=/var/run/openvswitch/ovsdb-server.pid
-
-# OVSDB_SERVER_RUN_DIR: Set the directory in which ovsdb-server should be
-#     run.  This mainly affects where core files will be placed.
-# OVSDB_SERVER_RUN_DIR=/var/xen/openvswitch
-
-# OVSDB_SERVER_PRIORITY: "nice" priority at which to run ovsdb-server and 
-#     related processes.
 # OVSDB_SERVER_PRIORITY=-10
 
-# OVSDB_SERVER_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# OVSDB_SERVER_LOGFILE=/var/log/openvswitch/ovsdb-server.log
-
-# OVSDB_SERVER_FILE_LOGLEVEL: Log level at which to log into the
-#     OVSDB_SERVER_LOG file.  If this is null or not set the logfile will
-#     not be created and nothing will be sent to it.  This is the
-#     default.  The available options are: EMER, WARN, INFO and DBG.
-# OVSDB_SERVER_FILE_LOGLEVEL=""
-
-# OVSDB_SERVER_SYSLOG_LOGLEVEL: Log level at which to log into syslog.  If
-#     this is null or not set the default is to log to syslog
-#     emergency and warning level messages only.
-# OVSDB_SERVER_SYSLOG_LOGLEVEL="WARN"
-
-# OVSDB_SERVER_MEMLEAK_LOGFILE: File for logging memory leak data.
-#     Enabling this option will slow ovsdb-server significantly.  Do not
-#     enable it except to debug a suspected memory leak.  Use the
-#     ovs-parse-leaks utility included with Open vSwitch to parse the
-#     log file.  For best results, you also need debug symbols.
-# OVSDB_SERVER_MEMLEAK_LOGFILE=""
-
-# OVSDB_SERVER_STRACE_LOG: File for logging strace output.
-#     If this is set to a nonempty string, then ovsdb-server will run
-#     under strace, whose output will be logged to the specified file.
-#     Enabling this option will slow ovsdb-server significantly.
-#     OVSDB_SERVER_STRACE_LOG and OVSDB_SERVER_VALGRIND_LOG are mutually 
-#     exclusive.
-# OVSDB_SERVER_STRACE_LOG=""
-
-# OVSDB_SERVER_STRACE_OPT: Options to pass to strace.
-#     This option's value is honored only when OVSDB_SERVER_STRACE_LOG is
-#     set to a nonempty string.
-# OVSDB_SERVER_STRACE_OPT=""
-
-# OVSDB_SERVER_VALGRIND_LOG: File for logging valgrind output.
-#     If this is set to a nonempty string, then ovsdb-server will run
-#     under valgrind, whose output will be logged to the specified file.
-#     Enabling this option will slow ovsdb-server by 100X or more.
-#     valgrind is not installed by default on XenServer systems; you must
-#     install it by hand to usefully enable this option.
-#     OVSDB_SERVER_STRACE_LOG and OVSDB_SERVER_VALGRIND_LOG are mutually 
-#     exclusive.
-# OVSDB_SERVER_VALGRIND_LOG=""
-
-# OVSDB_SERVER_VALGRIND_OPT: Options to pass to valgrind.
-#     This option's value is honored only when OVSDB_SERVER_VALGRIND_LOG is
-#     set to a nonempty string.
-# OVSDB_SERVER_VALGRIND_OPT=""
-
-# VSWITCHD_OVSDB_SERVER: Method to have ovs-vswitchd initiate a JSON-RPC
-#     connection to an ovsdb-server instance.
-# VSWITCHD_OVSDB_SERVER=unix:/var/run/openvswitch/db.sock
-
-# VSWITCHD_OVSDB_SCHEMA: Schema file to use for generating a new OVSDB
-#     ovs-vswitchd database.
-# VSWITCHD_OVSDB_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
-
-# VSWITCHD_PIDFILE: File in which to store the pid of the running
-#     ovs-vswitchd.
-# VSWITCHD_PIDFILE=/var/run/openvswitch/ovs-vswitchd.pid
-
-# VSWITCHD_RUN_DIR: Set the directory in which ovs-vswitchd should be
-#     run.  This mainly affects where core files will be placed.
-# VSWITCHD_RUN_DIR=/var/xen/openvswitch
-
-# VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
-#     processes.
+# VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd.
 # VSWITCHD_PRIORITY=-10
 
 # VSWITCHD_MLOCKALL: Whether to pass ovs-vswitchd the --mlockall option.
@@ -113,50 +18,3 @@
 #     system memory pressure in extraordinary situations, such as multiple
 #     concurrent VM import operations.
 # VSWITCHD_MLOCKALL=yes
-
-# VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# VSWITCHD_LOGFILE=/var/log/openvswitch/ovs-vswitchd.log
-
-# VSWITCHD_FILE_LOGLEVEL: Log level at which to log into the
-#     VSWITCHD_LOG file.  If this is null or not set the logfile will
-#     not be created and nothing will be sent to it.  This is the
-#     default.  The available options are: EMER, WARN, INFO and DBG.
-# VSWITCHD_FILE_LOGLEVEL=""
-
-# VSWITCHD_SYSLOG_LOGLEVEL: Log level at which to log into syslog.  If
-#     this is null or not set the default is to log to syslog
-#     emergency and warning level messages only.
-# VSWITCHD_SYSLOG_LOGLEVEL="WARN"
-
-# VSWITCHD_MEMLEAK_LOGFILE: File for logging memory leak data.
-#     Enabling this option will slow ovs-vswitchd significantly.  Do not
-#     enable it except to debug a suspected memory leak.  Use the
-#     ovs-parse-leaks utility included with Open vSwitch to parse the
-#     log file.  For best results, you also need debug symbols.
-# VSWITCHD_MEMLEAK_LOGFILE=""
-
-# VSWITCHD_STRACE_LOG: File for logging strace output.
-#     If this is set to a nonempty string, then ovs-vswitchd will run
-#     under strace, whose output will be logged to the specified file.
-#     Enabling this option will slow ovs-vswitchd significantly.
-#     VSWITCHD_STRACE_LOG and VSWITCHD_VALGRIND_LOG are mutually exclusive.
-# VSWITCHD_STRACE_LOG=""
-
-# VSWITCHD_STRACE_OPT: Options to pass to strace.
-#     This option's value is honored only when VSWITCHD_STRACE_LOG is
-#     set to a nonempty string.
-# VSWITCHD_STRACE_OPT=""
-
-# VSWITCHD_VALGRIND_LOG: File for logging valgrind output.
-#     If this is set to a nonempty string, then ovs-vswitchd will run
-#     under valgrind, whose output will be logged to the specified file.
-#     Enabling this option will slow ovs-vswitchd by 100X or more.
-#     valgrind is not installed by default on XenServer systems; you must
-#     install it by hand to usefully enable this option.
-#     VSWITCHD_STRACE_LOG and VSWITCHD_VALGRIND_LOG are mutually exclusive.
-# VSWITCHD_VALGRIND_LOG=""
-
-# VSWITCHD_VALGRIND_OPT: Options to pass to valgrind.
-#     This option's value is honored only when VSWITCHD_VALGRIND_LOG is
-#     set to a nonempty string.
-# VSWITCHD_VALGRIND_OPT=""

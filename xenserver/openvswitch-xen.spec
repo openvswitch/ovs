@@ -367,6 +367,8 @@ exit 0
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
 /usr/share/openvswitch/scripts/ovs-save
+/usr/share/openvswitch/scripts/ovs-ctl
+/usr/share/openvswitch/scripts/ovs-lib.sh
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-vlan-bug-workaround
 /usr/sbin/ovs-vswitchd
@@ -386,6 +388,7 @@ exit 0
 /usr/share/man/man1/ovsdb-tool.1.gz
 /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
+/usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-leaks.8.gz
