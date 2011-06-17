@@ -14,6 +14,7 @@
 from InterfaceReconfigure import *
 import os
 import re
+import subprocess
 
 #
 # Bare Network Devices -- network devices without IP configuration
@@ -292,10 +293,13 @@ def configure_datapath(pif):
     - A list containing the necessary vsctl command line arguments
     - A list of additional devices which should be brought up after
       the configuration is applied.
+    - A list containing flows to apply to the pif bridge, note that
+      port numbers may need to be substituted once ofport is known
     """
 
     vsctl_argv = []
     extra_up_ports = []
+    bridge_flows = []
 
     assert not pif_is_vlan(pif)
     bridge = pif_bridge_name(pif)
@@ -404,6 +408,25 @@ def configure_datapath(pif):
 
     if (fail_mode not in valid_fail_modes) and pool:
         fail_mode = pool['other_config'].get('vswitch-controller-fail-mode')
+        # Add default flows to allow management traffic if fail-mode
+        # transitions to secure based on pool fail-mode setting
+        if fail_mode == 'secure' and db().get_pif_record(pif).get('management', False):
+            prev_fail_mode = vswitchCfgQuery(['get-fail-mode', bridge])
+            if prev_fail_mode != 'secure':
+                tp = 'idle_timeout=0,priority=0'
+                host_mgmt_mac = db().get_pif_record(pif)['MAC']
+                # account for bond as management interface
+                if len(physical_devices) > 1:
+                    bridge_flows += ['%s,in_port=local,arp,dl_src=%s,actions=NORMAL' % (tp, host_mgmt_mac)]
+                    bridge_flows += ['%s,in_port=local,dl_src=%s,actions=NORMAL' % (tp, host_mgmt_mac)]
+                    # we don't know slave ofports yet, substitute later
+                    bridge_flows += ['%s,in_port=%%s,arp,nw_proto=1,actions=local' % (tp)]
+                    bridge_flows += ['%s,in_port=%%s,dl_dst=%s,actions=local' % (tp, host_mgmt_mac)]
+                else:
+                    bridge_flows += ['%s,in_port=%%s,arp,nw_proto=1,actions=local' % (tp)]
+                    bridge_flows += ['%s,in_port=local,arp,dl_src=%s,actions=%%s' % (tp, host_mgmt_mac)]
+                    bridge_flows += ['%s,in_port=%%s,dl_dst=%s,actions=local' % (tp, host_mgmt_mac)]
+                    bridge_flows += ['%s,in_port=local,dl_src=%s,actions=%%s' % (tp, host_mgmt_mac)]
 
     if fail_mode not in valid_fail_modes:
         fail_mode = 'standalone'
@@ -422,7 +445,7 @@ def configure_datapath(pif):
     vsctl_argv += set_br_external_ids(pif)
     vsctl_argv += ['## done configuring datapath %s' % bridge]
 
-    return vsctl_argv,extra_up_ports
+    return vsctl_argv,extra_up_ports,bridge_flows
 
 def deconfigure_bridge(pif):
     vsctl_argv = []
@@ -475,6 +498,7 @@ class DatapathVswitch(Datapath):
         Datapath.__init__(self, pif)
         self._dp = pif_datapath(pif)
         self._ipdev = pif_ipdev_name(pif)
+        self._bridge_flows = []
 
         if pif_is_vlan(pif) and not self._dp:
             raise Error("Unbridged VLAN devices not implemented yet")
@@ -505,15 +529,17 @@ class DatapathVswitch(Datapath):
     def preconfigure(self, parent):
         vsctl_argv = []
         extra_ports = []
+        bridge_flows = []
 
         pifrec = db().get_pif_record(self._pif)
         dprec = db().get_pif_record(self._dp)
 
         ipdev = self._ipdev
-        c,e = configure_datapath(self._dp)
+        c,e,f = configure_datapath(self._dp)
         bridge = pif_bridge_name(self._pif)
         vsctl_argv += c
         extra_ports += e
+        bridge_flows += f
 
         dpname = pif_bridge_name(self._dp)
         
@@ -542,6 +568,7 @@ class DatapathVswitch(Datapath):
 
         self._vsctl_argv = vsctl_argv
         self._extra_ports = extra_ports
+        self._bridge_flows = bridge_flows
 
     def bring_down_existing(self):
         # interface-reconfigure is never explicitly called to down a
@@ -612,6 +639,26 @@ class DatapathVswitch(Datapath):
             run_command(['/usr/sbin/ovs-vlan-bug-workaround', dev, setting])
 
         datapath_modify_config(self._vsctl_argv)
+        if self._bridge_flows:
+            ofports = []
+            physical_devices = datapath_get_physical_pifs(self._dp)
+            if len(physical_devices) > 1:
+                for slave in physical_devices:
+                    name = pif_netdev_name(slave)
+                    ofport = vswitchCfgQuery(['get', 'interface', name, 'ofport'])
+                    ofports.append(ofport)
+            else:
+                name = pif_netdev_name(self._dp)
+                ofport = vswitchCfgQuery(['get', 'interface', name, 'ofport'])
+                ofports.append(ofport)
+            dpname = pif_bridge_name(self._dp)
+            for flow in self._bridge_flows:
+                if flow.find('in_port=%s') != -1 or flow.find('actions=%s') != -1:
+                    for port in ofports:
+                        f = flow % (port)
+                        run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, f])
+                else:
+                    run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, flow])
 
     def post(self):
         for p in self._extra_ports:
@@ -667,3 +714,17 @@ class DatapathVswitch(Datapath):
                 netdev_down(p)
 
         datapath_modify_config(vsctl_argv)
+
+#
+# utility methods
+#
+
+def vswitchCfgQuery(action_args):
+    cmd = ['%s/usr/bin/ovs-vsctl' % root_prefix(),
+        '--timeout=5', '-vANY:console:emer'] + action_args
+    output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
+    if len(output) == 0 or output[0] == None:
+        output = ""
+    else:
+        output = output[0].strip()
+    return output

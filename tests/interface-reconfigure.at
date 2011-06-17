@@ -40,7 +40,6 @@ EOF
         sbin/ip \
         sbin/update-issue \
         sbin/vconfig \
-        usr/bin/ovs-vsctl \
         usr/sbin/brctl \
         usr/sbin/ovs-vlan-bug-workaround
     do
@@ -51,6 +50,36 @@ echo ${0} ${*} >&2
 EOF
         chmod +x $utility
     done
+
+    mkdir -p usr/bin
+    cat > usr/bin/ovs-vsctl <<'EOF'
+#! /bin/sh
+echo ${0} ${*} >&2
+
+while test ${#} -ge 4; do
+    if test X"${1}" = Xget && \
+       test X"${2}" = Xinterface && \
+       test X"${4}" = Xofport; then
+          if test X"${3}" = Xeth2; then
+	      echo 5
+	  else
+	      echo -1
+	  fi
+    fi
+
+    shift
+done
+EOF
+    chmod +x usr/bin/ovs-vsctl
+
+    cat > usr/bin/ovs-ofctl <<'EOF'
+#! /bin/sh
+echo ${0} ${*} >&2
+
+# Check that the flow is properly formed.
+ovs-ofctl -vofp_util:console:emer parse-flow "${3}" >/dev/null
+EOF
+    chmod +x usr/bin/ovs-ofctl
 
     mkdir -p etc/sysconfig/network-scripts
     configure_netdev () {
@@ -644,7 +673,7 @@ EOF
         <pool ref="OpaqueRef:a765d06c-fc82-cc67-8f6c-fd8db45f6a84">
                 <other_config>
                         <vswitch-controller-fail-mode>
-                                standalone
+                                secure
                         </vswitch-controller-fail-mode>
                 </other_config>
         </pool>
@@ -674,6 +703,7 @@ configure_datapath: bridge      - xenbr2
 configure_datapath: physical    - [u'eth2']
 configure_datapath: extra ports - []
 configure_datapath: extra bonds - []
+/usr/bin/ovs-vsctl --timeout=5 -vANY:console:emer get-fail-mode xenbr2
 Applying changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
 Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
@@ -685,9 +715,14 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
     --may-exist add-br xenbr2
     --may-exist add-port xenbr2 eth2
     set Bridge xenbr2 other-config:hwaddr="00:15:17:a0:29:80"
-    set Bridge xenbr2 fail_mode=standalone
+    set Bridge xenbr2 fail_mode=secure
     remove Bridge xenbr2 other_config disable-in-band
     br-set-external-id xenbr2 xs-network-uuids d08c8749-0c8f-9e8d-ce25-fd364661ee99
+/usr/bin/ovs-vsctl --timeout=5 -vANY:console:emer get interface eth2 ofport
+/usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=5,arp,nw_proto=1,actions=local
+/usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=local,arp,dl_src=00:15:17:a0:29:80,actions=5
+/usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=5,dl_dst=00:15:17:a0:29:80,actions=local
+/usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=local,dl_src=00:15:17:a0:29:80,actions=5
 /sbin/ifup xenbr2
 /sbin/update-issue
 Committing changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
@@ -752,7 +787,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
     --may-exist add-br xenbr3
     --may-exist add-port xenbr3 eth3
     set Bridge xenbr3 other-config:hwaddr="00:15:17:a0:29:81"
-    set Bridge xenbr3 fail_mode=standalone
+    set Bridge xenbr3 fail_mode=secure
     remove Bridge xenbr3 other_config disable-in-band
     br-set-external-id xenbr3 xs-network-uuids 2902ae1b-8013-897a-b697-0b200ea3aaa5;db7bdc03-074d-42ae-fc73-9b06de1d57f6
     --if-exists del-br xapi3
@@ -843,7 +878,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
     --fake-iface add-bond xapi1 bond0 eth0 eth1
     set Port bond0 MAC="00:22:19:22:4b:af" other-config:bond-miimon-interval=100 bond_downdelay=200 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
     set Bridge xapi1 other-config:hwaddr="00:22:19:22:4b:af"
-    set Bridge xapi1 fail_mode=standalone
+    set Bridge xapi1 fail_mode=secure
     remove Bridge xapi1 other_config disable-in-band
     br-set-external-id xapi1 xs-network-uuids 45cbbb43-113d-a712-3231-c6463f253cef;99be2da4-6c33-6f8e-49ea-3bc592fe3c85
 /sbin/ifup xapi1
@@ -930,7 +965,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
     --fake-iface add-bond xapi1 bond0 eth0 eth1
     set Port bond0 MAC="00:22:19:22:4b:af" other-config:bond-miimon-interval=100 bond_downdelay=200 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
     set Bridge xapi1 other-config:hwaddr="00:22:19:22:4b:af"
-    set Bridge xapi1 fail_mode=standalone
+    set Bridge xapi1 fail_mode=secure
     remove Bridge xapi1 other_config disable-in-band
     br-set-external-id xapi1 xs-network-uuids 45cbbb43-113d-a712-3231-c6463f253cef;99be2da4-6c33-6f8e-49ea-3bc592fe3c85
     --if-exists del-br xapi2
