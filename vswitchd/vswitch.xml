@@ -25,6 +25,19 @@
         SSL used globally by the daemon.
       </column>
 
+      <column name="other_config">
+        Key-value pairs for configuring rarely used Open vSwitch features.  The
+        currently defined key-value pairs are:
+        <dl>
+          <dt><code>enable-statistics</code></dt>
+          <dd>
+            Set to <code>true</code> to enable populating the <ref
+            column="statistics"/> column or <code>false</code> (the default)
+            disable populating it.
+          </dd>
+        </dl>
+      </column>
+
       <column name="external_ids">
         Key-value pairs for use by external frameworks that integrate
         with Open vSwitch, rather than by Open vSwitch itself.  System
@@ -73,6 +86,11 @@
           vSwitch.  These are updated periodically (currently, every 5
           seconds).  Key-value pairs that cannot be determined or that do not
           apply to a platform are omitted.
+        </p>
+
+        <p>
+          Statistics are disabled unless <ref column="other-config"
+          key="enable-statistics"/> is set to <code>true</code>.
         </p>
 
         <dl>

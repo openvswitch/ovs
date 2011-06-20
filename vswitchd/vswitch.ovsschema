@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "5.0.1",
- "cksum": "246745439 14434",
+ "version": "5.1.0",
+ "cksum": "154459795 14545",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -16,6 +16,8 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "SSL"},
                   "min": 0, "max": 1}},
+       "other_config": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},

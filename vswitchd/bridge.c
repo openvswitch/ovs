@@ -1291,6 +1291,23 @@ iface_refresh_stats(struct iface *iface)
 #undef IFACE_STATS
 }
 
+static bool
+enable_system_stats(const struct ovsrec_open_vswitch *cfg)
+{
+    const char *enable;
+
+    /* Use other-config:enable-system-stats by preference. */
+    enable = get_ovsrec_key_value(&cfg->header_,
+                                  &ovsrec_open_vswitch_col_other_config,
+                                  "enable-statistics");
+    if (enable) {
+        return !strcmp(enable, "true");
+    }
+
+    /* Disable by default. */
+    return false;
+}
+
 static void
 refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
@@ -1298,7 +1315,9 @@ refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
     struct shash stats;
 
     shash_init(&stats);
-    get_system_stats(&stats);
+    if (enable_system_stats(cfg)) {
+        get_system_stats(&stats);
+    }
 
     ovsdb_datum_from_shash(&datum, &stats);
     ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
