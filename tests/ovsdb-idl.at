@@ -221,6 +221,34 @@ OVSDB_CHECK_IDL([simple idl, increment operation],
 003: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, aborting],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['set 0 r 2.0, abort' \
+'+set 0 b 1']],
+  [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: commit, status=aborted
+002: commit, status=success
+003: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, destroy without commit or abort],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['set 0 r 2.0, destroy' \
+'+set 0 b 1']],
+  [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: destroy
+002: commit, status=success
+003: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['["idltest",

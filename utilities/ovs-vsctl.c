@@ -3642,6 +3642,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     txn = the_idl_txn = NULL;
 
     switch (status) {
+    case TXN_UNCOMMITTED:
     case TXN_INCOMPLETE:
         NOT_REACHED();
 

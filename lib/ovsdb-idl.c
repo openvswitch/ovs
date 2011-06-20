@@ -1127,6 +1127,8 @@ const char *
 ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
 {
     switch (status) {
+    case TXN_UNCOMMITTED:
+        return "uncommitted";
     case TXN_UNCHANGED:
         return "unchanged";
     case TXN_INCOMPLETE:
@@ -1153,7 +1155,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->request_id = NULL;
     txn->idl = idl;
     hmap_init(&txn->txn_rows);
-    txn->status = TXN_INCOMPLETE;
+    txn->status = TXN_UNCOMMITTED;
     txn->error = NULL;
     txn->dry_run = false;
     ds_init(&txn->comment);
@@ -1226,7 +1228,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 void
 ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *txn)
 {
-    if (txn->status != TXN_INCOMPLETE) {
+    if (txn->status != TXN_UNCOMMITTED && txn->status != TXN_INCOMPLETE) {
         poll_immediate_wake();
     }
 }
@@ -1532,6 +1534,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                        "transact", operations, &txn->request_id))) {
         hmap_insert(&txn->idl->outstanding_txns, &txn->hmap_node,
                     json_hash(txn->request_id, 0));
+        txn->status = TXN_INCOMPLETE;
     } else {
         txn->status = TXN_TRY_AGAIN;
     }
@@ -1569,7 +1572,7 @@ void
 ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
 {
     ovsdb_idl_txn_disassemble(txn);
-    if (txn->status == TXN_INCOMPLETE) {
+    if (txn->status == TXN_UNCOMMITTED || txn->status == TXN_INCOMPLETE) {
         txn->status = TXN_ABORTED;
     }
 }

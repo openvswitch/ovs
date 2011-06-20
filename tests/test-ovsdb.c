@@ -1828,6 +1828,13 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             }
             ovsdb_idl_txn_increment(txn, arg1, arg2, NULL);
             increment = true;
+        } else if (!strcmp(name, "abort")) {
+            ovsdb_idl_txn_abort(txn);
+            break;
+        } else if (!strcmp(name, "destroy")) {
+            printf("%03d: destroy\n", step);
+            ovsdb_idl_txn_destroy(txn);
+            return;
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }

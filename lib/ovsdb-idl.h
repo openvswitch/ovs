@@ -111,6 +111,7 @@ bool ovsdb_idl_row_is_synthetic(const struct ovsdb_idl_row *);
 /* Transactions. */
 
 enum ovsdb_idl_txn_status {
+    TXN_UNCOMMITTED,            /* Not yet committed or aborted. */
     TXN_UNCHANGED,              /* Transaction didn't include any changes. */
     TXN_INCOMPLETE,             /* Commit in progress, please wait. */
     TXN_ABORTED,                /* ovsdb_idl_txn_abort() called. */
