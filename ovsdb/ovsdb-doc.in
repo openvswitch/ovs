@@ -52,6 +52,8 @@ def inlineXmlToNroff(node, font):
             s = r'\fB'
             if node.hasAttribute('column'):
                 s += node.attributes['column'].nodeValue
+                if node.hasAttribute('key'):
+                    s += ':' + node.attributes['key'].nodeValue
             elif node.hasAttribute('table'):
                 s += node.attributes['table'].nodeValue
             elif node.hasAttribute('group'):
