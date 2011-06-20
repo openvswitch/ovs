@@ -112,6 +112,7 @@ struct vlog_rate_limit {
     unsigned int tokens;        /* Current number of tokens. */
     time_t last_fill;           /* Last time tokens added. */
     time_t first_dropped;       /* Time first message was dropped. */
+    time_t last_dropped;        /* Time of most recent message drop. */
     unsigned int n_dropped;     /* Number of messages dropped. */
 };
 
@@ -130,6 +131,7 @@ struct vlog_rate_limit {
             0,                              /* tokens */    \
             0,                              /* last_fill */ \
             0,                              /* first_dropped */ \
+            0,                              /* last_dropped */ \
             0,                              /* n_dropped */ \
         }
 

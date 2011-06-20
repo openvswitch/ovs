@@ -740,6 +740,7 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
             if (!rl->n_dropped) {
                 rl->first_dropped = now;
             }
+            rl->last_dropped = now;
             rl->n_dropped++;
             return true;
         }
@@ -747,10 +748,15 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
     rl->tokens -= VLOG_MSG_TOKENS;
 
     if (rl->n_dropped) {
+        time_t now = time_now();
+        unsigned int first_dropped_elapsed = now - rl->first_dropped;
+        unsigned int last_dropped_elapsed = now - rl->last_dropped;
+
         vlog(module, level,
-             "Dropped %u log messages in last %u seconds "
-             "due to excessive rate",
-             rl->n_dropped, (unsigned int) (time_now() - rl->first_dropped));
+             "Dropped %u log messages in last %u seconds (most recently, "
+             "%u seconds ago) due to excessive rate",
+             rl->n_dropped, first_dropped_elapsed, last_dropped_elapsed);
+
         rl->n_dropped = 0;
     }
     return false;
