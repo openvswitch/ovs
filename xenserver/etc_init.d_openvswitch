@@ -76,8 +76,7 @@ start () {
             --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
     fi
 
-    # Allow GRE traffic.
-    /sbin/iptables -I INPUT -p gre -j ACCEPT
+    $ovs_ctl --protocol=gre enable-protocol
 
     touch /var/lock/subsys/openvswitch
 }

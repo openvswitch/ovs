@@ -265,6 +265,49 @@ force_reload_kmod () {
     $log -f "$script"
 }
 
+## --------------- ##
+## enable-protocol ##
+## --------------- ##
+
+enable_protocol () {
+    set X "-p $PROTOCOL"
+    name=$PROTOCOL
+    if test X"$DPORT" != X; then
+        set "$@" "--dport $DPORT"
+        name="$name to port $DPORT"
+    fi
+    if test X"$SPORT" != X; then
+        set "$@" "--sport $SPORT"
+        name="$name from port $SPORT"
+    fi
+    shift
+
+    search="/^-A INPUT/!d"
+    insert="iptables -I INPUT"
+    for arg; do
+        search="$search
+/ $arg /!d"
+        insert="$insert $arg"
+    done
+    insert="$insert -j ACCEPT"
+
+    if (iptables -S INPUT) >/dev/null 2>&1; then
+        case `iptables -S INPUT | sed "$search"` in
+            '')
+                action "Enabling $name with iptables" $insert
+                ;;
+            *)
+                # There's already a rule for this protocol.  Don't override it.
+                log_success_msg "iptables already has a rule for $name, not explicitly enabling"
+                ;;
+        esac
+    elif (iptables --version) >/dev/null 2>&1; then
+        action "iptables binary not installed, not adding a rule for $name"
+    else
+        action "cannot list iptables rules, not adding a rule for $name"
+    fi
+}
+
 ## ---- ##
 ## main ##
 ## ---- ##
@@ -283,6 +326,10 @@ set_defaults () {
     DB_FILE=$etcdir/conf.db
     DB_SOCK=$rundir/db.sock
     DB_SCHEMA=$datadir/vswitch.ovsschema
+
+    PROTOCOL=gre
+    DPORT=
+    SPORT=
 
     if (lsb_release --id) >/dev/null 2>&1; then
         SYSTEM_TYPE=`lsb_release --id -s`
@@ -311,6 +358,7 @@ Commands:
   version            print versions of Open vSwitch daemons
   force-reload-kmod  save OVS network device state, stop OVS, unload kernel
                      module, reload kernel module, start OVS, restore state
+  enable-protocol    enable protocol specified in options with iptables
   help               display this help message
 
 One of the following options should be specified when starting Open vSwitch:
@@ -338,6 +386,11 @@ File location options:
   --db-file=FILE     database file name (default: $DB_FILE)
   --db-sock=SOCKET   JSON-RPC socket name (default: $DB_SOCK)
   --db-schema=FILE   database schema file name (default: $DB_SCHEMA)
+
+Options for enable-protocol:
+  --protocol=PROTOCOL  protocol to enable with iptables (default: gre)
+  --sport=PORT       source port to match (for tcp or udp protocol)
+  --dport=PORT       ddestination port to match (for tcp or udp protocol)
 
 Other options:
   -h, --help                  display this help message
@@ -442,6 +495,9 @@ case $command in
         ;;
     force-reload-kmod)
 	force_reload_kmod
+        ;;
+    enable-protocol)
+        enable_protocol
         ;;
     help)
         usage

@@ -34,11 +34,9 @@ start () {
     if test X"$FORCE_COREFILES" != X; then
 	set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
+    "$@" || exit $?
 
-    # Allow GRE traffic.
-    test ! -x /sbin/iptables || /sbin/iptables -I INPUT -p gre -j ACCEPT
-
-    "$@"
+    $ovs_ctl --protocol=gre enable-protocol
 }
 
 stop () {

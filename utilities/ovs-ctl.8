@@ -17,7 +17,7 @@
 ovs\-ctl \- OVS startup helper script
 .
 .SH SYNOPSIS
-\fBovs\-ctl\fR [\fB\-\-system\-id=random\fR | \fIuuid\fR]
+\fBovs\-ctl\fR \fB\-\-system\-id=random\fR|\fIuuid\fR
 [\fIoptions\fR] \fBstart
 .br
 \fBovs\-ctl stop
@@ -26,7 +26,16 @@ ovs\-ctl \- OVS startup helper script
 .br
 \fBovs\-ctl version
 .br
-\fBovs\-ctl force-reload-kmod
+\fBovs\-ctl
+\fB\-\-system\-id=random\fR|\fIuuid\fR
+[\fIoptions\fR]
+\fBforce\-reload\-kmod\fR
+.br
+\fBovs\-ctl
+\fR[\fB\-\-protocol=\fIprotocol\fR]
+[\fB\-\-sport=\fIsport\fR]
+[\fB\-\-dport=\fIdport\fR]
+\fBenable\-protocol\fR
 .br
 \fBovs\-ctl help \fR| \fB\-h \fR| \fB\-\-help
 .br
@@ -231,8 +240,50 @@ ISC DHCP client is running on an OVS internal interface, then it will
 have to be restarted after completing the above procedure.
 .
 .PP
-Because \fBforce\-kmod\-reload\fR internally stops and starts OVS, it
+\fBforce\-kmod\-reload\fR internally stops and starts OVS, so it
 accepts all of the options accepted by the \fBstart\fR command.
+.
+.SS "The ``enable\-protocol'' command"
+.
+.PP
+The \fBenable\-protocol\fR command checks for rules related to a
+specified protocol in the system's \fBiptables\fR(8) configuration.  If there
+are no rules specifically related to that protocol, then it inserts a
+rule to accept the specified protocol.
+.
+.PP
+More specifically:
+.
+.IP \(bu
+If \fBiptables\fR is not installed or not enabled, this command does
+nothing, assuming that lack of filtering means that the protocol is
+enabled.
+.
+.IP \(bu
+If the \fBINPUT\fR chain has a rule that matches the specified
+protocol, then this command does nothing, assuming that whatever rule
+is installed reflects the system administrator's decisions.
+.
+.IP \(bu
+Otherwise, this command installs a rule that accepts traffic of the
+specified protocol.
+.
+.PP
+This command normally completes successfully, even if it does
+nothing.  Only the failure of an attempt to insert a rule normally
+causes it to return an exit code other than 0.
+.
+The following options control the protocol to be enabled:
+.
+.IP "\fB\-\-protocol=\fIprotocol\fR"
+The name of the IP protocol to be enabled, such as \fBgre\fR or
+\fBtcp\fR.  The default is \fBgre\fR.
+.
+.IP "\fB\-\-sport=\fIsport\fR"
+.IQ "\fB\-\-dport=\fIdport\fR"
+TCP or UDP source or destination port to match.  These are optional
+and allowed only with \fB\-\-protocol=tcp\fR or
+\fB\-\-protocol=udp\fR.
 .
 .SS "The ``help'' command"
 .
