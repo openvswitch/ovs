@@ -34,6 +34,7 @@ EXTRA_DIST = \
 	DESIGN \
 	INSTALL.KVM \
 	INSTALL.Linux \
+	INSTALL.RHEL \
 	INSTALL.SSL \
 	INSTALL.XenServer \
 	INSTALL.bridge \
@@ -157,5 +158,6 @@ include third-party/automake.mk
 include debian/automake.mk
 include vswitchd/automake.mk
 include ovsdb/automake.mk
+include rhel/automake.mk
 include xenserver/automake.mk
 include python/ovs/automake.mk

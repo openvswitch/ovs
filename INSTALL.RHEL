@@ -1,0 +1,61 @@
+       How to Install Open vSwitch on Red Hat Enterprise Linux
+       =======================================================
+
+This document describes how to build and install Open vSwitch on a Red
+Hat Enterprise Linux (RHEL) host.  If you want to install Open vSwitch
+on a generic Linux host, see INSTALL.Linux instead.
+
+We have tested these instructions with RHEL 5.6 and RHEL 6.0.
+
+Building Open vSwitch for RHEL
+------------------------------
+
+You may build from an Open vSwitch distribution tarball or from an
+Open vSwitch Git tree.
+
+Before you begin, note the RPM source directory on your version of
+RHEL.  On RHEL 5, the default RPM source directory is
+/usr/src/redhat/SOURCES.  On RHEL 6, it is $HOME/rpmbuild/SOURCES.
+
+1. If you are building from an Open vSwitch Git tree, then you will
+   need to first create a distribution tarball by running "./boot.sh;
+   ./configure; make dist" in the Git tree.
+
+2. Copy the distribution tarball into the RPM source directory.
+
+3. Unpack the distribution tarball into a temporary directory and "cd"
+   into the root of the distribution tarball.
+
+4. To build Open vSwitch userspace, run:
+
+       rpmbuild -bb rhel/openvswitch.spec
+
+   This produces two RPMs: "openvswitch" and "openvswitch-debuginfo".
+
+5a. On RHEL 5, to build the Open vSwitch kernel module, copy
+    rhel/kmodtool-openvswitch-el5.sh into the RPM source directory and
+    run:
+
+	rpmbuild -bb --target=i686-unknown-linux \
+		rhel/openvswitch-kmod-rhel5.spec
+
+    You might have to specify a kernel version, e.g.:
+
+	rpmbuild -bb -D "kversion 2.6.18-238.12.1.el5" \
+		--target=i686-unknown-linux \
+		rhel/openvswitch-kmod-rhel5.spec
+
+    This produces a "kmod-openvswitch" RPM for each kernel variant,
+    which is usually: "kmod-openvswitch", "kmod-openvswitch-xen", and
+    "kmod-openvswitch-PAE".
+
+5b. On RHEL 6, to build the Open vSwitch kernel module, run:
+
+	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
+
+    This produces an "kmod-openvswitch" RPM.
+
+Reporting Bugs
+--------------
+
+Please report problems to bugs@openvswitch.org.

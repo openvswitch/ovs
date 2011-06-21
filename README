@@ -33,7 +33,8 @@ vSwitch supports the following features:
 
 The included Linux kernel module supports Linux 2.6.18 and up, with
 testing focused on 2.6.32 with Centos and Xen patches.  Open vSwitch
-also has special support for Citrix XenServer hosts.
+also has special support for Citrix XenServer and Red Hat Enterprise
+Linux hosts.
 
 Open vSwitch can also operate, at a cost in performance, entirely in
 userspace, without assistance from a kernel module.  This userspace
@@ -58,9 +59,10 @@ The main components of this distribution are:
 
     * ovs-dpctl, a tool for configuring the switch kernel module.
 
-    * Scripts and specs for building RPMs that allow Open vSwitch
-      to be installed on a Citrix XenServer host as a drop-in
-      replacement for its switch, with additional functionality.
+    * Scripts and specs for building RPMs for Citrix XenServer and Red
+      Hat Enterprise Linux.  The XenServer RPMs allow Open vSwitch to
+      be installed on a Citrix XenServer host as a drop-in replacement
+      for its switch, with additional functionality.
 
     * ovs-vsctl, a utility for querying and updating the configuration
       of ovs-vswitchd.
@@ -93,6 +95,9 @@ read INSTALL.bridge.
 
 To build RPMs for installing Open vSwitch on a Citrix XenServer host
 or resource pool, read INSTALL.XenServer.
+
+To build RPMs for installing Open vSwitch on a Red Hat Enterprise
+Linux host, read INSTALL.RHEL.
 
 To use Open vSwitch with KVM on Linux, read INSTALL.Linux, then
 INSTALL.KVM.

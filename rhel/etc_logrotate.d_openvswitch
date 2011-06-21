@@ -1,0 +1,20 @@
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+/var/log/openvswitch/*.log {
+	sharedscripts
+	missingok
+	postrotate
+	# Tell Open vSwitch daemons to reopen their log files
+	if [ -e /var/run/openvswitch/ovs-vswitchd.pid ]; then
+	    /usr/bin/ovs-appctl -t ovs-vswitchd vlog/reopen
+	fi
+	if [ -e /var/run/openvswitch/ovsdb-server.pid ]; then
+	    /usr/bin/ovs-appctl -t ovsdb-server vlog/reopen
+	fi
+	endscript
+}
