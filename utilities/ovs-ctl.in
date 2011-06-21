@@ -222,6 +222,10 @@ internal_interfaces () {
     done
 }
 
+save_interfaces () {
+    "$datadir/scripts/ovs-save" $ifaces > "$script"
+}
+
 force_reload_kmod () {
     ifaces=`internal_interfaces`
     action "Detected internal interfaces: $ifaces" true
@@ -229,8 +233,7 @@ force_reload_kmod () {
     stop
 
     script=`mktemp`
-    action "Save interface configuration to $script" true
-    if "$datadir/scripts/ovs-save" $ifaces > "$script"; then
+    if action "Save interface configuration to $script" save_interfaces; then
         :
     else
         log_warning_msg "Failed to save configuration, not replacing kernel module"
