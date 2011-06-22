@@ -16,7 +16,7 @@ Open vSwitch for Debian
 
         $ cd /usr/src/
         $ tar jxvf openvswitch.tar.bz2
-        $ cd /usr/src/kernel-source-2.6.9
+        $ cd /usr/src/kernel-source-2.6.26
         $ make-kpkg --added-modules=openvswitch modules
 
     - Building without make-kpkg
@@ -28,4 +28,4 @@ Open vSwitch for Debian
 
       If you run this as root, fakeroot is not needed.
 
- -- Ben Pfaff <blp@nicira.com>, Mon, 11 May 2009 13:27:50 -0700
+ -- Ben Pfaff <blp@nicira.com>, Wed, 22 Jun 2011 09:51:28 -0700
