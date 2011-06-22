@@ -93,7 +93,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
           *) KSRC=`pwd`/$KSRC ;;
       esac
       if test ! -e $KSRC/include/linux/kernel.h; then
-        AC_MSG_ERROR([$KSRC is not a kernel source directory)])
+        AC_MSG_ERROR([$KSRC is not a kernel source directory])
       fi
     else
       KSRC=$KBUILD
