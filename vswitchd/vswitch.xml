@@ -50,7 +50,7 @@
           <dd>A unique identifier for the Open vSwitch's physical host.
             The form of the identifier depends on the type of the host.
             On a Citrix XenServer, this will likely be the same as
-            <code>xs-system-uuid</code>.</dd>
+            <ref column="external_ids" key="xs-system-uuid"/>.</dd>
           <dt><code>xs-system-uuid</code></dt>
           <dd>The Citrix XenServer universally unique identifier for the
             physical host as displayed by <code>xe host-list</code>.</dd>
@@ -403,8 +403,9 @@
         defined key-value pairs are:
         <dl>
           <dt><code>bridge-id</code></dt>
-          <dd>A unique identifier of the bridge.  On Citrix XenServer this
-            will commonly be the same as <code>xs-network-uuids</code>.</dd>
+          <dd>A unique identifier of the bridge.  On Citrix XenServer this will
+            commonly be the same as
+            <ref column="external_ids" key="xs-network-uuids"/>.</dd>
           <dt><code>xs-network-uuids</code></dt>
           <dd>Semicolon-delimited set of universally unique identifier(s) for
             the network with which this bridge is associated on a Citrix
@@ -555,10 +556,12 @@
             balancing is done.  Uses a similar hashing strategy to
             <code>balance-tcp</code>, always taking into account L3 and L4
             fields even if LACP negotiations are unsuccessful. </p>
-          <p>Slave selection decisions are made based on
-            <code>bond-stable-id</code> if set.  Otherwise, OpenFlow port
-            number is used.  Decisions are consistent across all ovs-vswitchd
-            instances with equivalent <code>bond-stable-id</code>s.</p>
+          <p>Slave selection decisions are made based on <ref table="Interface"
+            column="other_config" key="bond-stable-id"/> if set.  Otherwise,
+            OpenFlow port number is used.  Decisions are consistent across all
+            <code>ovs-vswitchd</code> instances with equivalent
+            <ref table="Interface" column="other_config" key="bond-stable-id"/>
+            values.</p>
         </dd>
       </dl>
 
@@ -771,14 +774,16 @@
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
           <dt><code>gre</code></dt>
           <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
-             tunnel.  Each tunnel must be uniquely identified by the
-             combination of <code>remote_ip</code>, <code>local_ip</code>, and
-             <code>in_key</code>.  Note that if two ports are defined that are
-             the same except one has an optional identifier and the other does
-             not, the more specific one is matched first.  <code>in_key</code>
-             is considered more specific than <code>local_ip</code> if a port
-             defines one and another port defines the other.  The following
-             options may be specified in the <ref column="options"/> column:
+            tunnel.  Each tunnel must be uniquely identified by the
+            combination of <ref column="options" key="remote_ip"/>,
+            <ref column="options" key="local_ip"/>, and
+            <ref column="options" key="in_key"/>.  Note that if two ports
+            are defined that are the same except one has an optional
+            identifier and the other does not, the more specific one is
+            matched first.  <ref column="options" key="in_key"/> is considered
+            more specific than <ref column="options" key="local_ip"/> if a port
+            defines one and another port defines the other.  The following
+            options may be specified in the <ref column="options"/> column:
             <dl>
               <dt><code>remote_ip</code></dt>
               <dd>Required.  The tunnel endpoint.</dd>
@@ -884,13 +889,14 @@
           <dd>An Ethernet over RFC 2890 Generic Routing Encapsulation
             over IPv4 IPsec tunnel.  Each tunnel (including those of type
             <code>gre</code>) must be uniquely identified by the
-            combination of <code>remote_ip</code> and
-            <code>local_ip</code>.  Note that if two ports are defined
-            that are the same except one has an optional identifier and
+            combination of <ref column="options" key="remote_ip"/> and
+            <ref column="options" key="local_ip"/>.  Note that if two ports are
+            defined that are the same except one has an optional identifier and
             the other does not, the more specific one is matched first.
-            An authentication method of <code>peer_cert</code> or
-            <code>psk</code> must be defined.  The following options may
-            be specified in the <ref column="options"/> column:
+            An authentication method of <ref column="options" key="peer_cert"/>
+            or <ref column="options" key="psk"/> must be defined.  The
+            following options may be specified in the <ref column="options"/>
+            column:
             <dl>
               <dt><code>remote_ip</code></dt>
               <dd>Required.  The tunnel endpoint.</dd>
@@ -1014,10 +1020,12 @@
              of the protocol is implemented.  Due to the non-standard use of
              CAPWAP, UDP ports 58881 and 58882 are used as the source and
              destination ports respectively.  Each tunnel must be uniquely
-             identified by the combination of <code>remote_ip</code> and
-             <code>local_ip</code>.  If two ports are defined that are the same
-             except one includes <code>local_ip</code> and the other does not,
-             the more specific one is matched first.  CAPWAP support is not
+             identified by the combination of
+             <ref column="options" key="remote_ip"/> and
+             <ref column="options" key="local_ip"/>.  If two ports are defined
+             that are the same except one includes
+             <ref column="options" key="local_ip"/> and the other does not, the
+             more specific one is matched first.  CAPWAP support is not
              available on all platforms.  Currently it is only supported in the
              Linux kernel module with kernel versions >= 2.6.25.  The following
              options may be specified in the <ref column="options"/> column:
@@ -1165,9 +1173,9 @@
 
       <column name="status">
         <p>
-          Key-value pairs that report port status.  Supported status
-          values are <code>type</code>-dependent; some interfaces may not have
-          a valid <code>driver_name</code>, for example.
+          Key-value pairs that report port status.  Supported status values are
+          <ref column="type"/>-dependent; some interfaces may not have a valid
+          <ref column="status" key="driver_name"/>, for example.
         </p>
         <p>The currently defined key-value pairs are:</p>
         <dl>
@@ -1195,14 +1203,15 @@
             <dd>Egress interface for tunnels.  Currently only relevant for GRE
                 and CAPWAP tunnels.  On Linux systems, this column will show
                 the name of the interface which is responsible for routing
-                traffic destined for the configured <code>remote_ip</code>.
-                This could be an internal interface such as a bridge port.</dd>
+                traffic destined for the configured
+                <ref column="options" key="remote_ip"/>.  This could be an
+                internal interface such as a bridge port.</dd>
         </dl>
         <dl>
             <dt><code>tunnel_egress_iface_carrier</code></dt>
-            <dd>Whether a carrier is detected on <ref
-            column="tunnel_egress_iface"/>.  Valid values are <code>down</code>
-            and <code>up</code>.</dd>
+            <dd>Whether a carrier is detected on
+              <ref column="status" key="tunnel_egress_iface"/>.  Valid values
+              are <code>down</code> and <code>up</code>.</dd>
         </dl>
       </column>
     </group>
@@ -1342,7 +1351,8 @@
             field in the VIF record for this interface.</dd>
           <dt><code>iface-id</code></dt>
           <dd>A system-unique identifier for the interface.  On XenServer,
-            this will commonly be the same as <code>xs-vif-uuid</code>.</dd>
+            this will commonly be the same as
+            <ref column="external_ids" key="xs-vif-uuid"/>.</dd>
         </dl>
         <p>
           Additionally the following key-value pairs specifically
@@ -1375,10 +1385,11 @@
           <dt><code>bond-stable-id</code></dt>
           <dd> A positive integer using in <code>stable</code> bond mode to
             make slave selection decisions.  Allocating
-            <code>bond-stable-id</code>s consistently across interfaces
-            participating in a bond will guarantee consistent slave selection
-            decisions across ovs-vswitchd instances when using
-            <code>stable</code> bonding mode.</dd>
+            <ref column="other_config" key="bond-stable-id"/> values
+            consistently across interfaces participating in a bond will
+            guarantee consistent slave selection decisions across
+            <code>ovs-vswitchd</code> instances when using <code>stable</code>
+            bonding mode.</dd>
           <dt><code>lacp-port-id</code></dt>
           <dd> The LACP port ID of this <ref table="Interface"/>.  Port IDs are
             used in LACP negotiations to identify individual ports
