@@ -31,10 +31,6 @@ else
   KOBJ := $(KSRC)
 endif
 
-ifneq ($(shell grep -c 'PATCHLEVEL = 6' $(KSRC)/Makefile),1)
-  $(error Linux kernel source in $(KSRC) not 2.6)
-endif
-
 VERSION_FILE := $(KOBJ)/include/linux/version.h
 ifeq (,$(wildcard $(VERSION_FILE)))
   $(error Linux kernel source not configured - missing version.h)

@@ -112,17 +112,27 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$KSRC])
 
     AC_MSG_CHECKING([for kernel version])
+    version=`sed -n 's/^VERSION = //p' "$KSRC/Makefile"`
     patchlevel=`sed -n 's/^PATCHLEVEL = //p' "$KSRC/Makefile"`
     sublevel=`sed -n 's/^SUBLEVEL = //p' "$KSRC/Makefile"`
-    if test -z "$patchlevel" || test -z "$sublevel"; then
+    if test X"$version" = X || test X"$patchlevel" = X; then
        AC_ERROR([cannot determine kernel version])
+    elif test X"$sublevel" = X; then
+       kversion=$version.$patchlevel
+    else
+       kversion=$version.$patchlevel.$sublevel
     fi
-    AC_MSG_RESULT([2.$patchlevel.$sublevel])
-    if test "2.$patchlevel" != '2.6'; then
+    AC_MSG_RESULT([$kversion])
+
+    if test "$version" -ge 3; then
+       : # Linux 3.x
+    elif test "$version" = 2 && test "$patchlevel" -ge 6; then
+       : # Linux 2.6.x
+    else
        if test "$KBUILD" = "$KSRC"; then
-         AC_ERROR([Linux kernel in $KBUILD is not version 2.6])
+         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6 or later is required])
        else
-         AC_ERROR([Linux kernel in build tree $KBUILD (source tree $KSRC) is not version 2.6])
+         AC_ERROR([Linux kernel in build tree $KBUILD (source tree $KSRC) is version $kversion, but version 2.6 or later is required])
        fi
     fi
     if test ! -e "$KBUILD"/include/linux/version.h || \
