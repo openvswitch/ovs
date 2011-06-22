@@ -1035,7 +1035,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         struct flow_mod fm;
 
         ofpbuf_init(&actions, 64);
-        parse_ofp_str(&fm, &actions, ds_cstr(&s), true);
+        parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
 
         version = xmalloc(sizeof *version);
         version->cookie = fm.cookie;

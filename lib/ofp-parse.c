@@ -790,28 +790,71 @@ parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
     }
 }
 
-/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl
- * man page) into 'fm'.  If 'actions' is specified, an action must be in
- * 'string' and may be expanded or reallocated. */
+/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
+ * page) into 'fm' for sending the specified flow_mod 'command' to a switch.
+ * If 'actions' is specified, an action must be in 'string' and may be expanded
+ * or reallocated.
+ *
+ * To parse syntax for an OFPT_FLOW_MOD (or NXT_FLOW_MOD), use an OFPFC_*
+ * constant for 'command'.  To parse syntax for an OFPST_FLOW or
+ * OFPST_AGGREGATE (or NXST_FLOW or NXST_AGGREGATE), use -1 for 'command'. */
 void
-parse_ofp_str(struct flow_mod *fm, struct ofpbuf *actions, const char *str_,
-              bool verbose)
+parse_ofp_str(struct flow_mod *fm, int command, const char *str_, bool verbose)
 {
+    enum {
+        F_OUT_PORT = 1 << 0,
+        F_ACTIONS = 1 << 1,
+        F_COOKIE = 1 << 2,
+        F_TIMEOUT = 1 << 3,
+        F_PRIORITY = 1 << 4
+    } fields;
     char *string = xstrdup(str_);
     char *save_ptr = NULL;
     char *name;
 
+    switch (command) {
+    case -1:
+        fields = F_OUT_PORT;
+        break;
+
+    case OFPFC_ADD:
+        fields = F_ACTIONS | F_COOKIE | F_TIMEOUT | F_PRIORITY;
+        break;
+
+    case OFPFC_DELETE:
+        fields = F_OUT_PORT;
+        break;
+
+    case OFPFC_DELETE_STRICT:
+        fields = F_OUT_PORT | F_PRIORITY;
+        break;
+
+    case OFPFC_MODIFY:
+        fields = F_ACTIONS | F_COOKIE;
+        break;
+
+    case OFPFC_MODIFY_STRICT:
+        fields = F_ACTIONS | F_COOKIE | F_PRIORITY;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
     cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
     fm->cookie = htonll(0);
     fm->table_id = 0xff;
-    fm->command = UINT16_MAX;
+    fm->command = command;
     fm->idle_timeout = OFP_FLOW_PERMANENT;
     fm->hard_timeout = OFP_FLOW_PERMANENT;
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_NONE;
     fm->flags = 0;
-    if (actions) {
-        char *act_str = strstr(string, "action");
+    if (fields & F_ACTIONS) {
+        struct ofpbuf actions;
+        char *act_str;
+
+        act_str = strstr(string, "action");
         if (!act_str) {
             ofp_fatal(str_, verbose, "must specify an action");
         }
@@ -824,9 +867,10 @@ parse_ofp_str(struct flow_mod *fm, struct ofpbuf *actions, const char *str_,
 
         act_str++;
 
-        str_to_action(act_str, actions);
-        fm->actions = actions->data;
-        fm->n_actions = actions->size / sizeof(union ofp_action);
+        ofpbuf_init(&actions, sizeof(union ofp_action));
+        str_to_action(act_str, &actions);
+        fm->actions = ofpbuf_steal_data(&actions);
+        fm->n_actions = actions.size / sizeof(union ofp_action);
     } else {
         fm->actions = NULL;
         fm->n_actions = 0;
@@ -853,13 +897,13 @@ parse_ofp_str(struct flow_mod *fm, struct ofpbuf *actions, const char *str_,
                 fm->table_id = atoi(value);
             } else if (!strcmp(name, "out_port")) {
                 fm->out_port = atoi(value);
-            } else if (!strcmp(name, "priority")) {
+            } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
                 fm->cr.priority = atoi(value);
-            } else if (!strcmp(name, "idle_timeout")) {
+            } else if (fields & F_TIMEOUT && !strcmp(name, "idle_timeout")) {
                 fm->idle_timeout = atoi(value);
-            } else if (!strcmp(name, "hard_timeout")) {
+            } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
                 fm->hard_timeout = atoi(value);
-            } else if (!strcmp(name, "cookie")) {
+            } else if (fields & F_COOKIE && !strcmp(name, "cookie")) {
                 fm->cookie = htonll(str_to_u64(value));
             } else if (parse_field_name(name, &f)) {
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
@@ -922,7 +966,6 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
                        bool *flow_mod_table_id, char *string, uint16_t command,
                        bool verbose)
 {
-    bool is_del = command == OFPFC_DELETE || command == OFPFC_DELETE_STRICT;
     enum nx_flow_format min_format, next_format;
     struct cls_rule rule_copy;
     struct ofpbuf actions;
@@ -930,8 +973,7 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
     struct flow_mod fm;
 
     ofpbuf_init(&actions, 64);
-    parse_ofp_str(&fm, is_del ? NULL : &actions, string, verbose);
-    fm.command = command;
+    parse_ofp_str(&fm, command, string, verbose);
 
     min_format = ofputil_min_flow_format(&fm.cr);
     next_format = MAX(*cur_format, min_format);
@@ -987,7 +1029,7 @@ parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
 {
     struct flow_mod fm;
 
-    parse_ofp_str(&fm, NULL, string, false);
+    parse_ofp_str(&fm, -1, string, false);
     fsr->aggregate = aggregate;
     fsr->match = fm.cr;
     fsr->out_port = fm.out_port;

@@ -553,8 +553,8 @@ Finally, field assignments to \fBduration\fR, \fBn_packets\fR, or
 command to be used as input for other commands that parse flows.
 .
 .PP
-The \fBadd\-flow\fR and \fBadd\-flows\fR commands require an additional
-field, which must be the final field specified:
+The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
+require an additional field, which must be the final field specified:
 .
 .IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
 Specifies a comma-separated list of actions to take on a packet when the 
@@ -738,14 +738,15 @@ support an additional optional field:
 .
 A cookie is an opaque identifier that can be associated with the flow.
 \fIvalue\fR can be any 64-bit number and need not be unique among
-flows.
+flows.  If this field is omitted, these commands set a default cookie
+value of 0.
 .
 .PP
 The following additional field sets the priority for flows added by
 the \fBadd\-flow\fR and \fBadd\-flows\fR commands.  For
 \fBmod\-flows\fR and \fBdel\-flows\fR when \fB\-\-strict\fR is
 specified, priority must match along with the rest of the flow
-specification.  Other commands ignore the priority value.
+specification.  Other commands do not allow priority to be specified.
 .
 .IP \fBpriority=\fIvalue\fR
 The priority at which a wildcarded entry will match in comparison to
@@ -777,10 +778,6 @@ and \fBdel\-flows\fR commands support one additional optional field:
 .TP
 \fBout_port=\fIport\fR
 If set, a matching flow must include an output action to \fIport\fR.
-.
-.PP
-The \fBdump\-flows\fR and \fBdump\-aggregate\fR commands support an
-additional optional field:
 .
 .SS "Table Entry Output"
 .
