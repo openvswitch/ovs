@@ -57,6 +57,8 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     elif test X"$with_l26_source" != X; then
       KSRC=$with_l26_source
       AC_MSG_WARN([--with-l26-source is deprecated, please use --with-linux-source instead])
+    else
+      KSRC=
     fi
   elif test X"$with_linux_source" != X || test X"$with_l26_source" != X; then
     AC_MSG_ERROR([Linux source directory may not be specified without Linux build directory])
