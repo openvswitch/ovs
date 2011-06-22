@@ -124,8 +124,12 @@ def call_vsctl(args):
         s_log.warning("Couldn't call ovs-vsctl")
 
 def set_external_id(table, record, key, value):
-    col = 'external-ids:"' + key + '"="' + value + '"'
-    call_vsctl(["set", table, record, col])
+    if value:
+        col = 'external-ids:"%s"="%s"' % (key, value)
+        call_vsctl(["set", table, record, col])
+    else:
+        call_vsctl(["remove", table, record, "external-ids", key])
+
 
 # XenServer does not call interface-reconfigure on internal networks,
 # which is where the fail-mode would normally be set.
@@ -235,6 +239,27 @@ def handler(signum, frame):
     if (signum == signal.SIGHUP):
         force_run = True
 
+def update_tap_from_vif(idl, tap_name, vif_name):
+    ifaces = idl.data["Interface"]
+    tap = None
+    vif = None
+
+    for i in ifaces.values():
+        name = i.name.as_scalar().strip('"')
+        if name == tap_name:
+            tap = i
+        elif name == vif_name:
+            vif = i
+
+    if vif and tap:
+        vxid = vif.external_ids
+        txid = tap.external_ids
+
+        keys = ["attached-mac", "xs-network-uuid", "xs-vif-uuid", "xs-vm-uuid"]
+        for k in keys:
+            if vxid.get(k) != txid.get(k):
+                set_external_id("Interface", tap_name, k, vxid.get(k))
+
 def main(argv):
     global force_run
 
@@ -318,6 +343,8 @@ def main(argv):
 
                 new_interfaces[vif]["iface-status"] = "inactive"
                 new_interfaces[name]["iface-status"] = "active"
+
+                update_tap_from_vif(idl, name, vif)
 
         if bridges != new_bridges:
             for name,ids in new_bridges.items():
