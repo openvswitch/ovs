@@ -96,7 +96,7 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
     fi
     AC_MSG_RESULT([2.$patchlevel.$sublevel])
     if test "2.$patchlevel" != '2.6'; then
-       if test "$BUILD26" = "$KSRC26"; then
+       if test "$KBUILD26" = "$KSRC26"; then
          AC_ERROR([Linux kernel in $KBUILD26 is not version 2.6])
        else
          AC_ERROR([Linux kernel in build tree $KBUILD26 (source tree $KSRC26) is not version 2.6])
