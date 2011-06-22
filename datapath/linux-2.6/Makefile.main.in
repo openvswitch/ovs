@@ -2,7 +2,7 @@
 export builddir = @abs_builddir@
 export srcdir = @abs_srcdir@
 export top_srcdir = @abs_top_srcdir@
-export KSRC = @KBUILD26@
+export KSRC = @KBUILD@
 export VERSION = @VERSION@
 
 include $(srcdir)/../Modules.mk

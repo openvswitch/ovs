@@ -90,7 +90,7 @@ OVS_ENABLE_SPARSE
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
-OVS_CHECK_LINUX26
+OVS_CHECK_LINUX
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 

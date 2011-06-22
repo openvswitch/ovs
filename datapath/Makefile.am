@@ -1,5 +1,5 @@
 SUBDIRS = 
-if L26_ENABLED
+if LINUX_ENABLED
 SUBDIRS += linux-2.6
 endif
 
