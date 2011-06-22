@@ -63,7 +63,7 @@ echo "override %{kmod_name} * weak-updates/%{kmod_name}" > kmod-%{kmod_name}.con
 for kvariant in %{kvariants} ; do
     KSRC=%{_usrsrc}/kernels/%{kversion}${kvariant:+-$kvariant}-%{_target_cpu}
     cd _kmod_build_$kvariant
-    ../openvswitch-%{version}/configure --with-l26="$KSRC"
+    ../openvswitch-%{version}/configure --with-linux="$KSRC"
     %{__make} -C datapath/linux-2.6 %{?_smp_mflags}
     cd ..
 done

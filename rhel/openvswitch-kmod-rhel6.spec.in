@@ -40,7 +40,7 @@ Open vSwitch Linux kernel module.
 %build
 for flavor in %flavors_to_build; do
 	mkdir _$flavor
-	(cd _$flavor && ../configure --with-l26="%{kernel_source $flavor}")
+	(cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}")
 	%{__make} -C _$flavor/datapath/linux-2.6 %{?_smp_mflags}
 done
 

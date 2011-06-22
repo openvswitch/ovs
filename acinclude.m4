@@ -29,16 +29,39 @@ dnl OVS_CHECK_LINUX
 dnl
 dnl Configure linux kernel source tree 
 AC_DEFUN([OVS_CHECK_LINUX], [
-  AC_ARG_WITH([l26],
-              [AC_HELP_STRING([--with-l26=/path/to/linux-2.6],
-                              [Specify the linux 2.6 kernel build directory])],
-              [KBUILD="$withval"], [KBUILD=])dnl
-  AC_ARG_WITH([l26-source],
-              [AC_HELP_STRING([--with-l26-source=/path/to/linux-2.6-source],
-                              [Specify the linux 2.6 kernel source directory
+  AC_ARG_WITH([linux],
+              [AC_HELP_STRING([--with-linux=/path/to/linux],
+                              [Specify the Linux kernel build directory])])
+  AC_ARG_WITH([linux-source],
+              [AC_HELP_STRING([--with-linux-source=/path/to/linux-source],
+                              [Specify the Linux kernel source directory
 			       (usually figured out automatically from build
-			       directory)])],
-              [KSRC="$withval"], [KSRC=])dnl
+			       directory)])])
+
+  # Deprecated equivalents to --with-linux, --with-linux-source.
+  AC_ARG_WITH([l26])
+  AC_ARG_WITH([l26-source])
+
+  if test X"$with_linux" != X; then
+    KBUILD=$with_linux
+  elif test X"$with_l26" != X; then
+    KBUILD=$with_l26
+    AC_MSG_WARN([--with-l26 is deprecated, please use --with-linux instead])
+  else
+    KBUILD=
+  fi
+
+  if test X"$KBUILD" != X; then
+    if test X"$with_linux_source" != X; then
+      KSRC=$with_linux_source
+    elif test X"$with_l26_source" != X; then
+      KSRC=$with_l26_source
+      AC_MSG_WARN([--with-l26-source is deprecated, please use --with-linux-source instead])
+    fi
+  elif test X"$with_linux_source" != X || test X"$with_l26_source" != X; then
+    AC_MSG_ERROR([Linux source directory may not be specified without Linux build directory])
+  fi
+
   if test -n "$KBUILD"; then
     KBUILD=`eval echo "$KBUILD"`
     case $KBUILD in
@@ -48,7 +71,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
 
     # The build directory is what the user provided.
     # Make sure that it exists.
-    AC_MSG_CHECKING([for Linux 2.6 build directory])
+    AC_MSG_CHECKING([for Linux build directory])
     if test -d "$KBUILD"; then
 	AC_MSG_RESULT([$KBUILD])
 	AC_SUBST(KBUILD)
@@ -60,7 +83,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     # Debian breaks kernel headers into "source" header and "build" headers.
     # We want the source headers, but $KBUILD gives us the "build" headers.
     # Use heuristics to find the source headers.
-    AC_MSG_CHECKING([for Linux 2.6 source directory])
+    AC_MSG_CHECKING([for Linux source directory])
     if test -n "$KSRC"; then
       KSRC=`eval echo "$KSRC"`
       case $KSRC in
@@ -83,7 +106,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
 	esac
       fi
       if test ! -e $KSRC/include/linux/kernel.h; then
-        AC_MSG_ERROR([cannot find source directory (please use --with-l26-source)])
+        AC_MSG_ERROR([cannot find source directory (please use --with-linux-source)])
       fi
     fi
     AC_MSG_RESULT([$KSRC])
@@ -108,8 +131,6 @@ AC_DEFUN([OVS_CHECK_LINUX], [
 	AC_MSG_ERROR([Linux kernel source in $KBUILD is not configured])
     fi
     OVS_CHECK_LINUX_COMPAT
-  elif test -n "$KSRC"; then
-    AC_MSG_ERROR([--with-l26-source may not be specified without --with-l26])
   fi
   AM_CONDITIONAL(LINUX_ENABLED, test -n "$KBUILD")
 ])

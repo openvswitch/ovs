@@ -172,17 +172,17 @@ Prerequisites section, follow the procedure below to build.
    To build the Linux kernel module, so that you can run the
    kernel-based switch, pass the location of the kernel build
    directory on --with-l26.  For example, to build for a running
-   instance of Linux 2.6:
+   instance of Linux:
 
-      % ./configure --with-l26=/lib/modules/`uname -r`/build
+      % ./configure --with-linux=/lib/modules/`uname -r`/build
 
    If you wish to build the kernel module for an architecture other
    than the architecture of the machine used for the build, you may
    specify the kernel architecture string using the KARCH variable
    when invoking the configure script.  For example, to build for MIPS
-   with Linux 2.6:
+   with Linux:
 
-      % ./configure --with-l26=/path/to/linux-2.6 KARCH=mips
+      % ./configure --with-linux=/path/to/linux-2.6 KARCH=mips
 
    The configure script accepts a number of other options and honors
    additional environment variables.  For a full list, invoke

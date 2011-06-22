@@ -26,7 +26,7 @@ binary-modules: prep-deb-files
 	dh_testroot
 	dh_clean -k
 	tar xzf openvswitch.tar.gz
-	cd openvswitch && ./configure --with-l26=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
+	cd openvswitch && ./configure --with-linux=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
 	cd openvswitch && $(MAKE) -C datapath/linux-2.6
 	install -d -m755 $(DSTDIR)
 	install -m644 openvswitch/datapath/linux-2.6/*_mod.ko $(DSTDIR)/
