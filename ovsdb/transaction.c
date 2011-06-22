@@ -992,6 +992,7 @@ ovsdb_txn_table_destroy(struct ovsdb_txn_table *txn_table)
     for (i = 0; i < txn_table->table->schema->n_indexes; i++) {
         hmap_destroy(&txn_table->txn_indexes[i]);
     }
+    free(txn_table->txn_indexes);
 
     txn_table->table->txn_table = NULL;
     hmap_destroy(&txn_table->txn_rows);
