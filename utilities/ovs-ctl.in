@@ -302,9 +302,9 @@ enable_protocol () {
                 ;;
         esac
     elif (iptables --version) >/dev/null 2>&1; then
-        action "iptables binary not installed, not adding a rule for $name"
-    else
         action "cannot list iptables rules, not adding a rule for $name"
+    else
+        action "iptables binary not installed, not adding a rule for $name"
     fi
 }
 
