@@ -40,7 +40,8 @@ EXTRA_DIST += \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \
 	debian/rules \
-	debian/rules.modules
+	debian/rules.modules \
+	debian/source/format
 
 check-debian-changelog-version:
 	@DEB_VERSION=`echo '$(VERSION)' | sed 's/pre/~pre/'`;		     \
