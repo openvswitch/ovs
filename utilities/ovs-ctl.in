@@ -270,37 +270,40 @@ force_reload_kmod () {
 ## --------------- ##
 
 enable_protocol () {
-    set X "-p $PROTOCOL"
+    # Translate the protocol name to a number, because "iptables -n -L" prints
+    # some protocols by name (despite the -n) and therefore we need to look for
+    # both forms.
+    #
+    # (iptables -S output is more uniform but old iptables doesn't have it.)
+    protonum=`grep "^$PROTOCOL[ 	]" /etc/protocols | awk '{print $2}'`
+    if expr X"$protonum" : X'[0-9]\{1,\}$' > /dev/null; then :; else
+        log_failure_msg "unknown protocol $PROTOCOL"
+        return 1
+    fi
+
     name=$PROTOCOL
+    match="(\$2 == \"$PROTOCOL\" || \$2 == $protonum)"
+    insert="iptables -I INPUT -p $PROTOCOL"
     if test X"$DPORT" != X; then
-        set "$@" "--dport $DPORT"
         name="$name to port $DPORT"
+        match="$match && /dpt:$DPORT/"
+        insert="$insert --dport $DPORT"
     fi
     if test X"$SPORT" != X; then
-        set "$@" "--sport $SPORT"
         name="$name from port $SPORT"
+        match="$match && /spt:$SPORT/"
+        insert="$insert --sport $SPORT"
     fi
-    shift
-
-    search="/^-A INPUT/!d"
-    insert="iptables -I INPUT"
-    for arg; do
-        search="$search
-/ $arg /!d"
-        insert="$insert $arg"
-    done
     insert="$insert -j ACCEPT"
 
-    if (iptables -S INPUT) >/dev/null 2>&1; then
-        case `iptables -S INPUT | sed "$search"` in
-            '')
-                action "Enabling $name with iptables" $insert
-                ;;
-            *)
-                # There's already a rule for this protocol.  Don't override it.
-                log_success_msg "iptables already has a rule for $name, not explicitly enabling"
-                ;;
-        esac
+    if (iptables -n -L INPUT) >/dev/null 2>&1; then
+        if iptables -n -L INPUT | awk "$match { n++ } END { exit n == 0 }"
+        then
+            # There's already a rule for this protocol.  Don't override it.
+            log_success_msg "iptables already has a rule for $name, not explicitly enabling"
+        else
+            action "Enabling $name with iptables" $insert
+        fi
     elif (iptables --version) >/dev/null 2>&1; then
         action "cannot list iptables rules, not adding a rule for $name"
     else
