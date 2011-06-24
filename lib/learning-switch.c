@@ -225,7 +225,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         /* Nothing to do. */
         break;
 
-    case OFPUTIL_INVALID:
+    case OFPUTIL_MSG_INVALID:
     case OFPUTIL_OFPT_HELLO:
     case OFPUTIL_OFPT_ERROR:
     case OFPUTIL_OFPT_ECHO_REPLY:

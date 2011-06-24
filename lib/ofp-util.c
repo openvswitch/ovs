@@ -725,8 +725,8 @@ ofputil_decode_msg_type(const struct ofp_header *oh,
     }
     if (error) {
         static const struct ofputil_msg_type ofputil_invalid_type = {
-            OFPUTIL_INVALID,
-            0, "OFPUTIL_INVALID",
+            OFPUTIL_MSG_INVALID,
+            0, "OFPUTIL_MSG_INVALID",
             0, 0
         };
 

@@ -31,7 +31,7 @@ struct ofpbuf;
 
 /* Basic decoding and length validation of OpenFlow messages. */
 enum ofputil_msg_code {
-    OFPUTIL_INVALID,
+    OFPUTIL_MSG_INVALID,
 
     /* OFPT_* messages. */
     OFPUTIL_OFPT_HELLO,

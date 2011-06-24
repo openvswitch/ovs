@@ -1372,7 +1372,7 @@ ofp_to_string__(const struct ofp_header *oh,
 
     code = ofputil_msg_type_code(type);
     switch (code) {
-    case OFPUTIL_INVALID:
+    case OFPUTIL_MSG_INVALID:
         break;
 
     case OFPUTIL_OFPT_HELLO:

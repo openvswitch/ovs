@@ -2639,7 +2639,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_OFPST_QUEUE_REQUEST:
         return handle_queue_stats_request(ofconn, msg->data);
 
-    case OFPUTIL_INVALID:
+    case OFPUTIL_MSG_INVALID:
     case OFPUTIL_OFPT_HELLO:
     case OFPUTIL_OFPT_ERROR:
     case OFPUTIL_OFPT_FEATURES_REPLY:
