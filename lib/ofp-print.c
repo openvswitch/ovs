@@ -796,7 +796,7 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
                      (w & OFPFW_NW_DST_MASK) >> OFPFW_NW_DST_SHIFT, verbosity);
     if (!skip_proto) {
         if (om->dl_type == htons(ETH_TYPE_ARP)) {
-            print_wild(&f, "opcode=", w & OFPFW_NW_PROTO, verbosity,
+            print_wild(&f, "arp_op=", w & OFPFW_NW_PROTO, verbosity,
                        "%u", om->nw_proto);
         } else {
             print_wild(&f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,

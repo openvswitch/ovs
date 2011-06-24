@@ -592,7 +592,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     }
     if (!skip_proto && !(w & FWW_NW_PROTO)) {
         if (f->dl_type == htons(ETH_TYPE_ARP)) {
-            ds_put_format(s, "opcode=%"PRIu8",", f->nw_proto);
+            ds_put_format(s, "arp_op=%"PRIu8",", f->nw_proto);
         } else {
             ds_put_format(s, "nw_proto=%"PRIu8",", f->nw_proto);
         }
