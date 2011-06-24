@@ -116,7 +116,7 @@ install -m 644 \
                $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
 
 install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch \;
+find datapath/linux -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch \;
 install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 # Get rid of stuff we don't want to make RPM happy.

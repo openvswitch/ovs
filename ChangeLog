@@ -12,6 +12,8 @@ post v1.1.0
       --with-l26-source has been renamed --with-linux-source.  The old
       names will be removed after the next release, so please update
       your scripts.
+    - The "-2.6" suffix has been dropped from the datapath/linux-2.6 and
+      datapath/linux-2.6/compat-2.6 directories.
     - Feature removals:
       - Dropped support for "tun_id_from_cookie" OpenFlow extension.
 	(Use the extensible match extensions instead.)

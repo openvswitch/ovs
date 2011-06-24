@@ -20,7 +20,6 @@
 /ip_output-openvswitch.c
 /kcompat.h
 /kmemdup.c
-/linux-2.6
 /loop_counter.c
 /modules.order
 /netdevice.c

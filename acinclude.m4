@@ -180,7 +180,7 @@ dnl OVS_DEFINE(NAME)
 dnl
 dnl Defines NAME to 1 in kcompat.h.
 AC_DEFUN([OVS_DEFINE], [
-  echo '#define $1 1' >> datapath/linux-2.6/kcompat.h.new
+  echo '#define $1 1' >> datapath/linux/kcompat.h.new
 ])
 
 AC_DEFUN([OVS_CHECK_LOG2_H], [
@@ -198,9 +198,9 @@ dnl
 dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
 dnl the directory in $KBUILD.
 AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
-  rm -f datapath/linux-2.6/kcompat.h.new
-  mkdir -p datapath/linux-2.6
-  : > datapath/linux-2.6/kcompat.h.new
+  rm -f datapath/linux/kcompat.h.new
+  mkdir -p datapath/linux
+  : > datapath/linux/kcompat.h.new
 
   OVS_GREP_IFELSE([$KSRC/arch/x86/include/asm/checksum_32.h], [src_err,],
                   [OVS_DEFINE([HAVE_CSUM_COPY_DBG])])
@@ -261,11 +261,11 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_CHECK_LOG2_H
 
-  if cmp -s datapath/linux-2.6/kcompat.h.new \
-            datapath/linux-2.6/kcompat.h >/dev/null 2>&1; then
-    rm datapath/linux-2.6/kcompat.h.new
+  if cmp -s datapath/linux/kcompat.h.new \
+            datapath/linux/kcompat.h >/dev/null 2>&1; then
+    rm datapath/linux/kcompat.h.new
   else
-    mv datapath/linux-2.6/kcompat.h.new datapath/linux-2.6/kcompat.h
+    mv datapath/linux/kcompat.h.new datapath/linux/kcompat.h
   fi
 ])
 

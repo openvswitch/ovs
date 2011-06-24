@@ -1,6 +1,6 @@
 SUBDIRS = 
 if LINUX_ENABLED
-SUBDIRS += linux-2.6
+SUBDIRS += linux
 endif
 
 EXTRA_DIST = $(dist_headers) $(dist_sources)
@@ -9,7 +9,7 @@ EXTRA_DIST = $(dist_headers) $(dist_sources)
 AUTOMAKE_OPTIONS = -Wno-portability
 
 include Modules.mk
-include linux-2.6/Modules.mk
+include linux/Modules.mk
 
 # The following is based on commands for the Automake "distdir" target.
 distfiles: Makefile

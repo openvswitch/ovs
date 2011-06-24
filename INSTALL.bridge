@@ -34,7 +34,7 @@ kernel bridge module.
 
 2. Load the brcompat kernel module (which was built in step 1), e.g.:
 
-      % insmod datapath/linux-2.6/brcompat_mod.ko
+      % insmod datapath/linux/brcompat_mod.ko
 
    (openvswitch_mod.ko should already have been loaded.)
 

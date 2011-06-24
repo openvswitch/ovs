@@ -182,7 +182,7 @@ Prerequisites section, follow the procedure below to build.
    when invoking the configure script.  For example, to build for MIPS
    with Linux:
 
-      % ./configure --with-linux=/path/to/linux-2.6 KARCH=mips
+      % ./configure --with-linux=/path/to/linux KARCH=mips
 
    The configure script accepts a number of other options and honors
    additional environment variables.  For a full list, invoke
@@ -199,7 +199,7 @@ Prerequisites section, follow the procedure below to build.
 
 6. If you built kernel modules, you may load them with "insmod", e.g.:
 
-      % insmod datapath/linux-2.6/openvswitch_mod.ko
+      % insmod datapath/linux/openvswitch_mod.ko
 
    You may need to specify a full path to insmod, e.g. /sbin/insmod.
    To verify that the modules have been loaded, run "/sbin/lsmod" and

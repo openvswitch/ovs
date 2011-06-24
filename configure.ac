@@ -94,9 +94,9 @@ OVS_CHECK_LINUX
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 
-datapath/linux-2.6/Kbuild
-datapath/linux-2.6/Makefile
-datapath/linux-2.6/Makefile.main
+datapath/linux/Kbuild
+datapath/linux/Makefile
+datapath/linux/Makefile.main
 tests/atlocal])
 
 dnl This makes sure that include/openflow gets created in the build directory.

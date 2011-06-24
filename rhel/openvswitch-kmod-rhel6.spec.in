@@ -41,7 +41,7 @@ Open vSwitch Linux kernel module.
 for flavor in %flavors_to_build; do
 	mkdir _$flavor
 	(cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}")
-	%{__make} -C _$flavor/datapath/linux-2.6 %{?_smp_mflags}
+	%{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
 done
 
 %install
@@ -49,7 +49,7 @@ export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{name}
 for flavor in %flavors_to_build ; do
          make -C %{kernel_source $flavor} modules_install \
-                 M=$PWD/_$flavor/datapath/linux-2.6
+                 M=$PWD/_$flavor/datapath/linux
 done
 
 %clean
