@@ -573,6 +573,22 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         }
     }
 
+    /* Drop all packets which arrive on backup slaves.  This is similar to how
+     * Linux bonding handles active-backup bonds. */
+    if (bond->balance == BM_AB) {
+        struct bond_slave *slave = bond_slave_lookup(bond, slave_);
+
+        *tags |= bond_get_active_slave_tag(bond);
+        if (bond->active_slave != slave) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "active-backup bond received packet on backup"
+                         " slave (%s) destined for " ETH_ADDR_FMT,
+                         slave->name, ETH_ADDR_ARGS(eth_dst));
+            return BV_DROP;
+        }
+    }
+
     /* Drop all packets for which we have learned a different input port,
      * because we probably sent the packet on one slave and got it back on the
      * other.  Gratuitous ARP packets are an exception to this rule: the host
