@@ -195,7 +195,9 @@ static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_configure_cfm(struct iface *);
-static bool iface_refresh_cfm_stats(struct iface *iface);
+static bool iface_refresh_cfm_stats(struct iface *);
+static void iface_refresh_stats(struct iface *);
+static void iface_refresh_status(struct iface *);
 static bool iface_get_carrier(const struct iface *);
 static bool iface_is_synthetic(const struct iface *);
 
@@ -864,6 +866,12 @@ bridge_add_ofproto_ports(struct bridge *br)
                 VLOG_WARN("could not %s network device %s (%s)",
                           iface->netdev ? "reconfigure" : "open",
                           iface->name, strerror(error));
+            }
+
+            /* Populate stats columns in new Interface rows. */
+            if (!iface->cfg->mtu) {
+                iface_refresh_stats(iface);
+                iface_refresh_status(iface);
             }
 
             /* Add the port, if necessary. */
