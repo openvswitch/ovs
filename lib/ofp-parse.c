@@ -440,6 +440,7 @@ str_to_action(char *str, struct ofpbuf *b)
             if (remainder) {
                 ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
             }
+            nan = (struct nx_action_note *)((char *)b->data + start_ofs);
             nan->len = htons(b->size - start_ofs);
         } else if (!strcasecmp(act, "move")) {
             struct nx_action_reg_move *move;
