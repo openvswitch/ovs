@@ -7,8 +7,10 @@
 /ovs-cfg-mod.8
 /ovs-controller
 /ovs-controller.8
+/ovs-ctl
 /ovs-dpctl
 /ovs-dpctl.8
+/ovs-lib.sh
 /ovs-ofctl
 /ovs-ofctl.8
 /ovs-parse-leaks
