@@ -244,7 +244,7 @@ force_reload_kmod () {
     chmod +x "$script"
 
     for dp in `ovs-dpctl dump-dps`; do
-        action "Removing datapath: $dp" "$dpctl" del-dp "$dp"
+        action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 
     if test -e /sys/module/openvswitch_mod; then
