@@ -437,6 +437,14 @@ function force_reload_kmod {
     start
 
     action "Restore interface configuration from $script" $script
+
+    # Restart the high-availability daemon if it is running.  Otherwise
+    # it loses its heartbeat and reboots the system after a few minutes.
+    if pidof xhad >/dev/null && test -e /etc/xensource/xhad.conf; then
+	PATH=$PATH:/opt/xensource/xha
+	action "Stopping HA daemon" ha_stop_daemon
+	action "Starting HA daemon" ha_start_daemon
+    fi
 }
 
 case "$1" in
