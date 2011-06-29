@@ -559,10 +559,15 @@ enum bond_verdict
 bond_check_admissibility(struct bond *bond, const void *slave_,
                          const uint8_t eth_dst[ETH_ADDR_LEN], tag_type *tags)
 {
-    /* Admit all packets if LACP has been negotiated, because that means that
-     * the remote switch is aware of the bond and will "do the right thing". */
+    struct bond_slave *slave = bond_slave_lookup(bond, slave_);
+
+    /* LACP bonds have very loose admissibility restrictions because we can
+     * assume the remote switch is aware of the bond and will "do the right
+     * thing".  However, as a precaution we drop packets on disabled slaves
+     * because no correctly implemented partner switch should be sending
+     * packets to them. */
     if (bond->lacp_negotiated) {
-        return BV_ACCEPT;
+        return slave->enabled ? BV_ACCEPT : BV_DROP;
     }
 
     /* Drop all multicast packets on inactive slaves. */
@@ -576,8 +581,6 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
     /* Drop all packets which arrive on backup slaves.  This is similar to how
      * Linux bonding handles active-backup bonds. */
     if (bond->balance == BM_AB) {
-        struct bond_slave *slave = bond_slave_lookup(bond, slave_);
-
         *tags |= bond_get_active_slave_tag(bond);
         if (bond->active_slave != slave) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
