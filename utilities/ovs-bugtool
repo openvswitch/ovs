@@ -67,6 +67,8 @@ OS_RELEASE = platform.release()
 # Files & directories
 #
 
+APT_SOURCES_LIST = "/etc/apt/sources.list"
+APT_SOURCES_LIST_D = "/etc/apt/sources.list.d"
 BUG_DIR = "/var/log/ovs-bugtool"
 PLUGIN_DIR = "/etc/openvswitch/bugtool"
 GRUB_CONFIG = '/boot/grub/menu.lst'
@@ -143,6 +145,7 @@ DF = 'df'
 DMESG = 'dmesg'
 DMIDECODE = 'dmidecode'
 DMSETUP = 'dmsetup'
+DPKG_QUERY = 'dpkg-query'
 ETHTOOL = 'ethtool'
 FDISK = 'fdisk'
 FIND = 'find'
@@ -633,6 +636,9 @@ exclude those logs from the archive.
     file_output(CAP_YUM, [YUM_LOG])
     tree_output(CAP_YUM, YUM_REPOS_DIR)
     cmd_output(CAP_YUM, [RPM, '-qa'])
+    file_output(CAP_YUM, [APT_SOURCES_LIST])
+    tree_output(CAP_YUM, APT_SOURCES_LIST_D)
+    cmd_output(CAP_YUM, [DPKG_QUERY, '-W', '-f=${Package} ${Version} ${Status}\n'], 'dpkg-packages')
 
     try:
         load_plugins()
