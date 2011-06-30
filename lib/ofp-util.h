@@ -275,6 +275,38 @@ struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 /* Actions. */
 
+enum ofputil_action_code {
+    /* OFPAT_* actions. */
+    OFPUTIL_OFPAT_OUTPUT,
+    OFPUTIL_OFPAT_SET_VLAN_VID,
+    OFPUTIL_OFPAT_SET_VLAN_PCP,
+    OFPUTIL_OFPAT_STRIP_VLAN,
+    OFPUTIL_OFPAT_SET_DL_SRC,
+    OFPUTIL_OFPAT_SET_DL_DST,
+    OFPUTIL_OFPAT_SET_NW_SRC,
+    OFPUTIL_OFPAT_SET_NW_DST,
+    OFPUTIL_OFPAT_SET_NW_TOS,
+    OFPUTIL_OFPAT_SET_TP_SRC,
+    OFPUTIL_OFPAT_SET_TP_DST,
+    OFPUTIL_OFPAT_ENQUEUE,
+
+    /* NXAST_* actions. */
+    OFPUTIL_NXAST_RESUBMIT,
+    OFPUTIL_NXAST_SET_TUNNEL,
+    OFPUTIL_NXAST_SET_QUEUE,
+    OFPUTIL_NXAST_POP_QUEUE,
+    OFPUTIL_NXAST_REG_MOVE,
+    OFPUTIL_NXAST_REG_LOAD,
+    OFPUTIL_NXAST_NOTE,
+    OFPUTIL_NXAST_SET_TUNNEL64,
+    OFPUTIL_NXAST_MULTIPATH,
+    OFPUTIL_NXAST_AUTOPATH
+};
+
+int ofputil_decode_action(const union ofp_action *);
+enum ofputil_action_code ofputil_decode_action_unsafe(
+    const union ofp_action *);
+
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
 static inline union ofp_action *

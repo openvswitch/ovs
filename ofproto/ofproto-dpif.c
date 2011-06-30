@@ -3040,77 +3040,6 @@ xlate_autopath(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_nicira_action(struct action_xlate_ctx *ctx,
-                    const struct nx_action_header *nah)
-{
-    const struct nx_action_resubmit *nar;
-    const struct nx_action_set_tunnel *nast;
-    const struct nx_action_set_queue *nasq;
-    const struct nx_action_multipath *nam;
-    const struct nx_action_autopath *naa;
-    enum nx_action_subtype subtype = ntohs(nah->subtype);
-    ovs_be64 tun_id;
-
-    assert(nah->vendor == htonl(NX_VENDOR_ID));
-    switch (subtype) {
-    case NXAST_RESUBMIT:
-        nar = (const struct nx_action_resubmit *) nah;
-        xlate_table_action(ctx, ntohs(nar->in_port));
-        break;
-
-    case NXAST_SET_TUNNEL:
-        nast = (const struct nx_action_set_tunnel *) nah;
-        tun_id = htonll(ntohl(nast->tun_id));
-        ctx->flow.tun_id = tun_id;
-        break;
-
-    case NXAST_SET_QUEUE:
-        nasq = (const struct nx_action_set_queue *) nah;
-        xlate_set_queue_action(ctx, nasq);
-        break;
-
-    case NXAST_POP_QUEUE:
-        ctx->priority = 0;
-        break;
-
-    case NXAST_REG_MOVE:
-        nxm_execute_reg_move((const struct nx_action_reg_move *) nah,
-                             &ctx->flow);
-        break;
-
-    case NXAST_REG_LOAD:
-        nxm_execute_reg_load((const struct nx_action_reg_load *) nah,
-                             &ctx->flow);
-        break;
-
-    case NXAST_NOTE:
-        /* Nothing to do. */
-        break;
-
-    case NXAST_SET_TUNNEL64:
-        tun_id = ((const struct nx_action_set_tunnel64 *) nah)->tun_id;
-        ctx->flow.tun_id = tun_id;
-        break;
-
-    case NXAST_MULTIPATH:
-        nam = (const struct nx_action_multipath *) nah;
-        multipath_execute(nam, &ctx->flow);
-        break;
-
-    case NXAST_AUTOPATH:
-        naa = (const struct nx_action_autopath *) nah;
-        xlate_autopath(ctx, naa);
-        break;
-
-    case NXAST_SNAT__OBSOLETE:
-    case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
-    default:
-        VLOG_DBG_RL(&rl, "unknown Nicira action type %d", (int) subtype);
-        break;
-    }
-}
-
-static void
 do_xlate_actions(const union ofp_action *in, size_t n_in,
                  struct action_xlate_ctx *ctx)
 {
@@ -3130,68 +3059,116 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
     OFPUTIL_ACTION_FOR_EACH_UNSAFE (ia, left, in, n_in) {
         const struct ofp_action_dl_addr *oada;
-        enum ofp_action_type type = ntohs(ia->type);
+        const struct nx_action_resubmit *nar;
+        const struct nx_action_set_tunnel *nast;
+        const struct nx_action_set_queue *nasq;
+        const struct nx_action_multipath *nam;
+        const struct nx_action_autopath *naa;
+        enum ofputil_action_code code;
+        ovs_be64 tun_id;
 
-        switch (type) {
-        case OFPAT_OUTPUT:
+        code = ofputil_decode_action_unsafe(ia);
+        switch (code) {
+        case OFPUTIL_OFPAT_OUTPUT:
             xlate_output_action(ctx, &ia->output);
             break;
 
-        case OFPAT_SET_VLAN_VID:
+        case OFPUTIL_OFPAT_SET_VLAN_VID:
             ctx->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
             ctx->flow.vlan_tci |= ia->vlan_vid.vlan_vid | htons(VLAN_CFI);
             break;
 
-        case OFPAT_SET_VLAN_PCP:
+        case OFPUTIL_OFPAT_SET_VLAN_PCP:
             ctx->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
             ctx->flow.vlan_tci |= htons(
                 (ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
             break;
 
-        case OFPAT_STRIP_VLAN:
+        case OFPUTIL_OFPAT_STRIP_VLAN:
             ctx->flow.vlan_tci = htons(0);
             break;
 
-        case OFPAT_SET_DL_SRC:
+        case OFPUTIL_OFPAT_SET_DL_SRC:
             oada = ((struct ofp_action_dl_addr *) ia);
             memcpy(ctx->flow.dl_src, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
-        case OFPAT_SET_DL_DST:
+        case OFPUTIL_OFPAT_SET_DL_DST:
             oada = ((struct ofp_action_dl_addr *) ia);
             memcpy(ctx->flow.dl_dst, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
-        case OFPAT_SET_NW_SRC:
+        case OFPUTIL_OFPAT_SET_NW_SRC:
             ctx->flow.nw_src = ia->nw_addr.nw_addr;
             break;
 
-        case OFPAT_SET_NW_DST:
+        case OFPUTIL_OFPAT_SET_NW_DST:
             ctx->flow.nw_dst = ia->nw_addr.nw_addr;
             break;
 
-        case OFPAT_SET_NW_TOS:
+        case OFPUTIL_OFPAT_SET_NW_TOS:
             ctx->flow.nw_tos = ia->nw_tos.nw_tos;
             break;
 
-        case OFPAT_SET_TP_SRC:
+        case OFPUTIL_OFPAT_SET_TP_SRC:
             ctx->flow.tp_src = ia->tp_port.tp_port;
             break;
 
-        case OFPAT_SET_TP_DST:
+        case OFPUTIL_OFPAT_SET_TP_DST:
             ctx->flow.tp_dst = ia->tp_port.tp_port;
             break;
 
-        case OFPAT_VENDOR:
-            xlate_nicira_action(ctx, (const struct nx_action_header *) ia);
-            break;
-
-        case OFPAT_ENQUEUE:
+        case OFPUTIL_OFPAT_ENQUEUE:
             xlate_enqueue_action(ctx, (const struct ofp_action_enqueue *) ia);
             break;
 
-        default:
-            VLOG_DBG_RL(&rl, "unknown action type %d", (int) type);
+        case OFPUTIL_NXAST_RESUBMIT:
+            nar = (const struct nx_action_resubmit *) ia;
+            xlate_table_action(ctx, ntohs(nar->in_port));
+            break;
+
+        case OFPUTIL_NXAST_SET_TUNNEL:
+            nast = (const struct nx_action_set_tunnel *) ia;
+            tun_id = htonll(ntohl(nast->tun_id));
+            ctx->flow.tun_id = tun_id;
+            break;
+
+        case OFPUTIL_NXAST_SET_QUEUE:
+            nasq = (const struct nx_action_set_queue *) ia;
+            xlate_set_queue_action(ctx, nasq);
+            break;
+
+        case OFPUTIL_NXAST_POP_QUEUE:
+            ctx->priority = 0;
+            break;
+
+        case OFPUTIL_NXAST_REG_MOVE:
+            nxm_execute_reg_move((const struct nx_action_reg_move *) ia,
+                                 &ctx->flow);
+            break;
+
+        case OFPUTIL_NXAST_REG_LOAD:
+            nxm_execute_reg_load((const struct nx_action_reg_load *) ia,
+                                 &ctx->flow);
+            break;
+
+        case OFPUTIL_NXAST_NOTE:
+            /* Nothing to do. */
+            break;
+
+        case OFPUTIL_NXAST_SET_TUNNEL64:
+            tun_id = ((const struct nx_action_set_tunnel64 *) ia)->tun_id;
+            ctx->flow.tun_id = tun_id;
+            break;
+
+        case OFPUTIL_NXAST_MULTIPATH:
+            nam = (const struct nx_action_multipath *) ia;
+            multipath_execute(nam, &ctx->flow);
+            break;
+
+        case OFPUTIL_NXAST_AUTOPATH:
+            naa = (const struct nx_action_autopath *) ia;
+            xlate_autopath(ctx, naa);
             break;
         }
     }

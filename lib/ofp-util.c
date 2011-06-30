@@ -1941,33 +1941,6 @@ make_echo_reply(const struct ofp_header *rq)
     return out;
 }
 
-static int
-check_action_exact_len(const union ofp_action *a, unsigned int len,
-                       unsigned int required_len)
-{
-    if (len != required_len) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "action %"PRIu16" has invalid length "
-                     "%"PRIu16" (must be %u)\n",
-                     ntohs(a->type), ntohs(a->header.len), required_len);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    return 0;
-}
-
-static int
-check_nx_action_exact_len(const struct nx_action_header *a,
-                          unsigned int len, unsigned int required_len)
-{
-    if (len != required_len) {
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "Nicira action %"PRIu16" has invalid length %"PRIu16" "
-                     "(must be %u)\n",
-                     ntohs(a->subtype), ntohs(a->len), required_len);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    return 0;
-}
-
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an ofp_mkerr() return code. */
@@ -1988,171 +1961,7 @@ check_output_port(uint16_t port, int max_ports)
         if (port < max_ports) {
             return 0;
         }
-        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown output port %x", port);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
-    }
-}
-
-/* Checks that 'action' is a valid OFPAT_ENQUEUE action, given that the switch
- * will never have more than 'max_ports' ports.  Returns 0 if 'port' is valid,
- * otherwise an ofp_mkerr() return code. */
-static int
-check_enqueue_action(const union ofp_action *a, unsigned int len,
-                     int max_ports)
-{
-    const struct ofp_action_enqueue *oae;
-    uint16_t port;
-    int error;
-
-    error = check_action_exact_len(a, len, 16);
-    if (error) {
-        return error;
-    }
-
-    oae = (const struct ofp_action_enqueue *) a;
-    port = ntohs(oae->port);
-    if (port < max_ports || port == OFPP_IN_PORT) {
-        return 0;
-    }
-    VLOG_WARN_RL(&bad_ofmsg_rl, "unknown enqueue port %x", port);
-    return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
-}
-
-static int
-check_nicira_action(const union ofp_action *a, unsigned int len,
-                    const struct flow *flow)
-{
-    const struct nx_action_header *nah;
-    int subtype;
-    int error;
-
-    if (len < 16) {
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "Nicira vendor action only %u bytes", len);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    nah = (const struct nx_action_header *) a;
-
-    subtype = ntohs(nah->subtype);
-    if (subtype > TYPE_MAXIMUM(enum nx_action_subtype)) {
-        /* This is necessary because enum nx_action_subtype may be an
-         * 8-bit type, so the cast below throws away the top 8 bits. */
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
-    }
-
-    switch ((enum nx_action_subtype) subtype) {
-    case NXAST_RESUBMIT:
-    case NXAST_SET_TUNNEL:
-    case NXAST_SET_QUEUE:
-    case NXAST_POP_QUEUE:
-        return check_nx_action_exact_len(nah, len, 16);
-
-    case NXAST_REG_MOVE:
-        error = check_nx_action_exact_len(nah, len,
-                                          sizeof(struct nx_action_reg_move));
-        if (error) {
-            return error;
-        }
-        return nxm_check_reg_move((const struct nx_action_reg_move *) a, flow);
-
-    case NXAST_REG_LOAD:
-        error = check_nx_action_exact_len(nah, len,
-                                          sizeof(struct nx_action_reg_load));
-        if (error) {
-            return error;
-        }
-        return nxm_check_reg_load((const struct nx_action_reg_load *) a, flow);
-
-    case NXAST_NOTE:
-        return 0;
-
-    case NXAST_SET_TUNNEL64:
-        return check_nx_action_exact_len(
-            nah, len, sizeof(struct nx_action_set_tunnel64));
-
-    case NXAST_MULTIPATH:
-        error = check_nx_action_exact_len(
-            nah, len, sizeof(struct nx_action_multipath));
-        if (error) {
-            return error;
-        }
-        return multipath_check((const struct nx_action_multipath *) a);
-
-    case NXAST_AUTOPATH:
-        error = check_nx_action_exact_len(
-            nah, len, sizeof(struct nx_action_autopath));
-        if (error) {
-            return error;
-        }
-        return autopath_check((const struct nx_action_autopath *) a);
-
-    case NXAST_SNAT__OBSOLETE:
-    case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
-    default:
-        VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "unknown Nicira vendor action subtype %d", subtype);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
-    }
-}
-
-static int
-check_action(const union ofp_action *a, unsigned int len,
-             const struct flow *flow, int max_ports)
-{
-    enum ofp_action_type type = ntohs(a->type);
-    int error;
-
-    switch (type) {
-    case OFPAT_OUTPUT:
-        error = check_action_exact_len(a, len, 8);
-        if (error) {
-            return error;
-        }
-        return check_output_port(ntohs(a->output.port), max_ports);
-
-    case OFPAT_SET_VLAN_VID:
-        error = check_action_exact_len(a, len, 8);
-        if (error) {
-            return error;
-        }
-        if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
-        }
-        return 0;
-
-    case OFPAT_SET_VLAN_PCP:
-        error = check_action_exact_len(a, len, 8);
-        if (error) {
-            return error;
-        }
-        if (a->vlan_pcp.vlan_pcp & ~7) {
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
-        }
-        return 0;
-
-    case OFPAT_STRIP_VLAN:
-    case OFPAT_SET_NW_SRC:
-    case OFPAT_SET_NW_DST:
-    case OFPAT_SET_NW_TOS:
-    case OFPAT_SET_TP_SRC:
-    case OFPAT_SET_TP_DST:
-        return check_action_exact_len(a, len, 8);
-
-    case OFPAT_SET_DL_SRC:
-    case OFPAT_SET_DL_DST:
-        return check_action_exact_len(a, len, 16);
-
-    case OFPAT_VENDOR:
-        return (a->vendor.vendor == htonl(NX_VENDOR_ID)
-                ? check_nicira_action(a, len, flow)
-                : ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR));
-
-    case OFPAT_ENQUEUE:
-        return check_enqueue_action(a, len, max_ports);
-
-    default:
-        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %d", (int) type);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
 }
 
@@ -2160,36 +1969,224 @@ int
 validate_actions(const union ofp_action *actions, size_t n_actions,
                  const struct flow *flow, int max_ports)
 {
-    size_t i;
+    const union ofp_action *a;
+    size_t left;
 
-    for (i = 0; i < n_actions; ) {
-        const union ofp_action *a = &actions[i];
-        unsigned int len = ntohs(a->header.len);
-        unsigned int n_slots = len / OFP_ACTION_ALIGN;
-        unsigned int slots_left = &actions[n_actions] - a;
+    OFPUTIL_ACTION_FOR_EACH (a, left, actions, n_actions) {
+        uint16_t port;
         int error;
+        int code;
 
-        if (n_slots > slots_left) {
+        code = ofputil_decode_action(a);
+        if (code < 0) {
+            char *msg;
+
+            error = -code;
+            msg = ofputil_error_to_string(error);
             VLOG_WARN_RL(&bad_ofmsg_rl,
-                         "action requires %u slots but only %u remain",
-                         n_slots, slots_left);
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-        } else if (!len) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "action has invalid length 0");
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-        } else if (len % OFP_ACTION_ALIGN) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
-                         "of %d", len, OFP_ACTION_ALIGN);
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-        }
+                         "action decoding error at offset %td (%s)",
+                         (a - actions) * sizeof *a, msg);
+            free(msg);
 
-        error = check_action(a, len, flow, max_ports);
-        if (error) {
             return error;
         }
-        i += n_slots;
+
+        error = 0;
+        switch ((enum ofputil_action_code) code) {
+        case OFPUTIL_OFPAT_OUTPUT:
+            error = check_output_port(ntohs(a->output.port), max_ports);
+            break;
+
+        case OFPUTIL_OFPAT_SET_VLAN_VID:
+            if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
+                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+            }
+            break;
+
+        case OFPUTIL_OFPAT_SET_VLAN_PCP:
+            if (a->vlan_pcp.vlan_pcp & ~7) {
+                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+            }
+            break;
+
+        case OFPUTIL_OFPAT_ENQUEUE:
+            port = ntohs(((const struct ofp_action_enqueue *) a)->port);
+            if (port >= max_ports && port != OFPP_IN_PORT) {
+                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
+            }
+            break;
+
+        case OFPUTIL_NXAST_REG_MOVE:
+            error = nxm_check_reg_move((const struct nx_action_reg_move *) a,
+                                       flow);
+            break;
+
+        case OFPUTIL_NXAST_REG_LOAD:
+            error = nxm_check_reg_load((const struct nx_action_reg_load *) a,
+                                       flow);
+            break;
+
+        case OFPUTIL_NXAST_MULTIPATH:
+            error = multipath_check((const struct nx_action_multipath *) a);
+            break;
+
+        case OFPUTIL_NXAST_AUTOPATH:
+            error = autopath_check((const struct nx_action_autopath *) a);
+            break;
+
+        case OFPUTIL_OFPAT_STRIP_VLAN:
+        case OFPUTIL_OFPAT_SET_NW_SRC:
+        case OFPUTIL_OFPAT_SET_NW_DST:
+        case OFPUTIL_OFPAT_SET_NW_TOS:
+        case OFPUTIL_OFPAT_SET_TP_SRC:
+        case OFPUTIL_OFPAT_SET_TP_DST:
+        case OFPUTIL_OFPAT_SET_DL_SRC:
+        case OFPUTIL_OFPAT_SET_DL_DST:
+        case OFPUTIL_NXAST_RESUBMIT:
+        case OFPUTIL_NXAST_SET_TUNNEL:
+        case OFPUTIL_NXAST_SET_QUEUE:
+        case OFPUTIL_NXAST_POP_QUEUE:
+        case OFPUTIL_NXAST_NOTE:
+        case OFPUTIL_NXAST_SET_TUNNEL64:
+            break;
+        }
+
+        if (error) {
+            char *msg = ofputil_error_to_string(error);
+            VLOG_WARN_RL(&bad_ofmsg_rl, "bad action at offset %td (%s)",
+                         (a - actions) * sizeof *a, msg);
+            free(msg);
+            return error;
+        }
+    }
+    if (left) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "bad action format at offset %zu",
+                     (n_actions - left) * sizeof *a);
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
     }
     return 0;
+}
+
+struct ofputil_ofpat_action {
+    enum ofputil_action_code code;
+    unsigned int len;
+};
+
+static const struct ofputil_ofpat_action ofpat_actions[] = {
+    { OFPUTIL_OFPAT_OUTPUT,        8 },
+    { OFPUTIL_OFPAT_SET_VLAN_VID,  8 },
+    { OFPUTIL_OFPAT_SET_VLAN_PCP,  8 },
+    { OFPUTIL_OFPAT_STRIP_VLAN,    8 },
+    { OFPUTIL_OFPAT_SET_DL_SRC,   16 },
+    { OFPUTIL_OFPAT_SET_DL_DST,   16 },
+    { OFPUTIL_OFPAT_SET_NW_SRC,    8 },
+    { OFPUTIL_OFPAT_SET_NW_DST,    8 },
+    { OFPUTIL_OFPAT_SET_NW_TOS,    8 },
+    { OFPUTIL_OFPAT_SET_TP_SRC,    8 },
+    { OFPUTIL_OFPAT_SET_TP_DST,    8 },
+    { OFPUTIL_OFPAT_ENQUEUE,      16 },
+};
+
+struct ofputil_nxast_action {
+    enum ofputil_action_code code;
+    unsigned int min_len;
+    unsigned int max_len;
+};
+
+static const struct ofputil_nxast_action nxast_actions[] = {
+    { 0, UINT_MAX, UINT_MAX }, /* NXAST_SNAT__OBSOLETE */
+    { OFPUTIL_NXAST_RESUBMIT,     16, 16 },
+    { OFPUTIL_NXAST_SET_TUNNEL,   16, 16 },
+    { 0, UINT_MAX, UINT_MAX }, /* NXAST_DROP_SPOOFED_ARP__OBSOLETE */
+    { OFPUTIL_NXAST_SET_QUEUE,    16, 16 },
+    { OFPUTIL_NXAST_POP_QUEUE,    16, 16 },
+    { OFPUTIL_NXAST_REG_MOVE,     24, 24 },
+    { OFPUTIL_NXAST_REG_LOAD,     24, 24 },
+    { OFPUTIL_NXAST_NOTE,         16, UINT_MAX },
+    { OFPUTIL_NXAST_SET_TUNNEL64, 24, 24 },
+    { OFPUTIL_NXAST_MULTIPATH,    32, 32 },
+    { OFPUTIL_NXAST_AUTOPATH,     24, 24 },
+};
+
+static int
+ofputil_decode_ofpat_action(const union ofp_action *a)
+{
+    int type = ntohs(a->type);
+
+    if (type < ARRAY_SIZE(ofpat_actions)) {
+        const struct ofputil_ofpat_action *ooa = &ofpat_actions[type];
+        unsigned int len = ntohs(a->header.len);
+
+        return (len == ooa->len
+                ? ooa->code
+                : -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN));
+    } else {
+        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
+    }
+}
+
+static int
+ofputil_decode_nxast_action(const union ofp_action *a)
+{
+    unsigned int len = ntohs(a->header.len);
+
+    if (len < sizeof(struct nx_action_header)) {
+        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+    } else {
+        const struct nx_action_header *nah = (const void *) a;
+        int subtype = ntohs(nah->subtype);
+
+        if (subtype <= ARRAY_SIZE(nxast_actions)) {
+            const struct ofputil_nxast_action *ona = &nxast_actions[subtype];
+            if (len >= ona->min_len && len <= ona->max_len) {
+                return ona->code;
+            } else if (ona->min_len == UINT_MAX) {
+                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
+            } else {
+                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+            }
+        } else {
+            return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
+        }
+    }
+}
+
+/* Parses 'a' to determine its type.  Returns a nonnegative OFPUTIL_OFPAT_* or
+ * OFPUTIL_NXAST_* constant if successful, otherwise a negative OpenFlow error
+ * code (as returned by ofp_mkerr()).
+ *
+ * The caller must have already verified that 'a''s length is correct (that is,
+ * a->header.len is nonzero and a multiple of sizeof(union ofp_action) and no
+ * longer than the amount of space allocated to 'a').
+ *
+ * This function verifies that 'a''s length is correct for the type of action
+ * that it represents. */
+int
+ofputil_decode_action(const union ofp_action *a)
+{
+    if (a->type != htons(OFPAT_VENDOR)) {
+        return ofputil_decode_ofpat_action(a);
+    } else if (a->vendor.vendor == htonl(NX_VENDOR_ID)) {
+        return ofputil_decode_nxast_action(a);
+    } else {
+        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR);
+    }
+}
+
+/* Parses 'a' and returns its type as an OFPUTIL_OFPAT_* or OFPUTIL_NXAST_*
+ * constant.  The caller must have already validated that 'a' is a valid action
+ * understood by Open vSwitch (e.g. by a previous successful call to
+ * ofputil_decode_action()). */
+enum ofputil_action_code
+ofputil_decode_action_unsafe(const union ofp_action *a)
+{
+    if (a->type != htons(OFPAT_VENDOR)) {
+        return ofpat_actions[ntohs(a->type)].code;
+    } else {
+        const struct nx_action_header *nah = (const void *) a;
+
+        return nxast_actions[ntohs(nah->subtype)].code;
+    }
 }
 
 /* Returns true if 'action' outputs to 'port', false otherwise. */
