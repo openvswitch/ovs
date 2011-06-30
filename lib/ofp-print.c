@@ -332,43 +332,21 @@ ofp_action_len(enum ofp_action_type type)
     }
 }
 
-static int
-ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
-        size_t actions_len)
+static void
+ofp_print_action(struct ds *string, const struct ofp_action_header *ah)
 {
     enum ofp_action_type type;
     int required_len;
     size_t len;
 
-    if (actions_len < sizeof *ah) {
-        ds_put_format(string, "***action array too short for next action***\n");
-        return -1;
-    }
-
     type = ntohs(ah->type);
     len = ntohs(ah->len);
-    if (actions_len < len) {
-        ds_put_format(string, "***truncated action %d***\n", (int) type);
-        return -1;
-    }
-
-    if (!len) {
-        ds_put_format(string, "***zero-length action***\n");
-        return 8;
-    }
-
-    if ((len % OFP_ACTION_ALIGN) != 0) {
-        ds_put_format(string,
-                      "***action %d length not a multiple of %d***\n",
-                      (int) type, OFP_ACTION_ALIGN);
-        return -1;
-    }
 
     required_len = ofp_action_len(type);
     if (required_len >= 0 && len != required_len) {
         ds_put_format(string,
                       "***action %d wrong length: %zu***\n", (int) type, len);
-        return -1;
+        return;
     }
 
     switch (type) {
@@ -469,7 +447,7 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
                 = (struct ofp_action_vendor_header *)ah;
         if (len < sizeof *avh) {
             ds_put_format(string, "***ofpat_vendor truncated***\n");
-            return -1;
+            return;
         }
         if (avh->vendor == htonl(NX_VENDOR_ID)) {
             ofp_print_nx_action(string, (struct nx_action_header *)avh);
@@ -483,32 +461,28 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         ds_put_format(string, "(decoder %d not implemented)", (int) type);
         break;
     }
-
-    return len;
 }
 
 void
-ofp_print_actions(struct ds *string, const struct ofp_action_header *action,
-                  size_t actions_len)
+ofp_print_actions(struct ds *string, const union ofp_action *actions,
+                  size_t n_actions)
 {
-    uint8_t *p = (uint8_t *)action;
-    int len = 0;
+    const union ofp_action *a;
+    size_t left;
 
     ds_put_cstr(string, "actions=");
-    if (!actions_len) {
+    if (!n_actions) {
         ds_put_cstr(string, "drop");
     }
-    while (actions_len > 0) {
-        if (len) {
+    OFPUTIL_ACTION_FOR_EACH (a, left, actions, n_actions) {
+        if (a != actions) {
             ds_put_cstr(string, ",");
         }
-        len = ofp_print_action(string, (struct ofp_action_header *)p,
-                actions_len);
-        if (len < 0) {
-            return;
-        }
-        p += len;
-        actions_len -= len;
+        ofp_print_action(string, (struct ofp_action_header *)a);
+    }
+    if (left > 0) {
+        ds_put_format(string, " ***%zu leftover bytes following actions",
+                      left * sizeof *a);
     }
 }
 
@@ -527,7 +501,12 @@ ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
         ds_put_format(string, "***packet too short for action length***\n");
         return;
     }
-    ofp_print_actions(string, opo->actions, actions_len);
+    if (actions_len % sizeof(union ofp_action)) {
+        ds_put_format(string, "***action length not a multiple of %zu***\n",
+                      sizeof(union ofp_action));
+    }
+    ofp_print_actions(string, (const union ofp_action *) opo->actions,
+                      actions_len / sizeof(union ofp_action));
 
     if (ntohl(opo->buffer_id) == UINT32_MAX) {
         int data_len = len - sizeof *opo - actions_len;
@@ -907,8 +886,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
         ds_put_format(s, "flags:0x%"PRIx16" ", fm.flags);
     }
 
-    ofp_print_actions(s, (const struct ofp_action_header *) fm.actions,
-                      fm.n_actions * sizeof *fm.actions);
+    ofp_print_actions(s, fm.actions, fm.n_actions);
 }
 
 static void
@@ -1123,9 +1101,7 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 
         cls_rule_format(&fs.rule, string);
         ds_put_char(string, ' ');
-        ofp_print_actions(string,
-                          (const struct ofp_action_header *) fs.actions,
-                          fs.n_actions * sizeof *fs.actions);
+        ofp_print_actions(string, fs.actions, fs.n_actions);
      }
 }
 

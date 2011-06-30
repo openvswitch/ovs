@@ -3115,8 +3115,8 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
                  struct action_xlate_ctx *ctx)
 {
     const struct ofport_dpif *port;
-    struct actions_iterator iter;
     const union ofp_action *ia;
+    size_t left;
 
     port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
     if (port
@@ -3128,9 +3128,9 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         return;
     }
 
-    for (ia = actions_first(&iter, in, n_in); ia; ia = actions_next(&iter)) {
-        enum ofp_action_type type = ntohs(ia->type);
+    OFPUTIL_ACTION_FOR_EACH_UNSAFE (ia, left, in, n_in) {
         const struct ofp_action_dl_addr *oada;
+        enum ofp_action_type type = ntohs(ia->type);
 
         switch (type) {
         case OFPAT_OUTPUT:
@@ -3852,8 +3852,7 @@ trace_format_rule(struct ds *result, int level, const struct rule *rule)
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_cstr(result, "OpenFlow ");
-    ofp_print_actions(result, (const struct ofp_action_header *) rule->actions,
-                      rule->n_actions * sizeof *rule->actions);
+    ofp_print_actions(result, rule->actions, rule->n_actions);
     ds_put_char(result, '\n');
 }
 

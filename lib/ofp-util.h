@@ -277,13 +277,36 @@ struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
-struct actions_iterator {
-    const union ofp_action *pos, *end;
-};
-const union ofp_action *actions_first(struct actions_iterator *,
-                                      const union ofp_action *,
-                                      size_t n_actions);
-const union ofp_action *actions_next(struct actions_iterator *);
+static inline union ofp_action *
+ofputil_action_next(const union ofp_action *a)
+{
+    return (void *) ((uint8_t *) a + ntohs(a->header.len));
+}
+
+static inline bool
+ofputil_action_is_valid(const union ofp_action *a, size_t n_actions)
+{
+    uint16_t len = ntohs(a->header.len);
+    return (!(len % OFP_ACTION_ALIGN)
+            && len >= sizeof *a
+            && len / sizeof *a <= n_actions);
+}
+
+/* This macro is careful to check for actions with bad lengths. */
+#define OFPUTIL_ACTION_FOR_EACH(ITER, LEFT, ACTIONS, N_ACTIONS)         \
+    for ((ITER) = (ACTIONS), (LEFT) = (N_ACTIONS);                      \
+         (LEFT) > 0 && ofputil_action_is_valid(ITER, LEFT);             \
+         ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
+          (ITER) = ofputil_action_next(ITER)))
+
+/* This macro does not check for actions with bad lengths.  It should only be
+ * used with actions from trusted sources or with actions that have already
+ * been validated (e.g. with OFPUTIL_ACTION_FOR_EACH).  */
+#define OFPUTIL_ACTION_FOR_EACH_UNSAFE(ITER, LEFT, ACTIONS, N_ACTIONS)  \
+    for ((ITER) = (ACTIONS), (LEFT) = (N_ACTIONS);                      \
+         (LEFT) > 0;                                                    \
+         ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
+          (ITER) = ofputil_action_next(ITER)))
 
 int validate_actions(const union ofp_action *, size_t n_actions,
                      const struct flow *, int max_ports);

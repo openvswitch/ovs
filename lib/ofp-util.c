@@ -2206,30 +2206,6 @@ action_outputs_to_port(const union ofp_action *action, ovs_be16 port)
     }
 }
 
-/* The set of actions must either come from a trusted source or have been
- * previously validated with validate_actions(). */
-const union ofp_action *
-actions_first(struct actions_iterator *iter,
-              const union ofp_action *oa, size_t n_actions)
-{
-    iter->pos = oa;
-    iter->end = oa + n_actions;
-    return actions_next(iter);
-}
-
-const union ofp_action *
-actions_next(struct actions_iterator *iter)
-{
-    if (iter->pos != iter->end) {
-        const union ofp_action *a = iter->pos;
-        unsigned int len = ntohs(a->header.len);
-        iter->pos += len / OFP_ACTION_ALIGN;
-        return a;
-    } else {
-        return NULL;
-    }
-}
-
 /* "Normalizes" the wildcards in 'rule'.  That means:
  *
  *    1. If the type of level N is known, then only the valid fields for that

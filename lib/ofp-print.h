@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 struct ofp_flow_mod;
 struct ofp_match;
 struct ds;
-struct ofp_action_header;
+union ofp_action;
 
 #ifdef  __cplusplus
 extern "C" {
@@ -34,7 +34,7 @@ extern "C" {
 void ofp_print(FILE *, const void *, size_t, int verbosity);
 void ofp_print_packet(FILE *stream, const void *data, size_t len, size_t total_len);
 
-void ofp_print_actions(struct ds *, const struct ofp_action_header *, size_t);
+void ofp_print_actions(struct ds *, const union ofp_action *, size_t);
 void ofp_print_match(struct ds *, const struct ofp_match *, int verbosity);
 
 char *ofp_to_string(const void *, size_t, int verbosity);

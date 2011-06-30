@@ -1398,13 +1398,12 @@ static bool
 rule_has_out_port(const struct rule *rule, uint16_t out_port)
 {
     const union ofp_action *oa;
-    struct actions_iterator i;
+    size_t left;
 
     if (out_port == OFPP_NONE) {
         return true;
     }
-    for (oa = actions_first(&i, rule->actions, rule->n_actions); oa;
-         oa = actions_next(&i)) {
+    OFPUTIL_ACTION_FOR_EACH_UNSAFE (oa, left, rule->actions, rule->n_actions) {
         if (action_outputs_to_port(oa, htons(out_port))) {
             return true;
         }
@@ -1921,7 +1920,6 @@ static void
 flow_stats_ds(struct rule *rule, struct ds *results)
 {
     uint64_t packet_count, byte_count;
-    size_t act_len = sizeof *rule->actions * rule->n_actions;
 
     rule->ofproto->ofproto_class->rule_get_stats(rule,
                                                  &packet_count, &byte_count);
@@ -1936,8 +1934,8 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
     ds_put_char(results, ',');
-    if (act_len > 0) {
-        ofp_print_actions(results, &rule->actions->header, act_len);
+    if (rule->n_actions > 0) {
+        ofp_print_actions(results, rule->actions, rule->n_actions);
     } else {
         ds_put_cstr(results, "drop");
     }

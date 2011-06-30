@@ -951,8 +951,7 @@ fte_version_print(const struct fte_version *version)
     }
 
     ds_init(&s);
-    ofp_print_actions(&s, (const struct ofp_action_header *) version->actions,
-                      version->n_actions * sizeof *version->actions);
+    ofp_print_actions(&s, version->actions, version->n_actions);
     printf(" %s\n", ds_cstr(&s));
     ds_destroy(&s);
 }
