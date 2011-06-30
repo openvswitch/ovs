@@ -373,43 +373,45 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
 {
     const struct ofconn *ofconn;
 
-    shash_init(info);
-
     HMAP_FOR_EACH (ofconn, hmap_node, &mgr->controllers) {
         const struct rconn *rconn = ofconn->rconn;
-        time_t now = time_now();
-        time_t last_connection = rconn_get_last_connection(rconn);
-        time_t last_disconnect = rconn_get_last_disconnect(rconn);
-        int last_error = rconn_get_last_error(rconn);
-        struct ofproto_controller_info *cinfo = xmalloc(sizeof *cinfo);
+        const char *target = rconn_get_target(rconn);
 
-        shash_add(info, rconn_get_target(rconn), cinfo);
+        if (!shash_find(info, target)) {
+            struct ofproto_controller_info *cinfo = xmalloc(sizeof *cinfo);
+            time_t now = time_now();
+            time_t last_connection = rconn_get_last_connection(rconn);
+            time_t last_disconnect = rconn_get_last_disconnect(rconn);
+            int last_error = rconn_get_last_error(rconn);
 
-        cinfo->is_connected = rconn_is_connected(rconn);
-        cinfo->role = ofconn->role;
+            shash_add(info, target, cinfo);
 
-        cinfo->pairs.n = 0;
+            cinfo->is_connected = rconn_is_connected(rconn);
+            cinfo->role = ofconn->role;
 
-        if (last_error) {
-            cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
-            cinfo->pairs.values[cinfo->pairs.n++] =
-                xstrdup(ovs_retval_to_string(last_error));
-        }
+            cinfo->pairs.n = 0;
 
-        cinfo->pairs.keys[cinfo->pairs.n] = "state";
-        cinfo->pairs.values[cinfo->pairs.n++] =
-            xstrdup(rconn_get_state(rconn));
+            if (last_error) {
+                cinfo->pairs.keys[cinfo->pairs.n] = "last_error";
+                cinfo->pairs.values[cinfo->pairs.n++]
+                    = xstrdup(ovs_retval_to_string(last_error));
+            }
 
-        if (last_connection != TIME_MIN) {
-            cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_connect";
+            cinfo->pairs.keys[cinfo->pairs.n] = "state";
             cinfo->pairs.values[cinfo->pairs.n++]
-                = xasprintf("%ld", (long int) (now - last_connection));
-        }
+                = xstrdup(rconn_get_state(rconn));
 
-        if (last_disconnect != TIME_MIN) {
-            cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_disconnect";
-            cinfo->pairs.values[cinfo->pairs.n++]
-                = xasprintf("%ld", (long int) (now - last_disconnect));
+            if (last_connection != TIME_MIN) {
+                cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_connect";
+                cinfo->pairs.values[cinfo->pairs.n++]
+                    = xasprintf("%ld", (long int) (now - last_connection));
+            }
+
+            if (last_disconnect != TIME_MIN) {
+                cinfo->pairs.keys[cinfo->pairs.n] = "sec_since_disconnect";
+                cinfo->pairs.values[cinfo->pairs.n++]
+                    = xasprintf("%ld", (long int) (now - last_disconnect));
+            }
         }
     }
 }

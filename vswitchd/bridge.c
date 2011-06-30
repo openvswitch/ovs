@@ -1348,13 +1348,20 @@ nx_role_to_str(enum nx_role role)
 }
 
 static void
-bridge_refresh_controller_status(const struct bridge *br)
+refresh_controller_status(void)
 {
+    struct bridge *br;
     struct shash info;
     const struct ovsrec_controller *cfg;
 
-    ofproto_get_ofproto_controller_info(br->ofproto, &info);
+    shash_init(&info);
 
+    /* Accumulate status for controllers on all bridges. */
+    HMAP_FOR_EACH (br, node, &all_bridges) {
+        ofproto_get_ofproto_controller_info(br->ofproto, &info);
+    }
+
+    /* Update each controller in the database with current status. */
     OVSREC_CONTROLLER_FOR_EACH(cfg, idl) {
         struct ofproto_controller_info *cinfo =
             shash_find_data(&info, cfg->target);
@@ -1448,9 +1455,9 @@ bridge_run(void)
                         iface_refresh_status(iface);
                     }
                 }
-                bridge_refresh_controller_status(br);
             }
             refresh_system_stats(cfg);
+            refresh_controller_status();
             ovsdb_idl_txn_commit(txn);
             ovsdb_idl_txn_destroy(txn); /* XXX */
         }
