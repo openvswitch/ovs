@@ -1863,8 +1863,8 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
     enum { BUCKET_WIDTH = ROUND_UP(100, TIME_UPDATE_INTERVAL) };
     enum { N_BUCKETS = 5000 / BUCKET_WIDTH };
     int buckets[N_BUCKETS] = { 0 };
+    int total, subtotal, bucket;
     struct facet *facet;
-    int total, bucket;
     long long int now;
     int i;
 
@@ -1884,15 +1884,10 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
     }
 
     /* Find the first bucket whose flows should be expired. */
-    for (bucket = 0; bucket < N_BUCKETS; bucket++) {
-        if (buckets[bucket]) {
-            int subtotal = 0;
-            do {
-                subtotal += buckets[bucket++];
-            } while (bucket < N_BUCKETS && subtotal < MAX(1000, total / 100));
-            break;
-        }
-    }
+    subtotal = bucket = 0;
+    do {
+        subtotal += buckets[bucket++];
+    } while (bucket < N_BUCKETS && subtotal < MAX(1000, total / 100));
 
     if (VLOG_IS_DBG_ENABLED()) {
         struct ds s;
