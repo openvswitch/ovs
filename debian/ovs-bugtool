@@ -75,6 +75,10 @@ BOOT_INITRD = '/boot/initrd-' + OS_RELEASE + '.img'
 PROC_PARTITIONS = '/proc/partitions'
 FSTAB = '/etc/fstab'
 PROC_MOUNTS = '/proc/mounts'
+ISCSI_CONF = '/etc/iscsi/iscsid.conf'
+ISCSI_INITIATOR = '/etc/iscsi/initiatorname.iscsi'
+LVM_CACHE = '/etc/lvm/cache/.cache'
+LVM_CONFIG = '/etc/lvm/lvm.conf'
 PROC_CPUINFO = '/proc/cpuinfo'
 PROC_MEMINFO = '/proc/meminfo'
 PROC_IOPORTS = '/proc/ioports'
@@ -87,17 +91,30 @@ PROC_FILESYSTEMS = '/proc/filesystems'
 PROC_CMDLINE = '/proc/cmdline'
 PROC_CONFIG = '/proc/config.gz'
 PROC_USB_DEV = '/proc/bus/usb/devices'
+PROC_XEN_BALLOON = '/proc/xen/balloon'
+PROC_NET_BONDING_DIR = '/proc/net/bonding'
+IFCFG_RE = re.compile(r'^.*/ifcfg-.*')
+ROUTE_RE = re.compile(r'^.*/route-.*')
+SYSCONFIG_HWCONF = '/etc/sysconfig/hwconf'
+SYSCONFIG_NETWORK = '/etc/sysconfig/network'
+SYSCONFIG_NETWORK_SCRIPTS = '/etc/sysconfig/network-scripts'
+PROC_NET_VLAN_DIR = '/proc/net/vlan'
 PROC_NET_SOFTNET_STAT = '/proc/net/softnet_stat'
+MODPROBE_CONF = '/etc/modprobe.conf'
 MODPROBE_DIR = '/etc/modprobe.d'
 RESOLV_CONF = '/etc/resolv.conf'
+MPP_CONF = '/etc/mpp.conf'
+MULTIPATH_CONF = '/etc/multipath.conf'
 NSSWITCH_CONF = '/etc/nsswitch.conf'
 NTP_CONF = '/etc/ntp.conf'
+IPTABLES_CONFIG = '/etc/sysconfig/iptables-config'
 HOSTS = '/etc/hosts'
 HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
-DHCP_LEASE_DIR = '/var/lib/dhcp3'
+DHCP_LEASE_DIR = ['/var/lib/dhclient', '/var/lib/dhcp3']
 OPENVSWITCH_LOG_DIR = '/var/log/openvswitch'
-OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch'
+OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
+OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
 OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
 OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
@@ -108,42 +125,56 @@ X11_LOGS_DIR = VAR_LOG_DIR
 X11_LOGS_RE = re.compile(r'.*/Xorg\..*$')
 X11_AUTH_DIR = '/root/'
 X11_AUTH_RE = re.compile(r'.*/\.((Xauthority)|(serverauth\.[0-9]*))$')
+YUM_LOG = '/var/log/yum.log'
+YUM_REPOS_DIR = '/etc/yum.repos.d'
 PAM_DIR = '/etc/pam.d'
+KRB5_CONF = '/etc/krb5.conf'
 
 #
 # External programs
 #
 
-ARP = '/usr/sbin/arp'
-CAT = '/bin/cat'
-DF = '/bin/df'
-DMESG = '/bin/dmesg'
-DMIDECODE = '/usr/sbin/dmidecode'
-FDISK = '/sbin/fdisk'
-FIND = '/usr/bin/find'
-IFCONFIG = '/sbin/ifconfig'
-IPTABLES = '/sbin/iptables'
-LOSETUP = '/sbin/losetup'
-LS = '/bin/ls'
-LSPCI = '/usr/bin/lspci'
-MD5SUM = '/usr/bin/md5sum'
-MODINFO = '/sbin/modinfo'
-NETSTAT = '/bin/netstat'
-OVS_DPCTL = '/usr/sbin/ovs-dpctl'
-OVS_OFCTL = '/usr/sbin/ovs-ofctl'
-OVS_VSCTL = '/usr/sbin/ovs-vsctl'
-OVS_APPCTL = '/usr/sbin/ovs-appctl'
-PS = '/bin/ps'
-ROUTE = '/sbin/route'
-SYSCTL = '/sbin/sysctl'
-TC = '/sbin/tc'
-UPTIME = '/usr/bin/uptime'
-ZCAT = '/bin/zcat'
-
-ETHTOOL = '/sbin/ethtool'
-# ETHTOOL recently moved from /usr/sbin to /sbin in debian
-if not os.path.isfile(ETHTOOL):
-    ETHTOOL = '/usr/sbin/ethtool'
+os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+ARP = 'arp'
+BRCTL = 'brctl'
+CAT = 'cat'
+CHKCONFIG = 'chkconfig'
+DF = 'df'
+DMESG = 'dmesg'
+DMIDECODE = 'dmidecode'
+DMSETUP = 'dmsetup'
+ETHTOOL = 'ethtool'
+FDISK = 'fdisk'
+FIND = 'find'
+HDPARM = 'hdparm'
+IFCONFIG = 'ifconfig'
+IPTABLES = 'iptables'
+ISCSIADM = 'iscsiadm'
+LOSETUP = 'losetup'
+LS = 'ls'
+LSPCI = 'lspci'
+LVDISPLAY = 'lvdisplay'
+LVS = 'lvs'
+MD5SUM = 'md5sum'
+MODINFO = 'modinfo'
+MPPUTIL = 'mppUtil'
+MULTIPATHD = 'multipathd'
+NETSTAT = 'netstat'
+OVS_DPCTL = 'ovs-dpctl'
+OVS_OFCTL = 'ovs-ofctl'
+OVS_VSCTL = 'ovs-vsctl'
+OVS_APPCTL = 'ovs-appctl'
+PS = 'ps'
+PVS = 'pvs'
+ROUTE = 'route'
+RPM = 'rpm'
+SG_MAP = 'sg_map'
+SYSCTL = 'sysctl'
+TC = 'tc'
+UPTIME = 'uptime'
+VGS = 'vgs'
+VGSCAN = 'vgscan'
+ZCAT = 'zcat'
 
 #
 # PII -- Personally identifiable information.  Of particular concern are
@@ -190,11 +221,11 @@ CAP_COLLECTD_LOGS        = 'collectd-logs'
 CAP_DISK_INFO            = 'disk-info'
 CAP_FIRSTBOOT            = 'firstboot'
 CAP_HARDWARE_INFO        = 'hardware-info'
+CAP_HDPARM_T             = 'hdparm-t'
 CAP_HIGH_AVAILABILITY    = 'high-availability'
-CAP_HOST_CRASHDUMP_DUMPS = 'host-crashdump-dumps'
-CAP_HOST_CRASHDUMP_LOGS  = 'host-crashdump-logs'
 CAP_KERNEL_INFO          = 'kernel-info'
 CAP_LOSETUP_A            = 'loopback-devices'
+CAP_MULTIPATH            = 'multipath'
 CAP_NETWORK_CONFIG       = 'network-config'
 CAP_NETWORK_STATUS       = 'network-status'
 CAP_OEM                  = 'oem'
@@ -207,6 +238,7 @@ CAP_VNCTERM              = 'vncterm'
 CAP_WLB                  = 'wlb'
 CAP_X11_LOGS             = 'X11'
 CAP_X11_AUTH             = 'X11-auth'
+CAP_YUM                  = 'yum'
 
 KB = 1024
 MB = 1024 * 1024
@@ -228,22 +260,24 @@ cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
     max_time=5)
 cap(CAP_COLLECTD_LOGS,       PII_MAYBE,                 max_size=50*MB,
     max_time=5)
-cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=25*KB,
+cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=50*KB,
     max_time=20)
 cap(CAP_FIRSTBOOT,           PII_YES,   min_size=60*KB, max_size=80*KB)
 cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=30*KB,
     max_time=20)
+cap(CAP_HDPARM_T,            PII_NO,    min_size=0,     max_size=5*KB,
+    min_time=20, max_time=90, checked=False, hidden=True)
 cap(CAP_HIGH_AVAILABILITY,   PII_MAYBE,                 max_size=5*MB)
-cap(CAP_HOST_CRASHDUMP_DUMPS,PII_YES, checked = False)
-cap(CAP_HOST_CRASHDUMP_LOGS, PII_NO)
 cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
     max_time=5)
 cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
+cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=20*KB,
+    max_time=10)
 cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
-                                        min_size=0,     max_size=20*KB)
-cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=19*KB,
+                                        min_size=0,     max_size=40*KB)
+cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=50*KB,
     max_time=30)
-cap(CAP_PAM,                 PII_NO,                    max_size=30*KB)
+cap(CAP_PAM,                 PII_NO,                    max_size=50*KB)
 cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
     max_time=60)
 cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
@@ -257,6 +291,8 @@ cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
     max_time=20)
 cap(CAP_X11_LOGS,            PII_NO,                    max_size=100*KB)
 cap(CAP_X11_AUTH,            PII_NO,                    max_size=100*KB)
+cap(CAP_YUM,                 PII_IF_CUSTOMIZED,         max_size=10*KB,
+    max_time=30)
 
 ANSWER_YES_TO_ALL = False
 SILENT_MODE = False
@@ -468,41 +504,67 @@ exclude those logs from the archive.
     tree_output(CAP_COLLECTD_LOGS, COLLECTD_LOGS_DIR)
     cmd_output(CAP_DISK_INFO, [FDISK, '-l'])
     file_output(CAP_DISK_INFO, [PROC_PARTITIONS, PROC_MOUNTS])
-    file_output(CAP_DISK_INFO, [FSTAB])
+    file_output(CAP_DISK_INFO, [FSTAB, ISCSI_CONF, ISCSI_INITIATOR])
     cmd_output(CAP_DISK_INFO, [DF, '-alT'])
     cmd_output(CAP_DISK_INFO, [DF, '-alTi'])
+    for d in disk_list():
+        cmd_output(CAP_DISK_INFO, [HDPARM, '-I', '/dev/%s' % d])
+    if len(pidof('iscsid')) != 0:
+        cmd_output(CAP_DISK_INFO, [ISCSIADM, '-m', 'node'])
+    cmd_output(CAP_DISK_INFO, [VGSCAN])
+    cmd_output(CAP_DISK_INFO, [PVS])
+    cmd_output(CAP_DISK_INFO, [VGS])
+    cmd_output(CAP_DISK_INFO, [LVS])
+    file_output(CAP_DISK_INFO, [LVM_CACHE, LVM_CONFIG])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_host'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_disk'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/fc_transport'])
+    cmd_output(CAP_DISK_INFO, [SG_MAP, '-x'])
     func_output(CAP_DISK_INFO, 'scsi-hosts', dump_scsi_hosts)
-
+    cmd_output(CAP_DISK_INFO, [LVDISPLAY, '--map'])
 
     file_output(CAP_HARDWARE_INFO, [PROC_CPUINFO, PROC_MEMINFO, PROC_IOPORTS, PROC_INTERRUPTS])
     cmd_output(CAP_HARDWARE_INFO, [DMIDECODE])
     cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-n'])
     cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-vv'])
     file_output(CAP_HARDWARE_INFO, [PROC_USB_DEV, PROC_SCSI])
+    file_output(CAP_HARDWARE_INFO, [SYSCONFIG_HWCONF])
     cmd_output(CAP_HARDWARE_INFO, [LS, '-lR', '/dev'])
+    # FIXME IDE?
 
-    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES,
+    for d in disk_list():
+        cmd_output(CAP_HDPARM_T, [HDPARM, '-tT', '/dev/%s' % d])
+
+    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES, 
                                   PROC_FILESYSTEMS, PROC_CMDLINE])
     cmd_output(CAP_KERNEL_INFO, [ZCAT, PROC_CONFIG], label='config')
     cmd_output(CAP_KERNEL_INFO, [SYSCTL, '-A'])
+    file_output(CAP_KERNEL_INFO, [MODPROBE_CONF])
     tree_output(CAP_KERNEL_INFO, MODPROBE_DIR)
     func_output(CAP_KERNEL_INFO, 'modinfo', module_info)
 
     cmd_output(CAP_LOSETUP_A, [LOSETUP, '-a'])
 
-    file_output(CAP_NETWORK_CONFIG, [RESOLV_CONF, NSSWITCH_CONF, HOSTS])
-    file_output(CAP_NETWORK_CONFIG, [NTP_CONF, HOSTS_ALLOW, HOSTS_DENY])
-    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,
-        OPENVSWITCH_DEFAULT_CONTROLLER, OPENVSWITCH_CONF_DB])
+    file_output(CAP_MULTIPATH, [MULTIPATH_CONF, MPP_CONF])
+    cmd_output(CAP_MULTIPATH, [DMSETUP, 'table'])
+    func_output(CAP_MULTIPATH, 'multipathd_topology', multipathd_topology)
+    cmd_output(CAP_MULTIPATH, [MPPUTIL, '-a'])
+    if CAP_MULTIPATH in entries:
+        dump_rdac_groups(CAP_MULTIPATH)
+
+    tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, IFCFG_RE)
+    tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
+    file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
+    file_output(CAP_NETWORK_CONFIG, [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
+    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_CONF_DB])
 
     cmd_output(CAP_NETWORK_STATUS, [IFCONFIG, '-a'])
     cmd_output(CAP_NETWORK_STATUS, [ROUTE, '-n'])
     cmd_output(CAP_NETWORK_STATUS, [ARP, '-n'])
     cmd_output(CAP_NETWORK_STATUS, [NETSTAT, '-an'])
-    tree_output(CAP_NETWORK_STATUS, DHCP_LEASE_DIR)
+    for dir in DHCP_LEASE_DIR:
+        tree_output(CAP_NETWORK_STATUS, dir)
+    cmd_output(CAP_NETWORK_STATUS, [BRCTL, 'show'])
     cmd_output(CAP_NETWORK_STATUS, [IPTABLES, '-nL'])
     for p in os.listdir('/sys/class/net/'):
         try:
@@ -520,6 +582,8 @@ exclude those logs from the archive.
                            [TC, '-s', '-d', 'class', 'show', 'dev', p])
         except:
             pass
+    tree_output(CAP_NETWORK_STATUS, PROC_NET_BONDING_DIR)
+    tree_output(CAP_NETWORK_STATUS, PROC_NET_VLAN_DIR)
     cmd_output(CAP_NETWORK_STATUS, [TC, '-s', 'qdisc'])
     file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
     tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_LOG_DIR)
@@ -541,33 +605,40 @@ exclude those logs from the archive.
             pass
 
     tree_output(CAP_PAM, PAM_DIR)
+    file_output(CAP_PAM, [KRB5_CONF])
 
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
     file_output(CAP_SYSTEM_LOGS,
          [ VAR_LOG_DIR + x for x in
-           [ 'kern.log', 'daemon.log', 'user.log', 'syslog', 'messages',
-             'debug', 'dmesg', 'boot'] +
+           [ 'crit.log', 'kern.log', 'daemon.log', 'user.log', 'syslog', 
+             'messages', 'secure', 'debug', 'dmesg', 'boot'] +
            [ f % n for n in range(1, 20) \
-                 for f in ['kern.log.%d', 'kern.log.%d.gz',
+                 for f in ['crit.log.%d', 'crit.log.%d.gz',
+                           'kern.log.%d', 'kern.log.%d.gz',
                            'daemon.log.%d', 'daemon.log.%d.gz',
                            'user.log.%d', 'user.log.%d.gz',
-                           'messages.%d', 'messages.%d.gz']]])
+                           'messages.%d', 'messages.%d.gz',
+                           'syslog.%d', 'syslog.%d.gz']]])
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
 
+    cmd_output(CAP_SYSTEM_SERVICES, [CHKCONFIG, '--list'])
 
     tree_output(CAP_X11_LOGS, X11_LOGS_DIR, X11_LOGS_RE)
     tree_output(CAP_X11_AUTH, X11_AUTH_DIR, X11_AUTH_RE)
     tree_output(CAP_SYSTEM_LOGS, VAR_LOG_CORE_DIR)
 
+    file_output(CAP_YUM, [YUM_LOG])
+    tree_output(CAP_YUM, YUM_REPOS_DIR)
+    cmd_output(CAP_YUM, [RPM, '-qa'])
 
     try:
         load_plugins()
     except:
         pass
-
+    
     # permit the user to filter out data
     for k in sorted(data.keys()):
         if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % k):
@@ -684,6 +755,14 @@ def module_info(cap):
 
     return output.getvalue()
 
+
+def multipathd_topology(cap):
+    pipe = Popen([MULTIPATHD, '-k'], bufsize=1, stdin=PIPE, 
+                     stdout=PIPE, stderr=dev_null)
+    stdout, stderr = pipe.communicate('show topology')
+
+    return stdout
+
 def dp_list():
     output = StringIO.StringIO()
     procs = [ProcOutput([OVS_DPCTL, 'dump-dps'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
@@ -725,6 +804,23 @@ def fd_usage(cap):
         output += "%s: %s\n" % (k, str(fd_dict[k]))
     return output
 
+def dump_rdac_groups(cap):
+    output = StringIO.StringIO()
+    procs = [ProcOutput([MPPUTIL, '-a'], caps[cap][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        proc_line = 0
+        for line in output.getvalue().splitlines():
+            if line.startswith('ID'):
+                proc_line = 2
+            elif line.startswith('----'):
+                proc_line -= 1
+            elif proc_line > 0:
+                group, _ = line.split(None, 1)
+                cmd_output(cap, [MPPUTIL, '-g', group])
+
 def load_plugins(just_capabilities = False):
     def getText(nodelist):
         rc = ""
@@ -739,7 +835,7 @@ def load_plugins(just_capabilities = False):
         if val in ['true', 'false', 'yes', 'no']:
             ret = val in ['true', 'yes']
         return ret
-
+        
     for dir in [d for d in os.listdir(PLUGIN_DIR) if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
         if not caps.has_key(dir):
             if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
@@ -769,7 +865,7 @@ def load_plugins(just_capabilities = False):
 
         if just_capabilities:
             continue
-
+                    
         plugdir = os.path.join(PLUGIN_DIR, dir)
         for file in [f for f in os.listdir(plugdir) if f.endswith('.xml')]:
             xmldoc = parse(os.path.join(plugdir, file))
@@ -862,7 +958,7 @@ def make_zip(subdir, output_file):
                 pass
     finally:
         zf.close()
-
+    
     output ('Writing archive %s successful.' % filename)
     if SILENT_MODE:
         print filename
