@@ -103,9 +103,12 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 						0));
 	/*
 	 * Allow our local IP stack to fragment the outer packet even if the
-	 * DF bit is set as a last resort.
+	 * DF bit is set as a last resort.  We also need to force selection of
+	 * an IP ID here because Linux will otherwise leave it at 0 if the
+	 * packet originally had DF set.
 	 */
 	skb->local_df = 1;
+	__ip_select_ident(ip_hdr(skb), dst, 0);
 
 	return skb;
 }
