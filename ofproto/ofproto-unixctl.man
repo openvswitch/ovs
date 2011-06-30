@@ -23,7 +23,7 @@ Ethernet frame is at least 14 bytes long, so there must be at least 28
 hex digits.  Obviously, it is inconvenient to type in the hex digits
 by hand, so the \fBovs\-pcap\fR(1) and \fBovs\-tcpundump\fR(1)
 utilities provide easier ways.
-.RS
+.RE
 \fB\*(PN\fR will respond with extensive information on how the packet
 would be handled if it were to be received.  The packet will not
 actually be sent.
