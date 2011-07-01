@@ -107,7 +107,7 @@ binary-common:
 	dh_link
 	dh_strip --dbg-package=openvswitch-dbg
 	dh_compress 
-	dh_fixperms -X var/log/core
+	dh_fixperms
 	dh_pysupport
 	dh_perl
 	dh_makeshlibs
