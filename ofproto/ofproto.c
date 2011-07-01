@@ -845,16 +845,7 @@ ofproto_get_ofproto_controller_info(const struct ofproto *ofproto,
 void
 ofproto_free_ofproto_controller_info(struct shash *info)
 {
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, info) {
-        struct ofproto_controller_info *cinfo = node->data;
-        while (cinfo->pairs.n) {
-            free((char *) cinfo->pairs.values[--cinfo->pairs.n]);
-        }
-        free(cinfo);
-    }
-    shash_destroy(info);
+    connmgr_free_controller_info(info);
 }
 
 /* Makes a deep copy of 'old' into 'port'. */

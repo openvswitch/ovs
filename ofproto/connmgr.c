@@ -416,6 +416,21 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
     }
 }
 
+void
+connmgr_free_controller_info(struct shash *info)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, info) {
+        struct ofproto_controller_info *cinfo = node->data;
+        while (cinfo->pairs.n) {
+            free((char *) cinfo->pairs.values[--cinfo->pairs.n]);
+        }
+        free(cinfo);
+    }
+    shash_destroy(info);
+}
+
 /* Changes 'mgr''s set of controllers to the 'n_controllers' controllers in
  * 'controllers'. */
 void

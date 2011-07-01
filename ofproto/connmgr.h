@@ -66,6 +66,7 @@ void connmgr_retry(struct connmgr *);
 /* OpenFlow configuration. */
 bool connmgr_has_controllers(const struct connmgr *);
 void connmgr_get_controller_info(struct connmgr *, struct shash *);
+void connmgr_free_controller_info(struct shash *);
 void connmgr_set_controllers(struct connmgr *,
                              const struct ofproto_controller[], size_t n);
 void connmgr_reconnect(const struct connmgr *);
