@@ -596,6 +596,9 @@ omitted, then the entire packet is sent.
 Outputs the packet on the ``local port,'' which corresponds to the
 network device that has the same name as the bridge.
 .
+.IP \fBin_port\fR
+Outputs the packet on the port from which it was received.
+.
 .IP \fBdrop\fR
 Discards the packet, so no further processing or forwarding takes place.
 If a drop action is used, no other actions may be specified.
