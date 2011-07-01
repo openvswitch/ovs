@@ -113,7 +113,8 @@ def from_string(s):
     try:
         s = unicode(s, 'utf-8')
     except UnicodeDecodeError, e:
-        seq = ' '.join(["0x%2x" % ord(c) for c in e.object[e.start:e.end]])
+        seq = ' '.join(["0x%2x" % ord(c)
+                        for c in e.object[e.start:e.end] if ord(c) >= 0x80])
         return ("not a valid UTF-8 string: invalid UTF-8 sequence %s" % seq)
     p = Parser(check_trailer=True)
     p.feed(s)
