@@ -53,7 +53,7 @@ these components should not need to be modified as part of a port:
 
     - "ofproto" is the Open vSwitch library, in ofproto/, that
       implements an OpenFlow switch.  It talks to OpenFlow controllers
-      over the network and to switch hardware or software to an
+      over the network and to switch hardware or software through an
       "ofproto provider", explained further below.
 
     - "netdev" is the Open vSwitch library, in lib/netdev.c, that
@@ -146,7 +146,11 @@ depends on a few different factors:
       other features.  An ofproto provider has to provide its own
       implementations, if the hardware can support them at all.
 
-    * A dpif provider is usually easier to implement.
+    * A dpif provider is usually easier to implement, but most
+      appropriate for software switching.  It "explodes" wildcard
+      rules into exact-match entries.  This allows fast hash lookups
+      in software, but makes inefficient use of TCAMs in hardware
+      that support wildcarding.
 
 The following sections describe how to implement each kind of port.
 
@@ -156,7 +160,7 @@ ofproto Providers
 
 An "ofproto provider" is what ofproto uses to directly monitor and
 control an OpenFlow-capable switch.  struct ofproto_class, in
-ofproto/private.h, defines the interfaces to implement a ofproto
+ofproto/private.h, defines the interfaces to implement an ofproto
 provider for new hardware or software.  That structure contains many
 function pointers, each of which has a comment that is meant to
 describe its behavior in detail.  If the requirements are unclear,
@@ -243,7 +247,7 @@ name makes the intended use obvious.
 
 ovs-vswitchd is the most sophisticated of ofproto's clients, but
 ofproto can have other clients as well.  test-openflowd, in the
-tests directory, is much simpler than ovs-vswitchd.  It may be
+"tests" directory, is much simpler than ovs-vswitchd.  It may be
 easier to initially bring up test-openflowd as part of a port.
 
 lib/entropy.c assumes that it can obtain high-quality random number
