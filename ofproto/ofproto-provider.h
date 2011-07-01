@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef OFPROTO_PRIVATE_H
-#define OFPROTO_PRIVATE_H 1
+#ifndef OFPROTO_OFPROTO_PROVIDER_H
+#define OFPROTO_OFPROTO_PROVIDER_H 1
 
 /* Definitions for use within ofproto. */
 
@@ -923,4 +923,4 @@ void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
 bool ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
 void ofproto_flush_flows(struct ofproto *);
 
-#endif /* ofproto/private.h */
+#endif /* ofproto/ofproto-provider.h */

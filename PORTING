@@ -160,9 +160,9 @@ ofproto Providers
 
 An "ofproto provider" is what ofproto uses to directly monitor and
 control an OpenFlow-capable switch.  struct ofproto_class, in
-ofproto/private.h, defines the interfaces to implement an ofproto
-provider for new hardware or software.  That structure contains many
-function pointers, each of which has a comment that is meant to
+ofproto/ofproto-provider.h, defines the interfaces to implement an
+ofproto provider for new hardware or software.  That structure contains
+many function pointers, each of which has a comment that is meant to
 describe its behavior in detail.  If the requirements are unclear,
 please report this as a bug.
 

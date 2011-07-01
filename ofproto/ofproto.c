@@ -33,13 +33,13 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "ofproto-provider.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "pinsched.h"
 #include "pktbuf.h"
 #include "poll-loop.h"
-#include "private.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -1369,8 +1369,8 @@ ofproto_rule_destroy__(struct rule *rule)
 /* This function allows an ofproto implementation to destroy any rules that
  * remain when its ->destruct() function is called.  The caller must have
  * already uninitialized any derived members of 'rule' (step 5 described in the
- * large comment in ofproto/private.h titled "Life Cycle").  This function
- * implements steps 6 and 7.
+ * large comment in ofproto/ofproto-provider.h titled "Life Cycle").
+ * This function implements steps 6 and 7.
  *
  * This function should only be called from an ofproto implementation's
  * ->destruct() function.  It is not suitable elsewhere. */
@@ -2800,8 +2800,8 @@ ofoperation_destroy(struct ofoperation *op)
  * If 'op' is a "delete flow" operation, 'error' must be 0.  That is, flow
  * deletions are not allowed to fail.
  *
- * Please see the large comment in ofproto/private.h titled "Asynchronous
- * Operation Support" for more information. */
+ * Please see the large comment in ofproto/ofproto-provider.h titled
+ * "Asynchronous Operation Support" for more information. */
 void
 ofoperation_complete(struct ofoperation *op, int error)
 {

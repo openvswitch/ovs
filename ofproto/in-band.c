@@ -32,10 +32,10 @@
 #include "odp-util.h"
 #include "ofproto.h"
 #include "ofpbuf.h"
+#include "ofproto-provider.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "private.h"
 #include "timeval.h"
 #include "vlog.h"
 

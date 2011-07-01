@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "ofproto/private.h"
+#include "ofproto/ofproto-provider.h"
 
 #include <errno.h>
 

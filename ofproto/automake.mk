@@ -23,10 +23,10 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto-dpif.c \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
+	ofproto/ofproto-provider.h \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
 	ofproto/pinsched.c \
-	ofproto/pinsched.h \
-	ofproto/private.h
+	ofproto/pinsched.h
 
 EXTRA_DIST += ofproto/ofproto-unixctl.man
