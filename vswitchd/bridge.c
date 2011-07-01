@@ -869,7 +869,7 @@ bridge_add_ofproto_ports(struct bridge *br)
             }
 
             /* Populate stats columns in new Interface rows. */
-            if (!iface->cfg->mtu) {
+            if (iface->netdev && !iface->cfg->mtu) {
                 iface_refresh_stats(iface);
                 iface_refresh_status(iface);
             }
