@@ -333,10 +333,9 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
         error = ovsdb_file_update_row_from_json(new, converting, json);
         if (error) {
             ovsdb_row_destroy(new);
+        } else {
+            ovsdb_txn_row_insert(txn, new);
         }
-
-        ovsdb_txn_row_insert(txn, new);
-
         return error;
     }
 }
