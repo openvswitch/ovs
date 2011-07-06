@@ -18,4 +18,5 @@
 
 <collect>
   <command label="tc-class-show">/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show</command>
+  <command label="dump-ovsdb">/usr/share/openvswitch/scripts/ovs-bugtool-ovsdb-dump</command>
 </collect>

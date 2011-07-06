@@ -350,7 +350,7 @@ exit 0
 /usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 /usr/share/openvswitch/scripts/vif
 /usr/share/openvswitch/scripts/sysconfig.template
-/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
+/usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib.sh

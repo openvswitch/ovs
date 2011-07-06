@@ -8,7 +8,9 @@ bugtool_plugins = \
 	utilities/bugtool/plugins/system-configuration.xml \
 	utilities/bugtool/plugins/system-configuration/openvswitch.xml
 
-bugtool_scripts = utilities/bugtool/ovs-bugtool-tc-class-show
+bugtool_scripts = \
+	utilities/bugtool/ovs-bugtool-tc-class-show \
+	utilities/bugtool/ovs-bugtool-ovsdb-dump
 scripts_SCRIPTS += $(bugtool_scripts)
 
 bugtoolpluginsdir = $(sysconfdir)/openvswitch/bugtool-plugins
