@@ -101,6 +101,7 @@ exit 0
 %defattr(-,root,root)
 /etc/init.d/openvswitch
 /etc/logrotate.d/openvswitch
+/etc/openvswitch/bugtool-plugins/*
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
@@ -130,6 +131,7 @@ exit 0
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /usr/share/openvswitch/python/
+/usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib.sh
 /usr/share/openvswitch/scripts/ovs-save

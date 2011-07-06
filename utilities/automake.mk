@@ -7,19 +7,15 @@ bin_PROGRAMS += \
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
 if HAVE_PYTHON
 bin_SCRIPTS += \
-	utilities/ovs-bugtool \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpundump \
 	utilities/ovs-vlan-test
-man_MANS += utilities/ovs-bugtool.8
 endif
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
 scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh utilities/ovs-save
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \
-	utilities/ovs-bugtool \
-	utilities/ovs-bugtool.8 \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dpctl.8.in \
@@ -101,3 +97,5 @@ noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.a
 endif
+
+include utilities/bugtool/automake.mk

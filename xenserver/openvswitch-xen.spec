@@ -82,17 +82,6 @@ install -m 755 xenserver/etc_profile.d_openvswitch.sh \
 install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/openvswitch-cfg-update
-install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/network-status
-install -m 644 xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
-         $RPM_BUILD_ROOT/etc/xensource/bugtool/network-status/openvswitch.xml
-install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/kernel-info
-install -m 644 xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml \
-         $RPM_BUILD_ROOT/etc/xensource/bugtool/kernel-info/openvswitch.xml
-install -m 644 xenserver/etc_xensource_bugtool_system-configuration.xml \
-         $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration.xml
-install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration
-install -m 644 xenserver/etc_xensource_bugtool_system-configuration_openvswitch.xml \
-         $RPM_BUILD_ROOT/etc/xensource/bugtool/system-configuration/openvswitch.xml
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/interface-reconfigure
@@ -108,8 +97,6 @@ install -m 755 xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
                $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-xapi-sync
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
-install -m 755 xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show \
-         $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
@@ -119,9 +106,12 @@ install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch
 find datapath/linux -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch \;
 install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
+install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool
+mv $RPM_BUILD_ROOT/etc/openvswitch/bugtool-plugins $RPM_BUILD_ROOT/etc/xensource/bugtool
+
 # Get rid of stuff we don't want to make RPM happy.
 rm \
-    $RPM_BUILD_ROOT/usr/bin/ovs-bugtool \
+    $RPM_BUILD_ROOT/usr/sbin/ovs-bugtool \
     $RPM_BUILD_ROOT/usr/bin/ovs-controller \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-bugtool.8 \
@@ -328,10 +318,7 @@ exit 0
 /etc/init.d/openvswitch
 /etc/init.d/openvswitch-xapi-update
 /etc/xapi.d/plugins/openvswitch-cfg-update
-/etc/xensource/bugtool/network-status/openvswitch.xml
-/etc/xensource/bugtool/kernel-info/openvswitch.xml
-/etc/xensource/bugtool/system-configuration.xml
-/etc/xensource/bugtool/system-configuration/openvswitch.xml
+/etc/xensource/bugtool/*
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /usr/share/openvswitch/python/ovs/__init__.py
@@ -363,7 +350,7 @@ exit 0
 /usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 /usr/share/openvswitch/scripts/vif
 /usr/share/openvswitch/scripts/sysconfig.template
-/usr/share/openvswitch/scripts/xen-bugtool-tc-class-show
+/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib.sh

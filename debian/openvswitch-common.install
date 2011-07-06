@@ -4,5 +4,7 @@ _debian/utilities/ovs-appctl usr/sbin
 _debian/utilities/ovs-ofctl usr/sbin
 _debian/utilities/ovs-parse-leaks usr/bin
 _debian/utilities/ovs-pki usr/sbin
-utilities/ovs-bugtool usr/sbin
+debian/openvswitch/etc/openvswitch/bugtool-plugins etc/openvswitch
+debian/openvswitch/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
+_debian/utilities/bugtool/ovs-bugtool usr/sbin
 vswitchd/vswitch.ovsschema usr/share/openvswitch

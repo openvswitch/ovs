@@ -273,7 +273,7 @@ $(srcdir)/lib/ofp-errors.c: \
 		openflow/openflow.h openflow/nicira-ext.h > ../lib/ofp-errors.c
 EXTRA_DIST += build-aux/extract-ofp-errors
 
-install-data-local: lib-install-data-local
+INSTALL_DATA_LOCAL += lib-install-data-local
 lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(RUNDIR)
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)

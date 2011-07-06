@@ -54,6 +54,8 @@ dist_man_MANS =
 dist_pkgdata_DATA =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
+dist_scripts_SCRIPTS =
+INSTALL_DATA_LOCAL =
 man_MANS =
 noinst_DATA =
 noinst_HEADERS =
@@ -63,6 +65,7 @@ noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =
 pkgdata_DATA =
+sbin_SCRIPTS =
 scripts_SCRIPTS =
 SUFFIXES =
 check_DATA =
@@ -147,7 +150,8 @@ rate-limit-check:
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
 clean-local: $(CLEAN_LOCAL)
-.PHONY: $(DIST_HOOKS) $(CLEAN_LOCAL)
+install-data-local: $(INSTALL_DATA_LOCAL)
+.PHONY: $(DIST_HOOKS) $(CLEAN_LOCAL) $(INSTALL_DATA_LOCAL)
 
 include lib/automake.mk
 include ofproto/automake.mk

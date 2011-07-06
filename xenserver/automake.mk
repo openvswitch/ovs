@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -15,10 +15,6 @@ EXTRA_DIST += \
 	xenserver/etc_logrotate.d_openvswitch \
 	xenserver/etc_profile.d_openvswitch.sh \
 	xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
-	xenserver/etc_xensource_bugtool_network-status_openvswitch.xml \
-	xenserver/etc_xensource_bugtool_kernel-info_openvswitch.xml \
-	xenserver/etc_xensource_bugtool_system-configuration.xml \
-	xenserver/etc_xensource_bugtool_system-configuration_openvswitch.xml \
 	xenserver/etc_xensource_scripts_vif \
 	xenserver/openvswitch-xen.spec \
 	xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
@@ -28,5 +24,4 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template \
-	xenserver/usr_share_openvswitch_scripts_xen-bugtool-tc-class-show \
 	xenserver/uuid.py

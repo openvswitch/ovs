@@ -103,5 +103,6 @@ dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([ovsdb/ovsdbmonitor/dummy], [:])
+AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
 
 AC_OUTPUT

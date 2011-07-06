@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#! @PYTHON@
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of version 2.1 of the GNU Lesser General Public
@@ -58,9 +58,6 @@ import urllib
 import socket
 import base64
 
-sys.path.append('/usr/lib/python')
-sys.path.append('/usr/lib64/python')
-
 OS_RELEASE = platform.release()
 
 #
@@ -70,7 +67,7 @@ OS_RELEASE = platform.release()
 APT_SOURCES_LIST = "/etc/apt/sources.list"
 APT_SOURCES_LIST_D = "/etc/apt/sources.list.d"
 BUG_DIR = "/var/log/ovs-bugtool"
-PLUGIN_DIR = "/etc/openvswitch/bugtool"
+PLUGIN_DIR = "@sysconfdir@/openvswitch/bugtool-plugins"
 GRUB_CONFIG = '/boot/grub/menu.lst'
 BOOT_KERNEL = '/boot/vmlinuz-' + OS_RELEASE
 BOOT_INITRD = '/boot/initrd-' + OS_RELEASE + '.img'
@@ -114,12 +111,12 @@ HOSTS = '/etc/hosts'
 HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
 DHCP_LEASE_DIR = ['/var/lib/dhclient', '/var/lib/dhcp3']
-OPENVSWITCH_LOG_DIR = '/var/log/openvswitch'
+OPENVSWITCH_LOG_DIR = '@LOGDIR@'
 OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
 OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
-OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
-OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
+OPENVSWITCH_CONF_DB = '@sysconfdir@/openvswitch/conf.db'
+OPENVSWITCH_VSWITCHD_PID = '@RUNDIR@/ovs-vswitchd.pid'
 COLLECTD_LOGS_DIR = '/var/lib/collectd/rrd'
 VAR_LOG_DIR = '/var/log/'
 VAR_LOG_CORE_DIR = '/var/log/core'
@@ -136,7 +133,7 @@ KRB5_CONF = '/etc/krb5.conf'
 # External programs
 #
 
-os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:@pkgdatadir@/scripts'
 ARP = 'arp'
 BRCTL = 'brctl'
 CAT = 'cat'
