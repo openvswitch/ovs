@@ -6,6 +6,7 @@ bugtool_plugins = \
 	utilities/bugtool/plugins/kernel-info/openvswitch.xml \
 	utilities/bugtool/plugins/network-status/openvswitch.xml \
 	utilities/bugtool/plugins/system-configuration.xml \
+	utilities/bugtool/plugins/system-logs/openvswitch.xml \
 	utilities/bugtool/plugins/system-configuration/openvswitch.xml
 
 bugtool_scripts = \
