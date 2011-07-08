@@ -227,6 +227,7 @@ vconn_stream_run(struct vconn *vconn)
     struct vconn_stream *s = vconn_stream_cast(vconn);
     ssize_t retval;
 
+    stream_run(s->stream);
     if (!s->txbuf) {
         return;
     }
@@ -252,6 +253,7 @@ vconn_stream_run_wait(struct vconn *vconn)
 {
     struct vconn_stream *s = vconn_stream_cast(vconn);
 
+    stream_run_wait(s->stream);
     if (s->txbuf) {
         stream_send_wait(s->stream);
     }
