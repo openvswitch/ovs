@@ -56,8 +56,8 @@ static inline bool eth_addr_is_local(const uint8_t ea[6])
 {
     /* Local if it is either a locally administered address or a Nicira random
      * address. */
-    return !!(ea[0] & 2)
-       || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && !!(ea[3] & 0x80));
+    return ea[0] & 2
+       || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && ea[3] & 0x80);
 }
 static inline bool eth_addr_is_zero(const uint8_t ea[6])
 {
