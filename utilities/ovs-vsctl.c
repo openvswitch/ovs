@@ -785,8 +785,7 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
 
             if (!sset_add(&ports, port_cfg->name)) {
-                VLOG_WARN("%s: database contains duplicate port name",
-                          port_cfg->name);
+                /* Duplicate port name.  (We will warn about that later.) */
                 continue;
             }
 
@@ -800,7 +799,6 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
     sset_destroy(&ports);
 
     sset_init(&bridges);
-    sset_init(&ports);
     for (i = 0; i < ovs->n_bridges; i++) {
         struct ovsrec_bridge *br_cfg = ovs->bridges[i];
         struct vsctl_bridge *br;
@@ -815,7 +813,18 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
             struct vsctl_port *port;
             size_t k;
 
-            if (!sset_add(&ports, port_cfg->name)) {
+            port = shash_find_data(&info->ports, port_cfg->name);
+            if (port) {
+                if (port_cfg == port->port_cfg) {
+                    VLOG_WARN("%s: port is in multiple bridges (%s and %s)",
+                              port_cfg->name, br->name, port->bridge->name);
+                } else {
+                    /* Log as an error because this violates the database's
+                     * uniqueness constraints, so the database server shouldn't
+                     * have allowed it. */
+                    VLOG_ERR("%s: database contains duplicate port name",
+                             port_cfg->name);
+                }
                 continue;
             }
 
@@ -841,9 +850,21 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
                 struct ovsrec_interface *iface_cfg = port_cfg->interfaces[k];
                 struct vsctl_iface *iface;
 
-                if (shash_find(&info->ifaces, iface_cfg->name)) {
-                    VLOG_WARN("%s: database contains duplicate interface name",
-                              iface_cfg->name);
+                iface = shash_find_data(&info->ifaces, iface_cfg->name);
+                if (iface) {
+                    if (iface_cfg == iface->iface_cfg) {
+                        VLOG_WARN("%s: interface is in multiple ports "
+                                  "(%s and %s)",
+                                  iface_cfg->name,
+                                  iface->port->port_cfg->name,
+                                  port->port_cfg->name);
+                    } else {
+                        /* Log as an error because this violates the database's
+                         * uniqueness constraints, so the database server
+                         * shouldn't have allowed it. */
+                        VLOG_ERR("%s: database contains duplicate interface "
+                                 "name", iface_cfg->name);
+                    }
                     continue;
                 }
 
@@ -855,7 +876,6 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
         }
     }
     sset_destroy(&bridges);
-    sset_destroy(&ports);
 }
 
 static void
