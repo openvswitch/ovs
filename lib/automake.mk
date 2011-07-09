@@ -263,6 +263,7 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]LOGDIR[@],"$(LOGDIR)",g' \
 		-e 's,[@]RUNDIR[@],"$(RUNDIR)",g' \
 		-e 's,[@]bindir[@],"$(bindir)",g' \
+		-e 's,[@]sysconfdir[@],"$(sysconfdir)",g' \
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
 	     > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
