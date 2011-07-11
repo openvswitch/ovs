@@ -409,10 +409,30 @@ EOF
       fi])
    AS_IF([test $ovs_cv_gnu_make_if = yes], [$1], [$2])])
 
+dnl OVS_CHECK_SPARSE_TARGET
+dnl
+dnl The "cgcc" script from "sparse" isn't very good at detecting the
+dnl target for which the code is being built.  This helps it out.
+AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
+  [AC_CACHE_CHECK(
+    [target hint for cgcc],
+    [ac_cv_sparse_target],
+    [AS_CASE([`$CC -dumpmachine 2>/dev/null`],
+       [i?86-* | athlon-*], [ac_cv_sparse_target=x86],
+       [x86_64-*], [ac_cv_sparse_target=x86_64],
+       [ac_cv_sparse_target=other])])
+   AS_CASE([$ac_cv_sparse_target],
+     [x86], [SPARSEFLAGS= CGCCFLAGS=-target=i86],
+     [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS=-target=x86_64],
+     [SPARSEFLAGS= CGCCFLAGS=])
+   AC_SUBST([SPARSEFLAGS])
+   AC_SUBST([CGCCFLAGS])])
+
 dnl OVS_ENABLE_SPARSE
 AC_DEFUN([OVS_ENABLE_SPARSE],
-  [OVS_MAKE_HAS_IF(
+  [AC_REQUIRE([OVS_CHECK_SPARSE_TARGET])
+   OVS_MAKE_HAS_IF(
      [AC_CONFIG_COMMANDS_PRE(
         [: ${SPARSE=sparse}
          AC_SUBST([SPARSE])
-         CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse" cgcc,'"$CC"')'])])])
+         CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS)" cgcc $(CGCCFLAGS),'"$CC"')'])])])
