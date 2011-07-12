@@ -337,7 +337,7 @@ struct tbl *tbl_expand(struct tbl *table)
 	}
 
 	err = -ENOMEM;
-	new_table = tbl_create(TBL_MIN_BUCKETS);
+	new_table = tbl_create(n_buckets);
 	if (!new_table)
 		goto error;
 
