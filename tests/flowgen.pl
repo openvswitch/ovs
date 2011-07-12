@@ -32,19 +32,19 @@ print PACKETS pack('NnnNNNN',
 
 output(DL_HEADER => '802.2');
 
-for my $dl_header qw(802.2+SNAP Ethernet) {
+for my $dl_header (qw(802.2+SNAP Ethernet)) {
     my %a = (DL_HEADER => $dl_header);
-    for my $dl_vlan qw(none zero nonzero) {
+    for my $dl_vlan (qw(none zero nonzero)) {
         my %b = (%a, DL_VLAN => $dl_vlan);
 
         # Non-IP case.
         output(%b, DL_TYPE => 'non-ip');
 
-        for my $ip_options qw(no yes) {
+        for my $ip_options (qw(no yes)) {
             my %c = (%b, DL_TYPE => 'ip', IP_OPTIONS => $ip_options);
-            for my $ip_fragment qw(no first middle last) {
+            for my $ip_fragment (qw(no first middle last)) {
                 my %d = (%c, IP_FRAGMENT => $ip_fragment);
-                for my $tp_proto qw(TCP TCP+options UDP ICMP other) {
+                for my $tp_proto (qw(TCP TCP+options UDP ICMP other)) {
                     output(%d, TP_PROTO => $tp_proto);
                 }
             }
