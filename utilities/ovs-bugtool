@@ -898,7 +898,9 @@ def make_tar(subdir, suffix, output_fd, output_file):
             filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
         else:
             filename = output_file
+        old_umask = os.umask(0077)
         tf = tarfile.open(filename, mode)
+        os.umask(old_umask)
     else:
         tf = tarfile.open(None, 'w', os.fdopen(output_fd, 'a'))
 
@@ -939,7 +941,9 @@ def make_zip(subdir, output_file):
         filename = "%s/%s.zip" % (BUG_DIR, subdir)
     else:
         filename = output_file
+    old_umask = os.umask(0077)
     zf = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
+    os.umask(old_umask)
 
     try:
         for (k, v) in data.items():
