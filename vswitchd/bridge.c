@@ -3016,6 +3016,21 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
         }
     }
 
+    /* Drop all packets which arrive on backup slaves.  This is similar to how
+     * Linux bonding handles active-backup bonds. */
+    if (in_port->bond_mode == BM_AB) {
+
+        *tags |= in_port->active_iface;
+        if (in_port->active_iface != in_iface->port_ifidx) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "active-backup bond received packet on backup"
+                         " interface (%s) destined for " ETH_ADDR_FMT,
+                         in_iface->name, ETH_ADDR_ARGS(flow->dl_dst));
+            return false ;
+        }
+    }
+
     return true;
 }
 
