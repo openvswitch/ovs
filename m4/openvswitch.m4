@@ -92,8 +92,7 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
      [ssl=check])
 
    if test "$ssl" != false; then
-       dnl Make sure that pkg-config is installed.
-       m4_pattern_forbid([PKG_CHECK_MODULES])
+       m4_ifndef([PKG_CHECK_MODULES], [m4_fatal([Please install pkg-config.])])
        PKG_CHECK_MODULES([SSL], [openssl], 
          [HAVE_OPENSSL=yes],
          [HAVE_OPENSSL=no
