@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         return error;
     }
 
-    return new_fd_pstream("punix", fd, punix_accept,
+    return new_fd_pstream(name, fd, punix_accept,
                           xstrdup(suffix), pstreamp);
 }
 
