@@ -171,5 +171,9 @@ const uint8_t *flow_wildcards_to_dl_dst_mask(flow_wildcards_t);
 bool flow_wildcards_is_dl_dst_mask_valid(const uint8_t[6]);
 flow_wildcards_t flow_wildcards_set_dl_dst_mask(flow_wildcards_t,
                                                 const uint8_t mask[6]);
+uint32_t flow_hash_fields(const struct flow *, enum nx_hash_fields,
+                          uint16_t basis);
+const char *flow_hash_fields_to_str(enum nx_hash_fields);
+bool flow_hash_fields_valid(enum nx_hash_fields);
 
 #endif /* flow.h */

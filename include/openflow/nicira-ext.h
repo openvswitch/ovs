@@ -167,6 +167,25 @@ enum nicira_stats_type {
     NXST_AGGREGATE              /* Analogous to OFPST_AGGREGATE. */
 };
 
+/* Fields to use when hashing flows. */
+enum nx_hash_fields {
+    /* Ethernet source address (NXM_OF_ETH_SRC) only. */
+    NX_HASH_FIELDS_ETH_SRC,
+
+    /* L2 through L4, symmetric across src/dst.  Specifically, each of the
+     * following fields, if present, is hashed (slashes separate symmetric
+     * pairs):
+     *
+     *  - NXM_OF_ETH_DST / NXM_OF_ETH_SRC
+     *  - NXM_OF_ETH_TYPE
+     *  - The VID bits from NXM_OF_VLAN_TCI, ignoring PCP and CFI.
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     */
+    NX_HASH_FIELDS_SYMMETRIC_L4
+};
+
 /* This command enables or disables an Open vSwitch extension that allows a
  * controller to specify the OpenFlow table to which a flow should be added,
  * instead of having the switch decide which table is most appropriate as
@@ -498,7 +517,7 @@ OFP_ASSERT(sizeof(struct nx_action_note) == 16);
  *
  * This action performs the following steps in sequence:
  *
- *    1. Hashes the fields designated by 'fields', one of NX_MP_FIELDS_*.
+ *    1. Hashes the fields designated by 'fields', one of NX_HASH_FIELDS_*.
  *       Refer to the definition of "enum nx_mp_fields" for details.
  *
  *       The 'basis' value is used as a universal hash parameter, that is,
@@ -535,7 +554,7 @@ struct nx_action_multipath {
     ovs_be16 subtype;           /* NXAST_MULTIPATH. */
 
     /* What fields to hash and how. */
-    ovs_be16 fields;            /* One of NX_MP_FIELDS_*. */
+    ovs_be16 fields;            /* One of NX_HASH_FIELDS_*. */
     ovs_be16 basis;             /* Universal hash parameter. */
     ovs_be16 pad0;
 
@@ -550,26 +569,6 @@ struct nx_action_multipath {
     ovs_be32 dst;               /* Destination register. */
 };
 OFP_ASSERT(sizeof(struct nx_action_multipath) == 32);
-
-/* NXAST_MULTIPATH: Fields to hash. */
-enum nx_mp_fields {
-    /* Ethernet source address (NXM_OF_ETH_SRC) only. */
-    NX_MP_FIELDS_ETH_SRC,
-
-    /* L2 through L4, symmetric across src/dst.  Specifically, each of the
-     * following fields, if present, is hashed (slashes separate symmetric
-     * pairs):
-     *
-     *  - NXM_OF_ETH_DST / NXM_OF_ETH_SRC
-     *  - NXM_OF_ETH_TYPE
-     *  - The VID bits from NXM_OF_VLAN_TCI, ignoring PCP and CFI.
-     *  - NXM_OF_IP_PROTO
-     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
-     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
-     *  - NXM_OF_UDP_SRC / NXM_OF_UDP_DST
-     */
-    NX_MP_FIELDS_SYMMETRIC_L4
-};
 
 /* NXAST_MULTIPATH: Multipath link choice algorithm to apply.
  *

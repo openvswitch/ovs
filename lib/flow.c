@@ -852,3 +852,39 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     }
     return hash_bytes(&fields, sizeof fields, basis);
 }
+
+/* Hashes the portions of 'flow' designated by 'fields'. */
+uint32_t
+flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,
+                 uint16_t basis)
+{
+    switch (fields) {
+
+    case NX_HASH_FIELDS_ETH_SRC:
+        return hash_bytes(flow->dl_src, sizeof flow->dl_src, basis);
+
+    case NX_HASH_FIELDS_SYMMETRIC_L4:
+        return flow_hash_symmetric_l4(flow, basis);
+    }
+
+    NOT_REACHED();
+}
+
+/* Returns a string representation of 'fields'. */
+const char *
+flow_hash_fields_to_str(enum nx_hash_fields fields)
+{
+    switch (fields) {
+    case NX_HASH_FIELDS_ETH_SRC: return "eth_src";
+    case NX_HASH_FIELDS_SYMMETRIC_L4: return "symmetric_l4";
+    default: return "<unknown>";
+    }
+}
+
+/* Returns true if the value of 'fields' is supported. Otherwise false. */
+bool
+flow_hash_fields_valid(enum nx_hash_fields fields)
+{
+    return fields == NX_HASH_FIELDS_ETH_SRC
+        || fields == NX_HASH_FIELDS_SYMMETRIC_L4;
+}
