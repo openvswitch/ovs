@@ -463,12 +463,12 @@ query_db_remotes(const char *name, const struct ovsdb *db,
 
 static void
 update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
-                  const struct shash *statuses)
+                  const struct ovsdb_jsonrpc_server *jsonrpc)
 {
+    struct ovsdb_jsonrpc_remote_status status;
     struct ovsdb_row *rw_row;
     const char *target;
-    const struct ovsdb_jsonrpc_remote_status *status;
-    char *keys[4], *values[4];
+    char *keys[8], *values[8];
     size_t n = 0;
 
     /* Get the "target" (protocol/host/port) spec. */
@@ -476,43 +476,36 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
         /* Bad remote spec or incorrect schema. */
         return;
     }
-
-    /* Prepare to modify this row. */
     rw_row = ovsdb_txn_row_modify(txn, row);
-
-    /* Find status information for this target. */
-    status = shash_find_data(statuses, target);
-    if (!status) {
-        /* Should never happen, but just in case... */
-        return;
-    }
+    ovsdb_jsonrpc_server_get_remote_status(jsonrpc, target, &status);
 
     /* Update status information columns. */
+    write_bool_column(rw_row, "is_connected", status.is_connected);
 
-    write_bool_column(rw_row, "is_connected",
-                      status->is_connected);
-
-    keys[n] = xstrdup("state");
-    values[n++] = xstrdup(status->state);
-    if (status->sec_since_connect != UINT_MAX) {
+    if (status.state) {
+        keys[n] = xstrdup("state");
+        values[n++] = xstrdup(status.state);
+    }
+    if (status.sec_since_connect != UINT_MAX) {
         keys[n] = xstrdup("sec_since_connect");
-        values[n++] = xasprintf("%u", status->sec_since_connect);
+        values[n++] = xasprintf("%u", status.sec_since_connect);
     }
-    if (status->sec_since_disconnect != UINT_MAX) {
+    if (status.sec_since_disconnect != UINT_MAX) {
         keys[n] = xstrdup("sec_since_disconnect");
-        values[n++] = xasprintf("%u", status->sec_since_disconnect);
+        values[n++] = xasprintf("%u", status.sec_since_disconnect);
     }
-    if (status->last_error) {
+    if (status.last_error) {
         keys[n] = xstrdup("last_error");
         values[n++] =
-            xstrdup(ovs_retval_to_string(status->last_error));
+            xstrdup(ovs_retval_to_string(status.last_error));
     }
     write_string_string_column(rw_row, "status", keys, values, n);
 }
 
 static void
 update_remote_rows(const struct ovsdb *db, struct ovsdb_txn *txn,
-                   const char *remote_name, const struct shash *statuses)
+                   const char *remote_name,
+                   const struct ovsdb_jsonrpc_server *jsonrpc)
 {
     const struct ovsdb_table *table, *ref_table;
     const struct ovsdb_column *column;
@@ -542,7 +535,7 @@ update_remote_rows(const struct ovsdb *db, struct ovsdb_txn *txn,
 
             ref_row = ovsdb_table_get_row(ref_table, &datum->keys[i].uuid);
             if (ref_row) {
-                update_remote_row(ref_row, txn, statuses);
+                update_remote_row(ref_row, txn, jsonrpc);
             }
         }
     }
@@ -553,20 +546,16 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                      const struct sset *remotes, struct ovsdb *db)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    struct shash statuses;
     struct ovsdb_txn *txn;
     const bool durable_txn = false;
     struct ovsdb_error *error;
     const char *remote;
 
-    /* Get status of current connections. */
-    ovsdb_jsonrpc_server_get_remote_status(jsonrpc, &statuses);
-
     txn = ovsdb_txn_create(db);
 
     /* Iterate over --remote arguments given on command line. */
     SSET_FOR_EACH (remote, remotes) {
-        update_remote_rows(db, txn, remote, &statuses);
+        update_remote_rows(db, txn, remote, jsonrpc);
     }
 
     error = ovsdb_txn_commit(txn, durable_txn);
@@ -574,8 +563,6 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
         VLOG_ERR_RL(&rl, "Failed to update remote status: %s",
                     ovsdb_error_to_string(error));
     }
-
-    shash_destroy_free_data(&statuses);
 }
 
 /* Reconfigures ovsdb-server based on information in the database. */

@@ -22,6 +22,7 @@
 
 #include "bitmap.h"
 #include "column.h"
+#include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
@@ -53,9 +54,9 @@ static void ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_set_all_options(
     struct ovsdb_jsonrpc_remote *, const struct ovsdb_jsonrpc_options *);
-static void ovsdb_jsonrpc_session_get_status(
+static bool ovsdb_jsonrpc_session_get_status(
     const struct ovsdb_jsonrpc_remote *,
-    struct shash *);
+    struct ovsdb_jsonrpc_remote_status *);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
@@ -198,19 +199,23 @@ ovsdb_jsonrpc_server_del_remote(struct shash_node *node)
     free(remote);
 }
 
-void
-ovsdb_jsonrpc_server_get_remote_status(const struct ovsdb_jsonrpc_server *svr,
-                                       struct shash *statuses)
+/* Stores status information for the remote named 'target', which should have
+ * been configured on 'svr' with a call to ovsdb_jsonrpc_server_set_remotes(),
+ * into '*status'.  On success returns true, on failure (if 'svr' doesn't have
+ * a remote named 'target' or if that remote is an inbound remote that has no
+ * active connections) returns false.  On failure, 'status' will be zeroed.
+ */
+bool
+ovsdb_jsonrpc_server_get_remote_status(
+    const struct ovsdb_jsonrpc_server *svr, const char *target,
+    struct ovsdb_jsonrpc_remote_status *status)
 {
-    struct shash_node *node;
+    const struct ovsdb_jsonrpc_remote *remote;
 
-    shash_init(statuses);
+    memset(status, 0, sizeof *status);
 
-    SHASH_FOR_EACH (node, &svr->remotes) {
-        const struct ovsdb_jsonrpc_remote *remote = node->data;
-
-        ovsdb_jsonrpc_session_get_status(remote, statuses);
-    }
+    remote = shash_find_data(&svr->remotes, target);
+    return remote && ovsdb_jsonrpc_session_get_status(remote, status);
 }
 
 /* Forces all of the JSON-RPC sessions managed by 'svr' to disconnect and
@@ -439,32 +444,19 @@ ovsdb_jsonrpc_session_set_all_options(
     }
 }
 
-static void
+static bool
 ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
-                                 struct shash *shash)
+                                 struct ovsdb_jsonrpc_remote_status *status)
 {
     const struct ovsdb_jsonrpc_session *s;
     const struct jsonrpc_session *js;
-    const char *name;
-    struct ovsdb_jsonrpc_remote_status *status;
     struct reconnect_stats rstats;
 
-    /* We only look at the first session in the list. There should be only one
-     * node in the list for outbound connections. We don't track status for
-     * each individual inbound connection if someone configures the DB that
-     * way. Since outbound connections are the norm, this is fine. */
     if (list_is_empty(&remote->sessions)) {
-        return;
+        return false;
     }
     s = CONTAINER_OF(remote->sessions.next, struct ovsdb_jsonrpc_session, node);
     js = s->js;
-    if (!js) {
-        return;
-    }
-    name = jsonrpc_session_get_name(js);
-
-    status = xzalloc(sizeof *status);
-    shash_add(shash, name, status);
 
     status->is_connected = jsonrpc_session_is_connected(js);
     status->last_error = jsonrpc_session_get_status(js);
@@ -475,6 +467,8 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
         ? UINT_MAX : rstats.msec_since_connect / 1000;
     status->sec_since_disconnect = rstats.msec_since_disconnect == UINT_MAX
         ? UINT_MAX : rstats.msec_since_disconnect / 1000;
+
+    return true;
 }
 
 static const char *

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,9 @@ struct ovsdb_jsonrpc_remote_status {
     unsigned int sec_since_disconnect;
     bool is_connected;
 };
-void ovsdb_jsonrpc_server_get_remote_status(
-    const struct ovsdb_jsonrpc_server *,
-    struct shash * /* of 'struct ovsdb_jsonrpc_remote_status' */ );
+bool ovsdb_jsonrpc_server_get_remote_status(
+    const struct ovsdb_jsonrpc_server *, const char *target,
+    struct ovsdb_jsonrpc_remote_status *);
 
 void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
 
