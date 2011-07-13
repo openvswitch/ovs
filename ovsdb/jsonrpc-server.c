@@ -468,6 +468,8 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
     status->sec_since_disconnect = rstats.msec_since_disconnect == UINT_MAX
         ? UINT_MAX : rstats.msec_since_disconnect / 1000;
 
+    status->n_connections = list_size(&remote->sessions);
+
     return true;
 }
 

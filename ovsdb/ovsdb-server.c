@@ -499,6 +499,10 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
         values[n++] =
             xstrdup(ovs_retval_to_string(status.last_error));
     }
+    if (status.n_connections > 1) {
+        keys[n] = xstrdup("n_connections");
+        values[n++] = xasprintf("%d", status.n_connections);
+    }
     write_string_string_column(rw_row, "status", keys, values, n);
 }
 

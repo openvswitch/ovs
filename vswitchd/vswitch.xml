@@ -2191,6 +2191,23 @@
             database (in seconds). Value is empty if manager has never
             disconnected.</dd>
         </dl>
+        <dl>
+          <dt><code>n_connections</code></dt>
+          <dd>
+            <p>
+              When <ref column="target"/> specifies a connection method that
+              listens for inbound connections (e.g. <code>ptcp:</code> or
+              <code>pssl:</code>) and more than one connection is actually
+              active, the value is the number of active connections.
+              Otherwise, this key-value pair is omitted.
+            </p>
+            <p>
+              When multiple connections are active, status columns and
+              key-value pairs (other than this one) report the status of one
+              arbitrarily chosen connection.
+            </p>
+          </dd>
+        </dl>
       </column>
     </group>
   </table>

@@ -41,6 +41,7 @@ struct ovsdb_jsonrpc_remote_status {
     unsigned int sec_since_connect;
     unsigned int sec_since_disconnect;
     bool is_connected;
+    int n_connections;
 };
 bool ovsdb_jsonrpc_server_get_remote_status(
     const struct ovsdb_jsonrpc_server *, const char *target,
