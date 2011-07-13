@@ -241,7 +241,8 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
 .de TQ
 .  br
 .  ns
-.  TP "\\$1"
+.  TP
+\\$1
 ..
 .de ST
 .  PP
