@@ -2935,6 +2935,8 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
     case OFPP_LOCAL:
         add_output_action(ctx, OFPP_LOCAL);
         break;
+    case OFPP_NONE:
+        break;
     default:
         if (port != ctx->flow.in_port) {
             add_output_action(ctx, port);
