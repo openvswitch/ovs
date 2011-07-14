@@ -92,6 +92,7 @@ int ofputil_decode_msg_type(const struct ofp_header *,
                             const struct ofputil_msg_type **);
 enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
 const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
+int ofputil_check_output_port(uint16_t ofp_port, int max_ports);
 
 /* Converting OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK wildcard bit counts to
  * and from IP bitmasks. */

@@ -1944,8 +1944,8 @@ make_echo_reply(const struct ofp_header *rq)
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an ofp_mkerr() return code. */
-static int
-check_output_port(uint16_t port, int max_ports)
+int
+ofputil_check_output_port(uint16_t port, int max_ports)
 {
     switch (port) {
     case OFPP_IN_PORT:
@@ -1994,7 +1994,8 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         error = 0;
         switch ((enum ofputil_action_code) code) {
         case OFPUTIL_OFPAT_OUTPUT:
-            error = check_output_port(ntohs(a->output.port), max_ports);
+            error = ofputil_check_output_port(ntohs(a->output.port),
+                                              max_ports);
             break;
 
         case OFPUTIL_OFPAT_SET_VLAN_VID:
