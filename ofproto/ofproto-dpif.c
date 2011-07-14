@@ -287,6 +287,7 @@ struct ofport_dpif {
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     tag_type tag;               /* Tag associated with this port. */
     uint32_t bond_stable_id;    /* stable_id to use as bond slave, or 0. */
+    bool may_enable;            /* May be enabled in bonds. */
 };
 
 static struct ofport_dpif *
@@ -1176,12 +1177,7 @@ bundle_run(struct ofbundle *bundle)
         struct ofport_dpif *port;
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-            bool may_enable = lacp_slave_may_enable(bundle->lacp, port);
-
-            if (may_enable && port->cfm) {
-                may_enable = !cfm_get_fault(port->cfm);
-            }
-            bond_slave_set_may_enable(bundle->bond, port, may_enable);
+            bond_slave_set_may_enable(bundle->bond, port, port->may_enable);
         }
 
         bond_run(bundle->bond, &bundle->ofproto->revalidate_set,
@@ -1418,6 +1414,8 @@ ofproto_port_from_dpif_port(struct ofproto_port *ofproto_port,
 static void
 port_run(struct ofport_dpif *ofport)
 {
+    bool enable = netdev_get_carrier(ofport->up.netdev);
+
     if (ofport->cfm) {
         cfm_run(ofport->cfm);
 
@@ -1430,7 +1428,15 @@ port_run(struct ofport_dpif *ofport)
                         ofport->odp_port, &packet);
             ofpbuf_uninit(&packet);
         }
+
+        enable = enable && !cfm_get_fault(ofport->cfm);
     }
+
+    if (ofport->bundle) {
+        enable = enable && lacp_slave_may_enable(ofport->bundle->lacp, ofport);
+    }
+
+    ofport->may_enable = enable;
 }
 
 static void
