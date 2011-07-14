@@ -138,19 +138,27 @@ ff fe 50 54 00 00 00 01 62 72 30 00 00 00 00 00 \
 OFPT_FEATURES_REPLY (xid=0x1): ver:0x1, dpid:0000505400000001
 n_tables:2, n_buffers:256
 features: capabilities:0x87, actions:0xfff
- 1(eth1): addr:50:54:00:00:00:02, config: 0, state:0
-     current:    100MB-FD AUTO_NEG @&t@
-     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
-     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
- 2(eth2): addr:50:54:00:00:00:03, config: 0, state:0
-     current:    100MB-FD AUTO_NEG @&t@
-     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
-     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
- 3(eth0): addr:50:54:00:00:00:01, config: 0, state:0
-     current:    100MB-FD AUTO_NEG @&t@
-     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
-     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
- LOCAL(br0): addr:50:54:00:00:00:01, config: 0x1, state:0x1
+ 1(eth1): addr:50:54:00:00:00:02
+     config:     0
+     state:      0
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+ 2(eth2): addr:50:54:00:00:00:03
+     config:     0
+     state:      0
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+ 3(eth0): addr:50:54:00:00:00:01
+     config:     0
+     state:      0
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+ LOCAL(br0): addr:50:54:00:00:00:01
+     config:     PORT_DOWN
+     state:      LINK_DOWN
 ])
 AT_CLEANUP
 
@@ -256,10 +264,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 \
 00 00 02 08 00 00 02 8f 00 00 02 8f 00 00 00 00 \
 "], [0], [dnl
-OFPT_PORT_STATUS (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01, config: 0x1, state:0x1
-     current:    100MB-FD AUTO_NEG @&t@
-     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
-     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG @&t@
+OFPT_PORT_STATUS (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
 ])
 AT_CLEANUP
 

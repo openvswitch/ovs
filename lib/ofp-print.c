@@ -432,47 +432,108 @@ compare_ports(const void *a_, const void *b_)
     return ap < bp ? -1 : ap > bp;
 }
 
-static void ofp_print_port_features(struct ds *string, uint32_t features)
+struct bit_name {
+    uint32_t bit;
+    const char *name;
+};
+
+static void
+ofp_print_bit_names(struct ds *string, uint32_t bits,
+                    const struct bit_name bit_names[])
 {
-    if (features == 0) {
-        ds_put_cstr(string, "Unsupported\n");
+    int n = 0;
+
+    if (!bits) {
+        ds_put_cstr(string, "0");
         return;
     }
-    if (features & OFPPF_10MB_HD) {
-        ds_put_cstr(string, "10MB-HD ");
+
+    for (; bits && bit_names->name; bit_names++) {
+        if (bits & bit_names->bit) {
+            if (n++) {
+                ds_put_char(string, ' ');
+            }
+            ds_put_cstr(string, bit_names->name);
+            bits &= ~bit_names->bit;
+        }
     }
-    if (features & OFPPF_10MB_FD) {
-        ds_put_cstr(string, "10MB-FD ");
+
+    if (bits) {
+        if (n++) {
+            ds_put_char(string, ' ');
+        }
+        ds_put_format(string, "0x%"PRIx32, bits);
     }
-    if (features & OFPPF_100MB_HD) {
-        ds_put_cstr(string, "100MB-HD ");
-    }
-    if (features & OFPPF_100MB_FD) {
-        ds_put_cstr(string, "100MB-FD ");
-    }
-    if (features & OFPPF_1GB_HD) {
-        ds_put_cstr(string, "1GB-HD ");
-    }
-    if (features & OFPPF_1GB_FD) {
-        ds_put_cstr(string, "1GB-FD ");
-    }
-    if (features & OFPPF_10GB_FD) {
-        ds_put_cstr(string, "10GB-FD ");
-    }
-    if (features & OFPPF_COPPER) {
-        ds_put_cstr(string, "COPPER ");
-    }
-    if (features & OFPPF_FIBER) {
-        ds_put_cstr(string, "FIBER ");
-    }
-    if (features & OFPPF_AUTONEG) {
-        ds_put_cstr(string, "AUTO_NEG ");
-    }
-    if (features & OFPPF_PAUSE) {
-        ds_put_cstr(string, "AUTO_PAUSE ");
-    }
-    if (features & OFPPF_PAUSE_ASYM) {
-        ds_put_cstr(string, "AUTO_PAUSE_ASYM ");
+}
+
+static void
+ofp_print_port_features(struct ds *string, uint32_t features)
+{
+    static const struct bit_name feature_bits[] = {
+        { OFPPF_10MB_HD,    "10MB-HD" },
+        { OFPPF_10MB_FD,    "10MB-FD" },
+        { OFPPF_100MB_HD,   "100MB-HD" },
+        { OFPPF_100MB_FD,   "100MB-FD" },
+        { OFPPF_1GB_HD,     "1GB-HD" },
+        { OFPPF_1GB_FD,     "1GB-FD" },
+        { OFPPF_10GB_FD,    "10GB-FD" },
+        { OFPPF_COPPER,     "COPPER" },
+        { OFPPF_FIBER,      "FIBER" },
+        { OFPPF_AUTONEG,    "AUTO_NEG" },
+        { OFPPF_PAUSE,      "AUTO_PAUSE" },
+        { OFPPF_PAUSE_ASYM, "AUTO_PAUSE_ASYM" },
+        { 0,                NULL },
+    };
+
+    ofp_print_bit_names(string, features, feature_bits);
+    ds_put_char(string, '\n');
+}
+
+static void
+ofp_print_port_config(struct ds *string, uint32_t config)
+{
+    static const struct bit_name config_bits[] = {
+        { OFPPC_PORT_DOWN,    "PORT_DOWN" },
+        { OFPPC_NO_STP,       "NO_STP" },
+        { OFPPC_NO_RECV,      "NO_RECV" },
+        { OFPPC_NO_RECV_STP,  "NO_RECV_STP" },
+        { OFPPC_NO_FLOOD,     "NO_FLOOD" },
+        { OFPPC_NO_FWD,       "NO_FWD" },
+        { OFPPC_NO_PACKET_IN, "NO_PACKET_IN" },
+        { 0,                  NULL },
+    };
+
+    ofp_print_bit_names(string, config, config_bits);
+    ds_put_char(string, '\n');
+}
+
+static void
+ofp_print_port_state(struct ds *string, uint32_t state)
+{
+    static const struct bit_name state_bits[] = {
+        { OFPPS_LINK_DOWN, "LINK_DOWN" },
+        { 0,               NULL },
+    };
+    uint32_t stp_state;
+
+    /* The STP state is a 2-bit field so it doesn't fit in with the bitmask
+     * pattern.  We have to special case it.
+     *
+     * OVS doesn't support STP, so this field will always be 0 if we are
+     * talking to OVS, so we'd always print STP_LISTEN in that case.
+     * Therefore, we don't print anything at all if the value is STP_LISTEN, to
+     * avoid confusing users. */
+    stp_state = state & OFPPS_STP_MASK;
+    if (stp_state) {
+        ds_put_cstr(string, (stp_state == OFPPS_STP_LEARN ? "STP_LEARN"
+                             : stp_state == OFPPS_STP_FORWARD ? "STP_FORWARD"
+                             : "STP_BLOCK"));
+        state &= ~OFPPS_STP_MASK;
+        if (state) {
+            ofp_print_bit_names(string, state, state_bits);
+        }
+    } else {
+        ofp_print_bit_names(string, state, state_bits);
     }
     ds_put_char(string, '\n');
 }
@@ -493,9 +554,15 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
 
     ds_put_char(string, ' ');
     ofp_print_port_name(string, ntohs(port->port_no));
-    ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT", config: %#x, state:%#x\n",
-            name, ETH_ADDR_ARGS(port->hw_addr), ntohl(port->config),
-            ntohl(port->state));
+    ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT"\n",
+                  name, ETH_ADDR_ARGS(port->hw_addr));
+
+    ds_put_cstr(string, "     config:     ");
+    ofp_print_port_config(string, ntohl(port->config));
+
+    ds_put_cstr(string, "     state:      ");
+    ofp_print_port_state(string, ntohl(port->state));
+
     if (port->curr) {
         ds_put_format(string, "     current:    ");
         ofp_print_port_features(string, ntohl(port->curr));
