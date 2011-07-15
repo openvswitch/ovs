@@ -5,6 +5,7 @@ openvswitch_sources += \
 	linux/compat/ip_output-openvswitch.c \
 	linux/compat/kmemdup.c \
 	linux/compat/netdevice.c \
+	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/time.c
 openvswitch_headers += \
@@ -38,6 +39,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/netlink.h \
 	linux/compat/include/linux/rculist.h \
 	linux/compat/include/linux/rcupdate.h \
+	linux/compat/include/linux/reciprocal_div.h \
 	linux/compat/include/linux/rtnetlink.h \
 	linux/compat/include/linux/skbuff.h \
 	linux/compat/include/linux/slab.h \

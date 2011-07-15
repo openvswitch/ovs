@@ -24,6 +24,7 @@
 /modules.order
 /netdevice.c
 /random32.c
+/reciprocal_div.c
 /skbuff-openvswitch.c
 /table.c
 /time.c
