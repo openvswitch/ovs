@@ -184,7 +184,7 @@ start () {
 	if test X"$MLOCKALL" != Xno; then
 	    set "$@" --mlockall
 	fi
-	start_daemon "$VSWITCHD_PRIORITY" "$@"
+	start_daemon "$OVS_VSWITCHD_PRIORITY" "$@"
     fi
 }
 
