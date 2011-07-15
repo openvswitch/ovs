@@ -1,9 +1,4 @@
 # This is a POSIX shell fragment                -*- sh -*-
 
-# To configure the OpenFlow switch, fill in the following properly and
-# uncomment them.  Afterward, the switch will come up
-# automatically at boot time.  It can be started immediately with
-#       /etc/init.d/openvswitch-switch start
-
 # FORCE_COREFILES: If 'yes' then core files will be enabled.
 # FORCE_COREFILES=yes
