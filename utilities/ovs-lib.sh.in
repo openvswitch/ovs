@@ -84,6 +84,12 @@ fi
 ## Daemons ##
 ## ------- ##
 
+pid_exists () {
+    # This is better than "kill -0" because it doesn't require permission to
+    # send a signal (so daemon_status in particular works as non-root).
+    test -d /proc/"$1"
+}
+
 start_daemon () {
     priority=$1
     shift
@@ -128,7 +134,7 @@ stop_daemon () {
                         return 1
                         ;;
                     *)
-                        if kill -0 $pid >/dev/null 2>&1; then
+                        if pid_exists $pid >/dev/null 2>&1; then
                             sleep $action
                         else
                             return 0
@@ -145,7 +151,7 @@ daemon_status () {
     pidfile=$rundir/$1.pid
     if test -e "$pidfile"; then
         if pid=`cat "$pidfile"`; then
-            if kill -0 "$pid"; then
+            if pid_exists "$pid"; then
                 echo "$1 is running with pid $pid"
                 return 0
             else
@@ -162,5 +168,5 @@ daemon_status () {
 
 daemon_is_running () {
     pidfile=$rundir/$1.pid
-    test -e "$pidfile" && pid=`cat "$pidfile"` && kill -0 "$pid"
+    test -e "$pidfile" && pid=`cat "$pidfile"` && pid_exists "$pid"
 } >/dev/null 2>&1
