@@ -141,6 +141,7 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
 
     SHASH_FOR_EACH_SAFE (node, next, &svr->remotes) {
         if (!shash_find(new_remotes, node->name)) {
+            VLOG_INFO("%s: remote deconfigured", node->name);
             ovsdb_jsonrpc_server_del_remote(node);
         }
     }
