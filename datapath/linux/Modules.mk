@@ -1,6 +1,7 @@
 openvswitch_sources += \
 	linux/compat/addrconf_core-openvswitch.c \
 	linux/compat/dev-openvswitch.c \
+	linux/compat/flex_array.c \
 	linux/compat/genetlink-openvswitch.c \
 	linux/compat/ip_output-openvswitch.c \
 	linux/compat/kmemdup.c \
@@ -16,6 +17,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/cpumask.h \
 	linux/compat/include/linux/dmi.h \
 	linux/compat/include/linux/err.h \
+	linux/compat/include/linux/flex_array.h \
 	linux/compat/include/linux/genetlink.h \
 	linux/compat/include/linux/icmp.h \
 	linux/compat/include/linux/icmpv6.h \
@@ -37,6 +39,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/netfilter_bridge.h \
 	linux/compat/include/linux/netfilter_ipv4.h \
 	linux/compat/include/linux/netlink.h \
+	linux/compat/include/linux/poison.h \
 	linux/compat/include/linux/rculist.h \
 	linux/compat/include/linux/rcupdate.h \
 	linux/compat/include/linux/reciprocal_div.h \
