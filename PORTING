@@ -258,6 +258,51 @@ vswitchd/system-stats.c only knows how to obtain some statistics on
 Linux.  Optionally you may implement them for your platform as well.
 
 
+Why OVS Does Not Support Hybrid Providers
+-----------------------------------------
+
+The "Porting Strategies" section above describes the "ofproto
+provider" and "dpif provider" porting strategies.  Only an ofproto
+provider can take advantage of hardware TCAM support, and only a dpif
+provider can take advantage of the OVS built-in implementations of
+various features.  It is therefore tempting to suggest a hybrid
+approach that shares the advantages of both strategies.
+
+However, Open vSwitch does not support a hybrid approach.  Doing so
+may be possible, with a significant amount of extra development work,
+but it does not yet seem worthwhile, for the reasons explained below.
+
+First, user surprise is likely when a switch supports a feature only
+with a high performance penalty.  For example, one user questioned why
+adding a particular OpenFlow action to a flow caused a 1,058x slowdown
+on a hardware OpenFlow implementation [1].  The action required the
+flow to be implemented in software.
+
+Given that implementing a flow in software on the slow management CPU
+of a hardware switch causes a major slowdown, software-implemented
+flows would only make sense for very low-volume traffic.  But many of
+the features built into the OVS software switch implementation would
+need to apply to every flow to be useful.  There is no value, for
+example, in applying bonding or 802.1Q VLAN support only to low-volume
+traffic.
+
+Besides supporting features of OpenFlow actions, a hybrid approach
+could also support forms of matching not supported by particular
+switching hardware, by sending all packets that might match a rule to
+software.  But again this can cause an unacceptable slowdown by
+forcing bulk traffic through software in the hardware switch's slow
+management CPU.  Consider, for example, a hardware switch that can
+match on the IPv6 Ethernet type but not on fields in IPv6 headers.  An
+OpenFlow table that matched on the IPv6 Ethernet type would perform
+well, but adding a rule that matched only UDPv6 would force every IPv6
+packet to software, slowing down not just UDPv6 but all IPv6
+processing.
+
+[1] Aaron Rosen, "Modify packet fields extremely slow",
+    openflow-discuss mailing list, June 26, 2011, archived at
+    https://mailman.stanford.edu/pipermail/openflow-discuss/2011-June/002386.html.
+
+
 Questions
 ---------
 
