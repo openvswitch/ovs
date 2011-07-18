@@ -105,6 +105,7 @@ main(int argc, char *argv[])
     struct flow *flows;
     size_t i, n_permute, old_n_enabled;
     struct slave_group sg;
+    int old_active;
 
     set_program_name(argv[0]);
     random_init();
@@ -144,12 +145,14 @@ main(int argc, char *argv[])
      * skip it by starting at i = 1. We do one extra iteration to cover
      * transitioning from the final state back to the initial state. */
     old_n_enabled = 0;
+    old_active = -1;
     n_permute = 1 << sg.n_slaves;
     for (i = 1; i <= n_permute + 1; i++) {
         struct slave *slave;
         size_t j, n_enabled, changed;
         double disruption, perfect;
         uint8_t mask;
+        int active;
 
         mask = i % n_permute;
 
@@ -171,6 +174,14 @@ main(int argc, char *argv[])
             }
         }
 
+        active = -1;
+        for (j = 0; j < sg.n_slaves; j++) {
+            if (sg.slaves[j].enabled) {
+                active = j;
+                break;
+            }
+        }
+
         changed = 0;
         for (j = 0; j < N_FLOWS; j++) {
             struct flow *flow = &flows[j];
@@ -188,15 +199,19 @@ main(int argc, char *argv[])
             }
         }
 
-        if (old_n_enabled || n_enabled) {
-            perfect = 1.0 / MAX(old_n_enabled, n_enabled);
+        if (nab->algorithm == htons(NX_BD_ALG_ACTIVE_BACKUP)) {
+            perfect = active == old_active ? 0.0 : 1.0;
         } else {
-            /* This will happen when 'sg.n_slaves' is 0. */
-            perfect = 0;
+            if (old_n_enabled || n_enabled) {
+                perfect = 1.0 / MAX(old_n_enabled, n_enabled);
+            } else {
+                /* This will happen when 'sg.n_slaves' is 0. */
+                perfect = 0;
+            }
         }
 
         disruption = changed / (double)N_FLOWS;
-        printf("%s: disruption=%.2f (perfect=%.2f) ",
+        printf("%s: disruption=%.2f (perfect=%.2f)",
                mask_str(mask, sg.n_slaves), disruption, perfect);
 
         for (j = 0 ; j < sg.n_slaves; j++) {
@@ -204,10 +219,16 @@ main(int argc, char *argv[])
             double flow_percent;
 
             flow_percent = slave->flow_count / (double)N_FLOWS;
-            printf("%.2f ", flow_percent);
+            printf( " %.2f", flow_percent);
 
             if (slave->enabled) {
-                double perfect_fp = 1.0 / n_enabled;
+                double perfect_fp;
+
+                if (nab->algorithm == htons(NX_BD_ALG_ACTIVE_BACKUP)) {
+                    perfect_fp = j == active ? 1.0 : 0.0;
+                } else {
+                    perfect_fp = 1.0 / n_enabled;
+                }
 
                 if (fabs(flow_percent - perfect_fp) >= .01) {
                     fprintf(stderr, "%s: slave %d: flow_percentage=%.5f for"
@@ -232,6 +253,7 @@ main(int argc, char *argv[])
             ok = false;
         }
 
+        old_active = active;
         old_n_enabled = n_enabled;
     }
 

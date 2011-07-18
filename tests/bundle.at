@@ -77,6 +77,77 @@ AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,slaves:1,2,3,4,5,6']],
 # 100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 AT_CLEANUP
 
+AT_SETUP([active_backup bundle link selection])
+AT_CHECK([[test-bundle 'symmetric_l4,60,active_backup,ofport,slaves:1,2,3,4,5,6']],
+  [0],
+[100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+110000: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+010000: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+011000: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+111000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+101000: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+001000: disruption=1.00 (perfect=1.00) 0.00 0.00 1.00 0.00 0.00 0.00
+001100: disruption=0.00 (perfect=0.00) 0.00 0.00 1.00 0.00 0.00 0.00
+101100: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+111100: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+011100: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+010100: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+110100: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+100100: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+000100: disruption=1.00 (perfect=1.00) 0.00 0.00 0.00 1.00 0.00 0.00
+000110: disruption=0.00 (perfect=0.00) 0.00 0.00 0.00 1.00 0.00 0.00
+100110: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+110110: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+010110: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+011110: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+111110: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+101110: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+001110: disruption=1.00 (perfect=1.00) 0.00 0.00 1.00 0.00 0.00 0.00
+001010: disruption=0.00 (perfect=0.00) 0.00 0.00 1.00 0.00 0.00 0.00
+101010: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+111010: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+011010: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+010010: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+110010: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+100010: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+000010: disruption=1.00 (perfect=1.00) 0.00 0.00 0.00 0.00 1.00 0.00
+000011: disruption=0.00 (perfect=0.00) 0.00 0.00 0.00 0.00 1.00 0.00
+100011: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+110011: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+010011: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+011011: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+111011: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+101011: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+001011: disruption=1.00 (perfect=1.00) 0.00 0.00 1.00 0.00 0.00 0.00
+001111: disruption=0.00 (perfect=0.00) 0.00 0.00 1.00 0.00 0.00 0.00
+101111: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+111111: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+011111: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+010111: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+110111: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+100111: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+000111: disruption=1.00 (perfect=1.00) 0.00 0.00 0.00 1.00 0.00 0.00
+000101: disruption=0.00 (perfect=0.00) 0.00 0.00 0.00 1.00 0.00 0.00
+100101: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+110101: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+010101: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+011101: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+111101: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+101101: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+001101: disruption=1.00 (perfect=1.00) 0.00 0.00 1.00 0.00 0.00 0.00
+001001: disruption=0.00 (perfect=0.00) 0.00 0.00 1.00 0.00 0.00 0.00
+101001: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+111001: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+011001: disruption=1.00 (perfect=1.00) 0.00 1.00 0.00 0.00 0.00 0.00
+010001: disruption=0.00 (perfect=0.00) 0.00 1.00 0.00 0.00 0.00 0.00
+110001: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+100001: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
+000001: disruption=1.00 (perfect=1.00) 0.00 0.00 0.00 0.00 0.00 1.00
+000000: disruption=1.00 (perfect=1.00) 0.00 0.00 0.00 0.00 0.00 0.00
+100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
+])
+AT_CLEANUP
+
 AT_SETUP([hrw bundle single link selection])
 AT_CHECK([[test-bundle 'symmetric_l4,60,hrw,ofport,slaves:1']],
   [0], [ignore])

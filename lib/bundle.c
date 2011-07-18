@@ -32,17 +32,29 @@
 
 VLOG_DEFINE_THIS_MODULE(bundle);
 
-/* Executes 'nab' on 'flow'.  Uses 'slave_enabled' to determine if the slave
- * designated by 'ofp_port' is up.  Returns the chosen slave, or OFPP_NONE if
- * none of the slaves are acceptable. */
-uint16_t
-bundle_execute(const struct nx_action_bundle *nab, const struct flow *flow,
-               bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+static uint16_t
+execute_ab(const struct nx_action_bundle *nab,
+           bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+{
+    size_t i;
+
+    for (i = 0; i < ntohs(nab->n_slaves); i++) {
+        uint16_t slave = bundle_get_slave(nab, i);
+
+        if (slave_enabled(slave, aux)) {
+            return slave;
+        }
+    }
+
+    return OFPP_NONE;
+}
+
+static uint16_t
+execute_hrw(const struct nx_action_bundle *nab, const struct flow *flow,
+            bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
 {
     uint32_t flow_hash, best_hash;
     int best, i;
-
-    assert(nab->algorithm == htons(NX_BD_ALG_HRW));
 
     flow_hash = flow_hash_fields(flow, ntohs(nab->fields), ntohs(nab->basis));
     best = -1;
@@ -60,6 +72,20 @@ bundle_execute(const struct nx_action_bundle *nab, const struct flow *flow,
     }
 
     return best >= 0 ? bundle_get_slave(nab, best) : OFPP_NONE;
+}
+
+/* Executes 'nab' on 'flow'.  Uses 'slave_enabled' to determine if the slave
+ * designated by 'ofp_port' is up.  Returns the chosen slave, or OFPP_NONE if
+ * none of the slaves are acceptable. */
+uint16_t
+bundle_execute(const struct nx_action_bundle *nab, const struct flow *flow,
+               bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+{
+    switch (ntohs(nab->algorithm)) {
+    case NX_BD_ALG_HRW: return execute_hrw(nab, flow, slave_enabled, aux);
+    case NX_BD_ALG_ACTIVE_BACKUP: return execute_ab(nab, slave_enabled, aux);
+    default: NOT_REACHED();
+    }
 }
 
 /* Checks that 'nab' specifies a bundle action which is supported by this
@@ -87,7 +113,8 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports)
         VLOG_WARN_RL(&rl, "unsupported fields %"PRIu16, fields);
     } else if (n_slaves > BUNDLE_MAX_SLAVES) {
         VLOG_WARN_RL(&rl, "too may slaves");
-    } else if (algorithm != NX_BD_ALG_HRW) {
+    } else if (algorithm != NX_BD_ALG_HRW
+               && algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %"PRIu16, algorithm);
     } else if (slave_type != NXM_OF_IN_PORT) {
         VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu16, slave_type);
