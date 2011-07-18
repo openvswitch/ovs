@@ -1366,6 +1366,14 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
                 uint64_t new_value)
 {
     switch (dst->index) {
+    case NFI_NXM_OF_ETH_DST:
+        eth_addr_from_uint64(new_value, flow->dl_dst);
+        break;
+
+    case NFI_NXM_OF_ETH_SRC:
+        eth_addr_from_uint64(new_value, flow->dl_src);
+        break;
+
     case NFI_NXM_OF_VLAN_TCI:
         flow->vlan_tci = htons(new_value);
         break;
@@ -1395,21 +1403,34 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
 #error
 #endif
 
-    case NFI_NXM_OF_IN_PORT:
-    case NFI_NXM_OF_ETH_DST:
-    case NFI_NXM_OF_ETH_SRC:
-    case NFI_NXM_OF_ETH_TYPE:
     case NFI_NXM_OF_IP_TOS:
-    case NFI_NXM_OF_IP_PROTO:
-    case NFI_NXM_OF_ARP_OP:
+        flow->nw_tos = new_value & IP_DSCP_MASK;
+        break;
+
     case NFI_NXM_OF_IP_SRC:
-    case NFI_NXM_OF_ARP_SPA:
+        flow->nw_src = htonl(new_value);
+        break;
+
     case NFI_NXM_OF_IP_DST:
-    case NFI_NXM_OF_ARP_TPA:
+        flow->nw_dst = htonl(new_value);
+        break;
+
     case NFI_NXM_OF_TCP_SRC:
     case NFI_NXM_OF_UDP_SRC:
+        flow->tp_src = htons(new_value);
+        break;
+
     case NFI_NXM_OF_TCP_DST:
     case NFI_NXM_OF_UDP_DST:
+        flow->tp_dst = htons(new_value);
+        break;
+
+    case NFI_NXM_OF_IN_PORT:
+    case NFI_NXM_OF_ETH_TYPE:
+    case NFI_NXM_OF_IP_PROTO:
+    case NFI_NXM_OF_ARP_OP:
+    case NFI_NXM_OF_ARP_SPA:
+    case NFI_NXM_OF_ARP_TPA:
     case NFI_NXM_OF_ICMP_TYPE:
     case NFI_NXM_OF_ICMP_CODE:
     case NFI_NXM_NX_TUN_ID_W:

@@ -427,6 +427,18 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *
  * The following nxm_header values are potentially acceptable as 'dst':
  *
+ *   - NXM_OF_ETH_DST
+ *   - NXM_OF_ETH_SRC
+ *   - NXM_OF_IP_TOS
+ *   - NXM_OF_IP_SRC
+ *   - NXM_OF_IP_DST
+ *   - NXM_OF_TCP_SRC
+ *   - NXM_OF_TCP_DST
+ *   - NXM_OF_UDP_SRC
+ *   - NXM_OF_UDP_DST
+ *     Modifying any of the above fields changes the corresponding packet
+ *     header.
+ *
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
  *   - NXM_OF_VLAN_TCI.  Modifying this field's value has side effects on the
