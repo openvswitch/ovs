@@ -3151,7 +3151,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPUTIL_OFPAT_SET_NW_TOS:
-            ctx->flow.nw_tos = ia->nw_tos.nw_tos;
+            ctx->flow.nw_tos = ia->nw_tos.nw_tos & IP_DSCP_MASK;
             break;
 
         case OFPUTIL_OFPAT_SET_TP_SRC:
