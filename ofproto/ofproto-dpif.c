@@ -2807,6 +2807,11 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
         base->nw_dst = flow->nw_dst;
     }
 
+    if (base->nw_tos != flow->nw_tos) {
+        nl_msg_put_u8(odp_actions, ODP_ACTION_ATTR_SET_NW_TOS, flow->nw_tos);
+        base->nw_tos = flow->nw_tos;
+    }
+
     if (base->vlan_tci != flow->vlan_tci) {
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
             nl_msg_put_flag(odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
