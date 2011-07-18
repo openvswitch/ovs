@@ -25,22 +25,34 @@
 
 (test -x /usr/sbin/ovs-vswitchd && test -x /usr/bin/ovsdb-server) || exit 0
 
+. /usr/share/openvswitch/scripts/ovs-lib.sh
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
-ovs_ctl=/usr/share/openvswitch/scripts/ovs-ctl
+if test X"$BRCOMPAT" = Xyes && test ! -x /usr/sbin/ovs-brcompatd; then
+    BRCOMPAT=no
+    log_warning_msg "ovs-brcompatd missing, disabling bridge compatibility"
+fi
+
+ovs_ctl () {
+    set /usr/share/openvswitch/scripts/ovs-ctl "$@"
+    if test X"$BRCOMPAT" = Xyes; then
+        set "$@" --brcompat
+    fi
+    "$@"
+}
 
 start () {
-    set $ovs_ctl ${1-start} --system-id=random
+    set ovs_ctl ${1-start} --system-id=random
     if test X"$FORCE_COREFILES" != X; then
 	set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     "$@" || exit $?
 
-    $ovs_ctl --protocol=gre enable-protocol
+    ovs_ctl --protocol=gre enable-protocol
 }
 
 stop () {
-    $ovs_ctl stop
+    ovs_ctl stop
 }
 
 case $1 in
@@ -58,7 +70,7 @@ case $1 in
         start
         ;;
     status)
-        $ovs_ctl status
+        ovs_ctl status
         ;;
     force-reload-kmod)
         start force-reload-kmod

@@ -6,6 +6,9 @@ EXTRA_DIST += \
 	debian/copyright \
 	debian/copyright.in \
 	debian/dirs \
+	debian/openvswitch-brcompat.install \
+	debian/openvswitch-brcompat.manpages \
+	debian/openvswitch-brcompat.postinst \
 	debian/openvswitch-common.dirs \
 	debian/openvswitch-common.install \
 	debian/openvswitch-common.manpages \

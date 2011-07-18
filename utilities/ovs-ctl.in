@@ -30,7 +30,7 @@ done
 ## start ##
 ## ----- ##
 
-insert_modules_if_required () {
+insert_openvswitch_mod_if_required () {
     # If openvswitch_mod is already loaded then we're done.
     test -e /sys/module/openvswitch_mod && return 0
 
@@ -49,6 +49,11 @@ insert_modules_if_required () {
 
     # Try loading openvswitch_mod again.
     action "Inserting openvswitch module" modprobe openvswitch_mod
+}
+
+insert_brcompat_mod_if_required () {
+    test -e /sys/module/brcompat_mod && return 0
+    action "Inserting brcompat module" modprobe brcompat_mod
 }
 
 ovs_vsctl () {
@@ -155,7 +160,10 @@ start () {
         ulimit -Sc 67108864
     fi
 
-    insert_modules_if_required || return 1
+    insert_openvswitch_mod_if_required || return 1
+    if test X"$BRCOMPAT" = Xyes; then
+        insert_brcompat_mod_if_required || return 1
+    fi
 
     if daemon_is_running ovsdb-server; then
 	log_success_msg "ovsdb-server is already running"
@@ -199,6 +207,14 @@ start () {
 	fi
 	start_daemon "$OVS_VSWITCHD_PRIORITY" "$@"
     fi
+
+    if daemon_is_running ovs-brcompatd; then
+	log_success_msg "ovs-brcompatd is already running"
+    elif test X"$BRCOMPAT" = Xyes; then
+        set ovs-brcompatd
+	set "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:ERR -vANY:FILE:INFO
+	start_daemon "$OVS_BRCOMPATD_PRIORITY" "$@"
+    fi
 }
 
 ## ---- ##
@@ -206,6 +222,7 @@ start () {
 ## ---- ##
 
 stop () {
+    stop_daemon ovs-brcompatd
     stop_daemon ovs-vswitchd
     stop_daemon ovsdb-server
 }
@@ -260,6 +277,9 @@ force_reload_kmod () {
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 
+    if test -e /sys/module/brcompat_mod; then
+        action "Removing brcompat module" rmmod brcompat_mod
+    fi
     if test -e /sys/module/openvswitch_mod; then
         action "Removing openvswitch module" rmmod openvswitch_mod
     fi
@@ -332,12 +352,14 @@ set_defaults () {
     SYSTEM_ID=
 
     DELETE_BRIDGES=no
+    BRCOMPAT=no
 
     DAEMON_CWD=/
     FORCE_COREFILES=yes
     MLOCKALL=yes
     OVSDB_SERVER_PRIORITY=-10
     OVS_VSWITCHD_PRIORITY=-10
+    OVS_BRCOMPATD_PRIORITY=-10
 
     DB_FILE=$etcdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -377,33 +399,34 @@ Commands:
   enable-protocol    enable protocol specified in options with iptables
   help               display this help message
 
-One of the following options should be specified when starting Open vSwitch:
+One of the following options is required for "start" and "force-reload-kmod":
   --system-id=UUID   set specific ID to uniquely identify this system
   --system-id=random  use a random but persistent UUID to identify this system
 
-Other important options for starting Open vSwitch:
+Other important options for "start" and "force-reload-kmod":
   --system-type=TYPE  set system type (e.g. "XenServer")
   --system-version=VERSION  set system version (e.g. "5.6.100-39265p")
   --external-id="key=value"
                      add given key-value pair to Open_vSwitch external-ids
   --delete-bridges   delete all bridges just before starting ovs-vswitchd
 
-Less important options for starting Open vSwitch:
-  --daemon-cwd=DIR   current working directory for OVS daemons (default: $DAEMON_CWD)
-  --no-force-corefiles
-                     do not forcibly enable core dumps for OVS daemons
-  --no-mlockall      do not lock all of ovs-vswitchd into memory
-  --ovsdb-server-priority=NICE
-                     set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
-  --ovs-vswitchd-priority=NICE
-                     set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
+Less important options for "start" and "force-reload-kmod":
+  --daemon-cwd=DIR               set working dir for OVS daemons (default: $DAEMON_CWD)
+  --no-force-corefiles           do not force on core dumps for OVS daemons
+  --no-mlockall                  do not lock all of ovs-vswitchd into memory
+  --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
+  --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
+  --ovs-brcompatd-priority=NICE  set ovs-brcompatd's niceness (default: $OVS_BRCOMPATD_PRIORITY)
+
+Options for "start", "force-reload-kmod", "status", and "version":
+  --brcompat         enable Linux bridge compatibility module and daemon
 
 File location options:
   --db-file=FILE     database file name (default: $DB_FILE)
   --db-sock=SOCKET   JSON-RPC socket name (default: $DB_SOCK)
   --db-schema=FILE   database schema file name (default: $DB_SCHEMA)
 
-Options for enable-protocol:
+Options for "enable-protocol":
   --protocol=PROTOCOL  protocol to enable with iptables (default: gre)
   --sport=PORT       source port to match (for tcp or udp protocol)
   --dport=PORT       ddestination port to match (for tcp or udp protocol)
@@ -437,6 +460,13 @@ set_option () {
         return
     fi
     eval $var=\$value
+}
+
+daemons () {
+    echo ovsdb-server ovs-vswitchd
+    if test X"$BRCOMPAT" = Xyes; then
+        echo ovs-brcompatd
+    fi
 }
 
 set_defaults
@@ -504,10 +534,16 @@ case $command in
         stop
         ;;
     status)
-        daemon_status ovsdb-server && daemon_status ovs-vswitchd
+        rc=0
+        for daemon in `daemons`; do
+            daemon_status $daemon || rc=$?
+        done
+        exit $rc
         ;;
     version)
-        ovsdb-server --version && ovs-vswitchd --version
+        for daemon in `daemons`; do
+            $daemon --version
+        done
         ;;
     force-reload-kmod)
 	force_reload_kmod

@@ -81,6 +81,21 @@ Description: Open vSwitch controller implementation
  .
  Open vSwitch is a full-featured software-based Ethernet switch.
 
+Package: openvswitch-brcompat
+Architecture: linux-any
+Depends: ${shlibs:Depends}, openvswitch-switch (= ${binary:Version})
+Recommends: bridge-utils
+Description: Open vSwitch bridge compatibility support
+ openvswitch-brcompat provides a way for applications that use the
+ Linux bridge to gradually migrate to Open vSwitch.  Programs that
+ ordinarily control the Linux bridge module, such as "brctl", instead
+ control the Open vSwitch kernel-based switch.
+ .
+ Once this package is installed, adding BRCOMPAT=yes in
+ /etc/default/openvswitch-switch enables bridge compatibility.
+ .
+ Open vSwitch is a full-featured software-based Ethernet switch.
+
 Package: openvswitch-dbg
 Section: debug
 Architecture: linux-any

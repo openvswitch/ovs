@@ -65,29 +65,40 @@ bridge module and tries loading the Open vSwitch kernel module again.
 (This is because the Open vSwitch kernel module cannot coexist with
 the Linux bridge module before 2.6.37.)
 .
+.IP 2.
+If \fB\-\-brcompat\fR was specified, loads the Open vSwitch bridge
+compatibility module.
+.
 .PP
 The \fBstart\fR command skips the following steps if
 \fBovsdb\-server\fR is already running:
-.IP 2.
+.IP 3.
 If the Open vSwitch database file does not exist, it creates it.
 If the database does exist, but it has an obsolete version, it
 upgrades it to the latest schema.
 .
-.IP 3.
+.IP 4.
 Starts \fBovsdb-server\fR.
 .
-.IP 4.
+.IP 5.
 Initializes a few values inside the database.
 .
-.IP 5.
+.IP 6.
 If the \fB\-\-delete\-bridges\fR option was used, deletes all of the
 bridges from the database.
 .
 .PP
 The \fBstart\fR command skips the following step if
 \fBovs\-vswitchd\fR is already running:
-.IP 6.
+.IP 7.
 Starts \fBovs\-vswitchd\fR.
+.
+.PP
+The \fBstart\fR command skips the following step if
+\fBovs\-brcompatd\fR is already running or if \fB\-\-brcompat\fR is
+not specified:
+.IP 8.
+Starts \fBovs\-brcompatd\fR.
 .
 .SS "Options"
 .PP
@@ -181,9 +192,13 @@ Overrides the file name for the OVS database schema.
 .SH "The ``stop'' command"
 .
 .PP
-The \fBstart\fR command shuts down Open vSwitch.  If
-\fBovs\-vswitchd\fR is running, kills it and waits for it to
-terminate, then it does the same for \fBovsdb\-server\fR.
+The \fBstop\fR command shuts down Open vSwitch.  It kills any running
+\fBovs\-brcompatd\fR, \fBovs\-vswitchd\fR, or \fBovsdb\-server\fR
+daemons and waits for them to terminate.
+.
+.PP
+The \fBstop\fR command does not unload the Open vSwitch kernel
+modules.
 .
 .PP
 This command does nothing and finishes successfully if the OVS daemons
@@ -192,15 +207,18 @@ aren't running.
 .SH "The ``status'' command"
 .
 .PP
-The \fBstatus\fR command checks whether the OVS daemons are running
-and prints messages with that information.  It exits with status 0 if
+The \fBstatus\fR command checks whether the OVS daemons
+\fBovs-vswitchd\fR and \fBovsdb\-server\fR are running and prints
+messages with that information.  If \fB\-\-brcompat\fR is specified,
+it also checks for \fBovs\-brcompatd\fR.  It exits with status 0 if
 the daemons are running, 1 otherwise.
 .
 .SH "The ``version'' command"
 .
 .PP
 The \fBversion\fR command runs \fBovsdb\-server \-\-version\fR and
-\fBovs\-vswitchd \-\-version\fR.
+\fBovs\-vswitchd \-\-version\fR.  If \fB\-\-brcompat\fR is specified,
+it also runs \fBovs\-brcompatd \-\-version\fR.
 .
 .SH "The ``force\-reload\-kmod'' command"
 .
@@ -224,11 +242,13 @@ listed in step 1, including IP and IPv6 addresses and routing table
 entries.
 .
 .IP 4.
-Unloads the Open vSwitch kernel module.
+Unloads the Open vSwitch kernel module (including the bridge
+compatibility module if it is loaded).
 .
 .IP 5.
 Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
-reloads the kernel module and restarts the OVS daemons.
+reloads the kernel module and restarts the OVS daemons (including
+\fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR is specified).
 .
 .IP 6.
 Restores the kernel configuration state that was saved in step 3.
@@ -288,6 +308,21 @@ and allowed only with \fB\-\-protocol=tcp\fR or
 .SH "The ``help'' command"
 .
 Prints a usage message and exits successfully.
+.
+.SH "OPTIONS"
+.PP
+In addition to the options listed for each command above, this option
+controls the behavior of several of \fBovs\-ctl\fR's commands.
+.
+.IP "\fB\-\-brcompat\fR"
+By default, \fBovs\-ctl\fR does not load the Open vSwitch bridge
+compatibility module and does not start or check the status or report
+the version of the \fBovs\-brcompatd\fR daemon.  This option enables
+all of those behaviors.
+.
+.IP
+The \fBstop\fR command always stops \fBovs\-brcompatd\fR, if it is
+running, regardless of this option.
 .
 .SH "EXIT STATUS"
 .
@@ -356,5 +391,5 @@ distribution are good examples of how to use \fBovs\-ctl\fR.
 .
 .SH "SEE ALSO"
 .
-\fBREADME\fR, \fBINSTALL.LINUX\fR, \fBovsdb\-server\fR(8),
+\fBREADME\fR, \fBINSTALL.Linux\fR, \fBovsdb\-server\fR(8),
 \fBovs\-vswitchd\fR(8).
