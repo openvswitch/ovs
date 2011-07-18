@@ -3360,6 +3360,47 @@ vlan_is_mirrored(const struct ofmirror *m, int vlan)
     return vlan_bitmap_contains(m->vlans, vlan);
 }
 
+/* Returns true if a packet with Ethernet destination MAC 'dst' may be mirrored
+ * to a VLAN.  In general most packets may be mirrored but we want to drop
+ * protocols that may confuse switches. */
+static bool
+eth_dst_may_rspan(const uint8_t dst[ETH_ADDR_LEN])
+{
+    /* If you change this function's behavior, please update corresponding
+     * documentation in vswitch.xml at the same time. */
+    if (dst[0] != 0x01) {
+        /* All the currently banned MACs happen to start with 01 currently, so
+         * this is a quick way to eliminate most of the good ones. */
+    } else {
+        if (eth_addr_is_reserved(dst)) {
+            /* Drop STP, IEEE pause frames, and other reserved protocols
+             * (01-80-c2-00-00-0x). */
+            return false;
+        }
+
+        if (dst[0] == 0x01 && dst[1] == 0x00 && dst[2] == 0x0c) {
+            /* Cisco OUI. */
+            if ((dst[3] & 0xfe) == 0xcc &&
+                (dst[4] & 0xfe) == 0xcc &&
+                (dst[5] & 0xfe) == 0xcc) {
+                /* Drop the following protocols plus others following the same
+                   pattern:
+
+                   CDP, VTP, DTP, PAgP  (01-00-0c-cc-cc-cc)
+                   Spanning Tree PVSTP+ (01-00-0c-cc-cc-cd)
+                   STP Uplink Fast      (01-00-0c-cd-cd-cd) */
+                return false;
+            }
+
+            if (!(dst[3] | dst[4] | dst[5])) {
+                /* Drop Inter Switch Link packets (01-00-0c-00-00-00). */
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static void
 compose_mirror_dsts(struct action_xlate_ctx *ctx,
                     uint16_t vlan, const struct ofbundle *in_bundle,
@@ -3394,7 +3435,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
                     && !dst_is_duplicate(set, &dst)) {
                     dst_set_add(set, &dst);
                 }
-            } else {
+            } else if (eth_dst_may_rspan(ctx->flow.dl_dst)) {
                 struct ofbundle *bundle;
 
                 HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
