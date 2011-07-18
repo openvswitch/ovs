@@ -2394,8 +2394,8 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPAT_SET_NW_TOS:
             nl_msg_put_u8(ctx->odp_actions, ODP_ACTION_ATTR_SET_NW_TOS,
-                          ia->nw_tos.nw_tos);
-            ctx->flow.nw_tos = ia->nw_tos.nw_tos;
+                          ia->nw_tos.nw_tos & IP_DSCP_MASK);
+            ctx->flow.nw_tos = ia->nw_tos.nw_tos & IP_DSCP_MASK;
             break;
 
         case OFPAT_SET_TP_SRC:
