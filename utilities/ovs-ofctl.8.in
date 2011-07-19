@@ -705,7 +705,7 @@ Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter,
 then the applies multipath link selection \fIalgorithm\fR (with
 parameter \fIarg\fR) to choose one of \fIn_links\fR output links
 numbered 0 through \fIn_links\fR minus 1, and stores the link into
-\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM register as
+\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
 described above.
 .IP
 Currently, \fIfields\fR must be either \fBeth_src\fR or
@@ -717,7 +717,7 @@ Refer to \fBnicira\-ext.h\fR for more details.
 .
 .IP "\fBautopath(\fIid\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
 Given \fIid\fR, chooses an OpenFlow port and populates it in
-\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM register as
+\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
 described above.
 .IP
 Currently, \fIid\fR should be the OpenFlow port number of an interface on the

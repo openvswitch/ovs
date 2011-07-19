@@ -303,12 +303,6 @@ AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,0,0,NXM_NX
 ])
 AT_CLEANUP
 
-AT_SETUP([multipath action bad destination])
-AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,1,0,NXM_OF_VLAN_TCI[[]])'], [1], [],
-  [ovs-ofctl: eth_src,50,modulo_n,1,0,NXM_OF_VLAN_TCI[[]]: destination field must be register
-])
-AT_CLEANUP
-
 AT_SETUP([multipath action destination too narrow])
 AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]])'], [1], [],
   [ovs-ofctl: eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]]: 8-bit destination field has 256 possible values, less than specified n_links 1024

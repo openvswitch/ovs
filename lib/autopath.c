@@ -29,19 +29,13 @@
 
 VLOG_DEFINE_THIS_MODULE(autopath);
 
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
 /* Loads 'ofp_port' into the appropriate register in accordance with the
  * autopath action. */
 void
 autopath_execute(const struct nx_action_autopath *ap, struct flow *flow,
                  uint16_t ofp_port)
 {
-    uint32_t *reg = &flow->regs[NXM_NX_REG_IDX(ntohl(ap->dst))];
-    int ofs = nxm_decode_ofs(ap->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(ap->ofs_nbits);
-    uint32_t mask = n_bits == 32 ? UINT32_MAX : (UINT32_C(1) << n_bits) - 1;
-    *reg = (*reg & ~(mask << ofs)) | ((ofp_port & mask) << ofs);
+    nxm_reg_load(ap->dst, ap->ofs_nbits, ofp_port, flow);
 }
 
 void
@@ -68,10 +62,6 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
     }
 
     nxm_parse_field_bits(dst, &reg, &ofs, &n_bits);
-    if (!NXM_IS_NX_REG(reg) || NXM_NX_REG_IDX(reg) >= FLOW_N_REGS) {
-        ovs_fatal(0, "%s: destination field must be a register", s_);
-    }
-
     if (n_bits < 16) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
                   "less than required 65536", s_, n_bits, 1u << n_bits);
@@ -90,21 +80,7 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
 }
 
 int
-autopath_check(const struct nx_action_autopath *ap)
+autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
 {
-    uint32_t dst = ntohl(ap->dst);
-    int ofs = nxm_decode_ofs(ap->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(ap->ofs_nbits);
-
-    if (!NXM_IS_NX_REG(dst) || NXM_NX_REG_IDX(dst) >= FLOW_N_REGS) {
-        VLOG_WARN_RL(&rl, "unsupported destination field %#"PRIx32, dst);
-    } else if (ofs + n_bits > nxm_field_bits(dst)) {
-        VLOG_WARN_RL(&rl, "destination overflows output field");
-    } else if (n_bits < 16) {
-        VLOG_WARN_RL(&rl, "minimum of 16 bits required in output field");
-    } else {
-        return 0;
-    }
-
-    return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    return nxm_dst_check(ap->dst, ap->ofs_nbits, 16, flow);
 }

@@ -1211,27 +1211,48 @@ nxm_check_reg_move(const struct nx_action_reg_move *action,
     return 0;
 }
 
+/* Given a flow, checks that the destination field represented by 'dst_header'
+ * and 'ofs_nbits' is valid and large enough for 'min_n_bits' bits of data. */
 int
-nxm_check_reg_load(const struct nx_action_reg_load *action,
-                   const struct flow *flow)
+nxm_dst_check(ovs_be32 dst_header, ovs_be16 ofs_nbits, size_t min_n_bits,
+              const struct flow *flow)
 {
     const struct nxm_field *dst;
     int ofs, n_bits;
 
-    ofs = nxm_decode_ofs(action->ofs_nbits);
-    n_bits = nxm_decode_n_bits(action->ofs_nbits);
-    dst = nxm_field_lookup(ntohl(action->dst));
+    ofs = nxm_decode_ofs(ofs_nbits);
+    n_bits = nxm_decode_n_bits(ofs_nbits);
+    dst = nxm_field_lookup(ntohl(dst_header));
+
     if (!field_ok(dst, flow, ofs + n_bits)) {
-        return BAD_ARGUMENT;
+        VLOG_WARN_RL(&rl, "invalid destination field");
+    } else if (!dst->writable) {
+        VLOG_WARN_RL(&rl, "destination field is not writable");
+    } else if (n_bits < min_n_bits) {
+        VLOG_WARN_RL(&rl, "insufficient bits in destination");
+    } else {
+        return 0;
+    }
+
+    return BAD_ARGUMENT;
+}
+
+int
+nxm_check_reg_load(const struct nx_action_reg_load *action,
+                   const struct flow *flow)
+{
+    int n_bits;
+    int error;
+
+    error = nxm_dst_check(action->dst, action->ofs_nbits, 0, flow);
+    if (error) {
+        return error;
     }
 
     /* Reject 'action' if a bit numbered 'n_bits' or higher is set to 1 in
      * action->value. */
+    n_bits = nxm_decode_n_bits(action->ofs_nbits);
     if (n_bits < 64 && ntohll(action->value) >> n_bits) {
-        return BAD_ARGUMENT;
-    }
-
-    if (!dst->writable) {
         return BAD_ARGUMENT;
     }
 
@@ -1427,31 +1448,30 @@ nxm_execute_reg_move(const struct nx_action_reg_move *action,
     int src_ofs = ntohs(action->src_ofs);
     uint64_t src_data = nxm_read_field(src, flow) & (mask << src_ofs);
 
-    /* Get the remaining bits of the destination field. */
-    const struct nxm_field *dst = nxm_field_lookup(ntohl(action->dst));
-    int dst_ofs = ntohs(action->dst_ofs);
-    uint64_t dst_data = nxm_read_field(dst, flow) & ~(mask << dst_ofs);
-
-    /* Get the final value. */
-    uint64_t new_data = dst_data | ((src_data >> src_ofs) << dst_ofs);
-
-    nxm_write_field(dst, flow, new_data);
+    nxm_reg_load(action->dst,
+                 nxm_encode_ofs_nbits(ntohs(action->dst_ofs), n_bits),
+                 src_data, flow);
 }
 
 void
 nxm_execute_reg_load(const struct nx_action_reg_load *action,
                      struct flow *flow)
 {
-    /* Preparation. */
-    int n_bits = nxm_decode_n_bits(action->ofs_nbits);
+    nxm_reg_load(action->dst, action->ofs_nbits, ntohll(action->value), flow);
+}
+
+/* Calculates ofs and n_bits from the given 'ofs_nbits' parameter, and copies
+ * 'src_data'[0:n_bits] to 'dst_header'[ofs:ofs+n_bits] in the given 'flow'. */
+void
+nxm_reg_load(ovs_be32 dst_header, ovs_be16 ofs_nbits, uint64_t src_data,
+             struct flow *flow)
+{
+    int n_bits = nxm_decode_n_bits(ofs_nbits);
+    int dst_ofs = nxm_decode_ofs(ofs_nbits);
     uint64_t mask = n_bits == 64 ? UINT64_MAX : (UINT64_C(1) << n_bits) - 1;
 
-    /* Get source data. */
-    uint64_t src_data = ntohll(action->value);
-
     /* Get remaining bits of the destination field. */
-    const struct nxm_field *dst = nxm_field_lookup(ntohl(action->dst));
-    int dst_ofs = nxm_decode_ofs(action->ofs_nbits);
+    const struct nxm_field *dst = nxm_field_lookup(ntohl(dst_header));
     uint64_t dst_data = nxm_read_field(dst, flow) & ~(mask << dst_ofs);
 
     /* Get the final value. */

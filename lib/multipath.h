@@ -29,7 +29,7 @@ struct nx_action_reg_move;
  * See include/openflow/nicira-ext.h for NXAST_MULTIPATH specification.
  */
 
-int multipath_check(const struct nx_action_multipath *);
+int multipath_check(const struct nx_action_multipath *, const struct flow *);
 void multipath_execute(const struct nx_action_multipath *, struct flow *);
 
 void multipath_parse(struct nx_action_multipath *, const char *);

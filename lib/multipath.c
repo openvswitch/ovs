@@ -34,11 +34,16 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* multipath_check(). */
 int
-multipath_check(const struct nx_action_multipath *mp)
+multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 {
-    uint32_t dst = ntohl(mp->dst);
-    int ofs = nxm_decode_ofs(mp->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
+    uint32_t n_links = ntohs(mp->max_link) + 1;
+    size_t min_n_bits = log_2_floor(n_links) + 1;
+    int error;
+
+    error = nxm_dst_check(mp->dst, mp->ofs_nbits, min_n_bits, flow);
+    if (error) {
+        return error;
+    }
 
     if (!flow_hash_fields_valid(ntohs(mp->fields))) {
         VLOG_WARN_RL(&rl, "unsupported fields %"PRIu16, ntohs(mp->fields));
@@ -48,12 +53,6 @@ multipath_check(const struct nx_action_multipath *mp)
                && mp->algorithm != htons(NX_MP_ALG_ITER_HASH)) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %"PRIu16,
                      ntohs(mp->algorithm));
-    } else if (!NXM_IS_NX_REG(dst) || NXM_NX_REG_IDX(dst) >= FLOW_N_REGS) {
-        VLOG_WARN_RL(&rl, "unsupported destination field %#"PRIx32, dst);
-    } else if (ofs + n_bits > nxm_field_bits(dst)) {
-        VLOG_WARN_RL(&rl, "destination overflows output field");
-    } else if (n_bits < 16 && ntohs(mp->max_link) > (1u << n_bits)) {
-        VLOG_WARN_RL(&rl, "max_link overflows output field");
     } else {
         return 0;
     }
@@ -76,12 +75,7 @@ multipath_execute(const struct nx_action_multipath *mp, struct flow *flow)
                                         ntohs(mp->max_link) + 1,
                                         ntohl(mp->arg));
 
-    /* Store it. */
-    uint32_t *reg = &flow->regs[NXM_NX_REG_IDX(ntohl(mp->dst))];
-    int ofs = nxm_decode_ofs(mp->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
-    uint32_t mask = n_bits == 32 ? UINT32_MAX : (UINT32_C(1) << n_bits) - 1;
-    *reg = (*reg & ~(mask << ofs)) | (link << ofs);
+    nxm_reg_load(mp->dst, mp->ofs_nbits, link, flow);
 }
 
 static uint16_t
@@ -214,9 +208,6 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     mp->arg = htonl(atoi(arg));
 
     nxm_parse_field_bits(dst, &header, &ofs, &n_bits);
-    if (!NXM_IS_NX_REG(header) || NXM_NX_REG_IDX(header) >= FLOW_N_REGS) {
-        ovs_fatal(0, "%s: destination field must be register", s_);
-    }
     if (n_bits < 16 && n_links > (1u << n_bits)) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
                   "less than specified n_links %d",

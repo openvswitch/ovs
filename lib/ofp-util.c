@@ -2029,11 +2029,13 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             break;
 
         case OFPUTIL_NXAST_MULTIPATH:
-            error = multipath_check((const struct nx_action_multipath *) a);
+            error = multipath_check((const struct nx_action_multipath *) a,
+                                    flow);
             break;
 
         case OFPUTIL_NXAST_AUTOPATH:
-            error = autopath_check((const struct nx_action_autopath *) a);
+            error = autopath_check((const struct nx_action_autopath *) a,
+                                   flow);
             break;
 
         case OFPUTIL_NXAST_BUNDLE:

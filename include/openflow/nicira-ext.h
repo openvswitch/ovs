@@ -540,8 +540,7 @@ OFP_ASSERT(sizeof(struct nx_action_note) == 16);
  *
  *    3. Stores 'link' in dst[ofs:ofs+n_bits].  The format and semantics of
  *       'dst' and 'ofs_nbits' are similar to those for the NXAST_REG_LOAD
- *       action, except that 'dst' must be NXM_NX_REG(idx) for 'idx' in the
- *       switch's supported range.
+ *       action.
  *
  * The switch will reject actions that have an unknown 'fields', or an unknown
  * 'algorithm', or in which ofs+n_bits is greater than the width of 'dst', or
@@ -567,7 +566,7 @@ struct nx_action_multipath {
 
     /* Where to store the result. */
     ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
-    ovs_be32 dst;               /* Destination register. */
+    ovs_be32 dst;               /* Destination. */
 };
 OFP_ASSERT(sizeof(struct nx_action_multipath) == 32);
 
@@ -645,8 +644,7 @@ enum nx_mp_algorithm {
  *    3. Stores 'port' in dst[ofs:ofs+n_bits].
  *
  *       The format and semantics of 'dst' and 'ofs_nbits' are similar to those
- *       for the NXAST_REG_LOAD action, except that 'dst' must be
- *       NXM_NX_REG(idx) for 'idx' in the switch's supported range.
+ *       for the NXAST_REG_LOAD action.
  *
  * The switch will reject actions in which ofs+n_bits is greater than the width
  * of 'dst', with error type OFPET_BAD_ACTION, code OFPBAC_BAD_ARGUMENT.
@@ -659,7 +657,7 @@ struct nx_action_autopath {
 
     /* Where to store the result. */
     ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
-    ovs_be32 dst;               /* Destination register. */
+    ovs_be32 dst;               /* Destination. */
 
     ovs_be32 id;                /* Autopath ID. */
     ovs_be32 pad;

@@ -21,12 +21,6 @@ AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(bad, NXM_NX_REG0[[]])'], [1], [
 ])
 AT_CLEANUP
 
-AT_SETUP([autopath action bad destination])
-AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(1, NXM_OF_VLAN_TCI[[]])'], [1], [],
-  [ovs-ofctl: 1, NXM_OF_VLAN_TCI[[]]: destination field must be a register
-])
-AT_CLEANUP
-
 AT_SETUP([autopath action destination too narrow])
 AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(1,NXM_NX_REG0[[0..7]])'], [1], [],
   [ovs-ofctl: 1,NXM_NX_REG0[[0..7]]: 8-bit destination field has 256 possible values, less than required 65536
