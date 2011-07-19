@@ -345,7 +345,7 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
         /* IPv6 Neighbor Discovery. */
     case NFI_NXM_NX_ND_TARGET:
         /* We've already verified that it's an ICMPv6 message. */
-        if ((flow->tp_src != htons(ND_NEIGHBOR_SOLICIT)) 
+        if ((flow->tp_src != htons(ND_NEIGHBOR_SOLICIT))
                     && (flow->tp_src != htons(ND_NEIGHBOR_ADVERT))) {
             return NXM_BAD_PREREQ;
         }
