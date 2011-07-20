@@ -46,6 +46,7 @@ bundle_execute(const struct nx_action_bundle *nab, const struct flow *flow,
 
     flow_hash = flow_hash_fields(flow, ntohs(nab->fields), ntohs(nab->basis));
     best = -1;
+    best_hash = 0;
 
     for (i = 0; i < ntohs(nab->n_slaves); i++) {
         if (slave_enabled(bundle_get_slave(nab, i), aux)) {
