@@ -69,7 +69,8 @@ int
 bundle_check(const struct nx_action_bundle *nab, int max_ports)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    uint16_t n_slaves, fields, algorithm, slave_type, subtype;
+    uint16_t n_slaves, fields, algorithm, subtype;
+    uint32_t slave_type;
     size_t slaves_size, i;
     int error;
 
@@ -77,7 +78,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports)
     n_slaves = ntohs(nab->n_slaves);
     fields = ntohs(nab->fields);
     algorithm = ntohs(nab->algorithm);
-    slave_type = ntohs(nab->slave_type);
+    slave_type = ntohl(nab->slave_type);
     slaves_size = ntohs(nab->len) - sizeof *nab;
 
     error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
@@ -204,7 +205,7 @@ bundle_parse(struct ofpbuf *b, const char *s)
     }
 
     if (!strcasecmp(slave_type, "ofport")) {
-        nab->slave_type = htons(NXM_OF_IN_PORT);
+        nab->slave_type = htonl(NXM_OF_IN_PORT);
     } else {
         ovs_fatal(0, "%s: unknown slave_type `%s'", s, slave_type);
     }
@@ -233,7 +234,7 @@ bundle_format(const struct nx_action_bundle *nab, struct ds *s)
         algorithm = "<unknown>";
     }
 
-    switch (ntohs(nab->slave_type)) {
+    switch (ntohl(nab->slave_type)) {
     case NXM_OF_IN_PORT:
         slave_type = "ofport";
         break;
