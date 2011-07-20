@@ -2474,6 +2474,7 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
     } else {
         struct iface_delete_queues_cbdata cbdata;
         struct shash details;
+        bool queue_zero;
         size_t i;
 
         /* Configure top-level Qos for 'iface'. */
@@ -2489,15 +2490,27 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         netdev_dump_queues(iface->netdev, iface_delete_queues, &cbdata);
 
         /* Configure queues for 'iface'. */
+        queue_zero = false;
         for (i = 0; i < qos->n_queues; i++) {
             const struct ovsrec_queue *queue = qos->value_queues[i];
             unsigned int queue_id = qos->key_queues[i];
+
+            if (queue_id == 0) {
+                queue_zero = true;
+            }
 
             shash_from_ovs_idl_map(queue->key_other_config,
                                    queue->value_other_config,
                                    queue->n_other_config, &details);
             netdev_set_queue(iface->netdev, queue_id, &details);
             shash_destroy(&details);
+        }
+        if (!queue_zero) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "interface %s: QoS configured without a default "
+                         "queue (queue 0).  Packets not directed to a "
+                         "correctly configured queue may be dropped.",
+                         iface->name);
         }
     }
 
