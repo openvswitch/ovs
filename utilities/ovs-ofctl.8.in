@@ -743,6 +743,19 @@ hash with basis 0, to select between OpenFlow ports 4 and 8 using the Highest
 Random Weight algorithm.
 .IP
 Refer to \fBnicira\-ext.h\fR for more details.
+.
+.IP "\fBbundle_load(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIslave_type\fB, \fIdst\fB[\fIstart\fB..\fIend\fB], slaves:[\fIs1\fB, \fIs2\fB, ...])\fR"
+Has the same behavior as the \fBbundle\fR action, with one exception.  Instead
+of outputting to the selected slave, it writes its selection to
+\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as described
+above.
+.IP
+Example: \fBbundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[],slaves:4,8)\fR uses
+an Ethernet source hash with basis 0, to select between OpenFlow ports 4 and 8
+using the Highest Random Weight algorithm, and writes the selection to
+\fBNXM_NX_REG0[]\fR.
+.IP
+Refer to \fBnicira\-ext.h\fR for more details.
 .RE
 .
 .IP

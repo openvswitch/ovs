@@ -3228,6 +3228,13 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
                                                       slave_enabled_cb,
                                                       ctx->ofproto), 0);
             break;
+
+        case OFPUTIL_NXAST_BUNDLE_LOAD:
+            ctx->ofproto->has_bundle_action = true;
+            nab = (const struct nx_action_bundle *) ia;
+            bundle_execute_load(nab, &ctx->flow, slave_enabled_cb,
+                                ctx->ofproto);
+            break;
         }
     }
 }

@@ -2039,8 +2039,9 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             break;
 
         case OFPUTIL_NXAST_BUNDLE:
+        case OFPUTIL_NXAST_BUNDLE_LOAD:
             error = bundle_check((const struct nx_action_bundle *) a,
-                                 max_ports);
+                                 max_ports, flow);
             break;
 
         case OFPUTIL_OFPAT_STRIP_VLAN:
@@ -2116,6 +2117,7 @@ static const struct ofputil_nxast_action nxast_actions[] = {
     { OFPUTIL_NXAST_MULTIPATH,    32, 32 },
     { OFPUTIL_NXAST_AUTOPATH,     24, 24 },
     { OFPUTIL_NXAST_BUNDLE,       32, UINT_MAX },
+    { OFPUTIL_NXAST_BUNDLE_LOAD,  32, UINT_MAX },
 };
 
 static int

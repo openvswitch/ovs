@@ -278,7 +278,8 @@ enum nx_action_subtype {
     NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
     NXAST_MULTIPATH,            /* struct nx_action_multipath */
     NXAST_AUTOPATH,             /* struct nx_action_autopath */
-    NXAST_BUNDLE                /* struct nx_action_bundle */
+    NXAST_BUNDLE,               /* struct nx_action_bundle */
+    NXAST_BUNDLE_LOAD           /* struct nx_action_bundle */
 };
 
 /* Header for Nicira-defined actions. */
@@ -664,10 +665,11 @@ struct nx_action_autopath {
 };
 OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
 
-/* Action structure for NXAST_BUNDLE.
+/* Action structure for NXAST_BUNDLE and NXAST_BUNDLE_LOAD.
  *
- * NXAST_BUNDLE chooses a slave from a supplied list of options, and outputs to
- * its selection.
+ * The bundle actions choose a slave from a supplied list of options.
+ * NXAST_BUNDLE outputs to its selection.  NXAST_BUNDLE_LOAD writes its
+ * selection to a register.
  *
  * The list of possible slaves follows the nx_action_bundle structure. The size
  * of each slave is governed by its type as indicated by the 'slave_type'
@@ -693,7 +695,14 @@ OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
  *
  * The 'zero' parameter at the end of the action structure is reserved for
  * future use.  Switches are required to reject actions which have nonzero
- * bytes in the 'zero' field. */
+ * bytes in the 'zero' field.
+ *
+ * NXAST_BUNDLE actions should have 'ofs_nbits' and 'dst' zeroed.  Switches
+ * should reject actions which have nonzero bytes in either of these fields.
+ *
+ * NXAST_BUNDLE_LOAD stores the OpenFlow port number of the selected slave in
+ * dst[ofs:ofs+n_bits].  The format and semantics of 'dst' and 'ofs_nbits' are
+ * similar to those for the NXAST_REG_LOAD action. */
 struct nx_action_bundle {
     ovs_be16 type;              /* OFPAT_VENDOR. */
     ovs_be16 len;               /* Length including slaves. */
@@ -710,7 +719,10 @@ struct nx_action_bundle {
     ovs_be32 slave_type;        /* NXM_OF_IN_PORT. */
     ovs_be16 n_slaves;          /* Number of slaves. */
 
-    uint8_t zero[10];           /* Reserved. Must be zero. */
+    ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
+    ovs_be32 dst;               /* Destination. */
+
+    uint8_t zero[4];            /* Reserved. Must be zero. */
 };
 OFP_ASSERT(sizeof(struct nx_action_bundle) == 32);
 

@@ -344,6 +344,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         break;
 
     case OFPUTIL_NXAST_BUNDLE:
+    case OFPUTIL_NXAST_BUNDLE_LOAD:
         bundle_format((const struct nx_action_bundle *) a, s);
         break;
 

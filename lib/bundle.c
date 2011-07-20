@@ -88,12 +88,22 @@ bundle_execute(const struct nx_action_bundle *nab, const struct flow *flow,
     }
 }
 
+void
+bundle_execute_load(const struct nx_action_bundle *nab, struct flow *flow,
+                    bool (*slave_enabled)(uint16_t ofp_port, void *aux),
+                    void *aux)
+{
+    nxm_reg_load(nab->dst, nab->ofs_nbits,
+                 bundle_execute(nab, flow, slave_enabled, aux), flow);
+}
+
 /* Checks that 'nab' specifies a bundle action which is supported by this
  * bundle module.  Uses the 'max_ports' parameter to validate each port using
  * ofputil_check_output_port().  Returns 0 if 'nab' is supported, otherwise an
  * OpenFlow error code (as returned by ofp_mkerr()). */
 int
-bundle_check(const struct nx_action_bundle *nab, int max_ports)
+bundle_check(const struct nx_action_bundle *nab, int max_ports,
+             const struct flow *flow)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     uint16_t n_slaves, fields, algorithm, subtype;
@@ -129,6 +139,15 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports)
         }
     }
 
+    if (subtype == NXAST_BUNDLE && (nab->ofs_nbits || nab->dst)) {
+        VLOG_WARN_RL(&rl, "bundle action has nonzero reserved fields");
+        error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    }
+
+    if (subtype == NXAST_BUNDLE_LOAD) {
+        error = nxm_dst_check(nab->dst, nab->ofs_nbits, 16, flow) || error;
+    }
+
     if (slaves_size < n_slaves * sizeof(ovs_be16)) {
         VLOG_WARN_RL(&rl, "Nicira action %"PRIu16" only has %zu bytes "
                      "allocated for slaves.  %zu bytes are required for "
@@ -158,23 +177,15 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports)
     return error;
 }
 
-/* Converts a bundle action string contained in 's' to an nx_action_bundle and
- * stores it in 'b'.  Sets 'b''s l2 pointer to NULL. */
-void
-bundle_parse(struct ofpbuf *b, const char *s)
+/* Helper for bundle_parse and bundle_parse_load. */
+static void
+bundle_parse__(struct ofpbuf *b, const char *s, char **save_ptr,
+               const char *fields, const char *basis, const char *algorithm,
+               const char *slave_type, const char *dst,
+               const char *slave_delim)
 {
-    char *fields, *basis, *algorithm, *slave_type, *slave_delim;
     struct nx_action_bundle *nab;
-    char *tokstr, *save_ptr;
     uint16_t n_slaves;
-
-    save_ptr = NULL;
-    tokstr = xstrdup(s);
-    fields = strtok_r(tokstr, ", ", &save_ptr);
-    basis = strtok_r(NULL, ", ", &save_ptr);
-    algorithm = strtok_r(NULL, ", ", &save_ptr);
-    slave_type = strtok_r(NULL, ", ", &save_ptr);
-    slave_delim = strtok_r(NULL, ": ", &save_ptr);
 
     if (!slave_delim) {
         ovs_fatal(0, "%s: not enough arguments to bundle action", s);
@@ -192,7 +203,7 @@ bundle_parse(struct ofpbuf *b, const char *s)
         ovs_be16 slave_be;
         char *slave;
 
-        slave = strtok_r(NULL, ", ", &save_ptr);
+        slave = strtok_r(NULL, ", ", save_ptr);
         if (!slave || n_slaves >= BUNDLE_MAX_SLAVES) {
             break;
         }
@@ -212,7 +223,7 @@ bundle_parse(struct ofpbuf *b, const char *s)
     nab->type = htons(OFPAT_VENDOR);
     nab->len = htons(b->size - ((char *) b->l2 - (char *) b->data));
     nab->vendor = htonl(NX_VENDOR_ID);
-    nab->subtype = htons(NXAST_BUNDLE);
+    nab->subtype = htons(dst ? NXAST_BUNDLE_LOAD: NXAST_BUNDLE);
     nab->n_slaves = htons(n_slaves);
     nab->basis = htons(atoi(basis));
 
@@ -238,7 +249,60 @@ bundle_parse(struct ofpbuf *b, const char *s)
         ovs_fatal(0, "%s: unknown slave_type `%s'", s, slave_type);
     }
 
+    if (dst) {
+        uint32_t reg;
+        int ofs, n_bits;
+
+        nxm_parse_field_bits(dst, &reg, &ofs, &n_bits);
+
+        nab->dst = htonl(reg);
+        nab->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
+    }
+
     b->l2 = NULL;
+}
+
+/* Converts a bundle action string contained in 's' to an nx_action_bundle and
+ * stores it in 'b'.  Sets 'b''s l2 pointer to NULL. */
+void
+bundle_parse(struct ofpbuf *b, const char *s)
+{
+    char *fields, *basis, *algorithm, *slave_type, *slave_delim;
+    char *tokstr, *save_ptr;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(s);
+    fields = strtok_r(tokstr, ", ", &save_ptr);
+    basis = strtok_r(NULL, ", ", &save_ptr);
+    algorithm = strtok_r(NULL, ", ", &save_ptr);
+    slave_type = strtok_r(NULL, ", ", &save_ptr);
+    slave_delim = strtok_r(NULL, ": ", &save_ptr);
+
+    bundle_parse__(b, s, &save_ptr, fields, basis, algorithm, slave_type, NULL,
+                   slave_delim);
+    free(tokstr);
+}
+
+/* Converts a bundle_load action string contained in 's' to an nx_action_bundle
+ * and stores it in 'b'.  Sets 'b''s l2 pointer to NULL. */
+void
+bundle_parse_load(struct ofpbuf *b, const char *s)
+{
+    char *fields, *basis, *algorithm, *slave_type, *dst, *slave_delim;
+    char *tokstr, *save_ptr;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(s);
+    fields = strtok_r(tokstr, ", ", &save_ptr);
+    basis = strtok_r(NULL, ", ", &save_ptr);
+    algorithm = strtok_r(NULL, ", ", &save_ptr);
+    slave_type = strtok_r(NULL, ", ", &save_ptr);
+    dst = strtok_r(NULL, ", ", &save_ptr);
+    slave_delim = strtok_r(NULL, ": ", &save_ptr);
+
+    bundle_parse__(b, s, &save_ptr, fields, basis, algorithm, slave_type, dst,
+                   slave_delim);
+
     free(tokstr);
 }
 
@@ -246,7 +310,7 @@ bundle_parse(struct ofpbuf *b, const char *s)
 void
 bundle_format(const struct nx_action_bundle *nab, struct ds *s)
 {
-    const char *fields, *algorithm, *slave_type;
+    const char *action, *fields, *algorithm, *slave_type;
     size_t i;
 
     fields = flow_hash_fields_to_str(ntohs(nab->fields));
@@ -270,9 +334,28 @@ bundle_format(const struct nx_action_bundle *nab, struct ds *s)
         slave_type = "<unknown>";
     }
 
-    ds_put_format(s, "bundle(%s,%"PRIu16",%s,%s,slaves:", fields,
+    switch (ntohs(nab->subtype)) {
+    case NXAST_BUNDLE:
+        action = "bundle";
+        break;
+    case NXAST_BUNDLE_LOAD:
+        action = "bundle_load";
+        break;
+    default:
+        NOT_REACHED();
+    }
+
+    ds_put_format(s, "%s(%s,%"PRIu16",%s,%s,", action, fields,
                   ntohs(nab->basis), algorithm, slave_type);
 
+    if (nab->subtype == htons(NXAST_BUNDLE_LOAD)) {
+        nxm_format_field_bits(s, ntohl(nab->dst),
+                              nxm_decode_ofs(nab->ofs_nbits),
+                              nxm_decode_n_bits(nab->ofs_nbits));
+        ds_put_cstr(s, ",");
+    }
+
+    ds_put_cstr(s, "slaves:");
     for (i = 0; i < ntohs(nab->n_slaves); i++) {
         if (i) {
             ds_put_cstr(s, ",");

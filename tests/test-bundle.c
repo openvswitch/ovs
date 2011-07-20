@@ -71,7 +71,7 @@ parse_bundle_actions(char *actions)
     struct ofpbuf b;
 
     ofpbuf_init(&b, 0);
-    bundle_parse(&b, actions);
+    bundle_parse_load(&b, actions);
     nab = ofpbuf_steal_data(&b);
     ofpbuf_uninit(&b);
 
@@ -136,7 +136,7 @@ main(int argc, char *argv[])
         flows[i].regs[0] = OFPP_NONE;
     }
 
-    if (bundle_check(nab, 1024)) {
+    if (bundle_check(nab, 1024, flows)) {
         ovs_fatal(0, "Bundle action fails to check.");
     }
 
@@ -185,10 +185,15 @@ main(int argc, char *argv[])
         changed = 0;
         for (j = 0; j < N_FLOWS; j++) {
             struct flow *flow = &flows[j];
-            uint16_t old_slave_id;
+            uint16_t old_slave_id, ofp_port;
 
             old_slave_id = flow->regs[0];
-            flow->regs[0] = bundle_execute(nab, flow, slave_enabled_cb, &sg);
+            ofp_port = bundle_execute(nab, flow, slave_enabled_cb, &sg);
+            bundle_execute_load(nab, flow, slave_enabled_cb, &sg);
+            if (flow->regs[0] != ofp_port) {
+                ovs_fatal(0, "bundle_execute_load() and bundle_execute() "
+                          "disagree");
+            }
 
             if (flow->regs[0] != OFPP_NONE) {
                 slave_lookup(&sg, flow->regs[0])->flow_count++;

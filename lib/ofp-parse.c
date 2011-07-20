@@ -507,6 +507,8 @@ str_to_action(char *str, struct ofpbuf *b)
             autopath_parse(naa, arg);
         } else if (!strcasecmp(act, "bundle")) {
             bundle_parse(b, arg);
+        } else if (!strcasecmp(act, "bundle_load")) {
+            bundle_parse_load(b, arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "enqueue")) {
