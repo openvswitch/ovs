@@ -35,7 +35,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/uio.h>
 
 struct ofpbuf;
 struct nl_sock;
@@ -53,8 +52,6 @@ int nl_sock_join_mcgroup(struct nl_sock *, unsigned int multicast_group);
 int nl_sock_leave_mcgroup(struct nl_sock *, unsigned int multicast_group);
 
 int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
-int nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
-                  bool wait);
 int nl_sock_recv(struct nl_sock *, struct ofpbuf **, bool wait);
 int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
                      struct ofpbuf **reply);

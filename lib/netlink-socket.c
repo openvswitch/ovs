@@ -245,39 +245,6 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
     return nl_sock_send__(sock, msg, wait);
 }
 
-/* Tries to send the 'n_iov' chunks of data in 'iov' to the kernel on 'sock' as
- * a single Netlink message.  (The message must be fully formed and not require
- * finalization of its nlmsg_len or nlmsg_pid fields.)
- *
- * Returns 0 if successful, otherwise a positive errno value.  If 'wait' is
- * true, then the send will wait until buffer space is ready; otherwise,
- * returns EAGAIN if the 'sock' send buffer is full. */
-int
-nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
-              bool wait)
-{
-    struct msghdr msg;
-    int error;
-
-    COVERAGE_INC(netlink_send);
-    memset(&msg, 0, sizeof msg);
-    msg.msg_iov = (struct iovec *) iov;
-    msg.msg_iovlen = n_iov;
-    do {
-        int retval;
-        retval = sendmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
-        error = retval < 0 ? errno : 0;
-    } while (error == EINTR);
-    if (error != EAGAIN) {
-        log_nlmsg(__func__, error, iov[0].iov_base, iov[0].iov_len,
-                  sock->protocol);
-        if (!error) {
-            COVERAGE_INC(netlink_sent);
-        }
-    }
-    return error;
-}
-
 /* This stress option is useful for testing that OVS properly tolerates
  * -ENOBUFS on NetLink sockets.  Such errors are unavoidable because they can
  * occur if the kernel cannot temporarily allocate enough GFP_ATOMIC memory to
