@@ -247,7 +247,7 @@ open_vconn__(const char *name, const char *default_suffix,
         }
         open_vconn_socket(socket_name, vconnp);
     } else {
-        ovs_fatal(0, "%s is not a valid connection method", name);
+        ovs_fatal(0, "%s is not a bridge or a socket", name);
     }
 
     free(bridge_path);
