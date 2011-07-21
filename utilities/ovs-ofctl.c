@@ -233,7 +233,7 @@ open_vconn__(const char *name, const char *default_suffix,
     free(datapath_name);
     free(datapath_type);
 
-    if (strstr(name, ":")) {
+    if (strchr(name, ':')) {
         run(vconn_open_block(name, OFP_VERSION, vconnp),
             "connecting to %s", name);
     } else if (!stat(name, &s) && S_ISSOCK(s.st_mode)) {
