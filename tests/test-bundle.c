@@ -135,6 +135,10 @@ main(int argc, char *argv[])
         flows[i].regs[0] = OFPP_NONE;
     }
 
+    if (bundle_check(nab, 1024)) {
+        ovs_fatal(0, "Bundle action fails to check.");
+    }
+
     /* Cycles through each possible liveness permutation for the given
      * n_slaves.  The initial state is equivalent to all slaves down, so we
      * skip it by starting at i = 1. We do one extra iteration to cover
