@@ -21,6 +21,30 @@ OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 OFPROTO_STOP
 AT_CLEANUP
 
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - port stats])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -vANY:ANY:WARN dump-ports br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_PORT reply: 1 ports
+  port 65534: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=0, bytes=0, drop=0, errs=0, coll=0
+])
+OFPROTO_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - queue stats])
+OFPROTO_START
+AT_CHECK([ovs-ofctl -vANY:ANY:WARN queue-stats br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_QUEUE reply: 0 queues
+])
+OFPROTO_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - mod-port])
 OFPROTO_START
 for command_config_state in \

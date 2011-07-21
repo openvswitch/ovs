@@ -272,13 +272,14 @@ open_vconn(const char *name, struct vconn **vconnp)
 }
 
 static void *
-alloc_stats_request(size_t body_len, uint16_t type, struct ofpbuf **bufferp)
+alloc_stats_request(size_t rq_len, uint16_t type, struct ofpbuf **bufferp)
 {
     struct ofp_stats_msg *rq;
-    rq = make_openflow(sizeof *rq + body_len, OFPT_STATS_REQUEST, bufferp);
+
+    rq = make_openflow(rq_len, OFPT_STATS_REQUEST, bufferp);
     rq->type = htons(type);
     rq->flags = htons(0);
-    return rq + 1;
+    return rq;
 }
 
 static void
@@ -344,7 +345,7 @@ static void
 dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
 {
     struct ofpbuf *request;
-    alloc_stats_request(0, stats_type, &request);
+    alloc_stats_request(sizeof(struct ofp_stats_msg), stats_type, &request);
     dump_stats_transaction(vconn_name, request);
 }
 
