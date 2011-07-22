@@ -149,7 +149,7 @@ mac_learning_set_flood_vlans(struct mac_learning *ml,
 static bool
 is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
 {
-    return vlan_bitmap_contains(ml->flood_vlans, vlan);
+    return !ml->flood_vlans || !bitmap_is_set(ml->flood_vlans, vlan);
 }
 
 /* Returns true if 'src_mac' may be learned on 'vlan' for 'ml'.
