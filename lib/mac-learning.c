@@ -68,23 +68,15 @@ make_unknown_mac_tag(const struct mac_learning *ml,
     return tag_create_deterministic(h);
 }
 
-static struct list *
-mac_table_bucket(const struct mac_learning *ml,
-                 const uint8_t mac[ETH_ADDR_LEN],
-                 uint16_t vlan)
-{
-    uint32_t hash = mac_table_hash(mac, vlan);
-    const struct list *list = &ml->table[hash & MAC_HASH_MASK];
-    return (struct list *) list;
-}
-
 static struct mac_entry *
-search_bucket(struct list *bucket, const uint8_t mac[ETH_ADDR_LEN],
-              uint16_t vlan)
+mac_entry_lookup(const struct mac_learning *ml,
+                 const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
 {
     struct mac_entry *e;
-    LIST_FOR_EACH (e, hash_node, bucket) {
-        if (eth_addr_equals(e->mac, mac) && e->vlan == vlan) {
+
+    HMAP_FOR_EACH_WITH_HASH (e, hmap_node, mac_table_hash(mac, vlan),
+                             &ml->table) {
+        if (e->vlan == vlan && eth_addr_equals(e->mac, mac)) {
             return e;
         }
     }
@@ -116,9 +108,7 @@ mac_learning_create(void)
     ml = xmalloc(sizeof *ml);
     list_init(&ml->lrus);
     list_init(&ml->free);
-    for (i = 0; i < MAC_HASH_SIZE; i++) {
-        list_init(&ml->table[i]);
-    }
+    hmap_init(&ml->table);
     for (i = 0; i < MAC_MAX; i++) {
         struct mac_entry *s = &ml->entries[i];
         list_push_front(&ml->free, &s->lru_node);
@@ -133,6 +123,7 @@ void
 mac_learning_destroy(struct mac_learning *ml)
 {
     if (ml) {
+        hmap_destroy(&ml->table);
         bitmap_free(ml->flood_vlans);
         free(ml);
     }
@@ -185,18 +176,16 @@ mac_learning_insert(struct mac_learning *ml,
                     const uint8_t src_mac[ETH_ADDR_LEN], uint16_t vlan)
 {
     struct mac_entry *e;
-    struct list *bucket;
 
-    bucket = mac_table_bucket(ml, src_mac, vlan);
-    e = search_bucket(bucket, src_mac, vlan);
+    e = mac_entry_lookup(ml, src_mac, vlan);
     if (!e) {
         if (!list_is_empty(&ml->free)) {
             e = mac_entry_from_lru_node(ml->free.next);
         } else {
             e = mac_entry_from_lru_node(ml->lrus.next);
-            list_remove(&e->hash_node);
+            hmap_remove(&ml->table, &e->hmap_node);
         }
-        list_push_front(bucket, &e->hash_node);
+        hmap_insert(&ml->table, &e->hmap_node, mac_table_hash(src_mac, vlan));
         memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         e->vlan = vlan;
         e->tag = 0;
@@ -247,8 +236,8 @@ mac_learning_lookup(const struct mac_learning *ml,
          * rarely that we revalidate every flow when it changes. */
         return NULL;
     } else {
-        struct mac_entry *e = search_bucket(mac_table_bucket(ml, dst, vlan),
-                                            dst, vlan);
+        struct mac_entry *e = mac_entry_lookup(ml, dst, vlan);
+
         assert(e == NULL || e->tag != 0);
         if (tag) {
             /* Tag either the learned port or the lack thereof. */
@@ -263,7 +252,7 @@ mac_learning_lookup(const struct mac_learning *ml,
 void
 mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
 {
-    list_remove(&e->hash_node);
+    hmap_remove(&ml->table, &e->hmap_node);
     list_remove(&e->lru_node);
     list_push_front(&ml->free, &e->lru_node);
 }
