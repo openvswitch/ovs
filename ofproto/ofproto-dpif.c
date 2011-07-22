@@ -2784,7 +2784,7 @@ send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
 
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
-static bool xlate_normal(struct action_xlate_ctx *);
+static void xlate_normal(struct action_xlate_ctx *);
 
 static void
 commit_odp_actions(struct action_xlate_ctx *ctx)
@@ -3773,10 +3773,7 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
     return true;
 }
 
-/* If the composed actions may be applied to any packet in the given 'flow',
- * returns true.  Otherwise, the actions should only be applied to 'packet', or
- * not at all, if 'packet' was NULL. */
-static bool
+static void
 xlate_normal(struct action_xlate_ctx *ctx)
 {
     struct ofbundle *in_bundle;
@@ -3807,7 +3804,8 @@ xlate_normal(struct action_xlate_ctx *ctx)
          * of time where we could learn from a packet reflected on a bond and
          * blackhole packets before the learning table is updated to reflect
          * the correct port. */
-        return false;
+        ctx->may_set_up_flow = false;
+        return;
     } else {
         out_bundle = OFBUNDLE_FLOOD;
     }
@@ -3821,8 +3819,6 @@ done:
     if (in_bundle) {
         compose_actions(ctx, vlan, in_bundle, out_bundle);
     }
-
-    return true;
 }
 
 static bool
