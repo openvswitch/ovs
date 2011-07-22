@@ -16,8 +16,11 @@
 
 #include <config.h>
 #include "util.h"
+#include <assert.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -606,4 +609,36 @@ english_list_delimiter(size_t index, size_t total)
             : index < total - 1 ? ", "
             : total > 2 ? ", and "
             : " and ");
+}
+
+/* Given a 32 bit word 'n', calculates floor(log_2('n')).  This is equivalent
+ * to finding the bit position of the most significant one bit in 'n'.  It is
+ * an error to call this function with 'n' == 0. */
+int
+log_2_floor(uint32_t n)
+{
+    assert(n);
+
+#if !defined(UINT_MAX) || !defined(UINT32_MAX)
+#error "Someone screwed up the #includes."
+#elif __GNUC__ >= 4 && UINT_MAX == UINT32_MAX
+    return 31 - __builtin_clz(n);
+#else
+    {
+        int log = 0;
+
+#define BIN_SEARCH_STEP(BITS)                   \
+        if (n >= (1 << BITS)) {                 \
+            log += BITS;                        \
+            n >>= BITS;                         \
+        }
+        BIN_SEARCH_STEP(16);
+        BIN_SEARCH_STEP(8);
+        BIN_SEARCH_STEP(4);
+        BIN_SEARCH_STEP(2);
+        BIN_SEARCH_STEP(1);
+#undef BIN_SEARCH_STEP
+        return log;
+    }
+#endif
 }

@@ -297,6 +297,10 @@ tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
 
+noinst_PROGRAMS += tests/test-util
+tests_test_util_SOURCES = tests/test-util.c
+tests_test_util_LDADD = lib/libopenvswitch.a
+
 noinst_PROGRAMS += tests/test-uuid
 tests_test_uuid_SOURCES = tests/test-uuid.c
 tests_test_uuid_LDADD = lib/libopenvswitch.a
