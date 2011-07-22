@@ -46,9 +46,10 @@ mac_entry_age(const struct mac_entry *e)
 }
 
 static uint32_t
-mac_table_hash(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
+mac_table_hash(const struct mac_learning *ml, const uint8_t mac[ETH_ADDR_LEN],
+               uint16_t vlan)
 {
-    return hash_bytes(mac, ETH_ADDR_LEN, vlan);
+    return hash_bytes(mac, ETH_ADDR_LEN, vlan ^ ml->secret);
 }
 
 static struct mac_entry *
@@ -64,8 +65,7 @@ static tag_type
 make_unknown_mac_tag(const struct mac_learning *ml,
                      const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
 {
-    uint32_t h = hash_int(ml->secret, mac_table_hash(mac, vlan));
-    return tag_create_deterministic(h);
+    return tag_create_deterministic(mac_table_hash(ml, mac, vlan));
 }
 
 static struct mac_entry *
@@ -74,7 +74,7 @@ mac_entry_lookup(const struct mac_learning *ml,
 {
     struct mac_entry *e;
 
-    HMAP_FOR_EACH_WITH_HASH (e, hmap_node, mac_table_hash(mac, vlan),
+    HMAP_FOR_EACH_WITH_HASH (e, hmap_node, mac_table_hash(ml, mac, vlan),
                              &ml->table) {
         if (e->vlan == vlan && eth_addr_equals(e->mac, mac)) {
             return e;
@@ -179,13 +179,16 @@ mac_learning_insert(struct mac_learning *ml,
 
     e = mac_entry_lookup(ml, src_mac, vlan);
     if (!e) {
+        uint32_t hash = mac_table_hash(ml, src_mac, vlan);
+
         if (!list_is_empty(&ml->free)) {
             e = mac_entry_from_lru_node(ml->free.next);
         } else {
             e = mac_entry_from_lru_node(ml->lrus.next);
             hmap_remove(&ml->table, &e->hmap_node);
         }
-        hmap_insert(&ml->table, &e->hmap_node, mac_table_hash(src_mac, vlan));
+
+        hmap_insert(&ml->table, &e->hmap_node, hash);
         memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         e->vlan = vlan;
         e->tag = 0;
