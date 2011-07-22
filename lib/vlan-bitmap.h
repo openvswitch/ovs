@@ -22,20 +22,13 @@
 
 /* A "VLAN bitmap" is a 4096-bit bitmap that represents a set.  A 1-bit
  * indicates that the respective VLAN is a member of the set, a 0-bit indicates
- * that it is not.  There is one wrinkle: NULL indicates that every VLAN is a
- * member of the set.
+ * that it is not.  There is one wrinkle: NULL is a valid value that indicates
+ * either that all VLANs are or are not members, depending on the vlan_bitmap.
  *
  * This is empirically a useful data structure. */
 
 unsigned long *vlan_bitmap_from_array(const int64_t *vlans, size_t n_vlans);
 bool vlan_bitmap_equal(const unsigned long *a, const unsigned long *b);
-
-/* Returns true if 'vid', in the range [0,4095], is a member of 'vlans'. */
-static inline bool
-vlan_bitmap_contains(const unsigned long *vlans, uint16_t vid)
-{
-    return !vlans || bitmap_is_set(vlans, vid);
-}
 
 /* Returns a new copy of 'vlans'. */
 static inline unsigned long *

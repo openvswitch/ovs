@@ -3376,7 +3376,8 @@ dst_is_duplicate(const struct dst_set *set, const struct dst *test)
 static bool
 ofbundle_trunks_vlan(const struct ofbundle *bundle, uint16_t vlan)
 {
-    return bundle->vlan < 0 && vlan_bitmap_contains(bundle->trunks, vlan);
+    return (bundle->vlan < 0
+            && (!bundle->trunks || bitmap_is_set(bundle->trunks, vlan)));
 }
 
 static bool
@@ -3422,7 +3423,7 @@ compose_dsts(struct action_xlate_ctx *ctx, uint16_t vlan,
 static bool
 vlan_is_mirrored(const struct ofmirror *m, int vlan)
 {
-    return vlan_bitmap_contains(m->vlans, vlan);
+    return !m->vlans || bitmap_is_set(m->vlans, vlan);
 }
 
 /* Returns true if a packet with Ethernet destination MAC 'dst' may be mirrored
