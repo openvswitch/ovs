@@ -74,7 +74,7 @@ mac_table_bucket(const struct mac_learning *ml,
                  uint16_t vlan)
 {
     uint32_t hash = mac_table_hash(mac, vlan);
-    const struct list *list = &ml->table[hash & MAC_HASH_BITS];
+    const struct list *list = &ml->table[hash & MAC_HASH_MASK];
     return (struct list *) list;
 }
 
