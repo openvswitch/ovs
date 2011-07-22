@@ -103,16 +103,10 @@ struct mac_learning *
 mac_learning_create(void)
 {
     struct mac_learning *ml;
-    int i;
 
     ml = xmalloc(sizeof *ml);
     list_init(&ml->lrus);
-    list_init(&ml->free);
     hmap_init(&ml->table);
-    for (i = 0; i < MAC_MAX; i++) {
-        struct mac_entry *s = &ml->entries[i];
-        list_push_front(&ml->free, &s->lru_node);
-    }
     ml->secret = random_uint32();
     ml->flood_vlans = NULL;
     return ml;
@@ -123,7 +117,14 @@ void
 mac_learning_destroy(struct mac_learning *ml)
 {
     if (ml) {
+        struct mac_entry *e, *next;
+
+        HMAP_FOR_EACH_SAFE (e, next, hmap_node, &ml->table) {
+            hmap_remove(&ml->table, &e->hmap_node);
+            free(e);
+        }
         hmap_destroy(&ml->table);
+
         bitmap_free(ml->flood_vlans);
         free(ml);
     }
@@ -181,22 +182,22 @@ mac_learning_insert(struct mac_learning *ml,
     if (!e) {
         uint32_t hash = mac_table_hash(ml, src_mac, vlan);
 
-        if (!list_is_empty(&ml->free)) {
-            e = mac_entry_from_lru_node(ml->free.next);
-        } else {
-            e = mac_entry_from_lru_node(ml->lrus.next);
-            hmap_remove(&ml->table, &e->hmap_node);
+        if (hmap_count(&ml->table) >= MAC_MAX) {
+            get_lru(ml, &e);
+            mac_learning_expire(ml, e);
         }
 
+        e = xmalloc(sizeof *e);
         hmap_insert(&ml->table, &e->hmap_node, hash);
         memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         e->vlan = vlan;
         e->tag = 0;
         e->grat_arp_lock = TIME_MIN;
+    } else {
+        list_remove(&e->lru_node);
     }
 
     /* Mark 'e' as recently used. */
-    list_remove(&e->lru_node);
     list_push_back(&ml->lrus, &e->lru_node);
     e->expires = time_now() + MAC_ENTRY_IDLE_TIME;
 
@@ -250,14 +251,13 @@ mac_learning_lookup(const struct mac_learning *ml,
     }
 }
 
-/* Expires 'e' from the 'ml' hash table.  'e' must not already be on the free
- * list. */
+/* Expires 'e' from the 'ml' hash table. */
 void
 mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
 {
     hmap_remove(&ml->table, &e->hmap_node);
     list_remove(&e->lru_node);
-    list_push_front(&ml->free, &e->lru_node);
+    free(e);
 }
 
 /* Expires all the mac-learning entries in 'ml'.  The tags in 'ml' are
@@ -270,6 +270,7 @@ mac_learning_flush(struct mac_learning *ml)
     while (get_lru(ml, &e)){
         mac_learning_expire(ml, e);
     }
+    hmap_shrink(&ml->table);
 }
 
 void

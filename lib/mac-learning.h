@@ -36,7 +36,7 @@
 /* A MAC learning table entry. */
 struct mac_entry {
     struct hmap_node hmap_node; /* Node in a mac_learning hmap. */
-    struct list lru_node;       /* Element in 'lrus' or 'free' list. */
+    struct list lru_node;       /* Element in 'lrus' list. */
     time_t expires;             /* Expiration time. */
     time_t grat_arp_lock;       /* Gratuitous ARP lock expiration time. */
     uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
@@ -76,10 +76,8 @@ static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
 /* MAC learning table. */
 struct mac_learning {
     struct hmap table;          /* Learning table. */
-    struct list free;           /* Not-in-use entries. */
     struct list lrus;           /* In-use entries, least recently used at the
                                    front, most recently used at the back. */
-    struct mac_entry entries[MAC_MAX]; /* All entries. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
 };
