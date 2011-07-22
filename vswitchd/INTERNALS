@@ -129,3 +129,88 @@ least 0.1.
 Currently, "significantly more loaded" means that H must carry at
 least 1 Mbps more traffic, and that traffic must be at least 3%
 greater than L's.
+
+Bond Balance Modes
+------------------
+
+Each bond balancing mode has different considerations, described
+below.
+
+LACP Bonding
+------------
+
+LACP bonding requires the remote switch to implement LACP, but it is
+otherwise very simple in that, after LACP negotiation is complete,
+there is no need for special handling of received packets.
+
+SLB Bonding
+-----------
+
+SLB bonding allows a limited form of load balancing without the remote
+switch's knowledge or cooperation.  The basics of SLB are simple.  SLB
+assigns each source MAC+VLAN pair to a link and transmits all packets
+from that MAC+VLAN through that link.  Learning in the remote switch
+causes it to send packets to that MAC+VLAN through the same link.
+
+SLB bonding has the following complications:
+
+   0. When the remote switch has not learned the MAC for the
+      destination of a unicast packet and hence floods the packet to
+      all of the links on the SLB bond, Open vSwitch will forward
+      duplicate packets, one per link, to each other switch port.
+
+      Open vSwitch does not solve this problem.
+
+   1. When the remote switch receives a multicast or broadcast packet
+      from a port not on the SLB bond, it will forward it to all of
+      the links in the SLB bond.  This would cause packet duplication
+      if not handled specially.
+
+      Open vSwitch avoids packet duplication by accepting multicast
+      and broadcast packets on only the active slave, and dropping
+      multicast and broadcast packets on all other slaves.
+
+   2. When Open vSwitch forwards a multicast or broadcast packet to a
+      link in the SLB bond other than the active slave, the remote
+      switch will forward it to all of the other links in the SLB
+      bond, including the active slave.  Without special handling,
+      this would mean that Open vSwitch would forward a second copy of
+      the packet to each switch port (other than the bond), including
+      the port that originated the packet.
+
+      Open vSwitch deals with this case by dropping packets received
+      on any SLB bonded link that have a source MAC+VLAN that has been
+      learned on any other port.  (This means that SLB as implemented
+      in Open vSwitch relies critically on MAC learning.  Notably, SLB
+      is incompatible with the "flood_vlans" feature.)
+
+   3. Suppose that a MAC+VLAN moves to an SLB bond from another port
+      (e.g. when a VM is migrated from this hypervisor to a different
+      one).  Without additional special handling, Open vSwitch will
+      not notice until the MAC learning entry expires, up to 60
+      seconds later as a consequence of rule #2.
+
+      Open vSwitch avoids a 60-second delay by listening for
+      gratuitous ARPs, which VMs commonly emit upon migration.  As an
+      exception to rule #2, a gratuitous ARP received on an SLB bond
+      is not dropped and updates the MAC learning table in the usual
+      way.  (If a move does not trigger a gratuitous ARP, or if the
+      gratuitous ARP is lost in the network, then a 60-second delay
+      still occurs.)
+
+   4. Suppose that a MAC+VLAN moves from an SLB bond to another port
+      (e.g. when a VM is migrated from a different hypervisor to this
+      one), that the MAC+VLAN emits a gratuitous ARP, and that Open
+      vSwitch forwards that gratuitous ARP to a link in the SLB bond
+      other than the active slave.  The remote switch will forward the
+      gratuitous ARP to all of the other links in the SLB bond,
+      including the active slave.  Without additional special
+      handling, this would mean that Open vSwitch would learn that the
+      MAC+VLAN was located on the SLB bond, as a consequence of rule
+      #3.
+
+      Open vSwitch avoids this problem by "locking" the MAC learning
+      table entry for a MAC+VLAN from which a gratuitous ARP was
+      received from a non-SLB bond port.  For 5 seconds, a locked MAC
+      learning table entry will not be updated based on a gratuitous
+      ARP received on a SLB bond.
