@@ -82,6 +82,7 @@ EXTRA_DIST += \
 	soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
+ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-read-only: t -*-\n'
 
 SUFFIXES += .in
 .in:

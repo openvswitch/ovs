@@ -20,11 +20,13 @@ EXTRA_DIST += \
 
 
 $(srcdir)/rhel/openvswitch-kmod-rhel5.spec: rhel/openvswitch-kmod-rhel5.spec.in $(top_builddir)/config.status
-	sed -e 's,[@]VERSION[@],$(VERSION),g' < $< > $@
+	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+		< $(srcdir)/rhel/openvswitch-kmod-rhel5.spec.in > $@
 
 $(srcdir)/rhel/openvswitch-kmod-rhel6.spec: rhel/openvswitch-kmod-rhel6.spec.in $(top_builddir)/config.status
-
-	sed -e 's,[@]VERSION[@],$(VERSION),g' < $< > $@
+	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+		< $(srcdir)/rhel/openvswitch-kmod-rhel6.spec.in > $@
 
 $(srcdir)/rhel/openvswitch.spec: rhel/openvswitch.spec.in $(top_builddir)/config.status
-	sed -e 's,[@]VERSION[@],$(VERSION),g' < $< > $@
+	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+		< $(srcdir)/rhel/openvswitch.spec.in > $@
