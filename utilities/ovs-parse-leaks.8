@@ -1,7 +1,7 @@
 .TH ovs\-parse\-leaks 8 "August 2010" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
-Bovs\-parse\-leaks \- parses OVS leak checker log files
+ovs\-parse\-leaks \- parses OVS leak checker log files
 .
 .SH SYNOPSIS
 \fBovs\-parse\-leaks\fR [\fIbinary\fR] \fB< \fIlog\fR
@@ -22,12 +22,14 @@ argument.  For best results, the binary should have debug symbols.
 .SH OPTIONS
 .TP
 \fB\-\-help\fR
-Prints a help usage message and exits.
+Prints a usage message and exits.
 .SH BUGS
 The output can be hard to interpret, especially for a daemon that does
-not exit in normal operation.
+not exit in normal operation.  Using \fBovs\-appctl\fR(8) to invoke
+the \fBexit\fR command that some Open vSwitch daemons support
+sometimes helps with this.
 .PP
-\fBovs\-parse\-leaks\fR usually incorrectly reports one or more "bad
-frees of not-allocated address" errors at the beginning of output.
+\fBovs\-parse\-leaks\fR usually incorrectly reports one or more ``bad
+frees of not-allocated address'' errors at the beginning of output.
 These reflect frees of data that were allocated before the leak
 checker was turned on during program initialization.
