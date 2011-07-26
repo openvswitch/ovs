@@ -39,6 +39,7 @@
 #include "ovsdb/ovsdb.h"
 #include "ovsdb/query.h"
 #include "ovsdb/row.h"
+#include "ovsdb/server.h"
 #include "ovsdb/table.h"
 #include "ovsdb/transaction.h"
 #include "ovsdb/trigger.h"
@@ -1292,7 +1293,7 @@ static void
 do_trigger(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
-    struct list completions;
+    struct ovsdb_session session;
     struct json *json;
     struct ovsdb *db;
     long long int now;
@@ -1305,7 +1306,8 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
     json_destroy(json);
     db = ovsdb_create(schema);
 
-    list_init(&completions);
+    ovsdb_session_init(&session, db);
+
     now = 0;
     number = 0;
     for (i = 2; i < argc; i++) {
@@ -1319,7 +1321,7 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
-            ovsdb_trigger_init(db, &t->trigger, params, &completions, now);
+            ovsdb_trigger_init(&session, &t->trigger, params, now);
             t->number = number++;
             if (ovsdb_trigger_is_complete(&t->trigger)) {
                 do_trigger_dump(t, now, "immediate");
@@ -1329,8 +1331,8 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
         }
 
         ovsdb_trigger_run(db, now);
-        while (!list_is_empty(&completions)) {
-            do_trigger_dump(CONTAINER_OF(list_pop_front(&completions),
+        while (!list_is_empty(&session.completions)) {
+            do_trigger_dump(CONTAINER_OF(list_pop_front(&session.completions),
                                          struct test_trigger, trigger.node),
                             now, "delayed");
         }

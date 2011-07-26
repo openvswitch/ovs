@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,17 @@
 struct ovsdb;
 
 struct ovsdb_trigger {
-    struct list node;           /* !result: in struct ovsdb "triggers" list;
-                                 * result: in completion list. */
-    struct list *completion;    /* Completion list. */
+    struct ovsdb_session *session; /* Session that owns this trigger. */
+    struct list node;           /* !result: in session->db->triggers;
+                                 * result: in session->completions. */
     struct json *request;       /* Database request. */
     struct json *result;        /* Result (null if none yet). */
     long long int created;      /* Time created. */
     long long int timeout_msec; /* Max wait duration. */
 };
 
-void ovsdb_trigger_init(struct ovsdb *, struct ovsdb_trigger *,
-                        struct json *request, struct list *completion,
-                        long long int now);
+void ovsdb_trigger_init(struct ovsdb_session *, struct ovsdb_trigger *,
+                        struct json *request, long long int now);
 void ovsdb_trigger_destroy(struct ovsdb_trigger *);
 
 bool ovsdb_trigger_is_complete(const struct ovsdb_trigger *);

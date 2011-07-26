@@ -21,6 +21,8 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/query.h \
 	ovsdb/row.c \
 	ovsdb/row.h \
+	ovsdb/server.c \
+	ovsdb/server.h \
 	ovsdb/table.c \
 	ovsdb/table.h \
 	ovsdb/trigger.c \

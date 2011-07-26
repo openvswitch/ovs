@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,23 +24,23 @@
 #include "jsonrpc.h"
 #include "ovsdb.h"
 #include "poll-loop.h"
+#include "server.h"
 
-static bool ovsdb_trigger_try(struct ovsdb *db, struct ovsdb_trigger *,
-                              long long int now);
+static bool ovsdb_trigger_try(struct ovsdb_trigger *, long long int now);
 static void ovsdb_trigger_complete(struct ovsdb_trigger *);
 
 void
-ovsdb_trigger_init(struct ovsdb *db, struct ovsdb_trigger *trigger,
-                   struct json *request, struct list *completion,
-                   long long int now)
+ovsdb_trigger_init(struct ovsdb_session *session,
+                   struct ovsdb_trigger *trigger,
+                   struct json *request, long long int now)
 {
-    list_push_back(&db->triggers, &trigger->node);
-    trigger->completion = completion;
+    trigger->session = session;
+    list_push_back(&trigger->session->db->triggers, &trigger->node);
     trigger->request = request;
     trigger->result = NULL;
     trigger->created = now;
     trigger->timeout_msec = LLONG_MAX;
-    ovsdb_trigger_try(db, trigger, now);
+    ovsdb_trigger_try(trigger, now);
 }
 
 void
@@ -75,7 +75,7 @@ ovsdb_trigger_run(struct ovsdb *db, long long int now)
     db->run_triggers = false;
     LIST_FOR_EACH_SAFE (t, next, node, &db->triggers) {
         if (run_triggers || now - t->created >= t->timeout_msec) {
-            ovsdb_trigger_try(db, t, now);
+            ovsdb_trigger_try(t, now);
         }
     }
 }
@@ -108,10 +108,10 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
 }
 
 static bool
-ovsdb_trigger_try(struct ovsdb *db, struct ovsdb_trigger *t, long long int now)
+ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
-    t->result = ovsdb_execute(db, t->request, now - t->created,
-                              &t->timeout_msec);
+    t->result = ovsdb_execute(t->session->db, t->request,
+                              now - t->created, &t->timeout_msec);
     if (t->result) {
         ovsdb_trigger_complete(t);
         return true;
@@ -125,5 +125,5 @@ ovsdb_trigger_complete(struct ovsdb_trigger *t)
 {
     assert(t->result != NULL);
     list_remove(&t->node);
-    list_push_back(t->completion, &t->node);
+    list_push_back(&t->session->completions, &t->node);
 }
