@@ -4,14 +4,14 @@ bin_PROGRAMS += \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
 	utilities/ovs-vsctl
-bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
+bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl utilities/ovs-parse-leaks
 if HAVE_PYTHON
 bin_SCRIPTS += \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpundump \
 	utilities/ovs-vlan-test
 endif
-noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
+noinst_SCRIPTS += utilities/ovs-pki-cgi
 scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh utilities/ovs-save
 
 EXTRA_DIST += \

@@ -361,6 +361,7 @@ exit 0
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
+/usr/bin/ovs-parse-leaks
 /usr/bin/ovs-pcap
 /usr/bin/ovs-tcpundump
 /usr/bin/ovs-vlan-test
