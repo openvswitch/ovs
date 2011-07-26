@@ -3680,6 +3680,10 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     case TXN_ERROR:
         vsctl_fatal("transaction error: %s", error);
 
+    case TXN_NOT_LOCKED:
+        /* Should not happen--we never call ovsdb_idl_set_lock(). */
+        vsctl_fatal("database not locked");
+
     default:
         NOT_REACHED();
     }

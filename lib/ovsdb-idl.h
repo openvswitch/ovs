@@ -50,6 +50,10 @@ void ovsdb_idl_destroy(struct ovsdb_idl *);
 bool ovsdb_idl_run(struct ovsdb_idl *);
 void ovsdb_idl_wait(struct ovsdb_idl *);
 
+void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
+bool ovsdb_idl_has_lock(const struct ovsdb_idl *);
+bool ovsdb_idl_is_lock_contended(const struct ovsdb_idl *);
+
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
@@ -119,6 +123,7 @@ enum ovsdb_idl_txn_status {
     TXN_TRY_AGAIN,              /* Commit failed because a "verify" operation
                                  * reported an inconsistency, due to a network
                                  * problem, or other transient failure. */
+    TXN_NOT_LOCKED,             /* Server hasn't given us the lock yet. */
     TXN_ERROR                   /* Commit failed due to a hard error. */
 };
 

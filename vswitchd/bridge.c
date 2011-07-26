@@ -216,6 +216,7 @@ bridge_init(const char *remote)
 {
     /* Create connection to database. */
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class, true);
+    ovsdb_idl_set_lock(idl, "ovs_vswitchd");
 
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_cur_cfg);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_statistics);
@@ -1391,6 +1392,24 @@ bridge_run(void)
     bool database_changed;
     struct bridge *br;
 
+    /* (Re)configure if necessary. */
+    database_changed = ovsdb_idl_run(idl);
+    if (ovsdb_idl_is_lock_contended(idl)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        struct bridge *br, *next_br;
+
+        VLOG_ERR_RL(&rl, "another ovs-vswitchd process is running, "
+                    "disabling this process until it goes away");
+
+        HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
+            bridge_destroy(br);
+        }
+        return;
+    } else if (!ovsdb_idl_has_lock(idl)) {
+        return;
+    }
+    cfg = ovsrec_open_vswitch_first(idl);
+
     /* Let each bridge do the work that it needs to do. */
     datapath_destroyed = false;
     HMAP_FOR_EACH (br, node, &all_bridges) {
@@ -1402,10 +1421,6 @@ bridge_run(void)
             datapath_destroyed = true;
         }
     }
-
-    /* (Re)configure if necessary. */
-    database_changed = ovsdb_idl_run(idl);
-    cfg = ovsrec_open_vswitch_first(idl);
 
     /* Re-configure SSL.  We do this on every trip through the main loop,
      * instead of just when the database changes, because the contents of the
@@ -1495,16 +1510,18 @@ bridge_run(void)
 void
 bridge_wait(void)
 {
-    struct bridge *br;
-
-    HMAP_FOR_EACH (br, node, &all_bridges) {
-        ofproto_wait(br->ofproto);
-    }
     ovsdb_idl_wait(idl);
-    poll_timer_wait_until(stats_timer);
+    if (!hmap_is_empty(&all_bridges)) {
+        struct bridge *br;
 
-    if (db_limiter > time_msec()) {
-        poll_timer_wait_until(db_limiter);
+        HMAP_FOR_EACH (br, node, &all_bridges) {
+            ofproto_wait(br->ofproto);
+        }
+        poll_timer_wait_until(stats_timer);
+
+        if (db_limiter > time_msec()) {
+            poll_timer_wait_until(db_limiter);
+        }
     }
 }
 
