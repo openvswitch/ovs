@@ -30,6 +30,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dirs.h"
 #include "dummy.h"
 #include "leak-checker.h"
 #include "netdev.h"
@@ -52,7 +53,7 @@ VLOG_DEFINE_THIS_MODULE(vswitchd);
 
 static unixctl_cb_func ovs_vswitchd_exit;
 
-static const char *parse_options(int argc, char *argv[]);
+static char *parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
 int
@@ -60,7 +61,7 @@ main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
     struct signal *sighup;
-    const char *remote;
+    char *remote;
     bool exiting;
     int retval;
 
@@ -82,6 +83,8 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", ovs_vswitchd_exit, &exiting);
 
     bridge_init(remote);
+    free(remote);
+
     exiting = false;
     while (!exiting) {
         if (signal_poll(sighup)) {
@@ -107,7 +110,7 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static const char *
+static char *
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -190,21 +193,27 @@ parse_options(int argc, char *argv[])
     argc -= optind;
     argv += optind;
 
-    if (argc != 1) {
-        VLOG_FATAL("database socket is only non-option argument; "
+    switch (argc) {
+    case 0:
+        return xasprintf("unix:%s/db.sock", ovs_rundir());
+
+    case 1:
+        return xstrdup(argv[0]);
+
+    default:
+        VLOG_FATAL("at most one non-option argument accepted; "
                    "use --help for usage");
     }
-
-    return argv[0];
 }
 
 static void
 usage(void)
 {
     printf("%s: Open vSwitch daemon\n"
-           "usage: %s [OPTIONS] DATABASE\n"
-           "where DATABASE is a socket on which ovsdb-server is listening.\n",
-           program_name, program_name);
+           "usage: %s [OPTIONS] [DATABASE]\n"
+           "where DATABASE is a socket on which ovsdb-server is listening\n"
+           "      (default: \"unix:%s/db.sock\").\n",
+           program_name, program_name, ovs_rundir());
     stream_usage("DATABASE", true, false, true);
     daemon_usage();
     vlog_usage();

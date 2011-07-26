@@ -14,17 +14,15 @@
 ovs\-vswitchd \- Open vSwitch daemon
 .
 .SH SYNOPSIS
-.B ovs\-vswitchd
-\fIdatabase\fR
+\fBovs\-vswitchd \fR[\fIdatabase\fR]
 .
 .SH DESCRIPTION
 A daemon that manages and controls any number of Open vSwitch switches
 on the local machine.
 .PP
-The mandatory \fIdatabase\fR argument normally takes the form
-\fBunix:\fIfile\fR, where \fIfile\fR is the name of a Unix domain
-socket on which \fBovsdb\-server\fR is listening.  However, all of the
-following forms are accepted:
+The \fIdatabase\fR argument specifies how \fBovs\-vswitchd\fR connects
+to \fBovsdb\-server\fR.  The default is \fBunix:@RUNDIR@/db.sock\fR.
+The following forms are accepted:
 .so ovsdb/remote-active.man
 .so ovsdb/remote-passive.man
 .PP

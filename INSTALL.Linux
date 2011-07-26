@@ -287,8 +287,7 @@ ovsdb-tool (but running it at any time is harmless):
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
 
-      % ovs-vswitchd unix:/usr/local/var/run/openvswitch/db.sock \
-            --pidfile --detach 
+      % ovs-vswitchd --pidfile --detach
 
 Now you may use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named br0 and add ports
