@@ -10,7 +10,7 @@ ovsdb\-server \- Open vSwitch database server
 .
 .SH SYNOPSIS
 \fBovsdb\-server\fR
-\fIdatabase\fR
+[\fIdatabase\fR]
 [\fB\-\-remote=\fIremote\fR]\&...
 [\fB\-\-run=\fIcommand\fR]
 .so lib/daemon-syn.man
@@ -25,9 +25,10 @@ The \fBovsdb\-server\fR program provides RPC interfaces to an Open
 vSwitch database (OVSDB).  It supports JSON-RPC client connections
 over active or passive TCP/IP or Unix domain sockets.
 .PP
-The name of the OVSDB file must be specified on the command line as
-\fIdatabase\fR, which must already have been created and initialized
-using, for example, \fBovsdb\-tool create\fR.
+The OVSDB file may be specified on the command line as \fIdatabase\fR.
+The default is \fB@sysconfdir@/openvswitch/conf.db\fR.  The database
+file must already have been created and initialized using, for
+example, \fBovsdb\-tool create\fR.
 .
 .SH OPTIONS
 .
