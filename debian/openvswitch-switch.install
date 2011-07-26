@@ -1,10 +1,10 @@
-_debian/ovsdb/ovsdb-server usr/bin
-_debian/utilities/ovs-dpctl usr/sbin
-_debian/utilities/ovs-ctl usr/share/openvswitch/scripts
-_debian/utilities/ovs-lib.sh usr/share/openvswitch/scripts
-_debian/utilities/ovs-vsctl usr/sbin
-_debian/utilities/ovs-pcap usr/bin
-_debian/utilities/ovs-tcpundump usr/bin
-_debian/utilities/ovs-vlan-test usr/bin
-_debian/vswitchd/ovs-vswitchd usr/sbin
-utilities/ovs-save usr/share/openvswitch/scripts
+usr/bin/ovs-dpctl
+usr/bin/ovs-pcap
+usr/bin/ovs-tcpundump
+usr/bin/ovs-vlan-test
+usr/bin/ovs-vsctl
+usr/sbin/ovs-vswitchd
+usr/sbin/ovsdb-server
+usr/share/openvswitch/scripts/ovs-ctl
+usr/share/openvswitch/scripts/ovs-lib.sh
+usr/share/openvswitch/scripts/ovs-save

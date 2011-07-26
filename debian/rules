@@ -72,7 +72,7 @@ install: install-indep install-arch
 install-indep: build-indep
 	dh_testdir
 	dh_testroot
-	dh_clean -k -i 
+	dh_prep -i
 	dh_installdirs -i
 	dh_install -i
 	sed 's/^BUILD_NUMBER = .*/BUILD_NUMBER = $(BUILD_NUMBER)/' \
@@ -84,9 +84,9 @@ install-indep: build-indep
 install-arch: build-arch
 	dh_testdir
 	dh_testroot
-	dh_clean -k -s 
+	dh_prep -s
 	dh_installdirs -s
-	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openvswitch install
+	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/tmp install
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
 	dh_install -s
 

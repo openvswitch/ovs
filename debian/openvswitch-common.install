@@ -1,10 +1,10 @@
-_debian/ovsdb/ovsdb-client usr/bin
-_debian/ovsdb/ovsdb-tool usr/bin
-_debian/utilities/ovs-appctl usr/sbin
-_debian/utilities/ovs-ofctl usr/sbin
-_debian/utilities/ovs-parse-leaks usr/bin
-_debian/utilities/ovs-pki usr/sbin
-debian/openvswitch/etc/openvswitch/bugtool-plugins etc/openvswitch
-debian/openvswitch/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
-_debian/utilities/bugtool/ovs-bugtool usr/sbin
-vswitchd/vswitch.ovsschema usr/share/openvswitch
+etc/openvswitch/bugtool-plugins
+usr/bin/ovs-appctl
+usr/bin/ovs-ofctl
+usr/bin/ovs-parse-leaks
+usr/bin/ovs-pki
+usr/bin/ovsdb-client
+usr/bin/ovsdb-tool
+usr/sbin/ovs-bugtool
+usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
+usr/share/openvswitch/vswitch.ovsschema
