@@ -74,6 +74,7 @@ install-indep: build-indep
 	dh_testroot
 	dh_prep -i
 	dh_installdirs -i
+	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/tmp install
 	dh_install -i
 	sed 's/^BUILD_NUMBER = .*/BUILD_NUMBER = $(BUILD_NUMBER)/' \
 		< debian/rules.modules \

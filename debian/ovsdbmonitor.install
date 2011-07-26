@@ -1,2 +1,2 @@
-debian/openvswitch/usr/bin/ovsdbmonitor usr/bin
-debian/openvswitch/usr/share/openvswitch usr/share
+usr/bin/ovsdbmonitor
+usr/share/openvswitch
