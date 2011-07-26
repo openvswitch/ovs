@@ -155,9 +155,9 @@ AT_CHECK(
   [0], [ordinals
 ], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
-  [[ovsdb-client get-schema unix:socket nonexistent]], 
-  [1], [], [[ovsdb-client: syntax "{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"}": syntax error: Parsing database schema failed: Required 'name' member is missing.
-]], [test ! -e pid || kill `cat pid`])
+  [[test-jsonrpc request unix:socket get_schema [\"nonexistent\"]]], [0],
+  [[{"error":null,"id":0,"result":{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"}}
+]], [], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 

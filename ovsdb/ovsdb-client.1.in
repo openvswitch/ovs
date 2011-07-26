@@ -15,21 +15,21 @@
 ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .
 .SH SYNOPSIS
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs\fI server\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs \fR[\fIserver\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\fI server database\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI server database\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-tables\fI server database\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-columns\fI server database \fR[\fItable\fR]
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] [\fItable\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI server database\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server database table\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
 \fBovsdb\-client help\fR
@@ -44,26 +44,29 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .
 .SH DESCRIPTION
 The \fBovsdb\-client\fR program is a command-line client for
-interacting with a running \fBovsdb\-server\fR process.  For each
-command, the \fIserver\fR to connect to must be specified in one of
-the following forms:
+interacting with a running \fBovsdb\-server\fR process.
+Each command connects to an OVSDB server, which is
+\fBunix:@RUNDIR@/db.sock\fR by default, or may be specified as
+\fIserver\fR in one of the following forms:
 .RS
 .so ovsdb/remote-active.man
 .so ovsdb/remote-passive.man
 .RE
+.PP
+The default \fIdatabase\fR is \fBOpen_vSwitch\fR.
 .
 .SS "Commands"
 The following commands are implemented:
-.IP "\fBlist\-dbs\fI server\fR"
+.IP "\fBlist\-dbs \fR[\fIserver\fR]"
 Connects to \fIserver\fR, retrieves the list of known databases, and
 prints them one per line.  These database names are the ones that may
 be used for \fIdatabase\fR in the following commands.
 .
-.IP "\fBget\-schema\fI server database\fR"
+.IP "\fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints it in JSON format.
 .
-.IP "\fBget\-schema\-version\fI server database\fR"
+.IP "\fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints its version number on stdout.  A schema version number has the form
 \fIx\fB.\fIy\fB.\fIz\fR.  See \fBovs\-vswitchd.conf.db\fR(5) for
@@ -76,27 +79,27 @@ If \fIdatabase\fR was created before schema versioning was introduced,
 then it will not have a version number and this command will print a
 blank line.
 .
-.IP "\fBlist\-tables\fI server database\fR"
+.IP "\fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints a table listing the name of each table
 within the database.
 .
-.IP "\fBlist\-columns\fI server database \fR[\fItable\fR]"
+.IP "\fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints a table listing the name and type of each
 column.  If \fItable\fR is specified, only columns in that table are
 listed; otherwise, the tables include columns in all tables.
 .
-.IP "\fBtransact\fI server transaction\fR"
+.IP "\fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR"
 Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array containing one or more valid OVSDB
 operations, and prints the received reply on stdout.
 .
-.IP "\fBdump\fI server database\fR"
+.IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR"
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
 and prints it on stdout as a series of tables.
 .
-.IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR"
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
 \fIdatabase\fR.  By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If at least one

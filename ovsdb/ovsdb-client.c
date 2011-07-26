@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
@@ -29,6 +30,7 @@
 #include "column.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dirs.h"
 #include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -37,6 +39,7 @@
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "sort.h"
+#include "sset.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "table.h"
@@ -46,22 +49,109 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_client);
 
+enum args_needed {
+    NEED_NONE,            /* No JSON-RPC connection or database name needed. */
+    NEED_RPC,             /* JSON-RPC connection needed. */
+    NEED_DATABASE         /* JSON-RPC connection and database name needed. */
+};
+
+struct ovsdb_client_command {
+    const char *name;
+    enum args_needed need;
+    int min_args;
+    int max_args;
+    void (*handler)(struct jsonrpc *rpc, const char *database,
+                    int argc, char *argv[]);
+};
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
-static const struct command all_commands[];
+static const struct ovsdb_client_command all_commands[];
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
+static struct jsonrpc *open_jsonrpc(const char *server);
+static void fetch_dbs(struct jsonrpc *, struct sset *dbs);
 
 int
 main(int argc, char *argv[])
 {
+    const struct ovsdb_client_command *command;
+    const char *database;
+    struct jsonrpc *rpc;
+
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
-    run_command(argc - optind, argv + optind, all_commands);
+
+    if (optind >= argc) {
+        ovs_fatal(0, "missing command name; use --help for help");
+    }
+
+    for (command = all_commands; ; command++) {
+        if (!command->name) {
+            VLOG_FATAL("unknown command '%s'; use --help for help",
+                       argv[optind]);
+        } else if (!strcmp(command->name, argv[optind])) {
+            break;
+        }
+    }
+    optind++;
+
+    if (command->need != NEED_NONE) {
+        if (argc - optind > command->min_args
+            && (isalpha((unsigned char) argv[optind][0])
+                && strchr(argv[optind], ':'))) {
+            rpc = open_jsonrpc(argv[optind++]);
+        } else {
+            char *sock = xasprintf("unix:%s/db.sock", ovs_rundir());
+            rpc = open_jsonrpc(sock);
+            free(sock);
+        }
+    } else {
+        rpc = NULL;
+    }
+
+    if (command->need == NEED_DATABASE) {
+        struct sset dbs;
+
+        sset_init(&dbs);
+        fetch_dbs(rpc, &dbs);
+        if (argc - optind > command->min_args
+            && sset_contains(&dbs, argv[optind])) {
+            database = argv[optind++];
+        } else if (sset_count(&dbs) == 1) {
+            database = xstrdup(SSET_FIRST(&dbs));
+        } else if (sset_contains(&dbs, "Open_vSwitch")) {
+            database = "Open_vSwitch";
+        } else {
+            ovs_fatal(0, "no default database for `%s' command, please "
+                      "specify a database name", command->name);
+        }
+        sset_destroy(&dbs);
+    } else {
+        database = NULL;
+    }
+
+    if (argc - optind < command->min_args ||
+        argc - optind > command->max_args) {
+        VLOG_FATAL("invalid syntax for '%s' (use --help for help)",
+                    command->name);
+    }
+
+    command->handler(rpc, database, argc - optind, argv + optind);
+
+    jsonrpc_close(rpc);
+
+    if (ferror(stdout)) {
+        VLOG_FATAL("write to stdout failed");
+    }
+    if (ferror(stderr)) {
+        VLOG_FATAL("write to stderr failed");
+    }
+
     return 0;
 }
 
@@ -137,27 +227,29 @@ usage(void)
     printf("%s: Open vSwitch database JSON-RPC client\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
            "\nValid commands are:\n"
-           "\n  list-dbs SERVER\n"
+           "\n  list-dbs [SERVER]\n"
            "    list databases available on SERVER\n"
-           "\n  get-schema SERVER DATABASE\n"
+           "\n  get-schema [SERVER] [DATABASE]\n"
            "    retrieve schema for DATABASE from SERVER\n"
-           "\n  get-schema-version SERVER DATABASE\n"
+           "\n  get-schema-version [SERVER] [DATABASE]\n"
            "    retrieve schema for DATABASE from SERVER and report only its\n"
            "    version number on stdout\n"
-           "\n  list-tables SERVER DATABASE\n"
+           "\n  list-tables [SERVER] [DATABASE]\n"
            "    list tables for DATABASE on SERVER\n"
-           "\n  list-columns SERVER DATABASE [TABLE]\n"
+           "\n  list-columns [SERVER] [DATABASE] [TABLE]\n"
            "    list columns in TABLE (or all tables) in DATABASE on SERVER\n"
-           "\n  transact SERVER TRANSACTION\n"
+           "\n  transact [SERVER] TRANSACTION\n"
            "    run TRANSACTION (a JSON array of operations) on SERVER\n"
            "    and print the results as JSON on stdout\n"
-           "\n  monitor SERVER DATABASE TABLE [COLUMN,...]...\n"
+           "\n  monitor [SERVER] [DATABASE] TABLE [COLUMN,...]...\n"
            "    monitor contents of COLUMNs in TABLE in DATABASE on SERVER.\n"
            "    COLUMNs may include !initial, !insert, !delete, !modify\n"
            "    to avoid seeing the specified kinds of changes.\n"
-           "\n  dump SERVER DATABASE\n"
-           "    dump contents of DATABASE on SERVER to stdout\n",
-           program_name, program_name);
+           "\n  dump [SERVER] [DATABASE]\n"
+           "    dump contents of DATABASE on SERVER to stdout\n"
+           "\nThe default SERVER is unix:%s/db.sock.\n"
+           "The default DATABASE is Open_vSwitch.\n",
+           program_name, program_name, ovs_rundir());
     stream_usage("SERVER", true, true, true);
     printf("\nOutput formatting options:\n"
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
@@ -236,7 +328,7 @@ check_ovsdb_error(struct ovsdb_error *error)
 }
 
 static struct ovsdb_schema *
-fetch_schema_from_rpc(struct jsonrpc *rpc, const char *database)
+fetch_schema(struct jsonrpc *rpc, const char *database)
 {
     struct jsonrpc_msg *request, *reply;
     struct ovsdb_schema *schema;
@@ -256,29 +348,13 @@ fetch_schema_from_rpc(struct jsonrpc *rpc, const char *database)
     return schema;
 }
 
-static struct ovsdb_schema *
-fetch_schema(const char *server, const char *database)
-{
-    struct ovsdb_schema *schema;
-    struct jsonrpc *rpc;
-
-    rpc = open_jsonrpc(server);
-    schema = fetch_schema_from_rpc(rpc, database);
-    jsonrpc_close(rpc);
-
-    return schema;
-}
-
-
 static void
-do_list_dbs(int argc OVS_UNUSED, char *argv[])
+fetch_dbs(struct jsonrpc *rpc, struct sset *dbs)
 {
     struct jsonrpc_msg *request, *reply;
-    struct jsonrpc *rpc;
     int error;
     size_t i;
 
-    rpc = open_jsonrpc(argv[1]);
     request = jsonrpc_create_request("list_dbs", json_array_create_empty(),
                                      NULL);
     error = jsonrpc_transact_block(rpc, request, &reply);
@@ -296,35 +372,53 @@ do_list_dbs(int argc OVS_UNUSED, char *argv[])
         if (name->type != JSON_STRING) {
             ovs_fatal(0, "list_dbs response %zu is not string", i);
         }
-        puts(name->u.string);
+        sset_add(dbs, name->u.string);
     }
     jsonrpc_msg_destroy(reply);
 }
+
+static void
+do_list_dbs(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+            int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    const char *db_name;
+    struct sset dbs;
+
+    sset_init(&dbs);
+    fetch_dbs(rpc, &dbs);
+    SSET_FOR_EACH (db_name, &dbs) {
+        puts(db_name);
+    }
+    sset_destroy(&dbs);
+}
 
 static void
-do_get_schema(int argc OVS_UNUSED, char *argv[])
+do_get_schema(struct jsonrpc *rpc, const char *database,
+              int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    struct ovsdb_schema *schema = fetch_schema(argv[1], argv[2]);
+    struct ovsdb_schema *schema = fetch_schema(rpc, database);
     print_and_free_json(ovsdb_schema_to_json(schema));
     ovsdb_schema_destroy(schema);
 }
 
 static void
-do_get_schema_version(int argc OVS_UNUSED, char *argv[])
+do_get_schema_version(struct jsonrpc *rpc, const char *database,
+                      int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    struct ovsdb_schema *schema = fetch_schema(argv[1], argv[2]);
+    struct ovsdb_schema *schema = fetch_schema(rpc, database);
     puts(schema->version);
     ovsdb_schema_destroy(schema);
 }
 
 static void
-do_list_tables(int argc OVS_UNUSED, char *argv[])
+do_list_tables(struct jsonrpc *rpc, const char *database,
+               int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ovsdb_schema *schema;
     struct shash_node *node;
     struct table t;
 
-    schema = fetch_schema(argv[1], argv[2]);
+    schema = fetch_schema(rpc, database);
     table_init(&t);
     table_add_column(&t, "Table");
     SHASH_FOR_EACH (node, &schema->tables) {
@@ -338,14 +432,15 @@ do_list_tables(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_list_columns(int argc OVS_UNUSED, char *argv[])
+do_list_columns(struct jsonrpc *rpc, const char *database,
+                int argc OVS_UNUSED, char *argv[])
 {
-    const char *table_name = argv[3];
+    const char *table_name = argv[0];
     struct ovsdb_schema *schema;
     struct shash_node *table_node;
     struct table t;
 
-    schema = fetch_schema(argv[1], argv[2]);
+    schema = fetch_schema(rpc, database);
     table_init(&t);
     if (!table_name) {
         table_add_column(&t, "Table");
@@ -375,16 +470,15 @@ do_list_columns(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_transact(int argc OVS_UNUSED, char *argv[])
+do_transact(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+            int argc OVS_UNUSED, char *argv[])
 {
     struct jsonrpc_msg *request, *reply;
     struct json *transaction;
-    struct jsonrpc *rpc;
     int error;
 
-    transaction = parse_json(argv[2]);
+    transaction = parse_json(argv[0]);
 
-    rpc = open_jsonrpc(argv[1]);
     request = jsonrpc_create_request("transact", transaction, NULL);
     error = jsonrpc_transact_block(rpc, request, &reply);
     if (error) {
@@ -397,7 +491,6 @@ do_transact(int argc OVS_UNUSED, char *argv[])
     print_json(reply->result);
     putchar('\n');
     jsonrpc_msg_destroy(reply);
-    jsonrpc_close(rpc);
 }
 
 static void
@@ -565,22 +658,19 @@ parse_monitor_columns(char *arg, const char *server, const char *database,
 }
 
 static void
-do_monitor(int argc, char *argv[])
+do_monitor(struct jsonrpc *rpc, const char *database,
+           int argc, char *argv[])
 {
-    const char *server = argv[1];
-    const char *database = argv[2];
-    const char *table_name = argv[3];
+    const char *server = jsonrpc_get_name(rpc);
+    const char *table_name = argv[0];
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_table_schema *table;
     struct ovsdb_schema *schema;
     struct jsonrpc_msg *request;
-    struct jsonrpc *rpc;
     struct json *monitor, *monitor_request_array,
         *monitor_requests, *request_id;
 
-    rpc = open_jsonrpc(server);
-
-    schema = fetch_schema_from_rpc(rpc, database);
+    schema = fetch_schema(rpc, database);
     table = shash_find_data(&schema->tables, table_name);
     if (!table) {
         ovs_fatal(0, "%s: %s does not have a table named \"%s\"",
@@ -588,10 +678,10 @@ do_monitor(int argc, char *argv[])
     }
 
     monitor_request_array = json_array_create_empty();
-    if (argc > 4) {
+    if (argc > 1) {
         int i;
 
-        for (i = 4; i < argc; i++) {
+        for (i = 1; i < argc; i++) {
             json_array_add(
                 monitor_request_array,
                 parse_monitor_columns(argv[i], server, database, table,
@@ -795,15 +885,12 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
 }
 
 static void
-do_dump(int argc OVS_UNUSED, char *argv[])
+do_dump(struct jsonrpc *rpc, const char *database,
+        int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    const char *server = argv[1];
-    const char *database = argv[2];
-
     struct jsonrpc_msg *request, *reply;
     struct ovsdb_schema *schema;
     struct json *transaction;
-    struct jsonrpc *rpc;
     int error;
 
     const struct shash_node **tables;
@@ -811,9 +898,7 @@ do_dump(int argc OVS_UNUSED, char *argv[])
 
     size_t i;
 
-    rpc = open_jsonrpc(server);
-
-    schema = fetch_schema_from_rpc(rpc, database);
+    schema = fetch_schema(rpc, database);
     tables = shash_sort(&schema->tables);
     n_tables = shash_count(&schema->tables);
 
@@ -872,20 +957,30 @@ do_dump(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+do_help(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
+        int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }
 
-static const struct command all_commands[] = {
-    { "list-dbs", 1, 1, do_list_dbs },
-    { "get-schema", 2, 2, do_get_schema },
-    { "get-schema-version", 2, 2, do_get_schema_version },
-    { "list-tables", 2, 2, do_list_tables },
-    { "list-columns", 2, 3, do_list_columns },
-    { "transact", 2, 2, do_transact },
-    { "monitor", 3, INT_MAX, do_monitor },
-    { "dump", 2, 2, do_dump },
-    { "help", 0, INT_MAX, do_help },
-    { NULL, 0, 0, NULL },
+/* All command handlers (except for "help") are expected to take an optional
+ * server socket name (e.g. "unix:...") as their first argument.  The socket
+ * name argument must be included in max_args (but left out of min_args).  The
+ * command name and socket name are not included in the arguments passed to the
+ * handler: the argv[0] passed to the handler is the first argument after the
+ * optional server socket name.  The connection to the server is available as
+ * global variable 'rpc'. */
+static const struct ovsdb_client_command all_commands[] = {
+    { "list-dbs",           NEED_RPC,      0, 0,       do_list_dbs },
+    { "get-schema",         NEED_DATABASE, 0, 0,       do_get_schema },
+    { "get-schema-version", NEED_DATABASE, 0, 0,       do_get_schema_version },
+    { "list-tables",        NEED_DATABASE, 0, 0,       do_list_tables },
+    { "list-columns",       NEED_DATABASE, 0, 1,       do_list_columns },
+    { "transact",           NEED_RPC,      1, 1,       do_transact },
+    { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
+    { "dump",               NEED_DATABASE, 0, 0,       do_dump },
+
+    { "help",               NEED_NONE,     0, INT_MAX, do_help },
+
+    { NULL,                 0,             0, 0,       NULL },
 };
