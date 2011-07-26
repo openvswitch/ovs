@@ -2192,6 +2192,17 @@
             disconnected.</dd>
         </dl>
         <dl>
+          <dt><code>locks_held</code></dt>
+          <dt><code>locks_waiting</code></dt>
+          <dt><code>locks_lost</code></dt>
+          <dd>
+            Space-separated lists of the names of OVSDB locks that the
+            connection holds, is currently waiting to acquire, or has had
+            stolen by another OVSDB client, respectively.  Key-value pairs for
+            lists that would be empty are omitted.
+          </dd>
+        </dl>
+        <dl>
           <dt><code>n_connections</code></dt>
           <dd>
             <p>

@@ -29,12 +29,14 @@
 #include "ovsdb.h"
 #include "query.h"
 #include "row.h"
+#include "server.h"
 #include "table.h"
 #include "timeval.h"
 #include "transaction.h"
 
 struct ovsdb_execution {
     struct ovsdb *db;
+    const struct ovsdb_session *session;
     struct ovsdb_txn *txn;
     struct ovsdb_symbol_table *symtab;
     bool durable;
@@ -57,6 +59,7 @@ static ovsdb_operation_executor ovsdb_execute_wait;
 static ovsdb_operation_executor ovsdb_execute_commit;
 static ovsdb_operation_executor ovsdb_execute_abort;
 static ovsdb_operation_executor ovsdb_execute_comment;
+static ovsdb_operation_executor ovsdb_execute_assert;
 
 static ovsdb_operation_executor *
 lookup_executor(const char *name)
@@ -76,6 +79,7 @@ lookup_executor(const char *name)
         { "commit", ovsdb_execute_commit },
         { "abort", ovsdb_execute_abort },
         { "comment", ovsdb_execute_comment },
+        { "assert", ovsdb_execute_assert },
     };
 
     size_t i;
@@ -90,7 +94,8 @@ lookup_executor(const char *name)
 }
 
 struct json *
-ovsdb_execute(struct ovsdb *db, const struct json *params,
+ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
+              const struct json *params,
               long long int elapsed_msec, long long int *timeout_msec)
 {
     struct ovsdb_execution x;
@@ -116,6 +121,7 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
     }
 
     x.db = db;
+    x.session = session;
     x.txn = ovsdb_txn_create(db);
     x.symtab = ovsdb_symbol_table_create();
     x.durable = false;
@@ -705,4 +711,29 @@ ovsdb_execute_comment(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     ovsdb_txn_add_comment(x->txn, json_string(comment));
 
     return NULL;
+}
+
+static struct ovsdb_error *
+ovsdb_execute_assert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result OVS_UNUSED)
+{
+    const struct json *lock_name;
+
+    lock_name = ovsdb_parser_member(parser, "lock", OP_STRING);
+    if (!lock_name) {
+        return NULL;
+    }
+
+    if (x->session) {
+        const struct ovsdb_lock_waiter *waiter;
+
+        waiter = ovsdb_session_get_lock_waiter(x->session,
+                                               json_string(lock_name));
+        if (waiter && ovsdb_lock_waiter_is_owner(waiter)) {
+            return NULL;
+        }
+    }
+
+    return ovsdb_error("not owner", "Asserted lock %s not held.",
+                       json_string(lock_name));
 }

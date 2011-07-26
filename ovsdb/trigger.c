@@ -110,8 +110,8 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
 static bool
 ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
-    t->result = ovsdb_execute(t->session->db, t->request,
-                              now - t->created, &t->timeout_msec);
+    t->result = ovsdb_execute(t->session->db, t->session,
+                              t->request, now - t->created, &t->timeout_msec);
     if (t->result) {
         ovsdb_trigger_complete(t);
         return true;

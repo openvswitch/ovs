@@ -627,6 +627,107 @@ Cancels the ongoing table monitor request, identified by the
 ongoing "monitor" request.  No more "update" messages will be sent for
 this table monitor.
 
+lock operations
+...............
+
+Request object members:
+
+    "method": "lock", "steal", or "unlock"          required
+    "params": [<id>]                                required
+    "id": <nonnull-json-value>                      required
+
+Response object members:
+
+    "result": {"locked": <boolean>}     for "lock"
+    "result": {"locked": true}          for "steal"
+    "result": {}                        for "unlock"
+    "error": null
+    "id": same "id" as request
+
+Performs an operation on a "lock" object.  The database server
+supports an arbitrary number of locks, each of which is identified by
+a client-defined id (given in "params").  At any given time, each lock
+may have at most one owner.
+
+The locking operation depends on "method":
+
+    - "lock": The database will assign this client ownership of the
+      lock as soon as it becomes available.  When multiple clients
+      request the same lock, they will receive it in first-come, first
+      served order.
+
+    - "steal": The database immediately assigns this client ownership
+      of the lock.  If there is an existing owner, it loses ownership.
+
+    - "unlock": If the client owns the lock, releases it.  If the
+      client is waiting to obtain the lock, cancels the request and
+      stops waiting.
+
+      (Closing or otherwise disconnecting a database client connection
+      unlocks all of its locks.)
+
+For any given lock, the client must alternate "lock" or "steal"
+operations with "unlock" operations.  That is, if the previous
+operation on a lock was "lock" or "steal", it must be followed by an
+"unlock" operation, and vice versa.
+
+For a "lock" operation, the "locked" member in the response object is
+true if the lock has already been acquired, false if another client
+holds the lock and the client's request for it was queued.  In the
+latter case, the client will be notified later with a "locked" message
+when acquisition succeeds.
+
+These requests complete and send a response quickly, without waiting.
+The "locked" and "stolen" notifications (see below) report
+asynchronous changes to ownership.
+
+The scope of a lock is a database server, not a database hosted by
+that server.  A naming convention, such as "<db-name>:<lock-name>",
+can effectively limit the scope of a lock to a particular database.
+
+locked
+......
+
+Notification object members:
+
+    "method": "locked"
+    "params": [<id>]
+    "id": null
+
+Notifies the client that a "lock" operation that it previously
+requested has succeeded.  The client now owns the lock named in
+"params".
+
+The database server sends this notification after the reply to the
+corresponding "lock" request (but only if the "locked" member of the
+response was false), and before the reply to the client's subsequent
+"unlock" request.
+
+stolen
+......
+
+Notification object members:
+
+    "method": "locked"
+    "params": [<id>]
+    "id": null
+
+Notifies the client that owns a lock that another database client has
+stolen ownership of the lock.  The client no longer owns the lock
+named in "params".  The client must still issue an "unlock" request
+before performing any subsequent "lock" or "steal" operation on the
+lock.
+
+If the client originally obtained the lock through a "lock" request,
+then it will automatically regain the lock later after the client that
+stole it releases it.  (The database server will send the client a
+"locked" notification at that point to let it know.)
+
+If the client originally obtained the lock through a "steal" request,
+the database server won't automatically reassign it ownership of the
+lock when it later becomes available.  To regain ownership, the client
+must "unlock" and then "lock" or "steal" the lock again.
+
 echo
 ....
 
@@ -1192,3 +1293,26 @@ Semantics:
     Provides information to a database administrator on the purpose of
     a transaction.  The OVSDB server, for example, adds comments in
     transactions that modify the database to the database journal.
+
+assert
+......
+
+Request object members:
+
+    "op": "assert"                     required
+    "lock": <string>                   required
+
+Result object members:
+
+    none
+
+Semantics:
+
+    If the client does not own the lock named <string>, aborts the
+    transaction.
+
+Errors:
+
+    "error": "not owner"
+
+        The client does not own the named lock.

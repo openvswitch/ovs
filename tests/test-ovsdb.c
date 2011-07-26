@@ -1258,7 +1258,7 @@ do_execute(int argc OVS_UNUSED, char *argv[])
         char *s;
 
         params = parse_json(argv[i]);
-        result = ovsdb_execute(db, params, 0, NULL);
+        result = ovsdb_execute(db, NULL, params, 0, NULL);
         s = json_to_string(result, JSSF_SORT);
         printf("%s\n", s);
         free(s);

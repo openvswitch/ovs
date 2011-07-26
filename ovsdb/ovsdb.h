@@ -23,6 +23,7 @@
 
 struct json;
 struct ovsdb_log;
+struct ovsdb_session;
 struct ovsdb_txn;
 struct uuid;
 
@@ -71,7 +72,8 @@ struct json *ovsdb_to_json(const struct ovsdb *);
 
 struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 
-struct json *ovsdb_execute(struct ovsdb *, const struct json *params,
+struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
+                           const struct json *params,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
 

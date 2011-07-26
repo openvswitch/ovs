@@ -15,8 +15,7 @@
 
 #include <config.h>
 
-#include "ovsdb.h"
-
+#include <assert.h>
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
@@ -27,11 +26,13 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "file.h"
+#include "hash.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "jsonrpc-server.h"
 #include "leak-checker.h"
 #include "list.h"
+#include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-types.h"
 #include "ovsdb-error.h"
@@ -499,11 +500,25 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
         values[n++] =
             xstrdup(ovs_retval_to_string(status.last_error));
     }
+    if (status.locks_held && status.locks_held[0]) {
+        keys[n] = xstrdup("locks_held");
+        values[n++] = xstrdup(status.locks_held);
+    }
+    if (status.locks_waiting && status.locks_waiting[0]) {
+        keys[n] = xstrdup("locks_waiting");
+        values[n++] = xstrdup(status.locks_waiting);
+    }
+    if (status.locks_lost && status.locks_lost[0]) {
+        keys[n] = xstrdup("locks_lost");
+        values[n++] = xstrdup(status.locks_lost);
+    }
     if (status.n_connections > 1) {
         keys[n] = xstrdup("n_connections");
         values[n++] = xasprintf("%d", status.n_connections);
     }
     write_string_string_column(rw_row, "status", keys, values, n);
+
+    ovsdb_jsonrpc_server_free_remote_status(&status);
 }
 
 static void

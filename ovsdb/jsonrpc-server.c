@@ -58,6 +58,8 @@ static void ovsdb_jsonrpc_session_set_all_options(
 static bool ovsdb_jsonrpc_session_get_status(
     const struct ovsdb_jsonrpc_remote *,
     struct ovsdb_jsonrpc_remote_status *);
+static void ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *);
+static void ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
@@ -220,6 +222,15 @@ ovsdb_jsonrpc_server_get_remote_status(
     return remote && ovsdb_jsonrpc_session_get_status(remote, status);
 }
 
+void
+ovsdb_jsonrpc_server_free_remote_status(
+    struct ovsdb_jsonrpc_remote_status *status)
+{
+    free(status->locks_held);
+    free(status->locks_waiting);
+    free(status->locks_lost);
+}
+
 /* Forces all of the JSON-RPC sessions managed by 'svr' to disconnect and
  * reconnect. */
 void
@@ -330,8 +341,10 @@ static void
 ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
 {
     ovsdb_jsonrpc_monitor_remove_all(s);
+    ovsdb_jsonrpc_session_unlock_all(s);
     jsonrpc_session_close(s->js);
     list_remove(&s->node);
+    ovsdb_session_destroy(&s->up);
     s->remote->server->n_sessions--;
     ovsdb_session_destroy(&s->up);
     free(s);
@@ -345,6 +358,7 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
         s->js_seqno = jsonrpc_session_get_seqno(s->js);
         ovsdb_jsonrpc_trigger_complete_all(s);
         ovsdb_jsonrpc_monitor_remove_all(s);
+        ovsdb_jsonrpc_session_unlock_all(s);
     }
 
     ovsdb_jsonrpc_trigger_complete_done(s);
@@ -453,7 +467,9 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
 {
     const struct ovsdb_jsonrpc_session *s;
     const struct jsonrpc_session *js;
+    struct ovsdb_lock_waiter *waiter;
     struct reconnect_stats rstats;
+    struct ds locks_held, locks_waiting, locks_lost;
 
     if (list_is_empty(&remote->sessions)) {
         return false;
@@ -470,6 +486,24 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
         ? UINT_MAX : rstats.msec_since_connect / 1000;
     status->sec_since_disconnect = rstats.msec_since_disconnect == UINT_MAX
         ? UINT_MAX : rstats.msec_since_disconnect / 1000;
+
+    ds_init(&locks_held);
+    ds_init(&locks_waiting);
+    ds_init(&locks_lost);
+    HMAP_FOR_EACH (waiter, session_node, &s->up.waiters) {
+        struct ds *string;
+
+        string = (ovsdb_lock_waiter_is_owner(waiter) ? &locks_held
+                  : waiter->mode == OVSDB_LOCK_WAIT ? &locks_waiting
+                  : &locks_lost);
+        if (string->length) {
+            ds_put_char(string, ' ');
+        }
+        ds_put_cstr(string, waiter->lock_name);
+    }
+    status->locks_held = ds_steal_cstr(&locks_held);
+    status->locks_waiting = ds_steal_cstr(&locks_waiting);
+    status->locks_lost = ds_steal_cstr(&locks_lost);
 
     status->n_connections = list_size(&remote->sessions);
 
@@ -511,6 +545,144 @@ ovsdb_jsonrpc_check_db_name(const struct ovsdb_jsonrpc_session *s,
     }
 
     return NULL;
+
+error:
+    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    ovsdb_error_destroy(error);
+    return reply;
+}
+
+static struct ovsdb_error *
+ovsdb_jsonrpc_session_parse_lock_name(const struct jsonrpc_msg *request,
+                                      const char **lock_namep)
+{
+    const struct json_array *params;
+
+    params = json_array(request->params);
+    if (params->n != 1 || params->elems[0]->type != JSON_STRING ||
+        !ovsdb_parser_is_id(json_string(params->elems[0]))) {
+        *lock_namep = NULL;
+        return ovsdb_syntax_error(request->params, NULL,
+                                  "%s request params must be <id>",
+                                  request->method);
+    }
+
+    *lock_namep = json_string(params->elems[0]);
+    return NULL;
+}
+
+static void
+ovsdb_jsonrpc_session_notify(struct ovsdb_session *session,
+                             const char *lock_name,
+                             const char *method)
+{
+    struct ovsdb_jsonrpc_session *s;
+    struct json *params;
+
+    s = CONTAINER_OF(session, struct ovsdb_jsonrpc_session, up);
+    params = json_array_create_1(json_string_create(lock_name));
+    jsonrpc_session_send(s->js, jsonrpc_create_notify(method, params));
+}
+
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_session_lock(struct ovsdb_jsonrpc_session *s,
+                           struct jsonrpc_msg *request,
+                           enum ovsdb_lock_mode mode)
+{
+    struct ovsdb_lock_waiter *waiter;
+    struct jsonrpc_msg *reply;
+    struct ovsdb_error *error;
+    struct ovsdb_session *victim;
+    const char *lock_name;
+    struct json *result;
+
+    error = ovsdb_jsonrpc_session_parse_lock_name(request, &lock_name);
+    if (error) {
+        goto error;
+    }
+
+    /* Report error if this session has issued a "lock" or "steal" without a
+     * matching "unlock" for this lock. */
+    waiter = ovsdb_session_get_lock_waiter(&s->up, lock_name);
+    if (waiter) {
+        error = ovsdb_syntax_error(
+            request->params, NULL,
+            "must issue \"unlock\" before new \"%s\"", request->method);
+        goto error;
+    }
+
+    /* Get the lock, add us as a waiter. */
+    waiter = ovsdb_server_lock(&s->remote->server->up, &s->up, lock_name, mode,
+                               &victim);
+    if (victim) {
+        ovsdb_jsonrpc_session_notify(victim, lock_name, "stolen");
+    }
+
+    result = json_object_create();
+    json_object_put(result, "locked",
+                    json_boolean_create(ovsdb_lock_waiter_is_owner(waiter)));
+
+    return jsonrpc_create_reply(result, request->id);
+
+error:
+    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    ovsdb_error_destroy(error);
+    return reply;
+}
+
+static void
+ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *s)
+{
+    struct ovsdb_lock_waiter *waiter, *next;
+
+    HMAP_FOR_EACH_SAFE (waiter, next, session_node, &s->up.waiters) {
+        ovsdb_jsonrpc_session_unlock__(waiter);
+    }
+}
+
+static void
+ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *waiter)
+{
+    struct ovsdb_lock *lock = waiter->lock;
+
+    if (lock) {
+        struct ovsdb_session *new_owner = ovsdb_lock_waiter_remove(waiter);
+        if (new_owner) {
+            ovsdb_jsonrpc_session_notify(new_owner, lock->name, "locked");
+        } else {
+            /* ovsdb_server_lock() might have freed 'lock'. */
+        }
+    }
+
+    ovsdb_lock_waiter_destroy(waiter);
+}
+
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_session_unlock(struct ovsdb_jsonrpc_session *s,
+                             struct jsonrpc_msg *request)
+{
+    struct ovsdb_lock_waiter *waiter;
+    struct jsonrpc_msg *reply;
+    struct ovsdb_error *error;
+    const char *lock_name;
+
+    error = ovsdb_jsonrpc_session_parse_lock_name(request, &lock_name);
+    if (error) {
+        goto error;
+    }
+
+    /* Report error if this session has not issued a "lock" or "steal" for this
+     * lock. */
+    waiter = ovsdb_session_get_lock_waiter(&s->up, lock_name);
+    if (!waiter) {
+        error = ovsdb_syntax_error(
+            request->params, NULL, "\"unlock\" without \"lock\" or \"steal\"");
+        goto error;
+    }
+
+    ovsdb_jsonrpc_session_unlock__(waiter);
+
+    return jsonrpc_create_reply(json_object_create(), request->id);
 
 error:
     reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
@@ -560,6 +732,12 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
         reply = jsonrpc_create_reply(
             json_array_create_1(json_string_create(get_db_name(s))),
             request->id);
+    } else if (!strcmp(request->method, "lock")) {
+        reply = ovsdb_jsonrpc_session_lock(s, request, OVSDB_LOCK_WAIT);
+    } else if (!strcmp(request->method, "steal")) {
+        reply = ovsdb_jsonrpc_session_lock(s, request, OVSDB_LOCK_STEAL);
+    } else if (!strcmp(request->method, "unlock")) {
+        reply = ovsdb_jsonrpc_session_unlock(s, request);
     } else if (!strcmp(request->method, "echo")) {
         reply = jsonrpc_create_reply(json_clone(request->params), request->id);
     } else {

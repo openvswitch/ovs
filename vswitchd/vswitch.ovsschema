@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "5.1.0",
- "cksum": "154459795 14545",
+ "version": "5.2.0",
+ "cksum": "434778864 14545",
  "tables": {
    "Open_vSwitch": {
      "columns": {
