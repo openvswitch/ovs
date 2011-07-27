@@ -38,7 +38,7 @@ VLOG_DEFINE_THIS_MODULE(netlink_socket);
 
 COVERAGE_DEFINE(netlink_overflow);
 COVERAGE_DEFINE(netlink_received);
-COVERAGE_DEFINE(netlink_recv_retry);
+COVERAGE_DEFINE(netlink_recv_jumbo);
 COVERAGE_DEFINE(netlink_send);
 COVERAGE_DEFINE(netlink_sent);
 
@@ -257,73 +257,68 @@ STRESS_OPTION(
 static int
 nl_sock_recv__(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
 {
-    uint8_t tmp;
-    ssize_t bufsize = 2048;
-    ssize_t nbytes, nbytes2;
-    struct ofpbuf *buf;
-    struct nlmsghdr *nlmsghdr;
-    struct iovec iov;
-    struct msghdr msg = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = &iov,
-        .msg_iovlen = 1,
-        .msg_control = NULL,
-        .msg_controllen = 0,
-        .msg_flags = 0
-    };
+    /* We can't accurately predict the size of the data to be received.  Most
+     * received data will fit in a 2 kB buffer, so we allocate that much space.
+     * In case the data is actually bigger than that, we make available enough
+     * additional space to allow Netlink messages to be up to 64 kB long (a
+     * reasonable figure since that's the maximum length of a Netlink
+     * attribute). */
+    enum { MAX_SIZE = 65536 };
+    enum { HEAD_SIZE = 2048 };
+    enum { TAIL_SIZE = MAX_SIZE - HEAD_SIZE };
 
-    buf = ofpbuf_new(bufsize);
+    struct nlmsghdr *nlmsghdr;
+    uint8_t tail[TAIL_SIZE];
+    struct iovec iov[2];
+    struct ofpbuf *buf;
+    struct msghdr msg;
+    ssize_t retval;
+
     *bufp = NULL;
 
-try_again:
-    /* Attempt to read the message.  We don't know the size of the data
-     * yet, so we take a guess at 2048.  If we're wrong, we keep trying
-     * and doubling the buffer size each time.
-     */
-    nlmsghdr = ofpbuf_put_uninit(buf, bufsize);
-    iov.iov_base = nlmsghdr;
-    iov.iov_len = bufsize;
-    do {
-        nbytes = recvmsg(sock->fd, &msg, (wait ? 0 : MSG_DONTWAIT) | MSG_PEEK);
-    } while (nbytes < 0 && errno == EINTR);
-    if (nbytes < 0) {
-        ofpbuf_delete(buf);
-        return errno;
-    }
-    if (msg.msg_flags & MSG_TRUNC) {
-        COVERAGE_INC(netlink_recv_retry);
-        bufsize *= 2;
-        ofpbuf_reinit(buf, bufsize);
-        goto try_again;
-    }
-    buf->size = nbytes;
+    buf = ofpbuf_new(HEAD_SIZE);
+    iov[0].iov_base = buf->data;
+    iov[0].iov_len = HEAD_SIZE;
+    iov[1].iov_base = tail;
+    iov[1].iov_len = TAIL_SIZE;
 
-    /* We successfully read the message, so recv again to clear the queue */
-    iov.iov_base = &tmp;
-    iov.iov_len = 1;
+    memset(&msg, 0, sizeof msg);
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 2;
+
     do {
-        nbytes2 = recvmsg(sock->fd, &msg, MSG_DONTWAIT);
-    } while (nbytes2 < 0 && errno == EINTR);
-    if (nbytes2 < 0) {
-        if (errno == ENOBUFS) {
-            /* The kernel is notifying us that a message it tried to send to us
-             * was dropped.  We have to pass this along to the caller in case
-             * it wants to retry a request.  So kill the buffer, which we can
-             * re-read next time. */
+        retval = recvmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
+    } while (retval < 0 && errno == EINTR);
+
+    if (retval < 0) {
+        int error = errno;
+        if (error == ENOBUFS) {
+            /* Socket receive buffer overflow dropped one or more messages that
+             * the kernel tried to send to us. */
             COVERAGE_INC(netlink_overflow);
-            ofpbuf_delete(buf);
-            return ENOBUFS;
-        } else {
-            VLOG_ERR_RL(&rl, "failed to remove nlmsg from socket: %s\n",
-                        strerror(errno));
         }
+        ofpbuf_delete(buf);
+        return error;
     }
-    if (nbytes < sizeof *nlmsghdr
+
+    if (msg.msg_flags & MSG_TRUNC) {
+        VLOG_ERR_RL(&rl, "truncated message (longer than %d bytes)", MAX_SIZE);
+        ofpbuf_delete(buf);
+        return E2BIG;
+    }
+
+    ofpbuf_put_uninit(buf, MIN(retval, HEAD_SIZE));
+    if (retval > HEAD_SIZE) {
+        COVERAGE_INC(netlink_recv_jumbo);
+        ofpbuf_put(buf, tail, retval - HEAD_SIZE);
+    }
+
+    nlmsghdr = buf->data;
+    if (retval < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
-        || nlmsghdr->nlmsg_len > nbytes) {
+        || nlmsghdr->nlmsg_len > retval) {
         VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %d)",
-                    bufsize, NLMSG_HDRLEN);
+                    retval, NLMSG_HDRLEN);
         ofpbuf_delete(buf);
         return EPROTO;
     }
