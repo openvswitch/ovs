@@ -13,15 +13,34 @@ default: $(build_links)
 $(foreach s,$(sort $(foreach m,$(build_modules),$($(m)_sources))), \
   $(eval $(notdir $(s)): ; ln -s $(srcdir)/../$(s) $@))
 
-distclean: clean
-	rm -f kcompat.h
+all: default
 distdir: clean
 install:
-all: default
+install-data:
+install-exec:
+uninstall:
+install-dvi:
+install-html:
+install-info:
+install-ps:
+install-pdf:
+installdirs:
 check: all
+installcheck:
+mostlyclean:
 clean:
 	rm -f *.o *.ko *_mod.* Module.symvers *.cmd kcompat.h.new
 	for d in $(build_links); do if test -h $$d; then rm $$d; fi; done
+distclean: clean
+	rm -f kcompat.h
+maintainer-clean: distclean
+dvi:
+pdf:
+ps:
+info:
+html:
+tags:
+TAGS:
 
 ifneq ($(KSRC),)
 
