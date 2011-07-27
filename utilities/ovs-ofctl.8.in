@@ -143,13 +143,19 @@ Deletes entries from \fIswitch\fR's flow table.  With only a
 entries that match the specified flows.  With \fB\-\-strict\fR,
 wildcards are not treated as active for matching purposes.
 .
-.IP "\fBreplace\-flows \fIswitch file\fR"
+.IP "[\fB\-\-readd\fR] \fBreplace\-flows \fIswitch file\fR"
 Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
 \fB\-\fR) and queries the flow table from \fIswitch\fR.  Then it fixes
 up any differences, adding flows from \fIflow\fR that are missing on
 \fIswitch\fR, deleting flows from \fIswitch\fR that are not in
 \fIfile\fR, and updating flows in \fIswitch\fR whose actions, cookie,
 or timeouts differ in \fIfile\fR.
+.
+.IP
+With \fB\-\-readd\fR, \fBovs\-ofctl\fR adds all the flows from
+\fIfile\fR, even those that exist with the same actions, cookie, and
+timeout in \fIswitch\fR.  This resets all the flow packet and byte
+counters to 0, which can be useful for debugging.
 .
 .IP "\fBdiff\-flows \fIsource1 source2\fR"
 Reads flow entries from \fIsource1\fR and \fIsource2\fR and prints the

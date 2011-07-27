@@ -55,6 +55,10 @@ VLOG_DEFINE_THIS_MODULE(ofctl);
 /* --strict: Use strict matching for flow mod commands? */
 static bool strict;
 
+/* --readd: If ture, on replace-flows, re-add even flows that have not changed
+ * (to reset flow counters). */
+static bool readd;
+
 /* -F, --flow-format: Flow format to use.  Either one of NXFF_* to force a
  * particular flow format or -1 to let ovs-ofctl choose intelligently. */
 static int preferred_flow_format = -1;
@@ -82,11 +86,13 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_STRICT = UCHAR_MAX + 1,
+        OPT_READD,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"strict", no_argument, NULL, OPT_STRICT},
+        {"readd", no_argument, NULL, OPT_READD},
         {"flow-format", required_argument, NULL, 'F'},
         {"more", no_argument, NULL, 'm'},
         {"help", no_argument, NULL, 'h'},
@@ -139,6 +145,10 @@ parse_options(int argc, char *argv[])
             strict = true;
             break;
 
+        case OPT_READD:
+            readd = true;
+            break;
+
         VLOG_OPTION_HANDLERS
         STREAM_SSL_OPTION_HANDLERS
 
@@ -184,6 +194,7 @@ usage(void)
     vlog_usage();
     printf("\nOther options:\n"
            "  --strict                    use strict match for flow commands\n"
+           "  --readd                     replace flows that haven't changed\n"
            "  -F, --flow-format=FORMAT    force particular flow format\n"
            "  -m, --more                  be more verbose printing OpenFlow\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
@@ -1206,7 +1217,8 @@ do_replace_flows(int argc OVS_UNUSED, char *argv[])
         struct fte_version *file_ver = fte->versions[FILE_IDX];
         struct fte_version *sw_ver = fte->versions[SWITCH_IDX];
 
-        if (file_ver && (!sw_ver || !fte_version_equals(sw_ver, file_ver))) {
+        if (file_ver
+            && (readd || !sw_ver || !fte_version_equals(sw_ver, file_ver))) {
             fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, flow_format,
                               &requests);
         }
