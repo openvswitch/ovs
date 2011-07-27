@@ -16,6 +16,7 @@ scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh utilities/ovs-save
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \
+	utilities/ovs-benchmark.1.in \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dpctl.8.in \
@@ -39,6 +40,7 @@ EXTRA_DIST += \
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
+	utilities/ovs-benchmark.1 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-lib.sh \
@@ -58,6 +60,7 @@ DISTCLEANFILES += \
 
 man_MANS += \
 	utilities/ovs-appctl.8 \
+	utilities/ovs-benchmark.1 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-ofctl.8 \
@@ -97,5 +100,9 @@ noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.a
 endif
+
+bin_PROGRAMS += utilities/ovs-benchmark
+utilities_ovs_benchmark_SOURCES = utilities/ovs-benchmark.c
+utilities_ovs_benchmark_LDADD = lib/libopenvswitch.a
 
 include utilities/bugtool/automake.mk

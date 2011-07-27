@@ -103,6 +103,7 @@ exit 0
 /etc/logrotate.d/openvswitch
 /etc/openvswitch/bugtool-plugins/*
 /usr/bin/ovs-appctl
+/usr/bin/ovs-benchmark
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-parse-leaks
@@ -116,6 +117,7 @@ exit 0
 /usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
+/usr/share/man/man1/ovs-benchmark.1.gz
 /usr/share/man/man1/ovs-pcap.1.gz
 /usr/share/man/man1/ovs-tcpundump.1.gz
 /usr/share/man/man1/ovsdb-client.1.gz
