@@ -30,26 +30,7 @@ extern "C" {
 
 /* Logging severity levels.
  *
- * A logging severity level of OFF suppresses logging.  Messages at the
- * following log levels, in descending order of importance, are enabled by
- * default:
- *
- *   - EMER: The process is aborting due to unrecoverable failure.
- *
- *   - ERR: A high-level operation or a subsystem failed.  Attention is
- *     warranted.
- *
- *   - WARN: A low-level operation failed, but higher-level subsystems may be
- *     able to recover.
- *
- *   - INFO: Information that may be useful in retrospect when investigating
- *     a problem.
- *
- * The lowest log level is not enabled by default:
- *
- *   - DBG: Information useful only to someone with intricate knowledge of the
- *     system, or that would commonly cause too-voluminous log output.
- */
+ * ovs-appctl(8) defines each of the log levels. */
 #define VLOG_LEVELS                             \
     VLOG_LEVEL(OFF, LOG_ALERT)                  \
     VLOG_LEVEL(EMER, LOG_ALERT)                 \

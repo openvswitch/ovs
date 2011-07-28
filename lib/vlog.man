@@ -24,7 +24,8 @@ below).
 \fIlevel\fR must be one of \fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR,
 \fBinfo\fR, or
 \fBdbg\fR, designating the minimum severity of a message for it to be
-logged.  If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.
+logged.  If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.  See
+\fBovs\-appctl\fR(8) for a definition of each log level.
 .RE
 .
 .TP
