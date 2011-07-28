@@ -320,6 +320,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     hmap_insert(&all_ofprotos, &ofproto->hmap_node,
                 hash_string(ofproto->name, 0));
     ofproto->datapath_id = 0;
+    ofproto_set_flow_eviction_threshold(ofproto,
+                                        OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT);
     ofproto->fallback_dpid = pick_fallback_dpid();
     ofproto->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
     ofproto->hw_desc = xstrdup(DEFAULT_HW_DESC);
@@ -405,6 +407,18 @@ void
 ofproto_set_in_band_queue(struct ofproto *ofproto, int queue_id)
 {
     connmgr_set_in_band_queue(ofproto->connmgr, queue_id);
+}
+
+/* Sets the number of flows at which eviction from the kernel flow table
+ * will occur. */
+void
+ofproto_set_flow_eviction_threshold(struct ofproto *ofproto, unsigned threshold)
+{
+    if (threshold < OFPROTO_FLOW_EVICTION_THRESHOLD_MIN) {
+        ofproto->flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_MIN;
+    } else {
+        ofproto->flow_eviction_threshold = threshold;
+    }
 }
 
 void

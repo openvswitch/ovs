@@ -438,6 +438,21 @@
             does not have QoS configured, or if the port does not have a queue
             with the specified ID, the default queue is used instead.
           </dd>
+          <dt><code>flow-eviction-threshold</code></dt>
+          <dd>
+            A number of flows as a nonnegative integer.  This sets number
+            of flows at which eviction from the kernel flow table will
+            be triggered.
+            If there are a large number of flows then increasing this
+            value to around the number of flows present
+            can result in reduced CPU usage and packet loss.
+	  </dd>
+	  <dd>
+            The default is 1000.
+	  </dd>
+	  <dd>
+            Values below 100 will be rounded up to 100.
+          </dd>
         </dl>
       </column>
     </group>

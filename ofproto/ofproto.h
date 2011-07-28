@@ -141,6 +141,9 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
           : (ofproto_port_dump_done(DUMP), false));         \
         )
 
+#define OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT	1000
+#define OFPROTO_FLOW_EVICTION_THRESHOLD_MIN	100
+
 int ofproto_port_add(struct ofproto *, struct netdev *, uint16_t *ofp_portp);
 int ofproto_port_del(struct ofproto *, uint16_t ofp_port);
 
@@ -156,6 +159,7 @@ void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
+void ofproto_set_flow_eviction_threshold(struct ofproto *, unsigned threshold);
 void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,

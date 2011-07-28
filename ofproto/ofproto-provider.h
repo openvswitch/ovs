@@ -38,6 +38,9 @@ struct ofproto {
     /* Settings. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
     uint64_t datapath_id;       /* Datapath ID. */
+    unsigned flow_eviction_threshold; /* Threshold at which to begin flow
+                                       * table eviction. Only affects the
+                                       * ofproto-dpif implementation */
     char *mfr_desc;             /* Manufacturer. */
     char *hw_desc;              /* Hardware. */
     char *sw_desc;              /* Software version. */

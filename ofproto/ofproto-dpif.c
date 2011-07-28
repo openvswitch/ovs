@@ -1871,11 +1871,12 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
      * N_BUCKETS buckets whose width is BUCKET_WIDTH msecs each.  Each facet
      * that is installed in the kernel gets dropped in the appropriate bucket.
      * After the histogram has been built, we compute the cutoff so that only
-     * the most-recently-used 1% of facets (but at least 1000 flows) are kept
-     * cached.  At least the most-recently-used bucket of facets is kept, so
-     * actually an arbitrary number of facets can be kept in any given
-     * expiration run (though the next run will delete most of those unless
-     * they receive additional data).
+     * the most-recently-used 1% of facets (but at least
+     * ofproto->up.flow_eviction_threshold flows) are kept cached.  At least
+     * the most-recently-used bucket of facets is kept, so actually an
+     * arbitrary number of facets can be kept in any given expiration run
+     * (though the next run will delete most of those unless they receive
+     * additional data).
      *
      * This requires a second pass through the facets, in addition to the pass
      * made by update_stats(), because the former function never looks
@@ -1890,7 +1891,7 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
     int i;
 
     total = hmap_count(&ofproto->facets);
-    if (total <= 1000) {
+    if (total <= ofproto->up.flow_eviction_threshold) {
         return N_BUCKETS * BUCKET_WIDTH;
     }
 
@@ -1908,7 +1909,8 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
     subtotal = bucket = 0;
     do {
         subtotal += buckets[bucket++];
-    } while (bucket < N_BUCKETS && subtotal < MAX(1000, total / 100));
+    } while (bucket < N_BUCKETS &&
+             subtotal < MAX(ofproto->up.flow_eviction_threshold, total / 100));
 
     if (VLOG_IS_DBG_ENABLED()) {
         struct ds s;

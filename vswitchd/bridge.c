@@ -148,6 +148,7 @@ static void bridge_add_ofproto_ports(struct bridge *);
 static void bridge_del_ofproto_ports(struct bridge *);
 static void bridge_refresh_ofp_port(struct bridge *);
 static void bridge_configure_datapath_id(struct bridge *);
+static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_remotes(struct bridge *,
@@ -412,6 +413,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         }
         bridge_configure_mirrors(br);
         bridge_configure_datapath_id(br);
+        bridge_configure_flow_eviction_threshold(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -960,6 +962,22 @@ bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
 {
     return get_ovsrec_key_value(&br_cfg->header_,
                                 &ovsrec_bridge_col_other_config, key);
+}
+
+/* Set Flow eviction threshold */
+static void
+bridge_configure_flow_eviction_threshold(struct bridge *br)
+{
+    const char *threshold_str;
+    unsigned threshold;
+
+    threshold_str = bridge_get_other_config(br->cfg, "flow-eviction-threshold");
+    if (threshold_str) {
+        threshold = strtoul(threshold_str, NULL, 10);
+    } else {
+        threshold = OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT;
+    }
+    ofproto_set_flow_eviction_threshold(br->ofproto, threshold);
 }
 
 static void
