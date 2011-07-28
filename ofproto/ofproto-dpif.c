@@ -468,7 +468,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
 
     ofproto->has_bundle_action = false;
 
-    *n_tablesp = 1;
+    *n_tablesp = 255;
     return 0;
 }
 
@@ -489,14 +489,18 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
-    struct cls_cursor cursor;
+    struct classifier *table;
     int i;
 
     complete_operations(ofproto);
 
-    cls_cursor_init(&cursor, &ofproto->up.tables[0], NULL);
-    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-        ofproto_rule_destroy(&rule->up);
+    OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
+        struct cls_cursor cursor;
+
+        cls_cursor_init(&cursor, table, NULL);
+        CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
+            ofproto_rule_destroy(&rule->up);
+        }
     }
 
     for (i = 0; i < MAX_MIRRORS; i++) {
@@ -1744,7 +1748,7 @@ static int
 expire(struct ofproto_dpif *ofproto)
 {
     struct rule_dpif *rule, *next_rule;
-    struct cls_cursor cursor;
+    struct classifier *table;
     int dp_max_idle;
 
     /* Update stats for each flow in the datapath. */
@@ -1755,9 +1759,13 @@ expire(struct ofproto_dpif *ofproto)
     expire_facets(ofproto, dp_max_idle);
 
     /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
-    cls_cursor_init(&cursor, &ofproto->up.tables[0], NULL);
-    CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-        rule_expire(rule);
+    OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
+        struct cls_cursor cursor;
+
+        cls_cursor_init(&cursor, table, NULL);
+        CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
+            rule_expire(rule);
+        }
     }
 
     /* All outstanding data in existing flows has been accounted, so it's a
