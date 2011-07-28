@@ -33,6 +33,7 @@
 /test-sha1
 /test-type-props
 /test-unix-socket
+/test-util
 /test-uuid
 /test-vconn
 /testsuite

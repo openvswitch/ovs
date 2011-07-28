@@ -3,6 +3,8 @@
 /nlmon
 /ovs-appctl
 /ovs-appctl.8
+/ovs-benchmark
+/ovs-benchmark.1
 /ovs-cfg-mod
 /ovs-cfg-mod.8
 /ovs-controller
