@@ -419,7 +419,7 @@ dealloc(struct ofproto *ofproto_)
 }
 
 static int
-construct(struct ofproto *ofproto_)
+construct(struct ofproto *ofproto_, int *n_tablesp)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     const char *name = ofproto->up.name;
@@ -464,14 +464,11 @@ construct(struct ofproto *ofproto_)
 
     list_init(&ofproto->completions);
 
-    ofproto->up.tables = xmalloc(sizeof *ofproto->up.tables);
-    classifier_init(&ofproto->up.tables[0]);
-    ofproto->up.n_tables = 1;
-
     ofproto_dpif_unixctl_init();
 
     ofproto->has_bundle_action = false;
 
+    *n_tablesp = 1;
     return 0;
 }
 

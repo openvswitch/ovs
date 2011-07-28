@@ -290,7 +290,9 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 {
     const struct ofproto_class *class;
     struct ofproto *ofproto;
+    int n_tables;
     int error;
+    int i;
 
     *ofprotop = NULL;
 
@@ -337,14 +339,20 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     list_init(&ofproto->pending);
     hmap_init(&ofproto->deletions);
 
-    error = ofproto->ofproto_class->construct(ofproto);
+    error = ofproto->ofproto_class->construct(ofproto, &n_tables);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s",
                  datapath_name, strerror(error));
         ofproto_destroy__(ofproto);
         return error;
     }
-    assert(ofproto->n_tables > 0);
+
+    assert(n_tables >= 1 && n_tables <= 255);
+    ofproto->n_tables = n_tables;
+    ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
+    for (i = 0; i < n_tables; i++) {
+        classifier_init(&ofproto->tables[i]);
+    }
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
     VLOG_INFO("using datapath ID %016"PRIx64, ofproto->datapath_id);

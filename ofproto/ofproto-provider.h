@@ -255,17 +255,20 @@ struct ofproto_class {
      * Construction
      * ============
      *
-     * ->construct() should not modify most base members of the ofproto.  In
-     * particular, the client will initialize the ofproto's 'ports' member
-     * after construction is complete.
+     * ->construct() should not modify any base members of the ofproto.  The
+     * client will initialize the ofproto's 'ports' and 'tables' members after
+     * construction is complete.
      *
-     * ->construct() should initialize the base 'n_tables' member to the number
-     * of flow tables supported by the datapath (between 1 and 255, inclusive),
-     * initialize the base 'tables' member with space for one classifier per
-     * table, and initialize each classifier with classifier_init.  Each flow
-     * table should be initially empty, so ->construct() should delete flows
-     * from the underlying datapath, if necessary, rather than populating the
-     * tables.
+     * When ->construct() is called, the client does not yet know how many flow
+     * tables the datapath supports, so ofproto->n_tables will be 0 and
+     * ofproto->tables will be NULL.  ->construct() should store the number of
+     * flow tables supported by the datapath (between 1 and 255, inclusive)
+     * into '*n_tables'.  After a successful return, the client will initialize
+     * the base 'n_tables' member to '*n_tables' and allocate and initialize
+     * the base 'tables' member as the specified number of empty flow tables.
+     * Each flow table will be initially empty, so ->construct() should delete
+     * flows from the underlying datapath, if necessary, rather than populating
+     * the tables.
      *
      * Only one ofproto instance needs to be supported for any given datapath.
      * If a datapath is already open as part of one "ofproto", then another
@@ -279,15 +282,16 @@ struct ofproto_class {
      * Destruction
      * ===========
      *
-     * ->destruct() must do at least the following:
+     * If 'ofproto' has any pending asynchronous operations, ->destruct()
+     * must complete all of them by calling ofoperation_complete().
      *
-     *   - If 'ofproto' has any pending asynchronous operations, ->destruct()
-     *     must complete all of them by calling ofoperation_complete().
-     *
-     *   - If 'ofproto' has any rules left in any of its flow tables, ->
+     * ->destruct() must also destroy all remaining rules in the ofproto's
+     * tables, by passing each remaining rule to ofproto_rule_destroy().  The
+     * client will destroy the flow tables themselves after ->destruct()
+     * returns.
      */
     struct ofproto *(*alloc)(void);
-    int (*construct)(struct ofproto *ofproto);
+    int (*construct)(struct ofproto *ofproto, int *n_tables);
     void (*destruct)(struct ofproto *ofproto);
     void (*dealloc)(struct ofproto *ofproto);
 
