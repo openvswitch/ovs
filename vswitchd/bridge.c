@@ -2748,7 +2748,6 @@ mirror_configure(struct mirror *m, const struct ovsrec_mirror *cfg)
                              &s.srcs, &s.n_srcs);
         mirror_collect_ports(m, cfg->select_dst_port, cfg->n_select_dst_port,
                              &s.dsts, &s.n_dsts);
-
     }
 
     /* Get VLAN selection. */
