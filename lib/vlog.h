@@ -198,7 +198,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
  * THIS_MODULE.  When constructing a log message is expensive, this enables it
  * to be skipped. */
 #define VLOG_IS_EMER_ENABLED() true
-#define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_EMER)
+#define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_ERR)
 #define VLOG_IS_WARN_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_WARN)
 #define VLOG_IS_INFO_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_INFO)
 #define VLOG_IS_DBG_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_DBG)
