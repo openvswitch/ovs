@@ -61,7 +61,7 @@ ovs_vsctl () {
 }
 
 ovsdb_tool () {
-    ovsdb-tool -vANY:console:emer "$@"
+    ovsdb-tool -vANY:console:off "$@"
 }
 
 create_db () {

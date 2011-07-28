@@ -28,12 +28,13 @@
 extern "C" {
 #endif
 
-/* Logging importance levels.
+/* Logging severity levels.
  *
- * The following log levels, in descending order of importance, are enabled by
+ * A logging severity level of OFF suppresses logging.  Messages at the
+ * following log levels, in descending order of importance, are enabled by
  * default:
  *
- *   - EMER: Not currently used.
+ *   - EMER: The process is aborting due to unrecoverable failure.
  *
  *   - ERR: A high-level operation or a subsystem failed.  Attention is
  *     warranted.
@@ -50,6 +51,7 @@ extern "C" {
  *     system, or that would commonly cause too-voluminous log output.
  */
 #define VLOG_LEVELS                             \
+    VLOG_LEVEL(OFF, LOG_ALERT)                  \
     VLOG_LEVEL(EMER, LOG_ALERT)                 \
     VLOG_LEVEL(ERR, LOG_ERR)                    \
     VLOG_LEVEL(WARN, LOG_WARNING)               \
@@ -163,12 +165,10 @@ void vlog_valist(const struct vlog_module *, enum vlog_level,
                  const char *, va_list)
     PRINTF_FORMAT (3, 0);
 
-void vlog_fatal(const struct vlog_module *, enum vlog_level,
-                const char *format, ...)
-    PRINTF_FORMAT (3, 4) NO_RETURN;
-void vlog_fatal_valist(const struct vlog_module *, enum vlog_level,
-                       const char *, va_list)
-    PRINTF_FORMAT (3, 0) NO_RETURN;
+void vlog_fatal(const struct vlog_module *, const char *format, ...)
+    PRINTF_FORMAT (2, 3) NO_RETURN;
+void vlog_fatal_valist(const struct vlog_module *, const char *format, va_list)
+    PRINTF_FORMAT (2, 0) NO_RETURN;
 
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
@@ -187,7 +187,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
  *
  * Guaranteed to preserve errno.
  */
-#define VLOG_FATAL(...) vlog_fatal(THIS_MODULE, VLL_ERR, __VA_ARGS__)
+#define VLOG_FATAL(...) vlog_fatal(THIS_MODULE, __VA_ARGS__)
 #define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)
 #define VLOG_ERR(...) VLOG(VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN(...) VLOG(VLL_WARN, __VA_ARGS__)
@@ -197,7 +197,6 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 /* More convenience macros, for testing whether a given level is enabled in
  * THIS_MODULE.  When constructing a log message is expensive, this enables it
  * to be skipped. */
-#define VLOG_IS_EMER_ENABLED() true
 #define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_ERR)
 #define VLOG_IS_WARN_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_WARN)
 #define VLOG_IS_INFO_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_INFO)

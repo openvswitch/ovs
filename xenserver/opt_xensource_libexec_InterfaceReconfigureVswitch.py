@@ -721,7 +721,7 @@ class DatapathVswitch(Datapath):
 
 def vswitchCfgQuery(action_args):
     cmd = ['%s/usr/bin/ovs-vsctl' % root_prefix(),
-        '--timeout=5', '-vANY:console:emer'] + action_args
+        '--timeout=5', '-vANY:console:off'] + action_args
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
     if len(output) == 0 or output[0] == None:
         output = ""

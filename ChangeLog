@@ -1,5 +1,11 @@
 post v1.1.0
 ------------------------
+
+    - A new log level "off" has been added.  Configuring a log facility
+      "off" prevents any messages from being logged to it.  Previously,
+      "emer" was effectively "off" because no messages were ever logged at
+      level "emer".  Now, errors that cause a process to exit are logged
+      at "emer" level.
     - The new "-s" option for "ovs-dpctl show" prints packet and byte
       counters for each port.
     - ovs-ofctl:

@@ -444,7 +444,7 @@ vsctl_fatal(const char *format, ...)
     message = xvasprintf(format, args);
     va_end(args);
 
-    vlog_set_levels(&VLM_vsctl, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(&VLM_vsctl, VLF_CONSOLE, VLL_OFF);
     VLOG_ERR("%s", message);
     ovs_error(0, "%s", message);
     vsctl_exit(EXIT_FAILURE);

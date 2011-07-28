@@ -118,7 +118,7 @@ def get_iface_id(if_name, xs_vif_uuid):
         return xs_vif_uuid
 
 def call_vsctl(args):
-    cmd = [vsctl, "--timeout=30", "-vANY:console:emer"] + args
+    cmd = [vsctl, "--timeout=30", "-vANY:console:off"] + args
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
         s_log.warning("Couldn't call ovs-vsctl")

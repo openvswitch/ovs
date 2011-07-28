@@ -70,7 +70,8 @@ set the logging levels for all modules.  The \fIfacility\fR may be
 system log or to the console, respectively, or \fBANY\fR to set the
 logging levels for both facilities.  If it is omitted,
 \fIfacility\fR defaults to \fBANY\fR.  The \fIlevel\fR must be one of
-\fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or \fBdbg\fR, designating the
+\fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or
+\fBdbg\fR, designating the
 minimum severity of a message for it to be logged.  If it is omitted,
 \fIlevel\fR defaults to \fBdbg\fR.
 .

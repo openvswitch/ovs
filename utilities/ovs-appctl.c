@@ -81,22 +81,23 @@ main(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s, for querying and controlling Open vSwitch daemon\n"
-           "usage: %s [TARGET] COMMAND [ARG...]\n"
-           "Targets:\n"
-           "  -t, --target=TARGET  pidfile or socket to contact\n"
-           "Common commands:\n"
-           "  help               List commands supported by the target\n"
-           "  vlog/list          List current logging levels\n"
-           "  vlog/set MODULE[:FACILITY[:LEVEL]]\n"
-           "        Set MODULE and FACILITY log level to LEVEL\n"
-           "        MODULE may be any valid module name or 'ANY'\n"
-           "        FACILITY may be 'syslog', 'console', 'file', or 'ANY' (default)\n"
-           "        LEVEL may be 'emer', 'err', 'warn', 'info', or 'dbg' (default)\n"
-           "  vlog/reopen        Make the program reopen its log file\n"
-           "Other options:\n"
-           "  -h, --help         Print this helpful information\n"
-           "  -V, --version      Display version information\n",
+    printf("\
+%s, for querying and controlling Open vSwitch daemon\n\
+usage: %s [TARGET] COMMAND [ARG...]\n\
+Targets:\n\
+  -t, --target=TARGET  pidfile or socket to contact\n\
+Common commands:\n\
+  help               List commands supported by the target\n\
+  vlog/list          List current logging levels\n\
+  vlog/set MODULE[:FACILITY[:LEVEL]]\n\
+      Set MODULE and FACILITY log level to LEVEL\n\
+      MODULE may be any valid module name or 'ANY'\n\
+      FACILITY may be 'syslog', 'console', 'file', or 'ANY' (default)\n\
+      LEVEL may be 'off', 'emer', 'err', 'warn', 'info', or 'dbg' (default)\n\
+  vlog/reopen        Make the program reopen its log file\n\
+Other options:\n\
+  -h, --help         Print this helpful information\n\
+  -V, --version      Display version information\n",
            program_name, program_name);
     exit(EXIT_SUCCESS);
 }

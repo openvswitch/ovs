@@ -1,4 +1,4 @@
-# Copyright (c) 2007-2010 Citrix Systems Inc.
+# Copyright (c) 2007-2011 Citrix Systems Inc.
 # Copyright (c) 2009,2010,2011 Nicira Networks.
 #
 # This program is free software; you can redistribute it and/or modify
@@ -86,7 +86,7 @@ class VSwitchConfig:
     @staticmethod
     def Get(action):
         try:
-            arg = [vsctl, "--timeout=30", "-vANY:console:emer"] + action.split()
+            arg = [vsctl, "--timeout=30", "-vANY:console:off"] + action.split()
             output = ShellPipe(arg).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))

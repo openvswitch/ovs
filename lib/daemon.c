@@ -410,7 +410,7 @@ close_standard_fds(void)
     }
 
     /* Disable logging to stderr to avoid wasting CPU time. */
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_OFF);
 }
 
 /* If daemonization is configured, then starts daemonization, by forking and

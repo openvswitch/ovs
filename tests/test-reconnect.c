@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ main(void)
     int old_time;
     char line[128];
 
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_OFF);
 
     now = 1000;
     reconnect = reconnect_create(now);
