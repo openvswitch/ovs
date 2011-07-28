@@ -1402,7 +1402,8 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             puts(out);
             free(out);
         } else {
-            printf("nx_pull_match() returned error %x\n", error);
+            printf("nx_pull_match() returned error %x (%s)\n", error,
+                   ofputil_error_to_string(error));
         }
 
         ofpbuf_uninit(&nx_match);
