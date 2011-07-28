@@ -598,8 +598,7 @@ struct ofproto_class {
      * If multiple tables are candidates for inserting the flow, the function
      * should choose one arbitrarily (but deterministically).
      *
-     * This function will never be called for an ofproto that has only one
-     * table, so it may be NULL in that case. */
+     * If this function is NULL then table 0 is always chosen. */
     int (*rule_choose_table)(const struct ofproto *ofproto,
                              const struct cls_rule *cls_rule,
                              uint8_t *table_idp);

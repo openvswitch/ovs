@@ -2182,7 +2182,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn, struct flow_mod *fm,
     /* Pick table. */
     if (fm->table_id == 0xff) {
         uint8_t table_id;
-        if (ofproto->n_tables > 1) {
+        if (ofproto->ofproto_class->rule_choose_table) {
             error = ofproto->ofproto_class->rule_choose_table(ofproto, &fm->cr,
                                                               &table_id);
             if (error) {
