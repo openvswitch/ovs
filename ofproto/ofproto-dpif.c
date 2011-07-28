@@ -1267,6 +1267,7 @@ mirror_set(struct ofproto *ofproto_, void *aux,
         mirror = ofproto->mirrors[idx] = xzalloc(sizeof *mirror);
         mirror->ofproto = ofproto;
         mirror->idx = idx;
+        mirror->aux = aux;
         mirror->out_vlan = -1;
         mirror->name = NULL;
     }
