@@ -146,7 +146,7 @@ static int do_add_port(struct dp_netdev *, const char *devname,
 static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
-static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
+static int dp_netdev_output_userspace(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, const struct flow *,
                                     uint64_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
@@ -707,7 +707,7 @@ dpif_netdev_validate_actions(const struct nlattr *actions,
             }
             break;
 
-        case ODP_ACTION_ATTR_CONTROLLER:
+        case ODP_ACTION_ATTR_USERSPACE:
             break;
 
         case ODP_ACTION_ATTR_SET_DL_TCI:
@@ -1088,7 +1088,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
         dp->n_hit++;
     } else {
         dp->n_missed++;
-        dp_netdev_output_control(dp, packet, DPIF_UC_MISS, &key, 0);
+        dp_netdev_output_userspace(dp, packet, DPIF_UC_MISS, &key, 0);
     }
 }
 
@@ -1252,7 +1252,7 @@ dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
 }
 
 static int
-dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
+dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
                          int queue_no, const struct flow *flow, uint64_t arg)
 {
     struct dp_netdev_queue *q = &dp->queues[queue_no];
@@ -1299,8 +1299,8 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;
 
-        case ODP_ACTION_ATTR_CONTROLLER:
-            dp_netdev_output_control(dp, packet, DPIF_UC_ACTION,
+        case ODP_ACTION_ATTR_USERSPACE:
+            dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION,
                                      key, nl_attr_get_u64(a));
             break;
 

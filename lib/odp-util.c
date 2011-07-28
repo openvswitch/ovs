@@ -41,7 +41,7 @@ odp_action_len(uint16_t type)
 
     switch ((enum odp_action_type) type) {
     case ODP_ACTION_ATTR_OUTPUT: return 4;
-    case ODP_ACTION_ATTR_CONTROLLER: return 8;
+    case ODP_ACTION_ATTR_USERSPACE: return 8;
     case ODP_ACTION_ATTR_SET_DL_TCI: return 2;
     case ODP_ACTION_ATTR_STRIP_VLAN: return 0;
     case ODP_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
@@ -99,8 +99,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case ODP_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
-    case ODP_ACTION_ATTR_CONTROLLER:
-        ds_put_format(ds, "ctl(%"PRIu64")", nl_attr_get_u64(a));
+    case ODP_ACTION_ATTR_USERSPACE:
+        ds_put_format(ds, "userspace(%"PRIu64")", nl_attr_get_u64(a));
         break;
     case ODP_ACTION_ATTR_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",

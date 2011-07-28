@@ -84,7 +84,7 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
-static int queue_control_packets(struct datapath *, struct sk_buff *,
+static int queue_userspace_packets(struct datapath *, struct sk_buff *,
 				 const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
@@ -415,7 +415,7 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 		skb = nskb;
 	}
 
-	err = queue_control_packets(dp, skb, upcall_info);
+	err = queue_userspace_packets(dp, skb, upcall_info);
 	if (err)
 		goto err;
 
@@ -438,7 +438,7 @@ err:
  * 'upcall_info'.  There will be only one packet unless we broke up a GSO
  * packet.
  */
-static int queue_control_packets(struct datapath *dp, struct sk_buff *skb,
+static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 				 const struct dp_upcall_info *upcall_info)
 {
 	u32 group = packet_mc_group(dp, upcall_info->cmd);
@@ -552,7 +552,7 @@ static int validate_actions(const struct nlattr *attr)
 	nla_for_each_nested(a, attr, rem) {
 		static const u32 action_lens[ODP_ACTION_ATTR_MAX + 1] = {
 			[ODP_ACTION_ATTR_OUTPUT] = 4,
-			[ODP_ACTION_ATTR_CONTROLLER] = 8,
+			[ODP_ACTION_ATTR_USERSPACE] = 8,
 			[ODP_ACTION_ATTR_SET_DL_TCI] = 2,
 			[ODP_ACTION_ATTR_STRIP_VLAN] = 0,
 			[ODP_ACTION_ATTR_SET_DL_SRC] = ETH_ALEN,
@@ -575,7 +575,7 @@ static int validate_actions(const struct nlattr *attr)
 		case ODP_ACTION_ATTR_UNSPEC:
 			return -EINVAL;
 
-		case ODP_ACTION_ATTR_CONTROLLER:
+		case ODP_ACTION_ATTR_USERSPACE:
 		case ODP_ACTION_ATTR_STRIP_VLAN:
 		case ODP_ACTION_ATTR_SET_DL_SRC:
 		case ODP_ACTION_ATTR_SET_DL_DST:

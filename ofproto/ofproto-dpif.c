@@ -2047,7 +2047,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
                     struct ofpbuf *packet)
 {
     if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
-        && odp_actions->nla_type == ODP_ACTION_ATTR_CONTROLLER) {
+        && odp_actions->nla_type == ODP_ACTION_ATTR_USERSPACE) {
         /* As an optimization, avoid a round-trip from userspace to kernel to
          * userspace.  This also avoids possibly filling up kernel packet
          * buffers along the way. */
@@ -2956,7 +2956,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_CONTROLLER:
         commit_odp_actions(ctx);
-        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_CONTROLLER, max_len);
+        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_USERSPACE, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, OFPP_LOCAL);

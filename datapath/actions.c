@@ -218,7 +218,7 @@ error:
 	kfree_skb(skb);
 }
 
-static int output_control(struct datapath *dp, struct sk_buff *skb, u64 arg)
+static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
 {
 	struct dp_upcall_info upcall;
 
@@ -262,8 +262,8 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			prev_port = nla_get_u32(a);
 			break;
 
-		case ODP_ACTION_ATTR_CONTROLLER:
-			err = output_control(dp, skb, nla_get_u64(a));
+		case ODP_ACTION_ATTR_USERSPACE:
+			err = output_userspace(dp, skb, nla_get_u64(a));
 			break;
 
 		case ODP_ACTION_ATTR_SET_TUNNEL:
