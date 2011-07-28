@@ -289,10 +289,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
                struct ofproto **ofprotop)
 {
     const struct ofproto_class *class;
+    struct classifier *table;
     struct ofproto *ofproto;
     int n_tables;
     int error;
-    int i;
 
     *ofprotop = NULL;
 
@@ -350,8 +350,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     assert(n_tables >= 1 && n_tables <= 255);
     ofproto->n_tables = n_tables;
     ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
-    for (i = 0; i < n_tables; i++) {
-        classifier_init(&ofproto->tables[i]);
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        classifier_init(table);
     }
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
@@ -675,8 +675,7 @@ ofproto_flush__(struct ofproto *ofproto)
     }
 
     group = ofopgroup_create(ofproto);
-    for (table = ofproto->tables; table < &ofproto->tables[ofproto->n_tables];
-         table++) {
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         struct rule *rule, *next_rule;
         struct cls_cursor cursor;
 
@@ -695,7 +694,7 @@ ofproto_flush__(struct ofproto *ofproto)
 static void
 ofproto_destroy__(struct ofproto *ofproto)
 {
-    size_t i;
+    struct classifier *table;
 
     assert(list_is_empty(&ofproto->pending));
 
@@ -712,9 +711,9 @@ ofproto_destroy__(struct ofproto *ofproto)
     hmap_destroy(&ofproto->ports);
     shash_destroy(&ofproto->port_by_name);
 
-    for (i = 0; i < ofproto->n_tables; i++) {
-        assert(classifier_is_empty(&ofproto->tables[i]));
-        classifier_destroy(&ofproto->tables[i]);
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        assert(classifier_is_empty(table));
+        classifier_destroy(table);
     }
     free(ofproto->tables);
 
@@ -1956,7 +1955,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 {
     struct classifier *cls;
 
-    for (cls = &p->tables[0]; cls < &p->tables[p->n_tables]; cls++) {
+    OFPROTO_FOR_EACH_TABLE (cls, p) {
         struct cls_cursor cursor;
         struct rule *rule;
 
