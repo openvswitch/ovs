@@ -613,6 +613,7 @@ parse_protocol(const char *name, const struct protocol **p_out)
     return false;
 }
 
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
 #define FIELDS                                              \
     FIELD(F_TUN_ID,      "tun_id",      0)                  \
     FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \

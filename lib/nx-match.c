@@ -162,6 +162,8 @@ parse_nxm_entry(struct cls_rule *rule, const struct nxm_field *f,
     struct flow_wildcards *wc = &rule->wc;
     struct flow *flow = &rule->flow;
 
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+
     switch (f->index) {
         /* Metadata. */
     case NFI_NXM_OF_IN_PORT:
@@ -705,6 +707,8 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     const size_t start_len = b->size;
     int match_len;
     int i;
+
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
