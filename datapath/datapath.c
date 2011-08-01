@@ -687,6 +687,11 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = -ENODEV;
 	if (!dp)
 		goto err_unlock;
+
+	if (flow->key.eth.in_port < DP_MAX_PORTS)
+		OVS_CB(packet)->vport = get_vport_protected(dp,
+							flow->key.eth.in_port);
+
 	err = execute_actions(dp, packet);
 	rcu_read_unlock();
 
