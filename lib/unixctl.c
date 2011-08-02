@@ -107,6 +107,13 @@ unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
     ds_destroy(&ds);
 }
 
+static void
+unixctl_version(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                void *aux OVS_UNUSED)
+{
+    unixctl_command_reply(conn, 200, get_program_version());
+}
+
 void
 unixctl_command_register(const char *name, unixctl_cb_func *cb, void *aux)
 {
@@ -206,6 +213,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     }
 
     unixctl_command_register("help", unixctl_help, NULL);
+    unixctl_command_register("version", unixctl_version, NULL);
 
     server = xmalloc(sizeof *server);
     list_init(&server->conns);

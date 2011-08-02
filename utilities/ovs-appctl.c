@@ -88,6 +88,7 @@ Targets:\n\
   -t, --target=TARGET  pidfile or socket to contact\n\
 Common commands:\n\
   help               List commands supported by the target\n\
+  version            Print version of the target\n\
   vlog/list          List current logging levels\n\
   vlog/set MODULE[:FACILITY[:LEVEL]]\n\
       Set MODULE and FACILITY log level to LEVEL\n\
@@ -97,7 +98,7 @@ Common commands:\n\
   vlog/reopen        Make the program reopen its log file\n\
 Other options:\n\
   -h, --help         Print this helpful information\n\
-  -V, --version      Display version information\n",
+  -V, --version      Display ovs-appctl version information\n",
            program_name, program_name);
     exit(EXIT_SUCCESS);
 }

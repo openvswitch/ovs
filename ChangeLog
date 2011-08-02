@@ -1,6 +1,7 @@
 Post-v1.2.0
 ------------------------
-
+    - ovs-appctl:
+      - New "version" command to determine version of running daemon
 
 v1.2.0 - 03 Aug 2011
 ------------------------
