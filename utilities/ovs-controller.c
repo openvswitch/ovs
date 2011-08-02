@@ -397,7 +397,7 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'V':
-            OVS_PRINT_VERSION(OFP_VERSION, OFP_VERSION);
+            ovs_print_version(OFP_VERSION, OFP_VERSION);
             exit(EXIT_SUCCESS);
 
         VLOG_OPTION_HANDLERS

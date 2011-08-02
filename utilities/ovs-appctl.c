@@ -147,7 +147,7 @@ parse_command_line(int argc, char *argv[])
             break;
 
         case 'V':
-            OVS_PRINT_VERSION(0, 0);
+            ovs_print_version(0, 0);
             exit(EXIT_SUCCESS);
 
         case '?':

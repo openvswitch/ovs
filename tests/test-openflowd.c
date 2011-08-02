@@ -429,7 +429,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             usage();
 
         case 'V':
-            OVS_PRINT_VERSION(OFP_VERSION, OFP_VERSION);
+            ovs_print_version(OFP_VERSION, OFP_VERSION);
             exit(EXIT_SUCCESS);
 
         DAEMON_OPTION_HANDLERS

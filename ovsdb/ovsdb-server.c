@@ -709,7 +709,7 @@ parse_options(int argc, char *argv[], char **file_namep,
             usage();
 
         case 'V':
-            OVS_PRINT_VERSION(0, 0);
+            ovs_print_version(0, 0);
             exit(EXIT_SUCCESS);
 
         VLOG_OPTION_HANDLERS

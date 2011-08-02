@@ -33,6 +33,7 @@ VLOG_DEFINE_THIS_MODULE(util);
 COVERAGE_DEFINE(util_xalloc);
 
 const char *program_name;
+static char *program_version;
 
 void
 out_of_memory(void)
@@ -277,21 +278,41 @@ ovs_retval_to_string(int retval)
     return unknown;
 }
 
-/* Sets program_name based on 'argv0'.  Should be called at the beginning of
- * main(), as "set_program_name(argv[0]);".  */
-void set_program_name(const char *argv0)
+/* Sets global "program_name" and "program_version" variables.  Should
+ * be called at the beginning of main() with "argv[0]" as the argument
+ * to 'argv0'.
+ *
+ * The 'date' and 'time' arguments should likely be called with
+ * "__DATE__" and "__TIME__" to use the time the binary was built.
+ * Alternatively, the "set_program_name" macro may be called to do this
+ * automatically.
+ */
+void
+set_program_name__(const char *argv0, const char *date, const char *time)
 {
     const char *slash = strrchr(argv0, '/');
     program_name = slash ? slash + 1 : argv0;
+
+    free(program_version);
+    program_version = xasprintf("%s (Open vSwitch) "VERSION BUILDNR"\n"
+                                "Compiled %s %s\n",
+                                program_name, date, time);
+}
+
+/* Returns a pointer to a string describing the program version.  The
+ * caller must not modify or free the returned string.
+ */ 
+const char *
+get_program_version()
+{
+    return program_version;
 }
 
 /* Print the version information for the program.  */
 void
-ovs_print_version(char *date, char *time,
-                  uint8_t min_ofp, uint8_t max_ofp)
+ovs_print_version(uint8_t min_ofp, uint8_t max_ofp)
 {
-    printf("%s (Open vSwitch) "VERSION BUILDNR"\n", program_name);
-    printf("Compiled %s %s\n", date, time);
+    printf("%s", program_version);
     if (min_ofp || max_ofp) {
         printf("OpenFlow versions %#x:%#x\n", min_ofp, max_ofp);
     }
