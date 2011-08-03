@@ -1,4 +1,4 @@
-post v1.1.0
+v1.2.0 - 03 Aug 2011
 ------------------------
     - New "ofproto" abstraction layer to ease porting to hardware
       switching ASICs.

@@ -1,3 +1,50 @@
+openvswitch (1.2.0-1) unstable; urgency=low
+
+  [ Open vSwitch team ]
+  * New upstream version
+    - New "ofproto" abstraction layer to ease porting to hardware
+      switching ASICs.
+    - Packaging for Red Hat Enterprise Linux 5.6 and 6.0.
+    - Datapath support for Linux kernels up to 3.0.
+    - OpenFlow:
+      - New "bundle" and "bundle_load" action extensions.
+    - Database:
+      - Implement table unique constraints.
+      - Support cooperative locking between callers.
+    - ovs-dpctl:
+      - New "-s" option for "show" command prints packet and byte
+        counters for each port.
+    - ovs-ofctl:
+      - New "--readd" option for "replace-flows".
+    - ovs-vsctl:
+      - New "show" command to print an overview of configuration.
+      - New "comment" command to add remark that explains intentions.
+    - ovs-brcompatd has been rewritten to fix long-standing bugs.
+    - ovs-openflowd has been renamed test-openflowd and moved into the
+      tests directory.  Its presence confused too many users.  Please
+      use ovs-vswitchd instead.
+    - New ovs-benchmark utility to test flow setup performance.
+    - A new log level "off" has been added.  Configuring a log facility
+      "off" prevents any messages from being logged to it.  Previously,
+      "emer" was effectively "off" because no messages were ever logged at
+      level "emer".  Now, errors that cause a process to exit are logged
+      at "emer" level.
+    - "configure" option --with-l26 has been renamed --with-linux, and
+      --with-l26-source has been renamed --with-linux-source.  The old
+      names will be removed after the next release, so please update
+      your scripts.
+    - The "-2.6" suffix has been dropped from the datapath/linux-2.6 and
+      datapath/linux-2.6/compat-2.6 directories.
+    - Feature removals:
+      - Dropped support for "tun_id_from_cookie" OpenFlow extension.
+        Please use the extensible match extensions instead.
+      - Removed the Maintenance_Point and Monitor tables in an effort
+        to simplify 802.1ag configuration.
+    - Performance and scalability improvements
+    - Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 03 Aug 2011 14:43:00 +0000
+
 openvswitch (1.1.1-1) unstable; urgency=low
 
   [ Open vSwitch team ]
