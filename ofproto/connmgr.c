@@ -240,7 +240,10 @@ connmgr_run(struct connmgr *mgr,
     size_t i;
 
     if (handle_openflow && mgr->in_band) {
-        in_band_run(mgr->in_band);
+        if (!in_band_run(mgr->in_band)) {
+            in_band_destroy(mgr->in_band);
+            mgr->in_band = NULL;
+        }
     }
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &mgr->all_conns) {
@@ -604,13 +607,13 @@ update_in_band_remotes(struct connmgr *mgr)
         if (!mgr->in_band) {
             in_band_create(mgr->ofproto, mgr->local_port_name, &mgr->in_band);
         }
-        if (mgr->in_band) {
-            in_band_set_remotes(mgr->in_band, addrs, n_addrs);
-        }
         in_band_set_queue(mgr->in_band, mgr->in_band_queue);
     } else {
-        in_band_destroy(mgr->in_band);
-        mgr->in_band = NULL;
+        /* in_band_run() needs a chance to delete any existing in-band flows.
+         * We will destroy mgr->in_band after it's done with that. */
+    }
+    if (mgr->in_band) {
+        in_band_set_remotes(mgr->in_band, addrs, n_addrs);
     }
 
     /* Clean up. */
