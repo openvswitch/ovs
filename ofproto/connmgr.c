@@ -137,7 +137,6 @@ struct connmgr {
 
     /* In-band control. */
     struct in_band *in_band;
-    long long int next_in_band_update;
     struct sockaddr_in *extra_in_band_remotes;
     size_t n_extra_remotes;
     int in_band_queue;
@@ -172,7 +171,6 @@ connmgr_create(struct ofproto *ofproto,
     mgr->fail_mode = OFPROTO_FAIL_SECURE;
 
     mgr->in_band = NULL;
-    mgr->next_in_band_update = LLONG_MAX;
     mgr->extra_in_band_remotes = NULL;
     mgr->n_extra_remotes = 0;
     mgr->in_band_queue = -1;
@@ -242,9 +240,6 @@ connmgr_run(struct connmgr *mgr,
     size_t i;
 
     if (handle_openflow && mgr->in_band) {
-        if (time_msec() >= mgr->next_in_band_update) {
-            update_in_band_remotes(mgr);
-        }
         in_band_run(mgr->in_band);
     }
 
@@ -309,7 +304,6 @@ connmgr_wait(struct connmgr *mgr, bool handling_openflow)
         ofconn_wait(ofconn, handling_openflow);
     }
     if (handling_openflow && mgr->in_band) {
-        poll_timer_wait_until(mgr->next_in_band_update);
         in_band_wait(mgr->in_band);
     }
     if (handling_openflow && mgr->fail_open) {
@@ -614,7 +608,6 @@ update_in_band_remotes(struct connmgr *mgr)
             in_band_set_remotes(mgr->in_band, addrs, n_addrs);
         }
         in_band_set_queue(mgr->in_band, mgr->in_band_queue);
-        mgr->next_in_band_update = time_msec() + 1000;
     } else {
         in_band_destroy(mgr->in_band);
         mgr->in_band = NULL;
