@@ -310,7 +310,7 @@ update_rules(struct in_band *ib)
         ib_rule->op = DELETE;
     }
 
-    if (!eth_addr_is_zero(ib->local_mac)) {
+    if (ib->n_remotes && !eth_addr_is_zero(ib->local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
         cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
         cls_rule_set_in_port(&rule, ODPP_LOCAL);
@@ -395,7 +395,12 @@ update_rules(struct in_band *ib)
     }
 }
 
-void
+/* Updates the OpenFlow flow table for the current state of in-band control.
+ * Returns true ordinarily.  Returns false if no remotes are configured on 'ib'
+ * and 'ib' doesn't have any rules left to remove from the OpenFlow flow
+ * table.  Thus, a false return value means that the caller can destroy 'ib'
+ * without leaving extra flows hanging around in the flow table. */
+bool
 in_band_run(struct in_band *ib)
 {
     struct {
@@ -446,6 +451,8 @@ in_band_run(struct in_band *ib)
             break;
         }
     }
+
+    return ib->n_remotes || !hmap_is_empty(&ib->rules);
 }
 
 void

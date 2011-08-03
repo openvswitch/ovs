@@ -35,7 +35,7 @@ void in_band_set_queue(struct in_band *, int queue_id);
 void in_band_set_remotes(struct in_band *,
                          const struct sockaddr_in *, size_t n);
 
-void in_band_run(struct in_band *);
+bool in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
 
 bool in_band_msg_in_hook(struct in_band *, const struct flow *,
