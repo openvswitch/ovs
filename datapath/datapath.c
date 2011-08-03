@@ -629,11 +629,13 @@ static int expand_table(struct datapath *dp)
 	struct tbl *new_table;
 
 	new_table = tbl_expand(old_table);
-	if (IS_ERR(new_table))
-		return PTR_ERR(new_table);
-
-	rcu_assign_pointer(dp->table, new_table);
-	tbl_deferred_destroy(old_table, NULL);
+	if (IS_ERR(new_table)) {
+		if (PTR_ERR(new_table) != -ENOSPC)
+			return PTR_ERR(new_table);
+	} else {
+		rcu_assign_pointer(dp->table, new_table);
+		tbl_deferred_destroy(old_table, NULL);
+	}
 
  	return 0;
 }

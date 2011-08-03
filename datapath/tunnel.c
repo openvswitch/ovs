@@ -249,11 +249,13 @@ static int add_port(struct vport *vport)
 		struct tbl *new_table;
 
 		new_table = tbl_expand(cur_table);
-		if (IS_ERR(new_table))
-			return PTR_ERR(new_table);
-
-		rcu_assign_pointer(port_table, new_table);
-		tbl_deferred_destroy(cur_table, NULL);
+		if (IS_ERR(new_table)) {
+			if (PTR_ERR(new_table) != -ENOSPC)
+				return PTR_ERR(new_table);
+		} else {
+			rcu_assign_pointer(port_table, new_table);
+			tbl_deferred_destroy(cur_table, NULL);
+		}
 	}
 
 	err = tbl_insert(rtnl_dereference(port_table), &tnl_vport->tbl_node,
