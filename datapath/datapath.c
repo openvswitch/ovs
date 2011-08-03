@@ -747,6 +747,9 @@ static struct genl_ops dp_packet_genl_ops[] = {
 static void get_dp_stats(struct datapath *dp, struct odp_stats *stats)
 {
 	int i;
+	struct tbl *table = get_table_protected(dp);
+
+	stats->n_flows = tbl_count(table);
 
 	stats->n_frags = stats->n_hit = stats->n_missed = stats->n_lost = 0;
 	for_each_possible_cpu(i) {

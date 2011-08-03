@@ -369,6 +369,7 @@ show_dpif(struct dpif *dpif)
                (unsigned long long int) stats.n_hit,
                (unsigned long long int) stats.n_missed,
                (unsigned long long int) stats.n_lost);
+        printf("\tflows: %llu\n", (unsigned long long int)stats.n_flows);
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);

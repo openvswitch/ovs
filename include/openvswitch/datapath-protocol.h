@@ -133,6 +133,7 @@ struct odp_stats {
     uint64_t n_hit;             /* Number of flow table matches. */
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
+    uint64_t n_flows;           /* Number of flows present */
 };
 
 /* Logical ports. */
