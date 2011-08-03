@@ -333,7 +333,7 @@ struct tbl *tbl_expand(struct tbl *table)
 	int n_buckets = table->n_buckets * 2;
 	struct tbl *new_table;
 
-	if (n_buckets >= TBL_MAX_BUCKETS) {
+	if (n_buckets > TBL_MAX_BUCKETS) {
 		err = -ENOSPC;
 		goto error;
 	}
