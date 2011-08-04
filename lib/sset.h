@@ -19,6 +19,10 @@
 
 #include "hmap.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct sset_node {
     struct hmap_node hmap_node;
     char name[1];
@@ -84,5 +88,9 @@ bool sset_equals(const struct sset *, const struct sset *);
 #define SSET_NEXT(SSET, NAME)                                           \
     SSET_NAME_FROM_HMAP_NODE(                                           \
         hmap_next(&(SSET)->map, &SSET_NODE_FROM_NAME(NAME)->hmap_node))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* sset.h */

@@ -89,7 +89,7 @@ static inline void hmap_remove(struct hmap *, struct hmap_node *);
 
 void hmap_node_moved(struct hmap *, struct hmap_node *, struct hmap_node *);
 static inline void hmap_replace(struct hmap *, const struct hmap_node *old,
-                                struct hmap_node *new);
+                                struct hmap_node *new_node);
 
 struct hmap_node *hmap_random_node(const struct hmap *);
 
