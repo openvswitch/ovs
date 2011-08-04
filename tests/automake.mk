@@ -15,6 +15,7 @@ TESTSUITE_AT = \
 	tests/daemon-py.at \
 	tests/ofp-print.at \
 	tests/ovs-ofctl.at \
+	tests/odp.at \
 	tests/multipath.at \
 	tests/autopath.at \
 	tests/vconn.at \
@@ -80,6 +81,7 @@ lcov_wrappers = \
 	tests/lcov/test-list \
 	tests/lcov/test-lockfile \
 	tests/lcov/test-multipath \
+	tests/lcov/test-odp \
 	tests/lcov/test-ovsdb \
 	tests/lcov/test-packets \
 	tests/lcov/test-random \
@@ -133,6 +135,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-list \
 	tests/valgrind/test-lockfile \
 	tests/valgrind/test-multipath \
+	tests/valgrind/test-odp \
 	tests/valgrind/test-openflowd \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-packets \
@@ -260,6 +263,10 @@ tests_test_random_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-unix-socket
 tests_test_unix_socket_SOURCES = tests/test-unix-socket.c
 tests_test_unix_socket_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-odp
+tests_test_odp_SOURCES = tests/test-odp.c
+tests_test_odp_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = \

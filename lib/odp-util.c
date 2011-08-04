@@ -27,6 +27,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netlink.h"
+#include "ofpbuf.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "timeval.h"
@@ -387,6 +388,312 @@ odp_flow_key_format(const struct nlattr *key, size_t key_len, struct ds *ds)
     } else {
         ds_put_cstr(ds, "<empty>");
     }
+}
+
+static int
+put_nd_key(int n, const char *nd_target_s,
+           const uint8_t *nd_sll, const uint8_t *nd_tll, struct ofpbuf *key)
+{
+    struct odp_key_nd nd_key;
+
+    memset(&nd_key, 0, sizeof nd_key);
+    if (inet_pton(AF_INET6, nd_target_s, nd_key.nd_target) != 1) {
+        return -EINVAL;
+    }
+    if (nd_sll) {
+        memcpy(nd_key.nd_sll, nd_sll, ETH_ADDR_LEN);
+    }
+    if (nd_tll) {
+        memcpy(nd_key.nd_tll, nd_tll, ETH_ADDR_LEN);
+    }
+    nl_msg_put_unspec(key, ODP_KEY_ATTR_ND, &nd_key, sizeof nd_key);
+    return n;
+}
+
+static int
+parse_odp_key_attr(const char *s, struct ofpbuf *key)
+{
+    /* Many of the sscanf calls in this function use oversized destination
+     * fields because some sscanf() implementations truncate the range of %i
+     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
+     * value of 0x7fff.  The other alternatives are to allow only a single
+     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
+     * parsers.
+     *
+     * The tun_id parser has to use an alternative approach because there is no
+     * type larger than 64 bits. */
+
+    {
+        char tun_id_s[32];
+        int n = -1;
+
+        if (sscanf(s, "tun_id(%31[x0123456789abcdefABCDEF])%n",
+                   tun_id_s, &n) > 0 && n > 0) {
+            uint64_t tun_id = strtoull(tun_id_s, NULL, 0);
+            nl_msg_put_be64(key, ODP_KEY_ATTR_TUN_ID, htonll(tun_id));
+            return n;
+        }
+    }
+
+    {
+        unsigned long long int in_port;
+        int n = -1;
+
+        if (sscanf(s, "in_port(%lli)%n", &in_port, &n) > 0 && n > 0) {
+            nl_msg_put_u32(key, ODP_KEY_ATTR_IN_PORT, in_port);
+            return n;
+        }
+    }
+
+    {
+        struct odp_key_ethernet eth_key;
+        int n = -1;
+
+        if (sscanf(s,
+                   "eth(src="ETH_ADDR_SCAN_FMT",dst="ETH_ADDR_SCAN_FMT")%n",
+                   ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
+                   ETH_ADDR_SCAN_ARGS(eth_key.eth_dst), &n) > 0 && n > 0) {
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_ETHERNET,
+                              &eth_key, sizeof eth_key);
+            return n;
+        }
+    }
+
+    {
+        uint16_t tpid = ETH_TYPE_VLAN;
+        uint16_t vid;
+        int pcp;
+        int n = -1;
+
+        if ((sscanf(s, "vlan(vid=%"SCNi16",pcp=%i)%n",
+                    &vid, &pcp, &n) > 0 && n > 0) ||
+            (sscanf(s, "vlan(tpid=%"SCNi16",vid=%"SCNi16",pcp=%i)%n",
+                    &tpid, &vid, &pcp, &n) > 0 && n > 0)) {
+            struct odp_key_8021q q_key;
+
+            q_key.q_tpid = htons(tpid);
+            q_key.q_tci = htons((vid << VLAN_VID_SHIFT) |
+                                (pcp << VLAN_PCP_SHIFT));
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_8021Q, &q_key, sizeof q_key);
+            return n;
+        }
+    }
+
+    {
+        uint16_t eth_type;
+        int n = -1;
+
+        if (sscanf(s, "eth_type(%"SCNi16")%n", &eth_type, &n) > 0 && n > 0) {
+            nl_msg_put_be16(key, ODP_KEY_ATTR_ETHERTYPE, htons(eth_type));
+            return n;
+        }
+    }
+
+    {
+        ovs_be32 ipv4_src;
+        ovs_be32 ipv4_dst;
+        int ipv4_proto;
+        int ipv4_tos;
+        int n = -1;
+
+        if (sscanf(s, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT","
+                   "proto=%i,tos=%i)%n",
+                   IP_SCAN_ARGS(&ipv4_src),
+                   IP_SCAN_ARGS(&ipv4_dst), &ipv4_proto, &ipv4_tos, &n) > 0
+            && n > 0) {
+            struct odp_key_ipv4 ipv4_key;
+
+            memset(&ipv4_key, 0, sizeof ipv4_key);
+            ipv4_key.ipv4_src = ipv4_src;
+            ipv4_key.ipv4_dst = ipv4_dst;
+            ipv4_key.ipv4_proto = ipv4_proto;
+            ipv4_key.ipv4_tos = ipv4_tos;
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_IPV4,
+                              &ipv4_key, sizeof ipv4_key);
+            return n;
+        }
+    }
+
+    {
+        char ipv6_src_s[IPV6_SCAN_LEN + 1];
+        char ipv6_dst_s[IPV6_SCAN_LEN + 1];
+        int ipv6_proto;
+        int ipv6_tos;
+        int n = -1;
+
+        if (sscanf(s, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT","
+                   "proto=%i,tos=%i)%n",
+                   ipv6_src_s, ipv6_dst_s,
+                   &ipv6_proto, &ipv6_tos, &n) > 0 && n > 0) {
+            struct odp_key_ipv6 ipv6_key;
+
+            memset(&ipv6_key, 0, sizeof ipv6_key);
+            if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
+                inet_pton(AF_INET6, ipv6_dst_s, &ipv6_key.ipv6_dst) != 1) {
+                return -EINVAL;
+            }
+            ipv6_key.ipv6_proto = ipv6_proto;
+            ipv6_key.ipv6_tos = ipv6_tos;
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_IPV6,
+                              &ipv6_key, sizeof ipv6_key);
+            return n;
+        }
+    }
+
+    {
+        int tcp_src;
+        int tcp_dst;
+        int n = -1;
+
+        if (sscanf(s, "tcp(src=%i,dst=%i)%n",&tcp_src, &tcp_dst, &n) > 0
+            && n > 0) {
+            struct odp_key_tcp tcp_key;
+
+            tcp_key.tcp_src = htons(tcp_src);
+            tcp_key.tcp_dst = htons(tcp_dst);
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_TCP, &tcp_key, sizeof tcp_key);
+            return n;
+        }
+    }
+
+    {
+        int udp_src;
+        int udp_dst;
+        int n = -1;
+
+        if (sscanf(s, "udp(src=%i,dst=%i)%n", &udp_src, &udp_dst, &n) > 0
+            && n > 0) {
+            struct odp_key_udp udp_key;
+
+            udp_key.udp_src = htons(udp_src);
+            udp_key.udp_dst = htons(udp_dst);
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
+            return n;
+        }
+    }
+
+    {
+        int icmp_type;
+        int icmp_code;
+        int n = -1;
+
+        if (sscanf(s, "icmp(type=%i,code=%i)%n",
+                   &icmp_type, &icmp_code, &n) > 0
+            && n > 0) {
+            struct odp_key_icmp icmp_key;
+
+            icmp_key.icmp_type = icmp_type;
+            icmp_key.icmp_code = icmp_code;
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_ICMP,
+                              &icmp_key, sizeof icmp_key);
+            return n;
+        }
+    }
+
+    {
+        struct odp_key_icmpv6 icmpv6_key;
+        int n = -1;
+
+        if (sscanf(s, "icmpv6(type=%"SCNi8",code=%"SCNi8")%n",
+                   &icmpv6_key.icmpv6_type, &icmpv6_key.icmpv6_code,&n) > 0
+            && n > 0) {
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_ICMPV6,
+                              &icmpv6_key, sizeof icmpv6_key);
+            return n;
+        }
+    }
+
+    {
+        ovs_be32 arp_sip;
+        ovs_be32 arp_tip;
+        int arp_op;
+        uint8_t arp_sha[ETH_ADDR_LEN];
+        uint8_t arp_tha[ETH_ADDR_LEN];
+        int n = -1;
+
+        if (sscanf(s, "arp(sip="IP_SCAN_FMT",tip="IP_SCAN_FMT","
+                   "op=%i,sha="ETH_ADDR_SCAN_FMT",tha="ETH_ADDR_SCAN_FMT")%n",
+                   IP_SCAN_ARGS(&arp_sip),
+                   IP_SCAN_ARGS(&arp_tip),
+                   &arp_op,
+                   ETH_ADDR_SCAN_ARGS(arp_sha),
+                   ETH_ADDR_SCAN_ARGS(arp_tha), &n) > 0 && n > 0) {
+            struct odp_key_arp arp_key;
+
+            memset(&arp_key, 0, sizeof arp_key);
+            arp_key.arp_sip = arp_sip;
+            arp_key.arp_tip = arp_tip;
+            arp_key.arp_op = htons(arp_op);
+            memcpy(arp_key.arp_sha, arp_sha, ETH_ADDR_LEN);
+            memcpy(arp_key.arp_tha, arp_tha, ETH_ADDR_LEN);
+            nl_msg_put_unspec(key, ODP_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
+            return n;
+        }
+    }
+
+    {
+        char nd_target_s[IPV6_SCAN_LEN + 1];
+        uint8_t nd_sll[ETH_ADDR_LEN];
+        uint8_t nd_tll[ETH_ADDR_LEN];
+        int n = -1;
+
+        if (sscanf(s, "nd(target="IPV6_SCAN_FMT")%n",
+                   nd_target_s, &n) > 0 && n > 0) {
+            return put_nd_key(n, nd_target_s, NULL, NULL, key);
+        }
+        if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT")%n",
+                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll), &n) > 0
+            && n > 0) {
+            return put_nd_key(n, nd_target_s, nd_sll, NULL, key);
+        }
+        if (sscanf(s, "nd(target="IPV6_SCAN_FMT",tll="ETH_ADDR_SCAN_FMT")%n",
+                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_tll), &n) > 0
+            && n > 0) {
+            return put_nd_key(n, nd_target_s, NULL, nd_tll, key);
+        }
+        if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT","
+                   "tll="ETH_ADDR_SCAN_FMT")%n",
+                   nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll),
+                   ETH_ADDR_SCAN_ARGS(nd_tll), &n) > 0
+            && n > 0) {
+            return put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
+        }
+    }
+
+    return -EINVAL;
+}
+
+/* Parses the string representation of an ODP flow key, in the format output by
+ * odp_flow_key_format().  Returns 0 if successful, otherwise a positive errno
+ * value.  On success, the flow key is appended to 'key' as a series of Netlink
+ * attributes.  On failure, no data is appended to 'key'.  Either way, 'key''s
+ * data might be reallocated.
+ *
+ * On success, the attributes appended to 'key' are individually syntactically
+ * valid, but they may not be valid as a sequence.  'key' might, for example,
+ * be missing an "in_port" key, have duplicated keys, or have keys in the wrong
+ * order.  odp_flow_key_to_flow() will detect those errors. */
+int
+odp_flow_key_from_string(const char *s, struct ofpbuf *key)
+{
+    const size_t old_size = key->size;
+    for (;;) {
+        int retval;
+
+        s += strspn(s, ", \t\r\n");
+        if (!*s) {
+            return 0;
+        }
+
+        retval = parse_odp_key_attr(s, key);
+        if (retval < 0) {
+            key->size = old_size;
+            return -retval;
+        }
+        s += retval;
+    }
+
+    return 0;
 }
 
 /* Appends a representation of 'flow' as ODP_KEY_ATTR_* attributes to 'buf'. */
