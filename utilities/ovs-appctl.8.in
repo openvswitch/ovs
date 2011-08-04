@@ -18,12 +18,11 @@ ovs\-appctl \- utility for configuring running Open vSwitch daemons
 .br
 \fBovs\-appctl\fR \-\-version
 .SH DESCRIPTION
-Open vSwitch daemons accept certain commands at runtime to control
-their behavior and query their settings.  Every daemon accepts the
-commands for querying and adjusting its logging settings documented
-under \fBLOGGING COMMANDS\fR below, and \fBovs\-vswitchd\fR in
-particular accepts a number of additional commands documented in
-\fBovs\-vswitchd\fR(8).
+Open vSwitch daemons accept certain commands at runtime to control their
+behavior and query their settings.  Every daemon accepts a common set of
+commands documented under \fBCOMMON COMMANDS\fR below, and
+\fBovs\-vswitchd\fR in particular accepts a number of additional
+commands documented in \fBovs\-vswitchd\fR(8).
 .PP
 The \fBovs\-appctl\fR program provides a simple way to invoke these
 commands.  The command to be sent is specified on \fBovs\-appctl\fR's
@@ -54,19 +53,32 @@ as if it had been specified directly as the target.
 .IP
 The default target is \fBovs\-vswitchd\fR.
 .
-.SH LOGGING COMMANDS
+.SH COMMON COMMANDS
+Every Open vSwitch daemon supports a common set of commands, which are
+documented in this section.
 .
-.PP
-Open vSwitch has several log levels.  The highest-severity log level
-is:
+.SS GENERAL COMMANDS
+These commands display daemon-specific commands and the running version.
+Note that these commands are different from the \fB\-\-help\fR and
+\fB\-\-version\fR options that return information about the
+\fBovs\-appctl\fR utility itself.
+.
+.IP "\fBhelp\fR"
+Lists the commands supported by the target.
+.
+.IP "\fBversion\fR"
+Displays the version and compilation date of the target.
+.
+.SS LOGGING COMMANDS
+Open vSwitch has several log levels.  The highest-severity log level is:
 .
 .IP "\fBOFF\fR"
 No message is ever logged at this level, so setting a logging
 facility's log level to \fBOFF\fR disables logging to that facility.
 .
 .PP
-The following log levels, in order of descending severity, are enabled
-by default:
+The following log levels, in order of descending severity, are
+available:
 .
 .IP "\fBEMER\f"
 A major failure forced a process to abort.
@@ -85,8 +97,8 @@ system, or that would commonly cause too-voluminous log output.  Log
 messages at this level are not logged by default.
 .
 .PP
-Every Open vSwitch daemon supports the following commands for
-examining and adjusting log levels.
+Every Open vSwitch daemon supports the following commands for examining
+and adjusting log levels.
 .IP "\fBvlog/list\fR"
 Lists the known logging modules and their current levels.
 .
