@@ -272,7 +272,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         if (q_key->q_tpid != htons(ETH_TYPE_VLAN)) {
             ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(q_key->q_tpid));
         }
-        ds_put_format(ds, "vid%"PRIu16",pcp%d)",
+        ds_put_format(ds, "vid=%"PRIu16",pcp=%d)",
                       vlan_tci_to_vid(q_key->q_tci),
                       vlan_tci_to_pcp(q_key->q_tci));
         break;
