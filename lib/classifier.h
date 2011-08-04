@@ -32,6 +32,10 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A flow classifier. */
 struct classifier {
     int n_rules;                /* Total number of rules. */
@@ -163,5 +167,9 @@ struct cls_rule *cls_cursor_next(struct cls_cursor *, struct cls_rule *);
                              MEMBER)                                    \
           : 0);                                                         \
          (RULE) = (NEXT))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* classifier.h */

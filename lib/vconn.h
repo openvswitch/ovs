@@ -24,6 +24,10 @@
 
 #include "flow.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct list;
 struct ofpbuf;
 struct ofp_action_header;
@@ -77,5 +81,9 @@ const char *pvconn_get_name(const struct pvconn *);
 void pvconn_close(struct pvconn *);
 int pvconn_accept(struct pvconn *, int min_version, struct vconn **);
 void pvconn_wait(struct pvconn *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* vconn.h */

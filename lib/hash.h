@@ -22,6 +22,10 @@
 #include <string.h>
 #include "util.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* This is the public domain lookup3 hash by Bob Jenkins from
  * http://burtleburtle.net/bob/c/lookup3.c, modified for style. */
 
@@ -81,8 +85,8 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
  * quality. */
 static inline uint32_t hash_boolean(bool x, uint32_t basis)
 {
-    enum { P0 = 0xc2b73583 };   /* This is hash_int(1, 0). */
-    enum { P1 = 0xe90f1258 };   /* This is hash_int(2, 0). */
+    const uint32_t P0 = 0xc2b73583;   /* This is hash_int(1, 0). */
+    const uint32_t P1 = 0xe90f1258;   /* This is hash_int(2, 0). */
     return (x ? P0 : P1) ^ HASH_ROT(basis, 1);
 }
 
@@ -107,5 +111,9 @@ static inline uint32_t hash_pointer(const void *p, uint32_t basis)
      * entropy in the pointer is almost certainly in the lower 32 bits. */
     return hash_int((uint32_t) (uintptr_t) p, basis);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* hash.h */

@@ -315,7 +315,8 @@ enum ofputil_action_code ofputil_decode_action_unsafe(
 static inline union ofp_action *
 ofputil_action_next(const union ofp_action *a)
 {
-    return (void *) ((uint8_t *) a + ntohs(a->header.len));
+    return ((union ofp_action *) (void *)
+            ((uint8_t *) a + ntohs(a->header.len)));
 }
 
 static inline bool
