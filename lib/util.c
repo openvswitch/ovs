@@ -303,7 +303,7 @@ set_program_name__(const char *argv0, const char *date, const char *time)
  * caller must not modify or free the returned string.
  */ 
 const char *
-get_program_version()
+get_program_version(void)
 {
     return program_version;
 }
