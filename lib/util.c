@@ -301,7 +301,7 @@ set_program_name__(const char *argv0, const char *date, const char *time)
 
 /* Returns a pointer to a string describing the program version.  The
  * caller must not modify or free the returned string.
- */ 
+ */
 const char *
 get_program_version(void)
 {

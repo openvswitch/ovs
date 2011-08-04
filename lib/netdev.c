@@ -640,7 +640,7 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
  *
  *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
  *
- * 'address' or 'netmask' or both may be null, in which case the address or 
+ * 'address' or 'netmask' or both may be null, in which case the address or
  * netmask is not reported. */
 int
 netdev_get_in4(const struct netdev *netdev,

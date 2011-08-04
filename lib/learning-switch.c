@@ -149,7 +149,7 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
             }
         }
     }
-    
+
     return sw;
 }
 

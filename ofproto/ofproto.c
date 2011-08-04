@@ -430,7 +430,7 @@ ofproto_set_flow_eviction_threshold(struct ofproto *ofproto, unsigned threshold)
     }
 }
 
-/* If forward_bpdu is true, the NORMAL action will forward frames with 
+/* If forward_bpdu is true, the NORMAL action will forward frames with
  * reserved (e.g. STP) destination Ethernet addresses. if forward_bpdu is false,
  * the NORMAL action will drop these frames. */
 void
@@ -442,7 +442,7 @@ ofproto_set_forward_bpdu(struct ofproto *ofproto, bool forward_bpdu)
         if (ofproto->ofproto_class->forward_bpdu_changed) {
             ofproto->ofproto_class->forward_bpdu_changed(ofproto);
         }
-    }   
+    }
 }
 
 void

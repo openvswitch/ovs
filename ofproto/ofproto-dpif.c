@@ -1397,7 +1397,7 @@ is_mirror_output_bundle(struct ofproto *ofproto_, void *aux)
 }
 
 static void
-forward_bpdu_changed(struct ofproto *ofproto_) 
+forward_bpdu_changed(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     /* Revalidate cached flows whenever forward_bpdu option changes. */
@@ -3777,9 +3777,9 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
         return false;
     }
 
-    /* Drop frames for reserved multicast addresses 
+    /* Drop frames for reserved multicast addresses
      * only if forward_bpdu option is absent. */
-    if (eth_addr_is_reserved(flow->dl_dst) && 
+    if (eth_addr_is_reserved(flow->dl_dst) &&
         !ofproto->up.forward_bpdu) {
         return false;
     }

@@ -630,11 +630,11 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
             ds_put_char(s, ',');
         }
         if (!(w & FWW_ARP_SHA)) {
-            ds_put_format(s, "nd_sll="ETH_ADDR_FMT",", 
+            ds_put_format(s, "nd_sll="ETH_ADDR_FMT",",
                     ETH_ADDR_ARGS(f->arp_sha));
         }
         if (!(w & FWW_ARP_THA)) {
-            ds_put_format(s, "nd_tll="ETH_ADDR_FMT",", 
+            ds_put_format(s, "nd_tll="ETH_ADDR_FMT",",
                     ETH_ADDR_ARGS(f->arp_tha));
         }
    } else {
@@ -1172,7 +1172,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                     &wildcards->ipv6_src_mask)
             && ipv6_equal_except(&a->ipv6_dst, &b->ipv6_dst,
                     &wildcards->ipv6_dst_mask)
-            && (wc & FWW_ND_TARGET 
+            && (wc & FWW_ND_TARGET
                 || ipv6_addr_equals(&a->nd_target, &b->nd_target)));
 }
 

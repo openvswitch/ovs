@@ -477,7 +477,7 @@ flow_format(struct ds *ds, const struct flow *flow)
         print_ipv6_addr(ds, &flow->ipv6_src);
         ds_put_cstr(ds, "->");
         print_ipv6_addr(ds, &flow->ipv6_dst);
-       
+
     } else {
         ds_put_format(ds, " proto%"PRIu8
                           " tos%"PRIu8
@@ -612,7 +612,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || a->tun_id_mask != b->tun_id_mask
         || a->nw_src_mask != b->nw_src_mask
         || a->nw_dst_mask != b->nw_dst_mask
-        || a->vlan_tci_mask != b->vlan_tci_mask 
+        || a->vlan_tci_mask != b->vlan_tci_mask
         || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
         || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)) {
         return false;

@@ -761,7 +761,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         memcpy(arp_key->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
         memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
     }
-    
+
     if (flow->dl_type == htons(ETH_TYPE_IP)
             || flow->dl_type == htons(ETH_TYPE_IPV6)) {
 

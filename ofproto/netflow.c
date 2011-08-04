@@ -104,7 +104,7 @@ struct netflow {
 
 static void
 gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
-                struct ofexpired *expired, 
+                struct ofexpired *expired,
                 uint32_t packet_count, uint32_t byte_count)
 {
     struct netflow_v5_header *nf_hdr;
