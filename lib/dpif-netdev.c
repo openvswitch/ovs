@@ -331,7 +331,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             uint16_t port_no)
 {
     struct dp_netdev_port *port;
-    struct netdev_options netdev_options;
     struct netdev *netdev;
     bool internal;
     int mtu;
@@ -348,15 +347,13 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
 
     /* Open and validate network device. */
-    memset(&netdev_options, 0, sizeof netdev_options);
-    netdev_options.name = devname;
     if (dp->class == &dpif_dummy_class) {
-        netdev_options.type = "dummy";
+        type = "dummy";
     } else if (internal) {
-        netdev_options.type = "tap";
+        type = "tap";
     }
 
-    error = netdev_open(&netdev_options, &netdev);
+    error = netdev_open(devname, type, &netdev);
     if (error) {
         return error;
     }

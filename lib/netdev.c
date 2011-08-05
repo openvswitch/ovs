@@ -192,14 +192,15 @@ netdev_enumerate_types(struct sset *types)
     }
 }
 
-/* Opens the network device named 'name' (e.g. "eth0") and returns zero if
- * successful, otherwise a positive errno value.  On success, sets '*netdevp'
- * to the new network device, otherwise to null.
+/* Opens the network device named 'name' (e.g. "eth0") of the specified 'type'
+ * (e.g. "system") and returns zero if successful, otherwise a positive errno
+ * value.  On success, sets '*netdevp' to the new network device, otherwise to
+ * null.
  *
  * Some network devices may need to be configured (with netdev_set_config())
  * before they can be used. */
 int
-netdev_open(struct netdev_options *options, struct netdev **netdevp)
+netdev_open(const char *name, const char *type, struct netdev **netdevp)
 {
     struct netdev_dev *netdev_dev;
     int error;
@@ -207,18 +208,18 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
     *netdevp = NULL;
     netdev_initialize();
 
-    netdev_dev = shash_find_data(&netdev_dev_shash, options->name);
+    netdev_dev = shash_find_data(&netdev_dev_shash, name);
 
     if (!netdev_dev) {
         const struct netdev_class *class;
 
-        class = netdev_lookup_provider(options->type);
+        class = netdev_lookup_provider(type);
         if (!class) {
             VLOG_WARN("could not create netdev %s of unknown type %s",
-                      options->name, options->type);
+                      name, type);
             return EAFNOSUPPORT;
         }
-        error = class->create(class, options->name, &netdev_dev);
+        error = class->create(class, name, &netdev_dev);
         if (error) {
             return error;
         }
@@ -237,17 +238,6 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
     }
 
     return error;
-}
-
-int
-netdev_open_default(const char *name, struct netdev **netdevp)
-{
-    struct netdev_options options;
-
-    memset(&options, 0, sizeof options);
-    options.name = name;
-
-    return netdev_open(&options, netdevp);
 }
 
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
@@ -321,7 +311,7 @@ netdev_exists(const char *name)
     struct netdev *netdev;
     int error;
 
-    error = netdev_open_default(name, &netdev);
+    error = netdev_open(name, "system", &netdev);
     if (!error) {
         netdev_close(netdev);
         return true;
@@ -1265,7 +1255,7 @@ netdev_find_dev_by_in4(const struct in_addr *in4)
     SSET_FOR_EACH (name, &dev_list) {
         struct in_addr dev_in4;
 
-        if (!netdev_open_default(name, &netdev)
+        if (!netdev_open(name, "system", &netdev)
             && !netdev_get_in4(netdev, &dev_in4, NULL)
             && dev_in4.s_addr == in4->s_addr) {
             goto exit;

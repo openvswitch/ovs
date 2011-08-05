@@ -131,7 +131,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     {
         netdev_close(r->remote_netdev);
 
-        retval = netdev_open_default(next_hop_dev, &r->remote_netdev);
+        retval = netdev_open(next_hop_dev, "system", &r->remote_netdev);
         if (retval) {
             VLOG_WARN_RL(&rl, "cannot open netdev %s (next hop "
                          "to controller "IP_FMT"): %s",
@@ -472,7 +472,7 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     int error;
 
     *in_bandp = NULL;
-    error = netdev_open_default(local_name, &local_netdev);
+    error = netdev_open(local_name, "system", &local_netdev);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", local_name, strerror(error));

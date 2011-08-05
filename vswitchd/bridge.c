@@ -850,10 +850,7 @@ bridge_add_ofproto_ports(struct bridge *br)
 
             /* Open the netdev. */
             if (!iface->netdev) {
-                struct netdev_options options;
-                options.name = iface->name;
-                options.type = iface->type;
-                error = netdev_open(&options, &iface->netdev);
+                error = netdev_open(iface->name, iface->type, &iface->netdev);
                 if (error) {
                     VLOG_WARN("could not open network device %s (%s)",
                               iface->name, strerror(error));
@@ -928,13 +925,10 @@ bridge_add_ofproto_ports(struct bridge *br)
         if (port_is_bond_fake_iface(port)) {
             if (ofproto_port_query_by_name(br->ofproto, port->name,
                                            &ofproto_port)) {
-                struct netdev_options options;
                 struct netdev *netdev;
                 int error;
 
-                options.name = port->name;
-                options.type = "internal";
-                error = netdev_open(&options, &netdev);
+                error = netdev_open(port->name, "internal", &netdev);
                 if (!error) {
                     ofproto_port_add(br->ofproto, netdev, NULL);
                     netdev_close(netdev);

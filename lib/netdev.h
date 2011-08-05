@@ -75,11 +75,6 @@ struct netdev_stats {
     uint64_t tx_window_errors;
 };
 
-struct netdev_options {
-    const char *name;
-    const char *type;
-};
-
 struct netdev;
 struct netdev_class;
 
@@ -89,8 +84,7 @@ void netdev_wait(void);
 void netdev_enumerate_types(struct sset *types);
 
 /* Open and close. */
-int netdev_open(struct netdev_options *, struct netdev **);
-int netdev_open_default(const char *name, struct netdev **);
+int netdev_open(const char *name, const char *type, struct netdev **);
 void netdev_close(struct netdev *);
 
 bool netdev_exists(const char *name);

@@ -1507,7 +1507,7 @@ bond_update_fake_slave_stats(struct bond *bond)
         }
     }
 
-    if (!netdev_open_default(bond->name, &bond_dev)) {
+    if (!netdev_open(bond->name, "system", &bond_dev)) {
         netdev_set_stats(bond_dev, &bond_stats);
         netdev_close(bond_dev);
     }

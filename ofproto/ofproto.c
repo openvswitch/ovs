@@ -1107,16 +1107,11 @@ static struct netdev *
 ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
 {
     uint32_t curr, advertised, supported, peer;
-    struct netdev_options netdev_options;
     enum netdev_flags flags;
     struct netdev *netdev;
     int error;
 
-    memset(&netdev_options, 0, sizeof netdev_options);
-    netdev_options.name = ofproto_port->name;
-    netdev_options.type = ofproto_port->type;
-
-    error = netdev_open(&netdev_options, &netdev);
+    error = netdev_open(ofproto_port->name, ofproto_port->type, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",

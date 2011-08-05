@@ -435,7 +435,7 @@ netdev_vport_get_status(const struct netdev *netdev, struct shash *sh)
 
         shash_add(sh, "tunnel_egress_iface", xstrdup(iface));
 
-        if (!netdev_open_default(iface, &egress_netdev)) {
+        if (!netdev_open(iface, "system", &egress_netdev)) {
             shash_add(sh, "tunnel_egress_iface_carrier",
                       xstrdup(netdev_get_carrier(egress_netdev)
                               ? "up" : "down"));

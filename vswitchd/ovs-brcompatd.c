@@ -488,7 +488,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
         struct mac *mac = &local_macs[n_local_macs];
         struct netdev *netdev;
 
-        error = netdev_open_default(iface_name, &netdev);
+        error = netdev_open(iface_name, "system", &netdev);
         if (!error) {
             if (!netdev_get_etheraddr(netdev, mac->addr)) {
                 n_local_macs++;

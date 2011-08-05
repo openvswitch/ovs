@@ -166,7 +166,7 @@ static int if_up(const char *netdev_name)
     struct netdev *netdev;
     int retval;
 
-    retval = netdev_open_default(netdev_name, &netdev);
+    retval = netdev_open(netdev_name, "system", &netdev);
     if (!retval) {
         retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
         netdev_close(netdev);
@@ -222,17 +222,17 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
 
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
     for (i = 2; i < argc; i++) {
+        const char *name, *type;
         char *save_ptr = NULL;
-        struct netdev_options options;
         struct netdev *netdev = NULL;
         struct shash args;
         char *option;
         int error;
 
-        options.name = strtok_r(argv[i], ",", &save_ptr);
-        options.type = "system";
+        name = strtok_r(argv[i], ",", &save_ptr);
+        type = "system";
 
-        if (!options.name) {
+        if (!name) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
             continue;
         }
@@ -249,33 +249,31 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
             }
 
             if (!strcmp(key, "type")) {
-                options.type = value;
+                type = value;
             } else if (!shash_add_once(&args, key, value)) {
                 ovs_error(0, "duplicate \"%s\" option", key);
             }
         }
 
-        error = netdev_open(&options, &netdev);
+        error = netdev_open(name, type, &netdev);
         if (error) {
-            ovs_error(error, "%s: failed to open network device",
-                      options.name);
+            ovs_error(error, "%s: failed to open network device", name);
             goto next;
         }
 
         error = netdev_set_config(netdev, &args);
         if (error) {
-            ovs_error(error, "%s: failed to configure network device",
-                      options.name);
+            ovs_error(error, "%s: failed to configure network device", name);
             goto next;
         }
 
         error = dpif_port_add(dpif, netdev, NULL);
         if (error) {
-            ovs_error(error, "adding %s to %s failed", options.name, argv[1]);
+            ovs_error(error, "adding %s to %s failed", name, argv[1]);
             goto next;
         }
 
-        error = if_up(options.name);
+        error = if_up(name);
 
 next:
         netdev_close(netdev);
@@ -383,15 +381,12 @@ show_dpif(struct dpif *dpif)
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);
 
         if (strcmp(dpif_port.type, "system")) {
-            struct netdev_options netdev_options;
             struct netdev *netdev;
             int error;
 
             printf (" (%s", dpif_port.type);
 
-            netdev_options.name = dpif_port.name;
-            netdev_options.type = dpif_port.type;
-            error = netdev_open(&netdev_options, &netdev);
+            error = netdev_open(dpif_port.name, dpif_port.type, &netdev);
             if (!error) {
                 struct shash config;
 

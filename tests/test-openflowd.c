@@ -124,7 +124,7 @@ main(int argc, char *argv[])
     SSET_FOR_EACH (port, &s.ports) {
         struct netdev *netdev;
 
-        error = netdev_open_default(port, &netdev);
+        error = netdev_open(port, "system", &netdev);
         if (error) {
             VLOG_FATAL("%s: failed to open network device (%s)",
                        port, strerror(error));

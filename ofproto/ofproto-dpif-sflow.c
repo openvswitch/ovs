@@ -235,7 +235,7 @@ sflow_choose_agent_address(const char *agent_device, const char *control_ip,
     if (agent_device) {
         struct netdev *netdev;
 
-        if (!netdev_open_default(agent_device, &netdev)) {
+        if (!netdev_open(agent_device, "system", &netdev)) {
             int error = netdev_get_in4(netdev, &in4, NULL);
             netdev_close(netdev);
             if (!error) {
@@ -337,7 +337,7 @@ dpif_sflow_add_port(struct dpif_sflow *ds, uint16_t odp_port,
     dpif_sflow_del_port(ds, odp_port);
 
     /* Open network device. */
-    error = netdev_open_default(netdev_name, &netdev);
+    error = netdev_open(netdev_name, "system", &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to open network device \"%s\": %s",
                      netdev_name, strerror(error));
