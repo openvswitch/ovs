@@ -708,7 +708,7 @@ stolen
 
 Notification object members:
 
-    "method": "locked"
+    "method": "stolen"
     "params": [<id>]
     "id": null
 
