@@ -639,8 +639,7 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
 }
 
 static int
-netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
-                  struct netdev **netdevp)
+netdev_linux_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 {
     struct netdev_dev_linux *netdev_dev = netdev_dev_linux_cast(netdev_dev_);
     struct netdev_linux *netdev;
@@ -676,54 +675,6 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
          * directions appearing to be reversed. */
         netdev->fd = netdev_dev->state.tap.fd;
         netdev_dev->state.tap.opened = true;
-    } else if (ethertype != NETDEV_ETH_TYPE_NONE) {
-        struct sockaddr_ll sll;
-        int protocol;
-        int ifindex;
-
-        /* Create file descriptor. */
-        protocol = (ethertype == NETDEV_ETH_TYPE_ANY ? ETH_P_ALL
-                    : ethertype == NETDEV_ETH_TYPE_802_2 ? ETH_P_802_2
-                    : ethertype);
-        netdev->fd = socket(PF_PACKET, SOCK_RAW,
-                            (OVS_FORCE int) htons(protocol));
-        if (netdev->fd < 0) {
-            error = errno;
-            goto error;
-        }
-
-        /* Set non-blocking mode. */
-        error = set_nonblocking(netdev->fd);
-        if (error) {
-            goto error;
-        }
-
-        /* Get ethernet device index. */
-        error = get_ifindex(&netdev->netdev, &ifindex);
-        if (error) {
-            goto error;
-        }
-
-        /* Bind to specific ethernet device. */
-        memset(&sll, 0, sizeof sll);
-        sll.sll_family = AF_PACKET;
-        sll.sll_ifindex = ifindex;
-        if (bind(netdev->fd,
-                 (struct sockaddr *) &sll, sizeof sll) < 0) {
-            error = errno;
-            VLOG_ERR("bind to %s failed: %s", netdev_dev_get_name(netdev_dev_),
-                     strerror(error));
-            goto error;
-        }
-
-        /* Between the socket() and bind() calls above, the socket receives all
-         * packets of the requested type on all system interfaces.  We do not
-         * want to receive that data, but there is no way to avoid it.  So we
-         * must now drain out the receive queue. */
-        error = drain_rcvbuf(netdev->fd);
-        if (error) {
-            goto error;
-        }
     }
 
     *netdevp = &netdev->netdev;
@@ -769,12 +720,67 @@ netdev_linux_enumerate(struct sset *sset)
 }
 
 static int
+netdev_linux_listen(struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct sockaddr_ll sll;
+    int ifindex;
+    int error;
+    int fd;
+
+    if (netdev->fd >= 0) {
+        return 0;
+    }
+
+    /* Create file descriptor. */
+    fd = socket(PF_PACKET, SOCK_RAW, 0);
+    if (fd < 0) {
+        error = errno;
+        VLOG_ERR("failed to create raw socket (%s)", strerror(error));
+        goto error;
+    }
+
+    /* Set non-blocking mode. */
+    error = set_nonblocking(fd);
+    if (error) {
+        goto error;
+    }
+
+    /* Get ethernet device index. */
+    error = get_ifindex(&netdev->netdev, &ifindex);
+    if (error) {
+        goto error;
+    }
+
+    /* Bind to specific ethernet device. */
+    memset(&sll, 0, sizeof sll);
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifindex;
+    sll.sll_protocol = (OVS_FORCE unsigned short int) htons(ETH_P_ALL);
+    if (bind(fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
+        error = errno;
+        VLOG_ERR("%s: failed to bind raw socket (%s)",
+                 netdev_get_name(netdev_), strerror(error));
+        goto error;
+    }
+
+    netdev->fd = fd;
+    return 0;
+
+error:
+    if (fd >= 0) {
+        close(fd);
+    }
+    return error;
+}
+
+static int
 netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
     if (netdev->fd < 0) {
-        /* Device was opened with NETDEV_ETH_TYPE_NONE. */
+        /* Device is not listening. */
         return -EAGAIN;
     }
 
@@ -2254,6 +2260,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     ENUMERATE,                                                  \
                                                                 \
+    netdev_linux_listen,                                        \
     netdev_linux_recv,                                          \
     netdev_linux_recv_wait,                                     \
     netdev_linux_drain,                                         \

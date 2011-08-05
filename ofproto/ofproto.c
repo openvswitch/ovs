@@ -1115,7 +1115,6 @@ ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = ofproto_port->name;
     netdev_options.type = ofproto_port->type;
-    netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
 
     error = netdev_open(&netdev_options, &netdev);
     if (error) {

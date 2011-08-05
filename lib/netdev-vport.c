@@ -258,8 +258,7 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 }
 
 static int
-netdev_vport_open(struct netdev_dev *netdev_dev_, int ethertype OVS_UNUSED,
-                struct netdev **netdevp)
+netdev_vport_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 {
     struct netdev_vport *netdev;
 
@@ -937,6 +936,7 @@ config_equal_ipsec(const struct shash *nd_args, const struct shash *args)
                                                             \
     NULL,                       /* enumerate */             \
                                                             \
+    NULL,                       /* listen */                \
     NULL,                       /* recv */                  \
     NULL,                       /* recv_wait */             \
     NULL,                       /* drain */                 \

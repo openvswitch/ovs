@@ -859,7 +859,6 @@ bridge_add_ofproto_ports(struct bridge *br)
                 options.name = iface->name;
                 options.type = iface->type;
                 options.args = &args;
-                options.ethertype = NETDEV_ETH_TYPE_NONE;
                 error = netdev_open(&options, &iface->netdev);
             } else {
                 error = netdev_set_config(iface->netdev, &args);
@@ -925,7 +924,6 @@ bridge_add_ofproto_ports(struct bridge *br)
                 options.name = port->name;
                 options.type = "internal";
                 options.args = NULL;
-                options.ethertype = NETDEV_ETH_TYPE_NONE;
                 error = netdev_open(&options, &netdev);
                 if (!error) {
                     ofproto_port_add(br->ofproto, netdev, NULL);

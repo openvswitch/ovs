@@ -44,12 +44,6 @@ enum netdev_flags {
     NETDEV_LOOPBACK = 0x0004    /* This is a loopback device. */
 };
 
-enum netdev_pseudo_ethertype {
-    NETDEV_ETH_TYPE_NONE = -128, /* Receive no frames. */
-    NETDEV_ETH_TYPE_ANY,         /* Receive all frames. */
-    NETDEV_ETH_TYPE_802_2        /* Receive all IEEE 802.2 frames. */
-};
-
 /* Network device statistics.
  *
  * Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
@@ -85,7 +79,6 @@ struct netdev_options {
     const char *name;
     const char *type;
     const struct shash *args;
-    int ethertype;
 };
 
 struct netdev;
@@ -117,6 +110,7 @@ int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_get_ifindex(const struct netdev *);
 
 /* Packet send and receive. */
+int netdev_listen(struct netdev *);
 int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 int netdev_drain(struct netdev *);

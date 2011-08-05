@@ -147,14 +147,8 @@ struct netdev_class {
                          const struct shash *args);
 
     /* Attempts to open a network device.  On success, sets 'netdevp'
-     * to the new network device.
-     *
-     * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order
-     * to capture frames of that type received on the device.  It may also be
-     * one of the 'enum netdev_pseudo_ethertype' values to receive frames in
-     * one of those categories. */
-    int (*open)(struct netdev_dev *netdev_dev, int ethertype,
-                struct netdev **netdevp);
+     * to the new network device. */
+    int (*open)(struct netdev_dev *netdev_dev, struct netdev **netdevp);
 
     /* Closes 'netdev'. */
     void (*close)(struct netdev *netdev);
@@ -168,17 +162,39 @@ struct netdev_class {
      * If this netdev class does not support enumeration, this may be a null
      * pointer. */
     int (*enumerate)(struct sset *all_names);
+
+/* ## ----------------- ## */
+/* ## Receiving Packets ## */
+/* ## ----------------- ## */
+
+/* The network provider interface is mostly used for inspecting and configuring
+ * device "metadata", not for sending and receiving packets directly.  It may
+ * be impractical to implement these functions on some operating systems and
+ * hardware.  These functions may all be NULL in such cases.
+ *
+ * (However, the "dpif-netdev" implementation, which is the easiest way to
+ * integrate Open vSwitch with a new operating system or hardware, does require
+ * the ability to receive packets.) */
+
+    /* Attempts to set up 'netdev' for receiving packets with ->recv().
+     * Returns 0 if successful, otherwise a positive errno value.  Return
+     * EOPNOTSUPP to indicate that the network device does not implement packet
+     * reception through this interface.  This function may be set to null if
+     * it would always return EOPNOTSUPP anyhow.  (This will prevent the
+     * network device from being usefully used by the netdev-based "userspace
+     * datapath".)*/
+    int (*listen)(struct netdev *netdev);
 
     /* Attempts to receive a packet from 'netdev' into the 'size' bytes in
      * 'buffer'.  If successful, returns the number of bytes in the received
      * packet, otherwise a negative errno value.  Returns -EAGAIN immediately
      * if no packet is ready to be received.
      *
-     * May return -EOPNOTSUPP if a network device does not implement packet
-     * reception through this interface.  This function may be set to null if
-     * it would always return -EOPNOTSUPP anyhow.  (This will prevent the
-     * network device from being usefully used by the netdev-based "userspace
-     * datapath".) */
+     * This function can only be expected to return a packet if ->listen() has
+     * been called successfully.
+     *
+     * May be null if not needed, such as for a network device that does not
+     * implement packet reception through the 'recv' member function. */
     int (*recv)(struct netdev *netdev, void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
@@ -194,7 +210,7 @@ struct netdev_class {
      * May be null if not needed, such as for a network device that does not
      * implement packet reception through the 'recv' member function. */
     int (*drain)(struct netdev *netdev);
-
+
     /* Sends the 'size'-byte packet in 'buffer' on 'netdev'.  Returns 0 if
      * successful, otherwise a positive errno value.  Returns EAGAIN without
      * blocking if the packet cannot be queued immediately.  Returns EMSGSIZE

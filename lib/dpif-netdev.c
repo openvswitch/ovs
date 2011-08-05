@@ -350,7 +350,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     /* Open and validate network device. */
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = devname;
-    netdev_options.ethertype = NETDEV_ETH_TYPE_ANY;
     if (dp->class == &dpif_dummy_class) {
         netdev_options.type = "dummy";
     } else if (internal) {
@@ -363,6 +362,14 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
     /* XXX reject loopback devices */
     /* XXX reject non-Ethernet devices */
+
+    error = netdev_listen(netdev);
+    if (error) {
+        VLOG_ERR("%s: cannot receive packets on this network device (%s)",
+                 devname, strerror(errno));
+        netdev_close(netdev);
+        return error;
+    }
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, false);
     if (error) {

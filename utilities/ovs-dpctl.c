@@ -232,7 +232,6 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
         options.name = strtok_r(argv[i], ",", &save_ptr);
         options.type = "system";
         options.args = &args;
-        options.ethertype = NETDEV_ETH_TYPE_NONE;
 
         if (!options.name) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
@@ -384,7 +383,6 @@ show_dpif(struct dpif *dpif)
             netdev_options.name = dpif_port.name;
             netdev_options.type = dpif_port.type;
             netdev_options.args = NULL;
-            netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
             error = netdev_open(&netdev_options, &netdev);
             if (!error) {
                 const struct shash_node **nodes;

@@ -204,12 +204,8 @@ update_device_args(struct netdev_dev *dev, const struct shash *args)
  * to the new network device, otherwise to null.
  *
  * If this is the first time the device has been opened, then create is called
- * before opening.  The device is created using the given type and arguments.
- *
- * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order to
- * capture frames of that type received on the device.  It may also be one of
- * the 'enum netdev_pseudo_ethertype' values to receive frames in one of those
- * categories. */
+ * before opening.  The device is created using the given type and
+ * arguments. */
 int
 netdev_open(struct netdev_options *options, struct netdev **netdevp)
 {
@@ -250,8 +246,7 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         return EINVAL;
     }
 
-    error = netdev_dev->netdev_class->open(netdev_dev, options->ethertype,
-                netdevp);
+    error = netdev_dev->netdev_class->open(netdev_dev, netdevp);
 
     if (!error) {
         netdev_dev->ref_cnt++;
@@ -271,7 +266,6 @@ netdev_open_default(const char *name, struct netdev **netdevp)
 
     memset(&options, 0, sizeof options);
     options.name = name;
-    options.ethertype = NETDEV_ETH_TYPE_NONE;
 
     return netdev_open(&options, netdevp);
 }
@@ -387,12 +381,28 @@ netdev_enumerate(struct sset *sset)
     return error;
 }
 
+/* Attempts to set up 'netdev' for receiving packets with netdev_recv().
+ * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
+ * indicates that the network device does not implement packet reception
+ * through this interface. */
+int
+netdev_listen(struct netdev *netdev)
+{
+    int (*listen)(struct netdev *);
+
+    listen = netdev_get_dev(netdev)->netdev_class->listen;
+    return listen ? (listen)(netdev) : EOPNOTSUPP;
+}
+
 /* Attempts to receive a packet from 'netdev' into 'buffer', which the caller
  * must have initialized with sufficient room for the packet.  The space
  * required to receive any packet is ETH_HEADER_LEN bytes, plus VLAN_HEADER_LEN
  * bytes, plus the device's MTU (which may be retrieved via netdev_get_mtu()).
  * (Some devices do not allow for a VLAN header, in which case VLAN_HEADER_LEN
  * need not be included.)
+ *
+ * This function can only be expected to return a packet if ->listen() has
+ * been called successfully.
  *
  * If a packet is successfully retrieved, returns 0.  In this case 'buffer' is
  * guaranteed to contain at least ETH_TOTAL_MIN bytes.  Otherwise, returns a

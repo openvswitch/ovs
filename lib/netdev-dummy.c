@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,8 +102,7 @@ netdev_dummy_destroy(struct netdev_dev *netdev_dev_)
 }
 
 static int
-netdev_dummy_open(struct netdev_dev *netdev_dev_, int ethertype OVS_UNUSED,
-                  struct netdev **netdevp)
+netdev_dummy_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 {
     struct netdev_dummy *netdev;
 
@@ -119,6 +118,22 @@ netdev_dummy_close(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     free(netdev);
+}
+
+static int
+netdev_dummy_listen(struct netdev *netdev_ OVS_UNUSED)
+{
+    /* It's OK to listen on a dummy device.  It just never receives any
+     * packets. */
+    return 0;
+}
+
+static int
+netdev_dummy_recv(struct netdev *netdev_ OVS_UNUSED,
+                  void *buffer OVS_UNUSED, size_t size OVS_UNUSED)
+{
+    /* A dummy device never receives any packets. */
+    return -EAGAIN;
 }
 
 static int
@@ -234,7 +249,8 @@ static const struct netdev_class dummy_class = {
 
     NULL,                       /* enumerate */
 
-    NULL,                       /* recv */
+    netdev_dummy_listen,        /* listen */
+    netdev_dummy_recv,          /* recv */
     NULL,                       /* recv_wait */
     NULL,                       /* drain */
 
