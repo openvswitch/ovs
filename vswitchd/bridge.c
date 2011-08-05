@@ -2256,6 +2256,11 @@ port_configure_bond(struct port *port, struct bond_settings *s,
                   port->name, port->cfg->bond_mode,
                   bond_mode_to_string(s->balance));
     }
+    if (s->balance == BM_SLB && port->bridge->cfg->n_flood_vlans) {
+        VLOG_WARN("port %s: SLB bonds are incompatible with flood_vlans, "
+                  "please use another bond type or disable flood_vlans",
+                  port->name);
+    }
 
     miimon_interval = atoi(get_port_other_config(port->cfg,
                                                  "bond-miimon-interval", "0"));
