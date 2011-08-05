@@ -2077,89 +2077,86 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
     return 0;
 }
 
-struct ofputil_ofpat_action {
-    enum ofputil_action_code code;
-    unsigned int len;
-};
-
-static const struct ofputil_ofpat_action ofpat_actions[] = {
-    { OFPUTIL_OFPAT_OUTPUT,        8 },
-    { OFPUTIL_OFPAT_SET_VLAN_VID,  8 },
-    { OFPUTIL_OFPAT_SET_VLAN_PCP,  8 },
-    { OFPUTIL_OFPAT_STRIP_VLAN,    8 },
-    { OFPUTIL_OFPAT_SET_DL_SRC,   16 },
-    { OFPUTIL_OFPAT_SET_DL_DST,   16 },
-    { OFPUTIL_OFPAT_SET_NW_SRC,    8 },
-    { OFPUTIL_OFPAT_SET_NW_DST,    8 },
-    { OFPUTIL_OFPAT_SET_NW_TOS,    8 },
-    { OFPUTIL_OFPAT_SET_TP_SRC,    8 },
-    { OFPUTIL_OFPAT_SET_TP_DST,    8 },
-    { OFPUTIL_OFPAT_ENQUEUE,      16 },
-};
-
-struct ofputil_nxast_action {
-    enum ofputil_action_code code;
+struct ofputil_action {
+    int code;
     unsigned int min_len;
     unsigned int max_len;
 };
 
-static const struct ofputil_nxast_action nxast_actions[] = {
-    { 0, UINT_MAX, UINT_MAX }, /* NXAST_SNAT__OBSOLETE */
-    { OFPUTIL_NXAST_RESUBMIT,     16, 16 },
-    { OFPUTIL_NXAST_SET_TUNNEL,   16, 16 },
-    { 0, UINT_MAX, UINT_MAX }, /* NXAST_DROP_SPOOFED_ARP__OBSOLETE */
-    { OFPUTIL_NXAST_SET_QUEUE,    16, 16 },
-    { OFPUTIL_NXAST_POP_QUEUE,    16, 16 },
-    { OFPUTIL_NXAST_REG_MOVE,     24, 24 },
-    { OFPUTIL_NXAST_REG_LOAD,     24, 24 },
-    { OFPUTIL_NXAST_NOTE,         16, UINT_MAX },
-    { OFPUTIL_NXAST_SET_TUNNEL64, 24, 24 },
-    { OFPUTIL_NXAST_MULTIPATH,    32, 32 },
-    { OFPUTIL_NXAST_AUTOPATH,     24, 24 },
-    { OFPUTIL_NXAST_BUNDLE,       32, UINT_MAX },
-    { OFPUTIL_NXAST_BUNDLE_LOAD,  32, UINT_MAX },
-};
+static const struct ofputil_action action_bad_type
+    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE),   0, UINT_MAX };
+static const struct ofputil_action action_bad_len
+    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_LEN),    0, UINT_MAX };
+static const struct ofputil_action action_bad_vendor
+    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR), 0, UINT_MAX };
 
-static int
+static const struct ofputil_action *
 ofputil_decode_ofpat_action(const union ofp_action *a)
 {
-    int type = ntohs(a->type);
+    enum ofp_action_type type = ntohs(a->type);
 
-    if (type < ARRAY_SIZE(ofpat_actions)) {
-        const struct ofputil_ofpat_action *ooa = &ofpat_actions[type];
-        unsigned int len = ntohs(a->header.len);
+    switch (type) {
+#define OFPAT_ACTION(ENUM, TYPE)                            \
+        case ENUM: {                                        \
+            static const struct ofputil_action action = {   \
+                OFPUTIL_##ENUM, sizeof(TYPE), sizeof(TYPE)  \
+            };                                              \
+            return &action;                                 \
+        }
+        OFPAT_ACTION(OFPAT_OUTPUT,       struct ofp_action_output);
+        OFPAT_ACTION(OFPAT_SET_VLAN_VID, struct ofp_action_vlan_vid);
+        OFPAT_ACTION(OFPAT_SET_VLAN_PCP, struct ofp_action_vlan_pcp);
+        OFPAT_ACTION(OFPAT_STRIP_VLAN,   struct ofp_action_header);
+        OFPAT_ACTION(OFPAT_SET_DL_SRC,   struct ofp_action_dl_addr);
+        OFPAT_ACTION(OFPAT_SET_DL_DST,   struct ofp_action_dl_addr);
+        OFPAT_ACTION(OFPAT_SET_NW_SRC,   struct ofp_action_nw_addr);
+        OFPAT_ACTION(OFPAT_SET_NW_DST,   struct ofp_action_nw_addr);
+        OFPAT_ACTION(OFPAT_SET_NW_TOS,   struct ofp_action_nw_tos);
+        OFPAT_ACTION(OFPAT_SET_TP_SRC,   struct ofp_action_tp_port);
+        OFPAT_ACTION(OFPAT_SET_TP_DST,   struct ofp_action_tp_port);
+        OFPAT_ACTION(OFPAT_ENQUEUE,      struct ofp_action_enqueue);
+#undef OFPAT_ACTION
 
-        return (len == ooa->len
-                ? ooa->code
-                : -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN));
-    } else {
-        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
+    case OFPAT_VENDOR:
+    default:
+        return &action_bad_type;
     }
 }
 
-static int
+static const struct ofputil_action *
 ofputil_decode_nxast_action(const union ofp_action *a)
 {
-    unsigned int len = ntohs(a->header.len);
+    const struct nx_action_header *nah = (const struct nx_action_header *) a;
+    enum nx_action_subtype subtype = ntohs(nah->subtype);
 
-    if (len < sizeof(struct nx_action_header)) {
-        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    } else {
-        const struct nx_action_header *nah = (const void *) a;
-        int subtype = ntohs(nah->subtype);
-
-        if (subtype <= ARRAY_SIZE(nxast_actions)) {
-            const struct ofputil_nxast_action *ona = &nxast_actions[subtype];
-            if (len >= ona->min_len && len <= ona->max_len) {
-                return ona->code;
-            } else if (ona->min_len == UINT_MAX) {
-                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
-            } else {
-                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-            }
-        } else {
-            return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
+    switch (subtype) {
+#define NXAST_ACTION(ENUM, TYPE, EXTENSIBLE)                \
+        case ENUM: {                                        \
+            static const struct ofputil_action action = {   \
+                OFPUTIL_##ENUM,                             \
+                sizeof(TYPE),                               \
+                EXTENSIBLE ? UINT_MAX : sizeof(TYPE)        \
+            };                                              \
+            return &action;                                 \
         }
+        NXAST_ACTION(NXAST_RESUBMIT,     struct nx_action_resubmit,     false);
+        NXAST_ACTION(NXAST_SET_TUNNEL,   struct nx_action_set_tunnel,   false);
+        NXAST_ACTION(NXAST_SET_QUEUE,    struct nx_action_set_queue,    false);
+        NXAST_ACTION(NXAST_POP_QUEUE,    struct nx_action_pop_queue,    false);
+        NXAST_ACTION(NXAST_REG_MOVE,     struct nx_action_reg_move,     false);
+        NXAST_ACTION(NXAST_REG_LOAD,     struct nx_action_reg_load,     false);
+        NXAST_ACTION(NXAST_NOTE,         struct nx_action_note,         true);
+        NXAST_ACTION(NXAST_SET_TUNNEL64, struct nx_action_set_tunnel64, false);
+        NXAST_ACTION(NXAST_MULTIPATH,    struct nx_action_multipath,    false);
+        NXAST_ACTION(NXAST_AUTOPATH,     struct nx_action_autopath,     false);
+        NXAST_ACTION(NXAST_BUNDLE,       struct nx_action_bundle,       true);
+        NXAST_ACTION(NXAST_BUNDLE_LOAD,  struct nx_action_bundle,       true);
+#undef NXAST_ACTION
+
+    case NXAST_SNAT__OBSOLETE:
+    case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
+    default:
+        return &action_bad_type;
     }
 }
 
@@ -2176,13 +2173,28 @@ ofputil_decode_nxast_action(const union ofp_action *a)
 int
 ofputil_decode_action(const union ofp_action *a)
 {
+    const struct ofputil_action *action;
+    uint16_t len = ntohs(a->header.len);
+
     if (a->type != htons(OFPAT_VENDOR)) {
-        return ofputil_decode_ofpat_action(a);
-    } else if (a->vendor.vendor == htonl(NX_VENDOR_ID)) {
-        return ofputil_decode_nxast_action(a);
+        action = ofputil_decode_ofpat_action(a);
     } else {
-        return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR);
+        switch (ntohl(a->vendor.vendor)) {
+        case NX_VENDOR_ID:
+            if (len < sizeof(struct nx_action_header)) {
+                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+            }
+            action = ofputil_decode_nxast_action(a);
+            break;
+        default:
+            action = &action_bad_vendor;
+            break;
+        }
     }
+
+    return (len >= action->min_len && len <= action->max_len
+            ? action->code
+            : -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN));
 }
 
 /* Parses 'a' and returns its type as an OFPUTIL_OFPAT_* or OFPUTIL_NXAST_*
@@ -2192,13 +2204,15 @@ ofputil_decode_action(const union ofp_action *a)
 enum ofputil_action_code
 ofputil_decode_action_unsafe(const union ofp_action *a)
 {
-    if (a->type != htons(OFPAT_VENDOR)) {
-        return ofpat_actions[ntohs(a->type)].code;
-    } else {
-        const struct nx_action_header *nah = (const void *) a;
+    const struct ofputil_action *action;
 
-        return nxast_actions[ntohs(nah->subtype)].code;
+    if (a->type != htons(OFPAT_VENDOR)) {
+        action = ofputil_decode_ofpat_action(a);
+    } else {
+        action = ofputil_decode_nxast_action(a);
     }
+
+    return action->code;
 }
 
 /* Returns true if 'action' outputs to 'port', false otherwise. */
