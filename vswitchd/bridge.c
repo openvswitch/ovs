@@ -871,12 +871,6 @@ bridge_add_ofproto_ports(struct bridge *br)
                           iface->name, strerror(error));
             }
 
-            /* Populate stats columns in new Interface rows. */
-            if (iface->netdev && !iface->cfg->mtu) {
-                iface_refresh_stats(iface);
-                iface_refresh_status(iface);
-            }
-
             /* Add the port, if necessary. */
             if (iface->netdev && iface->ofp_port < 0) {
                 uint16_t ofp_port;
@@ -890,6 +884,12 @@ bridge_add_ofproto_ports(struct bridge *br)
                     netdev_close(iface->netdev);
                     iface->netdev = NULL;
                 }
+            }
+
+            /* Populate stats columns in new Interface rows. */
+            if (iface->netdev && !iface->cfg->mtu) {
+                iface_refresh_stats(iface);
+                iface_refresh_status(iface);
             }
 
             /* Delete the iface if  */
