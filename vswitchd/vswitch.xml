@@ -334,11 +334,19 @@
       </column>
 
       <column name="flood_vlans">
-        VLAN IDs of VLANs on which MAC address learning should be disabled, so
-        that packets are flooded instead of being sent to specific ports that
-        are believed to contain packets' destination MACs.  This should
-        ordinarily be used to disable MAC learning on VLANs used for mirroring
-        (RSPAN VLANs).  It may also be useful for debugging.
+        <p>
+          VLAN IDs of VLANs on which MAC address learning should be disabled,
+          so that packets are flooded instead of being sent to specific ports
+          that are believed to contain packets' destination MACs.  This should
+          ordinarily be used to disable MAC learning on VLANs used for
+          mirroring (RSPAN VLANs).  It may also be useful for debugging.
+        </p>
+        <p>
+          SLB bonding (see the <ref table="Port" column="bond_mode"/> column in
+          the <ref table="Port"/> table) is incompatible with
+          <code>flood_vlans</code>.  Consider using another bonding mode or
+          a different type of mirror instead.
+        </p>
       </column>
     </group>
 
