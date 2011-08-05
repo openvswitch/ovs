@@ -719,7 +719,7 @@ ovsdb_execute_assert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     const struct json *lock_name;
 
-    lock_name = ovsdb_parser_member(parser, "lock", OP_STRING);
+    lock_name = ovsdb_parser_member(parser, "lock", OP_ID);
     if (!lock_name) {
         return NULL;
     }

@@ -682,7 +682,7 @@ The "locked" and "stolen" notifications (see below) report
 asynchronous changes to ownership.
 
 The scope of a lock is a database server, not a database hosted by
-that server.  A naming convention, such as "<db-name>:<lock-name>",
+that server.  A naming convention, such as "<db-name>__<lock-name>",
 can effectively limit the scope of a lock to a particular database.
 
 locked
@@ -1300,7 +1300,7 @@ assert
 Request object members:
 
     "op": "assert"                     required
-    "lock": <string>                   required
+    "lock": <id>                       required
 
 Result object members:
 
