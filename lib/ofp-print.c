@@ -781,7 +781,7 @@ static void
 ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
                    enum ofputil_msg_code code, int verbosity)
 {
-    struct flow_mod fm;
+    struct ofputil_flow_mod fm;
     bool need_priority;
     int error;
 

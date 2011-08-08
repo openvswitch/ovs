@@ -122,7 +122,7 @@ struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
 struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
 
 /* Flow format independent flow_mod. */
-struct flow_mod {
+struct ofputil_flow_mod {
     struct cls_rule cr;
     ovs_be64 cookie;
     uint8_t table_id;
@@ -136,9 +136,9 @@ struct flow_mod {
     size_t n_actions;
 };
 
-int ofputil_decode_flow_mod(struct flow_mod *, const struct ofp_header *,
-                            bool flow_mod_table_id);
-struct ofpbuf *ofputil_encode_flow_mod(const struct flow_mod *,
+int ofputil_decode_flow_mod(struct ofputil_flow_mod *,
+                            const struct ofp_header *, bool flow_mod_table_id);
+struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        enum nx_flow_format,
                                        bool flow_mod_table_id);
 

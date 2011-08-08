@@ -135,8 +135,8 @@ static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 
 static void ofopgroup_destroy(struct ofopgroup *);
 
-static int add_flow(struct ofproto *, struct ofconn *, struct flow_mod *,
-                    const struct ofp_header *);
+static int add_flow(struct ofproto *, struct ofconn *,
+                    struct ofputil_flow_mod *, const struct ofp_header *);
 
 /* This return value tells handle_openflow() that processing of the current
  * OpenFlow message must be postponed until some ongoing operations have
@@ -1048,7 +1048,7 @@ ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
                                     &ofproto->tables[0], cls_rule));
     if (!rule || !ofputil_actions_equal(rule->actions, rule->n_actions,
                                         actions, n_actions)) {
-        struct flow_mod fm;
+        struct ofputil_flow_mod fm;
 
         memset(&fm, 0, sizeof fm);
         fm.cr = *cls_rule;
@@ -2174,8 +2174,8 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static int
-add_flow(struct ofproto *ofproto, struct ofconn *ofconn, struct flow_mod *fm,
-         const struct ofp_header *request)
+add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
+         struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
     struct classifier *table;
     struct ofopgroup *group;
@@ -2278,7 +2278,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn, struct flow_mod *fm,
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static int
-modify_flows__(struct ofconn *ofconn, const struct flow_mod *fm,
+modify_flows__(struct ofconn *ofconn, const struct ofputil_flow_mod *fm,
                const struct ofp_header *request, struct list *rules)
 {
     struct ofopgroup *group;
@@ -2308,7 +2308,7 @@ modify_flows__(struct ofconn *ofconn, const struct flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static int
-modify_flows_loose(struct ofconn *ofconn, struct flow_mod *fm,
+modify_flows_loose(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -2327,7 +2327,7 @@ modify_flows_loose(struct ofconn *ofconn, struct flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static int
-modify_flow_strict(struct ofconn *ofconn, struct flow_mod *fm,
+modify_flow_strict(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -2370,7 +2370,7 @@ delete_flows__(struct ofconn *ofconn, const struct ofp_header *request,
 
 /* Implements OFPFC_DELETE. */
 static int
-delete_flows_loose(struct ofconn *ofconn, const struct flow_mod *fm,
+delete_flows_loose(struct ofconn *ofconn, const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -2386,7 +2386,7 @@ delete_flows_loose(struct ofconn *ofconn, const struct flow_mod *fm,
 
 /* Implements OFPFC_DELETE_STRICT. */
 static int
-delete_flow_strict(struct ofconn *ofconn, struct flow_mod *fm,
+delete_flow_strict(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -2448,7 +2448,7 @@ static int
 handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct flow_mod fm;
+    struct ofputil_flow_mod fm;
     int error;
 
     error = reject_slave_controller(ofconn, "flow_mod");

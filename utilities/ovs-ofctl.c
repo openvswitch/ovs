@@ -1041,8 +1041,8 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     min_flow_format = NXFF_OPENFLOW10;
     while (!ds_get_preprocessed_line(&s, file)) {
         struct fte_version *version;
+        struct ofputil_flow_mod fm;
         enum nx_flow_format min_ff;
-        struct flow_mod fm;
 
         parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
 
@@ -1152,7 +1152,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
                   enum nx_flow_format flow_format, struct list *packets)
 {
     const struct fte_version *version = fte->versions[index];
-    struct flow_mod fm;
+    struct ofputil_flow_mod fm;
     struct ofpbuf *ofm;
 
     fm.cr = fte->rule;

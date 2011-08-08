@@ -836,7 +836,8 @@ parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
  * constant for 'command'.  To parse syntax for an OFPST_FLOW or
  * OFPST_AGGREGATE (or NXST_FLOW or NXST_AGGREGATE), use -1 for 'command'. */
 void
-parse_ofp_str(struct flow_mod *fm, int command, const char *str_, bool verbose)
+parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
+              bool verbose)
 {
     enum {
         F_OUT_PORT = 1 << 0,
@@ -1007,7 +1008,7 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
     struct cls_rule rule_copy;
     struct ofpbuf actions;
     struct ofpbuf *ofm;
-    struct flow_mod fm;
+    struct ofputil_flow_mod fm;
 
     ofpbuf_init(&actions, 64);
     parse_ofp_str(&fm, command, string, verbose);
@@ -1064,7 +1065,7 @@ void
 parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
                                  bool aggregate, char *string)
 {
-    struct flow_mod fm;
+    struct ofputil_flow_mod fm;
 
     parse_ofp_str(&fm, -1, string, false);
     fsr->aggregate = aggregate;

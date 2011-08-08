@@ -866,8 +866,8 @@ ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
  *
  * Does not validate the flow_mod actions. */
 int
-ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
-                        bool flow_mod_table_id)
+ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
+                        const struct ofp_header *oh, bool flow_mod_table_id)
 {
     const struct ofputil_msg_type *type;
     uint16_t command;
@@ -956,7 +956,7 @@ ofputil_decode_flow_mod(struct flow_mod *fm, const struct ofp_header *oh,
  * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
  * enabled, false otherwise. */
 struct ofpbuf *
-ofputil_encode_flow_mod(const struct flow_mod *fm,
+ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
                         enum nx_flow_format flow_format,
                         bool flow_mod_table_id)
 {

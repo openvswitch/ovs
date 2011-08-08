@@ -24,12 +24,12 @@
 #include <stdio.h>
 #include "openflow/nicira-ext.h"
 
-struct flow_mod;
 struct flow_stats_request;
 struct list;
 struct ofpbuf;
+struct ofputil_flow_mod;
 
-void parse_ofp_str(struct flow_mod *, int command, const char *str_,
+void parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
                    bool verbose);
 
 void parse_ofp_flow_mod_str(struct list *packets,
