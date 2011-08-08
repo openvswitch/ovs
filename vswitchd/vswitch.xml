@@ -1610,12 +1610,12 @@
     </column>
   </table>
 
-  <table name="Mirror" title="Port mirroring (SPAN/RSPAN).">
+  <table name="Mirror" title="Port mirroring (SPAN/RSPAN/ERSPAN).">
     <p>A port mirror within a <ref table="Bridge"/>.</p>
     <p>A port mirror configures a bridge to send selected frames to special
-      ``mirrored'' ports, in addition to their normal destinations.  Mirroring
-      traffic may also be referred to as SPAN or RSPAN, depending on the
-      mechanism used for delivery.</p>
+    ``mirrored'' ports, in addition to their normal destinations.  Mirroring
+    traffic may also be referred to as SPAN, RSPAN, or ERSPAN, depending on how
+    the mirrored traffic is sent.</p>
 
     <column name="name">
       Arbitrary identifier for the <ref table="Mirror"/>.
@@ -1656,10 +1656,14 @@
       <column name="output_port">
         <p>Output port for selected packets, if nonempty.</p>
         <p>Specifying a port for mirror output reserves that port exclusively
-          for mirroring.  No frames other than those selected for mirroring
-          will be forwarded to the port, and any frames received on the port
-          will be discarded.</p>
-        <p>This type of mirroring is sometimes called SPAN.</p>
+        for mirroring.  No frames other than those selected for mirroring
+        will be forwarded to the port, and any frames received on the port
+        will be discarded.</p>
+        <p>
+          The output port may be any kind of port supported by Open vSwitch.
+          It may be, for example, a physical port (sometimes called SPAN), or a
+          GRE tunnel (sometimes called ERSPAN).
+        </p>
       </column>
 
       <column name="output_vlan">
@@ -1727,6 +1731,10 @@
           Open vSwitch is being used as an intermediate switch, learning can be
           disabled by adding the mirrored VLAN to <ref column="flood_vlans"/>
           in the appropriate <ref table="Bridge"/> table or tables.</p>
+          <p>
+            Mirroring to a GRE tunnel has fewer caveats than mirroring to a
+            VLAN and should generally be preferred.
+          </p>
       </column>
     </group>
 
