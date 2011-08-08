@@ -88,7 +88,7 @@ v1.1.0 - 05 Apr 2011
       bugs.  New ovs-vlan-bug-workaround command for enabling and
       disabling a workaround for these driver bugs.
     - OpenFlow support:
-      - "Resubmit" actions now update flow statistics. 
+      - "Resubmit" actions now update flow statistics.
       - New "register" extension for use in matching and actions, via NXM.
       - New "multipath" experimental action extension.
       - New support for matching multicast Ethernet frames, via NXM.
@@ -167,7 +167,7 @@ v0.99.0 - 14 Jan 2010
 ---------------------
     - User-space forwarding engine
     - Bug fixes
-	
+
 v0.90.7 - 29 Nov 2009
 ---------------------
     - Add support for NetFlow active timeouts
