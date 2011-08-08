@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# Copyright (c) 2011 Nicira Networks Inc.
 # Copyright (c) 2007, 2009 Javier Fernandez-Sanguino <jfs@debian.org>
 #
 # This is free software; you may redistribute it and/or modify
@@ -103,6 +104,10 @@ start_server() {
     if [ -z "$LISTEN" ]; then
         echo "$default: No connection methods configured, controller disabled" >&2
         exit 0
+    fi
+
+    if [ ! -d /var/run/openvswitch ]; then
+        install -d -m 755 -o root -g root /var/run/openvswitch
     fi
 
     SSL_OPTS=
