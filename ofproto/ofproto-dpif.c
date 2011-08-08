@@ -3969,26 +3969,71 @@ static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
                       void *aux OVS_UNUSED)
 {
-    char *dpname, *in_port_s, *tun_id_s, *packet_s;
+    char *dpname, *arg1, *arg2, *arg3;
     char *args = xstrdup(args_);
     char *save_ptr = NULL;
     struct ofproto_dpif *ofproto;
-    struct ofpbuf packet;
+    struct ofpbuf odp_key;
+    struct ofpbuf *packet;
     struct rule_dpif *rule;
     struct ds result;
     struct flow flow;
-    uint16_t in_port;
-    ovs_be64 tun_id;
     char *s;
 
-    ofpbuf_init(&packet, strlen(args) / 2);
+    packet = NULL;
+    ofpbuf_init(&odp_key, 0);
     ds_init(&result);
 
     dpname = strtok_r(args, " ", &save_ptr);
-    tun_id_s = strtok_r(NULL, " ", &save_ptr);
-    in_port_s = strtok_r(NULL, " ", &save_ptr);
-    packet_s = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
-    if (!dpname || !in_port_s || !packet_s) {
+    arg1 = strtok_r(NULL, " ", &save_ptr);
+    arg2 = strtok_r(NULL, " ", &save_ptr);
+    arg3 = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
+    if (dpname && arg1 && !arg2 && !arg3) {
+        /* ofproto/trace dpname flow */
+        int error;
+
+        /* Convert string to ODP key. */
+        ofpbuf_init(&odp_key, 0);
+        error = odp_flow_key_from_string(arg1, &odp_key);
+        if (error) {
+            unixctl_command_reply(conn, 501, "Bad flow syntax");
+            goto exit;
+        }
+
+        /* Convert odp_key to flow. */
+        error = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+        if (error) {
+            unixctl_command_reply(conn, 501, "Invalid flow");
+            goto exit;
+        }
+    } else if (dpname && arg1 && arg2 && arg3) {
+        /* ofproto/trace dpname tun_id in_port packet */
+        uint16_t in_port;
+        ovs_be64 tun_id;
+
+        tun_id = htonll(strtoull(arg1, NULL, 0));
+        in_port = ofp_port_to_odp_port(atoi(arg2));
+
+        packet = ofpbuf_new(strlen(args) / 2);
+        arg3 = ofpbuf_put_hex(packet, arg3, NULL);
+        arg3 += strspn(arg3, " ");
+        if (*arg3 != '\0') {
+            unixctl_command_reply(conn, 501, "Trailing garbage in command");
+            goto exit;
+        }
+        if (packet->size < ETH_HEADER_LEN) {
+            unixctl_command_reply(conn, 501,
+                                  "Packet data too short for Ethernet");
+            goto exit;
+        }
+
+        ds_put_cstr(&result, "Packet: ");
+        s = ofp_packet_to_string(packet->data, packet->size, packet->size);
+        ds_put_cstr(&result, s);
+        free(s);
+
+        flow_extract(packet, tun_id, in_port, &flow);
+    } else {
         unixctl_command_reply(conn, 501, "Bad command syntax");
         goto exit;
     }
@@ -4000,26 +4045,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         goto exit;
     }
 
-    tun_id = htonll(strtoull(tun_id_s, NULL, 0));
-    in_port = ofp_port_to_odp_port(atoi(in_port_s));
-
-    packet_s = ofpbuf_put_hex(&packet, packet_s, NULL);
-    packet_s += strspn(packet_s, " ");
-    if (*packet_s != '\0') {
-        unixctl_command_reply(conn, 501, "Trailing garbage in command");
-        goto exit;
-    }
-    if (packet.size < ETH_HEADER_LEN) {
-        unixctl_command_reply(conn, 501, "Packet data too short for Ethernet");
-        goto exit;
-    }
-
-    ds_put_cstr(&result, "Packet: ");
-    s = ofp_packet_to_string(packet.data, packet.size, packet.size);
-    ds_put_cstr(&result, s);
-    free(s);
-
-    flow_extract(&packet, tun_id, in_port, &flow);
     ds_put_cstr(&result, "Flow: ");
     flow_format(&result, &flow);
     ds_put_char(&result, '\n');
@@ -4032,7 +4057,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
 
         trace.result = &result;
         trace.flow = flow;
-        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, &packet);
+        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         odp_actions = xlate_actions(&trace.ctx,
                                     rule->up.actions, rule->up.n_actions);
@@ -4042,13 +4067,23 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         ds_put_cstr(&result, "Datapath actions: ");
         format_odp_actions(&result, odp_actions->data, odp_actions->size);
         ofpbuf_delete(odp_actions);
+
+        if (!trace.ctx.may_set_up_flow) {
+            if (packet) {
+                ds_put_cstr(&result, "\nThis flow is not cachable.");
+            } else {
+                ds_put_cstr(&result, "\nThe datapath actions are incomplete--"
+                            "for complete actions, please supply a packet.");
+            }
+        }
     }
 
     unixctl_command_reply(conn, 200, ds_cstr(&result));
 
 exit:
     ds_destroy(&result);
-    ofpbuf_uninit(&packet);
+    ofpbuf_delete(packet);
+    ofpbuf_uninit(&odp_key);
     free(args);
 }
 
