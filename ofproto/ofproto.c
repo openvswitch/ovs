@@ -1899,7 +1899,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
                           const struct ofp_stats_msg *osm)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct flow_stats_request fsr;
+    struct ofputil_flow_stats_request fsr;
     struct list replies;
     struct list rules;
     struct rule *rule;
@@ -2008,7 +2008,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_msg *osm)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct flow_stats_request request;
+    struct ofputil_flow_stats_request request;
     struct ofputil_aggregate_stats stats;
     bool unknown_packets, unknown_bytes;
     struct ofpbuf *reply;

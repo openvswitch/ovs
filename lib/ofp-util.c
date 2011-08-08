@@ -1010,7 +1010,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
 }
 
 static int
-ofputil_decode_ofpst_flow_request(struct flow_stats_request *fsr,
+ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
                                   const struct ofp_header *oh,
                                   bool aggregate)
 {
@@ -1026,7 +1026,7 @@ ofputil_decode_ofpst_flow_request(struct flow_stats_request *fsr,
 }
 
 static int
-ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
+ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
                                  const struct ofp_header *oh,
                                  bool aggregate)
 {
@@ -1056,7 +1056,7 @@ ofputil_decode_nxst_flow_request(struct flow_stats_request *fsr,
  * request 'oh', into an abstract flow_stats_request in 'fsr'.  Returns 0 if
  * successful, otherwise an OpenFlow error code. */
 int
-ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
+ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
                                   const struct ofp_header *oh)
 {
     const struct ofputil_msg_type *type;
@@ -1090,7 +1090,7 @@ ofputil_decode_flow_stats_request(struct flow_stats_request *fsr,
  * OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE request 'oh' according to
  * 'flow_format', and returns the message. */
 struct ofpbuf *
-ofputil_encode_flow_stats_request(const struct flow_stats_request *fsr,
+ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
                                   enum nx_flow_format flow_format)
 {
     struct ofpbuf *msg;

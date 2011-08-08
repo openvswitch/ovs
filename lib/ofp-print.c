@@ -1016,7 +1016,7 @@ static void
 ofp_print_flow_stats_request(struct ds *string,
                              const struct ofp_stats_msg *osm)
 {
-    struct flow_stats_request fsr;
+    struct ofputil_flow_stats_request fsr;
     int error;
 
     error = ofputil_decode_flow_stats_request(&fsr, &osm->header);

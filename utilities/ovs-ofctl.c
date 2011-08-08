@@ -534,7 +534,7 @@ static void
 do_dump_flows__(int argc, char *argv[], bool aggregate)
 {
     enum nx_flow_format min_flow_format, flow_format;
-    struct flow_stats_request fsr;
+    struct ofputil_flow_stats_request fsr;
     struct ofpbuf *request;
     struct vconn *vconn;
 
@@ -1076,7 +1076,7 @@ static void
 read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
                        struct classifier *cls, int index)
 {
-    struct flow_stats_request fsr;
+    struct ofputil_flow_stats_request fsr;
     struct ofpbuf *request;
     ovs_be32 send_xid;
     bool done;

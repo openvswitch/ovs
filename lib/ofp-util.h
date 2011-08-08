@@ -143,17 +143,17 @@ struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        bool flow_mod_table_id);
 
 /* Flow stats or aggregate stats request, independent of flow format. */
-struct flow_stats_request {
+struct ofputil_flow_stats_request {
     bool aggregate;             /* Aggregate results? */
     struct cls_rule match;
     uint16_t out_port;
     uint8_t table_id;
 };
 
-int ofputil_decode_flow_stats_request(struct flow_stats_request *,
+int ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *,
                                       const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
-    const struct flow_stats_request *, enum nx_flow_format);
+    const struct ofputil_flow_stats_request *, enum nx_flow_format);
 
 /* Flow stats reply, independent of flow format. */
 struct ofputil_flow_stats {

@@ -1062,7 +1062,7 @@ parse_ofp_flow_mod_file(struct list *packets,
 }
 
 void
-parse_ofp_flow_stats_request_str(struct flow_stats_request *fsr,
+parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
                                  bool aggregate, char *string)
 {
     struct ofputil_flow_mod fm;
