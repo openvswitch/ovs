@@ -3920,7 +3920,7 @@ struct ofproto_trace {
 };
 
 static void
-trace_format_rule(struct ds *result, int level, const struct rule *rule)
+trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 {
     ds_put_char_multiple(result, '\t', level);
     if (!rule) {
@@ -3929,13 +3929,13 @@ trace_format_rule(struct ds *result, int level, const struct rule *rule)
     }
 
     ds_put_format(result, "Rule: cookie=%#"PRIx64" ",
-                  ntohll(rule->flow_cookie));
-    cls_rule_format(&rule->cr, result);
+                  ntohll(rule->up.flow_cookie));
+    cls_rule_format(&rule->up.cr, result);
     ds_put_char(result, '\n');
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_cstr(result, "OpenFlow ");
-    ofp_print_actions(result, rule->actions, rule->n_actions);
+    ofp_print_actions(result, rule->up.actions, rule->up.n_actions);
     ds_put_char(result, '\n');
 }
 
@@ -3962,7 +3962,7 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 
     ds_put_char(result, '\n');
     trace_format_flow(result, ctx->recurse + 1, "Resubmitted flow", trace);
-    trace_format_rule(result, ctx->recurse + 1, &rule->up);
+    trace_format_rule(result, ctx->recurse + 1, rule);
 }
 
 static void
@@ -4050,7 +4050,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     ds_put_char(&result, '\n');
 
     rule = rule_dpif_lookup(ofproto, &flow);
-    trace_format_rule(&result, 0, &rule->up);
+    trace_format_rule(&result, 0, rule);
     if (rule) {
         struct ofproto_trace trace;
         struct ofpbuf *odp_actions;
