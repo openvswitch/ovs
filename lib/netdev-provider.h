@@ -39,11 +39,9 @@ struct netdev_dev {
                                                 this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
-    struct shash args;                  /* Argument list from last config. */
 };
 
 void netdev_dev_init(struct netdev_dev *, const char *name,
-                     const struct shash *args,
                      const struct netdev_class *);
 void netdev_dev_uninit(struct netdev_dev *, bool destroy);
 const char *netdev_dev_get_type(const struct netdev_dev *);
@@ -52,8 +50,6 @@ const char *netdev_dev_get_name(const struct netdev_dev *);
 struct netdev_dev *netdev_dev_from_name(const char *name);
 void netdev_dev_get_devices(const struct netdev_class *,
                             struct shash *device_list);
-bool netdev_dev_args_equal(const struct netdev_dev *netdev_dev,
-                           const struct shash *args);
 
 static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
                                            const struct netdev_class *class_)
@@ -116,11 +112,10 @@ struct netdev_class {
      * needed here. */
     void (*wait)(void);
 
-    /* Attempts to create a network device named 'name' with initial 'args' in
-     * 'netdev_class'.  On success sets 'netdev_devp' to the newly created
-     * device. */
+    /* Attempts to create a network device named 'name' in 'netdev_class'.  On
+     * success sets 'netdev_devp' to the newly created device. */
     int (*create)(const struct netdev_class *netdev_class, const char *name,
-                  const struct shash *args, struct netdev_dev **netdev_devp);
+                  struct netdev_dev **netdev_devp);
 
     /* Destroys 'netdev_dev'.
      *
@@ -130,21 +125,18 @@ struct netdev_class {
      * called. */
     void (*destroy)(struct netdev_dev *netdev_dev);
 
+    /* Fetches the device 'netdev_dev''s configuration, storing it in 'args'.
+     * The caller owns 'args' and pre-initializes it to an empty shash.
+     *
+     * If this netdev class does not have any configuration options, this may
+     * be a null pointer. */
+    int (*get_config)(struct netdev_dev *netdev_dev, struct shash *args);
+
     /* Changes the device 'netdev_dev''s configuration to 'args'.
      *
-     * If this netdev class does not support reconfiguring a netdev
-     * device, this may be a null pointer.
-     */
+     * If this netdev class does not support configuration, this may be a null
+     * pointer. */
     int (*set_config)(struct netdev_dev *netdev_dev, const struct shash *args);
-
-    /* Returns true if 'args' is equivalent to the "args" field in
-     * 'netdev_dev', otherwise false.
-     *
-     * If no special processing needs to be done beyond a simple
-     * shash comparison, this may be a null pointer.
-     */
-    bool (*config_equal)(const struct netdev_dev *netdev_dev,
-                         const struct shash *args);
 
     /* Attempts to open a network device.  On success, sets 'netdevp'
      * to the new network device. */

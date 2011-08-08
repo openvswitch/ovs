@@ -516,17 +516,11 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
 /* Creates system and internal devices. */
 static int
-netdev_linux_create(const struct netdev_class *class,
-                           const char *name, const struct shash *args,
-                           struct netdev_dev **netdev_devp)
+netdev_linux_create(const struct netdev_class *class, const char *name,
+                    struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
     int error;
-
-    if (!shash_is_empty(args)) {
-        VLOG_WARN("%s: arguments for %s devices should be empty",
-                  name, class->type);
-    }
 
     if (!cache_notifier_refcount) {
         error = rtnetlink_link_notifier_register(&netdev_linux_cache_notifier,
@@ -539,7 +533,7 @@ netdev_linux_create(const struct netdev_class *class,
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
-    netdev_dev_init(&netdev_dev->netdev_dev, name, args, class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -553,18 +547,13 @@ netdev_linux_create(const struct netdev_class *class,
  * be unavailable to other reads for tap devices. */
 static int
 netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
-                        const char *name, const struct shash *args,
-                        struct netdev_dev **netdev_devp)
+                        const char *name, struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
     struct tap_state *state;
     static const char tap_dev[] = "/dev/net/tun";
     struct ifreq ifr;
     int error;
-
-    if (!shash_is_empty(args)) {
-        VLOG_WARN("%s: arguments for TAP devices should be empty", name);
-    }
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
     state = &netdev_dev->state.tap;
@@ -593,7 +582,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         goto error;
     }
 
-    netdev_dev_init(&netdev_dev->netdev_dev, name, args, &netdev_tap_class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_tap_class);
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 
@@ -2252,8 +2241,8 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     CREATE,                                                     \
     netdev_linux_destroy,                                       \
+    NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
-    NULL,                       /* config_equal */              \
                                                                 \
     netdev_linux_open,                                          \
     netdev_linux_close,                                         \

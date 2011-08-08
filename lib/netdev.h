@@ -78,7 +78,6 @@ struct netdev_stats {
 struct netdev_options {
     const char *name;
     const char *type;
-    const struct shash *args;
 };
 
 struct netdev;
@@ -101,7 +100,7 @@ int netdev_enumerate(struct sset *);
 
 /* Options. */
 int netdev_set_config(struct netdev *, const struct shash *args);
-const struct shash *netdev_get_config(const struct netdev *);
+int netdev_get_config(const struct netdev *, struct shash *);
 
 /* Basic properties. */
 const char *netdev_get_name(const struct netdev *);

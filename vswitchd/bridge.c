@@ -846,28 +846,39 @@ bridge_add_ofproto_ports(struct bridge *br)
         struct ofproto_port ofproto_port;
 
         LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
-            struct shash args;
             int error;
 
-            /* Open the netdev or reconfigure it. */
-            shash_init(&args);
-            shash_from_ovs_idl_map(iface->cfg->key_options,
-                                   iface->cfg->value_options,
-                                   iface->cfg->n_options, &args);
+            /* Open the netdev. */
             if (!iface->netdev) {
                 struct netdev_options options;
                 options.name = iface->name;
                 options.type = iface->type;
-                options.args = &args;
                 error = netdev_open(&options, &iface->netdev);
+                if (error) {
+                    VLOG_WARN("could not open network device %s (%s)",
+                              iface->name, strerror(error));
+                }
             } else {
-                error = netdev_set_config(iface->netdev, &args);
+                error = 0;
             }
-            shash_destroy(&args);
-            if (error) {
-                VLOG_WARN("could not %s network device %s (%s)",
-                          iface->netdev ? "reconfigure" : "open",
-                          iface->name, strerror(error));
+
+            /* Configure the netdev. */
+            if (iface->netdev) {
+                struct shash args;
+
+                shash_init(&args);
+                shash_from_ovs_idl_map(iface->cfg->key_options,
+                                       iface->cfg->value_options,
+                                       iface->cfg->n_options, &args);
+                error = netdev_set_config(iface->netdev, &args);
+                shash_destroy(&args);
+
+                if (error) {
+                    VLOG_WARN("could not configure network device %s (%s)",
+                              iface->name, strerror(error));
+                    netdev_close(iface->netdev);
+                    iface->netdev = NULL;
+                }
             }
 
             /* Add the port, if necessary. */
@@ -891,7 +902,7 @@ bridge_add_ofproto_ports(struct bridge *br)
                 iface_refresh_status(iface);
             }
 
-            /* Delete the iface if  */
+            /* Delete the iface if we failed. */
             if (iface->netdev && iface->ofp_port >= 0) {
                 VLOG_DBG("bridge %s: interface %s is on port %d",
                          br->name, iface->name, iface->ofp_port);
@@ -923,7 +934,6 @@ bridge_add_ofproto_ports(struct bridge *br)
 
                 options.name = port->name;
                 options.type = "internal";
-                options.args = NULL;
                 error = netdev_open(&options, &netdev);
                 if (!error) {
                     ofproto_port_add(br->ofproto, netdev, NULL);

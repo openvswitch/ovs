@@ -224,14 +224,13 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
     for (i = 2; i < argc; i++) {
         char *save_ptr = NULL;
         struct netdev_options options;
-        struct netdev *netdev;
+        struct netdev *netdev = NULL;
         struct shash args;
         char *option;
         int error;
 
         options.name = strtok_r(argv[i], ",", &save_ptr);
         options.type = "system";
-        options.args = &args;
 
         if (!options.name) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
@@ -260,16 +259,26 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
         if (error) {
             ovs_error(error, "%s: failed to open network device",
                       options.name);
-        } else {
-            error = dpif_port_add(dpif, netdev, NULL);
-            if (error) {
-                ovs_error(error, "adding %s to %s failed",
-                          options.name, argv[1]);
-            } else {
-                error = if_up(options.name);
-            }
-            netdev_close(netdev);
+            goto next;
         }
+
+        error = netdev_set_config(netdev, &args);
+        if (error) {
+            ovs_error(error, "%s: failed to configure network device",
+                      options.name);
+            goto next;
+        }
+
+        error = dpif_port_add(dpif, netdev, NULL);
+        if (error) {
+            ovs_error(error, "adding %s to %s failed", options.name, argv[1]);
+            goto next;
+        }
+
+        error = if_up(options.name);
+
+next:
+        netdev_close(netdev);
         if (error) {
             failure = true;
         }
@@ -382,21 +391,28 @@ show_dpif(struct dpif *dpif)
 
             netdev_options.name = dpif_port.name;
             netdev_options.type = dpif_port.type;
-            netdev_options.args = NULL;
             error = netdev_open(&netdev_options, &netdev);
             if (!error) {
-                const struct shash_node **nodes;
-                const struct shash *config;
-                size_t i;
+                struct shash config;
 
-                config = netdev_get_config(netdev);
-                nodes = shash_sort(config);
-                for (i = 0; i < shash_count(config); i++) {
-                    const struct shash_node *node = nodes[i];
-                    printf("%c %s=%s", i ? ',' : ':',
-                           node->name, (char *) node->data);
+                shash_init(&config);
+                error = netdev_get_config(netdev, &config);
+                if (!error) {
+                    const struct shash_node **nodes;
+                    size_t i;
+
+                    nodes = shash_sort(&config);
+                    for (i = 0; i < shash_count(&config); i++) {
+                        const struct shash_node *node = nodes[i];
+                        printf("%c %s=%s", i ? ',' : ':',
+                               node->name, (char *) node->data);
+                    }
+                    free(nodes);
+                } else {
+                    printf(", could not retrieve configuration (%s)",
+                           strerror(error));
                 }
-                free(nodes);
+                shash_destroy_free_data(&config);
 
                 netdev_close(netdev);
             } else {

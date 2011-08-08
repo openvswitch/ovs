@@ -192,33 +192,20 @@ netdev_enumerate_types(struct sset *types)
     }
 }
 
-void
-update_device_args(struct netdev_dev *dev, const struct shash *args)
-{
-    smap_destroy(&dev->args);
-    smap_clone(&dev->args, args);
-}
-
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
  * successful, otherwise a positive errno value.  On success, sets '*netdevp'
  * to the new network device, otherwise to null.
  *
- * If this is the first time the device has been opened, then create is called
- * before opening.  The device is created using the given type and
- * arguments. */
+ * Some network devices may need to be configured (with netdev_set_config())
+ * before they can be used. */
 int
 netdev_open(struct netdev_options *options, struct netdev **netdevp)
 {
-    struct shash empty_args = SHASH_INITIALIZER(&empty_args);
     struct netdev_dev *netdev_dev;
     int error;
 
     *netdevp = NULL;
     netdev_initialize();
-
-    if (!options->args) {
-        options->args = &empty_args;
-    }
 
     netdev_dev = shash_find_data(&netdev_dev_shash, options->name);
 
@@ -231,19 +218,12 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
                       options->name, options->type);
             return EAFNOSUPPORT;
         }
-        error = class->create(class, options->name, options->args,
-                              &netdev_dev);
+        error = class->create(class, options->name, &netdev_dev);
         if (error) {
             return error;
         }
         assert(netdev_dev->netdev_class == class);
 
-    } else if (!shash_is_empty(options->args) &&
-               !netdev_dev_args_equal(netdev_dev, options->args)) {
-
-        VLOG_WARN("%s: attempted to open already open netdev with "
-                  "different arguments", options->name);
-        return EINVAL;
     }
 
     error = netdev_dev->netdev_class->open(netdev_dev, netdevp);
@@ -275,36 +255,44 @@ netdev_open_default(const char *name, struct netdev **netdevp)
 int
 netdev_set_config(struct netdev *netdev, const struct shash *args)
 {
-    struct shash empty_args = SHASH_INITIALIZER(&empty_args);
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
 
-    if (!args) {
-        args = &empty_args;
-    }
-
     if (netdev_dev->netdev_class->set_config) {
-        if (!netdev_dev_args_equal(netdev_dev, args)) {
-            update_device_args(netdev_dev, args);
-            return netdev_dev->netdev_class->set_config(netdev_dev, args);
-        }
-    } else if (!shash_is_empty(args)) {
-        VLOG_WARN("%s: arguments provided to device whose configuration "
-                  "cannot be changed", netdev_get_name(netdev));
+        struct shash no_args = SHASH_INITIALIZER(&no_args);
+        return netdev_dev->netdev_class->set_config(netdev_dev,
+                                                    args ? args : &no_args);
+    } else if (args && !shash_is_empty(args)) {
+        VLOG_WARN("%s: arguments provided to device that is not configurable",
+                  netdev_get_name(netdev));
     }
 
     return 0;
 }
 
-/* Returns the current configuration for 'netdev'.  This is either the
- * configuration passed to netdev_open() or netdev_set_config(), or it is a
- * configuration retrieved from the device itself if no configuration was
- * passed to those functions.
+/* Returns the current configuration for 'netdev' in 'args'.  The caller must
+ * have already initialized 'args' with shash_init().  Returns 0 on success, in
+ * which case 'args' will be filled with 'netdev''s configuration.  On failure
+ * returns a positive errno value, in which case 'args' will be empty.
  *
- * 'netdev' retains ownership of the returned configuration. */
-const struct shash *
-netdev_get_config(const struct netdev *netdev)
+ * The caller owns 'args' and its contents and must eventually free them with
+ * shash_destroy_free_data(). */
+int
+netdev_get_config(const struct netdev *netdev, struct shash *args)
 {
-    return &netdev_get_dev(netdev)->args;
+    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+    int error;
+
+    shash_clear_free_data(args);
+    if (netdev_dev->netdev_class->get_config) {
+        error = netdev_dev->netdev_class->get_config(netdev_dev, args);
+        if (error) {
+            shash_clear_free_data(args);
+        }
+    } else {
+        error = 0;
+    }
+
+    return error;
 }
 
 /* Closes and destroys 'netdev'. */
@@ -1295,17 +1283,11 @@ exit:
  * 'netdev_class'.  This function is ordinarily called from a netdev provider's
  * 'create' function.
  *
- * 'args' should be the arguments that were passed to the netdev provider's
- * 'create'.  If an empty set of arguments was passed, and 'name' is the name
- * of a network device that existed before the 'create' call, then 'args' may
- * instead be the configuration for that existing device.
- *
  * This function adds 'netdev_dev' to a netdev-owned shash, so it is
  * very important that 'netdev_dev' only be freed after calling
  * the refcount drops to zero.  */
 void
 netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
-                const struct shash *args,
                 const struct netdev_class *netdev_class)
 {
     assert(!shash_find(&netdev_dev_shash, name));
@@ -1314,7 +1296,6 @@ netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
     netdev_dev->netdev_class = netdev_class;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
-    smap_clone(&netdev_dev->args, args);
 }
 
 /* Undoes the results of initialization.
@@ -1332,7 +1313,6 @@ netdev_dev_uninit(struct netdev_dev *netdev_dev, bool destroy)
     assert(!netdev_dev->ref_cnt);
 
     shash_delete(&netdev_dev_shash, netdev_dev->node);
-    smap_destroy(&netdev_dev->args);
 
     if (destroy) {
         netdev_dev->netdev_class->destroy(netdev_dev);
@@ -1389,19 +1369,6 @@ netdev_dev_get_devices(const struct netdev_class *netdev_class,
         if (dev->netdev_class == netdev_class) {
             shash_add(device_list, node->name, node->data);
         }
-    }
-}
-
-/* Returns true if 'args' is equivalent to the "args" field in
- * 'netdev_dev', otherwise false. */
-bool
-netdev_dev_args_equal(const struct netdev_dev *netdev_dev,
-                      const struct shash *args)
-{
-    if (netdev_dev->netdev_class->config_equal) {
-        return netdev_dev->netdev_class->config_equal(netdev_dev, args);
-    } else {
-        return smap_equal(&netdev_dev->args, args);
     }
 }
 
