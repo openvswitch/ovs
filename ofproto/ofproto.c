@@ -324,6 +324,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->datapath_id = 0;
     ofproto_set_flow_eviction_threshold(ofproto,
                                         OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT);
+    ofproto->forward_bpdu = false;
     ofproto->fallback_dpid = pick_fallback_dpid();
     ofproto->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
     ofproto->hw_desc = xstrdup(DEFAULT_HW_DESC);
@@ -427,6 +428,21 @@ ofproto_set_flow_eviction_threshold(struct ofproto *ofproto, unsigned threshold)
     } else {
         ofproto->flow_eviction_threshold = threshold;
     }
+}
+
+/* If forward_bpdu is true, the NORMAL action will forward frames with 
+ * reserved (e.g. STP) destination Ethernet addresses. if forward_bpdu is false,
+ * the NORMAL action will drop these frames. */
+void
+ofproto_set_forward_bpdu(struct ofproto *ofproto, bool forward_bpdu)
+{
+    bool old_val = ofproto->forward_bpdu;
+    ofproto->forward_bpdu = forward_bpdu;
+    if (old_val != ofproto->forward_bpdu) {
+        if (ofproto->ofproto_class->forward_bpdu_changed) {
+            ofproto->ofproto_class->forward_bpdu_changed(ofproto);
+        }
+    }   
 }
 
 void

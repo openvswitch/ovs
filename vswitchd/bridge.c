@@ -150,6 +150,7 @@ static void bridge_refresh_ofp_port(struct bridge *);
 static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
+static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_remotes(struct bridge *,
                                      const struct sockaddr_in *managers,
@@ -414,6 +415,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_mirrors(br);
         bridge_configure_datapath_id(br);
         bridge_configure_flow_eviction_threshold(br);
+        bridge_configure_forward_bpdu(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -980,6 +982,20 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
         threshold = OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT;
     }
     ofproto_set_flow_eviction_threshold(br->ofproto, threshold);
+}
+
+/* Set forward BPDU option. */
+static void
+bridge_configure_forward_bpdu(struct bridge *br)
+{
+    const char *forward_bpdu_str;
+    bool forward_bpdu = false;
+
+    forward_bpdu_str = bridge_get_other_config(br->cfg, "forward-bpdu");
+    if (forward_bpdu_str && !strcmp(forward_bpdu_str, "true")) {
+        forward_bpdu = true;
+    }
+    ofproto_set_forward_bpdu(br->ofproto, forward_bpdu);
 }
 
 static void
