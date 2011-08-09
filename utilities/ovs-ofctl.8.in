@@ -655,10 +655,16 @@ only known to be implemented by Open vSwitch:
 .RS
 .
 .IP \fBresubmit\fB:\fIport\fR
-Re-searches the OpenFlow flow table with the \fBin_port\fR field
-replaced by \fIport\fR and executes the actions found, if any, in
-addition to any other actions in this flow entry.  Recursive
-\fBresubmit\fR actions are ignored.
+.IQ \fBresubmit\fB(\fR[\fIport\fR]\fB,\fR[\fItable\fR]\fB)
+Re-searches this OpenFlow flow table (or the table whose number is
+specified by \fItable\fR) with the \fBin_port\fR field replaced by
+\fIport\fR (if \fIport\fR is specified) and executes the actions
+found, if any, in addition to any other actions in this flow entry.
+.IP
+Recursive \fBresubmit\fR actions are obeyed up to an
+implementation-defined maximum depth.  Open vSwitch 1.0.1 and earlier
+did not support recursion; Open vSwitch before 1.2.90 did not support
+\fItable\fR.
 .
 .IP \fBset_tunnel\fB:\fIid\fR
 .IQ \fBset_tunnel64\fB:\fIid\fR

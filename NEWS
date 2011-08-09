@@ -2,6 +2,12 @@ Post-v1.2.0
 ------------------------
     - ovs-appctl:
       - New "version" command to determine version of running daemon
+    - ovs-vswitchd:
+      - The software switch now supports 255 OpenFlow tables, instead
+        of just one.  By default, only table 0 is consulted, but the
+        new NXAST_RESUBMIT_TABLE action can look up in additional
+        tables.  Tables 128 and above are reserved for use by the
+        switch itself; please use only tables 0 through 127.
 
 v1.2.0 - 03 Aug 2011
 ------------------------

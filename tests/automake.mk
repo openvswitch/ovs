@@ -28,6 +28,7 @@ TESTSUITE_AT = \
 	tests/timeval.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
+	tests/ofproto-dpif.at \
 	tests/ofproto-macros.at \
 	tests/ofproto.at \
 	tests/ovsdb.at \

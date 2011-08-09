@@ -279,7 +279,8 @@ enum nx_action_subtype {
     NXAST_MULTIPATH,            /* struct nx_action_multipath */
     NXAST_AUTOPATH,             /* struct nx_action_autopath */
     NXAST_BUNDLE,               /* struct nx_action_bundle */
-    NXAST_BUNDLE_LOAD           /* struct nx_action_bundle */
+    NXAST_BUNDLE_LOAD,          /* struct nx_action_bundle */
+    NXAST_RESUBMIT_TABLE        /* struct nx_action_resubmit */
 };
 
 /* Header for Nicira-defined actions. */
@@ -292,31 +293,51 @@ struct nx_action_header {
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
 
-/* Action structure for NXAST_RESUBMIT.
+/* Action structures for NXAST_RESUBMIT and NXAST_RESUBMIT_TABLE.
  *
- * NXAST_RESUBMIT searches the flow table again, using a flow that is slightly
- * modified from the original lookup:
+ * These actions search one of the switch's flow tables:
  *
- *    - The 'in_port' member of struct nx_action_resubmit is used as the flow's
- *      in_port.
+ *    - For NXAST_RESUBMIT_TABLE only, if the 'table' member is not 255, then
+ *      it specifies the table to search.
  *
- *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
- *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
- *      values.
+ *    - Otherwise (for NXAST_RESUBMIT_TABLE with a 'table' of 255, or for
+ *      NXAST_RESUBMIT regardless of 'table'), it searches the current flow
+ *      table, that is, the OpenFlow flow table that contains the flow from
+ *      which this action was obtained.  If this action did not come from a
+ *      flow table (e.g. it came from an OFPT_PACKET_OUT message), then table 0
+ *      is the current table.
+ *
+ * The flow table lookup uses a flow that may be slightly modified from the
+ * original lookup:
+ *
+ *    - For NXAST_RESUBMIT, the 'in_port' member of struct nx_action_resubmit
+ *      is used as the flow's in_port.
+ *
+ *    - For NXAST_RESUBMIT_TABLE, if the 'in_port' member is not OFPP_IN_PORT,
+ *      then its value is used as the flow's in_port.  Otherwise, the original
+ *      in_port is used.
+ *
+ *    - If actions that modify the flow (e.g. OFPAT_SET_VLAN_VID) precede the
+ *      resubmit action, then the flow is updated with the new values.
  *
  * Following the lookup, the original in_port is restored.
  *
  * If the modified flow matched in the flow table, then the corresponding
- * actions are executed.  Afterward, actions following NXAST_RESUBMIT in the
+ * actions are executed.  Afterward, actions following the resubmit in the
  * original set of actions, if any, are executed; any changes made to the
  * packet (e.g. changes to VLAN) by secondary actions persist when those
  * actions are executed, although the original in_port is restored.
  *
- * NXAST_RESUBMIT may be used any number of times within a set of actions.
+ * Resubmit actions may be used any number of times within a set of actions.
  *
- * NXAST_RESUBMIT may nest to an implementation-defined depth.  Beyond this
- * implementation-defined depth, further NXAST_RESUBMIT actions are simply
- * ignored.  (Open vSwitch 1.0.1 and earlier did not support recursion.)
+ * Resubmit actions may nest to an implementation-defined depth.  Beyond this
+ * implementation-defined depth, further resubmit actions are simply ignored.
+ *
+ * NXAST_RESUBMIT ignores 'table' and 'pad'.  NXAST_RESUBMIT_TABLE requires
+ * 'pad' to be all-bits-zero.
+ *
+ * Open vSwitch 1.0.1 and earlier did not support recursion.  Open vSwitch
+ * before 1.2.90 did not support NXAST_RESUBMIT_TABLE.
  */
 struct nx_action_resubmit {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
@@ -324,7 +345,8 @@ struct nx_action_resubmit {
     ovs_be32 vendor;                /* NX_VENDOR_ID. */
     ovs_be16 subtype;               /* NXAST_RESUBMIT. */
     ovs_be16 in_port;               /* New in_port for checking flow table. */
-    uint8_t pad[4];
+    uint8_t table;                  /* NXAST_RESUBMIT_TABLE: table to use. */
+    uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 

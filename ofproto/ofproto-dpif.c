@@ -60,7 +60,7 @@ COVERAGE_DEFINE(facet_invalidated);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
 
-/* Maximum depth of flow table recursion (due to NXAST_RESUBMIT actions) in a
+/* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 16
 
@@ -96,8 +96,8 @@ static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
     return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
 }
 
-static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *ofproto,
-                                          const struct flow *flow);
+static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
+                                          const struct flow *, uint8_t table);
 
 #define MAX_MIRRORS 32
 typedef uint32_t mirror_mask_t;
@@ -188,6 +188,7 @@ struct action_xlate_ctx {
     uint32_t priority;          /* Current flow priority. 0 if none. */
     struct flow base_flow;      /* Flow at the last commit. */
     uint32_t base_priority;     /* Priority at the last commit. */
+    uint8_t table_id;           /* OpenFlow table ID where flow was found. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -1654,7 +1655,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
 
     facet = facet_lookup_valid(ofproto, &flow);
     if (!facet) {
-        struct rule_dpif *rule = rule_dpif_lookup(ofproto, &flow);
+        struct rule_dpif *rule = rule_dpif_lookup(ofproto, &flow, 0);
         if (!rule) {
             /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
             struct ofport_dpif *port = get_ofp_port(ofproto, flow.in_port);
@@ -2434,7 +2435,7 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
     COVERAGE_INC(facet_revalidate);
 
     /* Determine the new rule. */
-    new_rule = rule_dpif_lookup(ofproto, &facet->flow);
+    new_rule = rule_dpif_lookup(ofproto, &facet->flow, 0);
     if (!new_rule) {
         /* No new rule, so delete the facet. */
         facet_remove(ofproto, facet);
@@ -2592,10 +2593,11 @@ flow_push_stats(const struct rule_dpif *rule,
 /* Rules. */
 
 static struct rule_dpif *
-rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
+rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
+                 uint8_t table_id)
 {
     return rule_dpif_cast(rule_from_cls_rule(
-                              classifier_lookup(&ofproto->up.tables[0],
+                              classifier_lookup(&ofproto->up.tables[table_id],
                                                 flow)));
 }
 
@@ -2717,7 +2719,7 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
 
     /* Otherwise, if 'rule' is in fact the correct rule for 'packet', then
      * create a new facet for it and use that. */
-    if (rule_dpif_lookup(ofproto, flow) == rule) {
+    if (rule_dpif_lookup(ofproto, flow, 0) == rule) {
         facet = facet_create(rule, flow, packet);
         facet_execute(ofproto, facet, packet);
         facet_install(ofproto, facet, true);
@@ -2889,18 +2891,23 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 }
 
 static void
-xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
+xlate_table_action(struct action_xlate_ctx *ctx,
+                   uint16_t in_port, uint8_t table_id)
 {
     if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
         struct rule_dpif *rule;
         uint16_t old_in_port;
+        uint8_t old_table_id;
+
+        old_table_id = ctx->table_id;
+        ctx->table_id = table_id;
 
         /* Look up a flow with 'in_port' as the input port.  Then restore the
          * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
          * have surprising behavior). */
         old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
-        rule = rule_dpif_lookup(ctx->ofproto, &ctx->flow);
+        rule = rule_dpif_lookup(ctx->ofproto, &ctx->flow, table_id);
         ctx->flow.in_port = old_in_port;
 
         if (ctx->resubmit_hook) {
@@ -2912,12 +2919,29 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
             do_xlate_actions(rule->up.actions, rule->up.n_actions, ctx);
             ctx->recurse--;
         }
+
+        ctx->table_id = old_table_id;
     } else {
         static struct vlog_rate_limit recurse_rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-        VLOG_ERR_RL(&recurse_rl, "NXAST_RESUBMIT recursed over %d times",
+        VLOG_ERR_RL(&recurse_rl, "resubmit actions recursed over %d times",
                     MAX_RESUBMIT_RECURSION);
     }
+}
+
+static void
+xlate_resubmit_table(struct action_xlate_ctx *ctx,
+                     const struct nx_action_resubmit *nar)
+{
+    uint16_t in_port;
+    uint8_t table_id;
+
+    in_port = (nar->in_port == htons(OFPP_IN_PORT)
+               ? ctx->flow.in_port
+               : ntohs(nar->in_port));
+    table_id = nar->table == 255 ? ctx->table_id : nar->table;
+
+    xlate_table_action(ctx, in_port, table_id);
 }
 
 static void
@@ -2950,7 +2974,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         add_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
-        xlate_table_action(ctx, ctx->flow.in_port);
+        xlate_table_action(ctx, ctx->flow.in_port, ctx->table_id);
         break;
     case OFPP_NORMAL:
         xlate_normal(ctx);
@@ -3182,7 +3206,11 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPUTIL_NXAST_RESUBMIT:
             nar = (const struct nx_action_resubmit *) ia;
-            xlate_table_action(ctx, ntohs(nar->in_port));
+            xlate_table_action(ctx, ntohs(nar->in_port), ctx->table_id);
+            break;
+
+        case OFPUTIL_NXAST_RESUBMIT_TABLE:
+            xlate_resubmit_table(ctx, (const struct nx_action_resubmit *) ia);
             break;
 
         case OFPUTIL_NXAST_SET_TUNNEL:
@@ -3272,6 +3300,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->priority = 0;
     ctx->base_priority = 0;
     ctx->base_flow = ctx->flow;
+    ctx->table_id = 0;
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
@@ -3925,7 +3954,8 @@ struct ofproto_trace {
 };
 
 static void
-trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
+trace_format_rule(struct ds *result, uint8_t table_id, int level,
+                  const struct rule_dpif *rule)
 {
     ds_put_char_multiple(result, '\t', level);
     if (!rule) {
@@ -3933,8 +3963,8 @@ trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
         return;
     }
 
-    ds_put_format(result, "Rule: cookie=%#"PRIx64" ",
-                  ntohll(rule->up.flow_cookie));
+    ds_put_format(result, "Rule: table=%"PRIu8" cookie=%#"PRIx64" ",
+                  table_id, ntohll(rule->up.flow_cookie));
     cls_rule_format(&rule->up.cr, result);
     ds_put_char(result, '\n');
 
@@ -3967,7 +3997,7 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 
     ds_put_char(result, '\n');
     trace_format_flow(result, ctx->recurse + 1, "Resubmitted flow", trace);
-    trace_format_rule(result, ctx->recurse + 1, rule);
+    trace_format_rule(result, ctx->table_id, ctx->recurse + 1, rule);
 }
 
 static void
@@ -4054,8 +4084,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     flow_format(&result, &flow);
     ds_put_char(&result, '\n');
 
-    rule = rule_dpif_lookup(ofproto, &flow);
-    trace_format_rule(&result, 0, rule);
+    rule = rule_dpif_lookup(ofproto, &flow, 0);
+    trace_format_rule(&result, 0, 0, rule);
     if (rule) {
         struct ofproto_trace trace;
         struct ofpbuf *odp_actions;

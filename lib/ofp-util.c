@@ -1966,6 +1966,15 @@ ofputil_check_output_port(uint16_t port, int max_ports)
     }
 }
 
+static int
+check_resubmit_table(const struct nx_action_resubmit *nar)
+{
+    if (nar->pad[0] || nar->pad[1] || nar->pad[2]) {
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    }
+    return 0;
+}
+
 int
 validate_actions(const union ofp_action *actions, size_t n_actions,
                  const struct flow *flow, int max_ports)
@@ -2042,6 +2051,11 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         case OFPUTIL_NXAST_BUNDLE_LOAD:
             error = bundle_check((const struct nx_action_bundle *) a,
                                  max_ports, flow);
+            break;
+
+        case OFPUTIL_NXAST_RESUBMIT_TABLE:
+            error = check_resubmit_table(
+                (const struct nx_action_resubmit *) a);
             break;
 
         case OFPUTIL_OFPAT_STRIP_VLAN:
@@ -2151,6 +2165,7 @@ ofputil_decode_nxast_action(const union ofp_action *a)
         NXAST_ACTION(NXAST_AUTOPATH,     struct nx_action_autopath,     false);
         NXAST_ACTION(NXAST_BUNDLE,       struct nx_action_bundle,       true);
         NXAST_ACTION(NXAST_BUNDLE_LOAD,  struct nx_action_bundle,       true);
+        NXAST_ACTION(NXAST_RESUBMIT_TABLE, struct nx_action_resubmit,   false);
 #undef NXAST_ACTION
 
     case NXAST_SNAT__OBSOLETE:

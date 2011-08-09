@@ -285,7 +285,6 @@ put_dl_addr_action(struct ofpbuf *b, uint16_t type, const char *addr)
     str_to_mac(addr, oada->dl_addr);
 }
 
-
 static bool
 parse_port_name(const char *name, uint16_t *port)
 {
@@ -315,6 +314,40 @@ parse_port_name(const char *name, uint16_t *port)
         }
     }
     return false;
+}
+
+static void
+parse_resubmit(struct nx_action_resubmit *nar, char *arg)
+{
+    char *in_port_s, *table_s;
+    uint16_t in_port;
+    uint8_t table;
+
+    in_port_s = strsep(&arg, ",");
+    if (in_port_s && in_port_s[0]) {
+        if (!parse_port_name(in_port_s, &in_port)) {
+            in_port = str_to_u32(in_port_s);
+        }
+    } else {
+        in_port = OFPP_IN_PORT;
+    }
+
+    table_s = strsep(&arg, ",");
+    table = table_s && table_s[0] ? str_to_u32(table_s) : 255;
+
+    if (in_port == OFPP_IN_PORT && table == 255) {
+        ovs_fatal(0, "at least one \"in_port\" or \"table\" must be specified "
+                  " on resubmit");
+    }
+
+    nar->vendor = htonl(NX_VENDOR_ID);
+    nar->in_port = htons(in_port);
+    if (in_port != OFPP_IN_PORT && table == 255) {
+        nar->subtype = htons(NXAST_RESUBMIT);
+    } else {
+        nar->subtype = htons(NXAST_RESUBMIT_TABLE);
+        nar->table = table;
+    }
 }
 
 static void
@@ -421,9 +454,7 @@ str_to_action(char *str, struct ofpbuf *b)
         } else if (!strcasecmp(act, "resubmit")) {
             struct nx_action_resubmit *nar;
             nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
-            nar->vendor = htonl(NX_VENDOR_ID);
-            nar->subtype = htons(NXAST_RESUBMIT);
-            nar->in_port = htons(str_to_u32(arg));
+            parse_resubmit(nar, arg);
         } else if (!strcasecmp(act, "set_tunnel")
                    || !strcasecmp(act, "set_tunnel64")) {
             uint64_t tun_id = str_to_u64(arg);

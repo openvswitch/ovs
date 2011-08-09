@@ -1,0 +1,19 @@
+AT_BANNER([ofproto-dpif])
+
+AT_SETUP([ofproto-dpif - resubmit])
+OFPROTO_START
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=1000 icmp actions=output(10),resubmit(2),output(19),resubmit(3),output(21)
+table=0 in_port=2 priority=1500 icmp actions=output(11),resubmit(,1),output(16),resubmit(2,1),output(18)
+table=0 in_port=3 priority=2000 icmp actions=output(20)
+table=1 in_port=1 priority=1000 icmp actions=output(12),resubmit(4,1),output(13),resubmit(3),output(15)
+table=1 in_port=2 priority=1500 icmp actions=output(17),resubmit(,2)
+table=1 in_port=3 priority=1500 icmp actions=output(14),resubmit(,2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl -t test-openflowd ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 10,11,12,13,14,15,16,17,18,19,20,21
+])
+OFPROTO_STOP
+AT_CLEANUP

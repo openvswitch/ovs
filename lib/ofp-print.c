@@ -295,6 +295,19 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         ofp_print_port_name(s, ntohs(nar->in_port));
         break;
 
+    case OFPUTIL_NXAST_RESUBMIT_TABLE:
+        nar = (struct nx_action_resubmit *)a;
+        ds_put_format(s, "resubmit(");
+        if (nar->in_port != htons(OFPP_IN_PORT)) {
+            ofp_print_port_name(s, ntohs(nar->in_port));
+        }
+        ds_put_char(s, ',');
+        if (nar->table != 255) {
+            ds_put_format(s, "%"PRIu8, nar->table);
+        }
+        ds_put_char(s, ')');
+        break;
+
     case OFPUTIL_NXAST_SET_TUNNEL:
         nast = (struct nx_action_set_tunnel *)a;
         ds_put_format(s, "set_tunnel:%#"PRIx32, ntohl(nast->tun_id));
