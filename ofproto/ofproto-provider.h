@@ -41,6 +41,8 @@ struct ofproto {
     unsigned flow_eviction_threshold; /* Threshold at which to begin flow
                                        * table eviction. Only affects the
                                        * ofproto-dpif implementation */
+    bool forward_bpdu;          /* Option to allow forwarding of BPDU frames
+                                 * when NORMAL action is invoked. */
     char *mfr_desc;             /* Manufacturer. */
     char *hw_desc;              /* Hardware. */
     char *sw_desc;              /* Software version. */
@@ -914,6 +916,10 @@ struct ofproto_class {
     /* Returns true if 'aux' is a registered bundle that is currently in use as
      * the output for a mirror. */
     bool (*is_mirror_output_bundle)(struct ofproto *ofproto, void *aux);
+
+    /* When the configuration option of forward_bpdu changes, this function
+     * will be invoked. */
+    void (*forward_bpdu_changed)(struct ofproto *ofproto);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

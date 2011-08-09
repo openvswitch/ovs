@@ -1393,6 +1393,14 @@ is_mirror_output_bundle(struct ofproto *ofproto_, void *aux)
     struct ofbundle *bundle = bundle_lookup(ofproto, aux);
     return bundle && bundle->mirror_out != 0;
 }
+
+static void
+forward_bpdu_changed(struct ofproto *ofproto_) 
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    /* Revalidate cached flows whenever forward_bpdu option changes. */
+    ofproto->need_revalidate = true;
+}
 
 /* Ports. */
 
@@ -3735,8 +3743,10 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
         return false;
     }
 
-    /* Drop frames for reserved multicast addresses. */
-    if (eth_addr_is_reserved(flow->dl_dst)) {
+    /* Drop frames for reserved multicast addresses 
+     * only if forward_bpdu option is absent. */
+    if (eth_addr_is_reserved(flow->dl_dst) && 
+        !ofproto->up.forward_bpdu) {
         return false;
     }
 
@@ -4133,4 +4143,5 @@ const struct ofproto_class ofproto_dpif_class = {
     mirror_set,
     set_flood_vlans,
     is_mirror_output_bundle,
+    forward_bpdu_changed,
 };

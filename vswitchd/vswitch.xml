@@ -461,6 +461,16 @@
 	  <dd>
             Values below 100 will be rounded up to 100.
           </dd>
+          <dt><code>forward-bpdu</code></dt>
+          <dd>
+            Option to allow forwarding of BPDU frames when NORMAL 
+            action if invoked. Frames with reserved Ethernet addresses 
+            (e.g. STP BPDU) will be forwarded when this option is enabled. 
+            If the Open vSwitch bridge is used to connect different
+            Ethernet networks, and if Open vSwtich node does not run STP, 
+            then this option should be enabled.    
+            Default is disabled, set to <code>true</code> to enable. 
+          </dd>
         </dl>
       </column>
     </group>
