@@ -1042,10 +1042,8 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     while (!ds_get_preprocessed_line(&s, file)) {
         struct fte_version *version;
         enum nx_flow_format min_ff;
-        struct ofpbuf actions;
         struct flow_mod fm;
 
-        ofpbuf_init(&actions, 64);
         parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
 
         version = xmalloc(sizeof *version);
@@ -1053,8 +1051,8 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
         version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF_EMERG);
-        version->n_actions = actions.size / sizeof *version->actions;
-        version->actions = ofpbuf_steal_data(&actions);
+        version->actions = fm.actions;
+        version->n_actions = fm.n_actions;
 
         min_ff = ofputil_min_flow_format(&fm.cr);
         min_flow_format = MAX(min_flow_format, min_ff);
