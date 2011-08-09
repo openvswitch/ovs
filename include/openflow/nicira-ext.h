@@ -918,7 +918,7 @@ enum nx_bd_algorithm {
  * numbers and byte indexes.
  *
  *
- * 8-bit nxm_value, nxm_hasmask=1, nxm_length=1:
+ * 8-bit nxm_value, nxm_hasmask=1, nxm_length=2:
  *
  *  0          3  4   5
  * +------------+---+---+
