@@ -849,13 +849,6 @@ ofconn_has_pending_opgroups(const struct ofconn *ofconn)
     return !list_is_empty(&ofconn->opgroups);
 }
 
-/* Returns the number of pending opgroups on 'ofconn'. */
-size_t
-ofconn_n_pending_opgroups(const struct ofconn *ofconn)
-{
-    return list_size(&ofconn->opgroups);
-}
-
 /* Adds 'ofconn_node' to 'ofconn''s list of pending opgroups.
  *
  * If 'ofconn' is destroyed or its connection drops, then 'ofconn' will remove
