@@ -64,6 +64,7 @@ struct ofproto {
     /* Flow table operation tracking. */
     int state;                  /* Internal state. */
     struct list pending;        /* List of "struct ofopgroup"s. */
+    unsigned int n_pending;     /* list_size(&pending). */
     struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
 };
 

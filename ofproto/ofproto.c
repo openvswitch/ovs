@@ -338,6 +338,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->state = S_OPENFLOW;
     list_init(&ofproto->pending);
+    ofproto->n_pending = 0;
     hmap_init(&ofproto->deletions);
 
     error = ofproto->ofproto_class->construct(ofproto, &n_tables);
@@ -713,6 +714,7 @@ ofproto_destroy__(struct ofproto *ofproto)
     struct classifier *table;
 
     assert(list_is_empty(&ofproto->pending));
+    assert(!ofproto->n_pending);
 
     connmgr_destroy(ofproto->connmgr);
 
@@ -2475,7 +2477,8 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    if (list_size(&ofproto->pending) >= 50) {
+    if (ofproto->n_pending >= 50) {
+        assert(!list_is_empty(&ofproto->pending));
         return OFPROTO_POSTPONE;
     }
 
@@ -2778,6 +2781,7 @@ ofopgroup_submit(struct ofopgroup *group)
         ofopgroup_destroy(group);
     } else {
         list_push_back(&group->ofproto->pending, &group->ofproto_node);
+        group->ofproto->n_pending++;
     }
 }
 
@@ -2786,6 +2790,8 @@ ofopgroup_destroy(struct ofopgroup *group)
 {
     assert(list_is_empty(&group->ops));
     if (!list_is_empty(&group->ofproto_node)) {
+        assert(group->ofproto->n_pending > 0);
+        group->ofproto->n_pending--;
         list_remove(&group->ofproto_node);
     }
     if (!list_is_empty(&group->ofconn_node)) {
