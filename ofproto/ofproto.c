@@ -97,10 +97,10 @@ struct ofopgroup {
     int error;                  /* 0 if no error yet, otherwise error code. */
 };
 
-static struct ofopgroup *ofopgroup_create(struct ofproto *);
-static struct ofopgroup *ofopgroup_create_for_ofconn(struct ofconn *,
-                                                     const struct ofp_header *,
-                                                     uint32_t buffer_id);
+static struct ofopgroup *ofopgroup_create_unattached(struct ofproto *);
+static struct ofopgroup *ofopgroup_create(struct ofproto *, struct ofconn *,
+                                          const struct ofp_header *,
+                                          uint32_t buffer_id);
 static void ofopgroup_submit(struct ofopgroup *);
 static void ofopgroup_destroy(struct ofopgroup *);
 
@@ -691,7 +691,7 @@ ofproto_flush__(struct ofproto *ofproto)
         ofproto->ofproto_class->flush(ofproto);
     }
 
-    group = ofopgroup_create(ofproto);
+    group = ofopgroup_create_unattached(ofproto);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         struct rule *rule, *next_rule;
         struct cls_cursor cursor;
@@ -1081,7 +1081,7 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
         return false;
     } else {
         /* Initiate deletion -> success. */
-        struct ofopgroup *group = ofopgroup_create(ofproto);
+        struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
         ofoperation_create(group, rule, OFOPERATION_DELETE);
         classifier_remove(&ofproto->tables[rule->table_id], &rule->cr);
         rule->ofproto->ofproto_class->rule_destruct(rule);
@@ -2264,9 +2264,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     if (victim && victim->pending) {
         error = OFPROTO_POSTPONE;
     } else {
-        group = (ofconn
-                 ? ofopgroup_create_for_ofconn(ofconn, request, fm->buffer_id)
-                 : ofopgroup_create(ofproto));
+        group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
         ofoperation_create(group, rule, OFOPERATION_ADD);
         rule->pending->victim = victim;
 
@@ -2299,13 +2297,14 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static int
-modify_flows__(struct ofconn *ofconn, const struct ofputil_flow_mod *fm,
+modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
+               const struct ofputil_flow_mod *fm,
                const struct ofp_header *request, struct list *rules)
 {
     struct ofopgroup *group;
     struct rule *rule;
 
-    group = ofopgroup_create_for_ofconn(ofconn, request, fm->buffer_id);
+    group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
     LIST_FOR_EACH (rule, ofproto_node, rules) {
         if (!ofputil_actions_equal(fm->actions, fm->n_actions,
                                    rule->actions, rule->n_actions)) {
@@ -2329,17 +2328,18 @@ modify_flows__(struct ofconn *ofconn, const struct ofputil_flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static int
-modify_flows_loose(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
+modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
+                   struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct list rules;
     int error;
 
-    error = collect_rules_loose(p, fm->table_id, &fm->cr, OFPP_NONE, &rules);
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr, OFPP_NONE,
+                                &rules);
     return (error ? error
-            : list_is_empty(&rules) ? add_flow(p, ofconn, fm, request)
-            : modify_flows__(ofconn, fm, request, &rules));
+            : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
+            : modify_flows__(ofproto, ofconn, fm, request, &rules));
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
@@ -2348,18 +2348,19 @@ modify_flows_loose(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static int
-modify_flow_strict(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
+modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
+                   struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct list rules;
     int error;
 
-    error = collect_rules_strict(p, fm->table_id, &fm->cr, OFPP_NONE, &rules);
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr, OFPP_NONE,
+                                 &rules);
     return (error ? error
-            : list_is_empty(&rules) ? add_flow(p, ofconn, fm, request)
-            : list_is_singleton(&rules) ? modify_flows__(ofconn, fm, request,
-                                                         &rules)
+            : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
+            : list_is_singleton(&rules) ? modify_flows__(ofproto, ofconn,
+                                                         fm, request, &rules)
             : 0);
 }
 
@@ -2369,14 +2370,13 @@ modify_flow_strict(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static int
-delete_flows__(struct ofconn *ofconn, const struct ofp_header *request,
-               struct list *rules)
+delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
+               const struct ofp_header *request, struct list *rules)
 {
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct rule *rule, *next;
     struct ofopgroup *group;
 
-    group = ofopgroup_create_for_ofconn(ofconn, request, UINT32_MAX);
+    group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     LIST_FOR_EACH_SAFE (rule, next, ofproto_node, rules) {
         ofproto_rule_send_removed(rule, OFPRR_DELETE);
 
@@ -2391,34 +2391,35 @@ delete_flows__(struct ofconn *ofconn, const struct ofp_header *request,
 
 /* Implements OFPFC_DELETE. */
 static int
-delete_flows_loose(struct ofconn *ofconn, const struct ofputil_flow_mod *fm,
+delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
+                   const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct list rules;
     int error;
 
-    error = collect_rules_loose(p, fm->table_id, &fm->cr, fm->out_port,
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr, fm->out_port,
                                 &rules);
     return (error ? error
-            : !list_is_empty(&rules) ? delete_flows__(ofconn, request, &rules)
+            : !list_is_empty(&rules) ? delete_flows__(ofproto, ofconn, request,
+                                                      &rules)
             : 0);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
 static int
-delete_flow_strict(struct ofconn *ofconn, struct ofputil_flow_mod *fm,
+delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
+                   struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct list rules;
     int error;
 
-    error = collect_rules_strict(p, fm->table_id, &fm->cr, fm->out_port,
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr, fm->out_port,
                                  &rules);
     return (error ? error
-            : list_is_singleton(&rules) ? delete_flows__(ofconn, request,
-                                                         &rules)
+            : list_is_singleton(&rules) ? delete_flows__(ofproto, ofconn,
+                                                         request, &rules)
             : 0);
 }
 
@@ -2458,7 +2459,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 
     ofproto_rule_send_removed(rule, reason);
 
-    group = ofopgroup_create(ofproto);
+    group = ofopgroup_create_unattached(ofproto);
     ofoperation_create(group, rule, OFOPERATION_DELETE);
     classifier_remove(&ofproto->tables[rule->table_id], &rule->cr);
     rule->ofproto->ofproto_class->rule_destruct(rule);
@@ -2501,16 +2502,16 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return add_flow(ofproto, ofconn, &fm, oh);
 
     case OFPFC_MODIFY:
-        return modify_flows_loose(ofconn, &fm, oh);
+        return modify_flows_loose(ofproto, ofconn, &fm, oh);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flow_strict(ofconn, &fm, oh);
+        return modify_flow_strict(ofproto, ofconn, &fm, oh);
 
     case OFPFC_DELETE:
-        return delete_flows_loose(ofconn, &fm, oh);
+        return delete_flows_loose(ofproto, ofconn, &fm, oh);
 
     case OFPFC_DELETE_STRICT:
-        return delete_flow_strict(ofconn, &fm, oh);
+        return delete_flow_strict(ofproto, ofconn, &fm, oh);
 
     default:
         if (fm.command > 0xff) {
@@ -2735,7 +2736,7 @@ handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
  * The caller should add operations to the returned group with
  * ofoperation_create() and then submit it with ofopgroup_submit(). */
 static struct ofopgroup *
-ofopgroup_create(struct ofproto *ofproto)
+ofopgroup_create_unattached(struct ofproto *ofproto)
 {
     struct ofopgroup *group = xzalloc(sizeof *group);
     group->ofproto = ofproto;
@@ -2745,26 +2746,33 @@ ofopgroup_create(struct ofproto *ofproto)
     return group;
 }
 
-/* Creates and returns a new ofopgroup that is associated with 'ofconn'.  If
- * the ofopgroup eventually fails, then the error reply will include 'request'.
- * If the ofopgroup eventually succeeds, then the packet with buffer id
- * 'buffer_id' on 'ofconn' will be sent by 'ofconn''s ofproto.
+/* Creates and returns a new ofopgroup for 'ofproto'.
+ *
+ * If 'ofconn' is NULL, the new ofopgroup is not associated with any OpenFlow
+ * connection.  The 'request' and 'buffer_id' arguments are ignored.
+ *
+ * If 'ofconn' is nonnull, then the new ofopgroup is associated with 'ofconn'.
+ * If the ofopgroup eventually fails, then the error reply will include
+ * 'request'.  If the ofopgroup eventually succeeds, then the packet with
+ * buffer id 'buffer_id' on 'ofconn' will be sent by 'ofconn''s ofproto.
  *
  * The caller should add operations to the returned group with
  * ofoperation_create() and then submit it with ofopgroup_submit(). */
 static struct ofopgroup *
-ofopgroup_create_for_ofconn(struct ofconn *ofconn,
-                            const struct ofp_header *request,
-                            uint32_t buffer_id)
+ofopgroup_create(struct ofproto *ofproto, struct ofconn *ofconn,
+                 const struct ofp_header *request, uint32_t buffer_id)
 {
-    struct ofopgroup *group = ofopgroup_create(ofconn_get_ofproto(ofconn));
-    size_t request_len = ntohs(request->length);
+    struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
+    if (ofconn) {
+        size_t request_len = ntohs(request->length);
 
-    ofconn_add_opgroup(ofconn, &group->ofconn_node);
-    group->ofconn = ofconn;
-    group->request = xmemdup(request, MIN(request_len, 64));
-    group->buffer_id = buffer_id;
+        assert(ofconn_get_ofproto(ofconn) == ofproto);
 
+        ofconn_add_opgroup(ofconn, &group->ofconn_node);
+        group->ofconn = ofconn;
+        group->request = xmemdup(request, MIN(request_len, 64));
+        group->buffer_id = buffer_id;
+    }
     return group;
 }
 
