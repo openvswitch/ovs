@@ -49,7 +49,9 @@ void nxm_format_reg_load(const struct nx_action_reg_load *, struct ds *);
 
 int nxm_check_reg_move(const struct nx_action_reg_move *, const struct flow *);
 int nxm_check_reg_load(const struct nx_action_reg_load *, const struct flow *);
-int nxm_dst_check(ovs_be32 dst, ovs_be16 ofs_nbits, size_t min_n_bits,
+int nxm_src_check(ovs_be32 src, unsigned int ofs, unsigned int n_bits,
+                  const struct flow *);
+int nxm_dst_check(ovs_be32 dst, unsigned int ofs, unsigned int n_bits,
                   const struct flow *);
 
 void nxm_execute_reg_move(const struct nx_action_reg_move *, struct flow *);

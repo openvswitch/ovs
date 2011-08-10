@@ -38,9 +38,11 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 {
     uint32_t n_links = ntohs(mp->max_link) + 1;
     size_t min_n_bits = log_2_floor(n_links) + 1;
+    int ofs = nxm_decode_ofs(mp->ofs_nbits);
+    int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
     int error;
 
-    error = nxm_dst_check(mp->dst, mp->ofs_nbits, min_n_bits, flow);
+    error = nxm_dst_check(mp->dst, ofs, n_bits, flow);
     if (error) {
         return error;
     }
@@ -53,6 +55,9 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
                && mp->algorithm != htons(NX_MP_ALG_ITER_HASH)) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %"PRIu16,
                      ntohs(mp->algorithm));
+    } else if (n_bits < min_n_bits) {
+        VLOG_WARN_RL(&rl, "multipath action requires at least %zu bits for "
+                     "%"PRIu32" links", min_n_bits, n_links);
     } else {
         return 0;
     }

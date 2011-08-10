@@ -82,5 +82,14 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
 int
 autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
 {
-    return nxm_dst_check(ap->dst, ap->ofs_nbits, 16, flow);
+    int n_bits = nxm_decode_n_bits(ap->ofs_nbits);
+    int ofs = nxm_decode_ofs(ap->ofs_nbits);
+
+    if (n_bits < 16) {
+        VLOG_WARN("at least 16 bit destination is required for autopath "
+                  "action.");
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    }
+
+    return nxm_dst_check(ap->dst, ofs, n_bits, flow);
 }

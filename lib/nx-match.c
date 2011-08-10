@@ -1191,49 +1191,54 @@ int
 nxm_check_reg_move(const struct nx_action_reg_move *action,
                    const struct flow *flow)
 {
-    const struct nxm_field *src;
-    const struct nxm_field *dst;
+    int src_ofs, dst_ofs, n_bits;
+    int error;
 
-    if (action->n_bits == htons(0)) {
-        return BAD_ARGUMENT;
+    n_bits = ntohs(action->n_bits);
+    src_ofs = ntohs(action->src_ofs);
+    dst_ofs = ntohs(action->dst_ofs);
+
+    error = nxm_src_check(action->src, src_ofs, n_bits, flow);
+    if (error) {
+        return error;
     }
 
-    src = nxm_field_lookup(ntohl(action->src));
-    if (!field_ok(src, flow, ntohs(action->src_ofs) + ntohs(action->n_bits))) {
-        return BAD_ARGUMENT;
+    return nxm_dst_check(action->dst, dst_ofs, n_bits, flow);
+}
+
+/* Given a flow, checks that the source field represented by 'src_header'
+ * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
+int
+nxm_src_check(ovs_be32 src_header, unsigned int ofs, unsigned int n_bits,
+              const struct flow *flow)
+{
+    const struct nxm_field *src = nxm_field_lookup(ntohl(src_header));
+
+    if (!n_bits) {
+        VLOG_WARN_RL(&rl, "zero bit source field");
+    } else if (!field_ok(src, flow, ofs + n_bits)) {
+        VLOG_WARN_RL(&rl, "invalid source field");
+    } else {
+        return 0;
     }
 
-    dst = nxm_field_lookup(ntohl(action->dst));
-    if (!field_ok(dst, flow, ntohs(action->dst_ofs) + ntohs(action->n_bits))) {
-        return BAD_ARGUMENT;
-    }
-
-    if (!dst->writable) {
-        return BAD_ARGUMENT;
-    }
-
-    return 0;
+    return BAD_ARGUMENT;
 }
 
 /* Given a flow, checks that the destination field represented by 'dst_header'
- * and 'ofs_nbits' is valid and large enough for 'min_n_bits' bits of data. */
+ * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
 int
-nxm_dst_check(ovs_be32 dst_header, ovs_be16 ofs_nbits, size_t min_n_bits,
+nxm_dst_check(ovs_be32 dst_header, unsigned int ofs, unsigned int n_bits,
               const struct flow *flow)
 {
-    const struct nxm_field *dst;
-    int ofs, n_bits;
+    const struct nxm_field *dst = nxm_field_lookup(ntohl(dst_header));
 
-    ofs = nxm_decode_ofs(ofs_nbits);
-    n_bits = nxm_decode_n_bits(ofs_nbits);
-    dst = nxm_field_lookup(ntohl(dst_header));
-
-    if (!field_ok(dst, flow, ofs + n_bits)) {
+    if (!n_bits) {
+        VLOG_WARN_RL(&rl, "zero bit destination field");
+    } else if (!field_ok(dst, flow, ofs + n_bits)) {
         VLOG_WARN_RL(&rl, "invalid destination field");
     } else if (!dst->writable) {
         VLOG_WARN_RL(&rl, "destination field is not writable");
-    } else if (n_bits < min_n_bits) {
-        VLOG_WARN_RL(&rl, "insufficient bits in destination");
     } else {
         return 0;
     }
@@ -1245,17 +1250,17 @@ int
 nxm_check_reg_load(const struct nx_action_reg_load *action,
                    const struct flow *flow)
 {
-    int n_bits;
+    unsigned int ofs = nxm_decode_ofs(action->ofs_nbits);
+    unsigned int n_bits = nxm_decode_n_bits(action->ofs_nbits);
     int error;
 
-    error = nxm_dst_check(action->dst, action->ofs_nbits, 0, flow);
+    error = nxm_dst_check(action->dst, ofs, n_bits, flow);
     if (error) {
         return error;
     }
 
     /* Reject 'action' if a bit numbered 'n_bits' or higher is set to 1 in
      * action->value. */
-    n_bits = nxm_decode_n_bits(action->ofs_nbits);
     if (n_bits < 64 && ntohll(action->value) >> n_bits) {
         return BAD_ARGUMENT;
     }
