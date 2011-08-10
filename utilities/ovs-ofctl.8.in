@@ -770,10 +770,6 @@ using the Highest Random Weight algorithm, and writes the selection to
 Refer to \fBnicira\-ext.h\fR for more details.
 .RE
 .
-.IP
-(The OpenFlow protocol supports other actions that \fBovs\-ofctl\fR does
-not yet expose to the user.)
-.
 .PP
 The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
 support an additional optional field:
