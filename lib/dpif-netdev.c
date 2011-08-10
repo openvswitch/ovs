@@ -91,7 +91,6 @@ struct dp_netdev {
     long long int n_lost;       /* Number of misses not passed to client. */
 
     /* Ports. */
-    int n_ports;
     struct dp_netdev_port *ports[MAX_PORTS];
     struct list port_list;
     unsigned int serial;
@@ -265,10 +264,10 @@ dp_netdev_purge_queues(struct dp_netdev *dp)
 static void
 dp_netdev_free(struct dp_netdev *dp)
 {
+    struct dp_netdev_port *port, *next;
+
     dp_netdev_flow_flush(dp);
-    while (dp->n_ports > 0) {
-        struct dp_netdev_port *port = CONTAINER_OF(
-            dp->port_list.next, struct dp_netdev_port, node);
+    LIST_FOR_EACH_SAFE (port, next, node, &dp->port_list) {
         do_del_port(dp, port->port_no);
     }
     dp_netdev_purge_queues(dp);
@@ -386,7 +385,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     list_push_back(&dp->port_list, &port->node);
     dp->ports[port_no] = port;
-    dp->n_ports++;
     dp->serial++;
 
     return 0;
@@ -464,7 +462,6 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
 
     list_remove(&port->node);
     dp->ports[port->port_no] = NULL;
-    dp->n_ports--;
     dp->serial++;
 
     name = xstrdup(netdev_get_name(port->netdev));
