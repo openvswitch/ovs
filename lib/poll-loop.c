@@ -55,9 +55,6 @@ struct poll_waiter {
 /* All active poll waiters. */
 static struct list waiters = LIST_INITIALIZER(&waiters);
 
-/* Number of elements in the waiters list. */
-static size_t n_waiters;
-
 /* Max time to wait in next call to poll_block(), in milliseconds, or -1 to
  * wait forever. */
 static int timeout = -1;
@@ -217,13 +214,14 @@ poll_block(void)
     static size_t max_pollfds;
 
     struct poll_waiter *pw, *next;
-    int n_pollfds;
+    int n_waiters, n_pollfds;
     int retval;
 
     /* Register fatal signal events before actually doing any real work for
      * poll_block. */
     fatal_signal_wait();
 
+    n_waiters = list_size(&waiters);
     if (max_pollfds < n_waiters) {
         max_pollfds = n_waiters;
         pollfds = xrealloc(pollfds, max_pollfds * sizeof *pollfds);
@@ -275,7 +273,6 @@ poll_cancel(struct poll_waiter *pw)
     if (pw) {
         list_remove(&pw->node);
         free(pw);
-        n_waiters--;
     }
 }
 
@@ -289,6 +286,5 @@ new_waiter(int fd, short int events, const char *where)
     waiter->events = events;
     waiter->where = where;
     list_push_back(&waiters, &waiter->node);
-    n_waiters++;
     return waiter;
 }
