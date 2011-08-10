@@ -22,6 +22,7 @@
 /test-list
 /test-lockfile
 /test-multipath
+/test-odp
 /test-openflowd
 /test-openflowd.8
 /test-ovsdb
