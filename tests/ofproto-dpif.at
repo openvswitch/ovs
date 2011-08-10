@@ -42,3 +42,22 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 OFPROTO_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - output])
+OFPROTO_START
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=resubmit:2,resubmit:3,resubmit:4,resubmit:5,resubmit:6,resubmit:7
+in_port=2 actions=output:9
+in_port=3 actions=load:55->NXM_NX_REG0[[]],output:NXM_NX_REG0[[]],load:66->NXM_NX_REG1[[]]
+in_port=4 actions=output:10,output:NXM_NX_REG0[[]],output:NXM_NX_REG1[[]],output:11
+in_port=5 actions=load:77->NXM_NX_REG0[[0..15]],load:88->NXM_NX_REG0[[16..31]]
+in_port=6 actions=output:NXM_NX_REG0[[0..15]],output:NXM_NX_REG0[[16..31]]
+in_port=7 actions=load:0x110000ff->NXM_NX_REG0[[]],output:NXM_NX_REG0[[]]
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl -t test-openflowd ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 9,55,10,55,66,11,77,88
+])
+OFPROTO_STOP
+AT_CLEANUP

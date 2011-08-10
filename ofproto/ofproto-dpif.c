@@ -3020,6 +3020,19 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
 }
 
 static void
+xlate_output_reg_action(struct action_xlate_ctx *ctx,
+                        const struct nx_action_output_reg *naor)
+{
+    uint64_t ofp_port;
+
+    ofp_port = nxm_read_field_bits(naor->src, naor->ofs_nbits, &ctx->flow);
+
+    if (ofp_port <= UINT16_MAX) {
+        xlate_output_action__(ctx, ofp_port, ntohs(naor->max_len));
+    }
+}
+
+static void
 xlate_output_action(struct action_xlate_ctx *ctx,
                     const struct ofp_action_output *oao)
 {
@@ -3154,6 +3167,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         const struct nx_action_multipath *nam;
         const struct nx_action_autopath *naa;
         const struct nx_action_bundle *nab;
+        const struct nx_action_output_reg *naor;
         enum ofputil_action_code code;
         ovs_be64 tun_id;
 
@@ -3278,6 +3292,11 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             nab = (const struct nx_action_bundle *) ia;
             bundle_execute_load(nab, &ctx->flow, slave_enabled_cb,
                                 ctx->ofproto);
+            break;
+
+        case OFPUTIL_NXAST_OUTPUT_REG:
+            naor = (const struct nx_action_output_reg *) ia;
+            xlate_output_reg_action(ctx, naor);
             break;
         }
     }

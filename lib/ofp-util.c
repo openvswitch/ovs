@@ -1979,6 +1979,22 @@ check_resubmit_table(const struct nx_action_resubmit *nar)
     return 0;
 }
 
+static int
+check_output_reg(const struct nx_action_output_reg *naor,
+                 const struct flow *flow)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof naor->zero; i++) {
+        if (naor->zero[i]) {
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        }
+    }
+
+    return nxm_src_check(naor->src, nxm_decode_ofs(naor->ofs_nbits),
+                         nxm_decode_n_bits(naor->ofs_nbits), flow);
+}
+
 int
 validate_actions(const union ofp_action *actions, size_t n_actions,
                  const struct flow *flow, int max_ports)
@@ -2055,6 +2071,11 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         case OFPUTIL_NXAST_BUNDLE_LOAD:
             error = bundle_check((const struct nx_action_bundle *) a,
                                  max_ports, flow);
+            break;
+
+        case OFPUTIL_NXAST_OUTPUT_REG:
+            error = check_output_reg((const struct nx_action_output_reg *) a,
+                                     flow);
             break;
 
         case OFPUTIL_NXAST_RESUBMIT_TABLE:
@@ -2170,6 +2191,7 @@ ofputil_decode_nxast_action(const union ofp_action *a)
         NXAST_ACTION(NXAST_BUNDLE,       struct nx_action_bundle,       true);
         NXAST_ACTION(NXAST_BUNDLE_LOAD,  struct nx_action_bundle,       true);
         NXAST_ACTION(NXAST_RESUBMIT_TABLE, struct nx_action_resubmit,   false);
+        NXAST_ACTION(NXAST_OUTPUT_REG,   struct nx_action_output_reg,   false);
 #undef NXAST_ACTION
 
     case NXAST_SNAT__OBSOLETE:

@@ -317,6 +317,27 @@ parse_port_name(const char *name, uint16_t *port)
 }
 
 static void
+parse_output(struct ofpbuf *b, char *arg)
+{
+    if (strchr(arg, '[')) {
+        struct nx_action_output_reg *naor;
+        int ofs, n_bits;
+        uint32_t src;
+
+        nxm_parse_field_bits(arg, &src, &ofs, &n_bits);
+
+        naor = put_action(b, sizeof *naor, OFPAT_VENDOR);
+        naor->vendor = htonl(NX_VENDOR_ID);
+        naor->subtype = htons(NXAST_OUTPUT_REG);
+        naor->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
+        naor->src = htonl(src);
+        naor->max_len = htons(UINT16_MAX);
+    } else {
+        put_output_action(b, str_to_u32(arg));
+    }
+}
+
+static void
 parse_resubmit(struct nx_action_resubmit *nar, char *arg)
 {
     char *in_port_s, *table_s;
@@ -541,7 +562,7 @@ str_to_action(char *str, struct ofpbuf *b)
         } else if (!strcasecmp(act, "bundle_load")) {
             bundle_parse_load(b, arg);
         } else if (!strcasecmp(act, "output")) {
-            put_output_action(b, str_to_u32(arg));
+            parse_output(b, arg);
         } else if (!strcasecmp(act, "enqueue")) {
             char *sp = NULL;
             char *port_s = strtok_r(arg, ":q", &sp);

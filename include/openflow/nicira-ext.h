@@ -280,7 +280,8 @@ enum nx_action_subtype {
     NXAST_AUTOPATH,             /* struct nx_action_autopath */
     NXAST_BUNDLE,               /* struct nx_action_bundle */
     NXAST_BUNDLE_LOAD,          /* struct nx_action_bundle */
-    NXAST_RESUBMIT_TABLE        /* struct nx_action_resubmit */
+    NXAST_RESUBMIT_TABLE,       /* struct nx_action_resubmit */
+    NXAST_OUTPUT_REG            /* struct nx_action_output_reg */
 };
 
 /* Header for Nicira-defined actions. */
@@ -780,6 +781,36 @@ enum nx_bd_algorithm {
      * Uses the 'fields' and 'basis' parameters. */
     NX_BD_ALG_HRW /* Highest Random Weight. */
 };
+
+/* Action structure for NXAST_OUTPUT_REG.
+ *
+ * Outputs to the OpenFlow port number written to src[ofs:ofs+nbits].
+ *
+ * The format and semantics of 'src' and 'ofs_nbits' are similar to those for
+ * the NXAST_REG_LOAD action.
+ *
+ * The acceptable nxm_header values for 'src' are the same as the acceptable
+ * nxm_header values for the 'src' field of NXAST_REG_MOVE.
+ *
+ * The 'max_len' field indicates the number of bytes to send when the chosen
+ * port is OFPP_CONTROLLER.  Its semantics are equivalent to the 'max_len'
+ * field of OFPAT_OUTPUT.
+ *
+ * The 'zero' field is required to be zeroed for forward compatibility. */
+struct nx_action_output_reg {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* 24. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_OUTPUT_REG. */
+
+    ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
+    ovs_be32 src;               /* Source. */
+
+    ovs_be16 max_len;           /* Max length to send to controller. */
+
+    uint8_t zero[6];            /* Reserved, must be zero. */
+};
+OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 
 /* Flexible flow specifications (aka NXM = Nicira Extended Match).
  *

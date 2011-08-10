@@ -218,6 +218,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     const struct nx_action_reg_load *load;
     const struct nx_action_multipath *nam;
     const struct nx_action_autopath *naa;
+    const struct nx_action_output_reg *naor;
     uint16_t port;
 
     switch (code) {
@@ -360,6 +361,13 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     case OFPUTIL_NXAST_BUNDLE_LOAD:
         bundle_format((const struct nx_action_bundle *) a, s);
         break;
+
+    case OFPUTIL_NXAST_OUTPUT_REG:
+        naor = (const struct nx_action_output_reg *) a;
+        ds_put_cstr(s, "output:");
+        nxm_format_field_bits(s, ntohl(naor->src),
+                              nxm_decode_ofs(naor->ofs_nbits),
+                              nxm_decode_n_bits(naor->ofs_nbits));
 
     default:
         break;

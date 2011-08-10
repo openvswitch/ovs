@@ -571,7 +571,14 @@ of the following keywords:
 .
 .RS
 .IP \fBoutput\fR:\fIport\fR
-Outputs the packet on the port specified by \fIport\fR.
+.IQ \fBoutput\fR:\fIsrc\fB[\fIstart\fB..\fIend\fB]
+Outputs the packet. If \fIport\fR is an OpenFlow port number, outputs directly
+to it.  Otherwise, outputs to the OpenFlow port number read from \fIsrc\fR
+which must be an NXM field as described above.  Outputting to an NXM field is
+an OpenFlow extension which is not supported by standard OpenFlow switches.
+.IP
+Example: \fBoutput:NXM_NX_REG0[16..31]\fR outputs to the OpenFlow port number
+written in the upper half of register 0.
 .
 .IP \fBenqueue\fR:\fIport\fB:\fIqueue\fR
 Enqueues the packet on the specified \fIqueue\fR within port

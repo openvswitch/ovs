@@ -304,7 +304,8 @@ enum ofputil_action_code {
     OFPUTIL_NXAST_AUTOPATH,
     OFPUTIL_NXAST_BUNDLE,
     OFPUTIL_NXAST_BUNDLE_LOAD,
-    OFPUTIL_NXAST_RESUBMIT_TABLE
+    OFPUTIL_NXAST_RESUBMIT_TABLE,
+    OFPUTIL_NXAST_OUTPUT_REG
 };
 
 int ofputil_decode_action(const union ofp_action *);
