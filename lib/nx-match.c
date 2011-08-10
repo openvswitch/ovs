@@ -1370,6 +1370,23 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     NOT_REACHED();
 }
 
+/* Returns the value of the NXM field corresponding to 'header' at 'ofs_nbits'
+ * in 'flow'. */
+uint64_t
+nxm_read_field_bits(ovs_be32 header, ovs_be16 ofs_nbits,
+                    const struct flow *flow)
+{
+    int n_bits = nxm_decode_n_bits(ofs_nbits);
+    int ofs = nxm_decode_ofs(ofs_nbits);
+    uint64_t mask, data;
+
+    mask = n_bits == 64 ? UINT64_MAX : (UINT64_C(1) << n_bits) - 1;
+    data = nxm_read_field(nxm_field_lookup(ntohl(header)), flow);
+    data = (data >> ofs) & mask;
+
+    return data;
+}
+
 static void
 nxm_write_field(const struct nxm_field *dst, struct flow *flow,
                 uint64_t new_value)
@@ -1469,18 +1486,16 @@ void
 nxm_execute_reg_move(const struct nx_action_reg_move *action,
                      struct flow *flow)
 {
-    /* Preparation. */
-    int n_bits = ntohs(action->n_bits);
-    uint64_t mask = n_bits == 64 ? UINT64_MAX : (UINT64_C(1) << n_bits) - 1;
+    ovs_be16 src_ofs_nbits, dst_ofs_nbits;
+    uint64_t src_data;
+    int n_bits;
 
-    /* Get the interesting bits of the source field. */
-    const struct nxm_field *src = nxm_field_lookup(ntohl(action->src));
-    int src_ofs = ntohs(action->src_ofs);
-    uint64_t src_data = (nxm_read_field(src, flow) >> src_ofs) & mask;
+    n_bits = ntohs(action->n_bits);
+    src_ofs_nbits = nxm_encode_ofs_nbits(ntohs(action->src_ofs), n_bits);
+    dst_ofs_nbits = nxm_encode_ofs_nbits(ntohs(action->dst_ofs), n_bits);
 
-    nxm_reg_load(action->dst,
-                 nxm_encode_ofs_nbits(ntohs(action->dst_ofs), n_bits),
-                 src_data, flow);
+    src_data = nxm_read_field_bits(action->src, src_ofs_nbits, flow);
+    nxm_reg_load(action->dst, dst_ofs_nbits, src_data, flow);
 }
 
 void

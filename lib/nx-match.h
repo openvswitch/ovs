@@ -41,6 +41,9 @@ int nx_put_match(struct ofpbuf *, const struct cls_rule *);
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);
 
+uint64_t nxm_read_field_bits(ovs_be32 header, ovs_be16 ofs_nbits,
+                             const struct flow *);
+
 void nxm_parse_reg_move(struct nx_action_reg_move *, const char *);
 void nxm_parse_reg_load(struct nx_action_reg_load *, const char *);
 
