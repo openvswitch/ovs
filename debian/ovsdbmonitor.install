@@ -1,2 +1,2 @@
 usr/bin/ovsdbmonitor
-usr/share/openvswitch
+usr/share/openvswitch/ovsdbmonitor
