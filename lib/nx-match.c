@@ -1471,7 +1471,7 @@ nxm_execute_reg_move(const struct nx_action_reg_move *action,
     /* Get the interesting bits of the source field. */
     const struct nxm_field *src = nxm_field_lookup(ntohl(action->src));
     int src_ofs = ntohs(action->src_ofs);
-    uint64_t src_data = nxm_read_field(src, flow) & (mask << src_ofs);
+    uint64_t src_data = (nxm_read_field(src, flow) >> src_ofs) & mask;
 
     nxm_reg_load(action->dst,
                  nxm_encode_ofs_nbits(ntohs(action->dst_ofs), n_bits),
