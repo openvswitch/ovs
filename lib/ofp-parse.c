@@ -781,14 +781,20 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
 static void
 parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
 {
-    uint32_t reg_value, reg_mask;
+    /* This uses an oversized destination field (64 bits when 32 bits would do)
+     * because some sscanf() implementations truncate the range of %i
+     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
+     * value of 0x7fff.  The other alternatives are to allow only a single
+     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
+     * parsers. */
+    unsigned long long int reg_value, reg_mask;
 
     if (!strcmp(value, "ANY") || !strcmp(value, "*")) {
         cls_rule_set_reg_masked(rule, reg_idx, 0, 0);
-    } else if (sscanf(value, "%"SCNi32"/%"SCNi32,
+    } else if (sscanf(value, "%lli/%lli",
                       &reg_value, &reg_mask) == 2) {
         cls_rule_set_reg_masked(rule, reg_idx, reg_value, reg_mask);
-    } else if (sscanf(value, "%"SCNi32, &reg_value)) {
+    } else if (sscanf(value, "%lli", &reg_value)) {
         cls_rule_set_reg(rule, reg_idx, reg_value);
     } else {
         ovs_fatal(0, "register fields must take the form <value> "
