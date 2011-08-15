@@ -368,6 +368,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         nxm_format_field_bits(s, ntohl(naor->src),
                               nxm_decode_ofs(naor->ofs_nbits),
                               nxm_decode_n_bits(naor->ofs_nbits));
+        break;
 
     default:
         break;
