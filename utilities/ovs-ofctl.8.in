@@ -676,7 +676,7 @@ did not support recursion; Open vSwitch before 1.2.90 did not support
 .IP \fBset_tunnel\fB:\fIid\fR
 .IQ \fBset_tunnel64\fB:\fIid\fR
 If outputting to a port that encapsulates the packet in a tunnel and
-supports an identifier (such as GRE), sets the identifier to \fBid\fR.
+supports an identifier (such as GRE), sets the identifier to \fIid\fR.
 If the \fBset_tunnel\fR form is used and \fIid\fR fits in 32 bits,
 then this uses an action extension that is supported by Open vSwitch
 1.0 and later.  Otherwise, if \fIid\fR is a 64-bit value, it requires
@@ -696,7 +696,7 @@ Does nothing at all.  Any number of bytes represented as hex digits
 \fIhh\fR may be included.  Pairs of hex digits may be separated by
 periods for readability.
 .
-.IP "\fBmove:\fIsrc\fB[\fIstart\fB..\fIend\fB]->\fIdst\fB[\fIstart\fB..\fIend\fB]\fR"
+.IP "\fBmove:\fIsrc\fB[\fIstart\fB..\fIend\fB]\->\fIdst\fB[\fIstart\fB..\fIend\fB]\fR"
 Copies the named bits from field \fIsrc\fR to field \fIdst\fR.
 \fIsrc\fR and \fIdst\fR must be NXM field names as defined in
 \fBnicira\-ext.h\fR, e.g. \fBNXM_OF_UDP_SRC\fR or \fBNXM_NX_REG0\fR.
@@ -709,12 +709,12 @@ entire field.
 Examples: \fBmove:NXM_NX_REG0[0..5]\->NXM_NX_REG1[26..31]\fR copies the
 six bits numbered 0 through 5, inclusive, in register 0 into bits 26
 through 31, inclusive;
-\fBmove:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]\fR copies the least
+\fBmove:NXM_NX_REG0[0..15]\->NXM_OF_VLAN_TCI[]\fR copies the least
 significant 16 bits of register 0 into the VLAN TCI field.
 .
 .IP "\fBload:\fIvalue\fB\->\fIdst\fB[\fIstart\fB..\fIend\fB]"
 Writes \fIvalue\fR to bits \fIstart\fR through \fIend\fR, inclusive,
-in field \fBdst\fR.
+in field \fIdst\fR.
 .IP
 Example: \fBload:55\->NXM_NX_REG2[0..5]\fR loads value 55 (bit pattern
 \fB110111\fR) into bits 0 through 5, inclusive, in register 2.
