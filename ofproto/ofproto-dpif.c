@@ -272,8 +272,7 @@ static void facet_update_stats(struct ofproto_dpif *, struct facet *,
 static void facet_reset_counters(struct facet *);
 static void facet_reset_dp_stats(struct facet *, struct dpif_flow_stats *);
 static void facet_push_stats(struct facet *);
-static void facet_account(struct ofproto_dpif *, struct facet *,
-                          uint64_t extra_bytes);
+static void facet_account(struct ofproto_dpif *, struct facet *);
 
 static bool facet_is_controller_flow(struct facet *);
 
@@ -1849,7 +1848,7 @@ update_stats(struct ofproto_dpif *p)
             facet->dp_byte_count = stats->n_bytes;
 
             facet_update_time(p, facet, stats->used);
-            facet_account(p, facet, 0);
+            facet_account(p, facet);
             facet_push_stats(facet);
         } else {
             /* There's a flow in the datapath that we know nothing about.
@@ -2224,10 +2223,9 @@ vlan_tci_to_openflow_vlan(ovs_be16 vlan_tci)
 }
 
 static void
-facet_account(struct ofproto_dpif *ofproto,
-              struct facet *facet, uint64_t extra_bytes)
+facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
 {
-    uint64_t total_bytes, n_bytes;
+    uint64_t n_bytes;
     struct ofbundle *in_bundle;
     const struct nlattr *a;
     tag_type dummy = 0;
@@ -2235,12 +2233,11 @@ facet_account(struct ofproto_dpif *ofproto,
     ovs_be16 vlan_tci;
     int vlan;
 
-    total_bytes = facet->byte_count + extra_bytes;
-    if (total_bytes <= facet->accounted_bytes) {
+    if (facet->byte_count <= facet->accounted_bytes) {
         return;
     }
-    n_bytes = total_bytes - facet->accounted_bytes;
-    facet->accounted_bytes = total_bytes;
+    n_bytes = facet->byte_count - facet->accounted_bytes;
+    facet->accounted_bytes = facet->byte_count;
 
     /* Test that 'tags' is nonzero to ensure that only flows that include an
      * OFPP_NORMAL action are used for learning and bond slave rebalancing.
@@ -2356,7 +2353,7 @@ facet_flush_stats(struct ofproto_dpif *ofproto, struct facet *facet)
     assert(!facet->dp_packet_count);
 
     facet_push_stats(facet);
-    facet_account(ofproto, facet, 0);
+    facet_account(ofproto, facet);
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
         struct ofexpired expired;
