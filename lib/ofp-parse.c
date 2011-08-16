@@ -285,37 +285,6 @@ put_dl_addr_action(struct ofpbuf *b, uint16_t type, const char *addr)
     str_to_mac(addr, oada->dl_addr);
 }
 
-static bool
-parse_port_name(const char *name, uint16_t *port)
-{
-    struct pair {
-        const char *name;
-        uint16_t value;
-    };
-    static const struct pair pairs[] = {
-#define DEF_PAIR(NAME) {#NAME, OFPP_##NAME}
-        DEF_PAIR(IN_PORT),
-        DEF_PAIR(TABLE),
-        DEF_PAIR(NORMAL),
-        DEF_PAIR(FLOOD),
-        DEF_PAIR(ALL),
-        DEF_PAIR(CONTROLLER),
-        DEF_PAIR(LOCAL),
-        DEF_PAIR(NONE),
-#undef DEF_PAIR
-    };
-    static const int n_pairs = ARRAY_SIZE(pairs);
-    size_t i;
-
-    for (i = 0; i < n_pairs; i++) {
-        if (!strcasecmp(name, pairs[i].name)) {
-            *port = pairs[i].value;
-            return true;
-        }
-    }
-    return false;
-}
-
 static void
 parse_output(struct ofpbuf *b, char *arg)
 {
@@ -346,7 +315,7 @@ parse_resubmit(struct nx_action_resubmit *nar, char *arg)
 
     in_port_s = strsep(&arg, ",");
     if (in_port_s && in_port_s[0]) {
-        if (!parse_port_name(in_port_s, &in_port)) {
+        if (!ofputil_port_from_string(in_port_s, &in_port)) {
             in_port = str_to_u32(in_port_s);
         }
     } else {
@@ -590,10 +559,8 @@ str_to_action(char *str, struct ofpbuf *b)
             } else {
                 oao->max_len = htons(UINT16_MAX);
             }
-        } else if (parse_port_name(act, &port)) {
+        } else if (ofputil_port_from_string(act, &port)) {
             put_output_action(b, port);
-        } else if (strspn(act, "0123456789") == strlen(act)) {
-            put_output_action(b, str_to_u32(act));
         } else {
             ovs_fatal(0, "Unknown action: %s", act);
         }
@@ -724,7 +691,7 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
         break;
 
     case F_IN_PORT:
-        if (!parse_port_name(value, &port_no)) {
+        if (!ofputil_port_from_string(value, &port_no)) {
             port_no = atoi(value);
         }
         cls_rule_set_in_port(rule, port_no);

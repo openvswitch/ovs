@@ -1960,6 +1960,68 @@ ofputil_check_output_port(uint16_t port, int max_ports)
     }
 }
 
+#define OFPUTIL_NAMED_PORTS                     \
+        OFPUTIL_NAMED_PORT(IN_PORT)             \
+        OFPUTIL_NAMED_PORT(TABLE)               \
+        OFPUTIL_NAMED_PORT(NORMAL)              \
+        OFPUTIL_NAMED_PORT(FLOOD)               \
+        OFPUTIL_NAMED_PORT(ALL)                 \
+        OFPUTIL_NAMED_PORT(CONTROLLER)          \
+        OFPUTIL_NAMED_PORT(LOCAL)               \
+        OFPUTIL_NAMED_PORT(NONE)
+
+/* Checks whether 's' is the string representation of an OpenFlow port number,
+ * either as an integer or a string name (e.g. "LOCAL").  If it is, stores the
+ * number in '*port' and returns true.  Otherwise, returns false. */
+bool
+ofputil_port_from_string(const char *name, uint16_t *port)
+{
+    struct pair {
+        const char *name;
+        uint16_t value;
+    };
+    static const struct pair pairs[] = {
+#define OFPUTIL_NAMED_PORT(NAME) {#NAME, OFPP_##NAME},
+        OFPUTIL_NAMED_PORTS
+#undef OFPUTIL_NAMED_PORT
+    };
+    static const int n_pairs = ARRAY_SIZE(pairs);
+    int i;
+
+    if (str_to_int(name, 0, &i) && i >= 0 && i < UINT16_MAX) {
+        *port = i;
+        return true;
+    }
+
+    for (i = 0; i < n_pairs; i++) {
+        if (!strcasecmp(name, pairs[i].name)) {
+            *port = pairs[i].value;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Appends to 's' a string representation of the OpenFlow port number 'port'.
+ * Most ports' string representation is just the port number, but for special
+ * ports, e.g. OFPP_LOCAL, it is the name, e.g. "LOCAL". */
+void
+ofputil_format_port(uint16_t port, struct ds *s)
+{
+    const char *name;
+
+    switch (port) {
+#define OFPUTIL_NAMED_PORT(NAME) case OFPP_##NAME: name = #NAME; break;
+        OFPUTIL_NAMED_PORTS
+#undef OFPUTIL_NAMED_PORT
+
+    default:
+        ds_put_format(s, "%"PRIu16, port);
+        return;
+    }
+    ds_put_cstr(s, name);
+}
+
 static int
 check_resubmit_table(const struct nx_action_resubmit *nar)
 {
