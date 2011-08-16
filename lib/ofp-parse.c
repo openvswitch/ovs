@@ -253,19 +253,12 @@ str_to_ipv6(const char *str_, struct in6_addr *addrp, struct in6_addr *maskp)
     free(str);
 }
 
-static void *
-put_action(struct ofpbuf *b, size_t size, uint16_t type)
-{
-    struct ofp_action_header *ah = ofpbuf_put_zeros(b, size);
-    ah->type = htons(type);
-    ah->len = htons(size);
-    return ah;
-}
-
 static struct ofp_action_output *
 put_output_action(struct ofpbuf *b, uint16_t port)
 {
-    struct ofp_action_output *oao = put_action(b, sizeof *oao, OFPAT_OUTPUT);
+    struct ofp_action_output *oao;
+
+    oao = ofputil_put_OFPAT_OUTPUT(b);
     oao->port = htons(port);
     return oao;
 }
@@ -282,16 +275,9 @@ parse_enqueue(struct ofpbuf *b, char *arg)
         ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
     }
 
-    oae = put_action(b, sizeof *oae, OFPAT_ENQUEUE);
+    oae = ofputil_put_OFPAT_ENQUEUE(b);
     oae->port = htons(str_to_u32(port));
     oae->queue_id = htonl(str_to_u32(queue));
-}
-
-static void
-put_dl_addr_action(struct ofpbuf *b, uint16_t type, const char *addr)
-{
-    struct ofp_action_dl_addr *oada = put_action(b, sizeof *oada, type);
-    str_to_mac(addr, oada->dl_addr);
 }
 
 static void
@@ -304,9 +290,7 @@ parse_output(struct ofpbuf *b, char *arg)
 
         nxm_parse_field_bits(arg, &src, &ofs, &n_bits);
 
-        naor = put_action(b, sizeof *naor, OFPAT_VENDOR);
-        naor->vendor = htonl(NX_VENDOR_ID);
-        naor->subtype = htons(NXAST_OUTPUT_REG);
+        naor = ofputil_put_NXAST_OUTPUT_REG(b);
         naor->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
         naor->src = htonl(src);
         naor->max_len = htons(UINT16_MAX);
@@ -316,8 +300,9 @@ parse_output(struct ofpbuf *b, char *arg)
 }
 
 static void
-parse_resubmit(struct nx_action_resubmit *nar, char *arg)
+parse_resubmit(struct ofpbuf *b, char *arg)
 {
+    struct nx_action_resubmit *nar;
     char *in_port_s, *table_s;
     uint16_t in_port;
     uint8_t table;
@@ -339,33 +324,23 @@ parse_resubmit(struct nx_action_resubmit *nar, char *arg)
                   " on resubmit");
     }
 
-    nar->vendor = htonl(NX_VENDOR_ID);
-    nar->in_port = htons(in_port);
     if (in_port != OFPP_IN_PORT && table == 255) {
-        nar->subtype = htons(NXAST_RESUBMIT);
+        nar = ofputil_put_NXAST_RESUBMIT(b);
     } else {
-        nar->subtype = htons(NXAST_RESUBMIT_TABLE);
+        nar = ofputil_put_NXAST_RESUBMIT_TABLE(b);
         nar->table = table;
     }
+    nar->in_port = htons(in_port);
 }
 
 static void
-parse_set_tunnel(struct ofpbuf *b, enum ofputil_action_code code,
-                 const char *arg)
+parse_set_tunnel(struct ofpbuf *b, const char *arg)
 {
     uint64_t tun_id = str_to_u64(arg);
-    if (code == OFPUTIL_NXAST_SET_TUNNEL64 || tun_id > UINT32_MAX) {
-        struct nx_action_set_tunnel64 *nast64;
-        nast64 = put_action(b, sizeof *nast64, OFPAT_VENDOR);
-        nast64->vendor = htonl(NX_VENDOR_ID);
-        nast64->subtype = htons(NXAST_SET_TUNNEL64);
-        nast64->tun_id = htonll(tun_id);
+    if (tun_id > UINT32_MAX) {
+        ofputil_put_NXAST_SET_TUNNEL64(b)->tun_id = htonll(tun_id);
     } else {
-        struct nx_action_set_tunnel *nast;
-        nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
-        nast->vendor = htonl(NX_VENDOR_ID);
-        nast->subtype = htons(NXAST_SET_TUNNEL);
-        nast->tun_id = htonl(tun_id);
+        ofputil_put_NXAST_SET_TUNNEL(b)->tun_id = htonl(tun_id);
     }
 }
 
@@ -377,9 +352,7 @@ parse_note(struct ofpbuf *b, const char *arg)
     int remainder;
     size_t len;
 
-    nan = put_action(b, sizeof *nan, OFPAT_VENDOR);
-    nan->vendor = htonl(NX_VENDOR_ID);
-    nan->subtype = htons(NXAST_NOTE);
+    nan = ofputil_put_NXAST_NOTE(b);
 
     b->size -= sizeof nan->note;
     while (*arg != '\0') {
@@ -414,18 +387,11 @@ parse_note(struct ofpbuf *b, const char *arg)
 static void
 parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
 {
+    struct ofp_action_dl_addr *oada;
     struct ofp_action_vlan_pcp *oavp;
     struct ofp_action_vlan_vid *oavv;
     struct ofp_action_nw_addr *oana;
-    struct ofp_action_nw_tos *oant;
     struct ofp_action_tp_port *oata;
-    struct nx_action_header *nah;
-    struct nx_action_resubmit *nar;
-    struct nx_action_set_queue *nasq;
-    struct nx_action_reg_move *move;
-    struct nx_action_reg_load *load;
-    struct nx_action_multipath *nam;
-    struct nx_action_autopath *naa;
 
     switch (code) {
     case OFPUTIL_OFPAT_OUTPUT:
@@ -433,49 +399,38 @@ parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
         break;
 
     case OFPUTIL_OFPAT_SET_VLAN_VID:
-        oavv = put_action(b, sizeof *oavv, OFPAT_SET_VLAN_VID);
+        oavv = ofputil_put_OFPAT_SET_VLAN_VID(b);
         oavv->vlan_vid = htons(str_to_u32(arg));
         break;
 
     case OFPUTIL_OFPAT_SET_VLAN_PCP:
-        oavp = put_action(b, sizeof *oavp, OFPAT_SET_VLAN_PCP);
+        oavp = ofputil_put_OFPAT_SET_VLAN_PCP(b);
         oavp->vlan_pcp = str_to_u32(arg);
         break;
 
     case OFPUTIL_OFPAT_STRIP_VLAN:
-        put_action(b, sizeof(struct ofp_action_header), OFPAT_STRIP_VLAN);
+        ofputil_put_OFPAT_STRIP_VLAN(b);
         break;
 
     case OFPUTIL_OFPAT_SET_DL_SRC:
-        put_dl_addr_action(b, OFPAT_SET_DL_SRC, arg);
-        break;
-
     case OFPUTIL_OFPAT_SET_DL_DST:
-        put_dl_addr_action(b, OFPAT_SET_DL_DST, arg);
+        oada = ofputil_put_action(code, b);
+        str_to_mac(arg, oada->dl_addr);
         break;
 
     case OFPUTIL_OFPAT_SET_NW_SRC:
-        oana = put_action(b, sizeof *oana, OFPAT_SET_NW_SRC);
-        str_to_ip(arg, &oana->nw_addr, NULL);
-        break;
-
     case OFPUTIL_OFPAT_SET_NW_DST:
-        oana = put_action(b, sizeof *oana, OFPAT_SET_NW_DST);
+        oana = ofputil_put_action(code, b);
         str_to_ip(arg, &oana->nw_addr, NULL);
         break;
 
     case OFPUTIL_OFPAT_SET_NW_TOS:
-        oant = put_action(b, sizeof *oant, OFPAT_SET_NW_TOS);
-        oant->nw_tos = str_to_u32(arg);
+        ofputil_put_OFPAT_SET_NW_TOS(b)->nw_tos = str_to_u32(arg);
         break;
 
     case OFPUTIL_OFPAT_SET_TP_SRC:
-        oata = put_action(b, sizeof *oata, OFPAT_SET_TP_SRC);
-        oata->tp_port = htons(str_to_u32(arg));
-        break;
-
     case OFPUTIL_OFPAT_SET_TP_DST:
-        oata = put_action(b, sizeof *oata, OFPAT_SET_TP_DST);
+        oata = ofputil_put_action(code, b);
         oata->tp_port = htons(str_to_u32(arg));
         break;
 
@@ -484,50 +439,43 @@ parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
         break;
 
     case OFPUTIL_NXAST_RESUBMIT:
-        nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
-        parse_resubmit(nar, arg);
+        parse_resubmit(b, arg);
         break;
 
     case OFPUTIL_NXAST_SET_TUNNEL:
-    case OFPUTIL_NXAST_SET_TUNNEL64:
-        parse_set_tunnel(b, code, arg);
+        parse_set_tunnel(b, arg);
         break;
 
     case OFPUTIL_NXAST_SET_QUEUE:
-        nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
-        nasq->vendor = htonl(NX_VENDOR_ID);
-        nasq->subtype = htons(NXAST_SET_QUEUE);
-        nasq->queue_id = htonl(str_to_u32(arg));
+        ofputil_put_NXAST_SET_QUEUE(b)->queue_id = htonl(str_to_u32(arg));
         break;
 
     case OFPUTIL_NXAST_POP_QUEUE:
-        nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
-        nah->vendor = htonl(NX_VENDOR_ID);
-        nah->subtype = htons(NXAST_POP_QUEUE);
+        ofputil_put_NXAST_POP_QUEUE(b);
         break;
 
     case OFPUTIL_NXAST_REG_MOVE:
-        move = ofpbuf_put_uninit(b, sizeof *move);
-        nxm_parse_reg_move(move, arg);
+        nxm_parse_reg_move(ofputil_put_NXAST_REG_MOVE(b), arg);
         break;
 
     case OFPUTIL_NXAST_REG_LOAD:
-        load = ofpbuf_put_uninit(b, sizeof *load);
-        nxm_parse_reg_load(load, arg);
+        nxm_parse_reg_load(ofputil_put_NXAST_REG_LOAD(b), arg);
         break;
 
     case OFPUTIL_NXAST_NOTE:
         parse_note(b, arg);
         break;
 
+    case OFPUTIL_NXAST_SET_TUNNEL64:
+        ofputil_put_NXAST_SET_TUNNEL64(b)->tun_id = htonll(str_to_u64(arg));
+        break;
+
     case OFPUTIL_NXAST_MULTIPATH:
-        nam = ofpbuf_put_uninit(b, sizeof *nam);
-        multipath_parse(nam, arg);
+        multipath_parse(ofputil_put_NXAST_MULTIPATH(b), arg);
         break;
 
     case OFPUTIL_NXAST_AUTOPATH:
-        naa = ofpbuf_put_uninit(b, sizeof *naa);
-        autopath_parse(naa, arg);
+        autopath_parse(ofputil_put_NXAST_AUTOPATH(b), arg);
         break;
 
     case OFPUTIL_NXAST_BUNDLE:

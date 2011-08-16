@@ -67,11 +67,7 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
                   "less than required 65536", s_, n_bits, 1u << n_bits);
     }
 
-    memset(ap, 0, sizeof *ap);
-    ap->type = htons(OFPAT_VENDOR);
-    ap->len = htons(sizeof *ap);
-    ap->vendor = htonl(NX_VENDOR_ID);
-    ap->subtype = htons(NXAST_AUTOPATH);
+    ofputil_init_NXAST_AUTOPATH(ap);
     ap->id = htonl(id_int);
     ap->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
     ap->dst = htonl(reg);

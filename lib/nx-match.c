@@ -1093,10 +1093,7 @@ nxm_parse_reg_move(struct nx_action_reg_move *move, const char *s)
                   "%d bits wide", full_s, src_n_bits, dst_n_bits);
     }
 
-    move->type = htons(OFPAT_VENDOR);
-    move->len = htons(sizeof *move);
-    move->vendor = htonl(NX_VENDOR_ID);
-    move->subtype = htons(NXAST_REG_MOVE);
+    ofputil_init_NXAST_REG_MOVE(move);
     move->n_bits = htons(src_n_bits);
     move->src_ofs = htons(src_ofs);
     move->dst_ofs = htons(dst_ofs);
@@ -1127,10 +1124,7 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
                   full_s, value, n_bits);
     }
 
-    load->type = htons(OFPAT_VENDOR);
-    load->len = htons(sizeof *load);
-    load->vendor = htonl(NX_VENDOR_ID);
-    load->subtype = htons(NXAST_REG_LOAD);
+    ofputil_init_NXAST_REG_LOAD(load);
     load->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
     load->dst = htonl(dst);
     load->value = htonll(value);

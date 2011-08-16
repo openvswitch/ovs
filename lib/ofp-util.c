@@ -1825,10 +1825,7 @@ make_add_simple_flow(const struct cls_rule *rule,
         struct ofpbuf *buffer;
 
         buffer = make_add_flow(rule, buffer_id, idle_timeout, sizeof *oao);
-        oao = ofpbuf_put_zeros(buffer, sizeof *oao);
-        oao->type = htons(OFPAT_OUTPUT);
-        oao->len = htons(sizeof *oao);
-        oao->port = htons(out_port);
+        ofputil_put_OFPAT_OUTPUT(buffer)->port = htons(out_port);
         return buffer;
     } else {
         return make_add_flow(rule, buffer_id, idle_timeout, 0);
@@ -2307,6 +2304,60 @@ ofputil_action_code_from_name(const char *name)
     }
     return -1;
 }
+
+/* Appends an action of the type specified by 'code' to 'buf' and returns the
+ * action.  Initializes the parts of 'action' that identify it as having type
+ * <ENUM> and length 'sizeof *action' and zeros the rest.  For actions that
+ * have variable length, the length used and cleared is that of struct
+ * <STRUCT>.  */
+void *
+ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
+{
+    switch (code) {
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)                    \
+    case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)        \
+    case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
+#include "ofp-util.def"
+    }
+    NOT_REACHED();
+}
+
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)                        \
+    void                                                        \
+    ofputil_init_##ENUM(struct STRUCT *s)                       \
+    {                                                           \
+        memset(s, 0, sizeof *s);                                \
+        s->type = htons(ENUM);                                  \
+        s->len = htons(sizeof *s);                              \
+    }                                                           \
+                                                                \
+    struct STRUCT *                                             \
+    ofputil_put_##ENUM(struct ofpbuf *buf)                      \
+    {                                                           \
+        struct STRUCT *s = ofpbuf_put_uninit(buf, sizeof *s);   \
+        ofputil_init_##ENUM(s);                                 \
+        return s;                                               \
+    }
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)            \
+    void                                                        \
+    ofputil_init_##ENUM(struct STRUCT *s)                       \
+    {                                                           \
+        memset(s, 0, sizeof *s);                                \
+        s->type = htons(OFPAT_VENDOR);                          \
+        s->len = htons(sizeof *s);                              \
+        s->vendor = htonl(NX_VENDOR_ID);                        \
+        s->subtype = htons(ENUM);                               \
+    }                                                           \
+                                                                \
+    struct STRUCT *                                             \
+    ofputil_put_##ENUM(struct ofpbuf *buf)                      \
+    {                                                           \
+        struct STRUCT *s = ofpbuf_put_uninit(buf, sizeof *s);   \
+        ofputil_init_##ENUM(s);                                 \
+        return s;                                               \
+    }
+#include "ofp-util.def"
 
 /* Returns true if 'action' outputs to 'port', false otherwise. */
 bool

@@ -180,11 +180,7 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
         ovs_fatal(0, "%s: not enough arguments to multipath action", s_);
     }
 
-    memset(mp, 0, sizeof *mp);
-    mp->type = htons(OFPAT_VENDOR);
-    mp->len = htons(sizeof *mp);
-    mp->vendor = htonl(NX_VENDOR_ID);
-    mp->subtype = htons(NXAST_MULTIPATH);
+    ofputil_init_NXAST_MULTIPATH(mp);
     if (!strcasecmp(fields, "eth_src")) {
         mp->fields = htons(NX_HASH_FIELDS_ETH_SRC);
     } else if (!strcasecmp(fields, "symmetric_l4")) {

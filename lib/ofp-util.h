@@ -334,6 +334,30 @@ enum ofputil_action_code ofputil_decode_action_unsafe(
 
 int ofputil_action_code_from_name(const char *);
 
+void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
+
+/* For each OpenFlow action <ENUM> that has a corresponding action structure
+ * struct <STRUCT>, this defines two functions:
+ *
+ *   void ofputil_init_<ENUM>(struct <STRUCT> *action);
+ *
+ *     Initializes the parts of 'action' that identify it as having type <ENUM>
+ *     and length 'sizeof *action' and zeros the rest.  For actions that have
+ *     variable length, the length used and cleared is that of struct <STRUCT>.
+ *
+ *  struct <STRUCT> *ofputil_put_<ENUM>(struct ofpbuf *buf);
+ *
+ *     Appends a new 'action', of length 'sizeof(struct <STRUCT>)', to 'buf',
+ *     initializes it with ofputil_init_<ENUM>(), and returns it.
+ */
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)                \
+    void ofputil_init_##ENUM(struct STRUCT *);          \
+    struct STRUCT *ofputil_put_##ENUM(struct ofpbuf *);
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)    \
+    void ofputil_init_##ENUM(struct STRUCT *);          \
+    struct STRUCT *ofputil_put_##ENUM(struct ofpbuf *);
+#include "ofp-util.def"
+
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
 static inline union ofp_action *
