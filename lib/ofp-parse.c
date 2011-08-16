@@ -271,11 +271,20 @@ put_output_action(struct ofpbuf *b, uint16_t port)
 }
 
 static void
-put_enqueue_action(struct ofpbuf *b, uint16_t port, uint32_t queue)
+parse_enqueue(struct ofpbuf *b, char *arg)
 {
-    struct ofp_action_enqueue *oae = put_action(b, sizeof *oae, OFPAT_ENQUEUE);
-    oae->port = htons(port);
-    oae->queue_id = htonl(queue);
+    char *sp = NULL;
+    char *port = strtok_r(arg, ":q", &sp);
+    char *queue = strtok_r(NULL, "", &sp);
+    struct ofp_action_enqueue *oae;
+
+    if (port == NULL || queue == NULL) {
+        ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
+    }
+
+    oae = put_action(b, sizeof *oae, OFPAT_ENQUEUE);
+    oae->port = htons(str_to_u32(port));
+    oae->queue_id = htonl(str_to_u32(queue));
 }
 
 static void
@@ -341,6 +350,201 @@ parse_resubmit(struct nx_action_resubmit *nar, char *arg)
 }
 
 static void
+parse_set_tunnel(struct ofpbuf *b, enum ofputil_action_code code,
+                 const char *arg)
+{
+    uint64_t tun_id = str_to_u64(arg);
+    if (code == OFPUTIL_NXAST_SET_TUNNEL64 || tun_id > UINT32_MAX) {
+        struct nx_action_set_tunnel64 *nast64;
+        nast64 = put_action(b, sizeof *nast64, OFPAT_VENDOR);
+        nast64->vendor = htonl(NX_VENDOR_ID);
+        nast64->subtype = htons(NXAST_SET_TUNNEL64);
+        nast64->tun_id = htonll(tun_id);
+    } else {
+        struct nx_action_set_tunnel *nast;
+        nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
+        nast->vendor = htonl(NX_VENDOR_ID);
+        nast->subtype = htons(NXAST_SET_TUNNEL);
+        nast->tun_id = htonl(tun_id);
+    }
+}
+
+static void
+parse_note(struct ofpbuf *b, const char *arg)
+{
+    size_t start_ofs = b->size;
+    struct nx_action_note *nan;
+    int remainder;
+    size_t len;
+
+    nan = put_action(b, sizeof *nan, OFPAT_VENDOR);
+    nan->vendor = htonl(NX_VENDOR_ID);
+    nan->subtype = htons(NXAST_NOTE);
+
+    b->size -= sizeof nan->note;
+    while (*arg != '\0') {
+        uint8_t byte;
+        bool ok;
+
+        if (*arg == '.') {
+            arg++;
+        }
+        if (*arg == '\0') {
+            break;
+        }
+
+        byte = hexits_value(arg, 2, &ok);
+        if (!ok) {
+            ovs_fatal(0, "bad hex digit in `note' argument");
+        }
+        ofpbuf_put(b, &byte, 1);
+
+        arg += 2;
+    }
+
+    len = b->size - start_ofs;
+    remainder = len % OFP_ACTION_ALIGN;
+    if (remainder) {
+        ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
+    }
+    nan = (struct nx_action_note *)((char *)b->data + start_ofs);
+    nan->len = htons(b->size - start_ofs);
+}
+
+static void
+parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
+{
+    struct ofp_action_vlan_pcp *oavp;
+    struct ofp_action_vlan_vid *oavv;
+    struct ofp_action_nw_addr *oana;
+    struct ofp_action_nw_tos *oant;
+    struct ofp_action_tp_port *oata;
+    struct nx_action_header *nah;
+    struct nx_action_resubmit *nar;
+    struct nx_action_set_queue *nasq;
+    struct nx_action_reg_move *move;
+    struct nx_action_reg_load *load;
+    struct nx_action_multipath *nam;
+    struct nx_action_autopath *naa;
+
+    switch (code) {
+    case OFPUTIL_OFPAT_OUTPUT:
+        parse_output(b, arg);
+        break;
+
+    case OFPUTIL_OFPAT_SET_VLAN_VID:
+        oavv = put_action(b, sizeof *oavv, OFPAT_SET_VLAN_VID);
+        oavv->vlan_vid = htons(str_to_u32(arg));
+        break;
+
+    case OFPUTIL_OFPAT_SET_VLAN_PCP:
+        oavp = put_action(b, sizeof *oavp, OFPAT_SET_VLAN_PCP);
+        oavp->vlan_pcp = str_to_u32(arg);
+        break;
+
+    case OFPUTIL_OFPAT_STRIP_VLAN:
+        put_action(b, sizeof(struct ofp_action_header), OFPAT_STRIP_VLAN);
+        break;
+
+    case OFPUTIL_OFPAT_SET_DL_SRC:
+        put_dl_addr_action(b, OFPAT_SET_DL_SRC, arg);
+        break;
+
+    case OFPUTIL_OFPAT_SET_DL_DST:
+        put_dl_addr_action(b, OFPAT_SET_DL_DST, arg);
+        break;
+
+    case OFPUTIL_OFPAT_SET_NW_SRC:
+        oana = put_action(b, sizeof *oana, OFPAT_SET_NW_SRC);
+        str_to_ip(arg, &oana->nw_addr, NULL);
+        break;
+
+    case OFPUTIL_OFPAT_SET_NW_DST:
+        oana = put_action(b, sizeof *oana, OFPAT_SET_NW_DST);
+        str_to_ip(arg, &oana->nw_addr, NULL);
+        break;
+
+    case OFPUTIL_OFPAT_SET_NW_TOS:
+        oant = put_action(b, sizeof *oant, OFPAT_SET_NW_TOS);
+        oant->nw_tos = str_to_u32(arg);
+        break;
+
+    case OFPUTIL_OFPAT_SET_TP_SRC:
+        oata = put_action(b, sizeof *oata, OFPAT_SET_TP_SRC);
+        oata->tp_port = htons(str_to_u32(arg));
+        break;
+
+    case OFPUTIL_OFPAT_SET_TP_DST:
+        oata = put_action(b, sizeof *oata, OFPAT_SET_TP_DST);
+        oata->tp_port = htons(str_to_u32(arg));
+        break;
+
+    case OFPUTIL_OFPAT_ENQUEUE:
+        parse_enqueue(b, arg);
+        break;
+
+    case OFPUTIL_NXAST_RESUBMIT:
+        nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
+        parse_resubmit(nar, arg);
+        break;
+
+    case OFPUTIL_NXAST_SET_TUNNEL:
+    case OFPUTIL_NXAST_SET_TUNNEL64:
+        parse_set_tunnel(b, code, arg);
+        break;
+
+    case OFPUTIL_NXAST_SET_QUEUE:
+        nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
+        nasq->vendor = htonl(NX_VENDOR_ID);
+        nasq->subtype = htons(NXAST_SET_QUEUE);
+        nasq->queue_id = htonl(str_to_u32(arg));
+        break;
+
+    case OFPUTIL_NXAST_POP_QUEUE:
+        nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
+        nah->vendor = htonl(NX_VENDOR_ID);
+        nah->subtype = htons(NXAST_POP_QUEUE);
+        break;
+
+    case OFPUTIL_NXAST_REG_MOVE:
+        move = ofpbuf_put_uninit(b, sizeof *move);
+        nxm_parse_reg_move(move, arg);
+        break;
+
+    case OFPUTIL_NXAST_REG_LOAD:
+        load = ofpbuf_put_uninit(b, sizeof *load);
+        nxm_parse_reg_load(load, arg);
+        break;
+
+    case OFPUTIL_NXAST_NOTE:
+        parse_note(b, arg);
+        break;
+
+    case OFPUTIL_NXAST_MULTIPATH:
+        nam = ofpbuf_put_uninit(b, sizeof *nam);
+        multipath_parse(nam, arg);
+        break;
+
+    case OFPUTIL_NXAST_AUTOPATH:
+        naa = ofpbuf_put_uninit(b, sizeof *naa);
+        autopath_parse(naa, arg);
+        break;
+
+    case OFPUTIL_NXAST_BUNDLE:
+        bundle_parse(b, arg);
+        break;
+
+    case OFPUTIL_NXAST_BUNDLE_LOAD:
+        bundle_parse_load(b, arg);
+        break;
+
+    case OFPUTIL_NXAST_RESUBMIT_TABLE:
+    case OFPUTIL_NXAST_OUTPUT_REG:
+        NOT_REACHED();
+    }
+}
+
+static void
 str_to_action(char *str, struct ofpbuf *b)
 {
     bool drop = false;
@@ -354,6 +558,7 @@ str_to_action(char *str, struct ofpbuf *b)
         char *act, *arg;
         size_t actlen;
         uint16_t port;
+        int code;
 
         pos += strspn(pos, ", \t\r\n");
         if (*pos == '\0') {
@@ -405,141 +610,9 @@ str_to_action(char *str, struct ofpbuf *b)
         }
         act[actlen] = '\0';
 
-        if (!strcasecmp(act, "mod_vlan_vid")) {
-            struct ofp_action_vlan_vid *va;
-            va = put_action(b, sizeof *va, OFPAT_SET_VLAN_VID);
-            va->vlan_vid = htons(str_to_u32(arg));
-        } else if (!strcasecmp(act, "mod_vlan_pcp")) {
-            struct ofp_action_vlan_pcp *va;
-            va = put_action(b, sizeof *va, OFPAT_SET_VLAN_PCP);
-            va->vlan_pcp = str_to_u32(arg);
-        } else if (!strcasecmp(act, "strip_vlan")) {
-            struct ofp_action_header *ah;
-            ah = put_action(b, sizeof *ah, OFPAT_STRIP_VLAN);
-            ah->type = htons(OFPAT_STRIP_VLAN);
-        } else if (!strcasecmp(act, "mod_dl_src")) {
-            put_dl_addr_action(b, OFPAT_SET_DL_SRC, arg);
-        } else if (!strcasecmp(act, "mod_dl_dst")) {
-            put_dl_addr_action(b, OFPAT_SET_DL_DST, arg);
-        } else if (!strcasecmp(act, "mod_nw_src")) {
-            struct ofp_action_nw_addr *na;
-            na = put_action(b, sizeof *na, OFPAT_SET_NW_SRC);
-            str_to_ip(arg, &na->nw_addr, NULL);
-        } else if (!strcasecmp(act, "mod_nw_dst")) {
-            struct ofp_action_nw_addr *na;
-            na = put_action(b, sizeof *na, OFPAT_SET_NW_DST);
-            str_to_ip(arg, &na->nw_addr, NULL);
-        } else if (!strcasecmp(act, "mod_tp_src")) {
-            struct ofp_action_tp_port *ta;
-            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_SRC);
-            ta->tp_port = htons(str_to_u32(arg));
-        } else if (!strcasecmp(act, "mod_tp_dst")) {
-            struct ofp_action_tp_port *ta;
-            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_DST);
-            ta->tp_port = htons(str_to_u32(arg));
-        } else if (!strcasecmp(act, "mod_nw_tos")) {
-            struct ofp_action_nw_tos *nt;
-            nt = put_action(b, sizeof *nt, OFPAT_SET_NW_TOS);
-            nt->nw_tos = str_to_u32(arg);
-        } else if (!strcasecmp(act, "resubmit")) {
-            struct nx_action_resubmit *nar;
-            nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
-            parse_resubmit(nar, arg);
-        } else if (!strcasecmp(act, "set_tunnel")
-                   || !strcasecmp(act, "set_tunnel64")) {
-            uint64_t tun_id = str_to_u64(arg);
-            if (!strcasecmp(act, "set_tunnel64") || tun_id > UINT32_MAX) {
-                struct nx_action_set_tunnel64 *nast64;
-                nast64 = put_action(b, sizeof *nast64, OFPAT_VENDOR);
-                nast64->vendor = htonl(NX_VENDOR_ID);
-                nast64->subtype = htons(NXAST_SET_TUNNEL64);
-                nast64->tun_id = htonll(tun_id);
-            } else {
-                struct nx_action_set_tunnel *nast;
-                nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
-                nast->vendor = htonl(NX_VENDOR_ID);
-                nast->subtype = htons(NXAST_SET_TUNNEL);
-                nast->tun_id = htonl(tun_id);
-            }
-        } else if (!strcasecmp(act, "set_queue")) {
-            struct nx_action_set_queue *nasq;
-            nasq = put_action(b, sizeof *nasq, OFPAT_VENDOR);
-            nasq->vendor = htonl(NX_VENDOR_ID);
-            nasq->subtype = htons(NXAST_SET_QUEUE);
-            nasq->queue_id = htonl(str_to_u32(arg));
-        } else if (!strcasecmp(act, "pop_queue")) {
-            struct nx_action_header *nah;
-            nah = put_action(b, sizeof *nah, OFPAT_VENDOR);
-            nah->vendor = htonl(NX_VENDOR_ID);
-            nah->subtype = htons(NXAST_POP_QUEUE);
-        } else if (!strcasecmp(act, "note")) {
-            size_t start_ofs = b->size;
-            struct nx_action_note *nan;
-            int remainder;
-            size_t len;
-
-            nan = put_action(b, sizeof *nan, OFPAT_VENDOR);
-            nan->vendor = htonl(NX_VENDOR_ID);
-            nan->subtype = htons(NXAST_NOTE);
-
-            b->size -= sizeof nan->note;
-            while (*arg != '\0') {
-                uint8_t byte;
-                bool ok;
-
-                if (*arg == '.') {
-                    arg++;
-                }
-                if (*arg == '\0') {
-                    break;
-                }
-
-                byte = hexits_value(arg, 2, &ok);
-                if (!ok) {
-                    ovs_fatal(0, "bad hex digit in `note' argument");
-                }
-                ofpbuf_put(b, &byte, 1);
-
-                arg += 2;
-            }
-
-            len = b->size - start_ofs;
-            remainder = len % OFP_ACTION_ALIGN;
-            if (remainder) {
-                ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
-            }
-            nan = (struct nx_action_note *)((char *)b->data + start_ofs);
-            nan->len = htons(b->size - start_ofs);
-        } else if (!strcasecmp(act, "move")) {
-            struct nx_action_reg_move *move;
-            move = ofpbuf_put_uninit(b, sizeof *move);
-            nxm_parse_reg_move(move, arg);
-        } else if (!strcasecmp(act, "load")) {
-            struct nx_action_reg_load *load;
-            load = ofpbuf_put_uninit(b, sizeof *load);
-            nxm_parse_reg_load(load, arg);
-        } else if (!strcasecmp(act, "multipath")) {
-            struct nx_action_multipath *nam;
-            nam = ofpbuf_put_uninit(b, sizeof *nam);
-            multipath_parse(nam, arg);
-        } else if (!strcasecmp(act, "autopath")) {
-            struct nx_action_autopath *naa;
-            naa = ofpbuf_put_uninit(b, sizeof *naa);
-            autopath_parse(naa, arg);
-        } else if (!strcasecmp(act, "bundle")) {
-            bundle_parse(b, arg);
-        } else if (!strcasecmp(act, "bundle_load")) {
-            bundle_parse_load(b, arg);
-        } else if (!strcasecmp(act, "output")) {
-            parse_output(b, arg);
-        } else if (!strcasecmp(act, "enqueue")) {
-            char *sp = NULL;
-            char *port_s = strtok_r(arg, ":q", &sp);
-            char *queue = strtok_r(NULL, "", &sp);
-            if (port_s == NULL || queue == NULL) {
-                ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
-            }
-            put_enqueue_action(b, str_to_u32(port_s), str_to_u32(queue));
+        code = ofputil_action_code_from_name(act);
+        if (code >= 0) {
+            parse_named_action(code, b, arg);
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */
