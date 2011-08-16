@@ -269,6 +269,7 @@ static void facet_update_time(struct ofproto_dpif *, struct facet *,
                               long long int used);
 static void facet_update_stats(struct ofproto_dpif *, struct facet *,
                                const struct dpif_flow_stats *);
+static void facet_reset_counters(struct facet *);
 static void facet_reset_dp_stats(struct facet *, struct dpif_flow_stats *);
 static void facet_push_stats(struct facet *);
 static void facet_account(struct ofproto_dpif *, struct facet *,
@@ -2371,11 +2372,7 @@ facet_flush_stats(struct ofproto_dpif *ofproto, struct facet *facet)
 
     /* Reset counters to prevent double counting if 'facet' ever gets
      * reinstalled. */
-    facet->packet_count = 0;
-    facet->byte_count = 0;
-    facet->rs_packet_count = 0;
-    facet->rs_byte_count = 0;
-    facet->accounted_bytes = 0;
+    facet_reset_counters(facet);
 
     netflow_flow_clear(&facet->nf_flow);
 }
@@ -2538,6 +2535,16 @@ facet_update_stats(struct ofproto_dpif *ofproto, struct facet *facet,
 }
 
 static void
+facet_reset_counters(struct facet *facet)
+{
+    facet->packet_count = 0;
+    facet->byte_count = 0;
+    facet->rs_packet_count = 0;
+    facet->rs_byte_count = 0;
+    facet->accounted_bytes = 0;
+}
+
+static void
 facet_push_stats(struct facet *facet)
 {
     uint64_t rs_packets, rs_bytes;
@@ -2663,6 +2670,13 @@ rule_construct(struct rule *rule_)
         rule->facets = victim->facets;
         list_moved(&rule->facets);
         LIST_FOR_EACH (facet, list_node, &rule->facets) {
+            /* XXX: We're only clearing our local counters here.  It's possible
+             * that quite a few packets are unaccounted for in the datapath
+             * statistics.  These will be accounted to the new rule instead of
+             * cleared as required.  This could be fixed by clearing out the
+             * datapath statistics for this facet, but currently it doesn't
+             * seem worth it. */
+            facet_reset_counters(facet);
             facet->rule = rule;
         }
     } else {
