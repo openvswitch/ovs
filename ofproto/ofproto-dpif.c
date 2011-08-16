@@ -207,12 +207,8 @@ struct facet {
      *     dpif_execute().
      *
      *   - Do include packets and bytes that were obtained from the datapath
-     *     when a flow was deleted (e.g. dpif_flow_del()) or when its
-     *     statistics were reset (e.g. dpif_flow_put() with
+     *     when its statistics were reset (e.g. dpif_flow_put() with
      *     DPIF_FP_ZERO_STATS).
-     *
-     *   - Do not include any packets or bytes that can currently be obtained
-     *     from the datapath by, e.g., dpif_flow_get().
      */
     uint64_t packet_count;       /* Number of packets received. */
     uint64_t byte_count;         /* Number of bytes received. */
@@ -224,10 +220,7 @@ struct facet {
     uint64_t rs_byte_count;      /* Bytes pushed to resubmit children. */
     long long int rs_used;       /* Used time pushed to resubmit children. */
 
-    /* Number of bytes passed to account_cb.  This may include bytes that can
-     * currently obtained from the datapath (thus, it can be greater than
-     * byte_count). */
-    uint64_t accounted_bytes;
+    uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
 
     struct hmap_node hmap_node;  /* In owning ofproto's 'facets' hmap. */
     struct list list_node;       /* In owning rule's 'facets' list. */
