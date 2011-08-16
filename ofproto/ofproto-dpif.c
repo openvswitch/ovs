@@ -1849,7 +1849,7 @@ update_stats(struct ofproto_dpif *p)
             facet->dp_byte_count = stats->n_bytes;
 
             facet_update_time(p, facet, stats->used);
-            facet_account(p, facet, stats->n_bytes);
+            facet_account(p, facet, 0);
             facet_push_stats(facet);
         } else {
             /* There's a flow in the datapath that we know nothing about.
