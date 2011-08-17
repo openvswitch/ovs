@@ -2187,26 +2187,16 @@ ofputil_decode_ofpat_action(const union ofp_action *a)
     enum ofp_action_type type = ntohs(a->type);
 
     switch (type) {
-#define OFPAT_ACTION(ENUM, TYPE)                            \
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)                    \
         case ENUM: {                                        \
             static const struct ofputil_action action = {   \
-                OFPUTIL_##ENUM, sizeof(TYPE), sizeof(TYPE)  \
+                OFPUTIL_##ENUM,                             \
+                sizeof(struct STRUCT),                      \
+                sizeof(struct STRUCT)                       \
             };                                              \
             return &action;                                 \
         }
-        OFPAT_ACTION(OFPAT_OUTPUT,       struct ofp_action_output);
-        OFPAT_ACTION(OFPAT_SET_VLAN_VID, struct ofp_action_vlan_vid);
-        OFPAT_ACTION(OFPAT_SET_VLAN_PCP, struct ofp_action_vlan_pcp);
-        OFPAT_ACTION(OFPAT_STRIP_VLAN,   struct ofp_action_header);
-        OFPAT_ACTION(OFPAT_SET_DL_SRC,   struct ofp_action_dl_addr);
-        OFPAT_ACTION(OFPAT_SET_DL_DST,   struct ofp_action_dl_addr);
-        OFPAT_ACTION(OFPAT_SET_NW_SRC,   struct ofp_action_nw_addr);
-        OFPAT_ACTION(OFPAT_SET_NW_DST,   struct ofp_action_nw_addr);
-        OFPAT_ACTION(OFPAT_SET_NW_TOS,   struct ofp_action_nw_tos);
-        OFPAT_ACTION(OFPAT_SET_TP_SRC,   struct ofp_action_tp_port);
-        OFPAT_ACTION(OFPAT_SET_TP_DST,   struct ofp_action_tp_port);
-        OFPAT_ACTION(OFPAT_ENQUEUE,      struct ofp_action_enqueue);
-#undef OFPAT_ACTION
+#include "ofp-util.def"
 
     case OFPAT_VENDOR:
     default:
@@ -2221,30 +2211,16 @@ ofputil_decode_nxast_action(const union ofp_action *a)
     enum nx_action_subtype subtype = ntohs(nah->subtype);
 
     switch (subtype) {
-#define NXAST_ACTION(ENUM, TYPE, EXTENSIBLE)                \
-        case ENUM: {                                        \
-            static const struct ofputil_action action = {   \
-                OFPUTIL_##ENUM,                             \
-                sizeof(TYPE),                               \
-                EXTENSIBLE ? UINT_MAX : sizeof(TYPE)        \
-            };                                              \
-            return &action;                                 \
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)            \
+        case ENUM: {                                            \
+            static const struct ofputil_action action = {       \
+                OFPUTIL_##ENUM,                                 \
+                sizeof(struct STRUCT),                          \
+                EXTENSIBLE ? UINT_MAX : sizeof(struct STRUCT)   \
+            };                                                  \
+            return &action;                                     \
         }
-        NXAST_ACTION(NXAST_RESUBMIT,     struct nx_action_resubmit,     false);
-        NXAST_ACTION(NXAST_SET_TUNNEL,   struct nx_action_set_tunnel,   false);
-        NXAST_ACTION(NXAST_SET_QUEUE,    struct nx_action_set_queue,    false);
-        NXAST_ACTION(NXAST_POP_QUEUE,    struct nx_action_pop_queue,    false);
-        NXAST_ACTION(NXAST_REG_MOVE,     struct nx_action_reg_move,     false);
-        NXAST_ACTION(NXAST_REG_LOAD,     struct nx_action_reg_load,     false);
-        NXAST_ACTION(NXAST_NOTE,         struct nx_action_note,         true);
-        NXAST_ACTION(NXAST_SET_TUNNEL64, struct nx_action_set_tunnel64, false);
-        NXAST_ACTION(NXAST_MULTIPATH,    struct nx_action_multipath,    false);
-        NXAST_ACTION(NXAST_AUTOPATH,     struct nx_action_autopath,     false);
-        NXAST_ACTION(NXAST_BUNDLE,       struct nx_action_bundle,       true);
-        NXAST_ACTION(NXAST_BUNDLE_LOAD,  struct nx_action_bundle,       true);
-        NXAST_ACTION(NXAST_RESUBMIT_TABLE, struct nx_action_resubmit,   false);
-        NXAST_ACTION(NXAST_OUTPUT_REG,   struct nx_action_output_reg,   false);
-#undef NXAST_ACTION
+#include "ofp-util.def"
 
     case NXAST_SNAT__OBSOLETE:
     case NXAST_DROP_SPOOFED_ARP__OBSOLETE:
@@ -2306,6 +2282,30 @@ ofputil_decode_action_unsafe(const union ofp_action *a)
     }
 
     return action->code;
+}
+
+/* Returns the 'enum ofputil_action_code' corresponding to 'name' (e.g. if
+ * 'name' is "output" then the return value is OFPUTIL_OFPAT_OUTPUT), or -1 if
+ * 'name' is not the name of any action.
+ *
+ * ofp-util.def lists the mapping from names to action. */
+int
+ofputil_action_code_from_name(const char *name)
+{
+    static const char *names[OFPUTIL_N_ACTIONS] = {
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)             NAME,
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
+#include "ofp-util.def"
+    };
+
+    const char **p;
+
+    for (p = names; p < &names[ARRAY_SIZE(names)]; p++) {
+        if (*p && !strcasecmp(name, *p)) {
+            return p - names;
+        }
+    }
+    return -1;
 }
 
 /* Returns true if 'action' outputs to 'port', false otherwise. */

@@ -280,41 +280,59 @@ struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 /* Actions. */
 
+/* The type of an action.
+ *
+ * For each implemented OFPAT_* and NXAST_* action type, there is a
+ * corresponding constant prefixed with OFPUTIL_, e.g.:
+ *
+ * OFPUTIL_OFPAT_OUTPUT
+ * OFPUTIL_OFPAT_SET_VLAN_VID
+ * OFPUTIL_OFPAT_SET_VLAN_PCP
+ * OFPUTIL_OFPAT_STRIP_VLAN
+ * OFPUTIL_OFPAT_SET_DL_SRC
+ * OFPUTIL_OFPAT_SET_DL_DST
+ * OFPUTIL_OFPAT_SET_NW_SRC
+ * OFPUTIL_OFPAT_SET_NW_DST
+ * OFPUTIL_OFPAT_SET_NW_TOS
+ * OFPUTIL_OFPAT_SET_TP_SRC
+ * OFPUTIL_OFPAT_SET_TP_DST
+ * OFPUTIL_OFPAT_ENQUEUE
+ * OFPUTIL_NXAST_RESUBMIT
+ * OFPUTIL_NXAST_SET_TUNNEL
+ * OFPUTIL_NXAST_SET_QUEUE
+ * OFPUTIL_NXAST_POP_QUEUE
+ * OFPUTIL_NXAST_REG_MOVE
+ * OFPUTIL_NXAST_REG_LOAD
+ * OFPUTIL_NXAST_NOTE
+ * OFPUTIL_NXAST_SET_TUNNEL64
+ * OFPUTIL_NXAST_MULTIPATH
+ * OFPUTIL_NXAST_AUTOPATH
+ * OFPUTIL_NXAST_BUNDLE
+ * OFPUTIL_NXAST_BUNDLE_LOAD
+ * OFPUTIL_NXAST_RESUBMIT_TABLE
+ * OFPUTIL_NXAST_OUTPUT_REG
+ *
+ * (The above list helps developers who want to "grep" for these definitions.)
+ */
 enum ofputil_action_code {
-    /* OFPAT_* actions. */
-    OFPUTIL_OFPAT_OUTPUT,
-    OFPUTIL_OFPAT_SET_VLAN_VID,
-    OFPUTIL_OFPAT_SET_VLAN_PCP,
-    OFPUTIL_OFPAT_STRIP_VLAN,
-    OFPUTIL_OFPAT_SET_DL_SRC,
-    OFPUTIL_OFPAT_SET_DL_DST,
-    OFPUTIL_OFPAT_SET_NW_SRC,
-    OFPUTIL_OFPAT_SET_NW_DST,
-    OFPUTIL_OFPAT_SET_NW_TOS,
-    OFPUTIL_OFPAT_SET_TP_SRC,
-    OFPUTIL_OFPAT_SET_TP_DST,
-    OFPUTIL_OFPAT_ENQUEUE,
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
+#include "ofp-util.def"
+};
 
-    /* NXAST_* actions. */
-    OFPUTIL_NXAST_RESUBMIT,
-    OFPUTIL_NXAST_SET_TUNNEL,
-    OFPUTIL_NXAST_SET_QUEUE,
-    OFPUTIL_NXAST_POP_QUEUE,
-    OFPUTIL_NXAST_REG_MOVE,
-    OFPUTIL_NXAST_REG_LOAD,
-    OFPUTIL_NXAST_NOTE,
-    OFPUTIL_NXAST_SET_TUNNEL64,
-    OFPUTIL_NXAST_MULTIPATH,
-    OFPUTIL_NXAST_AUTOPATH,
-    OFPUTIL_NXAST_BUNDLE,
-    OFPUTIL_NXAST_BUNDLE_LOAD,
-    OFPUTIL_NXAST_RESUBMIT_TABLE,
-    OFPUTIL_NXAST_OUTPUT_REG
+/* The number of values of "enum ofputil_action_code". */
+enum {
+#define OFPAT_ACTION(ENUM, STRUCT, NAME)             + 1
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
+    OFPUTIL_N_ACTIONS = 0
+#include "ofp-util.def"
 };
 
 int ofputil_decode_action(const union ofp_action *);
 enum ofputil_action_code ofputil_decode_action_unsafe(
     const union ofp_action *);
+
+int ofputil_action_code_from_name(const char *);
 
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
