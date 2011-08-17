@@ -2735,3 +2735,72 @@ ofputil_actions_clone(const union ofp_action *actions, size_t n)
 {
     return n ? xmemdup(actions, n * sizeof *actions) : NULL;
 }
+
+/* Parses a key or a key-value pair from '*stringp'.
+ *
+ * On success: Stores the key into '*keyp'.  Stores the value, if present, into
+ * '*valuep', otherwise an empty string.  Advances '*stringp' past the end of
+ * the key-value pair, preparing it for another call.  '*keyp' and '*valuep'
+ * are substrings of '*stringp' created by replacing some of its bytes by null
+ * terminators.  Returns true.
+ *
+ * If '*stringp' is just white space or commas, sets '*keyp' and '*valuep' to
+ * NULL and returns false. */
+bool
+ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
+{
+    char *pos, *key, *value;
+    size_t key_len;
+
+    pos = *stringp;
+    pos += strspn(pos, ", \t\r\n");
+    if (*pos == '\0') {
+        *keyp = *valuep = NULL;
+        return false;
+    }
+
+    key = pos;
+    key_len = strcspn(pos, ":=(, \t\r\n");
+    if (key[key_len] == ':' || key[key_len] == '=') {
+        /* The value can be separated by a colon. */
+        size_t value_len;
+
+        value = key + key_len + 1;
+        value_len = strcspn(value, ", \t\r\n");
+        pos = value + value_len + (value[value_len] != '\0');
+        value[value_len] = '\0';
+    } else if (key[key_len] == '(') {
+        /* The value can be surrounded by balanced parentheses.  The outermost
+         * set of parentheses is removed. */
+        int level = 1;
+        size_t value_len;
+
+        value = key + key_len + 1;
+        for (value_len = 0; level > 0; value_len++) {
+            switch (value[value_len]) {
+            case '\0':
+                ovs_fatal(0, "unbalanced parentheses in argument to %s", key);
+
+            case '(':
+                level++;
+                break;
+
+            case ')':
+                level--;
+                break;
+            }
+        }
+        value[value_len - 1] = '\0';
+        pos = value + value_len;
+    } else {
+        /* There might be no value at all. */
+        value = key + key_len;  /* Will become the empty string below. */
+        pos = key + key_len + (key[key_len] != '\0');
+    }
+    key[key_len] = '\0';
+
+    *stringp = pos;
+    *keyp = key;
+    *valuep = value;
+    return true;
+}

@@ -495,68 +495,14 @@ parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
 static void
 str_to_action(char *str, struct ofpbuf *b)
 {
-    bool drop = false;
+    char *pos, *act, *arg;
     int n_actions;
-    char *pos;
 
     pos = str;
     n_actions = 0;
-    for (;;) {
-        char empty_string[] = "";
-        char *act, *arg;
-        size_t actlen;
+    while (ofputil_parse_key_value(&pos, &act, &arg)) {
         uint16_t port;
         int code;
-
-        pos += strspn(pos, ", \t\r\n");
-        if (*pos == '\0') {
-            break;
-        }
-
-        if (drop) {
-            ovs_fatal(0, "Drop actions must not be followed by other actions");
-        }
-
-        act = pos;
-        actlen = strcspn(pos, ":(, \t\r\n");
-        if (act[actlen] == ':') {
-            /* The argument can be separated by a colon. */
-            size_t arglen;
-
-            arg = act + actlen + 1;
-            arglen = strcspn(arg, ", \t\r\n");
-            pos = arg + arglen + (arg[arglen] != '\0');
-            arg[arglen] = '\0';
-        } else if (act[actlen] == '(') {
-            /* The argument can be surrounded by balanced parentheses.  The
-             * outermost set of parentheses is removed. */
-            int level = 1;
-            size_t arglen;
-
-            arg = act + actlen + 1;
-            for (arglen = 0; level > 0; arglen++) {
-                switch (arg[arglen]) {
-                case '\0':
-                    ovs_fatal(0, "unbalanced parentheses in argument to %s "
-                              "action", act);
-
-                case '(':
-                    level++;
-                    break;
-
-                case ')':
-                    level--;
-                    break;
-                }
-            }
-            arg[arglen - 1] = '\0';
-            pos = arg + arglen;
-        } else {
-            /* There might be no argument at all. */
-            arg = empty_string;
-            pos = act + actlen + (act[actlen] != '\0');
-        }
-        act[actlen] = '\0';
 
         code = ofputil_action_code_from_name(act);
         if (code >= 0) {
@@ -564,11 +510,14 @@ str_to_action(char *str, struct ofpbuf *b)
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */
-            drop = true;
             if (n_actions) {
                 ovs_fatal(0, "Drop actions must not be preceded by other "
                           "actions");
+            } else if (ofputil_parse_key_value(&pos, &act, &arg)) {
+                ovs_fatal(0, "Drop actions must not be followed by other "
+                          "actions");
             }
+            break;
         } else if (!strcasecmp(act, "CONTROLLER")) {
             struct ofp_action_output *oao;
             oao = put_output_action(b, OFPP_CONTROLLER);

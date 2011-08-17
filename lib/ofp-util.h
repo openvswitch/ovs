@@ -547,4 +547,7 @@ int ofputil_decode_error_msg(const struct ofp_header *, size_t *payload_ofs);
 void ofputil_format_error(struct ds *, int error);
 char *ofputil_error_to_string(int error);
 
+/* Handy utility for parsing flows and actions. */
+bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
+
 #endif /* ofp-util.h */
