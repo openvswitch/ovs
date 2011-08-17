@@ -171,7 +171,7 @@ Prerequisites section, follow the procedure below to build.
 
    To build the Linux kernel module, so that you can run the
    kernel-based switch, pass the location of the kernel build
-   directory on --with-l26.  For example, to build for a running
+   directory on --with-linux.  For example, to build for a running
    instance of Linux:
 
       % ./configure --with-linux=/lib/modules/`uname -r`/build
