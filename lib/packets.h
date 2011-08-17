@@ -291,6 +291,8 @@ ip_is_cidr(ovs_be32 netmask)
     uint32_t x = ~ntohl(netmask);
     return !(x & (x + 1));
 }
+int ip_count_cidr_bits(ovs_be32 netmask);
+void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
@@ -423,6 +425,8 @@ static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
 void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
+void print_ipv6_masked(struct ds *string, const struct in6_addr *addr,
+                       const struct in6_addr *mask);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
                                  const struct in6_addr *mask);
 struct in6_addr ipv6_create_mask(int mask);

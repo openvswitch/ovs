@@ -421,15 +421,8 @@ format_ip_netmask(struct ds *s, const char *name, ovs_be32 ip,
                   ovs_be32 netmask)
 {
     if (netmask) {
-        ds_put_format(s, "%s="IP_FMT, name, IP_ARGS(&ip));
-        if (netmask != htonl(UINT32_MAX)) {
-            if (ip_is_cidr(netmask)) {
-                int wcbits = ofputil_netmask_to_wcbits(netmask);
-                ds_put_format(s, "/%d", 32 - wcbits);
-            } else {
-                ds_put_format(s, "/"IP_FMT, IP_ARGS(&netmask));
-            }
-        }
+        ds_put_format(s, "%s=", name);
+        ip_format_masked(ip, netmask, s);
         ds_put_char(s, ',');
     }
 }
@@ -441,16 +434,7 @@ format_ipv6_netmask(struct ds *s, const char *name,
 {
     if (!ipv6_mask_is_any(netmask)) {
         ds_put_format(s, "%s=", name);
-        print_ipv6_addr(s, addr);
-        if (!ipv6_mask_is_exact(netmask)) {
-            if (ipv6_is_cidr(netmask)) {
-                int cidr_bits = ipv6_count_cidr_bits(netmask);
-                ds_put_format(s, "/%d", cidr_bits);
-            } else {
-                ds_put_char(s, '/');
-                print_ipv6_addr(s, netmask);
-            }
-        }
+        print_ipv6_masked(s, addr, netmask);
         ds_put_char(s, ',');
     }
 }

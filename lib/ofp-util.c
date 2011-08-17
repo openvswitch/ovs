@@ -59,22 +59,12 @@ ofputil_wcbits_to_netmask(int wcbits)
 }
 
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
- * that it wildcards.  'netmask' must be a CIDR netmask (see ip_is_cidr()). */
+ * that it wildcards, that is, the number of 0-bits in 'netmask'.  'netmask'
+ * must be a CIDR netmask (see ip_is_cidr()). */
 int
 ofputil_netmask_to_wcbits(ovs_be32 netmask)
 {
-    assert(ip_is_cidr(netmask));
-#if __GNUC__ >= 4
-    return netmask == htonl(0) ? 32 : __builtin_ctz(ntohl(netmask));
-#else
-    int wcbits;
-
-    for (wcbits = 32; netmask; wcbits--) {
-        netmask &= netmask - 1;
-    }
-
-    return wcbits;
-#endif
+    return 32 - ip_count_cidr_bits(netmask);
 }
 
 /* A list of the FWW_* and OFPFW_ bits that have the same value, meaning, and

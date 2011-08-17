@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,11 +25,21 @@
 #include "util.h"
 
 static void
-check(uint32_t x, int n)
+check_log_2_floor(uint32_t x, int n)
 {
     if (log_2_floor(x) != n) {
         fprintf(stderr, "log_2_floor(%"PRIu32") is %d but should be %d\n",
                 x, log_2_floor(x), n);
+        abort();
+    }
+}
+
+static void
+check_ctz(uint32_t x, int n)
+{
+    if (ctz(x) != n) {
+        fprintf(stderr, "ctz(%"PRIu32") is %d but should be %d\n",
+                x, ctz(x), n);
         abort();
     }
 }
@@ -39,14 +50,22 @@ main(void)
     int n;
 
     for (n = 0; n < 32; n++) {
-        /* Check minimum x that has log2(x) == n. */
-        check(1 << n, n);
+        /* Check minimum x such that f(x) == n. */
+        check_log_2_floor(1 << n, n);
+        check_ctz(1 << n, n);
 
-        /* Check maximum x that has log2(x) == n. */
-        check((1 << n) | ((1 << n) - 1), n);
+        /* Check maximum x such that f(x) == n. */
+        check_log_2_floor((1 << n) | ((1 << n) - 1), n);
+        check_ctz(UINT32_MAX << n, n);
 
         /* Check a random value in the middle. */
-        check((random_uint32() & ((1 << n) - 1)) | (1 << n), n);
+        check_log_2_floor((random_uint32() & ((1 << n) - 1)) | (1 << n), n);
+        check_ctz((random_uint32() | 1) << n, n);
     }
+
+    /* Check ctz(0).
+     * (log_2_floor(0) is undefined.) */
+    check_ctz(0, 32);
+
     return 0;
 }

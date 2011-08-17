@@ -194,7 +194,8 @@ char *base_name(const char *file_name);
 char *abs_file_name(const char *dir, const char *file_name);
 
 void ignore(bool x OVS_UNUSED);
-int log_2_floor(uint32_t n);
+int log_2_floor(uint32_t);
+int ctz(uint32_t);
 
 #ifdef  __cplusplus
 }
