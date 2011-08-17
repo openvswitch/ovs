@@ -17,9 +17,13 @@
 #ifndef NETDEV_LINUX_H
 #define NETDEV_LINUX_H 1
 
+#include <stdint.h>
+#include <stdbool.h>
+
 /* These functions are Linux specific, so they should be used directly only by
  * Linux-specific code. */
 
+struct netdev;
 struct netdev_stats;
 struct rtnl_link_stats;
 struct rtnl_link_stats64;
@@ -30,5 +34,8 @@ void netdev_stats_from_rtnl_link_stats64(struct netdev_stats *dst,
                                          const struct rtnl_link_stats64 *src);
 void netdev_stats_to_rtnl_link_stats64(struct rtnl_link_stats64 *dst,
                                        const struct netdev_stats *src);
+
+int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
+                                  const char *flag_name, bool enable);
 
 #endif /* netdev-linux.h */
