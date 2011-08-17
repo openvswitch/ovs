@@ -136,7 +136,8 @@ static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static void ofopgroup_destroy(struct ofopgroup *);
 
 static int add_flow(struct ofproto *, struct ofconn *,
-                    struct ofputil_flow_mod *, const struct ofp_header *);
+                    const struct ofputil_flow_mod *,
+                    const struct ofp_header *);
 
 /* This return value tells handle_openflow() that processing of the current
  * OpenFlow message must be postponed until some ongoing operations have
@@ -2196,7 +2197,7 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  * if any. */
 static int
 add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
-         struct ofputil_flow_mod *fm, const struct ofp_header *request)
+         const struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
     struct classifier *table;
     struct ofopgroup *group;
@@ -2329,7 +2330,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
  * if any. */
 static int
 modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
-                   struct ofputil_flow_mod *fm,
+                   const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
@@ -2349,7 +2350,7 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
  * if any. */
 static int
 modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
-                   struct ofputil_flow_mod *fm,
+                   const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
@@ -2409,7 +2410,7 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 /* Implements OFPFC_DELETE_STRICT. */
 static int
 delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
-                   struct ofputil_flow_mod *fm,
+                   const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
