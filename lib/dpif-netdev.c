@@ -336,7 +336,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     int error;
 
     /* XXX reject devices already in some dp_netdev. */
-    if (type[0] == '\0' || !strcmp(type, "system")) {
+    if (type[0] == '\0' || !strcmp(type, "system") || !strcmp(type, "dummy")) {
         internal = false;
     } else if (!strcmp(type, "internal")) {
         internal = true;
