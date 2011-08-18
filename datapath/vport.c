@@ -221,7 +221,7 @@ void vport_free(struct vport *vport)
  * @parms: Information about new vport.
  *
  * Creates a new vport with the specified configuration (which is dependent on
- * device type) and attaches it to a datapath.  RTNL lock must be held.
+ * device type).  RTNL lock must be held.
  */
 struct vport *vport_add(const struct vport_parms *parms)
 {
