@@ -480,10 +480,10 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
     }
 
     {
-        uint16_t eth_type;
+        int eth_type;
         int n = -1;
 
-        if (sscanf(s, "eth_type(%"SCNi16")%n", &eth_type, &n) > 0 && n > 0) {
+        if (sscanf(s, "eth_type(%i)%n", &eth_type, &n) > 0 && n > 0) {
             nl_msg_put_be16(key, ODP_KEY_ATTR_ETHERTYPE, htons(eth_type));
             return n;
         }
