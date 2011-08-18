@@ -372,10 +372,11 @@ struct odp_key_nd {
  * @ODP_FLOW_ATTR_KEY: Nested %ODP_KEY_ATTR_* attributes specifying the flow
  * key.  Always present in notifications.  Required for all requests (except
  * dumps).
- * @ODP_FLOW_ATTR_ACTIONS: Nested %ODPAT_* attributes specifying the actions to
- * take for packets that match the key.  Always present in notifications.
- * Required for %ODP_FLOW_CMD_NEW requests, optional on %ODP_FLOW_CMD_SET
- * request to change the existing actions, ignored for other requests.
+ * @ODP_FLOW_ATTR_ACTIONS: Nested %ODP_ACTION_ATTR_* attributes specifying
+ * the actions to take for packets that match the key.  Always present in
+ * notifications.  Required for %ODP_FLOW_CMD_NEW requests, optional
+ * on %ODP_FLOW_CMD_SET request to change the existing actions, ignored for
+ * other requests.
  * @ODP_FLOW_ATTR_STATS: &struct odp_flow_stats giving statistics for this
  * flow.  Present in notifications if the stats would be nonzero.  Ignored in
  * requests.
