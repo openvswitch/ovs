@@ -71,7 +71,7 @@ struct tnl_mutable_config {
 
 	unsigned char eth_addr[ETH_ALEN];
 
-	/* Configured via ODP_TUNNEL_ATTR_* attributes. */
+	/* Configured via OVS_TUNNEL_ATTR_* attributes. */
 	__be64	in_key;
 	__be64	out_key;
 	u32	flags;

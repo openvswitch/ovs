@@ -64,15 +64,15 @@ struct dpif_linux_dp {
     /* Generic Netlink header. */
     uint8_t cmd;
 
-    /* struct odp_header. */
+    /* struct ovs_header. */
     int dp_ifindex;
 
     /* Attributes. */
-    const char *name;                  /* ODP_DP_ATTR_NAME. */
-    struct odp_stats stats;            /* ODP_DP_ATTR_STATS. */
-    enum odp_frag_handling ipv4_frags; /* ODP_DP_ATTR_IPV4_FRAGS. */
-    const uint32_t *sampling;          /* ODP_DP_ATTR_SAMPLING. */
-    uint32_t mcgroups[DPIF_N_UC_TYPES]; /* ODP_DP_ATTR_MCGROUPS. */
+    const char *name;                  /* OVS_DP_ATTR_NAME. */
+    struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
+    enum ovs_frag_handling ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
+    const uint32_t *sampling;          /* OVS_DP_ATTR_SAMPLING. */
+    uint32_t mcgroups[DPIF_N_UC_TYPES]; /* OVS_DP_ATTR_MCGROUPS. */
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
@@ -89,7 +89,7 @@ struct dpif_linux_flow {
     /* Generic Netlink header. */
     uint8_t cmd;
 
-    /* struct odp_header. */
+    /* struct ovs_header. */
     unsigned int nlmsg_flags;
     int dp_ifindex;
 
@@ -99,16 +99,16 @@ struct dpif_linux_flow {
      * aligned on 32-bit boundaries, so get_unaligned_u64() should be used to
      * access their values.
      *
-     * If 'actions' is nonnull then ODP_FLOW_ATTR_ACTIONS will be included in
+     * If 'actions' is nonnull then OVS_FLOW_ATTR_ACTIONS will be included in
      * the Netlink version of the command, even if actions_len is zero. */
-    const struct nlattr *key;           /* ODP_FLOW_ATTR_KEY. */
+    const struct nlattr *key;           /* OVS_FLOW_ATTR_KEY. */
     size_t key_len;
-    const struct nlattr *actions;       /* ODP_FLOW_ATTR_ACTIONS. */
+    const struct nlattr *actions;       /* OVS_FLOW_ATTR_ACTIONS. */
     size_t actions_len;
-    const struct odp_flow_stats *stats; /* ODP_FLOW_ATTR_STATS. */
-    const uint8_t *tcp_flags;           /* ODP_FLOW_ATTR_TCP_FLAGS. */
-    const uint64_t *used;               /* ODP_FLOW_ATTR_USED. */
-    bool clear;                         /* ODP_FLOW_ATTR_CLEAR. */
+    const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
+    const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
+    const uint64_t *used;               /* OVS_FLOW_ATTR_USED. */
+    bool clear;                         /* OVS_FLOW_ATTR_CLEAR. */
 };
 
 static void dpif_linux_flow_init(struct dpif_linux_flow *);
@@ -146,11 +146,11 @@ struct dpif_linux {
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
-/* Generic Netlink family numbers for ODP. */
-static int odp_datapath_family;
-static int odp_vport_family;
-static int odp_flow_family;
-static int odp_packet_family;
+/* Generic Netlink family numbers for OVS. */
+static int ovs_datapath_family;
+static int ovs_vport_family;
+static int ovs_flow_family;
+static int ovs_packet_family;
 
 /* Generic Netlink socket. */
 static struct nl_sock *genl_sock;
@@ -233,7 +233,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
 
     /* Create or look up datapath. */
     dpif_linux_dp_init(&dp_request);
-    dp_request.cmd = create ? ODP_DP_CMD_NEW : ODP_DP_CMD_GET;
+    dp_request.cmd = create ? OVS_DP_CMD_NEW : OVS_DP_CMD_GET;
     dp_request.name = name;
     error = dpif_linux_dp_transact(&dp_request, &dp, &buf);
     if (error) {
@@ -274,7 +274,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
     dpif->lru_head = dpif->lru_tail = 0;
     dpif->lru_bitmap = bitmap_allocate(LRU_MAX_PORTS);
-    bitmap_set1(dpif->lru_bitmap, ODPP_LOCAL);
+    bitmap_set1(dpif->lru_bitmap, OVSP_LOCAL);
     for (i = 1; i < LRU_MAX_PORTS; i++) {
         dpif_linux_push_port(dpif, i);
     }
@@ -303,13 +303,13 @@ dpif_linux_destroy(struct dpif *dpif_)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_CMD_DEL;
+    dp.cmd = OVS_DP_CMD_DEL;
     dp.dp_ifindex = dpif->dp_ifindex;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
 static int
-dpif_linux_get_stats(const struct dpif *dpif_, struct odp_stats *stats)
+dpif_linux_get_stats(const struct dpif *dpif_, struct ovs_dp_stats *stats)
 {
     struct dpif_linux_dp dp;
     struct ofpbuf *buf;
@@ -332,7 +332,7 @@ dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
 
     error = dpif_linux_dp_get(dpif_, &dp, &buf);
     if (!error) {
-        *drop_fragsp = dp.ipv4_frags == ODP_DP_FRAG_DROP;
+        *drop_fragsp = dp.ipv4_frags == OVS_DP_FRAG_DROP;
         ofpbuf_delete(buf);
     }
     return error;
@@ -345,9 +345,9 @@ dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_CMD_SET;
+    dp.cmd = OVS_DP_CMD_SET;
     dp.dp_ifindex = dpif->dp_ifindex;
-    dp.ipv4_frags = drop_frags ? ODP_DP_FRAG_DROP : ODP_DP_FRAG_ZERO;
+    dp.ipv4_frags = drop_frags ? OVS_DP_FRAG_DROP : OVS_DP_FRAG_ZERO;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
@@ -364,10 +364,10 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     int error;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_CMD_NEW;
+    request.cmd = OVS_VPORT_CMD_NEW;
     request.dp_ifindex = dpif->dp_ifindex;
     request.type = netdev_vport_get_vport_type(netdev);
-    if (request.type == ODP_VPORT_TYPE_UNSPEC) {
+    if (request.type == OVS_VPORT_TYPE_UNSPEC) {
         VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
                      "unsupported type `%s'",
                      dpif_name(dpif_), name, type);
@@ -404,7 +404,7 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
     int error;
 
     dpif_linux_vport_init(&vport);
-    vport.cmd = ODP_VPORT_CMD_DEL;
+    vport.cmd = OVS_VPORT_CMD_DEL;
     vport.dp_ifindex = dpif->dp_ifindex;
     vport.port_no = port_no;
     error = dpif_linux_vport_transact(&vport, NULL, NULL);
@@ -425,7 +425,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
     int error;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_CMD_GET;
+    request.cmd = OVS_VPORT_CMD_GET;
     request.dp_ifindex = dpif_linux_cast(dpif)->dp_ifindex;
     request.port_no = port_no;
     request.name = port_name;
@@ -475,7 +475,7 @@ dpif_linux_flow_flush(struct dpif *dpif_)
     struct dpif_linux_flow flow;
 
     dpif_linux_flow_init(&flow);
-    flow.cmd = ODP_FLOW_CMD_DEL;
+    flow.cmd = OVS_FLOW_CMD_DEL;
     flow.dp_ifindex = dpif->dp_ifindex;
     return dpif_linux_flow_transact(&flow, NULL, NULL);
 }
@@ -499,7 +499,7 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
     state->complete = false;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_DP_CMD_GET;
+    request.cmd = OVS_DP_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
 
     buf = ofpbuf_new(1024);
@@ -603,7 +603,7 @@ dpif_linux_flow_get__(const struct dpif *dpif_,
     struct dpif_linux_flow request;
 
     dpif_linux_flow_init(&request);
-    request.cmd = ODP_FLOW_CMD_GET;
+    request.cmd = OVS_FLOW_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
     request.key = key;
     request.key_len = key_len;
@@ -648,11 +648,11 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     int error;
 
     dpif_linux_flow_init(&request);
-    request.cmd = flags & DPIF_FP_CREATE ? ODP_FLOW_CMD_NEW : ODP_FLOW_CMD_SET;
+    request.cmd = flags & DPIF_FP_CREATE ? OVS_FLOW_CMD_NEW : OVS_FLOW_CMD_SET;
     request.dp_ifindex = dpif->dp_ifindex;
     request.key = key;
     request.key_len = key_len;
-    /* Ensure that ODP_FLOW_ATTR_ACTIONS will always be included. */
+    /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request.actions = actions ? actions : &dummy_action;
     request.actions_len = actions_len;
     if (flags & DPIF_FP_ZERO_STATS) {
@@ -680,7 +680,7 @@ dpif_linux_flow_del(struct dpif *dpif_,
     int error;
 
     dpif_linux_flow_init(&request);
-    request.cmd = ODP_FLOW_CMD_DEL;
+    request.cmd = OVS_FLOW_CMD_DEL;
     request.dp_ifindex = dpif->dp_ifindex;
     request.key = key;
     request.key_len = key_len;
@@ -712,7 +712,7 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
     *statep = state = xmalloc(sizeof *state);
 
     dpif_linux_flow_init(&request);
-    request.cmd = ODP_DP_CMD_GET;
+    request.cmd = OVS_DP_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
 
     buf = ofpbuf_new(1024);
@@ -791,21 +791,21 @@ dpif_linux_execute__(int dp_ifindex,
                      const struct nlattr *actions, size_t actions_len,
                      const struct ofpbuf *packet)
 {
-    struct odp_header *execute;
+    struct ovs_header *execute;
     struct ofpbuf *buf;
     int error;
 
     buf = ofpbuf_new(128 + actions_len + packet->size);
 
-    nl_msg_put_genlmsghdr(buf, 0, odp_packet_family, NLM_F_REQUEST,
-                          ODP_PACKET_CMD_EXECUTE, 1);
+    nl_msg_put_genlmsghdr(buf, 0, ovs_packet_family, NLM_F_REQUEST,
+                          OVS_PACKET_CMD_EXECUTE, 1);
 
     execute = ofpbuf_put_uninit(buf, sizeof *execute);
     execute->dp_ifindex = dp_ifindex;
 
-    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_PACKET, packet->data, packet->size);
-    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_KEY, key, key_len);
-    nl_msg_put_unspec(buf, ODP_PACKET_ATTR_ACTIONS, actions, actions_len);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET, packet->data, packet->size);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, key, key_len);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS, actions, actions_len);
 
     error = nl_sock_transact(genl_sock, buf, NULL);
     ofpbuf_delete(buf);
@@ -901,7 +901,7 @@ dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
     struct dpif_linux_dp dp;
 
     dpif_linux_dp_init(&dp);
-    dp.cmd = ODP_DP_CMD_SET;
+    dp.cmd = OVS_DP_CMD_SET;
     dp.dp_ifindex = dpif->dp_ifindex;
     dp.sampling = &probability;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
@@ -923,22 +923,22 @@ static int
 parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
                  int *dp_ifindex)
 {
-    static const struct nl_policy odp_packet_policy[] = {
+    static const struct nl_policy ovs_packet_policy[] = {
         /* Always present. */
-        [ODP_PACKET_ATTR_PACKET] = { .type = NL_A_UNSPEC,
+        [OVS_PACKET_ATTR_PACKET] = { .type = NL_A_UNSPEC,
                                      .min_len = ETH_HEADER_LEN },
-        [ODP_PACKET_ATTR_KEY] = { .type = NL_A_NESTED },
+        [OVS_PACKET_ATTR_KEY] = { .type = NL_A_NESTED },
 
-        /* ODP_PACKET_CMD_ACTION only. */
-        [ODP_PACKET_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
+        /* OVS_PACKET_CMD_ACTION only. */
+        [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
 
-        /* ODP_PACKET_CMD_SAMPLE only. */
-        [ODP_PACKET_ATTR_SAMPLE_POOL] = { .type = NL_A_U32, .optional = true },
-        [ODP_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
+        /* OVS_PACKET_CMD_SAMPLE only. */
+        [OVS_PACKET_ATTR_SAMPLE_POOL] = { .type = NL_A_U32, .optional = true },
+        [OVS_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
     };
 
-    struct odp_header *odp_header;
-    struct nlattr *a[ARRAY_SIZE(odp_packet_policy)];
+    struct ovs_header *ovs_header;
+    struct nlattr *a[ARRAY_SIZE(ovs_packet_policy)];
     struct nlmsghdr *nlmsg;
     struct genlmsghdr *genl;
     struct ofpbuf b;
@@ -948,17 +948,17 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
-    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
-    if (!nlmsg || !genl || !odp_header
-        || nlmsg->nlmsg_type != odp_packet_family
-        || !nl_policy_parse(&b, 0, odp_packet_policy, a,
-                            ARRAY_SIZE(odp_packet_policy))) {
+    ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_packet_family
+        || !nl_policy_parse(&b, 0, ovs_packet_policy, a,
+                            ARRAY_SIZE(ovs_packet_policy))) {
         return EINVAL;
     }
 
-    type = (genl->cmd == ODP_PACKET_CMD_MISS ? DPIF_UC_MISS
-            : genl->cmd == ODP_PACKET_CMD_ACTION ? DPIF_UC_ACTION
-            : genl->cmd == ODP_PACKET_CMD_SAMPLE ? DPIF_UC_SAMPLE
+    type = (genl->cmd == OVS_PACKET_CMD_MISS ? DPIF_UC_MISS
+            : genl->cmd == OVS_PACKET_CMD_ACTION ? DPIF_UC_ACTION
+            : genl->cmd == OVS_PACKET_CMD_SAMPLE ? DPIF_UC_SAMPLE
             : -1);
     if (type < 0) {
         return EINVAL;
@@ -967,22 +967,22 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     memset(upcall, 0, sizeof *upcall);
     upcall->type = type;
     upcall->packet = buf;
-    upcall->packet->data = (void *) nl_attr_get(a[ODP_PACKET_ATTR_PACKET]);
-    upcall->packet->size = nl_attr_get_size(a[ODP_PACKET_ATTR_PACKET]);
-    upcall->key = (void *) nl_attr_get(a[ODP_PACKET_ATTR_KEY]);
-    upcall->key_len = nl_attr_get_size(a[ODP_PACKET_ATTR_KEY]);
-    upcall->userdata = (a[ODP_PACKET_ATTR_USERDATA]
-                        ? nl_attr_get_u64(a[ODP_PACKET_ATTR_USERDATA])
+    upcall->packet->data = (void *) nl_attr_get(a[OVS_PACKET_ATTR_PACKET]);
+    upcall->packet->size = nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]);
+    upcall->key = (void *) nl_attr_get(a[OVS_PACKET_ATTR_KEY]);
+    upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
+    upcall->userdata = (a[OVS_PACKET_ATTR_USERDATA]
+                        ? nl_attr_get_u64(a[OVS_PACKET_ATTR_USERDATA])
                         : 0);
-    upcall->sample_pool = (a[ODP_PACKET_ATTR_SAMPLE_POOL]
-                        ? nl_attr_get_u32(a[ODP_PACKET_ATTR_SAMPLE_POOL])
+    upcall->sample_pool = (a[OVS_PACKET_ATTR_SAMPLE_POOL]
+                        ? nl_attr_get_u32(a[OVS_PACKET_ATTR_SAMPLE_POOL])
                            : 0);
-    if (a[ODP_PACKET_ATTR_ACTIONS]) {
-        upcall->actions = (void *) nl_attr_get(a[ODP_PACKET_ATTR_ACTIONS]);
-        upcall->actions_len = nl_attr_get_size(a[ODP_PACKET_ATTR_ACTIONS]);
+    if (a[OVS_PACKET_ATTR_ACTIONS]) {
+        upcall->actions = (void *) nl_attr_get(a[OVS_PACKET_ATTR_ACTIONS]);
+        upcall->actions_len = nl_attr_get_size(a[OVS_PACKET_ATTR_ACTIONS]);
     }
 
-    *dp_ifindex = odp_header->dp_ifindex;
+    *dp_ifindex = ovs_header->dp_ifindex;
 
     return 0;
 }
@@ -1087,22 +1087,22 @@ dpif_linux_init(void)
     static int error = -1;
 
     if (error < 0) {
-        error = nl_lookup_genl_family(ODP_DATAPATH_FAMILY,
-                                      &odp_datapath_family);
+        error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
+                                      &ovs_datapath_family);
         if (error) {
             VLOG_ERR("Generic Netlink family '%s' does not exist. "
                      "The Open vSwitch kernel module is probably not loaded.",
-                     ODP_DATAPATH_FAMILY);
+                     OVS_DATAPATH_FAMILY);
         }
         if (!error) {
-            error = nl_lookup_genl_family(ODP_VPORT_FAMILY, &odp_vport_family);
+            error = nl_lookup_genl_family(OVS_VPORT_FAMILY, &ovs_vport_family);
         }
         if (!error) {
-            error = nl_lookup_genl_family(ODP_FLOW_FAMILY, &odp_flow_family);
+            error = nl_lookup_genl_family(OVS_FLOW_FAMILY, &ovs_flow_family);
         }
         if (!error) {
-            error = nl_lookup_genl_family(ODP_PACKET_FAMILY,
-                                          &odp_packet_family);
+            error = nl_lookup_genl_family(OVS_PACKET_FAMILY,
+                                          &ovs_packet_family);
         }
         if (!error) {
             error = nl_sock_create(NETLINK_GENERIC, &genl_sock);
@@ -1127,7 +1127,7 @@ dpif_linux_is_internal_device(const char *name)
                      name, strerror(error));
     }
 
-    return reply.type == ODP_VPORT_TYPE_INTERNAL;
+    return reply.type == OVS_VPORT_TYPE_INTERNAL;
 }
 
 int
@@ -1146,7 +1146,7 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
     odp_flow_key_from_flow(&key, &flow);
 
     ofpbuf_use_stack(&actions, &action, sizeof action);
-    nl_msg_put_u32(&actions, ODP_ACTION_ATTR_OUTPUT, port_no);
+    nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, port_no);
 
     return dpif_linux_execute__(dp_ifindex, key.data, key.size,
                                 actions.data, actions.size, &packet);
@@ -1172,7 +1172,7 @@ dpif_linux_port_changed(const struct rtnetlink_link_change *change,
     }
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_header" followed
+/* Parses the contents of 'buf', which contains a "struct ovs_header" followed
  * by Netlink attributes, into 'vport'.  Returns 0 if successful, otherwise a
  * positive errno value.
  *
@@ -1182,26 +1182,26 @@ static int
 dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
                              const struct ofpbuf *buf)
 {
-    static const struct nl_policy odp_vport_policy[] = {
-        [ODP_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32 },
-        [ODP_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
-        [ODP_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
-        [ODP_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
+    static const struct nl_policy ovs_vport_policy[] = {
+        [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32 },
+        [OVS_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
+        [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
+        [OVS_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
                                    .min_len = sizeof(struct rtnl_link_stats64),
                                    .max_len = sizeof(struct rtnl_link_stats64),
                                    .optional = true },
-        [ODP_VPORT_ATTR_ADDRESS] = { .type = NL_A_UNSPEC,
+        [OVS_VPORT_ATTR_ADDRESS] = { .type = NL_A_UNSPEC,
                                      .min_len = ETH_ADDR_LEN,
                                      .max_len = ETH_ADDR_LEN,
                                      .optional = true },
-        [ODP_VPORT_ATTR_MTU] = { .type = NL_A_U32, .optional = true },
-        [ODP_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
-        [ODP_VPORT_ATTR_IFINDEX] = { .type = NL_A_U32, .optional = true },
-        [ODP_VPORT_ATTR_IFLINK] = { .type = NL_A_U32, .optional = true },
+        [OVS_VPORT_ATTR_MTU] = { .type = NL_A_U32, .optional = true },
+        [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_VPORT_ATTR_IFINDEX] = { .type = NL_A_U32, .optional = true },
+        [OVS_VPORT_ATTR_IFLINK] = { .type = NL_A_U32, .optional = true },
     };
 
-    struct nlattr *a[ARRAY_SIZE(odp_vport_policy)];
-    struct odp_header *odp_header;
+    struct nlattr *a[ARRAY_SIZE(ovs_vport_policy)];
+    struct ovs_header *ovs_header;
     struct nlmsghdr *nlmsg;
     struct genlmsghdr *genl;
     struct ofpbuf b;
@@ -1211,94 +1211,94 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
-    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
-    if (!nlmsg || !genl || !odp_header
-        || nlmsg->nlmsg_type != odp_vport_family
-        || !nl_policy_parse(&b, 0, odp_vport_policy, a,
-                            ARRAY_SIZE(odp_vport_policy))) {
+    ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_vport_family
+        || !nl_policy_parse(&b, 0, ovs_vport_policy, a,
+                            ARRAY_SIZE(ovs_vport_policy))) {
         return EINVAL;
     }
 
     vport->cmd = genl->cmd;
-    vport->dp_ifindex = odp_header->dp_ifindex;
-    vport->port_no = nl_attr_get_u32(a[ODP_VPORT_ATTR_PORT_NO]);
-    vport->type = nl_attr_get_u32(a[ODP_VPORT_ATTR_TYPE]);
-    vport->name = nl_attr_get_string(a[ODP_VPORT_ATTR_NAME]);
-    if (a[ODP_VPORT_ATTR_STATS]) {
-        vport->stats = nl_attr_get(a[ODP_VPORT_ATTR_STATS]);
+    vport->dp_ifindex = ovs_header->dp_ifindex;
+    vport->port_no = nl_attr_get_u32(a[OVS_VPORT_ATTR_PORT_NO]);
+    vport->type = nl_attr_get_u32(a[OVS_VPORT_ATTR_TYPE]);
+    vport->name = nl_attr_get_string(a[OVS_VPORT_ATTR_NAME]);
+    if (a[OVS_VPORT_ATTR_STATS]) {
+        vport->stats = nl_attr_get(a[OVS_VPORT_ATTR_STATS]);
     }
-    if (a[ODP_VPORT_ATTR_ADDRESS]) {
-        vport->address = nl_attr_get(a[ODP_VPORT_ATTR_ADDRESS]);
+    if (a[OVS_VPORT_ATTR_ADDRESS]) {
+        vport->address = nl_attr_get(a[OVS_VPORT_ATTR_ADDRESS]);
     }
-    if (a[ODP_VPORT_ATTR_MTU]) {
-        vport->mtu = nl_attr_get_u32(a[ODP_VPORT_ATTR_MTU]);
+    if (a[OVS_VPORT_ATTR_MTU]) {
+        vport->mtu = nl_attr_get_u32(a[OVS_VPORT_ATTR_MTU]);
     } else {
         vport->mtu = INT_MAX;
     }
-    if (a[ODP_VPORT_ATTR_OPTIONS]) {
-        vport->options = nl_attr_get(a[ODP_VPORT_ATTR_OPTIONS]);
-        vport->options_len = nl_attr_get_size(a[ODP_VPORT_ATTR_OPTIONS]);
+    if (a[OVS_VPORT_ATTR_OPTIONS]) {
+        vport->options = nl_attr_get(a[OVS_VPORT_ATTR_OPTIONS]);
+        vport->options_len = nl_attr_get_size(a[OVS_VPORT_ATTR_OPTIONS]);
     }
-    if (a[ODP_VPORT_ATTR_IFINDEX]) {
-        vport->ifindex = nl_attr_get_u32(a[ODP_VPORT_ATTR_IFINDEX]);
+    if (a[OVS_VPORT_ATTR_IFINDEX]) {
+        vport->ifindex = nl_attr_get_u32(a[OVS_VPORT_ATTR_IFINDEX]);
     }
-    if (a[ODP_VPORT_ATTR_IFLINK]) {
-        vport->iflink = nl_attr_get_u32(a[ODP_VPORT_ATTR_IFLINK]);
+    if (a[OVS_VPORT_ATTR_IFLINK]) {
+        vport->iflink = nl_attr_get_u32(a[OVS_VPORT_ATTR_IFLINK]);
     }
     return 0;
 }
 
-/* Appends to 'buf' (which must initially be empty) a "struct odp_header"
+/* Appends to 'buf' (which must initially be empty) a "struct ovs_header"
  * followed by Netlink attributes corresponding to 'vport'. */
 static void
 dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
                            struct ofpbuf *buf)
 {
-    struct odp_header *odp_header;
+    struct ovs_header *ovs_header;
 
-    nl_msg_put_genlmsghdr(buf, 0, odp_vport_family, NLM_F_REQUEST | NLM_F_ECHO,
+    nl_msg_put_genlmsghdr(buf, 0, ovs_vport_family, NLM_F_REQUEST | NLM_F_ECHO,
                           vport->cmd, 1);
 
-    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
-    odp_header->dp_ifindex = vport->dp_ifindex;
+    ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
+    ovs_header->dp_ifindex = vport->dp_ifindex;
 
     if (vport->port_no != UINT32_MAX) {
-        nl_msg_put_u32(buf, ODP_VPORT_ATTR_PORT_NO, vport->port_no);
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_PORT_NO, vport->port_no);
     }
 
-    if (vport->type != ODP_VPORT_TYPE_UNSPEC) {
-        nl_msg_put_u32(buf, ODP_VPORT_ATTR_TYPE, vport->type);
+    if (vport->type != OVS_VPORT_TYPE_UNSPEC) {
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_TYPE, vport->type);
     }
 
     if (vport->name) {
-        nl_msg_put_string(buf, ODP_VPORT_ATTR_NAME, vport->name);
+        nl_msg_put_string(buf, OVS_VPORT_ATTR_NAME, vport->name);
     }
 
     if (vport->stats) {
-        nl_msg_put_unspec(buf, ODP_VPORT_ATTR_STATS,
+        nl_msg_put_unspec(buf, OVS_VPORT_ATTR_STATS,
                           vport->stats, sizeof *vport->stats);
     }
 
     if (vport->address) {
-        nl_msg_put_unspec(buf, ODP_VPORT_ATTR_ADDRESS,
+        nl_msg_put_unspec(buf, OVS_VPORT_ATTR_ADDRESS,
                           vport->address, ETH_ADDR_LEN);
     }
 
     if (vport->mtu && vport->mtu != INT_MAX) {
-        nl_msg_put_u32(buf, ODP_VPORT_ATTR_MTU, vport->mtu);
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_MTU, vport->mtu);
     }
 
     if (vport->options) {
-        nl_msg_put_nested(buf, ODP_VPORT_ATTR_OPTIONS,
+        nl_msg_put_nested(buf, OVS_VPORT_ATTR_OPTIONS,
                           vport->options, vport->options_len);
     }
 
     if (vport->ifindex) {
-        nl_msg_put_u32(buf, ODP_VPORT_ATTR_IFINDEX, vport->ifindex);
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_IFINDEX, vport->ifindex);
     }
 
     if (vport->iflink) {
-        nl_msg_put_u32(buf, ODP_VPORT_ATTR_IFLINK, vport->iflink);
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_IFLINK, vport->iflink);
     }
 }
 
@@ -1313,7 +1313,7 @@ dpif_linux_vport_init(struct dpif_linux_vport *vport)
 /* Executes 'request' in the kernel datapath.  If the command fails, returns a
  * positive errno value.  Otherwise, if 'reply' and 'bufp' are null, returns 0
  * without doing anything else.  If 'reply' and 'bufp' are nonnull, then the
- * result of the command is expected to be an odp_vport also, which is decoded
+ * result of the command is expected to be an ovs_vport also, which is decoded
  * and stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the
  * reply is no longer needed ('reply' will contain pointers into '*bufp'). */
 int
@@ -1363,13 +1363,13 @@ dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
     struct dpif_linux_vport request;
 
     dpif_linux_vport_init(&request);
-    request.cmd = ODP_VPORT_CMD_GET;
+    request.cmd = OVS_VPORT_CMD_GET;
     request.name = name;
 
     return dpif_linux_vport_transact(&request, reply, bufp);
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_header" followed
+/* Parses the contents of 'buf', which contains a "struct ovs_header" followed
  * by Netlink attributes, into 'dp'.  Returns 0 if successful, otherwise a
  * positive errno value.
  *
@@ -1378,19 +1378,19 @@ dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
 static int
 dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
 {
-    static const struct nl_policy odp_datapath_policy[] = {
-        [ODP_DP_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
-        [ODP_DP_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                .min_len = sizeof(struct odp_stats),
-                                .max_len = sizeof(struct odp_stats),
+    static const struct nl_policy ovs_datapath_policy[] = {
+        [OVS_DP_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
+        [OVS_DP_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                .min_len = sizeof(struct ovs_dp_stats),
+                                .max_len = sizeof(struct ovs_dp_stats),
                                 .optional = true },
-        [ODP_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
-        [ODP_DP_ATTR_SAMPLING] = { .type = NL_A_U32, .optional = true },
-        [ODP_DP_ATTR_MCGROUPS] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
+        [OVS_DP_ATTR_SAMPLING] = { .type = NL_A_U32, .optional = true },
+        [OVS_DP_ATTR_MCGROUPS] = { .type = NL_A_NESTED, .optional = true },
     };
 
-    struct nlattr *a[ARRAY_SIZE(odp_datapath_policy)];
-    struct odp_header *odp_header;
+    struct nlattr *a[ARRAY_SIZE(ovs_datapath_policy)];
+    struct ovs_header *ovs_header;
     struct nlmsghdr *nlmsg;
     struct genlmsghdr *genl;
     struct ofpbuf b;
@@ -1400,55 +1400,55 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
     ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
-    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
-    if (!nlmsg || !genl || !odp_header
-        || nlmsg->nlmsg_type != odp_datapath_family
-        || !nl_policy_parse(&b, 0, odp_datapath_policy, a,
-                            ARRAY_SIZE(odp_datapath_policy))) {
+    ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_datapath_family
+        || !nl_policy_parse(&b, 0, ovs_datapath_policy, a,
+                            ARRAY_SIZE(ovs_datapath_policy))) {
         return EINVAL;
     }
 
     dp->cmd = genl->cmd;
-    dp->dp_ifindex = odp_header->dp_ifindex;
-    dp->name = nl_attr_get_string(a[ODP_DP_ATTR_NAME]);
-    if (a[ODP_DP_ATTR_STATS]) {
+    dp->dp_ifindex = ovs_header->dp_ifindex;
+    dp->name = nl_attr_get_string(a[OVS_DP_ATTR_NAME]);
+    if (a[OVS_DP_ATTR_STATS]) {
         /* Can't use structure assignment because Netlink doesn't ensure
          * sufficient alignment for 64-bit members. */
-        memcpy(&dp->stats, nl_attr_get(a[ODP_DP_ATTR_STATS]),
+        memcpy(&dp->stats, nl_attr_get(a[OVS_DP_ATTR_STATS]),
                sizeof dp->stats);
     }
-    if (a[ODP_DP_ATTR_IPV4_FRAGS]) {
-        dp->ipv4_frags = nl_attr_get_u32(a[ODP_DP_ATTR_IPV4_FRAGS]);
+    if (a[OVS_DP_ATTR_IPV4_FRAGS]) {
+        dp->ipv4_frags = nl_attr_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]);
     }
-    if (a[ODP_DP_ATTR_SAMPLING]) {
-        dp->sampling = nl_attr_get(a[ODP_DP_ATTR_SAMPLING]);
+    if (a[OVS_DP_ATTR_SAMPLING]) {
+        dp->sampling = nl_attr_get(a[OVS_DP_ATTR_SAMPLING]);
     }
 
-    if (a[ODP_DP_ATTR_MCGROUPS]) {
-        static const struct nl_policy odp_mcgroup_policy[] = {
-            [ODP_PACKET_CMD_MISS] = { .type = NL_A_U32, .optional = true },
-            [ODP_PACKET_CMD_ACTION] = { .type = NL_A_U32, .optional = true },
-            [ODP_PACKET_CMD_SAMPLE] = { .type = NL_A_U32, .optional = true },
+    if (a[OVS_DP_ATTR_MCGROUPS]) {
+        static const struct nl_policy ovs_mcgroup_policy[] = {
+            [OVS_PACKET_CMD_MISS] = { .type = NL_A_U32, .optional = true },
+            [OVS_PACKET_CMD_ACTION] = { .type = NL_A_U32, .optional = true },
+            [OVS_PACKET_CMD_SAMPLE] = { .type = NL_A_U32, .optional = true },
         };
 
-        struct nlattr *mcgroups[ARRAY_SIZE(odp_mcgroup_policy)];
+        struct nlattr *mcgroups[ARRAY_SIZE(ovs_mcgroup_policy)];
 
-        if (!nl_parse_nested(a[ODP_DP_ATTR_MCGROUPS], odp_mcgroup_policy,
-                             mcgroups, ARRAY_SIZE(odp_mcgroup_policy))) {
+        if (!nl_parse_nested(a[OVS_DP_ATTR_MCGROUPS], ovs_mcgroup_policy,
+                             mcgroups, ARRAY_SIZE(ovs_mcgroup_policy))) {
             return EINVAL;
         }
 
-        if (mcgroups[ODP_PACKET_CMD_MISS]) {
+        if (mcgroups[OVS_PACKET_CMD_MISS]) {
             dp->mcgroups[DPIF_UC_MISS]
-                = nl_attr_get_u32(mcgroups[ODP_PACKET_CMD_MISS]);
+                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_MISS]);
         }
-        if (mcgroups[ODP_PACKET_CMD_ACTION]) {
+        if (mcgroups[OVS_PACKET_CMD_ACTION]) {
             dp->mcgroups[DPIF_UC_ACTION]
-                = nl_attr_get_u32(mcgroups[ODP_PACKET_CMD_ACTION]);
+                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_ACTION]);
         }
-        if (mcgroups[ODP_PACKET_CMD_SAMPLE]) {
+        if (mcgroups[OVS_PACKET_CMD_SAMPLE]) {
             dp->mcgroups[DPIF_UC_SAMPLE]
-                = nl_attr_get_u32(mcgroups[ODP_PACKET_CMD_SAMPLE]);
+                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_SAMPLE]);
         }
     }
 
@@ -1459,26 +1459,26 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
 static void
 dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
 {
-    struct odp_header *odp_header;
+    struct ovs_header *ovs_header;
 
-    nl_msg_put_genlmsghdr(buf, 0, odp_datapath_family,
+    nl_msg_put_genlmsghdr(buf, 0, ovs_datapath_family,
                           NLM_F_REQUEST | NLM_F_ECHO, dp->cmd, 1);
 
-    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
-    odp_header->dp_ifindex = dp->dp_ifindex;
+    ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
+    ovs_header->dp_ifindex = dp->dp_ifindex;
 
     if (dp->name) {
-        nl_msg_put_string(buf, ODP_DP_ATTR_NAME, dp->name);
+        nl_msg_put_string(buf, OVS_DP_ATTR_NAME, dp->name);
     }
 
-    /* Skip ODP_DP_ATTR_STATS since we never have a reason to serialize it. */
+    /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
 
     if (dp->ipv4_frags) {
-        nl_msg_put_u32(buf, ODP_DP_ATTR_IPV4_FRAGS, dp->ipv4_frags);
+        nl_msg_put_u32(buf, OVS_DP_ATTR_IPV4_FRAGS, dp->ipv4_frags);
     }
 
     if (dp->sampling) {
-        nl_msg_put_u32(buf, ODP_DP_ATTR_SAMPLING, *dp->sampling);
+        nl_msg_put_u32(buf, OVS_DP_ATTR_SAMPLING, *dp->sampling);
     }
 }
 
@@ -1496,7 +1496,7 @@ dpif_linux_dp_dump_start(struct nl_dump *dump)
     struct ofpbuf *buf;
 
     dpif_linux_dp_init(&request);
-    request.cmd = ODP_DP_CMD_GET;
+    request.cmd = OVS_DP_CMD_GET;
 
     buf = ofpbuf_new(1024);
     dpif_linux_dp_to_ofpbuf(&request, buf);
@@ -1548,13 +1548,13 @@ dpif_linux_dp_get(const struct dpif *dpif_, struct dpif_linux_dp *reply,
     struct dpif_linux_dp request;
 
     dpif_linux_dp_init(&request);
-    request.cmd = ODP_DP_CMD_GET;
+    request.cmd = OVS_DP_CMD_GET;
     request.dp_ifindex = dpif->dp_ifindex;
 
     return dpif_linux_dp_transact(&request, reply, bufp);
 }
 
-/* Parses the contents of 'buf', which contains a "struct odp_header" followed
+/* Parses the contents of 'buf', which contains a "struct ovs_header" followed
  * by Netlink attributes, into 'flow'.  Returns 0 if successful, otherwise a
  * positive errno value.
  *
@@ -1564,20 +1564,20 @@ static int
 dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
                             const struct ofpbuf *buf)
 {
-    static const struct nl_policy odp_flow_policy[] = {
-        [ODP_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
-        [ODP_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
-        [ODP_FLOW_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                  .min_len = sizeof(struct odp_flow_stats),
-                                  .max_len = sizeof(struct odp_flow_stats),
+    static const struct nl_policy ovs_flow_policy[] = {
+        [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
+        [OVS_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_FLOW_ATTR_STATS] = { .type = NL_A_UNSPEC,
+                                  .min_len = sizeof(struct ovs_flow_stats),
+                                  .max_len = sizeof(struct ovs_flow_stats),
                                   .optional = true },
-        [ODP_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
-        [ODP_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
-        /* The kernel never uses ODP_FLOW_ATTR_CLEAR. */
+        [OVS_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
+        [OVS_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
+        /* The kernel never uses OVS_FLOW_ATTR_CLEAR. */
     };
 
-    struct nlattr *a[ARRAY_SIZE(odp_flow_policy)];
-    struct odp_header *odp_header;
+    struct nlattr *a[ARRAY_SIZE(ovs_flow_policy)];
+    struct ovs_header *ovs_header;
     struct nlmsghdr *nlmsg;
     struct genlmsghdr *genl;
     struct ofpbuf b;
@@ -1587,55 +1587,55 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
-    odp_header = ofpbuf_try_pull(&b, sizeof *odp_header);
-    if (!nlmsg || !genl || !odp_header
-        || nlmsg->nlmsg_type != odp_flow_family
-        || !nl_policy_parse(&b, 0, odp_flow_policy, a,
-                            ARRAY_SIZE(odp_flow_policy))) {
+    ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_flow_family
+        || !nl_policy_parse(&b, 0, ovs_flow_policy, a,
+                            ARRAY_SIZE(ovs_flow_policy))) {
         return EINVAL;
     }
 
     flow->nlmsg_flags = nlmsg->nlmsg_flags;
-    flow->dp_ifindex = odp_header->dp_ifindex;
-    flow->key = nl_attr_get(a[ODP_FLOW_ATTR_KEY]);
-    flow->key_len = nl_attr_get_size(a[ODP_FLOW_ATTR_KEY]);
-    if (a[ODP_FLOW_ATTR_ACTIONS]) {
-        flow->actions = nl_attr_get(a[ODP_FLOW_ATTR_ACTIONS]);
-        flow->actions_len = nl_attr_get_size(a[ODP_FLOW_ATTR_ACTIONS]);
+    flow->dp_ifindex = ovs_header->dp_ifindex;
+    flow->key = nl_attr_get(a[OVS_FLOW_ATTR_KEY]);
+    flow->key_len = nl_attr_get_size(a[OVS_FLOW_ATTR_KEY]);
+    if (a[OVS_FLOW_ATTR_ACTIONS]) {
+        flow->actions = nl_attr_get(a[OVS_FLOW_ATTR_ACTIONS]);
+        flow->actions_len = nl_attr_get_size(a[OVS_FLOW_ATTR_ACTIONS]);
     }
-    if (a[ODP_FLOW_ATTR_STATS]) {
-        flow->stats = nl_attr_get(a[ODP_FLOW_ATTR_STATS]);
+    if (a[OVS_FLOW_ATTR_STATS]) {
+        flow->stats = nl_attr_get(a[OVS_FLOW_ATTR_STATS]);
     }
-    if (a[ODP_FLOW_ATTR_TCP_FLAGS]) {
-        flow->tcp_flags = nl_attr_get(a[ODP_FLOW_ATTR_TCP_FLAGS]);
+    if (a[OVS_FLOW_ATTR_TCP_FLAGS]) {
+        flow->tcp_flags = nl_attr_get(a[OVS_FLOW_ATTR_TCP_FLAGS]);
     }
-    if (a[ODP_FLOW_ATTR_USED]) {
-        flow->used = nl_attr_get(a[ODP_FLOW_ATTR_USED]);
+    if (a[OVS_FLOW_ATTR_USED]) {
+        flow->used = nl_attr_get(a[OVS_FLOW_ATTR_USED]);
     }
     return 0;
 }
 
-/* Appends to 'buf' (which must initially be empty) a "struct odp_header"
+/* Appends to 'buf' (which must initially be empty) a "struct ovs_header"
  * followed by Netlink attributes corresponding to 'flow'. */
 static void
 dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
                           struct ofpbuf *buf)
 {
-    struct odp_header *odp_header;
+    struct ovs_header *ovs_header;
 
-    nl_msg_put_genlmsghdr(buf, 0, odp_flow_family,
+    nl_msg_put_genlmsghdr(buf, 0, ovs_flow_family,
                           NLM_F_REQUEST | NLM_F_ECHO | flow->nlmsg_flags,
                           flow->cmd, 1);
 
-    odp_header = ofpbuf_put_uninit(buf, sizeof *odp_header);
-    odp_header->dp_ifindex = flow->dp_ifindex;
+    ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
+    ovs_header->dp_ifindex = flow->dp_ifindex;
 
     if (flow->key_len) {
-        nl_msg_put_unspec(buf, ODP_FLOW_ATTR_KEY, flow->key, flow->key_len);
+        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY, flow->key, flow->key_len);
     }
 
     if (flow->actions || flow->actions_len) {
-        nl_msg_put_unspec(buf, ODP_FLOW_ATTR_ACTIONS,
+        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,
                           flow->actions, flow->actions_len);
     }
 
@@ -1645,7 +1645,7 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
     assert(!flow->used);
 
     if (flow->clear) {
-        nl_msg_put_flag(buf, ODP_FLOW_ATTR_CLEAR);
+        nl_msg_put_flag(buf, OVS_FLOW_ATTR_CLEAR);
     }
 }
 

@@ -85,9 +85,9 @@ static void patch_exit(void)
 	kfree(peer_table);
 }
 
-static const struct nla_policy patch_policy[ODP_PATCH_ATTR_MAX + 1] = {
+static const struct nla_policy patch_policy[OVS_PATCH_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
-	[ODP_PATCH_ATTR_PEER] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
+	[OVS_PATCH_ATTR_PEER] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
 #endif
 };
 
@@ -95,22 +95,22 @@ static int patch_set_config(struct vport *vport, const struct nlattr *options,
 			    struct patch_config *patchconf)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct nlattr *a[ODP_PATCH_ATTR_MAX + 1];
+	struct nlattr *a[OVS_PATCH_ATTR_MAX + 1];
 	const char *peer_name;
 	int err;
 
 	if (!options)
 		return -EINVAL;
 
-	err = nla_parse_nested(a, ODP_PATCH_ATTR_MAX, options, patch_policy);
+	err = nla_parse_nested(a, OVS_PATCH_ATTR_MAX, options, patch_policy);
 	if (err)
 		return err;
 
-	if (!a[ODP_PATCH_ATTR_PEER] ||
-	    CHECK_NUL_STRING(a[ODP_PATCH_ATTR_PEER], IFNAMSIZ - 1))
+	if (!a[OVS_PATCH_ATTR_PEER] ||
+	    CHECK_NUL_STRING(a[OVS_PATCH_ATTR_PEER], IFNAMSIZ - 1))
 		return -EINVAL;
 
-	peer_name = nla_data(a[ODP_PATCH_ATTR_PEER]);
+	peer_name = nla_data(a[OVS_PATCH_ATTR_PEER]);
 	if (!strcmp(patch_vport->name, peer_name))
 		return -EINVAL;
 
@@ -267,7 +267,7 @@ static int patch_get_options(const struct vport *vport, struct sk_buff *skb)
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 	struct patch_config *patchconf = rcu_dereference_rtnl(patch_vport->patchconf);
 
-	return nla_put_string(skb, ODP_PATCH_ATTR_PEER, patchconf->peer_name);
+	return nla_put_string(skb, OVS_PATCH_ATTR_PEER, patchconf->peer_name);
 }
 
 static int patch_send(struct vport *vport, struct sk_buff *skb)
@@ -288,7 +288,7 @@ static int patch_send(struct vport *vport, struct sk_buff *skb)
 }
 
 const struct vport_ops patch_vport_ops = {
-	.type		= ODP_VPORT_TYPE_PATCH,
+	.type		= OVS_VPORT_TYPE_PATCH,
 	.flags		= VPORT_F_GEN_STATS,
 	.init		= patch_init,
 	.exit		= patch_exit,

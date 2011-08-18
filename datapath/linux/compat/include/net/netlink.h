@@ -7,9 +7,9 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 /* Before v2.6.29, a NLA_NESTED attribute, if it was present, was not allowed
  * to be empty.  However, OVS depends on the ability to accept empty
- * attributes.  For example, a present but empty ODP_FLOW_ATTR_ACTIONS on
- * ODP_FLOW_CMD_SET replaces the existing set of actions by an empty "drop"
- * action, whereas a missing ODP_FLOW_ATTR_ACTIONS leaves the existing
+ * attributes.  For example, a present but empty OVS_FLOW_ATTR_ACTIONS on
+ * OVS_FLOW_CMD_SET replaces the existing set of actions by an empty "drop"
+ * action, whereas a missing OVS_FLOW_ATTR_ACTIONS leaves the existing
  * actions, if any, unchanged.
  *
  * NLA_NESTED is different from NLA_UNSPEC in only two ways:

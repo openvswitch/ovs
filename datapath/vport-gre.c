@@ -388,7 +388,7 @@ static void gre_exit(void)
 }
 
 const struct vport_ops gre_vport_ops = {
-	.type		= ODP_VPORT_TYPE_GRE,
+	.type		= OVS_VPORT_TYPE_GRE,
 	.flags		= VPORT_F_GEN_STATS | VPORT_F_TUN_ID,
 	.init		= gre_init,
 	.exit		= gre_exit,

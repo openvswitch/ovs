@@ -272,7 +272,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 }
 
 const struct vport_ops internal_vport_ops = {
-	.type		= ODP_VPORT_TYPE_INTERNAL,
+	.type		= OVS_VPORT_TYPE_INTERNAL,
 	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,

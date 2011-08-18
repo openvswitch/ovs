@@ -38,7 +38,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		break;
 
 	case NETDEV_CHANGENAME:
-		if (vport->port_no != ODPP_LOCAL) {
+		if (vport->port_no != OVSP_LOCAL) {
 			dp_sysfs_del_if(vport);
 			dp_sysfs_add_if(vport);
 		}

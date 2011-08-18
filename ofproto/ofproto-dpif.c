@@ -660,7 +660,7 @@ static void
 get_tables(struct ofproto *ofproto_, struct ofp_table_stats *ots)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct odp_stats s;
+    struct ovs_dp_stats s;
 
     strcpy(ots->name, "classifier");
 
@@ -1654,7 +1654,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (connmgr_msg_in_hook(ofproto->up.connmgr, &flow, upcall->packet)) {
-        send_packet(ofproto, ODPP_LOCAL, upcall->packet);
+        send_packet(ofproto, OVSP_LOCAL, upcall->packet);
     }
 
     facet = facet_lookup_valid(ofproto, &flow);
@@ -1817,7 +1817,7 @@ update_stats(struct ofproto_dpif *p)
 
             ds_init(&s);
             odp_flow_key_format(key, key_len, &s);
-            VLOG_WARN_RL(&rl, "failed to convert ODP flow key to flow: %s",
+            VLOG_WARN_RL(&rl, "failed to convert datapath flow key to flow: %s",
                          ds_cstr(&s));
             ds_destroy(&s);
 
@@ -2059,7 +2059,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
                     struct ofpbuf *packet)
 {
     if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
-        && odp_actions->nla_type == ODP_ACTION_ATTR_USERSPACE) {
+        && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE) {
         /* As an optimization, avoid a round-trip from userspace to kernel to
          * userspace.  This also avoids possibly filling up kernel packet
          * buffers along the way. */
@@ -2101,8 +2101,8 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
  * applying flow_extract() to 'packet' would yield the same flow as
  * 'facet->flow'.
  *
- * 'facet' must have accurately composed ODP actions; that is, it must not be
- * in need of revalidation.
+ * 'facet' must have accurately composed datapath actions; that is, it must
+ * not be in need of revalidation.
  *
  * Takes ownership of 'packet'. */
 static void
@@ -2138,7 +2138,7 @@ facet_remove(struct ofproto_dpif *ofproto, struct facet *facet)
     facet_free(facet);
 }
 
-/* Composes the ODP actions for 'facet' based on its rule's actions. */
+/* Composes the datapath actions for 'facet' based on its rule's actions. */
 static void
 facet_make_actions(struct ofproto_dpif *p, struct facet *facet,
                    const struct ofpbuf *packet)
@@ -2264,7 +2264,7 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
         struct ofport_dpif *port;
 
         switch (nl_attr_type(a)) {
-        case ODP_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_OUTPUT:
             port = get_odp_port(ofproto, nl_attr_get_u32(a));
             if (port && port->bundle && port->bundle->bond) {
                 bond_account(port->bundle->bond, &facet->flow,
@@ -2272,11 +2272,11 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
             }
             break;
 
-        case ODP_ACTION_ATTR_STRIP_VLAN:
+        case OVS_ACTION_ATTR_STRIP_VLAN:
             vlan_tci = htons(0);
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_SET_DL_TCI:
             vlan_tci = nl_attr_get_be16(a);
             break;
         }
@@ -2440,7 +2440,7 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
         return false;
     }
 
-    /* Calculate new ODP actions.
+    /* Calculate new datapath actions.
      *
      * We do not modify any 'facet' state yet, because we might need to, e.g.,
      * emit a NetFlow expiration and, if so, we need to have the old state
@@ -2452,8 +2452,8 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
                        || memcmp(facet->actions, odp_actions->data,
                                  facet->actions_len));
 
-    /* If the ODP actions changed or the installability changed, then we need
-     * to talk to the datapath. */
+    /* If the datapath actions changed or the installability changed,
+     * then we need to talk to the datapath. */
     if (actions_changed || ctx.may_set_up_flow != facet->installed) {
         if (ctx.may_set_up_flow) {
             struct dpif_flow_stats stats;
@@ -2791,7 +2791,7 @@ send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
     odp_flow_key_from_flow(&key, &flow);
 
     ofpbuf_init(&odp_actions, 32);
-    nl_msg_put_u32(&odp_actions, ODP_ACTION_ATTR_OUTPUT, odp_port);
+    nl_msg_put_u32(&odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
     error = dpif_execute(ofproto->dpif,
                          key.data, key.size,
                          odp_actions.data, odp_actions.size,
@@ -2805,7 +2805,7 @@ send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
     return error;
 }
 
-/* OpenFlow to ODP action translation. */
+/* OpenFlow to datapath action translation. */
 
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
@@ -2819,63 +2819,63 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
     struct ofpbuf *odp_actions = ctx->odp_actions;
 
     if (base->tun_id != flow->tun_id) {
-        nl_msg_put_be64(odp_actions, ODP_ACTION_ATTR_SET_TUNNEL, flow->tun_id);
+        nl_msg_put_be64(odp_actions, OVS_ACTION_ATTR_SET_TUNNEL, flow->tun_id);
         base->tun_id = flow->tun_id;
     }
 
     if (base->nw_src != flow->nw_src) {
-        nl_msg_put_be32(odp_actions, ODP_ACTION_ATTR_SET_NW_SRC, flow->nw_src);
+        nl_msg_put_be32(odp_actions, OVS_ACTION_ATTR_SET_NW_SRC, flow->nw_src);
         base->nw_src = flow->nw_src;
     }
 
     if (base->nw_dst != flow->nw_dst) {
-        nl_msg_put_be32(odp_actions, ODP_ACTION_ATTR_SET_NW_DST, flow->nw_dst);
+        nl_msg_put_be32(odp_actions, OVS_ACTION_ATTR_SET_NW_DST, flow->nw_dst);
         base->nw_dst = flow->nw_dst;
     }
 
     if (base->nw_tos != flow->nw_tos) {
-        nl_msg_put_u8(odp_actions, ODP_ACTION_ATTR_SET_NW_TOS, flow->nw_tos);
+        nl_msg_put_u8(odp_actions, OVS_ACTION_ATTR_SET_NW_TOS, flow->nw_tos);
         base->nw_tos = flow->nw_tos;
     }
 
     if (base->vlan_tci != flow->vlan_tci) {
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-            nl_msg_put_flag(odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
+            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_STRIP_VLAN);
         } else {
-            nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_DL_TCI,
+            nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_SET_DL_TCI,
                             flow->vlan_tci & ~htons(VLAN_CFI));
         }
         base->vlan_tci = flow->vlan_tci;
     }
 
     if (base->tp_src != flow->tp_src) {
-        nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_TP_SRC, flow->tp_src);
+        nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_SET_TP_SRC, flow->tp_src);
         base->tp_src = flow->tp_src;
     }
 
     if (base->tp_dst != flow->tp_dst) {
-        nl_msg_put_be16(odp_actions, ODP_ACTION_ATTR_SET_TP_DST, flow->tp_dst);
+        nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_SET_TP_DST, flow->tp_dst);
         base->tp_dst = flow->tp_dst;
     }
 
     if (!eth_addr_equals(base->dl_src, flow->dl_src)) {
-        nl_msg_put_unspec(odp_actions, ODP_ACTION_ATTR_SET_DL_SRC,
+        nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_SET_DL_SRC,
                           flow->dl_src, ETH_ADDR_LEN);
         memcpy(base->dl_src, flow->dl_src, ETH_ADDR_LEN);
     }
 
     if (!eth_addr_equals(base->dl_dst, flow->dl_dst)) {
-        nl_msg_put_unspec(odp_actions, ODP_ACTION_ATTR_SET_DL_DST,
+        nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_SET_DL_DST,
                           flow->dl_dst, ETH_ADDR_LEN);
         memcpy(base->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
     }
 
     if (ctx->base_priority != ctx->priority) {
         if (ctx->priority) {
-            nl_msg_put_u32(odp_actions, ODP_ACTION_ATTR_SET_PRIORITY,
+            nl_msg_put_u32(odp_actions, OVS_ACTION_ATTR_SET_PRIORITY,
                            ctx->priority);
         } else {
-            nl_msg_put_flag(odp_actions, ODP_ACTION_ATTR_POP_PRIORITY);
+            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_PRIORITY);
         }
         ctx->base_priority = ctx->priority;
     }
@@ -2901,7 +2901,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
     }
 
     commit_odp_actions(ctx);
-    nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_OUTPUT, odp_port);
+    nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
     ctx->nf_output_iface = ofp_port;
 }
 
@@ -2968,7 +2968,7 @@ flood_packets(struct action_xlate_ctx *ctx, ovs_be32 mask)
     HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
         uint16_t ofp_port = ofport->up.ofp_port;
         if (ofp_port != ctx->flow.in_port && !(ofport->up.opp.config & mask)) {
-            nl_msg_put_u32(ctx->odp_actions, ODP_ACTION_ATTR_OUTPUT,
+            nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT,
                            ofport->odp_port);
         }
     }
@@ -3002,7 +3002,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_CONTROLLER:
         commit_odp_actions(ctx);
-        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_USERSPACE, max_len);
+        nl_msg_put_u64(ctx->odp_actions, OVS_ACTION_ATTR_USERSPACE, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, OFPP_LOCAL);
@@ -3062,14 +3062,14 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
         return;
     }
 
-    /* Figure out ODP output port. */
+    /* Figure out datapath output port. */
     ofp_port = ntohs(oae->port);
     if (ofp_port == OFPP_IN_PORT) {
         ofp_port = ctx->flow.in_port;
     }
     odp_port = ofp_port_to_odp_port(ofp_port);
 
-    /* Add ODP actions. */
+    /* Add datapath actions. */
     ctx_priority = ctx->priority;
     ctx->priority = priority;
     add_output_action(ctx, odp_port);
@@ -3628,7 +3628,7 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
             continue;
         }
         nl_msg_put_u32(ctx->odp_actions,
-                       ODP_ACTION_ATTR_OUTPUT, dst->port->odp_port);
+                       OVS_ACTION_ATTR_OUTPUT, dst->port->odp_port);
     }
 
     /* Then output the rest. */
@@ -3639,18 +3639,18 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
         }
         if (dst->vlan != cur_vlan) {
             if (dst->vlan == OFP_VLAN_NONE) {
-                nl_msg_put_flag(ctx->odp_actions, ODP_ACTION_ATTR_STRIP_VLAN);
+                nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_STRIP_VLAN);
             } else {
                 ovs_be16 tci;
                 tci = htons(dst->vlan & VLAN_VID_MASK);
                 tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
                 nl_msg_put_be16(ctx->odp_actions,
-                                ODP_ACTION_ATTR_SET_DL_TCI, tci);
+                                OVS_ACTION_ATTR_SET_DL_TCI, tci);
             }
             cur_vlan = dst->vlan;
         }
         nl_msg_put_u32(ctx->odp_actions,
-                       ODP_ACTION_ATTR_OUTPUT, dst->port->odp_port);
+                       OVS_ACTION_ATTR_OUTPUT, dst->port->odp_port);
     }
 
     dst_set_free(&set);
@@ -4078,7 +4078,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         /* ofproto/trace dpname flow */
         int error;
 
-        /* Convert string to ODP key. */
+        /* Convert string to datapath key. */
         ofpbuf_init(&odp_key, 0);
         error = odp_flow_key_from_string(arg1, &odp_key);
         if (error) {

@@ -27,20 +27,20 @@ struct dpif_linux_vport {
     /* Generic Netlink header. */
     uint8_t cmd;
 
-    /* odp_vport header. */
+    /* ovs_vport header. */
     int dp_ifindex;
     uint32_t port_no;                      /* UINT32_MAX if unknown. */
-    enum odp_vport_type type;
+    enum ovs_vport_type type;
 
     /* Attributes. */
-    const char *name;                      /* ODP_VPORT_ATTR_NAME. */
-    const struct rtnl_link_stats64 *stats; /* ODP_VPORT_ATTR_STATS. */
-    const uint8_t *address;                /* ODP_VPORT_ATTR_ADDRESS. */
-    int mtu;                               /* ODP_VPORT_ATTR_MTU. */
-    const struct nlattr *options;          /* ODP_VPORT_ATTR_OPTIONS. */
+    const char *name;                      /* OVS_VPORT_ATTR_NAME. */
+    const struct rtnl_link_stats64 *stats; /* OVS_VPORT_ATTR_STATS. */
+    const uint8_t *address;                /* OVS_VPORT_ATTR_ADDRESS. */
+    int mtu;                               /* OVS_VPORT_ATTR_MTU. */
+    const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
-    int ifindex;                           /* ODP_VPORT_ATTR_IFINDEX. */
-    int iflink;                            /* ODP_VPORT_ATTR_IFLINK. */
+    int ifindex;                           /* OVS_VPORT_ATTR_IFINDEX. */
+    int iflink;                            /* OVS_VPORT_ATTR_IFLINK. */
 };
 
 void dpif_linux_vport_init(struct dpif_linux_vport *);

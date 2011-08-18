@@ -64,13 +64,13 @@ struct dp_stats_percpu {
  * @drop_frags: Drop all IP fragments if nonzero.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table.  Protected by genl_lock and RCU.
- * @ports: Map from port number to &struct vport.  %ODPP_LOCAL port
+ * @ports: Map from port number to &struct vport.  %OVSP_LOCAL port
  * always exists, other ports may be %NULL.  Protected by RTNL and RCU.
  * @port_list: List of all ports in @ports in arbitrary order.  RTNL required
  * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %ODP_PACKET_CMD_SAMPLE multicast group, e.g. (@sflow_probability/UINT_MAX)
+ * %OVS_PACKET_CMD_SAMPLE multicast group, e.g. (@sflow_probability/UINT_MAX)
  * is the probability of sampling a given packet.
  *
  * Context: See the comment on locking at the top of datapath.c for additional
@@ -127,11 +127,11 @@ struct ovs_skb_cb {
 
 /**
  * struct dp_upcall - metadata to include with a packet to send to userspace
- * @cmd: One of %ODP_PACKET_CMD_*.
- * @key: Becomes %ODP_PACKET_ATTR_KEY.  Must be nonnull.
- * @userdata: Becomes %ODP_PACKET_ATTR_USERDATA if nonzero.
- * @sample_pool: Becomes %ODP_PACKET_ATTR_SAMPLE_POOL if nonzero.
- * @actions: Becomes %ODP_PACKET_ATTR_ACTIONS if nonnull.
+ * @cmd: One of %OVS_PACKET_CMD_*.
+ * @key: Becomes %OVS_PACKET_ATTR_KEY.  Must be nonnull.
+ * @userdata: Becomes %OVS_PACKET_ATTR_USERDATA if nonzero.
+ * @sample_pool: Becomes %OVS_PACKET_ATTR_SAMPLE_POOL if nonzero.
+ * @actions: Becomes %OVS_PACKET_ATTR_ACTIONS if nonnull.
  * @actions_len: Number of bytes in @actions.
 */
 struct dp_upcall_info {

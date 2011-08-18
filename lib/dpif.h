@@ -58,7 +58,7 @@ const char *dpif_base_name(const struct dpif *);
 
 int dpif_delete(struct dpif *);
 
-int dpif_get_dp_stats(const struct dpif *, struct odp_stats *);
+int dpif_get_dp_stats(const struct dpif *, struct ovs_dp_stats *);
 int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
 int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
@@ -155,7 +155,7 @@ int dpif_execute(struct dpif *,
 
 enum dpif_upcall_type {
     DPIF_UC_MISS,               /* Miss in flow table. */
-    DPIF_UC_ACTION,             /* ODP_ACTION_ATTR_USERSPACE action. */
+    DPIF_UC_ACTION,             /* OVS_ACTION_ATTR_USERSPACE action. */
     DPIF_UC_SAMPLE,             /* Packet sampling. */
     DPIF_N_UC_TYPES
 };
@@ -177,7 +177,7 @@ struct dpif_upcall {
     size_t key_len;             /* Length of 'key' in bytes. */
 
     /* DPIF_UC_ACTION only. */
-    uint64_t userdata;          /* Argument to ODP_ACTION_ATTR_USERSPACE. */
+    uint64_t userdata;          /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 
     /* DPIF_UC_SAMPLE only. */
     uint32_t sample_pool;       /* # of sampling candidate packets so far. */

@@ -25,7 +25,7 @@ void netdev_vport_register(void);
 
 const struct ofpbuf *netdev_vport_get_options(const struct netdev *);
 
-enum odp_vport_type netdev_vport_get_vport_type(const struct netdev *);
+enum ovs_vport_type netdev_vport_get_vport_type(const struct netdev *);
 const char *netdev_vport_get_netdev_type(const struct dpif_linux_vport *);
 
 int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);

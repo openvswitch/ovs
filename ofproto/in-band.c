@@ -267,8 +267,8 @@ in_band_rule_check(const struct flow *flow,
         unsigned int left;
 
         NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-            if (nl_attr_type(a) == ODP_ACTION_ATTR_OUTPUT
-                && nl_attr_get_u32(a) == ODPP_LOCAL) {
+            if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT
+                && nl_attr_get_u32(a) == OVSP_LOCAL) {
                 return true;
             }
         }
@@ -313,7 +313,7 @@ update_rules(struct in_band *ib)
     if (ib->n_remotes && !eth_addr_is_zero(ib->local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
         cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
-        cls_rule_set_in_port(&rule, ODPP_LOCAL);
+        cls_rule_set_in_port(&rule, OVSP_LOCAL);
         cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
         cls_rule_set_dl_src(&rule, ib->local_mac);
         cls_rule_set_nw_proto(&rule, IPPROTO_UDP);

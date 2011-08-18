@@ -136,14 +136,14 @@ int flow_cmp(const struct tbl_node *, void *target, int len);
  *
  *                         struct  pad  nl hdr  total
  *                         ------  ---  ------  -----
- *  ODP_KEY_ATTR_TUN_ID        8    --     4     12
- *  ODP_KEY_ATTR_IN_PORT       4    --     4      8
- *  ODP_KEY_ATTR_ETHERNET     12    --     4     16
- *  ODP_KEY_ATTR_8021Q         4    --     4      8
- *  ODP_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  ODP_KEY_ATTR_IPV6         34     2     4     40
- *  ODP_KEY_ATTR_ICMPV6        2     2     4      8
- *  ODP_KEY_ATTR_ND           28    --     4     32
+ *  OVS_KEY_ATTR_TUN_ID        8    --     4     12
+ *  OVS_KEY_ATTR_IN_PORT       4    --     4      8
+ *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
+ *  OVS_KEY_ATTR_8021Q         4    --     4      8
+ *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
+ *  OVS_KEY_ATTR_IPV6         34     2     4     40
+ *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
+ *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
  *  total                                       132
  */

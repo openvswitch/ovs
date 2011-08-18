@@ -50,7 +50,7 @@ main(void)
             continue;
         }
 
-        /* Convert string to ODP key. */
+        /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);
         error = odp_flow_key_from_string(ds_cstr(&in), &odp_key);
         if (error) {

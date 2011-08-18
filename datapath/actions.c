@@ -126,7 +126,7 @@ static int set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
 		return err;
 
 	nh = ip_hdr(skb);
-	nwaddr = nla_type(a) == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
+	nwaddr = nla_type(a) == OVS_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
 
 	check = get_l4_checksum(skb);
 	if (likely(check))
@@ -192,7 +192,7 @@ static int set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 	 * supports those protocols.
 	 */
 	th = udp_hdr(skb);
-	port = nla_type(a) == ODP_ACTION_ATTR_SET_TP_SRC ? &th->source : &th->dest;
+	port = nla_type(a) == OVS_ACTION_ATTR_SET_TP_SRC ? &th->source : &th->dest;
 	inet_proto_csum_replace2(check, skb, *port, nla_get_be16(a), 0);
 	*port = nla_get_be16(a);
 	skb_clear_rxhash(skb);
@@ -226,7 +226,7 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
 	if (!skb)
 		return -ENOMEM;
 
-	upcall.cmd = ODP_PACKET_CMD_ACTION;
+	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = arg;
 	upcall.sample_pool = 0;
@@ -258,57 +258,57 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		}
 
 		switch (nla_type(a)) {
-		case ODP_ACTION_ATTR_OUTPUT:
+		case OVS_ACTION_ATTR_OUTPUT:
 			prev_port = nla_get_u32(a);
 			break;
 
-		case ODP_ACTION_ATTR_USERSPACE:
+		case OVS_ACTION_ATTR_USERSPACE:
 			err = output_userspace(dp, skb, nla_get_u64(a));
 			break;
 
-		case ODP_ACTION_ATTR_SET_TUNNEL:
+		case OVS_ACTION_ATTR_SET_TUNNEL:
 			OVS_CB(skb)->tun_id = nla_get_be64(a);
 			break;
 
-		case ODP_ACTION_ATTR_SET_DL_TCI:
+		case OVS_ACTION_ATTR_SET_DL_TCI:
 			err = modify_vlan_tci(skb, nla_get_be16(a));
 			break;
 
-		case ODP_ACTION_ATTR_STRIP_VLAN:
+		case OVS_ACTION_ATTR_STRIP_VLAN:
 			err = strip_vlan(skb);
 			break;
 
-		case ODP_ACTION_ATTR_SET_DL_SRC:
+		case OVS_ACTION_ATTR_SET_DL_SRC:
 			err = make_writable(skb, ETH_HLEN);
 			if (likely(!err))
 				memcpy(eth_hdr(skb)->h_source, nla_data(a), ETH_ALEN);
 			break;
 
-		case ODP_ACTION_ATTR_SET_DL_DST:
+		case OVS_ACTION_ATTR_SET_DL_DST:
 			err = make_writable(skb, ETH_HLEN);
 			if (likely(!err))
 				memcpy(eth_hdr(skb)->h_dest, nla_data(a), ETH_ALEN);
 			break;
 
-		case ODP_ACTION_ATTR_SET_NW_SRC:
-		case ODP_ACTION_ATTR_SET_NW_DST:
+		case OVS_ACTION_ATTR_SET_NW_SRC:
+		case OVS_ACTION_ATTR_SET_NW_DST:
 			err = set_nw_addr(skb, a);
 			break;
 
-		case ODP_ACTION_ATTR_SET_NW_TOS:
+		case OVS_ACTION_ATTR_SET_NW_TOS:
 			err = set_nw_tos(skb, nla_get_u8(a));
 			break;
 
-		case ODP_ACTION_ATTR_SET_TP_SRC:
-		case ODP_ACTION_ATTR_SET_TP_DST:
+		case OVS_ACTION_ATTR_SET_TP_SRC:
+		case OVS_ACTION_ATTR_SET_TP_DST:
 			err = set_tp_port(skb, a);
 			break;
 
-		case ODP_ACTION_ATTR_SET_PRIORITY:
+		case OVS_ACTION_ATTR_SET_PRIORITY:
 			skb->priority = nla_get_u32(a);
 			break;
 
-		case ODP_ACTION_ATTR_POP_PRIORITY:
+		case OVS_ACTION_ATTR_POP_PRIORITY:
 			skb->priority = priority;
 			break;
 		}
@@ -345,7 +345,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	if (unlikely(!nskb))
 		return;
 
-	upcall.cmd = ODP_PACKET_CMD_SAMPLE;
+	upcall.cmd = OVS_PACKET_CMD_SAMPLE;
 	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = 0;
 	upcall.sample_pool = atomic_read(&p->sflow_pool);

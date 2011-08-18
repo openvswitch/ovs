@@ -203,7 +203,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     }
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
-    error = do_add_port(dp, name, "internal", ODPP_LOCAL);
+    error = do_add_port(dp, name, "internal", OVSP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
         return error;
@@ -297,7 +297,7 @@ dpif_netdev_destroy(struct dpif *dpif)
 }
 
 static int
-dpif_netdev_get_stats(const struct dpif *dpif, struct odp_stats *stats)
+dpif_netdev_get_stats(const struct dpif *dpif, struct ovs_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     memset(stats, 0, sizeof *stats);
@@ -411,7 +411,7 @@ static int
 dpif_netdev_port_del(struct dpif *dpif, uint16_t port_no)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    return port_no == ODPP_LOCAL ? EINVAL : do_del_port(dp, port_no);
+    return port_no == OVSP_LOCAL ? EINVAL : do_del_port(dp, port_no);
 }
 
 static bool
@@ -703,42 +703,42 @@ dpif_netdev_validate_actions(const struct nlattr *actions,
         }
 
         switch (type) {
-        case ODP_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_OUTPUT:
             if (nl_attr_get_u32(a) >= MAX_PORTS) {
                 return EINVAL;
             }
             break;
 
-        case ODP_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_USERSPACE:
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_SET_DL_TCI:
             *mutates = true;
             if (nl_attr_get_be16(a) & htons(VLAN_CFI)) {
                 return EINVAL;
             }
             break;
 
-        case ODP_ACTION_ATTR_SET_NW_TOS:
+        case OVS_ACTION_ATTR_SET_NW_TOS:
             *mutates = true;
             if (nl_attr_get_u8(a) & IP_ECN_MASK) {
                 return EINVAL;
             }
             break;
 
-        case ODP_ACTION_ATTR_STRIP_VLAN:
-        case ODP_ACTION_ATTR_SET_DL_SRC:
-        case ODP_ACTION_ATTR_SET_DL_DST:
-        case ODP_ACTION_ATTR_SET_NW_SRC:
-        case ODP_ACTION_ATTR_SET_NW_DST:
-        case ODP_ACTION_ATTR_SET_TP_SRC:
-        case ODP_ACTION_ATTR_SET_TP_DST:
+        case OVS_ACTION_ATTR_STRIP_VLAN:
+        case OVS_ACTION_ATTR_SET_DL_SRC:
+        case OVS_ACTION_ATTR_SET_DL_DST:
+        case OVS_ACTION_ATTR_SET_NW_SRC:
+        case OVS_ACTION_ATTR_SET_NW_DST:
+        case OVS_ACTION_ATTR_SET_TP_SRC:
+        case OVS_ACTION_ATTR_SET_TP_DST:
             *mutates = true;
             break;
 
-        case ODP_ACTION_ATTR_SET_TUNNEL:
-        case ODP_ACTION_ATTR_SET_PRIORITY:
-        case ODP_ACTION_ATTR_POP_PRIORITY:
+        case OVS_ACTION_ATTR_SET_TUNNEL:
+        case OVS_ACTION_ATTR_SET_PRIORITY:
+        case OVS_ACTION_ATTR_POP_PRIORITY:
         default:
             return EOPNOTSUPP;
         }
@@ -1181,7 +1181,7 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
         uint16_t type = nl_attr_type(a);
         ovs_be32 *field;
 
-        field = type == ODP_ACTION_ATTR_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
+        field = type == OVS_ACTION_ATTR_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
         if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
             th->tcp_csum = recalc_csum32(th->tcp_csum, *field, ip);
@@ -1227,13 +1227,13 @@ dp_netdev_set_tp_port(struct ofpbuf *packet, const struct flow *key,
 
         if (key->nw_proto == IPPROTO_TCP && packet->l7) {
             struct tcp_header *th = packet->l4;
-            field = (type == ODP_ACTION_ATTR_SET_TP_SRC
+            field = (type == OVS_ACTION_ATTR_SET_TP_SRC
                      ? &th->tcp_src : &th->tcp_dst);
             th->tcp_csum = recalc_csum16(th->tcp_csum, *field, port);
             *field = port;
         } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
             struct udp_header *uh = packet->l4;
-            field = (type == ODP_ACTION_ATTR_SET_TP_SRC
+            field = (type == OVS_ACTION_ATTR_SET_TP_SRC
                      ? &uh->udp_src : &uh->udp_dst);
             uh->udp_csum = recalc_csum16(uh->udp_csum, *field, port);
             *field = port;
@@ -1297,42 +1297,42 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
         switch (nl_attr_type(a)) {
-        case ODP_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_OUTPUT:
             dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;
 
-        case ODP_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_USERSPACE:
             dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION,
                                      key, nl_attr_get_u64(a));
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_SET_DL_TCI:
             eth_set_vlan_tci(packet, nl_attr_get_be16(a));
             break;
 
-        case ODP_ACTION_ATTR_STRIP_VLAN:
+        case OVS_ACTION_ATTR_STRIP_VLAN:
             dp_netdev_strip_vlan(packet);
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_SRC:
+        case OVS_ACTION_ATTR_SET_DL_SRC:
             dp_netdev_set_dl_src(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_DST:
+        case OVS_ACTION_ATTR_SET_DL_DST:
             dp_netdev_set_dl_dst(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
             break;
 
-        case ODP_ACTION_ATTR_SET_NW_SRC:
-        case ODP_ACTION_ATTR_SET_NW_DST:
+        case OVS_ACTION_ATTR_SET_NW_SRC:
+        case OVS_ACTION_ATTR_SET_NW_DST:
             dp_netdev_set_nw_addr(packet, key, a);
             break;
 
-        case ODP_ACTION_ATTR_SET_NW_TOS:
+        case OVS_ACTION_ATTR_SET_NW_TOS:
             dp_netdev_set_nw_tos(packet, key, nl_attr_get_u8(a));
             break;
 
-        case ODP_ACTION_ATTR_SET_TP_SRC:
-        case ODP_ACTION_ATTR_SET_TP_DST:
+        case OVS_ACTION_ATTR_SET_TP_SRC:
+        case OVS_ACTION_ATTR_SET_TP_DST:
             dp_netdev_set_tp_port(packet, key, a);
             break;
         }

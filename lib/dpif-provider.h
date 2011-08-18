@@ -108,7 +108,7 @@ struct dpif_class {
     void (*wait)(struct dpif *dpif);
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
-    int (*get_stats)(const struct dpif *dpif, struct odp_stats *stats);
+    int (*get_stats)(const struct dpif *dpif, struct ovs_dp_stats *stats);
 
     /* Retrieves 'dpif''s current treatment of IP fragments into '*drop_frags':
      * true indicates that fragments are dropped, false indicates that
@@ -190,7 +190,7 @@ struct dpif_class {
     void (*port_poll_wait)(const struct dpif *dpif);
 
     /* Queries 'dpif' for a flow entry.  The flow is specified by the Netlink
-     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
      * 'key'.
      *
      * Returns 0 if successful.  If no flow matches, returns ENOENT.  On other
@@ -208,9 +208,9 @@ struct dpif_class {
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats);
 
     /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
-     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
      * 'key'.  The associated actions are specified by the Netlink attributes
-     * with types ODP_ACTION_ATTR_* in the 'actions_len' bytes starting at
+     * with types OVS_ACTION_ATTR_* in the 'actions_len' bytes starting at
      * 'actions'.
      *
      * - If the flow's key does not exist in 'dpif', then the flow will be
@@ -235,7 +235,7 @@ struct dpif_class {
 
     /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
      * does not contain such a flow.  The flow is specified by the Netlink
-     * attributes with types ODP_KEY_ATTR_* in the 'key_len' bytes starting at
+     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
      * 'key'.
      *
      * If the operation succeeds, then 'stats', if nonnull, must be set to the
@@ -262,10 +262,10 @@ struct dpif_class {
      * 'flow_dump_done' function will be called afterward).
      *
      * On success, if 'key' and 'key_len' are nonnull then '*key' and
-     * '*key_len' must be set to Netlink attributes with types ODP_KEY_ATTR_*
+     * '*key_len' must be set to Netlink attributes with types OVS_KEY_ATTR_*
      * representing the dumped flow's key.  If 'actions' and 'actions_len' are
      * nonnull then they should be set to Netlink attributes with types
-     * ODP_ACTION_ATTR_* representing the dumped flow's actions.  If 'stats'
+     * OVS_ACTION_ATTR_* representing the dumped flow's actions.  If 'stats'
      * is nonnull then it should be set to the dumped flow's statistics.
      *
      * All of the returned data is owned by 'dpif', not by the caller, and the
@@ -323,7 +323,7 @@ struct dpif_class {
     int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
 
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
-     * priority value for use in the ODP_ACTION_ATTR_SET_PRIORITY action in
+     * priority value for use in the OVS_ACTION_ATTR_SET_PRIORITY action in
      * '*priority'. */
     int (*queue_to_priority)(const struct dpif *dpif, uint32_t queue_id,
                              uint32_t *priority);

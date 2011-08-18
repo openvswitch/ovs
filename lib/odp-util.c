@@ -33,31 +33,37 @@
 #include "timeval.h"
 #include "util.h"
 
+/* The interface between userspace and kernel uses an "OVS_*" prefix.
+ * Since this is fairly non-specific for the OVS userspace components,
+ * "ODP_*" (Open vSwitch Datapath) is used as the prefix for
+ * interactions with the datapath.
+ */
+
 int
 odp_action_len(uint16_t type)
 {
-    if (type > ODP_ACTION_ATTR_MAX) {
+    if (type > OVS_ACTION_ATTR_MAX) {
         return -1;
     }
 
-    switch ((enum odp_action_type) type) {
-    case ODP_ACTION_ATTR_OUTPUT: return 4;
-    case ODP_ACTION_ATTR_USERSPACE: return 8;
-    case ODP_ACTION_ATTR_SET_DL_TCI: return 2;
-    case ODP_ACTION_ATTR_STRIP_VLAN: return 0;
-    case ODP_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
-    case ODP_ACTION_ATTR_SET_DL_DST: return ETH_ADDR_LEN;
-    case ODP_ACTION_ATTR_SET_NW_SRC: return 4;
-    case ODP_ACTION_ATTR_SET_NW_DST: return 4;
-    case ODP_ACTION_ATTR_SET_NW_TOS: return 1;
-    case ODP_ACTION_ATTR_SET_TP_SRC: return 2;
-    case ODP_ACTION_ATTR_SET_TP_DST: return 2;
-    case ODP_ACTION_ATTR_SET_TUNNEL: return 8;
-    case ODP_ACTION_ATTR_SET_PRIORITY: return 4;
-    case ODP_ACTION_ATTR_POP_PRIORITY: return 0;
+    switch ((enum ovs_action_type) type) {
+    case OVS_ACTION_ATTR_OUTPUT: return 4;
+    case OVS_ACTION_ATTR_USERSPACE: return 8;
+    case OVS_ACTION_ATTR_SET_DL_TCI: return 2;
+    case OVS_ACTION_ATTR_STRIP_VLAN: return 0;
+    case OVS_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
+    case OVS_ACTION_ATTR_SET_DL_DST: return ETH_ADDR_LEN;
+    case OVS_ACTION_ATTR_SET_NW_SRC: return 4;
+    case OVS_ACTION_ATTR_SET_NW_DST: return 4;
+    case OVS_ACTION_ATTR_SET_NW_TOS: return 1;
+    case OVS_ACTION_ATTR_SET_TP_SRC: return 2;
+    case OVS_ACTION_ATTR_SET_TP_DST: return 2;
+    case OVS_ACTION_ATTR_SET_TUNNEL: return 8;
+    case OVS_ACTION_ATTR_SET_PRIORITY: return 4;
+    case OVS_ACTION_ATTR_POP_PRIORITY: return 0;
 
-    case ODP_ACTION_ATTR_UNSPEC:
-    case __ODP_ACTION_ATTR_MAX:
+    case OVS_ACTION_ATTR_UNSPEC:
+    case __OVS_ACTION_ATTR_MAX:
         return -1;
     }
 
@@ -97,53 +103,53 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     }
 
     switch (nl_attr_type(a)) {
-    case ODP_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
-    case ODP_ACTION_ATTR_USERSPACE:
+    case OVS_ACTION_ATTR_USERSPACE:
         ds_put_format(ds, "userspace(%"PRIu64")", nl_attr_get_u64(a));
         break;
-    case ODP_ACTION_ATTR_SET_TUNNEL:
+    case OVS_ACTION_ATTR_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",
                       ntohll(nl_attr_get_be64(a)));
         break;
-    case ODP_ACTION_ATTR_SET_DL_TCI:
+    case OVS_ACTION_ATTR_SET_DL_TCI:
         ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",
                       vlan_tci_to_vid(nl_attr_get_be16(a)),
                       vlan_tci_to_pcp(nl_attr_get_be16(a)));
         break;
-    case ODP_ACTION_ATTR_STRIP_VLAN:
+    case OVS_ACTION_ATTR_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");
         break;
-    case ODP_ACTION_ATTR_SET_DL_SRC:
+    case OVS_ACTION_ATTR_SET_DL_SRC:
         eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
         ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
-    case ODP_ACTION_ATTR_SET_DL_DST:
+    case OVS_ACTION_ATTR_SET_DL_DST:
         eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
         ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
         break;
-    case ODP_ACTION_ATTR_SET_NW_SRC:
+    case OVS_ACTION_ATTR_SET_NW_SRC:
         ip = nl_attr_get_be32(a);
         ds_put_format(ds, "set_nw_src("IP_FMT")", IP_ARGS(&ip));
         break;
-    case ODP_ACTION_ATTR_SET_NW_DST:
+    case OVS_ACTION_ATTR_SET_NW_DST:
         ip = nl_attr_get_be32(a);
         ds_put_format(ds, "set_nw_dst("IP_FMT")", IP_ARGS(&ip));
         break;
-    case ODP_ACTION_ATTR_SET_NW_TOS:
+    case OVS_ACTION_ATTR_SET_NW_TOS:
         ds_put_format(ds, "set_nw_tos(%"PRIu8")", nl_attr_get_u8(a));
         break;
-    case ODP_ACTION_ATTR_SET_TP_SRC:
+    case OVS_ACTION_ATTR_SET_TP_SRC:
         ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
-    case ODP_ACTION_ATTR_SET_TP_DST:
+    case OVS_ACTION_ATTR_SET_TP_DST:
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
         break;
-    case ODP_ACTION_ATTR_SET_PRIORITY:
+    case OVS_ACTION_ATTR_SET_PRIORITY:
         ds_put_format(ds, "set_priority(%#"PRIx32")", nl_attr_get_u32(a));
         break;
-    case ODP_ACTION_ATTR_POP_PRIORITY:
+    case OVS_ACTION_ATTR_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
         break;
     default:
@@ -182,27 +188,27 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
 static int
 odp_flow_key_attr_len(uint16_t type)
 {
-    if (type > ODP_KEY_ATTR_MAX) {
+    if (type > OVS_KEY_ATTR_MAX) {
         return -1;
     }
 
-    switch ((enum odp_key_type) type) {
-    case ODP_KEY_ATTR_TUN_ID: return 8;
-    case ODP_KEY_ATTR_IN_PORT: return 4;
-    case ODP_KEY_ATTR_ETHERNET: return sizeof(struct odp_key_ethernet);
-    case ODP_KEY_ATTR_8021Q: return sizeof(struct odp_key_8021q);
-    case ODP_KEY_ATTR_ETHERTYPE: return 2;
-    case ODP_KEY_ATTR_IPV4: return sizeof(struct odp_key_ipv4);
-    case ODP_KEY_ATTR_IPV6: return sizeof(struct odp_key_ipv6);
-    case ODP_KEY_ATTR_TCP: return sizeof(struct odp_key_tcp);
-    case ODP_KEY_ATTR_UDP: return sizeof(struct odp_key_udp);
-    case ODP_KEY_ATTR_ICMP: return sizeof(struct odp_key_icmp);
-    case ODP_KEY_ATTR_ICMPV6: return sizeof(struct odp_key_icmpv6);
-    case ODP_KEY_ATTR_ARP: return sizeof(struct odp_key_arp);
-    case ODP_KEY_ATTR_ND: return sizeof(struct odp_key_nd);
+    switch ((enum ovs_key_type) type) {
+    case OVS_KEY_ATTR_TUN_ID: return 8;
+    case OVS_KEY_ATTR_IN_PORT: return 4;
+    case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
+    case OVS_KEY_ATTR_8021Q: return sizeof(struct ovs_key_8021q);
+    case OVS_KEY_ATTR_ETHERTYPE: return 2;
+    case OVS_KEY_ATTR_IPV4: return sizeof(struct ovs_key_ipv4);
+    case OVS_KEY_ATTR_IPV6: return sizeof(struct ovs_key_ipv6);
+    case OVS_KEY_ATTR_TCP: return sizeof(struct ovs_key_tcp);
+    case OVS_KEY_ATTR_UDP: return sizeof(struct ovs_key_udp);
+    case OVS_KEY_ATTR_ICMP: return sizeof(struct ovs_key_icmp);
+    case OVS_KEY_ATTR_ICMPV6: return sizeof(struct ovs_key_icmpv6);
+    case OVS_KEY_ATTR_ARP: return sizeof(struct ovs_key_arp);
+    case OVS_KEY_ATTR_ND: return sizeof(struct ovs_key_nd);
 
-    case ODP_KEY_ATTR_UNSPEC:
-    case __ODP_KEY_ATTR_MAX:
+    case OVS_KEY_ATTR_UNSPEC:
+    case __OVS_KEY_ATTR_MAX:
         return -1;
     }
 
@@ -232,16 +238,16 @@ format_generic_odp_key(const struct nlattr *a, struct ds *ds)
 static void
 format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 {
-    const struct odp_key_ethernet *eth_key;
-    const struct odp_key_8021q *q_key;
-    const struct odp_key_ipv4 *ipv4_key;
-    const struct odp_key_ipv6 *ipv6_key;
-    const struct odp_key_tcp *tcp_key;
-    const struct odp_key_udp *udp_key;
-    const struct odp_key_icmp *icmp_key;
-    const struct odp_key_icmpv6 *icmpv6_key;
-    const struct odp_key_arp *arp_key;
-    const struct odp_key_nd *nd_key;
+    const struct ovs_key_ethernet *eth_key;
+    const struct ovs_key_8021q *q_key;
+    const struct ovs_key_ipv4 *ipv4_key;
+    const struct ovs_key_ipv6 *ipv6_key;
+    const struct ovs_key_tcp *tcp_key;
+    const struct ovs_key_udp *udp_key;
+    const struct ovs_key_icmp *icmp_key;
+    const struct ovs_key_icmpv6 *icmpv6_key;
+    const struct ovs_key_arp *arp_key;
+    const struct ovs_key_nd *nd_key;
 
     if (nl_attr_get_size(a) != odp_flow_key_attr_len(nl_attr_type(a))) {
         ds_put_format(ds, "bad length %zu, expected %d for: ",
@@ -252,22 +258,22 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     }
 
     switch (nl_attr_type(a)) {
-    case ODP_KEY_ATTR_TUN_ID:
+    case OVS_KEY_ATTR_TUN_ID:
         ds_put_format(ds, "tun_id(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
 
-    case ODP_KEY_ATTR_IN_PORT:
+    case OVS_KEY_ATTR_IN_PORT:
         ds_put_format(ds, "in_port(%"PRIu32")", nl_attr_get_u32(a));
         break;
 
-    case ODP_KEY_ATTR_ETHERNET:
+    case OVS_KEY_ATTR_ETHERNET:
         eth_key = nl_attr_get(a);
         ds_put_format(ds, "eth(src="ETH_ADDR_FMT",dst="ETH_ADDR_FMT")",
                       ETH_ADDR_ARGS(eth_key->eth_src),
                       ETH_ADDR_ARGS(eth_key->eth_dst));
         break;
 
-    case ODP_KEY_ATTR_8021Q:
+    case OVS_KEY_ATTR_8021Q:
         q_key = nl_attr_get(a);
         ds_put_cstr(ds, "vlan(");
         if (q_key->q_tpid != htons(ETH_TYPE_VLAN)) {
@@ -278,12 +284,12 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
                       vlan_tci_to_pcp(q_key->q_tci));
         break;
 
-    case ODP_KEY_ATTR_ETHERTYPE:
+    case OVS_KEY_ATTR_ETHERTYPE:
         ds_put_format(ds, "eth_type(0x%04"PRIx16")",
                       ntohs(nl_attr_get_be16(a)));
         break;
 
-    case ODP_KEY_ATTR_IPV4:
+    case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get(a);
         ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT","
                       "proto=%"PRId8",tos=%"PRIu8")",
@@ -292,7 +298,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
                       ipv4_key->ipv4_proto, ipv4_key->ipv4_tos);
         break;
 
-    case ODP_KEY_ATTR_IPV6: {
+    case OVS_KEY_ATTR_IPV6: {
         char src_str[INET6_ADDRSTRLEN];
         char dst_str[INET6_ADDRSTRLEN];
 
@@ -306,31 +312,31 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
     }
 
-    case ODP_KEY_ATTR_TCP:
+    case OVS_KEY_ATTR_TCP:
         tcp_key = nl_attr_get(a);
         ds_put_format(ds, "tcp(src=%"PRIu16",dst=%"PRIu16")",
                       ntohs(tcp_key->tcp_src), ntohs(tcp_key->tcp_dst));
         break;
 
-    case ODP_KEY_ATTR_UDP:
+    case OVS_KEY_ATTR_UDP:
         udp_key = nl_attr_get(a);
         ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16")",
                       ntohs(udp_key->udp_src), ntohs(udp_key->udp_dst));
         break;
 
-    case ODP_KEY_ATTR_ICMP:
+    case OVS_KEY_ATTR_ICMP:
         icmp_key = nl_attr_get(a);
         ds_put_format(ds, "icmp(type=%"PRIu8",code=%"PRIu8")",
                       icmp_key->icmp_type, icmp_key->icmp_code);
         break;
 
-    case ODP_KEY_ATTR_ICMPV6:
+    case OVS_KEY_ATTR_ICMPV6:
         icmpv6_key = nl_attr_get(a);
         ds_put_format(ds, "icmpv6(type=%"PRIu8",code=%"PRIu8")",
                       icmpv6_key->icmpv6_type, icmpv6_key->icmpv6_code);
         break;
 
-    case ODP_KEY_ATTR_ARP:
+    case OVS_KEY_ATTR_ARP:
         arp_key = nl_attr_get(a);
         ds_put_format(ds, "arp(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
                       "sha="ETH_ADDR_FMT",tha="ETH_ADDR_FMT")",
@@ -339,7 +345,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
                       ETH_ADDR_ARGS(arp_key->arp_tha));
         break;
 
-    case ODP_KEY_ATTR_ND: {
+    case OVS_KEY_ATTR_ND: {
         char target[INET6_ADDRSTRLEN];
 
         nd_key = nl_attr_get(a);
@@ -365,7 +371,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 }
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
- * ODP_KEY_ATTR_* attributes in 'key'. */
+ * OVS_KEY_ATTR_* attributes in 'key'. */
 void
 odp_flow_key_format(const struct nlattr *key, size_t key_len, struct ds *ds)
 {
@@ -394,7 +400,7 @@ static int
 put_nd_key(int n, const char *nd_target_s,
            const uint8_t *nd_sll, const uint8_t *nd_tll, struct ofpbuf *key)
 {
-    struct odp_key_nd nd_key;
+    struct ovs_key_nd nd_key;
 
     memset(&nd_key, 0, sizeof nd_key);
     if (inet_pton(AF_INET6, nd_target_s, nd_key.nd_target) != 1) {
@@ -406,7 +412,7 @@ put_nd_key(int n, const char *nd_target_s,
     if (nd_tll) {
         memcpy(nd_key.nd_tll, nd_tll, ETH_ADDR_LEN);
     }
-    nl_msg_put_unspec(key, ODP_KEY_ATTR_ND, &nd_key, sizeof nd_key);
+    nl_msg_put_unspec(key, OVS_KEY_ATTR_ND, &nd_key, sizeof nd_key);
     return n;
 }
 
@@ -430,7 +436,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         if (sscanf(s, "tun_id(%31[x0123456789abcdefABCDEF])%n",
                    tun_id_s, &n) > 0 && n > 0) {
             uint64_t tun_id = strtoull(tun_id_s, NULL, 0);
-            nl_msg_put_be64(key, ODP_KEY_ATTR_TUN_ID, htonll(tun_id));
+            nl_msg_put_be64(key, OVS_KEY_ATTR_TUN_ID, htonll(tun_id));
             return n;
         }
     }
@@ -440,20 +446,20 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         int n = -1;
 
         if (sscanf(s, "in_port(%lli)%n", &in_port, &n) > 0 && n > 0) {
-            nl_msg_put_u32(key, ODP_KEY_ATTR_IN_PORT, in_port);
+            nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
             return n;
         }
     }
 
     {
-        struct odp_key_ethernet eth_key;
+        struct ovs_key_ethernet eth_key;
         int n = -1;
 
         if (sscanf(s,
                    "eth(src="ETH_ADDR_SCAN_FMT",dst="ETH_ADDR_SCAN_FMT")%n",
                    ETH_ADDR_SCAN_ARGS(eth_key.eth_src),
                    ETH_ADDR_SCAN_ARGS(eth_key.eth_dst), &n) > 0 && n > 0) {
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_ETHERNET,
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_ETHERNET,
                               &eth_key, sizeof eth_key);
             return n;
         }
@@ -469,12 +475,12 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
                     &vid, &pcp, &n) > 0 && n > 0) ||
             (sscanf(s, "vlan(tpid=%"SCNi16",vid=%"SCNi16",pcp=%i)%n",
                     &tpid, &vid, &pcp, &n) > 0 && n > 0)) {
-            struct odp_key_8021q q_key;
+            struct ovs_key_8021q q_key;
 
             q_key.q_tpid = htons(tpid);
             q_key.q_tci = htons((vid << VLAN_VID_SHIFT) |
                                 (pcp << VLAN_PCP_SHIFT));
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_8021Q, &q_key, sizeof q_key);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_8021Q, &q_key, sizeof q_key);
             return n;
         }
     }
@@ -484,7 +490,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         int n = -1;
 
         if (sscanf(s, "eth_type(%i)%n", &eth_type, &n) > 0 && n > 0) {
-            nl_msg_put_be16(key, ODP_KEY_ATTR_ETHERTYPE, htons(eth_type));
+            nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
             return n;
         }
     }
@@ -501,14 +507,14 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
                    IP_SCAN_ARGS(&ipv4_src),
                    IP_SCAN_ARGS(&ipv4_dst), &ipv4_proto, &ipv4_tos, &n) > 0
             && n > 0) {
-            struct odp_key_ipv4 ipv4_key;
+            struct ovs_key_ipv4 ipv4_key;
 
             memset(&ipv4_key, 0, sizeof ipv4_key);
             ipv4_key.ipv4_src = ipv4_src;
             ipv4_key.ipv4_dst = ipv4_dst;
             ipv4_key.ipv4_proto = ipv4_proto;
             ipv4_key.ipv4_tos = ipv4_tos;
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_IPV4,
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
                               &ipv4_key, sizeof ipv4_key);
             return n;
         }
@@ -525,7 +531,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
                    "proto=%i,tos=%i)%n",
                    ipv6_src_s, ipv6_dst_s,
                    &ipv6_proto, &ipv6_tos, &n) > 0 && n > 0) {
-            struct odp_key_ipv6 ipv6_key;
+            struct ovs_key_ipv6 ipv6_key;
 
             memset(&ipv6_key, 0, sizeof ipv6_key);
             if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
@@ -534,7 +540,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
             }
             ipv6_key.ipv6_proto = ipv6_proto;
             ipv6_key.ipv6_tos = ipv6_tos;
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_IPV6,
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV6,
                               &ipv6_key, sizeof ipv6_key);
             return n;
         }
@@ -547,11 +553,11 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
 
         if (sscanf(s, "tcp(src=%i,dst=%i)%n",&tcp_src, &tcp_dst, &n) > 0
             && n > 0) {
-            struct odp_key_tcp tcp_key;
+            struct ovs_key_tcp tcp_key;
 
             tcp_key.tcp_src = htons(tcp_src);
             tcp_key.tcp_dst = htons(tcp_dst);
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_TCP, &tcp_key, sizeof tcp_key);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_TCP, &tcp_key, sizeof tcp_key);
             return n;
         }
     }
@@ -563,11 +569,11 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
 
         if (sscanf(s, "udp(src=%i,dst=%i)%n", &udp_src, &udp_dst, &n) > 0
             && n > 0) {
-            struct odp_key_udp udp_key;
+            struct ovs_key_udp udp_key;
 
             udp_key.udp_src = htons(udp_src);
             udp_key.udp_dst = htons(udp_dst);
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_UDP, &udp_key, sizeof udp_key);
             return n;
         }
     }
@@ -580,24 +586,24 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         if (sscanf(s, "icmp(type=%i,code=%i)%n",
                    &icmp_type, &icmp_code, &n) > 0
             && n > 0) {
-            struct odp_key_icmp icmp_key;
+            struct ovs_key_icmp icmp_key;
 
             icmp_key.icmp_type = icmp_type;
             icmp_key.icmp_code = icmp_code;
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_ICMP,
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMP,
                               &icmp_key, sizeof icmp_key);
             return n;
         }
     }
 
     {
-        struct odp_key_icmpv6 icmpv6_key;
+        struct ovs_key_icmpv6 icmpv6_key;
         int n = -1;
 
         if (sscanf(s, "icmpv6(type=%"SCNi8",code=%"SCNi8")%n",
                    &icmpv6_key.icmpv6_type, &icmpv6_key.icmpv6_code,&n) > 0
             && n > 0) {
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_ICMPV6,
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_ICMPV6,
                               &icmpv6_key, sizeof icmpv6_key);
             return n;
         }
@@ -618,7 +624,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
                    &arp_op,
                    ETH_ADDR_SCAN_ARGS(arp_sha),
                    ETH_ADDR_SCAN_ARGS(arp_tha), &n) > 0 && n > 0) {
-            struct odp_key_arp arp_key;
+            struct ovs_key_arp arp_key;
 
             memset(&arp_key, 0, sizeof arp_key);
             arp_key.arp_sip = arp_sip;
@@ -626,7 +632,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
             arp_key.arp_op = htons(arp_op);
             memcpy(arp_key.arp_sha, arp_sha, ETH_ADDR_LEN);
             memcpy(arp_key.arp_tha, arp_tha, ETH_ADDR_LEN);
-            nl_msg_put_unspec(key, ODP_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_ARP, &arp_key, sizeof arp_key);
             return n;
         }
     }
@@ -663,11 +669,12 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
     return -EINVAL;
 }
 
-/* Parses the string representation of an ODP flow key, in the format output by
- * odp_flow_key_format().  Returns 0 if successful, otherwise a positive errno
- * value.  On success, the flow key is appended to 'key' as a series of Netlink
- * attributes.  On failure, no data is appended to 'key'.  Either way, 'key''s
- * data might be reallocated.
+/* Parses the string representation of a datapath flow key, in the
+ * format output by odp_flow_key_format().  Returns 0 if successful,
+ * otherwise a positive errno value.  On success, the flow key is
+ * appended to 'key' as a series of Netlink attributes.  On failure, no
+ * data is appended to 'key'.  Either way, 'key''s data might be
+ * reallocated.
  *
  * On success, the attributes appended to 'key' are individually syntactically
  * valid, but they may not be valid as a sequence.  'key' might, for example,
@@ -696,28 +703,28 @@ odp_flow_key_from_string(const char *s, struct ofpbuf *key)
     return 0;
 }
 
-/* Appends a representation of 'flow' as ODP_KEY_ATTR_* attributes to 'buf'. */
+/* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'. */
 void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 {
-    struct odp_key_ethernet *eth_key;
+    struct ovs_key_ethernet *eth_key;
 
     if (flow->tun_id != htonll(0)) {
-        nl_msg_put_be64(buf, ODP_KEY_ATTR_TUN_ID, flow->tun_id);
+        nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tun_id);
     }
 
-    nl_msg_put_u32(buf, ODP_KEY_ATTR_IN_PORT,
+    nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT,
                    ofp_port_to_odp_port(flow->in_port));
 
-    eth_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ETHERNET,
+    eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
                                        sizeof *eth_key);
     memcpy(eth_key->eth_src, flow->dl_src, ETH_ADDR_LEN);
     memcpy(eth_key->eth_dst, flow->dl_dst, ETH_ADDR_LEN);
 
     if (flow->vlan_tci != htons(0)) {
-        struct odp_key_8021q *q_key;
+        struct ovs_key_8021q *q_key;
 
-        q_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_8021Q,
+        q_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_8021Q,
                                          sizeof *q_key);
         q_key->q_tpid = htons(ETH_TYPE_VLAN);
         q_key->q_tci = flow->vlan_tci & ~htons(VLAN_CFI);
@@ -727,12 +734,12 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         return;
     }
 
-    nl_msg_put_be16(buf, ODP_KEY_ATTR_ETHERTYPE, flow->dl_type);
+    nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, flow->dl_type);
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
-        struct odp_key_ipv4 *ipv4_key;
+        struct ovs_key_ipv4 *ipv4_key;
 
-        ipv4_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_IPV4,
+        ipv4_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4,
                                             sizeof *ipv4_key);
         memset(ipv4_key, 0, sizeof *ipv4_key);
         ipv4_key->ipv4_src = flow->nw_src;
@@ -740,9 +747,9 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv4_key->ipv4_proto = flow->nw_proto;
         ipv4_key->ipv4_tos = flow->nw_tos;
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        struct odp_key_ipv6 *ipv6_key;
+        struct ovs_key_ipv6 *ipv6_key;
 
-        ipv6_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_IPV6,
+        ipv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV6,
                                             sizeof *ipv6_key);
         memset(ipv6_key, 0, sizeof *ipv6_key);
         memcpy(ipv6_key->ipv6_src, &flow->ipv6_src, sizeof ipv6_key->ipv6_src);
@@ -750,9 +757,9 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv6_key->ipv6_proto = flow->nw_proto;
         ipv6_key->ipv6_tos = flow->nw_tos;
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-        struct odp_key_arp *arp_key;
+        struct ovs_key_arp *arp_key;
 
-        arp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ARP,
+        arp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ARP,
                                            sizeof *arp_key);
         memset(arp_key, 0, sizeof *arp_key);
         arp_key->arp_sip = flow->nw_src;
@@ -766,41 +773,41 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
             || flow->dl_type == htons(ETH_TYPE_IPV6)) {
 
         if (flow->nw_proto == IPPROTO_TCP) {
-            struct odp_key_tcp *tcp_key;
+            struct ovs_key_tcp *tcp_key;
 
-            tcp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_TCP,
+            tcp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_TCP,
                                                sizeof *tcp_key);
             tcp_key->tcp_src = flow->tp_src;
             tcp_key->tcp_dst = flow->tp_dst;
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            struct odp_key_udp *udp_key;
+            struct ovs_key_udp *udp_key;
 
-            udp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_UDP,
+            udp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_UDP,
                                                sizeof *udp_key);
             udp_key->udp_src = flow->tp_src;
             udp_key->udp_dst = flow->tp_dst;
         } else if (flow->dl_type == htons(ETH_TYPE_IP)
                 && flow->nw_proto == IPPROTO_ICMP) {
-            struct odp_key_icmp *icmp_key;
+            struct ovs_key_icmp *icmp_key;
 
-            icmp_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ICMP,
+            icmp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMP,
                                                 sizeof *icmp_key);
             icmp_key->icmp_type = ntohs(flow->tp_src);
             icmp_key->icmp_code = ntohs(flow->tp_dst);
         } else if (flow->dl_type == htons(ETH_TYPE_IPV6)
                 && flow->nw_proto == IPPROTO_ICMPV6) {
-            struct odp_key_icmpv6 *icmpv6_key;
+            struct ovs_key_icmpv6 *icmpv6_key;
 
-            icmpv6_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ICMPV6,
+            icmpv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMPV6,
                                                   sizeof *icmpv6_key);
             icmpv6_key->icmpv6_type = ntohs(flow->tp_src);
             icmpv6_key->icmpv6_code = ntohs(flow->tp_dst);
 
             if (icmpv6_key->icmpv6_type == ND_NEIGHBOR_SOLICIT
                     || icmpv6_key->icmpv6_type == ND_NEIGHBOR_ADVERT) {
-                struct odp_key_nd *nd_key;
+                struct ovs_key_nd *nd_key;
 
-                nd_key = nl_msg_put_unspec_uninit(buf, ODP_KEY_ATTR_ND,
+                nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
                                                     sizeof *nd_key);
                 memcpy(nd_key->nd_target, &flow->nd_target,
                         sizeof nd_key->nd_target);
@@ -811,31 +818,31 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
     }
 }
 
-/* Converts the 'key_len' bytes of ODP_KEY_ATTR_* attributes in 'key' to a flow
+/* Converts the 'key_len' bytes of OVS_KEY_ATTR_* attributes in 'key' to a flow
  * structure in 'flow'.  Returns 0 if successful, otherwise EINVAL. */
 int
 odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                      struct flow *flow)
 {
     const struct nlattr *nla;
-    enum odp_key_type prev_type;
+    enum ovs_key_type prev_type;
     size_t left;
 
     memset(flow, 0, sizeof *flow);
     flow->dl_type = htons(FLOW_DL_TYPE_NONE);
 
-    prev_type = ODP_KEY_ATTR_UNSPEC;
+    prev_type = OVS_KEY_ATTR_UNSPEC;
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
-        const struct odp_key_ethernet *eth_key;
-        const struct odp_key_8021q *q_key;
-        const struct odp_key_ipv4 *ipv4_key;
-        const struct odp_key_ipv6 *ipv6_key;
-        const struct odp_key_tcp *tcp_key;
-        const struct odp_key_udp *udp_key;
-        const struct odp_key_icmp *icmp_key;
-        const struct odp_key_icmpv6 *icmpv6_key;
-        const struct odp_key_arp *arp_key;
-        const struct odp_key_nd *nd_key;
+        const struct ovs_key_ethernet *eth_key;
+        const struct ovs_key_8021q *q_key;
+        const struct ovs_key_ipv4 *ipv4_key;
+        const struct ovs_key_ipv6 *ipv6_key;
+        const struct ovs_key_tcp *tcp_key;
+        const struct ovs_key_udp *udp_key;
+        const struct ovs_key_icmp *icmp_key;
+        const struct ovs_key_icmpv6 *icmpv6_key;
+        const struct ovs_key_arp *arp_key;
+        const struct ovs_key_nd *nd_key;
 
         uint16_t type = nl_attr_type(nla);
         int len = odp_flow_key_attr_len(type);
@@ -846,25 +853,25 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
 #define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
         switch (TRANSITION(prev_type, type)) {
-        case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_TUN_ID):
+        case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):
             flow->tun_id = nl_attr_get_be64(nla);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_UNSPEC, ODP_KEY_ATTR_IN_PORT):
-        case TRANSITION(ODP_KEY_ATTR_TUN_ID, ODP_KEY_ATTR_IN_PORT):
+        case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_IN_PORT):
+        case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_IN_PORT):
             if (nl_attr_get_u32(nla) >= UINT16_MAX) {
                 return EINVAL;
             }
             flow->in_port = odp_port_to_ofp_port(nl_attr_get_u32(nla));
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_IN_PORT, ODP_KEY_ATTR_ETHERNET):
+        case TRANSITION(OVS_KEY_ATTR_IN_PORT, OVS_KEY_ATTR_ETHERNET):
             eth_key = nl_attr_get(nla);
             memcpy(flow->dl_src, eth_key->eth_src, ETH_ADDR_LEN);
             memcpy(flow->dl_dst, eth_key->eth_dst, ETH_ADDR_LEN);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_ETHERNET, ODP_KEY_ATTR_8021Q):
+        case TRANSITION(OVS_KEY_ATTR_ETHERNET, OVS_KEY_ATTR_8021Q):
             q_key = nl_attr_get(nla);
             if (q_key->q_tpid != htons(ETH_TYPE_VLAN)) {
                 /* Only standard 0x8100 VLANs currently supported. */
@@ -876,15 +883,15 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->vlan_tci = q_key->q_tci | htons(VLAN_CFI);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_8021Q, ODP_KEY_ATTR_ETHERTYPE):
-        case TRANSITION(ODP_KEY_ATTR_ETHERNET, ODP_KEY_ATTR_ETHERTYPE):
+        case TRANSITION(OVS_KEY_ATTR_8021Q, OVS_KEY_ATTR_ETHERTYPE):
+        case TRANSITION(OVS_KEY_ATTR_ETHERNET, OVS_KEY_ATTR_ETHERTYPE):
             flow->dl_type = nl_attr_get_be16(nla);
             if (ntohs(flow->dl_type) < 1536) {
                 return EINVAL;
             }
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_IPV4):
+        case TRANSITION(OVS_KEY_ATTR_ETHERTYPE, OVS_KEY_ATTR_IPV4):
             if (flow->dl_type != htons(ETH_TYPE_IP)) {
                 return EINVAL;
             }
@@ -898,7 +905,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             }
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_IPV6):
+        case TRANSITION(OVS_KEY_ATTR_ETHERTYPE, OVS_KEY_ATTR_IPV6):
             if (flow->dl_type != htons(ETH_TYPE_IPV6)) {
                 return EINVAL;
             }
@@ -912,8 +919,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             }
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_TCP):
-        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_TCP):
+        case TRANSITION(OVS_KEY_ATTR_IPV4, OVS_KEY_ATTR_TCP):
+        case TRANSITION(OVS_KEY_ATTR_IPV6, OVS_KEY_ATTR_TCP):
             if (flow->nw_proto != IPPROTO_TCP) {
                 return EINVAL;
             }
@@ -922,8 +929,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->tp_dst = tcp_key->tcp_dst;
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_UDP):
-        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_UDP):
+        case TRANSITION(OVS_KEY_ATTR_IPV4, OVS_KEY_ATTR_UDP):
+        case TRANSITION(OVS_KEY_ATTR_IPV6, OVS_KEY_ATTR_UDP):
             if (flow->nw_proto != IPPROTO_UDP) {
                 return EINVAL;
             }
@@ -932,7 +939,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->tp_dst = udp_key->udp_dst;
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_IPV4, ODP_KEY_ATTR_ICMP):
+        case TRANSITION(OVS_KEY_ATTR_IPV4, OVS_KEY_ATTR_ICMP):
             if (flow->nw_proto != IPPROTO_ICMP) {
                 return EINVAL;
             }
@@ -941,7 +948,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->tp_dst = htons(icmp_key->icmp_code);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_IPV6, ODP_KEY_ATTR_ICMPV6):
+        case TRANSITION(OVS_KEY_ATTR_IPV6, OVS_KEY_ATTR_ICMPV6):
             if (flow->nw_proto != IPPROTO_ICMPV6) {
                 return EINVAL;
             }
@@ -950,7 +957,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->tp_dst = htons(icmpv6_key->icmpv6_code);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_ETHERTYPE, ODP_KEY_ATTR_ARP):
+        case TRANSITION(OVS_KEY_ATTR_ETHERTYPE, OVS_KEY_ATTR_ARP):
             if (flow->dl_type != htons(ETH_TYPE_ARP)) {
                 return EINVAL;
             }
@@ -965,7 +972,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             memcpy(flow->arp_tha, arp_key->arp_tha, ETH_ADDR_LEN);
             break;
 
-        case TRANSITION(ODP_KEY_ATTR_ICMPV6, ODP_KEY_ATTR_ND):
+        case TRANSITION(OVS_KEY_ATTR_ICMPV6, OVS_KEY_ATTR_ND):
             if (flow->tp_src != htons(ND_NEIGHBOR_SOLICIT)
                     && flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
                 return EINVAL;
@@ -977,8 +984,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         default:
-            if (type == ODP_KEY_ATTR_UNSPEC
-                || prev_type == ODP_KEY_ATTR_UNSPEC) {
+            if (type == OVS_KEY_ATTR_UNSPEC
+                || prev_type == OVS_KEY_ATTR_UNSPEC) {
                 return EINVAL;
             }
             return EINVAL;
@@ -991,18 +998,18 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
 
     switch (prev_type) {
-    case ODP_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_UNSPEC:
         return EINVAL;
 
-    case ODP_KEY_ATTR_TUN_ID:
-    case ODP_KEY_ATTR_IN_PORT:
+    case OVS_KEY_ATTR_TUN_ID:
+    case OVS_KEY_ATTR_IN_PORT:
         return EINVAL;
 
-    case ODP_KEY_ATTR_ETHERNET:
-    case ODP_KEY_ATTR_8021Q:
+    case OVS_KEY_ATTR_ETHERNET:
+    case OVS_KEY_ATTR_8021Q:
         return 0;
 
-    case ODP_KEY_ATTR_ETHERTYPE:
+    case OVS_KEY_ATTR_ETHERTYPE:
         if (flow->dl_type == htons(ETH_TYPE_IP)
             || flow->dl_type == htons(ETH_TYPE_IPV6)
             || flow->dl_type == htons(ETH_TYPE_ARP)) {
@@ -1010,7 +1017,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
         return 0;
 
-    case ODP_KEY_ATTR_IPV4:
+    case OVS_KEY_ATTR_IPV4:
         if (flow->nw_proto == IPPROTO_TCP
             || flow->nw_proto == IPPROTO_UDP
             || flow->nw_proto == IPPROTO_ICMP) {
@@ -1018,7 +1025,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
         return 0;
 
-    case ODP_KEY_ATTR_IPV6:
+    case OVS_KEY_ATTR_IPV6:
         if (flow->nw_proto == IPPROTO_TCP
             || flow->nw_proto == IPPROTO_UDP
             || flow->nw_proto == IPPROTO_ICMPV6) {
@@ -1026,21 +1033,21 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
         return 0;
 
-    case ODP_KEY_ATTR_ICMPV6:
+    case OVS_KEY_ATTR_ICMPV6:
         if (flow->icmp_type == htons(ND_NEIGHBOR_SOLICIT)
             || flow->icmp_type == htons(ND_NEIGHBOR_ADVERT)) {
             return EINVAL;
         }
         return 0;
 
-    case ODP_KEY_ATTR_TCP:
-    case ODP_KEY_ATTR_UDP:
-    case ODP_KEY_ATTR_ICMP:
-    case ODP_KEY_ATTR_ARP:
-    case ODP_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_TCP:
+    case OVS_KEY_ATTR_UDP:
+    case OVS_KEY_ATTR_ICMP:
+    case OVS_KEY_ATTR_ARP:
+    case OVS_KEY_ATTR_ND:
         return 0;
 
-    case __ODP_KEY_ATTR_MAX:
+    case __OVS_KEY_ATTR_MAX:
     default:
         NOT_REACHED();
     }

@@ -351,7 +351,7 @@ static struct attribute_group bridge_group = {
 int dp_sysfs_add_dp(struct datapath *dp)
 {
 	struct kobject *kobj =
-		vport_get_kobj(rtnl_dereference(dp->ports[ODPP_LOCAL]));
+		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL]));
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -381,7 +381,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 int dp_sysfs_del_dp(struct datapath *dp)
 {
 	struct kobject *kobj =
-		vport_get_kobj(rtnl_dereference(dp->ports[ODPP_LOCAL]));
+		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL]));
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);

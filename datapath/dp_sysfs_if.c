@@ -221,7 +221,7 @@ int dp_sysfs_add_if(struct vport *p)
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
 	err = sysfs_create_link(&p->kobj,
-		vport_get_kobj(rtnl_dereference(dp->ports[ODPP_LOCAL])),
+		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL])),
 		SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;

@@ -43,24 +43,24 @@
 #include <linux/types.h>
 #include "openvswitch/datapath-protocol.h"
 
-/* ODP_VPORT_ATTR_OPTIONS attributes for tunnels.
+/* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
  *
- * ODP_TUNNEL_ATTR_FLAGS and ODP_TUNNEL_ATTR_DST_IPV4 are required.  All other
+ * OVS_TUNNEL_ATTR_FLAGS and OVS_TUNNEL_ATTR_DST_IPV4 are required.  All other
  * attributes are optional.
  */
 enum {
-	ODP_TUNNEL_ATTR_UNSPEC,
-	ODP_TUNNEL_ATTR_FLAGS,    /* 32-bit TNL_F_*. */
-	ODP_TUNNEL_ATTR_DST_IPV4, /* IPv4 destination address. */
-	ODP_TUNNEL_ATTR_SRC_IPV4, /* IPv4 source address. */
-	ODP_TUNNEL_ATTR_OUT_KEY,  /* __be64 key to use on output. */
-	ODP_TUNNEL_ATTR_IN_KEY,   /* __be64 key to match on input. */
-	ODP_TUNNEL_ATTR_TOS,      /* 8-bit TOS value. */
-	ODP_TUNNEL_ATTR_TTL,      /* 8-bit TTL value. */
-	__ODP_TUNNEL_ATTR_MAX
+	OVS_TUNNEL_ATTR_UNSPEC,
+	OVS_TUNNEL_ATTR_FLAGS,    /* 32-bit TNL_F_*. */
+	OVS_TUNNEL_ATTR_DST_IPV4, /* IPv4 destination address. */
+	OVS_TUNNEL_ATTR_SRC_IPV4, /* IPv4 source address. */
+	OVS_TUNNEL_ATTR_OUT_KEY,  /* __be64 key to use on output. */
+	OVS_TUNNEL_ATTR_IN_KEY,   /* __be64 key to match on input. */
+	OVS_TUNNEL_ATTR_TOS,      /* 8-bit TOS value. */
+	OVS_TUNNEL_ATTR_TTL,      /* 8-bit TTL value. */
+	__OVS_TUNNEL_ATTR_MAX
 };
 
-#define ODP_TUNNEL_ATTR_MAX (__ODP_TUNNEL_ATTR_MAX - 1)
+#define OVS_TUNNEL_ATTR_MAX (__OVS_TUNNEL_ATTR_MAX - 1)
 
 #define TNL_F_CSUM		(1 << 0) /* Checksum packets. */
 #define TNL_F_TOS_INHERIT	(1 << 1) /* Inherit the ToS from the inner packet. */

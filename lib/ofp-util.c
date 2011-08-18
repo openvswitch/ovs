@@ -1883,7 +1883,7 @@ make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
     opo->header.length = htons(size);
     opo->header.xid = htonl(0);
     opo->buffer_id = htonl(buffer_id);
-    opo->in_port = htons(in_port == ODPP_LOCAL ? OFPP_LOCAL : in_port);
+    opo->in_port = htons(in_port == OVSP_LOCAL ? OFPP_LOCAL : in_port);
     opo->actions_len = htons(actions_len);
     ofpbuf_put(out, actions, actions_len);
     if (packet) {

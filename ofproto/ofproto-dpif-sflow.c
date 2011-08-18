@@ -41,7 +41,7 @@ struct dpif_sflow_port {
     struct hmap_node hmap_node; /* In struct dpif_sflow's "ports" hmap. */
     struct netdev *netdev;      /* Underlying network device, for stats. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
-    uint16_t odp_port;          /* ODP port number. */
+    uint16_t odp_port;          /* Datapath port number. */
 };
 
 struct dpif_sflow {
@@ -533,12 +533,12 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dpif_upcall *upcall,
         ovs_be16 tci;
 
         switch (nl_attr_type(a)) {
-        case ODP_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_OUTPUT:
             fs.output = dpif_sflow_odp_port_to_ifindex(ds, nl_attr_get_u32(a));
             n_outputs++;
             break;
 
-        case ODP_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_SET_DL_TCI:
             tci = nl_attr_get_be16(a);
             switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
             switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);

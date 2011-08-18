@@ -366,7 +366,7 @@ show_dpif(struct dpif *dpif)
 {
     struct dpif_port_dump dump;
     struct dpif_port dpif_port;
-    struct odp_stats stats;
+    struct ovs_dp_stats stats;
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {

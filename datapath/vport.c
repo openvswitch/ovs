@@ -386,7 +386,7 @@ const char *vport_get_name(const struct vport *vport)
  *
  * Retrieves the type of the given device.
  */
-enum odp_vport_type vport_get_type(const struct vport *vport)
+enum ovs_vport_type vport_get_type(const struct vport *vport)
 {
 	return vport->ops->type;
 }
@@ -623,7 +623,7 @@ int vport_get_mtu(const struct vport *vport)
  * @skb: sk_buff where options should be appended.
  *
  * Retrieves the configuration of the given device, appending an
- * %ODP_VPORT_ATTR_OPTIONS attribute that in turn contains nested
+ * %OVS_VPORT_ATTR_OPTIONS attribute that in turn contains nested
  * vport-specific attributes to @skb.
  *
  * Returns 0 if successful, -EMSGSIZE if @skb has insufficient room, or another
@@ -636,7 +636,7 @@ int vport_get_options(const struct vport *vport, struct sk_buff *skb)
 {
 	struct nlattr *nla;
 
-	nla = nla_nest_start(skb, ODP_VPORT_ATTR_OPTIONS);
+	nla = nla_nest_start(skb, OVS_VPORT_ATTR_OPTIONS);
 	if (!nla)
 		return -EMSGSIZE;
 

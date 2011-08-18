@@ -1341,64 +1341,64 @@ out:
 	return sent_len;
 }
 
-static const struct nla_policy tnl_policy[ODP_TUNNEL_ATTR_MAX + 1] = {
-	[ODP_TUNNEL_ATTR_FLAGS]    = { .type = NLA_U32 },
-	[ODP_TUNNEL_ATTR_DST_IPV4] = { .type = NLA_U32 },
-	[ODP_TUNNEL_ATTR_SRC_IPV4] = { .type = NLA_U32 },
-	[ODP_TUNNEL_ATTR_OUT_KEY]  = { .type = NLA_U64 },
-	[ODP_TUNNEL_ATTR_IN_KEY]   = { .type = NLA_U64 },
-	[ODP_TUNNEL_ATTR_TOS]      = { .type = NLA_U8 },
-	[ODP_TUNNEL_ATTR_TTL]      = { .type = NLA_U8 },
+static const struct nla_policy tnl_policy[OVS_TUNNEL_ATTR_MAX + 1] = {
+	[OVS_TUNNEL_ATTR_FLAGS]    = { .type = NLA_U32 },
+	[OVS_TUNNEL_ATTR_DST_IPV4] = { .type = NLA_U32 },
+	[OVS_TUNNEL_ATTR_SRC_IPV4] = { .type = NLA_U32 },
+	[OVS_TUNNEL_ATTR_OUT_KEY]  = { .type = NLA_U64 },
+	[OVS_TUNNEL_ATTR_IN_KEY]   = { .type = NLA_U64 },
+	[OVS_TUNNEL_ATTR_TOS]      = { .type = NLA_U8 },
+	[OVS_TUNNEL_ATTR_TTL]      = { .type = NLA_U8 },
 };
 
-/* Sets ODP_TUNNEL_ATTR_* fields in 'mutable', which must initially be zeroed. */
+/* Sets OVS_TUNNEL_ATTR_* fields in 'mutable', which must initially be zeroed. */
 static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 			  const struct vport *cur_vport,
 			  struct tnl_mutable_config *mutable)
 {
 	const struct vport *old_vport;
 	const struct tnl_mutable_config *old_mutable;
-	struct nlattr *a[ODP_TUNNEL_ATTR_MAX + 1];
+	struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
 	int err;
 
 	if (!options)
 		return -EINVAL;
 
-	err = nla_parse_nested(a, ODP_TUNNEL_ATTR_MAX, options, tnl_policy);
+	err = nla_parse_nested(a, OVS_TUNNEL_ATTR_MAX, options, tnl_policy);
 	if (err)
 		return err;
 
-	if (!a[ODP_TUNNEL_ATTR_FLAGS] || !a[ODP_TUNNEL_ATTR_DST_IPV4])
+	if (!a[OVS_TUNNEL_ATTR_FLAGS] || !a[OVS_TUNNEL_ATTR_DST_IPV4])
 		return -EINVAL;
 
-	mutable->flags = nla_get_u32(a[ODP_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
+	mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
 
-	if (a[ODP_TUNNEL_ATTR_SRC_IPV4])
-		mutable->saddr = nla_get_be32(a[ODP_TUNNEL_ATTR_SRC_IPV4]);
-	mutable->daddr = nla_get_be32(a[ODP_TUNNEL_ATTR_DST_IPV4]);
+	if (a[OVS_TUNNEL_ATTR_SRC_IPV4])
+		mutable->saddr = nla_get_be32(a[OVS_TUNNEL_ATTR_SRC_IPV4]);
+	mutable->daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
 
-	if (a[ODP_TUNNEL_ATTR_TOS]) {
-		mutable->tos = nla_get_u8(a[ODP_TUNNEL_ATTR_TOS]);
+	if (a[OVS_TUNNEL_ATTR_TOS]) {
+		mutable->tos = nla_get_u8(a[OVS_TUNNEL_ATTR_TOS]);
 		if (mutable->tos != RT_TOS(mutable->tos))
 			return -EINVAL;
 	}
 
-	if (a[ODP_TUNNEL_ATTR_TTL])
-		mutable->ttl = nla_get_u8(a[ODP_TUNNEL_ATTR_TTL]);
+	if (a[OVS_TUNNEL_ATTR_TTL])
+		mutable->ttl = nla_get_u8(a[OVS_TUNNEL_ATTR_TTL]);
 
 	mutable->tunnel_type = tnl_ops->tunnel_type;
-	if (!a[ODP_TUNNEL_ATTR_IN_KEY]) {
+	if (!a[OVS_TUNNEL_ATTR_IN_KEY]) {
 		mutable->tunnel_type |= TNL_T_KEY_MATCH;
 		mutable->flags |= TNL_F_IN_KEY_MATCH;
 	} else {
 		mutable->tunnel_type |= TNL_T_KEY_EXACT;
-		mutable->in_key = nla_get_be64(a[ODP_TUNNEL_ATTR_IN_KEY]);
+		mutable->in_key = nla_get_be64(a[OVS_TUNNEL_ATTR_IN_KEY]);
 	}
 
-	if (!a[ODP_TUNNEL_ATTR_OUT_KEY])
+	if (!a[OVS_TUNNEL_ATTR_OUT_KEY])
 		mutable->flags |= TNL_F_OUT_KEY_ACTION;
 	else
-		mutable->out_key = nla_get_be64(a[ODP_TUNNEL_ATTR_OUT_KEY]);
+		mutable->out_key = nla_get_be64(a[OVS_TUNNEL_ATTR_OUT_KEY]);
 
 	mutable->tunnel_hlen = tnl_ops->hdr_len(mutable);
 	if (mutable->tunnel_hlen < 0)
@@ -1515,19 +1515,19 @@ int tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
-	NLA_PUT_U32(skb, ODP_TUNNEL_ATTR_FLAGS, mutable->flags & TNL_F_PUBLIC);
-	NLA_PUT_BE32(skb, ODP_TUNNEL_ATTR_DST_IPV4, mutable->daddr);
+	NLA_PUT_U32(skb, OVS_TUNNEL_ATTR_FLAGS, mutable->flags & TNL_F_PUBLIC);
+	NLA_PUT_BE32(skb, OVS_TUNNEL_ATTR_DST_IPV4, mutable->daddr);
 
 	if (!(mutable->flags & TNL_F_IN_KEY_MATCH))
-		NLA_PUT_BE64(skb, ODP_TUNNEL_ATTR_IN_KEY, mutable->in_key);
+		NLA_PUT_BE64(skb, OVS_TUNNEL_ATTR_IN_KEY, mutable->in_key);
 	if (!(mutable->flags & TNL_F_OUT_KEY_ACTION))
-		NLA_PUT_BE64(skb, ODP_TUNNEL_ATTR_OUT_KEY, mutable->out_key);
+		NLA_PUT_BE64(skb, OVS_TUNNEL_ATTR_OUT_KEY, mutable->out_key);
 	if (mutable->saddr)
-		NLA_PUT_BE32(skb, ODP_TUNNEL_ATTR_SRC_IPV4, mutable->saddr);
+		NLA_PUT_BE32(skb, OVS_TUNNEL_ATTR_SRC_IPV4, mutable->saddr);
 	if (mutable->tos)
-		NLA_PUT_U8(skb, ODP_TUNNEL_ATTR_TOS, mutable->tos);
+		NLA_PUT_U8(skb, OVS_TUNNEL_ATTR_TOS, mutable->tos);
 	if (mutable->ttl)
-		NLA_PUT_U8(skb, ODP_TUNNEL_ATTR_TTL, mutable->ttl);
+		NLA_PUT_U8(skb, OVS_TUNNEL_ATTR_TTL, mutable->ttl);
 
 	return 0;
 

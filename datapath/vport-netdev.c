@@ -399,7 +399,7 @@ struct vport *netdev_get_vport(struct net_device *dev)
 }
 
 const struct vport_ops netdev_vport_ops = {
-	.type		= ODP_VPORT_TYPE_NETDEV,
+	.type		= OVS_VPORT_TYPE_NETDEV,
 	.flags          = (VPORT_F_REQUIRED |
 			  (USE_VPORT_STATS ? VPORT_F_GEN_STATS : 0)),
 	.init		= netdev_init,
