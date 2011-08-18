@@ -123,12 +123,16 @@ main(int argc, char *argv[])
     /* Add ports to the datapath if requested by the user. */
     SSET_FOR_EACH (port, &s.ports) {
         struct netdev *netdev;
+        char *name, *type;
 
-        error = netdev_open(port, "system", &netdev);
+        netdev_parse_name(port, &name, &type);
+        error = netdev_open(name, type, &netdev);
         if (error) {
             VLOG_FATAL("%s: failed to open network device (%s)",
                        port, strerror(error));
         }
+        free(name);
+        free(type);
 
         error = ofproto_port_add(ofproto, netdev, NULL);
         if (error) {

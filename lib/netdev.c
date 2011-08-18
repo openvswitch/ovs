@@ -359,6 +359,25 @@ netdev_enumerate(struct sset *sset)
     return error;
 }
 
+/* Parses 'netdev_name_', which is of the form [type@]name into its component
+ * pieces.  'name' and 'type' must be freed by the caller. */
+void
+netdev_parse_name(const char *netdev_name_, char **name, char **type)
+{
+    char *netdev_name = xstrdup(netdev_name_);
+    char *separator;
+
+    separator = strchr(netdev_name, '@');
+    if (separator) {
+        *separator = '\0';
+        *type = netdev_name;
+        *name = xstrdup(separator + 1);
+    } else {
+        *name = netdev_name;
+        *type = xstrdup("system");
+    }
+}
+
 /* Attempts to set up 'netdev' for receiving packets with netdev_recv().
  * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
  * indicates that the network device does not implement packet reception

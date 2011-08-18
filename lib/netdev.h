@@ -92,6 +92,8 @@ bool netdev_is_open(const char *name);
 
 int netdev_enumerate(struct sset *);
 
+void netdev_parse_name(const char *netdev_name, char **name, char **type);
+
 /* Options. */
 int netdev_set_config(struct netdev *, const struct shash *args);
 int netdev_get_config(const struct netdev *, struct shash *);
