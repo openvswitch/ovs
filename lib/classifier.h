@@ -44,7 +44,7 @@ struct classifier {
 
 /* A set of rules that all have the same fields wildcarded. */
 struct cls_table {
-    struct hmap_node hmap_node; /* Within struct classifier 'wctables'. */
+    struct hmap_node hmap_node; /* Within struct classifier 'tables' hmap. */
     struct hmap rules;          /* Contains "struct cls_rule"s. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
     int n_table_rules;          /* Number of rules, including duplicates. */
