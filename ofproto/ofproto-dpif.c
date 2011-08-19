@@ -559,6 +559,8 @@ run(struct ofproto *ofproto_)
         bundle_run(bundle);
     }
 
+    mac_learning_run(ofproto->ml, &ofproto->revalidate_set);
+
     /* Now revalidate if there's anything to do. */
     if (ofproto->need_revalidate
         || !tag_set_is_empty(&ofproto->revalidate_set)) {
@@ -606,6 +608,7 @@ wait(struct ofproto *ofproto_)
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
         bundle_wait(bundle);
     }
+    mac_learning_wait(ofproto->ml);
     if (ofproto->need_revalidate) {
         /* Shouldn't happen, but if it does just go around again. */
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
