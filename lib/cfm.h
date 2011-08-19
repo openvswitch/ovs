@@ -27,9 +27,6 @@ struct ofpbuf;
 struct cfm_settings {
     uint16_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
-
-    const uint16_t *remote_mpids; /* Array of remote MPIDs */
-    size_t n_remote_mpids;        /* Number of MPIDs in 'remote_mpids'. */
 };
 
 void cfm_init(void);

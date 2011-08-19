@@ -2607,18 +2607,13 @@ iface_configure_cfm(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
     struct cfm_settings s;
-    uint16_t remote_mpid;
 
-    if (!cfg->n_cfm_mpid || !cfg->n_cfm_remote_mpid) {
+    if (!cfg->n_cfm_mpid) {
         ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->ofp_port);
         return;
     }
 
     s.mpid = *cfg->cfm_mpid;
-    remote_mpid = *cfg->cfm_remote_mpid;
-    s.remote_mpids = &remote_mpid;
-    s.n_remote_mpids = 1;
-
     s.interval = atoi(get_interface_other_config(iface->cfg, "cfm_interval",
                                                  "0"));
     if (s.interval <= 0) {

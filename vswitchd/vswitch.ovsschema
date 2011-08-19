@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "5.2.0",
- "cksum": "434778864 14545",
+ "version": "6.0.0",
+ "cksum": "1100213054 14376",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -169,11 +169,6 @@
        "cfm_mpid": {
          "type": {
            "key": {"type": "integer", "minInteger": 1, "maxInteger": 8191},
-           "min": 0,
-           "max": 1}},
-       "cfm_remote_mpid": {
-         "type" : {
-           "key": { "type": "integer", "minInteger": 1, "maxInteger": 8191},
            "min": 0,
            "max": 1}},
        "cfm_fault": {

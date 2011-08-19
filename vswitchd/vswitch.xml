@@ -1332,6 +1332,15 @@
         configurable transmission interval.
       </p>
 
+      <p>
+        According to the 802.1ag specification, each Maintenance Point should
+        be configured out-of-band with a list of Remote Maintenance Points it
+        should have connectivity to.  Open vSwitch differs from the
+        specification in this area.  It simply assumes the link is faulted if
+        no Remote Maintenance Points are reachable, and considers it not
+        faulted otherwise.
+      </p>
+
       <column name="cfm_mpid">
         A Maintenance Point ID (MPID) uniquely identifies each endpoint within
         a Maintenance Association.  The MPID is used to identify this endpoint
@@ -1340,18 +1349,22 @@
         CFM on this <ref table="Interface"/>.
       </column>
 
-      <column name="cfm_remote_mpid">
-        The MPID of the remote endpoint being monitored.  If this
-        <ref table="Interface"/> does not have connectivity to an endpoint
-        advertising the configured MPID, a fault is signalled.  Must be
-        configured to enable CFM on this <ref table="Interface"/>
-      </column>
-
       <column name="cfm_fault">
-        Indicates a connectivity fault triggered by an inability to receive
-        heartbeats from the remote endpoint.  When a fault is triggered on
-        <ref table="Interface"/>s participating in bonds, they will be
-        disabled.
+        <p>
+          Indicates a connectivity fault triggered by an inability to receive
+          heartbeats from any remote endpoint.  When a fault is triggered on
+          <ref table="Interface"/>s participating in bonds, they will be
+          disabled.
+        </p>
+        <p>
+          Faults can be triggered for several reasons.  Most importantly they
+          are triggered when no CCMs are received for a period of 3.5 times the
+          transmission interval. Faults are also triggered when any CCMs
+          indicate that a Remote Maintenance Point is not receiving CCMs but
+          able to send them.  Finally, a fault is triggered if a CCM is
+          received which indicates unexpected configuration.  Notably, this
+          case arises when a CCM is received which advertises the local MPID.
+        </p>
       </column>
     </group>
 
