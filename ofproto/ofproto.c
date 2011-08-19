@@ -2252,7 +2252,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->cr = fm->cr;
     rule->pending = NULL;
     rule->flow_cookie = fm->cookie;
-    rule->created = time_msec();
+    rule->created = rule->modified = time_msec();
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
     rule->table_id = table - ofproto->tables;
@@ -2315,6 +2315,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             rule->actions = ofputil_actions_clone(fm->actions, fm->n_actions);
             rule->n_actions = fm->n_actions;
             rule->ofproto->ofproto_class->rule_modify_actions(rule);
+        } else {
+            rule->modified = time_msec();
         }
         rule->flow_cookie = fm->cookie;
     }
@@ -2944,7 +2946,9 @@ ofoperation_complete(struct ofoperation *op, int error)
         break;
 
     case OFOPERATION_MODIFY:
-        if (error) {
+        if (!error) {
+            rule->modified = time_msec();
+        } else {
             free(rule->actions);
             rule->actions = op->actions;
             rule->n_actions = op->n_actions;

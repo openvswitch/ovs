@@ -2009,7 +2009,7 @@ rule_expire(struct rule_dpif *rule)
     /* Has 'rule' expired? */
     now = time_msec();
     if (rule->up.hard_timeout
-        && now > rule->up.created + rule->up.hard_timeout * 1000) {
+        && now > rule->up.modified + rule->up.hard_timeout * 1000) {
         reason = OFPRR_HARD_TIMEOUT;
     } else if (rule->up.idle_timeout && list_is_empty(&rule->facets)
                && now > rule->used + rule->up.idle_timeout * 1000) {

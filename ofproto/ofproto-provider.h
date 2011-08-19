@@ -107,8 +107,9 @@ struct rule {
     ovs_be64 flow_cookie;        /* Controller-issued identifier. */
 
     long long int created;       /* Creation time. */
+    long long int modified;      /* Time of last modification. */
     uint16_t idle_timeout;       /* In seconds from time of last use. */
-    uint16_t hard_timeout;       /* In seconds from time of creation. */
+    uint16_t hard_timeout;       /* In seconds from last modification. */
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
 
