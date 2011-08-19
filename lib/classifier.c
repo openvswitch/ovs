@@ -45,7 +45,6 @@ static struct cls_rule *insert_rule(struct cls_table *, struct cls_rule *);
 
 static bool flow_equal_except(const struct flow *, const struct flow *,
                                 const struct flow_wildcards *);
-static void zero_wildcards(struct flow *, const struct flow_wildcards *);
 
 /* Iterates RULE over HEAD and all of the cls_rules on HEAD->list. */
 #define FOR_EACH_RULE_IN_LIST(RULE, HEAD)                               \
@@ -109,7 +108,7 @@ cls_rule_init_catchall(struct cls_rule *rule, unsigned int priority)
 void
 cls_rule_zero_wildcarded_fields(struct cls_rule *rule)
 {
-    zero_wildcards(&rule->flow, &rule->wc);
+    flow_zero_wildcards(&rule->flow, &rule->wc);
 }
 
 void
@@ -1016,7 +1015,7 @@ find_match(const struct cls_table *table, const struct flow *flow)
     struct flow f;
 
     f = *flow;
-    zero_wildcards(&f, &table->wc);
+    flow_zero_wildcards(&f, &table->wc);
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, flow_hash(&f, 0),
                              &table->rules) {
         if (flow_equal(&f, &rule->flow)) {
@@ -1160,62 +1159,4 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                     &wildcards->ipv6_dst_mask)
             && (wc & FWW_ND_TARGET
                 || ipv6_addr_equals(&a->nd_target, &b->nd_target)));
-}
-
-static void
-zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
-{
-    const flow_wildcards_t wc = wildcards->wildcards;
-    int i;
-
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        flow->regs[i] &= wildcards->reg_masks[i];
-    }
-    flow->tun_id &= wildcards->tun_id_mask;
-    flow->nw_src &= wildcards->nw_src_mask;
-    flow->nw_dst &= wildcards->nw_dst_mask;
-    if (wc & FWW_IN_PORT) {
-        flow->in_port = 0;
-    }
-    flow->vlan_tci &= wildcards->vlan_tci_mask;
-    if (wc & FWW_DL_TYPE) {
-        flow->dl_type = 0;
-    }
-    if (wc & FWW_TP_SRC) {
-        flow->tp_src = 0;
-    }
-    if (wc & FWW_TP_DST) {
-        flow->tp_dst = 0;
-    }
-    if (wc & FWW_DL_SRC) {
-        memset(flow->dl_src, 0, sizeof flow->dl_src);
-    }
-    if (wc & FWW_DL_DST) {
-        flow->dl_dst[0] &= 0x01;
-        memset(&flow->dl_dst[1], 0, 5);
-    }
-    if (wc & FWW_ETH_MCAST) {
-        flow->dl_dst[0] &= 0xfe;
-    }
-    if (wc & FWW_NW_PROTO) {
-        flow->nw_proto = 0;
-    }
-    if (wc & FWW_NW_TOS) {
-        flow->nw_tos = 0;
-    }
-    if (wc & FWW_ARP_SHA) {
-        memset(flow->arp_sha, 0, sizeof flow->arp_sha);
-    }
-    if (wc & FWW_ARP_THA) {
-        memset(flow->arp_tha, 0, sizeof flow->arp_tha);
-    }
-    flow->ipv6_src = ipv6_addr_bitand(&flow->ipv6_src,
-            &wildcards->ipv6_src_mask);
-    flow->ipv6_dst = ipv6_addr_bitand(&flow->ipv6_dst,
-            &wildcards->ipv6_dst_mask);
-    if (wc & FWW_ND_TARGET) {
-        memset(&flow->nd_target, 0, sizeof flow->nd_target);
-    }
 }

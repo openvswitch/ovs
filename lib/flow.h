@@ -82,6 +82,8 @@ int flow_extract(struct ofpbuf *, ovs_be64 tun_id, uint16_t in_port,
                  struct flow *);
 void flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
                         struct dpif_flow_stats *);
+void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
+
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);
