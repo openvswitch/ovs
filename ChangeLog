@@ -1,3 +1,7 @@
+v1.2.1 - 19 Aug 2011
+------------------------
+    - Bug fixes
+
 v1.2.0 - 03 Aug 2011
 ------------------------
     - New "ofproto" abstraction layer to ease porting to hardware
