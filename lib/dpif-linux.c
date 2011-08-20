@@ -308,6 +308,18 @@ dpif_linux_destroy(struct dpif *dpif_)
     return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
+static void
+dpif_linux_run(struct dpif *dpif OVS_UNUSED)
+{
+    rtnetlink_link_notifier_run();
+}
+
+static void
+dpif_linux_wait(struct dpif *dpif OVS_UNUSED)
+{
+    rtnetlink_link_notifier_wait();
+}
+
 static int
 dpif_linux_get_stats(const struct dpif *dpif_, struct ovs_dp_stats *stats)
 {
@@ -589,8 +601,6 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     if (!sset_is_empty(&dpif->changed_ports) || dpif->change_error) {
         poll_immediate_wake();
-    } else {
-        rtnetlink_link_notifier_wait();
     }
 }
 
@@ -1048,8 +1058,8 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_destroy,
-    NULL,                       /* run */
-    NULL,                       /* wait */
+    dpif_linux_run,
+    dpif_linux_wait,
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,
     dpif_linux_set_drop_frags,
