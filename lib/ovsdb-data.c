@@ -1278,19 +1278,7 @@ struct json *
 ovsdb_datum_to_json(const struct ovsdb_datum *datum,
                     const struct ovsdb_type *type)
 {
-    if (datum->n == 1 && !ovsdb_type_is_map(type)) {
-        return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
-    } else if (type->value.type == OVSDB_TYPE_VOID) {
-        struct json **elems;
-        size_t i;
-
-        elems = xmalloc(datum->n * sizeof *elems);
-        for (i = 0; i < datum->n; i++) {
-            elems[i] = ovsdb_atom_to_json(&datum->keys[i], type->key.type);
-        }
-
-        return wrap_json("set", json_array_create(elems, datum->n));
-    } else {
+    if (ovsdb_type_is_map(type)) {
         struct json **elems;
         size_t i;
 
@@ -1302,6 +1290,18 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
         }
 
         return wrap_json("map", json_array_create(elems, datum->n));
+    } else if (datum->n == 1) {
+        return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
+    } else {
+        struct json **elems;
+        size_t i;
+
+        elems = xmalloc(datum->n * sizeof *elems);
+        for (i = 0; i < datum->n; i++) {
+            elems[i] = ovsdb_atom_to_json(&datum->keys[i], type->key.type);
+        }
+
+        return wrap_json("set", json_array_create(elems, datum->n));
     }
 }
 

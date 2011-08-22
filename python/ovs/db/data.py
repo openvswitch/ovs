@@ -325,14 +325,14 @@ class Datum(object):
             return Datum(type_, {keyAtom: None})
 
     def to_json(self):
-        if len(self.values) == 1 and not self.type.is_map():
-            key = self.values.keys()[0]
-            return key.to_json()
-        elif not self.type.is_map():
-            return ["set", [k.to_json() for k in sorted(self.values.keys())]]
-        else:
+        if self.type.is_map():
             return ["map", [[k.to_json(), v.to_json()]
                             for k, v in sorted(self.values.items())]]
+        elif len(self.values) == 1:
+            key = self.values.keys()[0]
+            return key.to_json()
+        else:
+            return ["set", [k.to_json() for k in sorted(self.values.keys())]]
 
     def to_string(self):
         head = tail = None
