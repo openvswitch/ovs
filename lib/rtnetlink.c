@@ -37,6 +37,7 @@ static void rtnetlink_report(struct rtnetlink *rtn, void *change);
 struct rtnetlink {
     struct nl_sock *notify_sock; /* Rtnetlink socket. */
     struct list all_notifiers;   /* All rtnetlink notifiers. */
+    bool has_run;                /* Guard for run and wait functions. */
 
     /* Passed in by rtnetlink_create(). */
     int multicast_group;         /* Multicast group we listen on. */
@@ -59,6 +60,7 @@ rtnetlink_create(int multicast_group, rtnetlink_parse_func *parse,
     rtn->multicast_group = multicast_group;
     rtn->parse           = parse;
     rtn->change          = change;
+    rtn->has_run         = false;
 
     list_init(&rtn->all_notifiers);
     return rtn;
@@ -135,10 +137,11 @@ rtnetlink_notifier_run(struct rtnetlink *rtn)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-    if (!rtn->notify_sock) {
+    if (!rtn->notify_sock || rtn->has_run) {
         return;
     }
 
+    rtn->has_run = true;
     for (;;) {
         struct ofpbuf *buf;
         int error;
@@ -170,6 +173,7 @@ rtnetlink_notifier_run(struct rtnetlink *rtn)
 void
 rtnetlink_notifier_wait(struct rtnetlink *rtn)
 {
+    rtn->has_run = false;
     if (rtn->notify_sock) {
         nl_sock_wait(rtn->notify_sock, POLLIN);
     }
