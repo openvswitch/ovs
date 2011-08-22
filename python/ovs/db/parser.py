@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ def float_to_int(x):
     # XXX still needed?
     if type(x) == float:
         integer = int(x)
-        if integer == x and integer >= -2**53 and integer < 2**53:
+        if integer == x and -2**53 <= integer < 2**53:
             return integer
     return x
 

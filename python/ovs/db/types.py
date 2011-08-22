@@ -141,7 +141,7 @@ class BaseType(object):
             value = default
         else:
             max_value = 2**32 - 1
-            if value < 0 or value > max_value:
+            if not (0 <= value <= max_value):
                 raise error.Error("%s out of valid range 0 to %d"
                                   % (name, max_value), value)
         return value
@@ -396,9 +396,7 @@ class Type(object):
         return (self.key.type != VoidType and self.key.is_valid() and
                 (self.value is None or
                  (self.value.type != VoidType and self.value.is_valid())) and
-                self.n_min <= 1 and
-                self.n_min <= self.n_max and
-                self.n_max >= 1)
+                self.n_min <= 1 <= self.n_max)
 
     def is_scalar(self):
         return self.n_min == 1 and self.n_max == 1 and not self.value
@@ -423,7 +421,7 @@ class Type(object):
     def __n_from_json(json, default):
         if json is None:
             return default
-        elif type(json) == int and json >= 0 and json <= sys.maxint:
+        elif type(json) == int and 0 <= json <= sys.maxint:
             return json
         else:
             raise error.Error("bad min or max value", json)

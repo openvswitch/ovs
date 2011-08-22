@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -556,7 +556,6 @@ ovsdb_type_is_valid(const struct ovsdb_type *type)
             && ovsdb_base_type_is_valid(&type->key)
             && ovsdb_base_type_is_valid(&type->value)
             && type->n_min <= 1
-            && type->n_min <= type->n_max
             && type->n_max >= 1);
 }
 

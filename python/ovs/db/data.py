@@ -402,7 +402,7 @@ class Datum(object):
 
     def conforms_to_type(self):
         n = len(self.values)
-        return n >= self.type.n_min and n <= self.type.n_max
+        return self.type.n_min <= n <= self.type.n_max
 
     def cInitDatum(self, var):
         if len(self.values) == 0:
