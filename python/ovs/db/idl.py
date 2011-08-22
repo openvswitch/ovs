@@ -271,8 +271,8 @@ class Idl:
                                 % (column_name, table_name, e))
                 continue
 
-            if datum != row.__dict__[column_name]:
-                row.__dict__[column_name] = datum
+            if datum != getattr(row, column_name):
+                setattr(row, column_name, datum)
                 changed = True
             else:
                 # Didn't really change but the OVSDB monitor protocol always
@@ -296,7 +296,7 @@ class Idl:
             pass
         row = self.data[table.name][uuid] = Row()
         for column in table.columns.itervalues():
-            row.__dict__[column.name] = ovs.db.data.Datum.default(column.type)
+            setattr(row, column.name, ovs.db.data.Datum.default(column.type))
         return row
 
     def force_reconnect(self):

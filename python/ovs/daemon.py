@@ -266,8 +266,7 @@ def _should_restart(status):
     if os.WIFSIGNALED(status):
         for signame in ("SIGABRT", "SIGALRM", "SIGBUS", "SIGFPE", "SIGILL",
                         "SIGPIPE", "SIGSEGV", "SIGXCPU", "SIGXFSZ"):
-            if (signame in signal.__dict__ and
-                os.WTERMSIG(status) == signal.__dict__[signame]):
+            if os.WTERMSIG(status) == getattr(signal, signame, None):
                 return True
     return False
 

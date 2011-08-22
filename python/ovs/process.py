@@ -18,7 +18,7 @@ import signal
 def _signal_status_msg(type, signr):
     s = "%s by signal %d" % (type, signr)
     for name in signal.__dict__:
-        if name.startswith("SIG") and signal.__dict__[name] == signr:
+        if name.startswith("SIG") and getattr(signal, name) == signr:
             return "%s (%s)" % (s, name)
     return s
     
