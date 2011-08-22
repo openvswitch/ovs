@@ -30,7 +30,7 @@ class AtomicType(object):
             for atomic_type in ATOMIC_TYPES:
                 if s == atomic_type.name:
                     return atomic_type
-        raise error.Error("\"%s\" is not an atomic type" % s)
+        raise error.Error('"%s" is not an atomic type' % s)
 
     @staticmethod
     def from_json(json):
@@ -39,7 +39,7 @@ class AtomicType(object):
         try:
             return AtomicType.from_string(json)
         except error.Error:
-            raise error.Error("\"%s\" is not an atomic-type" % json, json)
+            raise error.Error('"%s" is not an atomic-type' % json, json)
 
     def __str__(self):
         return self.name
@@ -181,8 +181,8 @@ class BaseType(object):
                 base.ref_type = parser.get_optional("refType", [str, unicode],
                                                    "strong")
                 if base.ref_type not in ['strong', 'weak']:
-                    raise error.Error("refType must be \"strong\" or \"weak\" "
-                                      "(not \"%s\")" % base.ref_type)
+                    raise error.Error('refType must be "strong" or "weak" '
+                                      '(not "%s")' % base.ref_type)
         parser.finish()
 
         return base
@@ -328,7 +328,7 @@ class BaseType(object):
         if self.ref_table:
             return "%s = NULL;" % var
         elif self.type == StringType and not is_optional:
-            return "%s = \"\";" % var
+            return '%s = "";' % var
         else:
             pattern = {IntegerType: '%s = 0;',
                        RealType: '%s = 0.0;',

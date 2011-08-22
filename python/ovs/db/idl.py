@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -185,40 +185,40 @@ class Idl:
         for table_name, table_update in table_updates.iteritems():
             table = self.schema.tables.get(table_name)
             if not table:
-                raise error.Error("<table-updates> includes unknown "
-                                  "table \"%s\"" % table_name)
+                raise error.Error('<table-updates> includes unknown '
+                                  'table "%s"' % table_name)
 
             if type(table_update) != dict:
-                raise error.Error("<table-update> for table \"%s\" is not "
-                                  "an object" % table_name, table_update)
+                raise error.Error('<table-update> for table "%s" is not '
+                                  'an object' % table_name, table_update)
 
             for uuid_string, row_update in table_update.iteritems():
                 if not ovs.ovsuuid.UUID.is_valid_string(uuid_string):
-                    raise error.Error("<table-update> for table \"%s\" "
-                                      "contains bad UUID \"%s\" as member "
-                                      "name" % (table_name, uuid_string),
+                    raise error.Error('<table-update> for table "%s" '
+                                      'contains bad UUID "%s" as member '
+                                      'name' % (table_name, uuid_string),
                                       table_update)
                 uuid = ovs.ovsuuid.UUID.from_string(uuid_string)
 
                 if type(row_update) != dict:
-                    raise error.Error("<table-update> for table \"%s\" "
-                                      "contains <row-update> for %s that "
-                                      "is not an object"
+                    raise error.Error('<table-update> for table "%s" '
+                                      'contains <row-update> for %s that '
+                                      'is not an object'
                                       % (table_name, uuid_string))
 
                 old = row_update.get("old", None)
                 new = row_update.get("new", None)
 
                 if old is not None and type(old) != dict:
-                    raise error.Error("\"old\" <row> is not object", old)
+                    raise error.Error('"old" <row> is not an object', old)
                 if new is not None and type(new) != dict:
-                    raise error.Error("\"new\" <row> is not object", new)
+                    raise error.Error('"new" <row> is not an object', new)
                 if (old is not None) + (new is not None) != len(row_update):
                     raise error.Error("<row-update> contains unexpected "
                                       "member", row_update)
                 if not old and not new:
-                    raise error.Error("<row-update> missing \"old\" and "
-                                      "\"new\" members", row_update)
+                    raise error.Error('<row-update> missing "old" and '
+                                      '"new" members', row_update)
 
                 if self.__parse_row_update(table, uuid, old, new):
                     self.change_seqno += 1

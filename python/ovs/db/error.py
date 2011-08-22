@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,5 +29,5 @@ class Error(Exception):
         # Compose message.
         syntax = ""
         if self.json is not None:
-                syntax = "syntax \"%s\": " % ovs.json.to_string(self.json)
+                syntax = 'syntax "%s": ' % ovs.json.to_string(self.json)
         Exception.__init__(self, "%s%s: %s" % (syntax, self.tag, self.msg))

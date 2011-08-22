@@ -94,7 +94,7 @@ def json_type_to_string(type):
 def unwrap_json(json, name, need_type):
     if (type(json) != list or len(json) != 2 or json[0] != name or
         type(json[1]) != need_type):
-        raise error.Error("expected [\"%s\", <%s>]"
+        raise error.Error('expected ["%s", <%s>]'
                           % (name, json_type_to_string(need_type)), json)
     return json[1]
 

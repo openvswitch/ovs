@@ -143,12 +143,12 @@ class Atom(object):
             length = len(s)
             if length < base.min_length:
                 raise ConstraintViolation(
-                    "\"%s\" length %d is less than minimum allowed length %d"
+                    '"%s" length %d is less than minimum allowed length %d'
                     % (s, length, base.min_length))
             elif length > base.max_length:
                 raise ConstraintViolation(
-                    "\"%s\" length %d is greater than maximum allowed "
-                    "length %d" % (s, length, base.max_length))
+                    '"%s" length %d is greater than maximum allowed '
+                    'length %d' % (s, length, base.max_length))
     
     def to_json(self):
         if self.type == ovs.db.types.UuidType:

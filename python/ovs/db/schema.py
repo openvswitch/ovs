@@ -65,13 +65,13 @@ class DbSchema(object):
 
         if (version is not None and
             not re.match('[0-9]+\.[0-9]+\.[0-9]+$', version)):
-            raise error.Error("schema version \"%s\" not in format x.y.z"
+            raise error.Error('schema version "%s" not in format x.y.z'
                               % version)
 
         tables = {}
         for tableName, tableJson in tablesJson.iteritems():
             if tableName.startswith('_'):
-                raise error.Error("names beginning with \"_\" are reserved",
+                raise error.Error('names beginning with "_" are reserved',
                                   json)
             elif not ovs.db.parser.is_identifier(tableName):
                 raise error.Error("name must be a valid id", json)
@@ -183,7 +183,7 @@ class TableSchema(object):
         columns = {}
         for column_name, column_json in columns_json.iteritems():
             if column_name.startswith('_'):
-                raise error.Error("names beginning with \"_\" are reserved",
+                raise error.Error('names beginning with "_" are reserved',
                                   json)
             elif not ovs.db.parser.is_identifier(column_name):
                 raise error.Error("name must be a valid id", json)
