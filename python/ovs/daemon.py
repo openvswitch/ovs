@@ -75,8 +75,7 @@ def set_pidfile(name):
 
 def get_pidfile():
     """Returns an absolute path to the configured pidfile, or None if no
-    pidfile is configured.  The caller must not modify or free the returned
-    string."""
+    pidfile is configured."""
     return _pidfile
 
 def set_no_chdir():
