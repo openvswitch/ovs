@@ -422,10 +422,10 @@ def __read_pidfile(pidfile, delete_if_stale):
             logging.warning("%s: failed to delete stale pidfile"
                             % (pidfile, e.strerror))
             return -e.errno
-
-        logging.debug("%s: deleted stale pidfile" % pidfile)
-        file.close()
-        return 0
+        else:
+            logging.debug("%s: deleted stale pidfile" % pidfile)
+            file.close()
+            return 0
     except IOError, e:
         if e.errno not in [errno.EACCES, errno.EAGAIN]:
             logging.warn("%s: fcntl: %s" % (pidfile, e.strerror))
