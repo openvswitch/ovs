@@ -146,7 +146,6 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
-        case 'H':
         case 'h':
             usage();
 
