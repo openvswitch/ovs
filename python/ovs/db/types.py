@@ -337,8 +337,8 @@ class BaseType(object):
             
     def cInitBaseType(self, indent, var):
         stmts = []
-        stmts.append('ovsdb_base_type_init(&%s, OVSDB_TYPE_%s);' % (
-                var, self.type.to_string().upper()),)
+        stmts.append('ovsdb_base_type_init(&%s, %s);' % (
+                var, self.toAtomicType()))
         if self.enum:
             stmts.append("%s.enum_ = xmalloc(sizeof *%s.enum_);"
                          % (var, var))
