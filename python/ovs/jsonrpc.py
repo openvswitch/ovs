@@ -34,7 +34,6 @@ class Message(object):
                T_NOTIFY: "notification",
                T_REPLY: "reply",
                T_ERROR: "error"}
-    __next_id = 0
 
     def __init__(self, type_, method, params, result, error, id):
         self.type = type_
