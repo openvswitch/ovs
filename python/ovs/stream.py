@@ -136,6 +136,7 @@ class Stream(object):
         returns errno.EAGAIN."""
         last_state = -1         # Always differs from initial self.state
         while self.state != last_state:
+            last_state = self.state
             if self.state == Stream.__S_CONNECTING:
                 self.__scs_connecting()
             elif self.state == Stream.__S_CONNECTED:
