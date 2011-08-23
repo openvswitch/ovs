@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,19 +17,7 @@ import logging
 import os
 import signal
 
-_inited = False
 _hooks = []
-
-def _init():
-    global _inited
-    if not _inited:
-        _inited = True
-
-        for signr in (signal.SIGTERM, signal.SIGINT,
-                      signal.SIGHUP, signal.SIGALRM):
-            if signal.getsignal(signr) == signal.SIG_DFL:
-                signal.signal(signr, _signal_handler)
-        atexit.register(_atexit_handler)
 
 def add_hook(hook, cancel, run_at_exit):
     _init()
@@ -119,3 +107,15 @@ def _call_hooks(signr):
     for hook, cancel, run_at_exit in _hooks:
         if signr != 0 or run_at_exit:
             hook()
+
+_inited = False
+def _init():
+    global _inited
+    if not _inited:
+        _inited = True
+
+        for signr in (signal.SIGTERM, signal.SIGINT,
+                      signal.SIGHUP, signal.SIGALRM):
+            if signal.getsignal(signr) == signal.SIG_DFL:
+                signal.signal(signr, _signal_handler)
+        atexit.register(_atexit_handler)
