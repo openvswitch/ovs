@@ -51,22 +51,18 @@ def to_stream(obj, stream, pretty=False, sort_keys=True):
             items = sorted(obj.items())
         else:
             items = obj.iteritems()
-        i = 0
-        for key, value in items:
+        for i, (key, value) in enumerate(items):
             if i > 0:
                 stream.write(u",")
-            i += 1
             __dump_string(stream, unicode(key))
             stream.write(u":")
             to_stream(value, stream, pretty, sort_keys)
         stream.write(u"}")
     elif type(obj) in (list, tuple):
         stream.write(u"[")
-        i = 0
-        for value in obj:
+        for i, value in enumerate(obj):
             if i > 0:
                 stream.write(u",")
-            i += 1
             to_stream(value, stream, pretty, sort_keys)
         stream.write(u"]")
     else:

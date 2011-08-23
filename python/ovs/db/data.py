@@ -348,11 +348,9 @@ class Datum(object):
         if head:
             s.append(head)
 
-        i = 0
-        for key in sorted(self.values):
+        for i, key in enumerate(sorted(self.values)):
             if i:
                 s.append(", ")
-            i += 1
 
             s.append(key.to_string())
             if self.type.is_map():
@@ -412,18 +410,14 @@ class Datum(object):
         s += ["%s->keys = xmalloc(%d * sizeof *%s->keys);"
               % (var, len(self.values), var)]
 
-        i = 0
-        for key, value in sorted(self.values.items()):
+        for i, key in enumerate(sorted(self.values)):
             s += key.cInitAtom("%s->keys[%d]" % (var, i))
-            i += 1
         
         if self.type.value:
             s += ["%s->values = xmalloc(%d * sizeof *%s->values);"
                   % (var, len(self.values), var)]
-            i = 0
-            for key, value in sorted(self.values.items()):
+            for i, (key, value) in enumerate(sorted(self.values.items())):
                 s += value.cInitAtom("%s->values[%d]" % (var, i))
-                i += 1
         else:
             s += ["%s->values = NULL;" % var]
 
