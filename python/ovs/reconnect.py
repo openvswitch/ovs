@@ -117,7 +117,7 @@ class Reconnect(object):
                           % (fsm.name, (now - fsm.state_entered) / 1000.0))
             return DISCONNECT
 
-    class Reconnect:
+    class Reconnect(object):
         name = "RECONNECT"
         is_connected = False
 
