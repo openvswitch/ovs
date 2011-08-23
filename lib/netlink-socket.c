@@ -680,6 +680,7 @@ static struct hmap genl_families = HMAP_INITIALIZER(&genl_families);
 
 static const struct nl_policy family_policy[CTRL_ATTR_MAX + 1] = {
     [CTRL_ATTR_FAMILY_ID] = {.type = NL_A_U16},
+    [CTRL_ATTR_MCAST_GROUPS] = {.type = NL_A_NESTED},
 };
 
 static struct genl_family *
@@ -725,11 +726,11 @@ genl_family_to_name(uint16_t id)
     }
 }
 
-static int do_lookup_genl_family(const char *name)
+static int
+do_lookup_genl_family(const char *name, struct nlattr **attrs)
 {
     struct nl_sock *sock;
     struct ofpbuf request, *reply;
-    struct nlattr *attrs[ARRAY_SIZE(family_policy)];
     int retval;
 
     retval = nl_sock_create(NETLINK_GENERIC, &sock);
@@ -767,6 +768,51 @@ static int do_lookup_genl_family(const char *name)
     return retval;
 }
 
+/* Finds the multicast group called 'group_name' in genl family 'family_name'.
+ * When successful, writes its result to 'multicast_group' and returns 0.
+ * Otherwise, clears 'multicast_group' and returns a positive error code. */
+int
+nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
+                       unsigned int *multicast_group)
+{
+    struct nlattr *family_attrs[ARRAY_SIZE(family_policy)];
+    struct ofpbuf all_mcs;
+    struct nlattr *mc;
+    unsigned int left;
+    int retval;
+
+    *multicast_group = 0;
+    retval = do_lookup_genl_family(family_name, family_attrs);
+    if (retval <= 0) {
+        assert(retval);
+        return -retval;
+    }
+
+    nl_attr_get_nested(family_attrs[CTRL_ATTR_MCAST_GROUPS], &all_mcs);
+    NL_ATTR_FOR_EACH (mc, left, all_mcs.data, all_mcs.size) {
+        static const struct nl_policy mc_policy[] = {
+            [CTRL_ATTR_MCAST_GRP_ID] = {.type = NL_A_U32},
+            [CTRL_ATTR_MCAST_GRP_NAME] = {.type = NL_A_STRING},
+        };
+
+        struct nlattr *mc_attrs[ARRAY_SIZE(mc_policy)];
+        const char *mc_name;
+
+        if (!nl_parse_nested(mc, mc_policy, mc_attrs, ARRAY_SIZE(mc_policy))) {
+            return EPROTO;
+        }
+
+        mc_name = nl_attr_get_string(mc_attrs[CTRL_ATTR_MCAST_GRP_NAME]);
+        if (!strcmp(group_name, mc_name)) {
+            *multicast_group =
+                nl_attr_get_u32(mc_attrs[CTRL_ATTR_MCAST_GRP_ID]);
+            return 0;
+        }
+    }
+
+    return EPROTO;
+}
+
 /* If '*number' is 0, translates the given Generic Netlink family 'name' to a
  * number and stores it in '*number'.  If successful, returns 0 and the caller
  * may use '*number' as the family number.  On failure, returns a positive
@@ -774,8 +820,10 @@ static int do_lookup_genl_family(const char *name)
 int
 nl_lookup_genl_family(const char *name, int *number)
 {
+    struct nlattr *attrs[ARRAY_SIZE(family_policy)];
+
     if (*number == 0) {
-        *number = do_lookup_genl_family(name);
+        *number = do_lookup_genl_family(name, attrs);
         assert(*number != 0);
     }
     return *number > 0 ? 0 : -*number;
