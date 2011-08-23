@@ -53,15 +53,13 @@ class Parser(object):
         if missing:
             name = missing.pop()
             if len(missing) > 1:
-                self.__raise_error("Member '%s' and %d other members "
-                                   "are present but not allowed here"
-                                   % (name, len(missing)))
+                present = "and %d other members are" % len(missing)
             elif missing:
-                self.__raise_error("Member '%s' and 1 other member "
-                                   "are present but not allowed here" % name)
+                present = "and 1 other member are"
             else:
-                self.__raise_error("Member '%s' is present but not "
-                                   "allowed here" % name)
+                present = "is"
+            self.__raise_error("Member '%s' %s present but not allowed here" %
+                               (name, present))
     
 def float_to_int(x):
     # XXX still needed?
