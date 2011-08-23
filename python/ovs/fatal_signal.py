@@ -21,8 +21,6 @@ _hooks = []
 
 def add_hook(hook, cancel, run_at_exit):
     _init()
-
-    global _hooks
     _hooks.append((hook, cancel, run_at_exit))
 
 def fork():
