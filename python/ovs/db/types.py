@@ -510,14 +510,14 @@ class Type(object):
         keyConstraints = self.key.constraintsToEnglish(escapeLiteral)
         if keyConstraints:
             if self.value:
-                constraints += ['key ' + keyConstraints]
+                constraints.append('key %s' % keyConstraints)
             else:
-                constraints += [keyConstraints]
+                constraints.append(keyConstraints)
 
         if self.value:
             valueConstraints = self.value.constraintsToEnglish(escapeLiteral)
             if valueConstraints:
-                constraints += ['value ' + valueConstraints]
+                constraints.append('value %s' % valueConstraints)
 
         return ', '.join(constraints)
                 
