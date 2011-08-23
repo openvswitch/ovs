@@ -15,6 +15,7 @@
 import logging
 
 import ovs.jsonrpc
+import ovs.db.parser
 import ovs.db.schema
 from ovs.db import error
 import ovs.ovsuuid
@@ -206,16 +207,11 @@ class Idl:
                                       'is not an object'
                                       % (table_name, uuid_string))
 
-                old = row_update.get("old", None)
-                new = row_update.get("new", None)
+                parser = ovs.db.parser.Parser(json, "row-update")
+                old = parser.get_optional("old", [dict])
+                new = parser.get_optional("new", [dict])
+                parser.finish()
 
-                if old is not None and type(old) != dict:
-                    raise error.Error('"old" <row> is not an object', old)
-                if new is not None and type(new) != dict:
-                    raise error.Error('"new" <row> is not an object', new)
-                if (old is not None) + (new is not None) != len(row_update):
-                    raise error.Error("<row-update> contains unexpected "
-                                      "member", row_update)
                 if not old and not new:
                     raise error.Error('<row-update> missing "old" and '
                                       '"new" members', row_update)
