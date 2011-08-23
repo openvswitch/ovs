@@ -513,8 +513,8 @@ class Reconnect(object):
 
     def timeout(self, now):
         """Returns the number of milliseconds after which self.run() should be
-        called if nothing else notable happens in the meantime, or a negative
-        number if this is currently unnecessary."""
+        called if nothing else notable happens in the meantime, or None if this
+        is currently unnecessary."""
         deadline = self.state.deadline(self)
         if deadline is not None:
             remaining = deadline - now
