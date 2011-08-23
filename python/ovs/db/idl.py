@@ -222,32 +222,37 @@ class Idl:
     def __parse_row_update(self, table, uuid, old, new):
         """Returns True if a column changed, False otherwise."""
         row = self.data[table.name].get(uuid)
+        changed = False
         if not new:
             # Delete row.
             if row:
                 del self.data[table.name][uuid]
+                changed = True
             else:
                 # XXX rate-limit
                 logging.warning("cannot delete missing row %s from table %s"
                                 % (uuid, table.name))
-                return False
         elif not old:
             # Insert row.
             if not row:
                 row = self.__create_row(table, uuid)
+                changed = True
             else:
                 # XXX rate-limit
                 logging.warning("cannot add existing row %s to table %s"
                                 % (uuid, table.name))
-            self.__modify_row(table, row, new)
+            if self.__modify_row(table, row, new):
+                changed = True
         else:
             if not row:
                 row = self.__create_row(table, uuid)
+                changed = True
                 # XXX rate-limit
                 logging.warning("cannot modify missing row %s in table %s"
                                 % (uuid, table_name))
-            self.__modify_row(table, row, new)
-        return True
+            if self.__modify_row(table, row, new):
+                changed = True
+        return changed
 
     def __modify_row(self, table, row, row_json):
         changed = False
