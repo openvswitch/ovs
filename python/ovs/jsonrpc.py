@@ -215,9 +215,6 @@ class Connection(object):
         else:
             return len(self.output)
 
-    def get_name(self):
-        return self.name
-
     def __log_msg(self, title, msg):
         logging.debug("%s: %s %s" % (self.name, title, msg))
 
@@ -371,7 +368,7 @@ class Session(object):
     def open_unreliably(jsonrpc):
         reconnect = ovs.reconnect.Reconnect(ovs.timeval.msec())
         reconnect.set_quiet(True)
-        reconnect.set_name(jsonrpc.get_name())
+        reconnect.set_name(jsonrpc.name)
         reconnect.set_max_tries(0)
         reconnect.connected(ovs.timeval.msec())
         return Session(reconnect, jsonrpc)
