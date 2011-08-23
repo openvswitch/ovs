@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,8 +36,8 @@ class Message(object):
                T_ERROR: "error"}
     __next_id = 0
 
-    def __init__(self, type, method, params, result, error, id):
-        self.type = type
+    def __init__(self, type_, method, params, result, error, id):
+        self.type = type_
         self.method = method
         self.params = params
         self.result = result
@@ -70,8 +70,8 @@ class Message(object):
         return Message(Message.T_ERROR, None, None, None, error, id)
 
     @staticmethod
-    def type_to_string(type):
-        return Message.__types[type]
+    def type_to_string(type_):
+        return Message.__types[type_]
 
     @staticmethod
     def __validate_arg(value, name, must_have):

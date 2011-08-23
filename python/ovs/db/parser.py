@@ -75,18 +75,18 @@ id_re = re.compile("[_a-zA-Z][_a-zA-Z0-9]*$")
 def is_identifier(s):
     return type(s) in [str, unicode] and id_re.match(s)
 
-def json_type_to_string(type):
-    if type == None:
+def json_type_to_string(type_):
+    if type_ == None:
         return "null"
-    elif type == bool:
+    elif type_ == bool:
         return "boolean"
-    elif type == dict:
+    elif type_ == dict:
         return "object"
-    elif type == list:
+    elif type_ == list:
         return "array"
-    elif type in [int, long, float]:
+    elif type_ in [int, long, float]:
         return "number"
-    elif type in [str, unicode]:
+    elif type_ in [str, unicode]:
         return "string"
     else:
         return "<invalid>"

@@ -64,12 +64,12 @@ def returnUnchanged(x):
     return x
 
 class Atom(object):
-    def __init__(self, type, value=None):
-        self.type = type
+    def __init__(self, type_, value=None):
+        self.type = type_
         if value is not None:
             self.value = value
         else:
-            self.value = type.default_atom()
+            self.value = type_.default_atom()
 
     def __cmp__(self, other):
         if not isinstance(other, Atom) or self.type != other.type:
@@ -85,8 +85,8 @@ class Atom(object):
         return hash(self.value)
 
     @staticmethod
-    def default(type):
-        return Atom(type)
+    def default(type_):
+        return Atom(type_)
 
     def is_default(self):
         return self == self.default(self.type)
@@ -227,8 +227,8 @@ class Atom(object):
         return Atom(t, x)
 
 class Datum(object):
-    def __init__(self, type, values={}):
-        self.type = type
+    def __init__(self, type_, values={}):
+        self.type = type_
         self.values = values
 
     def __cmp__(self, other):
@@ -250,14 +250,14 @@ class Datum(object):
         return Datum(self.type, dict(self.values))
 
     @staticmethod
-    def default(type):
-        if type.n_min == 0:
+    def default(type_):
+        if type_.n_min == 0:
             values = {}
-        elif type.is_map():
-            values = {type.key.default(): type.value.default()}
+        elif type_.is_map():
+            values = {type_.key.default(): type_.value.default()}
         else:
-            values = {type.key.default(): None}
-        return Datum(type, values)
+            values = {type_.key.default(): None}
+        return Datum(type_, values)
 
     def is_default(self):
         return self == Datum.default(self.type)

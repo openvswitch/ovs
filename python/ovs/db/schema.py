@@ -239,11 +239,11 @@ class TableSchema(object):
         return json
 
 class ColumnSchema(object):
-    def __init__(self, name, mutable, persistent, type):
+    def __init__(self, name, mutable, persistent, type_):
         self.name = name
         self.mutable = mutable
         self.persistent = persistent
-        self.type = type
+        self.type = type_
         self.unique = False
 
     @staticmethod

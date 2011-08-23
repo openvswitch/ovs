@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
 import os
 import signal
 
-def _signal_status_msg(type, signr):
-    s = "%s by signal %d" % (type, signr)
+def _signal_status_msg(type_, signr):
+    s = "%s by signal %d" % (type_, signr)
     for name in signal.__dict__:
         if name.startswith("SIG") and getattr(signal, name) == signr:
             return "%s (%s)" % (s, name)

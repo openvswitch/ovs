@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -332,15 +332,15 @@ class Reconnect(object):
                                     % self.name)
             else:
                 if self.passive:
-                    type = "listen"
+                    type_ = "listen"
                 else:
-                    type = "connection"
+                    type_ = "connection"
                 if error > 0:
                     logging.warning("%s: %s attempt failed (%s)"
-                                    % (self.name, type, os.strerror(error)))
+                                    % (self.name, type_, os.strerror(error)))
                 else:
                     self.info_level("%s: %s attempt timed out"
-                                    % (self.name, type))
+                                    % (self.name, type_))
 
             if (self.state in (Reconnect.Active, Reconnect.Idle)):
                 self.last_disconnected = now
