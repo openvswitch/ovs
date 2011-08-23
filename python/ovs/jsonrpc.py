@@ -174,7 +174,7 @@ class Message(object):
 
 class Connection(object):
     def __init__(self, stream):
-        self.name = stream.get_name()
+        self.name = stream.name
         self.stream = stream
         self.status = 0
         self.input = ""

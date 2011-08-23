@@ -220,9 +220,6 @@ class Stream(object):
     def send_wait(self, poller):
         self.wait(poller, Stream.W_SEND)
         
-    def get_name(self):
-        return self.name
-        
     def __del__(self):
         # Don't delete the file: we might have forked.
         self.socket.close()
