@@ -365,7 +365,10 @@ class BaseType(object):
         return '\n'.join([indent + stmt for stmt in stmts])
 
 class Type(object):
-    def __init__(self, key, value=None, n_min=1, n_max=1):
+    DEFAULT_MIN = 1
+    DEFAULT_MAX = 1
+
+    def __init__(self, key, value=None, n_min=DEFAULT_MIN, n_max=DEFAULT_MAX):
         self.key = key
         self.value = value
         self.n_min = n_min
@@ -442,12 +445,12 @@ class Type(object):
         else:
             value = None
 
-        n_min = Type.__n_from_json(min_json, 1)
+        n_min = Type.__n_from_json(min_json, Type.DEFAULT_MIN)
 
         if max_json == 'unlimited':
             n_max = sys.maxint
         else:
-            n_max = Type.__n_from_json(max_json, 1)            
+            n_max = Type.__n_from_json(max_json, Type.DEFAULT_MAX)
 
         type_ = Type(key, value, n_min, n_max)
         if not type_.is_valid():
@@ -461,11 +464,11 @@ class Type(object):
         json = {"key": self.key.to_json()}
         if self.value is not None:
             json["value"] = self.value.to_json()
-        if self.n_min != 1:
+        if self.n_min != Type.DEFAULT_MIN:
             json["min"] = self.n_min
         if self.n_max == sys.maxint:
             json["max"] = "unlimited"
-        elif self.n_max != 1:
+        elif self.n_max != Type.DEFAULT_MAX:
             json["max"] = self.n_max
         return json
 
