@@ -206,10 +206,10 @@ class Stream(object):
 
         if self.state == Stream.__S_CONNECTING:
             wait = Stream.W_CONNECT
-        if wait in (Stream.W_CONNECT, Stream.W_SEND):
-            poller.fd_wait(self.socket, select.POLLOUT)
-        else:
+        if wait == Stream.W_RECV:
             poller.fd_wait(self.socket, select.POLLIN)
+        else:
+            poller.fd_wait(self.socket, select.POLLOUT)
 
     def connect_wait(self, poller):
         self.wait(poller, Stream.W_CONNECT)
