@@ -249,7 +249,7 @@ class Connection(object):
             return self.status, None
 
         while True:
-            if len(self.input) == 0:
+            if not self.input:
                 error, data = self.stream.recv(4096)
                 if error:
                     if error == errno.EAGAIN:
@@ -260,7 +260,7 @@ class Connection(object):
                                         % (self.name, os.strerror(error)))
                         self.error(error)
                         return self.status, None
-                elif len(data) == 0:
+                elif not data:
                     self.error(EOF)
                     return EOF, None
                 else:
@@ -321,7 +321,7 @@ class Connection(object):
         return msg
         
     def recv_wait(self, poller):
-        if self.status or len(self.input) > 0:
+        if self.status or self.input:
             poller.immediate_wake()
         else:
             self.stream.recv_wait(poller)
