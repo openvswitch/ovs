@@ -293,8 +293,6 @@ class Idl:
             self.data[table_name] = {}
 
     def __create_row(self, table, uuid):
-        class Row(object):
-            pass
         row = self.data[table.name][uuid] = Row()
         for column in table.columns.itervalues():
             setattr(row, column.name, ovs.db.data.Datum.default(column.type))
@@ -304,3 +302,10 @@ class Idl:
         """Forces the IDL to drop its connection to the database and reconnect.
         In the meantime, the contents of the IDL will not change."""
         self.session.force_reconnect()
+
+class Row(object):
+    """A row within an Idl.  Data for each column is stored as an attribute
+    with the same name as the column and using an ovs.db.data.Datum as the
+    value."""
+    pass
+
