@@ -19,6 +19,12 @@ from ovs.db import error
 import ovs.db.parser
 from ovs.db import types
 
+def _check_id(name, json):
+    if name.startswith('_'):
+        raise error.Error('names beginning with "_" are reserved', json)
+    elif not ovs.db.parser.is_identifier(name):
+        raise error.Error("name must be a valid id", json)
+
 class DbSchema(object):
     """Schema for an OVSDB database."""
 
@@ -70,11 +76,7 @@ class DbSchema(object):
 
         tables = {}
         for tableName, tableJson in tablesJson.iteritems():
-            if tableName.startswith('_'):
-                raise error.Error('names beginning with "_" are reserved',
-                                  json)
-            elif not ovs.db.parser.is_identifier(tableName):
-                raise error.Error("name must be a valid id", json)
+            _check_id(tableName, json)
             tables[tableName] = TableSchema.from_json(tableJson, tableName)
 
         return DbSchema(name, version, tables)
@@ -182,11 +184,7 @@ class TableSchema(object):
 
         columns = {}
         for column_name, column_json in columns_json.iteritems():
-            if column_name.startswith('_'):
-                raise error.Error('names beginning with "_" are reserved',
-                                  json)
-            elif not ovs.db.parser.is_identifier(column_name):
-                raise error.Error("name must be a valid id", json)
+            _check_id(column_name, json)
             columns[column_name] = ColumnSchema.from_json(column_json,
                                                           column_name)
 
