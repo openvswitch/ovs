@@ -11,6 +11,7 @@
 /openvswitch-common.copyright
 /openvswitch-controller
 /openvswitch-datapath-source
+/openvswitch-datapath-dkms
 /openvswitch-dbg
 /openvswitch-ipsec
 /openvswitch-pki

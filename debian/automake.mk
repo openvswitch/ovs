@@ -5,6 +5,7 @@ EXTRA_DIST += \
 	debian/control.modules.in \
 	debian/copyright \
 	debian/copyright.in \
+	debian/dkms.conf.in \
 	debian/dirs \
 	debian/openvswitch-brcompat.install \
 	debian/openvswitch-brcompat.manpages \
@@ -20,6 +21,8 @@ EXTRA_DIST += \
 	debian/openvswitch-controller.manpages \
 	debian/openvswitch-controller.postinst \
 	debian/openvswitch-datapath-module-_KVERS_.postinst.modules.in \
+	debian/openvswitch-datapath-dkms.postinst \
+	debian/openvswitch-datapath-dkms.prerm \
 	debian/openvswitch-datapath-source.README.Debian \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
