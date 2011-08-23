@@ -88,15 +88,14 @@ class Stream(object):
             return 0, Stream(sock, name, bind_path, status)
 
     @staticmethod
-    def open_block(tuple):
+    def open_block((error, stream)):
         """Blocks until a Stream completes its connection attempt, either
-        succeeding or failing.  'tuple' should be the tuple returned by
+        succeeding or failing.  (error, stream) should be the tuple returned by
         Stream.open().  Returns a tuple of the same form.
 
         Typical usage:
-        error, stream = Stream.open_block(Stream.open("tcp:1.2.3.4:5"))"""
+        error, stream = Stream.open_block(Stream.open("unix:/tmp/socket"))"""
 
-        error, stream = tuple
         if not error:
             while True:
                 error = stream.connect()
