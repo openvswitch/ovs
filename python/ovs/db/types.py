@@ -30,16 +30,14 @@ class AtomicType(object):
             for atomic_type in ATOMIC_TYPES:
                 if s == atomic_type.name:
                     return atomic_type
-        raise error.Error('"%s" is not an atomic type' % s)
+        raise error.Error('"%s" is not an atomic-type' % s, s)
 
     @staticmethod
     def from_json(json):
         if type(json) not in [str, unicode]:
             raise error.Error("atomic-type expected", json)
-        try:
+        else:
             return AtomicType.from_string(json)
-        except error.Error:
-            raise error.Error('"%s" is not an atomic-type' % json, json)
 
     def __str__(self):
         return self.name
