@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,8 +75,8 @@ class Stream(object):
             return errno.EAFNOSUPPORT, None
 
         Stream.n_unix_sockets += 1
-        bind_path = "/tmp/stream-unix.%ld.%d" % (os.getpid(),
-                                                 Stream.n_unix_sockets)
+        bind_path = "/tmp/stream-unix.%d.%d" % (os.getpid(),
+                                                Stream.n_unix_sockets)
         connect_path = name[5:]
         error, sock = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                        True, bind_path,
