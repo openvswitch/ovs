@@ -35,30 +35,30 @@ class ConstraintViolation(error.Error):
         error.Error.__init__(self, msg, json, tag="constraint violation")
 
 def escapeCString(src):
-    dst = ""
+    dst = []
     for c in src:
         if c in "\\\"":
-            dst += "\\" + c
+            dst.append("\\" + c)
         elif ord(c) < 32:
             if c == '\n':
-                dst += '\\n'
+                dst.append('\\n')
             elif c == '\r':
-                dst += '\\r'
+                dst.append('\\r')
             elif c == '\a':
-                dst += '\\a'
+                dst.append('\\a')
             elif c == '\b':
-                dst += '\\b'
+                dst.append('\\b')
             elif c == '\f':
-                dst += '\\f'
+                dst.append('\\f')
             elif c == '\t':
-                dst += '\\t'
+                dst.append('\\t')
             elif c == '\v':
-                dst += '\\v'
+                dst.append('\\v')
             else:
-                dst += '\\%03o' % ord(c)
+                dst.append('\\%03o' % ord(c))
         else:
-            dst += c
-    return dst
+            dst.append(c)
+    return ''.join(dst)
 
 def returnUnchanged(x):
     return x
@@ -335,31 +335,33 @@ class Datum(object):
                             for k, v in sorted(self.values.items())]]
 
     def to_string(self):
+        head = tail = None
         if self.type.n_max > 1 or len(self.values) == 0:
             if self.type.is_map():
-                s = "{"
+                head = "{"
+                tail = "}"
             else:
-                s = "["
-        else:
-            s = ""
+                head = "["
+                tail = "]"
+
+        s = []
+        if head:
+            s.append(head)
 
         i = 0
         for key in sorted(self.values):
-            if i > 0:
-                s += ", "
+            if i:
+                s.append(", ")
             i += 1
 
+            s.append(key.to_string())
             if self.type.is_map():
-                s += "%s=%s" % (key.to_string(), self.values[key].to_string())
-            else:
-                s += key.to_string()
+                s.append("=")
+                s.append(self.values[key].to_string())
 
-        if self.type.n_max > 1 or len(self.values) == 0:
-            if self.type.is_map():
-                s += "}"
-            else:
-                s += "]"
-        return s
+        if tail:
+            s.append(tail)
+        return ''.join(s)
 
     def as_list(self):
         if self.type.is_map():
