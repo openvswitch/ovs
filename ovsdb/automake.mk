@@ -29,7 +29,7 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/trigger.h \
 	ovsdb/transaction.c \
 	ovsdb/transaction.h
-EXTRA_DIST += \
+MAN_FRAGMENTS += \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
 

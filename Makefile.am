@@ -45,7 +45,8 @@ EXTRA_DIST = \
 	REPORTING-BUGS \
 	SubmittingPatches \
 	WHY-OVS \
-	boot.sh
+	boot.sh \
+	$(MAN_FRAGMENTS)
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
@@ -57,6 +58,7 @@ dist_sbin_SCRIPTS =
 dist_scripts_SCRIPTS =
 INSTALL_DATA_LOCAL =
 man_MANS =
+MAN_FRAGMENTS =
 noinst_DATA =
 noinst_HEADERS =
 noinst_LIBRARIES =
@@ -147,6 +149,17 @@ rate-limit-check:
 	    echo "'struct vlog_rate_limit' must always be 'static'"; \
 	    exit 1; \
 	 fi
+
+if HAVE_GROFF
+ALL_LOCAL += manpage-check
+manpage-check: $(MANS) $(MAN_FRAGMENTS)
+	@manpages=; \
+	for d in $(MANS); do \
+		manpages="$$manpages `test -f $$d || echo $(VPATH)/`$$d"; \
+	done; \
+	LANG=en_US.UTF-8 groff -w mac -w delim -w escape -w input -w missing -w tab -T utf8 -man -p -z $$manpages && touch $@
+CLEANFILES += manpage-check
+endif
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)

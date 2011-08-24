@@ -236,7 +236,7 @@ EXTRA_DIST += \
 	lib/dh4096.pem \
 	lib/dirs.c.in
 
-EXTRA_DIST += \
+MAN_FRAGMENTS += \
 	lib/common.man \
 	lib/common-syn.man \
 	lib/daemon.man \

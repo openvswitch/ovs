@@ -361,3 +361,15 @@ AC_DEFUN([OVS_CHECK_LINKER_SECTIONS],
    fi
    AM_CONDITIONAL(
      [USE_LINKER_SECTIONS], [test $ovs_cv_use_linker_sections = yes])])
+
+dnl Checks for groff.
+AC_DEFUN([OVS_CHECK_GROFF],
+  [AC_CACHE_CHECK(
+    [for groff],
+    [ovs_cv_groff],
+    [if (groff -v) >/dev/null 2>&1; then
+       ovs_cv_groff=yes
+     else
+       ovs_cv_groff=no
+     fi])
+   AM_CONDITIONAL([HAVE_GROFF], [test "$ovs_cv_groff" = yes])])

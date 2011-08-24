@@ -32,11 +32,11 @@ EXTRA_DIST += \
 	utilities/ovs-save \
 	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-tcpundump.in \
-	utilities/ovs-vlan-bugs.man \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-vlan-test.8.in \
 	utilities/ovs-vsctl.8.in
+MAN_FRAGMENTS += utilities/ovs-vlan-bugs.man
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
