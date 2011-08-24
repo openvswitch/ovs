@@ -29,6 +29,7 @@ communicate with \fBovsdb\-server\fR.  The default is
 \fBovs\-brcompatd\fR will search the \fBPATH\fR environment variable
 to find it.
 .
+.ds DD
 .so lib/daemon.man
 .so lib/vlog.man
 .so lib/common.man
