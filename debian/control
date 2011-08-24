@@ -83,7 +83,8 @@ Description: Open vSwitch controller implementation
 
 Package: openvswitch-brcompat
 Architecture: linux-any
-Depends: ${shlibs:Depends}, openvswitch-switch (= ${binary:Version})
+Depends:
+ ${shlibs:Depends}, openvswitch-switch (= ${binary:Version}), ${misc:Depends}
 Recommends: bridge-utils
 Description: Open vSwitch bridge compatibility support
  openvswitch-brcompat provides a way for applications that use the
@@ -121,7 +122,7 @@ Description: Python bindings for Open vSwitch
 Package: ovsdbmonitor
 Architecture: all
 Section: utils
-Depends: ${python:Depends}, python-openvswitch
+Depends: ${python:Depends}, python-openvswitch, ${misc:Depends}
 Provides: ${python:Provides}
 Description: Open vSwitch graphical monitoring tool
  This package is a GUI tool for monitoring and troubleshooting local
