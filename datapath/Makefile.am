@@ -3,7 +3,7 @@ if LINUX_ENABLED
 SUBDIRS += linux
 endif
 
-EXTRA_DIST = $(dist_headers) $(dist_sources)
+EXTRA_DIST = $(dist_headers) $(dist_sources) $(dist_extras)
 
 # Suppress warnings about GNU extensions in Modules.mk files.
 AUTOMAKE_OPTIONS = -Wno-portability

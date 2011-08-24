@@ -1086,6 +1086,32 @@
                 Default is the system default TTL.</dd>
             </dl>
             <dl>
+              <dt><code>in_key</code></dt>
+              <dd>Optional.  The WSI key that received packets must contain.
+                It may either be a 64-bit number (no key and a key of 0 are
+                treated as equivalent) or the word <code>flow</code>.  If
+                <code>flow</code> is specified then any key will be accepted
+                and the key will be placed in the <code>tun_id</code> field
+                for matching in the flow table.  The ovs-ofctl manual page
+                contains additional information about matching fields in
+                OpenFlow flows.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>out_key</code></dt>
+              <dd>Optional.  The WSI key to be set on outgoing packets.  It may
+                either be a 64-bit number or the word <code>flow</code>.  If
+                <code>flow</code> is specified then the key may be set using
+                the <code>set_tunnel</code> Nicira OpenFlow vendor extension (0
+                is used in the absence of an action).  The ovs-ofctl manual
+                page contains additional information about the Nicira OpenFlow
+                vendor extensions.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>key</code></dt>
+              <dd>Optional.  Shorthand to set <code>in_key</code> and
+                <code>out_key</code> at the same time.</dd>
+            </dl>
+            <dl>
               <dt><code>df_inherit</code></dt>
               <dd>Optional.  If enabled, the Don't Fragment bit will be copied
                 from the inner IP headers (those of the encapsulated traffic)

@@ -42,20 +42,63 @@
  * statically create them and we can do very fast parsing by checking all 12
  * fields in one go.
  */
-#define CAPWAP_BEGIN_HLEN __cpu_to_be32(0x00100000)
-#define CAPWAP_BEGIN_WBID __cpu_to_be32(0x00000200)
-#define CAPWAP_BEGIN_FRAG __cpu_to_be32(0x00000080)
-#define CAPWAP_BEGIN_LAST __cpu_to_be32(0x00000040)
+#define CAPWAP_PREAMBLE_MASK __cpu_to_be32(0xFF000000)
+#define CAPWAP_HLEN_SHIFT    17
+#define CAPWAP_HLEN_MASK     __cpu_to_be32(0x00F80000)
+#define CAPWAP_RID_MASK      __cpu_to_be32(0x0007C000)
+#define CAPWAP_WBID_MASK     __cpu_to_be32(0x00003E00)
+#define CAPWAP_F_MASK        __cpu_to_be32(0x000001FF)
 
-#define NO_FRAG_HDR (CAPWAP_BEGIN_HLEN | CAPWAP_BEGIN_WBID)
-#define FRAG_HDR (NO_FRAG_HDR | CAPWAP_BEGIN_FRAG)
-#define FRAG_LAST_HDR (FRAG_HDR | CAPWAP_BEGIN_LAST)
+#define CAPWAP_F_FRAG        __cpu_to_be32(0x00000080)
+#define CAPWAP_F_LASTFRAG    __cpu_to_be32(0x00000040)
+#define CAPWAP_F_WSI         __cpu_to_be32(0x00000020)
+#define CAPWAP_F_RMAC        __cpu_to_be32(0x00000010)
+
+#define CAPWAP_RMAC_LEN      4
+
+/*  Standard CAPWAP looks for a WBID value of 2.
+ *  When we insert WSI field, use WBID value of 30, which has been
+ *  proposed for all "experimental" usage - users with no reserved WBID value
+ *  of their own.
+*/
+#define CAPWAP_WBID_30   __cpu_to_be32(0x00003C00)
+#define CAPWAP_WBID_2    __cpu_to_be32(0x00000200)
+
+#define FRAG_HDR (CAPWAP_F_FRAG)
+#define FRAG_LAST_HDR (FRAG_HDR | CAPWAP_F_LASTFRAG)
+
+/* Keyed packet, WBID 30, and length long enough to include WSI key */
+#define CAPWAP_KEYED (CAPWAP_WBID_30 | CAPWAP_F_WSI | htonl(20 << CAPWAP_HLEN_SHIFT))
+/* A backward-compatible packet, WBID 2 and length of 2 words (no WSI fields) */
+#define CAPWAP_NO_WSI (CAPWAP_WBID_2 | htonl(8 << CAPWAP_HLEN_SHIFT))
+
+/* Mask for all parts of header that must be 0. */
+#define CAPWAP_ZERO_MASK (CAPWAP_PREAMBLE_MASK | \
+		(CAPWAP_F_MASK ^ (CAPWAP_F_WSI | CAPWAP_F_FRAG | CAPWAP_F_LASTFRAG | CAPWAP_F_RMAC)))
 
 struct capwaphdr {
 	__be32 begin;
 	__be16 frag_id;
+	/* low 3 bits of frag_off are reserved */
 	__be16 frag_off;
 };
+
+/*
+ * We use the WSI field to hold additional tunnel data.
+ * The first eight bits store the size of the wsi data in bytes.
+ */
+struct capwaphdr_wsi {
+	u8 wsi_len;
+	u8 flags;
+	__be16 reserved_padding;
+};
+
+struct capwaphdr_wsi_key {
+	__be64 key;
+};
+
+/* Flag indicating a 64bit key is stored in WSI data field */
+#define CAPWAP_WSI_F_KEY64 0x80
 
 static inline struct capwaphdr *capwap_hdr(const struct sk_buff *skb)
 {
@@ -70,7 +113,11 @@ static inline struct capwaphdr *capwap_hdr(const struct sk_buff *skb)
  */
 #define FRAG_OFF_MASK (~0x7U)
 
-#define CAPWAP_HLEN (sizeof(struct udphdr) + sizeof(struct capwaphdr))
+/*
+ * The minimum header length.  The header may be longer if the optional
+ * WSI field is used.
+ */
+#define CAPWAP_MIN_HLEN (sizeof(struct udphdr) + sizeof(struct capwaphdr))
 
 struct frag_match {
 	__be32 saddr;
@@ -89,7 +136,7 @@ struct frag_skb_cb {
 #define FRAG_CB(skb) ((struct frag_skb_cb *)(skb)->cb)
 
 static struct sk_buff *fragment(struct sk_buff *, const struct vport *,
-				struct dst_entry *);
+				struct dst_entry *dst, unsigned int hlen);
 static void defrag_init(void);
 static void defrag_exit(void);
 static struct sk_buff *defrag(struct sk_buff *, bool frag_last);
@@ -117,18 +164,19 @@ static struct socket *capwap_rcv_socket;
 
 static int capwap_hdr_len(const struct tnl_mutable_config *mutable)
 {
+	int size = CAPWAP_MIN_HLEN;
+
 	/* CAPWAP has no checksums. */
 	if (mutable->flags & TNL_F_CSUM)
 		return -EINVAL;
 
-	/* CAPWAP has no keys, so check that the configuration for keys is the
-	 * default if no key-specific attributes are used.
-	 */
-	if ((mutable->flags & (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION)) !=
-	    (TNL_F_IN_KEY_MATCH | TNL_F_OUT_KEY_ACTION))
-		return -EINVAL;
+        /* if keys are specified, then add WSI field */
+	if (mutable->out_key || (mutable->flags & TNL_F_OUT_KEY_ACTION)) {
+		size += sizeof(struct capwaphdr_wsi) +
+			sizeof(struct capwaphdr_wsi_key);
+	}
 
-	return CAPWAP_HLEN;
+	return size;
 }
 
 static void capwap_build_header(const struct vport *vport,
@@ -142,9 +190,28 @@ static void capwap_build_header(const struct vport *vport,
 	udph->dest = htons(CAPWAP_DST_PORT);
 	udph->check = 0;
 
-	cwh->begin = NO_FRAG_HDR;
 	cwh->frag_id = 0;
 	cwh->frag_off = 0;
+
+	if (mutable->out_key || (mutable->flags & TNL_F_OUT_KEY_ACTION)) {
+		struct capwaphdr_wsi *wsi = (struct capwaphdr_wsi *)(cwh + 1);
+
+		cwh->begin = CAPWAP_KEYED;
+
+		/* -1 for wsi_len byte, not included in length as per spec */
+		wsi->wsi_len = sizeof(struct capwaphdr_wsi) - 1
+			+ sizeof(struct capwaphdr_wsi_key);
+		wsi->flags = CAPWAP_WSI_F_KEY64;
+		wsi->reserved_padding = 0;
+
+		if (mutable->out_key) {
+			struct capwaphdr_wsi_key *opt = (struct capwaphdr_wsi_key *)(wsi + 1);
+			opt->key = mutable->out_key;
+		}
+	} else {
+		/* make packet readable by old capwap code */
+		cwh->begin = CAPWAP_NO_WSI;
+	}
 }
 
 static struct sk_buff *capwap_update_header(const struct vport *vport,
@@ -154,31 +221,101 @@ static struct sk_buff *capwap_update_header(const struct vport *vport,
 {
 	struct udphdr *udph = udp_hdr(skb);
 
+	if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
+		/* first field in WSI is key */
+		struct capwaphdr *cwh = (struct capwaphdr *)(udph + 1);
+		struct capwaphdr_wsi *wsi = (struct capwaphdr_wsi *)(cwh + 1);
+		struct capwaphdr_wsi_key *opt = (struct capwaphdr_wsi_key *)(wsi + 1);
+
+		opt->key = OVS_CB(skb)->tun_id;
+	}
+
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 
-	if (unlikely(skb->len - skb_network_offset(skb) > dst_mtu(dst)))
-		skb = fragment(skb, vport, dst);
+	if (unlikely(skb->len - skb_network_offset(skb) > dst_mtu(dst))) {
+		unsigned int hlen = skb_transport_offset(skb) + capwap_hdr_len(mutable);
+		skb = fragment(skb, vport, dst, hlen);
+	}
 
 	return skb;
 }
 
-static inline struct sk_buff *process_capwap_proto(struct sk_buff *skb)
+static int process_capwap_wsi(struct sk_buff *skb, __be64 *key)
 {
 	struct capwaphdr *cwh = capwap_hdr(skb);
+	struct capwaphdr_wsi *wsi;
+	int hdr_len;
+	int rmac_len = 0;
+	int wsi_len;
 
-	if (likely(cwh->begin == NO_FRAG_HDR))
-		return skb;
-	else if (cwh->begin == FRAG_HDR)
-		return defrag(skb, false);
-	else if (cwh->begin == FRAG_LAST_HDR)
-		return defrag(skb, true);
-	else {
-		if (net_ratelimit())
-			pr_warn("unparsable packet receive on capwap socket\n");
+	if (((cwh->begin & CAPWAP_WBID_MASK) != CAPWAP_WBID_30))
+		return 0;
 
-		kfree_skb(skb);
-		return NULL;
+	if (cwh->begin & CAPWAP_F_RMAC)
+		rmac_len = CAPWAP_RMAC_LEN;
+
+	hdr_len = ntohl(cwh->begin & CAPWAP_HLEN_MASK) >> CAPWAP_HLEN_SHIFT;
+
+	if (unlikely(sizeof(struct capwaphdr) + rmac_len + sizeof(struct capwaphdr_wsi) > hdr_len))
+		return -EINVAL;
+
+	/* read wsi header to find out how big it really is */
+	wsi = (struct capwaphdr_wsi *)((u8 *)(cwh + 1) + rmac_len);
+	/* +1 for length byte not included in wsi_len */
+	wsi_len = 1 + wsi->wsi_len;
+
+	if (unlikely(sizeof(struct capwaphdr) + rmac_len + wsi_len != hdr_len))
+		return -EINVAL;
+
+	wsi_len -= sizeof(struct capwaphdr_wsi);
+
+	if (wsi->flags & CAPWAP_WSI_F_KEY64) {
+		struct capwaphdr_wsi_key *opt;
+
+		if (unlikely(wsi_len < sizeof(struct capwaphdr_wsi_key)))
+			return -EINVAL;
+
+		opt = (struct capwaphdr_wsi_key *)(wsi + 1);
+		*key = opt->key;
 	}
+
+	return 0;
+}
+
+static inline struct sk_buff *process_capwap_proto(struct sk_buff *skb,
+		                                   __be64 *key)
+{
+	struct capwaphdr *cwh = capwap_hdr(skb);
+	int hdr_len = sizeof(struct udphdr);
+
+	if (unlikely((cwh->begin & CAPWAP_ZERO_MASK) != 0))
+		goto error;
+
+	hdr_len += ntohl(cwh->begin & CAPWAP_HLEN_MASK) >> CAPWAP_HLEN_SHIFT;
+	if (unlikely(hdr_len < CAPWAP_MIN_HLEN))
+		goto error;
+
+	if (unlikely(!pskb_may_pull(skb, hdr_len + ETH_HLEN)))
+		goto error;
+
+	cwh = capwap_hdr(skb);
+	__skb_pull(skb, hdr_len);
+	skb_postpull_rcsum(skb, skb_transport_header(skb), hdr_len + ETH_HLEN);
+
+	if (cwh->begin & CAPWAP_F_FRAG) {
+		skb = defrag(skb, (__force bool)(cwh->begin & CAPWAP_F_LASTFRAG));
+		if (!skb)
+			return NULL;
+		cwh = capwap_hdr(skb);
+	}
+
+	if ((cwh->begin & CAPWAP_F_WSI) && process_capwap_wsi(skb, key))
+		goto error;
+
+	return skb;
+error:
+	kfree_skb(skb);
+	return NULL;
 }
 
 /* Called with rcu_read_lock and BH disabled. */
@@ -187,24 +324,27 @@ static int capwap_rcv(struct sock *sk, struct sk_buff *skb)
 	struct vport *vport;
 	const struct tnl_mutable_config *mutable;
 	struct iphdr *iph;
+	__be64 key = 0;
 
-	if (unlikely(!pskb_may_pull(skb, CAPWAP_HLEN + ETH_HLEN)))
+	if (unlikely(!pskb_may_pull(skb, CAPWAP_MIN_HLEN + ETH_HLEN)))
 		goto error;
 
-	__skb_pull(skb, CAPWAP_HLEN);
-	skb_postpull_rcsum(skb, skb_transport_header(skb), CAPWAP_HLEN + ETH_HLEN);
-
-	skb = process_capwap_proto(skb);
+	skb = process_capwap_proto(skb, &key);
 	if (unlikely(!skb))
 		goto out;
 
 	iph = ip_hdr(skb);
-	vport = tnl_find_port(iph->daddr, iph->saddr, 0,
-			      TNL_T_PROTO_CAPWAP | TNL_T_KEY_EXACT, &mutable);
+	vport = tnl_find_port(iph->daddr, iph->saddr, key,
+			      TNL_T_PROTO_CAPWAP | TNL_T_KEY_EITHER, &mutable);
 	if (unlikely(!vport)) {
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 		goto error;
 	}
+
+	if (mutable->flags & TNL_F_IN_KEY_MATCH)
+		OVS_CB(skb)->tun_id = key;
+	else
+		OVS_CB(skb)->tun_id = 0;
 
 	tnl_rcv(vport, skb, iph->tos);
 	goto out;
@@ -290,10 +430,9 @@ static void copy_skb_metadata(struct sk_buff *from, struct sk_buff *to)
 }
 
 static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
-				struct dst_entry *dst)
+				struct dst_entry *dst, unsigned int hlen)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	unsigned int hlen = skb_transport_offset(skb) + CAPWAP_HLEN;
 	unsigned int headroom;
 	unsigned int max_frame_len = dst_mtu(dst) + skb_network_offset(skb);
 	struct sk_buff *result = NULL, *list_cur = NULL;
@@ -352,9 +491,9 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 
 		cwh = capwap_hdr(skb2);
 		if (remaining > frag_size)
-			cwh->begin = FRAG_HDR;
+			cwh->begin |= FRAG_HDR;
 		else
-			cwh->begin = FRAG_LAST_HDR;
+			cwh->begin |= FRAG_LAST_HDR;
 		cwh->frag_id = frag_id;
 		cwh->frag_off = htons(offset);
 
@@ -649,7 +788,7 @@ static void capwap_frag_expire(unsigned long ifq)
 
 const struct vport_ops capwap_vport_ops = {
 	.type		= OVS_VPORT_TYPE_CAPWAP,
-	.flags		= VPORT_F_GEN_STATS,
+	.flags		= VPORT_F_GEN_STATS | VPORT_F_TUN_ID,
 	.init		= capwap_init,
 	.exit		= capwap_exit,
 	.create		= capwap_create,

@@ -634,9 +634,9 @@ parse_tunnel_config(const char *name, const char *type,
                     || !strcmp(node->name, "private_key")
                     || !strcmp(node->name, "use_ssl_cert"))) {
             /* Ignore options not used by the netdev. */
-        } else if (is_gre && (!strcmp(node->name, "key") ||
-                              !strcmp(node->name, "in_key") ||
-                              !strcmp(node->name, "out_key"))) {
+        } else if (!strcmp(node->name, "key") ||
+                   !strcmp(node->name, "in_key") ||
+                   !strcmp(node->name, "out_key")) {
             /* Handled separately below. */
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->name);
@@ -666,10 +666,8 @@ parse_tunnel_config(const char *name, const char *type,
         }
     }
 
-    if (is_gre) {
-        set_key(args, "in_key", OVS_TUNNEL_ATTR_IN_KEY, options);
-        set_key(args, "out_key", OVS_TUNNEL_ATTR_OUT_KEY, options);
-    }
+    set_key(args, "in_key", OVS_TUNNEL_ATTR_IN_KEY, options);
+    set_key(args, "out_key", OVS_TUNNEL_ATTR_OUT_KEY, options);
 
     if (!daddr) {
         VLOG_ERR("%s: %s type requires valid 'remote_ip' argument",
