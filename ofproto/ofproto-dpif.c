@@ -1061,7 +1061,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     }
 
     /* Get trunked VLANs. */
-    trunks = s->vlan == -1 ? NULL : s->trunks;
+    trunks = s->vlan == -1 ? s->trunks : NULL;
     if (!vlan_bitmap_equal(trunks, bundle->trunks)) {
         free(bundle->trunks);
         bundle->trunks = vlan_bitmap_clone(trunks);
