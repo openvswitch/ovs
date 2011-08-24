@@ -47,7 +47,6 @@
 #include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "rtnetlink-link.h"
 #include "shash.h"
 #include "sset.h"
 #include "unaligned.h"
@@ -158,11 +157,12 @@ static int ovs_packet_family;
 
 /* Generic Netlink socket. */
 static struct nl_sock *genl_sock;
+static struct nln *nln = NULL;
 
 static int dpif_linux_init(void);
 static int open_dpif(const struct dpif_linux_dp *, struct dpif **);
-static void dpif_linux_port_changed(const struct rtnetlink_link_change *,
-                                    void *dpif);
+static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
+static void dpif_linux_port_changed(const void *vport, void *dpif);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -257,8 +257,8 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     int i;
 
     dpif = xmalloc(sizeof *dpif);
-    error = rtnetlink_link_notifier_register(&dpif->port_notifier,
-                                             dpif_linux_port_changed, dpif);
+    error = nln_notifier_register(nln, &dpif->port_notifier,
+                                  dpif_linux_port_changed, dpif);
     if (error) {
         goto error_free;
     }
@@ -293,8 +293,12 @@ static void
 dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    if (nln) {
+        nln_notifier_unregister(nln, &dpif->port_notifier);
+    }
+
     nl_sock_destroy(dpif->mc_sock);
-    rtnetlink_link_notifier_unregister(&dpif->port_notifier);
     sset_destroy(&dpif->changed_ports);
     free(dpif->lru_bitmap);
     free(dpif);
@@ -315,13 +319,17 @@ dpif_linux_destroy(struct dpif *dpif_)
 static void
 dpif_linux_run(struct dpif *dpif OVS_UNUSED)
 {
-    rtnetlink_link_notifier_run();
+    if (nln) {
+        nln_notifier_run(nln);
+    }
 }
 
 static void
 dpif_linux_wait(struct dpif *dpif OVS_UNUSED)
 {
-    rtnetlink_link_notifier_wait();
+    if (nln) {
+        nln_notifier_wait(nln);
+    }
 }
 
 static int
@@ -1105,6 +1113,8 @@ dpif_linux_init(void)
     static int error = -1;
 
     if (error < 0) {
+        unsigned int ovs_vport_mcgroup;
+
         error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
                                       &ovs_datapath_family);
         if (error) {
@@ -1124,6 +1134,15 @@ dpif_linux_init(void)
         }
         if (!error) {
             error = nl_sock_create(NETLINK_GENERIC, &genl_sock);
+        }
+        if (!error) {
+            error = nl_lookup_genl_mcgroup(OVS_VPORT_FAMILY, OVS_VPORT_MCGROUP,
+                                           &ovs_vport_mcgroup);
+        }
+        if (!error) {
+            static struct dpif_linux_vport vport;
+            nln = nln_create(NETLINK_GENERIC, ovs_vport_mcgroup,
+                             dpif_linux_nln_parse, &vport);
         }
     }
 
@@ -1170,20 +1189,27 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
                                 actions.data, actions.size, &packet);
 }
 
-static void
-dpif_linux_port_changed(const struct rtnetlink_link_change *change,
-                        void *dpif_)
+static bool
+dpif_linux_nln_parse(struct ofpbuf *buf, void *vport_)
 {
+    struct dpif_linux_vport *vport = vport_;
+    return dpif_linux_vport_from_ofpbuf(vport, buf) == 0;
+}
+
+static void
+dpif_linux_port_changed(const void *vport_, void *dpif_)
+{
+    const struct dpif_linux_vport *vport = vport_;
     struct dpif_linux *dpif = dpif_;
 
-    if (change) {
-        if (change->master_ifindex == dpif->dp_ifindex
-            && (change->nlmsg_type == RTM_NEWLINK
-                || change->nlmsg_type == RTM_DELLINK))
-        {
-            /* Our datapath changed, either adding a new port or deleting an
-             * existing one. */
-            sset_add(&dpif->changed_ports, change->ifname);
+    if (vport) {
+        if (vport->dp_ifindex == dpif->dp_ifindex
+            && (vport->cmd == OVS_VPORT_CMD_NEW
+                || vport->cmd == OVS_VPORT_CMD_DEL
+                || vport->cmd == OVS_VPORT_CMD_SET)) {
+            VLOG_DBG("port_changed: dpif:%s vport:%s cmd:%"PRIu8,
+                     dpif->dpif.full_name, vport->name, vport->cmd);
+            sset_add(&dpif->changed_ports, vport->name);
         }
     } else {
         dpif->change_error = true;
