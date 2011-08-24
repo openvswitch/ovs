@@ -115,7 +115,7 @@ Configures packets received on the port named \fIport-name\fR
 overrides the default specified on \fB\-q\fR or \fB\-\-queue\fR.
 .IP
 This option may be specified any number of times with different
-\Iport-name\fR arguments.
+\fIport-name\fR arguments.
 .IP
 This option is incompatible with \fB\-N\fR or \fB\-\-normal\fR and
 with \fB\-H\fR or \fB\-\-hub\fR.  If more than one is specified then

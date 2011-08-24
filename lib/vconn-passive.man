@@ -10,7 +10,7 @@ given \fIip\fR.
 Listens for OpenFlow TCP connections on \fIport\fR (default: 6633).
 By default, \fB\*(PN\fR listens for connections to any local IP
 address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\Ar.
+to the given \fIip\fR.
 .
 .IP "\fBpunix:\fIfile\fR"
 Listens for OpenFlow connections on the Unix domain server socket

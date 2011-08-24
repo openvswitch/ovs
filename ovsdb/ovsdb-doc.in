@@ -88,7 +88,7 @@ def blockXmlToNroff(nodes, para='.PP'):
                         and liNode.tagName == 'li'):
                         i += 1
                         if node.tagName == 'ul':
-                            s += ".IP \\bu\n"
+                            s += ".IP \\(bu\n"
                         else:
                             s += ".IP %d. .25in\n" % i
                         s += blockXmlToNroff(liNode.childNodes, ".IP")
