@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira Networks
+# Copyright (c) 2009, 2010, 2011 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ class Atom(object):
         return Atom(type)
 
     def is_default(self):
-        return self == default(self.type)
+        return self == self.default(self.type)
 
     @staticmethod
     def from_json(base, json, symtab=None):
@@ -259,9 +259,8 @@ class Datum(object):
             values = {type.key.default(): None}
         return Datum(type, values)
 
-    @staticmethod
     def is_default(self):
-        return self == default(self.type)
+        return self == Datum.default(self.type)
 
     def check_constraints(self):
         """Checks that each of the atoms in 'datum' conforms to the constraints
