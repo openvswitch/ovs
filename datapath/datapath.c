@@ -1603,7 +1603,7 @@ static struct genl_family dp_vport_genl_family = {
 	.maxattr = OVS_VPORT_ATTR_MAX
 };
 
-static struct genl_multicast_group dp_vport_multicast_group = {
+struct genl_multicast_group dp_vport_multicast_group = {
 	.name = OVS_VPORT_MCGROUP
 };
 
@@ -1662,8 +1662,8 @@ error:
 }
 
 /* Called with RTNL lock or RCU read lock. */
-static struct sk_buff *ovs_vport_cmd_build_info(struct vport *vport, u32 pid,
-						u32 seq, u8 cmd)
+struct sk_buff *ovs_vport_cmd_build_info(struct vport *vport, u32 pid,
+					 u32 seq, u8 cmd)
 {
 	struct sk_buff *skb;
 	int retval;

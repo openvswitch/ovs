@@ -144,6 +144,7 @@ struct dp_upcall_info {
 };
 
 extern struct notifier_block dp_device_notifier;
+extern struct genl_multicast_group dp_vport_multicast_group;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct vport *, struct sk_buff *);
@@ -154,5 +155,7 @@ void set_internal_devs_mtu(const struct datapath *dp);
 
 struct datapath *get_dp(int dp_idx);
 const char *dp_name(const struct datapath *dp);
+struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
+					 u8 cmd);
 
 #endif /* datapath.h */

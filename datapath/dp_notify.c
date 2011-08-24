@@ -9,6 +9,7 @@
 /* Handle changes to managed devices */
 
 #include <linux/netdevice.h>
+#include <net/genetlink.h>
 
 #include "datapath.h"
 #include "vport-internal_dev.h"
@@ -33,8 +34,23 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
-		if (!is_internal_dev(dev))
+		if (!is_internal_dev(dev)) {
+			struct sk_buff *reply;
+
 			dp_detach_port(vport);
+			reply = ovs_vport_cmd_build_info(vport, 0, 0,
+							 OVS_VPORT_CMD_DEL);
+			if (IS_ERR(reply)) {
+				netlink_set_err(INIT_NET_GENL_SOCK, 0,
+						dp_vport_multicast_group.id,
+						PTR_ERR(reply));
+				break;
+			}
+
+			genl_notify(reply, dev_net(dev), 0,
+				    dp_vport_multicast_group.id, NULL,
+				    GFP_KERNEL);
+		}
 		break;
 
 	case NETDEV_CHANGENAME:
