@@ -105,7 +105,7 @@ COVERAGE_DEFINE(netdev_ethtool);
 #define TC_RTAB_SIZE 1024
 #endif
 
-static struct rtnetlink_notifier netdev_linux_cache_notifier;
+static struct nln_notifier netdev_linux_cache_notifier;
 static int cache_notifier_refcount;
 
 enum {

@@ -138,7 +138,7 @@ struct dpif_linux {
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
-    struct rtnetlink_notifier port_notifier;
+    struct nln_notifier port_notifier;
     bool change_error;
 
     /* Queue of unused ports. */

@@ -28,52 +28,55 @@
 #include "ofpbuf.h"
 #include "vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(rtnetlink);
+VLOG_DEFINE_THIS_MODULE(netlink_notifier);
 
-COVERAGE_DEFINE(rtnetlink_changed);
+COVERAGE_DEFINE(nln_changed);
 
-static void rtnetlink_report(struct rtnetlink *rtn, void *change);
+static void nln_report(struct nln *nln, void *change);
 
-struct rtnetlink {
-    struct nl_sock *notify_sock; /* Rtnetlink socket. */
-    struct list all_notifiers;   /* All rtnetlink notifiers. */
+struct nln {
+    struct nl_sock *notify_sock; /* Netlink socket. */
+    struct list all_notifiers;   /* All nln notifiers. */
     bool has_run;                /* Guard for run and wait functions. */
 
-    /* Passed in by rtnetlink_create(). */
+    /* Passed in by nln_create(). */
     int multicast_group;         /* Multicast group we listen on. */
-    rtnetlink_parse_func *parse; /* Message parsing function. */
+    int protocol;                /* Protocal passed to nl_sock_create(). */
+    nln_parse_func *parse;       /* Message parsing function. */
     void *change;                /* Change passed to parse. */
 };
 
-/* Creates an rtnetlink handle which may be used to manage change
- * notifications.  The created handle will listen for rtnetlink messages on
- * 'multicast_group'.  Incoming messages will be parsed with 'parse' which will
- * be passed 'change' as an argument. */
-struct rtnetlink *
-rtnetlink_create(int multicast_group, rtnetlink_parse_func *parse,
-                 void *change)
+/* Creates an nln handle which may be used to manage change notifications.  The
+ * created handle will listen for netlink messages on 'multicast_group' using
+ * netlink protocol 'protocol' (e.g. NETLINK_ROUTE, NETLINK_GENERIC, ...).
+ * Incoming messages will be parsed with 'parse' which will be passed 'change'
+ * as an argument. */
+struct nln *
+nln_create(int protocol, int multicast_group, nln_parse_func *parse,
+           void *change)
 {
-    struct rtnetlink *rtn;
+    struct nln *nln;
 
-    rtn                  = xzalloc(sizeof *rtn);
-    rtn->notify_sock     = NULL;
-    rtn->multicast_group = multicast_group;
-    rtn->parse           = parse;
-    rtn->change          = change;
-    rtn->has_run         = false;
+    nln = xzalloc(sizeof *nln);
+    nln->notify_sock = NULL;
+    nln->protocol = protocol;
+    nln->multicast_group = multicast_group;
+    nln->parse = parse;
+    nln->change = change;
+    nln->has_run = false;
 
-    list_init(&rtn->all_notifiers);
-    return rtn;
+    list_init(&nln->all_notifiers);
+    return nln;
 }
 
-/* Destroys 'rtn' by freeing any memory it has reserved and closing any sockets
+/* Destroys 'nln' by freeing any memory it has reserved and closing any sockets
  * it has opened. */
 void
-rtnetlink_destroy(struct rtnetlink *rtn)
+nln_destroy(struct nln *nln)
 {
-    if (rtn) {
-        nl_sock_destroy(rtn->notify_sock);
-        free(rtn);
+    if (nln) {
+        nl_sock_destroy(nln->notify_sock);
+        free(nln);
     }
 }
 
@@ -86,110 +89,106 @@ rtnetlink_destroy(struct rtnetlink *rtn)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-rtnetlink_notifier_register(struct rtnetlink *rtn,
-                            struct rtnetlink_notifier *notifier,
-                            rtnetlink_notify_func *cb, void *aux)
+nln_notifier_register(struct nln *nln, struct nln_notifier *notifier,
+                      nln_notify_func *cb, void *aux)
 {
-    if (!rtn->notify_sock) {
+    if (!nln->notify_sock) {
         struct nl_sock *sock;
         int error;
 
-        error = nl_sock_create(NETLINK_ROUTE, &sock);
+        error = nl_sock_create(nln->protocol, &sock);
         if (!error) {
-            error = nl_sock_join_mcgroup(sock, rtn->multicast_group);
+            error = nl_sock_join_mcgroup(sock, nln->multicast_group);
         }
         if (error) {
             nl_sock_destroy(sock);
-            VLOG_WARN("could not create rtnetlink socket: %s",
-                      strerror(error));
+            VLOG_WARN("could not create netlink socket: %s", strerror(error));
             return error;
         }
-        rtn->notify_sock = sock;
+        nln->notify_sock = sock;
     } else {
         /* Catch up on notification work so that the new notifier won't
          * receive any stale notifications. */
-        rtnetlink_notifier_run(rtn);
+        nln_notifier_run(nln);
     }
 
-    list_push_back(&rtn->all_notifiers, &notifier->node);
+    list_push_back(&nln->all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
     return 0;
 }
 
 /* Cancels notification on 'notifier', which must have previously been
- * registered with rtnetlink_notifier_register(). */
+ * registered with nln_notifier_register(). */
 void
-rtnetlink_notifier_unregister(struct rtnetlink *rtn,
-                              struct rtnetlink_notifier *notifier)
+nln_notifier_unregister(struct nln *nln, struct nln_notifier *notifier)
 {
     list_remove(&notifier->node);
-    if (list_is_empty(&rtn->all_notifiers)) {
-        nl_sock_destroy(rtn->notify_sock);
-        rtn->notify_sock = NULL;
+    if (list_is_empty(&nln->all_notifiers)) {
+        nl_sock_destroy(nln->notify_sock);
+        nln->notify_sock = NULL;
     }
 }
 
 /* Calls all of the registered notifiers, passing along any as-yet-unreported
  * change events. */
 void
-rtnetlink_notifier_run(struct rtnetlink *rtn)
+nln_notifier_run(struct nln *nln)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-    if (!rtn->notify_sock || rtn->has_run) {
+    if (!nln->notify_sock || nln->has_run) {
         return;
     }
 
-    rtn->has_run = true;
+    nln->has_run = true;
     for (;;) {
         struct ofpbuf *buf;
         int error;
 
-        error = nl_sock_recv(rtn->notify_sock, &buf, false);
+        error = nl_sock_recv(nln->notify_sock, &buf, false);
         if (!error) {
-            if (rtn->parse(buf, rtn->change)) {
-                rtnetlink_report(rtn, rtn->change);
+            if (nln->parse(buf, nln->change)) {
+                nln_report(nln, nln->change);
             } else {
-                VLOG_WARN_RL(&rl, "received bad rtnl message");
-                rtnetlink_report(rtn, NULL);
+                VLOG_WARN_RL(&rl, "received bad netlink message");
+                nln_report(nln, NULL);
             }
             ofpbuf_delete(buf);
         } else if (error == EAGAIN) {
             return;
         } else {
             if (error == ENOBUFS) {
-                VLOG_WARN_RL(&rl, "rtnetlink receive buffer overflowed");
+                VLOG_WARN_RL(&rl, "netlink receive buffer overflowed");
             } else {
-                VLOG_WARN_RL(&rl, "error reading rtnetlink socket: %s",
+                VLOG_WARN_RL(&rl, "error reading netlink socket: %s",
                              strerror(error));
             }
-            rtnetlink_report(rtn, NULL);
+            nln_report(nln, NULL);
         }
     }
 }
 
 /* Causes poll_block() to wake up when change notifications are ready. */
 void
-rtnetlink_notifier_wait(struct rtnetlink *rtn)
+nln_notifier_wait(struct nln *nln)
 {
-    rtn->has_run = false;
-    if (rtn->notify_sock) {
-        nl_sock_wait(rtn->notify_sock, POLLIN);
+    nln->has_run = false;
+    if (nln->notify_sock) {
+        nl_sock_wait(nln->notify_sock, POLLIN);
     }
 }
 
 static void
-rtnetlink_report(struct rtnetlink *rtn, void *change)
+nln_report(struct nln *nln, void *change)
 {
-    struct rtnetlink_notifier *notifier;
+    struct nln_notifier *notifier;
 
     if (change) {
-        COVERAGE_INC(rtnetlink_changed);
+        COVERAGE_INC(nln_changed);
     }
 
-    LIST_FOR_EACH (notifier, node, &rtn->all_notifiers) {
+    LIST_FOR_EACH (notifier, node, &nln->all_notifiers) {
         notifier->cb(change, notifier->aux);
     }
 }
-

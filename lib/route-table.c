@@ -67,10 +67,10 @@ struct name_node {
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static unsigned int register_count = 0;
-static struct rtnetlink *rtn = NULL;
+static struct nln *nln = NULL;
 static struct route_table_msg rtmsg;
-static struct rtnetlink_notifier route_notifier;
-static struct rtnetlink_notifier name_notifier;
+static struct nln_notifier route_notifier;
+static struct nln_notifier name_notifier;
 
 static bool route_table_valid = false;
 static bool name_table_valid = false;
@@ -161,16 +161,12 @@ void
 route_table_register(void)
 {
     if (!register_count) {
-        rtnetlink_parse_func *pf;
-        rtnetlink_notify_func *nf;
+        assert(!nln);
 
-        assert(!rtn);
-
-        pf = (rtnetlink_parse_func *)  route_table_parse;
-        nf = (rtnetlink_notify_func *) route_table_change;
-
-        rtn = rtnetlink_create(RTNLGRP_IPV4_ROUTE, pf, &rtmsg);
-        rtnetlink_notifier_register(rtn, &route_notifier, nf, NULL);
+        nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
+                         (nln_parse_func *) route_table_parse, &rtmsg);
+        nln_notifier_register(nln, &route_notifier,
+                              (nln_notify_func *) route_table_change, NULL);
 
         hmap_init(&route_map);
         route_table_reset();
@@ -189,8 +185,8 @@ route_table_unregister(void)
     register_count--;
 
     if (!register_count) {
-        rtnetlink_destroy(rtn);
-        rtn = NULL;
+        nln_destroy(nln);
+        nln = NULL;
 
         route_map_clear();
         hmap_destroy(&route_map);
@@ -202,9 +198,9 @@ route_table_unregister(void)
 void
 route_table_run(void)
 {
-    if (rtn) {
+    if (nln) {
         rtnetlink_link_notifier_run();
-        rtnetlink_notifier_run(rtn);
+        nln_notifier_run(nln);
     }
 }
 
@@ -212,9 +208,9 @@ route_table_run(void)
 void
 route_table_wait(void)
 {
-    if (rtn) {
+    if (nln) {
         rtnetlink_link_notifier_wait();
-        rtnetlink_notifier_wait(rtn);
+        nln_notifier_wait(nln);
     }
 }
 

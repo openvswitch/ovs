@@ -26,7 +26,7 @@
 #include "netlink-notifier.h"
 #include "ofpbuf.h"
 
-static struct rtnetlink *rtn = NULL;
+static struct nln *nln = NULL;
 static struct rtnetlink_link_change rtn_change;
 
 /* Parses a rtnetlink message 'buf' into 'change'.  If 'buf' is unparseable,
@@ -87,25 +87,23 @@ rtnetlink_link_parse_cb(struct ofpbuf *buf, void *change)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-rtnetlink_link_notifier_register(struct rtnetlink_notifier *notifier,
+rtnetlink_link_notifier_register(struct nln_notifier *notifier,
                                  rtnetlink_link_notify_func *cb, void *aux)
 {
-    rtnetlink_notify_func *nf = (rtnetlink_notify_func *) cb;
-
-    if (!rtn) {
-        rtn = rtnetlink_create(RTNLGRP_LINK, rtnetlink_link_parse_cb,
-                               &rtn_change);
+    if (!nln) {
+        nln = nln_create(NETLINK_ROUTE, RTNLGRP_LINK, rtnetlink_link_parse_cb,
+                         &rtn_change);
     }
 
-    return rtnetlink_notifier_register(rtn, notifier, nf, aux);
+    return nln_notifier_register(nln, notifier, (nln_notify_func *) cb, aux);
 }
 
 /* Cancels notification on 'notifier', which must have previously been
  * registered with rtnetlink_link_notifier_register(). */
 void
-rtnetlink_link_notifier_unregister(struct rtnetlink_notifier *notifier)
+rtnetlink_link_notifier_unregister(struct nln_notifier *notifier)
 {
-    rtnetlink_notifier_unregister(rtn, notifier);
+    nln_notifier_unregister(nln, notifier);
 }
 
 /* Calls all of the registered notifiers, passing along any as-yet-unreported
@@ -113,8 +111,8 @@ rtnetlink_link_notifier_unregister(struct rtnetlink_notifier *notifier)
 void
 rtnetlink_link_notifier_run(void)
 {
-    if (rtn) {
-        rtnetlink_notifier_run(rtn);
+    if (nln) {
+        nln_notifier_run(nln);
     }
 }
 
@@ -123,7 +121,7 @@ rtnetlink_link_notifier_run(void)
 void
 rtnetlink_link_notifier_wait(void)
 {
-    if (rtn) {
-        rtnetlink_notifier_wait(rtn);
+    if (nln) {
+        nln_notifier_wait(nln);
     }
 }

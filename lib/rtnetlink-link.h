@@ -20,7 +20,7 @@
 #include <stdbool.h>
 
 struct ofpbuf;
-struct rtnetlink_notifier;
+struct nln_notifier;
 
 /* These functions are Linux specific, so they should be used directly only by
  * Linux-specific code. */
@@ -50,9 +50,9 @@ void rtnetlink_link_notify_func(const struct rtnetlink_link_change *change,
 
 bool rtnetlink_link_parse(struct ofpbuf *buf,
                           struct rtnetlink_link_change *change);
-int rtnetlink_link_notifier_register(struct rtnetlink_notifier *,
+int rtnetlink_link_notifier_register(struct nln_notifier*,
                                      rtnetlink_link_notify_func *, void *aux);
-void rtnetlink_link_notifier_unregister(struct rtnetlink_notifier *);
+void rtnetlink_link_notifier_unregister(struct nln_notifier *);
 void rtnetlink_link_notifier_run(void);
 void rtnetlink_link_notifier_wait(void);
 #endif /* rtnetlink-link.h */

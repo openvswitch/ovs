@@ -14,46 +14,41 @@
  * limitations under the License.
  */
 
-#ifndef RTNETLINK_H
-#define RTNETLINK_H 1
+#ifndef NETLINK_NOTIFIER_H
+#define NETLINK_NOTIFIER_H 1
 
 /* These functions are Linux specific, so they should be used directly only by
  * Linux-specific code. */
 
 #include "list.h"
 
-struct rtnetlink;
+struct nln;
 struct nlattr;
 struct ofpbuf;
 
-/* Function called to report rtnetlink notifications.  'change' describes the
- * specific change filled out by an rtnetlink_parse_func.  It may be null if
- * the buffer of change information overflowed, in which case the function must
+/* Function called to report netlink notifications.  'change' describes the
+ * specific change filled out by an nln_parse_func.  It may be null if the
+ * buffer of change information overflowed, in which case the function must
  * assume that everything may have changed. 'aux' is as specified in
- * rtnetlink_notifier_register().
- */
-typedef void rtnetlink_notify_func(const void *change, void *aux);
+ * nln_notifier_register(). */
+typedef void nln_notify_func(const void *change, void *aux);
 
-/* Function called to parse incoming rtnetlink notifications.  The 'buf'
- * message should be parsed into 'change' as specified in rtnetlink_create().
- */
-typedef bool rtnetlink_parse_func(struct ofpbuf *buf, void *change);
+/* Function called to parse incoming nln notifications.  The 'buf' message
+ * should be parsed into 'change' as specified in nln_create(). */
+typedef bool nln_parse_func(struct ofpbuf *buf, void *change);
 
-struct rtnetlink_notifier {
+struct nln_notifier {
     struct list node;
-    rtnetlink_notify_func *cb;
+    nln_notify_func *cb;
     void *aux;
 };
 
-struct rtnetlink *rtnetlink_create(int multicast_group,
-                                   rtnetlink_parse_func *,
-                                   void *change);
-void rtnetlink_destroy(struct rtnetlink *rtn);
-int rtnetlink_notifier_register(struct rtnetlink *,
-                                struct rtnetlink_notifier *,
-                                rtnetlink_notify_func *, void *aux);
-void rtnetlink_notifier_unregister(struct rtnetlink *,
-                                   struct rtnetlink_notifier *);
-void rtnetlink_notifier_run(struct rtnetlink *);
-void rtnetlink_notifier_wait(struct rtnetlink *);
-#endif /* rtnetlink.h */
+struct nln *nln_create(int protocol, int multicast_group, nln_parse_func *,
+                       void *change);
+void nln_destroy(struct nln *);
+int nln_notifier_register(struct nln *, struct nln_notifier *,
+                          nln_notify_func *, void *aux);
+void nln_notifier_unregister(struct nln *, struct nln_notifier *);
+void nln_notifier_run(struct nln *);
+void nln_notifier_wait(struct nln *);
+#endif /* netlink-notifier.h */

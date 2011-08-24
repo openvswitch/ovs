@@ -799,7 +799,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
-    struct rtnetlink_notifier link_notifier;
+    struct nln_notifier link_notifier;
     struct unixctl_server *unixctl;
     int retval;
 
