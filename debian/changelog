@@ -1,10 +1,14 @@
 openvswitch (1.2.1-1) unstable; urgency=low
 
-  [ Open vSwitch team ]
   * New upstream version
-    - Bug fixes
+    - Various bug fixes
+    - Remove excess files from ovsdbmonitor package
+      (closes: #636816)
+  * Add dependency on ${misc:Depends} to openvswitch-brcompat and ovsdbmonitor.
+  * Resolve manpage warnings
+  * Set -e in brcompat's postinst script so that it doesn't ignore errors
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 19 Aug 2011 19:23:00 +0000
+ -- Simon Horman <horms@debian.org>  Wed, 24 Aug 2011 09:39:15 +0900
 
 openvswitch (1.2.0-1) unstable; urgency=low
 
