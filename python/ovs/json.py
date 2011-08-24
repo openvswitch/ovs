@@ -28,15 +28,7 @@ for i in range(32):
         escapes[i] = u"\\u%04x" % i
 
 def __dump_string(stream, s):
-    stream.write(u"\"")
-    for c in s:
-        x = ord(c)
-        escape = escapes.get(x)
-        if escape:
-            stream.write(escape)
-        else:
-            stream.write(c)
-    stream.write(u"\"")
+    stream.write(u'"%s"' % ''.join(escapes.get(ord(c), c) for c in s))
 
 def to_stream(obj, stream, pretty=False, sort_keys=True):
     if obj is None:
