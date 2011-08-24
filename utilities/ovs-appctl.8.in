@@ -80,7 +80,7 @@ facility's log level to \fBOFF\fR disables logging to that facility.
 The following log levels, in order of descending severity, are
 available:
 .
-.IP "\fBEMER\f"
+.IP "\fBEMER\fR"
 A major failure forced a process to abort.
 .IP "\fBERR\fR"
 A high-level operation or a subsystem failed.  Attention is
