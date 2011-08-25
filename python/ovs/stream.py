@@ -300,7 +300,7 @@ class PassiveStream(object):
         # Don't delete the file: we might have forked.
         self.socket.close()
 
-def usage(name, active, passive, bootstrap):
+def usage(name, active, passive):
     print
     if active:
         print("Active %s connection methods:" % name)
