@@ -68,8 +68,8 @@ def unlink_file_now(file):
     return error
 
 def _unlink_files():
-    for file in _files:
-        _unlink(file)
+    for file_ in _files:
+        _unlink(file_)
 
 def _cancel_files():
     global _added_hook
@@ -77,9 +77,9 @@ def _cancel_files():
     _added_hook = False
     _files = {}
 
-def _unlink(file):
+def _unlink(file_):
     try:
-        os.unlink(file)
+        os.unlink(file_)
         return 0
     except OSError, e:
         return e.errno

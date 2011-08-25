@@ -539,9 +539,9 @@ class Type(object):
                          'OVSDB_TYPE_VOID);' % (indent, var))
         initMin = "%s%s.n_min = %s;" % (indent, var, self.n_min)
         if self.n_max == sys.maxint:
-            max = "UINT_MAX"
+            n_max = "UINT_MAX"
         else:
-            max = self.n_max
-        initMax = "%s%s.n_max = %s;" % (indent, var, max)
+            n_max = self.n_max
+        initMax = "%s%s.n_max = %s;" % (indent, var, n_max)
         return "\n".join((initKey, initValue, initMin, initMax))
 

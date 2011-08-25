@@ -18,26 +18,26 @@ import sys
 
 PROGRAM_NAME = os.path.basename(sys.argv[0])
 
-def abs_file_name(dir, file_name):
+def abs_file_name(dir_, file_name):
     """If 'file_name' starts with '/', returns a copy of 'file_name'.
     Otherwise, returns an absolute path to 'file_name' considering it relative
-    to 'dir', which itself must be absolute.  'dir' may be None or the empty
+    to 'dir_', which itself must be absolute.  'dir_' may be None or the empty
     string, in which case the current working directory is used.
 
-    Returns None if 'dir' is null and getcwd() fails.
+    Returns None if 'dir_' is None and getcwd() fails.
 
     This differs from os.path.abspath() in that it will never change the
     meaning of a file name."""
     if file_name.startswith('/'):
         return file_name
     else:
-        if dir is None or dir == "":
+        if dir_ is None or dir_ == "":
             try:
-                dir = os.getcwd()
+                dir_ = os.getcwd()
             except OSError:
                 return None
 
-        if dir.endswith('/'):
-            return dir + file_name
+        if dir_.endswith('/'):
+            return dir_ + file_name
         else:
-            return "%s/%s" % (dir, file_name)
+            return "%s/%s" % (dir_, file_name)

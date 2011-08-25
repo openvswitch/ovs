@@ -23,9 +23,9 @@ escapes = {ord('"'): u"\\\"",
            ord("\n"): u"\\n",
            ord("\r"): u"\\r",
            ord("\t"): u"\\t"}
-for i in range(32):
-    if i not in escapes:
-        escapes[i] = u"\\u%04x" % i
+for esc in range(32):
+    if esc not in escapes:
+        escapes[esc] = u"\\u%04x" % esc
 
 def __dump_string(stream, s):
     stream.write(u'"%s"' % ''.join(escapes.get(ord(c), c) for c in s))

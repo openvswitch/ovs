@@ -249,10 +249,10 @@ class ColumnSchema(object):
         parser = ovs.db.parser.Parser(json, "schema for column %s" % name)
         mutable = parser.get_optional("mutable", [bool], True)
         ephemeral = parser.get_optional("ephemeral", [bool], False)
-        type = types.Type.from_json(parser.get("type", [dict, unicode]))
+        type_ = types.Type.from_json(parser.get("type", [dict, unicode]))
         parser.finish()
 
-        return ColumnSchema(name, mutable, not ephemeral, type)
+        return ColumnSchema(name, mutable, not ephemeral, type_)
 
     def to_json(self):
         json = {"type": self.type.to_json()}

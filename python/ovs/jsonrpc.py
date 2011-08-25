@@ -119,7 +119,7 @@ class Message(object):
         params = json.pop("params", None)
         result = json.pop("result", None)
         error = json.pop("error", None)
-        id = json.pop("id", None)
+        id_ = json.pop("id", None)
         if len(json):
             return "message has unexpected member \"%s\"" % json.popitem()[0]
 
@@ -127,12 +127,12 @@ class Message(object):
             msg_type = Message.T_REPLY
         elif error is not None:
             msg_type = Message.T_ERROR
-        elif id is not None:
+        elif id_ is not None:
             msg_type = Message.T_REQUEST
         else:
             msg_type = Message.T_NOTIFY
         
-        msg = Message(msg_type, method, params, result, error, id)
+        msg = Message(msg_type, method, params, result, error, id_)
         validation_error = msg.is_valid()
         if validation_error is not None:
             return validation_error
@@ -289,13 +289,13 @@ class Connection(object):
             poller.block()
     
     def transact_block(self, request):
-        id = request.id
+        id_ = request.id
 
         error = self.send(request)
         reply = None
         while not error:
             error, reply = self.recv_block()
-            if reply and reply.type == Message.T_REPLY and reply.id == id:
+            if reply and reply.type == Message.T_REPLY and reply.id == id_:
                 break
         return error, reply
 
