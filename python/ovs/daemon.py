@@ -415,7 +415,7 @@ def __read_pidfile(pidfile, delete_if_stale):
             raced = True
         if raced:
             logging.warning("%s: lost race to delete pidfile" % pidfile)
-            return -errno.ALREADY
+            return -errno.EALREADY
 
         # We won the right to delete the stale pidfile.
         try:
