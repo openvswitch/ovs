@@ -38,6 +38,7 @@
 /depcomp
 /distfiles
 /install-sh
+/manpage-check
 /missing
 /missing-distfiles
 /package.m4
