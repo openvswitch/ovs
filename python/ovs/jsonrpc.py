@@ -359,7 +359,7 @@ class Session(object):
         reconnect.enable(ovs.timeval.msec())
 
         if ovs.stream.PassiveStream.is_valid_name(name):
-            self.reconnect.set_passive(True, ovs.timeval.msec())
+            reconnect.set_passive(True, ovs.timeval.msec())
 
         return Session(reconnect, None)
 
