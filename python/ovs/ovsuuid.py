@@ -66,7 +66,7 @@ class UUID(uuid.UUID):
         return ["uuid", str(self)]
 
     def cInitUUID(self, var):
-        m = re.match(str(self))
+        m = UUID.uuidRE.match(str(self))
         return ["%s.parts[0] = 0x%s;" % (var, m.group(1)),
                 "%s.parts[1] = 0x%s%s;" % (var, m.group(2), m.group(3)),
                 "%s.parts[2] = 0x%s%s;" % (var, m.group(4), m.group(5)),
