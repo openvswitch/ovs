@@ -18,15 +18,16 @@ EXTRA_DIST += \
 	rhel/openvswitch.spec.in \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template
 
+update_spec = \
+  ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+    < $(srcdir)/rhel/$(@F).in > $(@F).tmp || exit 1; \
+  if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
 
 $(srcdir)/rhel/openvswitch-kmod-rhel5.spec: rhel/openvswitch-kmod-rhel5.spec.in $(top_builddir)/config.status
-	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
-		< $(srcdir)/rhel/openvswitch-kmod-rhel5.spec.in > $@
+	$(update_spec)
 
 $(srcdir)/rhel/openvswitch-kmod-rhel6.spec: rhel/openvswitch-kmod-rhel6.spec.in $(top_builddir)/config.status
-	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
-		< $(srcdir)/rhel/openvswitch-kmod-rhel6.spec.in > $@
+	$(update_spec)
 
 $(srcdir)/rhel/openvswitch.spec: rhel/openvswitch.spec.in $(top_builddir)/config.status
-	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
-		< $(srcdir)/rhel/openvswitch.spec.in > $@
+	$(update_spec)
