@@ -207,7 +207,7 @@ class Idl:
                                       'is not an object'
                                       % (table_name, uuid_string))
 
-                parser = ovs.db.parser.Parser(json, "row-update")
+                parser = ovs.db.parser.Parser(row_update, "row-update")
                 old = parser.get_optional("old", [dict])
                 new = parser.get_optional("new", [dict])
                 parser.finish()
