@@ -505,8 +505,6 @@ class Type(object):
                 return "set of %s%s" % (quantity, plural)
 
     def constraintsToEnglish(self, escapeLiteral=returnUnchanged):
-        s = ""
-
         constraints = []
         keyConstraints = self.key.constraintsToEnglish(escapeLiteral)
         if keyConstraints:
