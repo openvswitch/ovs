@@ -1,5 +1,6 @@
 if HAVE_PYTHON
 sbin_SCRIPTS += utilities/bugtool/ovs-bugtool
+CLEANFILES += utilities/bugtool/ovs-bugtool
 man_MANS += utilities/bugtool/ovs-bugtool.8
 
 bugtool_plugins = \
