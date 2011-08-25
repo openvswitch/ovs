@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "rtnetlink.h"
+#include "netlink-notifier.h"
 
 #include <errno.h>
 #include <poll.h>

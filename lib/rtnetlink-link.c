@@ -23,8 +23,8 @@
 #include <net/if.h>
 
 #include "netlink.h"
+#include "netlink-notifier.h"
 #include "ofpbuf.h"
-#include "rtnetlink.h"
 
 static struct rtnetlink *rtn = NULL;
 static struct rtnetlink_link_change rtn_change;

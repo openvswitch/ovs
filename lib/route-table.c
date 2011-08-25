@@ -27,9 +27,9 @@
 #include "hash.h"
 #include "hmap.h"
 #include "netlink.h"
+#include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "ofpbuf.h"
-#include "rtnetlink.h"
 #include "rtnetlink-link.h"
 #include "vlog.h"
 

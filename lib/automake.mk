@@ -205,11 +205,11 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/netdev-linux.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
+	lib/netlink-notifier.c \
+	lib/netlink-notifier.h \
 	lib/netlink-protocol.h \
 	lib/netlink-socket.c \
 	lib/netlink-socket.h \
-	lib/rtnetlink.c \
-	lib/rtnetlink.h \
 	lib/rtnetlink-link.c \
 	lib/rtnetlink-link.h \
 	lib/route-table.c \
