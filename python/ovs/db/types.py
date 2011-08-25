@@ -113,6 +113,10 @@ class BaseType(object):
         self.min_length = min_length
         self.max_length = max_length
         self.ref_table = ref_table
+        if ref_table:
+            self.ref_type = 'strong'
+        else:
+            self.ref_type = None
 
     def default(self):
         return ovs.db.data.Atom.default(self.type)
