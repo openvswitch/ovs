@@ -66,7 +66,7 @@ def to_stream(obj, stream, pretty=False, sort_keys=True):
             to_stream(value, stream, pretty, sort_keys)
         stream.write(u"]")
     else:
-        raise Error("can't serialize %s as JSON" % obj)
+        raise Exception("can't serialize %s as JSON" % obj)
 
 def to_file(obj, name, pretty=False, sort_keys=True):
     stream = open(name, "w")
