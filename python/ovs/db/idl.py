@@ -249,7 +249,7 @@ class Idl:
                 changed = True
                 # XXX rate-limit
                 logging.warning("cannot modify missing row %s in table %s"
-                                % (uuid, table_name))
+                                % (uuid, table.name))
             if self.__modify_row(table, row, new):
                 changed = True
         return changed
@@ -269,7 +269,7 @@ class Idl:
             except error.Error, e:
                 # XXX rate-limit
                 logging.warning("error parsing column %s in table %s: %s"
-                                % (column_name, table_name, e))
+                                % (column_name, table.name, e))
                 continue
 
             if datum != getattr(row, column_name):
