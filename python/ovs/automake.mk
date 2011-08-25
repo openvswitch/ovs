@@ -42,6 +42,6 @@ ovs-install-data-local:
 endif
 install-data-local: ovs-install-data-local
 
-uninstall-local: ovs-uninstall-local
+UNINSTALL_LOCAL += ovs-uninstall-local
 ovs-uninstall-local:
 	rm -f $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py

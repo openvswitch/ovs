@@ -43,7 +43,7 @@ DISTCLEANFILES += \
 man_MANS += ovsdb/ovsdbmonitor/ovsdbmonitor.1
 endif
 
-uninstall-local: ovsdbmonitor-uninstall-local
+UNINSTALL_LOCAL += ovsdbmonitor-uninstall-local
 ovsdbmonitor-uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/ovsdbmonitor
 

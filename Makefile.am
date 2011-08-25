@@ -57,6 +57,7 @@ dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 dist_scripts_SCRIPTS =
 INSTALL_DATA_LOCAL =
+UNINSTALL_LOCAL =
 man_MANS =
 MAN_FRAGMENTS =
 noinst_DATA =
@@ -165,7 +166,8 @@ dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
 clean-local: $(CLEAN_LOCAL)
 install-data-local: $(INSTALL_DATA_LOCAL)
-.PHONY: $(DIST_HOOKS) $(CLEAN_LOCAL) $(INSTALL_DATA_LOCAL)
+uninstall-local: $(UNINSTALL_LOCAL)
+.PHONY: $(DIST_HOOKS) $(CLEAN_LOCAL) $(INSTALL_DATA_LOCAL) $(UNINSTALL_LOCAL)
 
 include lib/automake.mk
 include ofproto/automake.mk
