@@ -72,8 +72,7 @@ class Message(object):
     def type_to_string(type_):
         return Message.__types[type_]
 
-    @staticmethod
-    def __validate_arg(value, name, must_have):
+    def __validate_arg(self, value, name, must_have):
         if (value is not None) == (must_have != 0):
             return None
         else:
@@ -96,11 +95,11 @@ class Message(object):
             return "invalid JSON-RPC message type %s" % self.type
 
         return (
-            Message.__validate_arg(self.method, "method", pattern & 0x10000) or
-            Message.__validate_arg(self.params, "params", pattern & 0x1000) or
-            Message.__validate_arg(self.result, "result", pattern & 0x100) or
-            Message.__validate_arg(self.error, "error", pattern & 0x10) or
-            Message.__validate_arg(self.id, "id", pattern & 0x1))
+            self.__validate_arg(self.method, "method", pattern & 0x10000) or
+            self.__validate_arg(self.params, "params", pattern & 0x1000) or
+            self.__validate_arg(self.result, "result", pattern & 0x100) or
+            self.__validate_arg(self.error, "error", pattern & 0x10) or
+            self.__validate_arg(self.id, "id", pattern & 0x1))
 
     @staticmethod
     def from_json(json):
