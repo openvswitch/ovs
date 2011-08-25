@@ -421,7 +421,7 @@ def __read_pidfile(pidfile, delete_if_stale):
         try:
             os.unlink(pidfile)
         except IOError, e:
-            logging.warning("%s: failed to delete stale pidfile"
+            logging.warning("%s: failed to delete stale pidfile (%s)"
                             % (pidfile, e.strerror))
             return -e.errno
         else:
