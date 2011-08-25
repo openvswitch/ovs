@@ -182,6 +182,8 @@ def _make_pidfile():
         if error:
             _fatal("%s: unlink failed (%s)" % (tmpfile, os.strerror(error)))
 
+    global _pidfile_dev
+    global _pidfile_ino
     _pidfile_dev = s.st_dev
     _pidfile_ino = s.st_ino
 
