@@ -17,7 +17,6 @@ import logging
 import os
 import select
 import socket
-import sys
 
 import ovs.poller
 import ovs.socket_util
