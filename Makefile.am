@@ -46,6 +46,7 @@ EXTRA_DIST = \
 	SubmittingPatches \
 	WHY-OVS \
 	boot.sh \
+	build-aux/soexpand.pl \
 	$(MAN_FRAGMENTS)
 bin_PROGRAMS =
 sbin_PROGRAMS =
@@ -81,15 +82,12 @@ scriptsdir = $(pkgdatadir)/scripts
 # http://article.gmane.org/gmane.comp.sysutils.automake.general/10891
 noinst_HEADERS += $(EXTRA_DIST)
 
-EXTRA_DIST += \
-	soexpand.pl
-
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-read-only: t -*-\n'
 
 SUFFIXES += .in
 .in:
-	$(PERL) $(srcdir)/soexpand.pl -I$(srcdir) < $< | \
+	$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
 	    sed \
 		-e 's,[@]PKIDIR[@],$(PKIDIR),g' \
                 -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
