@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,25 @@
 #include <config.h>
 #include "bitmap.h"
 #include <string.h>
+
+/* Allocates and returns a bitmap initialized to all-1-bits. */
+unsigned long *
+bitmap_allocate1(size_t n_bits)
+{
+    size_t n_bytes = bitmap_n_bytes(n_bits);
+    size_t n_longs = bitmap_n_longs(n_bits);
+    unsigned long *bitmap;
+
+    /* Allocate and initialize most of the bitmap. */
+    bitmap = xmalloc(n_bytes);
+    memset(bitmap, 0xff, n_bytes);
+
+    /* Ensure that the last "unsigned long" in the bitmap only has as many
+     * 1-bits as there actually should be. */
+    bitmap[n_longs - 1] = (1UL << (n_bits % BITMAP_ULONG_BITS)) - 1;
+
+    return bitmap;
+}
 
 /* Sets 'count' consecutive bits in 'bitmap', starting at bit offset 'start',
  * to 'value'. */

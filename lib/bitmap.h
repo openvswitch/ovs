@@ -53,6 +53,8 @@ bitmap_allocate(size_t n_bits)
     return xzalloc(bitmap_n_bytes(n_bits));
 }
 
+unsigned long *bitmap_allocate1(size_t n_bits);
+
 static inline unsigned long *
 bitmap_clone(const unsigned long *bitmap, size_t n_bits)
 {
