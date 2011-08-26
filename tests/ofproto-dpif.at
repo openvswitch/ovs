@@ -79,3 +79,82 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 OFPROTO_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - trunks])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 trunks=10,12 -- set Interface p1 type=dummy -- \
+   add-port br0 p2 tag=10       -- set Interface p2 type=dummy -- \
+   add-port br0 p3 tag=12       -- set Interface p3 type=dummy -- \
+   add-port br0 p4 tag=12       -- set Interface p4 type=dummy])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport \
+        -- get Interface p4 ofport],
+  [0], [stdout])
+set `cat stdout`
+br0=0 p1=$1 p2=$2 p3=$3 p4=$4
+
+dnl Each of these specifies an in_port, a VLAN VID (or "none"), and one
+dnl or more sets of valid datapath actions.  (The order of datapath
+dnl actions is somewhat unpredictable, hence the ability to specify more
+dnl than one set.)
+for tuple in \
+        "$br0 none drop" \
+        "$br0 0 drop" \
+        "$br0 10 $p1,strip_vlan,$p2" \
+        "$br0 11 drop" \
+        "$br0 12 $p1,strip_vlan,$p3,$p4 $p1,strip_vlan,$p4,$p3" \
+        "$p1 none drop" \
+        "$p1 0 drop" \
+        "$p1 10 $br0,strip_vlan,$p2" \
+        "$p1 11 drop" \
+        "$p1 12 $br0,strip_vlan,$p4,$p3 $br0,strip_vlan,$p3,$p4" \
+        "$p2 none set_tci(vid=10,pcp=0),$br0,$p1 set_tci(vid=10,pcp=0),$p1,$br0" \
+        "$p2 0 set_tci(vid=10,pcp=1),$br0,$p1 set_tci(vid=10,pcp=1),$p1,$br0" \
+        "$p2 10 drop" \
+        "$p2 11 drop" \
+        "$p2 12 drop" \
+        "$p3 none $p4,set_tci(vid=12,pcp=0),$br0,$p1 $p4,set_tci(vid=12,pcp=0),$p1,$br0" \
+        "$p3 0 $p4,set_tci(vid=12,pcp=1),$br0,$p1 $p4,set_tci(vid=12,pcp=1),$p1,$br0" \
+        "$p3 10 drop" \
+        "$p3 11 drop" \
+        "$p3 12 drop" \
+        "$p4 none $p3,set_tci(vid=12,pcp=0),$br0,$p1 $p3,set_tci(vid=12,pcp=0),$p1,$br0" \
+        "$p4 0 $p3,set_tci(vid=12,pcp=1),$br0,$p1 $p3,set_tci(vid=12,pcp=1),$p1,$br0" \
+        "$p4 10 drop" \
+        "$p4 11 drop" \
+        "$p4 12 drop"
+do
+  set $tuple
+  in_port=$1
+  vlan=$2
+  shift; shift
+
+  if test $vlan = none; then
+    flow="in_port($in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0xabcd)"
+  else
+    flow="in_port($in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),vlan(vid=$vlan,pcp=1),eth_type(0xabcd)"
+  fi
+
+  AT_CHECK(
+    [echo "-- $tuple"
+     echo "-- br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4"
+     ovs-appctl ofproto/trace br0 "$flow"],
+    [0], [stdout])
+
+  actions=`tail -1 stdout | sed 's/Datapath actions: //'`
+  no_match=:
+  for pattern
+  do
+    if test X"$actions" = X"$pattern"; then
+      no_match=false
+    fi
+  done
+  AT_FAIL_IF([$no_match])
+done
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
