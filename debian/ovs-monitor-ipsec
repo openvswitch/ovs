@@ -29,6 +29,7 @@ import getopt
 import glob
 import logging, logging.handlers
 import os
+import socket
 import subprocess
 import sys
 
@@ -38,16 +39,18 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
-
-# By default log messages as DAEMON into syslog
 s_log = logging.getLogger("ovs-monitor-ipsec")
-l_handler = logging.handlers.SysLogHandler(
-        "/dev/log",
-        facility=logging.handlers.SysLogHandler.LOG_DAEMON)
-l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-l_handler.setFormatter(l_formatter)
-s_log.addHandler(l_handler)
-
+try:
+    # By default log messages as DAEMON into syslog
+    l_handler = logging.handlers.SysLogHandler(
+            "/dev/log",
+            facility=logging.handlers.SysLogHandler.LOG_DAEMON)
+    l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
+    l_handler.setFormatter(l_formatter)
+    s_log.addHandler(l_handler)
+except socket.error, e:
+    logging.basicConfig()
+    s_log.warn("failed to connect to syslog (%s)" % e)
 
 setkey = "/usr/sbin/setkey"
 
