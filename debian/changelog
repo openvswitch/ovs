@@ -1,3 +1,16 @@
+openvswitch (1.2.1-2) unstable; urgency=low
+
+  * Install python modules into /usr/share/pyshared/ovs/
+    rather than usr/share/pyshared/python-openvswitch/ovs/
+    This allows them to be found using the default sys.path
+    as they were able to be found befoer the dh_python2 transition
+    was made.
+
+    This resolves a problem whereby openvswitch-ipsec fails
+    to start because it can't import the ovs.db module.
+
+ -- Simon Horman <horms@debian.org>  Fri, 26 Aug 2011 09:34:08 +0900
+
 openvswitch (1.2.1-1) unstable; urgency=low
 
   * New upstream version
@@ -6,6 +19,7 @@ openvswitch (1.2.1-1) unstable; urgency=low
       (closes: #636816)
   * Add dependency on ${misc:Depends} to openvswitch-brcompat and ovsdbmonitor.
   * Resolve manpage warnings
+  * Transition to dh_python2
   * Set -e in brcompat's postinst script so that it doesn't ignore errors
 
  -- Simon Horman <horms@debian.org>  Wed, 24 Aug 2011 09:39:15 +0900
