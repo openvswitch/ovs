@@ -222,7 +222,7 @@ int
 drain_rcvbuf(int fd)
 {
     socklen_t rcvbuf_len;
-    size_t rcvbuf;
+    size_t rcvbuf = 0;
 
     rcvbuf_len = sizeof rcvbuf;
     if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, &rcvbuf_len) < 0) {
