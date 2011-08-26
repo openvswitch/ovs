@@ -5,8 +5,8 @@ Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 5), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
- libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, python,
- python-support (>= 0.8.4), procps, python-qt4,
+ libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl,
+ python (>= 2.6.6-3), procps, python-qt4,
  python-zopeinterface, python-twisted-conch
 Standards-Version: 3.9.2
 Homepage: http://openvswitch.org/
@@ -46,7 +46,7 @@ Description: Open vSwitch switch implementations
 Package: openvswitch-ipsec
 Architecture: linux-any
 Depends:
- ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, 
+ ${shlibs:Depends}, ${misc:Depends}, python,
  ipsec-tools (>=0.8~alpha20101208), 
  racoon (>=0.8~alpha20101208),
  openvswitch-common (= ${binary:Version}),
@@ -115,7 +115,6 @@ Package: python-openvswitch
 Architecture: all
 Section: python
 Depends: ${misc:Depends}, ${python:Depends}
-Provides: ${python:Provides}
 Description: Python bindings for Open vSwitch
  This package contains the full Python bindings for Open vSwitch database.
 
@@ -123,7 +122,6 @@ Package: ovsdbmonitor
 Architecture: all
 Section: utils
 Depends: ${python:Depends}, python-openvswitch, ${misc:Depends}
-Provides: ${python:Provides}
 Description: Open vSwitch graphical monitoring tool
  This package is a GUI tool for monitoring and troubleshooting local
  or remote Open vSwitch installations.  It presents GUI tables that
