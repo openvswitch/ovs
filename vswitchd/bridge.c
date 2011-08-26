@@ -1004,6 +1004,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 {
     const char *hwaddr;
     struct port *port;
+    bool found_addr = false;
     int error;
 
     *hw_addr_iface = NULL;
@@ -1023,7 +1024,6 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
     /* Otherwise choose the minimum non-local MAC address among all of the
      * interfaces. */
-    memset(ea, 0xff, ETH_ADDR_LEN);
     HMAP_FOR_EACH (port, hmap_node, &br->ports) {
         uint8_t iface_ea[ETH_ADDR_LEN];
         struct iface *candidate;
@@ -1081,16 +1081,17 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         {
             memcpy(ea, iface_ea, ETH_ADDR_LEN);
             *hw_addr_iface = iface;
+            found_addr = true;
         }
     }
-    if (eth_addr_is_multicast(ea)) {
+    if (found_addr) {
+        VLOG_DBG("bridge %s: using bridge Ethernet address "ETH_ADDR_FMT,
+                 br->name, ETH_ADDR_ARGS(ea));
+    } else {
         memcpy(ea, br->default_ea, ETH_ADDR_LEN);
         *hw_addr_iface = NULL;
         VLOG_WARN("bridge %s: using default bridge Ethernet "
                   "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
-    } else {
-        VLOG_DBG("bridge %s: using bridge Ethernet address "ETH_ADDR_FMT,
-                 br->name, ETH_ADDR_ARGS(ea));
     }
 }
 
