@@ -88,6 +88,11 @@ struct cfm {
     struct timer fault_timer; /* Check for faults when expired. */
 
     struct hmap remote_mps;   /* Remote MPs. */
+
+    /* Result of cfm_get_remote_mpids(). Updated only during fault check to
+     * avoid flapping. */
+    uint64_t *rmps_array;     /* Cache of remote_mps. */
+    size_t rmps_array_len;    /* Number of rmps in 'rmps_array'. */
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -249,6 +254,7 @@ cfm_destroy(struct cfm *cfm)
 
     hmap_destroy(&cfm->remote_mps);
     hmap_remove(&all_cfms, &cfm->hmap_node);
+    free(cfm->rmps_array);
     free(cfm->name);
     free(cfm);
 }
@@ -263,6 +269,11 @@ cfm_run(struct cfm *cfm)
 
         cfm->fault = cfm->unexpected_recv;
         cfm->unexpected_recv = false;
+
+        cfm->rmps_array_len = 0;
+        free(cfm->rmps_array);
+        cfm->rmps_array = xmalloc(hmap_count(&cfm->remote_mps) *
+                                  sizeof *cfm->rmps_array);
 
         HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
 
@@ -285,6 +296,8 @@ cfm_run(struct cfm *cfm)
                              rmp->mpid);
                     cfm->fault = true;
                 }
+
+                cfm->rmps_array[cfm->rmps_array_len++] = rmp->mpid;
             }
         }
 
@@ -478,6 +491,17 @@ bool
 cfm_get_fault(const struct cfm *cfm)
 {
     return cfm->fault;
+}
+
+/* Populates 'rmps' with an array of remote maintenance points reachable by
+ * 'cfm'. The number of remote maintenance points is written to 'n_rmps'.
+ * 'cfm' retains ownership of the array written to 'rmps' */
+void
+cfm_get_remote_mpids(const struct cfm *cfm, const uint64_t **rmps,
+                     size_t *n_rmps)
+{
+    *rmps = cfm->rmps_array;
+    *n_rmps = cfm->rmps_array_len;
 }
 
 static struct cfm *

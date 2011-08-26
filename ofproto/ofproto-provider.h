@@ -20,6 +20,7 @@
 /* Definitions for use within ofproto. */
 
 #include "ofproto/ofproto.h"
+#include "cfm.h"
 #include "classifier.h"
 #include "list.h"
 #include "shash.h"
@@ -877,6 +878,16 @@ struct ofproto_class {
      * This function may be a null pointer if the ofproto implementation does
      * not support CFM. */
     int (*get_cfm_fault)(const struct ofport *ofport);
+
+    /* Gets the MPIDs of the remote maintenance points broadcasting to
+     * 'ofport'.  Populates 'rmps' with a provider owned array of MPIDs, and
+     * 'n_rmps' with the number of MPIDs in 'rmps'. Returns a number less than
+     * 0 if CFM is not enabled of 'ofport'.
+     *
+     * This function may be a null pointer if the ofproto implementation does
+     * not support CFM. */
+    int (*get_cfm_remote_mpids)(const struct ofport *ofport,
+                                const uint64_t **rmps, size_t *n_rmps);
 
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as

@@ -41,5 +41,7 @@ bool cfm_configure(struct cfm *, const struct cfm_settings *);
 bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *);
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
 bool cfm_get_fault(const struct cfm *);
+void cfm_get_remote_mpids(const struct cfm *, const uint64_t **rmps,
+                          size_t *n_rmps);
 
 #endif /* cfm.h */

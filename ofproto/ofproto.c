@@ -2003,6 +2003,25 @@ ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
             : -1);
 }
 
+/* Gets the MPIDs of the remote maintenance points broadcasting to 'ofp_port'
+ * within 'ofproto'.  Populates 'rmps' with an array of MPIDs owned by
+ * 'ofproto', and 'n_rmps' with the number of MPIDs in 'rmps'.  Returns a
+ * number less than 0 if CFM is not enabled on 'ofp_port'. */
+int
+ofproto_port_get_cfm_remote_mpids(const struct ofproto *ofproto,
+                                  uint16_t ofp_port, const uint64_t **rmps,
+                                  size_t *n_rmps)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+
+    *rmps = NULL;
+    *n_rmps = 0;
+    return (ofport && ofproto->ofproto_class->get_cfm_remote_mpids
+            ? ofproto->ofproto_class->get_cfm_remote_mpids(ofport, rmps,
+                                                           n_rmps)
+            : -1);
+}
+
 static int
 handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_msg *osm)

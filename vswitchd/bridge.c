@@ -243,6 +243,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_statistics);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_fault);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_mpids);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_current);
     ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
 
@@ -1262,7 +1263,9 @@ static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    int fault;
+    int fault, error;
+    const uint64_t *rmps;
+    size_t n_rmps;
 
     fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
                                        iface->ofp_port);
@@ -1271,6 +1274,15 @@ iface_refresh_cfm_stats(struct iface *iface)
         ovsrec_interface_set_cfm_fault(cfg, &fault_bool, 1);
     } else {
         ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
+    }
+
+    error = ofproto_port_get_cfm_remote_mpids(iface->port->bridge->ofproto,
+                                              iface->ofp_port, &rmps, &n_rmps);
+    if (error >= 0) {
+        ovsrec_interface_set_cfm_remote_mpids(cfg, (const int64_t *)rmps,
+                                              n_rmps);
+    } else {
+        ovsrec_interface_set_cfm_remote_mpids(cfg, NULL, 0);
     }
 }
 
