@@ -6,8 +6,6 @@
  * kernel, by Linus Torvalds and others.
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/dcache.h>
 #include <linux/etherdevice.h>
 #include <linux/if.h>
@@ -687,16 +685,6 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 	dp_process_received_packet(vport, skb);
 }
 
-static inline unsigned packet_length(const struct sk_buff *skb)
-{
-	unsigned length = skb->len - ETH_HLEN;
-
-	if (skb->protocol == htons(ETH_P_8021Q))
-		length -= VLAN_HLEN;
-
-	return length;
-}
-
 /**
  *	vport_send - send a packet on a device
  *
@@ -708,18 +696,7 @@ static inline unsigned packet_length(const struct sk_buff *skb)
  */
 int vport_send(struct vport *vport, struct sk_buff *skb)
 {
-	int mtu;
-	int sent;
-
-	mtu = vport_get_mtu(vport);
-	if (mtu && unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
-		if (net_ratelimit())
-			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
-				dp_name(vport->dp), packet_length(skb), mtu);
-		goto error;
-	}
-
-	sent = vport->ops->send(vport, skb);
+	int sent = vport->ops->send(vport, skb);
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS && sent > 0) {
 		struct vport_percpu_stats *stats;
@@ -736,11 +713,6 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	return sent;
-
-error:
-	kfree_skb(skb);
-	vport_record_error(vport, VPORT_E_TX_DROPPED);
-	return 0;
 }
 
 /**

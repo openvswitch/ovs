@@ -6,6 +6,8 @@
  * kernel, by Linus Torvalds and others.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/if_arp.h>
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
@@ -158,7 +160,9 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 		goto error_put;
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 	dev_disable_lro(netdev_vport->dev);
+#endif
 	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
 
 	return vport;
@@ -281,8 +285,6 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	if (unlikely(!skb))
 		return;
 
-	skb_warn_if_lro(skb);
-
 	skb_push(skb, ETH_HLEN);
 
 	if (unlikely(compute_ip_summed(skb, false))) {
@@ -292,6 +294,16 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	vlan_copy_skb_tci(skb);
 
 	vport_receive(vport, skb);
+}
+
+static inline unsigned packet_length(const struct sk_buff *skb)
+{
+	unsigned length = skb->len - ETH_HLEN;
+
+	if (skb->protocol == htons(ETH_P_8021Q))
+		length -= VLAN_HLEN;
+
+	return length;
 }
 
 static bool dev_supports_vlan_tx(struct net_device *dev)
@@ -310,7 +322,18 @@ static bool dev_supports_vlan_tx(struct net_device *dev)
 static int netdev_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
+	int mtu = netdev_vport->dev->mtu;
 	int len;
+
+	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
+		if (net_ratelimit())
+			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
+				dp_name(vport->dp), packet_length(skb), mtu);
+		goto error;
+	}
+
+	if (unlikely(skb_warn_if_lro(skb)))
+		goto error;
 
 	skb->dev = netdev_vport->dev;
 	forward_ip_summed(skb, true);
@@ -379,6 +402,11 @@ tag:
 	dev_queue_xmit(skb);
 
 	return len;
+
+error:
+	kfree_skb(skb);
+	vport_record_error(vport, VPORT_E_TX_DROPPED);
+	return 0;
 }
 
 /* Returns null if this device is not attached to a datapath. */

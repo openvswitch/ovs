@@ -60,6 +60,10 @@ enum { LRU_MAX_PORTS = 1024 };
 enum { LRU_MASK = LRU_MAX_PORTS - 1};
 BUILD_ASSERT_DECL(IS_POW2(LRU_MAX_PORTS));
 
+/* This ethtool flag was introduced in Linux 2.6.24, so it might be
+ * missing if we have old headers. */
+#define ETH_FLAG_LRO      (1 << 15)    /* LRO is enabled */
+
 struct dpif_linux_dp {
     /* Generic Netlink header. */
     uint8_t cmd;
@@ -391,6 +395,10 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     if (options && options->size) {
         request.options = options->data;
         request.options_len = options->size;
+    }
+
+    if (request.type == OVS_VPORT_TYPE_NETDEV) {
+        netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
     }
 
     /* Loop until we find a port that isn't used. */
