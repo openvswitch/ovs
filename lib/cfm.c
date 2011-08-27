@@ -299,6 +299,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     ccm->mpid = htons(cfm->mpid);
     ccm->flags = cfm->ccm_interval;
     memcpy(ccm->maid, cfm->maid, sizeof ccm->maid);
+    memset(ccm->zero, 0, sizeof ccm->zero);
 
     if (cfm->recv_fault) {
         ccm->flags |= CCM_RDI_MASK;
