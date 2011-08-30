@@ -67,6 +67,7 @@ struct cfm {
     uint16_t mpid;
     bool fault;            /* Indicates connectivity fault. */
     bool recv_fault;       /* Indicates an inability to receive CCMs. */
+    bool unexpected_recv;  /* Received an unexpected CCM. */
 
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
@@ -244,8 +245,10 @@ cfm_run(struct cfm *cfm)
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp;
 
-        cfm->fault = false;
+        cfm->fault = cfm->unexpected_recv;
         cfm->recv_fault = false;
+        cfm->unexpected_recv = false;
+
         HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
             rmp->fault = !rmp->recv;
             rmp->recv = false;
@@ -414,6 +417,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * bonds. Furthermore, faults can be maliciously triggered by crafting
      * invalid CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
+        cfm->unexpected_recv = true;
         VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, cfm->name, ETH_ADDR_ARGS(eth->eth_src));
     } else {
@@ -433,6 +437,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                              ccm_interval, rmp->mpid);
             }
         } else {
+            cfm->unexpected_recv = true;
             VLOG_WARN_RL(&rl, "%s: Received unexpected remote MPID %d from"
                          " MAC " ETH_ADDR_FMT, cfm->name, ccm_mpid,
                          ETH_ADDR_ARGS(eth->eth_src));
@@ -479,8 +484,9 @@ cfm_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    ds_put_format(&ds, "MPID %"PRIu16":%s%s\n", cfm->mpid,
+    ds_put_format(&ds, "MPID %"PRIu16":%s%s%s\n", cfm->mpid,
                   cfm->fault ? " fault" : "",
+                  cfm->unexpected_recv ? " unexpected_recv" : "",
                   cfm->recv_fault ? " recv_fault" : "");
 
     ds_put_format(&ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
