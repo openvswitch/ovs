@@ -1614,16 +1614,21 @@ static bool
 process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
                 const struct ofpbuf *packet)
 {
-    if (cfm_should_process_flow(flow)) {
-        struct ofport_dpif *ofport = get_ofp_port(ofproto, flow->in_port);
-        if (packet && ofport && ofport->cfm) {
+    struct ofport_dpif *ofport = get_ofp_port(ofproto, flow->in_port);
+
+    if (!ofport) {
+        return false;
+    }
+
+    if (ofport->cfm && cfm_should_process_flow(flow)) {
+        if (packet) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }
         return true;
-    } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
-        struct ofport_dpif *port = get_ofp_port(ofproto, flow->in_port);
-        if (packet && port && port->bundle && port->bundle->lacp) {
-            lacp_process_packet(port->bundle->lacp, port, packet);
+    } else if (ofport->bundle && ofport->bundle->lacp
+               && flow->dl_type == htons(ETH_TYPE_LACP)) {
+        if (packet) {
+            lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
         return true;
     }
