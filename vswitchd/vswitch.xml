@@ -635,8 +635,8 @@
           connected to.  <code>active</code> ports are allowed to initiate LACP
           negotiations.  <code>passive</code> ports are allowed to participate
           in LACP negotiations initiated by a remote switch, but not allowed to
-          initiate such negotiations themselves. If unset Open vSwitch will
-          choose a reasonable default. </p>
+          initiate such negotiations themselves. Defaults to <code>off</code>
+          if unset. </p>
       </column>
 
     </group>
