@@ -2606,6 +2606,7 @@ static void
 iface_configure_cfm(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
+    const char *extended_str;
     struct cfm_settings s;
 
     if (!cfg->n_cfm_mpid) {
@@ -2619,6 +2620,10 @@ iface_configure_cfm(struct iface *iface)
     if (s.interval <= 0) {
         s.interval = 1000;
     }
+
+    extended_str = get_interface_other_config(iface->cfg, "cfm_extended",
+                                              "false");
+    s.extended = !strcasecmp("true", extended_str);
 
     ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port, &s);
 }

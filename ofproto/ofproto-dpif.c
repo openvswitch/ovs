@@ -1620,7 +1620,7 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
         return false;
     }
 
-    if (ofport->cfm && cfm_should_process_flow(flow)) {
+    if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
         if (packet) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }

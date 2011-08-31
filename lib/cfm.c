@@ -40,6 +40,9 @@ VLOG_DEFINE_THIS_MODULE(cfm);
 
 /* Ethernet destination address of CCM packets. */
 static const uint8_t eth_addr_ccm[6] = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
+static const uint8_t eth_addr_ccm_x[6] = {
+    0x01, 0x23, 0x20, 0x00, 0x00, 0x30
+};
 
 #define ETH_TYPE_CFM 0x8902
 
@@ -67,6 +70,7 @@ struct cfm {
     struct hmap_node hmap_node; /* Node in all_cfms list. */
 
     uint16_t mpid;
+    bool extended;         /* Extended mode. */
     bool fault;            /* Indicates connectivity fault. */
     bool unexpected_recv;  /* Received an unexpected CCM. */
 
@@ -97,6 +101,12 @@ static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
 static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
                              void *aux);
+
+static const uint8_t *
+cfm_ccm_addr(const struct cfm *cfm)
+{
+    return cfm->extended ? eth_addr_ccm_x : eth_addr_ccm;
+}
 
 static void
 cfm_generate_maid(struct cfm *cfm)
@@ -297,8 +307,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     struct ccm *ccm;
 
     timer_set_duration(&cfm->tx_timer, cfm->ccm_interval_ms);
-
-    ccm = eth_compose(packet, eth_addr_ccm, eth_src, ETH_TYPE_CFM,
+    ccm = eth_compose(packet, cfm_ccm_addr(cfm), eth_src, ETH_TYPE_CFM,
                       sizeof *ccm);
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
@@ -333,6 +342,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     }
 
     cfm->mpid = s->mpid;
+    cfm->extended = s->extended;
     interval = ms_to_ccm_interval(s->interval);
 
     if (interval != cfm->ccm_interval) {
@@ -346,12 +356,12 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     return true;
 }
 
-/* Returns true if the CFM library should process packets from 'flow'. */
+/* Returns true if 'cfm' should process packets from 'flow'. */
 bool
-cfm_should_process_flow(const struct flow *flow)
+cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow)
 {
     return (ntohs(flow->dl_type) == ETH_TYPE_CFM
-            && eth_addr_equals(flow->dl_dst, eth_addr_ccm));
+            && eth_addr_equals(flow->dl_dst, cfm_ccm_addr(cfm)));
 }
 
 /* Updates internal statistics relevant to packet 'p'.  Should be called on

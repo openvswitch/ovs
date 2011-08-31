@@ -1425,6 +1425,11 @@
           <dd> The transmission interval of CFM heartbeats in milliseconds.
             Three missed heartbeat receptions indicate a connectivity fault.
             Defaults to 1000ms. </dd>
+          <dt><code>cfm_extended</code></dt>
+          <dd> When true, the CFM module operates in extended mode. This causes
+            it to use a nonstandard destination address to avoid conflicting
+            with compliant implementations which may be running concurrently on
+            the network. Defaults to false. </dd>
           <dt><code>bond-stable-id</code></dt>
           <dd> A positive integer using in <code>stable</code> bond mode to
             make slave selection decisions.  Allocating
