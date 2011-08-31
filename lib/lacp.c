@@ -32,6 +32,55 @@
 
 VLOG_DEFINE_THIS_MODULE(lacp);
 
+/* Masks for lacp_info state member. */
+#define LACP_STATE_ACT  0x01 /* Activity. Active or passive? */
+#define LACP_STATE_TIME 0x02 /* Timeout. Short or long timeout? */
+#define LACP_STATE_AGG  0x04 /* Aggregation. Is the link is bondable? */
+#define LACP_STATE_SYNC 0x08 /* Synchronization. Is the link in up to date? */
+#define LACP_STATE_COL  0x10 /* Collecting. Is the link receiving frames? */
+#define LACP_STATE_DIST 0x20 /* Distributing. Is the link sending frames? */
+#define LACP_STATE_DEF  0x40 /* Defaulted. Using default partner info? */
+#define LACP_STATE_EXP  0x80 /* Expired. Using expired partner info? */
+
+#define LACP_FAST_TIME_TX 1000  /* Fast transmission rate. */
+#define LACP_SLOW_TIME_TX 30000 /* Slow transmission rate. */
+#define LACP_RX_MULTIPLIER 3    /* Multiply by TX rate to get RX rate. */
+
+#define LACP_INFO_LEN 15
+struct lacp_info {
+    ovs_be16 sys_priority;            /* System priority. */
+    uint8_t sys_id[ETH_ADDR_LEN];     /* System ID. */
+    ovs_be16 key;                     /* Operational key. */
+    ovs_be16 port_priority;           /* Port priority. */
+    ovs_be16 port_id;                 /* Port ID. */
+    uint8_t state;                    /* State mask.  See LACP_STATE macros. */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(LACP_INFO_LEN == sizeof(struct lacp_info));
+
+#define LACP_PDU_LEN 110
+struct lacp_pdu {
+    uint8_t subtype;          /* Always 1. */
+    uint8_t version;          /* Always 1. */
+
+    uint8_t actor_type;       /* Always 1. */
+    uint8_t actor_len;        /* Always 20. */
+    struct lacp_info actor;   /* LACP actor information. */
+    uint8_t z1[3];            /* Reserved.  Always 0. */
+
+    uint8_t partner_type;     /* Always 2. */
+    uint8_t partner_len;      /* Always 20. */
+    struct lacp_info partner; /* LACP partner information. */
+    uint8_t z2[3];            /* Reserved.  Always 0. */
+
+    uint8_t collector_type;   /* Always 3. */
+    uint8_t collector_len;    /* Always 16. */
+    ovs_be16 collector_delay; /* Maximum collector delay. Set to UINT16_MAX. */
+    uint8_t z3[64];           /* Combination of several fields.  Always 0. */
+} __attribute__((packed));
+BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
+
+/* Implementation. */
+
 enum slave_status {
     LACP_CURRENT,   /* Current State.  Partner up to date. */
     LACP_EXPIRED,   /* Expired State.  Partner out of date. */
@@ -90,7 +139,7 @@ static void lacp_unixctl_show(struct unixctl_conn *, const char *args,
                               void *aux);
 
 /* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */
-void
+static void
 compose_lacp_pdu(const struct lacp_info *actor,
                  const struct lacp_info *partner, struct lacp_pdu *pdu)
 {
@@ -116,7 +165,7 @@ compose_lacp_pdu(const struct lacp_info *actor,
  * returns NULL if 'b' is malformed, or does not represent a LACP PDU format
  * supported by OVS.  Otherwise, it returns a pointer to the lacp_pdu contained
  * within 'b'. */
-const struct lacp_pdu *
+static const struct lacp_pdu *
 parse_lacp_packet(const struct ofpbuf *b)
 {
     const struct lacp_pdu *pdu;
@@ -202,15 +251,23 @@ lacp_is_active(const struct lacp *lacp)
     return lacp->active;
 }
 
-/* Processes 'pdu', a parsed LACP packet received on 'slave_'.  This function
- * should be called on all packets received on 'slave_' with Ethernet Type
- * ETH_TYPE_LACP and parsable by parse_lacp_packet(). */
+/* Processes 'packet' which was received on 'slave_'.  This function should be
+ * called on all packets received on 'slave_' with Ethernet Type ETH_TYPE_LACP.
+ */
 void
-lacp_process_pdu(struct lacp *lacp, const void *slave_,
-                 const struct lacp_pdu *pdu)
+lacp_process_packet(struct lacp *lacp, const void *slave_,
+                    const struct ofpbuf *packet)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     struct slave *slave = slave_lookup(lacp, slave_);
+    const struct lacp_pdu *pdu;
     long long int tx_rate;
+
+    pdu = parse_lacp_packet(packet);
+    if (!pdu) {
+        VLOG_WARN_RL(&rl, "%s: received an unparsable LACP PDU.", lacp->name);
+        return;
+    }
 
     switch (lacp->lacp_time) {
     case LACP_TIME_FAST:
@@ -371,7 +428,6 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
     }
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-        struct lacp_pdu pdu;
         struct lacp_info actor;
 
         if (!slave_may_tx(slave)) {
@@ -383,10 +439,11 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
         if (timer_expired(&slave->tx)
             || !info_tx_equal(&actor, &slave->ntt_actor)) {
             long long int duration;
+            struct lacp_pdu pdu;
 
             slave->ntt_actor = actor;
             compose_lacp_pdu(&actor, &slave->partner, &pdu);
-            send_pdu(slave->aux, &pdu);
+            send_pdu(slave->aux, &pdu, sizeof pdu);
 
             if (lacp->lacp_time == LACP_TIME_CUSTOM) {
                 duration = lacp->custom_time;

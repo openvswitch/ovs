@@ -1111,7 +1111,7 @@ bundle_remove(struct ofport *port_)
 }
 
 static void
-send_pdu_cb(void *port_, const struct lacp_pdu *pdu)
+send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
     struct ofport_dpif *port = port_;
@@ -1120,13 +1120,14 @@ send_pdu_cb(void *port_, const struct lacp_pdu *pdu)
 
     error = netdev_get_etheraddr(port->up.netdev, ea);
     if (!error) {
-        struct lacp_pdu *packet_pdu;
         struct ofpbuf packet;
+        void *packet_pdu;
 
         ofpbuf_init(&packet, 0);
         packet_pdu = eth_compose(&packet, eth_addr_lacp, ea, ETH_TYPE_LACP,
-                                 sizeof *packet_pdu);
-        *packet_pdu = *pdu;
+                                 pdu_size);
+        memcpy(packet_pdu, pdu, pdu_size);
+
         error = netdev_send(port->up.netdev, &packet);
         if (error) {
             VLOG_WARN_RL(&rl, "port %s: sending LACP PDU on iface %s failed "
@@ -1622,10 +1623,7 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
     } else if (flow->dl_type == htons(ETH_TYPE_LACP)) {
         struct ofport_dpif *port = get_ofp_port(ofproto, flow->in_port);
         if (packet && port && port->bundle && port->bundle->lacp) {
-            const struct lacp_pdu *pdu = parse_lacp_packet(packet);
-            if (pdu) {
-                lacp_process_pdu(port->bundle->lacp, port, pdu);
-            }
+            lacp_process_packet(port->bundle->lacp, port, packet);
         }
         return true;
     }
