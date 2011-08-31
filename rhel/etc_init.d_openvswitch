@@ -48,10 +48,6 @@ start () {
     if test X"$VSWITCHD_MLOCKALL" != X; then
 	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
-    if test ! -e /var/run/openvswitch.booted; then
-        touch /var/run/openvswitch.booted
-        set "$@" --delete-bridges
-    fi
     "$@"
 
     touch /var/lock/subsys/openvswitch
