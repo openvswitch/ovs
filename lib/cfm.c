@@ -61,7 +61,10 @@ struct ccm {
     ovs_be32 seq;
     ovs_be16 mpid;
     uint8_t  maid[CCM_MAID_LEN];
-    uint8_t  zero[16]; /* Defined by ITU-T Y.1731 should be zero */
+
+    /* Defined by ITU-T Y.1731 should be zero */
+    ovs_be16 interval_ms_x;      /* Transmission interval in ms. */
+    uint8_t  zero[14];
 } __attribute__((packed));
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
@@ -318,6 +321,11 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     memcpy(ccm->maid, cfm->maid, sizeof ccm->maid);
     memset(ccm->zero, 0, sizeof ccm->zero);
 
+    if (cfm->ccm_interval == 0) {
+        assert(cfm->extended);
+        ccm->interval_ms_x = htons(cfm->ccm_interval_ms);
+    }
+
     if (hmap_is_empty(&cfm->remote_mps)) {
         ccm->flags |= CCM_RDI_MASK;
     }
@@ -336,6 +344,7 @@ bool
 cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
 {
     uint8_t interval;
+    int interval_ms;
 
     if (!cfm_is_valid_mpid(s->mpid) || s->interval <= 0) {
         return false;
@@ -344,10 +353,16 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     cfm->mpid = s->mpid;
     cfm->extended = s->extended;
     interval = ms_to_ccm_interval(s->interval);
+    interval_ms = ccm_interval_to_ms(interval);
 
-    if (interval != cfm->ccm_interval) {
+    if (cfm->extended && interval_ms != s->interval) {
+        interval = 0;
+        interval_ms = MIN(s->interval, UINT16_MAX);
+    }
+
+    if (interval != cfm->ccm_interval || interval_ms != cfm->ccm_interval_ms) {
         cfm->ccm_interval = interval;
-        cfm->ccm_interval_ms = ccm_interval_to_ms(interval);
+        cfm->ccm_interval_ms = interval_ms;
 
         timer_set_expired(&cfm->tx_timer);
         timer_set_duration(&cfm->fault_timer, cfm_fault_interval(cfm));
@@ -371,10 +386,6 @@ void
 cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 {
     struct ccm *ccm;
-    bool ccm_rdi;
-    uint16_t ccm_mpid;
-    uint8_t ccm_interval;
-    struct remote_mp *rmp;
     struct eth_header *eth;
 
     eth = p->l2;
@@ -406,14 +417,24 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, cfm->name, ETH_ADDR_ARGS(eth->eth_src));
     } else {
-        ccm_mpid = ntohs(ccm->mpid);
-        ccm_interval = ccm->flags & 0x7;
-        ccm_rdi = ccm->flags & CCM_RDI_MASK;
+        uint16_t ccm_mpid = ntohs(ccm->mpid);
+        uint8_t ccm_interval = ccm->flags & 0x7;
+        bool ccm_rdi = ccm->flags & CCM_RDI_MASK;
+        uint16_t ccm_interval_ms_x = ntohs(ccm->interval_ms_x);
+
+        struct remote_mp *rmp;
 
         if (ccm_interval != cfm->ccm_interval) {
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
                          " (%"PRIu8") from RMP %"PRIu16, cfm->name,
                          ccm_interval, ccm_mpid);
+        }
+
+        if (cfm->extended && ccm_interval == 0
+            && ccm_interval_ms_x != cfm->ccm_interval_ms) {
+            VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid extended"
+                         " interval (%"PRIu16"ms) from RMP %"PRIu16, cfm->name,
+                         ccm_interval_ms_x, ccm_mpid);
         }
 
         rmp = lookup_remote_mp(cfm, ccm_mpid);

@@ -1429,7 +1429,10 @@
           <dd> When true, the CFM module operates in extended mode. This causes
             it to use a nonstandard destination address to avoid conflicting
             with compliant implementations which may be running concurrently on
-            the network. Defaults to false. </dd>
+            the network. Furthermore, extended mode increases the accuracy of
+            the <code>cfm_interval</code> configuration parameter by breaking
+            wire compatibility with 802.1ag compliant implementations.
+            Defaults to false.</dd>
           <dt><code>bond-stable-id</code></dt>
           <dd> A positive integer using in <code>stable</code> bond mode to
             make slave selection decisions.  Allocating
