@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "byte-order.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
@@ -64,7 +65,8 @@ struct ccm {
 
     /* Defined by ITU-T Y.1731 should be zero */
     ovs_be16 interval_ms_x;      /* Transmission interval in ms. */
-    uint8_t  zero[14];
+    ovs_be64 mpid64;             /* MPID in extended mode. */
+    uint8_t  zero[6];
 } __attribute__((packed));
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
@@ -72,7 +74,7 @@ struct cfm {
     char *name;                 /* Name of this CFM object. */
     struct hmap_node hmap_node; /* Node in all_cfms list. */
 
-    uint16_t mpid;
+    uint64_t mpid;
     bool extended;         /* Extended mode. */
     bool fault;            /* Indicates connectivity fault. */
     bool unexpected_recv;  /* Received an unexpected CCM. */
@@ -91,7 +93,7 @@ struct cfm {
 /* Remote MPs represent foreign network entities that are configured to have
  * the same MAID as this CFM instance. */
 struct remote_mp {
-    uint16_t mpid;         /* The Maintenance Point ID of this 'remote_mp'. */
+    uint64_t mpid;         /* The Maintenance Point ID of this 'remote_mp'. */
     struct hmap_node node; /* Node in 'remote_mps' map. */
 
     bool recv;           /* CCM was received since last fault check. */
@@ -183,20 +185,21 @@ ms_to_ccm_interval(int interval_ms)
 }
 
 static uint32_t
-hash_mpid(uint8_t mpid)
+hash_mpid(uint64_t mpid)
 {
-    return hash_int(mpid, 0);
+    return hash_bytes(&mpid, sizeof mpid, 0);
 }
 
 static bool
-cfm_is_valid_mpid(uint32_t mpid)
+cfm_is_valid_mpid(bool extended, uint64_t mpid)
 {
-    /* 802.1ag specification requires MPIDs to be within the range [1, 8191] */
-    return mpid >= 1 && mpid <= 8191;
+    /* 802.1ag specification requires MPIDs to be within the range [1, 8191].
+     * In extended mode we relax this requirement. */
+    return mpid >= 1 && (extended || mpid <= 8191);
 }
 
 static struct remote_mp *
-lookup_remote_mp(const struct cfm *cfm, uint16_t mpid)
+lookup_remote_mp(const struct cfm *cfm, uint64_t mpid)
 {
     struct remote_mp *rmp;
 
@@ -264,7 +267,7 @@ cfm_run(struct cfm *cfm)
         HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
 
             if (!rmp->recv) {
-                VLOG_DBG("%s: No CCM from RMP %"PRIu16" in the last %lldms",
+                VLOG_DBG("%s: no CCM from RMP %"PRIu64" in the last %lldms",
                          cfm->name, rmp->mpid, interval);
                 hmap_remove(&cfm->remote_mps, &rmp->node);
                 free(rmp);
@@ -272,13 +275,13 @@ cfm_run(struct cfm *cfm)
                 rmp->recv = false;
 
                 if (rmp->mpid == cfm->mpid) {
-                    VLOG_WARN_RL(&rl, "%s: Received CCM with local MPID (%d)",
-                                 cfm->name, rmp->mpid);
+                    VLOG_WARN_RL(&rl,"%s: received CCM with local MPID"
+                                 " %"PRIu64, cfm->name, rmp->mpid);
                     cfm->fault = true;
                 }
 
                 if (rmp->rdi) {
-                    VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu16, cfm->name,
+                    VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
                              rmp->mpid);
                     cfm->fault = true;
                 }
@@ -316,10 +319,17 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     ccm->opcode = CCM_OPCODE;
     ccm->tlv_offset = 70;
     ccm->seq = htonl(++cfm->seq);
-    ccm->mpid = htons(cfm->mpid);
     ccm->flags = cfm->ccm_interval;
     memcpy(ccm->maid, cfm->maid, sizeof ccm->maid);
     memset(ccm->zero, 0, sizeof ccm->zero);
+
+    if (cfm->extended) {
+        ccm->mpid = htons(hash_mpid(cfm->mpid));
+        ccm->mpid64 = htonll(cfm->mpid);
+    } else {
+        ccm->mpid = htons(cfm->mpid);
+        ccm->mpid64 = htonll(0);
+    }
 
     if (cfm->ccm_interval == 0) {
         assert(cfm->extended);
@@ -346,7 +356,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     uint8_t interval;
     int interval_ms;
 
-    if (!cfm_is_valid_mpid(s->mpid) || s->interval <= 0) {
+    if (!cfm_is_valid_mpid(s->extended, s->mpid) || s->interval <= 0) {
         return false;
     }
 
@@ -417,23 +427,25 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, cfm->name, ETH_ADDR_ARGS(eth->eth_src));
     } else {
-        uint16_t ccm_mpid = ntohs(ccm->mpid);
         uint8_t ccm_interval = ccm->flags & 0x7;
         bool ccm_rdi = ccm->flags & CCM_RDI_MASK;
         uint16_t ccm_interval_ms_x = ntohs(ccm->interval_ms_x);
 
         struct remote_mp *rmp;
+        uint64_t ccm_mpid;
+
+        ccm_mpid = cfm->extended ? ntohll(ccm->mpid64) : ntohs(ccm->mpid);
 
         if (ccm_interval != cfm->ccm_interval) {
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
-                         " (%"PRIu8") from RMP %"PRIu16, cfm->name,
+                         " (%"PRIu8") from RMP %"PRIu64, cfm->name,
                          ccm_interval, ccm_mpid);
         }
 
         if (cfm->extended && ccm_interval == 0
             && ccm_interval_ms_x != cfm->ccm_interval_ms) {
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid extended"
-                         " interval (%"PRIu16"ms) from RMP %"PRIu16, cfm->name,
+                         " interval (%"PRIu16"ms) from RMP %"PRIu64, cfm->name,
                          ccm_interval_ms_x, ccm_mpid);
         }
 
@@ -449,12 +461,12 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(rmp->mpid));
         } else {
             cfm->unexpected_recv = true;
-            VLOG_WARN_RL(&rl, "%s: dropped CCM with MPID %d from MAC "
+            VLOG_WARN_RL(&rl, "%s: dropped CCM with MPID %"PRIu64" from MAC "
                          ETH_ADDR_FMT, cfm->name, ccm_mpid,
                          ETH_ADDR_ARGS(eth->eth_src));
         }
 
-        VLOG_DBG("%s: Received CCM (seq %"PRIu32") (mpid %"PRIu16")"
+        VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
                  " (interval %"PRIu8") (RDI %s)", cfm->name, ntohl(ccm->seq),
                  ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
     }
@@ -495,7 +507,7 @@ cfm_unixctl_show(struct unixctl_conn *conn,
         return;
     }
 
-    ds_put_format(&ds, "MPID %"PRIu16":%s%s\n", cfm->mpid,
+    ds_put_format(&ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
                   cfm->fault ? " fault" : "",
                   cfm->unexpected_recv ? " unexpected_recv" : "");
 
@@ -507,7 +519,8 @@ cfm_unixctl_show(struct unixctl_conn *conn,
 
     ds_put_cstr(&ds, "\n");
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-        ds_put_format(&ds, "Remote MPID %"PRIu16":%s\n", rmp->mpid,
+        ds_put_format(&ds, "Remote MPID %"PRIu64":%s\n",
+                      rmp->mpid,
                       rmp->rdi ? " rdi" : "");
         ds_put_format(&ds, "\trecv since check: %s",
                       rmp->recv ? "true" : "false");

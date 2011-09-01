@@ -25,7 +25,7 @@ struct flow;
 struct ofpbuf;
 
 struct cfm_settings {
-    uint16_t mpid;              /* The MPID of this CFM. */
+    uint64_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
     bool extended;              /* Run in extended mode. */
 };
