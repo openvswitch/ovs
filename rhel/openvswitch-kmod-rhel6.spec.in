@@ -8,7 +8,9 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-Name:           openvswitch
+%define oname openvswitch
+
+Name:           %{oname}-kmod
 Version:        @VERSION@
 Release:        1%{?dist}
 Summary:        Open vSwitch kernel module
@@ -16,7 +18,7 @@ Summary:        Open vSwitch kernel module
 Group:          System/Kernel
 License:        GPLv2
 URL:            http://openvswitch.org/
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{oname}-%{version}.tar.gz
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 BuildRequires:  %kernel_module_package_buildreqs
 
@@ -28,14 +30,14 @@ BuildRequires:  %kernel_module_package_buildreqs
 #kernel_module_package default debug
 
 # Build only for standard kernel variant(s)
-%kernel_module_package default
+%kernel_module_package -n %{oname} default
 
 %description
 Open vSwitch Linux kernel module.
 
 %prep
 
-%setup
+%setup -n %{oname}-%{version}
 
 %build
 for flavor in %flavors_to_build; do
@@ -46,7 +48,7 @@ done
 
 %install
 export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
-export INSTALL_MOD_DIR=extra/%{name}
+export INSTALL_MOD_DIR=extra/%{oname}
 for flavor in %flavors_to_build ; do
          make -C %{kernel_source $flavor} modules_install \
                  M=$PWD/_$flavor/datapath/linux
