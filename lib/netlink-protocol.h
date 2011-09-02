@@ -36,6 +36,25 @@
 #ifdef HAVE_NETLINK
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
+
+/* Some Xenddks have an outdated genetlink header file which doesn't have some
+ * symbols it should. */
+#ifndef CTRL_ATTR_MCAST_GRP_MAX
+
+#undef CTRL_ATTR_MAX
+#define CTRL_ATTR_MAX 7
+#define CTRL_ATTR_MCAST_GROUPS 7
+
+enum {
+	CTRL_ATTR_MCAST_GRP_UNSPEC,
+	CTRL_ATTR_MCAST_GRP_NAME,
+	CTRL_ATTR_MCAST_GRP_ID,
+	__CTRL_ATTR_MCAST_GRP_MAX,
+};
+
+#define CTRL_ATTR_MCAST_GRP_MAX (__CTRL_ATTR_MCAST_GRP_MAX - 1)
+#endif /* CTRL_ATTR_MCAST_GRP_MAX */
+
 #else
 #define NETLINK_GENERIC         16
 
