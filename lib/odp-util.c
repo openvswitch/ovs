@@ -989,10 +989,6 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         default:
-            if (type == OVS_KEY_ATTR_UNSPEC
-                || prev_type == OVS_KEY_ATTR_UNSPEC) {
-                return EINVAL;
-            }
             return EINVAL;
         }
 
