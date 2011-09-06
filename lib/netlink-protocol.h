@@ -37,24 +37,6 @@
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 
-/* Some Xenddks have an outdated genetlink header file which doesn't have some
- * symbols it should. */
-#ifndef CTRL_ATTR_MCAST_GRP_MAX
-
-#undef CTRL_ATTR_MAX
-#define CTRL_ATTR_MAX 7
-#define CTRL_ATTR_MCAST_GROUPS 7
-
-enum {
-	CTRL_ATTR_MCAST_GRP_UNSPEC,
-	CTRL_ATTR_MCAST_GRP_NAME,
-	CTRL_ATTR_MCAST_GRP_ID,
-	__CTRL_ATTR_MCAST_GRP_MAX,
-};
-
-#define CTRL_ATTR_MCAST_GRP_MAX (__CTRL_ATTR_MCAST_GRP_MAX - 1)
-#endif /* CTRL_ATTR_MCAST_GRP_MAX */
-
 #else
 #define NETLINK_GENERIC         16
 
@@ -178,5 +160,23 @@ enum {
 #define NETLINK_ADD_MEMBERSHIP 1
 #define NETLINK_DROP_MEMBERSHIP 2
 #endif
+
+/* These were introduced all together in 2.6.23.  (We want our programs to
+ * support the newer kernel features even if compiled with older headers.) */
+#ifndef CTRL_ATTR_MCAST_GRP_MAX
+
+#undef CTRL_ATTR_MAX
+#define CTRL_ATTR_MAX 7
+#define CTRL_ATTR_MCAST_GROUPS 7
+
+enum {
+	CTRL_ATTR_MCAST_GRP_UNSPEC,
+	CTRL_ATTR_MCAST_GRP_NAME,
+	CTRL_ATTR_MCAST_GRP_ID,
+	__CTRL_ATTR_MCAST_GRP_MAX,
+};
+
+#define CTRL_ATTR_MCAST_GRP_MAX (__CTRL_ATTR_MCAST_GRP_MAX - 1)
+#endif /* CTRL_ATTR_MCAST_GRP_MAX */
 
 #endif /* netlink-protocol.h */
