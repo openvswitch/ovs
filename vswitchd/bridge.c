@@ -1269,6 +1269,8 @@ iface_refresh_cfm_stats(struct iface *iface)
     if (fault >= 0) {
         bool fault_bool = fault;
         ovsrec_interface_set_cfm_fault(cfg, &fault_bool, 1);
+    } else {
+        ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
     }
 }
 
