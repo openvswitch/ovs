@@ -344,9 +344,6 @@ static int
 ofputil_decode_vendor(const struct ofp_header *oh,
                       const struct ofputil_msg_type **typep)
 {
-    BUILD_ASSERT_DECL(sizeof(struct nxt_set_flow_format)
-                      != sizeof(struct nxt_flow_mod_table_id));
-
     static const struct ofputil_msg_type nxt_messages[] = {
         { OFPUTIL_NXT_ROLE_REQUEST,
           NXT_ROLE_REQUEST, "NXT_ROLE_REQUEST",
