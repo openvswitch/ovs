@@ -27,6 +27,10 @@ ovs\-ctl \- OVS startup helper script
 \fBovs\-ctl version
 .br
 \fBovs\-ctl
+[\fIoptions\fR]
+\fBload\-kmod\fR
+.br
+\fBovs\-ctl
 \fB\-\-system\-id=random\fR|\fIuuid\fR
 [\fIoptions\fR]
 \fBforce\-reload\-kmod\fR
@@ -262,6 +266,20 @@ have to be restarted after completing the above procedure.
 .PP
 \fBforce\-kmod\-reload\fR internally stops and starts OVS, so it
 accepts all of the options accepted by the \fBstart\fR command.
+.
+.SH "The ``load\-kmod'' command"
+.
+.PP
+The \fBload\-kmod\fR command loads the openvswitch kernel modules if
+they are not already loaded. This operation also occurs as part of
+the \fBstart\fR command. The motivation for providing the \fBload\-kmod\fR
+command is to allow errors when loading modules to be handled separatetly
+from other errors that may occur when running the \fBstart\fR command.
+.
+.PP
+By default the \fBload\-kmod\fR command attempts to load the
+openvswitch_mod kernel module. If the \fB\-\-brcompat\fR option is
+specified then the brcompat_mod kernel module is also loaded.
 .
 .SH "The ``enable\-protocol'' command"
 .
