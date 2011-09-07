@@ -56,6 +56,13 @@ insert_brcompat_mod_if_required () {
     action "Inserting brcompat module" modprobe brcompat_mod
 }
 
+insert_mod_if_required () {
+    insert_openvswitch_mod_if_required || return 1
+    if test X"$BRCOMPAT" = Xyes; then
+        insert_brcompat_mod_if_required || return 1
+    fi
+}
+
 ovs_vsctl () {
     ovs-vsctl --no-wait --timeout=5 "$@"
 }
@@ -160,10 +167,7 @@ start () {
         ulimit -Sc 67108864
     fi
 
-    insert_openvswitch_mod_if_required || return 1
-    if test X"$BRCOMPAT" = Xyes; then
-        insert_brcompat_mod_if_required || return 1
-    fi
+    insert_mod_if_required || return 1
 
     if daemon_is_running ovsdb-server; then
 	log_success_msg "ovsdb-server is already running"
@@ -394,6 +398,7 @@ Commands:
   stop               stop Open vSwitch daemons
   status             check whether Open vSwitch daemons are running
   version            print versions of Open vSwitch daemons
+  load-kmod          insert modules if not already present
   force-reload-kmod  save OVS network device state, stop OVS, unload kernel
                      module, reload kernel module, start OVS, restore state
   enable-protocol    enable protocol specified in options with iptables
@@ -418,7 +423,7 @@ Less important options for "start" and "force-reload-kmod":
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
   --ovs-brcompatd-priority=NICE  set ovs-brcompatd's niceness (default: $OVS_BRCOMPATD_PRIORITY)
 
-Options for "start", "force-reload-kmod", "status", and "version":
+Options for "start", "force-reload-kmod", "load-kmod", "status", and "version":
   --brcompat         enable Linux bridge compatibility module and daemon
 
 File location options:
@@ -547,6 +552,9 @@ case $command in
         ;;
     force-reload-kmod)
 	force_reload_kmod
+        ;;
+    load-kmod)
+        insert_mod_if_required
         ;;
     enable-protocol)
         enable_protocol
