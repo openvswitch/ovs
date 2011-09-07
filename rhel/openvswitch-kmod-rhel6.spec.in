@@ -26,11 +26,15 @@ BuildRequires:  %kernel_module_package_buildreqs
 # conflicts with the openvswitch-debuginfo package for OVS userspace).
 %undefine _enable_debug_packages
 
-# Uncomment to build "debug" packages
-#kernel_module_package default debug
+# Use -D 'kversion 2.6.32-131.6.1.el6.x86_64' to build package
+# for specified kernel version.
+%{?kversion:%define kernel_version %kversion}
 
-# Build only for standard kernel variant(s)
-%kernel_module_package -n %{oname} default
+# Use -D 'kflavors default debug kdump' to build packages for
+# specified kernel variants.
+%{!?kflavors:%define kflavors default}
+
+%kernel_module_package -n %{oname} %kflavors
 
 %description
 Open vSwitch Linux kernel module.
