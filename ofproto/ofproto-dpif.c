@@ -4099,8 +4099,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     arg1 = strtok_r(NULL, " ", &save_ptr);
     arg2 = strtok_r(NULL, " ", &save_ptr);
     arg3 = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
-    if (dpname && arg1 && !arg2 && !arg3) {
-        /* ofproto/trace dpname flow */
+    if (dpname && arg1 && (!arg2 || !strcmp(arg2, "-generate")) && !arg3) {
+        /* ofproto/trace dpname flow [-generate] */
         int error;
 
         /* Convert string to datapath key. */
@@ -4116,6 +4116,12 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         if (error) {
             unixctl_command_reply(conn, 501, "Invalid flow");
             goto exit;
+        }
+
+        /* Generate a packet, if requested. */
+        if (arg2) {
+            packet = ofpbuf_new(0);
+            flow_compose(packet, &flow);
         }
     } else if (dpname && arg1 && arg2 && arg3) {
         /* ofproto/trace dpname tun_id in_port packet */

@@ -888,3 +888,74 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
     return fields == NX_HASH_FIELDS_ETH_SRC
         || fields == NX_HASH_FIELDS_SYMMETRIC_L4;
 }
+
+/* Puts into 'b' a packet that flow_extract() would parse as having the given
+ * 'flow'.
+ *
+ * (This is useful only for testing, obviously, and the packet isn't really
+ * valid.  It hasn't got any checksums filled in, for one, and lots of fields
+ * are just zeroed.) */
+void
+flow_compose(struct ofpbuf *b, const struct flow *flow)
+{
+    eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
+    if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
+        struct eth_header *eth = b->l2;
+        eth->eth_type = htons(b->size);
+        return;
+    }
+
+    if (flow->vlan_tci & htons(VLAN_CFI)) {
+        eth_push_vlan(b, flow->vlan_tci & ~htons(VLAN_CFI));
+    }
+
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        struct ip_header *ip;
+
+        b->l3 = ip = ofpbuf_put_zeros(b, sizeof *ip);
+        ip->ip_ihl_ver = IP_IHL_VER(5, 4);
+        ip->ip_tos = flow->nw_tos;
+        ip->ip_proto = flow->nw_proto;
+        ip->ip_src = flow->nw_src;
+        ip->ip_dst = flow->nw_dst;
+
+        if (flow->nw_proto == IPPROTO_TCP) {
+            struct tcp_header *tcp;
+
+            b->l4 = tcp = ofpbuf_put_zeros(b, sizeof *tcp);
+            tcp->tcp_src = flow->tp_src;
+            tcp->tcp_dst = flow->tp_dst;
+        } else if (flow->nw_proto == IPPROTO_UDP) {
+            struct udp_header *udp;
+
+            b->l4 = udp = ofpbuf_put_zeros(b, sizeof *udp);
+            udp->udp_src = flow->tp_src;
+            udp->udp_dst = flow->tp_dst;
+        } else if (flow->nw_proto == IPPROTO_ICMP) {
+            struct icmp_header *icmp;
+
+            b->l4 = icmp = ofpbuf_put_zeros(b, sizeof *icmp);
+            icmp->icmp_type = ntohs(flow->tp_src);
+            icmp->icmp_code = ntohs(flow->tp_dst);
+        }
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        /* XXX */
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+        struct arp_eth_header *arp;
+
+        b->l3 = arp = ofpbuf_put_zeros(b, sizeof *arp);
+        arp->ar_hrd = htons(1);
+        arp->ar_pro = htons(ETH_TYPE_IP);
+        arp->ar_hln = ETH_ADDR_LEN;
+        arp->ar_pln = 4;
+        arp->ar_op = htons(flow->nw_proto);
+
+        if (flow->nw_proto == ARP_OP_REQUEST ||
+            flow->nw_proto == ARP_OP_REPLY) {
+            arp->ar_spa = flow->nw_src;
+            arp->ar_tpa = flow->nw_dst;
+            memcpy(arp->ar_sha, flow->arp_sha, ETH_ADDR_LEN);
+            memcpy(arp->ar_tha, flow->arp_tha, ETH_ADDR_LEN);
+        }
+    }
+}

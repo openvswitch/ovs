@@ -89,6 +89,8 @@ static inline int flow_compare(const struct flow *, const struct flow *);
 static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);
 
+void flow_compose(struct ofpbuf *, const struct flow *);
+
 static inline int
 flow_compare(const struct flow *a, const struct flow *b)
 {
