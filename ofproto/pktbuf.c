@@ -161,6 +161,8 @@ pktbuf_get_null(void)
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
  * NULL in '*bufferp' and UINT16_max in '*in_port'.
  *
+ * 'in_port' may be NULL if the input port is not of interest.
+ *
  * A returned packet will have at least sizeof(struct ofp_packet_in) bytes of
  * headroom.
  *
@@ -189,7 +191,9 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
         struct ofpbuf *buffer = p->buffer;
         if (buffer) {
             *bufferp = buffer;
-            *in_port = p->in_port;
+            if (in_port) {
+                *in_port = p->in_port;
+            }
             p->buffer = NULL;
             COVERAGE_INC(pktbuf_retrieved);
             return 0;
@@ -211,7 +215,9 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
     }
 error:
     *bufferp = NULL;
-    *in_port = UINT16_MAX;
+    if (in_port) {
+        *in_port = UINT16_MAX;
+    }
     return error;
 }
 

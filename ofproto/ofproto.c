@@ -1590,7 +1590,6 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf request;
     struct flow flow;
     size_t n_ofp_actions;
-    uint16_t in_port;
     int error;
 
     COVERAGE_INC(ofproto_packet_out);
@@ -1614,7 +1613,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Get payload. */
     if (opo->buffer_id != htonl(UINT32_MAX)) {
         error = ofconn_pktbuf_retrieve(ofconn, ntohl(opo->buffer_id),
-                                       &buffer, &in_port);
+                                       &buffer, NULL);
         if (error || !buffer) {
             return error;
         }
