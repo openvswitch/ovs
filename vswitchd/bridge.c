@@ -197,7 +197,7 @@ static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_configure_cfm(struct iface *);
-static bool iface_refresh_cfm_stats(struct iface *);
+static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_get_carrier(const struct iface *);
@@ -1258,27 +1258,18 @@ iface_refresh_status(struct iface *iface)
 
 /* Writes 'iface''s CFM statistics to the database.  Returns true if anything
  * changed, false otherwise. */
-static bool
+static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    bool changed = false;
     int fault;
 
     fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
                                        iface->ofp_port);
-
-    if (fault < 0) {
-        return false;
-    }
-
-    if (cfg->n_cfm_fault != 1 || cfg->cfm_fault[0] != fault) {
+    if (fault >= 0) {
         bool fault_bool = fault;
         ovsrec_interface_set_cfm_fault(cfg, &fault_bool, 1);
-        changed = true;
     }
-
-    return changed;
 }
 
 static bool
@@ -1422,6 +1413,31 @@ refresh_controller_status(void)
     ofproto_free_ofproto_controller_info(&info);
 }
 
+static void
+refresh_cfm_stats(void)
+{
+    static struct ovsdb_idl_txn *txn = NULL;
+
+    if (!txn) {
+        struct bridge *br;
+
+        txn = ovsdb_idl_txn_create(idl);
+
+        HMAP_FOR_EACH (br, node, &all_bridges) {
+            struct iface *iface;
+
+            HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
+                iface_refresh_cfm_stats(iface);
+            }
+        }
+    }
+
+    if (ovsdb_idl_txn_commit(txn) != TXN_INCOMPLETE) {
+        ovsdb_idl_txn_destroy(txn);
+        txn = NULL;
+    }
+}
+
 void
 bridge_run(void)
 {
@@ -1531,7 +1547,9 @@ bridge_run(void)
                 struct iface *iface;
 
                 LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                    changed = iface_refresh_cfm_stats(iface) || changed;
+                    /* XXX: Eventually we need to remove the lacp_current flag
+                     * from the database so that we can completely get rid of
+                     * this rate limiter code. */
                     changed = iface_refresh_lacp_stats(iface) || changed;
                 }
             }
@@ -1544,6 +1562,8 @@ bridge_run(void)
         ovsdb_idl_txn_commit(txn);
         ovsdb_idl_txn_destroy(txn);
     }
+
+    refresh_cfm_stats();
 }
 
 void
