@@ -713,8 +713,10 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tun_id);
     }
 
-    nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT,
-                   ofp_port_to_odp_port(flow->in_port));
+    if (flow->in_port != OFPP_NONE) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT,
+                       ofp_port_to_odp_port(flow->in_port));
+    }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
                                        sizeof *eth_key);
@@ -830,6 +832,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
     memset(flow, 0, sizeof *flow);
     flow->dl_type = htons(FLOW_DL_TYPE_NONE);
+    flow->in_port = OFPP_NONE;
 
     prev_type = OVS_KEY_ATTR_UNSPEC;
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
@@ -865,6 +868,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->in_port = odp_port_to_ofp_port(nl_attr_get_u32(nla));
             break;
 
+        case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_ETHERNET):
+        case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_ETHERNET):
         case TRANSITION(OVS_KEY_ATTR_IN_PORT, OVS_KEY_ATTR_ETHERNET):
             eth_key = nl_attr_get(nla);
             memcpy(flow->dl_src, eth_key->eth_src, ETH_ADDR_LEN);

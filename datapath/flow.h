@@ -33,7 +33,7 @@ struct sw_flow_actions {
 struct sw_flow_key {
 	struct {
 		__be64 tun_id;		/* Encapsulating tunnel ID. */
-		u16    in_port;		/* Input switch port. */
+		u16    in_port;		/* Input switch port (or USHRT_MAX). */
 		u8     src[ETH_ALEN];	/* Ethernet source address. */
 		u8     dst[ETH_ALEN];	/* Ethernet destination address. */
 		__be16 tci;		/* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */

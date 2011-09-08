@@ -624,7 +624,7 @@ static const u32 key_lens[OVS_KEY_ATTR_MAX + 1] = {
  * This state machine accepts the following forms, with [] for optional
  * elements and | for alternatives:
  *
- * [tun_id] in_port ethernet [8021q] [ethertype \
+ * [tun_id] [in_port] ethernet [8021q] [ethertype \
  *              [IPv4 [TCP|UDP|ICMP] | IPv6 [TCP|UDP|ICMPv6 [ND]] | ARP]]
  */
 int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
@@ -637,6 +637,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	int key_len;
 
 	memset(swkey, 0, sizeof(*swkey));
+	swkey->eth.in_port = USHRT_MAX;
 	swkey->eth.type = htons(ETH_P_802_2);
 	key_len = SW_FLOW_KEY_OFFSET(eth);
 
@@ -671,6 +672,8 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			swkey->eth.in_port = nla_get_u32(nla);
 			break;
 
+		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_ETHERNET):
+		case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_ETHERNET):
 		case TRANSITION(OVS_KEY_ATTR_IN_PORT, OVS_KEY_ATTR_ETHERNET):
 			eth_key = nla_data(nla);
 			memcpy(swkey->eth.src, eth_key->eth_src, ETH_ALEN);
@@ -888,6 +891,7 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 	u16 prev_type;
 	int rem;
 
+	*in_port = USHRT_MAX;
 	*tun_id = 0;
 
 	prev_type = OVS_KEY_ATTR_UNSPEC;
@@ -910,17 +914,12 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 			break;
 
 		default:
-			goto done;
+			return 0;
 		}
 
 		prev_type = type;
 	}
 	if (rem)
-		return -EINVAL;
-
-done:
-	if (prev_type == OVS_KEY_ATTR_UNSPEC ||
-	    prev_type == OVS_KEY_ATTR_TUN_ID)
 		return -EINVAL;
 	return 0;
 }
@@ -938,7 +937,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	if (swkey->eth.tun_id != cpu_to_be64(0))
 		NLA_PUT_BE64(skb, OVS_KEY_ATTR_TUN_ID, swkey->eth.tun_id);
 
-	NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->eth.in_port);
+	if (swkey->eth.in_port != USHRT_MAX)
+		NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->eth.in_port);
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));
 	if (!nla)
