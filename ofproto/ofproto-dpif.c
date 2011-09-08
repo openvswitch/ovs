@@ -5077,6 +5077,10 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     int error;
 
+    if (flow->in_port >= ofproto->max_ports && flow->in_port < OFPP_MAX) {
+        return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_IN_PORT);
+    }
+
     error = validate_actions(ofp_actions, n_ofp_actions, flow,
                              ofproto->max_ports);
     if (!error) {

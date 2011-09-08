@@ -1729,6 +1729,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf request;
     struct flow flow;
     size_t n_ofp_actions;
+    uint16_t in_port;
     int error;
 
     COVERAGE_INC(ofproto_packet_out);
@@ -1762,8 +1763,18 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         buffer = NULL;
     }
 
+    /* Get in_port and partially validate it.
+     *
+     * We don't know what range of ports the ofproto actually implements, but
+     * we do know that only certain reserved ports (numbered OFPP_MAX and
+     * above) are valid. */
+    in_port = ntohs(opo->in_port);
+    if (in_port >= OFPP_MAX && in_port != OFPP_LOCAL && in_port != OFPP_NONE) {
+        return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_IN_PORT);
+    }
+
     /* Send out packet. */
-    flow_extract(&payload, 0, 0, ntohs(opo->in_port), &flow);
+    flow_extract(&payload, 0, 0, in_port, &flow);
     error = p->ofproto_class->packet_out(p, &payload, &flow,
                                          ofp_actions, n_ofp_actions);
     ofpbuf_delete(buffer);

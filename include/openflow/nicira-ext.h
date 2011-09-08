@@ -110,6 +110,9 @@ enum nx_bad_request_code {
 
     /* NXT_ROLE_REQUEST specified an invalid role. */
     NXBRC_BAD_ROLE = 0x201,
+
+    /* The in_port in an ofp_packet_out request is invalid. */
+    NXBRC_BAD_IN_PORT = 0x202
 };
 
 /* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
