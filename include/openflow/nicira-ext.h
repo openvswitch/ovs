@@ -107,6 +107,9 @@ enum nx_bad_request_code {
      * used instead, when it is appropriate, because that is such a special
      * case.) */
     NXBRC_BAD_TABLE_ID = 0x200,
+
+    /* NXT_ROLE_REQUEST specified an invalid role. */
+    NXBRC_BAD_ROLE = 0x201,
 };
 
 /* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
