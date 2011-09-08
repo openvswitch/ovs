@@ -242,6 +242,8 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_statistics);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_fault);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_current);
     ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_controller_col_is_connected);
