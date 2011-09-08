@@ -577,28 +577,6 @@ int vport_get_ifindex(const struct vport *vport)
 }
 
 /**
- *	vport_get_iflink - retrieve device system link index
- *
- * @vport: vport from which to retrieve index
- *
- * Retrieves the system link index of the given device.  The link is the index
- * of the interface on which the packet will actually be sent.  In most cases
- * this is the same as the ifindex but may be different for tunnel devices.
- * Returns a negative index on error.
- *
- * Must be called with RTNL lock or rcu_read_lock.
- */
-int vport_get_iflink(const struct vport *vport)
-{
-	if (vport->ops->get_iflink)
-		return vport->ops->get_iflink(vport);
-
-	/* If we don't have an iflink, use the ifindex.  In most cases they
-	 * are the same. */
-	return vport_get_ifindex(vport);
-}
-
-/**
  *	vport_get_mtu - retrieve device MTU
  *
  * @vport: vport from which to retrieve MTU

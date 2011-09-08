@@ -1241,7 +1241,6 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
         [OVS_VPORT_ATTR_MTU] = { .type = NL_A_U32, .optional = true },
         [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_VPORT_ATTR_IFINDEX] = { .type = NL_A_U32, .optional = true },
-        [OVS_VPORT_ATTR_IFLINK] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_vport_policy)];
@@ -1285,9 +1284,6 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     }
     if (a[OVS_VPORT_ATTR_IFINDEX]) {
         vport->ifindex = nl_attr_get_u32(a[OVS_VPORT_ATTR_IFINDEX]);
-    }
-    if (a[OVS_VPORT_ATTR_IFLINK]) {
-        vport->iflink = nl_attr_get_u32(a[OVS_VPORT_ATTR_IFLINK]);
     }
     return 0;
 }
@@ -1339,10 +1335,6 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
 
     if (vport->ifindex) {
         nl_msg_put_u32(buf, OVS_VPORT_ATTR_IFINDEX, vport->ifindex);
-    }
-
-    if (vport->iflink) {
-        nl_msg_put_u32(buf, OVS_VPORT_ATTR_IFLINK, vport->iflink);
     }
 }
 

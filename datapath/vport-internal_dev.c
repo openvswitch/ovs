@@ -285,7 +285,6 @@ const struct vport_ops internal_vport_ops = {
 	.is_running	= netdev_is_running,
 	.get_operstate	= netdev_get_operstate,
 	.get_ifindex	= netdev_get_ifindex,
-	.get_iflink	= netdev_get_iflink,
 	.get_mtu	= netdev_get_mtu,
 	.send		= internal_dev_recv,
 };

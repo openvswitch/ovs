@@ -142,15 +142,11 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 {
 	struct datapath *dp = port->dp;
 	int ifindex = vport_get_ifindex(port);
-	int iflink = vport_get_iflink(port);
 	struct ifinfomsg *hdr;
 	struct nlmsghdr *nlh;
 
 	if (ifindex < 0)
 		return ifindex;
-
-	if (iflink < 0)
-		return iflink;
 
 	nlh = nlmsg_put(skb, 0, 0, event, sizeof(*hdr), flags);
 	if (nlh == NULL)
@@ -176,9 +172,6 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 #endif
 
 	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN, vport_get_addr(port));
-
-	if (ifindex != iflink)
-		NLA_PUT_U32(skb, IFLA_LINK,iflink);
 
 	return nlmsg_end(skb, nlh);
 
@@ -1613,7 +1606,7 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 {
 	struct ovs_header *ovs_header;
 	struct nlattr *nla;
-	int ifindex, iflink;
+	int ifindex;
 	int mtu;
 	int err;
 
@@ -1647,10 +1640,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	ifindex = vport_get_ifindex(vport);
 	if (ifindex > 0)
 		NLA_PUT_U32(skb, OVS_VPORT_ATTR_IFINDEX, ifindex);
-
-	iflink = vport_get_iflink(vport);
-	if (iflink > 0)
-		NLA_PUT_U32(skb, OVS_VPORT_ATTR_IFLINK, iflink);
 
 	return genlmsg_end(skb, ovs_header);
 

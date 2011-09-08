@@ -36,7 +36,6 @@ unsigned netdev_get_dev_flags(const struct vport *);
 int netdev_is_running(const struct vport *);
 unsigned char netdev_get_operstate(const struct vport *);
 int netdev_get_ifindex(const struct vport *);
-int netdev_get_iflink(const struct vport *);
 int netdev_get_mtu(const struct vport *);
 
 #endif /* vport_netdev.h */

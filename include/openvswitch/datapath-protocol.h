@@ -225,8 +225,6 @@ enum ovs_vport_cmd {
  * @OVS_VPORT_ATTR_MTU: MTU for the vport.  Omitted if the vport does not have
  * an MTU as, e.g., some tunnels do not.
  * @OVS_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
- * @OVS_VPORT_ATTR_IFLINK: ifindex of the device on which packets are sent (for
- * tunnels), if any.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_VPORT_* commands.
@@ -256,7 +254,6 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_MTU,	/* 32-bit maximum transmission unit */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
 	OVS_VPORT_ATTR_IFINDEX, /* 32-bit ifindex of backing netdev */
-	OVS_VPORT_ATTR_IFLINK,	/* 32-bit ifindex on which packets are sent */
 	__OVS_VPORT_ATTR_MAX
 };
 

@@ -40,7 +40,6 @@ struct dpif_linux_vport {
     const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
     int ifindex;                           /* OVS_VPORT_ATTR_IFINDEX. */
-    int iflink;                            /* OVS_VPORT_ATTR_IFLINK. */
 };
 
 void dpif_linux_vport_init(struct dpif_linux_vport *);

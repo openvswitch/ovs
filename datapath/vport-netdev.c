@@ -257,12 +257,6 @@ int netdev_get_ifindex(const struct vport *vport)
 	return netdev_vport->dev->ifindex;
 }
 
-int netdev_get_iflink(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netdev_vport->dev->iflink;
-}
-
 int netdev_get_mtu(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
@@ -444,7 +438,6 @@ const struct vport_ops netdev_vport_ops = {
 	.is_running	= netdev_is_running,
 	.get_operstate	= netdev_get_operstate,
 	.get_ifindex	= netdev_get_ifindex,
-	.get_iflink	= netdev_get_iflink,
 	.get_mtu	= netdev_get_mtu,
 	.send		= netdev_send,
 };

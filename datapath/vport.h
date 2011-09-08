@@ -46,7 +46,6 @@ int vport_is_running(const struct vport *);
 unsigned char vport_get_operstate(const struct vport *);
 
 int vport_get_ifindex(const struct vport *);
-int vport_get_iflink(const struct vport *);
 
 int vport_get_mtu(const struct vport *);
 
@@ -172,9 +171,6 @@ struct vport_parms {
  * @get_operstate: Get the device's operating state.
  * @get_ifindex: Get the system interface index associated with the device.
  * May be null if the device does not have an ifindex.
- * @get_iflink: Get the system interface index associated with the device that
- * will be used to send packets (may be different than ifindex for tunnels).
- * May be null if the device does not have an iflink.
  * @get_mtu: Get the device's MTU.  May be %NULL if the device does not have an
  * MTU (as e.g. some tunnels do not).
  * @send: Send a packet on the device.  Returns the length of the packet sent.
@@ -209,7 +205,6 @@ struct vport_ops {
 	unsigned char (*get_operstate)(const struct vport *);
 
 	int (*get_ifindex)(const struct vport *);
-	int (*get_iflink)(const struct vport *);
 
 	int (*get_mtu)(const struct vport *);
 
