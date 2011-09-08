@@ -99,7 +99,14 @@ enum nx_bad_request_code {
     NXBRC_NXM_BAD_PREREQ = 0x104,
 
     /* A given nxm_type was specified more than once. */
-    NXBRC_NXM_DUP_TYPE = 0x105
+    NXBRC_NXM_DUP_TYPE = 0x105,
+
+/* Other errors. */
+
+    /* A request specified a nonexistent table ID.  (But NXFMFC_BAD_TABLE_ID is
+     * used instead, when it is appropriate, because that is such a special
+     * case.) */
+    NXBRC_BAD_TABLE_ID = 0x200,
 };
 
 /* Additional "code" values for OFPET_FLOW_MOD_FAILED. */

@@ -1925,6 +1925,17 @@ calc_flow_duration__(long long int start, uint32_t *sec, uint32_t *nsec)
     *nsec = (msecs % 1000) * (1000 * 1000);
 }
 
+/* Checks whether 'table_id' is 0xff or a valid table ID in 'ofproto'.  Returns
+ * 0 if 'table_id' is OK, otherwise an OpenFlow error code.  */
+static int
+check_table_id(const struct ofproto *ofproto, uint8_t table_id)
+{
+    return (table_id == 0xff || table_id < ofproto->n_tables
+            ? 0
+            : ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_TABLE_ID));
+
+}
+
 static struct classifier *
 first_matching_table(struct ofproto *ofproto, uint8_t table_id)
 {
@@ -1933,11 +1944,6 @@ first_matching_table(struct ofproto *ofproto, uint8_t table_id)
     } else if (table_id < ofproto->n_tables) {
         return &ofproto->tables[table_id];
     } else {
-        /* It would probably be better to reply with an error but there doesn't
-         * seem to be any appropriate value, so that might just be
-         * confusing. */
-        VLOG_WARN_RL(&rl, "controller asked for invalid table %"PRIu8,
-                     table_id);
         return NULL;
     }
 }
@@ -1960,8 +1966,9 @@ next_matching_table(struct ofproto *ofproto,
  *   - If TABLE_ID is the number of a table in OFPROTO, then the loop iterates
  *     only once, for that table.
  *
- *   - Otherwise, TABLE_ID isn't valid for OFPROTO, so ofproto logs a warning
- *     and does not enter the loop at all.
+ *   - Otherwise, TABLE_ID isn't valid for OFPROTO, so the loop won't be
+ *     entered at all.  (Perhaps you should have validated TABLE_ID with
+ *     check_table_id().)
  *
  * All parameters are evaluated multiple times.
  */
@@ -1987,6 +1994,12 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
                     struct list *rules)
 {
     struct classifier *cls;
+    int error;
+
+    error = check_table_id(ofproto, table_id);
+    if (error) {
+        return error;
+    }
 
     list_init(rules);
     FOR_EACH_MATCHING_TABLE (cls, table_id, ofproto) {
@@ -2023,6 +2036,12 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
                      struct list *rules)
 {
     struct classifier *cls;
+    int error;
+
+    error = check_table_id(ofproto, table_id);
+    if (error) {
+        return error;
+    }
 
     list_init(rules);
     FOR_EACH_MATCHING_TABLE (cls, table_id, ofproto) {
@@ -2349,6 +2368,11 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct rule *victim;
     struct rule *rule;
     int error;
+
+    error = check_table_id(ofproto, fm->table_id);
+    if (error) {
+        return error;
+    }
 
     /* Pick table. */
     if (fm->table_id == 0xff) {
