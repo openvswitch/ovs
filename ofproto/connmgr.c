@@ -828,8 +828,30 @@ void
 ofconn_send_error(const struct ofconn *ofconn,
                   const struct ofp_header *request, int error)
 {
-    struct ofpbuf *msg = ofputil_encode_error_msg(error, request);
+    struct ofpbuf *msg;
+
+    msg = ofputil_encode_error_msg(error, request);
     if (msg) {
+        static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(10, 10);
+
+        if (!VLOG_DROP_INFO(&err_rl)) {
+            const struct ofputil_msg_type *type;
+            const char *type_name;
+            size_t request_len;
+            char *error_s;
+
+            request_len = ntohs(request->length);
+            type_name = (!ofputil_decode_msg_type_partial(request,
+                                                          MIN(64, request_len),
+                                                          &type)
+                         ? ofputil_msg_type_name(type)
+                         : "invalid");
+
+            error_s = ofputil_error_to_string(error);
+            VLOG_INFO("%s: sending %s error reply to %s message",
+                      rconn_get_name(ofconn->rconn), error_s, type_name);
+            free(error_s);
+        }
         ofconn_send_reply(ofconn, msg);
     }
 }

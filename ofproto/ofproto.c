@@ -1707,18 +1707,12 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 
 /* Checks whether 'ofconn' is a slave controller.  If so, returns an OpenFlow
  * error message code (composed with ofp_mkerr()) for the caller to propagate
- * upward.  Otherwise, returns 0.
- *
- * The log message mentions 'msg_type'. */
+ * upward.  Otherwise, returns 0. */
 static int
-reject_slave_controller(struct ofconn *ofconn, const char *msg_type)
+reject_slave_controller(const struct ofconn *ofconn)
 {
     if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
         && ofconn_get_role(ofconn) == NX_ROLE_SLAVE) {
-        static struct vlog_rate_limit perm_rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&perm_rl, "rejecting %s message from slave controller",
-                     msg_type);
-
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
     } else {
         return 0;
@@ -1739,7 +1733,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     COVERAGE_INC(ofproto_packet_out);
 
-    error = reject_slave_controller(ofconn, "OFPT_PACKET_OUT");
+    error = reject_slave_controller(ofconn);
     if (error) {
         return error;
     }
@@ -1807,7 +1801,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofport *port;
     int error;
 
-    error = reject_slave_controller(ofconn, "OFPT_PORT_MOD");
+    error = reject_slave_controller(ofconn);
     if (error) {
         return error;
     }
@@ -2621,7 +2615,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofputil_flow_mod fm;
     int error;
 
-    error = reject_slave_controller(ofconn, "flow_mod");
+    error = reject_slave_controller(ofconn);
     if (error) {
         return error;
     }
@@ -2687,15 +2681,12 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     uint32_t role;
 
     if (ofconn_get_type(ofconn) != OFCONN_PRIMARY) {
-        VLOG_WARN_RL(&rl, "ignoring role request on service connection");
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
     }
 
     role = ntohl(nrr->role);
     if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
         && role != NX_ROLE_SLAVE) {
-        VLOG_WARN_RL(&rl, "received request for unknown role %"PRIu32, role);
-
         /* There's no good error code for this. */
         return ofp_mkerr(OFPET_BAD_REQUEST, -1);
     }
@@ -2860,11 +2851,6 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXST_FLOW_REPLY:
     case OFPUTIL_NXST_AGGREGATE_REPLY:
     default:
-        if (VLOG_IS_WARN_ENABLED()) {
-            char *s = ofp_to_string(oh, ntohs(oh->length), 2);
-            VLOG_DBG_RL(&rl, "OpenFlow message ignored: %s", s);
-            free(s);
-        }
         if (oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY) {
             return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT);
         } else {
