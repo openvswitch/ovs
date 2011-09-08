@@ -691,13 +691,14 @@ static int odp_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = flow_extract(packet, -1, &flow->key, &key_len, &is_frag);
 	if (err)
 		goto err_flow_put;
-	flow->tbl_node.hash = flow_hash(&flow->key, key_len);
 
 	err = flow_metadata_from_nlattrs(&flow->key.eth.in_port,
 					 &flow->key.eth.tun_id,
 					 a[ODP_PACKET_ATTR_KEY]);
 	if (err)
 		goto err_flow_put;
+
+	flow->tbl_node.hash = flow_hash(&flow->key, key_len);
 
 	acts = flow_actions_alloc(a[ODP_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
