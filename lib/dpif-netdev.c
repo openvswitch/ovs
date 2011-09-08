@@ -652,6 +652,12 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         return EINVAL;
     }
 
+    if (flow->in_port < OFPP_MAX
+        ? flow->in_port >= MAX_PORTS
+        : flow->in_port != OFPP_LOCAL && flow->in_port != OFPP_NONE) {
+        return EINVAL;
+    }
+
     return 0;
 }
 
@@ -977,9 +983,11 @@ dpif_netdev_execute(struct dpif *dpif,
     }
 
     flow_extract(&copy, 0, -1, &key);
-    dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
-
-    error = dp_netdev_execute_actions(dp, &copy, &key, actions, actions_len);
+    error = dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
+    if (!error) {
+        error = dp_netdev_execute_actions(dp, &copy, &key,
+                                          actions, actions_len);
+    }
     if (mutates) {
         ofpbuf_uninit(&copy);
     }
