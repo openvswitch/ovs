@@ -721,8 +721,8 @@ struct ofproto_class {
      *       * Return an OpenFlow error code (as returned by ofp_mkerr()).  (Do
      *         not call ofoperation_complete() in this case.)
      *
-     *     In the former case, ->rule_destruct() will be called; in the latter
-     *     case, it will not.  ->rule_dealloc() will be called in either case.
+     *     Either way, ->rule_destruct() will not be called for 'rule', but
+     *     ->rule_dealloc() will be.
      *
      *   - If the operation is only partially complete, then it must return 0.
      *     Later, when the operation is complete, the ->run() or ->destruct()
