@@ -2828,8 +2828,29 @@ ofoperation_destroy(struct ofoperation *op)
  * indicate success or an OpenFlow error code (constructed with
  * e.g. ofp_mkerr()).
  *
- * If 'op' is a "delete flow" operation, 'error' must be 0.  That is, flow
- * deletions are not allowed to fail.
+ * If 'error' is 0, indicating success, the operation will be committed
+ * permanently to the flow table.  There is one interesting subcase:
+ *
+ *   - If 'op' is an "add flow" operation that is replacing an existing rule in
+ *     the flow table (the "victim" rule) by a new one, then the caller must
+ *     have uninitialized any derived state in the victim rule, as in step 5 in
+ *     the "Life Cycle" in ofproto/ofproto-provider.h.  ofoperation_complete()
+ *     performs steps 6 and 7 for the victim rule, most notably by calling its
+ *     ->rule_dealloc() function.
+ *
+ * If 'error' is nonzero, then generally the operation will be rolled back:
+ *
+ *   - If 'op' is an "add flow" operation, ofproto removes the new rule or
+ *     restores the original rule.  The caller must have uninitialized any
+ *     derived state in the new rule, as in step 5 of in the "Life Cycle" in
+ *     ofproto/ofproto-provider.h.  ofoperation_complete() performs steps 6 and
+ *     and 7 for the new rule, calling its ->rule_dealloc() function.
+ *
+ *   - If 'op' is a "modify flow" operation, ofproto restores the original
+ *     actions.
+ *
+ *   - 'op' must not be a "delete flow" operation.  Removing a rule is not
+ *     allowed to fail.  It must always succeed.
  *
  * Please see the large comment in ofproto/ofproto-provider.h titled
  * "Asynchronous Operation Support" for more information. */

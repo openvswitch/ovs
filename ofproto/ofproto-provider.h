@@ -686,7 +686,8 @@ struct ofproto_class {
      *
      *   - 'rule' is replacing an existing rule in its flow table that had the
      *     same matching criteria and priority.  In this case,
-     *     ofoperation_get_victim(rule) returns the rule being replaced.
+     *     ofoperation_get_victim(rule) returns the rule being replaced (the
+     *     "victim" rule).
      *
      * ->rule_construct() should set the following in motion:
      *
@@ -706,9 +707,13 @@ struct ofproto_class {
      *   - If the rule is valid, update the datapath flow table, adding the new
      *     rule or replacing the existing one.
      *
+     *   - If 'rule' is replacing an existing rule, uninitialize any derived
+     *     state for the victim rule, as in step 5 in the "Life Cycle"
+     *     described above.
+     *
      * (On failure, the ofproto code will roll back the insertion from the flow
-     * table, either removing 'rule' or replacing it by the flow that was
-     * originally in its place.)
+     * table, either removing 'rule' or replacing it by the victim rule if
+     * there is one.)
      *
      * ->rule_construct() must act in one of the following ways:
      *
