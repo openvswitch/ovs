@@ -1080,7 +1080,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             !eth_addr_is_local(iface_ea) &&
             !eth_addr_is_reserved(iface_ea) &&
             !eth_addr_is_zero(iface_ea) &&
-            eth_addr_compare_3way(iface_ea, ea) < 0)
+            (!found_addr || eth_addr_compare_3way(iface_ea, ea) < 0))
         {
             memcpy(ea, iface_ea, ETH_ADDR_LEN);
             *hw_addr_iface = iface;
