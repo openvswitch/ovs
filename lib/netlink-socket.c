@@ -727,45 +727,41 @@ genl_family_to_name(uint16_t id)
 }
 
 static int
-do_lookup_genl_family(const char *name, struct nlattr **attrs)
+do_lookup_genl_family(const char *name, struct nlattr **attrs,
+                      struct ofpbuf **replyp)
 {
     struct nl_sock *sock;
     struct ofpbuf request, *reply;
-    int retval;
+    int error;
 
-    retval = nl_sock_create(NETLINK_GENERIC, &sock);
-    if (retval) {
-        return -retval;
+    *replyp = NULL;
+    error = nl_sock_create(NETLINK_GENERIC, &sock);
+    if (error) {
+        return error;
     }
 
     ofpbuf_init(&request, 0);
     nl_msg_put_genlmsghdr(&request, 0, GENL_ID_CTRL, NLM_F_REQUEST,
                           CTRL_CMD_GETFAMILY, 1);
     nl_msg_put_string(&request, CTRL_ATTR_FAMILY_NAME, name);
-    retval = nl_sock_transact(sock, &request, &reply);
+    error = nl_sock_transact(sock, &request, &reply);
     ofpbuf_uninit(&request);
-    if (retval) {
+    if (error) {
         nl_sock_destroy(sock);
-        return -retval;
+        return error;
     }
 
     if (!nl_policy_parse(reply, NLMSG_HDRLEN + GENL_HDRLEN,
-                         family_policy, attrs, ARRAY_SIZE(family_policy))) {
+                         family_policy, attrs, ARRAY_SIZE(family_policy))
+        || nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]) == 0) {
         nl_sock_destroy(sock);
         ofpbuf_delete(reply);
-        return -EPROTO;
+        return EPROTO;
     }
 
-    retval = nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]);
-    if (retval == 0) {
-        retval = -EPROTO;
-    } else {
-        define_genl_family(retval, name);
-    }
     nl_sock_destroy(sock);
-    ofpbuf_delete(reply);
-
-    return retval;
+    *replyp = reply;
+    return 0;
 }
 
 /* Finds the multicast group called 'group_name' in genl family 'family_name'.
@@ -777,15 +773,15 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
 {
     struct nlattr *family_attrs[ARRAY_SIZE(family_policy)];
     struct ofpbuf all_mcs;
+    struct ofpbuf *reply;
     struct nlattr *mc;
     unsigned int left;
-    int retval;
+    int error;
 
     *multicast_group = 0;
-    retval = do_lookup_genl_family(family_name, family_attrs);
-    if (retval <= 0) {
-        assert(retval);
-        return -retval;
+    error = do_lookup_genl_family(family_name, family_attrs, &reply);
+    if (error) {
+        return error;
     }
 
     nl_attr_get_nested(family_attrs[CTRL_ATTR_MCAST_GROUPS], &all_mcs);
@@ -799,18 +795,23 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
         const char *mc_name;
 
         if (!nl_parse_nested(mc, mc_policy, mc_attrs, ARRAY_SIZE(mc_policy))) {
-            return EPROTO;
+            error = EPROTO;
+            goto exit;
         }
 
         mc_name = nl_attr_get_string(mc_attrs[CTRL_ATTR_MCAST_GRP_NAME]);
         if (!strcmp(group_name, mc_name)) {
             *multicast_group =
                 nl_attr_get_u32(mc_attrs[CTRL_ATTR_MCAST_GRP_ID]);
-            return 0;
+            error = 0;
+            goto exit;
         }
     }
+    error = EPROTO;
 
-    return EPROTO;
+exit:
+    ofpbuf_delete(reply);
+    return error;
 }
 
 /* If '*number' is 0, translates the given Generic Netlink family 'name' to a
@@ -820,10 +821,20 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
 int
 nl_lookup_genl_family(const char *name, int *number)
 {
-    struct nlattr *attrs[ARRAY_SIZE(family_policy)];
-
     if (*number == 0) {
-        *number = do_lookup_genl_family(name, attrs);
+        struct nlattr *attrs[ARRAY_SIZE(family_policy)];
+        struct ofpbuf *reply;
+        int error;
+
+        error = do_lookup_genl_family(name, attrs, &reply);
+        if (!error) {
+            *number = nl_attr_get_u16(attrs[CTRL_ATTR_FAMILY_ID]);
+            define_genl_family(*number, name);
+        } else {
+            *number = -error;
+        }
+        ofpbuf_delete(reply);
+
         assert(*number != 0);
     }
     return *number > 0 ? 0 : -*number;
