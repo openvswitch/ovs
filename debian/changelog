@@ -1,3 +1,14 @@
+openvswitch (1.2.1-3) unstable; urgency=low
+
+  * Allow the openvswitch-switch init script to fail gracefully
+    if the openvswitch_mod module can't be loaded. This avoids
+    failure to install the openvswitch-switch package in the case
+    where the module isn't available.
+
+    This resolves a regression between 1.1.1 and 1.2.1.
+
+ -- Simon Horman <horms@debian.org>  Tue, 06 Sep 2011 09:08:31 +0900
+
 openvswitch (1.2.1-2) unstable; urgency=low
 
   * Install python modules into /usr/share/pyshared/ovs/
