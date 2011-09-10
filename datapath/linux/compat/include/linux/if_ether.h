@@ -10,4 +10,10 @@
 
 #endif /* linux kernel < 2.6.28 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+
+#define ETH_P_FCOE	0x8906          /* Fibre Channel over Ethernet  */
+
+#endif /* linux kernel < 2.6.30 */
+
 #endif

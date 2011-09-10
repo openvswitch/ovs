@@ -532,7 +532,7 @@ bond_send_learning_packet(struct bond *bond,
     compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
                           eth_src);
     if (vlan) {
-        eth_set_vlan_tci(&packet, htons(vlan));
+        eth_push_vlan(&packet, htons(vlan));
     }
     error = netdev_send(slave->netdev, &packet);
     ofpbuf_uninit(&packet);

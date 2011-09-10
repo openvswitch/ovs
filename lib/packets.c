@@ -75,33 +75,27 @@ compose_benign_packet(struct ofpbuf *b, const char *tag, uint16_t snap_type,
     memcpy(payload + tag_size, eth_src, ETH_ADDR_LEN);
 }
 
-/* Modify the TCI field of 'packet', whose data must begin with an Ethernet
- * header.  If a VLAN tag is present, its TCI field is replaced by 'tci'.  If a
- * VLAN tag is not present, one is added with the TCI field set to 'tci'.
+/* Insert VLAN header according to given TCI. Packet passed must be Ethernet
+ * packet.
  *
  * Also sets 'packet->l2' to point to the new Ethernet header. */
 void
-eth_set_vlan_tci(struct ofpbuf *packet, ovs_be16 tci)
+eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
 {
     struct eth_header *eh = packet->data;
     struct vlan_eth_header *veh;
 
-    if (packet->size >= sizeof(struct vlan_eth_header)
-        && eh->eth_type == htons(ETH_TYPE_VLAN)) {
-        veh = packet->data;
-        veh->veth_tci = tci;
-    } else {
-        /* Insert new 802.1Q header. */
-        struct vlan_eth_header tmp;
-        memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
-        memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
-        tmp.veth_type = htons(ETH_TYPE_VLAN);
-        tmp.veth_tci = tci;
-        tmp.veth_next_type = eh->eth_type;
+    /* Insert new 802.1Q header. */
+    struct vlan_eth_header tmp;
+    memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
+    memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
+    tmp.veth_type = htons(ETH_TYPE_VLAN);
+    tmp.veth_tci = tci;
+    tmp.veth_next_type = eh->eth_type;
 
-        veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);
-        memcpy(veh, &tmp, sizeof tmp);
-    }
+    veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);
+    memcpy(veh, &tmp, sizeof tmp);
+
     packet->l2 = packet->data;
 }
 

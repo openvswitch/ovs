@@ -333,19 +333,15 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 	forward_ip_summed(skb, true);
 
 	if (vlan_tx_tag_present(skb) && !dev_supports_vlan_tx(skb->dev)) {
-		int features = 0;
+		int features;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
-		features = skb->dev->features & skb->dev->vlan_features;
-#endif
+		features = netif_skb_features(skb);
 
 		if (!vlan_tso)
 			features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |
 				      NETIF_F_UFO | NETIF_F_FSO);
 
-		if (skb_is_gso(skb) &&
-		    (!skb_gso_ok(skb, features) ||
-		     unlikely(skb->ip_summed != CHECKSUM_PARTIAL))) {
+		if (netif_needs_gso(skb, features)) {
 			struct sk_buff *nskb;
 
 			nskb = skb_gso_segment(skb, features);

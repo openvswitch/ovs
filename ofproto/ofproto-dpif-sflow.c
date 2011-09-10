@@ -538,7 +538,7 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dpif_upcall *upcall,
             n_outputs++;
             break;
 
-        case OVS_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
             tci = nl_attr_get_be16(a);
             switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
             switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);

@@ -39,19 +39,12 @@ static int make_writable(struct sk_buff *skb, int write_len)
 	return pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
 }
 
-static int strip_vlan(struct sk_buff *skb)
+/* remove VLAN header from packet and update csum accrodingly. */
+static int __pop_vlan_tci(struct sk_buff *skb, __be16 *current_tci)
 {
 	struct ethhdr *eh;
+	struct vlan_ethhdr *veth;
 	int err;
-
-	if (vlan_tx_tag_present(skb)) {
-		vlan_set_tci(skb, 0);
-		return 0;
-	}
-
-	if (unlikely(skb->protocol != htons(ETH_P_8021Q) ||
-	    skb->len < VLAN_ETH_HLEN))
-		return 0;
 
 	err = make_writable(skb, VLAN_ETH_HLEN);
 	if (unlikely(err))
@@ -61,9 +54,12 @@ static int strip_vlan(struct sk_buff *skb)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
+	veth = (struct vlan_ethhdr *) skb->data;
+	*current_tci = veth->h_vlan_TCI;
+
 	memmove(skb->data + VLAN_HLEN, skb->data, 2 * ETH_ALEN);
 
-	eh = (struct ethhdr *)skb_pull(skb, VLAN_HLEN);
+	eh = (struct ethhdr *)__skb_pull(skb, VLAN_HLEN);
 
 	skb->protocol = eh->h_proto;
 	skb->mac_header += VLAN_HLEN;
@@ -71,21 +67,52 @@ static int strip_vlan(struct sk_buff *skb)
 	return 0;
 }
 
-static int modify_vlan_tci(struct sk_buff *skb, __be16 tci)
+static int pop_vlan(struct sk_buff *skb)
 {
-	if (!vlan_tx_tag_present(skb) && skb->protocol == htons(ETH_P_8021Q)) {
-		int err;
+	__be16 tci;
+	int err;
 
-		if (unlikely(skb->len < VLAN_ETH_HLEN))
+	if (likely(vlan_tx_tag_present(skb))) {
+		vlan_set_tci(skb, 0);
+	} else {
+		if (unlikely(skb->protocol != htons(ETH_P_8021Q) ||
+		    skb->len < VLAN_ETH_HLEN))
 			return 0;
 
-		err = strip_vlan(skb);
-		if (unlikely(err))
+		err = __pop_vlan_tci(skb, &tci);
+		if (err)
 			return err;
 	}
+	/* move next vlan tag to hw accel tag */
+	if (likely(skb->protocol != htons(ETH_P_8021Q) ||
+	    skb->len < VLAN_ETH_HLEN))
+		return 0;
+
+	err = __pop_vlan_tci(skb, &tci);
+	if (unlikely(err))
+		return err;
 
 	__vlan_hwaccel_put_tag(skb, ntohs(tci));
+	return 0;
+}
 
+static int push_vlan(struct sk_buff *skb, __be16 new_tci)
+{
+	if (unlikely(vlan_tx_tag_present(skb))) {
+		u16 current_tag;
+
+		/* push down current VLAN tag */
+		current_tag = vlan_tx_tag_get(skb);
+
+		if (!__vlan_put_tag(skb, current_tag))
+			return -ENOMEM;
+
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE)
+			skb->csum = csum_add(skb->csum, csum_partial(skb->data
+					+ ETH_HLEN, VLAN_HLEN, 0));
+
+	}
+	__vlan_hwaccel_put_tag(skb, ntohs(new_tci));
 	return 0;
 }
 
@@ -270,12 +297,14 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			OVS_CB(skb)->tun_id = nla_get_be64(a);
 			break;
 
-		case OVS_ACTION_ATTR_SET_DL_TCI:
-			err = modify_vlan_tci(skb, nla_get_be16(a));
+		case OVS_ACTION_ATTR_PUSH_VLAN:
+			err = push_vlan(skb, nla_get_be16(a));
+			if (unlikely(err)) /* skb already freed */
+				return err;
 			break;
 
-		case OVS_ACTION_ATTR_STRIP_VLAN:
-			err = strip_vlan(skb);
+		case OVS_ACTION_ATTR_POP_VLAN:
+			err = pop_vlan(skb);
 			break;
 
 		case OVS_ACTION_ATTR_SET_DL_SRC:

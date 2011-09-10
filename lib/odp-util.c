@@ -49,8 +49,8 @@ odp_action_len(uint16_t type)
     switch ((enum ovs_action_type) type) {
     case OVS_ACTION_ATTR_OUTPUT: return 4;
     case OVS_ACTION_ATTR_USERSPACE: return 8;
-    case OVS_ACTION_ATTR_SET_DL_TCI: return 2;
-    case OVS_ACTION_ATTR_STRIP_VLAN: return 0;
+    case OVS_ACTION_ATTR_PUSH_VLAN: return 2;
+    case OVS_ACTION_ATTR_POP_VLAN: return 0;
     case OVS_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
     case OVS_ACTION_ATTR_SET_DL_DST: return ETH_ADDR_LEN;
     case OVS_ACTION_ATTR_SET_NW_SRC: return 4;
@@ -113,13 +113,13 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",
                       ntohll(nl_attr_get_be64(a)));
         break;
-    case OVS_ACTION_ATTR_SET_DL_TCI:
-        ds_put_format(ds, "set_tci(vid=%"PRIu16",pcp=%d)",
+    case OVS_ACTION_ATTR_PUSH_VLAN:
+        ds_put_format(ds, "push_vlan(vid=%"PRIu16",pcp=%d)",
                       vlan_tci_to_vid(nl_attr_get_be16(a)),
                       vlan_tci_to_pcp(nl_attr_get_be16(a)));
         break;
-    case OVS_ACTION_ATTR_STRIP_VLAN:
-        ds_put_format(ds, "strip_vlan");
+    case OVS_ACTION_ATTR_POP_VLAN:
+        ds_put_format(ds, "pop_vlan");
         break;
     case OVS_ACTION_ATTR_SET_DL_SRC:
         eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);

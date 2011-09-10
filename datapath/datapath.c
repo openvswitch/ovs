@@ -545,8 +545,8 @@ static int validate_actions(const struct nlattr *attr)
 		static const u32 action_lens[OVS_ACTION_ATTR_MAX + 1] = {
 			[OVS_ACTION_ATTR_OUTPUT] = 4,
 			[OVS_ACTION_ATTR_USERSPACE] = 8,
-			[OVS_ACTION_ATTR_SET_DL_TCI] = 2,
-			[OVS_ACTION_ATTR_STRIP_VLAN] = 0,
+			[OVS_ACTION_ATTR_PUSH_VLAN] = 2,
+			[OVS_ACTION_ATTR_POP_VLAN] = 0,
 			[OVS_ACTION_ATTR_SET_DL_SRC] = ETH_ALEN,
 			[OVS_ACTION_ATTR_SET_DL_DST] = ETH_ALEN,
 			[OVS_ACTION_ATTR_SET_NW_SRC] = 4,
@@ -568,7 +568,7 @@ static int validate_actions(const struct nlattr *attr)
 			return -EINVAL;
 
 		case OVS_ACTION_ATTR_USERSPACE:
-		case OVS_ACTION_ATTR_STRIP_VLAN:
+		case OVS_ACTION_ATTR_POP_VLAN:
 		case OVS_ACTION_ATTR_SET_DL_SRC:
 		case OVS_ACTION_ATTR_SET_DL_DST:
 		case OVS_ACTION_ATTR_SET_NW_SRC:
@@ -586,7 +586,7 @@ static int validate_actions(const struct nlattr *attr)
 				return -EINVAL;
 			break;
 
-		case OVS_ACTION_ATTR_SET_DL_TCI:
+		case OVS_ACTION_ATTR_PUSH_VLAN:
 			if (nla_get_be16(a) & htons(VLAN_CFI_MASK))
 				return -EINVAL;
 			break;

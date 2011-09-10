@@ -409,8 +409,8 @@ enum ovs_action_type {
 	OVS_ACTION_ATTR_UNSPEC,
 	OVS_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
 	OVS_ACTION_ATTR_USERSPACE,    /* Send copy to userspace. */
-	OVS_ACTION_ATTR_SET_DL_TCI,   /* Set the 802.1q TCI value. */
-	OVS_ACTION_ATTR_STRIP_VLAN,   /* Strip the 802.1q header. */
+	OVS_ACTION_ATTR_PUSH_VLAN,    /* Set the 802.1q TCI value. */
+	OVS_ACTION_ATTR_POP_VLAN,     /* Strip the 802.1q header. */
 	OVS_ACTION_ATTR_SET_DL_SRC,   /* Ethernet source address. */
 	OVS_ACTION_ATTR_SET_DL_DST,   /* Ethernet destination address. */
 	OVS_ACTION_ATTR_SET_NW_SRC,   /* IPv4 source address. */

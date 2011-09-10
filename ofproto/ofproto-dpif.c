@@ -2289,11 +2289,11 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
             }
             break;
 
-        case OVS_ACTION_ATTR_STRIP_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
             vlan_tci = htons(0);
             break;
 
-        case OVS_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
             vlan_tci = nl_attr_get_be16(a);
             break;
         }
@@ -2857,9 +2857,12 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
 
     if (base->vlan_tci != flow->vlan_tci) {
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_STRIP_VLAN);
+            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
         } else {
-            nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_SET_DL_TCI,
+            if (base->vlan_tci != OFP_VLAN_NONE) {
+                nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
+            }
+            nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
                             flow->vlan_tci & ~htons(VLAN_CFI));
         }
         base->vlan_tci = flow->vlan_tci;
@@ -3656,13 +3659,17 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
         }
         if (dst->vlan != cur_vlan) {
             if (dst->vlan == OFP_VLAN_NONE) {
-                nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_STRIP_VLAN);
+                nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_VLAN);
             } else {
                 ovs_be16 tci;
+
+                if (cur_vlan != OFP_VLAN_NONE) {
+                     nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_VLAN);
+                }
                 tci = htons(dst->vlan & VLAN_VID_MASK);
                 tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
                 nl_msg_put_be16(ctx->odp_actions,
-                                OVS_ACTION_ATTR_SET_DL_TCI, tci);
+                                OVS_ACTION_ATTR_PUSH_VLAN, tci);
             }
             cur_vlan = dst->vlan;
         }

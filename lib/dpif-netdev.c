@@ -718,7 +718,7 @@ dpif_netdev_validate_actions(const struct nlattr *actions,
         case OVS_ACTION_ATTR_USERSPACE:
             break;
 
-        case OVS_ACTION_ATTR_SET_DL_TCI:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
             *mutates = true;
             if (nl_attr_get_be16(a) & htons(VLAN_CFI)) {
                 return EINVAL;
@@ -732,7 +732,7 @@ dpif_netdev_validate_actions(const struct nlattr *actions,
             }
             break;
 
-        case OVS_ACTION_ATTR_STRIP_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
         case OVS_ACTION_ATTR_SET_DL_SRC:
         case OVS_ACTION_ATTR_SET_DL_DST:
         case OVS_ACTION_ATTR_SET_NW_SRC:
@@ -1142,7 +1142,7 @@ dpif_netdev_wait(struct dpif *dpif)
 }
 
 static void
-dp_netdev_strip_vlan(struct ofpbuf *packet)
+dp_netdev_pop_vlan(struct ofpbuf *packet)
 {
     struct vlan_eth_header *veh = packet->l2;
     if (packet->size >= sizeof *veh
@@ -1314,12 +1314,12 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
                                      key, nl_attr_get_u64(a));
             break;
 
-        case OVS_ACTION_ATTR_SET_DL_TCI:
-            eth_set_vlan_tci(packet, nl_attr_get_be16(a));
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+            eth_push_vlan(packet, nl_attr_get_be16(a));
             break;
 
-        case OVS_ACTION_ATTR_STRIP_VLAN:
-            dp_netdev_strip_vlan(packet);
+        case OVS_ACTION_ATTR_POP_VLAN:
+            dp_netdev_pop_vlan(packet);
             break;
 
         case OVS_ACTION_ATTR_SET_DL_SRC:
