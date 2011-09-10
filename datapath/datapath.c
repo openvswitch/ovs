@@ -131,7 +131,6 @@ static inline size_t br_nlmsg_size(void)
 	       + nla_total_size(MAX_ADDR_LEN) /* IFLA_ADDRESS */
 	       + nla_total_size(4) /* IFLA_MASTER */
 	       + nla_total_size(4) /* IFLA_MTU */
-	       + nla_total_size(4) /* IFLA_LINK */
 	       + nla_total_size(1); /* IFLA_OPERSTATE */
 }
 
