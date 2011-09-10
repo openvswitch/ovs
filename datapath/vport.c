@@ -275,13 +275,13 @@ int vport_set_options(struct vport *vport, struct nlattr *options)
  * Detaches @vport from its datapath and destroys it.  It is possible to fail
  * for reasons such as lack of memory.  RTNL lock must be held.
  */
-int vport_del(struct vport *vport)
+void vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
 
 	hlist_del_rcu(&vport->hash_node);
 
-	return vport->ops->destroy(vport);
+	vport->ops->destroy(vport);
 }
 
 /**

@@ -175,15 +175,13 @@ static void free_port_rcu(struct rcu_head *rcu)
 	vport_free(vport_from_priv(patch_vport));
 }
 
-static int patch_destroy(struct vport *vport)
+static void patch_destroy(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
 	update_peers(patch_vport->name, NULL);
 	hlist_del(&patch_vport->hash_node);
 	call_rcu(&patch_vport->rcu, free_port_rcu);
-
-	return 0;
 }
 
 static int patch_set_options(struct vport *vport, struct nlattr *options)

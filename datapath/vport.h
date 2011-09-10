@@ -26,7 +26,7 @@ int vport_init(void);
 void vport_exit(void);
 
 struct vport *vport_add(const struct vport_parms *);
-int vport_del(struct vport *);
+void vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
 
@@ -185,7 +185,7 @@ struct vport_ops {
 
 	/* Called with RTNL lock. */
 	struct vport *(*create)(const struct vport_parms *);
-	int (*destroy)(struct vport *);
+	void (*destroy)(struct vport *);
 
 	int (*set_options)(struct vport *, struct nlattr *);
 	int (*get_options)(const struct vport *, struct sk_buff *);

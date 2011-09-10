@@ -13,9 +13,11 @@
 #include <linux/in.h>
 #include <linux/in_route.h>
 #include <linux/jhash.h>
+#include <linux/list.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/workqueue.h>
+#include <linux/rculist.h>
 
 #include <net/dsfield.h>
 #include <net/dst.h>
@@ -31,7 +33,6 @@
 #include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
-#include "table.h"
 #include "tunnel.h"
 #include "vlan.h"
 #include "vport.h"
@@ -68,8 +69,10 @@
 #define CACHE_CLEANER_INTERVAL (5 * HZ)
 
 #define CACHE_DATA_ALIGN 16
+#define PORT_TABLE_SIZE  1024
 
-static struct tbl __rcu *port_table __read_mostly;
+static struct hlist_head *port_table __read_mostly;
+static int port_table_count;
 
 static void cache_cleaner(struct work_struct *work);
 static DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
@@ -93,11 +96,6 @@ static unsigned int remote_ports __read_mostly;
 static inline struct vport *tnl_vport_to_vport(const struct tnl_vport *tnl_vport)
 {
 	return vport_from_priv(tnl_vport);
-}
-
-static inline struct tnl_vport *tnl_vport_table_cast(const struct tbl_node *node)
-{
-	return container_of(node, struct tnl_vport, tbl_node);
 }
 
 /* This is analogous to rtnl_dereference for the tunnel cache.  It checks that
@@ -186,11 +184,9 @@ struct port_lookup_key {
  * Modifies 'target' to store the rcu_dereferenced pointer that was used to do
  * the comparision.
  */
-static int port_cmp(const struct tbl_node *node, void *target, int unused)
+static int port_cmp(const struct tnl_vport *tnl_vport,
+                    struct port_lookup_key *lookup)
 {
-	const struct tnl_vport *tnl_vport = tnl_vport_table_cast(node);
-	struct port_lookup_key *lookup = target;
-
 	lookup->mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
 	return (lookup->mutable->tunnel_type == lookup->tunnel_type &&
@@ -218,106 +214,69 @@ static u32 mutable_hash(const struct tnl_mutable_config *mutable)
 	return port_hash(&lookup);
 }
 
-static void check_table_empty(void)
-{
-	struct tbl *old_table = rtnl_dereference(port_table);
 
-	if (tbl_count(old_table) == 0) {
-		cancel_delayed_work_sync(&cache_cleaner_wq);
-		rcu_assign_pointer(port_table, NULL);
-		tbl_deferred_destroy(old_table, NULL);
-	}
+static inline struct hlist_head *find_bucket(u32 hash)
+{
+	return &port_table[(hash & (PORT_TABLE_SIZE - 1))];
 }
 
-static int add_port(struct vport *vport)
+static void port_table_add_port(struct vport *vport)
 {
-	struct tbl *cur_table = rtnl_dereference(port_table);
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	int err;
+	u32 hash = mutable_hash(rtnl_dereference(tnl_vport->mutable));
 
-	if (!port_table) {
-		struct tbl *new_table;
-
-		new_table = tbl_create(TBL_MIN_BUCKETS);
-		if (!new_table)
-			return -ENOMEM;
-
-		rcu_assign_pointer(port_table, new_table);
+	if (port_table_count == 0)
 		schedule_cache_cleaner();
 
-	} else if (tbl_count(cur_table) > tbl_n_buckets(cur_table)) {
-		struct tbl *new_table;
-
-		new_table = tbl_expand(cur_table);
-		if (IS_ERR(new_table)) {
-			if (PTR_ERR(new_table) != -ENOSPC)
-				return PTR_ERR(new_table);
-		} else {
-			rcu_assign_pointer(port_table, new_table);
-			tbl_deferred_destroy(cur_table, NULL);
-		}
-	}
-
-	err = tbl_insert(rtnl_dereference(port_table), &tnl_vport->tbl_node,
-			 mutable_hash(rtnl_dereference(tnl_vport->mutable)));
-	if (err) {
-		check_table_empty();
-		return err;
-	}
+	hlist_add_head_rcu(&tnl_vport->hash_node, find_bucket(hash));
+	port_table_count++;
 
 	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))++;
-
-	return 0;
 }
 
-static int move_port(struct vport *vport, struct tnl_mutable_config *new_mutable)
+static void port_table_move_port(struct vport *vport,
+		      struct tnl_mutable_config *new_mutable)
 {
-	int err;
-	struct tbl *cur_table = rtnl_dereference(port_table);
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	u32 hash;
 
 	hash = mutable_hash(new_mutable);
-	if (hash == tnl_vport->tbl_node.hash)
-		goto table_updated;
+	hlist_del_init_rcu(&tnl_vport->hash_node);
+	hlist_add_head_rcu(&tnl_vport->hash_node, find_bucket(hash));
 
-	/*
-	 * Ideally we should make this move atomic to avoid having gaps in
-	 * finding tunnels or the possibility of failure.  However, if we do
-	 * find a tunnel it will always be consistent.
-	 */
-	err = tbl_remove(cur_table, &tnl_vport->tbl_node);
-	if (err)
-		return err;
-
-	err = tbl_insert(cur_table, &tnl_vport->tbl_node, hash);
-	if (err) {
-		(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
-		check_table_empty();
-		return err;
-	}
-
-table_updated:
 	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
 	assign_config_rcu(vport, new_mutable);
 	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))++;
-
-	return 0;
 }
 
-static int del_port(struct vport *vport)
+static void port_table_remove_port(struct vport *vport)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	int err;
 
-	err = tbl_remove(rtnl_dereference(port_table), &tnl_vport->tbl_node);
-	if (err)
-		return err;
+	hlist_del_init_rcu(&tnl_vport->hash_node);
 
-	check_table_empty();
+	port_table_count--;
+	if (port_table_count == 0)
+		cancel_delayed_work_sync(&cache_cleaner_wq);
+
 	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
+}
 
-	return 0;
+static struct tnl_vport *port_table_lookup(struct port_lookup_key *lookup)
+{
+	struct hlist_node *n;
+	struct hlist_head *bucket;
+	u32 hash = port_hash(lookup);
+	struct tnl_vport * tnl_vport;
+
+	bucket = find_bucket(hash);
+
+	hlist_for_each_entry_rcu(tnl_vport, n, bucket, hash_node) {
+		if (!port_cmp(tnl_vport, lookup))
+			return tnl_vport;
+	}
+
+	return NULL;
 }
 
 struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
@@ -325,11 +284,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    const struct tnl_mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
-	struct tbl *table = rcu_dereference_rtnl(port_table);
-	struct tbl_node *tbl_node;
-
-	if (unlikely(!table))
-		return NULL;
+	struct tnl_vport * tnl_vport;
 
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
@@ -339,18 +294,15 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_MATCH;
 
 		if (key_local_remote_ports) {
-			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
-					      port_hash(&lookup), port_cmp);
-			if (tbl_node)
+			tnl_vport = port_table_lookup(&lookup);
+			if (tnl_vport)
 				goto found;
 		}
 
 		if (key_remote_ports) {
 			lookup.saddr = 0;
-
-			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
-					      port_hash(&lookup), port_cmp);
-			if (tbl_node)
+			tnl_vport = port_table_lookup(&lookup);
+			if (tnl_vport)
 				goto found;
 
 			lookup.saddr = saddr;
@@ -362,18 +314,15 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_EXACT;
 
 		if (local_remote_ports) {
-			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
-					      port_hash(&lookup), port_cmp);
-			if (tbl_node)
+			tnl_vport = port_table_lookup(&lookup);
+			if (tnl_vport)
 				goto found;
 		}
 
 		if (remote_ports) {
 			lookup.saddr = 0;
-
-			tbl_node = tbl_lookup(table, &lookup, sizeof(lookup),
-					      port_hash(&lookup), port_cmp);
-			if (tbl_node)
+			tnl_vport = port_table_lookup(&lookup);
+			if (tnl_vport)
 				goto found;
 		}
 	}
@@ -382,7 +331,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 
 found:
 	*mutable = lookup.mutable;
-	return tnl_vport_to_vport(tnl_vport_table_cast(tbl_node));
+	return tnl_vport_to_vport(tnl_vport);
 }
 
 static void ecn_decapsulate(struct sk_buff *skb, u8 tos)
@@ -848,10 +797,10 @@ static inline bool check_cache_valid(const struct tnl_cache *cache,
 		(cache->flow && !cache->flow->dead));
 }
 
-static int cache_cleaner_cb(struct tbl_node *tbl_node, void *aux)
+static void __cache_cleaner(struct tnl_vport *tnl_vport)
 {
-	struct tnl_vport *tnl_vport = tnl_vport_table_cast(tbl_node);
-	const struct tnl_mutable_config *mutable = rcu_dereference(tnl_vport->mutable);
+	const struct tnl_mutable_config *mutable =
+			rcu_dereference(tnl_vport->mutable);
 	const struct tnl_cache *cache = rcu_dereference(tnl_vport->cache);
 
 	if (cache && !check_cache_valid(cache, mutable) &&
@@ -859,16 +808,24 @@ static int cache_cleaner_cb(struct tbl_node *tbl_node, void *aux)
 		assign_cache_rcu(tnl_vport_to_vport(tnl_vport), NULL);
 		spin_unlock_bh(&tnl_vport->cache_lock);
 	}
-
-	return 0;
 }
 
 static void cache_cleaner(struct work_struct *work)
 {
+	int i;
+
 	schedule_cache_cleaner();
 
 	rcu_read_lock();
-	tbl_foreach(rcu_dereference(port_table), cache_cleaner_cb, NULL);
+	for (i = 0; i < PORT_TABLE_SIZE; i++) {
+		struct hlist_node *n;
+		struct hlist_head *bucket;
+		struct tnl_vport  *tnl_vport;
+
+		bucket = &port_table[i];
+		hlist_for_each_entry_rcu(tnl_vport, n, bucket, hash_node)
+			__cache_cleaner(tnl_vport);
+	}
 	rcu_read_unlock();
 }
 
@@ -949,12 +906,12 @@ static struct tnl_cache *build_cache(struct vport *vport,
 
 	if (is_internal_dev(rt_dst(rt).dev)) {
 		struct sw_flow_key flow_key;
-		struct tbl_node *flow_node;
 		struct vport *dst_vport;
 		struct sk_buff *skb;
 		bool is_frag;
 		int err;
 		int flow_key_len;
+		struct sw_flow *flow;
 
 		dst_vport = internal_dev_get_vport(rt_dst(rt).dev);
 		if (!dst_vport)
@@ -974,13 +931,9 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		if (err || is_frag)
 			goto done;
 
-		flow_node = tbl_lookup(rcu_dereference(dst_vport->dp->table),
-				       &flow_key, flow_key_len,
-				       flow_hash(&flow_key, flow_key_len),
-				       flow_cmp);
-		if (flow_node) {
-			struct sw_flow *flow = flow_cast(flow_node);
-
+		flow = flow_tbl_lookup(rcu_dereference(dst_vport->dp->table),
+					 &flow_key, flow_key_len);
+		if (flow) {
 			cache->flow = flow;
 			flow_hold(flow);
 		}
@@ -1461,10 +1414,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 
 	rcu_assign_pointer(tnl_vport->mutable, mutable);
 
-	err = add_port(vport);
-	if (err)
-		goto error_free_mutable;
-
+	port_table_add_port(vport);
 	return vport;
 
 error_free_mutable:
@@ -1498,9 +1448,8 @@ int tnl_set_options(struct vport *vport, struct nlattr *options)
 	if (err)
 		goto error_free;
 
-	err = move_port(vport, mutable);
-	if (err)
-		goto error_free;
+	if (mutable_hash(mutable) != mutable_hash(old_mutable))
+		port_table_move_port(vport, mutable);
 
 	return 0;
 
@@ -1545,21 +1494,14 @@ static void free_port_rcu(struct rcu_head *rcu)
 	vport_free(tnl_vport_to_vport(tnl_vport));
 }
 
-int tnl_destroy(struct vport *vport)
+void tnl_destroy(struct vport *vport)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	const struct tnl_mutable_config *mutable, *old_mutable;
+	const struct tnl_mutable_config *mutable;
 
 	mutable = rtnl_dereference(tnl_vport->mutable);
-
-	if (vport == tnl_find_port(mutable->saddr, mutable->daddr,
-				   mutable->in_key, mutable->tunnel_type,
-				   &old_mutable))
-		del_port(vport);
-
+	port_table_remove_port(vport);
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
-
-	return 0;
 }
 
 int tnl_set_addr(struct vport *vport, const unsigned char *addr)
@@ -1597,4 +1539,38 @@ void tnl_free_linked_skbs(struct sk_buff *skb)
 		kfree_skb(skb);
 		skb = next;
 	}
+}
+
+int tnl_init(void)
+{
+	int i;
+
+	port_table = kmalloc(PORT_TABLE_SIZE * sizeof(struct hlist_head *),
+			GFP_KERNEL);
+	if (!port_table)
+		return -ENOMEM;
+
+	for (i = 0; i < PORT_TABLE_SIZE; i++)
+		INIT_HLIST_HEAD(&port_table[i]);
+
+	return 0;
+}
+
+void tnl_exit(void)
+{
+	int i;
+
+	for (i = 0; i < PORT_TABLE_SIZE; i++) {
+		struct tnl_vport * tnl_vport;
+		struct hlist_head *hash_head;
+		struct hlist_node *n;
+
+		hash_head = &port_table[i];
+		hlist_for_each_entry(tnl_vport, n, hash_head, hash_node) {
+			BUG();
+			goto out;
+		}
+	}
+out:
+	kfree(port_table);
 }

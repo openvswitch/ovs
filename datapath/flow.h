@@ -18,9 +18,8 @@
 #include <linux/in6.h>
 #include <linux/jiffies.h>
 #include <linux/time.h>
-
+#include <linux/flex_array.h>
 #include "openvswitch/datapath-protocol.h"
-#include "table.h"
 
 struct sk_buff;
 
@@ -80,7 +79,8 @@ struct sw_flow_key {
 
 struct sw_flow {
 	struct rcu_head rcu;
-	struct tbl_node tbl_node;
+	struct hlist_node  hash_node;
+	u32 hash;
 
 	struct sw_flow_key key;
 	struct sw_flow_actions __rcu *sf_acts;
@@ -115,7 +115,6 @@ void flow_exit(void);
 
 struct sw_flow *flow_alloc(void);
 void flow_deferred_free(struct sw_flow *);
-void flow_free_tbl(struct tbl_node *);
 
 struct sw_flow_actions *flow_actions_alloc(const struct nlattr *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
@@ -127,9 +126,6 @@ int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
 		 int *key_lenp, bool *is_frag);
 void flow_used(struct sw_flow *, struct sk_buff *);
 u64 flow_used_time(unsigned long flow_jiffies);
-
-u32 flow_hash(const struct sw_flow_key *, int key_lenp);
-int flow_cmp(const struct tbl_node *, void *target, int len);
 
 /* Upper bound on the length of a nlattr-formatted flow key.  The longest
  * nlattr-formatted flow key would be:
@@ -155,9 +151,34 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 			       const struct nlattr *);
 
-static inline struct sw_flow *flow_cast(const struct tbl_node *node)
+#define TBL_MIN_BUCKETS		1024
+
+struct flow_table {
+        struct flex_array *buckets;
+        unsigned int count, n_buckets;
+        struct rcu_head rcu;
+};
+
+static inline int flow_tbl_count(struct flow_table *table)
 {
-	return container_of(node, struct sw_flow, tbl_node);
+	return table->count;
 }
+
+static inline int flow_tbl_need_to_expand(struct flow_table *table)
+{
+	return (table->count > table->n_buckets);
+}
+
+struct sw_flow *flow_tbl_lookup(struct flow_table *table,
+				struct sw_flow_key *key,    int len);
+void flow_tbl_destroy(struct flow_table *table);
+void flow_tbl_deferred_destroy(struct flow_table *table);
+struct flow_table *flow_tbl_alloc(int new_size);
+struct flow_table *flow_tbl_expand(struct flow_table *table);
+void flow_tbl_insert(struct flow_table *table, struct sw_flow *flow);
+void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
+u32 flow_hash(const struct sw_flow_key *key, int key_len);
+
+struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
 
 #endif /* flow.h */

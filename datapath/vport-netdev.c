@@ -175,7 +175,7 @@ error:
 	return ERR_PTR(err);
 }
 
-static int netdev_destroy(struct vport *vport)
+static void netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -187,8 +187,6 @@ static int netdev_destroy(struct vport *vport)
 
 	dev_put(netdev_vport->dev);
 	vport_free(vport);
-
-	return 0;
 }
 
 int netdev_set_mtu(struct vport *vport, int mtu)

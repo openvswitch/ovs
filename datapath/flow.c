@@ -29,6 +29,7 @@
 #include <linux/udp.h>
 #include <linux/icmp.h>
 #include <linux/icmpv6.h>
+#include <linux/rculist.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/ipv6.h>
@@ -216,12 +217,151 @@ struct sw_flow *flow_alloc(void)
 	return flow;
 }
 
-void flow_free_tbl(struct tbl_node *node)
+static struct hlist_head __rcu *find_bucket(struct flow_table * table, u32 hash)
 {
-	struct sw_flow *flow = flow_cast(node);
+	return flex_array_get(table->buckets,
+				(hash & (table->n_buckets - 1)));
+}
 
+static struct flex_array  __rcu *alloc_buckets(unsigned int n_buckets)
+{
+	struct flex_array  __rcu * buckets;
+	int i, err;
+
+	buckets = flex_array_alloc(sizeof(struct hlist_head *),
+				   n_buckets, GFP_KERNEL);
+	if (!buckets)
+		return NULL;
+
+	err = flex_array_prealloc(buckets, 0, n_buckets, GFP_KERNEL);
+	if (err) {
+		flex_array_free(buckets);
+		return NULL;
+	}
+
+	for (i = 0; i < n_buckets; i++)
+		INIT_HLIST_HEAD((struct hlist_head *)
+					flex_array_get(buckets, i));
+
+	return buckets;
+}
+
+static void free_buckets(struct flex_array * buckets)
+{
+	flex_array_free(buckets);
+}
+
+struct flow_table *flow_tbl_alloc(int new_size)
+{
+	struct flow_table *table = kmalloc(sizeof(*table), GFP_KERNEL);
+
+	if (!table)
+		return NULL;
+
+	table->buckets = alloc_buckets(new_size);
+
+	if (!table->buckets) {
+		kfree(table);
+		return NULL;
+	}
+	table->n_buckets = new_size;
+	table->count = 0;
+
+	return table;
+}
+
+static void flow_free(struct sw_flow *flow)
+{
 	flow->dead = true;
 	flow_put(flow);
+}
+
+void flow_tbl_destroy(struct flow_table *table)
+{
+	int i;
+
+	if (!table)
+		return;
+
+	for (i = 0; i < table->n_buckets; i++) {
+		struct sw_flow *flow;
+		struct hlist_head *head = flex_array_get(table->buckets, i);
+		struct hlist_node *node, *n;
+
+		hlist_for_each_entry_safe(flow, node, n, head, hash_node) {
+			hlist_del_init_rcu(&flow->hash_node);
+			flow_free(flow);
+		}
+	}
+
+	free_buckets(table->buckets);
+	kfree(table);
+}
+
+static void flow_tbl_destroy_rcu_cb(struct rcu_head *rcu)
+{
+	struct flow_table *table = container_of(rcu, struct flow_table, rcu);
+
+	flow_tbl_destroy(table);
+}
+
+void flow_tbl_deferred_destroy(struct flow_table *table)
+{
+        if (!table)
+                return;
+
+        call_rcu(&table->rcu, flow_tbl_destroy_rcu_cb);
+}
+
+struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *last)
+{
+	struct sw_flow *flow;
+	struct hlist_head *head;
+	struct hlist_node *n;
+	int i;
+
+	while (*bucket < table->n_buckets) {
+		i = 0;
+		head = flex_array_get(table->buckets, *bucket);
+		hlist_for_each_entry_rcu(flow, n, head, hash_node) {
+			if (i < *last) {
+				i++;
+				continue;
+			}
+			*last = i + 1;
+			return flow;
+		}
+		(*bucket)++;
+		*last = 0;
+	}
+
+	return NULL;
+}
+
+struct flow_table *flow_tbl_expand(struct flow_table *table)
+{
+	struct flow_table *new_table;
+	int n_buckets = table->n_buckets * 2;
+	int i;
+
+	new_table = flow_tbl_alloc(n_buckets);
+	if (!new_table)
+		return ERR_PTR(-ENOMEM);
+
+	for (i = 0; i < table->n_buckets; i++) {
+		struct sw_flow *flow;
+		struct hlist_head *head;
+		struct hlist_node *n, *pos;
+
+		head = flex_array_get(table->buckets, i);
+
+		hlist_for_each_entry_safe(flow, n, pos, head, hash_node) {
+			hlist_del_init_rcu(&flow->hash_node);
+			flow_tbl_insert(new_table, flow);
+		}
+	}
+
+	return new_table;
 }
 
 /* RCU callback used by flow_deferred_free. */
@@ -589,12 +729,43 @@ u32 flow_hash(const struct sw_flow_key *key, int key_len)
 	return jhash2((u32*)key, DIV_ROUND_UP(key_len, sizeof(u32)), hash_seed);
 }
 
-int flow_cmp(const struct tbl_node *node, void *key2_, int len)
+struct sw_flow * flow_tbl_lookup(struct flow_table *table,
+				struct sw_flow_key *key, int key_len)
 {
-	const struct sw_flow_key *key1 = &flow_cast(node)->key;
-	const struct sw_flow_key *key2 = key2_;
+	struct sw_flow *flow;
+	struct hlist_node *n;
+	struct hlist_head *head;
+	u32 hash;
 
-	return !memcmp(key1, key2, len);
+	hash = flow_hash(key, key_len);
+
+	head = find_bucket(table, hash);
+	hlist_for_each_entry_rcu(flow, n, head, hash_node) {
+
+		if (flow->hash == hash &&
+		    !memcmp(&flow->key, key, key_len)) {
+			return flow;
+		}
+	}
+	return NULL;
+}
+
+void flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
+{
+	struct hlist_head *head;
+
+	head = find_bucket(table, flow->hash);
+	hlist_add_head_rcu(&flow->hash_node, head);
+	table->count++;
+}
+
+void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
+{
+	if (!hlist_unhashed(&flow->hash_node)) {
+		hlist_del_init_rcu(&flow->hash_node);
+		table->count--;
+		BUG_ON(table->count < 0);
+	}
 }
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */

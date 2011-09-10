@@ -85,7 +85,7 @@ struct datapath {
 	int drop_frags;
 
 	/* Flow table. */
-	struct tbl __rcu *table;
+	struct flow_table __rcu *table;
 
 	/* Switch ports. */
 	struct vport __rcu *ports[DP_MAX_PORTS];
@@ -148,7 +148,7 @@ extern struct genl_multicast_group dp_vport_multicast_group;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct vport *, struct sk_buff *);
-int dp_detach_port(struct vport *);
+void dp_detach_port(struct vport *);
 int dp_upcall(struct datapath *, struct sk_buff *, const struct dp_upcall_info *);
 int dp_min_mtu(const struct datapath *dp);
 void set_internal_devs_mtu(const struct datapath *dp);

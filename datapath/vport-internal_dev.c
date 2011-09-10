@@ -230,7 +230,7 @@ error:
 	return ERR_PTR(err);
 }
 
-static int internal_dev_destroy(struct vport *vport)
+static void internal_dev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -239,8 +239,6 @@ static int internal_dev_destroy(struct vport *vport)
 
 	/* unregister_netdevice() waits for an RCU grace period. */
 	unregister_netdevice(netdev_vport->dev);
-
-	return 0;
 }
 
 static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)

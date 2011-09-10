@@ -13,7 +13,6 @@
 
 #include "flow.h"
 #include "openvswitch/tunnel.h"
-#include "table.h"
 #include "vport.h"
 
 /*
@@ -187,7 +186,7 @@ struct tnl_cache {
 
 struct tnl_vport {
 	struct rcu_head rcu;
-	struct tbl_node tbl_node;
+	struct hlist_node hash_node;
 
 	char name[IFNAMSIZ];
 	const struct tnl_ops *tnl_ops;
@@ -217,7 +216,7 @@ struct tnl_vport {
 
 struct vport *tnl_create(const struct vport_parms *, const struct vport_ops *,
 			 const struct tnl_ops *);
-int tnl_destroy(struct vport *);
+void tnl_destroy(struct vport *);
 
 int tnl_set_options(struct vport *, struct nlattr *);
 int tnl_get_options(const struct vport *, struct sk_buff *);
@@ -236,6 +235,8 @@ bool tnl_frag_needed(struct vport *vport,
 		     struct sk_buff *skb, unsigned int mtu, __be64 flow_key);
 void tnl_free_linked_skbs(struct sk_buff *skb);
 
+int tnl_init(void);
+void tnl_exit(void);
 static inline struct tnl_vport *tnl_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
