@@ -41,7 +41,22 @@ ovs_ctl () {
     "$@"
 }
 
+load_kmod () {
+    ovs_ctl load-kmod || exit $?
+}
+
 start () {
+    if ovs_ctl load-kmod; then
+	:
+    else
+	echo "Module has probably not been built for this kernel."
+	if ! test -d /usr/share/doc/openvswitch-datapath-source; then
+	    echo "Install the openvswitch-datapath-source package, then read"
+	else
+            echo "For instructions, read"
+	fi
+	echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
+    fi
     set ovs_ctl ${1-start} --system-id=random
     if test X"$FORCE_COREFILES" != X; then
 	set "$@" --force-corefiles="$FORCE_COREFILES"
@@ -75,8 +90,11 @@ case $1 in
     force-reload-kmod)
         start force-reload-kmod
         ;;
+    load-kmod)
+        load_kmod
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|force-reload|status|force-stop|force-reload-kmod}" >&2
+        echo "Usage: $0 {start|stop|restart|force-reload|status|force-stop|force-reload-kmod|load-kmod}" >&2
         exit 1
         ;;
 esac

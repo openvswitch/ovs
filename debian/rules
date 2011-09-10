@@ -117,7 +117,8 @@ binary-common:
 	dh_installexamples
 	dh_installdebconf
 	dh_installlogrotate
-	dh_installinit -R
+	dh_installinit -R -Nopenvswitch-switch
+	dh_installinit -R -popenvswitch-switch --error-handler=init_script_error
 	dh_installcron
 	dh_installman
 	dh_link
