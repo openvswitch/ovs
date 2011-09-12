@@ -390,10 +390,10 @@ cls_rule_set_ipv6_dst_masked(struct cls_rule *rule, const struct in6_addr *dst,
 }
 
 void
-cls_rule_set_nd_target(struct cls_rule *rule, const struct in6_addr target)
+cls_rule_set_nd_target(struct cls_rule *rule, const struct in6_addr *target)
 {
     rule->wc.wildcards &= ~FWW_ND_TARGET;
-    rule->flow.nd_target = target;
+    rule->flow.nd_target = *target;
 }
 
 /* Returns true if 'a' and 'b' have the same priority, wildcard the same

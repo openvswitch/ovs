@@ -813,7 +813,7 @@ parse_field_value(struct cls_rule *rule, enum field_index index,
 
     case F_ND_TARGET:
         str_to_ipv6(value, &ipv6, NULL);
-        cls_rule_set_nd_target(rule, ipv6);
+        cls_rule_set_nd_target(rule, &ipv6);
         break;
 
     case F_ND_SLL:
