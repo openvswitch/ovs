@@ -65,6 +65,10 @@ COVERAGE_DEFINE(facet_unexpected);
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 16
 
+/* Number of implemented OpenFlow tables. */
+enum { N_TABLES = 255 };
+BUILD_ASSERT_DECL(N_TABLES >= 1 && N_TABLES <= 255);
+
 struct ofport_dpif;
 struct ofproto_dpif;
 
@@ -473,7 +477,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
 
     ofproto->has_bundle_action = false;
 
-    *n_tablesp = 255;
+    *n_tablesp = N_TABLES;
     return 0;
 }
 
@@ -2630,6 +2634,10 @@ static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
                  uint8_t table_id)
 {
+    if (table_id >= N_TABLES) {
+        return NULL;
+    }
+
     return rule_dpif_cast(rule_from_cls_rule(
                               classifier_lookup(&ofproto->up.tables[table_id],
                                                 flow)));
