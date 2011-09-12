@@ -3354,6 +3354,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->priority = 0;
     ctx->base_priority = 0;
     ctx->base_flow = ctx->flow;
+    ctx->base_flow.tun_id = 0;
     ctx->table_id = 0;
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
