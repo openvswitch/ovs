@@ -775,6 +775,68 @@ between OpenFlow ports 4 and 8 using the Highest Random Weight
 algorithm, and writes the selection to \fBNXM_NX_REG0[]\fR.
 .IP
 Refer to \fBnicira\-ext.h\fR for more details.
+.
+.IP "\fBlearn(\fIargument\fR[\fB,\fIargument\fR]...\fB)\fR"
+This action adds or modifies a flow in an OpenFlow table, similar to
+\fBovs\-ofctl \-\-strict mod\-flows\fR.  The arguments specify the
+flow's match fields, actions, and other properties, as follows.  At
+least one match criterion and one action argument should ordinarily be
+specified.
+.RS
+.IP \fBidle_timeout=\fIseconds\fR
+.IQ \fBhard_timeout=\fIseconds\fR
+.IQ \fBpriority=\fIvalue\fR
+These key-value pairs have the same meaning as in the usual
+\fBovs\-ofctl\fR flow syntax.
+.
+.IP \fBtable=\fInumber\fR
+The table in which the new flow should be inserted.  Specify a decimal
+number between 0 and 254.  The default, if \fBtable\fR is unspecified,
+is table 1.
+.
+.IP \fIfield\fB=\fIvalue\fR
+.IQ \fIfield\fB[\fIstart\fB..\fIend\fB]=\fIsrc\fB[\fIstart\fB..\fIend\fB]\fR
+.IQ \fIfield\fB[\fIstart\fB..\fIend\fB]\fR
+Adds a match criterion to the new flow.
+.IP
+The first form specifies that \fIfield\fR must match the literal
+\fIvalue\fR, e.g. \fBdl_type=0x0800\fR.  All of the fields and values
+for \fBovs\-ofctl\fR flow syntax are available with their usual
+meanings.
+.IP
+The second form specifies that \fIfield\fB[\fIstart\fB..\fIend\fB]\fR
+in the new flow must match \fIsrc\fB[\fIstart\fB..\fIend\fB]\fR taken
+from the flow currently being processed.
+.IP
+The third form is a shorthand for the second form.  It specifies that
+\fIfield\fB[\fIstart\fB..\fIend\fB]\fR in the new flow must match
+\fIfield\fB[\fIstart\fB..\fIend\fB]\fR taken from the flow currently
+being processed.
+.
+.IP \fBload:\fIvalue\fB\->\fIdst\fB[\fIstart\fB..\fIend\fB]
+.IQ \fBload:\fIsrc\fB[\fIstart\fB..\fIend\fB]\->\fIdst\fB[\fIstart\fB..\fIend\fB]
+.
+Adds a \fBload\fR action to the new flow.
+.IP
+The first form loads the literal \fIvalue\fR into bits \fIstart\fR
+through \fIend\fR, inclusive, in field \fIdst\fR.  Its syntax is the
+same as the \fBload\fR action described earlier in this section.
+.IP
+The second form loads \fIsrc\fB[\fIstart\fB..\fIend\fB]\fR, a value
+from the flow currently being processed, into bits \fIstart\fR
+through \fIend\fR, inclusive, in field \fIdst\fR.
+.
+.IP \fBoutput:\fIfield\fB[\fIstart\fB..\fIend\fB]\fR
+Add an \fBoutput\fR action to the new flow's actions, that outputs to
+the OpenFlow port taken from \fIfield\fB[\fIstart\fB..\fIend\fB]\fR,
+which must be an NXM field as described above.
+.RE
+.IP
+For best performance, segregate learned flows into a table (using
+\fBtable=\fInumber\fR) that is not used for any other flows except
+possibly for a lowest-priority ``catch-all'' flow, that is, a flow
+with no match criteria.  (This is why the default \fBtable\fR is 1, to
+keep the learned flows separate from the primary flow table 0.)
 .RE
 .
 .PP

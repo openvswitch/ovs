@@ -302,32 +302,6 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }
 };
 
-static bool
-is_all_zeros(const uint8_t *field, size_t length)
-{
-    size_t i;
-
-    for (i = 0; i < length; i++) {
-        if (field[i] != 0x00) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool
-is_all_ones(const uint8_t *field, size_t length)
-{
-    size_t i;
-
-    for (i = 0; i < length; i++) {
-        if (field[i] != 0xff) {
-            return false;
-        }
-    }
-    return true;
-}
-
 /* Returns the field with the given 'id'. */
 const struct mf_field *
 mf_from_id(enum mf_field_id id)

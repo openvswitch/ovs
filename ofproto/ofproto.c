@@ -139,16 +139,10 @@ static int add_flow(struct ofproto *, struct ofconn *,
                     const struct ofputil_flow_mod *,
                     const struct ofp_header *);
 
-/* This return value tells handle_openflow() that processing of the current
- * OpenFlow message must be postponed until some ongoing operations have
- * completed.
- *
- * This particular value is a good choice because it is negative (so it won't
- * collide with any errno value or any value returned by ofp_mkerr()) and large
- * (so it won't accidentally collide with EOF or a negative errno value). */
-enum { OFPROTO_POSTPONE = -100000 };
-
 static bool handle_openflow(struct ofconn *, struct ofpbuf *);
+static int handle_flow_mod__(struct ofproto *, struct ofconn *,
+                             const struct ofputil_flow_mod *,
+                             const struct ofp_header *);
 
 static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
@@ -1060,6 +1054,18 @@ ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
         fm.n_actions = n_actions;
         add_flow(ofproto, NULL, &fm, NULL);
     }
+}
+
+/* Executes the flow modification specified in 'fm'.  Returns 0 on success, an
+ * OpenFlow error code as encoded by ofp_mkerr() on failure, or
+ * OFPROTO_POSTPONE if the operation cannot be initiated now but may be retried
+ * later.
+ *
+ * This is a helper function for in-band control and fail-open. */
+int
+ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
+{
+    return handle_flow_mod__(ofproto, NULL, fm, NULL);
 }
 
 /* Searches for a rule with matching criteria exactly equal to 'target' in
@@ -2190,8 +2196,9 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  * in which no matching flow already exists in the flow table.
  *
  * Adds the flow specified by 'ofm', which is followed by 'n_actions'
- * ofp_actions, to the ofproto's flow table.  Returns 0 on success or an
- * OpenFlow error code as encoded by ofp_mkerr() on failure.
+ * ofp_actions, to the ofproto's flow table.  Returns 0 on success, an OpenFlow
+ * error code as encoded by ofp_mkerr() on failure, or OFPROTO_POSTPONE if the
+ * operation cannot be initiated now but may be retried later.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
@@ -2472,18 +2479,12 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 static int
 handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_mod fm;
     int error;
 
     error = reject_slave_controller(ofconn, "flow_mod");
     if (error) {
         return error;
-    }
-
-    if (ofproto->n_pending >= 50) {
-        assert(!list_is_empty(&ofproto->pending));
-        return OFPROTO_POSTPONE;
     }
 
     error = ofputil_decode_flow_mod(&fm, oh,
@@ -2500,24 +2501,37 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
     }
 
-    switch (fm.command) {
+    return handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
+}
+
+static int
+handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
+                  const struct ofputil_flow_mod *fm,
+                  const struct ofp_header *oh)
+{
+    if (ofproto->n_pending >= 50) {
+        assert(!list_is_empty(&ofproto->pending));
+        return OFPROTO_POSTPONE;
+    }
+
+    switch (fm->command) {
     case OFPFC_ADD:
-        return add_flow(ofproto, ofconn, &fm, oh);
+        return add_flow(ofproto, ofconn, fm, oh);
 
     case OFPFC_MODIFY:
-        return modify_flows_loose(ofproto, ofconn, &fm, oh);
+        return modify_flows_loose(ofproto, ofconn, fm, oh);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flow_strict(ofproto, ofconn, &fm, oh);
+        return modify_flow_strict(ofproto, ofconn, fm, oh);
 
     case OFPFC_DELETE:
-        return delete_flows_loose(ofproto, ofconn, &fm, oh);
+        return delete_flows_loose(ofproto, ofconn, fm, oh);
 
     case OFPFC_DELETE_STRICT:
-        return delete_flow_strict(ofproto, ofconn, &fm, oh);
+        return delete_flow_strict(ofproto, ofconn, fm, oh);
 
     default:
-        if (fm.command > 0xff) {
+        if (fm->command > 0xff) {
             VLOG_WARN_RL(&rl, "flow_mod has explicit table_id but "
                          "flow_mod_table_id extension is not enabled");
         }

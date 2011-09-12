@@ -67,6 +67,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lacp.h \
 	lib/leak-checker.c \
 	lib/leak-checker.h \
+	lib/learn.c \
+	lib/learn.h \
 	lib/learning-switch.c \
 	lib/learning-switch.h \
 	lib/list.c \

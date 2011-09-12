@@ -26,6 +26,8 @@
 #include "shash.h"
 #include "timeval.h"
 
+struct ofputil_flow_mod;
+
 /* An OpenFlow switch.
  *
  * With few exceptions, ofproto implementations may look at these fields but
@@ -957,6 +959,18 @@ extern const struct ofproto_class ofproto_dpif_class;
 int ofproto_class_register(const struct ofproto_class *);
 int ofproto_class_unregister(const struct ofproto_class *);
 
+/* ofproto_flow_mod() returns this value if the flow_mod could not be processed
+ * because it overlaps with an ongoing flow table operation that has not yet
+ * completed.  The caller should retry the operation later.
+ *
+ * ofproto.c also uses this value internally for additional (similar) purposes.
+ *
+ * This particular value is a good choice because it is negative (so it won't
+ * collide with any errno value or any value returned by ofp_mkerr()) and large
+ * (so it won't accidentally collide with EOF or a negative errno value). */
+enum { OFPROTO_POSTPONE = -100000 };
+
+int ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *);
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
                       const union ofp_action *, size_t n_actions);
 bool ofproto_delete_flow(struct ofproto *, const struct cls_rule *);

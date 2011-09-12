@@ -34,4 +34,5 @@ NXAST_ACTION(NXAST_BUNDLE,         nx_action_bundle,       1, "bundle")
 NXAST_ACTION(NXAST_BUNDLE_LOAD,    nx_action_bundle,       1, "bundle_load")
 NXAST_ACTION(NXAST_RESUBMIT_TABLE, nx_action_resubmit,     0, NULL)
 NXAST_ACTION(NXAST_OUTPUT_REG,     nx_action_output_reg,   0, NULL)
+NXAST_ACTION(NXAST_LEARN,          nx_action_learn,        1, "learn")
 #undef NXAST_ACTION

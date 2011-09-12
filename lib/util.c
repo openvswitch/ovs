@@ -696,3 +696,32 @@ ctz(uint32_t n)
 #endif
     }
 }
+
+/* Returns true if the 'n' bytes starting at 'p' are zeros. */
+bool
+is_all_zeros(const uint8_t *p, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        if (p[i] != 0x00) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Returns true if the 'n' bytes starting at 'p' are 0xff. */
+bool
+is_all_ones(const uint8_t *p, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        if (p[i] != 0xff) {
+            return false;
+        }
+    }
+    return true;
+}
+

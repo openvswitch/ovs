@@ -25,6 +25,7 @@
 #include "byte-order.h"
 #include "classifier.h"
 #include "dynamic-string.h"
+#include "learn.h"
 #include "multipath.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
@@ -2130,6 +2131,10 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         case OFPUTIL_NXAST_RESUBMIT_TABLE:
             error = check_resubmit_table(
                 (const struct nx_action_resubmit *) a);
+            break;
+
+        case OFPUTIL_NXAST_LEARN:
+            error = learn_check((const struct nx_action_learn *) a, flow);
             break;
 
         case OFPUTIL_OFPAT_STRIP_VLAN:

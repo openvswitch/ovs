@@ -18,6 +18,7 @@ TESTSUITE_AT = \
 	tests/odp.at \
 	tests/multipath.at \
 	tests/autopath.at \
+	tests/learn.at \
 	tests/vconn.at \
 	tests/file_name.at \
 	tests/aes128.at \

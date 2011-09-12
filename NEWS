@@ -3,6 +3,7 @@ Post-v1.2.0
     - OpenFlow:
       - Added an OpenFlow extension which allows the "output" action to accept
         NXM fields.
+      - Added an OpenFlow extension for flexible learning.
     - ovs-appctl:
       - New "version" command to determine version of running daemon
     - ovs-vswitchd:

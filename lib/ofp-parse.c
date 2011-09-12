@@ -26,6 +26,7 @@
 #include "bundle.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
+#include "learn.h"
 #include "meta-flow.h"
 #include "netdev.h"
 #include "multipath.h"
@@ -228,7 +229,8 @@ parse_note(struct ofpbuf *b, const char *arg)
 }
 
 static void
-parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
+parse_named_action(enum ofputil_action_code code, const struct flow *flow,
+                   struct ofpbuf *b, char *arg)
 {
     struct ofp_action_dl_addr *oada;
     struct ofp_action_vlan_pcp *oavp;
@@ -332,11 +334,15 @@ parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
     case OFPUTIL_NXAST_RESUBMIT_TABLE:
     case OFPUTIL_NXAST_OUTPUT_REG:
         NOT_REACHED();
+
+    case OFPUTIL_NXAST_LEARN:
+        learn_parse(b, arg, flow);
+        break;
     }
 }
 
 static void
-str_to_action(char *str, struct ofpbuf *b)
+str_to_action(const struct flow *flow, char *str, struct ofpbuf *b)
 {
     char *pos, *act, *arg;
     int n_actions;
@@ -349,7 +355,7 @@ str_to_action(char *str, struct ofpbuf *b)
 
         code = ofputil_action_code_from_name(act);
         if (code >= 0) {
-            parse_named_action(code, b, arg);
+            parse_named_action(code, flow, b, arg);
         } else if (!strcasecmp(act, "drop")) {
             /* A drop action in OpenFlow occurs by just not setting
              * an action. */
@@ -462,6 +468,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     } fields;
     char *string = xstrdup(str_);
     char *save_ptr = NULL;
+    char *act_str = NULL;
     char *name;
 
     switch (command) {
@@ -503,9 +510,6 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     fm->out_port = OFPP_NONE;
     fm->flags = 0;
     if (fields & F_ACTIONS) {
-        struct ofpbuf actions;
-        char *act_str;
-
         act_str = strstr(string, "action");
         if (!act_str) {
             ofp_fatal(str_, verbose, "must specify an action");
@@ -518,14 +522,6 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         }
 
         act_str++;
-
-        ofpbuf_init(&actions, sizeof(union ofp_action));
-        str_to_action(act_str, &actions);
-        fm->actions = ofpbuf_steal_data(&actions);
-        fm->n_actions = actions.size / sizeof(union ofp_action);
-    } else {
-        fm->actions = NULL;
-        fm->n_actions = 0;
     }
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
@@ -568,6 +564,17 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 ofp_fatal(str_, verbose, "unknown keyword %s", name);
             }
         }
+    }
+    if (fields & F_ACTIONS) {
+        struct ofpbuf actions;
+
+        ofpbuf_init(&actions, sizeof(union ofp_action));
+        str_to_action(&fm->cr.flow, act_str, &actions);
+        fm->actions = ofpbuf_steal_data(&actions);
+        fm->n_actions = actions.size / sizeof(union ofp_action);
+    } else {
+        fm->actions = NULL;
+        fm->n_actions = 0;
     }
 
     free(string);

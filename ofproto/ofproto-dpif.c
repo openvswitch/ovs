@@ -32,6 +32,7 @@
 #include "fail-open.h"
 #include "hmapx.h"
 #include "lacp.h"
+#include "learn.h"
 #include "mac-learning.h"
 #include "multipath.h"
 #include "netdev.h"
@@ -166,6 +167,12 @@ struct action_xlate_ctx {
      * revalidating without a packet to refer to. */
     const struct ofpbuf *packet;
 
+    /* Should OFPP_NORMAL MAC learning and NXAST_LEARN actions execute?  We
+     * want to execute them if we are actually processing a packet, or if we
+     * are accounting for packets that the datapath has processed, but not if
+     * we are just revalidating. */
+    bool may_learn;
+
     /* If nonnull, called just before executing a resubmit action.
      *
      * This is normally null so the client has to set it manually after
@@ -176,9 +183,11 @@ struct action_xlate_ctx {
  * to look at them after it returns. */
 
     struct ofpbuf *odp_actions; /* Datapath actions. */
-    tag_type tags;              /* Tags associated with OFPP_NORMAL actions. */
+    tag_type tags;              /* Tags associated with actions. */
     bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
+    bool has_learn;             /* Actions include NXAST_LEARN? */
+    bool has_normal;            /* Actions output to OFPP_NORMAL? */
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
 
 /* xlate_actions() initializes and uses these members, but the client has no
@@ -229,6 +238,8 @@ struct facet {
     bool installed;              /* Installed in datapath? */
     bool may_install;            /* True ordinarily; false if actions must
                                   * be reassessed for every packet. */
+    bool has_learn;              /* Actions include NXAST_LEARN? */
+    bool has_normal;             /* Actions output to OFPP_NORMAL? */
     size_t actions_len;          /* Number of bytes in actions[]. */
     struct nlattr *actions;      /* Datapath actions. */
     tag_type tags;               /* Tags. */
@@ -2168,6 +2179,8 @@ facet_make_actions(struct ofproto_dpif *p, struct facet *facet,
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
+    facet->has_learn = ctx.has_learn;
+    facet->has_normal = ctx.has_normal;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
 
     if (facet->actions_len != odp_actions->size
@@ -2239,12 +2252,9 @@ static void
 facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
 {
     uint64_t n_bytes;
-    struct ofbundle *in_bundle;
     const struct nlattr *a;
-    tag_type dummy = 0;
     unsigned int left;
     ovs_be16 vlan_tci;
-    int vlan;
 
     if (facet->byte_count <= facet->accounted_bytes) {
         return;
@@ -2252,22 +2262,19 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
     n_bytes = facet->byte_count - facet->accounted_bytes;
     facet->accounted_bytes = facet->byte_count;
 
-    /* Test that 'tags' is nonzero to ensure that only flows that include an
-     * OFPP_NORMAL action are used for learning and bond slave rebalancing.
-     * This works because OFPP_NORMAL always sets a nonzero tag value.
-     *
-     * Feed information from the active flows back into the learning table to
+    /* Feed information from the active flows back into the learning table to
      * ensure that table is always in sync with what is actually flowing
      * through the datapath. */
-    if (!facet->tags
-        || !is_admissible(ofproto, &facet->flow, false, &dummy,
-                          &vlan, &in_bundle)) {
-        return;
+    if (facet->has_learn || facet->has_normal) {
+        struct action_xlate_ctx ctx;
+
+        action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
+        ctx.may_learn = true;
+        ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
+                                    facet->rule->up.n_actions));
     }
 
-    update_learning_table(ofproto, &facet->flow, vlan, in_bundle);
-
-    if (!ofproto->has_bonded_bundles) {
+    if (!facet->has_normal || !ofproto->has_bonded_bundles) {
         return;
     }
 
@@ -2491,6 +2498,8 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
     facet->tags = ctx.tags;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->may_install = ctx.may_set_up_flow;
+    facet->has_learn = ctx.has_learn;
+    facet->has_normal = ctx.has_normal;
     if (actions_changed) {
         free(facet->actions);
         facet->actions_len = odp_actions->size;
@@ -3169,6 +3178,26 @@ slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
 }
 
 static void
+xlate_learn_action(struct action_xlate_ctx *ctx,
+                   const struct nx_action_learn *learn)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+    struct ofputil_flow_mod fm;
+    int error;
+
+    learn_execute(learn, &ctx->flow, &fm);
+
+    error = ofproto_flow_mod(&ctx->ofproto->up, &fm);
+    if (error && !VLOG_DROP_WARN(&rl)) {
+        char *msg = ofputil_error_to_string(error);
+        VLOG_WARN("learning action failed to modify flow table (%s)", msg);
+        free(msg);
+    }
+
+    free(fm.actions);
+}
+
+static void
 do_xlate_actions(const union ofp_action *in, size_t n_in,
                  struct action_xlate_ctx *ctx)
 {
@@ -3325,6 +3354,13 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             naor = (const struct nx_action_output_reg *) ia;
             xlate_output_reg_action(ctx, naor);
             break;
+
+        case OFPUTIL_NXAST_LEARN:
+            ctx->has_learn = true;
+            if (ctx->may_learn) {
+                xlate_learn_action(ctx, (const struct nx_action_learn *) ia);
+            }
+            break;
         }
     }
 }
@@ -3337,6 +3373,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
     ctx->packet = packet;
+    ctx->may_learn = packet != NULL;
     ctx->resubmit_hook = NULL;
 }
 
@@ -3349,6 +3386,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->odp_actions = ofpbuf_new(512);
     ctx->tags = 0;
     ctx->may_set_up_flow = true;
+    ctx->has_learn = false;
+    ctx->has_normal = false;
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
     ctx->priority = 0;
@@ -3821,6 +3860,7 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
                          "port %"PRIu16,
                          ofproto->up.name, flow->in_port);
         }
+        *vlanp = -1;
         return false;
     }
     *vlanp = vlan = flow_get_vlan(ofproto, flow, in_bundle, have_packet);
@@ -3879,6 +3919,8 @@ xlate_normal(struct action_xlate_ctx *ctx)
     struct mac_entry *mac;
     int vlan;
 
+    ctx->has_normal = true;
+
     /* Check whether we should drop packets in this flow. */
     if (!is_admissible(ctx->ofproto, &ctx->flow, ctx->packet != NULL,
                        &ctx->tags, &vlan, &in_bundle)) {
@@ -3886,8 +3928,8 @@ xlate_normal(struct action_xlate_ctx *ctx)
         goto done;
     }
 
-    /* Learn source MAC (but don't try to learn from revalidation). */
-    if (ctx->packet) {
+    /* Learn source MAC. */
+    if (ctx->may_learn) {
         update_learning_table(ctx->ofproto, &ctx->flow, vlan, in_bundle);
     }
 

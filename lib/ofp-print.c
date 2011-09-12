@@ -31,6 +31,7 @@
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "learn.h"
 #include "multipath.h"
 #include "nx-match.h"
 #include "ofp-util.h"
@@ -331,6 +332,10 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         nxm_format_field_bits(s, ntohl(naor->src),
                               nxm_decode_ofs(naor->ofs_nbits),
                               nxm_decode_n_bits(naor->ofs_nbits));
+        break;
+
+    case OFPUTIL_NXAST_LEARN:
+        learn_format((const struct nx_action_learn *) a, s);
         break;
 
     default:
