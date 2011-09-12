@@ -50,6 +50,18 @@ struct cls_table {
     int n_table_rules;          /* Number of rules, including duplicates. */
 };
 
+/* Returns true if 'table' is a "catch-all" table that will match every
+ * packet (if there is no higher-priority match). */
+static inline bool
+cls_table_is_catchall(const struct cls_table *table)
+{
+    /* A catch-all table can only have one rule, so use hmap_count() as a cheap
+     * check to rule out other kinds of match before doing the full check with
+     * flow_wildcards_is_catchall(). */
+    return (hmap_count(&table->rules) == 1
+            && flow_wildcards_is_catchall(&table->wc));
+}
+
 /* A flow classification rule.
  *
  * Use one of the cls_rule_*() functions to initialize a cls_rule.

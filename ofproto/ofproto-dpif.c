@@ -93,6 +93,8 @@ struct rule_dpif {
     uint64_t packet_count;       /* Number of packets received. */
     uint64_t byte_count;         /* Number of bytes received. */
 
+    tag_type tag;                /* Caches rule_calculate_tag() result. */
+
     struct list facets;          /* List of "struct facet"s. */
 };
 
@@ -288,6 +290,11 @@ static void flow_push_stats(const struct rule_dpif *,
                             struct flow *, uint64_t packets, uint64_t bytes,
                             long long int used);
 
+static uint32_t rule_calculate_tag(const struct flow *,
+                                   const struct flow_wildcards *,
+                                   uint32_t basis);
+static void rule_invalidate(const struct rule_dpif *);
+
 struct ofport_dpif {
     struct ofport up;
 
@@ -316,6 +323,17 @@ struct dpif_completion {
     struct ofoperation *op;
 };
 
+/* Extra information about a classifier table.
+ * Currently used just for optimized flow revalidation. */
+struct table_dpif {
+    /* If either of these is nonnull, then this table has a form that allows
+     * flows to be tagged to avoid revalidating most flows for the most common
+     * kinds of flow table changes. */
+    struct cls_table *catchall_table; /* Table that wildcards all fields. */
+    struct cls_table *other_table;    /* Table with any other wildcard set. */
+    uint32_t basis;                   /* Keeps each table's tags separate. */
+};
+
 struct ofproto_dpif {
     struct ofproto up;
     struct dpif *dpif;
@@ -337,6 +355,9 @@ struct ofproto_dpif {
 
     /* Facets. */
     struct hmap facets;
+
+    /* Revalidation. */
+    struct table_dpif tables[N_TABLES];
     bool need_revalidate;
     struct tag_set revalidate_set;
 
@@ -468,6 +489,14 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     timer_set_duration(&ofproto->next_expiration, 1000);
 
     hmap_init(&ofproto->facets);
+
+    for (i = 0; i < N_TABLES; i++) {
+        struct table_dpif *table = &ofproto->tables[i];
+
+        table->catchall_table = NULL;
+        table->other_table = NULL;
+        table->basis = random_uint32();
+    }
     ofproto->need_revalidate = false;
     tag_set_init(&ofproto->revalidate_set);
 
@@ -2648,7 +2677,7 @@ complete_operation(struct rule_dpif *rule)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
-    ofproto->need_revalidate = true;
+    rule_invalidate(rule);
     if (clogged) {
         struct dpif_completion *c = xmalloc(sizeof *c);
         c->op = rule->up.pending;
@@ -2678,6 +2707,7 @@ rule_construct(struct rule *rule_)
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct rule_dpif *victim;
+    uint8_t table_id;
     int error;
 
     error = validate_actions(rule->up.actions, rule->up.n_actions,
@@ -2710,6 +2740,12 @@ rule_construct(struct rule *rule_)
         /* Must avoid list_moved() in this case. */
         list_init(&rule->facets);
     }
+
+    table_id = rule->up.table_id;
+    rule->tag = (victim ? victim->tag
+                 : table_id == 0 ? 0
+                 : rule_calculate_tag(&rule->up.cr.flow, &rule->up.cr.wc,
+                                      ofproto->tables[table_id].basis));
 
     complete_operation(rule);
     return 0;
@@ -2947,6 +2983,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
                    uint16_t in_port, uint8_t table_id)
 {
     if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
+        struct ofproto_dpif *ofproto = ctx->ofproto;
         struct rule_dpif *rule;
         uint16_t old_in_port;
         uint8_t old_table_id;
@@ -2954,12 +2991,25 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         old_table_id = ctx->table_id;
         ctx->table_id = table_id;
 
-        /* Look up a flow with 'in_port' as the input port.  Then restore the
-         * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
-         * have surprising behavior). */
+        /* Look up a flow with 'in_port' as the input port. */
         old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
-        rule = rule_dpif_lookup(ctx->ofproto, &ctx->flow, table_id);
+        rule = rule_dpif_lookup(ofproto, &ctx->flow, table_id);
+
+        /* Tag the flow. */
+        if (table_id > 0 && table_id < N_TABLES) {
+            struct table_dpif *table = &ofproto->tables[table_id];
+            if (table->other_table) {
+                ctx->tags |= (rule
+                              ? rule->tag
+                              : rule_calculate_tag(&ctx->flow,
+                                                   &table->other_table->wc,
+                                                   table->basis));
+            }
+        }
+
+        /* Restore the original input port.  Otherwise OFPP_NORMAL and
+         * OFPP_IN_PORT will have surprising behavior. */
         ctx->flow.in_port = old_in_port;
 
         if (ctx->resubmit_hook) {
@@ -3966,6 +4016,120 @@ xlate_normal(struct action_xlate_ctx *ctx)
 done:
     if (in_bundle) {
         compose_actions(ctx, vlan, in_bundle, out_bundle);
+    }
+}
+
+/* Optimized flow revalidation.
+ *
+ * It's a difficult problem, in general, to tell which facets need to have
+ * their actions recalculated whenever the OpenFlow flow table changes.  We
+ * don't try to solve that general problem: for most kinds of OpenFlow flow
+ * table changes, we recalculate the actions for every facet.  This is
+ * relatively expensive, but it's good enough if the OpenFlow flow table
+ * doesn't change very often.
+ *
+ * However, we can expect one particular kind of OpenFlow flow table change to
+ * happen frequently: changes caused by MAC learning.  To avoid wasting a lot
+ * of CPU on revalidating every facet whenever MAC learning modifies the flow
+ * table, we add a special case that applies to flow tables in which every rule
+ * has the same form (that is, the same wildcards), except that the table is
+ * also allowed to have a single "catch-all" flow that matches all packets.  We
+ * optimize this case by tagging all of the facets that resubmit into the table
+ * and invalidating the same tag whenever a flow changes in that table.  The
+ * end result is that we revalidate just the facets that need it (and sometimes
+ * a few more, but not all of the facets or even all of the facets that
+ * resubmit to the table modified by MAC learning). */
+
+/* Calculates the tag to use for 'flow' and wildcards 'wc' when it is inserted
+ * into an OpenFlow table with the given 'basis'. */
+static uint32_t
+rule_calculate_tag(const struct flow *flow, const struct flow_wildcards *wc,
+                   uint32_t secret)
+{
+    if (flow_wildcards_is_catchall(wc)) {
+        return 0;
+    } else {
+        struct flow tag_flow = *flow;
+        flow_zero_wildcards(&tag_flow, wc);
+        return tag_create_deterministic(flow_hash(&tag_flow, secret));
+    }
+}
+
+/* Following a change to OpenFlow table 'table_id' in 'ofproto', update the
+ * taggability of that table.
+ *
+ * This function must be called after *each* change to a flow table.  If you
+ * skip calling it on some changes then the pointer comparisons at the end can
+ * be invalid if you get unlucky.  For example, if a flow removal causes a
+ * cls_table to be destroyed and then a flow insertion causes a cls_table with
+ * different wildcards to be created with the same address, then this function
+ * will incorrectly skip revalidation. */
+static void
+table_update_taggable(struct ofproto_dpif *ofproto, uint8_t table_id)
+{
+    struct table_dpif *table = &ofproto->tables[table_id];
+    const struct classifier *cls = &ofproto->up.tables[table_id];
+    struct cls_table *catchall, *other;
+    struct cls_table *t;
+
+    catchall = other = NULL;
+
+    switch (hmap_count(&cls->tables)) {
+    case 0:
+        /* We could tag this OpenFlow table but it would make the logic a
+         * little harder and it's a corner case that doesn't seem worth it
+         * yet. */
+        break;
+
+    case 1:
+    case 2:
+        HMAP_FOR_EACH (t, hmap_node, &cls->tables) {
+            if (cls_table_is_catchall(t)) {
+                catchall = t;
+            } else if (!other) {
+                other = t;
+            } else {
+                /* Indicate that we can't tag this by setting both tables to
+                 * NULL.  (We know that 'catchall' is already NULL.) */
+                other = NULL;
+            }
+        }
+        break;
+
+    default:
+        /* Can't tag this table. */
+        break;
+    }
+
+    if (table->catchall_table != catchall || table->other_table != other) {
+        table->catchall_table = catchall;
+        table->other_table = other;
+        ofproto->need_revalidate = true;
+    }
+}
+
+/* Given 'rule' that has changed in some way (either it is a rule being
+ * inserted, a rule being deleted, or a rule whose actions are being
+ * modified), marks facets for revalidation to ensure that packets will be
+ * forwarded correctly according to the new state of the flow table.
+ *
+ * This function must be called after *each* change to a flow table.  See
+ * the comment on table_update_taggable() for more information. */
+static void
+rule_invalidate(const struct rule_dpif *rule)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
+
+    table_update_taggable(ofproto, rule->up.table_id);
+
+    if (!ofproto->need_revalidate) {
+        struct table_dpif *table = &ofproto->tables[rule->up.table_id];
+
+        if (table->other_table && rule->tag) {
+            tag_set_add(&ofproto->revalidate_set, rule->tag);
+        } else {
+            ofproto->need_revalidate = true;
+        }
     }
 }
 
