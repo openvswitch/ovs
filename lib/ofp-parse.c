@@ -26,6 +26,7 @@
 #include "bundle.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
+#include "meta-flow.h"
 #include "netdev.h"
 #include "multipath.h"
 #include "nx-match.h"
@@ -85,172 +86,14 @@ str_to_mac(const char *str, uint8_t mac[6])
 }
 
 static void
-str_to_eth_dst(const char *str,
-               uint8_t mac[ETH_ADDR_LEN], uint8_t mask[ETH_ADDR_LEN])
+str_to_ip(const char *str, ovs_be32 *ip)
 {
-    if (sscanf(str, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT,
-               ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask))
-        == ETH_ADDR_SCAN_COUNT * 2) {
-        if (!flow_wildcards_is_dl_dst_mask_valid(mask)) {
-            ovs_fatal(0, "%s: invalid Ethernet destination mask (only "
-                      "00:00:00:00:00:00, 01:00:00:00:00:00, "
-                      "fe:ff:ff:ff:ff:ff, and ff:ff:ff:ff:ff:ff are allowed)",
-                      str);
-        }
-    } else if (sscanf(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
-               == ETH_ADDR_SCAN_COUNT) {
-        memset(mask, 0xff, ETH_ADDR_LEN);
-    } else {
-        ovs_fatal(0, "invalid mac address %s", str);
-    }
-}
-
-static void
-str_to_ip(const char *str_, ovs_be32 *ip, ovs_be32 *maskp)
-{
-    char *str = xstrdup(str_);
-    char *save_ptr = NULL;
-    const char *name, *netmask;
     struct in_addr in_addr;
-    ovs_be32 mask;
-    int retval;
 
-    name = strtok_r(str, "/", &save_ptr);
-    retval = name ? lookup_ip(name, &in_addr) : EINVAL;
-    if (retval) {
+    if (lookup_ip(str, &in_addr)) {
         ovs_fatal(0, "%s: could not convert to IP address", str);
     }
     *ip = in_addr.s_addr;
-
-    netmask = strtok_r(NULL, "/", &save_ptr);
-    if (netmask) {
-        uint8_t o[4];
-        if (sscanf(netmask, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8,
-                   &o[0], &o[1], &o[2], &o[3]) == 4) {
-            mask = htonl((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]);
-        } else {
-            int prefix = atoi(netmask);
-            if (prefix <= 0 || prefix > 32) {
-                ovs_fatal(0, "%s: network prefix bits not between 1 and 32",
-                          str);
-            } else if (prefix == 32) {
-                mask = htonl(UINT32_MAX);
-            } else {
-                mask = htonl(((1u << prefix) - 1) << (32 - prefix));
-            }
-        }
-    } else {
-        mask = htonl(UINT32_MAX);
-    }
-    *ip &= mask;
-
-    if (maskp) {
-        *maskp = mask;
-    } else {
-        if (mask != htonl(UINT32_MAX)) {
-            ovs_fatal(0, "%s: netmask not allowed here", str_);
-        }
-    }
-
-    free(str);
-}
-
-static void
-str_to_tun_id(const char *str, ovs_be64 *tun_idp, ovs_be64 *maskp)
-{
-    uint64_t tun_id, mask;
-    char *tail;
-
-    errno = 0;
-    tun_id = strtoull(str, &tail, 0);
-    if (errno || (*tail != '\0' && *tail != '/')) {
-        goto error;
-    }
-
-    if (*tail == '/') {
-        mask = strtoull(tail + 1, &tail, 0);
-        if (errno || *tail != '\0') {
-            goto error;
-        }
-    } else {
-        mask = UINT64_MAX;
-    }
-
-    *tun_idp = htonll(tun_id);
-    *maskp = htonll(mask);
-    return;
-
-error:
-    ovs_fatal(0, "%s: bad syntax for tunnel id", str);
-}
-
-static void
-str_to_vlan_tci(const char *str, ovs_be16 *vlan_tcip, ovs_be16 *maskp)
-{
-    uint16_t vlan_tci, mask;
-    char *tail;
-
-    errno = 0;
-    vlan_tci = strtol(str, &tail, 0);
-    if (errno || (*tail != '\0' && *tail != '/')) {
-        goto error;
-    }
-
-    if (*tail == '/') {
-        mask = strtol(tail + 1, &tail, 0);
-        if (errno || *tail != '\0') {
-            goto error;
-        }
-    } else {
-        mask = UINT16_MAX;
-    }
-
-    *vlan_tcip = htons(vlan_tci);
-    *maskp = htons(mask);
-    return;
-
-error:
-    ovs_fatal(0, "%s: bad syntax for vlan_tci", str);
-}
-
-static void
-str_to_ipv6(const char *str_, struct in6_addr *addrp, struct in6_addr *maskp)
-{
-    char *str = xstrdup(str_);
-    char *save_ptr = NULL;
-    const char *name, *netmask;
-    struct in6_addr addr, mask;
-    int retval;
-
-    name = strtok_r(str, "/", &save_ptr);
-    retval = name ? lookup_ipv6(name, &addr) : EINVAL;
-    if (retval) {
-        ovs_fatal(0, "%s: could not convert to IPv6 address", str);
-    }
-
-    netmask = strtok_r(NULL, "/", &save_ptr);
-    if (netmask) {
-        int prefix = atoi(netmask);
-        if (prefix <= 0 || prefix > 128) {
-            ovs_fatal(0, "%s: network prefix bits not between 1 and 128",
-                      str);
-        } else {
-            mask = ipv6_create_mask(prefix);
-        }
-    } else {
-        mask = in6addr_exact;
-    }
-    *addrp = ipv6_addr_bitand(&addr, &mask);
-
-    if (maskp) {
-        *maskp = mask;
-    } else {
-        if (!ipv6_mask_is_exact(&mask)) {
-            ovs_fatal(0, "%s: netmask not allowed here", str_);
-        }
-    }
-
-    free(str);
 }
 
 static struct ofp_action_output *
@@ -421,7 +264,7 @@ parse_named_action(enum ofputil_action_code code, struct ofpbuf *b, char *arg)
     case OFPUTIL_OFPAT_SET_NW_SRC:
     case OFPUTIL_OFPAT_SET_NW_DST:
         oana = ofputil_put_action(code, b);
-        str_to_ip(arg, &oana->nw_addr, NULL);
+        str_to_ip(arg, &oana->nw_addr);
         break;
 
     case OFPUTIL_OFPAT_SET_NW_TOS:
@@ -571,45 +414,6 @@ parse_protocol(const char *name, const struct protocol **p_out)
     return false;
 }
 
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
-#define FIELDS                                              \
-    FIELD(F_TUN_ID,      "tun_id",      0)                  \
-    FIELD(F_IN_PORT,     "in_port",     FWW_IN_PORT)        \
-    FIELD(F_DL_VLAN,     "dl_vlan",     0)                  \
-    FIELD(F_DL_VLAN_PCP, "dl_vlan_pcp", 0)                  \
-    FIELD(F_VLAN_TCI,    "vlan_tci",    0)                  \
-    FIELD(F_DL_SRC,      "dl_src",      FWW_DL_SRC)         \
-    FIELD(F_DL_DST,      "dl_dst",      FWW_DL_DST | FWW_ETH_MCAST) \
-    FIELD(F_DL_TYPE,     "dl_type",     FWW_DL_TYPE)        \
-    FIELD(F_NW_SRC,      "nw_src",      0)                  \
-    FIELD(F_NW_DST,      "nw_dst",      0)                  \
-    FIELD(F_NW_PROTO,    "nw_proto",    FWW_NW_PROTO)       \
-    FIELD(F_NW_TOS,      "nw_tos",      FWW_NW_TOS)         \
-    FIELD(F_TP_SRC,      "tp_src",      FWW_TP_SRC)         \
-    FIELD(F_TP_DST,      "tp_dst",      FWW_TP_DST)         \
-    FIELD(F_ICMP_TYPE,   "icmp_type",   FWW_TP_SRC)         \
-    FIELD(F_ICMP_CODE,   "icmp_code",   FWW_TP_DST)         \
-    FIELD(F_ARP_SHA,     "arp_sha",     FWW_ARP_SHA)        \
-    FIELD(F_ARP_THA,     "arp_tha",     FWW_ARP_THA)        \
-    FIELD(F_IPV6_SRC,    "ipv6_src",    0)                  \
-    FIELD(F_IPV6_DST,    "ipv6_dst",    0)                  \
-    FIELD(F_ND_TARGET,   "nd_target",   FWW_ND_TARGET)      \
-    FIELD(F_ND_SLL,      "nd_sll",      FWW_ARP_SHA)        \
-    FIELD(F_ND_TLL,      "nd_tll",      FWW_ARP_THA)
-
-enum field_index {
-#define FIELD(ENUM, NAME, WILDCARD) ENUM,
-    FIELDS
-#undef FIELD
-    N_FIELDS
-};
-
-struct field {
-    enum field_index index;
-    const char *name;
-    flow_wildcards_t wildcard;  /* FWW_* bit. */
-};
-
 static void
 ofp_fatal(const char *flow, bool verbose, const char *format, ...)
 {
@@ -623,173 +427,18 @@ ofp_fatal(const char *flow, bool verbose, const char *format, ...)
     ovs_fatal_valist(0, format, args);
 }
 
-static bool
-parse_field_name(const char *name, const struct field **f_out)
-{
-    static const struct field fields[N_FIELDS] = {
-#define FIELD(ENUM, NAME, WILDCARD) { ENUM, NAME, WILDCARD },
-        FIELDS
-#undef FIELD
-    };
-    const struct field *f;
-
-    for (f = fields; f < &fields[ARRAY_SIZE(fields)]; f++) {
-        if (!strcmp(f->name, name)) {
-            *f_out = f;
-            return true;
-        }
-    }
-    *f_out = NULL;
-    return false;
-}
-
 static void
-parse_field_value(struct cls_rule *rule, enum field_index index,
-                  const char *value)
+parse_field(const struct mf_field *mf, const char *s, struct cls_rule *rule)
 {
-    uint8_t mac[ETH_ADDR_LEN], mac_mask[ETH_ADDR_LEN];
-    ovs_be64 tun_id, tun_mask;
-    ovs_be32 ip, mask;
-    ovs_be16 tci, tci_mask;
-    struct in6_addr ipv6, ipv6_mask;
-    uint16_t port_no;
+    union mf_value value, mask;
+    char *error;
 
-    switch (index) {
-    case F_TUN_ID:
-        str_to_tun_id(value, &tun_id, &tun_mask);
-        cls_rule_set_tun_id_masked(rule, tun_id, tun_mask);
-        break;
-
-    case F_IN_PORT:
-        if (!ofputil_port_from_string(value, &port_no)) {
-            port_no = atoi(value);
-        }
-        cls_rule_set_in_port(rule, port_no);
-        break;
-
-    case F_DL_VLAN:
-        cls_rule_set_dl_vlan(rule, htons(str_to_u32(value)));
-        break;
-
-    case F_DL_VLAN_PCP:
-        cls_rule_set_dl_vlan_pcp(rule, str_to_u32(value));
-        break;
-
-    case F_VLAN_TCI:
-        str_to_vlan_tci(value, &tci, &tci_mask);
-        cls_rule_set_dl_tci_masked(rule, tci, tci_mask);
-        break;
-
-    case F_DL_SRC:
-        str_to_mac(value, mac);
-        cls_rule_set_dl_src(rule, mac);
-        break;
-
-    case F_DL_DST:
-        str_to_eth_dst(value, mac, mac_mask);
-        cls_rule_set_dl_dst_masked(rule, mac, mac_mask);
-        break;
-
-    case F_DL_TYPE:
-        cls_rule_set_dl_type(rule, htons(str_to_u32(value)));
-        break;
-
-    case F_NW_SRC:
-        str_to_ip(value, &ip, &mask);
-        cls_rule_set_nw_src_masked(rule, ip, mask);
-        break;
-
-    case F_NW_DST:
-        str_to_ip(value, &ip, &mask);
-        cls_rule_set_nw_dst_masked(rule, ip, mask);
-        break;
-
-    case F_NW_PROTO:
-        cls_rule_set_nw_proto(rule, str_to_u32(value));
-        break;
-
-    case F_NW_TOS:
-        cls_rule_set_nw_tos(rule, str_to_u32(value));
-        break;
-
-    case F_TP_SRC:
-        cls_rule_set_tp_src(rule, htons(str_to_u32(value)));
-        break;
-
-    case F_TP_DST:
-        cls_rule_set_tp_dst(rule, htons(str_to_u32(value)));
-        break;
-
-    case F_ICMP_TYPE:
-        cls_rule_set_icmp_type(rule, str_to_u32(value));
-        break;
-
-    case F_ICMP_CODE:
-        cls_rule_set_icmp_code(rule, str_to_u32(value));
-        break;
-
-    case F_ARP_SHA:
-        str_to_mac(value, mac);
-        cls_rule_set_arp_sha(rule, mac);
-        break;
-
-    case F_ARP_THA:
-        str_to_mac(value, mac);
-        cls_rule_set_arp_tha(rule, mac);
-        break;
-
-    case F_IPV6_SRC:
-        str_to_ipv6(value, &ipv6, &ipv6_mask);
-        cls_rule_set_ipv6_src_masked(rule, &ipv6, &ipv6_mask);
-        break;
-
-    case F_IPV6_DST:
-        str_to_ipv6(value, &ipv6, &ipv6_mask);
-        cls_rule_set_ipv6_dst_masked(rule, &ipv6, &ipv6_mask);
-        break;
-
-    case F_ND_TARGET:
-        str_to_ipv6(value, &ipv6, NULL);
-        cls_rule_set_nd_target(rule, &ipv6);
-        break;
-
-    case F_ND_SLL:
-        str_to_mac(value, mac);
-        cls_rule_set_arp_sha(rule, mac);
-        break;
-
-    case F_ND_TLL:
-        str_to_mac(value, mac);
-        cls_rule_set_arp_tha(rule, mac);
-        break;
-
-    case N_FIELDS:
-        NOT_REACHED();
+    error = mf_parse(mf, s, &value, &mask);
+    if (error) {
+        ovs_fatal(0, "%s", error);
     }
-}
 
-static void
-parse_reg_value(struct cls_rule *rule, int reg_idx, const char *value)
-{
-    /* This uses an oversized destination field (64 bits when 32 bits would do)
-     * because some sscanf() implementations truncate the range of %i
-     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
-     * value of 0x7fff.  The other alternatives are to allow only a single
-     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
-     * parsers. */
-    unsigned long long int reg_value, reg_mask;
-
-    if (!strcmp(value, "ANY") || !strcmp(value, "*")) {
-        cls_rule_set_reg_masked(rule, reg_idx, 0, 0);
-    } else if (sscanf(value, "%lli/%lli",
-                      &reg_value, &reg_mask) == 2) {
-        cls_rule_set_reg_masked(rule, reg_idx, reg_value, reg_mask);
-    } else if (sscanf(value, "%lli", &reg_value)) {
-        cls_rule_set_reg(rule, reg_idx, reg_value);
-    } else {
-        ovs_fatal(0, "register fields must take the form <value> "
-                  "or <value>/<mask>");
-    }
+    mf_set(mf, &value, &mask, rule);
 }
 
 /* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
@@ -888,7 +537,6 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 cls_rule_set_nw_proto(&fm->cr, p->nw_proto);
             }
         } else {
-            const struct field *f;
             char *value;
 
             value = strtok_r(NULL, ", \t\r\n", &save_ptr);
@@ -908,41 +556,8 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 fm->hard_timeout = atoi(value);
             } else if (fields & F_COOKIE && !strcmp(name, "cookie")) {
                 fm->cookie = htonll(str_to_u64(value));
-            } else if (parse_field_name(name, &f)) {
-                if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
-                    if (f->wildcard) {
-                        fm->cr.wc.wildcards |= f->wildcard;
-                        cls_rule_zero_wildcarded_fields(&fm->cr);
-                    } else if (f->index == F_NW_SRC) {
-                        cls_rule_set_nw_src_masked(&fm->cr, 0, 0);
-                    } else if (f->index == F_NW_DST) {
-                        cls_rule_set_nw_dst_masked(&fm->cr, 0, 0);
-                    } else if (f->index == F_IPV6_SRC) {
-                        cls_rule_set_ipv6_src_masked(&fm->cr,
-                                &in6addr_any, &in6addr_any);
-                    } else if (f->index == F_IPV6_DST) {
-                        cls_rule_set_ipv6_dst_masked(&fm->cr,
-                                &in6addr_any, &in6addr_any);
-                    } else if (f->index == F_DL_VLAN) {
-                        cls_rule_set_any_vid(&fm->cr);
-                    } else if (f->index == F_DL_VLAN_PCP) {
-                        cls_rule_set_any_pcp(&fm->cr);
-                    } else {
-                        NOT_REACHED();
-                    }
-                } else {
-                    parse_field_value(&fm->cr, f->index, value);
-                }
-            } else if (!strncmp(name, "reg", 3)
-                       && isdigit((unsigned char) name[3])) {
-                unsigned int reg_idx = atoi(name + 3);
-                if (reg_idx >= FLOW_N_REGS) {
-                    if (verbose) {
-                        fprintf(stderr, "%s:\n", str_);
-                    }
-                    ofp_fatal(str_, verbose, "only %d registers supported", FLOW_N_REGS);
-                }
-                parse_reg_value(&fm->cr, reg_idx, value);
+            } else if (mf_from_name(name)) {
+                parse_field(mf_from_name(name), value, &fm->cr);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
                        || !strcmp(name, "n_bytes")) {

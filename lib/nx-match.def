@@ -14,58 +14,51 @@
  * limitations under the License.
  */
 
-#define N_NXM_DL_TYPES 2
+#define DEFINE_FIELD_M(HEADER, MFF_ID, WRITABLE)  \
+    DEFINE_FIELD(HEADER,     MFF_ID, WRITABLE)        \
+    DEFINE_FIELD(HEADER##_W, MFF_ID, false)
 
-#define NXM_DL_NONE   (0, 0)
-#define NXM_DL_ARP    (ETH_TYPE_ARP, 0)
-#define NXM_DL_IP     (ETH_TYPE_IP, 0)
-#define NXM_DL_IPV6   (ETH_TYPE_IPV6, 0)
-#define NXM_DL_IP_ANY (ETH_TYPE_IP, ETH_TYPE_IPV6)
+/*             NXM_ suffix    MFF_ field ID    rw? */
+/*             ------------   ------------   ----- */
+DEFINE_FIELD_M(NX_TUN_ID,     MFF_TUN_ID,     true)
+DEFINE_FIELD  (OF_IN_PORT,    MFF_IN_PORT,   false)
+DEFINE_FIELD_M(OF_ETH_DST,    MFF_ETH_DST,    true)
+DEFINE_FIELD  (OF_ETH_SRC,    MFF_ETH_SRC,    true)
+DEFINE_FIELD  (OF_ETH_TYPE,   MFF_ETH_TYPE,  false)
+DEFINE_FIELD_M(OF_VLAN_TCI,   MFF_VLAN_TCI,   true)
+DEFINE_FIELD  (OF_IP_TOS,     MFF_IP_TOS,     true)
+DEFINE_FIELD  (OF_IP_PROTO,   MFF_IP_PROTO,  false)
+DEFINE_FIELD_M(OF_IP_SRC,     MFF_IPV4_SRC,   true)
+DEFINE_FIELD_M(OF_IP_DST,     MFF_IPV4_DST,   true)
+DEFINE_FIELD  (OF_TCP_SRC,    MFF_TCP_SRC,    true)
+DEFINE_FIELD  (OF_TCP_DST,    MFF_TCP_DST,    true)
+DEFINE_FIELD  (OF_UDP_SRC,    MFF_UDP_SRC,    true)
+DEFINE_FIELD  (OF_UDP_DST,    MFF_UDP_DST,    true)
+DEFINE_FIELD  (OF_ICMP_TYPE,  MFF_ICMP_TYPE, false)
+DEFINE_FIELD  (OF_ICMP_CODE,  MFF_ICMP_CODE, false)
+DEFINE_FIELD  (OF_ARP_OP,     MFF_ARP_OP,    false)
+DEFINE_FIELD_M(OF_ARP_SPA,    MFF_ARP_SPA,   false)
+DEFINE_FIELD_M(OF_ARP_TPA,    MFF_ARP_TPA,   false)
+DEFINE_FIELD  (NX_ARP_SHA,    MFF_ARP_SHA,   false)
+DEFINE_FIELD  (NX_ARP_THA,    MFF_ARP_THA,   false)
+DEFINE_FIELD_M(NX_IPV6_SRC,   MFF_IPV6_SRC,  false)
+DEFINE_FIELD_M(NX_IPV6_DST,   MFF_IPV6_DST,  false)
+/* XXX should we have MFF_ICMPV4_TYPE and MFF_ICMPV6_TYPE? */
+DEFINE_FIELD  (NX_ICMPV6_TYPE,MFF_ICMP_TYPE, false)
+DEFINE_FIELD  (NX_ICMPV6_CODE,MFF_ICMP_CODE, false)
+DEFINE_FIELD  (NX_ND_TARGET,  MFF_ND_TARGET, false)
+DEFINE_FIELD  (NX_ND_SLL,     MFF_ND_SLL,    false)
+DEFINE_FIELD  (NX_ND_TLL,     MFF_ND_TLL,    false)
 
-#define DEFINE_FIELD_M(HEADER, WILDCARD, DL_TYPES, NW_PROTO, WRITABLE)  \
-    DEFINE_FIELD(HEADER, WILDCARD, DL_TYPES, NW_PROTO, WRITABLE)        \
-    DEFINE_FIELD(HEADER##_W, WILDCARD, DL_TYPES, NW_PROTO, false)
-
-/*             NXM_ suffix    FWW_* bit     dl_types       nw_proto      rw? */
-/*             ------------   ------------  -----------    ------------- --- */
-DEFINE_FIELD_M(NX_TUN_ID,     0,            NXM_DL_NONE,   0,            true)
-DEFINE_FIELD  (OF_IN_PORT,    FWW_IN_PORT,  NXM_DL_NONE,   0,            false)
-DEFINE_FIELD_M(OF_ETH_DST,    0,            NXM_DL_NONE,   0,            true)
-DEFINE_FIELD  (OF_ETH_SRC,    FWW_DL_SRC,   NXM_DL_NONE,   0,            true)
-DEFINE_FIELD  (OF_ETH_TYPE,   FWW_DL_TYPE,  NXM_DL_NONE,   0,            false)
-DEFINE_FIELD_M(OF_VLAN_TCI,   0,            NXM_DL_NONE,   0,            true)
-DEFINE_FIELD  (OF_IP_TOS,     FWW_NW_TOS,   NXM_DL_IP_ANY, 0,            true)
-DEFINE_FIELD  (OF_IP_PROTO,   FWW_NW_PROTO, NXM_DL_IP_ANY, 0,            false)
-DEFINE_FIELD_M(OF_IP_SRC,     0,            NXM_DL_IP,     0,            true)
-DEFINE_FIELD_M(OF_IP_DST,     0,            NXM_DL_IP,     0,            true)
-DEFINE_FIELD  (OF_TCP_SRC,    FWW_TP_SRC,   NXM_DL_IP_ANY, IPPROTO_TCP,  true)
-DEFINE_FIELD  (OF_TCP_DST,    FWW_TP_DST,   NXM_DL_IP_ANY, IPPROTO_TCP,  true)
-DEFINE_FIELD  (OF_UDP_SRC,    FWW_TP_SRC,   NXM_DL_IP_ANY, IPPROTO_UDP,  true)
-DEFINE_FIELD  (OF_UDP_DST,    FWW_TP_DST,   NXM_DL_IP_ANY, IPPROTO_UDP,  true)
-DEFINE_FIELD  (OF_ICMP_TYPE,  FWW_TP_SRC,   NXM_DL_IP,     IPPROTO_ICMP, false)
-DEFINE_FIELD  (OF_ICMP_CODE,  FWW_TP_DST,   NXM_DL_IP,     IPPROTO_ICMP, false)
-DEFINE_FIELD  (OF_ARP_OP,     FWW_NW_PROTO, NXM_DL_ARP,    0,            false)
-DEFINE_FIELD_M(OF_ARP_SPA,    0,            NXM_DL_ARP,    0,            false)
-DEFINE_FIELD_M(OF_ARP_TPA,    0,            NXM_DL_ARP,    0,            false)
-DEFINE_FIELD  (NX_ARP_SHA,    FWW_ARP_SHA,  NXM_DL_ARP,    0,            false)
-DEFINE_FIELD  (NX_ARP_THA,    FWW_ARP_THA,  NXM_DL_ARP,    0,            false)
-DEFINE_FIELD_M(NX_IPV6_SRC,   0,            NXM_DL_IPV6,   0,            false)
-DEFINE_FIELD_M(NX_IPV6_DST,   0,            NXM_DL_IPV6,   0,            false)
-DEFINE_FIELD  (NX_ICMPV6_TYPE,FWW_TP_SRC,   NXM_DL_IPV6, IPPROTO_ICMPV6, false)
-DEFINE_FIELD  (NX_ICMPV6_CODE,FWW_TP_DST,   NXM_DL_IPV6, IPPROTO_ICMPV6, false)
-DEFINE_FIELD  (NX_ND_TARGET,  FWW_ND_TARGET,NXM_DL_IPV6, IPPROTO_ICMPV6, false)
-DEFINE_FIELD  (NX_ND_SLL,     FWW_ARP_SHA,  NXM_DL_IPV6, IPPROTO_ICMPV6, false)
-DEFINE_FIELD  (NX_ND_TLL,     FWW_ARP_THA,  NXM_DL_IPV6, IPPROTO_ICMPV6, false)
-
-DEFINE_FIELD_M(NX_REG0,        0,            NXM_DL_NONE,   0,            true)
+DEFINE_FIELD_M(NX_REG0,       MFF_REG0,       true)
 #if FLOW_N_REGS >= 2
-DEFINE_FIELD_M(NX_REG1,        0,            NXM_DL_NONE,   0,            true)
+DEFINE_FIELD_M(NX_REG1,       MFF_REG1,       true)
 #endif
 #if FLOW_N_REGS >= 3
-DEFINE_FIELD_M(NX_REG2,        0,            NXM_DL_NONE,   0,            true)
+DEFINE_FIELD_M(NX_REG2,       MFF_REG2,       true)
 #endif
 #if FLOW_N_REGS >= 4
-DEFINE_FIELD_M(NX_REG3,        0,            NXM_DL_NONE,   0,            true)
+DEFINE_FIELD_M(NX_REG3,       MFF_REG3,       true)
 #endif
 #if FLOW_N_REGS > 4
 #error
