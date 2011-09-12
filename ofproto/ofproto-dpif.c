@@ -2859,7 +2859,7 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
         if (!(flow->vlan_tci & htons(VLAN_CFI))) {
             nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
         } else {
-            if (base->vlan_tci != OFP_VLAN_NONE) {
+            if (base->vlan_tci != htons(0)) {
                 nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
             }
             nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
