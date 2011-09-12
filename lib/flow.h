@@ -164,6 +164,7 @@ void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);
 
 bool flow_wildcards_is_exact(const struct flow_wildcards *);
+bool flow_wildcards_is_catchall(const struct flow_wildcards *);
 
 bool flow_wildcards_set_nw_src_mask(struct flow_wildcards *, ovs_be32);
 bool flow_wildcards_set_nw_dst_mask(struct flow_wildcards *, ovs_be32);

@@ -606,6 +606,8 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
         || wc->nw_src_mask != htonl(UINT32_MAX)
@@ -618,6 +620,34 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if (wc->reg_masks[i] != UINT32_MAX) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* Returns true if 'wc' matches every packet, false if 'wc' fixes any bits or
+ * fields. */
+bool
+flow_wildcards_is_catchall(const struct flow_wildcards *wc)
+{
+    int i;
+
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+
+    if (wc->wildcards != FWW_ALL
+        || wc->tun_id_mask != htonll(0)
+        || wc->nw_src_mask != htonl(0)
+        || wc->nw_dst_mask != htonl(0)
+        || wc->vlan_tci_mask != htons(0)
+        || !ipv6_mask_is_any(&wc->ipv6_src_mask)
+        || !ipv6_mask_is_any(&wc->ipv6_dst_mask)) {
+        return false;
+    }
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (wc->reg_masks[i] != 0) {
             return false;
         }
     }
