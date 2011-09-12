@@ -6,6 +6,9 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 #include <linux/mutex.h>
 
+#include "openvswitch/datapath-compat.h"
+#include "openvswitch/datapath-protocol.h"
+
 static DEFINE_MUTEX(mc_group_mutex);
 
 int genl_register_mc_group(struct genl_family *family,
@@ -13,9 +16,15 @@ int genl_register_mc_group(struct genl_family *family,
 {
 	static int next_group = GENL_FIRST_MCGROUP;
 
+	grp->family = family;
+
+	if (!strcmp(grp->name, OVS_VPORT_MCGROUP)) {
+		grp->id = OVS_VPORT_MCGROUP_FALLBACK_ID;
+		return 0;
+	}
+
 	mutex_lock(&mc_group_mutex);
 	grp->id = next_group;
-	grp->family = family;
 
 	if (++next_group > GENL_LAST_MCGROUP)
 		next_group = GENL_FIRST_MCGROUP;
