@@ -20,7 +20,7 @@
 #include <limits.h>
 
 #define TYPE_IS_INTEGER(TYPE) ((TYPE) 1.5 == (TYPE) 1)
-#define TYPE_IS_SIGNED(TYPE) ((TYPE) 0 > (TYPE) -1)
+#define TYPE_IS_SIGNED(TYPE) ((TYPE) 1 > (TYPE) -1)
 #define TYPE_VALUE_BITS(TYPE) (sizeof(TYPE) * CHAR_BIT - TYPE_IS_SIGNED(TYPE))
 #define TYPE_MINIMUM(TYPE) (TYPE_IS_SIGNED(TYPE) \
                             ? ~(TYPE)0 << TYPE_VALUE_BITS(TYPE) \
