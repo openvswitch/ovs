@@ -680,7 +680,7 @@ static struct hmap genl_families = HMAP_INITIALIZER(&genl_families);
 
 static const struct nl_policy family_policy[CTRL_ATTR_MAX + 1] = {
     [CTRL_ATTR_FAMILY_ID] = {.type = NL_A_U16},
-    [CTRL_ATTR_MCAST_GROUPS] = {.type = NL_A_NESTED},
+    [CTRL_ATTR_MCAST_GROUPS] = {.type = NL_A_NESTED, .optional = true},
 };
 
 static struct genl_family *
@@ -766,10 +766,13 @@ do_lookup_genl_family(const char *name, struct nlattr **attrs,
 
 /* Finds the multicast group called 'group_name' in genl family 'family_name'.
  * When successful, writes its result to 'multicast_group' and returns 0.
- * Otherwise, clears 'multicast_group' and returns a positive error code. */
+ * Otherwise, clears 'multicast_group' and returns a positive error code.
+ *
+ * Some kernels do not support looking up a multicast group with this function.
+ * In this case, 'multicast_group' will be populated with 'fallback'. */
 int
 nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
-                       unsigned int *multicast_group)
+                       unsigned int *multicast_group, unsigned int fallback)
 {
     struct nlattr *family_attrs[ARRAY_SIZE(family_policy)];
     struct ofpbuf all_mcs;
@@ -782,6 +785,14 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
     error = do_lookup_genl_family(family_name, family_attrs, &reply);
     if (error) {
         return error;
+    }
+
+    if (!family_attrs[CTRL_ATTR_MCAST_GROUPS]) {
+        *multicast_group = fallback;
+        VLOG_WARN("%s-%s: has no multicast group, using fallback %d",
+                  family_name, group_name, *multicast_group);
+        error = 0;
+        goto exit;
     }
 
     nl_attr_get_nested(family_attrs[CTRL_ATTR_MCAST_GROUPS], &all_mcs);
