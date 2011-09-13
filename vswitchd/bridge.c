@@ -1267,6 +1267,10 @@ iface_refresh_cfm_stats(struct iface *iface)
     const uint64_t *rmps;
     size_t n_rmps;
 
+    if (iface_is_synthetic(iface)) {
+        return;
+    }
+
     fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
                                        iface->ofp_port);
     if (fault >= 0) {
