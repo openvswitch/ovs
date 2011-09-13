@@ -285,36 +285,6 @@ void vport_del(struct vport *vport)
 }
 
 /**
- *	vport_set_mtu - set device MTU (for kernel callers)
- *
- * @vport: vport on which to set MTU.
- * @mtu: New MTU.
- *
- * Sets the MTU of the given device.  Some devices may not support setting the
- * MTU, in which case the result will always be -EOPNOTSUPP.  RTNL lock must
- * be held.
- */
-int vport_set_mtu(struct vport *vport, int mtu)
-{
-	ASSERT_RTNL();
-
-	if (mtu < 68)
-		return -EINVAL;
-
-	if (vport->ops->set_mtu) {
-		int ret;
-
-		ret = vport->ops->set_mtu(vport, mtu);
-
-		if (!ret && !is_internal_vport(vport))
-			set_internal_devs_mtu(vport->dp);
-
-		return ret;
-	} else
-		return -EOPNOTSUPP;
-}
-
-/**
  *	vport_set_addr - set device Ethernet address (for kernel callers)
  *
  * @vport: vport on which to set Ethernet address.

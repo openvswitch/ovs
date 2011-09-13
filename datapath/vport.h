@@ -30,7 +30,6 @@ void vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
 
-int vport_set_mtu(struct vport *, int mtu);
 int vport_set_addr(struct vport *, const unsigned char *);
 int vport_set_stats(struct vport *, struct rtnl_link_stats64 *);
 
@@ -156,7 +155,6 @@ struct vport_parms {
  * @get_options: Appends vport-specific attributes for the configuration of an
  * existing vport to a &struct sk_buff.  May be %NULL for a vport that does not
  * have any configuration.
- * @set_mtu: Set the device's MTU.  May be null if not supported.
  * @set_addr: Set the device's MAC address.  May be null if not supported.
  * @get_name: Get the device's name.
  * @get_addr: Get the device's MAC address.
@@ -190,7 +188,6 @@ struct vport_ops {
 	int (*set_options)(struct vport *, struct nlattr *);
 	int (*get_options)(const struct vport *, struct sk_buff *);
 
-	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);
 
 	/* Called with rcu_read_lock or RTNL lock. */

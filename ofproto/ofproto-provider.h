@@ -93,6 +93,7 @@ struct ofport {
     struct ofp_phy_port opp;
     uint16_t ofp_port;          /* OpenFlow port number. */
     unsigned int change_seq;
+    int mtu;
 };
 
 /* An OpenFlow flow within a "struct ofproto".

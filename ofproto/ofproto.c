@@ -147,6 +147,7 @@ static int handle_flow_mod__(struct ofproto *, struct ofconn *,
 static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
+static void set_internal_devs_mtu(struct ofproto *);
 
 static void ofproto_unixctl_init(void);
 
@@ -1193,6 +1194,7 @@ ofport_install(struct ofproto *p,
 {
     const char *netdev_name = netdev_get_name(netdev);
     struct ofport *ofport;
+    int dev_mtu;
     int error;
 
     /* Create ofport. */
@@ -1210,6 +1212,13 @@ ofport_install(struct ofproto *p,
     /* Add port to 'p'. */
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->ofp_port, 0));
     shash_add(&p->port_by_name, netdev_name, ofport);
+
+    if (!netdev_get_mtu(netdev, &dev_mtu)) {
+        set_internal_devs_mtu(p);
+        ofport->mtu = dev_mtu;
+    } else {
+        ofport->mtu = 0;
+    }
 
     /* Let the ofproto_class initialize its private data. */
     error = p->ofproto_class->port_construct(ofport);
@@ -1337,10 +1346,20 @@ update_port(struct ofproto *ofproto, const char *name)
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
         if (port && !strcmp(netdev_get_name(port->netdev), name)) {
             struct netdev *old_netdev = port->netdev;
+            int dev_mtu;
 
             /* 'name' hasn't changed location.  Any properties changed? */
             if (!ofport_equal(&port->opp, &opp)) {
                 ofport_modified(port, &opp);
+            }
+
+            /* If this is a non-internal port and the MTU changed, check
+             * if the datapath's MTU needs to be updated. */
+            if (strcmp(netdev_get_type(netdev), "internal")
+                    && !netdev_get_mtu(netdev, &dev_mtu)
+                    && port->mtu != dev_mtu) {
+                set_internal_devs_mtu(ofproto);
+                port->mtu = dev_mtu;
             }
 
             /* Install the newly opened netdev in case it has changed.
@@ -1397,6 +1416,52 @@ init_ports(struct ofproto *p)
     }
 
     return 0;
+}
+
+/* Find the minimum MTU of all non-datapath devices attached to 'p'.
+ * Returns ETH_PAYLOAD_MAX or the minimum of the ports. */
+static int
+find_min_mtu(struct ofproto *p)
+{
+    struct ofport *ofport;
+    int mtu = 0;
+
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        struct netdev *netdev = ofport->netdev;
+        int dev_mtu;
+
+        /* Skip any internal ports, since that's what we're trying to
+         * set. */
+        if (!strcmp(netdev_get_type(netdev), "internal")) {
+            continue;
+        }
+
+        if (netdev_get_mtu(netdev, &dev_mtu)) {
+            continue;
+        }
+        if (!mtu || dev_mtu < mtu) {
+            mtu = dev_mtu;
+        }
+    }
+
+    return mtu ? mtu: ETH_PAYLOAD_MAX;
+}
+
+/* Set the MTU of all datapath devices on 'p' to the minimum of the
+ * non-datapath ports. */
+static void
+set_internal_devs_mtu(struct ofproto *p)
+{
+    struct ofport *ofport;
+    int mtu = find_min_mtu(p);
+
+    HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
+        struct netdev *netdev = ofport->netdev;
+
+        if (!strcmp(netdev_get_type(netdev), "internal")) {
+            netdev_set_mtu(netdev, mtu);
+        }
+    }
 }
 
 static void

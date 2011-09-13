@@ -117,12 +117,7 @@ static const struct ethtool_ops internal_dev_ethtool_ops = {
 
 static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 {
-	struct vport *vport = internal_dev_get_vport(netdev);
-
 	if (new_mtu < 68)
-		return -EINVAL;
-
-	if (new_mtu > dp_min_mtu(vport->dp))
 		return -EINVAL;
 
 	netdev->mtu = new_mtu;
@@ -274,7 +269,6 @@ const struct vport_ops internal_vport_ops = {
 	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
-	.set_mtu	= netdev_set_mtu,
 	.set_addr	= netdev_set_addr,
 	.get_name	= netdev_get_name,
 	.get_addr	= netdev_get_addr,

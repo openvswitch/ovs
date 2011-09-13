@@ -749,52 +749,6 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 	}
 }
 
-/* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports.
- * Called with RTNL lock.
- */
-int dp_min_mtu(const struct datapath *dp)
-{
-	struct vport *p;
-	int mtu = 0;
-
-	ASSERT_RTNL();
-
-	list_for_each_entry (p, &dp->port_list, node) {
-		int dev_mtu;
-
-		/* Skip any internal ports, since that's what we're trying to
-		 * set. */
-		if (is_internal_vport(p))
-			continue;
-
-		dev_mtu = vport_get_mtu(p);
-		if (!dev_mtu)
-			continue;
-		if (!mtu || dev_mtu < mtu)
-			mtu = dev_mtu;
-	}
-
-	return mtu ? mtu : ETH_DATA_LEN;
-}
-
-/* Sets the MTU of all datapath devices to the minimum of the ports
- * Called with RTNL lock.
- */
-void set_internal_devs_mtu(const struct datapath *dp)
-{
-	struct vport *p;
-	int mtu;
-
-	ASSERT_RTNL();
-
-	mtu = dp_min_mtu(dp);
-
-	list_for_each_entry (p, &dp->port_list, node) {
-		if (is_internal_vport(p))
-			vport_set_mtu(p, mtu);
-	}
-}
-
 static const struct nla_policy flow_policy[OVS_FLOW_ATTR_MAX + 1] = {
 	[OVS_FLOW_ATTR_KEY] = { .type = NLA_NESTED },
 	[OVS_FLOW_ATTR_ACTIONS] = { .type = NLA_NESTED },
@@ -1740,7 +1694,6 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(vport))
 		goto exit_unlock;
 
- 	set_internal_devs_mtu(dp);
  	dp_sysfs_add_if(vport);
 
 	err = change_vport(vport, a);

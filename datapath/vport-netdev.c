@@ -189,12 +189,6 @@ static void netdev_destroy(struct vport *vport)
 	vport_free(vport);
 }
 
-int netdev_set_mtu(struct vport *vport, int mtu)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return dev_set_mtu(netdev_vport->dev, mtu);
-}
-
 int netdev_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
@@ -422,7 +416,6 @@ const struct vport_ops netdev_vport_ops = {
 	.exit		= netdev_exit,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
-	.set_mtu	= netdev_set_mtu,
 	.set_addr	= netdev_set_addr,
 	.get_name	= netdev_get_name,
 	.get_addr	= netdev_get_addr,

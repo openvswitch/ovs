@@ -59,11 +59,6 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 			dp_sysfs_add_if(vport);
 		}
 		break;
-
-	case NETDEV_CHANGEMTU:
-		if (!is_internal_dev(dev))
-			set_internal_devs_mtu(dp);
-		break;
 	}
 	return NOTIFY_DONE;
 }

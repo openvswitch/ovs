@@ -25,7 +25,6 @@ netdev_vport_priv(const struct vport *vport)
 	return vport_priv(vport);
 }
 
-int netdev_set_mtu(struct vport *, int mtu);
 int netdev_set_addr(struct vport *, const unsigned char *addr);
 const char *netdev_get_name(const struct vport *);
 const unsigned char *netdev_get_addr(const struct vport *);
