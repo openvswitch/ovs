@@ -157,7 +157,7 @@ manpage-check: $(MANS) $(MAN_FRAGMENTS)
 	for d in $(MANS); do \
 		manpages="$$manpages `test -f $$d || echo $(VPATH)/`$$d"; \
 	done; \
-	LANG=en_US.UTF-8 groff -w mac -w delim -w escape -w input -w missing -w tab -T utf8 -man -p -z $$manpages && touch $@
+	LANG=en_US.UTF-8 groff -w mac -w delim -w escape -w input -w missing -w tab -T ascii -man -p -z $$manpages && touch $@
 CLEANFILES += manpage-check
 endif
 
