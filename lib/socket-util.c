@@ -598,7 +598,7 @@ exit:
  * If successful, stores the address into '*sinp' and returns true; otherwise
  * zeros '*sinp' and returns false. */
 bool
-inet_parse_passive(const char *target_, uint16_t default_port,
+inet_parse_passive(const char *target_, int default_port,
                    struct sockaddr_in *sinp)
 {
     char *target = xstrdup(target_);
