@@ -458,10 +458,7 @@ class Parser(object):
     def __parser_input(self, token, string=None):
         self.lex_state = Parser.__lex_start
         self.buffer = ""
-        #old_state = self.parse_state
         self.parse_state(self, token, string)
-        #print ("token=%s string=%s old_state=%s new_state=%s"
-        #       % (token, string, old_state, self.parse_state))
 
     def __put_value(self, value):
         top = self.stack[-1]
