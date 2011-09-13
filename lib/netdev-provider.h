@@ -248,8 +248,14 @@ struct netdev_class {
      * bytes for Ethernet devices.
      *
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
-     * this function should set '*mtup' to INT_MAX. */
+     * this function should return EOPNOTSUPP. */
     int (*get_mtu)(const struct netdev *netdev, int *mtup);
+
+    /* Sets 'netdev''s MTU to 'mtu'.
+     *
+     * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
+     * this function should return EOPNOTSUPP. */
+    int (*set_mtu)(const struct netdev *netdev, int mtu);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.
      * On failure, returns a negative errno value.

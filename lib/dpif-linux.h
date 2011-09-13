@@ -36,7 +36,6 @@ struct dpif_linux_vport {
     const char *name;                      /* OVS_VPORT_ATTR_NAME. */
     const struct rtnl_link_stats64 *stats; /* OVS_VPORT_ATTR_STATS. */
     const uint8_t *address;                /* OVS_VPORT_ATTR_ADDRESS. */
-    int mtu;                               /* OVS_VPORT_ATTR_MTU. */
     const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
     int ifindex;                           /* OVS_VPORT_ATTR_IFINDEX. */

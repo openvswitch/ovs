@@ -510,19 +510,36 @@ netdev_get_name(const struct netdev *netdev)
  * (and received) packets, in bytes, not including the hardware header; thus,
  * this is typically 1500 bytes for Ethernet devices.
  *
- * If successful, returns 0 and stores the MTU size in '*mtup'.  Stores INT_MAX
- * in '*mtup' if 'netdev' does not have an MTU (as e.g. some tunnels do not).On
- * failure, returns a positive errno value and stores ETH_PAYLOAD_MAX (1500) in
- * '*mtup'. */
+ * If successful, returns 0 and stores the MTU size in '*mtup'.  Returns
+ * EOPNOTSUPP if 'netdev' does not have an MTU (as e.g. some tunnels do not).
+ * On other failure, returns a positive errno value. */
 int
 netdev_get_mtu(const struct netdev *netdev, int *mtup)
 {
     int error = netdev_get_dev(netdev)->netdev_class->get_mtu(netdev, mtup);
-    if (error) {
+    if (error && error != EOPNOTSUPP) {
         VLOG_WARN_RL(&rl, "failed to retrieve MTU for network device %s: %s",
                      netdev_get_name(netdev), strerror(error));
-        *mtup = ETH_PAYLOAD_MAX;
     }
+    return error;
+}
+
+/* Sets the MTU of 'netdev'.  The MTU is the maximum size of transmitted
+ * (and received) packets, in bytes.
+ *
+ * If successful, returns 0.  Returns EOPNOTSUPP if 'netdev' does not have an
+ * MTU (as e.g. some tunnels do not).  On other failure, returns a positive
+ * errno value. */
+int
+netdev_set_mtu(const struct netdev *netdev, int mtu)
+{
+    int error = netdev_get_dev(netdev)->netdev_class->set_mtu(netdev, mtu);
+
+    if (error && error != EOPNOTSUPP) {
+        VLOG_WARN_RL(&rl, "failed to retrieve MTU for network device %s: %s",
+                     netdev_get_name(netdev), strerror(error));
+    }
+
     return error;
 }
 

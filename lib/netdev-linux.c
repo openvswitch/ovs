@@ -1000,6 +1000,29 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
     return 0;
 }
 
+/* Sets the maximum size of transmitted (MTU) for given device using linux
+ * networking ioctl interface.
+ */
+static int
+netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct ifreq ifr;
+    int error;
+
+    ifr.ifr_mtu = mtu;
+    error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
+                                  SIOCSIFMTU, "SIOCSIFMTU");
+    if (error) {
+        return error;
+    }
+
+    netdev_dev->mtu = ifr.ifr_mtu;
+    netdev_dev->cache_valid |= VALID_MTU;
+    return 0;
+}
+
 /* Returns the ifindex of 'netdev', if successful, as a positive number.
  * On failure, returns a negative errno value. */
 static int
@@ -2269,6 +2292,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_set_etheraddr,                                 \
     netdev_linux_get_etheraddr,                                 \
     netdev_linux_get_mtu,                                       \
+    netdev_linux_set_mtu,                                       \
     netdev_linux_get_ifindex,                                   \
     netdev_linux_get_carrier,                                   \
     netdev_linux_set_miimon_interval,                           \
@@ -2412,11 +2436,11 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     int error;
     int mtu;
 
-    netdev_get_mtu(netdev, &mtu);
-    if (mtu == INT_MAX) {
+    error = netdev_get_mtu(netdev, &mtu);
+    if (error) {
         VLOG_WARN_RL(&rl, "cannot set up HTB on device %s that lacks MTU",
                      netdev_get_name(netdev));
-        return EINVAL;
+        return error;
     }
 
     memset(&opt, 0, sizeof opt);
@@ -2535,13 +2559,13 @@ htb_parse_class_details__(struct netdev *netdev,
     const char *max_rate_s = shash_find_data(details, "max-rate");
     const char *burst_s = shash_find_data(details, "burst");
     const char *priority_s = shash_find_data(details, "priority");
-    int mtu;
+    int mtu, error;
 
-    netdev_get_mtu(netdev, &mtu);
-    if (mtu == INT_MAX) {
+    error = netdev_get_mtu(netdev, &mtu);
+    if (error) {
         VLOG_WARN_RL(&rl, "cannot parse HTB class on device %s that lacks MTU",
                      netdev_get_name(netdev));
-        return EINVAL;
+        return error;
     }
 
     /* HTB requires at least an mtu sized min-rate to send any traffic even

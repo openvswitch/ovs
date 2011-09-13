@@ -100,6 +100,7 @@ int netdev_get_config(const struct netdev *, struct shash *);
 const char *netdev_get_name(const struct netdev *);
 const char *netdev_get_type(const struct netdev *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
+int netdev_set_mtu(const struct netdev *, int mtu);
 int netdev_get_ifindex(const struct netdev *);
 
 /* Packet send and receive. */

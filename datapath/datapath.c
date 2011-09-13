@@ -1551,7 +1551,6 @@ static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 	[OVS_VPORT_ATTR_STATS] = { .minlen = sizeof(struct rtnl_link_stats64) },
 	[OVS_VPORT_ATTR_ADDRESS] = { .minlen = ETH_ALEN },
 #endif
-	[OVS_VPORT_ATTR_MTU] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
 
@@ -1574,7 +1573,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	struct ovs_header *ovs_header;
 	struct nlattr *nla;
 	int ifindex;
-	int mtu;
 	int err;
 
 	ovs_header = genlmsg_put(skb, pid, seq, &dp_vport_genl_family,
@@ -1595,10 +1593,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 		__skb_trim(skb, skb->len - nla->nla_len);
 
 	NLA_PUT(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN, vport_get_addr(vport));
-
-	mtu = vport_get_mtu(vport);
-	if (mtu)
-		NLA_PUT_U32(skb, OVS_VPORT_ATTR_MTU, mtu);
 
 	err = vport_get_options(vport, skb);
 	if (err == -EMSGSIZE)
@@ -1679,8 +1673,6 @@ static int change_vport(struct vport *vport, struct nlattr *a[OVS_VPORT_ATTR_MAX
 		err = vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
 	if (!err && a[OVS_VPORT_ATTR_ADDRESS])
 		err = vport_set_addr(vport, nla_data(a[OVS_VPORT_ATTR_ADDRESS]));
-	if (!err && a[OVS_VPORT_ATTR_MTU])
-		err = vport_set_mtu(vport, nla_get_u32(a[OVS_VPORT_ATTR_MTU]));
 	return err;
 }
 

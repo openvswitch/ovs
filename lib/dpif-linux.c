@@ -1238,7 +1238,6 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
                                      .min_len = ETH_ADDR_LEN,
                                      .max_len = ETH_ADDR_LEN,
                                      .optional = true },
-        [OVS_VPORT_ATTR_MTU] = { .type = NL_A_U32, .optional = true },
         [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_VPORT_ATTR_IFINDEX] = { .type = NL_A_U32, .optional = true },
     };
@@ -1272,11 +1271,6 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     }
     if (a[OVS_VPORT_ATTR_ADDRESS]) {
         vport->address = nl_attr_get(a[OVS_VPORT_ATTR_ADDRESS]);
-    }
-    if (a[OVS_VPORT_ATTR_MTU]) {
-        vport->mtu = nl_attr_get_u32(a[OVS_VPORT_ATTR_MTU]);
-    } else {
-        vport->mtu = INT_MAX;
     }
     if (a[OVS_VPORT_ATTR_OPTIONS]) {
         vport->options = nl_attr_get(a[OVS_VPORT_ATTR_OPTIONS]);
@@ -1322,10 +1316,6 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
     if (vport->address) {
         nl_msg_put_unspec(buf, OVS_VPORT_ATTR_ADDRESS,
                           vport->address, ETH_ADDR_LEN);
-    }
-
-    if (vport->mtu && vport->mtu != INT_MAX) {
-        nl_msg_put_u32(buf, OVS_VPORT_ATTR_MTU, vport->mtu);
     }
 
     if (vport->options) {

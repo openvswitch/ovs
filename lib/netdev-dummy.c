@@ -172,6 +172,16 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
 }
 
 static int
+netdev_dummy_set_mtu(const struct netdev *netdev, int mtu)
+{
+    struct netdev_dev_dummy *dev =
+        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+
+    dev->mtu = mtu;
+    return 0;
+}
+
+static int
 netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     const struct netdev_dev_dummy *dev =
@@ -259,6 +269,7 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_set_etheraddr,
     netdev_dummy_get_etheraddr,
     netdev_dummy_get_mtu,
+    netdev_dummy_set_mtu,
     NULL,                       /* get_ifindex */
     NULL,                       /* get_carrier */
     NULL,                       /* get_miimon */

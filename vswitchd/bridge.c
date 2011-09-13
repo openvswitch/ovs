@@ -1248,7 +1248,7 @@ iface_refresh_status(struct iface *iface)
                                     iface_get_carrier(iface) ? "up" : "down");
 
     error = netdev_get_mtu(iface->netdev, &mtu);
-    if (!error && mtu != INT_MAX) {
+    if (!error) {
         mtu_64 = mtu;
         ovsrec_interface_set_mtu(iface->cfg, &mtu_64, 1);
     }

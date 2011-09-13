@@ -222,8 +222,6 @@ enum ovs_vport_cmd {
  * @OVS_VPORT_ATTR_STATS: A &struct rtnl_link_stats64 giving statistics for
  * packets sent or received through the vport.
  * @OVS_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
- * @OVS_VPORT_ATTR_MTU: MTU for the vport.  Omitted if the vport does not have
- * an MTU as, e.g., some tunnels do not.
  * @OVS_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
@@ -237,8 +235,8 @@ enum ovs_vport_cmd {
  * %OVS_VPORT_ATTR_NAME attributes are required.  %OVS_VPORT_ATTR_PORT_NO is
  * optional; if not specified a free port number is automatically selected.
  * Whether %OVS_VPORT_ATTR_OPTIONS is required or optional depends on the type
- * of vport.  %OVS_VPORT_ATTR_STATS, %OVS_VPORT_ATTR_ADDRESS, and
- * %OVS_VPORT_ATTR_MTU are optional, and other attributes are ignored.
+ * of vport.  %OVS_VPORT_ATTR_STATS and %OVS_VPORT_ATTR_ADDRESS are optional,
+ * and other attributes are ignored.
  *
  * For other requests, if %OVS_VPORT_ATTR_NAME is specified then it is used to
  * look up the vport to operate on; otherwise dp_idx from the &struct
@@ -251,7 +249,6 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
 	OVS_VPORT_ATTR_STATS,	/* struct rtnl_link_stats64 */
 	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
-	OVS_VPORT_ATTR_MTU,	/* 32-bit maximum transmission unit */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
 	OVS_VPORT_ATTR_IFINDEX, /* 32-bit ifindex of backing netdev */
 	__OVS_VPORT_ATTR_MAX
