@@ -168,7 +168,7 @@ struct json *ovsdb_type_to_json(const struct ovsdb_type *);
 static inline bool
 ovsdb_atomic_type_is_valid(enum ovsdb_atomic_type atomic_type)
 {
-    return atomic_type >= 0 && atomic_type < OVSDB_N_TYPES;
+    return (int) atomic_type >= 0 && atomic_type < OVSDB_N_TYPES;
 }
 
 static inline bool
