@@ -176,6 +176,7 @@ struct vport *vport_alloc(int priv_size, const struct vport_ops *ops, const stru
 
 	vport->dp = parms->dp;
 	vport->port_no = parms->port_no;
+	vport->upcall_pid = parms->upcall_pid;
 	atomic_set(&vport->sflow_pool, 0);
 	vport->ops = ops;
 

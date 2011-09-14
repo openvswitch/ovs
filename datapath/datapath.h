@@ -69,7 +69,7 @@ struct dp_stats_percpu {
  * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %OVS_PACKET_CMD_SAMPLE multicast group, e.g. (@sflow_probability/UINT_MAX)
+ * %OVS_PACKET_CMD_SAMPLE upcall, e.g. (@sflow_probability/UINT_MAX)
  * is the probability of sampling a given packet.
  *
  * Context: See the comment on locking at the top of datapath.c for additional

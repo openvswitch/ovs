@@ -85,6 +85,10 @@ struct ovs_header {
  * the &struct ovs_header.  Always present in notifications.  Required in
  * %OVS_DP_NEW requests.  May be used as an alternative to specifying
  * dp_ifindex in other requests (with a dp_ifindex of 0).
+ * @OVS_DP_ATTR_UPCALL_PID: The Netlink socket in userspace that is initially
+ * set on the datapath port (for OVS_ACTION_ATTR_MISS).  Only valid on
+ * %OVS_DP_CMD_NEW requests. A value of zero indicates that upcalls should
+ * not be sent.
  * @OVS_DP_ATTR_STATS: Statistics about packets that have passed through the
  * datapath.  Always present in notifications.
  * @OVS_DP_ATTR_IPV4_FRAGS: One of %OVS_DP_FRAG_*.  Always present in
@@ -94,10 +98,6 @@ struct ovs_header {
  * @OVS_PACKET_CMD_SAMPLE.  A value of 0 samples no packets, a value of
  * %UINT32_MAX samples all packets, and intermediate values sample intermediate
  * fractions of packets.
- * @OVS_DP_ATTR_MCGROUPS: Nested attributes with multicast groups.  Each nested
- * attribute has a %OVS_PACKET_CMD_* type with a 32-bit value giving the
- * Generic Netlink multicast group number used for sending this datapath's
- * messages with that command type up to userspace.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_DP_* commands.
@@ -105,10 +105,10 @@ struct ovs_header {
 enum ovs_datapath_attr {
 	OVS_DP_ATTR_UNSPEC,
 	OVS_DP_ATTR_NAME,       /* name of dp_ifindex netdev */
+	OVS_DP_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
 	OVS_DP_ATTR_STATS,      /* struct ovs_dp_stats */
 	OVS_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum ovs_frag_handling */
 	OVS_DP_ATTR_SAMPLING,   /* 32-bit fraction of packets to sample. */
-	OVS_DP_ATTR_MCGROUPS,   /* Nested attributes with multicast groups. */
 	__OVS_DP_ATTR_MAX
 };
 
@@ -174,6 +174,10 @@ enum ovs_packet_cmd {
  * extracted from the packet as nested %OVS_KEY_ATTR_* attributes.  This allows
  * userspace to adapt its flow setup strategy by comparing its notion of the
  * flow key against the kernel's.
+ * @OVS_PACKET_ATTR_UPCALL_PID: Optionally present for OVS_PACKET_CMD_EXECUTE.
+ * The Netlink socket in userspace that OVS_PACKET_CMD_USERSPACE and
+ * OVS_PACKET_CMD_SAMPLE upcalls will be directed to for actions triggered by
+ * this packet.  A value of zero indicates that upcalls should not be sent.
  * @OVS_PACKET_ATTR_USERDATA: Present for an %OVS_PACKET_CMD_ACTION
  * notification if the %OVS_ACTION_ATTR_USERSPACE, action's argument was
  * nonzero.
@@ -190,6 +194,7 @@ enum ovs_packet_attr {
 	OVS_PACKET_ATTR_UNSPEC,
 	OVS_PACKET_ATTR_PACKET,      /* Packet data. */
 	OVS_PACKET_ATTR_KEY,         /* Nested OVS_KEY_ATTR_* attributes. */
+	OVS_PACKET_ATTR_UPCALL_PID,  /* Netlink PID to receive upcalls. */
 	OVS_PACKET_ATTR_USERDATA,    /* u64 OVS_ACTION_ATTR_USERSPACE arg. */
 	OVS_PACKET_ATTR_SAMPLE_POOL, /* # sampling candidate packets so far. */
 	OVS_PACKET_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
@@ -229,6 +234,9 @@ enum ovs_vport_cmd {
  * @OVS_VPORT_ATTR_NAME: Name of vport.  For a vport based on a network device
  * this is the name of the network device.  Maximum length %IFNAMSIZ-1 bytes
  * plus a null terminator.
+ * @OVS_VPORT_ATTR_UPCALL_PID: The Netlink socket in userspace that
+ * OVS_PACKET_CMD_MISS upcalls will be directed to for packets received on
+ * this port.  A value of zero indicates that upcalls should not be sent.
  * @OVS_VPORT_ATTR_STATS: A &struct ovs_vport_stats giving statistics for
  * packets sent or received through the vport.
  * @OVS_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
@@ -257,6 +265,7 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_PORT_NO,	/* port number within datapath */
 	OVS_VPORT_ATTR_TYPE,	/* 32-bit OVS_VPORT_TYPE_* constant. */
 	OVS_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
+	OVS_VPORT_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
 	OVS_VPORT_ATTR_STATS,	/* struct ovs_vport_stats */
 	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
@@ -379,6 +388,10 @@ struct ovs_key_nd {
  * @OVS_FLOW_ATTR_ACTIONS: Nested %OVS_ACTION_ATTR_* attributes specifying
  * the actions to take for packets that match the key.  Always present in
  * notifications.  Required for %OVS_FLOW_CMD_NEW requests, optional
+ * @OVS_FLOW_ATTR_UPCALL_PID: The Netlink socket in userspace that
+ * OVS_PACKET_CMD_USERSPACE and OVS_PACKET_CMD_SAMPLE upcalls will be
+ * directed to for packets received on this port.  A value of zero indicates
+ * that upcalls should not be sent.
  * on %OVS_FLOW_CMD_SET request to change the existing actions, ignored for
  * other requests.
  * @OVS_FLOW_ATTR_STATS: &struct ovs_flow_stats giving statistics for this
@@ -402,6 +415,7 @@ enum ovs_flow_attr {
 	OVS_FLOW_ATTR_UNSPEC,
 	OVS_FLOW_ATTR_KEY,       /* Sequence of OVS_KEY_ATTR_* attributes. */
 	OVS_FLOW_ATTR_ACTIONS,   /* Nested OVS_ACTION_ATTR_* attributes. */
+	OVS_FLOW_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls. */
 	OVS_FLOW_ATTR_STATS,     /* struct ovs_flow_stats. */
 	OVS_FLOW_ATTR_TCP_FLAGS, /* 8-bit OR'd TCP flags. */
 	OVS_FLOW_ATTR_USED,      /* u64 msecs last used in monotonic time. */

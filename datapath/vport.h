@@ -82,6 +82,8 @@ struct vport_err_stats {
  * @node: Element in @dp's @port_list.
  * @sflow_pool: Number of packets that were candidates for sFlow sampling,
  * regardless of whether they were actually chosen and sent down to userspace.
+ * @upcall_pid: The Netlink port to use for packets received on this port that
+ * miss the flow table.
  * @hash_node: Element in @dev_table hash table in vport.c.
  * @ops: Class structure.
  * @percpu_stats: Points to per-CPU statistics used and maintained by vport
@@ -98,6 +100,7 @@ struct vport {
 	char linkname[IFNAMSIZ];
 	struct list_head node;
 	atomic_t sflow_pool;
+	u32 upcall_pid;
 
 	struct hlist_node hash_node;
 	const struct vport_ops *ops;
@@ -131,6 +134,7 @@ struct vport_parms {
 	/* For vport_alloc(). */
 	struct datapath *dp;
 	u16 port_no;
+	u32 upcall_pid;
 };
 
 /**

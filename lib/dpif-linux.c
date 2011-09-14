@@ -73,10 +73,10 @@ struct dpif_linux_dp {
 
     /* Attributes. */
     const char *name;                  /* OVS_DP_ATTR_NAME. */
+    uint32_t upcall_pid;               /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
     enum ovs_frag_handling ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
     const uint32_t *sampling;          /* OVS_DP_ATTR_SAMPLING. */
-    uint32_t mcgroups[DPIF_N_UC_TYPES]; /* OVS_DP_ATTR_MCGROUPS. */
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
@@ -109,6 +109,7 @@ struct dpif_linux_flow {
     size_t key_len;
     const struct nlattr *actions;       /* OVS_FLOW_ATTR_ACTIONS. */
     size_t actions_len;
+    uint32_t upcall_pid;                /* OVS_FLOW_ATTR_UPCALL_PID. */
     const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
     const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
     const uint64_t *used;               /* OVS_FLOW_ATTR_USED. */
@@ -131,9 +132,8 @@ struct dpif_linux {
     struct dpif dpif;
     int dp_ifindex;
 
-    /* Multicast group messages. */
-    struct nl_sock *mc_sock;
-    uint32_t mcgroups[DPIF_N_UC_TYPES];
+    /* Upcall messages. */
+    struct nl_sock *upcall_sock;
     unsigned int listen_mask;
 
     /* Change notification. */
@@ -263,10 +263,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
 
-    dpif->mc_sock = NULL;
-    for (i = 0; i < DPIF_N_UC_TYPES; i++) {
-        dpif->mcgroups[i] = dp->mcgroups[i];
-    }
+    dpif->upcall_sock = NULL;
     dpif->listen_mask = 0;
     dpif->dp_ifindex = dp->dp_ifindex;
     sset_init(&dpif->changed_ports);
@@ -287,7 +284,7 @@ dpif_linux_close(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     nln_notifier_destroy(dpif->port_notifier);
-    nl_sock_destroy(dpif->mc_sock);
+    nl_sock_destroy(dpif->upcall_sock);
     sset_destroy(&dpif->changed_ports);
     free(dpif->lru_bitmap);
     free(dpif);
@@ -401,6 +398,9 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     /* Loop until we find a port that isn't used. */
     do {
         request.port_no = dpif_linux_pop_port(dpif);
+        if (dpif->upcall_sock) {
+            request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
+        }
         error = dpif_linux_vport_transact(&request, &reply, &buf);
 
         if (!error) {
@@ -659,6 +659,9 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request.actions = actions ? actions : &dummy_action;
     request.actions_len = actions_len;
+    if (dpif->upcall_sock) {
+        request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
+    }
     if (flags & DPIF_FP_ZERO_STATS) {
         request.clear = true;
     }
@@ -790,7 +793,7 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 }
 
 static int
-dpif_linux_execute__(int dp_ifindex,
+dpif_linux_execute__(int dp_ifindex, uint32_t upcall_pid,
                      const struct nlattr *key, size_t key_len,
                      const struct nlattr *actions, size_t actions_len,
                      const struct ofpbuf *packet)
@@ -810,6 +813,7 @@ dpif_linux_execute__(int dp_ifindex,
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET, packet->data, packet->size);
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, key, key_len);
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS, actions, actions_len);
+    nl_msg_put_u32(buf, OVS_PACKET_ATTR_UPCALL_PID, upcall_pid);
 
     error = nl_sock_transact(genl_sock, buf, NULL);
     ofpbuf_delete(buf);
@@ -823,8 +827,13 @@ dpif_linux_execute(struct dpif *dpif_,
                    const struct ofpbuf *packet)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    uint32_t upcall_pid = 0;
 
-    return dpif_linux_execute__(dpif->dp_ifindex, key, key_len,
+    if (dpif->upcall_sock) {
+        upcall_pid = nl_sock_pid(dpif->upcall_sock);
+    }
+
+    return dpif_linux_execute__(dpif->dp_ifindex, upcall_pid, key, key_len,
                                 actions, actions_len, packet);
 }
 
@@ -841,45 +850,61 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
-    int i;
 
     if (listen_mask == dpif->listen_mask) {
         return 0;
     } else if (!listen_mask) {
-        nl_sock_destroy(dpif->mc_sock);
-        dpif->mc_sock = NULL;
-        dpif->listen_mask = 0;
-        return 0;
-    } else if (!dpif->mc_sock) {
-        error = nl_sock_create(NETLINK_GENERIC, &dpif->mc_sock);
+        nl_sock_destroy(dpif->upcall_sock);
+        dpif->upcall_sock = NULL;
+    } else if (!dpif->upcall_sock) {
+        struct dpif_port port;
+        struct dpif_port_dump port_dump;
+        struct dpif_flow_dump flow_dump;
+        const struct nlattr *key;
+        size_t key_len;
+
+        error = nl_sock_create(NETLINK_GENERIC, &dpif->upcall_sock);
         if (error) {
             return error;
         }
-    }
 
-    /* Unsubscribe from old groups. */
-    for (i = 0; i < DPIF_N_UC_TYPES; i++) {
-        if (dpif->listen_mask & (1u << i)) {
-            nl_sock_leave_mcgroup(dpif->mc_sock, dpif->mcgroups[i]);
-        }
-    }
+        DPIF_PORT_FOR_EACH (&port, &port_dump, dpif_) {
+            struct dpif_linux_vport vport_request;
 
-    /* Update listen_mask. */
-    dpif->listen_mask = listen_mask;
-
-    /* Subscribe to new groups. */
-    error = 0;
-    for (i = 0; i < DPIF_N_UC_TYPES; i++) {
-        if (dpif->listen_mask & (1u << i)) {
-            int retval;
-
-            retval = nl_sock_join_mcgroup(dpif->mc_sock, dpif->mcgroups[i]);
-            if (retval) {
-                error = retval;
+            dpif_linux_vport_init(&vport_request);
+            vport_request.cmd = OVS_VPORT_CMD_SET;
+            vport_request.dp_ifindex = dpif->dp_ifindex;
+            vport_request.port_no = port.port_no;
+            vport_request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
+            error = dpif_linux_vport_transact(&vport_request, NULL, NULL);
+            if (error) {
+                VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on "
+                          "port: %s", dpif_name(dpif_), strerror(error));
             }
         }
+
+        dpif_flow_dump_start(&flow_dump, dpif_);
+        while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
+                                   NULL, NULL, NULL)) {
+            struct dpif_linux_flow flow_request;
+
+            dpif_linux_flow_init(&flow_request);
+            flow_request.cmd = OVS_FLOW_CMD_SET;
+            flow_request.dp_ifindex = dpif->dp_ifindex;
+            flow_request.key = key;
+            flow_request.key_len = key_len;
+            flow_request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
+            error = dpif_linux_flow_transact(&flow_request, NULL, NULL);
+            if (error) {
+                VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on "
+                          "flow: %s", dpif_name(dpif_), strerror(error));
+            }
+        }
+        dpif_flow_dump_done(&flow_dump);
     }
-    return error;
+
+    dpif->listen_mask = listen_mask;
+    return 0;
 }
 
 static int
@@ -999,14 +1024,14 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
     int error;
     int i;
 
-    if (!dpif->mc_sock) {
+    if (!dpif->upcall_sock) {
         return EAGAIN;
     }
 
     for (i = 0; i < 50; i++) {
         int dp_ifindex;
 
-        error = nl_sock_recv(dpif->mc_sock, &buf, false);
+        error = nl_sock_recv(dpif->upcall_sock, &buf, false);
         if (error) {
             return error;
         }
@@ -1031,8 +1056,8 @@ static void
 dpif_linux_recv_wait(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (dpif->mc_sock) {
-        nl_sock_wait(dpif->mc_sock, POLLIN);
+    if (dpif->upcall_sock) {
+        nl_sock_wait(dpif->upcall_sock, POLLIN);
     }
 }
 
@@ -1041,8 +1066,8 @@ dpif_linux_recv_purge(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (dpif->mc_sock) {
-        nl_sock_drain(dpif->mc_sock);
+    if (dpif->upcall_sock) {
+        nl_sock_drain(dpif->upcall_sock);
     }
 }
 
@@ -1164,7 +1189,7 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
     ofpbuf_use_stack(&actions, &action, sizeof action);
     nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, port_no);
 
-    return dpif_linux_execute__(dp_ifindex, key.data, key.size,
+    return dpif_linux_execute__(dp_ifindex, 0, key.data, key.size,
                                 actions.data, actions.size, &packet);
 }
 
@@ -1209,6 +1234,7 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
         [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32 },
         [OVS_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
         [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
+        [OVS_VPORT_ATTR_UPCALL_PID] = { .type = NL_A_U32 },
         [OVS_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
                                    .min_len = sizeof(struct ovs_vport_stats),
                                    .max_len = sizeof(struct ovs_vport_stats),
@@ -1245,6 +1271,9 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     vport->port_no = nl_attr_get_u32(a[OVS_VPORT_ATTR_PORT_NO]);
     vport->type = nl_attr_get_u32(a[OVS_VPORT_ATTR_TYPE]);
     vport->name = nl_attr_get_string(a[OVS_VPORT_ATTR_NAME]);
+    if (a[OVS_VPORT_ATTR_UPCALL_PID]) {
+        vport->upcall_pid = nl_attr_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
+    }
     if (a[OVS_VPORT_ATTR_STATS]) {
         vport->stats = nl_attr_get(a[OVS_VPORT_ATTR_STATS]);
     }
@@ -1286,6 +1315,8 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
     if (vport->name) {
         nl_msg_put_string(buf, OVS_VPORT_ATTR_NAME, vport->name);
     }
+
+    nl_msg_put_u32(buf, OVS_VPORT_ATTR_UPCALL_PID, vport->upcall_pid);
 
     if (vport->stats) {
         nl_msg_put_unspec(buf, OVS_VPORT_ATTR_STATS,
@@ -1391,7 +1422,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
                                 .optional = true },
         [OVS_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
         [OVS_DP_ATTR_SAMPLING] = { .type = NL_A_U32, .optional = true },
-        [OVS_DP_ATTR_MCGROUPS] = { .type = NL_A_NESTED, .optional = true },
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_datapath_policy)];
@@ -1429,34 +1459,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
         dp->sampling = nl_attr_get(a[OVS_DP_ATTR_SAMPLING]);
     }
 
-    if (a[OVS_DP_ATTR_MCGROUPS]) {
-        static const struct nl_policy ovs_mcgroup_policy[] = {
-            [OVS_PACKET_CMD_MISS] = { .type = NL_A_U32, .optional = true },
-            [OVS_PACKET_CMD_ACTION] = { .type = NL_A_U32, .optional = true },
-            [OVS_PACKET_CMD_SAMPLE] = { .type = NL_A_U32, .optional = true },
-        };
-
-        struct nlattr *mcgroups[ARRAY_SIZE(ovs_mcgroup_policy)];
-
-        if (!nl_parse_nested(a[OVS_DP_ATTR_MCGROUPS], ovs_mcgroup_policy,
-                             mcgroups, ARRAY_SIZE(ovs_mcgroup_policy))) {
-            return EINVAL;
-        }
-
-        if (mcgroups[OVS_PACKET_CMD_MISS]) {
-            dp->mcgroups[DPIF_UC_MISS]
-                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_MISS]);
-        }
-        if (mcgroups[OVS_PACKET_CMD_ACTION]) {
-            dp->mcgroups[DPIF_UC_ACTION]
-                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_ACTION]);
-        }
-        if (mcgroups[OVS_PACKET_CMD_SAMPLE]) {
-            dp->mcgroups[DPIF_UC_SAMPLE]
-                = nl_attr_get_u32(mcgroups[OVS_PACKET_CMD_SAMPLE]);
-        }
-    }
-
     return 0;
 }
 
@@ -1475,6 +1477,8 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
     if (dp->name) {
         nl_msg_put_string(buf, OVS_DP_ATTR_NAME, dp->name);
     }
+
+    nl_msg_put_u32(buf, OVS_DP_ATTR_UPCALL_PID, dp->upcall_pid);
 
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
 
@@ -1572,6 +1576,7 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     static const struct nl_policy ovs_flow_policy[] = {
         [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
         [OVS_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_FLOW_ATTR_UPCALL_PID] = { .type = NL_A_U32 },
         [OVS_FLOW_ATTR_STATS] = { .type = NL_A_UNSPEC,
                                   .min_len = sizeof(struct ovs_flow_stats),
                                   .max_len = sizeof(struct ovs_flow_stats),
@@ -1608,6 +1613,9 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
         flow->actions = nl_attr_get(a[OVS_FLOW_ATTR_ACTIONS]);
         flow->actions_len = nl_attr_get_size(a[OVS_FLOW_ATTR_ACTIONS]);
     }
+    if (a[OVS_FLOW_ATTR_UPCALL_PID]) {
+        flow->upcall_pid = nl_attr_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
+    }
     if (a[OVS_FLOW_ATTR_STATS]) {
         flow->stats = nl_attr_get(a[OVS_FLOW_ATTR_STATS]);
     }
@@ -1643,6 +1651,8 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
         nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,
                           flow->actions, flow->actions_len);
     }
+
+    nl_msg_put_u32(buf, OVS_FLOW_ATTR_UPCALL_PID, flow->upcall_pid);
 
     /* We never need to send these to the kernel. */
     assert(!flow->stats);

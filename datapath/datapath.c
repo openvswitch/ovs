@@ -84,7 +84,7 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
-static int queue_userspace_packets(struct datapath *, struct sk_buff *,
+static int queue_userspace_packets(struct datapath *, u32 pid, struct sk_buff *,
 				 const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
@@ -361,49 +361,22 @@ static struct genl_family dp_packet_genl_family = {
 	.maxattr = OVS_PACKET_ATTR_MAX
 };
 
-/* Generic Netlink multicast groups for upcalls.
- *
- * We really want three unique multicast groups per datapath, but we can't even
- * get one, because genl_register_mc_group() takes genl_lock, which is also
- * held during Generic Netlink message processing, so trying to acquire
- * multicast groups during OVS_DP_NEW processing deadlocks.  Instead, we
- * preallocate a few groups and use them round-robin for datapaths.  Collision
- * isn't fatal--multicast listeners should check that the family is the one
- * that they want and discard others--but it wastes time and memory to receive
- * unwanted messages.
- */
-#define PACKET_N_MC_GROUPS 16
-static struct genl_multicast_group packet_mc_groups[PACKET_N_MC_GROUPS];
-
-static u32 packet_mc_group(int dp_ifindex, u8 cmd)
-{
-	u32 idx;
-	BUILD_BUG_ON_NOT_POWER_OF_2(PACKET_N_MC_GROUPS);
-
-	idx = jhash_2words(dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
-	return packet_mc_groups[idx].id;
-}
-
-static int packet_register_mc_groups(void)
-{
-	int i;
-
-	for (i = 0; i < PACKET_N_MC_GROUPS; i++) {
-		struct genl_multicast_group *group = &packet_mc_groups[i];
-		int error;
-
-		sprintf(group->name, "packet%d", i);
-		error = genl_register_mc_group(&dp_packet_genl_family, group);
-		if (error)
-			return error;
-	}
-	return 0;
-}
-
 int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
 {
 	struct dp_stats_percpu *stats;
+	u32 pid;
 	int err;
+
+	if (OVS_CB(skb)->flow)
+		pid = OVS_CB(skb)->flow->upcall_pid;
+	else
+		pid = OVS_CB(skb)->vport->upcall_pid;
+
+	if (pid == 0) {
+		err = -ENOTCONN;
+		kfree_skb(skb);
+		goto err;
+	}
 
 	forward_ip_summed(skb, true);
 
@@ -421,7 +394,7 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 		skb = nskb;
 	}
 
-	err = queue_userspace_packets(dp, skb, upcall_info);
+	err = queue_userspace_packets(dp, pid, skb, upcall_info);
 	if (err)
 		goto err;
 
@@ -444,11 +417,11 @@ err:
  * 'upcall_info'.  There will be only one packet unless we broke up a GSO
  * packet.
  */
-static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
-				 const struct dp_upcall_info *upcall_info)
+static int queue_userspace_packets(struct datapath *dp, u32 pid,
+				   struct sk_buff *skb,
+				   const struct dp_upcall_info *upcall_info)
 {
 	int dp_ifindex;
-	u32 group;
 	struct sk_buff *nskb;
 	int err;
 
@@ -458,8 +431,6 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 		nskb = skb->next;
 		goto err_kfree_skbs;
 	}
-
-	group = packet_mc_group(dp_ifindex, upcall_info->cmd);
 
 	do {
 		struct ovs_header *upcall;
@@ -491,7 +462,6 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 
 		user_skb = genlmsg_new(len, GFP_ATOMIC);
 		if (!user_skb) {
-			netlink_set_err(INIT_NET_GENL_SOCK, 0, group, -ENOBUFS);
 			err = -ENOMEM;
 			goto err_kfree_skbs;
 		}
@@ -522,7 +492,7 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 		else
 			skb_copy_bits(skb, 0, nla_data(nla), skb->len);
 
-		err = genlmsg_multicast(user_skb, 0, group, GFP_ATOMIC);
+		err = genlmsg_unicast(&init_net, user_skb, pid);
 		if (err)
 			goto err_kfree_skbs;
 
@@ -702,6 +672,11 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	flow->hash = flow_hash(&flow->key, key_len);
 
+	if (a[OVS_PACKET_ATTR_UPCALL_PID])
+		flow->upcall_pid = nla_get_u32(a[OVS_PACKET_ATTR_UPCALL_PID]);
+	else
+		flow->upcall_pid = NETLINK_CB(skb).pid;
+
 	acts = flow_actions_alloc(a[OVS_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
@@ -740,6 +715,7 @@ static const struct nla_policy packet_policy[OVS_PACKET_ATTR_MAX + 1] = {
 	[OVS_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
 	[OVS_PACKET_ATTR_KEY] = { .type = NLA_NESTED },
 	[OVS_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
+	[OVS_PACKET_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 };
 
 static struct genl_ops dp_packet_genl_ops[] = {
@@ -779,6 +755,7 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 
 static const struct nla_policy flow_policy[OVS_FLOW_ATTR_MAX + 1] = {
 	[OVS_FLOW_ATTR_KEY] = { .type = NLA_NESTED },
+	[OVS_FLOW_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 	[OVS_FLOW_ATTR_ACTIONS] = { .type = NLA_NESTED },
 	[OVS_FLOW_ATTR_CLEAR] = { .type = NLA_FLAG },
 };
@@ -824,6 +801,8 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (err)
 		goto error;
 	nla_nest_end(skb, nla);
+
+	NLA_PUT_U32(skb, OVS_FLOW_ATTR_UPCALL_PID, flow->upcall_pid);
 
 	spin_lock_bh(&flow->lock);
 	used = flow->used;
@@ -962,6 +941,11 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		flow->key = key;
 		clear_stats(flow);
 
+		if (a[OVS_FLOW_ATTR_UPCALL_PID])
+			flow->upcall_pid = nla_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
+		else
+			flow->upcall_pid = NETLINK_CB(skb).pid;
+
 		/* Obtain actions. */
 		acts = flow_actions_alloc(a[OVS_FLOW_ATTR_ACTIONS]);
 		error = PTR_ERR(acts);
@@ -1010,6 +994,9 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 		reply = ovs_flow_cmd_build_info(flow, dp, info->snd_pid,
 						info->snd_seq, OVS_FLOW_CMD_NEW);
+
+		if (a[OVS_FLOW_ATTR_UPCALL_PID])
+			flow->upcall_pid = nla_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
 
 		/* Clear stats. */
 		if (a[OVS_FLOW_ATTR_CLEAR]) {
@@ -1169,6 +1156,7 @@ static const struct nla_policy datapath_policy[OVS_DP_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
 	[OVS_DP_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
 #endif
+	[OVS_DP_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 	[OVS_DP_ATTR_IPV4_FRAGS] = { .type = NLA_U32 },
 	[OVS_DP_ATTR_SAMPLING] = { .type = NLA_U32 },
 };
@@ -1191,14 +1179,13 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 	struct ovs_header *ovs_header;
 	struct nlattr *nla;
 	int err;
-	int dp_ifindex = get_dpifindex(dp);
 
 	ovs_header = genlmsg_put(skb, pid, seq, &dp_datapath_genl_family,
 				   flags, cmd);
 	if (!ovs_header)
 		goto error;
 
-	ovs_header->dp_ifindex = dp_ifindex;
+	ovs_header->dp_ifindex = get_dpifindex(dp);
 
 	rcu_read_lock();
 	err = nla_put_string(skb, OVS_DP_ATTR_NAME, dp_name(dp));
@@ -1216,17 +1203,6 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 
 	if (dp->sflow_probability)
 		NLA_PUT_U32(skb, OVS_DP_ATTR_SAMPLING, dp->sflow_probability);
-
-	nla = nla_nest_start(skb, OVS_DP_ATTR_MCGROUPS);
-	if (!nla)
-		goto nla_put_failure;
-	NLA_PUT_U32(skb, OVS_PACKET_CMD_MISS,
-			packet_mc_group(dp_ifindex, OVS_PACKET_CMD_MISS));
-	NLA_PUT_U32(skb, OVS_PACKET_CMD_ACTION,
-			packet_mc_group(dp_ifindex, OVS_PACKET_CMD_ACTION));
-	NLA_PUT_U32(skb, OVS_PACKET_CMD_SAMPLE,
-			packet_mc_group(dp_ifindex, OVS_PACKET_CMD_SAMPLE));
-	nla_nest_end(skb, nla);
 
 	return genlmsg_end(skb, ovs_header);
 
@@ -1347,6 +1323,11 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	parms.options = NULL;
 	parms.dp = dp;
 	parms.port_no = OVSP_LOCAL;
+	if (a[OVS_DP_ATTR_UPCALL_PID])
+		parms.upcall_pid = nla_get_u32(a[OVS_DP_ATTR_UPCALL_PID]);
+	else
+		parms.upcall_pid = NETLINK_CB(skb).pid;
+
 	vport = new_vport(&parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
@@ -1543,6 +1524,7 @@ static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 #endif
 	[OVS_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
+	[OVS_VPORT_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
 
@@ -1577,6 +1559,7 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_PORT_NO, vport->port_no);
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_TYPE, vport_get_type(vport));
 	NLA_PUT_STRING(skb, OVS_VPORT_ATTR_NAME, vport_get_name(vport));
+	NLA_PUT_U32(skb, OVS_VPORT_ATTR_UPCALL_PID, vport->upcall_pid);
 
 	nla = nla_reserve(skb, OVS_VPORT_ATTR_STATS, sizeof(struct ovs_vport_stats));
 	if (!nla)
@@ -1724,6 +1707,10 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	parms.options = a[OVS_VPORT_ATTR_OPTIONS];
 	parms.dp = dp;
 	parms.port_no = port_no;
+	if (a[OVS_VPORT_ATTR_UPCALL_PID])
+		parms.upcall_pid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
+	else
+		parms.upcall_pid = NETLINK_CB(skb).pid;
 
 	vport = new_vport(&parms);
 	err = PTR_ERR(vport);
@@ -1775,6 +1762,8 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 		err = vport_set_options(vport, a[OVS_VPORT_ATTR_OPTIONS]);
 	if (!err)
 		err = change_vport(vport, a);
+	if (!err && a[OVS_VPORT_ATTR_UPCALL_PID])
+		vport->upcall_pid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
 
 	reply = ovs_vport_cmd_build_info(vport, info->snd_pid, info->snd_seq,
 					 OVS_VPORT_CMD_NEW);
@@ -1976,9 +1965,6 @@ static int dp_register_genl(void)
 		}
 	}
 
-	err = packet_register_mc_groups();
-	if (err)
-		goto error;
 	return 0;
 
 error:
