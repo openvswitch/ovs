@@ -160,7 +160,7 @@ static struct nl_sock *genl_sock;
 static struct nln *nln = NULL;
 
 static int dpif_linux_init(void);
-static int open_dpif(const struct dpif_linux_dp *, struct dpif **);
+static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
 static void dpif_linux_port_changed(const void *vport, void *dpif);
 
@@ -243,13 +243,13 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     if (error) {
         return error;
     }
-    error = open_dpif(&dp, dpifp);
-    ofpbuf_delete(buf);
 
-    return error;
+    open_dpif(&dp, dpifp);
+    ofpbuf_delete(buf);
+    return 0;
 }
 
-static int
+static void
 open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 {
     struct dpif_linux *dpif;
@@ -258,9 +258,6 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif = xmalloc(sizeof *dpif);
     dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
                                               dpif);
-    if (!dpif->port_notifier) {
-        goto error_free;
-    }
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
@@ -281,11 +278,6 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     for (i = 1; i < LRU_MAX_PORTS; i++) {
         dpif_linux_push_port(dpif, i);
     }
-    return 0;
-
-error_free:
-    free(dpif);
-    return EINVAL;
 }
 
 static void
