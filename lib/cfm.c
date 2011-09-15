@@ -357,7 +357,6 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
 void
 cfm_wait(struct cfm *cfm)
 {
-
     timer_wait(&cfm->tx_timer);
     timer_wait(&cfm->fault_timer);
 }
