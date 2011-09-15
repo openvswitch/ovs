@@ -105,7 +105,7 @@ COVERAGE_DEFINE(netdev_ethtool);
 #define TC_RTAB_SIZE 1024
 #endif
 
-static struct nln_notifier netdev_linux_cache_notifier;
+static struct nln_notifier *netdev_linux_cache_notifier = NULL;
 static int cache_notifier_refcount;
 
 enum {
@@ -526,13 +526,15 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
                     struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
-    int error;
 
     if (!cache_notifier_refcount) {
-        error = rtnetlink_link_notifier_register(&netdev_linux_cache_notifier,
-                                                 netdev_linux_cache_cb, NULL);
-        if (error) {
-            return error;
+        assert(!netdev_linux_cache_notifier);
+
+        netdev_linux_cache_notifier =
+            rtnetlink_link_notifier_create(netdev_linux_cache_cb, NULL);
+
+        if (!netdev_linux_cache_notifier) {
+            return EINVAL;
         }
     }
     cache_notifier_refcount++;
@@ -622,7 +624,9 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         cache_notifier_refcount--;
 
         if (!cache_notifier_refcount) {
-            rtnetlink_link_notifier_unregister(&netdev_linux_cache_notifier);
+            assert(netdev_linux_cache_notifier);
+            rtnetlink_link_notifier_destroy(netdev_linux_cache_notifier);
+            netdev_linux_cache_notifier = NULL;
         }
     } else if (class == &netdev_tap_class) {
         destroy_tap(netdev_dev);

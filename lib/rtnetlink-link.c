@@ -85,25 +85,24 @@ rtnetlink_link_parse_cb(struct ofpbuf *buf, void *change)
  * using dpif_port_poll() or netdev_change_seq(), which unlike this function
  * are not Linux-specific.
  *
- * Returns 0 if successful, otherwise a positive errno value. */
-int
-rtnetlink_link_notifier_register(struct nln_notifier *notifier,
-                                 rtnetlink_link_notify_func *cb, void *aux)
+ * Returns an initialized nln_notifier if successful, NULL otherwise. */
+struct nln_notifier *
+rtnetlink_link_notifier_create(rtnetlink_link_notify_func *cb, void *aux)
 {
     if (!nln) {
         nln = nln_create(NETLINK_ROUTE, RTNLGRP_LINK, rtnetlink_link_parse_cb,
                          &rtn_change);
     }
 
-    return nln_notifier_register(nln, notifier, (nln_notify_func *) cb, aux);
+    return nln_notifier_create(nln, (nln_notify_func *) cb, aux);
 }
 
-/* Cancels notification on 'notifier', which must have previously been
- * registered with rtnetlink_link_notifier_register(). */
+/* Destroys 'notifier', which must have previously been created with
+ * rtnetlink_link_notifier_register(). */
 void
-rtnetlink_link_notifier_unregister(struct nln_notifier *notifier)
+rtnetlink_link_notifier_destroy(struct nln_notifier *notifier)
 {
-    nln_notifier_unregister(nln, notifier);
+    nln_notifier_destroy(notifier);
 }
 
 /* Calls all of the registered notifiers, passing along any as-yet-unreported

@@ -18,6 +18,7 @@
 
 #include "netlink-notifier.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdlib.h>
@@ -46,6 +47,14 @@ struct nln {
     void *change;                /* Change passed to parse. */
 };
 
+struct nln_notifier {
+    struct nln *nln;             /* Parent nln. */
+
+    struct list node;
+    nln_notify_func *cb;
+    void *aux;
+};
+
 /* Creates an nln handle which may be used to manage change notifications.  The
  * created handle will listen for netlink messages on 'multicast_group' using
  * netlink protocol 'protocol' (e.g. NETLINK_ROUTE, NETLINK_GENERIC, ...).
@@ -70,11 +79,15 @@ nln_create(int protocol, int multicast_group, nln_parse_func *parse,
 }
 
 /* Destroys 'nln' by freeing any memory it has reserved and closing any sockets
- * it has opened. */
+ * it has opened.
+ *
+ * The caller is responsible for destroying any notifiers created by this
+ * 'nln' before destroying 'nln'. */
 void
 nln_destroy(struct nln *nln)
 {
     if (nln) {
+        assert(list_is_empty(&nln->all_notifiers));
         nl_sock_destroy(nln->notify_sock);
         free(nln);
     }
@@ -87,11 +100,12 @@ nln_destroy(struct nln *nln)
  * This is probably not the function you want.  You should probably be using
  * message specific notifiers like rtnetlink_link_notifier_register().
  *
- * Returns 0 if successful, otherwise a positive errno value. */
-int
-nln_notifier_register(struct nln *nln, struct nln_notifier *notifier,
-                      nln_notify_func *cb, void *aux)
+ * Returns an initialized nln_notifier if successful, otherwise NULL. */
+struct nln_notifier *
+nln_notifier_create(struct nln *nln, nln_notify_func *cb, void *aux)
 {
+    struct nln_notifier *notifier;
+
     if (!nln->notify_sock) {
         struct nl_sock *sock;
         int error;
@@ -103,7 +117,7 @@ nln_notifier_register(struct nln *nln, struct nln_notifier *notifier,
         if (error) {
             nl_sock_destroy(sock);
             VLOG_WARN("could not create netlink socket: %s", strerror(error));
-            return error;
+            return NULL;
         }
         nln->notify_sock = sock;
     } else {
@@ -112,21 +126,28 @@ nln_notifier_register(struct nln *nln, struct nln_notifier *notifier,
         nln_run(nln);
     }
 
+    notifier = xmalloc(sizeof *notifier);
     list_push_back(&nln->all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
-    return 0;
+    notifier->nln = nln;
+    return notifier;
 }
 
-/* Cancels notification on 'notifier', which must have previously been
- * registered with nln_notifier_register(). */
+/* Destroys 'notifier', which must have previously been created with
+ * nln_notifier_register(). */
 void
-nln_notifier_unregister(struct nln *nln, struct nln_notifier *notifier)
+nln_notifier_destroy(struct nln_notifier *notifier)
 {
-    list_remove(&notifier->node);
-    if (list_is_empty(&nln->all_notifiers)) {
-        nl_sock_destroy(nln->notify_sock);
-        nln->notify_sock = NULL;
+    if (notifier) {
+        struct nln *nln = notifier->nln;
+
+        list_remove(&notifier->node);
+        if (list_is_empty(&nln->all_notifiers)) {
+            nl_sock_destroy(nln->notify_sock);
+            nln->notify_sock = NULL;
+        }
+        free(notifier);
     }
 }
 

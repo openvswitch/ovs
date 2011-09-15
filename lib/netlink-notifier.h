@@ -23,6 +23,8 @@
 #include "list.h"
 
 struct nln;
+struct nln_notifier;
+
 struct nlattr;
 struct ofpbuf;
 
@@ -37,18 +39,12 @@ typedef void nln_notify_func(const void *change, void *aux);
  * should be parsed into 'change' as specified in nln_create(). */
 typedef bool nln_parse_func(struct ofpbuf *buf, void *change);
 
-struct nln_notifier {
-    struct list node;
-    nln_notify_func *cb;
-    void *aux;
-};
-
 struct nln *nln_create(int protocol, int multicast_group, nln_parse_func *,
                        void *change);
 void nln_destroy(struct nln *);
-int nln_notifier_register(struct nln *, struct nln_notifier *,
-                          nln_notify_func *, void *aux);
-void nln_notifier_unregister(struct nln *, struct nln_notifier *);
+struct nln_notifier *nln_notifier_create(struct nln *, nln_notify_func *,
+                                         void *aux);
+void nln_notifier_destroy(struct nln_notifier *);
 void nln_run(struct nln *);
 void nln_wait(struct nln *);
 #endif /* netlink-notifier.h */

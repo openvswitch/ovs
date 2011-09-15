@@ -137,7 +137,7 @@ struct dpif_linux {
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
-    struct nln_notifier port_notifier;
+    struct nln_notifier *port_notifier;
     bool change_error;
 
     /* Queue of unused ports. */
@@ -253,13 +253,12 @@ static int
 open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 {
     struct dpif_linux *dpif;
-    int error;
     int i;
 
     dpif = xmalloc(sizeof *dpif);
-    error = nln_notifier_register(nln, &dpif->port_notifier,
-                                  dpif_linux_port_changed, dpif);
-    if (error) {
+    dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
+                                              dpif);
+    if (!dpif->port_notifier) {
         goto error_free;
     }
 
@@ -286,7 +285,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
 error_free:
     free(dpif);
-    return error;
+    return EINVAL;
 }
 
 static void
@@ -294,10 +293,7 @@ dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (nln) {
-        nln_notifier_unregister(nln, &dpif->port_notifier);
-    }
-
+    nln_notifier_destroy(dpif->port_notifier);
     nl_sock_destroy(dpif->mc_sock);
     sset_destroy(&dpif->changed_ports);
     free(dpif->lru_bitmap);

@@ -799,7 +799,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
-    struct nln_notifier link_notifier;
+    struct nln_notifier *link_notifier;
     struct unixctl_server *unixctl;
     int retval;
 
@@ -823,8 +823,7 @@ main(int argc, char *argv[])
                    "\"brcompat\" kernel module.");
     }
 
-
-    rtnetlink_link_notifier_register(&link_notifier, netdev_changed_cb, NULL);
+    link_notifier = rtnetlink_link_notifier_create(netdev_changed_cb, NULL);
 
     daemonize_complete();
 
@@ -842,7 +841,7 @@ main(int argc, char *argv[])
         poll_block();
     }
 
-    rtnetlink_link_notifier_unregister(&link_notifier);
+    rtnetlink_link_notifier_destroy(link_notifier);
 
     return 0;
 }

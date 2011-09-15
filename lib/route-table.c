@@ -69,8 +69,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static unsigned int register_count = 0;
 static struct nln *nln = NULL;
 static struct route_table_msg rtmsg;
-static struct nln_notifier route_notifier;
-static struct nln_notifier name_notifier;
+static struct nln_notifier *route_notifier = NULL;
+static struct nln_notifier *name_notifier = NULL;
 
 static bool route_table_valid = false;
 static bool name_table_valid = false;
@@ -162,11 +162,14 @@ route_table_register(void)
 {
     if (!register_count) {
         assert(!nln);
+        assert(!route_notifier);
 
         nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
                          (nln_parse_func *) route_table_parse, &rtmsg);
-        nln_notifier_register(nln, &route_notifier,
-                              (nln_notify_func *) route_table_change, NULL);
+
+        route_notifier =
+            nln_notifier_create(nln, (nln_notify_func *) route_table_change,
+                                NULL);
 
         hmap_init(&route_map);
         route_table_reset();
@@ -396,14 +399,15 @@ static void
 name_table_init(void)
 {
     hmap_init(&name_map);
-    rtnetlink_link_notifier_register(&name_notifier, name_table_change, NULL);
+    name_notifier = rtnetlink_link_notifier_create(name_table_change, NULL);
     name_table_valid = false;
 }
 
 static void
 name_table_uninit(void)
 {
-    rtnetlink_link_notifier_unregister(&name_notifier);
+    rtnetlink_link_notifier_destroy(name_notifier);
+    name_notifier = NULL;
     name_map_clear();
     hmap_destroy(&name_map);
 }
