@@ -272,7 +272,7 @@ static struct tnl_vport *port_table_lookup(struct port_lookup_key *lookup)
 	bucket = find_bucket(hash);
 
 	hlist_for_each_entry_rcu(tnl_vport, n, bucket, hash_node) {
-		if (!port_cmp(tnl_vport, lookup))
+		if (port_cmp(tnl_vport, lookup))
 			return tnl_vport;
 	}
 
