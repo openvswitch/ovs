@@ -109,7 +109,7 @@ nln_notifier_register(struct nln *nln, struct nln_notifier *notifier,
     } else {
         /* Catch up on notification work so that the new notifier won't
          * receive any stale notifications. */
-        nln_notifier_run(nln);
+        nln_run(nln);
     }
 
     list_push_back(&nln->all_notifiers, &notifier->node);
@@ -133,7 +133,7 @@ nln_notifier_unregister(struct nln *nln, struct nln_notifier *notifier)
 /* Calls all of the registered notifiers, passing along any as-yet-unreported
  * change events. */
 void
-nln_notifier_run(struct nln *nln)
+nln_run(struct nln *nln)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -171,7 +171,7 @@ nln_notifier_run(struct nln *nln)
 
 /* Causes poll_block() to wake up when change notifications are ready. */
 void
-nln_notifier_wait(struct nln *nln)
+nln_wait(struct nln *nln)
 {
     nln->has_run = false;
     if (nln->notify_sock) {

@@ -49,6 +49,6 @@ void nln_destroy(struct nln *);
 int nln_notifier_register(struct nln *, struct nln_notifier *,
                           nln_notify_func *, void *aux);
 void nln_notifier_unregister(struct nln *, struct nln_notifier *);
-void nln_notifier_run(struct nln *);
-void nln_notifier_wait(struct nln *);
+void nln_run(struct nln *);
+void nln_wait(struct nln *);
 #endif /* netlink-notifier.h */

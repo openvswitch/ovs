@@ -320,7 +320,7 @@ static void
 dpif_linux_run(struct dpif *dpif OVS_UNUSED)
 {
     if (nln) {
-        nln_notifier_run(nln);
+        nln_run(nln);
     }
 }
 
@@ -328,7 +328,7 @@ static void
 dpif_linux_wait(struct dpif *dpif OVS_UNUSED)
 {
     if (nln) {
-        nln_notifier_wait(nln);
+        nln_wait(nln);
     }
 }
 

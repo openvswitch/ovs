@@ -53,6 +53,6 @@ bool rtnetlink_link_parse(struct ofpbuf *buf,
 int rtnetlink_link_notifier_register(struct nln_notifier*,
                                      rtnetlink_link_notify_func *, void *aux);
 void rtnetlink_link_notifier_unregister(struct nln_notifier *);
-void rtnetlink_link_notifier_run(void);
-void rtnetlink_link_notifier_wait(void);
+void rtnetlink_link_run(void);
+void rtnetlink_link_wait(void);
 #endif /* rtnetlink-link.h */

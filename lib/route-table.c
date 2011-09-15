@@ -199,8 +199,8 @@ void
 route_table_run(void)
 {
     if (nln) {
-        rtnetlink_link_notifier_run();
-        nln_notifier_run(nln);
+        rtnetlink_link_run();
+        nln_run(nln);
     }
 }
 
@@ -209,8 +209,8 @@ void
 route_table_wait(void)
 {
     if (nln) {
-        rtnetlink_link_notifier_wait();
-        nln_notifier_wait(nln);
+        rtnetlink_link_wait();
+        nln_wait(nln);
     }
 }
 

@@ -109,19 +109,19 @@ rtnetlink_link_notifier_unregister(struct nln_notifier *notifier)
 /* Calls all of the registered notifiers, passing along any as-yet-unreported
  * netdev change events. */
 void
-rtnetlink_link_notifier_run(void)
+rtnetlink_link_run(void)
 {
     if (nln) {
-        nln_notifier_run(nln);
+        nln_run(nln);
     }
 }
 
 /* Causes poll_block() to wake up when network device change notifications are
  * ready. */
 void
-rtnetlink_link_notifier_wait(void)
+rtnetlink_link_wait(void)
 {
     if (nln) {
-        nln_notifier_wait(nln);
+        nln_wait(nln);
     }
 }

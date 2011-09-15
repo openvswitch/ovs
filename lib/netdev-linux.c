@@ -469,14 +469,14 @@ netdev_linux_init(void)
 static void
 netdev_linux_run(void)
 {
-    rtnetlink_link_notifier_run();
+    rtnetlink_link_run();
     netdev_linux_miimon_run();
 }
 
 static void
 netdev_linux_wait(void)
 {
-    rtnetlink_link_notifier_wait();
+    rtnetlink_link_wait();
     netdev_linux_miimon_wait();
 }
 

@@ -724,7 +724,7 @@ brc_recv_update(void)
      * (XenServer Tools 5.5.0 does not exhibit this behavior, and neither does
      * a VM without Tools installed at all.)
      */
-    rtnetlink_link_notifier_run();
+    rtnetlink_link_run();
 
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
@@ -830,14 +830,14 @@ main(int argc, char *argv[])
 
     for (;;) {
         unixctl_server_run(unixctl);
-        rtnetlink_link_notifier_run();
+        rtnetlink_link_run();
         brc_recv_update();
 
         netdev_run();
 
         nl_sock_wait(brc_sock, POLLIN);
         unixctl_server_wait(unixctl);
-        rtnetlink_link_notifier_wait();
+        rtnetlink_link_wait();
         netdev_wait();
         poll_block();
     }
