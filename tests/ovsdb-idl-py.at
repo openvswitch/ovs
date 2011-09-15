@@ -39,7 +39,7 @@ OVSDB_CHECK_IDL_PY([simple idl, initially empty, no ops - Python],
 001: done
 ])
 
-OVSDB_CHECK_IDL([simple idl, initially empty, various ops - Python],
+OVSDB_CHECK_IDL_PY([simple idl, initially empty, various ops - Python],
   [],
   [['["idltest",
       {"op": "insert",
@@ -93,31 +93,31 @@ OVSDB_CHECK_IDL([simple idl, initially empty, various ops - Python],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
 002: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 003: {"error":null,"result":[{"count":2}]}
 004: i=0 r=0 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-004: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+004: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 005: {"error":null,"result":[{"count":2}]}
 006: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-006: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+006: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
-008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=false sa=[] ua=[] uuid=<6>
 008: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-008: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+008: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 009: {"error":null,"result":[{"count":2}]}
-010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=false sa=[] ua=[] uuid=<6>
 010: i=0 r=123.5 b=true s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-010: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+010: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 011: {"error":null,"result":[{"count":1}]}
-012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
-012: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=false sa=[] ua=[] uuid=<6>
+012: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 013: reconnect
-014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
-014: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=false sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<4> <5>] uuid=<0>
 015: done
 ]])
 
-OVSDB_CHECK_IDL([simple idl, initially populated - Python],
+OVSDB_CHECK_IDL_PY([simple idl, initially populated - Python],
   [['["idltest",
       {"op": "insert",
        "table": "simple",
@@ -141,9 +141,9 @@ OVSDB_CHECK_IDL([simple idl, initially populated - Python],
        "where": [],
        "row": {"b": true}}]']],
   [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-000: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<5>
+000: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<3> <4>] uuid=<5>
 001: {"error":null,"result":[{"count":2}]}
 002: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-002: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<5>
+002: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=true sa=[abc def] ua=[<3> <4>] uuid=<5>
 003: done
 ]])
