@@ -504,17 +504,17 @@ Interface commands (a bond consists of multiple interfaces):\n\
   iface-to-br IFACE           print name of bridge that contains IFACE\n\
 \n\
 Controller commands:\n\
-  get-controller BRIDGE      print the controller for BRIDGE\n\
-  del-controller BRIDGE      delete the controller for BRIDGE\n\
-  set-controller BRIDGE TARGET  set the controller for BRIDGE to TARGET\n\
+  get-controller BRIDGE      print the controllers for BRIDGE\n\
+  del-controller BRIDGE      delete the controllers for BRIDGE\n\
+  set-controller BRIDGE TARGET...  set the controllers for BRIDGE\n\
   get-fail-mode BRIDGE       print the fail-mode for BRIDGE\n\
   del-fail-mode BRIDGE       delete the fail-mode for BRIDGE\n\
   set-fail-mode BRIDGE MODE  set the fail-mode for BRIDGE to MODE\n\
 \n\
 Manager commands:\n\
-  get-manager                print all manager(s)\n\
-  del-manager                delete all manager(s)\n\
-  set-manager TARGET...      set the list of manager(s) to TARGET(s)\n\
+  get-manager                print the managers\n\
+  del-manager                delete the managers\n\
+  set-manager TARGET...      set the list of managers to TARGET...\n\
 \n\
 SSL commands:\n\
   get-ssl                     print the SSL configuration\n\
