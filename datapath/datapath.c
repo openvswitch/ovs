@@ -124,6 +124,24 @@ const char *dp_name(const struct datapath *dp)
 	return vport_get_name(rcu_dereference_rtnl(dp->ports[ODPP_LOCAL]));
 }
 
+static int get_dpifindex(struct datapath *dp)
+{
+	struct vport *local;
+	int ifindex;
+
+	rcu_read_lock();
+
+	local = get_vport_protected(dp, ODPP_LOCAL);
+	if (local)
+		ifindex = vport_get_ifindex(local);
+	else
+		ifindex = 0;
+
+	rcu_read_unlock();
+
+	return ifindex;
+}
+
 static inline size_t br_nlmsg_size(void)
 {
 	return NLMSG_ALIGN(sizeof(struct ifinfomsg))
@@ -165,8 +183,7 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr->ifi_change = 0;
 
 	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port));
-	NLA_PUT_U32(skb, IFLA_MASTER,
-		vport_get_ifindex(get_vport_protected(dp, ODPP_LOCAL)));
+	NLA_PUT_U32(skb, IFLA_MASTER, get_dpifindex(dp));
 	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
@@ -367,12 +384,12 @@ static struct genl_family dp_packet_genl_family = {
 #define PACKET_N_MC_GROUPS 16
 static struct genl_multicast_group packet_mc_groups[PACKET_N_MC_GROUPS];
 
-static u32 packet_mc_group(struct datapath *dp, u8 cmd)
+static u32 packet_mc_group(int dp_ifindex, u8 cmd)
 {
 	u32 idx;
 	BUILD_BUG_ON_NOT_POWER_OF_2(PACKET_N_MC_GROUPS);
 
-	idx = jhash_2words(dp->dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
+	idx = jhash_2words(dp_ifindex, cmd, 0) & (PACKET_N_MC_GROUPS - 1);
 	return packet_mc_groups[idx].id;
 }
 
@@ -441,9 +458,19 @@ err:
 static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 				 const struct dp_upcall_info *upcall_info)
 {
-	u32 group = packet_mc_group(dp, upcall_info->cmd);
+	int dp_ifindex;
+	u32 group;
 	struct sk_buff *nskb;
 	int err;
+
+	dp_ifindex = get_dpifindex(dp);
+	if (!dp_ifindex) {
+		err = -ENODEV;
+		nskb = skb->next;
+		goto err_kfree_skbs;
+	}
+
+	group = packet_mc_group(dp_ifindex, upcall_info->cmd);
 
 	do {
 		struct odp_header *upcall;
@@ -481,7 +508,7 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 		}
 
 		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family, 0, upcall_info->cmd);
-		upcall->dp_ifindex = dp->dp_ifindex;
+		upcall->dp_ifindex = dp_ifindex;
 
 		nla = nla_nest_start(user_skb, ODP_PACKET_ATTR_KEY);
 		flow_to_nlattrs(upcall_info->key, user_skb);
@@ -859,7 +886,7 @@ static int odp_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (!odp_header)
 		return -EMSGSIZE;
 
-	odp_header->dp_ifindex = dp->dp_ifindex;
+	odp_header->dp_ifindex = get_dpifindex(dp);
 
 	nla = nla_nest_start(skb, ODP_FLOW_ATTR_KEY);
 	if (!nla)
@@ -1248,13 +1275,14 @@ static int odp_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 	struct odp_header *odp_header;
 	struct nlattr *nla;
 	int err;
+	int dp_ifindex = get_dpifindex(dp);
 
 	odp_header = genlmsg_put(skb, pid, seq, &dp_datapath_genl_family,
 				   flags, cmd);
 	if (!odp_header)
 		goto error;
 
-	odp_header->dp_ifindex = dp->dp_ifindex;
+	odp_header->dp_ifindex = dp_ifindex;
 
 	rcu_read_lock();
 	err = nla_put_string(skb, ODP_DP_ATTR_NAME, dp_name(dp));
@@ -1276,9 +1304,12 @@ static int odp_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 	nla = nla_nest_start(skb, ODP_DP_ATTR_MCGROUPS);
 	if (!nla)
 		goto nla_put_failure;
-	NLA_PUT_U32(skb, ODP_PACKET_CMD_MISS, packet_mc_group(dp, ODP_PACKET_CMD_MISS));
-	NLA_PUT_U32(skb, ODP_PACKET_CMD_ACTION, packet_mc_group(dp, ODP_PACKET_CMD_ACTION));
-	NLA_PUT_U32(skb, ODP_PACKET_CMD_SAMPLE, packet_mc_group(dp, ODP_PACKET_CMD_SAMPLE));
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_MISS,
+			packet_mc_group(dp_ifindex, ODP_PACKET_CMD_MISS));
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_ACTION,
+			packet_mc_group(dp_ifindex, ODP_PACKET_CMD_ACTION));
+	NLA_PUT_U32(skb, ODP_PACKET_CMD_SAMPLE,
+			packet_mc_group(dp_ifindex, ODP_PACKET_CMD_SAMPLE));
 	nla_nest_end(skb, nla);
 
 	return genlmsg_end(skb, odp_header);
@@ -1385,6 +1416,15 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (!dp->table)
 		goto err_free_dp;
 
+	dp->drop_frags = 0;
+	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
+	if (!dp->stats_percpu) {
+		err = -ENOMEM;
+		goto err_destroy_table;
+	}
+
+	change_datapath(dp, a);
+
 	/* Set up our datapath device. */
 	parms.name = nla_data(a[ODP_DP_ATTR_NAME]);
 	parms.type = ODP_VPORT_TYPE_INTERNAL;
@@ -1397,18 +1437,8 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		if (err == -EBUSY)
 			err = -EEXIST;
 
-		goto err_destroy_table;
+		goto err_destroy_percpu;
 	}
-	dp->dp_ifindex = vport_get_ifindex(vport);
-
-	dp->drop_frags = 0;
-	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
-	if (!dp->stats_percpu) {
-		err = -ENOMEM;
-		goto err_destroy_local_port;
-	}
-
-	change_datapath(dp, a);
 
 	reply = odp_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, ODP_DP_CMD_NEW);
 	err = PTR_ERR(reply);
@@ -1426,6 +1456,8 @@ static int odp_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 
 err_destroy_local_port:
 	dp_detach_port(get_vport_protected(dp, ODPP_LOCAL));
+err_destroy_percpu:
+	free_percpu(dp->stats_percpu);
 err_destroy_table:
 	tbl_destroy(get_table_protected(dp), NULL);
 err_free_dp:
@@ -1626,7 +1658,7 @@ static int odp_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	if (!odp_header)
 		return -EMSGSIZE;
 
-	odp_header->dp_ifindex = vport->dp->dp_ifindex;
+	odp_header->dp_ifindex = get_dpifindex(vport->dp);
 
 	NLA_PUT_U32(skb, ODP_VPORT_ATTR_PORT_NO, vport->port_no);
 	NLA_PUT_U32(skb, ODP_VPORT_ATTR_TYPE, vport_get_type(vport));
