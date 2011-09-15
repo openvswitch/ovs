@@ -212,7 +212,7 @@ class Atom(object):
         elif type(x) == float:
             t = ovs.db.types.RealType
         elif x in [False, True]:
-            t = ovs.db.types.RealType
+            t = ovs.db.types.BooleanType
         elif type(x) in [str, unicode]:
             t = ovs.db.types.StringType
         elif isinstance(x, uuid):
