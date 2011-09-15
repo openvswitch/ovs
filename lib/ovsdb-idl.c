@@ -100,7 +100,7 @@ struct ovsdb_idl_txn {
     int64_t inc_new_value;
 
     /* Inserted rows. */
-    struct hmap inserted_rows;
+    struct hmap inserted_rows;  /* Contains "struct ovsdb_idl_txn_insert"s. */
 };
 
 struct ovsdb_idl_txn_insert {
@@ -320,10 +320,10 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
 
         if (msg->type == JSONRPC_NOTIFY
-                   && !strcmp(msg->method, "update")
-                   && msg->params->type == JSON_ARRAY
-                   && msg->params->u.array.n == 2
-                   && msg->params->u.array.elems[0]->type == JSON_NULL) {
+            && !strcmp(msg->method, "update")
+            && msg->params->type == JSON_ARRAY
+            && msg->params->u.array.n == 2
+            && msg->params->u.array.elems[0]->type == JSON_NULL) {
             /* Database contents changed. */
             ovsdb_idl_parse_update(idl, msg->params->u.array.elems[1]);
         } else if (msg->type == JSONRPC_REPLY
@@ -1458,9 +1458,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
         const struct ovsdb_idl_table_class *class = row->table->class;
 
-        if (row->old == row->new) {
-            continue;
-        } else if (!row->new) {
+        if (!row->new) {
             if (class->is_root) {
                 struct json *op = json_object_create();
                 json_object_put_string(op, "op", "delete");
@@ -1471,7 +1469,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             } else {
                 /* Let ovsdb-server decide whether to really delete it. */
             }
-        } else {
+        } else if (row->old != row->new) {
             struct json *row_json;
             struct json *op;
             size_t idx;
