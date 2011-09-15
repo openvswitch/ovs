@@ -248,13 +248,15 @@ struct netdev_class {
      * bytes for Ethernet devices.
      *
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
-     * this function should return EOPNOTSUPP. */
+     * this function should return EOPNOTSUPP.  This function may be set to
+     * null if it would always return EOPNOTSUPP. */
     int (*get_mtu)(const struct netdev *netdev, int *mtup);
 
     /* Sets 'netdev''s MTU to 'mtu'.
      *
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
-     * this function should return EOPNOTSUPP. */
+     * this function should return EOPNOTSUPP.  This function may be set to
+     * null if it would always return EOPNOTSUPP. */
     int (*set_mtu)(const struct netdev *netdev, int mtu);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.

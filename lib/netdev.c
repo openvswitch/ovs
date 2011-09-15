@@ -531,14 +531,21 @@ netdev_get_name(const struct netdev *netdev)
  *
  * If successful, returns 0 and stores the MTU size in '*mtup'.  Returns
  * EOPNOTSUPP if 'netdev' does not have an MTU (as e.g. some tunnels do not).
- * On other failure, returns a positive errno value. */
+ * On other failure, returns a positive errno value.  On failure, sets '*mtup'
+ * to 0. */
 int
 netdev_get_mtu(const struct netdev *netdev, int *mtup)
 {
-    int error = netdev_get_dev(netdev)->netdev_class->get_mtu(netdev, mtup);
-    if (error && error != EOPNOTSUPP) {
-        VLOG_WARN_RL(&rl, "failed to retrieve MTU for network device %s: %s",
-                     netdev_get_name(netdev), strerror(error));
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    int error;
+
+    error = class->get_mtu ? class->get_mtu(netdev, mtup) : EOPNOTSUPP;
+    if (error) {
+        *mtup = 0;
+        if (error != EOPNOTSUPP) {
+            VLOG_WARN_RL(&rl, "failed to retrieve MTU for network device %s: "
+                         "%s", netdev_get_name(netdev), strerror(error));
+        }
     }
     return error;
 }
@@ -552,8 +559,10 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
 int
 netdev_set_mtu(const struct netdev *netdev, int mtu)
 {
-    int error = netdev_get_dev(netdev)->netdev_class->set_mtu(netdev, mtu);
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    int error;
 
+    error = class->set_mtu ? class->set_mtu(netdev, mtu) : EOPNOTSUPP;
     if (error && error != EOPNOTSUPP) {
         VLOG_WARN_RL(&rl, "failed to retrieve MTU for network device %s: %s",
                      netdev_get_name(netdev), strerror(error));

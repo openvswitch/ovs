@@ -361,20 +361,6 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
     return error;
 }
 
-static int
-netdev_vport_get_mtu(const struct netdev *netdev OVS_UNUSED,
-                     int *mtup OVS_UNUSED)
-{
-    return EOPNOTSUPP;
-}
-
-static int
-netdev_vport_set_mtu(const struct netdev *netdev OVS_UNUSED,
-                     int mtu OVS_UNUSED)
-{
-    return EOPNOTSUPP;
-}
-
 int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
@@ -872,8 +858,8 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
                                                             \
     netdev_vport_set_etheraddr,                             \
     netdev_vport_get_etheraddr,                             \
-    netdev_vport_get_mtu,                                   \
-    netdev_vport_set_mtu,                                   \
+    NULL,                       /* get_mtu */               \
+    NULL,                       /* set_mtu */               \
     NULL,                       /* get_ifindex */           \
     NULL,                       /* get_carrier */           \
     NULL,                       /* get_miimon */            \
