@@ -165,6 +165,8 @@ class Message(object):
             s.append("method=\"%s\"" % self.method)
         if self.params is not None:
             s.append("params=" + ovs.json.to_string(self.params))
+        if self.result is not None:
+            s.append("result=" + ovs.json.to_string(self.result))
         if self.error is not None:
             s.append("error=" + ovs.json.to_string(self.error))
         if self.id is not None:
