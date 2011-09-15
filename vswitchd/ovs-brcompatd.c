@@ -790,7 +790,7 @@ netdev_changed_cb(const struct rtnetlink_link_change *change,
               port_name, br_name);
 
     run_vsctl(vsctl_program, VSCTL_OPTIONS,
-              "--", "--if-exists", "del-port", br_name, port_name,
+              "--", "--if-exists", "del-port", port_name,
               "--", "comment", "ovs-brcompatd:", port_name, "disappeared",
               (char *) NULL);
 }
