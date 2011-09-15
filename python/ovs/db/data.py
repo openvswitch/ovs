@@ -264,10 +264,10 @@ class Datum(object):
         This function is not commonly useful because the most ordinary way to
         obtain a datum is ultimately via Datum.from_json() or Atom.from_json(),
         which check constraints themselves."""
-        for keyAtom, valueAtom in self.values:
-            keyAtom.check_constraints()
+        for keyAtom, valueAtom in self.values.iteritems():
+            keyAtom.check_constraints(self.type.key)
             if valueAtom is not None:
-                valueAtom.check_constraints()
+                valueAtom.check_constraints(self.type.value)
 
     @staticmethod
     def from_json(type_, json, symtab=None):
