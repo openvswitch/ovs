@@ -220,8 +220,8 @@ class BaseType(object):
                     json['refType'] = self.ref_type
         return json
 
-    def clone(self):
-        return BaseType(self.type, self.enum.clone(), self.min, self.max,
+    def copy(self):
+        return BaseType(self.type, self.enum.copy(), self.min, self.max,
                         self.min_length, self.max_length, self.ref_table)
 
     def is_valid(self):
@@ -378,12 +378,12 @@ class Type(object):
         self.n_min = n_min
         self.n_max = n_max
 
-    def clone(self):
+    def copy(self):
         if self.value is None:
             value = None
         else:
-            value = self.value.clone()
-        return Type(self.key.clone(), value, self.n_min, self.n_max)
+            value = self.value.copy()
+        return Type(self.key.copy(), value, self.n_min, self.n_max)
 
     def __eq__(self, other):
         if not isinstance(other, Type):

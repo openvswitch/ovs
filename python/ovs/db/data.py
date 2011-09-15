@@ -241,7 +241,7 @@ class Datum(object):
     def __contains__(self, item):
         return item in self.values
 
-    def clone(self):
+    def copy(self):
         return Datum(self.type, dict(self.values))
 
     @staticmethod
