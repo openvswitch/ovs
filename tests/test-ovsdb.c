@@ -1779,7 +1779,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             struct idltest_simple *s;
 
             if (!arg1 || arg2) {
-                ovs_fatal(0, "\"set\" command requires 1 argument");
+                ovs_fatal(0, "\"insert\" command requires 1 argument");
             }
 
             s = idltest_simple_insert(txn);
@@ -1788,12 +1788,12 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             const struct idltest_simple *s;
 
             if (!arg1 || arg2) {
-                ovs_fatal(0, "\"set\" command requires 1 argument");
+                ovs_fatal(0, "\"delete\" command requires 1 argument");
             }
 
             s = idltest_find_simple(idl, atoi(arg1));
             if (!s) {
-                ovs_fatal(0, "\"set\" command asks for nonexistent "
+                ovs_fatal(0, "\"delete\" command asks for nonexistent "
                           "i=%d", atoi(arg1));
             }
             idltest_simple_delete(s);
