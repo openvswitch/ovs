@@ -836,6 +836,10 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
         error = 0;
     } else {
         if (!ofport->cfm) {
+            struct ofproto_dpif *ofproto;
+
+            ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+            ofproto->need_revalidate = true;
             ofport->cfm = cfm_create(netdev_get_name(ofport->up.netdev));
         }
 
@@ -1069,6 +1073,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     /* LACP. */
     if (s->lacp) {
         if (!bundle->lacp) {
+            ofproto->need_revalidate = true;
             bundle->lacp = lacp_create();
         }
         lacp_configure(bundle->lacp, s->lacp);
