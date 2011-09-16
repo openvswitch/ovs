@@ -288,7 +288,8 @@ class Datum(object):
             else:
                 class_ = "set"
 
-            inner = ovs.db.parser.unwrap_json(json, class_, list)
+            inner = ovs.db.parser.unwrap_json(json, class_, [list, tuple],
+                                              "array")
             n = len(inner)
             if n < type_.n_min or n > type_.n_max:
                 raise error.Error("%s must have %d to %d members but %d are "

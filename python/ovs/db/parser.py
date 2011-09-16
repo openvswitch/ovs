@@ -89,11 +89,10 @@ def json_type_to_string(type_):
     else:
         return "<invalid>"
 
-def unwrap_json(json, name, need_type):
-    if (type(json) != list or len(json) != 2 or json[0] != name or
-        type(json[1]) != need_type):
-        raise error.Error('expected ["%s", <%s>]'
-                          % (name, json_type_to_string(need_type)), json)
+def unwrap_json(json, name, types, desc):
+    if (type(json) not in (list, tuple) or len(json) != 2 or json[0] != name or
+        type(json[1]) not in types):
+        raise error.Error('expected ["%s", <%s>]' % (name, desc), json)
     return json[1]
 
 def parse_json_pair(json):

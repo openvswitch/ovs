@@ -150,7 +150,7 @@ class BaseType(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) == unicode:
+        if type(json) in [str, unicode]:
             return BaseType(AtomicType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
@@ -437,8 +437,8 @@ class Type(object):
             return Type(BaseType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
-        key_json = parser.get("key", [dict, unicode])
-        value_json = parser.get_optional("value", [dict, unicode])
+        key_json = parser.get("key", [dict, str, unicode])
+        value_json = parser.get_optional("value", [dict, str, unicode])
         min_json = parser.get_optional("min", [int])
         max_json = parser.get_optional("max", [int, str, unicode])
         parser.finish()
