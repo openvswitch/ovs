@@ -141,23 +141,23 @@ def _make_pidfile():
         # unlock the lock for us, and we don't want that.
         global file
 
-        file = open(tmpfile, "w")
+        file_handle = open(tmpfile, "w")
     except IOError, e:
         _fatal("%s: create failed (%s)" % (tmpfile, e.strerror))
 
     try:
-        s = os.fstat(file.fileno())
+        s = os.fstat(file_handle.fileno())
     except IOError, e:
         _fatal("%s: fstat failed (%s)" % (tmpfile, e.strerror))
 
     try:
-        file.write("%s\n" % pid)
-        file.flush()
+        file_handle.write("%s\n" % pid)
+        file_handle.flush()
     except OSError, e:
         _fatal("%s: write failed: %s" % (tmpfile, e.strerror))
 
     try:
-        fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except IOError, e:
         _fatal("%s: fcntl failed: %s" % (tmpfile, e.strerror))
 
@@ -407,7 +407,7 @@ def __read_pidfile(pidfile, delete_if_stale):
             pass
 
     try:
-        file = open(pidfile, "r+")
+        file_handle = open(pidfile, "r+")
     except IOError, e:
         if e.errno == errno.ENOENT and delete_if_stale:
             return 0
@@ -417,11 +417,11 @@ def __read_pidfile(pidfile, delete_if_stale):
     # Python fcntl doesn't directly support F_GETLK so we have to just try
     # to lock it.
     try:
-        fcntl.lockf(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
         # pidfile exists but wasn't locked by anyone.  Now we have the lock.
         if not delete_if_stale:
-            file.close()
+            file_handle.close()
             logging.warning("%s: pid file is stale" % pidfile)
             return -errno.ESRCH
 
@@ -429,7 +429,7 @@ def __read_pidfile(pidfile, delete_if_stale):
         try:
             raced = False
             s = os.stat(pidfile)
-            s2 = os.fstat(file.fileno())
+            s2 = os.fstat(file_handle.fileno())
             if s.st_ino != s2.st_ino or s.st_dev != s2.st_dev:
                 raced = True
         except IOError:
@@ -447,7 +447,7 @@ def __read_pidfile(pidfile, delete_if_stale):
             return -e.errno
         else:
             logging.debug("%s: deleted stale pidfile" % pidfile)
-            file.close()
+            file_handle.close()
             return 0
     except IOError, e:
         if e.errno not in [errno.EACCES, errno.EAGAIN]:
@@ -457,7 +457,7 @@ def __read_pidfile(pidfile, delete_if_stale):
     # Someone else has the pidfile locked.
     try:
         try:
-            return int(file.readline())
+            return int(file_handle.readline())
         except IOError, e:
             logging.warning("%s: read: %s" % (pidfile, e.strerror))
             return -e.errno
@@ -466,7 +466,7 @@ def __read_pidfile(pidfile, delete_if_stale):
             return -errno.EINVAL
     finally:
         try:
-            file.close()
+            file_handle.close()
         except IOError:
             pass
 
