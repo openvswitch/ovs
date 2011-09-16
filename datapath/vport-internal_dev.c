@@ -32,16 +32,14 @@ static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
 	return netdev_priv(netdev);
 }
 
-/* This function is only called by the kernel network layer.  It is not a vport
- * get_stats() function.  If a vport get_stats() function is defined that
- * results in this being called it will cause infinite recursion. */
+/* This function is only called by the kernel network layer.*/
 static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev)
 {
 	struct vport *vport = internal_dev_get_vport(netdev);
 	struct net_device_stats *stats = &internal_dev_priv(netdev)->stats;
 
 	if (vport) {
-		struct rtnl_link_stats64 vport_stats;
+		struct ovs_vport_stats vport_stats;
 
 		vport_get_stats(vport, &vport_stats);
 
@@ -55,7 +53,6 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 		stats->tx_errors	= vport_stats.rx_errors;
 		stats->rx_dropped	= vport_stats.tx_dropped;
 		stats->tx_dropped	= vport_stats.rx_dropped;
-		stats->collisions	= vport_stats.collisions;
 	}
 
 	return stats;
@@ -266,7 +263,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 
 const struct vport_ops internal_vport_ops = {
 	.type		= OVS_VPORT_TYPE_INTERNAL,
-	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS | VPORT_F_FLOW,
+	.flags		= VPORT_F_REQUIRED | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
 	.set_addr	= netdev_set_addr,

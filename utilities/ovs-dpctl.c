@@ -367,6 +367,7 @@ show_dpif(struct dpif *dpif)
     struct dpif_port_dump dump;
     struct dpif_port dpif_port;
     struct ovs_dp_stats stats;
+    struct netdev *netdev;
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
@@ -381,7 +382,6 @@ show_dpif(struct dpif *dpif)
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);
 
         if (strcmp(dpif_port.type, "system")) {
-            struct netdev *netdev;
             int error;
 
             printf (" (%s", dpif_port.type);
@@ -418,29 +418,42 @@ show_dpif(struct dpif *dpif)
         putchar('\n');
 
         if (print_statistics) {
-            const struct netdev_stats *s = &dpif_port.stats;
+            struct netdev_stats s;
+            int error;
 
-            print_stat("\t\tRX packets:", s->rx_packets);
-            print_stat(" errors:", s->rx_errors);
-            print_stat(" dropped:", s->rx_dropped);
-            print_stat(" overruns:", s->rx_over_errors);
-            print_stat(" frame:", s->rx_frame_errors);
+            error = netdev_open(dpif_port.name, dpif_port.type, &netdev);
+            if (error) {
+                printf(", open failed (%s)", strerror(error));
+                continue;
+            }
+            error = netdev_get_stats(netdev, &s);
+            if (error) {
+                printf(", could not retrieve stats (%s)", strerror(error));
+                continue;
+            }
+
+            netdev_close(netdev);
+            print_stat("\t\tRX packets:", s.rx_packets);
+            print_stat(" errors:", s.rx_errors);
+            print_stat(" dropped:", s.rx_dropped);
+            print_stat(" overruns:", s.rx_over_errors);
+            print_stat(" frame:", s.rx_frame_errors);
             printf("\n");
 
-            print_stat("\t\tTX packets:", s->tx_packets);
-            print_stat(" errors:", s->tx_errors);
-            print_stat(" dropped:", s->tx_dropped);
-            print_stat(" aborted:", s->tx_aborted_errors);
-            print_stat(" carrier:", s->tx_carrier_errors);
+            print_stat("\t\tTX packets:", s.tx_packets);
+            print_stat(" errors:", s.tx_errors);
+            print_stat(" dropped:", s.tx_dropped);
+            print_stat(" aborted:", s.tx_aborted_errors);
+            print_stat(" carrier:", s.tx_carrier_errors);
             printf("\n");
 
-            print_stat("\t\tcollisions:", s->collisions);
+            print_stat("\t\tcollisions:", s.collisions);
             printf("\n");
 
-            print_stat("\t\tRX bytes:", s->rx_bytes);
-            print_human_size(s->rx_bytes);
-            print_stat("  TX bytes:", s->tx_bytes);
-            print_human_size(s->tx_bytes);
+            print_stat("\t\tRX bytes:", s.rx_bytes);
+            print_human_size(s.rx_bytes);
+            print_stat("  TX bytes:", s.tx_bytes);
+            print_human_size(s.tx_bytes);
             printf("\n");
         }
     }

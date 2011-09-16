@@ -31,14 +31,14 @@ void vport_del(struct vport *);
 struct vport *vport_locate(const char *name);
 
 int vport_set_addr(struct vport *, const unsigned char *);
-int vport_set_stats(struct vport *, struct rtnl_link_stats64 *);
+void vport_set_stats(struct vport *, struct ovs_vport_stats *);
 
 const char *vport_get_name(const struct vport *);
 enum ovs_vport_type vport_get_type(const struct vport *);
 const unsigned char *vport_get_addr(const struct vport *);
 
 struct kobject *vport_get_kobj(const struct vport *);
-int vport_get_stats(struct vport *, struct rtnl_link_stats64 *);
+void vport_get_stats(struct vport *, struct ovs_vport_stats *);
 
 unsigned vport_get_flags(const struct vport *);
 int vport_is_running(const struct vport *);
@@ -84,11 +84,9 @@ struct vport_err_stats {
  * regardless of whether they were actually chosen and sent down to userspace.
  * @hash_node: Element in @dev_table hash table in vport.c.
  * @ops: Class structure.
- * @percpu_stats: Points to per-CPU statistics used and maintained by the vport
- * code if %VPORT_F_GEN_STATS is set to 1 in @ops flags, otherwise unused.
+ * @percpu_stats: Points to per-CPU statistics used and maintained by vport
  * @stats_lock: Protects @err_stats and @offset_stats.
- * @err_stats: Points to error statistics used and maintained by the vport code
- * if %VPORT_F_GEN_STATS is set to 1 in @ops flags, otherwise unused.
+ * @err_stats: Points to error statistics used and maintained by vport
  * @offset_stats: Added to actual statistics as a sop to compatibility with
  * XAPI for Citrix XenServer.  Deprecated.
  */
@@ -108,13 +106,12 @@ struct vport {
 
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
-	struct rtnl_link_stats64 offset_stats;
+	struct ovs_vport_stats offset_stats;
 };
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
-#define VPORT_F_GEN_STATS	(1 << 1) /* Track stats at the generic layer. */
-#define VPORT_F_FLOW		(1 << 2) /* Sets OVS_CB(skb)->flow. */
-#define VPORT_F_TUN_ID		(1 << 3) /* Sets OVS_CB(skb)->tun_id. */
+#define VPORT_F_FLOW		(1 << 1) /* Sets OVS_CB(skb)->flow. */
+#define VPORT_F_TUN_ID		(1 << 2) /* Sets OVS_CB(skb)->tun_id. */
 
 /**
  * struct vport_parms - parameters for creating a new vport
@@ -160,10 +157,6 @@ struct vport_parms {
  * @get_addr: Get the device's MAC address.
  * @get_config: Get the device's configuration.
  * @get_kobj: Get the kobj associated with the device (may return null).
- * @get_stats: Fill in the transmit/receive stats.  May be null if stats are
- * not supported or if generic stats are in use.  If defined and
- * VPORT_F_GEN_STATS is also set, the error stats are added to those already
- * collected.
  * @get_dev_flags: Get the device's flags.
  * @is_running: Checks whether the device is running.
  * @get_operstate: Get the device's operating state.
@@ -195,7 +188,6 @@ struct vport_ops {
 	const unsigned char *(*get_addr)(const struct vport *);
 	void (*get_config)(const struct vport *, void *);
 	struct kobject *(*get_kobj)(const struct vport *);
-	int (*get_stats)(const struct vport *, struct rtnl_link_stats64 *);
 
 	unsigned (*get_dev_flags)(const struct vport *);
 	int (*is_running)(const struct vport *);

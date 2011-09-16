@@ -46,25 +46,6 @@ AC_DEFUN([OVS_CHECK_NDEBUG],
      [ndebug=false])
    AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])])
 
-dnl Checks for struct rtnl_link_stats64.
-dnl
-dnl (OVS checks for this structure in both kernel and userspace headers.  This
-dnl is not redundant, because the kernel and userspace builds have completely
-dnl different include paths.  It is possible for the kernel to have this
-dnl structure but not userspace, and vice versa.)
-AC_DEFUN([OVS_CHECK_RTNL_LINK_STATS64],
-  [AC_REQUIRE([OVS_CHECK_NETLINK])
-   if test $HAVE_NETLINK = yes; then
-     AC_CHECK_MEMBER(
-       [struct rtnl_link_stats64.tx_packets],
-       [AC_DEFINE([HAVE_RTNL_LINK_STATS64], [1],
-                  [Define to 1 if <linux/if_link.h> defines
-                   struct rtnl_link_stats64.])],
-       [], [#include <sys/socket.h>     /* Provides sa_family_t. */
-#include <linux/if_link.h>
-])
-   fi])
-
 dnl Checks for Netlink support.
 AC_DEFUN([OVS_CHECK_NETLINK],
   [AC_CHECK_HEADER([linux/netlink.h],

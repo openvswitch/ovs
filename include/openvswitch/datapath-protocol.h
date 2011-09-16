@@ -51,7 +51,6 @@
 #include <sys/socket.h>
 #endif
 
-#include <linux/if_link.h>
 #include <linux/netlink.h>
 
 /* datapaths. */
@@ -134,6 +133,17 @@ struct ovs_dp_stats {
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
     uint64_t n_flows;           /* Number of flows present */
+};
+
+struct ovs_vport_stats {
+	uint64_t   rx_packets;		/* total packets received       */
+	uint64_t   tx_packets;		/* total packets transmitted    */
+	uint64_t   rx_bytes;		/* total bytes received         */
+	uint64_t   tx_bytes;		/* total bytes transmitted      */
+	uint64_t   rx_errors;		/* bad packets received         */
+	uint64_t   tx_errors;		/* packet transmit problems     */
+	uint64_t   rx_dropped;		/* no space in linux buffers    */
+	int64_t   tx_dropped;		/* no space available in linux  */
 };
 
 /* Logical ports. */
@@ -219,7 +229,7 @@ enum ovs_vport_cmd {
  * @OVS_VPORT_ATTR_NAME: Name of vport.  For a vport based on a network device
  * this is the name of the network device.  Maximum length %IFNAMSIZ-1 bytes
  * plus a null terminator.
- * @OVS_VPORT_ATTR_STATS: A &struct rtnl_link_stats64 giving statistics for
+ * @OVS_VPORT_ATTR_STATS: A &struct ovs_vport_stats giving statistics for
  * packets sent or received through the vport.
  * @OVS_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
  * @OVS_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
@@ -247,7 +257,7 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_PORT_NO,	/* port number within datapath */
 	OVS_VPORT_ATTR_TYPE,	/* 32-bit OVS_VPORT_TYPE_* constant. */
 	OVS_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
-	OVS_VPORT_ATTR_STATS,	/* struct rtnl_link_stats64 */
+	OVS_VPORT_ATTR_STATS,	/* struct ovs_vport_stats */
 	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
 	OVS_VPORT_ATTR_IFINDEX, /* 32-bit ifindex of backing netdev */

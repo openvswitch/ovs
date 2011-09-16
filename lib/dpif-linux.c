@@ -463,12 +463,6 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
         dpif_port->name = xstrdup(reply.name);
         dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
         dpif_port->port_no = reply.port_no;
-        if (reply.stats) {
-            netdev_stats_from_rtnl_link_stats64(&dpif_port->stats,
-                                                reply.stats);
-        } else {
-            memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
-        }
         ofpbuf_delete(buf);
     }
     return error;
@@ -564,11 +558,6 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
     dpif_port->name = (char *) vport.name;
     dpif_port->type = (char *) netdev_vport_get_netdev_type(&vport);
     dpif_port->port_no = vport.port_no;
-    if (vport.stats) {
-        netdev_stats_from_rtnl_link_stats64(&dpif_port->stats, vport.stats);
-    } else {
-        memset(&dpif_port->stats, 0xff, sizeof dpif_port->stats);
-    }
     return 0;
 }
 
@@ -1231,8 +1220,8 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
         [OVS_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
         [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
         [OVS_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                   .min_len = sizeof(struct rtnl_link_stats64),
-                                   .max_len = sizeof(struct rtnl_link_stats64),
+                                   .min_len = sizeof(struct ovs_vport_stats),
+                                   .max_len = sizeof(struct ovs_vport_stats),
                                    .optional = true },
         [OVS_VPORT_ATTR_ADDRESS] = { .type = NL_A_UNSPEC,
                                      .min_len = ETH_ADDR_LEN,

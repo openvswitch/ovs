@@ -115,9 +115,8 @@ enum {
     VALID_IN6               = 1 << 3,
     VALID_MTU               = 1 << 4,
     VALID_CARRIER           = 1 << 5,
-    VALID_IS_PSEUDO         = 1 << 6, /* Represents is_internal and is_tap. */
-    VALID_POLICING          = 1 << 7,
-    VALID_HAVE_VPORT_STATS  = 1 << 8
+    VALID_POLICING          = 1 << 6,
+    VALID_HAVE_VPORT_STATS  = 1 << 7
 };
 
 struct tap_state {
@@ -369,8 +368,6 @@ struct netdev_dev_linux {
     struct in6_addr in6;
     int mtu;
     int carrier;
-    bool is_internal;           /* Is this an openvswitch internal device? */
-    bool is_tap;                /* Is this a tuntap device? */
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
     bool have_vport_stats;
@@ -1246,21 +1243,6 @@ check_for_working_netlink_stats(void)
     }
 }
 
-/* Brings the 'is_internal' and 'is_tap' members of 'netdev_dev' up-to-date. */
-static void
-netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
-{
-    if (!(netdev_dev->cache_valid & VALID_IS_PSEUDO)) {
-        const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
-        const char *type = netdev_dev_get_type(&netdev_dev->netdev_dev);
-
-        netdev_dev->is_tap = !strcmp(type, "tap");
-        netdev_dev->is_internal = (!netdev_dev->is_tap
-                                   && dpif_linux_is_internal_device(name));
-        netdev_dev->cache_valid |= VALID_IS_PSEUDO;
-    }
-}
-
 static void
 swap_uint64(uint64_t *a, uint64_t *b)
 {
@@ -1269,37 +1251,123 @@ swap_uint64(uint64_t *a, uint64_t *b)
     *b = tmp;
 }
 
-/* Retrieves current device stats for 'netdev'. */
+static void
+get_stats_via_vport(const struct netdev *netdev_,
+                    struct netdev_stats *stats)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
+    if (netdev_dev->have_vport_stats ||
+        !(netdev_dev->cache_valid & VALID_HAVE_VPORT_STATS)) {
+        int error;
+
+        error = netdev_vport_get_stats(netdev_, stats);
+        if (error) {
+            VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed %d",
+                         netdev_get_name(netdev_), error);
+        }
+        netdev_dev->have_vport_stats = !error;
+        netdev_dev->cache_valid |= VALID_HAVE_VPORT_STATS;
+    }
+}
+
+static int
+netdev_linux_sys_get_stats(const struct netdev *netdev_,
+                         struct netdev_stats *stats)
+{
+    static int use_netlink_stats = -1;
+    int error;
+
+    if (use_netlink_stats < 0) {
+        use_netlink_stats = check_for_working_netlink_stats();
+    }
+
+    if (use_netlink_stats) {
+        int ifindex;
+
+        error = get_ifindex(netdev_, &ifindex);
+        if (!error) {
+            error = get_stats_via_netlink(ifindex, stats);
+        }
+    } else {
+        error = get_stats_via_proc(netdev_get_name(netdev_), stats);
+    }
+
+    if (error) {
+        VLOG_WARN_RL(&rl, "%s: linux-sys get stats failed %d",
+                      netdev_get_name(netdev_), error);
+    }
+    return error;
+
+}
+
+/* Retrieves current device stats for 'netdev-linux'. */
 static int
 netdev_linux_get_stats(const struct netdev *netdev_,
                        struct netdev_stats *stats)
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
-    static int use_netlink_stats = -1;
+    struct netdev_stats dev_stats;
     int error;
 
-    if (netdev_dev->have_vport_stats ||
-        !(netdev_dev->cache_valid & VALID_HAVE_VPORT_STATS)) {
+    get_stats_via_vport(netdev_, stats);
 
-        error = netdev_vport_get_stats(netdev_, stats);
-        netdev_dev->have_vport_stats = !error;
-        netdev_dev->cache_valid |= VALID_HAVE_VPORT_STATS;
+    error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
+
+    if (error) {
+        if (!netdev_dev->have_vport_stats) {
+            return error;
+        } else {
+            return 0;
+        }
     }
 
     if (!netdev_dev->have_vport_stats) {
-        if (use_netlink_stats < 0) {
-            use_netlink_stats = check_for_working_netlink_stats();
-        }
-        if (use_netlink_stats) {
-            int ifindex;
+        /* stats not available from OVS then use ioctl stats. */
+        *stats = dev_stats;
+    } else {
+        stats->rx_errors           += dev_stats.rx_errors;
+        stats->tx_errors           += dev_stats.tx_errors;
+        stats->rx_dropped          += dev_stats.rx_dropped;
+        stats->tx_dropped          += dev_stats.tx_dropped;
+        stats->multicast           += dev_stats.multicast;
+        stats->collisions          += dev_stats.collisions;
+        stats->rx_length_errors    += dev_stats.rx_length_errors;
+        stats->rx_over_errors      += dev_stats.rx_over_errors;
+        stats->rx_crc_errors       += dev_stats.rx_crc_errors;
+        stats->rx_frame_errors     += dev_stats.rx_frame_errors;
+        stats->rx_fifo_errors      += dev_stats.rx_fifo_errors;
+        stats->rx_missed_errors    += dev_stats.rx_missed_errors;
+        stats->tx_aborted_errors   += dev_stats.tx_aborted_errors;
+        stats->tx_carrier_errors   += dev_stats.tx_carrier_errors;
+        stats->tx_fifo_errors      += dev_stats.tx_fifo_errors;
+        stats->tx_heartbeat_errors += dev_stats.tx_heartbeat_errors;
+        stats->tx_window_errors    += dev_stats.tx_window_errors;
+    }
+    return 0;
+}
 
-            error = get_ifindex(netdev_, &ifindex);
-            if (!error) {
-                error = get_stats_via_netlink(ifindex, stats);
-            }
+/* Retrieves current device stats for 'netdev-tap' netdev or
+ * netdev-internal. */
+static int
+netdev_pseudo_get_stats(const struct netdev *netdev_,
+                        struct netdev_stats *stats)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_stats dev_stats;
+    int error;
+
+    get_stats_via_vport(netdev_, stats);
+
+    error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
+    if (error) {
+        if (!netdev_dev->have_vport_stats) {
+            return error;
         } else {
-            error = get_stats_via_proc(netdev_get_name(netdev_), stats);
+            return 0;
         }
     }
 
@@ -1309,9 +1377,8 @@ netdev_linux_get_stats(const struct netdev *netdev_,
      * them back here. This does not apply if we are getting stats from the
      * vport layer because it always tracks stats from the perspective of the
      * switch. */
-    netdev_linux_update_is_pseudo(netdev_dev);
-    if (!error && !netdev_dev->have_vport_stats &&
-        (netdev_dev->is_internal || netdev_dev->is_tap)) {
+    if (!netdev_dev->have_vport_stats) {
+        *stats = dev_stats;
         swap_uint64(&stats->rx_packets, &stats->tx_packets);
         swap_uint64(&stats->rx_bytes, &stats->tx_bytes);
         swap_uint64(&stats->rx_errors, &stats->tx_errors);
@@ -1327,9 +1394,17 @@ netdev_linux_get_stats(const struct netdev *netdev_,
         stats->tx_fifo_errors = 0;
         stats->tx_heartbeat_errors = 0;
         stats->tx_window_errors = 0;
-    }
+    } else {
+        stats->rx_dropped          += dev_stats.tx_dropped;
+        stats->tx_dropped          += dev_stats.rx_dropped;
 
-    return error;
+        stats->rx_errors           += dev_stats.tx_errors;
+        stats->tx_errors           += dev_stats.rx_errors;
+
+        stats->multicast           += dev_stats.multicast;
+        stats->collisions          += dev_stats.collisions;
+    }
+    return 0;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
@@ -2263,7 +2338,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     return netdev_dev_linux_cast(netdev_get_dev(netdev))->change_seq;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CREATE, ENUMERATE, SET_STATS)  \
+#define NETDEV_LINUX_CLASS(NAME, CREATE, ENUMERATE, GET_STATS, SET_STATS)  \
 {                                                               \
     NAME,                                                       \
                                                                 \
@@ -2296,7 +2371,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_get_ifindex,                                   \
     netdev_linux_get_carrier,                                   \
     netdev_linux_set_miimon_interval,                           \
-    netdev_linux_get_stats,                                     \
+    GET_STATS,                                                  \
     SET_STATS,                                                  \
                                                                 \
     netdev_linux_get_features,                                  \
@@ -2333,6 +2408,7 @@ const struct netdev_class netdev_linux_class =
         "system",
         netdev_linux_create,
         netdev_linux_enumerate,
+        netdev_linux_get_stats,
         NULL);                  /* set_stats */
 
 const struct netdev_class netdev_tap_class =
@@ -2340,6 +2416,7 @@ const struct netdev_class netdev_tap_class =
         "tap",
         netdev_linux_create_tap,
         NULL,                   /* enumerate */
+        netdev_pseudo_get_stats,
         NULL);                  /* set_stats */
 
 const struct netdev_class netdev_internal_class =
@@ -2347,6 +2424,7 @@ const struct netdev_class netdev_internal_class =
         "internal",
         netdev_linux_create,
         NULL,                    /* enumerate */
+        netdev_pseudo_get_stats,
         netdev_vport_set_stats);
 
 /* HTB traffic control class. */
@@ -3956,56 +4034,34 @@ tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
     return tc_bytes_to_ticks(Bps, MAX(burst_bytes, min_burst));
 }
 
-/* Public utility functions. */
-
-#define COPY_NETDEV_STATS                                   \
-    dst->rx_packets = src->rx_packets;                      \
-    dst->tx_packets = src->tx_packets;                      \
-    dst->rx_bytes = src->rx_bytes;                          \
-    dst->tx_bytes = src->tx_bytes;                          \
-    dst->rx_errors = src->rx_errors;                        \
-    dst->tx_errors = src->tx_errors;                        \
-    dst->rx_dropped = src->rx_dropped;                      \
-    dst->tx_dropped = src->tx_dropped;                      \
-    dst->multicast = src->multicast;                        \
-    dst->collisions = src->collisions;                      \
-    dst->rx_length_errors = src->rx_length_errors;          \
-    dst->rx_over_errors = src->rx_over_errors;              \
-    dst->rx_crc_errors = src->rx_crc_errors;                \
-    dst->rx_frame_errors = src->rx_frame_errors;            \
-    dst->rx_fifo_errors = src->rx_fifo_errors;              \
-    dst->rx_missed_errors = src->rx_missed_errors;          \
-    dst->tx_aborted_errors = src->tx_aborted_errors;        \
-    dst->tx_carrier_errors = src->tx_carrier_errors;        \
-    dst->tx_fifo_errors = src->tx_fifo_errors;              \
-    dst->tx_heartbeat_errors = src->tx_heartbeat_errors;    \
-    dst->tx_window_errors = src->tx_window_errors
-
 /* Copies 'src' into 'dst', performing format conversion in the process. */
-void
+static void
 netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
                                   const struct rtnl_link_stats *src)
 {
-    COPY_NETDEV_STATS;
+    dst->rx_packets = src->rx_packets;
+    dst->tx_packets = src->tx_packets;
+    dst->rx_bytes = src->rx_bytes;
+    dst->tx_bytes = src->tx_bytes;
+    dst->rx_errors = src->rx_errors;
+    dst->tx_errors = src->tx_errors;
+    dst->rx_dropped = src->rx_dropped;
+    dst->tx_dropped = src->tx_dropped;
+    dst->multicast = src->multicast;
+    dst->collisions = src->collisions;
+    dst->rx_length_errors = src->rx_length_errors;
+    dst->rx_over_errors = src->rx_over_errors;
+    dst->rx_crc_errors = src->rx_crc_errors;
+    dst->rx_frame_errors = src->rx_frame_errors;
+    dst->rx_fifo_errors = src->rx_fifo_errors;
+    dst->rx_missed_errors = src->rx_missed_errors;
+    dst->tx_aborted_errors = src->tx_aborted_errors;
+    dst->tx_carrier_errors = src->tx_carrier_errors;
+    dst->tx_fifo_errors = src->tx_fifo_errors;
+    dst->tx_heartbeat_errors = src->tx_heartbeat_errors;
+    dst->tx_window_errors = src->tx_window_errors;
 }
 
-/* Copies 'src' into 'dst', performing format conversion in the process. */
-void
-netdev_stats_from_rtnl_link_stats64(struct netdev_stats *dst,
-                                    const struct rtnl_link_stats64 *src)
-{
-    COPY_NETDEV_STATS;
-}
-
-/* Copies 'src' into 'dst', performing format conversion in the process. */
-void
-netdev_stats_to_rtnl_link_stats64(struct rtnl_link_stats64 *dst,
-                                  const struct netdev_stats *src)
-{
-    COPY_NETDEV_STATS;
-    dst->rx_compressed = 0;
-    dst->tx_compressed = 0;
-}
 
 /* Utility functions. */
 

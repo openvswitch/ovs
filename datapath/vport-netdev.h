@@ -30,7 +30,6 @@ const char *netdev_get_name(const struct vport *);
 const unsigned char *netdev_get_addr(const struct vport *);
 const char *netdev_get_config(const struct vport *);
 struct kobject *netdev_get_kobj(const struct vport *);
-int netdev_get_stats(const struct vport *, struct rtnl_link_stats64 *);
 unsigned netdev_get_dev_flags(const struct vport *);
 int netdev_is_running(const struct vport *);
 unsigned char netdev_get_operstate(const struct vport *);

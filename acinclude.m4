@@ -254,8 +254,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/if_link.h], [rtnl_link_stats64])
-
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [ADD_ALL_VLANS_CMD],
                   [OVS_DEFINE([HAVE_VLAN_BUG_WORKAROUND])])
 

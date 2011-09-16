@@ -788,7 +788,7 @@ static void capwap_frag_expire(unsigned long ifq)
 
 const struct vport_ops capwap_vport_ops = {
 	.type		= OVS_VPORT_TYPE_CAPWAP,
-	.flags		= VPORT_F_GEN_STATS | VPORT_F_TUN_ID,
+	.flags		= VPORT_F_TUN_ID,
 	.init		= capwap_init,
 	.exit		= capwap_exit,
 	.create		= capwap_create,

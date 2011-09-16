@@ -1504,10 +1504,10 @@ static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 	[OVS_VPORT_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
 	[OVS_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
-	[OVS_VPORT_ATTR_STATS] = { .len = sizeof(struct rtnl_link_stats64) },
+	[OVS_VPORT_ATTR_STATS] = { .len = sizeof(struct ovs_vport_stats) },
 	[OVS_VPORT_ATTR_ADDRESS] = { .len = ETH_ALEN },
 #else
-	[OVS_VPORT_ATTR_STATS] = { .minlen = sizeof(struct rtnl_link_stats64) },
+	[OVS_VPORT_ATTR_STATS] = { .minlen = sizeof(struct ovs_vport_stats) },
 	[OVS_VPORT_ATTR_ADDRESS] = { .minlen = ETH_ALEN },
 #endif
 	[OVS_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
@@ -1545,11 +1545,11 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_TYPE, vport_get_type(vport));
 	NLA_PUT_STRING(skb, OVS_VPORT_ATTR_NAME, vport_get_name(vport));
 
-	nla = nla_reserve(skb, OVS_VPORT_ATTR_STATS, sizeof(struct rtnl_link_stats64));
+	nla = nla_reserve(skb, OVS_VPORT_ATTR_STATS, sizeof(struct ovs_vport_stats));
 	if (!nla)
 		goto nla_put_failure;
-	if (vport_get_stats(vport, nla_data(nla)))
-		__skb_trim(skb, skb->len - nla->nla_len);
+
+	vport_get_stats(vport, nla_data(nla));
 
 	NLA_PUT(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN, vport_get_addr(vport));
 
@@ -1628,10 +1628,13 @@ static struct vport *lookup_vport(struct ovs_header *ovs_header,
 static int change_vport(struct vport *vport, struct nlattr *a[OVS_VPORT_ATTR_MAX + 1])
 {
 	int err = 0;
+
 	if (a[OVS_VPORT_ATTR_STATS])
-		err = vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
-	if (!err && a[OVS_VPORT_ATTR_ADDRESS])
+		vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
+
+	if (a[OVS_VPORT_ATTR_ADDRESS])
 		err = vport_set_addr(vport, nla_data(a[OVS_VPORT_ATTR_ADDRESS]));
+
 	return err;
 }
 

@@ -35,9 +35,6 @@ MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
 #define vlan_tso true
 #endif
 
-/* If the native device stats aren't 64 bit use the vport stats tracking instead. */
-#define USE_VPORT_STATS (sizeof(((struct net_device_stats *)0)->rx_bytes) < sizeof(u64))
-
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
@@ -144,16 +141,6 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 		goto error_put;
 	}
 
-	/* If we are using the vport stats layer initialize it to the current
-	 * values so we are roughly consistent with the device stats. */
-	if (USE_VPORT_STATS) {
-		struct rtnl_link_stats64 stats;
-
-		err = netdev_get_stats(vport, &stats);
-		if (!err)
-			vport_set_stats(vport, &stats);
-	}
-
 	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
 					 vport);
 	if (err)
@@ -216,13 +203,6 @@ struct kobject *netdev_get_kobj(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
-}
-
-int netdev_get_stats(const struct vport *vport, struct rtnl_link_stats64 *stats)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	dev_get_stats(netdev_vport->dev, stats);
-	return 0;
 }
 
 unsigned netdev_get_dev_flags(const struct vport *vport)
@@ -410,8 +390,7 @@ struct vport *netdev_get_vport(struct net_device *dev)
 
 const struct vport_ops netdev_vport_ops = {
 	.type		= OVS_VPORT_TYPE_NETDEV,
-	.flags          = (VPORT_F_REQUIRED |
-			  (USE_VPORT_STATS ? VPORT_F_GEN_STATS : 0)),
+	.flags          = VPORT_F_REQUIRED,
 	.init		= netdev_init,
 	.exit		= netdev_exit,
 	.create		= netdev_create,
@@ -420,7 +399,6 @@ const struct vport_ops netdev_vport_ops = {
 	.get_name	= netdev_get_name,
 	.get_addr	= netdev_get_addr,
 	.get_kobj	= netdev_get_kobj,
-	.get_stats	= netdev_get_stats,
 	.get_dev_flags	= netdev_get_dev_flags,
 	.is_running	= netdev_is_running,
 	.get_operstate	= netdev_get_operstate,

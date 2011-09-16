@@ -361,6 +361,45 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
     return error;
 }
 
+#define COPY_OVS_STATS                                      \
+    dst->rx_packets = src->rx_packets;                      \
+    dst->tx_packets = src->tx_packets;                      \
+    dst->rx_bytes = src->rx_bytes;                          \
+    dst->tx_bytes = src->tx_bytes;                          \
+    dst->rx_errors = src->rx_errors;                        \
+    dst->tx_errors = src->tx_errors;                        \
+    dst->rx_dropped = src->rx_dropped;                      \
+    dst->tx_dropped = src->tx_dropped;
+
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+static void
+netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
+                                  const struct ovs_vport_stats *src)
+{
+    COPY_OVS_STATS
+    dst->multicast = 0;
+    dst->collisions = 0;
+    dst->rx_length_errors = 0;
+    dst->rx_over_errors = 0;
+    dst->rx_crc_errors = 0;
+    dst->rx_frame_errors = 0;
+    dst->rx_fifo_errors = 0;
+    dst->rx_missed_errors = 0;
+    dst->tx_aborted_errors = 0;
+    dst->tx_carrier_errors = 0;
+    dst->tx_fifo_errors = 0;
+    dst->tx_heartbeat_errors = 0;
+    dst->tx_window_errors = 0;
+}
+
+/* Copies 'src' into 'dst', performing format conversion in the process. */
+static void
+netdev_stats_to_ovs_vport_stats(struct ovs_vport_stats *dst,
+                                const struct netdev_stats *src)
+{
+    COPY_OVS_STATS
+}
+
 int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
@@ -376,7 +415,7 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
         return EOPNOTSUPP;
     }
 
-    netdev_stats_from_rtnl_link_stats64(stats, reply.stats);
+    netdev_stats_from_ovs_vport_stats(stats, reply.stats);
 
     ofpbuf_delete(buf);
 
@@ -386,11 +425,11 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 int
 netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 {
-    struct rtnl_link_stats64 rtnl_stats;
+    struct ovs_vport_stats rtnl_stats;
     struct dpif_linux_vport vport;
     int err;
 
-    netdev_stats_to_rtnl_link_stats64(&rtnl_stats, stats);
+    netdev_stats_to_ovs_vport_stats(&rtnl_stats, stats);
 
     dpif_linux_vport_init(&vport);
     vport.cmd = OVS_VPORT_CMD_SET;
