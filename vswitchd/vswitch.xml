@@ -1392,6 +1392,14 @@
           case arises when a CCM is received which advertises the local MPID.
         </p>
       </column>
+
+      <column name="cfm_remote_mpids">
+        When CFM is properly configured, Open vSwitch will occasionally
+        receive CCM broadcasts.  These broadcasts contain the MPID of the
+        sending Maintenance Point.  The list of MPIDs from which this
+        <ref table="Interface"/> is receiving broadcasts from is regularly
+        collected and written to this column.
+      </column>
     </group>
 
     <group title="Other Features">
