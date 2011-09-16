@@ -457,13 +457,15 @@ def __read_pidfile(pidfile, delete_if_stale):
     # Someone else has the pidfile locked.
     try:
         try:
-            return int(file_handle.readline())
+            error = int(file_handle.readline())
         except IOError, e:
             logging.warning("%s: read: %s" % (pidfile, e.strerror))
-            return -e.errno
+            error = -e.errno
         except ValueError:
             logging.warning("%s does not contain a pid" % pidfile)
-            return -errno.EINVAL
+            error = -errno.EINVAL
+
+        return error
     finally:
         try:
             file_handle.close()
