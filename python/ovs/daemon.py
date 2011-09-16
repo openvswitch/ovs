@@ -54,6 +54,7 @@ _daemonize_fd = None
 
 RESTART_EXIT_CODE = 5
 
+
 def make_pidfile_name(name):
     """Returns the file name that would be used for a pidfile if 'name' were
     provided to set_pidfile()."""
@@ -62,30 +63,35 @@ def make_pidfile_name(name):
     else:
         return ovs.util.abs_file_name(ovs.dirs.RUNDIR, name)
 
+
 def set_pidfile(name):
     """Sets up a following call to daemonize() to create a pidfile named
     'name'.  If 'name' begins with '/', then it is treated as an absolute path.
     Otherwise, it is taken relative to ovs.util.RUNDIR, which is
     $(prefix)/var/run by default.
-    
+
     If 'name' is null, then ovs.util.PROGRAM_NAME followed by ".pid" is
     used."""
     global _pidfile
     _pidfile = make_pidfile_name(name)
+
 
 def get_pidfile():
     """Returns an absolute path to the configured pidfile, or None if no
     pidfile is configured."""
     return _pidfile
 
+
 def set_no_chdir():
     """Sets that we do not chdir to "/"."""
     global _chdir
     _chdir = False
 
+
 def is_chdir_enabled():
     """Will we chdir to "/" as part of daemonizing?"""
     return _chdir
+
 
 def ignore_existing_pidfile():
     """Normally, daemonize() or daemonize_start() will terminate the program
@@ -94,15 +100,18 @@ def ignore_existing_pidfile():
     global _overwrite_pidfile
     _overwrite_pidfile = True
 
+
 def set_detach():
     """Sets up a following call to daemonize() to detach from the foreground
     session, running this process in the background."""
     global _detach
     _detach = True
 
+
 def get_detach():
     """Will daemonize() really detach?"""
     return _detach
+
 
 def set_monitor():
     """Sets up a following call to daemonize() to fork a supervisory process to
@@ -110,10 +119,12 @@ def set_monitor():
     global _monitor
     _monitor = True
 
+
 def _fatal(msg):
     logging.error(msg)
     sys.stderr.write("%s\n" % msg)
     sys.exit(1)
+
 
 def _make_pidfile():
     """If a pidfile has been configured, creates it and stores the running
@@ -172,7 +183,6 @@ def _make_pidfile():
             _fatal("failed to link \"%s\" as \"%s\" (%s)"
                    % (tmpfile, _pidfile, os.strerror(error)))
 
-
     # Ensure that the pidfile will get deleted on exit.
     ovs.fatal_signal.add_file_to_unlink(_pidfile)
 
@@ -187,11 +197,13 @@ def _make_pidfile():
     _pidfile_dev = s.st_dev
     _pidfile_ino = s.st_ino
 
+
 def daemonize():
     """If configured with set_pidfile() or set_detach(), creates the pid file
     and detaches from the foreground session."""
     daemonize_start()
     daemonize_complete()
+
 
 def _waitpid(pid, options):
     while True:
@@ -201,6 +213,7 @@ def _waitpid(pid, options):
             if e.errno == errno.EINTR:
                 pass
             return -e.errno, 0
+
 
 def _fork_and_wait_for_startup():
     try:
@@ -250,6 +263,7 @@ def _fork_and_wait_for_startup():
         _daemonize_fd = wfd
     return pid
 
+
 def _fork_notify_startup(fd):
     if fd is not None:
         error, bytes_written = ovs.socket_util.write_fully(fd, "0")
@@ -257,6 +271,7 @@ def _fork_notify_startup(fd):
             sys.stderr.write("could not write to pipe\n")
             sys.exit(1)
         os.close(fd)
+
 
 def _should_restart(status):
     global RESTART_EXIT_CODE
@@ -271,6 +286,7 @@ def _should_restart(status):
                 return True
     return False
 
+
 def _monitor_daemon(daemon_pid):
     # XXX should log daemon's stderr output at startup time
     # XXX should use setproctitle module if available
@@ -283,7 +299,7 @@ def _monitor_daemon(daemon_pid):
         elif retval == daemon_pid:
             status_msg = ("pid %d died, %s"
                           % (daemon_pid, ovs.process.status_msg(status)))
-            
+
             if _should_restart(status):
                 if os.WCOREDUMP(status):
                     # Disable further core dumps to save disk space.
@@ -316,6 +332,7 @@ def _monitor_daemon(daemon_pid):
 
    # Running in new daemon process.
 
+
 def _close_standard_fds():
     """Close stdin, stdout, stderr.  If we're started from e.g. an SSH session,
     then this keeps us from holding that session open artificially."""
@@ -325,13 +342,14 @@ def _close_standard_fds():
         os.dup2(null_fd, 1)
         os.dup2(null_fd, 2)
 
+
 def daemonize_start():
     """If daemonization is configured, then starts daemonization, by forking
     and returning in the child process.  The parent process hangs around until
     the child lets it know either that it completed startup successfully (by
     calling daemon_complete()) or that it failed to start up (by exiting with a
     nonzero exit code)."""
-    
+
     if _detach:
         if _fork_and_wait_for_startup() > 0:
             # Running in parent process.
@@ -347,9 +365,10 @@ def daemonize_start():
             _close_standard_fds()
             _monitor_daemon(daemon_pid)
         # Running in daemon process
-    
+
     if _pidfile:
         _make_pidfile()
+
 
 def daemonize_complete():
     """If daemonization is configured, then this function notifies the parent
@@ -362,6 +381,7 @@ def daemonize_complete():
             os.chdir("/")
         _close_standard_fds()
 
+
 def usage():
     sys.stdout.write("""
 Daemon options:
@@ -370,6 +390,7 @@ Daemon options:
    --pidfile[=FILE]        create pidfile (default: %s/%s.pid)
    --overwrite-pidfile     with --pidfile, start even if already running
 """ % (ovs.dirs.RUNDIR, ovs.util.PROGRAM_NAME))
+
 
 def __read_pidfile(pidfile, delete_if_stale):
     if _pidfile_dev is not None:
@@ -449,10 +470,12 @@ def __read_pidfile(pidfile, delete_if_stale):
         except IOError:
             pass
 
+
 def read_pidfile(pidfile):
     """Opens and reads a PID from 'pidfile'.  Returns the positive PID if
     successful, otherwise a negative errno value."""
     return __read_pidfile(pidfile, False)
+
 
 def _check_already_running():
     pid = __read_pidfile(_pidfile, True)
@@ -467,6 +490,7 @@ def _check_already_running():
 # argument).  Need to write our own getopt I guess.
 LONG_OPTIONS = ["detach", "no-chdir", "pidfile", "pidfile-name=",
                 "overwrite-pidfile", "monitor"]
+
 
 def parse_opt(option, arg):
     if option == '--detach':
