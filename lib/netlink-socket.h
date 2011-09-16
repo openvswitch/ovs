@@ -60,6 +60,8 @@ int nl_sock_drain(struct nl_sock *);
 
 void nl_sock_wait(const struct nl_sock *, short int events);
 
+uint32_t nl_sock_pid(const struct nl_sock *);
+
 /* Table dumping. */
 struct nl_dump {
     struct nl_sock *sock;       /* Socket being dumped. */

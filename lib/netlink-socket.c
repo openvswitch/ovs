@@ -667,6 +667,13 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 {
     poll_fd_wait(sock->fd, events);
 }
+
+/* Returns the PID associated with this socket. */
+uint32_t
+nl_sock_pid(const struct nl_sock *sock)
+{
+    return sock->pid;
+}
 
 /* Miscellaneous.  */
 
