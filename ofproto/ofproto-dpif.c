@@ -465,6 +465,9 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     ofproto->max_ports = dpif_get_max_ports(ofproto->dpif);
     ofproto->n_matches = 0;
 
+    dpif_flow_flush(ofproto->dpif);
+    dpif_recv_purge(ofproto->dpif);
+
     error = dpif_recv_set_mask(ofproto->dpif,
                                ((1u << DPIF_UC_MISS) |
                                 (1u << DPIF_UC_ACTION) |
@@ -474,8 +477,6 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
         dpif_close(ofproto->dpif);
         return error;
     }
-    dpif_flow_flush(ofproto->dpif);
-    dpif_recv_purge(ofproto->dpif);
 
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
