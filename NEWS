@@ -15,6 +15,9 @@ Post-v1.2.0
     - CAPWAP tunneling now supports an extension to transport a 64-key.  By
       default it remains compatible with the old version and other
       standards-based implementations.
+    - Flow setups are now processed in a round-robin manner across ports
+      to prevent any single client from monopolizing the CPU and conducting
+      a denial of service attack.
 
 v1.2.0 - 03 Aug 2011
 ------------------------

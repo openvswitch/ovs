@@ -48,6 +48,7 @@
 #include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "random.h"
 #include "shash.h"
 #include "sset.h"
 #include "unaligned.h"
@@ -59,6 +60,9 @@ VLOG_DEFINE_THIS_MODULE(dpif_linux);
 enum { LRU_MAX_PORTS = 1024 };
 enum { LRU_MASK = LRU_MAX_PORTS - 1};
 BUILD_ASSERT_DECL(IS_POW2(LRU_MAX_PORTS));
+
+enum { N_UPCALL_SOCKS = 16 };
+BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS));
 
 /* This ethtool flag was introduced in Linux 2.6.24, so it might be
  * missing if we have old headers. */
@@ -133,7 +137,8 @@ struct dpif_linux {
     int dp_ifindex;
 
     /* Upcall messages. */
-    struct nl_sock *upcall_sock;
+    struct nl_sock *upcall_socks[N_UPCALL_SOCKS];
+    int last_read_upcall;
     unsigned int listen_mask;
 
     /* Change notification. */
@@ -164,6 +169,9 @@ static int dpif_linux_init(void);
 static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
 static void dpif_linux_port_changed(const void *vport, void *dpif);
+static uint32_t get_upcall_pid_port(struct dpif_linux *, uint32_t port);
+static uint32_t get_upcall_pid_flow(struct dpif_linux *,
+                                    const struct nlattr *key, size_t key_len);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -256,25 +264,32 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     struct dpif_linux *dpif;
     int i;
 
-    dpif = xmalloc(sizeof *dpif);
+    dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
                                               dpif);
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
 
-    dpif->upcall_sock = NULL;
-    dpif->listen_mask = 0;
     dpif->dp_ifindex = dp->dp_ifindex;
     sset_init(&dpif->changed_ports);
-    dpif->change_error = false;
     *dpifp = &dpif->dpif;
 
-    dpif->lru_head = dpif->lru_tail = 0;
     dpif->lru_bitmap = bitmap_allocate(LRU_MAX_PORTS);
     bitmap_set1(dpif->lru_bitmap, OVSP_LOCAL);
     for (i = 1; i < LRU_MAX_PORTS; i++) {
         dpif_linux_push_port(dpif, i);
+    }
+}
+
+static void
+destroy_upcall_socks(struct dpif_linux *dpif)
+{
+    int i;
+
+    for (i = 0; i < N_UPCALL_SOCKS; i++) {
+        nl_sock_destroy(dpif->upcall_socks[i]);
+        dpif->upcall_socks[i] = NULL;
     }
 }
 
@@ -284,7 +299,7 @@ dpif_linux_close(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     nln_notifier_destroy(dpif->port_notifier);
-    nl_sock_destroy(dpif->upcall_sock);
+    destroy_upcall_socks(dpif);
     sset_destroy(&dpif->changed_ports);
     free(dpif->lru_bitmap);
     free(dpif);
@@ -398,13 +413,15 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     /* Loop until we find a port that isn't used. */
     do {
         request.port_no = dpif_linux_pop_port(dpif);
-        if (dpif->upcall_sock) {
-            request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
-        }
+        request.upcall_pid = get_upcall_pid_port(dpif, request.port_no);
         error = dpif_linux_vport_transact(&request, &reply, &buf);
 
         if (!error) {
             *port_nop = reply.port_no;
+            VLOG_DBG("%s: assigning port %"PRIu32" to netlink "
+                     "pid %"PRIu32,
+                     dpif_name(dpif_), request.port_no,
+                     request.upcall_pid);
         }
         ofpbuf_delete(buf);
     } while (request.port_no != UINT32_MAX
@@ -659,9 +676,7 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request.actions = actions ? actions : &dummy_action;
     request.actions_len = actions_len;
-    if (dpif->upcall_sock) {
-        request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
-    }
+    request.upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
     if (flags & DPIF_FP_ZERO_STATS) {
         request.clear = true;
     }
@@ -827,11 +842,7 @@ dpif_linux_execute(struct dpif *dpif_,
                    const struct ofpbuf *packet)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    uint32_t upcall_pid = 0;
-
-    if (dpif->upcall_sock) {
-        upcall_pid = nl_sock_pid(dpif->upcall_sock);
-    }
+    uint32_t upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
 
     return dpif_linux_execute__(dpif->dp_ifindex, upcall_pid, key, key_len,
                                 actions, actions_len, packet);
@@ -845,65 +856,123 @@ dpif_linux_recv_get_mask(const struct dpif *dpif_, int *listen_mask)
     return 0;
 }
 
+static uint32_t
+get_upcall_pid_port__(struct dpif_linux *dpif, uint32_t port)
+{
+    int idx = port & (N_UPCALL_SOCKS - 1);
+    return nl_sock_pid(dpif->upcall_socks[idx]);
+}
+
+static uint32_t
+get_upcall_pid_port(struct dpif_linux *dpif, uint32_t port)
+{
+    if (!(dpif->listen_mask & (1u << DPIF_UC_MISS))) {
+        return 0;
+    }
+
+    return get_upcall_pid_port__(dpif, port);
+}
+
+static uint32_t
+get_upcall_pid_flow(struct dpif_linux *dpif,
+                    const struct nlattr *key, size_t key_len)
+{
+    const struct nlattr *nla;
+    uint32_t port;
+
+    if (!(dpif->listen_mask &
+          ((1u << DPIF_UC_ACTION) | (1u << DPIF_UC_SAMPLE)))) {
+        return 0;
+    }
+
+    nla = nl_attr_find__(key, key_len, OVS_KEY_ATTR_IN_PORT);
+    if (nla) {
+        port = nl_attr_get_u32(nla);
+    } else {
+        port = random_uint32();
+    }
+
+    return get_upcall_pid_port__(dpif, port);
+}
+
+static void
+set_upcall_pids(struct dpif_linux *dpif)
+{
+    struct dpif_port port;
+    struct dpif_port_dump port_dump;
+    struct dpif_flow_dump flow_dump;
+    const struct nlattr *key;
+    size_t key_len;
+    int error;
+
+    DPIF_PORT_FOR_EACH (&port, &port_dump, &dpif->dpif) {
+        struct dpif_linux_vport vport_request;
+
+        dpif_linux_vport_init(&vport_request);
+        vport_request.cmd = OVS_VPORT_CMD_SET;
+        vport_request.dp_ifindex = dpif->dp_ifindex;
+        vport_request.port_no = port.port_no;
+        vport_request.upcall_pid = get_upcall_pid_port(dpif,
+                                                       vport_request.port_no);
+        error = dpif_linux_vport_transact(&vport_request, NULL, NULL);
+        if (!error) {
+            VLOG_DBG("%s: assigning port %"PRIu32" to netlink "
+                     "pid %"PRIu32,
+                     dpif_name(&dpif->dpif), vport_request.port_no,
+                     vport_request.upcall_pid);
+        } else {
+            VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on port: %s",
+                         dpif_name(&dpif->dpif), strerror(error));
+        }
+    }
+
+    dpif_flow_dump_start(&flow_dump, &dpif->dpif);
+    while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
+                               NULL, NULL, NULL)) {
+        struct dpif_linux_flow flow_request;
+
+        dpif_linux_flow_init(&flow_request);
+        flow_request.cmd = OVS_FLOW_CMD_SET;
+        flow_request.dp_ifindex = dpif->dp_ifindex;
+        flow_request.key = key;
+        flow_request.key_len = key_len;
+        flow_request.upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
+        error = dpif_linux_flow_transact(&flow_request, NULL, NULL);
+        if (error) {
+            VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on flow: %s",
+                         dpif_name(&dpif->dpif), strerror(error));
+        }
+    }
+    dpif_flow_dump_done(&flow_dump);
+}
+
 static int
 dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int error;
 
     if (listen_mask == dpif->listen_mask) {
         return 0;
-    } else if (!listen_mask) {
-        nl_sock_destroy(dpif->upcall_sock);
-        dpif->upcall_sock = NULL;
-    } else if (!dpif->upcall_sock) {
-        struct dpif_port port;
-        struct dpif_port_dump port_dump;
-        struct dpif_flow_dump flow_dump;
-        const struct nlattr *key;
-        size_t key_len;
+    }
 
-        error = nl_sock_create(NETLINK_GENERIC, &dpif->upcall_sock);
-        if (error) {
-            return error;
-        }
+    if (!listen_mask) {
+        destroy_upcall_socks(dpif);
+    } else if (!dpif->listen_mask) {
+        int i;
+        int error;
 
-        DPIF_PORT_FOR_EACH (&port, &port_dump, dpif_) {
-            struct dpif_linux_vport vport_request;
-
-            dpif_linux_vport_init(&vport_request);
-            vport_request.cmd = OVS_VPORT_CMD_SET;
-            vport_request.dp_ifindex = dpif->dp_ifindex;
-            vport_request.port_no = port.port_no;
-            vport_request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
-            error = dpif_linux_vport_transact(&vport_request, NULL, NULL);
+        for (i = 0; i < N_UPCALL_SOCKS; i++) {
+            error = nl_sock_create(NETLINK_GENERIC, &dpif->upcall_socks[i]);
             if (error) {
-                VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on "
-                          "port: %s", dpif_name(dpif_), strerror(error));
+                destroy_upcall_socks(dpif);
+                return error;
             }
         }
-
-        dpif_flow_dump_start(&flow_dump, dpif_);
-        while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
-                                   NULL, NULL, NULL)) {
-            struct dpif_linux_flow flow_request;
-
-            dpif_linux_flow_init(&flow_request);
-            flow_request.cmd = OVS_FLOW_CMD_SET;
-            flow_request.dp_ifindex = dpif->dp_ifindex;
-            flow_request.key = key;
-            flow_request.key_len = key_len;
-            flow_request.upcall_pid = nl_sock_pid(dpif->upcall_sock);
-            error = dpif_linux_flow_transact(&flow_request, NULL, NULL);
-            if (error) {
-                VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on "
-                          "flow: %s", dpif_name(dpif_), strerror(error));
-            }
-        }
-        dpif_flow_dump_done(&flow_dump);
     }
 
     dpif->listen_mask = listen_mask;
+    set_upcall_pids(dpif);
+
     return 0;
 }
 
@@ -1020,32 +1089,49 @@ static int
 dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct ofpbuf *buf;
-    int error;
     int i;
+    int read_tries = 0;
 
-    if (!dpif->upcall_sock) {
-        return EAGAIN;
+    if (!dpif->listen_mask) {
+       return EAGAIN;
     }
 
-    for (i = 0; i < 50; i++) {
-        int dp_ifindex;
+    for (i = 0; i < N_UPCALL_SOCKS; i++) {
+        struct nl_sock *upcall_sock;
+        dpif->last_read_upcall = (dpif->last_read_upcall + 1) &
+                                 (N_UPCALL_SOCKS - 1);
+        upcall_sock = dpif->upcall_socks[dpif->last_read_upcall];
 
-        error = nl_sock_recv(dpif->upcall_sock, &buf, false);
-        if (error) {
-            return error;
-        }
+        if (nl_sock_woke(upcall_sock)) {
+            int dp_ifindex;
 
-        error = parse_odp_packet(buf, upcall, &dp_ifindex);
-        if (!error
-            && dp_ifindex == dpif->dp_ifindex
-            && dpif->listen_mask & (1u << upcall->type)) {
-            return 0;
-        }
+            for (;;) {
+                struct ofpbuf *buf;
+                int error;
 
-        ofpbuf_delete(buf);
-        if (error) {
-            return error;
+                if (++read_tries > 50) {
+                    return EAGAIN;
+                }
+
+                error = nl_sock_recv(upcall_sock, &buf, false);
+                if (error == EAGAIN) {
+                    break;
+                } else if (error) {
+                    return error;
+                }
+
+                error = parse_odp_packet(buf, upcall, &dp_ifindex);
+                if (!error
+                    && dp_ifindex == dpif->dp_ifindex
+                    && dpif->listen_mask & (1u << upcall->type)) {
+                    return 0;
+                }
+
+                ofpbuf_delete(buf);
+                if (error) {
+                    return error;
+                }
+            }
         }
     }
 
@@ -1056,8 +1142,14 @@ static void
 dpif_linux_recv_wait(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (dpif->upcall_sock) {
-        nl_sock_wait(dpif->upcall_sock, POLLIN);
+    int i;
+
+    if (!dpif->listen_mask) {
+       return;
+    }
+
+    for (i = 0; i < N_UPCALL_SOCKS; i++) {
+        nl_sock_wait(dpif->upcall_socks[i], POLLIN);
     }
 }
 
@@ -1065,9 +1157,14 @@ static void
 dpif_linux_recv_purge(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int i;
 
-    if (dpif->upcall_sock) {
-        nl_sock_drain(dpif->upcall_sock);
+    if (!dpif->listen_mask) {
+       return;
+    }
+
+    for (i = 0; i < N_UPCALL_SOCKS; i++) {
+        nl_sock_drain(dpif->upcall_socks[i]);
     }
 }
 
