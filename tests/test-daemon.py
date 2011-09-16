@@ -21,8 +21,10 @@ import time
 import ovs.daemon
 import ovs.util
 
-def handler(signum, frame):
+
+def handler(signum, _):
     raise Exception("Signal handler called with %d" % signum)
+
 
 def main(argv):
     logging.basicConfig(level=logging.DEBUG)
@@ -56,6 +58,7 @@ def main(argv):
 
     while True:
         time.sleep(1)
+
 
 def usage():
     sys.stdout.write("""\
