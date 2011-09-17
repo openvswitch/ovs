@@ -177,7 +177,7 @@ def main(argv):
     args = args[1:]
     if not command_name in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
-                         "(use --help for help)\n" % (argv0, command_name))
+                         "(use --help for help)\n" % (argv[0], command_name))
         sys.exit(1)
 
     func, n_args = commands[command_name]
@@ -185,13 +185,13 @@ def main(argv):
         if len(args) < n_args[0]:
             sys.stderr.write("%s: \"%s\" requires at least %d arguments but "
                              "only %d provided\n"
-                             % (argv0, command_name, n_args, len(args)))
+                             % (argv[0], command_name, n_args, len(args)))
             sys.exit(1)
     elif type(n_args) == int:
         if len(args) != n_args:
             sys.stderr.write("%s: \"%s\" requires %d arguments but %d "
                              "provided\n"
-                             % (argv0, command_name, n_args, len(args)))
+                             % (argv[0], command_name, n_args, len(args)))
             sys.exit(1)
     else:
         assert False
