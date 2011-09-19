@@ -1133,12 +1133,12 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *     and nxm_value=0x0800.  That is, matching on the IP source address is
  *     allowed only if the Ethernet type is explicitly set to IP.
  *
- *   - An nxm_entry for nxm_type=NXM_OF_TCP_SRC is allowed only if it is preced
- *     by an entry with nxm_type=NXM_OF_ETH_TYPE, nxm_hasmask=0,
- *     nxm_value=0x0800 and another with nxm_type=NXM_OF_IP_PROTO,
- *     nxm_hasmask=0, nxm_value=6, in that order.  That is, matching on the TCP
- *     source port is allowed only if the Ethernet type is IP and the IP
- *     protocol is TCP.
+ *   - An nxm_entry for nxm_type=NXM_OF_TCP_SRC is allowed only if it is
+ *     preceded by an entry with nxm_type=NXM_OF_ETH_TYPE, nxm_hasmask=0, and
+ *     nxm_value either 0x0800 or 0x86dd, and another with
+ *     nxm_type=NXM_OF_IP_PROTO, nxm_hasmask=0, nxm_value=6, in that order.
+ *     That is, matching on the TCP source port is allowed only if the Ethernet
+ *     type is IP or IPv6 and the IP protocol is TCP.
  *
  * These restrictions should be noted in specifications for individual fields.
  * A switch may implement relaxed versions of these restrictions.  A switch
