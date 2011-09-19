@@ -34,6 +34,7 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "vlog.h"
+#include "lib/odp-util.h"
 
 VLOG_DEFINE_THIS_MODULE(sflow);
 
@@ -489,7 +490,8 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dpif_upcall *upcall,
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
-    fs.input = dpif_sflow_odp_port_to_ifindex(ds, flow->in_port);
+    fs.input = dpif_sflow_odp_port_to_ifindex(ds,
+				 ofp_port_to_odp_port(flow->in_port));
     fs.output = 0;              /* Filled in correctly below. */
     fs.sample_pool = upcall->sample_pool;
 
