@@ -276,8 +276,13 @@ may be specified to explicitly mark any of these fields as a wildcard.
 (\fB*\fR should be quoted to protect it from shell expansion.)
 .
 .IP \fBin_port=\fIport_no\fR
-Matches physical port \fIport_no\fR.  Switch ports are numbered as
+Matches OpenFlow port \fIport_no\fR.  Ports are numbered as
 displayed by \fBovs\-ofctl show\fR.
+.IP
+(The \fBresubmit\fR action can search OpenFlow flow tables with
+arbitrary \fBin_port\fR values, so flows that match port numbers that
+do not exist from an OpenFlow perspective can still potentially be
+matched.)
 .
 .IP \fBdl_vlan=\fIvlan\fR
 Matches IEEE 802.1q Virtual LAN tag \fIvlan\fR.  Specify \fB0xffff\fR
