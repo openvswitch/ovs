@@ -143,7 +143,7 @@ struct ovs_vport_stats {
 	uint64_t   rx_errors;		/* bad packets received         */
 	uint64_t   tx_errors;		/* packet transmit problems     */
 	uint64_t   rx_dropped;		/* no space in linux buffers    */
-	int64_t   tx_dropped;		/* no space available in linux  */
+	uint64_t   tx_dropped;		/* no space available in linux  */
 };
 
 /* Logical ports. */
