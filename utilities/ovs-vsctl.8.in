@@ -353,7 +353,7 @@ If the value is \fBstandalone\fR, or if neither of these settings
 is set, \fBovs\-vswitchd\fR will take over
 responsibility for setting up
 flows when no message has been received from the controller for three
-times the inactivity probe interval (xxx needs to be exposed).  In this mode,
+times the inactivity probe interval.  In this mode,
 \fBovs\-vswitchd\fR causes the datapath to act like an ordinary
 MAC-learning switch.  \fBovs\-vswitchd\fR will continue to retry connecting
 to the controller in the background and, when the connection succeeds,
