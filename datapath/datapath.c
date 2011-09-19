@@ -458,8 +458,10 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 		if (unlikely(err))
 			goto err_kfree_skbs;
 
-		if (nla_attr_size(skb->len) > USHRT_MAX)
+		if (nla_attr_size(skb->len) > USHRT_MAX) {
+			err = -EFBIG;
 			goto err_kfree_skbs;
+		}
 
 		len = sizeof(struct odp_header);
 		len += nla_total_size(skb->len);
@@ -474,6 +476,7 @@ static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 		user_skb = genlmsg_new(len, GFP_ATOMIC);
 		if (!user_skb) {
 			netlink_set_err(INIT_NET_GENL_SOCK, 0, group, -ENOBUFS);
+			err = -ENOMEM;
 			goto err_kfree_skbs;
 		}
 
