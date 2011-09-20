@@ -290,7 +290,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_USERSPACE:
-			err = output_userspace(dp, skb, nla_get_u64(a));
+			output_userspace(dp, skb, nla_get_u64(a));
 			break;
 
 		case OVS_ACTION_ATTR_SET_TUNNEL:
