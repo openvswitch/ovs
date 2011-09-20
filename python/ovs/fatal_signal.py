@@ -84,7 +84,7 @@ def _unlink(file):
     except OSError, e:
         return e.errno
 
-def _signal_handler(signr, frame):
+def _signal_handler(signr, _):
     _call_hooks(signr)
 
     # Re-raise the signal with the default handling so that the program

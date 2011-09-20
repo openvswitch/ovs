@@ -141,7 +141,7 @@ class Parser(object):
     def __lex_start_number(self, c):
         self.buffer = c
         self.lex_state = Parser.__lex_number
-    def __lex_start_string(self, c):
+    def __lex_start_string(self, _):
         self.lex_state = Parser.__lex_string
     def __lex_start_error(self, c):
         if ord(c) >= 32 and ord(c) < 128:
@@ -371,14 +371,14 @@ class Parser(object):
         assert eat is True or eat is False
         return eat
 
-    def __parse_start(self, token, string):
+    def __parse_start(self, token, unused_string):
         if token == '{':
             self.__push_object()
         elif token == '[':
             self.__push_array()
         else:
             self.__error("syntax error at beginning of input")
-    def __parse_end(self, token, string):
+    def __parse_end(self, unused_token, unused_string):
         self.__error("trailing garbage at end of input")
     def __parse_object_init(self, token, string):
         if token == '}':
@@ -391,14 +391,14 @@ class Parser(object):
             self.parse_state = Parser.__parse_object_colon
         else:
             self.__error("syntax error parsing object expecting string")
-    def __parse_object_colon(self, token, string):
+    def __parse_object_colon(self, token, unused_string):
         if token == ":":
             self.parse_state = Parser.__parse_object_value
         else:
             self.__error("syntax error parsing object expecting ':'")
     def __parse_object_value(self, token, string):
         self.__parse_value(token, string, Parser.__parse_object_next)
-    def __parse_object_next(self, token, string):
+    def __parse_object_next(self, token, unused_string):
         if token == ",":
             self.parse_state = Parser.__parse_object_name
         elif token == "}":
@@ -412,7 +412,7 @@ class Parser(object):
             self.__parse_array_value(token, string)
     def __parse_array_value(self, token, string):
         self.__parse_value(token, string, Parser.__parse_array_next)
-    def __parse_array_next(self, token, string):
+    def __parse_array_next(self, token, unused_string):
         if token == ",":
             self.parse_state = Parser.__parse_array_value
         elif token == "]":
