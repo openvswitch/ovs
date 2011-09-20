@@ -1,0 +1,302 @@
+AT_BANNER([Spanning Tree Protocol unit tests])
+
+AT_SETUP([STP example from IEEE 802.1D-1998])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-ieee802.1d-1998],
+[bridge 0 0x42 = a b
+bridge 1 0x97 = c:5 a d:5
+bridge 2 0x45 = b e
+bridge 3 0x57 = b:5 e:5
+bridge 4 0x83 = a:5 e:5
+run 1000
+check 0 = root
+check 1 = F F:10 F
+check 2 = F:10 B
+check 3 = F:5 F
+check 4 = F:5 B
+])
+AT_CHECK([test-stp test-stp-ieee802.1d-1998])
+AT_CLEANUP
+
+AT_SETUP([STP example from IEEE 802.1D-2004 figures 17.4 and 17.5])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-ieee802.1d-2004-fig17.4],
+[bridge 0 0x111 = a b e c
+bridge 1 0x222 = a b d f
+bridge 2 0x333 = c d l j h g
+bridge 3 0x444 = e f n m k i
+bridge 4 0x555 = g i 0 0
+bridge 5 0x666 = h k 0 0
+bridge 6 0x777 = j m 0 0
+bridge 7 0x888 = l n 0 0
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = F:10 B F F F F
+check 3 = F:10 B F F F F
+check 4 = F:20 B F F
+check 5 = F:20 B F F
+check 6 = F:20 B F F
+check 7 = F:20 B F F
+
+# Now connect two ports of bridge 7 to the same LAN.
+bridge 7 = l n o o
+# Same results except for bridge 7:
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = F:10 B F F F F
+check 3 = F:10 B F F F F
+check 4 = F:20 B F F
+check 5 = F:20 B F F
+check 6 = F:20 B F F
+check 7 = F:20 B F B
+])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.4])
+AT_CLEANUP
+
+AT_SETUP([STP example from IEEE 802.1D-2004 figure 17.6])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-ieee802.1d-2004-fig17.6],
+[bridge 0 0x111 = a b l
+bridge 1 0x222 = b c d
+bridge 2 0x333 = d e f
+bridge 3 0x444 = f g h
+bridge 4 0x555 = j h i
+bridge 5 0x666 = l j k
+run 1000
+check 0 = root
+check 1 = F:10 F F
+check 2 = F:20 F F
+check 3 = F:30 F B
+check 4 = F:20 F F
+check 5 = F:10 F F
+])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.6])
+AT_CLEANUP
+
+AT_SETUP([STP example from IEEE 802.1D-2004 figure 17.7])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-ieee802.1d-2004-fig17.7],
+[bridge 0 0xaa = b
+bridge 1 0x111 = a b d f h g e c
+bridge 2 0x222 = g h j l n m k i
+run 1000
+check 0 = root
+check 1 = F F:10 F F F F F F
+check 2 = B F:20 F F F F F F
+
+# This is not the port priority change described in that figure,
+# but I don't understand what port priority change would cause
+# that change.
+bridge 2 = g X j l n m k i
+run 1000
+check 0 = root
+check 1 = F F:10 F F F F F F
+check 2 = F:20 D F F F F F F
+])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.7])
+AT_CLEANUP
+
+AT_SETUP([STP.io.1.1: Link Failure])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-io-1.1],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+#
+# STP.io.1.1: Link Failure
+bridge 0 0x111 = a b c
+bridge 1 0x222 = a b c
+run 1000
+check 0 = root
+check 1 = F:10 B B
+bridge 1 = 0 _ _
+run 1000
+check 0 = root
+check 1 = F F:10 B
+bridge 1 = X _ _
+run 1000
+check 0 = root
+check 1 = D F:10 B
+bridge 1 = _ 0 _
+run 1000
+check 0 = root
+check 1 = D F F:10
+bridge 1 = _ X _
+run 1000
+check 0 = root
+check 1 = D D F:10
+])
+AT_CHECK([test-stp test-stp-iol-io-1.1])
+AT_CLEANUP
+
+AT_SETUP([STP.io.1.2: Repeated Network])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-io-1.2],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.2: Repeated Network
+bridge 0 0x111 = a a
+bridge 1 0x222 = a a
+run 1000
+check 0 = rootid:0x111 F B
+check 1 = rootid:0x111 F:10 B
+bridge 1 = a^0x90 _
+run 1000
+check 0 = rootid:0x111 F B
+check 1 = rootid:0x111 B F:10
+])
+AT_CHECK([test-stp test-stp-iol-io-1.2])
+AT_CLEANUP
+
+AT_SETUP([STP.io.1.4: Network Initialization])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-io-1.4],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.4: Network Initialization
+bridge 0 0x111 = a b c
+bridge 1 0x222 = b d e
+bridge 2 0x333 = a d f
+bridge 3 0x444 = c e f
+run 1000
+check 0 = root
+check 1 = F:10 F F
+check 2 = F:10 B F
+check 3 = F:10 B B
+])
+AT_CHECK([test-stp test-stp-iol-io-1.4])
+AT_CLEANUP
+
+AT_SETUP([STP.io.1.5: Topology Change])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-io-1.5],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.5: Topology Change
+bridge 0 0x111 = a b d c
+bridge 1 0x222 = a b f e
+bridge 2 0x333 = c d g h
+bridge 3 0x444 = e f g h
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = B F:10 F F
+check 3 = B F:20 B B
+bridge 1^0x7000
+run 1000
+check 0 = F:10 B F F
+check 1 = root
+check 2 = B F:20 B B
+check 3 = B F:10 F F
+bridge 2^0x6000
+run 1000
+check 0 = F F B F:10
+check 1 = F:20 B B B
+check 2 = root
+check 3 = F F F:10 B
+bridge 3^0x5000
+run 1000
+check 0 = B B B F:20
+check 1 = F F B F:10
+check 2 = F F F:10 B
+check 3 = root
+bridge 0^0x4000
+bridge 1^0x4001
+bridge 2^0x4002
+bridge 3^0x4003
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = B F:10 F F
+check 3 = B F:20 B B
+])
+AT_CHECK([test-stp test-stp-iol-io-1.5])
+AT_CLEANUP
+
+AT_SETUP([STP.op.1.1 and STP.op.1.2])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-op-1.1],
+[# This test file approximates the following tests from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.1.1: Root ID Initialized to Bridge ID
+# Test STP.op.1.2: Root Path Cost Initialized to Zero
+bridge 0 0x123 =
+check 0 = root
+])
+AT_CHECK([test-stp test-stp-iol-op-1.1])
+AT_CLEANUP
+
+AT_SETUP([STP.op.1.4: All Ports Initialized to Designated Ports])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-op-1.4],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.1.4: All Ports Initialized to Designated Ports
+bridge 0 0x123 = a b c d e f
+check 0 = Li Li Li Li Li Li
+run 1000
+check 0 = F F F F F F
+])
+AT_CHECK([test-stp test-stp-iol-op-1.4])
+AT_CLEANUP
+
+AT_SETUP([STP.op.3.1: Root Bridge Selection: Root ID Values])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-op-3.1],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.3.1: Root Bridge Selection: Root ID Values
+bridge 0 0x111 = a
+bridge 1 0x222 = a
+check 0 = rootid:0x111 Li
+check 1 = rootid:0x222 Li
+run 1000
+check 0 = rootid:0x111 root
+check 1 = rootid:0x111 F:10
+])
+AT_CHECK([test-stp test-stp-iol-op-3.1])
+AT_CLEANUP
+
+AT_SETUP([STP.op.3.3: Root Bridge Selection: Bridge ID Values])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-op-3.3],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.3.3: Root Bridge Selection: Bridge ID Values
+bridge 0 0x333^0x6000 = a
+bridge 1 0x222^0x7000 = b
+bridge 2 0x111 = a b
+run 1000
+check 0 = rootid:0x333^0x6000 root
+check 1 = rootid:0x333^0x6000 F:20
+check 2 = rootid:0x333^0x6000 F:10 F
+])
+AT_CHECK([test-stp test-stp-iol-op-3.3])
+AT_CLEANUP
+
+AT_SETUP([STP.op.3.3: Root Bridge Selection: Bridge ID Values])
+AT_KEYWORDS([STP])
+AT_DATA([test-stp-iol-op-3.4],
+[# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.3.3: Root Bridge Selection: Bridge ID Values
+bridge 0 0x333^0x6000 = a
+bridge 1 0x222^0x7000 = b
+bridge 2 0x111 = a b
+run 1000
+check 0 = rootid:0x333^0x6000 root
+check 1 = rootid:0x333^0x6000 F:20
+check 2 = rootid:0x333^0x6000 F:10 F
+])
+AT_CHECK([test-stp test-stp-iol-op-3.4])
+AT_CLEANUP

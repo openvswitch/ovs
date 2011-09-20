@@ -141,6 +141,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/sort.h \
 	lib/sset.c \
 	lib/sset.h \
+	lib/stp.c \
+	lib/stp.h \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \

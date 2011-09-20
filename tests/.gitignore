@@ -29,9 +29,10 @@
 /test-packets
 /test-random
 /test-reconnect
+/test-sha1
+/test-stp
 /test-strtok_r
 /test-timeval
-/test-sha1
 /test-type-props
 /test-unix-socket
 /test-util

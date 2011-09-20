@@ -53,6 +53,7 @@ TESTSUITE_AT = \
 	tests/ovs-vsctl.at \
 	tests/ovs-monitor-ipsec.at \
 	tests/ovs-xapi-sync.at \
+	tests/stp.at \
 	tests/interface-reconfigure.at \
 	tests/vlog.at
 TESTSUITE = $(srcdir)/tests/testsuite
@@ -92,6 +93,7 @@ lcov_wrappers = \
 	tests/lcov/test-random \
 	tests/lcov/test-reconnect \
 	tests/lcov/test-sha1 \
+	tests/lcov/test-stp \
 	tests/lcov/test-timeval \
 	tests/lcov/test-type-props \
 	tests/lcov/test-unix-socket \
@@ -147,6 +149,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-random \
 	tests/valgrind/test-reconnect \
 	tests/valgrind/test-sha1 \
+	tests/valgrind/test-stp \
 	tests/valgrind/test-timeval \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-unix-socket \
@@ -256,7 +259,6 @@ tests_test_openflowd_LDADD = \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
 
-
 noinst_PROGRAMS += tests/test-packets
 tests_test_packets_SOURCES = tests/test-packets.c
 tests_test_packets_LDADD = lib/libopenvswitch.a
@@ -264,6 +266,10 @@ tests_test_packets_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-random
 tests_test_random_SOURCES = tests/test-random.c
 tests_test_random_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-stp
+tests_test_stp_SOURCES = tests/test-stp.c
+tests_test_stp_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-unix-socket
 tests_test_unix_socket_SOURCES = tests/test-unix-socket.c
