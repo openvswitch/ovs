@@ -1619,14 +1619,14 @@ static struct genl_ops dp_datapath_genl_ops[] = {
 static const struct nla_policy vport_policy[ODP_VPORT_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
 	[ODP_VPORT_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
-	[ODP_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
-	[ODP_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
 	[ODP_VPORT_ATTR_STATS] = { .len = sizeof(struct rtnl_link_stats64) },
 	[ODP_VPORT_ATTR_ADDRESS] = { .len = ETH_ALEN },
 #else
 	[ODP_VPORT_ATTR_STATS] = { .minlen = sizeof(struct rtnl_link_stats64) },
 	[ODP_VPORT_ATTR_ADDRESS] = { .minlen = ETH_ALEN },
 #endif
+	[ODP_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
+	[ODP_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
 	[ODP_VPORT_ATTR_MTU] = { .type = NLA_U32 },
 	[ODP_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
