@@ -1535,14 +1535,14 @@ static struct genl_ops dp_datapath_genl_ops[] = {
 static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
 	[OVS_VPORT_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
-	[OVS_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
-	[OVS_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_STATS] = { .len = sizeof(struct ovs_vport_stats) },
 	[OVS_VPORT_ATTR_ADDRESS] = { .len = ETH_ALEN },
 #else
 	[OVS_VPORT_ATTR_STATS] = { .minlen = sizeof(struct ovs_vport_stats) },
 	[OVS_VPORT_ATTR_ADDRESS] = { .minlen = ETH_ALEN },
 #endif
+	[OVS_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
+	[OVS_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
 
