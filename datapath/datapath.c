@@ -405,8 +405,6 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 	struct dp_stats_percpu *stats;
 	int err;
 
-	WARN_ON_ONCE(skb_shared(skb));
-
 	forward_ip_summed(skb, true);
 
 	/* Break apart GSO packets into their component pieces.  Otherwise
