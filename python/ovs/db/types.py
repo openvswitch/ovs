@@ -104,7 +104,7 @@ def returnUnchanged(x):
 
 class BaseType(object):
     def __init__(self, type_, enum=None, min=None, max=None,
-                 min_length = 0, max_length=sys.maxint, ref_table=None):
+                 min_length = 0, max_length=sys.maxint, ref_table_name=None):
         assert isinstance(type_, AtomicType)
         self.type = type_
         self.enum = enum
@@ -112,11 +112,12 @@ class BaseType(object):
         self.max = max
         self.min_length = min_length
         self.max_length = max_length
-        self.ref_table = ref_table
-        if ref_table:
+        self.ref_table_name = ref_table_name
+        if ref_table_name:
             self.ref_type = 'strong'
         else:
             self.ref_type = None
+        self.ref_table = None
 
     def default(self):
         return ovs.db.data.Atom.default(self.type)
@@ -128,7 +129,7 @@ class BaseType(object):
                 self.min == other.min and self.max == other.max and
                 self.min_length == other.min_length and
                 self.max_length == other.max_length and
-                self.ref_table == other.ref_table)
+                self.ref_table_name == other.ref_table_name)
 
     def __ne__(self, other):
         if not isinstance(other, BaseType):
@@ -178,8 +179,8 @@ class BaseType(object):
             if base.min_length > base.max_length:
                 raise error.Error("minLength exceeds maxLength", json)
         elif base.type == UuidType:
-            base.ref_table = parser.get_optional("refTable", ['id'])
-            if base.ref_table:
+            base.ref_table_name = parser.get_optional("refTable", ['id'])
+            if base.ref_table_name:
                 base.ref_type = parser.get_optional("refType", [str, unicode],
                                                    "strong")
                 if base.ref_type not in ['strong', 'weak']:
@@ -214,15 +215,17 @@ class BaseType(object):
             if self.max_length != sys.maxint:
                 json['maxLength'] = self.max_length
         elif self.type == UuidType:
-            if self.ref_table:
-                json['refTable'] = self.ref_table
+            if self.ref_table_name:
+                json['refTable'] = self.ref_table_name
                 if self.ref_type != 'strong':
                     json['refType'] = self.ref_type
         return json
 
     def copy(self):
-        return BaseType(self.type, self.enum.copy(), self.min, self.max,
-                        self.min_length, self.max_length, self.ref_table)
+        base = BaseType(self.type, self.enum.copy(), self.min, self.max,
+                        self.min_length, self.max_length, self.ref_table_name)
+        base.ref_table = self.ref_table
+        return base
 
     def is_valid(self):
         if self.type in (VoidType, BooleanType, UuidType):
@@ -237,7 +240,7 @@ class BaseType(object):
     def has_constraints(self):
         return (self.enum is not None or self.min is not None or self.max is not None or
                 self.min_length != 0 or self.max_length != sys.maxint or
-                self.ref_table is not None)
+                self.ref_table_name is not None)
 
     def without_constraints(self):
         return BaseType(self.type)
@@ -249,7 +252,7 @@ class BaseType(object):
         return Type(BaseType(atomic_type), None, 1, sys.maxint)
     
     def is_ref(self):
-        return self.type == UuidType and self.ref_table is not None
+        return self.type == UuidType and self.ref_table_name is not None
 
     def is_strong_ref(self):
         return self.is_ref() and self.ref_type == 'strong'
@@ -258,8 +261,8 @@ class BaseType(object):
         return self.is_ref() and self.ref_type == 'weak'
 
     def toEnglish(self, escapeLiteral=returnUnchanged):
-        if self.type == UuidType and self.ref_table:
-            s = escapeLiteral(self.ref_table)
+        if self.type == UuidType and self.ref_table_name:
+            s = escapeLiteral(self.ref_table_name)
             if self.ref_type == 'weak':
                 s = "weak reference to " + s
             return s
@@ -305,8 +308,8 @@ class BaseType(object):
             return ''
 
     def toCType(self, prefix):
-        if self.ref_table:
-            return "struct %s%s *" % (prefix, self.ref_table.lower())
+        if self.ref_table_name:
+            return "struct %s%s *" % (prefix, self.ref_table_name.lower())
         else:
             return {IntegerType: 'int64_t ',
                     RealType: 'double ',
@@ -319,7 +322,7 @@ class BaseType(object):
 
     def copyCValue(self, dst, src):
         args = {'dst': dst, 'src': src}
-        if self.ref_table:
+        if self.ref_table_name:
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = xstrdup(%(src)s);" % args
@@ -327,7 +330,7 @@ class BaseType(object):
             return "%(dst)s = %(src)s;" % args
 
     def initCDefault(self, var, is_optional):
-        if self.ref_table:
+        if self.ref_table_name:
             return "%s = NULL;" % var
         elif self.type == StringType and not is_optional:
             return '%s = "";' % var
@@ -363,8 +366,8 @@ class BaseType(object):
             if self.max_length != sys.maxint:
                 stmts.append('%s.u.string.maxLen = %d;' % (var, self.max_length))
         elif self.type == UuidType:
-            if self.ref_table is not None:
-                stmts.append('%s.u.uuid.refTableName = "%s";' % (var, escapeCString(self.ref_table)))
+            if self.ref_table_name is not None:
+                stmts.append('%s.u.uuid.refTableName = "%s";' % (var, escapeCString(self.ref_table_name)))
                 stmts.append('%s.u.uuid.refType = OVSDB_REF_%s;' % (var, self.ref_type.upper()))
         return '\n'.join([indent + stmt for stmt in stmts])
 
@@ -420,7 +423,7 @@ class Type(object):
 
     def is_optional_pointer(self):
         return (self.is_optional() and not self.value
-                and (self.key.type == StringType or self.key.ref_table))
+                and (self.key.type == StringType or self.key.ref_table_name))
 
     @staticmethod
     def __n_from_json(json, default):

@@ -379,7 +379,7 @@ def keep_table_columns(schema, table_name, column_types):
 def monitor_uuid_schema_cb(schema):
     string_type = types.Type(types.BaseType(types.StringType))
     optional_ssl_type = types.Type(types.BaseType(types.UuidType,
-                                                  ref_table='SSL'), None, 0, 1)
+                                                  ref_table_name='SSL'), None, 0, 1)
     string_map_type = types.Type(types.BaseType(types.StringType),
                                  types.BaseType(types.StringType),
                                  0, sys.maxint)

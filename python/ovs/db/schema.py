@@ -41,16 +41,15 @@ class DbSchema(object):
             for table in self.tables.itervalues():
                 table.is_root = True
 
-        # Validate that all ref_tables refer to the names of tables
-        # that exist.
+        # Find the "ref_table"s referenced by "ref_table_name"s.
         #
         # Also force certain columns to be persistent, as explained in
         # __check_ref_table().  This requires 'is_root' to be known, so this
         # must follow the loop updating 'is_root' above.
         for table in self.tables.itervalues():
             for column in table.columns.itervalues():
-                self.__check_ref_table(column, column.type.key, "key")
-                self.__check_ref_table(column, column.type.value, "value")
+                self.__follow_ref_table(column, column.type.key, "key")
+                self.__follow_ref_table(column, column.type.value, "value")
 
     def __root_set_size(self):
         """Returns the number of tables in the schema's root set."""
@@ -96,17 +95,17 @@ class DbSchema(object):
             json["version"] = self.version
         return json
 
-    def __check_ref_table(self, column, base, base_name):
-        if not base or base.type != types.UuidType or not base.ref_table:
+    def __follow_ref_table(self, column, base, base_name):
+        if not base or base.type != types.UuidType or not base.ref_table_name:
             return
 
-        ref_table = self.tables.get(base.ref_table)
-        if not ref_table:
+        base.ref_table = self.tables.get(base.ref_table_name)
+        if not base.ref_table:
             raise error.Error("column %s %s refers to undefined table %s"
-                              % (column.name, base_name, base.ref_table),
+                              % (column.name, base_name, base.ref_table_name),
                               tag="syntax error")
 
-        if base.is_strong_ref() and not ref_table.is_root:
+        if base.is_strong_ref() and not base.ref_table.is_root:
             # We cannot allow a strong reference to a non-root table to be
             # ephemeral: if it is the only reference to a row, then replaying
             # the database log from disk will cause the referenced row to be
