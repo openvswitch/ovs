@@ -31,7 +31,7 @@
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-DAEMON=/usr/sbin/ovs-controller # Introduce the server's location here
+DAEMON=/usr/bin/ovs-controller # Introduce the server's location here
 NAME=ovs-controller         # Introduce the short server's name here
 DESC=ovs-controller         # Introduce a short description here
 LOGDIR=/var/log/openvswitch # Log directory to use
