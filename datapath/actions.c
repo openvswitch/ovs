@@ -227,22 +227,21 @@ static int set_tp_port(struct sk_buff *skb, const struct nlattr *a)
 	return 0;
 }
 
-static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
+static int do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
-	struct vport *p;
+	struct vport *vport;
 
-	if (!skb)
-		goto error;
+	if (unlikely(!skb))
+		return -ENOMEM;
 
-	p = rcu_dereference(dp->ports[out_port]);
-	if (!p)
-		goto error;
+	vport = rcu_dereference(dp->ports[out_port]);
+	if (unlikely(!vport)) {
+		kfree_skb(skb);
+		return -ENODEV;
+	}
 
-	vport_send(p, skb);
-	return;
-
-error:
-	kfree_skb(skb);
+	vport_send(vport, skb);
+	return 0;
 }
 
 static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
