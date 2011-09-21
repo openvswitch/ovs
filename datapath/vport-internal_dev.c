@@ -22,6 +22,10 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
+#define HAVE_NET_DEVICE_OPS
+#endif
+
 struct internal_dev {
 	struct vport *vport;
 	struct net_device_stats stats;
