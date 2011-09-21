@@ -10,6 +10,10 @@
 
 #endif /* linux kernel < 2.6.31 */
 
+#ifndef IFF_TX_SKB_SHARING
+#define IFF_TX_SKB_SHARING 0
+#endif
+
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,36)
 #define IFF_OVS_DATAPATH IFF_BRIDGE_PORT
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
