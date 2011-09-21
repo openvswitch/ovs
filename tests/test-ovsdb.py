@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import codecs
 import getopt
 import re
 import os
 import signal
 import sys
+import uuid
 
 from ovs.db import error
 import ovs.db.idl
@@ -27,6 +27,7 @@ from ovs.db import types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
+import idltest
 
 def unbox_json(json):
     if type(json) == list and len(json) == 1:
@@ -35,14 +36,14 @@ def unbox_json(json):
         return json
 
 def do_default_atoms():
-    for type in types.ATOMIC_TYPES:
-        if type == types.VoidType:
+    for type_ in types.ATOMIC_TYPES:
+        if type_ == types.VoidType:
             continue
 
-        sys.stdout.write("%s: " % type.to_string())
+        sys.stdout.write("%s: " % type_.to_string())
 
-        atom = data.Atom.default(type)
-        if atom != data.Atom.default(type):
+        atom = data.Atom.default(type_)
+        if atom != data.Atom.default(type_):
             sys.stdout.write("wrong\n")
             sys.exit(1)
 
@@ -59,14 +60,14 @@ def do_default_data():
                     valueBase = None
                 else:
                     valueBase = types.BaseType(value)
-                type = types.Type(types.BaseType(key), valueBase, n_min, 1)
-                assert type.is_valid()
+                type_ = types.Type(types.BaseType(key), valueBase, n_min, 1)
+                assert type_.is_valid()
 
                 sys.stdout.write("key %s, value %s, n_min %d: "
                                  % (key.to_string(), value.to_string(), n_min))
 
-                datum = data.Datum.default(type)
-                if datum != data.Datum.default(type):
+                datum = data.Datum.default(type_)
+                if datum != data.Datum.default(type_):
                     sys.stdout.write("wrong\n")
                     any_errors = True
                 else:
@@ -86,8 +87,8 @@ def do_parse_base_type(type_string):
 
 def do_parse_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type = types.Type.from_json(type_json)
-    print ovs.json.to_string(type.to_json(), sort_keys=True)
+    type_ = types.Type.from_json(type_json)
+    print ovs.json.to_string(type_.to_json(), sort_keys=True)
 
 def do_parse_atoms(type_string, *atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
@@ -102,10 +103,10 @@ def do_parse_atoms(type_string, *atom_strings):
 
 def do_parse_data(type_string, *data_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type = types.Type.from_json(type_json)
+    type_ = types.Type.from_json(type_json)
     for datum_string in data_strings:
         datum_json = unbox_json(ovs.json.from_string(datum_string))
-        datum = data.Datum.from_json(type, datum_json)
+        datum = data.Datum.from_json(type_, datum_json)
         print ovs.json.to_string(datum.to_json())
 
 def do_sort_atoms(type_string, atom_strings):
@@ -127,26 +128,54 @@ def do_parse_table(name, table_string, default_is_root_string='false'):
     table = ovs.db.schema.TableSchema.from_json(table_json, name)
     print ovs.json.to_string(table.to_json(default_is_root), sort_keys=True)
 
-def do_parse_rows(table_string, *rows):
-    table_json = unbox_json(ovs.json.from_string(table_string))
-    table = ovs.db.schema.TableSchema.from_json(table_json, name)
-
 def do_parse_schema(schema_string):
     schema_json = unbox_json(ovs.json.from_string(schema_string))
     schema = ovs.db.schema.DbSchema.from_json(schema_json)
     print ovs.json.to_string(schema.to_json(), sort_keys=True)
 
 def print_idl(idl, step):
+    simple = idl.tables["simple"].rows
+    l1 = idl.tables["link1"].rows
+    l2 = idl.tables["link2"].rows
+
     n = 0
-    for uuid, row in idl.data["simple"].iteritems():
+    for row in simple.itervalues():
         s = ("%03d: i=%s r=%s b=%s s=%s u=%s "
              "ia=%s ra=%s ba=%s sa=%s ua=%s uuid=%s"
              % (step, row.i, row.r, row.b, row.s, row.u,
-                row.ia, row.ra, row.ba, row.sa, row.ua, uuid))
-        print(re.sub('""|,', "", s))
+                row.ia, row.ra, row.ba, row.sa, row.ua, row.uuid))
+        s = re.sub('""|,|u?\'', "", s)
+        s = re.sub('UUID\(([^)]+)\)', r'\1', s)
+        s = re.sub('False', 'false', s)
+        s = re.sub('True', 'true', s)
+        s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
+        print(s)
         n += 1
+
+    for row in l1.itervalues():
+        s = ["%03d: i=%s k=" % (step, row.i)]
+        if row.k:
+            s.append(str(row.k.i))
+        s.append(" ka=[")
+        s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
+        s.append("] l2=")
+        if row.l2:
+            s.append(str(row.l2[0].i))
+        s.append(" uuid=%s" % row.uuid)
+        print(''.join(s))
+        n += 1
+
+    for row in l2.itervalues():
+        s = ["%03d: i=%s l1=" % (step, row.i)]
+        if row.l1:
+            s.append(str(row.l1.i))
+        s.append(" uuid=%s" % row.uuid)
+        print(''.join(s))
+        n += 1
+
     if not n:
         print("%03d: empty" % step)
+    sys.stdout.flush()
 
 def substitute_uuids(json, symtab):
     if type(json) in [str, unicode]:
@@ -174,8 +203,108 @@ def parse_uuids(json, symtab):
         for value in json.itervalues():
             parse_uuids(value, symtab)
 
-def do_idl(remote, *commands):
-    idl = ovs.db.idl.Idl(remote, "idltest")
+def idltest_find_simple(idl, i):
+    for row in idl.tables["simple"].rows.itervalues():
+        if row.i == i:
+            return row
+    return None
+
+def idl_set(idl, commands, step):
+    txn = ovs.db.idl.Transaction(idl)
+    increment = False
+    for command in commands.split(','):
+        words = command.split()
+        name = words[0]
+        args = words[1:]
+
+        if name == "set":
+            if len(args) != 3:
+                sys.stderr.write('"set" command requires 3 arguments\n')
+                sys.exit(1)
+
+            s = idltest_find_simple(idl, int(args[0]))
+            if not s:
+                sys.stderr.write('"set" command asks for nonexistent i=%d\n'
+                                 % int(args[0]))
+                sys.exit(1)
+
+            if args[1] == "b":
+                s.b = args[2] == "1"
+            elif args[1] == "s":
+                s.s = args[2]
+            elif args[1] == "u":
+                s.u = uuid.UUID(args[2])
+            elif args[1] == "r":
+                s.r = float(args[2])
+            else:
+                sys.stderr.write('"set" comamnd asks for unknown column %s\n'
+                                 % args[2])
+                sys.stderr.exit(1)
+        elif name == "insert":
+            if len(args) != 1:
+                sys.stderr.write('"set" command requires 1 argument\n')
+                sys.exit(1)
+
+            s = txn.insert(idl.tables["simple"])
+            s.i = int(args[0])
+        elif name == "delete":
+            if len(args) != 1:
+                sys.stderr.write('"delete" command requires 1 argument\n')
+                sys.exit(1)
+
+            s = idltest_find_simple(idl, int(args[0]))
+            if not s:
+                sys.stderr.write('"delete" command asks for nonexistent i=%d\n'
+                                 % int(args[0]))
+                sys.exit(1)
+            s.delete()
+        elif name == "verify":
+            if len(args) != 2:
+                sys.stderr.write('"verify" command requires 2 arguments\n')
+                sys.exit(1)
+
+            s = idltest_find_simple(idl, int(args[0]))
+            if not s:
+                sys.stderr.write('"verify" command asks for nonexistent i=%d\n'
+                                 % int(args[0]))
+                sys.exit(1)
+
+            if args[1] in ("i", "b", "s", "u", "r"):
+                s.verify(args[1])
+            else:
+                sys.stderr.write('"verify" command asks for unknown column '
+                                 '"%s"\n' % args[1])
+                sys.exit(1)
+        elif name == "increment":
+            if len(args) != 2:
+                sys.stderr.write('"increment" command requires 2 arguments\n')
+                sys.exit(1)
+
+            txn.increment(args[0], args[1], [])
+            increment = True
+        elif name == "abort":
+            txn.abort()
+            break
+        elif name == "destroy":
+            print "%03d: destroy" % step
+            sys.stdout.flush()
+            txn.abort()
+            return
+        else:
+            sys.stderr.write("unknown command %s\n" % name)
+            sys.exit(1)
+
+    status = txn.commit_block()
+    sys.stdout.write("%03d: commit, status=%s"
+                     % (step, ovs.db.idl.Transaction.status_to_string(status)))
+    if increment and status == ovs.db.idl.Transaction.SUCCESS:
+        sys.stdout.write(", increment=%d" % txn.get_increment_new_value())
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+
+def do_idl(schema_file, remote, *commands):
+    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
+    idl = ovs.db.idl.Idl(remote, schema)
 
     if commands:
         error, stream = ovs.stream.Stream.open_block(
@@ -196,7 +325,7 @@ def do_idl(remote, *commands):
             command = command[1:]
         else:
             # Wait for update.
-            while idl.get_seqno() == seqno and not idl.run():
+            while idl.change_seqno == seqno and not idl.run():
                 rpc.run()
 
                 poller = ovs.poller.Poller()
@@ -207,10 +336,11 @@ def do_idl(remote, *commands):
             print_idl(idl, step)
             step += 1
 
-        seqno = idl.get_seqno()
+        seqno = idl.change_seqno
 
         if command == "reconnect":
             print("%03d: reconnect" % step)
+            sys.stdout.flush()
             step += 1
             idl.force_reconnect()
         elif not command.startswith("["):
@@ -235,10 +365,11 @@ def do_idl(remote, *commands):
                 parse_uuids(reply.result, symtab)
             reply.id = None
             sys.stdout.write("%s\n" % ovs.json.to_string(reply.to_json()))
+            sys.stdout.flush()
 
     if rpc:
         rpc.close()
-    while idl.get_seqno() == seqno and not idl.run():
+    while idl.change_seqno == seqno and not idl.run():
         poller = ovs.poller.Poller()
         idl.wait(poller)
         poller.block()
@@ -277,10 +408,10 @@ parse-table NAME OBJECT [DEFAULT-IS-ROOT]
   parse table NAME with info OBJECT
 parse-schema JSON
   parse JSON as an OVSDB schema, and re-serialize
-idl SERVER [TRANSACTION...]
-  connect to SERVER and dump the contents of the database
-  as seen initially by the IDL implementation and after
-  executing each TRANSACTION.  (Each TRANSACTION must modify
+idl SCHEMA SERVER [TRANSACTION...]
+  connect to SERVER (which has the specified SCHEMA) and dump the
+  contents of the database as seen initially by the IDL implementation
+  and after executing each TRANSACTION.  (Each TRANSACTION must modify
   the database or this command will hang.)
 
 The following options are also available:
@@ -313,8 +444,6 @@ def main(argv):
         else:
             sys.exit(0)
 
-    optKeys = [key for key, value in options]
-
     if not args:
         sys.stderr.write("%s: missing command argument "
                          "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
@@ -331,7 +460,7 @@ def main(argv):
                 "parse-column": (do_parse_column, 2),
                 "parse-table": (do_parse_table, (2, 3)),
                 "parse-schema": (do_parse_schema, 1),
-                "idl": (do_idl, (1,))}
+                "idl": (do_idl, (2,))}
 
     command_name = args[0]
     args = args[1:]

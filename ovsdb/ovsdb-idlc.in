@@ -548,6 +548,21 @@ void
         print "    %s_columns_init();" % structName
     print "}"
 
+def print_python_module(schema_file):
+    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
+    print """\
+# Generated automatically -- do not modify!    -*- buffer-read-only: t -*-
+
+import ovs.db.schema
+import ovs.json
+
+__schema_json = \"\"\"
+%s
+\"\"\"
+
+schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_string(__schema_json))
+""" % ovs.json.to_string(schema.to_json(), pretty=True)
+
 def ovsdb_escape(string):
     def escape(match):
         c = match.group(0)
@@ -569,8 +584,6 @@ def ovsdb_escape(string):
             return '\\x%02x' % ord(c)
     return re.sub(r'["\\\000-\037]', escape, string)
 
-
-
 def usage():
     print """\
 %(argv0)s: ovsdb schema compiler
@@ -580,6 +593,7 @@ The following commands are supported:
   annotate SCHEMA ANNOTATIONS print SCHEMA combined with ANNOTATIONS
   c-idl-header IDL            print C header file for IDL
   c-idl-source IDL            print C source file for IDL implementation
+  python-module IDL           print Python module for IDL
   nroff IDL                   print schema documentation in nroff format
 
 The following options are also available:
@@ -618,7 +632,8 @@ if __name__ == "__main__":
 
         commands = {"annotate": (annotateSchema, 2),
                     "c-idl-header": (printCIDLHeader, 1),
-                    "c-idl-source": (printCIDLSource, 1)}
+                    "c-idl-source": (printCIDLSource, 1),
+                    "python-module": (print_python_module, 1)}
 
         if not args[0] in commands:
             sys.stderr.write("%s: unknown command \"%s\" "

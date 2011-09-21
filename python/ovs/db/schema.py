@@ -95,6 +95,9 @@ class DbSchema(object):
             json["version"] = self.version
         return json
 
+    def copy(self):
+        return DbSchema.from_json(self.to_json())
+
     def __follow_ref_table(self, column, base, base_name):
         if not base or base.type != types.UuidType or not base.ref_table_name:
             return

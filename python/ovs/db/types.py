@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import sys
+import uuid
 
 from ovs.db import error
 import ovs.db.parser
@@ -20,9 +21,10 @@ import ovs.db.data
 import ovs.ovsuuid
 
 class AtomicType(object):
-    def __init__(self, name, default):
+    def __init__(self, name, default, python_types):
         self.name = name
         self.default = default
+        self.python_types = python_types
 
     @staticmethod
     def from_string(s):
@@ -51,12 +53,12 @@ class AtomicType(object):
     def default_atom(self):
         return ovs.db.data.Atom(self, self.default)
 
-VoidType = AtomicType("void", None)
-IntegerType = AtomicType("integer", 0)
-RealType = AtomicType("real", 0.0)
-BooleanType = AtomicType("boolean", False)
-StringType = AtomicType("string", "")
-UuidType = AtomicType("uuid", ovs.ovsuuid.zero())
+VoidType = AtomicType("void", None, ())
+IntegerType = AtomicType("integer", 0, (int, long))
+RealType = AtomicType("real", 0.0, (int, long, float))
+BooleanType = AtomicType("boolean", False, (bool,))
+StringType = AtomicType("string", "", (str, unicode))
+UuidType = AtomicType("uuid", ovs.ovsuuid.zero(), (uuid.UUID,))
 
 ATOMIC_TYPES = [VoidType, IntegerType, RealType, BooleanType, StringType,
                 UuidType]

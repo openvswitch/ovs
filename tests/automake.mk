@@ -50,7 +50,6 @@ TESTSUITE_AT = \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
-	tests/ovsdb-idl-py.at \
 	tests/ovs-vsctl.at \
 	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
@@ -279,14 +278,21 @@ EXTRA_DIST += tests/uuidfilt.pl tests/ovsdb-monitor-sort.pl
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 
 # idltest schema and IDL
-OVSIDL_BUILT +=	tests/idltest.c tests/idltest.h tests/idltest.ovsidl
+OVSIDL_BUILT += \
+	tests/idltest.c \
+	tests/idltest.h \
+	tests/idltest.ovsidl \
+	tests/idltest.py
 IDLTEST_IDL_FILES = tests/idltest.ovsschema tests/idltest.ann
 EXTRA_DIST += $(IDLTEST_IDL_FILES)
+CLEANFILES += tests/idltest.pyc tests/idltest.pyo
 tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
 	$(OVSDB_IDLC) -C $(srcdir) annotate $(IDLTEST_IDL_FILES) > $@.tmp
 	mv $@.tmp $@
 
 tests/idltest.c: tests/idltest.h
+
+noinst_SCRIPTS += tests/idltest.py
 
 noinst_PROGRAMS += tests/test-reconnect
 tests_test_reconnect_SOURCES = tests/test-reconnect.c

@@ -33,6 +33,7 @@ import socket
 import subprocess
 import sys
 
+import ovs.dirs
 from ovs.db import error
 from ovs.db import types
 import ovs.util
@@ -376,7 +377,7 @@ def keep_table_columns(schema, table_name, column_types):
     table.columns = new_columns
     return table
  
-def monitor_uuid_schema_cb(schema):
+def prune_schema(schema):
     string_type = types.Type(types.BaseType(types.StringType))
     optional_ssl_type = types.Type(types.BaseType(types.UuidType,
                                                   ref_table_name='SSL'), None, 0, 1)
@@ -425,18 +426,17 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
             s_log.warning("skipping ipsec config for %s: %s" % (name, msg))
 
 def get_ssl_cert(data):
-    for ovs_rec in data["Open_vSwitch"].itervalues():
-        if ovs_rec.ssl.as_list():
-            ssl_rec = data["SSL"][ovs_rec.ssl.as_scalar()]
-            return (ssl_rec.certificate.as_scalar(),
-                    ssl_rec.private_key.as_scalar())
+    for ovs_rec in data["Open_vSwitch"].rows.itervalues():
+        ssl = ovs_rec.ssl
+        if ssl and ssl.certificate and ssl.private_key:
+            return (ssl.certificate, ssl.private_key)
 
     return None
 
 def main(argv):
     try:
         options, args = getopt.gnu_getopt(
-            argv[1:], 'h', ['help'] + ovs.daemon.LONG_OPTIONS)
+            argv[1:], 'h', ['help', 'root-prefix='] + ovs.daemon.LONG_OPTIONS)
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
@@ -444,6 +444,9 @@ def main(argv):
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
+        elif key == '--root-prefix':
+            global root_prefix
+            root_prefix = value
         elif not ovs.daemon.parse_opt(key, value):
             sys.stderr.write("%s: unhandled option %s\n"
                              % (ovs.util.PROGRAM_NAME, key))
@@ -455,7 +458,11 @@ def main(argv):
         sys.exit(1)
 
     remote = args[0]
-    idl = ovs.db.idl.Idl(remote, "Open_vSwitch", monitor_uuid_schema_cb)
+
+    schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
+    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
+    prune_schema(schema)
+    idl = ovs.db.idl.Idl(remote, schema)
 
     ovs.daemon.daemonize()
 
@@ -469,20 +476,21 @@ def main(argv):
             poller.block()
             continue
 
-        ssl_cert = get_ssl_cert(idl.data)
+        ssl_cert = get_ssl_cert(idl.tables)
  
         new_interfaces = {}
-        for rec in idl.data["Interface"].itervalues():
-            if rec.type.as_scalar() == "ipsec_gre":
-                name = rec.name.as_scalar()
+        for rec in idl.tables["Interface"].rows.itervalues():
+            if rec.type == "ipsec_gre":
+                name = rec.name
+                options = rec.options
                 entry = {
-                    "remote_ip": rec.options.get("remote_ip"),
-                    "local_ip": rec.options.get("local_ip", "0.0.0.0/0"),
-                    "certificate": rec.options.get("certificate"),
-                    "private_key": rec.options.get("private_key"),
-                    "use_ssl_cert": rec.options.get("use_ssl_cert"),
-                    "peer_cert": rec.options.get("peer_cert"),
-                    "psk": rec.options.get("psk") }
+                    "remote_ip": options.get("remote_ip"),
+                    "local_ip": options.get("local_ip", "0.0.0.0/0"),
+                    "certificate": options.get("certificate"),
+                    "private_key": options.get("private_key"),
+                    "use_ssl_cert": options.get("use_ssl_cert"),
+                    "peer_cert": options.get("peer_cert"),
+                    "psk": options.get("psk") }
 
                 if entry["peer_cert"] and entry["psk"]:
                     s_log.warning("both 'peer_cert' and 'psk' defined for %s" 

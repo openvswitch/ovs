@@ -81,6 +81,18 @@ class Atom(object):
 
     @staticmethod
     def default(type_):
+        """Returns the default value for the given type_, which must be an
+        instance of ovs.db.types.AtomicType.
+
+        The default value for each atomic type is;
+
+          - 0, for integer or real atoms.
+
+          - False, for a boolean atom.
+
+          - "", for a string atom.
+
+          - The all-zeros UUID, for a UUID atom."""
         return Atom(type_)
 
     def is_default(self):
@@ -102,12 +114,21 @@ class Atom(object):
         atom.check_constraints(base)
         return atom
 
+    @staticmethod
+    def from_python(base, value):
+        value = ovs.db.parser.float_to_int(value)
+        if type(value) in base.type.python_types:
+            atom = Atom(base.type, value)
+        else:
+            raise error.Error("expected %s, got %s" % (base.type, type(value)))
+        atom.check_constraints(base)
+        return atom
+
     def check_constraints(self, base):
         """Checks whether 'atom' meets the constraints (if any) defined in
         'base' and raises an ovs.db.error.Error if any constraint is violated.
 
         'base' and 'atom' must have the same type.
-
         Checking UUID constraints is deferred to transaction commit time, so
         this function does nothing for UUID constraints."""
         assert base.type == self.type
@@ -363,6 +384,9 @@ class Datum(object):
         else:
             return [k.value for k in self.values.iterkeys()]
         
+    def as_dict(self):
+        return dict(self.values)
+
     def as_scalar(self):
         if len(self.values) == 1:
             if self.type.is_map():
@@ -372,6 +396,97 @@ class Datum(object):
                 return self.values.keys()[0].value
         else:
             return None
+
+    def to_python(self, uuid_to_row):
+        """Returns this datum's value converted into a natural Python
+        representation of this datum's type, according to the following
+        rules:
+
+        - If the type has exactly one value and it is not a map (that is,
+          self.type.is_scalar() returns True), then the value is:
+
+            * An int or long, for an integer column.
+
+            * An int or long or float, for a real column.
+
+            * A bool, for a boolean column.
+
+            * A str or unicode object, for a string column.
+
+            * A uuid.UUID object, for a UUID column without a ref_table.
+
+            * An object represented the referenced row, for a UUID column with
+              a ref_table.  (For the Idl, this object will be an ovs.db.idl.Row
+              object.)
+
+          If some error occurs (e.g. the database server's idea of the column
+          is different from the IDL's idea), then the default value for the
+          scalar type is used (see Atom.default()).
+
+        - Otherwise, if the type is not a map, then the value is a Python list
+          whose elements have the types described above.
+
+        - Otherwise, the type is a map, and the value is a Python dict that
+          maps from key to value, with key and value types determined as
+          described above.
+
+        'uuid_to_row' must be a function that takes a value and an
+        ovs.db.types.BaseType and translates UUIDs into row objects."""
+        if self.type.is_scalar():
+            value = uuid_to_row(self.as_scalar(), self.type.key)
+            if value is None:
+                return self.type.key.default()
+            else:
+                return value
+        elif self.type.is_map():
+            value = {}
+            for k, v in self.values.iteritems():
+                dk = uuid_to_row(k.value, self.type.key)
+                dv = uuid_to_row(v.value, self.type.value)
+                if dk is not None and dv is not None:
+                    value[dk] = dv
+            return value
+        else:
+            s = set()
+            for k in self.values:
+                dk = uuid_to_row(k.value, self.type.key)
+                if dk is not None:
+                    s.add(dk)
+            return sorted(s)
+
+    @staticmethod
+    def from_python(type_, value, row_to_uuid):
+        """Returns a new Datum with the given ovs.db.types.Type 'type_'.  The
+        new datum's value is taken from 'value', which must take the form
+        described as a valid return value from Datum.to_python() for 'type'.
+
+        Each scalar value within 'value' is initally passed through
+        'row_to_uuid', which should convert objects that represent rows (if
+        any) into uuid.UUID objects and return other data unchanged.
+
+        Raises ovs.db.error.Error if 'value' is not in an appropriate form for
+        'type_'."""
+        d = {}
+        if type(value) == dict:
+            for k, v in value.iteritems():
+                ka = Atom.from_python(type_.key, row_to_uuid(k))
+                va = Atom.from_python(type_.value, row_to_uuid(v))
+                d[ka] = va
+        elif type(value) in (list, tuple):
+            for k in value:
+                ka = Atom.from_python(type_.key, row_to_uuid(k))
+                d[ka] = None
+        else:
+            ka = Atom.from_python(type_.key, row_to_uuid(value))
+            d[ka] = None
+
+        datum = Datum(type_, d)
+        datum.check_constraints()
+        if not datum.conforms_to_type():
+            raise error.Error("%d values when type requires between %d and %d"
+                              % (len(d), type_.n_min, type_.n_max))
+
+        return datum
 
     def __getitem__(self, key):
         if not isinstance(key, Atom):

@@ -1,7 +1,7 @@
 AT_BANNER([OVSDB -- interface description language (IDL)])
 
-# OVSDB_CHECK_IDL(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
-#                 [FILTER])
+# OVSDB_CHECK_IDL_C(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
+#                   [FILTER])
 #
 # Creates a database with a schema derived from idltest.ovsidl, runs
 # each PRE-IDL-TXN (if any), starts an ovsdb-server on that database,
@@ -16,20 +16,41 @@ AT_BANNER([OVSDB -- interface description language (IDL)])
 # through the specified program.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
-m4_define([OVSDB_CHECK_IDL], 
-  [AT_SETUP([$1])
+m4_define([OVSDB_CHECK_IDL_C],
+  [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
-   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3], 
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
             [0], [stdout], [ignore], [kill `cat pid`])
    AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
             [0], [$4], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
+
+# same as OVSDB_CHECK_IDL but uses the Python IDL implementation.
+m4_define([OVSDB_CHECK_IDL_PY],
+  [AT_SETUP([$1 - Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl positive Python $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL],
+  [OVSDB_CHECK_IDL_C($@)
+   OVSDB_CHECK_IDL_PY($@)])
 
 OVSDB_CHECK_IDL([simple idl, initially empty, no ops],
   [],
@@ -51,7 +72,7 @@ OVSDB_CHECK_IDL([simple idl, initially empty, various ops],
                "ia": ["set", [1, 2, 3]],
                "ra": ["set", [-0.5]],
                "ba": ["set", [true]],
-               "sa": ["set", ["abc", "def"]], 
+               "sa": ["set", ["abc", "def"]],
                "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
                               ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
       {"op": "insert",
@@ -77,7 +98,7 @@ OVSDB_CHECK_IDL([simple idl, initially empty, various ops],
                "ia": ["set", [1]],
                "ra": ["set", [1.5]],
                "ba": ["set", [false]],
-               "sa": ["set", []], 
+               "sa": ["set", []],
                "ua": ["set", []]}}]' \
     '["idltest",
       {"op": "update",
@@ -128,7 +149,7 @@ OVSDB_CHECK_IDL([simple idl, initially populated],
                "ia": ["set", [1, 2, 3]],
                "ra": ["set", [-0.5]],
                "ba": ["set", [true]],
-               "sa": ["set", ["abc", "def"]], 
+               "sa": ["set", ["abc", "def"]],
                "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
                               ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
       {"op": "insert",
@@ -159,7 +180,7 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL],
                "ia": ["set", [1, 2, 3]],
                "ra": ["set", [-0.5]],
                "ba": ["set", [true]],
-               "sa": ["set", ["abc", "def"]], 
+               "sa": ["set", ["abc", "def"]],
                "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
                               ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
       {"op": "insert",
