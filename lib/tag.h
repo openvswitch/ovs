@@ -75,7 +75,7 @@ static inline bool tag_intersects(tag_type, tag_type);
 static inline bool tag_is_valid(tag_type);
 
 /* Returns true if 'a' and 'b' have at least one tag in common,
- * false if their set of tags is disjoint. . */
+ * false if their set of tags is disjoint. */
 static inline bool
 tag_intersects(tag_type a, tag_type b)
 {
