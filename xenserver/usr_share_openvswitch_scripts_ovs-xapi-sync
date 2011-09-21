@@ -38,14 +38,7 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
-s_log     = logging.getLogger("ovs-xapi-sync")
-l_handler = logging.handlers.RotatingFileHandler(
-        "/var/log/openvswitch/ovs-xapi-sync.log")
-l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-l_handler.setFormatter(l_formatter)
-s_log.addHandler(l_handler)
-s_log.setLevel(logging.INFO)
-
+s_log = logging.getLogger("ovs-xapi-sync")
 vsctl="/usr/bin/ovs-vsctl"
 session = None
 force_run = False
@@ -262,6 +255,13 @@ def update_tap_from_vif(idl, tap_name, vif_name):
 
 def main(argv):
     global force_run
+
+    l_handler = logging.handlers.RotatingFileHandler(
+            "/var/log/openvswitch/ovs-xapi-sync.log")
+    l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
+    l_handler.setFormatter(l_formatter)
+    s_log.addHandler(l_handler)
+    s_log.setLevel(logging.INFO)
 
     try:
         options, args = getopt.gnu_getopt(
