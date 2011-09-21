@@ -59,7 +59,7 @@ def inlineXmlToNroff(node, font):
             elif node.hasAttribute('group'):
                 s += node.attributes['group'].nodeValue
             else:
-                raise error.Error("'ref' lacks column and table attributes")
+                raise error.Error("'ref' lacks required attributes: %s" % node.attributes.keys())
             return s + font
         elif node.tagName == 'var':
             s = r'\fI'
@@ -125,6 +125,15 @@ def blockXmlToNroff(nodes, para='.PP'):
                         s += "\n"
                     s += para + "\n"
                 s += blockXmlToNroff(node.childNodes, para)
+            elif node.tagName in ('h1', 'h2', 'h3'):
+                if s != "":
+                    if not s.endswith("\n"):
+                        s += "\n"
+                nroffTag = {'h1': 'SH', 'h2': 'SS', 'h3': 'ST'}[node.tagName]
+                s += ".%s " % nroffTag
+                for child_node in node.childNodes:
+                    s += inlineXmlToNroff(child_node, r'\fR')
+                s += "\n"
             else:
                 s += inlineXmlToNroff(node, r'\fR')
         else:
@@ -142,12 +151,6 @@ def typeAndConstraintsToNroff(column):
         type += " (must be unique within table)"
     return type
 
-def columnToNroff(columnName, column, node):
-    type = typeAndConstraintsToNroff(column)
-    s = '.IP "\\fB%s\\fR: %s"\n' % (columnName, type)
-    s += blockXmlToNroff(node.childNodes, '.IP') + "\n"
-    return s
-
 def columnGroupToNroff(table, groupXml):
     introNodes = []
     columnNodes = []
@@ -156,6 +159,10 @@ def columnGroupToNroff(table, groupXml):
             and node.tagName in ('column', 'group')):
             columnNodes += [node]
         else:
+            if (columnNodes
+                and not (node.nodeType == node.TEXT_NODE
+                         and node.data.isspace())):
+                raise error.Error("text follows <column> or <group> inside <group>: %s" % node)
             introNodes += [node]
 
     summary = []
@@ -163,10 +170,18 @@ def columnGroupToNroff(table, groupXml):
     body = ''
     for node in columnNodes:
         if node.tagName == 'column':
-            columnName = node.attributes['name'].nodeValue
-            column = table.columns[columnName]
-            body += columnToNroff(columnName, column, node)
-            summary += [('column', columnName, column)]
+            name = node.attributes['name'].nodeValue
+            column = table.columns[name]
+            if node.hasAttribute('key'):
+                key = node.attributes['key'].nodeValue
+                nameNroff = "%s : %s" % (name, key)
+                typeNroff = "optional %s" % column.type.value.toEnglish()
+            else:
+                nameNroff = name
+                typeNroff = typeAndConstraintsToNroff(column)
+            body += '.IP "\\fB%s\\fR: %s"\n' % (nameNroff, typeNroff)
+            body += blockXmlToNroff(node.childNodes, '.IP') + "\n"
+            summary += [('column', nameNroff, typeNroff)]
         elif node.tagName == 'group':
             title = node.attributes["title"].nodeValue
             subSummary, subIntro, subBody = columnGroupToNroff(table, node)
@@ -181,19 +196,11 @@ def tableSummaryToNroff(summary, level=0):
     s = ""
     for type, name, arg in summary:
         if type == 'column':
-
-            s += "%s\\fB%s\\fR\tT{\n%s\nT}\n" % (
-                r'\ \ ' * level, name, typeAndConstraintsToNroff(arg))
+            s += ".TQ %.2fin\n\\fB%s\\fR\n%s\n" % (3 - level * .25, name, arg)
         else:
-            if s != "":
-                s += "_\n"
-            s += """.T&
-li | s
-l | l.
-%s%s
-_
-""" % (r'\ \ ' * level, name)
+            s += ".TQ .25in\n\\fI%s:\\fR\n.RS .25in\n" % name
             s += tableSummaryToNroff(arg, level + 1)
+            s += ".RE\n"
     return s
 
 def tableToNroff(schema, tableXml):
@@ -201,24 +208,13 @@ def tableToNroff(schema, tableXml):
     table = schema.tables[tableName]
 
     s = """.bp
-.SS "%s Table"
+.SH "%s TABLE"
 """ % tableName
     summary, intro, body = columnGroupToNroff(table, tableXml)
     s += intro
-
-    s += r"""
-.sp
-.ce 1
-\fB%s\fR Table Columns:
-.TS
-center box;
-l | l.
-Column	Type
-=
-""" % tableName
+    s += '.SS "Summary:\n'
     s += tableSummaryToNroff(summary)
-    s += ".TE\n"
-
+    s += '.SS "Details:\n'
     s += body
     return s
 
@@ -233,16 +229,15 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
     if title == None:
         title = schema.name
 
-    # Putting '\" pt as the first line tells "man" that the manpage
-    # needs to be preprocessed by "pic" and "tbl".
-    s = r''''\" pt
+    # Putting '\" p as the first line tells "man" that the manpage
+    # needs to be preprocessed by "pic".
+    s = r''''\" p
 .TH %s 5 "%s" "Open vSwitch" "Open vSwitch Manual"
 .\" -*- nroff -*-
 .de TQ
 .  br
 .  ns
-.  TP
-\\$1
+.  TP "\\$1"
 ..
 .de ST
 .  PP
@@ -273,26 +268,27 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
             introNodes += [dbNode]
 
     s += blockXmlToNroff(introNodes) + "\n"
-    tableSummary = r"""
-.sp
-.ce 1
-\fB%s\fR Database Tables:
-.TS
-center box;
-l | l
-lb | l.
-Table	Purpose
-=
+
+    s += r"""
+.SH "TABLE SUMMARY"
+.PP
+The following list summarizes the purpose of each of the tables in the
+\fB%s\fR database.  Each table is described in more detail on a later
+page.
+.IP "Table" 1in
+Purpose
 """ % schema.name
     for name, title in summary:
-        tableSummary += "%s\t%s\n" % (name, textToNroff(title))
-    tableSummary += '.TE\n'
-    s += tableSummary
+        s += r"""
+.TQ 1in
+\fB%s\fR
+%s
+""" % (name, textToNroff(title))
 
     if erFile:
         s += """
 .if !'\*[.T]'ascii' \{
-.sp 1
+.bp
 .SH "TABLE RELATIONSHIPS"
 .PP
 The following diagram shows the relationship among tables in the
