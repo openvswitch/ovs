@@ -1,0 +1,105 @@
+AT_BANNER([vlog])
+
+AT_SETUP([vlog - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
+-v ANY:ANY:dbg module_1:ANY:info module_2:ANY:warn ANY:syslog:off \
+2>stderr_log])
+AT_CAPTURE_FILE([log_file])
+AT_CAPTURE_FILE([stderr_log])
+
+AT_CHECK([diff log_file stderr_log])
+
+AT_CHECK([sed -e 's/.* .* ..:..:..|//' \
+-e 's/File "[[^"]]*", line [[0-9]][[0-9]]*,/File <name>, line <number>,/' \
+stderr_log], [0], [dnl
+0|module_0|EMER|emergency
+1|module_0|ERR|error
+2|module_0|WARN|warning
+3|module_0|INFO|information
+4|module_0|DBG|debug
+5|module_0|EMER|emergency exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+6|module_0|ERR|error exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+7|module_0|WARN|warn exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+8|module_0|INFO|information exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+9|module_0|DBG|debug exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+10|module_0|ERR|exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+11|module_1|EMER|emergency
+12|module_1|ERR|error
+13|module_1|WARN|warning
+14|module_1|INFO|information
+16|module_1|EMER|emergency exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+17|module_1|ERR|error exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+18|module_1|WARN|warn exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+19|module_1|INFO|information exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+21|module_1|ERR|exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+22|module_2|EMER|emergency
+23|module_2|ERR|error
+24|module_2|WARN|warning
+27|module_2|EMER|emergency exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+28|module_2|ERR|error exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+29|module_2|WARN|warn exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+32|module_2|ERR|exception
+Traceback (most recent call last):
+  File <name>, line <number>, in main
+    assert fail
+AssertionError
+])
+
+AT_CLEANUP
