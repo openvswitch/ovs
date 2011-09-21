@@ -194,12 +194,12 @@ class Idl:
                                   'an object' % table_name, table_update)
 
             for uuid_string, row_update in table_update.iteritems():
-                if not ovs.ovsuuid.UUID.is_valid_string(uuid_string):
+                if not ovs.ovsuuid.is_valid_string(uuid_string):
                     raise error.Error('<table-update> for table "%s" '
                                       'contains bad UUID "%s" as member '
                                       'name' % (table_name, uuid_string),
                                       table_update)
-                uuid = ovs.ovsuuid.UUID.from_string(uuid_string)
+                uuid = ovs.ovsuuid.from_string(uuid_string)
 
                 if type(row_update) != dict:
                     raise error.Error('<table-update> for table "%s" '

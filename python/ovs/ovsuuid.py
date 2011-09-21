@@ -18,57 +18,51 @@ import uuid
 from ovs.db import error
 import ovs.db.parser
 
-class UUID(uuid.UUID):
-    x = "[0-9a-fA-f]"
-    uuidRE = re.compile("^(%s{8})-(%s{4})-(%s{4})-(%s{4})-(%s{4})(%s{8})$"
-                        % (x, x, x, x, x, x))
+uuidRE = re.compile("^xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx$"
+                    .replace('x', '[0-9a-fA-F]'))
 
-    def __init__(self, s):
-        uuid.UUID.__init__(self, hex=s)
+def zero():
+    return uuid.UUID(int=0)
 
-    @staticmethod
-    def zero():
-        return UUID('00000000-0000-0000-0000-000000000000')
 
-    def is_zero(self):
-        return self.int == 0
+def is_valid_string(s):
+    return uuidRE.match(s) is not None
 
-    @staticmethod
-    def is_valid_string(s):
-        return UUID.uuidRE.match(s) != None
 
-    @staticmethod
-    def from_string(s):
-        if not UUID.is_valid_string(s):
-            raise error.Error("%s is not a valid UUID" % s)
-        return UUID(s)
+def from_string(s):
+    if not is_valid_string(s):
+        raise error.Error("%s is not a valid UUID" % s)
+    return uuid.UUID(s)
 
-    @staticmethod
-    def from_json(json, symtab=None):
+
+def from_json(json, symtab=None):
+    try:
+        s = ovs.db.parser.unwrap_json(json, "uuid", unicode)
+        if not uuidRE.match(s):
+            raise error.Error("\"%s\" is not a valid UUID" % s, json)
+        return uuid.UUID(s)
+    except error.Error, e:
+        if not symtab:
+            raise e
         try:
-            s = ovs.db.parser.unwrap_json(json, "uuid", unicode)
-            if not UUID.uuidRE.match(s):
-                raise error.Error("\"%s\" is not a valid UUID" % s, json)
-            return UUID(s)
-        except error.Error, e:
-            if not symtab:
-                raise e
-            try:
-                name = ovs.db.parser.unwrap_json(json, "named-uuid", unicode)
-            except error.Error:
-                raise e
+            name = ovs.db.parser.unwrap_json(json, "named-uuid", unicode)
+        except error.Error:
+            raise e
 
-            if name not in symtab:
-                symtab[name] = uuid4()
-            return symtab[name]
+        if name not in symtab:
+            symtab[name] = uuid4()
+        return symtab[name]
 
-    def to_json(self):
-        return ["uuid", str(self)]
 
-    def cInitUUID(self, var):
-        m = UUID.uuidRE.match(str(self))
-        return ["%s.parts[0] = 0x%s;" % (var, m.group(1)),
-                "%s.parts[1] = 0x%s%s;" % (var, m.group(2), m.group(3)),
-                "%s.parts[2] = 0x%s%s;" % (var, m.group(4), m.group(5)),
-                "%s.parts[3] = 0x%s;" % (var, m.group(6))]
+def to_json(uuid_):
+    return ["uuid", str(uuid_)]
 
+
+def to_c_assignment(uuid_, var):
+    """Returns an array of strings, each of which contain a C statement.  The
+    statements assign 'uuid_' to a "struct uuid" as defined in Open vSwitch
+    lib/uuid.h."""
+
+    hex_string = uuid_.hex
+    return ["%s.parts[%d] = 0x%s;" % (var, x, hex_string[x * 8:(x + 1) * 8])
+            for x in range(4)]

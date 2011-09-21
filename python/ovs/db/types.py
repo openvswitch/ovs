@@ -56,7 +56,7 @@ IntegerType = AtomicType("integer", 0)
 RealType = AtomicType("real", 0.0)
 BooleanType = AtomicType("boolean", False)
 StringType = AtomicType("string", "")
-UuidType = AtomicType("uuid", ovs.ovsuuid.UUID.zero())
+UuidType = AtomicType("uuid", ovs.ovsuuid.zero())
 
 ATOMIC_TYPES = [VoidType, IntegerType, RealType, BooleanType, StringType,
                 UuidType]

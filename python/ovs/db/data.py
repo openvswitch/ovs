@@ -96,7 +96,7 @@ class Atom(object):
             or (type_ == ovs.db.types.StringType and type(json) in [str, unicode])):
             atom = Atom(type_, json)
         elif type_ == ovs.db.types.UuidType:
-            atom = Atom(type_, ovs.ovsuuid.UUID.from_json(json, symtab))
+            atom = Atom(type_, ovs.ovsuuid.from_json(json, symtab))
         else:
             raise error.Error("expected %s" % type_.to_string(), json)
         atom.check_constraints(base)
@@ -147,7 +147,7 @@ class Atom(object):
     
     def to_json(self):
         if self.type == ovs.db.types.UuidType:
-            return self.value.to_json()
+            return ovs.ovsuuid.to_json(self.value)
         else:
             return self.value
 
@@ -165,7 +165,7 @@ class Atom(object):
             return ['%s.string = xstrdup("%s");'
                     % (var, escapeCString(self.value))]
         elif self.type == ovs.db.types.UuidType:
-            return self.value.cInitUUID(var)
+            return ovs.ovsuuid.to_c_assignment(self.value, var)
 
     def toEnglish(self, escapeLiteral=returnUnchanged):
         if self.type == ovs.db.types.IntegerType:

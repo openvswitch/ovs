@@ -163,7 +163,7 @@ def substitute_uuids(json, symtab):
     return json
 
 def parse_uuids(json, symtab):
-    if type(json) in [str, unicode] and ovs.ovsuuid.UUID.is_valid_string(json):
+    if type(json) in [str, unicode] and ovs.ovsuuid.is_valid_string(json):
         name = "#%d#" % len(symtab)
         sys.stderr.write("%s = %s\n" % (name, json))
         symtab[name] = json
