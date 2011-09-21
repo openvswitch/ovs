@@ -374,7 +374,7 @@ error:
 /* Returns null if this device is not attached to a datapath. */
 struct vport *netdev_get_vport(struct net_device *dev)
 {
-#ifdef IFF_BRIDGE_PORT
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 #if IFF_BRIDGE_PORT != IFF_OVS_DATAPATH
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
 #else
