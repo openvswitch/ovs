@@ -390,7 +390,7 @@ def collect_data():
 
 def main(argv = None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
-    global entries, data, dbg
+    global entries, data, dbg, unlimited_data
 
     # we need access to privileged files, exit if we are not running as root
     if os.getuid() != 0:
