@@ -538,7 +538,7 @@ nl_dump_start(struct nl_dump *dump,
     dump->buffer = NULL;
     if (sock->any_groups || sock->dump) {
         /* 'sock' might belong to some multicast group, or it already has an
-         * onoging dump.  Clone the socket to avoid possibly intermixing
+         * ongoing dump.  Clone the socket to avoid possibly intermixing
          * multicast messages or previous dump results with our results. */
         dump->status = nl_sock_clone(sock, &dump->sock);
         if (dump->status) {
