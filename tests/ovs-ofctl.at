@@ -504,7 +504,7 @@ OFPROTO_START
 AT_CHECK([ovs-ofctl add-flow br0 reg0=0x12345,actions=drop])
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
 OFPST_FLOW reply:
- cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0,  actions=drop
+ cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, actions=drop
 ])
 OFPROTO_STOP
 AT_CLEANUP

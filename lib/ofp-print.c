@@ -1053,7 +1053,9 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         }
 
         cls_rule_format(&fs.rule, string);
-        ds_put_char(string, ' ');
+        if (string->string[string->length - 1] != ' ') {
+            ds_put_char(string, ' ');
+        }
         ofp_print_actions(string, fs.actions, fs.n_actions);
      }
 }
