@@ -136,7 +136,7 @@ path certificate "%s";
     def reload(self):
         exitcode = subprocess.call(["/etc/init.d/racoon", "reload"])
         if exitcode != 0:
-            # Racoon is finicky about it's configuration file and will
+            # Racoon is finicky about its configuration file and will
             # refuse to start if it sees something it doesn't like
             # (e.g., a certificate file doesn't exist).  Try restarting
             # the process before giving up.
