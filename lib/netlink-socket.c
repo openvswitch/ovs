@@ -62,7 +62,6 @@ struct nl_sock
     int fd;
     uint32_t pid;
     int protocol;
-    bool any_groups;
     struct nl_dump *dump;
 };
 
@@ -92,7 +91,6 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         goto error;
     }
     sock->protocol = protocol;
-    sock->any_groups = false;
     sock->dump = NULL;
 
     retval = alloc_pid(&sock->pid);
@@ -164,6 +162,10 @@ nl_sock_destroy(struct nl_sock *sock)
 /* Tries to add 'sock' as a listener for 'multicast_group'.  Returns 0 if
  * successful, otherwise a positive errno value.
  *
+ * A socket that is subscribed to a multicast group that receives asynchronous
+ * notifications must not be used for Netlink transactions or dumps, because
+ * transactions and dumps can cause notifications to be lost.
+ *
  * Multicast group numbers are always positive.
  *
  * It is not an error to attempt to join a multicast group to which a socket
@@ -181,7 +183,6 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
                   multicast_group, strerror(errno));
         return errno;
     }
-    sock->any_groups = true;
     return 0;
 }
 
@@ -536,10 +537,9 @@ nl_dump_start(struct nl_dump *dump,
     nlmsghdr->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
     dump->seq = nlmsghdr->nlmsg_seq;
     dump->buffer = NULL;
-    if (sock->any_groups || sock->dump) {
-        /* 'sock' might belong to some multicast group, or it already has an
-         * ongoing dump.  Clone the socket to avoid possibly intermixing
-         * multicast messages or previous dump results with our results. */
+    if (sock->dump) {
+        /* 'sock' already has an ongoing dump.  Clone the socket because
+         * Netlink only allows one dump at a time. */
         dump->status = nl_sock_clone(sock, &dump->sock);
         if (dump->status) {
             return;
