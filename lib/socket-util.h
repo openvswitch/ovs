@@ -18,6 +18,7 @@
 #define SOCKET_UTIL_H 1
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include "openvswitch/types.h"
