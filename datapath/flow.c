@@ -922,10 +922,6 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 	if (rem)
 		return -EINVAL;
 
-done:
-	if (prev_type == ODP_KEY_ATTR_UNSPEC ||
-	    prev_type == ODP_KEY_ATTR_TUN_ID)
-		return -EINVAL;
 	return 0;
 }
 
