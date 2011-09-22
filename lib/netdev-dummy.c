@@ -256,8 +256,6 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_open,
     netdev_dummy_close,
 
-    NULL,                       /* enumerate */
-
     netdev_dummy_listen,        /* listen */
     netdev_dummy_recv,          /* recv */
     NULL,                       /* recv_wait */

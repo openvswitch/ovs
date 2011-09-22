@@ -144,16 +144,6 @@ struct netdev_class {
 
     /* Closes 'netdev'. */
     void (*close)(struct netdev *netdev);
-
-    /* Enumerates the names of all network devices of this class.
-     *
-     * The caller has already initialized 'all_names' and might already have
-     * added some names to it.  This function should not disturb any existing
-     * names in 'all_names'.
-     *
-     * If this netdev class does not support enumeration, this may be a null
-     * pointer. */
-    int (*enumerate)(struct sset *all_names);
 
 /* ## ----------------- ## */
 /* ## Receiving Packets ## */

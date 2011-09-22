@@ -885,8 +885,6 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     netdev_vport_open,                                      \
     netdev_vport_close,                                     \
                                                             \
-    NULL,                       /* enumerate */             \
-                                                            \
     NULL,                       /* listen */                \
     NULL,                       /* recv */                  \
     NULL,                       /* recv_wait */             \

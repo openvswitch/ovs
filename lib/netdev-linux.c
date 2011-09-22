@@ -694,28 +694,6 @@ netdev_linux_close(struct netdev *netdev_)
     free(netdev);
 }
 
-/* Initializes 'sset' with a list of the names of all known network devices. */
-static int
-netdev_linux_enumerate(struct sset *sset)
-{
-    struct if_nameindex *names;
-
-    names = if_nameindex();
-    if (names) {
-        size_t i;
-
-        for (i = 0; names[i].if_name != NULL; i++) {
-            sset_add(sset, names[i].if_name);
-        }
-        if_freenameindex(names);
-        return 0;
-    } else {
-        VLOG_WARN("could not obtain list of network device names: %s",
-                  strerror(errno));
-        return errno;
-    }
-}
-
 static int
 netdev_linux_listen(struct netdev *netdev_)
 {
@@ -2340,7 +2318,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     return netdev_dev_linux_cast(netdev_get_dev(netdev))->change_seq;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CREATE, ENUMERATE, GET_STATS, SET_STATS)  \
+#define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS)  \
 {                                                               \
     NAME,                                                       \
                                                                 \
@@ -2355,8 +2333,6 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     netdev_linux_open,                                          \
     netdev_linux_close,                                         \
-                                                                \
-    ENUMERATE,                                                  \
                                                                 \
     netdev_linux_listen,                                        \
     netdev_linux_recv,                                          \
@@ -2409,7 +2385,6 @@ const struct netdev_class netdev_linux_class =
     NETDEV_LINUX_CLASS(
         "system",
         netdev_linux_create,
-        netdev_linux_enumerate,
         netdev_linux_get_stats,
         NULL);                  /* set_stats */
 
@@ -2417,7 +2392,6 @@ const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
         "tap",
         netdev_linux_create_tap,
-        NULL,                   /* enumerate */
         netdev_pseudo_get_stats,
         NULL);                  /* set_stats */
 
@@ -2425,7 +2399,6 @@ const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
         "internal",
         netdev_linux_create,
-        NULL,                    /* enumerate */
         netdev_pseudo_get_stats,
         netdev_vport_set_stats);
 

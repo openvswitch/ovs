@@ -90,8 +90,6 @@ void netdev_close(struct netdev *);
 bool netdev_exists(const char *name);
 bool netdev_is_open(const char *name);
 
-int netdev_enumerate(struct sset *);
-
 void netdev_parse_name(const char *netdev_name, char **name, char **type);
 
 /* Options. */

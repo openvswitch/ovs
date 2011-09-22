@@ -332,33 +332,6 @@ netdev_is_open(const char *name)
     return !!shash_find_data(&netdev_dev_shash, name);
 }
 
-/*  Clears 'sset' and enumerates the names of all known network devices. */
-int
-netdev_enumerate(struct sset *sset)
-{
-    struct shash_node *node;
-    int error = 0;
-
-    netdev_initialize();
-    sset_clear(sset);
-
-    SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *netdev_class = node->data;
-        if (netdev_class->enumerate) {
-            int retval = netdev_class->enumerate(sset);
-            if (retval) {
-                VLOG_WARN("failed to enumerate %s network devices: %s",
-                          netdev_class->type, strerror(retval));
-                if (!error) {
-                    error = retval;
-                }
-            }
-        }
-    }
-
-    return error;
-}
-
 /* Parses 'netdev_name_', which is of the form [type@]name into its component
  * pieces.  'name' and 'type' must be freed by the caller. */
 void
@@ -1285,33 +1258,6 @@ netdev_get_vlan_vid(const struct netdev *netdev, int *vlan_vid)
         *vlan_vid = 0;
     }
     return error;
-}
-
-/* Returns a network device that has 'in4' as its IP address, if one exists,
- * otherwise a null pointer. */
-struct netdev *
-netdev_find_dev_by_in4(const struct in_addr *in4)
-{
-    struct netdev *netdev;
-    struct sset dev_list = SSET_INITIALIZER(&dev_list);
-    const char *name;
-
-    netdev_enumerate(&dev_list);
-    SSET_FOR_EACH (name, &dev_list) {
-        struct in_addr dev_in4;
-
-        if (!netdev_open(name, "system", &netdev)
-            && !netdev_get_in4(netdev, &dev_in4, NULL)
-            && dev_in4.s_addr == in4->s_addr) {
-            goto exit;
-        }
-        netdev_close(netdev);
-    }
-    netdev = NULL;
-
-exit:
-    sset_destroy(&dev_list);
-    return netdev;
 }
 
 /* Initializes 'netdev_dev' as a netdev device named 'name' of the specified
