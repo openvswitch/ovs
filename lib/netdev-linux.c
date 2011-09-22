@@ -37,9 +37,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netpacket/packet.h>
-#include <net/ethernet.h>
 #include <net/if.h>
-#include <linux/if_tunnel.h>
 #include <net/if_arp.h>
 #include <net/if_packet.h>
 #include <net/route.h>
