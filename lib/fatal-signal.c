@@ -32,6 +32,12 @@
 #include "util.h"
 #include "vlog.h"
 
+#include "type-props.h"
+
+#ifndef SIG_ATOMIC_MAX
+#define SIG_ATOMIC_MAX TYPE_MAXIMUM(sig_atomic_t)
+#endif
+
 VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
