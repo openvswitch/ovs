@@ -104,7 +104,8 @@ install -m 644 \
 
 install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch
 find datapath/linux -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/extra/openvswitch \;
-install xenserver/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
+install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
+install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool
 mv $RPM_BUILD_ROOT/etc/openvswitch/bugtool-plugins $RPM_BUILD_ROOT/etc/xensource/bugtool
@@ -345,6 +346,7 @@ exit 0
 /usr/share/openvswitch/python/ovs/timeval.py
 /usr/share/openvswitch/python/ovs/util.py
 /usr/share/openvswitch/python/uuid.py
+/usr/share/openvswitch/python/argparse.py
 /usr/share/openvswitch/scripts/ovs-xapi-sync
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py

@@ -23,5 +23,4 @@ EXTRA_DIST += \
 	xenserver/opt_xensource_libexec_interface-reconfigure \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
-	xenserver/usr_share_openvswitch_scripts_sysconfig.template \
-	xenserver/uuid.py
+	xenserver/usr_share_openvswitch_scripts_sysconfig.template

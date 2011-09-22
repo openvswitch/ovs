@@ -77,7 +77,7 @@ files are:
 
     usr_share_openvswitch_scripts_sysconfig.template
 
-        Template for Open vSwitch's /etc/sysconfig/openvswitch 
+        Template for Open vSwitch's /etc/sysconfig/openvswitch
         configuration file.
 
     usr_share_openvswitch_scripts_xen-bugtool-tc-class-show
@@ -89,14 +89,8 @@ files are:
     usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
 
         xsconsole plugin to configure the pool-wide configuration keys
-        used to control Open vSwitch when integrated with Citrix 
+        used to control Open vSwitch when integrated with Citrix
         management tools.
-
-    uuid.py
-
-        This is uuid.py from Python 2.5.  It is installed into the
-        Open vSwitch RPM because XenServer uses Python 2.4, which does
-        not have uuid.py.
 
 To install, build the Open vSwitch RPM with a command like this:
 

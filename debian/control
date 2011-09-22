@@ -33,7 +33,7 @@ Description: Open vSwitch datapath module source - DKMS version
 
 Package: openvswitch-common
 Architecture: linux-any
-Depends: ${shlibs:Depends}, openssl, ${misc:Depends}, python
+Depends: ${shlibs:Depends}, openssl, ${misc:Depends}, python, python-argparse
 Suggests: ethtool
 Description: Open vSwitch common components
  openvswitch-common provides components required by both openvswitch-switch
