@@ -131,7 +131,7 @@ instead, to write to a database that is served by
 \fBovsdb\-server\fR(1).
 .
 .IP "\fBshow\-log\fI db\fR"
-Prints a summary of the records in \fBdb\fR's log, including the time
+Prints a summary of the records in \fIdb\fR's log, including the time
 and date at which each database change occurred and any associated
 comment.  This may be useful for debugging.
 .PP
