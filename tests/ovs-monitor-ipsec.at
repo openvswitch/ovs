@@ -1,0 +1,222 @@
+AT_BANNER([ovs-monitor-ipsec])
+
+AT_SETUP([ovs-monitor-ipsec])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+
+OVS_PKGDATADIR=`pwd`; export OVS_PKGDATADIR
+cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
+
+trap 'kill `cat pid ovs-monitor-ipsec.pid`' 0
+
+mkdir etc etc/init.d etc/racoon etc/racoon/certs
+mkdir usr usr/sbin
+
+AT_DATA([etc/init.d/racoon], [dnl
+#! /bin/sh
+echo "racoon: $@" >&3
+exit 0
+])
+chmod +x etc/init.d/racoon
+
+AT_DATA([usr/sbin/setkey], [dnl
+#! /bin/sh
+exec >&3
+echo "setkey:"
+while read line; do
+      echo "> $line"
+done
+])
+chmod +x usr/sbin/setkey
+
+touch etc/racoon/certs/ovs-stale.pem
+
+ovs_vsctl () {
+    ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket "$@"
+}
+trim () {  # Removes blank lines and lines starting with # from input.
+    sed -e '/^#/d' -e '/^[       ]*$/d' "$@"
+}
+
+###
+### Start ovsdb-server.
+###
+OVS_VSCTL_SETUP
+
+###
+### Start ovs-monitor-ipsec and wait for it to delete the stale cert.
+###
+AT_CHECK(
+  [$PYTHON $top_srcdir/debian/ovs-monitor-ipsec "--root-prefix=`pwd`" \
+        "--pidfile-name=`pwd`/ovs-monitor-ipsec.pid" \
+        unix:socket 2>log 3>actions &])
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([actions])
+OVS_WAIT_UNTIL([test ! -f etc/racoon/certs/ovs-stale.pem])
+
+###
+### Add an ipsec_gre psk interface and check what ovs-monitor-ipsec does
+###
+AT_CHECK([ovs_vsctl \
+              -- add-br br0 \
+              -- add-port br0 gre0 \
+              -- set interface gre0 type=ipsec_gre \
+                                    options:remote_ip=1.2.3.4 \
+                                    options:psk=swordfish])
+OVS_WAIT_UNTIL([test -f actions && grep 'spdadd 1.2.3.4' actions >/dev/null])
+AT_CHECK([cat actions], [0], [dnl
+setkey:
+> flush;
+setkey:
+> spdflush;
+racoon: reload
+racoon: reload
+setkey:
+> spdadd 0.0.0.0/0 1.2.3.4 gre -P out ipsec esp/transport//require;
+> spdadd 1.2.3.4 0.0.0.0/0 gre -P in ipsec esp/transport//require;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [1.2.3.4   swordfish
+])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+remote 1.2.3.4 {
+        exchange_mode main;
+        nat_traversal on;
+        proposal {
+                encryption_algorithm aes;
+                hash_algorithm sha1;
+                authentication_method pre_shared_key;
+                dh_group 2;
+        }
+}
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+
+###
+### Delete the ipsec_gre interface and check what ovs-monitor-ipsec does
+###
+AT_CHECK([ovs_vsctl del-port gre0])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 17])
+AT_CHECK([sed '1,9d' actions], [0], [dnl
+racoon: reload
+setkey:
+> spddelete 0.0.0.0/0 1.2.3.4 gre -P out;
+> spddelete 1.2.3.4 0.0.0.0/0 gre -P in;
+setkey:
+> dump ;
+setkey:
+> dump ;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+
+###
+### Add ipsec_gre certificate interface and check what ovs-monitor-ipsec does
+###
+AT_DATA([cert.pem], [dnl
+-----BEGIN CERTIFICATE-----
+(not a real certificate)
+-----END CERTIFICATE-----
+])
+AT_DATA([key.pem], [dnl
+-----BEGIN RSA PRIVATE KEY-----
+(not a real private key)
+-----END RSA PRIVATE KEY-----
+])
+AT_CHECK([ovs_vsctl \
+              -- add-port br0 gre1 \
+              -- set Interface gre1 type=ipsec_gre \
+                 options:remote_ip=2.3.4.5 \
+                 options:peer_cert='"-----BEGIN CERTIFICATE-----
+(not a real peer certificate)
+-----END CERTIFICATE-----
+"' \
+                 options:certificate='"/cert.pem"' \
+                 options:private_key='"/key.pem"'])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 21])
+AT_CHECK([sed '1,17d' actions], [0], [dnl
+racoon: reload
+setkey:
+> spdadd 0.0.0.0/0 2.3.4.5 gre -P out ipsec esp/transport//require;
+> spdadd 2.3.4.5 0.0.0.0/0 gre -P in ipsec esp/transport//require;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+remote 2.3.4.5 {
+        exchange_mode main;
+        nat_traversal on;
+        ike_frag on;
+        certificate_type x509 "/cert.pem" "/key.pem";
+        my_identifier asn1dn;
+        peers_identifier asn1dn;
+        peers_certfile x509 "/etc/racoon/certs/ovs-2.3.4.5.pem";
+        verify_identifier on;
+        proposal {
+                encryption_algorithm aes;
+                hash_algorithm sha1;
+                authentication_method rsasig;
+                dh_group 2;
+        }
+}
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+AT_CHECK([cat etc/racoon/certs/ovs-2.3.4.5.pem], [0], [dnl
+-----BEGIN CERTIFICATE-----
+(not a real peer certificate)
+-----END CERTIFICATE-----
+])
+
+###
+### Delete the ipsec_gre certificate interface.
+###
+AT_CHECK([ovs_vsctl del-port gre1])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 29])
+AT_CHECK([sed '1,21d' actions], [0], [dnl
+racoon: reload
+setkey:
+> spddelete 0.0.0.0/0 2.3.4.5 gre -P out;
+> spddelete 2.3.4.5 0.0.0.0/0 gre -P in;
+setkey:
+> dump ;
+setkey:
+> dump ;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+AT_CHECK([test ! -f etc/racoon/certs/ovs-2.3.4.5.pem])
+
+AT_CLEANUP
