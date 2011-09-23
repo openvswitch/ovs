@@ -27,7 +27,8 @@
 
 import getopt
 import glob
-import logging, logging.handlers
+import logging
+import logging.handlers
 import os
 import socket
 import subprocess
@@ -54,6 +55,7 @@ except socket.error, e:
     s_log.warn("failed to connect to syslog (%s)" % e)
 
 setkey = "/usr/sbin/setkey"
+
 
 # Class to configure the racoon daemon, which handles IKE negotiation
 class Racoon:
@@ -204,7 +206,6 @@ path certificate "%s";
         cert = open(vals["private_key"]).read()
         if cert.find("-----BEGIN RSA PRIVATE KEY-----") == -1:
             raise error.Error("'private_key' is not in valid PEM format")
-            
 
     def _add_cert(self, host, vals):
         if host in self.psk_hosts:
@@ -213,7 +214,7 @@ path certificate "%s";
         if vals["certificate"] == None:
             raise error.Error("'certificate' not defined for %s" % host)
         elif vals["private_key"] == None:
-            # Assume the private key is stored in the same PEM file as 
+            # Assume the private key is stored in the same PEM file as
             # the certificate.  We make a copy of "vals" so that we don't
             # modify the original "vals", which would cause the script
             # to constantly think that the configuration has changed
@@ -270,7 +271,7 @@ class IPsec:
 
     def call_setkey(self, cmds):
         try:
-            p = subprocess.Popen([setkey, "-c"], stdin=subprocess.PIPE, 
+            p = subprocess.Popen([setkey, "-c"], stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE)
         except:
             s_log.error("could not call setkey")
@@ -293,7 +294,7 @@ class IPsec:
         for i in range(len(results)):
             if results[i].strip() == host_line:
                 # The SPI is in the line following the host pair
-                spi_line = results[i+1]
+                spi_line = results[i + 1]
                 if (spi_line[1:4] == proto):
                     spi = spi_line.split()[2]
                     spi_list.append(spi.split('(')[1].rstrip(')'))
@@ -346,7 +347,6 @@ class IPsec:
 
         self.entries.append(remote_ip)
 
-
     def del_entry(self, local_ip, remote_ip):
         if remote_ip in self.entries:
             self.racoon.del_entry(remote_ip)
@@ -376,15 +376,16 @@ def keep_table_columns(schema, table_name, column_types):
         new_columns[column_name] = column
     table.columns = new_columns
     return table
- 
+
+
 def prune_schema(schema):
     string_type = types.Type(types.BaseType(types.StringType))
     optional_ssl_type = types.Type(types.BaseType(types.UuidType,
-                                                  ref_table_name='SSL'), None, 0, 1)
+        ref_table_name='SSL'), None, 0, 1)
     string_map_type = types.Type(types.BaseType(types.StringType),
                                  types.BaseType(types.StringType),
                                  0, sys.maxint)
- 
+
     new_tables = {}
     new_tables["Interface"] = keep_table_columns(
         schema, "Interface", {"name": string_type,
@@ -397,6 +398,7 @@ def prune_schema(schema):
                         "private_key": string_type})
     schema.tables = new_tables
 
+
 def usage():
     print "usage: %s [OPTIONS] DATABASE" % sys.argv[0]
     print "where DATABASE is a socket on which ovsdb-server is listening."
@@ -404,7 +406,8 @@ def usage():
     print "Other options:"
     print "  -h, --help               display this help message"
     sys.exit(0)
- 
+
+
 def update_ipsec(ipsec, interfaces, new_interfaces):
     for name, vals in interfaces.iteritems():
         if name not in new_interfaces:
@@ -425,6 +428,7 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
         except error.Error, msg:
             s_log.warning("skipping ipsec config for %s: %s" % (name, msg))
 
+
 def get_ssl_cert(data):
     for ovs_rec in data["Open_vSwitch"].rows.itervalues():
         ssl = ovs_rec.ssl
@@ -433,6 +437,7 @@ def get_ssl_cert(data):
 
     return None
 
+
 def main(argv):
     try:
         options, args = getopt.gnu_getopt(
@@ -440,7 +445,7 @@ def main(argv):
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
- 
+
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
@@ -448,7 +453,7 @@ def main(argv):
             sys.stderr.write("%s: unhandled option %s\n"
                              % (ovs.util.PROGRAM_NAME, key))
             sys.exit(1)
- 
+
     if len(args) != 1:
         sys.stderr.write("%s: exactly one nonoption argument is required "
                          "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
@@ -474,7 +479,7 @@ def main(argv):
             continue
 
         ssl_cert = get_ssl_cert(idl.tables)
- 
+
         new_interfaces = {}
         for rec in idl.tables["Interface"].rows.itervalues():
             if rec.type == "ipsec_gre":
@@ -487,14 +492,14 @@ def main(argv):
                     "private_key": options.get("private_key"),
                     "use_ssl_cert": options.get("use_ssl_cert"),
                     "peer_cert": options.get("peer_cert"),
-                    "psk": options.get("psk") }
+                    "psk": options.get("psk")}
 
                 if entry["peer_cert"] and entry["psk"]:
-                    s_log.warning("both 'peer_cert' and 'psk' defined for %s" 
+                    s_log.warning("both 'peer_cert' and 'psk' defined for %s"
                             % name)
                     continue
                 elif not entry["peer_cert"] and not entry["psk"]:
-                    s_log.warning("no 'peer_cert' or 'psk' defined for %s" 
+                    s_log.warning("no 'peer_cert' or 'psk' defined for %s"
                             % name)
                     continue
 
@@ -509,11 +514,12 @@ def main(argv):
                     entry["private_key"] = ssl_cert[1]
 
                 new_interfaces[name] = entry
- 
+
         if interfaces != new_interfaces:
             update_ipsec(ipsec, interfaces, new_interfaces)
             interfaces = new_interfaces
- 
+
+
 if __name__ == '__main__':
     try:
         main(sys.argv)
