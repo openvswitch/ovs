@@ -599,7 +599,7 @@ exclude those logs from the archive.
             vspidfile.close()
             for b in bond_list(vspid):
                 cmd_output(CAP_NETWORK_STATUS,
-                           [OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % vspid, '-e' 'bond/show %s' % b],
+                           [OVS_APPCTL, '-t', '@RUNDIR@/ovs-vswitchd.%s.ctl' % vspid, '-e' 'bond/show %s' % b],
                            'ovs-appctl-bond-show-%s.out' % b)
         except e:
             pass
@@ -778,7 +778,7 @@ def dp_list():
 
 def bond_list(pid):
     output = StringIO.StringIO()
-    procs = [ProcOutput([OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % pid, '-e' 'bond/list'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+    procs = [ProcOutput([OVS_APPCTL, '-t', '@RUNDIR@/ovs-vswitchd.%s.ctl' % pid, '-e' 'bond/list'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
 
     run_procs([procs])
 
