@@ -23,6 +23,7 @@ import ovs.jsonrpc
 import ovs.poller
 import ovs.stream
 
+
 def handle_rpc(rpc, msg):
     done = False
     reply = None
@@ -43,10 +44,11 @@ def handle_rpc(rpc, msg):
     else:
         rpc.error(errno.EPROTO)
         sys.stderr.write("unsolicited JSON-RPC reply or error\n")
-        
+
     if reply:
         rpc.send(reply)
     return done
+
 
 def do_listen(name):
     error, pstream = ovs.stream.PassiveStream.open(name)
@@ -98,6 +100,7 @@ def do_listen(name):
         poller.block()
     pstream.close()
 
+
 def do_request(name, method, params_string):
     params = ovs.json.from_string(params_string)
     msg = ovs.jsonrpc.Message.create_request(method, params)
@@ -123,11 +126,12 @@ def do_request(name, method, params_string):
     if error:
         sys.stderr.write("error waiting for reply: %s\n" % os.strerror(error))
         sys.exit(1)
-    
+
     print ovs.json.to_string(msg.to_json())
 
     rpc.close()
-    
+
+
 def do_notify(name, method, params_string):
     params = ovs.json.from_string(params_string)
     msg = ovs.jsonrpc.Message.create_notify(method, params)
@@ -151,6 +155,7 @@ def do_notify(name, method, params_string):
         sys.exit(1)
 
     rpc.close()
+
 
 def main(argv):
     try:
@@ -198,6 +203,7 @@ def main(argv):
 
     func(*args)
 
+
 def usage():
     sys.stdout.write("""\
 %s: JSON-RPC test utility for Python
@@ -214,6 +220,6 @@ Other options:
 """)
     sys.exit(0)
 
+
 if __name__ == '__main__':
     main(sys.argv)
-
