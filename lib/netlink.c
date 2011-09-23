@@ -615,7 +615,7 @@ nl_parse_nested(const struct nlattr *nla, const struct nl_policy policy[],
     return nl_policy_parse(&buf, 0, policy, attrs, n_attrs);
 }
 
-static const struct nlattr *
+const struct nlattr *
 nl_attr_find__(const struct nlattr *attrs, size_t size, uint16_t type)
 {
     const struct nlattr *nla;
