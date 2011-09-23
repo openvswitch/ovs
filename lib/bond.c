@@ -639,7 +639,6 @@ void
 bond_account(struct bond *bond, const struct flow *flow, uint16_t vlan,
              uint64_t n_bytes)
 {
-
     if (bond_is_balanced(bond)) {
         lookup_bond_entry(bond, flow, vlan)->tx_bytes += n_bytes;
     }
