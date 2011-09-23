@@ -436,7 +436,7 @@ def get_ssl_cert(data):
 def main(argv):
     try:
         options, args = getopt.gnu_getopt(
-            argv[1:], 'h', ['help', 'root-prefix='] + ovs.daemon.LONG_OPTIONS)
+            argv[1:], 'h', ['help'] + ovs.daemon.LONG_OPTIONS)
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
@@ -444,9 +444,6 @@ def main(argv):
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
-        elif key == '--root-prefix':
-            global root_prefix
-            root_prefix = value
         elif not ovs.daemon.parse_opt(key, value):
             sys.stderr.write("%s: unhandled option %s\n"
                              % (ovs.util.PROGRAM_NAME, key))
