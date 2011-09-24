@@ -33,7 +33,7 @@ def error_from_string(s):
     elif s == "ECONNREFUSED":
         return errno.ECONNREFUSED
     elif s == "EOF":
-        return EOF
+        return ovs.reconnect.EOF
     else:
         sys.stderr.write("unknown error '%s'\n" % s)
         sys.exit(1)
