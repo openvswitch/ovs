@@ -22,6 +22,7 @@ PROBE = 'probe'
 
 EOF = -1
 
+
 class Reconnect(object):
     """A finite-state machine for connecting and reconnecting to a network
     resource with exponential backoff.  It also provides optional support for
@@ -160,10 +161,10 @@ class Reconnect(object):
         debug level, by default keeping them out of log files.  This is
         appropriate if the connection is one that is expected to be
         short-lived, so that the log messages are merely distracting.
-        
+
         If 'quiet' is false, this object logs informational messages at info
         level.  This is the default.
-        
+
         This setting has no effect on the log level of debugging, warning, or
         error messages."""
         if quiet:
@@ -177,7 +178,7 @@ class Reconnect(object):
     def set_name(self, name):
         """Sets this object's name to 'name'.  If 'name' is None, then "void"
         is used instead.
-        
+
         The name is used in log messages."""
         if name is None:
             self.name = "void"
@@ -235,7 +236,7 @@ class Reconnect(object):
         if (self.state == Reconnect.Backoff and
             self.backoff > self.max_backoff):
                 self.backoff = self.max_backoff
-        
+
     def set_probe_interval(self, probe_interval):
         """Sets the "probe interval" to 'probe_interval', in milliseconds.  If
         this is zero, it disables the connection keepalive feature.  If it is
@@ -260,7 +261,8 @@ class Reconnect(object):
     def set_passive(self, passive, now):
         """Configures this FSM for active or passive mode.  In active mode (the
         default), the FSM is attempting to connect to a remote host.  In
-        passive mode, the FSM is listening for connections from a remote host."""
+        passive mode, the FSM is listening for connections from a remote
+        host."""
         if self.passive != passive:
             self.passive = passive
 
@@ -386,15 +388,15 @@ class Reconnect(object):
             else:
                 self.info_level("%s: connecting..." % self.name)
             self._transition(now, Reconnect.ConnectInProgress)
-            
+
     def listening(self, now):
         """Tell this FSM that the client is listening for connection attempts.
         This state last indefinitely until the client reports some change.
-        
+
         The natural progression from this state is for the client to report
         that a connection has been accepted or is in progress of being
         accepted, by calling self.connecting() or self.connected().
-        
+
         The client may also report that listening failed (e.g. accept()
         returned an unexpected error such as ENOMEM) by calling
         self.listen_error(), in which case the FSM will back off and eventually
@@ -407,7 +409,7 @@ class Reconnect(object):
     def listen_error(self, now, error):
         """Tell this FSM that the client's attempt to accept a connection
         failed (e.g. accept() returned an unexpected error such as ENOMEM).
-        
+
         If the FSM is currently listening (self.listening() was called), it
         will back off and eventually return ovs.reconnect.CONNECT from
         self.run() to tell the client to try listening again.  If there is an
@@ -456,7 +458,7 @@ class Reconnect(object):
             if connected_before:
                 self.total_connected_duration += now - self.last_connected
             self.seqno += 1
-            
+
         logging.debug("%s: entering %s" % (self.name, state.name))
         self.state = state
         self.state_entered = now
@@ -464,36 +466,36 @@ class Reconnect(object):
     def run(self, now):
         """Assesses whether any action should be taken on this FSM.  The return
         value is one of:
-        
+
             - None: The client need not take any action.
-        
+
             - Active client, ovs.reconnect.CONNECT: The client should start a
               connection attempt and indicate this by calling
               self.connecting().  If the connection attempt has definitely
               succeeded, it should call self.connected().  If the connection
               attempt has definitely failed, it should call
               self.connect_failed().
-        
+
               The FSM is smart enough to back off correctly after successful
               connections that quickly abort, so it is OK to call
               self.connected() after a low-level successful connection
               (e.g. connect()) even if the connection might soon abort due to a
               failure at a high-level (e.g. SSL negotiation failure).
-        
+
             - Passive client, ovs.reconnect.CONNECT: The client should try to
               listen for a connection, if it is not already listening.  It
               should call self.listening() if successful, otherwise
               self.connecting() or reconnected_connect_failed() if the attempt
               is in progress or definitely failed, respectively.
-        
+
               A listening passive client should constantly attempt to accept a
               new connection and report an accepted connection with
               self.connected().
-        
+
             - ovs.reconnect.DISCONNECT: The client should abort the current
               connection or connection attempt or listen attempt and call
               self.disconnected() or self.connect_failed() to indicate it.
-        
+
             - ovs.reconnect.PROBE: The client should send some kind of request
               to the peer that will elicit a response, to ensure that the
               connection is indeed in working order.  (This will only be
@@ -503,7 +505,7 @@ class Reconnect(object):
             return self.state.run(self, now)
         else:
             return None
-        
+
     def wait(self, poller, now):
         """Causes the next call to poller.block() to wake up when self.run()
         should be called."""
@@ -560,7 +562,8 @@ class Reconnect(object):
         stats.msec_since_disconnect = self.get_last_disconnect_elapsed(now)
         stats.total_connected_duration = self.total_connected_duration
         if self.is_connected():
-            stats.total_connected_duration += self.get_last_connect_elapsed(now)
+            stats.total_connected_duration += (
+                    self.get_last_connect_elapsed(now))
         stats.n_attempted_connections = self.n_attempted_connections
         stats.n_successful_connections = self.n_successful_connections
         stats.state = self.state.name

@@ -22,6 +22,9 @@ from ovs.db import error
 import ovs.ovsuuid
 import ovs.poller
 
+__pychecker__ = 'no-classattr no-objattrs'
+
+
 class Idl:
     """Open vSwitch Database Interface Definition Language (OVSDB IDL).
 
@@ -95,7 +98,7 @@ class Idl:
         # Database locking.
         self.lock_name = None          # Name of lock we need, None if none.
         self.has_lock = False          # Has db server said we have the lock?
-        self.is_lock_contended = False # Has db server said we can't get lock?
+        self.is_lock_contended = False  # Has db server said we can't get lock?
         self._lock_request_id = None   # JSON-RPC ID of in-flight lock request.
 
         # Transaction support.
@@ -443,17 +446,20 @@ class Idl:
         if txn:
             txn._process_reply(msg)
 
+
 def _uuid_to_row(atom, base):
     if base.ref_table:
         return base.ref_table.rows.get(atom)
     else:
         return atom
 
+
 def _row_to_uuid(value):
     if type(value) == Row:
         return value.uuid
     else:
         return value
+
 
 class Row(object):
     """A row within an IDL.
@@ -590,29 +596,33 @@ class Row(object):
         self.__dict__["_changes"] = None
         del self._table.rows[self.uuid]
 
+
 def _uuid_name_from_uuid(uuid):
     return "row%s" % str(uuid).replace("-", "_")
 
+
 def _where_uuid_equals(uuid):
     return [["_uuid", "==", ["uuid", str(uuid)]]]
+
 
 class _InsertedRow(object):
     def __init__(self, op_index):
         self.op_index = op_index
         self.real = None
 
+
 class Transaction(object):
     # Status values that Transaction.commit() can return.
-    UNCOMMITTED = "uncommitted" # Not yet committed or aborted.
-    UNCHANGED = "unchanged"     # Transaction didn't include any changes.
-    INCOMPLETE = "incomplete"   # Commit in progress, please wait.
-    ABORTED = "aborted"         # ovsdb_idl_txn_abort() called.
-    SUCCESS = "success"         # Commit successful.
-    TRY_AGAIN = "try again"     # Commit failed because a "verify" operation
-                                # reported an inconsistency, due to a network
-                                # problem, or other transient failure.
-    NOT_LOCKED = "not locked"   # Server hasn't given us the lock yet.
-    ERROR = "error"             # Commit failed due to a hard error.
+    UNCOMMITTED = "uncommitted"  # Not yet committed or aborted.
+    UNCHANGED = "unchanged"      # Transaction didn't include any changes.
+    INCOMPLETE = "incomplete"    # Commit in progress, please wait.
+    ABORTED = "aborted"          # ovsdb_idl_txn_abort() called.
+    SUCCESS = "success"          # Commit successful.
+    TRY_AGAIN = "try again"      # Commit failed because a "verify" operation
+                                 # reported an inconsistency, due to a network
+                                 # problem, or other transient failure.
+    NOT_LOCKED = "not locked"    # Server hasn't given us the lock yet.
+    ERROR = "error"              # Commit failed due to a hard error.
 
     @staticmethod
     def status_to_string(status):
@@ -650,7 +660,7 @@ class Transaction(object):
         self._inc_column = None
         self._inc_where = None
 
-        self._inserted_rows = {} # Map from UUID to _InsertedRow
+        self._inserted_rows = {}  # Map from UUID to _InsertedRow
 
     def add_comment(self, comment):
         """Appens 'comment' to the comments that will be passed to the OVSDB
@@ -768,7 +778,8 @@ class Transaction(object):
 
                 for column_name, datum in row._changes.iteritems():
                     if row._data is not None or not datum.is_default():
-                        row_json[column_name] = self._substitute_uuids(datum.to_json())
+                        row_json[column_name] = (
+                                self._substitute_uuids(datum.to_json()))
 
                         # If anything really changed, consider it an update.
                         # We can't suppress not-really-changed values earlier
@@ -787,11 +798,13 @@ class Transaction(object):
 
             operations.append({"op": "mutate",
                                "table": self._inc_table,
-                               "where": self._substitute_uuids(self._inc_where),
+                               "where": self._substitute_uuids(
+                                   self._inc_where),
                                "mutations": [[self._inc_column, "+=", 1]]})
             operations.append({"op": "select",
                                "table": self._inc_table,
-                               "where": self._substitute_uuids(self._inc_where),
+                               "where": self._substitute_uuids(
+                                   self._inc_where),
                                "columns": [self._inc_column]})
 
         # Add comment.

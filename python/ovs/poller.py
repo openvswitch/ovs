@@ -17,6 +17,7 @@ import logging
 import select
 import ovs.timeval
 
+
 class Poller(object):
     """High-level wrapper around the "poll" system call.
 
@@ -36,7 +37,7 @@ class Poller(object):
         be select.POLLIN or select.POLLOUT or their bitwise-OR).  The following
         call to self.block() will wake up when 'fd' becomes ready for one or
         more of the requested events.
-        
+
         The event registration is one-shot: only the following call to
         self.block() is affected.  The event will need to be re-registered
         after self.block() is called if it is to persist.
@@ -63,10 +64,10 @@ class Poller(object):
             self.__timer_wait(msec)
 
     def timer_wait_until(self, msec):
-        """Causes the following call to self.block() to wake up when the current
-        time, as returned by ovs.timeval.msec(), reaches 'msec' or later.  If
-        'msec' is earlier than the current time, the following call to
-        self.block() will not block at all.
+        """Causes the following call to self.block() to wake up when the
+        current time, as returned by ovs.timeval.msec(), reaches 'msec' or
+        later.  If 'msec' is earlier than the current time, the following call
+        to self.block() will not block at all.
 
         The timer registration is one-shot: only the following call to
         self.block() is affected.  The timer will need to be re-registered
@@ -120,5 +121,4 @@ class Poller(object):
 
     def __reset(self):
         self.poll = select.poll()
-        self.timeout = -1            
-
+        self.timeout = -1

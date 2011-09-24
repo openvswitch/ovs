@@ -15,13 +15,15 @@
 import os
 import signal
 
+
 def _signal_status_msg(type_, signr):
     s = "%s by signal %d" % (type_, signr)
     for name in signal.__dict__:
         if name.startswith("SIG") and getattr(signal, name) == signr:
             return "%s (%s)" % (s, name)
     return s
-    
+
+
 def status_msg(status):
     """Given 'status', which is a process status in the form reported by
     waitpid(2) and returned by process_status(), returns a string describing

@@ -16,6 +16,7 @@ import re
 
 from ovs.db import error
 
+
 class Parser(object):
     def __init__(self, json, name):
         self.name = name
@@ -34,7 +35,7 @@ class Parser(object):
                 self.__raise_error("Type mismatch for member '%s'." % name)
             return member
         else:
-            if not optional:        
+            if not optional:
                 self.__raise_error("Required '%s' member is missing." % name)
             return default
 
@@ -60,18 +61,23 @@ class Parser(object):
                 present = "is"
             self.__raise_error("Member '%s' %s present but not allowed here" %
                                (name, present))
-    
+
+
 def float_to_int(x):
     # XXX still needed?
     if type(x) == float:
         integer = int(x)
-        if integer == x and -2**53 <= integer < 2**53:
+        if integer == x and -2 ** 53 <= integer < 2 ** 53:
             return integer
     return x
 
+
 id_re = re.compile("[_a-zA-Z][_a-zA-Z0-9]*$")
+
+
 def is_identifier(s):
     return type(s) in [str, unicode] and id_re.match(s)
+
 
 def json_type_to_string(type_):
     if type_ == None:
@@ -89,14 +95,15 @@ def json_type_to_string(type_):
     else:
         return "<invalid>"
 
+
 def unwrap_json(json, name, types, desc):
     if (type(json) not in (list, tuple) or len(json) != 2 or json[0] != name or
         type(json[1]) not in types):
         raise error.Error('expected ["%s", <%s>]' % (name, desc), json)
     return json[1]
 
+
 def parse_json_pair(json):
     if type(json) != list or len(json) != 2:
         raise error.Error("expected 2-element array", json)
     return json
-

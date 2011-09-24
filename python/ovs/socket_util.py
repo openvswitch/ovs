@@ -21,6 +21,7 @@ import sys
 
 import ovs.fatal_signal
 
+
 def make_unix_socket(style, nonblock, bind_path, connect_path):
     """Creates a Unix domain socket in the given 'style' (either
     socket.SOCK_DGRAM or socket.SOCK_STREAM) that is bound to 'bind_path' (if
@@ -74,6 +75,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
             ovs.fatal_signal.add_file_to_unlink(bind_path)
         return get_exception_errno(e), None
 
+
 def check_connection_completion(sock):
     p = select.poll()
     p.register(sock, select.POLLOUT)
@@ -82,10 +84,12 @@ def check_connection_completion(sock):
     else:
         return errno.EAGAIN
 
+
 def get_socket_error(sock):
     """Returns the errno value associated with 'socket' (0 if no error) and
     resets the socket's error status."""
     return sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+
 
 def get_exception_errno(e):
     """A lot of methods on Python socket objects raise socket.error, but that
@@ -97,7 +101,10 @@ def get_exception_errno(e):
     else:
         return errno.EPROTO
 
+
 null_fd = -1
+
+
 def get_null_fd():
     """Returns a readable and writable fd for /dev/null, if successful,
     otherwise a negative errno value.  The caller must not close the returned
@@ -111,6 +118,7 @@ def get_null_fd():
                           % os.strerror(e.errno))
             return -e.errno
     return null_fd
+
 
 def write_fully(fd, buf):
     """Returns an (error, bytes_written) tuple where 'error' is 0 on success,
@@ -134,6 +142,7 @@ def write_fully(fd, buf):
                 buf = buf[:retval]
         except OSError, e:
             return e.errno, bytes_written
+
 
 def set_nonblocking(sock):
     try:

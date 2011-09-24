@@ -21,6 +21,7 @@ import ovs.db.parser
 uuidRE = re.compile("^xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx$"
                     .replace('x', '[0-9a-fA-F]'))
 
+
 def zero():
     return uuid.UUID(int=0)
 

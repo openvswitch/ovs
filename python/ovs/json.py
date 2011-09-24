@@ -16,6 +16,8 @@ import re
 import StringIO
 import sys
 
+__pychecker__ = 'no-stringiter'
+
 escapes = {ord('"'): u"\\\"",
            ord("\\"): u"\\\\",
            ord("\b"): u"\\b",
@@ -104,6 +106,7 @@ class _Serializer(object):
 def to_stream(obj, stream, pretty=False, sort_keys=True):
     _Serializer(stream, pretty, sort_keys).serialize(obj)
 
+
 def to_file(obj, name, pretty=False, sort_keys=True):
     stream = open(name, "w")
     try:
@@ -111,12 +114,14 @@ def to_file(obj, name, pretty=False, sort_keys=True):
     finally:
         stream.close()
 
+
 def to_string(obj, pretty=False, sort_keys=True):
     output = StringIO.StringIO()
     to_stream(obj, output, pretty, sort_keys)
     s = output.getvalue()
     output.close()
     return s
+
 
 def from_stream(stream):
     p = Parser(check_trailer=True)
@@ -126,12 +131,14 @@ def from_stream(stream):
             break
     return p.finish()
 
+
 def from_file(name):
     stream = open(name, "r")
     try:
         return from_stream(stream)
     finally:
         stream.close()
+
 
 def from_string(s):
     try:
@@ -143,6 +150,7 @@ def from_string(s):
     p = Parser(check_trailer=True)
     p.feed(s)
     return p.finish()
+
 
 class Parser(object):
     ## Maximum height of parsing stack. ##
@@ -157,7 +165,7 @@ class Parser(object):
         self.line_number = 0
         self.column_number = 0
         self.byte_number = 0
-        
+
         # Parsing.
         self.parse_state = Parser.__parse_start
         self.stack = []
@@ -169,16 +177,21 @@ class Parser(object):
 
     def __lex_start_space(self, c):
         pass
+
     def __lex_start_alpha(self, c):
         self.buffer = c
         self.lex_state = Parser.__lex_keyword
+
     def __lex_start_token(self, c):
         self.__parser_input(c)
+
     def __lex_start_number(self, c):
         self.buffer = c
         self.lex_state = Parser.__lex_number
+
     def __lex_start_string(self, _):
         self.lex_state = Parser.__lex_string
+
     def __lex_start_error(self, c):
         if ord(c) >= 32 and ord(c) < 128:
             self.__error("invalid character '%s'" % c)
@@ -195,6 +208,7 @@ class Parser(object):
     for c in "-0123456789":
         __lex_start_actions[c] = __lex_start_number
     __lex_start_actions['"'] = __lex_start_string
+
     def __lex_start(self, c):
         Parser.__lex_start_actions.get(
             c, Parser.__lex_start_error)(self, c)
@@ -203,6 +217,7 @@ class Parser(object):
     __lex_alpha = {}
     for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ":
         __lex_alpha[c] = True
+
     def __lex_finish_keyword(self):
         if self.buffer == "false":
             self.__parser_input(False)
@@ -212,6 +227,7 @@ class Parser(object):
             self.__parser_input(None)
         else:
             self.__error("invalid keyword '%s'" % self.buffer)
+
     def __lex_keyword(self, c):
         if c in Parser.__lex_alpha:
             self.buffer += c
@@ -220,12 +236,14 @@ class Parser(object):
             self.__lex_finish_keyword()
             return False
 
-    __number_re = re.compile("(-)?(0|[1-9][0-9]*)(?:\.([0-9]+))?(?:[eE]([-+]?[0-9]+))?$")
+    __number_re = re.compile("(-)?(0|[1-9][0-9]*)"
+            "(?:\.([0-9]+))?(?:[eE]([-+]?[0-9]+))?$")
+
     def __lex_finish_number(self):
         s = self.buffer
         m = Parser.__number_re.match(s)
         if m:
-            sign, integer, fraction, exp = m.groups() 
+            sign, integer, fraction, exp = m.groups()
             if (exp is not None and
                 (long(exp) > sys.maxint or long(exp) < -sys.maxint - 1)):
                 self.__error("exponent outside valid range")
@@ -248,16 +266,16 @@ class Parser(object):
             if significand == 0:
                 self.__parser_input(0)
                 return
-            elif significand <= 2**63:
-                while pow10 > 0 and significand <= 2*63:
+            elif significand <= 2 ** 63:
+                while pow10 > 0 and significand <= 2 * 63:
                     significand *= 10
                     pow10 -= 1
                 while pow10 < 0 and significand % 10 == 0:
                     significand /= 10
                     pow10 += 1
                 if (pow10 == 0 and
-                    ((not sign and significand < 2**63) or
-                     (sign and significand <= 2**63))):
+                    ((not sign and significand < 2 ** 63) or
+                     (sign and significand <= 2 ** 63))):
                     if sign:
                         self.__parser_input(-significand)
                     else:
@@ -282,7 +300,7 @@ class Parser(object):
             self.__error("exponent must contain at least one digit")
         else:
             self.__error("syntax error in number")
-            
+
     def __lex_number(self, c):
         if c in ".0123456789eE-+":
             self.buffer += c
@@ -292,6 +310,7 @@ class Parser(object):
             return False
 
     __4hex_re = re.compile("[0-9a-fA-F]{4}")
+
     def __lex_4hex(self, s):
         if len(s) < 4:
             self.__error("quoted string ends within \\u escape")
@@ -301,16 +320,19 @@ class Parser(object):
             self.__error("null bytes not supported in quoted strings")
         else:
             return int(s, 16)
+
     @staticmethod
     def __is_leading_surrogate(c):
         """Returns true if 'c' is a Unicode code point for a leading
         surrogate."""
         return c >= 0xd800 and c <= 0xdbff
+
     @staticmethod
     def __is_trailing_surrogate(c):
         """Returns true if 'c' is a Unicode code point for a trailing
         surrogate."""
         return c >= 0xdc00 and c <= 0xdfff
+
     @staticmethod
     def __utf16_decode_surrogate_pair(leading, trailing):
         """Returns the unicode code point corresponding to leading surrogate
@@ -333,6 +355,7 @@ class Parser(object):
                   "n": u"\n",
                   "r": u"\r",
                   "t": u"\t"}
+
     def __lex_finish_string(self):
         inp = self.buffer
         out = u""
@@ -355,7 +378,7 @@ class Parser(object):
             elif inp[0] != u'u':
                 self.__error("bad escape \\%s" % inp[0])
                 return
-            
+
             c0 = self.__lex_4hex(inp[1:5])
             if c0 is None:
                 return
@@ -383,6 +406,7 @@ class Parser(object):
         self.buffer += c
         self.lex_state = Parser.__lex_string
         return True
+
     def __lex_string(self, c):
         if c == '\\':
             self.buffer += c
@@ -414,26 +438,32 @@ class Parser(object):
             self.__push_array()
         else:
             self.__error("syntax error at beginning of input")
+
     def __parse_end(self, unused_token, unused_string):
         self.__error("trailing garbage at end of input")
+
     def __parse_object_init(self, token, string):
         if token == '}':
             self.__parser_pop()
         else:
             self.__parse_object_name(token, string)
+
     def __parse_object_name(self, token, string):
         if token == 'string':
             self.member_name = string
             self.parse_state = Parser.__parse_object_colon
         else:
             self.__error("syntax error parsing object expecting string")
+
     def __parse_object_colon(self, token, unused_string):
         if token == ":":
             self.parse_state = Parser.__parse_object_value
         else:
             self.__error("syntax error parsing object expecting ':'")
+
     def __parse_object_value(self, token, string):
         self.__parse_value(token, string, Parser.__parse_object_next)
+
     def __parse_object_next(self, token, unused_string):
         if token == ",":
             self.parse_state = Parser.__parse_object_name
@@ -441,13 +471,16 @@ class Parser(object):
             self.__parser_pop()
         else:
             self.__error("syntax error expecting '}' or ','")
+
     def __parse_array_init(self, token, string):
         if token == ']':
             self.__parser_pop()
         else:
             self.__parse_array_value(token, string)
+
     def __parse_array_value(self, token, string):
         self.__parse_value(token, string, Parser.__parse_array_next)
+
     def __parse_array_next(self, token, unused_string):
         if token == ",":
             self.parse_state = Parser.__parse_array_value
@@ -455,6 +488,7 @@ class Parser(object):
             self.__parser_pop()
         else:
             self.__error("syntax error expecting ']' or ','")
+
     def __parser_input(self, token, string=None):
         self.lex_state = Parser.__lex_start
         self.buffer = ""
@@ -476,8 +510,10 @@ class Parser(object):
         else:
             self.__error("input exceeds maximum nesting depth %d" %
                          Parser.MAX_HEIGHT)
+
     def __push_object(self):
         self.__parser_push({}, Parser.__parse_object_init)
+
     def __push_array(self):
         self.__parser_push([], Parser.__parse_array_init)
 

@@ -18,6 +18,7 @@ import sys
 
 PROGRAM_NAME = os.path.basename(sys.argv[0])
 
+
 def abs_file_name(dir_, file_name):
     """If 'file_name' starts with '/', returns a copy of 'file_name'.
     Otherwise, returns an absolute path to 'file_name' considering it relative

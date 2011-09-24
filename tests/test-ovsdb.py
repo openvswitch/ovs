@@ -28,11 +28,13 @@ import ovs.ovsuuid
 import ovs.poller
 import ovs.util
 
+
 def unbox_json(json):
     if type(json) == list and len(json) == 1:
         return json[0]
     else:
         return json
+
 
 def do_default_atoms():
     for type_ in types.ATOMIC_TYPES:
@@ -47,6 +49,7 @@ def do_default_atoms():
             sys.exit(1)
 
         sys.stdout.write("OK\n")
+
 
 def do_default_data():
     any_errors = False
@@ -74,20 +77,24 @@ def do_default_data():
     if any_errors:
         sys.exit(1)
 
+
 def do_parse_atomic_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
     atomic_type = types.AtomicType.from_json(type_json)
     print ovs.json.to_string(atomic_type.to_json(), sort_keys=True)
+
 
 def do_parse_base_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
     base_type = types.BaseType.from_json(type_json)
     print ovs.json.to_string(base_type.to_json(), sort_keys=True)
 
+
 def do_parse_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
     type_ = types.Type.from_json(type_json)
     print ovs.json.to_string(type_.to_json(), sort_keys=True)
+
 
 def do_parse_atoms(type_string, *atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
@@ -100,6 +107,7 @@ def do_parse_atoms(type_string, *atom_strings):
         except error.Error, e:
             print unicode(e)
 
+
 def do_parse_data(type_string, *data_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
     type_ = types.Type.from_json(type_json)
@@ -107,6 +115,7 @@ def do_parse_data(type_string, *data_strings):
         datum_json = unbox_json(ovs.json.from_string(datum_string))
         datum = data.Datum.from_json(type_, datum_json)
         print ovs.json.to_string(datum.to_json())
+
 
 def do_sort_atoms(type_string, atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
@@ -116,10 +125,12 @@ def do_sort_atoms(type_string, atom_strings):
     print ovs.json.to_string([data.Atom.to_json(atom)
                               for atom in sorted(atoms)])
 
+
 def do_parse_column(name, column_string):
     column_json = unbox_json(ovs.json.from_string(column_string))
     column = ovs.db.schema.ColumnSchema.from_json(column_json, name)
     print ovs.json.to_string(column.to_json(), sort_keys=True)
+
 
 def do_parse_table(name, table_string, default_is_root_string='false'):
     default_is_root = default_is_root_string == 'true'
@@ -127,10 +138,12 @@ def do_parse_table(name, table_string, default_is_root_string='false'):
     table = ovs.db.schema.TableSchema.from_json(table_json, name)
     print ovs.json.to_string(table.to_json(default_is_root), sort_keys=True)
 
+
 def do_parse_schema(schema_string):
     schema_json = unbox_json(ovs.json.from_string(schema_string))
     schema = ovs.db.schema.DbSchema.from_json(schema_json)
     print ovs.json.to_string(schema.to_json(), sort_keys=True)
+
 
 def print_idl(idl, step):
     simple = idl.tables["simple"].rows
@@ -176,6 +189,7 @@ def print_idl(idl, step):
         print("%03d: empty" % step)
     sys.stdout.flush()
 
+
 def substitute_uuids(json, symtab):
     if type(json) in [str, unicode]:
         symbol = symtab.get(json)
@@ -190,6 +204,7 @@ def substitute_uuids(json, symtab):
         return d
     return json
 
+
 def parse_uuids(json, symtab):
     if type(json) in [str, unicode] and ovs.ovsuuid.is_valid_string(json):
         name = "#%d#" % len(symtab)
@@ -202,11 +217,13 @@ def parse_uuids(json, symtab):
         for value in json.itervalues():
             parse_uuids(value, symtab)
 
+
 def idltest_find_simple(idl, i):
     for row in idl.tables["simple"].rows.itervalues():
         if row.i == i:
             return row
     return None
+
 
 def idl_set(idl, commands, step):
     txn = ovs.db.idl.Transaction(idl)
@@ -301,6 +318,7 @@ def idl_set(idl, commands, step):
     sys.stdout.write("\n")
     sys.stdout.flush()
 
+
 def do_idl(schema_file, remote, *commands):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
     idl = ovs.db.idl.Idl(remote, schema)
@@ -331,7 +349,7 @@ def do_idl(schema_file, remote, *commands):
                 idl.wait(poller)
                 rpc.wait(poller)
                 poller.block()
-                
+
             print_idl(idl, step)
             step += 1
 
@@ -377,6 +395,7 @@ def do_idl(schema_file, remote, *commands):
     idl.close()
     print("%03d: done" % step)
 
+
 def usage():
     print """\
 %(program_name)s: test utility for Open vSwitch database Python bindings
@@ -418,6 +437,7 @@ The following options are also available:
   -h, --help                  display this help message\
 """ % {'program_name': ovs.util.PROGRAM_NAME}
     sys.exit(0)
+
 
 def main(argv):
     try:
@@ -488,6 +508,7 @@ def main(argv):
         assert False
 
     func(*args)
+
 
 if __name__ == '__main__':
     try:

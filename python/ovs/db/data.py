@@ -25,9 +25,11 @@ import ovs.db.parser
 from ovs.db import error
 import ovs.db.types
 
+
 class ConstraintViolation(error.Error):
     def __init__(self, msg, json=None):
         error.Error.__init__(self, msg, json, tag="constraint violation")
+
 
 def escapeCString(src):
     dst = []
@@ -55,8 +57,10 @@ def escapeCString(src):
             dst.append(c)
     return ''.join(dst)
 
+
 def returnUnchanged(x):
     return x
+
 
 class Atom(object):
     def __init__(self, type_, value=None):
@@ -103,9 +107,11 @@ class Atom(object):
         type_ = base.type
         json = ovs.db.parser.float_to_int(json)
         if ((type_ == ovs.db.types.IntegerType and type(json) in [int, long])
-            or (type_ == ovs.db.types.RealType and type(json) in [int, long, float])
+            or (type_ == ovs.db.types.RealType
+                and type(json) in [int, long, float])
             or (type_ == ovs.db.types.BooleanType and type(json) == bool)
-            or (type_ == ovs.db.types.StringType and type(json) in [str, unicode])):
+            or (type_ == ovs.db.types.StringType
+                and type(json) in [str, unicode])):
             atom = Atom(type_, json)
         elif type_ == ovs.db.types.UuidType:
             atom = Atom(type_, ovs.ovsuuid.from_json(json, symtab))
@@ -165,7 +171,7 @@ class Atom(object):
                 raise ConstraintViolation(
                     '"%s" length %d is greater than maximum allowed '
                     'length %d' % (s, length, base.max_length))
-    
+
     def to_json(self):
         if self.type == ovs.db.types.UuidType:
             return ovs.ovsuuid.to_json(self.value)
@@ -204,6 +210,7 @@ class Atom(object):
             return self.value.value
 
     __need_quotes_re = re.compile("$|true|false|[^_a-zA-Z]|.*[^-._a-zA-Z]")
+
     @staticmethod
     def __string_needs_quotes(s):
         return Atom.__need_quotes_re.match(s)
@@ -241,6 +248,7 @@ class Atom(object):
         else:
             raise TypeError
         return Atom(t, x)
+
 
 class Datum(object):
     def __init__(self, type_, values={}):
@@ -295,9 +303,9 @@ class Datum(object):
         """Parses 'json' as a datum of the type described by 'type'.  If
         successful, returns a new datum.  On failure, raises an
         ovs.db.error.Error.
-        
+
         Violations of constraints expressed by 'type' are treated as errors.
-        
+
         If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.
         Refer to ovsdb/SPECS for information about this, and for the syntax
         that this function accepts."""
@@ -383,7 +391,7 @@ class Datum(object):
             return [[k.value, v.value] for k, v in self.values.iteritems()]
         else:
             return [k.value for k in self.values.iterkeys()]
-        
+
     def as_dict(self):
         return dict(self.values)
 
@@ -505,7 +513,7 @@ class Datum(object):
             return self.values[key].value
         else:
             return default
-        
+
     def __str__(self):
         return self.to_string()
 
@@ -523,7 +531,7 @@ class Datum(object):
 
         for i, key in enumerate(sorted(self.values)):
             s += key.cInitAtom("%s->keys[%d]" % (var, i))
-        
+
         if self.type.value:
             s += ["%s->values = xmalloc(%d * sizeof *%s->values);"
                   % (var, len(self.values), var)]

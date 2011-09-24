@@ -21,6 +21,7 @@ import socket
 import ovs.poller
 import ovs.socket_util
 
+
 class Stream(object):
     """Bidirectional byte stream.  Currently only Unix domain sockets
     are implemented."""
@@ -106,7 +107,7 @@ class Stream(object):
                 stream.connect_wait(poller)
                 poller.block()
             assert error != errno.EINPROGRESS
-        
+
         if error and stream:
             stream.close()
             stream = None
@@ -145,7 +146,7 @@ class Stream(object):
     def recv(self, n):
         """Tries to receive up to 'n' bytes from this stream.  Returns a
         (error, string) tuple:
-        
+
             - If successful, 'error' is zero and 'string' contains between 1
               and 'n' bytes of data.
 
@@ -153,7 +154,7 @@ class Stream(object):
 
             - If the connection has been closed in the normal fashion or if 'n'
               is 0, the tuple is (0, "").
-        
+
         The recv function will not block waiting for data to arrive.  If no
         data have been received, it returns (errno.EAGAIN, "") immediately."""
 
@@ -212,16 +213,17 @@ class Stream(object):
 
     def connect_wait(self, poller):
         self.wait(poller, Stream.W_CONNECT)
-        
+
     def recv_wait(self, poller):
         self.wait(poller, Stream.W_RECV)
-        
+
     def send_wait(self, poller):
         self.wait(poller, Stream.W_SEND)
-        
+
     def __del__(self):
         # Don't delete the file: we might have forked.
         self.socket.close()
+
 
 class PassiveStream(object):
     @staticmethod
@@ -299,12 +301,13 @@ class PassiveStream(object):
         # Don't delete the file: we might have forked.
         self.socket.close()
 
+
 def usage(name, active, passive):
     print
     if active:
         print("Active %s connection methods:" % name)
         print("  unix:FILE               "
-               "Unix domain socket named FILE");
+               "Unix domain socket named FILE")
 
     if passive:
         print("Passive %s connection methods:" % name)

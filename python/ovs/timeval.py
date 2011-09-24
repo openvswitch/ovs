@@ -14,10 +14,12 @@
 
 import time
 
+
 def msec():
     """Returns the current time, as the amount of time since the epoch, in
     milliseconds, as a float."""
     return time.time() * 1000.0
+
 
 def postfork():
     # Just a stub for now

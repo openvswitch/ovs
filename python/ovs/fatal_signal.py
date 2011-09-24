@@ -19,9 +19,11 @@ import signal
 
 _hooks = []
 
+
 def add_hook(hook, cancel, run_at_exit):
     _init()
     _hooks.append((hook, cancel, run_at_exit))
+
 
 def fork():
     """Clears all of the fatal signal hooks without executing them.  If any of
@@ -42,6 +44,7 @@ def fork():
 _added_hook = False
 _files = {}
 
+
 def add_file_to_unlink(file):
     """Registers 'file' to be unlinked when the program terminates via
     sys.exit() or a fatal signal."""
@@ -51,11 +54,13 @@ def add_file_to_unlink(file):
         add_hook(_unlink_files, _cancel_files, True)
     _files[file] = None
 
+
 def remove_file_to_unlink(file):
     """Unregisters 'file' from being unlinked when the program terminates via
     sys.exit() or a fatal signal."""
     if file in _files:
         del _files[file]
+
 
 def unlink_file_now(file):
     """Like fatal_signal_remove_file_to_unlink(), but also unlinks 'file'.
@@ -67,9 +72,11 @@ def unlink_file_now(file):
     remove_file_to_unlink(file)
     return error
 
+
 def _unlink_files():
     for file_ in _files:
         _unlink(file_)
+
 
 def _cancel_files():
     global _added_hook
@@ -77,12 +84,14 @@ def _cancel_files():
     _added_hook = False
     _files = {}
 
+
 def _unlink(file_):
     try:
         os.unlink(file_)
         return 0
     except OSError, e:
         return e.errno
+
 
 def _signal_handler(signr, _):
     _call_hooks(signr)
@@ -92,10 +101,14 @@ def _signal_handler(signr, _):
     signal.signal(signr, signal.SIG_DFL)
     os.kill(os.getpid(), signr)
 
+
 def _atexit_handler():
     _call_hooks(0)
 
+
 recurse = False
+
+
 def _call_hooks(signr):
     global recurse
     if recurse:
@@ -106,7 +119,10 @@ def _call_hooks(signr):
         if signr != 0 or run_at_exit:
             hook()
 
+
 _inited = False
+
+
 def _init():
     global _inited
     if not _inited:

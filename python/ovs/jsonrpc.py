@@ -24,6 +24,7 @@ import ovs.timeval
 
 EOF = -1
 
+
 class Message(object):
     T_REQUEST = 0               # Request.
     T_NOTIFY = 1                # Notification.
@@ -44,6 +45,7 @@ class Message(object):
         self.id = id
 
     _next_id = 0
+
     @staticmethod
     def _create_id():
         this_id = Message._next_id
@@ -131,7 +133,7 @@ class Message(object):
             msg_type = Message.T_REQUEST
         else:
             msg_type = Message.T_NOTIFY
-        
+
         msg = Message(msg_type, method, params, result, error, id_)
         validation_error = msg.is_valid()
         if validation_error is not None:
@@ -172,6 +174,7 @@ class Message(object):
         if self.id is not None:
             s.append("id=" + ovs.json.to_string(self.id))
         return ", ".join(s)
+
 
 class Connection(object):
     def __init__(self, stream):
@@ -289,7 +292,7 @@ class Connection(object):
             self.wait(poller)
             self.recv_wait(poller)
             poller.block()
-    
+
     def transact_block(self, request):
         id_ = request.id
 
@@ -320,7 +323,7 @@ class Connection(object):
 
         self.__log_msg("received", msg)
         return msg
-        
+
     def recv_wait(self, poller):
         if self.status or self.input:
             poller.immediate_wake()
@@ -332,7 +335,8 @@ class Connection(object):
             self.status = error
             self.stream.close()
             self.output = ""
-            
+
+
 class Session(object):
     """A JSON-RPC session with reconnection."""
 
@@ -348,10 +352,10 @@ class Session(object):
         """Creates and returns a Session that maintains a JSON-RPC session to
         'name', which should be a string acceptable to ovs.stream.Stream or
         ovs.stream.PassiveStream's initializer.
-        
+
         If 'name' is an active connection method, e.g. "tcp:127.1.2.3", the new
         session connects and reconnects, with back-off, to 'name'.
-        
+
         If 'name' is a passive connection method, e.g. "ptcp:", the new session
         listens for connections to 'name'.  It maintains at most one connection
         at any given time.  Any new connection causes the previous one (if any)
@@ -395,7 +399,7 @@ class Session(object):
             self.stream.close()
             self.stream = None
             self.seqno += 1
-    
+
     def __connect(self):
         self.__disconnect()
 
@@ -513,7 +517,7 @@ class Session(object):
         else:
             max_tries = self.reconnect.get_max_tries()
             return max_tries is None or max_tries > 0
-    
+
     def is_connected(self):
         return self.rpc is not None
 

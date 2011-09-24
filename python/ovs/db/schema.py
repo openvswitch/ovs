@@ -19,11 +19,13 @@ from ovs.db import error
 import ovs.db.parser
 from ovs.db import types
 
+
 def _check_id(name, json):
     if name.startswith('_'):
         raise error.Error('names beginning with "_" are reserved', json)
     elif not ovs.db.parser.is_identifier(name):
         raise error.Error("name must be a valid id", json)
+
 
 class DbSchema(object):
     """Schema for an OVSDB database."""
@@ -118,6 +120,7 @@ class DbSchema(object):
             # error.
             column.persistent = True
 
+
 class IdlSchema(DbSchema):
     def __init__(self, name, version, tables, idlPrefix, idlHeader):
         DbSchema.__init__(self, name, version, tables)
@@ -138,6 +141,7 @@ class IdlSchema(DbSchema):
         return IdlSchema(schema.name, schema.version, schema.tables,
                          idlPrefix, idlHeader)
 
+
 def column_set_from_json(json, columns):
     if json is None:
         return tuple(columns)
@@ -155,6 +159,7 @@ def column_set_from_json(json, columns):
             # Duplicate.
             raise error.Error("array of distinct column names expected", json)
         return tuple([columns[column_name] for column_name in json])
+
 
 class TableSchema(object):
     def __init__(self, name, columns, mutable=True, max_rows=sys.maxint,
@@ -238,6 +243,7 @@ class TableSchema(object):
 
         return json
 
+
 class ColumnSchema(object):
     def __init__(self, name, mutable, persistent, type_):
         self.name = name
@@ -263,4 +269,3 @@ class ColumnSchema(object):
         if not self.persistent:
             json["ephemeral"] = True
         return json
-

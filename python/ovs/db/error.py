@@ -14,6 +14,7 @@
 
 import ovs.json
 
+
 class Error(Exception):
     def __init__(self, msg, json=None, tag=None):
         self.msg = msg
