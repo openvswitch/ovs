@@ -51,7 +51,7 @@ def from_json(json, symtab=None):
             raise e
 
         if name not in symtab:
-            symtab[name] = uuid4()
+            symtab[name] = uuid.uuid4()
         return symtab[name]
 
 
