@@ -138,6 +138,7 @@ struct ofbundle {
 
     /* Configuration. */
     struct list ports;          /* Contains "struct ofport"s. */
+    enum port_vlan_mode vlan_mode; /* VLAN mode */
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                  * NULL if all VLANs are trunked. */
@@ -1029,9 +1030,10 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     bool need_flush = false;
-    const unsigned long *trunks;
     struct ofport_dpif *port;
     struct ofbundle *bundle;
+    unsigned long *trunks;
+    int vlan;
     size_t i;
     bool ok;
 
@@ -1054,6 +1056,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->name = NULL;
 
         list_init(&bundle->ports);
+        bundle->vlan_mode = PORT_VLAN_TRUNK;
         bundle->vlan = -1;
         bundle->trunks = NULL;
         bundle->lacp = NULL;
@@ -1113,18 +1116,64 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         return EINVAL;
     }
 
+    /* Set VLAN tagging mode */
+    if (s->vlan_mode != bundle->vlan_mode) {
+        bundle->vlan_mode = s->vlan_mode;
+        need_flush = true;
+    }
+
     /* Set VLAN tag. */
-    if (s->vlan != bundle->vlan) {
-        bundle->vlan = s->vlan;
+    vlan = (s->vlan_mode == PORT_VLAN_TRUNK ? -1
+            : s->vlan >= 0 && s->vlan <= 4095 ? s->vlan
+            : 0);
+    if (vlan != bundle->vlan) {
+        bundle->vlan = vlan;
         need_flush = true;
     }
 
     /* Get trunked VLANs. */
-    trunks = s->vlan == -1 ? s->trunks : NULL;
+    switch (s->vlan_mode) {
+    case PORT_VLAN_ACCESS:
+        trunks = NULL;
+        break;
+
+    case PORT_VLAN_TRUNK:
+        trunks = (unsigned long *) s->trunks;
+        break;
+
+    case PORT_VLAN_NATIVE_UNTAGGED:
+    case PORT_VLAN_NATIVE_TAGGED:
+        if (vlan != 0 && (!s->trunks
+                          || !bitmap_is_set(s->trunks, vlan)
+                          || bitmap_is_set(s->trunks, 0))) {
+            /* Force trunking the native VLAN and prohibit trunking VLAN 0. */
+            if (s->trunks) {
+                trunks = bitmap_clone(s->trunks, 4096);
+            } else {
+                trunks = bitmap_allocate1(4096);
+            }
+            bitmap_set1(trunks, vlan);
+            bitmap_set0(trunks, 0);
+        } else {
+            trunks = (unsigned long *) s->trunks;
+        }
+        break;
+
+    default:
+        NOT_REACHED();
+    }
     if (!vlan_bitmap_equal(trunks, bundle->trunks)) {
         free(bundle->trunks);
-        bundle->trunks = vlan_bitmap_clone(trunks);
+        if (trunks == s->trunks) {
+            bundle->trunks = vlan_bitmap_clone(trunks);
+        } else {
+            bundle->trunks = trunks;
+            trunks = NULL;
+        }
         need_flush = true;
+    }
+    if (trunks != s->trunks) {
+        free(trunks);
     }
 
     /* Bonding. */
@@ -3499,20 +3548,71 @@ static void dst_set_free(struct dst_set *);
 
 static struct ofport_dpif *ofbundle_get_a_port(const struct ofbundle *);
 
+/* Given 'vid', the VID obtained from the 802.1Q header that was received as
+ * part of a packet (specify 0 if there was no 802.1Q header), and 'in_bundle',
+ * the bundle on which the packet was received, returns the VLAN to which the
+ * packet belongs.
+ *
+ * Both 'vid' and the return value are in the range 0...4095. */
+static uint16_t
+input_vid_to_vlan(const struct ofbundle *in_bundle, uint16_t vid)
+{
+    switch (in_bundle->vlan_mode) {
+    case PORT_VLAN_ACCESS:
+        return in_bundle->vlan;
+        break;
+
+    case PORT_VLAN_TRUNK:
+        return vid;
+
+    case PORT_VLAN_NATIVE_UNTAGGED:
+    case PORT_VLAN_NATIVE_TAGGED:
+        return vid ? vid : in_bundle->vlan;
+
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* Given 'vlan', the VLAN that a packet belongs to, and
+ * 'out_bundle', a bundle on which the packet is to be output, returns the VID
+ * that should be included in the 802.1Q header.  (If the return value is 0,
+ * then the 802.1Q header should only be included in the packet if there is a
+ * nonzero PCP.)
+ *
+ * Both 'vlan' and the return value are in the range 0...4095. */
+static uint16_t
+output_vlan_to_vid(const struct ofbundle *out_bundle, uint16_t vlan)
+{
+    switch (out_bundle->vlan_mode) {
+    case PORT_VLAN_ACCESS:
+        return 0;
+
+    case PORT_VLAN_TRUNK:
+    case PORT_VLAN_NATIVE_TAGGED:
+        return vlan;
+
+    case PORT_VLAN_NATIVE_UNTAGGED:
+        return vlan == out_bundle->vlan ? 0 : vlan;
+
+    default:
+        NOT_REACHED();
+    }
+}
+
 static bool
 set_dst(struct action_xlate_ctx *ctx, struct dst *dst,
         const struct ofbundle *in_bundle, const struct ofbundle *out_bundle)
 {
-    dst->vid = (out_bundle->vlan >= 0 ? 0
-                : in_bundle->vlan >= 0 ? in_bundle->vlan
-                : ctx->flow.vlan_tci == 0 ? 0
-                : vlan_tci_to_vid(ctx->flow.vlan_tci));
+    uint16_t vlan;
+
+    vlan = input_vid_to_vlan(in_bundle, vlan_tci_to_vid(ctx->flow.vlan_tci));
+    dst->vid = output_vlan_to_vid(out_bundle, vlan);
 
     dst->port = (!out_bundle->bond
                  ? ofbundle_get_a_port(out_bundle)
                  : bond_choose_output_slave(out_bundle->bond, &ctx->flow,
                                             dst->vid, &ctx->tags));
-
     return dst->port != NULL;
 }
 
@@ -3574,7 +3674,7 @@ dst_is_duplicate(const struct dst_set *set, const struct dst *test)
 static bool
 ofbundle_trunks_vlan(const struct ofbundle *bundle, uint16_t vlan)
 {
-    return (bundle->vlan < 0
+    return (bundle->vlan_mode != PORT_VLAN_ACCESS
             && (!bundle->trunks || bitmap_is_set(bundle->trunks, vlan)));
 }
 
@@ -3702,19 +3802,14 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
                     if (ofbundle_includes_vlan(bundle, m->out_vlan)
                         && set_dst(ctx, &dst, in_bundle, bundle))
                     {
-                        if (bundle->vlan < 0) {
-                            dst.vid = m->out_vlan;
-                        }
+                        /* set_dst() got dst->vid from the input packet's VLAN,
+                         * not from m->out_vlan, so recompute it. */
+                        dst.vid = output_vlan_to_vid(bundle, m->out_vlan);
+
                         if (dst_is_duplicate(set, &dst)) {
                             continue;
                         }
 
-                        /* Use the vlan tag on the original flow instead of
-                         * the one passed in the vlan parameter.  This ensures
-                         * that we compare the vlan from before any implicit
-                         * tagging tags place. This is necessary because
-                         * dst->vlan is the final vlan, after removing implicit
-                         * tags. */
                         if (bundle == in_bundle && dst.vid == flow_vid) {
                             /* Don't send out input port on same VLAN. */
                             continue;
@@ -3790,8 +3885,9 @@ flow_get_vlan(struct ofproto_dpif *ofproto, const struct flow *flow,
               struct ofbundle *in_bundle, bool have_packet)
 {
     int vlan = vlan_tci_to_vid(flow->vlan_tci);
-    if (in_bundle->vlan >= 0) {
-        if (vlan) {
+    if (vlan) {
+        if (in_bundle->vlan_mode == PORT_VLAN_ACCESS) {
+            /* Drop tagged packet on access port */
             if (have_packet) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
@@ -3801,10 +3897,10 @@ flow_get_vlan(struct ofproto_dpif *ofproto, const struct flow *flow,
                              in_bundle->name, in_bundle->vlan);
             }
             return -1;
-        }
-        vlan = in_bundle->vlan;
-    } else {
-        if (!ofbundle_includes_vlan(in_bundle, vlan)) {
+        } else if (ofbundle_includes_vlan(in_bundle, vlan)) {
+            return vlan;
+        } else {
+            /* Drop packets from a VLAN not member of the trunk */
             if (have_packet) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
@@ -3814,9 +3910,13 @@ flow_get_vlan(struct ofproto_dpif *ofproto, const struct flow *flow,
             }
             return -1;
         }
+    } else {
+        if (in_bundle->vlan_mode != PORT_VLAN_TRUNK) {
+            return in_bundle->vlan;
+        } else {
+            return ofbundle_includes_vlan(in_bundle, 0) ? 0 : -1;
+        }
     }
-
-    return vlan;
 }
 
 /* A VM broadcasts a gratuitous ARP to indicate that it has resumed after

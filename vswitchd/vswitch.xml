@@ -499,50 +499,96 @@
     </column>
 
     <group title="VLAN Configuration">
-      <p>A bridge port must be configured for VLANs in one of two
-        mutually exclusive ways:
-        <ul>
-          <li>A ``trunk port'' has an empty value for <ref
-            column="tag"/>.  Its <ref column="trunks"/> value may be
-            empty or non-empty.</li>
-          <li>An ``implicitly tagged VLAN port'' or ``access port''
-            has an nonempty value for <ref column="tag"/>.  Its
-            <ref column="trunks"/> value must be empty.</li>
-        </ul>
-        If <ref column="trunks"/> and <ref column="tag"/> are both
-        nonempty, the configuration is ill-formed.
+      <p>Bridge ports support the following types of VLAN configuration:</p>
+      <dl>
+        <dt>trunk</dt>
+        <dd>
+          <p>
+            A trunk port carries packets on one or more specified VLANs
+            specified in the <ref column="trunks"/> column (often, on every
+            VLAN).  A packet that ingresses on a trunk port is in the VLAN
+            specified in its 802.1Q header, or VLAN 0 if the packet has no
+            802.1Q header.  A packet that egresses through a trunk port will
+            have a 802.1Q header if it has a nonzero VLAN ID (or a nonzero
+            802.1Q priority).
+          </p>
+
+          <p>
+            Any packet that ingresses on a trunk port tagged with a VLAN that
+            the port does not trunk is dropped.
+          </p>
+        </dd>
+
+        <dt>access</dt>
+        <dd>
+          <p>
+            An access port carries packets on exactly one VLAN specified in the
+            <ref column="tag"/> column.  Packets ingressing and egressing on an
+            access port have no 802.1Q header.
+          </p>
+
+          <p>
+            Any packet with an 802.1Q header that ingresses on an access port
+            is dropped, regardless of whether the VLAN ID in the header is the
+            access port's VLAN ID.
+          </p>
+        </dd>
+
+        <dt>native-tagged</dt>
+        <dd>
+          A native-tagged port resembles a trunk port, with the exception that
+          a packet without an 802.1Q header that ingresses on a native-tagged
+          port is in the ``native VLAN'' (specified in the <ref column="tag"/>
+          column).
+        </dd>
+
+        <dt>native-untagged</dt>
+        <dd>
+          A native-untagged port resembles a native-tagged port, with the
+          exception that a packet that egresses on a native-untagged port in
+          the native VLAN not have an 802.1Q header.
+        </dd>
+      </dl>
+      <p>
+        A packet will only egress through bridge ports that carry the VLAN of
+        the packet, as described by the rules above.
       </p>
+
+      <column name="vlan_mode">
+        <p>
+          The VLAN mode of the port, as described above.  When this column is
+          empty, a default mode is selected as follows:
+        </p>
+        <ul>
+          <li>
+            If <ref column="tag"/> contains a value, the port is an access
+            port.  The <ref column="trunks"/> column should be empty.
+          </li>
+          <li>
+            Otherwise, the port is a trunk port.  The <ref column="trunks"/>
+            column value is honored if it is present.
+          </li>
+        </ul>
+      </column>
 
       <column name="tag">
         <p>
-          If this is an access port (see above), the port's implicitly
-          tagged VLAN.  Must be empty if this is a trunk port.
-        </p>
-        <p>
-          Frames arriving on trunk ports will be forwarded to this
-          port only if they are tagged with the given VLAN (or, if
-          <ref column="tag"/> is 0, then if they lack a VLAN header).
-          Frames arriving on other access ports will be forwarded to
-          this port only if they have the same <ref column="tag"/>
-          value.  Frames forwarded to this port will not have an
-          802.1Q header.
-        </p>
-        <p>
-          When a frame with a 802.1Q header that indicates a nonzero
-          VLAN is received on an access port, it is discarded.
+          For an access port, the port's implicitly tagged VLAN.  For a
+          native-tagged or native-untagged port, the port's native VLAN.  Must
+          be empty if this is a trunk port.
         </p>
       </column>
 
       <column name="trunks">
         <p>
-          If this is a trunk port (see above), the 802.1Q VLAN(s) that
-          this port trunks; if it is empty, then the port trunks all
-          VLANs.  Must be empty if this is an access port.
+          For a trunk, native-tagged, or native-untagged port, the 802.1Q VLAN
+          or VLANs that this port trunks; if it is empty, then the port trunks
+          all VLANs.  Must be empty if this is an access port.
         </p>
         <p>
-          Frames arriving on trunk ports are dropped if they are not
-          in one of the specified VLANs.  For this purpose, packets
-          that have no VLAN header are treated as part of VLAN 0.
+          A native-tagged or native-untagged port always trunks its native
+          VLAN, regardless of whether <ref column="trunks"/> includes that
+          VLAN.
         </p>
       </column>
     </group>

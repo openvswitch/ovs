@@ -180,6 +180,27 @@ void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
                           const struct cfm_settings *);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
 
+/* The behaviour of the port regarding VLAN handling */
+enum port_vlan_mode {
+    /* This port is an access port.  'vlan' is the VLAN ID.  'trunks' is
+     * ignored. */
+    PORT_VLAN_ACCESS,
+
+    /* This port is a trunk.  'trunks' is the set of trunks. 'vlan' is
+     * ignored. */
+    PORT_VLAN_TRUNK,
+
+    /* Untagged incoming packets are part of 'vlan', as are incoming packets
+     * tagged with 'vlan'.  Outgoing packets tagged with 'vlan' stay tagged.
+     * Other VLANs in 'trunks' are trunked. */
+    PORT_VLAN_NATIVE_TAGGED,
+
+    /* Untagged incoming packets are part of 'vlan', as are incoming packets
+     * tagged with 'vlan'.  Outgoing packets tagged with 'vlan' are untagged.
+     * Other VLANs in 'trunks' are trunked. */
+    PORT_VLAN_NATIVE_UNTAGGED
+};
+
 /* Configuration of bundles. */
 struct ofproto_bundle_settings {
     char *name;                 /* For use in log messages. */
@@ -187,8 +208,9 @@ struct ofproto_bundle_settings {
     uint16_t *slaves;           /* OpenFlow port numbers for slaves. */
     size_t n_slaves;
 
-    int vlan;                   /* VLAN if access port, -1 if trunk port. */
-    unsigned long *trunks;      /* vlan_bitmap, NULL to trunk all VLANs. */
+    enum port_vlan_mode vlan_mode; /* Selects mode for vlan and trunks */
+    int vlan;                   /* VLAN VID, except for PORT_VLAN_TRUNK. */
+    unsigned long *trunks;      /* vlan_bitmap, except for PORT_VLAN_ACCESS. */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
     uint32_t *bond_stable_ids;  /* Array of n_slaves elements. */

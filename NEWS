@@ -18,6 +18,9 @@ Post-v1.2.0
     - Flow setups are now processed in a round-robin manner across ports
       to prevent any single client from monopolizing the CPU and conducting
       a denial of service attack.
+    - Added support for native VLAN tagging.  A new "vlan_mode"
+      parameter can be set for "port". Possible values: "access",
+      "trunk", "native-tagged" and "native-untagged".
 
 v1.2.0 - 03 Aug 2011
 ------------------------

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.0.0",
- "cksum": "3439303729 14480",
+ "version": "6.1.0",
+ "cksum": "3987556157 14663",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -115,6 +115,10 @@
                           "minInteger": 0,
                           "maxInteger": 4095},
                   "min": 0, "max": 1}},
+       "vlan_mode": {
+         "type": {"key": {"type": "string",
+           "enum": ["set", ["trunk", "access", "native-tagged", "native-untagged"]]},
+         "min": 0, "max": 1}},
        "qos": {
          "type": {"key": {"type": "uuid",
                           "refTable": "QoS"},

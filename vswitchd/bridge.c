@@ -493,7 +493,6 @@ port_configure(struct port *port)
         if (list_is_short(&port->ifaces)) {
             if (*cfg->tag >= 0 && *cfg->tag <= 4095) {
                 s.vlan = *cfg->tag;
-                VLOG_DBG("port %s: assigning VLAN tag %d", port->name, s.vlan);
             }
         } else {
             /* It's possible that bonded, VLAN-tagged ports make sense.  Maybe
@@ -505,11 +504,35 @@ port_configure(struct port *port)
 
     /* Get VLAN trunks. */
     s.trunks = NULL;
-    if (s.vlan < 0 && cfg->n_trunks) {
+    if (cfg->n_trunks) {
         s.trunks = vlan_bitmap_from_array(cfg->trunks, cfg->n_trunks);
-    } else if (s.vlan >= 0 && cfg->n_trunks) {
-        VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
-                 port->name);
+    }
+
+    /* Get VLAN mode. */
+    if (cfg->vlan_mode) {
+        if (!strcmp(cfg->vlan_mode, "access")) {
+            s.vlan_mode = PORT_VLAN_ACCESS;
+        } else if (!strcmp(cfg->vlan_mode, "trunk")) {
+            s.vlan_mode = PORT_VLAN_TRUNK;
+        } else if (!strcmp(cfg->vlan_mode, "native-tagged")) {
+            s.vlan_mode = PORT_VLAN_NATIVE_TAGGED;
+        } else if (!strcmp(cfg->vlan_mode, "native-untagged")) {
+            s.vlan_mode = PORT_VLAN_NATIVE_UNTAGGED;
+        } else {
+            /* This "can't happen" because ovsdb-server should prevent it. */
+            VLOG_ERR("unknown VLAN mode %s", cfg->vlan_mode);
+            s.vlan_mode = PORT_VLAN_TRUNK;
+        }
+    } else {
+        if (s.vlan >= 0) {
+            s.vlan_mode = PORT_VLAN_ACCESS;
+            if (cfg->n_trunks) {
+                VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
+                         port->name);
+            }
+        } else {
+            s.vlan_mode = PORT_VLAN_TRUNK;
+        }
     }
 
     /* Get LACP settings. */
