@@ -191,11 +191,6 @@ def keep_table_columns(schema, table_name, columns):
     return table
 
 def prune_schema(schema):
-    string_type = types.Type(types.BaseType(types.StringType))
-    string_map_type = types.Type(types.BaseType(types.StringType),
-                                 types.BaseType(types.StringType),
-                                 0, sys.maxint)
-
     new_tables = {}
     new_tables["Bridge"] = keep_table_columns(
         schema, "Bridge", ("name", "external_ids", "other_config",
