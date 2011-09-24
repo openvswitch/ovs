@@ -27,7 +27,6 @@ from ovs.db import types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
-import idltest
 
 def unbox_json(json):
     if type(json) == list and len(json) == 1:
