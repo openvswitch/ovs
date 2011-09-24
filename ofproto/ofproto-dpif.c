@@ -2888,6 +2888,26 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
 static void xlate_normal(struct action_xlate_ctx *);
 
 static void
+commit_vlan_tci(struct action_xlate_ctx *ctx, ovs_be16 vlan_tci)
+{
+    struct flow *base = &ctx->base_flow;
+    struct ofpbuf *odp_actions = ctx->odp_actions;
+
+    if (base->vlan_tci != vlan_tci) {
+        if (!(vlan_tci & htons(VLAN_CFI))) {
+            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
+        } else {
+            if (base->vlan_tci != htons(0)) {
+                nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
+            }
+            nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
+                            vlan_tci & ~htons(VLAN_CFI));
+        }
+        base->vlan_tci = vlan_tci;
+    }
+}
+
+static void
 commit_odp_actions(struct action_xlate_ctx *ctx)
 {
     const struct flow *flow = &ctx->flow;
@@ -2914,18 +2934,7 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
         base->nw_tos = flow->nw_tos;
     }
 
-    if (base->vlan_tci != flow->vlan_tci) {
-        if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-            nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
-        } else {
-            if (base->vlan_tci != htons(0)) {
-                nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
-            }
-            nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
-                            flow->vlan_tci & ~htons(VLAN_CFI));
-        }
-        base->vlan_tci = flow->vlan_tci;
-    }
+    commit_vlan_tci(ctx, flow->vlan_tci);
 
     if (base->tp_src != flow->tp_src) {
         nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_SET_TP_SRC, flow->tp_src);
@@ -3741,8 +3750,13 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
     dst_set_init(&set);
     compose_dsts(ctx, vlan, in_bundle, out_bundle, &set);
     compose_mirror_dsts(ctx, vlan, in_bundle, &set);
+    if (!set.n) {
+        dst_set_free(&set);
+        return;
+    }
 
     /* Output all the packets we can without having to change the VLAN. */
+    commit_odp_actions(ctx);
     initial_vlan = vlan_tci_to_vid(ctx->flow.vlan_tci);
     if (initial_vlan == 0) {
         initial_vlan = OFP_VLAN_NONE;
@@ -3762,19 +3776,15 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
             continue;
         }
         if (dst->vlan != cur_vlan) {
-            if (dst->vlan == OFP_VLAN_NONE) {
-                nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_VLAN);
-            } else {
-                ovs_be16 tci;
+            ovs_be16 tci;
 
-                if (cur_vlan != OFP_VLAN_NONE) {
-                     nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_VLAN);
-                }
-                tci = htons(dst->vlan & VLAN_VID_MASK);
-                tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
-                nl_msg_put_be16(ctx->odp_actions,
-                                OVS_ACTION_ATTR_PUSH_VLAN, tci);
+            tci = htons(dst->vlan == OFP_VLAN_NONE ? 0 : dst->vlan);
+            tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
+            if (tci) {
+                tci |= htons(VLAN_CFI);
             }
+            commit_vlan_tci(ctx, tci);
+
             cur_vlan = dst->vlan;
         }
         nl_msg_put_u32(ctx->odp_actions,
