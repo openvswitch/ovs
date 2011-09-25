@@ -27,8 +27,6 @@
 
 import argparse
 import glob
-import logging
-import logging.handlers
 import os
 import socket
 import subprocess
@@ -40,21 +38,9 @@ from ovs.db import types
 import ovs.util
 import ovs.daemon
 import ovs.db.idl
+import ovs.vlog
 
-s_log = logging.getLogger("ovs-monitor-ipsec")
-try:
-    # By default log messages as DAEMON into syslog
-    l_handler = logging.handlers.SysLogHandler(
-            "/dev/log",
-            facility=logging.handlers.SysLogHandler.LOG_DAEMON)
-    l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-    l_handler.setFormatter(l_formatter)
-    s_log.addHandler(l_handler)
-except socket.error, e:
-    logging.basicConfig()
-    s_log.warn("failed to connect to syslog (%s)" % e)
-s_log.addHandler(logging.StreamHandler())
-
+vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 root_prefix = ''                # Prefix for absolute file names, for testing.
 setkey = "/usr/sbin/setkey"
 
@@ -444,8 +430,10 @@ def main():
                         help="Use DIR as alternate root directory"
                         " (for testing).")
 
+    ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
     args = parser.parse_args()
+    ovs.vlog.handle_args(args)
     ovs.daemon.handle_args(args)
 
     global root_prefix
@@ -518,5 +506,5 @@ if __name__ == '__main__':
         # Let system.exit() calls complete normally
         raise
     except:
-        s_log.exception("traceback")
+        vlog.exception("traceback")
         sys.exit(ovs.daemon.RESTART_EXIT_CODE)
