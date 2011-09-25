@@ -23,8 +23,6 @@
 #   - Set the fail-mode on internal bridges.
 
 import argparse
-import logging
-import logging.handlers
 import os
 import signal
 import subprocess
@@ -41,7 +39,7 @@ import ovs.daemon
 import ovs.db.idl
 
 root_prefix = ''                # Prefix for absolute file names, for testing.
-s_log = logging.getLogger("ovs-xapi-sync")
+vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 vsctl = "/usr/bin/ovs-vsctl"
 session = None
 force_run = False
@@ -62,7 +60,7 @@ def init_session():
         session.xenapi.login_with_password("", "")
     except XenAPI.Failure, e:
         session = None
-        s_log.warning("Couldn't login to XAPI (%s)" % e)
+        vlog.warn("Couldn't login to XAPI (%s)" % e)
         return False
 
     return True
@@ -70,7 +68,7 @@ def init_session():
 
 def get_network_by_bridge(br_name):
     if not init_session():
-        s_log.warning("Failed to get bridge id %s because"
+        vlog.warn("Failed to get bridge id %s because"
                 " XAPI session could not be initialized" % br_name)
         return None
 
@@ -105,7 +103,7 @@ def get_iface_id(if_name, xs_vif_uuid):
         return xs_vif_uuid
 
     if not init_session():
-        s_log.warning("Failed to get interface id %s because"
+        vlog.warn("Failed to get interface id %s because"
                 " XAPI session could not be initialized" % if_name)
         return xs_vif_uuid
 
@@ -114,7 +112,7 @@ def get_iface_id(if_name, xs_vif_uuid):
         rec = session.xenapi.VIF.get_record(vif)
         return rec['other_config'].get('nicira-iface-id', xs_vif_uuid)
     except XenAPI.Failure:
-        s_log.warning("Could not find XAPI entry for VIF %s" % if_name)
+        vlog.warn("Could not find XAPI entry for VIF %s" % if_name)
         return xs_vif_uuid
 
 
@@ -122,7 +120,7 @@ def call_vsctl(args):
     cmd = [vsctl, "--timeout=30", "-vANY:console:off"] + args
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        s_log.warning("Couldn't call ovs-vsctl")
+        vlog.warn("Couldn't call ovs-vsctl")
 
 
 def set_or_delete(d, key, value):
@@ -175,8 +173,8 @@ def update_in_band_mgmt(row):
 
     other_config = row.other_config
     if dib and dib not in ['true', 'false']:
-        s_log.warning('"%s" isn\'t a valid setting for '
-                      "other_config:disable-in-band on %s" % (dib, row.name))
+        vlog.warn('"%s" isn\'t a valid setting for '
+                "other_config:disable-in-band on %s" % (dib, row.name))
     elif set_or_delete(other_config, 'disable-in-band', dib):
         row.other_config = other_config
 
@@ -224,18 +222,6 @@ def handler(signum, _):
 def main():
     global force_run
 
-    s_log.addHandler(logging.StreamHandler())
-    try:
-        l_handler = logging.handlers.RotatingFileHandler(
-            "/var/log/openvswitch/ovs-xapi-sync.log")
-        l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-        l_handler.setFormatter(l_formatter)
-        s_log.addHandler(l_handler)
-    except IOError, e:
-        logging.basicConfig()
-        s_log.warn("failed to open logfile (%s)" % e)
-    s_log.setLevel(logging.INFO)
-
     parser = argparse.ArgumentParser()
     parser.add_argument("database", metavar="DATABASE",
             help="A socket on which ovsdb-server is listening.")
@@ -243,8 +229,10 @@ def main():
                         help="Use DIR as alternate root directory"
                         " (for testing).")
 
+    ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
     args = parser.parse_args()
+    ovs.vlog.handle_args(args)
     ovs.daemon.handle_args(args)
 
     global root_prefix
@@ -276,7 +264,7 @@ def main():
             continue
 
         if force_run:
-            s_log.info("Forced to re-run as the result of a SIGHUP")
+            vlog.info("Forced to re-run as the result of a SIGHUP")
             bridges = {}
             interfaces = {}
             force_run = False
@@ -361,5 +349,5 @@ if __name__ == '__main__':
         # Let system.exit() calls complete normally
         raise
     except:
-        s_log.exception("traceback")
+        vlog.exception("traceback")
         sys.exit(ovs.daemon.RESTART_EXIT_CODE)
