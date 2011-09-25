@@ -13,13 +13,15 @@
 # limitations under the License.
 
 import errno
-import logging
 import os
 import select
 import socket
 
 import ovs.poller
 import ovs.socket_util
+import ovs.vlog
+
+vlog = ovs.vlog.Vlog("stream")
 
 
 class Stream(object):
@@ -260,7 +262,7 @@ class PassiveStream(object):
         try:
             sock.listen(10)
         except socket.error, e:
-            logging.error("%s: listen: %s" % (name, os.strerror(e.error)))
+            vlog.err("%s: listen: %s" % (name, os.strerror(e.error)))
             sock.close()
             return e.error, None
 
@@ -291,7 +293,7 @@ class PassiveStream(object):
                 error = ovs.socket_util.get_exception_errno(e)
                 if error != errno.EAGAIN:
                     # XXX rate-limit
-                    logging.debug("accept: %s" % os.strerror(error))
+                    vlog.dbg("accept: %s" % os.strerror(error))
                 return error, None
 
     def wait(self, poller):

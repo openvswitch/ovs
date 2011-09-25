@@ -27,7 +27,6 @@ def handler(signum, _):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
 
     signal.signal(signal.SIGHUP, handler)
 

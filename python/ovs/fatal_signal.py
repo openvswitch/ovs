@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import atexit
-import logging
 import os
 import signal
 
+import ovs.vlog
+
 _hooks = []
+vlog = ovs.vlog.Vlog("fatal-signal")
 
 
 def add_hook(hook, cancel, run_at_exit):
@@ -67,8 +69,7 @@ def unlink_file_now(file):
     Returns 0 if successful, otherwise a positive errno value."""
     error = _unlink(file)
     if error:
-        logging.warning("could not unlink \"%s\" (%s)"
-                        % (file, os.strerror(error)))
+        vlog.warn("could not unlink \"%s\" (%s)" % (file, os.strerror(error)))
     remove_file_to_unlink(file)
     return error
 

@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import os
+
+import ovs.vlog
 
 # Values returned by Reconnect.run()
 CONNECT = 'connect'
@@ -21,6 +22,7 @@ DISCONNECT = 'disconnect'
 PROBE = 'probe'
 
 EOF = -1
+vlog = ovs.vlog.Vlog("reconnect")
 
 
 class Reconnect(object):
@@ -97,9 +99,9 @@ class Reconnect(object):
 
         @staticmethod
         def run(fsm, now):
-            logging.debug("%s: idle %d ms, sending inactivity probe"
-                          % (fsm.name,
-                             now - max(fsm.last_received, fsm.state_entered)))
+            vlog.dbg("%s: idle %d ms, sending inactivity probe"
+                     % (fsm.name,
+                        now - max(fsm.last_received, fsm.state_entered)))
             fsm._transition(now, Reconnect.Idle)
             return PROBE
 
@@ -113,9 +115,9 @@ class Reconnect(object):
 
         @staticmethod
         def run(fsm, now):
-            logging.error("%s: no response to inactivity probe after %.3g "
-                          "seconds, disconnecting"
-                          % (fsm.name, (now - fsm.state_entered) / 1000.0))
+            vlog.err("%s: no response to inactivity probe after %.3g "
+                     "seconds, disconnecting"
+                      % (fsm.name, (now - fsm.state_entered) / 1000.0))
             return DISCONNECT
 
     class Reconnect(object):
@@ -140,7 +142,7 @@ class Reconnect(object):
         self.max_backoff = 8000
         self.probe_interval = 5000
         self.passive = False
-        self.info_level = logging.info
+        self.info_level = vlog.info
 
         self.state = Reconnect.Void
         self.state_entered = now
@@ -168,9 +170,9 @@ class Reconnect(object):
         This setting has no effect on the log level of debugging, warning, or
         error messages."""
         if quiet:
-            self.info_level = logging.debug
+            self.info_level = vlog.dbg
         else:
-            self.info_level = logging.info
+            self.info_level = vlog.info
 
     def get_name(self):
         return self.name
@@ -318,8 +320,8 @@ class Reconnect(object):
             # Report what happened
             if self.state in (Reconnect.Active, Reconnect.Idle):
                 if error > 0:
-                    logging.warning("%s: connection dropped (%s)"
-                                    % (self.name, os.strerror(error)))
+                    vlog.warn("%s: connection dropped (%s)"
+                              % (self.name, os.strerror(error)))
                 elif error == EOF:
                     self.info_level("%s: connection closed by peer"
                                     % self.name)
@@ -327,8 +329,8 @@ class Reconnect(object):
                     self.info_level("%s: connection dropped" % self.name)
             elif self.state == Reconnect.Listening:
                 if error > 0:
-                    logging.warning("%s: error listening for connections (%s)"
-                                    % (self.name, os.strerror(error)))
+                    vlog.warn("%s: error listening for connections (%s)"
+                              % (self.name, os.strerror(error)))
                 else:
                     self.info_level("%s: error listening for connections"
                                     % self.name)
@@ -338,8 +340,8 @@ class Reconnect(object):
                 else:
                     type_ = "connection"
                 if error > 0:
-                    logging.warning("%s: %s attempt failed (%s)"
-                                    % (self.name, type_, os.strerror(error)))
+                    vlog.warn("%s: %s attempt failed (%s)"
+                              % (self.name, type_, os.strerror(error)))
                 else:
                     self.info_level("%s: %s attempt timed out"
                                     % (self.name, type_))
@@ -459,7 +461,7 @@ class Reconnect(object):
                 self.total_connected_duration += now - self.last_connected
             self.seqno += 1
 
-        logging.debug("%s: entering %s" % (self.name, state.name))
+        vlog.dbg("%s: entering %s" % (self.name, state.name))
         self.state = state
         self.state_entered = now
 

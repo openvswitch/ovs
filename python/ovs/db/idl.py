@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import uuid
 
 import ovs.jsonrpc
@@ -21,6 +20,9 @@ import ovs.db.schema
 from ovs.db import error
 import ovs.ovsuuid
 import ovs.poller
+import ovs.vlog
+
+vlog = ovs.vlog.Vlog("idl")
 
 __pychecker__ = 'no-classattr no-objattrs'
 
@@ -173,8 +175,8 @@ class Idl:
                     self.__clear()
                     self.__parse_update(msg.result)
                 except error.Error, e:
-                    logging.error("%s: parse error in received schema: %s"
-                                  % (self._session.get_name(), e))
+                    vlog.err("%s: parse error in received schema: %s"
+                              % (self._session.get_name(), e))
                     self.__error()
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
                   and self._lock_request_id is not None
@@ -200,9 +202,9 @@ class Idl:
             else:
                 # This can happen if a transaction is destroyed before we
                 # receive the reply, so keep the log level low.
-                logging.debug("%s: received unexpected %s message"
-                              % (self._session.get_name(),
-                                 ovs.jsonrpc.Message.type_to_string(msg.type)))
+                vlog.dbg("%s: received unexpected %s message"
+                         % (self._session.get_name(),
+                             ovs.jsonrpc.Message.type_to_string(msg.type)))
 
         return initial_change_seqno != self.change_seqno
 
@@ -319,8 +321,8 @@ class Idl:
         try:
             self.__do_parse_update(update)
         except error.Error, e:
-            logging.error("%s: error parsing update: %s"
-                          % (self._session.get_name(), e))
+            vlog.err("%s: error parsing update: %s"
+                     % (self._session.get_name(), e))
 
     def __do_parse_update(self, table_updates):
         if type(table_updates) != dict:
@@ -374,8 +376,8 @@ class Idl:
                 changed = True
             else:
                 # XXX rate-limit
-                logging.warning("cannot delete missing row %s from table %s"
-                                % (uuid, table.name))
+                vlog.warn("cannot delete missing row %s from table %s"
+                          % (uuid, table.name))
         elif not old:
             # Insert row.
             if not row:
@@ -383,8 +385,8 @@ class Idl:
                 changed = True
             else:
                 # XXX rate-limit
-                logging.warning("cannot add existing row %s to table %s"
-                                % (uuid, table.name))
+                vlog.warn("cannot add existing row %s to table %s"
+                          % (uuid, table.name))
             if self.__row_update(table, row, new):
                 changed = True
         else:
@@ -392,8 +394,8 @@ class Idl:
                 row = self.__create_row(table, uuid)
                 changed = True
                 # XXX rate-limit
-                logging.warning("cannot modify missing row %s in table %s"
-                                % (uuid, table.name))
+                vlog.warn("cannot modify missing row %s in table %s"
+                          % (uuid, table.name))
             if self.__row_update(table, row, new):
                 changed = True
         return changed
@@ -404,16 +406,16 @@ class Idl:
             column = table.columns.get(column_name)
             if not column:
                 # XXX rate-limit
-                logging.warning("unknown column %s updating table %s"
-                                % (column_name, table.name))
+                vlog.warn("unknown column %s updating table %s"
+                          % (column_name, table.name))
                 continue
 
             try:
                 datum = ovs.db.data.Datum.from_json(column.type, datum_json)
             except error.Error, e:
                 # XXX rate-limit
-                logging.warning("error parsing column %s in table %s: %s"
-                                % (column_name, table.name, e))
+                vlog.warn("error parsing column %s in table %s: %s"
+                          % (column_name, table.name, e))
                 continue
 
             if datum != row._data[column_name]:
@@ -548,8 +550,8 @@ class Row(object):
                                                   _row_to_uuid)
         except error.Error, e:
             # XXX rate-limit
-            logging.error("attempting to write bad value to column %s (%s)"
-                          % (column_name, e))
+            vlog.err("attempting to write bad value to column %s (%s)"
+                     % (column_name, e))
             return
         self._idl.txn._write(self, column, datum)
 
@@ -936,7 +938,7 @@ class Transaction(object):
             self._status = Transaction.ERROR
         elif type(msg.result) not in (list, tuple):
             # XXX rate-limit
-            logging.warning('reply to "transact" is not JSON array')
+            vlog.warn('reply to "transact" is not JSON array')
         else:
             hard_errors = False
             soft_errors = False
@@ -965,8 +967,7 @@ class Transaction(object):
                     hard_errors = True
                     self.__set_error_json(op)
                     # XXX rate-limit
-                    logging.warning("operation reply is not JSON null or "
-                                    "object")
+                    vlog.warn("operation reply is not JSON null or object")
 
             if not soft_errors and not hard_errors and not lock_errors:
                 if self._inc_table and not self.__process_inc_reply(ops):
@@ -989,11 +990,11 @@ class Transaction(object):
     def __check_json_type(json, types, name):
         if not json:
             # XXX rate-limit
-            logging.warning("%s is missing" % name)
+            vlog.warn("%s is missing" % name)
             return False
         elif type(json) not in types:
             # XXX rate-limit
-            logging.warning("%s has unexpected type %s" % (name, type(json)))
+            vlog.warn("%s has unexpected type %s" % (name, type(json)))
             return False
         else:
             return True
@@ -1001,9 +1002,9 @@ class Transaction(object):
     def __process_inc_reply(self, ops):
         if self._inc_index + 2 > len(ops):
             # XXX rate-limit
-            logging.warning("reply does not contain enough operations for "
-                            "increment (has %d, needs %d)" %
-                            (len(ops), self._inc_index + 2))
+            vlog.warn("reply does not contain enough operations for "
+                      "increment (has %d, needs %d)" %
+                      (len(ops), self._inc_index + 2))
 
         # We know that this is a JSON object because the loop in
         # __process_reply() already checked.
@@ -1014,8 +1015,7 @@ class Transaction(object):
             return False
         if count != 1:
             # XXX rate-limit
-            logging.warning('"mutate" reply "count" is %d instead of 1'
-                            % count)
+            vlog.warn('"mutate" reply "count" is %d instead of 1' % count)
             return False
 
         select = ops[self._inc_index + 1]
@@ -1025,8 +1025,8 @@ class Transaction(object):
             return False
         if len(rows) != 1:
             # XXX rate-limit
-            logging.warning('"select" reply "rows" has %d elements '
-                            'instead of 1' % len(rows))
+            vlog.warn('"select" reply "rows" has %d elements '
+                      'instead of 1' % len(rows))
             return False
         row = rows[0]
         if not Transaction.__check_json_type(row, (dict,),
@@ -1042,9 +1042,9 @@ class Transaction(object):
     def __process_insert_reply(self, insert, ops):
         if insert.op_index >= len(ops):
             # XXX rate-limit
-            logging.warning("reply does not contain enough operations "
-                            "for insert (has %d, needs %d)"
-                            % (len(ops), insert.op_index))
+            vlog.warn("reply does not contain enough operations "
+                      "for insert (has %d, needs %d)"
+                      % (len(ops), insert.op_index))
             return False
 
         # We know that this is a JSON object because the loop in
@@ -1059,7 +1059,7 @@ class Transaction(object):
             uuid_ = ovs.ovsuuid.from_json(json_uuid)
         except error.Error:
             # XXX rate-limit
-            logging.warning('"insert" reply "uuid" is not a JSON UUID')
+            vlog.warn('"insert" reply "uuid" is not a JSON UUID')
             return False
 
         insert.real = uuid_

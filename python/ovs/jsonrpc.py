@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import errno
-import logging
 import os
 
 import ovs.json
@@ -21,8 +20,10 @@ import ovs.poller
 import ovs.reconnect
 import ovs.stream
 import ovs.timeval
+import ovs.vlog
 
 EOF = -1
+vlog = ovs.vlog.Vlog("jsonrpc")
 
 
 class Message(object):
@@ -199,8 +200,8 @@ class Connection(object):
                 self.output = self.output[retval:]
             else:
                 if retval != -errno.EAGAIN:
-                    logging.warn("%s: send error: %s" % (self.name,
-                                                         os.strerror(-retval)))
+                    vlog.warn("%s: send error: %s" %
+                              (self.name, os.strerror(-retval)))
                     self.error(-retval)
                 break
 
@@ -220,7 +221,7 @@ class Connection(object):
             return len(self.output)
 
     def __log_msg(self, title, msg):
-        logging.debug("%s: %s %s" % (self.name, title, msg))
+        vlog.dbg("%s: %s %s" % (self.name, title, msg))
 
     def send(self, msg):
         if self.status:
@@ -260,8 +261,8 @@ class Connection(object):
                         return error, None
                     else:
                         # XXX rate-limit
-                        logging.warning("%s: receive error: %s"
-                                        % (self.name, os.strerror(error)))
+                        vlog.warn("%s: receive error: %s"
+                                  % (self.name, os.strerror(error)))
                         self.error(error)
                         return self.status, None
                 elif not data:
@@ -309,15 +310,15 @@ class Connection(object):
         self.parser = None
         if type(json) in [str, unicode]:
             # XXX rate-limit
-            logging.warning("%s: error parsing stream: %s" % (self.name, json))
+            vlog.warn("%s: error parsing stream: %s" % (self.name, json))
             self.error(errno.EPROTO)
             return
 
         msg = Message.from_json(json)
         if not isinstance(msg, Message):
             # XXX rate-limit
-            logging.warning("%s: received bad JSON-RPC message: %s"
-                            % (self.name, msg))
+            vlog.warn("%s: received bad JSON-RPC message: %s"
+                      % (self.name, msg))
             self.error(errno.EPROTO)
             return
 
@@ -425,8 +426,8 @@ class Session(object):
             if error == 0:
                 if self.rpc or self.stream:
                     # XXX rate-limit
-                    logging.info("%s: new connection replacing active "
-                                 "connection" % self.reconnect.get_name())
+                    vlog.info("%s: new connection replacing active "
+                              "connection" % self.reconnect.get_name())
                     self.__disconnect()
                 self.reconnect.connected(ovs.timeval.msec())
                 self.rpc = Connection(stream)

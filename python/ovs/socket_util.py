@@ -13,13 +13,15 @@
 # limitations under the License.
 
 import errno
-import logging
 import os
 import select
 import socket
 import sys
 
 import ovs.fatal_signal
+import ovs.vlog
+
+vlog = ovs.vlog.Vlog("socket_util")
 
 
 def make_unix_socket(style, nonblock, bind_path, connect_path):
@@ -114,8 +116,7 @@ def get_null_fd():
         try:
             null_fd = os.open("/dev/null", os.O_RDWR)
         except OSError, e:
-            logging.error("could not open /dev/null: %s"
-                          % os.strerror(e.errno))
+            vlog.err("could not open /dev/null: %s" % os.strerror(e.errno))
             return -e.errno
     return null_fd
 
@@ -135,7 +136,7 @@ def write_fully(fd, buf):
             if retval == len(buf):
                 return 0, bytes_written + len(buf)
             elif retval == 0:
-                logging.warning("write returned 0")
+                vlog.warn("write returned 0")
                 return errno.EPROTO, bytes_written
             else:
                 bytes_written += retval
@@ -148,5 +149,5 @@ def set_nonblocking(sock):
     try:
         sock.setblocking(0)
     except socket.error, e:
-        logging.error("could not set nonblocking mode on socket: %s"
-                      % os.strerror(get_socket_error(e)))
+        vlog.err("could not set nonblocking mode on socket: %s"
+                 % os.strerror(get_socket_error(e)))

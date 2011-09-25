@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import errno
-import logging
 import select
 import ovs.timeval
+import ovs.vlog
+
+vlog = ovs.vlog.Vlog("poller")
 
 
 class Poller(object):
@@ -96,13 +98,13 @@ class Poller(object):
                 # XXX rate-limit
                 error, msg = e
                 if error != errno.EINTR:
-                    logging.error("poll: %s" % e[1])
+                    vlog.err("poll: %s" % e[1])
         finally:
             self.__reset()
 
     def __log_wakeup(self, events):
         if not events:
-            logging.debug("%d-ms timeout" % self.timeout)
+            vlog.dbg("%d-ms timeout" % self.timeout)
         else:
             for fd, revents in events:
                 if revents != 0:
@@ -117,7 +119,7 @@ class Poller(object):
                         s += "[POLLHUP]"
                     if revents & select.POLLNVAL:
                         s += "[POLLNVAL]"
-                    logging.debug("%s on fd %d" % (s, fd))
+                    vlog.dbg("%s on fd %d" % (s, fd))
 
     def __reset(self):
         self.poll = select.poll()

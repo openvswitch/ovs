@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import errno
-import logging
 import sys
 
 import ovs.reconnect
@@ -176,8 +175,6 @@ def main():
         "listening": do_listening,
         "listen-error": do_listen_error
     }
-
-    logging.basicConfig(level=logging.CRITICAL)
 
     global now
     global r

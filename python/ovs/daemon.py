@@ -14,7 +14,6 @@
 
 import errno
 import fcntl
-import logging
 import os
 import resource
 import signal
@@ -28,6 +27,9 @@ import ovs.process
 import ovs.socket_util
 import ovs.timeval
 import ovs.util
+import ovs.vlog
+
+vlog = ovs.vlog.Vlog("daemon")
 
 # --detach: Should we run in the background?
 _detach = False
@@ -121,7 +123,7 @@ def set_monitor():
 
 
 def _fatal(msg):
-    logging.error(msg)
+    vlog.err(msg)
     sys.stderr.write("%s\n" % msg)
     sys.exit(1)
 
@@ -306,13 +308,13 @@ def _monitor_daemon(daemon_pid):
                     try:
                         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
                     except resource.error:
-                        logging.warning("failed to disable core dumps")
+                        vlog.warn("failed to disable core dumps")
 
                 # Throttle restarts to no more than once every 10 seconds.
                 if (last_restart is not None and
                     ovs.timeval.msec() < last_restart + 10000):
-                    logging.warning("%s, waiting until 10 seconds since last "
-                                    "restart" % status_msg)
+                    vlog.warn("%s, waiting until 10 seconds since last "
+                              "restart" % status_msg)
                     while True:
                         now = ovs.timeval.msec()
                         wakeup = last_restart + 10000
@@ -322,12 +324,12 @@ def _monitor_daemon(daemon_pid):
                         time.sleep((wakeup - now) / 1000.0)
                 last_restart = ovs.timeval.msec()
 
-                logging.error("%s, restarting" % status_msg)
+                vlog.err("%s, restarting" % status_msg)
                 daemon_pid = _fork_and_wait_for_startup()
                 if not daemon_pid:
                     break
             else:
-                logging.info("%s, exiting" % status_msg)
+                vlog.info("%s, exiting" % status_msg)
                 sys.exit(0)
 
    # Running in new daemon process.
@@ -411,7 +413,7 @@ def __read_pidfile(pidfile, delete_if_stale):
     except IOError, e:
         if e.errno == errno.ENOENT and delete_if_stale:
             return 0
-        logging.warning("%s: open: %s" % (pidfile, e.strerror))
+        vlog.warn("%s: open: %s" % (pidfile, e.strerror))
         return -e.errno
 
     # Python fcntl doesn't directly support F_GETLK so we have to just try
@@ -422,7 +424,7 @@ def __read_pidfile(pidfile, delete_if_stale):
         # pidfile exists but wasn't locked by anyone.  Now we have the lock.
         if not delete_if_stale:
             file_handle.close()
-            logging.warning("%s: pid file is stale" % pidfile)
+            vlog.warn("%s: pid file is stale" % pidfile)
             return -errno.ESRCH
 
         # Is the file we have locked still named 'pidfile'?
@@ -435,23 +437,23 @@ def __read_pidfile(pidfile, delete_if_stale):
         except IOError:
             raced = True
         if raced:
-            logging.warning("%s: lost race to delete pidfile" % pidfile)
+            vlog.warn("%s: lost race to delete pidfile" % pidfile)
             return -errno.EALREADY
 
         # We won the right to delete the stale pidfile.
         try:
             os.unlink(pidfile)
         except IOError, e:
-            logging.warning("%s: failed to delete stale pidfile (%s)"
+            vlog.warn("%s: failed to delete stale pidfile (%s)"
                             % (pidfile, e.strerror))
             return -e.errno
         else:
-            logging.debug("%s: deleted stale pidfile" % pidfile)
+            vlog.dbg("%s: deleted stale pidfile" % pidfile)
             file_handle.close()
             return 0
     except IOError, e:
         if e.errno not in [errno.EACCES, errno.EAGAIN]:
-            logging.warn("%s: fcntl: %s" % (pidfile, e.strerror))
+            vlog.warn("%s: fcntl: %s" % (pidfile, e.strerror))
             return -e.errno
 
     # Someone else has the pidfile locked.
@@ -459,10 +461,10 @@ def __read_pidfile(pidfile, delete_if_stale):
         try:
             error = int(file_handle.readline())
         except IOError, e:
-            logging.warning("%s: read: %s" % (pidfile, e.strerror))
+            vlog.warn("%s: read: %s" % (pidfile, e.strerror))
             error = -e.errno
         except ValueError:
-            logging.warning("%s does not contain a pid" % pidfile)
+            vlog.warn("%s does not contain a pid" % pidfile)
             error = -errno.EINVAL
 
         return error
