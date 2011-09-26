@@ -166,7 +166,7 @@ def main(argv):
         sys.exit(1)
 
     for key, value in options:
-        if key in ['h', '--help']:
+        if key in ['-h', '--help']:
             usage()
         elif not ovs.daemon.parse_opt(key, value):
             sys.stderr.write("%s: unhandled option %s\n"
@@ -212,7 +212,7 @@ usage: %s [OPTIONS] COMMAND [ARG...]
   request REMOTE METHOD PARAMS   send request, print reply
   notify REMOTE METHOD PARAMS  send notification and exit
 """ % (ovs.util.PROGRAM_NAME, ovs.util.PROGRAM_NAME))
-    ovs.stream.usage("JSON-RPC", True, True, True)
+    ovs.stream.usage("JSON-RPC", True, True)
     ovs.daemon.usage()
     sys.stdout.write("""
 Other options:
