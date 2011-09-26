@@ -168,4 +168,7 @@ static inline struct net *genl_info_net(struct genl_info *info)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#define genlmsg_unicast(ignore_net, skb, pid)   genlmsg_unicast(skb, pid)
+#endif
 #endif /* genetlink.h */
