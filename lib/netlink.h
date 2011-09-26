@@ -46,7 +46,7 @@ struct genlmsghdr *nl_msg_genlmsghdr(const struct ofpbuf *);
 bool nl_msg_nlmsgerr(const struct ofpbuf *, int *error);
 void nl_msg_reserve(struct ofpbuf *, size_t);
 
-/* Appending headers and raw data. */
+/* Appending and prepending headers and raw data. */
 void nl_msg_put_nlmsghdr(struct ofpbuf *, size_t expected_payload,
                          uint32_t type, uint32_t flags);
 void nl_msg_put_genlmsghdr(struct ofpbuf *, size_t expected_payload,
@@ -54,6 +54,8 @@ void nl_msg_put_genlmsghdr(struct ofpbuf *, size_t expected_payload,
                            uint8_t cmd, uint8_t version);
 void nl_msg_put(struct ofpbuf *, const void *, size_t);
 void *nl_msg_put_uninit(struct ofpbuf *, size_t);
+void nl_msg_push(struct ofpbuf *, const void *, size_t);
+void *nl_msg_push_uninit(struct ofpbuf *, size_t);
 
 /* Appending attributes. */
 void *nl_msg_put_unspec_uninit(struct ofpbuf *, uint16_t type, size_t);
@@ -72,6 +74,19 @@ size_t nl_msg_start_nested(struct ofpbuf *, uint16_t type);
 void nl_msg_end_nested(struct ofpbuf *, size_t offset);
 void nl_msg_put_nested(struct ofpbuf *, uint16_t type,
                        const void *data, size_t size);
+
+/* Prepending attributes. */
+void *nl_msg_push_unspec_uninit(struct ofpbuf *, uint16_t type, size_t);
+void nl_msg_push_unspec(struct ofpbuf *, uint16_t type, const void *, size_t);
+void nl_msg_push_flag(struct ofpbuf *, uint16_t type);
+void nl_msg_push_u8(struct ofpbuf *, uint16_t type, uint8_t value);
+void nl_msg_push_u16(struct ofpbuf *, uint16_t type, uint16_t value);
+void nl_msg_push_u32(struct ofpbuf *, uint16_t type, uint32_t value);
+void nl_msg_push_u64(struct ofpbuf *, uint16_t type, uint64_t value);
+void nl_msg_push_be16(struct ofpbuf *, uint16_t type, ovs_be16 value);
+void nl_msg_push_be32(struct ofpbuf *, uint16_t type, ovs_be32 value);
+void nl_msg_push_be64(struct ofpbuf *, uint16_t type, ovs_be64 value);
+void nl_msg_push_string(struct ofpbuf *, uint16_t type, const char *value);
 
 /* Separating buffers into individual messages. */
 struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);

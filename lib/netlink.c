@@ -201,6 +201,29 @@ nl_msg_put_uninit(struct ofpbuf *msg, size_t size)
     return p;
 }
 
+/* Prepends the 'size' bytes of data in 'p', plus Netlink padding if needed, to
+ * the head end of 'msg'.  Data in 'msg' is reallocated and copied if
+ * necessary. */
+void
+nl_msg_push(struct ofpbuf *msg, const void *data, size_t size)
+{
+    memcpy(nl_msg_push_uninit(msg, size), data, size);
+}
+
+/* Prepends 'size' bytes of data, plus Netlink padding if needed, to the head
+ * end of 'msg', reallocating and copying its data if necessary.  Returns a
+ * pointer to the first byte of the new data, which is left uninitialized. */
+void *
+nl_msg_push_uninit(struct ofpbuf *msg, size_t size)
+{
+    size_t pad = NLMSG_ALIGN(size) - size;
+    char *p = ofpbuf_push_uninit(msg, size + pad);
+    if (pad) {
+        memset(p + size, 0, pad);
+    }
+    return p;
+}
+
 /* Appends a Netlink attribute of the given 'type' and room for 'size' bytes of
  * data as its payload, plus Netlink padding if needed, to the tail end of
  * 'msg', reallocating and copying its data if necessary.  Returns a pointer to
@@ -298,6 +321,105 @@ void
 nl_msg_put_string(struct ofpbuf *msg, uint16_t type, const char *value)
 {
     nl_msg_put_unspec(msg, type, value, strlen(value) + 1);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and room for 'size' bytes
+ * of data as its payload, plus Netlink padding if needed, to the head end of
+ * 'msg', reallocating and copying its data if necessary.  Returns a pointer to
+ * the first byte of data in the attribute, which is left uninitialized. */
+void *
+nl_msg_push_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
+{
+    size_t total_size = NLA_HDRLEN + size;
+    struct nlattr* nla = nl_msg_push_uninit(msg, total_size);
+    assert(NLA_ALIGN(total_size) <= UINT16_MAX);
+    nla->nla_len = total_size;
+    nla->nla_type = type;
+    return nla + 1;
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the 'size' bytes of
+ * 'data' as its payload, to the head end of 'msg', reallocating and copying
+ * its data if necessary.  Returns a pointer to the first byte of data in the
+ * attribute, which is left uninitialized. */
+void
+nl_msg_push_unspec(struct ofpbuf *msg, uint16_t type,
+                  const void *data, size_t size)
+{
+    memcpy(nl_msg_push_unspec_uninit(msg, type, size), data, size);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and no payload to 'msg'.
+ * (Some Netlink protocols use the presence or absence of an attribute as a
+ * Boolean flag.) */
+void
+nl_msg_push_flag(struct ofpbuf *msg, uint16_t type)
+{
+    nl_msg_push_unspec(msg, type, NULL, 0);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 8-bit 'value'
+ * to 'msg'. */
+void
+nl_msg_push_u8(struct ofpbuf *msg, uint16_t type, uint8_t value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 16-bit host
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_push_u16(struct ofpbuf *msg, uint16_t type, uint16_t value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 32-bit host
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_push_u32(struct ofpbuf *msg, uint16_t type, uint32_t value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 64-bit host
+ * byte order 'value' to 'msg'. */
+void
+nl_msg_push_u64(struct ofpbuf *msg, uint16_t type, uint64_t value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 16-bit
+ * network byte order 'value' to 'msg'. */
+void
+nl_msg_push_be16(struct ofpbuf *msg, uint16_t type, ovs_be16 value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 32-bit
+ * network byte order 'value' to 'msg'. */
+void
+nl_msg_push_be32(struct ofpbuf *msg, uint16_t type, ovs_be32 value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given 64-bit
+ * network byte order 'value' to 'msg'. */
+void
+nl_msg_push_be64(struct ofpbuf *msg, uint16_t type, ovs_be64 value)
+{
+    nl_msg_push_unspec(msg, type, &value, sizeof value);
+}
+
+/* Prepends a Netlink attribute of the given 'type' and the given
+ * null-terminated string 'value' to 'msg'. */
+void
+nl_msg_push_string(struct ofpbuf *msg, uint16_t type, const char *value)
+{
+    nl_msg_push_unspec(msg, type, value, strlen(value) + 1);
 }
 
 /* Adds the header for nested Netlink attributes to 'msg', with the specified
