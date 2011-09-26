@@ -37,7 +37,8 @@ files are:
     etc_xensource_bugtool_network-status_openvswitch.xml
 
         xen-bugtool extension to collect networking information relevant to
-        Open vSwitch. Runs
+        Open vSwitch. Runs usr_share_openvswitch_scripts_xen-bugtool-cfm-show,
+        usr_share_openvswitch_scripts_xen-bugtool-lcap-show, and
         usr_share_openvswitch_scripts_xen-bugtool-tc-class-show.
 
     etc_xensource_bugtool_kernel-info_openvswitch.xml
@@ -79,6 +80,18 @@ files are:
 
         Template for Open vSwitch's /etc/sysconfig/openvswitch
         configuration file.
+
+    usr_share_openvswitch_scripts_ovs-bugtool-cfm-show
+
+        Script to dump detailed CFM information for all enabled
+        interfaces. Intended to be run by xen-bugtool via
+        etc_xensource_bugtool_network-status_openvswitch.xml.
+
+    usr_share_openvswitch_scripts_ovs-bugtool-lacp-show
+
+        Script to dump detailed LACP information for all enabled
+        ports. Intended to be run by xen-bugtool via
+        etc_xensource_bugtool_network-status_openvswitch.xml.
 
     usr_share_openvswitch_scripts_xen-bugtool-tc-class-show
 

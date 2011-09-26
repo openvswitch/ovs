@@ -6,4 +6,6 @@ usr/bin/ovs-parse-leaks
 usr/bin/ovs-pki
 usr/bin/ovsdb-client
 usr/sbin/ovs-bugtool
+usr/share/openvswitch/scripts/ovs-bugtool-cfm-show
+usr/share/openvswitch/scripts/ovs-bugtool-lacp-show
 usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
