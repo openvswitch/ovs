@@ -40,6 +40,7 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
+root_prefix = ''                # Prefix for absolute file names, for testing.
 s_log = logging.getLogger("ovs-xapi-sync")
 vsctl = "/usr/bin/ovs-vsctl"
 session = None
@@ -59,9 +60,9 @@ def init_session():
     try:
         session = XenAPI.xapi_local()
         session.xenapi.login_with_password("", "")
-    except:
+    except XenAPI.Failure, e:
         session = None
-        s_log.warning("Couldn't login to XAPI")
+        s_log.warning("Couldn't login to XAPI (%s)" % e)
         return False
 
     return True
@@ -218,8 +219,10 @@ def usage():
     print "usage: %s [OPTIONS] DATABASE" % sys.argv[0]
     print "where DATABASE is a socket on which ovsdb-server is listening."
     ovs.daemon.usage()
-    print "Other options:"
-    print "  -h, --help               display this help message"
+    print """\
+Other options:
+    --root-prefix=DIR   Use DIR as alternate root directory (for testing).
+    -h, --help               display this help message"""
     sys.exit(0)
 
 
@@ -232,16 +235,21 @@ def handler(signum, _):
 def main(argv):
     global force_run
 
-    l_handler = logging.handlers.RotatingFileHandler(
+    s_log.addHandler(logging.StreamHandler())
+    try:
+        l_handler = logging.handlers.RotatingFileHandler(
             "/var/log/openvswitch/ovs-xapi-sync.log")
-    l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-    l_handler.setFormatter(l_formatter)
-    s_log.addHandler(l_handler)
+        l_formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
+        l_handler.setFormatter(l_formatter)
+        s_log.addHandler(l_handler)
+    except IOError, e:
+        logging.basicConfig()
+        s_log.warn("failed to open logfile (%s)" % e)
     s_log.setLevel(logging.INFO)
 
     try:
         options, args = getopt.gnu_getopt(
-            argv[1:], 'h', ['help'] + ovs.daemon.LONG_OPTIONS)
+            argv[1:], 'h', ['help', 'root-prefix='] + ovs.daemon.LONG_OPTIONS)
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
@@ -249,6 +257,9 @@ def main(argv):
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
+        elif key == '--root-prefix':
+            global root_prefix
+            root_prefix = value
         elif not ovs.daemon.parse_opt(key, value):
             sys.stderr.write("%s: unhandled option %s\n"
                              % (ovs.util.PROGRAM_NAME, key))
@@ -269,7 +280,8 @@ def main(argv):
 
     # This daemon is usually started before XAPI, but to complete our
     # tasks, we need it.  Wait here until it's up.
-    while not os.path.exists("/var/run/xapi_init_complete.cookie"):
+    cookie_file = root_prefix + "/var/run/xapi_init_complete.cookie"
+    while not os.path.exists(cookie_file):
         time.sleep(1)
 
     signal.signal(signal.SIGHUP, handler)

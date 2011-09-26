@@ -52,6 +52,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-idl.at \
 	tests/ovs-vsctl.at \
 	tests/ovs-monitor-ipsec.at \
+	tests/ovs-xapi-sync.at \
 	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
@@ -335,7 +336,8 @@ EXTRA_DIST += \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
 	tests/test-ovsdb.py \
-	tests/test-reconnect.py
+	tests/test-reconnect.py \
+	tests/MockXenAPI.py
 
 if HAVE_OPENSSL
 TESTPKI_FILES = \
