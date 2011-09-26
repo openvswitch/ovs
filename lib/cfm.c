@@ -220,7 +220,8 @@ lookup_remote_mp(const struct cfm *cfm, uint64_t mpid)
 void
 cfm_init(void)
 {
-    unixctl_command_register("cfm/show", "interface", cfm_unixctl_show, NULL);
+    unixctl_command_register("cfm/show", "[interface]", cfm_unixctl_show,
+                             NULL);
 }
 
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
@@ -517,36 +518,49 @@ cfm_find(const char *name)
 }
 
 static void
+cfm_print_details(struct ds *ds, const struct cfm *cfm)
+{
+    struct remote_mp *rmp;
+
+    ds_put_format(ds, "---- %s ----\n", cfm->name);
+    ds_put_format(ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
+                  cfm->fault ? " fault" : "",
+                  cfm->unexpected_recv ? " unexpected_recv" : "");
+
+    ds_put_format(ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
+    ds_put_format(ds, "\tnext CCM tx: %lldms\n",
+                  timer_msecs_until_expired(&cfm->tx_timer));
+    ds_put_format(ds, "\tnext fault check: %lldms\n",
+                  timer_msecs_until_expired(&cfm->fault_timer));
+
+    ds_put_cstr(ds, "\n");
+    HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
+        ds_put_format(ds, "Remote MPID %"PRIu64":%s\n",
+                      rmp->mpid,
+                      rmp->rdi ? " rdi" : "");
+        ds_put_format(ds, "\trecv since check: %s",
+                      rmp->recv ? "true" : "false");
+    }
+}
+
+static void
 cfm_unixctl_show(struct unixctl_conn *conn,
                  const char *args, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct cfm *cfm;
-    struct remote_mp *rmp;
 
-    cfm = cfm_find(args);
-    if (!cfm) {
-        unixctl_command_reply(conn, 501, "no such CFM object");
-        return;
-    }
-
-    ds_put_format(&ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
-                  cfm->fault ? " fault" : "",
-                  cfm->unexpected_recv ? " unexpected_recv" : "");
-
-    ds_put_format(&ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
-    ds_put_format(&ds, "\tnext CCM tx: %lldms\n",
-                  timer_msecs_until_expired(&cfm->tx_timer));
-    ds_put_format(&ds, "\tnext fault check: %lldms\n",
-                  timer_msecs_until_expired(&cfm->fault_timer));
-
-    ds_put_cstr(&ds, "\n");
-    HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-        ds_put_format(&ds, "Remote MPID %"PRIu64":%s\n",
-                      rmp->mpid,
-                      rmp->rdi ? " rdi" : "");
-        ds_put_format(&ds, "\trecv since check: %s",
-                      rmp->recv ? "true" : "false");
+    if (strlen(args)) {
+        cfm = cfm_find(args);
+        if (!cfm) {
+            unixctl_command_reply(conn, 501, "no such CFM object");
+            return;
+        }
+        cfm_print_details(&ds, cfm);
+    } else {
+        HMAP_FOR_EACH (cfm, hmap_node, &all_cfms) {
+            cfm_print_details(&ds, cfm);
+        }
     }
 
     unixctl_command_reply(conn, 200, ds_cstr(&ds));

@@ -5,7 +5,9 @@ Post-v1.2.0
         NXM fields.
       - Added an OpenFlow extension for flexible learning.
     - ovs-appctl:
-      - New "version" command to determine version of running daemon
+      - New "version" command to determine version of running daemon.
+      - If no argument is provided for "cfm/show", displays detailed
+        information about all interfaces with CFM enabled.
     - ovs-vswitchd:
       - The software switch now supports 255 OpenFlow tables, instead
         of just one.  By default, only table 0 is consulted, but the
