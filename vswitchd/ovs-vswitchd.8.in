@@ -183,12 +183,14 @@ status of \fIslave\fR changes.
 Returns the hash value which would be used for \fImac\fR with \fIvlan\fR
 and \fIbasis\fR if specified.
 .
-.IP "\fBlacp/show\fR \fIport\fR"
+.IP "\fBlacp/show\fR [\fIport\fR]"
 Lists all of the LACP related information about the given \fIport\fR:
 active or passive, aggregation key, system id, and system priority.  Also
 lists information about each slave: whether it is enabled or disabled,
 whether it is attached or detached, port id and priority, actor
-information, and partner information.
+information, and partner information.  If \fIport\fR is not specified,
+then displays detailed information about all interfaces with CFM
+enabled.
 .
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man

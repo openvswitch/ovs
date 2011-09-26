@@ -187,7 +187,7 @@ parse_lacp_packet(const struct ofpbuf *b)
 void
 lacp_init(void)
 {
-    unixctl_command_register("lacp/show", "port", lacp_unixctl_show, NULL);
+    unixctl_command_register("lacp/show", "[port]", lacp_unixctl_show, NULL);
 }
 
 /* Creates a LACP object. */
@@ -757,53 +757,43 @@ ds_put_lacp_state(struct ds *ds, uint8_t state)
 }
 
 static void
-lacp_unixctl_show(struct unixctl_conn *conn,
-                  const char *args, void *aux OVS_UNUSED)
+lacp_print_details(struct ds *ds, struct lacp *lacp)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    struct lacp *lacp;
     struct slave *slave;
 
-    lacp = lacp_find(args);
-    if (!lacp) {
-        unixctl_command_reply(conn, 501, "no such lacp object");
-        return;
-    }
-
-    ds_put_format(&ds, "lacp: %s\n", lacp->name);
-
-    ds_put_format(&ds, "\tstatus: %s", lacp->active ? "active" : "passive");
+    ds_put_format(ds, "---- %s ----\n", lacp->name);
+    ds_put_format(ds, "\tstatus: %s", lacp->active ? "active" : "passive");
     if (lacp->heartbeat) {
-        ds_put_cstr(&ds, " heartbeat");
+        ds_put_cstr(ds, " heartbeat");
     }
     if (lacp->negotiated) {
-        ds_put_cstr(&ds, " negotiated");
+        ds_put_cstr(ds, " negotiated");
     }
-    ds_put_cstr(&ds, "\n");
+    ds_put_cstr(ds, "\n");
 
-    ds_put_format(&ds, "\tsys_id: " ETH_ADDR_FMT "\n", ETH_ADDR_ARGS(lacp->sys_id));
-    ds_put_format(&ds, "\tsys_priority: %u\n", lacp->sys_priority);
-    ds_put_cstr(&ds, "\taggregation key: ");
+    ds_put_format(ds, "\tsys_id: " ETH_ADDR_FMT "\n", ETH_ADDR_ARGS(lacp->sys_id));
+    ds_put_format(ds, "\tsys_priority: %u\n", lacp->sys_priority);
+    ds_put_cstr(ds, "\taggregation key: ");
     if (lacp->key_slave) {
-        ds_put_format(&ds, "%u", lacp->key_slave->port_id);
+        ds_put_format(ds, "%u", lacp->key_slave->port_id);
     } else {
-        ds_put_cstr(&ds, "none");
+        ds_put_cstr(ds, "none");
     }
-    ds_put_cstr(&ds, "\n");
+    ds_put_cstr(ds, "\n");
 
-    ds_put_cstr(&ds, "\tlacp_time: ");
+    ds_put_cstr(ds, "\tlacp_time: ");
     switch (lacp->lacp_time) {
     case LACP_TIME_FAST:
-        ds_put_cstr(&ds, "fast\n");
+        ds_put_cstr(ds, "fast\n");
         break;
     case LACP_TIME_SLOW:
-        ds_put_cstr(&ds, "slow\n");
+        ds_put_cstr(ds, "slow\n");
         break;
     case LACP_TIME_CUSTOM:
-        ds_put_format(&ds, "custom (%lld)\n", lacp->custom_time);
+        ds_put_format(ds, "custom (%lld)\n", lacp->custom_time);
         break;
     default:
-        ds_put_cstr(&ds, "unknown\n");
+        ds_put_cstr(ds, "unknown\n");
     }
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
@@ -825,38 +815,59 @@ lacp_unixctl_show(struct unixctl_conn *conn,
             NOT_REACHED();
         }
 
-        ds_put_format(&ds, "\nslave: %s: %s %s\n", slave->name, status,
+        ds_put_format(ds, "\nslave: %s: %s %s\n", slave->name, status,
                       slave->attached ? "attached" : "detached");
-        ds_put_format(&ds, "\tport_id: %u\n", slave->port_id);
-        ds_put_format(&ds, "\tport_priority: %u\n", slave->port_priority);
+        ds_put_format(ds, "\tport_id: %u\n", slave->port_id);
+        ds_put_format(ds, "\tport_priority: %u\n", slave->port_priority);
 
-        ds_put_format(&ds, "\n\tactor sys_id: " ETH_ADDR_FMT "\n",
+        ds_put_format(ds, "\n\tactor sys_id: " ETH_ADDR_FMT "\n",
                       ETH_ADDR_ARGS(actor.sys_id));
-        ds_put_format(&ds, "\tactor sys_priority: %u\n",
+        ds_put_format(ds, "\tactor sys_priority: %u\n",
                       ntohs(actor.sys_priority));
-        ds_put_format(&ds, "\tactor port_id: %u\n",
+        ds_put_format(ds, "\tactor port_id: %u\n",
                       ntohs(actor.port_id));
-        ds_put_format(&ds, "\tactor port_priority: %u\n",
+        ds_put_format(ds, "\tactor port_priority: %u\n",
                       ntohs(actor.port_priority));
-        ds_put_format(&ds, "\tactor key: %u\n",
+        ds_put_format(ds, "\tactor key: %u\n",
                       ntohs(actor.key));
-        ds_put_cstr(&ds, "\tactor state: ");
-        ds_put_lacp_state(&ds, actor.state);
-        ds_put_cstr(&ds, "\n\n");
+        ds_put_cstr(ds, "\tactor state: ");
+        ds_put_lacp_state(ds, actor.state);
+        ds_put_cstr(ds, "\n\n");
 
-        ds_put_format(&ds, "\tpartner sys_id: " ETH_ADDR_FMT "\n",
+        ds_put_format(ds, "\tpartner sys_id: " ETH_ADDR_FMT "\n",
                       ETH_ADDR_ARGS(slave->partner.sys_id));
-        ds_put_format(&ds, "\tpartner sys_priority: %u\n",
+        ds_put_format(ds, "\tpartner sys_priority: %u\n",
                       ntohs(slave->partner.sys_priority));
-        ds_put_format(&ds, "\tpartner port_id: %u\n",
+        ds_put_format(ds, "\tpartner port_id: %u\n",
                       ntohs(slave->partner.port_id));
-        ds_put_format(&ds, "\tpartner port_priority: %u\n",
+        ds_put_format(ds, "\tpartner port_priority: %u\n",
                       ntohs(slave->partner.port_priority));
-        ds_put_format(&ds, "\tpartner key: %u\n",
+        ds_put_format(ds, "\tpartner key: %u\n",
                       ntohs(slave->partner.key));
-        ds_put_cstr(&ds, "\tpartner state: ");
-        ds_put_lacp_state(&ds, slave->partner.state);
-        ds_put_cstr(&ds, "\n");
+        ds_put_cstr(ds, "\tpartner state: ");
+        ds_put_lacp_state(ds, slave->partner.state);
+        ds_put_cstr(ds, "\n");
+    }
+}
+
+static void
+lacp_unixctl_show(struct unixctl_conn *conn,
+                  const char *args, void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct lacp *lacp;
+
+    if (strlen(args)) {
+        lacp = lacp_find(args);
+        if (!lacp) {
+            unixctl_command_reply(conn, 501, "no such lacp object");
+            return;
+        }
+        lacp_print_details(&ds, lacp);
+    } else {
+        LIST_FOR_EACH (lacp, node, &all_lacps) {
+            lacp_print_details(&ds, lacp);
+        }
     }
 
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
