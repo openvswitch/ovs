@@ -48,6 +48,7 @@ COVERAGE_DEFINE(unixctl_received);
 COVERAGE_DEFINE(unixctl_replied);
 
 struct unixctl_command {
+    const char *args;
     unixctl_cb_func *cb;
     void *aux;
 };
@@ -85,23 +86,18 @@ unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
              void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    struct shash_node *node;
-    struct svec names;
-    const char *name;
+    const struct shash_node **nodes = shash_sort(&commands);
     size_t i;
 
     ds_put_cstr(&ds, "The available commands are:\n");
 
-    svec_init(&names);
-    SHASH_FOR_EACH (node, &commands) {
-        svec_add(&names, node->name);
+    for (i = 0; i < shash_count(&commands); i++) {
+        const struct shash_node *node = nodes[i];
+        const struct unixctl_command *command = node->data;
+        
+        ds_put_format(&ds, "  %-23s%s\n", node->name, command->args);
     }
-    svec_sort(&names);
-
-    SVEC_FOR_EACH (i, name, &names) {
-        ds_put_format(&ds, "\t%s\n", name);
-    }
-    svec_destroy(&names);
+    free(nodes);
 
     unixctl_command_reply(conn, 214, ds_cstr(&ds));
     ds_destroy(&ds);
@@ -115,13 +111,15 @@ unixctl_version(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 }
 
 void
-unixctl_command_register(const char *name, unixctl_cb_func *cb, void *aux)
+unixctl_command_register(const char *name, const char *args,
+        unixctl_cb_func *cb, void *aux)
 {
     struct unixctl_command *command;
 
     assert(!shash_find_data(&commands, name)
            || shash_find_data(&commands, name) == cb);
     command = xmalloc(sizeof *command);
+    command->args = args;
     command->cb = cb;
     command->aux = aux;
     shash_add(&commands, name, command);
@@ -212,8 +210,8 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
         return 0;
     }
 
-    unixctl_command_register("help", unixctl_help, NULL);
-    unixctl_command_register("version", unixctl_version, NULL);
+    unixctl_command_register("help", "", unixctl_help, NULL);
+    unixctl_command_register("version", "", unixctl_version, NULL);
 
     server = xmalloc(sizeof *server);
     list_init(&server->conns);

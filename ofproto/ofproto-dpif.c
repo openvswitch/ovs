@@ -4687,11 +4687,13 @@ ofproto_dpif_unixctl_init(void)
     }
     registered = true;
 
-    unixctl_command_register("ofproto/trace", ofproto_unixctl_trace, NULL);
-    unixctl_command_register("fdb/show", ofproto_unixctl_fdb_show, NULL);
-
-    unixctl_command_register("ofproto/clog", ofproto_dpif_clog, NULL);
-    unixctl_command_register("ofproto/unclog", ofproto_dpif_unclog, NULL);
+    unixctl_command_register("ofproto/trace",
+                      "bridge {tun_id in_port packet | odp_flow [-generate]}",
+                      ofproto_unixctl_trace, NULL);
+    unixctl_command_register("fdb/show", "bridge", ofproto_unixctl_fdb_show,
+                             NULL); 
+    unixctl_command_register("ofproto/clog", "", ofproto_dpif_clog, NULL);
+    unixctl_command_register("ofproto/unclog", "", ofproto_dpif_unclog, NULL);
 }
 
 const struct ofproto_class ofproto_dpif_class = {

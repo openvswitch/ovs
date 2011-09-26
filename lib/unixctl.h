@@ -41,7 +41,7 @@ const char *unixctl_client_target(const struct unixctl_client *);
 struct unixctl_conn;
 typedef void unixctl_cb_func(struct unixctl_conn *,
                              const char *args, void *aux);
-void unixctl_command_register(const char *name,
+void unixctl_command_register(const char *name, const char *args,
                               unixctl_cb_func *cb, void *aux);
 void unixctl_command_reply(struct unixctl_conn *, int code,
                            const char *body);

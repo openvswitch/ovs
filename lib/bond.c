@@ -1205,16 +1205,18 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
 void
 bond_init(void)
 {
-    unixctl_command_register("bond/list", bond_unixctl_list, NULL);
-    unixctl_command_register("bond/show", bond_unixctl_show, NULL);
-    unixctl_command_register("bond/migrate", bond_unixctl_migrate, NULL);
-    unixctl_command_register("bond/set-active-slave",
+    unixctl_command_register("bond/list", "", bond_unixctl_list, NULL);
+    unixctl_command_register("bond/show", "port", bond_unixctl_show, NULL);
+    unixctl_command_register("bond/migrate", "port hash slave",
+                             bond_unixctl_migrate, NULL);
+    unixctl_command_register("bond/set-active-slave", "port slave",
                              bond_unixctl_set_active_slave, NULL);
-    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave,
-                             NULL);
-    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave,
-                             NULL);
-    unixctl_command_register("bond/hash", bond_unixctl_hash, NULL);
+    unixctl_command_register("bond/enable-slave", "port slave",
+                             bond_unixctl_enable_slave, NULL);
+    unixctl_command_register("bond/disable-slave", "port slave",
+                             bond_unixctl_disable_slave, NULL);
+    unixctl_command_register("bond/hash", "mac [vlan] [basis]",
+                             bond_unixctl_hash, NULL);
 }
 
 static void

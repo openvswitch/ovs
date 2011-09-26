@@ -187,7 +187,7 @@ parse_lacp_packet(const struct ofpbuf *b)
 void
 lacp_init(void)
 {
-    unixctl_command_register("lacp/show", lacp_unixctl_show, NULL);
+    unixctl_command_register("lacp/show", "port", lacp_unixctl_show, NULL);
 }
 
 /* Creates a LACP object. */

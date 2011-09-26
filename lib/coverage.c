@@ -58,7 +58,7 @@ coverage_unixctl_log(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 void
 coverage_init(void)
 {
-    unixctl_command_register("coverage/log", coverage_unixctl_log, NULL);
+    unixctl_command_register("coverage/log", "", coverage_unixctl_log, NULL);
 }
 
 /* Sorts coverage counters in descending order by count, within equal counts

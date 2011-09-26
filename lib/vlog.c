@@ -464,9 +464,11 @@ vlog_init(void)
         VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
     }
 
-    unixctl_command_register("vlog/set", vlog_unixctl_set, NULL);
-    unixctl_command_register("vlog/list", vlog_unixctl_list, NULL);
-    unixctl_command_register("vlog/reopen", vlog_unixctl_reopen, NULL);
+    unixctl_command_register("vlog/set",
+                   "{module[:facility[:level]] | PATTERN:facility:pattern}",
+                   vlog_unixctl_set, NULL);
+    unixctl_command_register("vlog/list", "", vlog_unixctl_list, NULL);
+    unixctl_command_register("vlog/reopen", "", vlog_unixctl_reopen, NULL);
 }
 
 /* Closes the logging subsystem. */

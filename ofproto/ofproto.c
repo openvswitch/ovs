@@ -3115,5 +3115,5 @@ ofproto_unixctl_init(void)
     }
     registered = true;
 
-    unixctl_command_register("ofproto/list", ofproto_unixctl_list, NULL);
+    unixctl_command_register("ofproto/list", "", ofproto_unixctl_list, NULL);
 }

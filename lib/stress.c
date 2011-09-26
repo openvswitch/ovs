@@ -215,8 +215,10 @@ stress_unixctl_set(struct unixctl_conn *conn, const char *args_,
 void
 stress_init_command(void)
 {
-    unixctl_command_register("stress/list", stress_unixctl_list, NULL);
-    unixctl_command_register("stress/set", stress_unixctl_set, NULL);
-    unixctl_command_register("stress/enable", stress_unixctl_enable, NULL);
-    unixctl_command_register("stress/disable", stress_unixctl_disable, NULL);
+    unixctl_command_register("stress/list", "", stress_unixctl_list, NULL);
+    unixctl_command_register("stress/set", "option period [random | periodic]",
+                             stress_unixctl_set, NULL);
+    unixctl_command_register("stress/enable", "", stress_unixctl_enable, NULL);
+    unixctl_command_register("stress/disable", "",
+                             stress_unixctl_disable, NULL);
 }

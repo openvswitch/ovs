@@ -272,11 +272,11 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
 
     /* Register unixctl commands. */
-    unixctl_command_register("qos/show", qos_unixctl_show, NULL);
-    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
-                             NULL);
-    unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
-                             NULL);
+    unixctl_command_register("qos/show", "interface", qos_unixctl_show, NULL);
+    unixctl_command_register("bridge/dump-flows", "bridge",
+                             bridge_unixctl_dump_flows, NULL);
+    unixctl_command_register("bridge/reconnect", "[bridge]",
+                             bridge_unixctl_reconnect, NULL);
     lacp_init();
     bond_init();
     cfm_init();

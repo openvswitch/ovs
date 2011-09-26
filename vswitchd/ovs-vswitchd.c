@@ -80,7 +80,7 @@ main(int argc, char *argv[])
     if (retval) {
         exit(EXIT_FAILURE);
     }
-    unixctl_command_register("exit", ovs_vswitchd_exit, &exiting);
+    unixctl_command_register("exit", "", ovs_vswitchd_exit, &exiting);
 
     bridge_init(remote);
     free(remote);

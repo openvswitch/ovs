@@ -220,7 +220,7 @@ lookup_remote_mp(const struct cfm *cfm, uint64_t mpid)
 void
 cfm_init(void)
 {
-    unixctl_command_register("cfm/show", cfm_unixctl_show, NULL);
+    unixctl_command_register("cfm/show", "interface", cfm_unixctl_show, NULL);
 }
 
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by

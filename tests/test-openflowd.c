@@ -109,7 +109,7 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    unixctl_command_register("exit", test_openflowd_exit, &exiting);
+    unixctl_command_register("exit", "", test_openflowd_exit, &exiting);
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
