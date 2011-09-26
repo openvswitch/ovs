@@ -267,7 +267,7 @@ class Parser(object):
                 self.__parser_input(0)
                 return
             elif significand <= 2 ** 63:
-                while pow10 > 0 and significand <= 2 * 63:
+                while pow10 > 0 and significand <= 2 ** 63:
                     significand *= 10
                     pow10 -= 1
                 while pow10 < 0 and significand % 10 == 0:
