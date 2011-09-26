@@ -212,7 +212,7 @@ usage: %s [OPTIONS] COMMAND [ARG...]
   request REMOTE METHOD PARAMS   send request, print reply
   notify REMOTE METHOD PARAMS  send notification and exit
 """ % (ovs.util.PROGRAM_NAME, ovs.util.PROGRAM_NAME))
-    ovs.stream.usage("JSON-RPC", True, True)
+    sys.stdout.write(ovs.stream.usage("JSON-RPC") + "\n")
     ovs.daemon.usage()
     sys.stdout.write("""
 Other options:

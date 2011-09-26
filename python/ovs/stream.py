@@ -302,14 +302,10 @@ class PassiveStream(object):
         self.socket.close()
 
 
-def usage(name, active, passive):
-    print
-    if active:
-        print("Active %s connection methods:" % name)
-        print("  unix:FILE               "
-               "Unix domain socket named FILE")
+def usage(name):
+    return """
+Active %s connection methods:
+  unix:FILE               Unix domain socket named FILE
 
-    if passive:
-        print("Passive %s connection methods:" % name)
-        print("  punix:FILE              "
-              "listen on Unix domain socket FILE")
+Passive %s connection methods:
+  punix:FILE              Listen on Unix domain socket FILE""" % (name, name)
