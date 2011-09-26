@@ -90,6 +90,18 @@ void nl_msg_push_string(struct ofpbuf *, uint16_t type, const char *value);
 
 /* Separating buffers into individual messages. */
 struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);
+
+/* Sizes of various attribute types, in bytes, including the attribute header
+ * and padding. */
+#define NL_ATTR_SIZE(PAYLOAD_SIZE) (NLA_HDRLEN + NLA_ALIGN(PAYLOAD_SIZE))
+#define NL_A_U8_SIZE   NL_ATTR_SIZE(sizeof(uint8_t))
+#define NL_A_U16_SIZE  NL_ATTR_SIZE(sizeof(uint16_t))
+#define NL_A_U32_SIZE  NL_ATTR_SIZE(sizeof(uint32_t))
+#define NL_A_U64_SIZE  NL_ATTR_SIZE(sizeof(uint64_t))
+#define NL_A_BE16_SIZE NL_ATTR_SIZE(sizeof(ovs_be16))
+#define NL_A_BE32_SIZE NL_ATTR_SIZE(sizeof(ovs_be32))
+#define NL_A_BE64_SIZE NL_ATTR_SIZE(sizeof(ovs_be64))
+#define NL_A_FLAG_SIZE NL_ATTR_SIZE(0)
 
 /* Netlink attribute types. */
 enum nl_attr_type
