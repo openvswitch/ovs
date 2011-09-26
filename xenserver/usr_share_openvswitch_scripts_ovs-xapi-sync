@@ -22,7 +22,7 @@
 #   - Set the "iface-id" key in the Interface table.
 #   - Set the fail-mode on internal bridges.
 
-import getopt
+import argparse
 import logging
 import logging.handlers
 import os
@@ -215,24 +215,13 @@ def prune_schema(schema):
     schema.tables = new_tables
 
 
-def usage():
-    print "usage: %s [OPTIONS] DATABASE" % sys.argv[0]
-    print "where DATABASE is a socket on which ovsdb-server is listening."
-    ovs.daemon.usage()
-    print """\
-Other options:
-    --root-prefix=DIR   Use DIR as alternate root directory (for testing).
-    -h, --help               display this help message"""
-    sys.exit(0)
-
-
 def handler(signum, _):
     global force_run
     if (signum == signal.SIGHUP):
         force_run = True
 
 
-def main(argv):
+def main():
     global force_run
 
     s_log.addHandler(logging.StreamHandler())
@@ -247,30 +236,21 @@ def main(argv):
         s_log.warn("failed to open logfile (%s)" % e)
     s_log.setLevel(logging.INFO)
 
-    try:
-        options, args = getopt.gnu_getopt(
-            argv[1:], 'h', ['help', 'root-prefix='] + ovs.daemon.LONG_OPTIONS)
-    except getopt.GetoptError, geo:
-        sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("database", metavar="DATABASE",
+            help="A socket on which ovsdb-server is listening.")
+    parser.add_argument("--root-prefix", metavar="DIR",
+                        help="Use DIR as alternate root directory"
+                        " (for testing).")
 
-    for key, value in options:
-        if key in ['-h', '--help']:
-            usage()
-        elif key == '--root-prefix':
-            global root_prefix
-            root_prefix = value
-        elif not ovs.daemon.parse_opt(key, value):
-            sys.stderr.write("%s: unhandled option %s\n"
-                             % (ovs.util.PROGRAM_NAME, key))
-            sys.exit(1)
+    ovs.daemon.add_args(parser)
+    args = parser.parse_args()
+    ovs.daemon.handle_args(args)
 
-    if len(args) != 1:
-        sys.stderr.write("%s: exactly one nonoption argument is required "
-                         "(use --help for help)\n" % ovs.util.PROGRAM_NAME)
-        sys.exit(1)
+    global root_prefix
+    root_prefix = args.root_prefix
 
-    remote = args[0]
+    remote = args.database
     schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
     prune_schema(schema)
@@ -376,7 +356,7 @@ def main(argv):
 
 if __name__ == '__main__':
     try:
-        main(sys.argv)
+        main()
     except SystemExit:
         # Let system.exit() calls complete normally
         raise

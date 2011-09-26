@@ -487,26 +487,43 @@ def _check_already_running():
         _fatal("%s: pidfile check failed (%s), aborting"
                % (_pidfile, os.strerror(pid)))
 
-# XXX Python's getopt does not support options with optional arguments, so we
-# have to separate --pidfile (with no argument) from --pidfile-name (with an
-# argument).  Need to write our own getopt I guess.
-LONG_OPTIONS = ["detach", "no-chdir", "pidfile", "pidfile-name=",
-                "overwrite-pidfile", "monitor"]
+
+def add_args(parser):
+    """Populates 'parser', an ArgumentParser allocated using the argparse
+    module, with the command line arguments required by the daemon module."""
+
+    pidfile = make_pidfile_name(None)
+
+    group = parser.add_argument_group(title="Daemon Options")
+    group.add_argument("--detach", action="store_true",
+            help="Run in background as a daemon.")
+    group.add_argument("--no-chdir", action="store_true",
+            help="Do not chdir to '/'.")
+    group.add_argument("--monitor", action="store_true",
+            help="Monitor %s process." % ovs.util.PROGRAM_NAME)
+    group.add_argument("--pidfile", nargs="?", default=pidfile,
+            help="Create pidfile (default %s)." % pidfile)
+    group.add_argument("--overwrite-pidfile", action="store_true",
+            help="With --pidfile, start even if already running.")
 
 
-def parse_opt(option, arg):
-    if option == '--detach':
+def handle_args(args):
+    """Handles daemon module settings in 'args'.  'args' is an object
+    containing values parsed by the parse_args() method of ArgumentParser.  The
+    parent ArgumentParser should have been prepared by add_args() before
+    calling parse_args()."""
+
+    if args.detach:
         set_detach()
-    elif option == '--no-chdir':
+
+    if args.no_chdir:
         set_no_chdir()
-    elif option == '--pidfile':
-        set_pidfile(None)
-    elif option == '--pidfile-name':
-        set_pidfile(arg)
-    elif option == '--overwrite-pidfile':
+
+    if args.pidfile:
+        set_pidfile(args.pidfile)
+
+    if args.overwrite_pidfile:
         ignore_existing_pidfile()
-    elif option == '--monitor':
+
+    if args.monitor:
         set_monitor()
-    else:
-        return False
-    return True

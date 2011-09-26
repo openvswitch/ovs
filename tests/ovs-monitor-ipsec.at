@@ -47,7 +47,7 @@ OVS_VSCTL_SETUP
 ###
 AT_CHECK(
   [$PYTHON $top_srcdir/debian/ovs-monitor-ipsec "--root-prefix=`pwd`" \
-        "--pidfile-name=`pwd`/ovs-monitor-ipsec.pid" \
+        "--pidfile=`pwd`/ovs-monitor-ipsec.pid" \
         unix:socket 2>log 3>actions &])
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([actions])

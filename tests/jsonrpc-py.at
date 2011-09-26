@@ -2,7 +2,7 @@ AT_BANNER([JSON-RPC - Python])
 
 AT_SETUP([JSON-RPC request and successful reply - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile=`pwd`/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
@@ -14,7 +14,7 @@ AT_CLEANUP
 
 AT_SETUP([JSON-RPC request and error reply - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile=`pwd`/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
@@ -26,7 +26,7 @@ AT_CLEANUP
 
 AT_SETUP([JSON-RPC notification - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile-name=$PWD/pid listen punix:socket])
+AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --detach --pidfile=`pwd`/pid listen punix:socket])
 AT_CHECK([test -s pid])
 # When a daemon dies it deletes its pidfile, so make a copy.
 AT_CHECK([cp pid pid2])

@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 import errno
-import getopt
 import os
 import sys
 
@@ -158,28 +158,35 @@ def do_notify(name, method, params_string):
 
 
 def main(argv):
-    try:
-        options, args = getopt.gnu_getopt(
-            argv[1:], 'h', ["help"] + ovs.daemon.LONG_OPTIONS)
-    except getopt.GetoptError, geo:
-        sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
-        sys.exit(1)
 
-    for key, value in options:
-        if key in ['-h', '--help']:
-            usage()
-        elif not ovs.daemon.parse_opt(key, value):
-            sys.stderr.write("%s: unhandled option %s\n"
-                             % (ovs.util.PROGRAM_NAME, key))
-            sys.exit(1)
+    parser = argparse.ArgumentParser(
+            description="JSON-RPC test utility for Python.",
+            formatter_class=argparse.RawDescriptionHelpFormatter)
 
     commands = {"listen": (do_listen, 1),
                 "request": (do_request, 3),
                 "notify": (do_notify, 3),
-                "help": (usage, (0,))}
+                "help": (parser.print_help, (0,))}
 
-    command_name = args[0]
-    args = args[1:]
+    group_description = """\
+listen LOCAL             listen for connections on LOCAL
+request REMOTE METHOD PARAMS   send request, print reply
+notify REMOTE METHOD PARAMS  send notification and exit
+""" + ovs.stream.usage("JSON-RPC")
+
+    group = parser.add_argument_group(title="Commands",
+                                      description=group_description)
+    group.add_argument('command', metavar="COMMAND", nargs=1,
+                        choices=commands, help="Command to use.")
+    group.add_argument('command_args', metavar="ARG", nargs='*',
+                       help="Arguments to COMMAND.")
+
+    ovs.daemon.add_args(parser)
+    args = parser.parse_args()
+    ovs.daemon.handle_args(args)
+
+    command_name = args.command[0]
+    args = args.command_args
     if not command_name in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
                          "(use --help for help)\n" % (argv[0], command_name))
@@ -202,23 +209,6 @@ def main(argv):
         assert False
 
     func(*args)
-
-
-def usage():
-    sys.stdout.write("""\
-%s: JSON-RPC test utility for Python
-usage: %s [OPTIONS] COMMAND [ARG...]
-  listen LOCAL             listen for connections on LOCAL
-  request REMOTE METHOD PARAMS   send request, print reply
-  notify REMOTE METHOD PARAMS  send notification and exit
-""" % (ovs.util.PROGRAM_NAME, ovs.util.PROGRAM_NAME))
-    sys.stdout.write(ovs.stream.usage("JSON-RPC") + "\n")
-    ovs.daemon.usage()
-    sys.stdout.write("""
-Other options:
-  -h, --help              display this help message
-""")
-    sys.exit(0)
 
 
 if __name__ == '__main__':

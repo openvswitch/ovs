@@ -6,7 +6,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid& echo $! > expected], [0])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid& echo $! > expected], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
 AT_CHECK(
   [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -25,7 +25,7 @@ AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --monitor& echo $! > parent], [0])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --monitor& echo $! > parent], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
@@ -68,7 +68,7 @@ AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --monitor& echo $! > parent], [0])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --monitor& echo $! > parent], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
@@ -110,7 +110,7 @@ AT_CAPTURE_FILE([pid])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
@@ -133,7 +133,7 @@ AT_CAPTURE_FILE([init])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/daemon --detach --monitor], [0])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/daemon --detach --monitor], [0])
 AT_CHECK([test -s daemon])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is a running process,
@@ -172,7 +172,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach startup errors - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach --bail], [1], [], [stderr])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --bail], [1], [], [stderr])
 AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
@@ -181,7 +181,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach --monitor startup errors - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
-AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach --monitor --bail], [1], [], [stderr])
+AT_CHECK([$PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --monitor --bail], [1], [], [stderr])
 AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
@@ -192,7 +192,7 @@ AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
-AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
@@ -212,7 +212,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile-name=$PWD/pid --detach], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
