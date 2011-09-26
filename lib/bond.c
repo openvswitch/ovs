@@ -1178,7 +1178,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
             return;
         }
     } else {
-        vlan = OFP_VLAN_NONE;
+        vlan = 0;
     }
 
     if (basis_s) {

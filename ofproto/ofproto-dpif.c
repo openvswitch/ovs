@@ -2281,12 +2281,6 @@ facet_install(struct ofproto_dpif *p, struct facet *facet, bool zero_stats)
     }
 }
 
-static int
-vlan_tci_to_openflow_vlan(ovs_be16 vlan_tci)
-{
-    return vlan_tci != htons(0) ? vlan_tci_to_vid(vlan_tci) : OFP_VLAN_NONE;
-}
-
 static void
 facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
 {
@@ -2331,7 +2325,7 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
             port = get_odp_port(ofproto, nl_attr_get_u32(a));
             if (port && port->bundle && port->bundle->bond) {
                 bond_account(port->bundle->bond, &facet->flow,
-                             vlan_tci_to_openflow_vlan(vlan_tci), n_bytes);
+                             vlan_tci_to_vid(vlan_tci), n_bytes);
             }
             break;
 
@@ -3220,7 +3214,7 @@ xlate_autopath(struct action_xlate_ctx *ctx,
     } else if (port->bundle->bond) {
         /* Autopath does not support VLAN hashing. */
         struct ofport_dpif *slave = bond_choose_output_slave(
-            port->bundle->bond, &ctx->flow, OFP_VLAN_NONE, &ctx->tags);
+            port->bundle->bond, &ctx->flow, 0, &ctx->tags);
         if (slave) {
             ofp_port = slave->up.ofp_port;
         }
@@ -3490,7 +3484,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
 struct dst {
     struct ofport_dpif *port;
-    uint16_t vlan;
+    uint16_t vid;
 };
 
 struct dst_set {
@@ -3509,15 +3503,15 @@ static bool
 set_dst(struct action_xlate_ctx *ctx, struct dst *dst,
         const struct ofbundle *in_bundle, const struct ofbundle *out_bundle)
 {
-    dst->vlan = (out_bundle->vlan >= 0 ? OFP_VLAN_NONE
-                 : in_bundle->vlan >= 0 ? in_bundle->vlan
-                 : ctx->flow.vlan_tci == 0 ? OFP_VLAN_NONE
-                 : vlan_tci_to_vid(ctx->flow.vlan_tci));
+    dst->vid = (out_bundle->vlan >= 0 ? 0
+                : in_bundle->vlan >= 0 ? in_bundle->vlan
+                : ctx->flow.vlan_tci == 0 ? 0
+                : vlan_tci_to_vid(ctx->flow.vlan_tci));
 
     dst->port = (!out_bundle->bond
                  ? ofbundle_get_a_port(out_bundle)
                  : bond_choose_output_slave(out_bundle->bond, &ctx->flow,
-                                            dst->vlan, &ctx->tags));
+                                            dst->vid, &ctx->tags));
 
     return dst->port != NULL;
 }
@@ -3569,7 +3563,7 @@ dst_is_duplicate(const struct dst_set *set, const struct dst *test)
 {
     size_t i;
     for (i = 0; i < set->n; i++) {
-        if (set->dsts[i].vlan == test->vlan
+        if (set->dsts[i].vid == test->vid
             && set->dsts[i].port == test->port) {
             return true;
         }
@@ -3678,7 +3672,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
-    int flow_vlan;
+    uint16_t flow_vid;
     size_t i;
 
     mirrors = in_bundle->src_mirrors;
@@ -3690,11 +3684,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
         return;
     }
 
-    flow_vlan = vlan_tci_to_vid(ctx->flow.vlan_tci);
-    if (flow_vlan == 0) {
-        flow_vlan = OFP_VLAN_NONE;
-    }
-
+    flow_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     while (mirrors) {
         struct ofmirror *m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
         if (vlan_is_mirrored(m, vlan)) {
@@ -3713,7 +3703,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
                         && set_dst(ctx, &dst, in_bundle, bundle))
                     {
                         if (bundle->vlan < 0) {
-                            dst.vlan = m->out_vlan;
+                            dst.vid = m->out_vlan;
                         }
                         if (dst_is_duplicate(set, &dst)) {
                             continue;
@@ -3725,7 +3715,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
                          * tagging tags place. This is necessary because
                          * dst->vlan is the final vlan, after removing implicit
                          * tags. */
-                        if (bundle == in_bundle && dst.vlan == flow_vlan) {
+                        if (bundle == in_bundle && dst.vid == flow_vid) {
                             /* Don't send out input port on same VLAN. */
                             continue;
                         }
@@ -3743,7 +3733,7 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
                 const struct ofbundle *in_bundle,
                 const struct ofbundle *out_bundle)
 {
-    uint16_t initial_vlan, cur_vlan;
+    uint16_t initial_vid, cur_vid;
     const struct dst *dst;
     struct dst_set set;
 
@@ -3757,12 +3747,9 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
 
     /* Output all the packets we can without having to change the VLAN. */
     commit_odp_actions(ctx);
-    initial_vlan = vlan_tci_to_vid(ctx->flow.vlan_tci);
-    if (initial_vlan == 0) {
-        initial_vlan = OFP_VLAN_NONE;
-    }
+    initial_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vlan != initial_vlan) {
+        if (dst->vid != initial_vid) {
             continue;
         }
         nl_msg_put_u32(ctx->odp_actions,
@@ -3770,22 +3757,22 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
     }
 
     /* Then output the rest. */
-    cur_vlan = initial_vlan;
+    cur_vid = initial_vid;
     for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vlan == initial_vlan) {
+        if (dst->vid == initial_vid) {
             continue;
         }
-        if (dst->vlan != cur_vlan) {
+        if (dst->vid != cur_vid) {
             ovs_be16 tci;
 
-            tci = htons(dst->vlan == OFP_VLAN_NONE ? 0 : dst->vlan);
+            tci = htons(dst->vid);
             tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
             if (tci) {
                 tci |= htons(VLAN_CFI);
             }
             commit_vlan_tci(ctx, tci);
 
-            cur_vlan = dst->vlan;
+            cur_vid = dst->vid;
         }
         nl_msg_put_u32(ctx->odp_actions,
                        OVS_ACTION_ATTR_OUTPUT, dst->port->odp_port);
