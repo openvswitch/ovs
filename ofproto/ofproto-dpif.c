@@ -2886,6 +2886,9 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
     /* First look for a related facet.  If we find one, account it to that. */
     facet = facet_lookup_valid(ofproto, flow);
     if (facet && facet->rule == rule) {
+        if (!facet->may_install) {
+            facet_make_actions(ofproto, facet, packet);
+        }
         facet_execute(ofproto, facet, packet);
         return 0;
     }
