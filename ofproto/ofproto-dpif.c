@@ -266,6 +266,11 @@ static struct facet *facet_lookup_valid(struct ofproto_dpif *,
                                         const struct flow *);
 static bool facet_revalidate(struct ofproto_dpif *, struct facet *);
 
+static bool execute_controller_action(struct ofproto_dpif *,
+                                      const struct flow *,
+                                      const struct nlattr *odp_actions,
+                                      size_t actions_len,
+                                      struct ofpbuf *packet);
 static void facet_execute(struct ofproto_dpif *, struct facet *,
                           struct ofpbuf *packet);
 
@@ -2213,6 +2218,33 @@ facet_free(struct facet *facet)
     free(facet);
 }
 
+static bool
+execute_controller_action(struct ofproto_dpif *ofproto,
+                          const struct flow *flow,
+                          const struct nlattr *odp_actions, size_t actions_len,
+                          struct ofpbuf *packet)
+{
+    if (actions_len
+        && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
+        && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
+        /* As an optimization, avoid a round-trip from userspace to kernel to
+         * userspace.  This also avoids possibly filling up kernel packet
+         * buffers along the way.
+         *
+         * This optimization will not accidentally catch sFlow
+         * OVS_ACTION_ATTR_USERSPACE actions, since those are encapsulated
+         * inside OVS_ACTION_ATTR_SAMPLE. */
+        const struct nlattr *nla;
+
+        nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
+        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow,
+                              false);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 /* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
  * 'packet', which arrived on 'in_port'.
  *
@@ -2226,22 +2258,8 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     struct ofpbuf key;
     int error;
 
-    if (actions_len == 0) {
-        return true;
-    } else if (odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
-               && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
-        /* As an optimization, avoid a round-trip from userspace to kernel to
-         * userspace.  This also avoids possibly filling up kernel packet
-         * buffers along the way.
-         *
-         * This optimization will not accidentally catch sFlow
-         * OVS_ACTION_ATTR_USERSPACE actions, since those are encapsulated
-         * inside OVS_ACTION_ATTR_SAMPLE. */
-        const struct nlattr *nla;
-
-        nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
-        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow,
-                              false);
+    if (execute_controller_action(ofproto, flow, odp_actions, actions_len,
+                                  packet)) {
         return true;
     }
 
