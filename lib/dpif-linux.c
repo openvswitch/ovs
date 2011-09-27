@@ -123,7 +123,7 @@ static int dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *,
                                        const struct ofpbuf *);
 static void dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *,
                                       struct ofpbuf *);
-static int dpif_linux_flow_transact(const struct dpif_linux_flow *request,
+static int dpif_linux_flow_transact(struct dpif_linux_flow *request,
                                     struct dpif_linux_flow *reply,
                                     struct ofpbuf **bufp);
 static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
@@ -1642,7 +1642,7 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
     struct ovs_header *ovs_header;
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_flow_family,
-                          NLM_F_REQUEST | NLM_F_ECHO | flow->nlmsg_flags,
+                          NLM_F_REQUEST | flow->nlmsg_flags,
                           flow->cmd, 1);
 
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
@@ -1681,13 +1681,17 @@ dpif_linux_flow_init(struct dpif_linux_flow *flow)
  * stored in '*reply' and '*bufp'.  The caller must free '*bufp' when the reply
  * is no longer needed ('reply' will contain pointers into '*bufp'). */
 static int
-dpif_linux_flow_transact(const struct dpif_linux_flow *request,
+dpif_linux_flow_transact(struct dpif_linux_flow *request,
                          struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {
     struct ofpbuf *request_buf;
     int error;
 
     assert((reply != NULL) == (bufp != NULL));
+
+    if (reply) {
+        request->nlmsg_flags |= NLM_F_ECHO;
+    }
 
     request_buf = ofpbuf_new(1024);
     dpif_linux_flow_to_ofpbuf(request, request_buf);
