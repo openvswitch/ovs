@@ -346,7 +346,7 @@ vlog_set_levels_from_string(const char *s_)
 
         facility = strtok_r(NULL, ":", &save_ptr);
 
-        if (!facility || !strcmp(facility, "ANY")) {
+        if (!facility || !strcasecmp(facility, "ANY")) {
             e_facility = VLF_ANY_FACILITY;
         } else {
             e_facility = vlog_get_facility_val(facility);
@@ -357,14 +357,14 @@ vlog_set_levels_from_string(const char *s_)
             }
         }
 
-        if (!strcmp(module, "PATTERN")) {
+        if (!strcasecmp(module, "PATTERN")) {
             vlog_set_pattern(e_facility, save_ptr);
             break;
         } else {
             char *level;
             enum vlog_level e_level;
 
-            if (!strcmp(module, "ANY")) {
+            if (!strcasecmp(module, "ANY")) {
                 e_module = NULL;
             } else {
                 e_module = vlog_module_from_name(module);
