@@ -1783,12 +1783,6 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
         return;
     }
 
-    /* Check with in-band control to see if this packet should be sent
-     * to the local port regardless of the flow table. */
-    if (connmgr_msg_in_hook(ofproto->up.connmgr, &flow, upcall->packet)) {
-        send_packet(ofproto, OVSP_LOCAL, upcall->packet);
-    }
-
     facet = facet_lookup_valid(ofproto, &flow);
     if (!facet) {
         struct rule_dpif *rule = rule_dpif_lookup(ofproto, &flow, 0);
@@ -3672,6 +3666,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     COVERAGE_INC(ofproto_dpif_xlate);
 
     ctx->odp_actions = ofpbuf_new(512);
+    ofpbuf_reserve(ctx->odp_actions, NL_A_U32_SIZE);
     ctx->tags = 0;
     ctx->may_set_up_flow = true;
     ctx->has_learn = false;
@@ -3686,18 +3681,23 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
+        return ctx->odp_actions;
     } else {
         add_sflow_action(ctx);
         do_xlate_actions(in, n_in, ctx);
         fix_sflow_action(ctx);
-    }
 
-    /* Check with in-band control to see if we're allowed to set up this
-     * flow. */
-    if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
-                                 ctx->odp_actions->data,
-                                 ctx->odp_actions->size)) {
-        ctx->may_set_up_flow = false;
+        if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
+                                     ctx->odp_actions->data,
+                                     ctx->odp_actions->size)) {
+            ctx->may_set_up_flow = false;
+            if (ctx->packet
+                && connmgr_msg_in_hook(ctx->ofproto->up.connmgr, &ctx->flow,
+                                       ctx->packet)) {
+                nl_msg_push_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT,
+                                OVSP_LOCAL);
+            }
+        }
     }
 
     return ctx->odp_actions;
