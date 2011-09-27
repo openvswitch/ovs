@@ -414,6 +414,7 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
     char *name, *value;
     size_t learn_ofs;
     size_t len;
+    int error;
 
     struct nx_action_learn *learn;
     struct cls_rule rule;
@@ -497,7 +498,6 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
             }
         }
     }
-    free(orig);
 
     put_u16(b, 0);
 
@@ -508,6 +508,14 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
 
     learn = ofpbuf_at_assert(b, learn_ofs, sizeof *learn);
     learn->len = htons(b->size - learn_ofs);
+
+    /* In theory the above should have caught any errors, but... */
+    error = learn_check(learn, flow);
+    if (error) {
+        char *msg = ofputil_error_to_string(error);
+        ovs_fatal(0, "%s: %s", orig, msg);
+    }
+    free(orig);
 }
 
 void
