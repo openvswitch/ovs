@@ -345,6 +345,7 @@ exit 0
 /usr/share/openvswitch/python/ovs/stream.py
 /usr/share/openvswitch/python/ovs/timeval.py
 /usr/share/openvswitch/python/ovs/util.py
+/usr/share/openvswitch/python/ovs/vlog.py
 /usr/share/openvswitch/python/uuid.py
 /usr/share/openvswitch/python/argparse.py
 /usr/share/openvswitch/scripts/ovs-xapi-sync
