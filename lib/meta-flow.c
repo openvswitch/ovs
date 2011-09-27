@@ -268,7 +268,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ICMP_CODE, "icmp_code", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_TP_SRC,
+        MFM_NONE, FWW_TP_DST,
         MFS_DECIMAL,
         MFP_ICMP_ANY,
         NXM_OF_ICMP_CODE,
