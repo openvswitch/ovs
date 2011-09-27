@@ -2547,7 +2547,8 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow)
     /* The facet we found might not be valid, since we could be in need of
      * revalidation.  If it is not valid, don't return it. */
     if (facet
-        && ofproto->need_revalidate
+        && (ofproto->need_revalidate
+            || tag_set_intersects(&ofproto->revalidate_set, facet->tags))
         && !facet_revalidate(ofproto, facet)) {
         COVERAGE_INC(facet_invalidated);
         return NULL;
