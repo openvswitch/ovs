@@ -256,8 +256,7 @@ struct facet {
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
 };
 
-static struct facet *facet_create(struct rule_dpif *, const struct flow *,
-                                  const struct ofpbuf *packet);
+static struct facet *facet_create(struct rule_dpif *, const struct flow *);
 static void facet_remove(struct ofproto_dpif *, struct facet *);
 static void facet_free(struct facet *);
 
@@ -1834,7 +1833,8 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
             return;
         }
 
-        facet = facet_create(rule, &flow, upcall->packet);
+        facet = facet_create(rule, &flow);
+        facet_make_actions(ofproto, facet, upcall->packet);
     } else if (!facet->may_install) {
         /* The facet is not installable, that is, we need to process every
          * packet, so process the current packet's actions into 'facet'. */
@@ -2184,15 +2184,16 @@ rule_expire(struct rule_dpif *rule)
 
 /* Facets. */
 
-/* Creates and returns a new facet owned by 'rule', given a 'flow' and an
- * example 'packet' within that flow.
+/* Creates and returns a new facet owned by 'rule', given a 'flow'.
  *
  * The caller must already have determined that no facet with an identical
  * 'flow' exists in 'ofproto' and that 'flow' is the best match for 'rule' in
- * the ofproto's classifier table. */
+ * the ofproto's classifier table.
+ *
+ * The facet will initially have no ODP actions.  The caller should fix that
+ * by calling facet_make_actions(). */
 static struct facet *
-facet_create(struct rule_dpif *rule, const struct flow *flow,
-             const struct ofpbuf *packet)
+facet_create(struct rule_dpif *rule, const struct flow *flow)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct facet *facet;
@@ -2205,8 +2206,6 @@ facet_create(struct rule_dpif *rule, const struct flow *flow,
     facet->flow = *flow;
     netflow_flow_init(&facet->nf_flow);
     netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, facet->used);
-
-    facet_make_actions(ofproto, facet, packet);
 
     return facet;
 }
@@ -2922,7 +2921,8 @@ rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
     /* Otherwise, if 'rule' is in fact the correct rule for 'packet', then
      * create a new facet for it and use that. */
     if (rule_dpif_lookup(ofproto, flow, 0) == rule) {
-        facet = facet_create(rule, flow, packet);
+        facet = facet_create(rule, flow);
+        facet_make_actions(ofproto, facet, packet);
         facet_execute(ofproto, facet, packet);
         facet_install(ofproto, facet, true);
         return 0;
