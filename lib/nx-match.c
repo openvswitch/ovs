@@ -225,12 +225,15 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
         }
 
         if (error) {
+            char *msg = ofputil_error_to_string(error);
             VLOG_DBG_RL(&rl, "bad nxm_entry with vendor=%"PRIu32", "
                         "field=%"PRIu32", hasmask=%"PRIu32", type=%"PRIu32" "
-                        "(error %x)",
+                        "(%s)",
                         NXM_VENDOR(header), NXM_FIELD(header),
                         NXM_HASMASK(header), NXM_TYPE(header),
-                        error);
+                        msg);
+            free(msg);
+
             return error;
         }
 
