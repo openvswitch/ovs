@@ -784,7 +784,8 @@ enum nx_mp_algorithm {
  *    actions=load:A->NXM_NX_REG1[16..31]".
  *
  *    In syntax accepted by ovs-ofctl, this action is: learn(in_port=99,
- *    NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
+ *    NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],
+ *    load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
  *
  * 2. Output to input port based on the source MAC and VLAN VID, with lookup
  *    into NXM_NX_REG1[16:31]:
