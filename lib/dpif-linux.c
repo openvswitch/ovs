@@ -687,30 +687,43 @@ dpif_linux_flow_get(const struct dpif *dpif_,
     return error;
 }
 
+static void
+dpif_linux_init_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
+                         const struct nlattr *key, size_t key_len,
+                         const struct nlattr *actions, size_t actions_len,
+                         struct dpif_linux_flow *request)
+{
+    static struct nlattr dummy_action;
+
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    dpif_linux_flow_init(request);
+    request->cmd = (flags & DPIF_FP_CREATE
+                    ? OVS_FLOW_CMD_NEW : OVS_FLOW_CMD_SET);
+    request->dp_ifindex = dpif->dp_ifindex;
+    request->key = key;
+    request->key_len = key_len;
+    /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
+    request->actions = actions ? actions : &dummy_action;
+    request->actions_len = actions_len;
+    if (flags & DPIF_FP_ZERO_STATS) {
+        request->clear = true;
+    }
+    request->nlmsg_flags = flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
+}
+
 static int
 dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
                     const struct nlattr *key, size_t key_len,
                     const struct nlattr *actions, size_t actions_len,
                     struct dpif_flow_stats *stats)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow request, reply;
-    struct nlattr dummy_action;
     struct ofpbuf *buf;
     int error;
 
-    dpif_linux_flow_init(&request);
-    request.cmd = flags & DPIF_FP_CREATE ? OVS_FLOW_CMD_NEW : OVS_FLOW_CMD_SET;
-    request.dp_ifindex = dpif->dp_ifindex;
-    request.key = key;
-    request.key_len = key_len;
-    /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
-    request.actions = actions ? actions : &dummy_action;
-    request.actions_len = actions_len;
-    if (flags & DPIF_FP_ZERO_STATS) {
-        request.clear = true;
-    }
-    request.nlmsg_flags = flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
+    dpif_linux_init_flow_put(dpif_, flags, key, key_len, actions, actions_len,
+                             &request);
     error = dpif_linux_flow_transact(&request,
                                      stats ? &reply : NULL,
                                      stats ? &buf : NULL);
@@ -837,14 +850,14 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
     return error;
 }
 
-static int
-dpif_linux_execute__(int dp_ifindex, const struct nlattr *key, size_t key_len,
-                     const struct nlattr *actions, size_t actions_len,
-                     const struct ofpbuf *packet)
+static struct ofpbuf *
+dpif_linux_encode_execute(int dp_ifindex,
+                          const struct nlattr *key, size_t key_len,
+                          const struct nlattr *actions, size_t actions_len,
+                          const struct ofpbuf *packet)
 {
     struct ovs_header *execute;
     struct ofpbuf *buf;
-    int error;
 
     buf = ofpbuf_new(128 + actions_len + packet->size);
 
@@ -858,8 +871,23 @@ dpif_linux_execute__(int dp_ifindex, const struct nlattr *key, size_t key_len,
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, key, key_len);
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS, actions, actions_len);
 
-    error = nl_sock_transact(genl_sock, buf, NULL);
-    ofpbuf_delete(buf);
+    return buf;
+}
+
+static int
+dpif_linux_execute__(int dp_ifindex, const struct nlattr *key, size_t key_len,
+                     const struct nlattr *actions, size_t actions_len,
+                     const struct ofpbuf *packet)
+{
+    struct ofpbuf *request;
+    int error;
+
+    request = dpif_linux_encode_execute(dp_ifindex,
+                                        key, key_len, actions, actions_len,
+                                        packet);
+    error = nl_sock_transact(genl_sock, request, NULL);
+    ofpbuf_delete(request);
+
     return error;
 }
 
@@ -873,6 +901,82 @@ dpif_linux_execute(struct dpif *dpif_,
 
     return dpif_linux_execute__(dpif->dp_ifindex, key, key_len,
                                 actions, actions_len, packet);
+}
+
+static void
+dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct nl_transaction **txnsp;
+    struct nl_transaction *txns;
+    size_t i;
+
+    txns = xmalloc(n_ops * sizeof *txns);
+    for (i = 0; i < n_ops; i++) {
+        struct nl_transaction *txn = &txns[i];
+        union dpif_op *op = ops[i];
+
+        if (op->type == DPIF_OP_FLOW_PUT) {
+            struct dpif_flow_put *put = &op->flow_put;
+            struct dpif_linux_flow request;
+
+            dpif_linux_init_flow_put(dpif_, put->flags, put->key, put->key_len,
+                                     put->actions, put->actions_len,
+                                     &request);
+            if (put->stats) {
+                request.nlmsg_flags |= NLM_F_ECHO;
+            }
+            txn->request = ofpbuf_new(1024);
+            dpif_linux_flow_to_ofpbuf(&request, txn->request);
+        } else if (op->type == DPIF_OP_EXECUTE) {
+            struct dpif_execute *execute = &op->execute;
+
+            txn->request = dpif_linux_encode_execute(
+                dpif->dp_ifindex, execute->key, execute->key_len,
+                execute->actions, execute->actions_len, execute->packet);
+        } else {
+            NOT_REACHED();
+        }
+    }
+
+    txnsp = xmalloc(n_ops * sizeof *txnsp);
+    for (i = 0; i < n_ops; i++) {
+        txnsp[i] = &txns[i];
+    }
+
+    nl_sock_transact_multiple(genl_sock, txnsp, n_ops);
+
+    free(txnsp);
+
+    for (i = 0; i < n_ops; i++) {
+        struct nl_transaction *txn = &txns[i];
+        union dpif_op *op = ops[i];
+
+        if (op->type == DPIF_OP_FLOW_PUT) {
+            struct dpif_flow_put *put = &op->flow_put;
+            int error = txn->error;
+
+            if (!error && put->stats) {
+                struct dpif_linux_flow reply;
+
+                error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+                if (!error) {
+                    dpif_linux_flow_get_stats(&reply, put->stats);
+                }
+            }
+            put->error = error;
+        } else if (op->type == DPIF_OP_EXECUTE) {
+            struct dpif_execute *execute = &op->execute;
+
+            execute->error = txn->error;
+        } else {
+            NOT_REACHED();
+        }
+
+        ofpbuf_delete(txn->request);
+        ofpbuf_delete(txn->reply);
+    }
+    free(txns);
 }
 
 static int
@@ -1123,6 +1227,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_flow_dump_next,
     dpif_linux_flow_dump_done,
     dpif_linux_execute,
+    dpif_linux_operate,
     dpif_linux_recv_get_mask,
     dpif_linux_recv_set_mask,
     dpif_linux_queue_to_priority,
@@ -1725,4 +1830,3 @@ dpif_linux_flow_get_stats(const struct dpif_linux_flow *flow,
     stats->used = flow->used ? get_32aligned_u64(flow->used) : 0;
     stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
 }
-

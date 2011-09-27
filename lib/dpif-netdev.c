@@ -1356,6 +1356,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_dump_next,
     dpif_netdev_flow_dump_done,
     dpif_netdev_execute,
+    NULL,                       /* operate */
     dpif_netdev_recv_get_mask,
     dpif_netdev_recv_set_mask,
     NULL,                       /* queue_to_priority */

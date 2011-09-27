@@ -303,6 +303,14 @@ struct dpif_class {
                    const struct nlattr *actions, size_t actions_len,
                    const struct ofpbuf *packet);
 
+    /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order
+     * in which they are specified, placing each operation's results in the
+     * "output" members documented in comments.
+     *
+     * This function is optional.  It is only worthwhile to implement it if
+     * 'dpif' can perform operations in batch faster than individually. */
+    void (*operate)(struct dpif *dpif, union dpif_op **ops, size_t n_ops);
+
     /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value
      * 2**X set in '*listen_mask' indicates that 'dpif' will receive messages
      * of the type (from "enum dpif_upcall_type") with value X when its 'recv'

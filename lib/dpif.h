@@ -71,6 +71,8 @@ int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 
 int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
 int dpif_set_drop_frags(struct dpif *, bool drop_frags);
+
+/* Port operations. */
 
 int dpif_port_add(struct dpif *, struct netdev *, uint16_t *port_nop);
 int dpif_port_del(struct dpif *, uint16_t port_no);
@@ -118,6 +120,8 @@ int dpif_port_dump_done(struct dpif_port_dump *);
 
 int dpif_port_poll(const struct dpif *, char **devnamep);
 void dpif_port_poll_wait(const struct dpif *);
+
+/* Flow table operations. */
 
 struct dpif_flow_stats {
     uint64_t n_packets;
@@ -159,11 +163,63 @@ bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct nlattr **actions, size_t *actions_len,
                          const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
+
+/* Packet operations. */
 
 int dpif_execute(struct dpif *,
                  const struct nlattr *key, size_t key_len,
                  const struct nlattr *actions, size_t actions_len,
                  const struct ofpbuf *);
+
+/* Operation batching interface.
+ *
+ * Some datapaths are faster at performing N operations together than the same
+ * N operations individually, hence an interface for batching.
+ */
+
+enum dpif_op_type {
+    DPIF_OP_FLOW_PUT = 1,
+    DPIF_OP_EXECUTE
+};
+
+struct dpif_flow_put {
+    enum dpif_op_type type;         /* Always DPIF_OP_FLOW_PUT. */
+
+    /* Input. */
+    enum dpif_flow_put_flags flags; /* DPIF_FP_*. */
+    const struct nlattr *key;       /* Flow to put. */
+    size_t key_len;                 /* Length of 'key' in bytes. */
+    const struct nlattr *actions;   /* Actions to perform on flow. */
+    size_t actions_len;             /* Length of 'actions' in bytes. */
+
+    /* Output. */
+    struct dpif_flow_stats *stats;  /* Optional flow statistics. */
+    int error;                      /* 0 or positive errno value. */
+};
+
+struct dpif_execute {
+    enum dpif_op_type type;         /* Always DPIF_OP_EXECUTE. */
+
+    /* Input. */
+    const struct nlattr *key;       /* Partial flow key (only for metadata). */
+    size_t key_len;                 /* Length of 'key' in bytes. */
+    const struct nlattr *actions;   /* Actions to execute on packet. */
+    size_t actions_len;             /* Length of 'actions' in bytes. */
+    const struct ofpbuf *packet;    /* Packet to execute. */
+
+    /* Output. */
+    int error;                      /* 0 or positive errno value. */
+};
+
+union dpif_op {
+    enum dpif_op_type type;
+    struct dpif_flow_put flow_put;
+    struct dpif_execute execute;
+};
+
+void dpif_operate(struct dpif *, union dpif_op **ops, size_t n_ops);
+
+/* Upcalls. */
 
 enum dpif_upcall_type {
     DPIF_UC_MISS,               /* Miss in flow table. */
@@ -196,6 +252,8 @@ int dpif_recv_set_mask(struct dpif *, int listen_mask);
 int dpif_recv(struct dpif *, struct dpif_upcall *);
 void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);
+
+/* Miscellaneous. */
 
 void dpif_get_netflow_ids(const struct dpif *,
                           uint8_t *engine_type, uint8_t *engine_id);

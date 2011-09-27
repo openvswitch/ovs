@@ -988,6 +988,51 @@ dpif_execute(struct dpif *dpif,
     return error;
 }
 
+/* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order in
+ * which they are specified, placing each operation's results in the "output"
+ * members documented in comments.
+ *
+ * This function exists because some datapaths can perform batched operations
+ * faster than individual operations. */
+void
+dpif_operate(struct dpif *dpif, union dpif_op **ops, size_t n_ops)
+{
+    size_t i;
+
+    if (dpif->dpif_class->operate) {
+        dpif->dpif_class->operate(dpif, ops, n_ops);
+        return;
+    }
+
+    for (i = 0; i < n_ops; i++) {
+        union dpif_op *op = ops[i];
+        struct dpif_flow_put *put;
+        struct dpif_execute *execute;
+
+        switch (op->type) {
+        case DPIF_OP_FLOW_PUT:
+            put = &op->flow_put;
+            put->error = dpif_flow_put(dpif, put->flags,
+                                       put->key, put->key_len,
+                                       put->actions, put->actions_len,
+                                       put->stats);
+            break;
+
+        case DPIF_OP_EXECUTE:
+            execute = &op->execute;
+            execute->error = dpif_execute(dpif, execute->key, execute->key_len,
+                                          execute->actions,
+                                          execute->actions_len,
+                                          execute->packet);
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+    }
+}
+
+
 /* Returns a string that represents 'type', for use in log messages. */
 const char *
 dpif_upcall_type_to_string(enum dpif_upcall_type type)
