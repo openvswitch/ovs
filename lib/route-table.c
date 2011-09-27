@@ -188,6 +188,7 @@ route_table_unregister(void)
     register_count--;
 
     if (!register_count) {
+        nln_notifier_destroy(route_notifier);
         nln_destroy(nln);
         nln = NULL;
 
