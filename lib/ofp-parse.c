@@ -41,6 +41,28 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse);
 
+static uint8_t
+str_to_table_id(const char *str)
+{
+    int table_id;
+
+    if (!str_to_int(str, 10, &table_id) || table_id < 0 || table_id > 255) {
+        ovs_fatal(0, "invalid table \"%s\"", str);
+    }
+    return table_id;
+}
+
+static uint16_t
+str_to_u16(const char *str, const char *name)
+{
+    int value;
+
+    if (!str_to_int(str, 0, &value) || value < 0 || value > 65535) {
+        ovs_fatal(0, "invalid %s \"%s\"", name, str);
+    }
+    return value;
+}
+
 static uint32_t
 str_to_u32(const char *str)
 {
@@ -541,15 +563,15 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             }
 
             if (!strcmp(name, "table")) {
-                fm->table_id = atoi(value);
+                fm->table_id = str_to_table_id(value);
             } else if (!strcmp(name, "out_port")) {
                 fm->out_port = atoi(value);
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
-                fm->cr.priority = atoi(value);
+                fm->cr.priority = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "idle_timeout")) {
-                fm->idle_timeout = atoi(value);
+                fm->idle_timeout = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
-                fm->hard_timeout = atoi(value);
+                fm->hard_timeout = str_to_u16(value, name);
             } else if (fields & F_COOKIE && !strcmp(name, "cookie")) {
                 fm->cookie = htonll(str_to_u64(value));
             } else if (mf_from_name(name)) {
