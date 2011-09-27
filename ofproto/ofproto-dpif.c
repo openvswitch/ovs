@@ -1715,28 +1715,52 @@ port_is_lacp_current(const struct ofport *ofport_)
 
 /* Upcall handling. */
 
-/* Given 'upcall', of type DPIF_UC_ACTION or DPIF_UC_MISS, sends an
- * OFPT_PACKET_IN message to each OpenFlow controller as necessary according to
- * their individual configurations.
+/* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_NO_MATCH to each
+ * OpenFlow controller as necessary according to their individual
+ * configurations.
+ *
+ * If 'clone' is true, the caller retains ownership of 'packet'.  Otherwise,
+ * ownership is transferred to this function. */
+static void
+send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
+                    const struct flow *flow, bool clone)
+{
+    struct ofputil_packet_in pin;
+
+    pin.packet = packet;
+    pin.in_port = flow->in_port;
+    pin.reason = OFPR_NO_MATCH;
+    pin.buffer_id = 0;          /* not yet known */
+    pin.send_len = 0;           /* not used for flow table misses */
+    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
+                           clone ? NULL : packet);
+}
+
+/* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_ACTION to each
+ * OpenFlow controller as necessary according to their individual
+ * configurations.
+ *
+ * 'send_len' should be the number of bytes of 'packet' to send to the
+ * controller, as specified in the action that caused the packet to be sent.
  *
  * If 'clone' is true, the caller retains ownership of 'upcall->packet'.
  * Otherwise, ownership is transferred to this function. */
 static void
-send_packet_in(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall,
-               const struct flow *flow, bool clone)
+send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
+                      uint64_t userdata, const struct flow *flow, bool clone)
 {
     struct ofputil_packet_in pin;
     struct user_action_cookie cookie;
 
-    pin.packet = upcall->packet;
-    pin.in_port = flow->in_port;
-    pin.reason = upcall->type == DPIF_UC_MISS ? OFPR_NO_MATCH : OFPR_ACTION;
-    pin.buffer_id = 0;          /* not yet known */
+    memcpy(&cookie, &userdata, sizeof(cookie));
 
-    memcpy(&cookie, &upcall->userdata, sizeof(cookie));
+    pin.packet = packet;
+    pin.in_port = flow->in_port;
+    pin.reason = OFPR_ACTION;
+    pin.buffer_id = 0;          /* not yet known */
     pin.send_len = cookie.data;
     connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
-                           clone ? NULL : upcall->packet);
+                           clone ? NULL : packet);
 }
 
 static bool
@@ -1801,7 +1825,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
                              flow.in_port);
             }
 
-            send_packet_in(ofproto, upcall, &flow, false);
+            send_packet_in_miss(ofproto, upcall->packet, &flow, false);
             return;
         }
 
@@ -1823,7 +1847,7 @@ handle_miss_upcall(struct ofproto_dpif *ofproto, struct dpif_upcall *upcall)
          *
          * See the top-level comment in fail-open.c for more information.
          */
-        send_packet_in(ofproto, upcall, &flow, true);
+        send_packet_in_miss(ofproto, upcall->packet, &flow, true);
     }
 
     facet_execute(ofproto, facet, upcall->packet);
@@ -1850,7 +1874,8 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
     } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
         COVERAGE_INC(ofproto_dpif_ctlr_action);
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-        send_packet_in(ofproto, upcall, &flow, false);
+        send_packet_in_action(ofproto, upcall->packet, upcall->userdata,
+                              &flow, false);
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
     }
@@ -2205,31 +2230,19 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
         return true;
     } else if (odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
                && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
-        struct user_action_cookie cookie;
-        struct dpif_upcall upcall;
-        uint64_t cookie_u64;
+        /* As an optimization, avoid a round-trip from userspace to kernel to
+         * userspace.  This also avoids possibly filling up kernel packet
+         * buffers along the way.
+         *
+         * This optimization will not accidentally catch sFlow
+         * OVS_ACTION_ATTR_USERSPACE actions, since those are encapsulated
+         * inside OVS_ACTION_ATTR_SAMPLE. */
+        const struct nlattr *nla;
 
-        cookie_u64 = nl_attr_get_u64(nl_attr_find_nested(
-                                         odp_actions,
-                                         OVS_USERSPACE_ATTR_USERDATA));
-        memcpy(&cookie, &cookie_u64, sizeof cookie);
-        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
-            /* As an optimization, avoid a round-trip from userspace to kernel
-             * to userspace.  This also avoids possibly filling up kernel packet
-             * buffers along the way.
-             * This optimization does not work in case of sFlow is turned ON.
-             * Since first action would be sFlow SAMPLE action followed by
-             * Controller action. */
-
-            upcall.type = DPIF_UC_ACTION;
-            upcall.packet = packet;
-            upcall.key = NULL;
-            upcall.key_len = 0;
-            upcall.userdata = nl_attr_get_u64(odp_actions);
-
-            send_packet_in(ofproto, &upcall, flow, false);
-            return true;
-        }
+        nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
+        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow,
+                              false);
+        return true;
     }
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
