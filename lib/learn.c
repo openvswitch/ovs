@@ -160,7 +160,9 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
             int dst_ofs = ntohs(get_be16(&p));
             int error;
 
-            error = nxm_dst_check(dst_field, dst_ofs, n_bits, &rule.flow);
+            error = (dst_type == NX_LEARN_DST_LOAD
+                     ? nxm_dst_check(dst_field, dst_ofs, n_bits, &rule.flow)
+                     : nxm_src_check(dst_field, dst_ofs, n_bits, &rule.flow));
             if (error) {
                 return error;
             }
