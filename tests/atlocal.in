@@ -9,3 +9,12 @@ export PYTHONPATH
 
 PYTHONIOENCODING=utf_8
 export PYTHONIOENCODING
+
+if test $HAVE_PYTHON = yes; then
+    if python -m argparse 2>/dev/null; then
+        :
+    else
+        PYTHONPATH=$PYTHONPATH:$abs_top_srcdir/python/compat
+        export PYTHONPATH
+   fi
+fi
