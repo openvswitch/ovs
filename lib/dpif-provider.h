@@ -303,25 +303,6 @@ struct dpif_class {
      * called. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
-    /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.
-     * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
-     * the datapath does not support sFlow, as does a null pointer.
-     *
-     * '*probability' is expressed as the number of packets out of UINT_MAX to
-     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
-     * packet. */
-    int (*get_sflow_probability)(const struct dpif *dpif,
-                                 uint32_t *probability);
-
-    /* Sets 'dpif''s sFlow sampling probability to 'probability'.  Return value
-     * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
-     * does not support sFlow, as does a null pointer.
-     *
-     * 'probability' is expressed as the number of packets out of UINT_MAX to
-     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
-     * packet. */
-    int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
-
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
      * priority value for use in the OVS_ACTION_ATTR_SET_PRIORITY action in
      * '*priority'. */

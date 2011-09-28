@@ -34,6 +34,8 @@ struct vport;
 
 #define DP_MAX_PORTS 1024
 
+#define SAMPLE_ACTION_DEPTH 3
+
 /**
  * struct dp_stats_percpu - per-cpu packet processing statistics for a given
  * datapath.
@@ -68,9 +70,6 @@ struct dp_stats_percpu {
  * @port_list: List of all ports in @ports in arbitrary order.  RTNL required
  * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
- * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %OVS_PACKET_CMD_SAMPLE upcall, e.g. (@sflow_probability/UINT_MAX)
- * is the probability of sampling a given packet.
  *
  * Context: See the comment on locking at the top of datapath.c for additional
  * locking information.
@@ -91,9 +90,6 @@ struct datapath {
 
 	/* Stats. */
 	struct dp_stats_percpu __percpu *stats_percpu;
-
-	/* sFlow Sampling */
-	unsigned int sflow_probability;
 };
 
 /**
@@ -127,18 +123,13 @@ struct ovs_skb_cb {
  * struct dp_upcall - metadata to include with a packet to send to userspace
  * @cmd: One of %OVS_PACKET_CMD_*.
  * @key: Becomes %OVS_PACKET_ATTR_KEY.  Must be nonnull.
- * @userdata: Becomes %OVS_PACKET_ATTR_USERDATA if nonzero.
- * @sample_pool: Becomes %OVS_PACKET_ATTR_SAMPLE_POOL if nonzero.
- * @actions: Becomes %OVS_PACKET_ATTR_ACTIONS if nonnull.
- * @actions_len: Number of bytes in @actions.
-*/
+ * @userdata: Is passed to user-space as %OVS_PACKET_ATTR_USERDATA if @cmd is
+ * %OVS_PACKET_CMD_ACTION.
+ */
 struct dp_upcall_info {
 	u8 cmd;
 	const struct sw_flow_key *key;
 	u64 userdata;
-	u32 sample_pool;
-	const struct nlattr *actions;
-	u32 actions_len;
 };
 
 extern struct notifier_block dp_device_notifier;

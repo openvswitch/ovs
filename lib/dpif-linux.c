@@ -80,7 +80,6 @@ struct dpif_linux_dp {
     uint32_t upcall_pid;               /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
     enum ovs_frag_handling ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
-    const uint32_t *sampling;          /* OVS_DP_ATTR_SAMPLING. */
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
@@ -880,8 +879,7 @@ get_upcall_pid_flow(struct dpif_linux *dpif,
     const struct nlattr *nla;
     uint32_t port;
 
-    if (!(dpif->listen_mask &
-          ((1u << DPIF_UC_ACTION) | (1u << DPIF_UC_SAMPLE)))) {
+    if (!(dpif->listen_mask & (1u << DPIF_UC_ACTION))) {
         return 0;
     }
 
@@ -977,35 +975,6 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
 }
 
 static int
-dpif_linux_get_sflow_probability(const struct dpif *dpif_,
-                                 uint32_t *probability)
-{
-    struct dpif_linux_dp dp;
-    struct ofpbuf *buf;
-    int error;
-
-    error = dpif_linux_dp_get(dpif_, &dp, &buf);
-    if (!error) {
-        *probability = dp.sampling ? *dp.sampling : 0;
-        ofpbuf_delete(buf);
-    }
-    return error;
-}
-
-static int
-dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
-{
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_dp dp;
-
-    dpif_linux_dp_init(&dp);
-    dp.cmd = OVS_DP_CMD_SET;
-    dp.dp_ifindex = dpif->dp_ifindex;
-    dp.sampling = &probability;
-    return dpif_linux_dp_transact(&dp, NULL, NULL);
-}
-
-static int
 dpif_linux_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                              uint32_t queue_id, uint32_t *priority)
 {
@@ -1029,10 +998,6 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 
         /* OVS_PACKET_CMD_ACTION only. */
         [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
-
-        /* OVS_PACKET_CMD_SAMPLE only. */
-        [OVS_PACKET_ATTR_SAMPLE_POOL] = { .type = NL_A_U32, .optional = true },
-        [OVS_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
     };
 
     struct ovs_header *ovs_header;
@@ -1056,7 +1021,6 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 
     type = (genl->cmd == OVS_PACKET_CMD_MISS ? DPIF_UC_MISS
             : genl->cmd == OVS_PACKET_CMD_ACTION ? DPIF_UC_ACTION
-            : genl->cmd == OVS_PACKET_CMD_SAMPLE ? DPIF_UC_SAMPLE
             : -1);
     if (type < 0) {
         return EINVAL;
@@ -1072,14 +1036,6 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     upcall->userdata = (a[OVS_PACKET_ATTR_USERDATA]
                         ? nl_attr_get_u64(a[OVS_PACKET_ATTR_USERDATA])
                         : 0);
-    upcall->sample_pool = (a[OVS_PACKET_ATTR_SAMPLE_POOL]
-                        ? nl_attr_get_u32(a[OVS_PACKET_ATTR_SAMPLE_POOL])
-                           : 0);
-    if (a[OVS_PACKET_ATTR_ACTIONS]) {
-        upcall->actions = (void *) nl_attr_get(a[OVS_PACKET_ATTR_ACTIONS]);
-        upcall->actions_len = nl_attr_get_size(a[OVS_PACKET_ATTR_ACTIONS]);
-    }
-
     *dp_ifindex = ovs_header->dp_ifindex;
 
     return 0;
@@ -1199,8 +1155,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_execute,
     dpif_linux_recv_get_mask,
     dpif_linux_recv_set_mask,
-    dpif_linux_get_sflow_probability,
-    dpif_linux_set_sflow_probability,
     dpif_linux_queue_to_priority,
     dpif_linux_recv,
     dpif_linux_recv_wait,
@@ -1518,7 +1472,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
                                 .max_len = sizeof(struct ovs_dp_stats),
                                 .optional = true },
         [OVS_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
-        [OVS_DP_ATTR_SAMPLING] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_datapath_policy)];
@@ -1552,9 +1505,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
     if (a[OVS_DP_ATTR_IPV4_FRAGS]) {
         dp->ipv4_frags = nl_attr_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]);
     }
-    if (a[OVS_DP_ATTR_SAMPLING]) {
-        dp->sampling = nl_attr_get(a[OVS_DP_ATTR_SAMPLING]);
-    }
 
     return 0;
 }
@@ -1581,10 +1531,6 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
 
     if (dp->ipv4_frags) {
         nl_msg_put_u32(buf, OVS_DP_ATTR_IPV4_FRAGS, dp->ipv4_frags);
-    }
-
-    if (dp->sampling) {
-        nl_msg_put_u32(buf, OVS_DP_ATTR_SAMPLING, *dp->sampling);
     }
 }
 

@@ -155,7 +155,6 @@ int dpif_execute(struct dpif *,
 enum dpif_upcall_type {
     DPIF_UC_MISS,               /* Miss in flow table. */
     DPIF_UC_ACTION,             /* OVS_ACTION_ATTR_USERSPACE action. */
-    DPIF_UC_SAMPLE,             /* Packet sampling. */
     DPIF_N_UC_TYPES
 };
 
@@ -177,17 +176,10 @@ struct dpif_upcall {
 
     /* DPIF_UC_ACTION only. */
     uint64_t userdata;          /* Argument to OVS_ACTION_ATTR_USERSPACE. */
-
-    /* DPIF_UC_SAMPLE only. */
-    uint32_t sample_pool;       /* # of sampling candidate packets so far. */
-    struct nlattr *actions;     /* Associated flow actions. */
-    size_t actions_len;
 };
 
 int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
 int dpif_recv_set_mask(struct dpif *, int listen_mask);
-int dpif_get_sflow_probability(const struct dpif *, uint32_t *probability);
-int dpif_set_sflow_probability(struct dpif *, uint32_t probability);
 int dpif_recv(struct dpif *, struct dpif_upcall *);
 void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);

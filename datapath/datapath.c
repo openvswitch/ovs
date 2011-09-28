@@ -310,10 +310,6 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 			upcall.cmd = OVS_PACKET_CMD_MISS;
 			upcall.key = &key;
-			upcall.userdata = 0;
-			upcall.sample_pool = 0;
-			upcall.actions = NULL;
-			upcall.actions_len = 0;
 			dp_upcall(dp, skb, &upcall);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
 			goto out;
@@ -453,12 +449,8 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 		len = sizeof(struct ovs_header);
 		len += nla_total_size(skb->len);
 		len += nla_total_size(FLOW_BUFSIZE);
-		if (upcall_info->userdata)
+		if (upcall_info->cmd == OVS_PACKET_CMD_ACTION)
 			len += nla_total_size(8);
-		if (upcall_info->sample_pool)
-			len += nla_total_size(4);
-		if (upcall_info->actions_len)
-			len += nla_total_size(upcall_info->actions_len);
 
 		user_skb = genlmsg_new(len, GFP_ATOMIC);
 		if (!user_skb) {
@@ -473,18 +465,9 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 		flow_to_nlattrs(upcall_info->key, user_skb);
 		nla_nest_end(user_skb, nla);
 
-		if (upcall_info->userdata)
-			nla_put_u64(user_skb, OVS_PACKET_ATTR_USERDATA, upcall_info->userdata);
-		if (upcall_info->sample_pool)
-			nla_put_u32(user_skb, OVS_PACKET_ATTR_SAMPLE_POOL, upcall_info->sample_pool);
-		if (upcall_info->actions_len) {
-			const struct nlattr *actions = upcall_info->actions;
-			u32 actions_len = upcall_info->actions_len;
-
-			nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_ACTIONS);
-			memcpy(__skb_put(user_skb, actions_len), actions, actions_len);
-			nla_nest_end(user_skb, nla);
-		}
+		if (upcall_info->cmd == OVS_PACKET_CMD_ACTION)
+			nla_put_u64(user_skb, OVS_PACKET_ATTR_USERDATA,
+						upcall_info->userdata);
 
 		nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
 		if (skb->ip_summed == CHECKSUM_PARTIAL)
@@ -532,10 +515,37 @@ static int flush_flows(int dp_ifindex)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *attr)
+static int validate_actions(const struct nlattr *attr, int depth);
+
+static int validate_sample(const struct nlattr *attr, int depth)
+{
+	static const struct nla_policy sample_policy[OVS_SAMPLE_ATTR_MAX + 1] =
+	{
+		[OVS_SAMPLE_ATTR_PROBABILITY] = {.type = NLA_U32 },
+		[OVS_SAMPLE_ATTR_ACTIONS] = {.type = NLA_UNSPEC },
+	};
+	struct nlattr *a[OVS_SAMPLE_ATTR_MAX + 1];
+	int error;
+
+	error = nla_parse_nested(a, OVS_SAMPLE_ATTR_MAX, attr, sample_policy);
+	if (error)
+		return error;
+
+	if (!a[OVS_SAMPLE_ATTR_PROBABILITY])
+		return -EINVAL;
+	if (!a[OVS_SAMPLE_ATTR_ACTIONS])
+		return -EINVAL;
+
+	return validate_actions(a[OVS_SAMPLE_ATTR_ACTIONS], (depth + 1));
+}
+
+static int validate_actions(const struct nlattr *attr, int depth)
 {
 	const struct nlattr *a;
-	int rem;
+	int rem, err;
+
+	if (depth >= SAMPLE_ACTION_DEPTH)
+		return -EOVERFLOW;
 
 	nla_for_each_nested(a, attr, rem) {
 		static const u32 action_lens[OVS_ACTION_ATTR_MAX + 1] = {
@@ -556,7 +566,12 @@ static int validate_actions(const struct nlattr *attr)
 		};
 		int type = nla_type(a);
 
-		if (type > OVS_ACTION_ATTR_MAX || nla_len(a) != action_lens[type])
+		/* Match expected attr len for given attr len except for
+		 * OVS_ACTION_ATTR_SAMPLE, as it has nested actions list which
+		 * is variable size. */
+		if (type > OVS_ACTION_ATTR_MAX ||
+		   (nla_len(a) != action_lens[type] &&
+			  type != OVS_ACTION_ATTR_SAMPLE))
 			return -EINVAL;
 
 		switch (type) {
@@ -590,6 +605,12 @@ static int validate_actions(const struct nlattr *attr)
 		case OVS_ACTION_ATTR_SET_NW_TOS:
 			if (nla_get_u8(a) & INET_ECN_MASK)
 				return -EINVAL;
+			break;
+
+		case OVS_ACTION_ATTR_SAMPLE:
+			err = validate_sample(a, depth);
+			if (err)
+				return err;
 			break;
 
 		default:
@@ -630,7 +651,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	    nla_len(a[OVS_PACKET_ATTR_PACKET]) < ETH_HLEN)
 		goto err;
 
-	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS]);
+	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], 0);
 	if (err)
 		goto err;
 
@@ -897,7 +918,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		error = validate_actions(a[OVS_FLOW_ATTR_ACTIONS]);
+		error = validate_actions(a[OVS_FLOW_ATTR_ACTIONS], 0);
 		if (error)
 			goto error;
 	} else if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW) {
@@ -1158,7 +1179,6 @@ static const struct nla_policy datapath_policy[OVS_DP_ATTR_MAX + 1] = {
 #endif
 	[OVS_DP_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 	[OVS_DP_ATTR_IPV4_FRAGS] = { .type = NLA_U32 },
-	[OVS_DP_ATTR_SAMPLING] = { .type = NLA_U32 },
 };
 
 static struct genl_family dp_datapath_genl_family = {
@@ -1200,9 +1220,6 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 
 	NLA_PUT_U32(skb, OVS_DP_ATTR_IPV4_FRAGS,
 		    dp->drop_frags ? OVS_DP_FRAG_DROP : OVS_DP_FRAG_ZERO);
-
-	if (dp->sflow_probability)
-		NLA_PUT_U32(skb, OVS_DP_ATTR_SAMPLING, dp->sflow_probability);
 
 	return genlmsg_end(skb, ovs_header);
 
@@ -1265,8 +1282,6 @@ static void change_datapath(struct datapath *dp, struct nlattr *a[OVS_DP_ATTR_MA
 {
 	if (a[OVS_DP_ATTR_IPV4_FRAGS])
 		dp->drop_frags = nla_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]) == OVS_DP_FRAG_DROP;
-	if (a[OVS_DP_ATTR_SAMPLING])
-		dp->sflow_probability = nla_get_u32(a[OVS_DP_ATTR_SAMPLING]);
 }
 
 static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)

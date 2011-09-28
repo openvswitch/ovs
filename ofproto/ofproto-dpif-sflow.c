@@ -46,7 +46,6 @@ struct dpif_sflow_port {
 };
 
 struct dpif_sflow {
-    struct ofproto *ofproto;
     struct collectors *collectors;
     SFLAgent *sflow_agent;
     struct ofproto_sflow_options *options;
@@ -54,6 +53,7 @@ struct dpif_sflow {
     time_t next_tick;
     size_t n_flood, n_all;
     struct hmap ports;          /* Contains "struct dpif_sflow_port"s. */
+    uint32_t probability;
 };
 
 static void dpif_sflow_del_port__(struct dpif_sflow *,
@@ -270,7 +270,7 @@ dpif_sflow_clear(struct dpif_sflow *ds)
     ds->options = NULL;
 
     /* Turn off sampling to save CPU cycles. */
-    dpif_set_sflow_probability(ds->dpif, 0);
+    ds->probability = 0;
 }
 
 bool
@@ -288,7 +288,17 @@ dpif_sflow_create(struct dpif *dpif)
     ds->dpif = dpif;
     ds->next_tick = time_now() + 1;
     hmap_init(&ds->ports);
+    ds->probability = 0;
     return ds;
+}
+
+/* 32-bit fraction of packets to sample with.  A value of 0 samples no packets,
+ * a value of %UINT32_MAX samples all packets and intermediate values sample
+ * intermediate fractions of packets. */
+uint32_t
+dpif_sflow_get_probability(const struct dpif_sflow *ds)
+{
+    return ds->probability;
 }
 
 void
@@ -457,8 +467,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
     /* Set the sampling_rate down in the datapath. */
-    dpif_set_sflow_probability(ds->dpif,
-                               MAX(1, UINT32_MAX / options->sampling_rate));
+    ds->probability = MAX(1, UINT32_MAX / ds->options->sampling_rate);
 
     /* Add samplers and pollers for the currently known ports. */
     HMAP_FOR_EACH (dsp, hmap_node, &ds->ports) {
@@ -467,7 +476,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     }
 }
 
-static int
+int
 dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
                                uint16_t odp_port)
 {
@@ -476,24 +485,34 @@ dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
 }
 
 void
-dpif_sflow_received(struct dpif_sflow *ds, const struct dpif_upcall *upcall,
-                    const struct flow *flow)
+dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
+                    const struct flow *flow,
+                    const struct user_action_cookie *cookie)
 {
     SFL_FLOW_SAMPLE_TYPE fs;
     SFLFlow_sample_element hdrElem;
     SFLSampled_header *header;
     SFLFlow_sample_element switchElem;
     SFLSampler *sampler;
-    unsigned int left;
-    struct nlattr *a;
-    size_t n_outputs;
+    struct dpif_sflow_port *in_dsp;
+    struct netdev_stats stats;
+    int error;
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
-    fs.input = dpif_sflow_odp_port_to_ifindex(ds,
-				 ofp_port_to_odp_port(flow->in_port));
-    fs.output = 0;              /* Filled in correctly below. */
-    fs.sample_pool = upcall->sample_pool;
+
+    in_dsp = dpif_sflow_find_port(ds, ofp_port_to_odp_port(flow->in_port));
+    if (!in_dsp) {
+        return;
+    }
+    fs.input = SFL_DS_INDEX(in_dsp->dsi);
+
+    error = netdev_get_stats(in_dsp->netdev, &stats);
+    if (error) {
+        VLOG_WARN_RL(&rl, "netdev get-stats error %s", strerror(error));
+        return;
+    }
+    fs.sample_pool = stats.rx_packets;
 
     /* We are going to give it to the sampler that represents this input port.
      * By implementing "ingress-only" sampling like this we ensure that we
@@ -512,54 +531,34 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dpif_upcall *upcall,
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
     /* The frame_length should include the Ethernet FCS (4 bytes),
        but it has already been stripped,  so we need to add 4 here. */
-    header->frame_length = upcall->packet->size + 4;
+    header->frame_length = packet->size + 4;
     /* Ethernet FCS stripped off. */
     header->stripped = 4;
-    header->header_length = MIN(upcall->packet->size,
+    header->header_length = MIN(packet->size,
                                 sampler->sFlowFsMaximumHeaderSize);
-    header->header_bytes = upcall->packet->data;
+    header->header_bytes = packet->data;
 
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));
     switchElem.tag = SFLFLOW_EX_SWITCH;
     switchElem.flowType.sw.src_vlan = vlan_tci_to_vid(flow->vlan_tci);
     switchElem.flowType.sw.src_priority = vlan_tci_to_pcp(flow->vlan_tci);
-    /* Initialize the output VLAN and priority to be the same as the input,
-       but these fields can be overriden below if affected by an action. */
-    switchElem.flowType.sw.dst_vlan = switchElem.flowType.sw.src_vlan;
-    switchElem.flowType.sw.dst_priority = switchElem.flowType.sw.src_priority;
 
-    /* Figure out the output ports. */
-    n_outputs = 0;
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, upcall->actions, upcall->actions_len) {
-        ovs_be16 tci;
-
-        switch (nl_attr_type(a)) {
-        case OVS_ACTION_ATTR_OUTPUT:
-            fs.output = dpif_sflow_odp_port_to_ifindex(ds, nl_attr_get_u32(a));
-            n_outputs++;
-            break;
-
-        case OVS_ACTION_ATTR_PUSH_VLAN:
-            tci = nl_attr_get_be16(a);
-            switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(tci);
-            switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(tci);
-            break;
-
-        default:
-            break;
-        }
-    }
+    /* Retrieve data from user_action_cookie. */
+    switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(cookie->vlan_tci);
+    switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(cookie->vlan_tci);
 
     /* Set output port, as defined by http://www.sflow.org/sflow_version_5.txt
        (search for "Input/output port information"). */
-    if (!n_outputs) {
+    if (!cookie->n_output) {
         /* This value indicates that the packet was dropped for an unknown
          * reason. */
         fs.output = 0x40000000 | 256;
-    } else if (n_outputs > 1 || !fs.output) {
+    } else if (cookie->n_output > 1 || !cookie->data) {
         /* Setting the high bit means "multiple output ports". */
-        fs.output = 0x80000000 | n_outputs;
+        fs.output = 0x80000000 | cookie->n_output;
+    } else {
+        fs.output = cookie->data;
     }
 
     /* Submit the flow sample to be encoded into the next datagram. */

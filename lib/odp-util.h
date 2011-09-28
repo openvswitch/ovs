@@ -99,4 +99,22 @@ int odp_flow_key_from_string(const char *s, struct ofpbuf *);
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);
 int odp_flow_key_to_flow(const struct nlattr *, size_t, struct flow *);
 
+enum user_action_cookie_type {
+    USER_ACTION_COOKIE_UNSPEC,
+    USER_ACTION_COOKIE_CONTROLLER,   /* Packet for controller. */
+    USER_ACTION_COOKIE_SFLOW,        /* Packet for sFlow sampling. */
+};
+
+/* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
+ * Since is it passed to kernel as u64, its size has to be 8 bytes. */
+struct user_action_cookie {
+    uint8_t   type;                 /* enum user_action_cookie_type. */
+    uint8_t   n_output;             /* No of output ports. used by sflow. */
+    ovs_be16  vlan_tci;             /* Used by sFlow */
+    uint32_t  data;                 /* Data is len for OFPP_CONTROLLER action.
+                                       For sFlow it is port_ifindex. */
+};
+
+BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 8);
+
 #endif /* odp-util.h */

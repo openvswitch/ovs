@@ -62,6 +62,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET_PRIORITY: return 4;
     case OVS_ACTION_ATTR_POP_PRIORITY: return 0;
 
+    case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         return -1;
@@ -89,13 +90,50 @@ format_generic_odp_action(struct ds *ds, const struct nlattr *a)
     }
 }
 
+static void
+format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
+{
+    static const struct nl_policy ovs_sample_policy[] = {
+        [OVS_SAMPLE_ATTR_PROBABILITY] = { .type = NL_A_U32 },
+        [OVS_SAMPLE_ATTR_ACTIONS] = { .type = NL_A_NESTED }
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_sample_policy)];
+    struct ofpbuf buf;
+    double percentage;
+    const struct nlattr *nla_acts;
+    int len;
+
+    ds_put_cstr(ds, "sample");
+
+    ofpbuf_use_const(&buf, nl_attr_get(attr), nl_attr_get_size(attr));
+    if (!nl_policy_parse(&buf, 0, ovs_sample_policy, a,
+                            ARRAY_SIZE(ovs_sample_policy))) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    percentage = (100.0 * nl_attr_get_u32(a[OVS_SAMPLE_ATTR_PROBABILITY])) /
+                        UINT32_MAX;
+
+    ds_put_format(ds, "(sample=%.1f%%,", percentage);
+
+    ds_put_cstr(ds, "actions(");
+    nla_acts = nl_attr_get(a[OVS_SAMPLE_ATTR_ACTIONS]);
+    len = nl_attr_get_size(a[OVS_SAMPLE_ATTR_ACTIONS]);
+    format_odp_actions(ds, nla_acts, len);
+    ds_put_format(ds, "))");
+}
+
 void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     const uint8_t *eth;
     ovs_be32 ip;
+    struct user_action_cookie cookie;
+    uint64_t data;
 
-    if (nl_attr_get_size(a) != odp_action_len(nl_attr_type(a))) {
+    if (nl_attr_get_size(a) != odp_action_len(nl_attr_type(a)) &&
+            nl_attr_type(a) != OVS_ACTION_ATTR_SAMPLE) {
         ds_put_format(ds, "bad length %zu, expected %d for: ",
                       nl_attr_get_size(a), odp_action_len(nl_attr_type(a)));
         format_generic_odp_action(ds, a);
@@ -107,7 +145,21 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
     case OVS_ACTION_ATTR_USERSPACE:
-        ds_put_format(ds, "userspace(%"PRIu64")", nl_attr_get_u64(a));
+        data = nl_attr_get_u64(a);
+        memcpy(&cookie, &data, sizeof(cookie));
+
+        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
+            ds_put_format(ds, "userspace(controller,length=%"PRIu32")",
+                          cookie.data);
+        } else if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
+            ds_put_format(ds, "userspace(sFlow,n_output=%"PRIu8","
+                          "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32")",
+                          cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
+                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.data);
+        } else {
+            ds_put_format(ds, "userspace(unknown,data=0x%"PRIx64")",
+                          nl_attr_get_u64(a));
+        }
         break;
     case OVS_ACTION_ATTR_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",
@@ -151,6 +203,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case OVS_ACTION_ATTR_POP_PRIORITY:
         ds_put_cstr(ds, "pop_priority");
+        break;
+    case OVS_ACTION_ATTR_SAMPLE:
+        format_odp_sample_action(ds, a);
         break;
     default:
         format_generic_odp_action(ds, a);

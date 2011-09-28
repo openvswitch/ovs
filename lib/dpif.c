@@ -958,7 +958,6 @@ dpif_upcall_type_to_string(enum dpif_upcall_type type)
     switch (type) {
     case DPIF_UC_MISS: return "miss";
     case DPIF_UC_ACTION: return "action";
-    case DPIF_UC_SAMPLE: return "sample";
     case DPIF_N_UC_TYPES: default: return "<unknown>";
     }
 }
@@ -967,8 +966,7 @@ static bool OVS_UNUSED
 is_valid_listen_mask(int listen_mask)
 {
     return !(listen_mask & ~((1u << DPIF_UC_MISS) |
-                             (1u << DPIF_UC_ACTION) |
-                             (1u << DPIF_UC_SAMPLE)));
+                             (1u << DPIF_UC_ACTION)));
 }
 
 /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value 2**X
@@ -1000,41 +998,6 @@ dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 
     error = dpif->dpif_class->recv_set_mask(dpif, listen_mask);
     log_operation(dpif, "recv_set_mask", error);
-    return error;
-}
-
-/* Retrieve the sFlow sampling probability.  '*probability' is expressed as the
- * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
- * the probability of sampling a given packet.
- *
- * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
- * indicates that 'dpif' does not support sFlow sampling. */
-int
-dpif_get_sflow_probability(const struct dpif *dpif, uint32_t *probability)
-{
-    int error = (dpif->dpif_class->get_sflow_probability
-                 ? dpif->dpif_class->get_sflow_probability(dpif, probability)
-                 : EOPNOTSUPP);
-    if (error) {
-        *probability = 0;
-    }
-    log_operation(dpif, "get_sflow_probability", error);
-    return error;
-}
-
-/* Set the sFlow sampling probability.  'probability' is expressed as the
- * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
- * the probability of sampling a given packet.
- *
- * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
- * indicates that 'dpif' does not support sFlow sampling. */
-int
-dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
-{
-    int error = (dpif->dpif_class->set_sflow_probability
-                 ? dpif->dpif_class->set_sflow_probability(dpif, probability)
-                 : EOPNOTSUPP);
-    log_operation(dpif, "set_sflow_probability", error);
     return error;
 }
 

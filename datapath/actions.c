@@ -28,8 +28,8 @@
 #include "vlan.h"
 #include "vport.h"
 
-static int do_execute_actions(struct datapath *, struct sk_buff *,
-			      struct sw_flow_actions *acts);
+static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
+			const struct nlattr *attr, int len, bool keep_skb);
 
 static int make_writable(struct sk_buff *skb, int write_len)
 {
@@ -255,15 +255,37 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = arg;
-	upcall.sample_pool = 0;
-	upcall.actions = NULL;
-	upcall.actions_len = 0;
 	return dp_upcall(dp, skb, &upcall);
+}
+
+static int sample(struct datapath *dp, struct sk_buff *skb,
+		  const struct nlattr *attr)
+{
+	const struct nlattr *acts_list = NULL;
+	const struct nlattr *a;
+	int rem;
+
+	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
+		 a = nla_next(a, &rem)) {
+		switch (nla_type(a)) {
+		case OVS_SAMPLE_ATTR_PROBABILITY:
+			if (net_random() >= nla_get_u32(a))
+				return 0;
+			break;
+
+		case OVS_SAMPLE_ATTR_ACTIONS:
+			acts_list = a;
+			break;
+		}
+	}
+
+	return do_execute_actions(dp, skb, nla_data(acts_list),
+						 nla_len(acts_list), true);
 }
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			      struct sw_flow_actions *acts)
+			const struct nlattr *attr, int len, bool keep_skb)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -274,7 +296,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	const struct nlattr *a;
 	int rem;
 
-	for (a = acts->actions, rem = acts->actions_len; rem > 0;
+	for (a = attr, rem = len; rem > 0;
 	     a = nla_next(a, &rem)) {
 		int err = 0;
 
@@ -339,47 +361,27 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case OVS_ACTION_ATTR_POP_PRIORITY:
 			skb->priority = priority;
 			break;
-		}
 
+		case OVS_ACTION_ATTR_SAMPLE:
+			err = sample(dp, skb, a);
+			break;
+
+		}
 		if (unlikely(err)) {
 			kfree_skb(skb);
 			return err;
 		}
 	}
 
-	if (prev_port != -1)
+	if (prev_port != -1) {
+		if (keep_skb)
+			skb = skb_clone(skb, GFP_ATOMIC);
+
 		do_output(dp, skb, prev_port);
-	else
+	} else if (!keep_skb)
 		consume_skb(skb);
 
 	return 0;
-}
-
-static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 struct sw_flow_actions *acts)
-{
-	struct sk_buff *nskb;
-	struct vport *p = OVS_CB(skb)->vport;
-	struct dp_upcall_info upcall;
-
-	if (unlikely(!p))
-		return;
-
-	atomic_inc(&p->sflow_pool);
-	if (net_random() >= dp->sflow_probability)
-		return;
-
-	nskb = skb_clone(skb, GFP_ATOMIC);
-	if (unlikely(!nskb))
-		return;
-
-	upcall.cmd = OVS_PACKET_CMD_SAMPLE;
-	upcall.key = &OVS_CB(skb)->flow->key;
-	upcall.userdata = 0;
-	upcall.sample_pool = atomic_read(&p->sflow_pool);
-	upcall.actions = acts->actions;
-	upcall.actions_len = acts->actions_len;
-	dp_upcall(dp, nskb, &upcall);
 }
 
 /* Execute a list of actions against 'skb'. */
@@ -399,11 +401,9 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb)
 		goto out_loop;
 	}
 
-	/* Really execute actions. */
-	if (dp->sflow_probability)
-		sflow_sample(dp, skb, acts);
 	OVS_CB(skb)->tun_id = 0;
-	error = do_execute_actions(dp, skb, acts);
+	error = do_execute_actions(dp, skb, acts->actions,
+					 acts->actions_len, false);
 
 	/* Check whether sub-actions looped too much. */
 	if (unlikely(loop->looping))

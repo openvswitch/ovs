@@ -80,8 +80,6 @@ struct vport_err_stats {
  * &struct vport.  (We keep this around so that we can delete it if the
  * device gets renamed.)  Set to the null string when no link exists.
  * @node: Element in @dp's @port_list.
- * @sflow_pool: Number of packets that were candidates for sFlow sampling,
- * regardless of whether they were actually chosen and sent down to userspace.
  * @upcall_pid: The Netlink port to use for packets received on this port that
  * miss the flow table.
  * @hash_node: Element in @dev_table hash table in vport.c.
@@ -99,7 +97,6 @@ struct vport {
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
 	struct list_head node;
-	atomic_t sflow_pool;
 	u32 upcall_pid;
 
 	struct hlist_node hash_node;

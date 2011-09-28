@@ -94,10 +94,6 @@ struct ovs_header {
  * @OVS_DP_ATTR_IPV4_FRAGS: One of %OVS_DP_FRAG_*.  Always present in
  * notifications.  May be included in %OVS_DP_NEW or %OVS_DP_SET requests to
  * change the fragment handling policy.
- * @OVS_DP_ATTR_SAMPLING: 32-bit fraction of packets to sample with
- * @OVS_PACKET_CMD_SAMPLE.  A value of 0 samples no packets, a value of
- * %UINT32_MAX samples all packets, and intermediate values sample intermediate
- * fractions of packets.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_DP_* commands.
@@ -108,7 +104,6 @@ enum ovs_datapath_attr {
 	OVS_DP_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
 	OVS_DP_ATTR_STATS,      /* struct ovs_dp_stats */
 	OVS_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum ovs_frag_handling */
-	OVS_DP_ATTR_SAMPLING,   /* 32-bit fraction of packets to sample. */
 	__OVS_DP_ATTR_MAX
 };
 
@@ -157,7 +152,6 @@ enum ovs_packet_cmd {
         /* Kernel-to-user notifications. */
         OVS_PACKET_CMD_MISS,    /* Flow table miss. */
         OVS_PACKET_CMD_ACTION,  /* OVS_ACTION_ATTR_USERSPACE action. */
-        OVS_PACKET_CMD_SAMPLE,  /* Sampled packet. */
 
         /* User commands. */
         OVS_PACKET_CMD_EXECUTE  /* Apply actions to a packet. */
@@ -174,6 +168,8 @@ enum ovs_packet_cmd {
  * extracted from the packet as nested %OVS_KEY_ATTR_* attributes.  This allows
  * userspace to adapt its flow setup strategy by comparing its notion of the
  * flow key against the kernel's.
+ * @OVS_PACKET_ATTR_ACTIONS: Contains actions for the packet.  Used
+ * for %OVS_PACKET_CMD_EXECUTE.  It has nested %OVS_ACTION_ATTR_* attributes.
  * @OVS_PACKET_ATTR_UPCALL_PID: Optionally present for OVS_PACKET_CMD_EXECUTE.
  * The Netlink socket in userspace that OVS_PACKET_CMD_USERSPACE and
  * OVS_PACKET_CMD_SAMPLE upcalls will be directed to for actions triggered by
@@ -181,11 +177,6 @@ enum ovs_packet_cmd {
  * @OVS_PACKET_ATTR_USERDATA: Present for an %OVS_PACKET_CMD_ACTION
  * notification if the %OVS_ACTION_ATTR_USERSPACE, action's argument was
  * nonzero.
- * @OVS_PACKET_ATTR_SAMPLE_POOL: Present for %OVS_PACKET_CMD_SAMPLE.  Contains
- * the number of packets processed so far that were candidates for sampling.
- * @OVS_PACKET_ATTR_ACTIONS: Present for %OVS_PACKET_CMD_SAMPLE.  Contains a
- * copy of the actions applied to the packet, as nested %OVS_ACTION_ATTR_*
- * attributes.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_PACKET_* commands.
@@ -194,10 +185,9 @@ enum ovs_packet_attr {
 	OVS_PACKET_ATTR_UNSPEC,
 	OVS_PACKET_ATTR_PACKET,      /* Packet data. */
 	OVS_PACKET_ATTR_KEY,         /* Nested OVS_KEY_ATTR_* attributes. */
+	OVS_PACKET_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
 	OVS_PACKET_ATTR_UPCALL_PID,  /* Netlink PID to receive upcalls. */
 	OVS_PACKET_ATTR_USERDATA,    /* u64 OVS_ACTION_ATTR_USERSPACE arg. */
-	OVS_PACKET_ATTR_SAMPLE_POOL, /* # sampling candidate packets so far. */
-	OVS_PACKET_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
 	__OVS_PACKET_ATTR_MAX
 };
 
@@ -425,6 +415,24 @@ enum ovs_flow_attr {
 
 #define OVS_FLOW_ATTR_MAX (__OVS_FLOW_ATTR_MAX - 1)
 
+/**
+ * enum ovs_sample_attr - Attributes for OVS_ACTION_ATTR_SAMPLE
+ * @OVS_SAMPLE_ATTR_PROBABILITY: 32-bit fraction of packets to sample with
+ * @OVS_ACTION_ATTR_SAMPLE.  A value of 0 samples no packets, a value of
+ * %UINT32_MAX samples all packets and intermediate values sample intermediate
+ * fractions of packets.
+ * @OVS_SAMPLE_ATTR_ACTIONS: Set of actions to execute in sampling event.
+ * Actions are passed as nested attributes.
+ */
+enum ovs_sample_attr {
+	OVS_SAMPLE_ATTR_UNSPEC,
+	OVS_SAMPLE_ATTR_PROBABILITY, /* u32 number */
+	OVS_SAMPLE_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
+	__OVS_SAMPLE_ATTR_MAX,
+};
+
+#define OVS_SAMPLE_ATTR_MAX (__OVS_SAMPLE_ATTR_MAX - 1)
+
 /* Action types. */
 enum ovs_action_type {
 	OVS_ACTION_ATTR_UNSPEC,
@@ -442,6 +450,8 @@ enum ovs_action_type {
 	OVS_ACTION_ATTR_SET_TUNNEL,   /* Set the encapsulating tunnel ID. */
 	OVS_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
 	OVS_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
+	OVS_ACTION_ATTR_SAMPLE,       /* Execute list of actions at given
+					 probability. */
 	__OVS_ACTION_ATTR_MAX
 };
 
