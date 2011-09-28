@@ -93,7 +93,7 @@ def update(session, args):
         except KeyError:
             pass
 
-    # If new controller, get managagment MAC addresses from XAPI now
+    # If new controller, get management MAC addresses from XAPI now
     # in case fail_mode set to secure which may affect XAPI access
     mgmt_bridge = None
     host_mgmt_mac = None
