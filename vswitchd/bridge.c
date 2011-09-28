@@ -195,6 +195,7 @@ static struct iface *iface_from_ofp_port(const struct bridge *,
                                          uint16_t ofp_port);
 static void iface_set_mac(struct iface *);
 static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
+static void iface_clear_db_record(const struct ovsrec_interface *if_cfg);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_configure_cfm(struct iface *);
 static void iface_refresh_cfm_stats(struct iface *);
@@ -939,7 +940,7 @@ bridge_add_ofproto_ports(struct bridge *br)
                     /* We already reported a related error, don't bother
                      * duplicating it. */
                 }
-                iface_set_ofport(iface->cfg, -1);
+                iface_clear_db_record(iface->cfg);
                 iface_destroy(iface);
             }
         }
@@ -2162,7 +2163,7 @@ port_add_ifaces(struct port *port)
             && !shash_add_once(&new_ifaces, cfg->name, cfg)) {
             VLOG_WARN("port %s: %s specified twice as port interface",
                       port->name, cfg->name);
-            iface_set_ofport(cfg, -1);
+            iface_clear_db_record(cfg);
         }
     }
 
@@ -2512,6 +2513,29 @@ iface_set_ofport(const struct ovsrec_interface *if_cfg, int64_t ofport)
 {
     if (if_cfg && !ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
         ovsrec_interface_set_ofport(if_cfg, &ofport, 1);
+    }
+}
+
+/* Clears all of the fields in 'if_cfg' that indicate interface status, and
+ * sets the "ofport" field to -1.
+ *
+ * This is appropriate when 'if_cfg''s interface cannot be created or is
+ * otherwise invalid. */
+static void
+iface_clear_db_record(const struct ovsrec_interface *if_cfg)
+{
+    if (!ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
+        iface_set_ofport(if_cfg, -1);
+        ovsrec_interface_set_status(if_cfg, NULL, NULL, 0);
+        ovsrec_interface_set_admin_state(if_cfg, NULL);
+        ovsrec_interface_set_duplex(if_cfg, NULL);
+        ovsrec_interface_set_link_speed(if_cfg, NULL, 0);
+        ovsrec_interface_set_link_state(if_cfg, NULL);
+        ovsrec_interface_set_mtu(if_cfg, NULL, 0);
+        ovsrec_interface_set_cfm_fault(if_cfg, NULL, 0);
+        ovsrec_interface_set_cfm_remote_mpids(if_cfg, NULL, 0);
+        ovsrec_interface_set_lacp_current(if_cfg, NULL, 0);
+        ovsrec_interface_set_statistics(if_cfg, NULL, NULL, 0);
     }
 }
 
