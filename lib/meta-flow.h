@@ -44,6 +44,9 @@ enum mf_field_id {
     MFF_REG3,                   /* be32 */
 #endif
 #if FLOW_N_REGS > 4
+    MFF_REG4,                   /* be32 */
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 

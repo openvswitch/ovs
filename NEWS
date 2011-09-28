@@ -4,6 +4,7 @@ Post-v1.2.0
       - Added an OpenFlow extension which allows the "output" action to accept
         NXM fields.
       - Added an OpenFlow extension for flexible learning.
+      - Bumped number of NXM registers from four to five.
     - ovs-appctl:
       - New "version" command to determine version of running daemon.
       - If no argument is provided for "cfm/show", displays detailed

@@ -1046,7 +1046,10 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
 #if FLOW_N_REGS >= 4
     NXM_READ_REGISTER(3);
 #endif
-#if FLOW_N_REGS > 4
+#if FLOW_N_REGS >= 5
+    NXM_READ_REGISTER(4);
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 
@@ -1132,7 +1135,10 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
 #if FLOW_N_REGS >= 4
     NXM_WRITE_REGISTER(3);
 #endif
-#if FLOW_N_REGS > 4
+#if FLOW_N_REGS >= 5
+    NXM_WRITE_REGISTER(4);
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 

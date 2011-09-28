@@ -60,7 +60,10 @@ DEFINE_FIELD_M(NX_REG2,       MFF_REG2,       true)
 #if FLOW_N_REGS >= 4
 DEFINE_FIELD_M(NX_REG3,       MFF_REG3,       true)
 #endif
-#if FLOW_N_REGS > 4
+#if FLOW_N_REGS >= 5
+DEFINE_FIELD_M(NX_REG4,       MFF_REG4,       true)
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 

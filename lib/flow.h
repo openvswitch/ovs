@@ -37,7 +37,7 @@ struct ofpbuf;
  * failures in places which likely need to be updated. */
 #define FLOW_WC_SEQ 1
 
-#define FLOW_N_REGS 4
+#define FLOW_N_REGS 5
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 
 /* Used for struct flow's dl_type member for frames that have no Ethernet
@@ -75,7 +75,7 @@ BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nd_target) == 16);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 116 && FLOW_WC_SEQ == 1);
+BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 120 && FLOW_WC_SEQ == 1);
 
 int flow_extract(struct ofpbuf *, ovs_be64 tun_id, uint16_t in_port,
                  struct flow *);
@@ -155,7 +155,7 @@ struct flow_wildcards {
 };
 
 /* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */
-BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 72 && FLOW_WC_SEQ == 1);
+BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 76 && FLOW_WC_SEQ == 1);
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);

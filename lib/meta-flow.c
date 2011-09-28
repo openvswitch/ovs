@@ -80,6 +80,9 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     REGISTER(3),
 #endif
 #if FLOW_N_REGS > 4
+    REGISTER(4),
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 
@@ -376,6 +379,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
         return !wc->reg_masks[mf->id - MFF_REG0];
@@ -461,6 +467,9 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
         mask->be32 = htonl(wc->reg_masks[mf->id - MFF_REG0]);
@@ -627,6 +636,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
     case MFF_ETH_SRC:
@@ -699,6 +711,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
         value->be32 = htonl(flow->regs[0]);
@@ -837,6 +852,9 @@ mf_set_value(const struct mf_field *mf,
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 #if FLOW_N_REGS > 0
@@ -986,6 +1004,11 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+        cls_rule_set_reg_masked(rule, 4, 0, 0);
+        break;
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
 
@@ -1151,6 +1174,9 @@ mf_set(const struct mf_field *mf,
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
         cls_rule_set_reg_masked(rule, mf->id - MFF_REG0,
@@ -1302,6 +1328,9 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_REG3:
 #endif
 #if FLOW_N_REGS > 4
+    case MFF_REG4:
+#endif
+#if FLOW_N_REGS > 5
 #error
 #endif
     case MFF_ETH_SRC:
