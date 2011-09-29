@@ -24,7 +24,6 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "hash.h"
-#include "openvswitch/datapath-protocol.h"
 #include "util.h"
 
 struct dpif_flow_stats;

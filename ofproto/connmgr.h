@@ -23,6 +23,7 @@
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
+struct nlattr;
 struct ofconn;
 struct ofopgroup;
 struct ofputil_flow_removed;

@@ -19,7 +19,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "openvswitch/datapath-protocol.h"
 
 /* These functions are Linux specific, so they should be used directly only by
  * Linux-specific code. */
