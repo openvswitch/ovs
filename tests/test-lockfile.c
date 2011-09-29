@@ -28,9 +28,6 @@
 #include "util.h"
 #include "vlog.h"
 
-#undef NDEBUG
-#include <assert.h>
-
 struct test {
     const char *name;
     void (*function)(void);
@@ -38,12 +35,25 @@ struct test {
 
 static const struct test tests[];
 
+#define CHECK(A, B) check(A, B, #A, #B, __FILE__, __LINE__)
+static void
+check(int a, int b,
+      const char *a_string, const char *b_string, const char *file, int line)
+{
+    if (a != b) {
+        fprintf(stderr, "%s:%d: expected %s == %s but %d != %d\n",
+                file, line, a_string, b_string, a, b);
+        fflush(stderr);
+        abort();
+    }
+}
+
 static void
 run_lock_and_unlock(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
     lockfile_unlock(lockfile);
 }
 
@@ -52,10 +62,10 @@ run_lock_and_unlock_twice(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
     lockfile_unlock(lockfile);
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
     lockfile_unlock(lockfile);
 }
 
@@ -64,8 +74,8 @@ run_lock_blocks_same_process(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
-    assert(lockfile_lock("file", 0, &lockfile) == EDEADLK);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
     lockfile_unlock(lockfile);
 }
 
@@ -74,9 +84,9 @@ run_lock_blocks_same_process_twice(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
-    assert(lockfile_lock("file", 0, &lockfile) == EDEADLK);
-    assert(lockfile_lock("file", 0, &lockfile) == EDEADLK);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
+    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
     lockfile_unlock(lockfile);
 }
 
@@ -107,10 +117,10 @@ run_lock_blocks_other_process(void)
      * this function that does the wait() call. */
     static struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
     if (do_fork() == CHILD) {
         lockfile_unlock(lockfile);
-        assert(lockfile_lock("file", 0, &lockfile) == EAGAIN);
+        CHECK(lockfile_lock("file", 0, &lockfile), EAGAIN);
         exit(11);
     }
 }
@@ -120,10 +130,10 @@ run_lock_twice_blocks_other_process(void)
 {
     struct lockfile *lockfile, *dummy;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
-    assert(lockfile_lock("file", 0, &dummy) == EDEADLK);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", 0, &dummy), EDEADLK);
     if (do_fork() == CHILD) {
-        assert(lockfile_lock("file", 0, &dummy) == EAGAIN);
+        CHECK(lockfile_lock("file", 0, &dummy), EAGAIN);
         exit(11);
     }
 }
@@ -133,11 +143,11 @@ run_lock_and_unlock_allows_other_process(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
     lockfile_unlock(lockfile);
 
     if (do_fork() == CHILD) {
-        assert(lockfile_lock("file", 0, &lockfile) == 0);
+        CHECK(lockfile_lock("file", 0, &lockfile), 0);
         exit(11);
     }
 }
@@ -147,12 +157,11 @@ run_lock_timeout_gets_the_lock(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
 
     if (do_fork() == CHILD) {
         lockfile_unlock(lockfile);
-        assert(lockfile_lock("file", TIME_UPDATE_INTERVAL * 3,
-                             &lockfile) == 0);
+        CHECK(lockfile_lock("file", TIME_UPDATE_INTERVAL * 3, &lockfile), 0);
         exit(11);
     } else {
         long long int now = time_msec();
@@ -168,12 +177,12 @@ run_lock_timeout_runs_out(void)
 {
     struct lockfile *lockfile;
 
-    assert(lockfile_lock("file", 0, &lockfile) == 0);
+    CHECK(lockfile_lock("file", 0, &lockfile), 0);
 
     if (do_fork() == CHILD) {
         lockfile_unlock(lockfile);
-        assert(lockfile_lock("file", TIME_UPDATE_INTERVAL,
-                             &lockfile) == ETIMEDOUT);
+        CHECK(lockfile_lock("file", TIME_UPDATE_INTERVAL, &lockfile),
+              ETIMEDOUT);
         exit(11);
     } else {
         long long int now = time_msec();
@@ -189,17 +198,17 @@ run_lock_multiple(void)
 {
     struct lockfile *a, *b, *c, *dummy;
 
-    assert(lockfile_lock("a", 0, &a) == 0);
-    assert(lockfile_lock("b", 0, &b) == 0);
-    assert(lockfile_lock("c", 0, &c) == 0);
+    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lockfile_lock("b", 0, &b), 0);
+    CHECK(lockfile_lock("c", 0, &c), 0);
 
     lockfile_unlock(a);
-    assert(lockfile_lock("a", 0, &a) == 0);
-    assert(lockfile_lock("a", 0, &dummy) == EDEADLK);
+    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
     lockfile_unlock(a);
 
     lockfile_unlock(b);
-    assert(lockfile_lock("a", 0, &a) == 0);
+    CHECK(lockfile_lock("a", 0, &a), 0);
 
     lockfile_unlock(c);
     lockfile_unlock(a);
