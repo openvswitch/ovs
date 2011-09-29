@@ -311,6 +311,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 			upcall.cmd = OVS_PACKET_CMD_MISS;
 			upcall.key = &key;
 			dp_upcall(dp, skb, &upcall);
+			kfree_skb(skb);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
 			goto out;
 		}
@@ -357,8 +358,10 @@ static struct genl_family dp_packet_genl_family = {
 	.maxattr = OVS_PACKET_ATTR_MAX
 };
 
-int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_info *upcall_info)
+int dp_upcall(struct datapath *dp, struct sk_buff *skb,
+	      const struct dp_upcall_info *upcall_info)
 {
+	struct sk_buff *segs = NULL;
 	struct dp_stats_percpu *stats;
 	u32 pid;
 	int err;
@@ -370,7 +373,6 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 
 	if (pid == 0) {
 		err = -ENOTCONN;
-		kfree_skb(skb);
 		goto err;
 	}
 
@@ -379,18 +381,25 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb, const struct dp_upcall_i
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
 	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
+		segs = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
 		
-		if (IS_ERR(nskb)) {
-			kfree_skb(skb);
-			err = PTR_ERR(nskb);
+		if (IS_ERR(segs)) {
+			err = PTR_ERR(segs);
 			goto err;
 		}
-		consume_skb(skb);
-		skb = nskb;
+		skb = segs;
 	}
 
 	err = queue_userspace_packets(dp, pid, skb, upcall_info);
+	if (segs) {
+		struct sk_buff *next;
+		/* Free GSO-segments */
+		do {
+			next = segs->next;
+			kfree_skb(segs);
+		} while ((segs = next) != NULL);
+	}
+
 	if (err)
 		goto err;
 
@@ -418,33 +427,24 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 				   const struct dp_upcall_info *upcall_info)
 {
 	int dp_ifindex;
-	struct sk_buff *nskb;
-	int err;
 
 	dp_ifindex = get_dpifindex(dp);
-	if (!dp_ifindex) {
-		err = -ENODEV;
-		nskb = skb->next;
-		goto err_kfree_skbs;
-	}
+	if (!dp_ifindex)
+		return -ENODEV;
 
 	do {
 		struct ovs_header *upcall;
 		struct sk_buff *user_skb; /* to be queued to userspace */
 		struct nlattr *nla;
 		unsigned int len;
-
-		nskb = skb->next;
-		skb->next = NULL;
+		int err;
 
 		err = vlan_deaccel_tag(skb);
 		if (unlikely(err))
-			goto err_kfree_skbs;
+			return err;
 
-		if (nla_attr_size(skb->len) > USHRT_MAX) {
-			err = -EFBIG;
-			goto err_kfree_skbs;
-		}
+		if (nla_attr_size(skb->len) > USHRT_MAX)
+			return -EFBIG;
 
 		len = sizeof(struct ovs_header);
 		len += nla_total_size(skb->len);
@@ -453,12 +453,11 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 			len += nla_total_size(8);
 
 		user_skb = genlmsg_new(len, GFP_ATOMIC);
-		if (!user_skb) {
-			err = -ENOMEM;
-			goto err_kfree_skbs;
-		}
+		if (!user_skb)
+			return -ENOMEM;
 
-		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family, 0, upcall_info->cmd);
+		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family,
+					 0, upcall_info->cmd);
 		upcall->dp_ifindex = dp_ifindex;
 
 		nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_KEY);
@@ -477,20 +476,11 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 
 		err = genlmsg_unicast(&init_net, user_skb, pid);
 		if (err)
-			goto err_kfree_skbs;
+			return err;
 
-		consume_skb(skb);
-		skb = nskb;
-	} while (skb);
+	} while ((skb = skb->next));
+
 	return 0;
-
-err_kfree_skbs:
-	kfree_skb(skb);
-	while ((skb = nskb) != NULL) {
-		nskb = skb->next;
-		kfree_skb(skb);
-	}
-	return err;
 }
 
 /* Called with genl_mutex. */

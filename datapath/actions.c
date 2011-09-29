@@ -248,10 +248,6 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
 {
 	struct dp_upcall_info upcall;
 
-	skb = skb_clone(skb, GFP_ATOMIC);
-	if (!skb)
-		return -ENOMEM;
-
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.key = &OVS_CB(skb)->flow->key;
 	upcall.userdata = arg;
