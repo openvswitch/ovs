@@ -31,7 +31,6 @@
 #include "hash.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
 #include "packets.h"
 #include "unaligned.h"
 #include "vlog.h"
