@@ -10,6 +10,28 @@ information that can be used to let us know how we can make Open vSwitch
 more generally useful.
 
 
+Multiple Table Support
+======================
+
+OpenFlow 1.0 has only rudimentary support for multiple flow tables.
+Notably, OpenFlow 1.0 does not allow the controller to specify the
+flow table to which a flow is to be added.  Open vSwitch adds an
+extension for this purpose, which is enabled on a per-OpenFlow
+connection basis using the NXT_FLOW_MOD_TABLE_ID message.  When the
+extension is enabled, the upper 8 bits of the 'command' member in an
+OFPT_FLOW_MOD or NXT_FLOW_MOD message designates the table to which a
+flow is to be added.
+
+The Open vSwitch software switch implementation offers 255 flow
+tables.  On packet ingress, only the first flow table (table 0) is
+searched, and the contents of the remaining tables are not considered
+in any way.  Tables other than table 0 only come into play when an
+NXAST_RESUBMIT_TABLE action specifies another table to search.
+
+Tables 128 and above are reserved for use by the switch itself.
+Controllers should use only tables 0 through 127.
+
+
 IPv6
 ====
 
