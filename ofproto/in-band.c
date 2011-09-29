@@ -313,7 +313,7 @@ update_rules(struct in_band *ib)
     if (ib->n_remotes && !eth_addr_is_zero(ib->local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
         cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
-        cls_rule_set_in_port(&rule, OVSP_LOCAL);
+        cls_rule_set_in_port(&rule, OFPP_LOCAL);
         cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
         cls_rule_set_dl_src(&rule, ib->local_mac);
         cls_rule_set_nw_proto(&rule, IPPROTO_UDP);
