@@ -4,9 +4,8 @@ Citrix XenServer hosts managed by the Citrix management tools.
 Files in this directory are licensed on a file-by-file basis.  Please
 refer to each file for details.
 
-Most of the files in this directory is installed on a XenServer system
-under the same name, if underscores are replaced by slashes.  The
-files are:
+Most of the files in this directory are installed on a XenServer system
+under the same name; underscores are replaced by slashes.  The files are:
 
     etc_init.d_openvswitch
 
@@ -34,30 +33,6 @@ files are:
         in the ovs-vswitchd configuration that are managed in the
         xapi database when integrated with Citrix management tools.
 
-    etc_xensource_bugtool_network-status_openvswitch.xml
-
-        xen-bugtool extension to collect networking information relevant to
-        Open vSwitch. Runs usr_share_openvswitch_scripts_xen-bugtool-cfm-show,
-        usr_share_openvswitch_scripts_xen-bugtool-lcap-show, and
-        usr_share_openvswitch_scripts_xen-bugtool-tc-class-show.
-
-    etc_xensource_bugtool_kernel-info_openvswitch.xml
-
-        xen-bugtool extension to collect kernel information relevant to
-        Open vSwitch.
-
-    etc_xensource_bugtool_system-configuration.xml
-
-        Custom xen-bugtool category to collect system configuration data.
-        This category is configured to collect up to 1Mb of data, take
-        up to 60 seconds to collect data, run every time and is hidden from
-        display in xencenter.
-
-    etc_xensource_bugtool_system-configuration_openvswitch.xml
-
-        xen-bugtool extension to collect system configuration information
-        relevant to Open vSwitch, including timezone.
-
     etc_xensource_scripts_vif
 
         Open vSwitch-aware replacement for Citrix script of the same name.
@@ -67,8 +42,18 @@ files are:
         spec file for building RPMs to install on a XenServer host.
 
     opt_xensource_libexec_interface-reconfigure
+    opt_xensource_libexec_InterfaceReconfigureBridge.py
+    opt_xensource_libexec_InterfaceReconfigure.py
+    opt_xensource_libexec_InterfaceReconfigureVswitch.py
 
-        Open vSwitch-aware replacement for Citrix script of the same name.
+        Open vSwitch-aware replacements for Citrix script of the same
+        names.
+
+    usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
+
+        xsconsole plugin to configure the pool-wide configuration keys
+        used to control Open vSwitch when integrated with Citrix
+        management tools.
 
     usr_share_openvswitch_scripts_ovs-xapi-sync
 
@@ -81,29 +66,57 @@ files are:
         Template for Open vSwitch's /etc/sysconfig/openvswitch
         configuration file.
 
-    usr_share_openvswitch_scripts_ovs-bugtool-cfm-show
+Open vSwitch installs a number of xen-bugtool extensions in
+/etc/xensource/bugtool to gather additional information useful for
+debugging.  The sources for the extensions are in
+../utilities/bugtool/plugins:
 
-        Script to dump detailed CFM information for all enabled
-        interfaces. Intended to be run by xen-bugtool via
-        etc_xensource_bugtool_network-status_openvswitch.xml.
+    kernel-info/openvswitch.xml
 
-    usr_share_openvswitch_scripts_ovs-bugtool-lacp-show
+        Collect kernel information relevant to Open vSwitch, such as
+        slabinfo.
 
-        Script to dump detailed LACP information for all enabled
-        ports. Intended to be run by xen-bugtool via
-        etc_xensource_bugtool_network-status_openvswitch.xml.
+    network-status/openvswitch.xml
 
-    usr_share_openvswitch_scripts_xen-bugtool-tc-class-show
+        Collect networking information relevant to Open vSwitch.  Runs
+        the following scripts, which are described below:
 
-        Script to dump tc class configuration for all network
-        interfaces. Intended to be run by xen-bugtool via
-        etc_xensource_bugtool_network-status_openvswitch.xml.
+            * ovs-bugtool-cfm-show
+            * ovs-bugtool-lcap-show
+            * ovs-bugtool-ovsdb-dump
+            * ovs-bugtool-tc-class-show
 
-    usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
+    system-configuration/openvswitch.xml
 
-        xsconsole plugin to configure the pool-wide configuration keys
-        used to control Open vSwitch when integrated with Citrix
-        management tools.
+        Collect system configuration information relevant to Open vSwitch,
+        including timezone.
+
+    system-configuration.xml
+
+        Collect system configuration data.  This category is configured
+        to collect up to 1Mb of data, take up to 60 seconds to collect
+        data, run every time and is hidden from display in XenCenter.
+
+A number of scripts are installed in /usr/share/openvswitch/scripts to
+assist Open vSwitch's xen-bugtool extensions.  The sources for the
+scripts are located in ../utilities/bugtool:
+
+    ovs-bugtool-cfm-show
+
+        Script to dump detailed CFM information for all enabled interfaces.
+
+    ovs-bugtool-lacp-show
+
+        Script to dump detailed LACP information for all enabled ports.
+
+    ovs-bugtool-ovsdb-dump
+
+        Script to dump contents of Open vSwitch configuration database 
+        in comma-separated value format.
+
+    ovs-bugtool-tc-class-show
+
+        Script to dump tc class configuration for all network interfaces.
 
 To install, build the Open vSwitch RPM with a command like this:
 
