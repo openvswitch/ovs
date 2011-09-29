@@ -141,7 +141,7 @@ def _make_pidfile():
         # This is global to keep Python from garbage-collecting and
         # therefore closing our file after this function exits.  That would
         # unlock the lock for us, and we don't want that.
-        global file
+        global file_handle
 
         file_handle = open(tmpfile, "w")
     except IOError, e:
