@@ -37,9 +37,9 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		if (!is_internal_dev(dev)) {
 			struct sk_buff *reply;
 
-			dp_detach_port(vport);
 			reply = ovs_vport_cmd_build_info(vport, 0, 0,
 							 OVS_VPORT_CMD_DEL);
+			dp_detach_port(vport);
 			if (IS_ERR(reply)) {
 				netlink_set_err(INIT_NET_GENL_SOCK, 0,
 						dp_vport_multicast_group.id,
