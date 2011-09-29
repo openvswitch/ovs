@@ -503,7 +503,7 @@ def add_args(parser):
             help="Do not chdir to '/'.")
     group.add_argument("--monitor", action="store_true",
             help="Monitor %s process." % ovs.util.PROGRAM_NAME)
-    group.add_argument("--pidfile", nargs="?", default=pidfile,
+    group.add_argument("--pidfile", nargs="?", const=pidfile,
             help="Create pidfile (default %s)." % pidfile)
     group.add_argument("--overwrite-pidfile", action="store_true",
             help="With --pidfile, start even if already running.")
