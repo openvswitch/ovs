@@ -25,7 +25,6 @@
 #include <stdlib.h>
 #include "classifier.h"
 #include "dhcp.h"
-#include "dpif.h"
 #include "flow.h"
 #include "netdev.h"
 #include "netlink.h"

@@ -661,6 +661,26 @@ dpif_port_poll_wait(const struct dpif *dpif)
     dpif->dpif_class->port_poll_wait(dpif);
 }
 
+/* Extracts the flow stats for a packet.  The 'flow' and 'packet'
+ * arguments must have been initialized through a call to flow_extract().
+ */
+void
+dpif_flow_stats_extract(const struct flow *flow, struct ofpbuf *packet,
+                        struct dpif_flow_stats *stats)
+{
+    memset(stats, 0, sizeof(*stats));
+
+    if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
+        if ((flow->nw_proto == IPPROTO_TCP) && packet->l7) {
+            struct tcp_header *tcp = packet->l4;
+            stats->tcp_flags = TCP_FLAGS(tcp->tcp_ctl);
+        }
+    }
+
+    stats->n_bytes = packet->size;
+    stats->n_packets = 1;
+}
+
 /* Appends a human-readable representation of 'stats' to 's'. */
 void
 dpif_flow_stats_format(const struct dpif_flow_stats *stats, struct ds *s)

@@ -26,7 +26,6 @@
 #include <string.h>
 #include "byte-order.h"
 #include "coverage.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "ofpbuf.h"
@@ -422,26 +421,6 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t ofp_in_port,
     }
 
     return retval;
-}
-
-/* Extracts the flow stats for a packet.  The 'flow' and 'packet'
- * arguments must have been initialized through a call to flow_extract().
- */
-void
-flow_extract_stats(const struct flow *flow, struct ofpbuf *packet,
-                   struct dpif_flow_stats *stats)
-{
-    memset(stats, 0, sizeof(*stats));
-
-    if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
-        if ((flow->nw_proto == IPPROTO_TCP) && packet->l7) {
-            struct tcp_header *tcp = packet->l4;
-            stats->tcp_flags = TCP_FLAGS(tcp->tcp_ctl);
-        }
-    }
-
-    stats->n_bytes = packet->size;
-    stats->n_packets = 1;
 }
 
 /* For every bit of a field that is wildcarded in 'wildcards', sets the

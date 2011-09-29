@@ -32,6 +32,7 @@ extern "C" {
 
 struct dpif;
 struct ds;
+struct flow;
 struct nlattr;
 struct ofpbuf;
 struct sset;
@@ -115,6 +116,8 @@ struct dpif_flow_stats {
     uint8_t tcp_flags;
 };
 
+void dpif_flow_stats_extract(const struct flow *, struct ofpbuf *packet,
+                             struct dpif_flow_stats *);
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
 
 enum dpif_flow_put_flags {

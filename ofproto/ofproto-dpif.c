@@ -2258,7 +2258,7 @@ facet_execute(struct ofproto_dpif *ofproto, struct facet *facet,
 
     assert(ofpbuf_headroom(packet) >= sizeof(struct ofp_packet_in));
 
-    flow_extract_stats(&facet->flow, packet, &stats);
+    dpif_flow_stats_extract(&facet->flow, packet, &stats);
     stats.used = time_msec();
     if (execute_odp_actions(ofproto, &facet->flow,
                             facet->actions, facet->actions_len, packet)) {
