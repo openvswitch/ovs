@@ -935,14 +935,10 @@ ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
         ds_put_printable(string, payload, payload_len);
         break;
 
-    case OFPET_BAD_REQUEST:
+    default:
         s = ofp_to_string(payload, payload_len, 1);
         ds_put_cstr(string, s);
         free(s);
-        break;
-
-    default:
-        ds_put_hex_dump(string, payload, payload_len, 0, true);
         break;
     }
 }
