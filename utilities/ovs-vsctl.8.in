@@ -786,11 +786,11 @@ their UUIDs, then "\fBovs\-vsctl destroy Queue \fIuuid1\fR
 .PP
 Monitor connectivity to a remote maintenance point on eth0.
 .IP
-.B "ovs\-vsctl set Interface eth0 cfm_mpid=1 cfm_remote_mpid=2"
+.B "ovs\-vsctl set Interface eth0 cfm_mpid=1"
 .PP
 Deconfigure connectivity monitoring from above:
 .IP
-.B "ovs\-vsctl clear Interface eth0 cfm_mpid cfm_remote_mpid"
+.B "ovs\-vsctl clear Interface eth0 cfm_mpid"
 .SS "NetFlow"
 .PP
 Configure bridge \fBbr0\fR to send NetFlow records to UDP port 5566 on
