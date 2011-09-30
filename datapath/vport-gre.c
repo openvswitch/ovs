@@ -207,7 +207,7 @@ static void gre_err(struct sk_buff *skb, u32 info)
 	 * out key as if it were the in key and then check to see if the input
 	 * and output keys are the same.
 	 */
-	if (mutable->in_key != mutable->out_key)
+	if (mutable->key.in_key != mutable->out_key)
 		return;
 
 	if (!!(mutable->flags & TNL_F_IN_KEY_MATCH) !=
