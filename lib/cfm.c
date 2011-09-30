@@ -533,12 +533,11 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
     ds_put_format(ds, "\tnext fault check: %lldms\n",
                   timer_msecs_until_expired(&cfm->fault_timer));
 
-    ds_put_cstr(ds, "\n");
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
         ds_put_format(ds, "Remote MPID %"PRIu64":%s\n",
                       rmp->mpid,
                       rmp->rdi ? " rdi" : "");
-        ds_put_format(ds, "\trecv since check: %s",
+        ds_put_format(ds, "\trecv since check: %s\n",
                       rmp->recv ? "true" : "false");
     }
 }
