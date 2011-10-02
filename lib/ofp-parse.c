@@ -593,11 +593,9 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
 {
     enum nx_flow_format min_format, next_format;
     struct cls_rule rule_copy;
-    struct ofpbuf actions;
     struct ofpbuf *ofm;
     struct ofputil_flow_mod fm;
 
-    ofpbuf_init(&actions, 64);
     parse_ofp_str(&fm, command, string, verbose);
 
     min_format = ofputil_min_flow_format(&fm.cr);
@@ -622,8 +620,6 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
 
     ofm = ofputil_encode_flow_mod(&fm, *cur_format, *flow_mod_table_id);
     list_push_back(packets, &ofm->list_node);
-
-    ofpbuf_uninit(&actions);
 }
 
 /* Similar to parse_ofp_flow_mod_str(), except that the string is read from
