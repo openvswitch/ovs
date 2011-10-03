@@ -2926,7 +2926,7 @@ rule_modify_actions(struct rule *rule_)
     complete_operation(rule);
 }
 
-/* Sends 'packet' out of port 'odp_port' within 'p'.
+/* Sends 'packet' out of port 'odp_port' within 'ofproto'.
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
 send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
