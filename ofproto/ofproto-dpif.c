@@ -758,6 +758,7 @@ port_construct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
+    ofproto->need_revalidate = true;
     port->odp_port = ofp_port_to_odp_port(port->up.ofp_port);
     port->bundle = NULL;
     port->cfm = NULL;
@@ -778,6 +779,7 @@ port_destruct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
+    ofproto->need_revalidate = true;
     bundle_remove(port_);
     set_cfm(port_, NULL);
     if (ofproto->sflow) {
