@@ -990,6 +990,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
         }
     }
     if (lacp) {
+        port->bundle->ofproto->need_revalidate = true;
         lacp_slave_register(bundle->lacp, port, lacp);
     }
 
