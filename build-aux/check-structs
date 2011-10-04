@@ -187,6 +187,7 @@ def parseStruct():
             warn("%s needs %d bytes of tail padding" % (structName, shortage))
         size += shortage
     types[structName] = {"size": size, "alignment": alignment}
+    return structName
 
 def checkStructs():
     if len(sys.argv) < 2:
@@ -223,6 +224,7 @@ header files without extensions.''' % {"argv0": argv0}
         global lineNumber
         inputFile = open(fileName)
         lineNumber = 0
+        lastStruct = None
         while getToken():
             if token in ("#ifdef", "#ifndef", "#include",
                          "#endif", "#elif", "#else"):
@@ -243,12 +245,15 @@ header files without extensions.''' % {"argv0": argv0}
                 while token != ';':
                     getToken()
             elif token in ('struct', 'union'):
-                parseStruct()
+                lastStruct = parseStruct()
             elif match('OFP_ASSERT') or match('BOOST_STATIC_ASSERT'):
                 forceMatch('(')
                 forceMatch('sizeof')
                 forceMatch('(')
                 typeName = parseTypeName()
+                if typeName != lastStruct:
+                    warn("checking size of %s but %s was most recently defined"
+                         % (typeName, lastStruct))
                 forceMatch(')')
                 forceMatch('=')
                 forceMatch('=')
