@@ -17,12 +17,8 @@
 #ifndef VCONN_H
 #define VCONN_H 1
 
-#include <assert.h>
 #include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-#include "flow.h"
+#include "openvswitch/types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,10 +26,6 @@ extern "C" {
 
 struct list;
 struct ofpbuf;
-struct ofp_action_header;
-struct ofp_header;
-struct ofp_match;
-struct ofp_stats_msg;
 struct pvconn;
 struct vconn;
 

@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "command-line.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "stream.h"

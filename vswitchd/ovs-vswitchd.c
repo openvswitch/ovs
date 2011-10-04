@@ -34,6 +34,7 @@
 #include "dummy.h"
 #include "leak-checker.h"
 #include "netdev.h"
+#include "openflow/openflow.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"

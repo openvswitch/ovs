@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "hash.h"
 #include "hmap.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
