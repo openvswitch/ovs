@@ -431,7 +431,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -558,7 +558,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->ipv6_dst_mask = in6addr_any;
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
     wc->vlan_tci_mask = htons(0);
-    wc->zero = 0;
+    memset(wc->zeros, 0, sizeof wc->zeros);
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -574,7 +574,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->ipv6_dst_mask = in6addr_exact;
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
     wc->vlan_tci_mask = htons(UINT16_MAX);
-    wc->zero = 0;
+    memset(wc->zeros, 0, sizeof wc->zeros);
 }
 
 /* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
@@ -584,7 +584,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
@@ -612,7 +612,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     if (wc->wildcards != FWW_ALL
         || wc->tun_id_mask != htonll(0)
@@ -664,7 +664,7 @@ flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
     /* If you change struct flow_wildcards and thereby trigger this
      * assertion, please check that the new struct flow_wildcards has no holes
      * in it before you update the assertion. */
-    BUILD_ASSERT_DECL(sizeof *wc == 56 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(sizeof *wc == 60 + FLOW_N_REGS * 4);
     return hash_bytes(wc, sizeof *wc, basis);
 }
 

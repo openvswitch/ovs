@@ -99,7 +99,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -790,7 +790,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {

@@ -419,7 +419,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 1);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
