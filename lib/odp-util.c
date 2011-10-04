@@ -98,16 +98,13 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
         [OVS_SAMPLE_ATTR_ACTIONS] = { .type = NL_A_NESTED }
     };
     struct nlattr *a[ARRAY_SIZE(ovs_sample_policy)];
-    struct ofpbuf buf;
     double percentage;
     const struct nlattr *nla_acts;
     int len;
 
     ds_put_cstr(ds, "sample");
 
-    ofpbuf_use_const(&buf, nl_attr_get(attr), nl_attr_get_size(attr));
-    if (!nl_policy_parse(&buf, 0, ovs_sample_policy, a,
-                            ARRAY_SIZE(ovs_sample_policy))) {
+    if (!nl_parse_nested(attr, ovs_sample_policy, a, ARRAY_SIZE(a))) {
         ds_put_cstr(ds, "(error)");
         return;
     }
