@@ -28,7 +28,6 @@
 import argparse
 import glob
 import os
-import socket
 import subprocess
 import sys
 
@@ -120,7 +119,7 @@ path certificate "%s";
             try:
                 os.remove(ovs_cert)
             except OSError:
-                s_log.warning("couldn't remove %s" % ovs_cert)
+                vlog.warn("couldn't remove %s" % ovs_cert)
 
         # Replace racoon's conf file with our template
         self.commit()
@@ -133,11 +132,11 @@ path certificate "%s";
             # refuse to start if it sees something it doesn't like
             # (e.g., a certificate file doesn't exist).  Try restarting
             # the process before giving up.
-            s_log.warning("attempting to restart racoon")
+            vlog.warn("attempting to restart racoon")
             exitcode = subprocess.call([root_prefix + "/etc/init.d/racoon",
                                         "restart"])
             if exitcode != 0:
-                s_log.warning("couldn't reload racoon")
+                vlog.warn("couldn't reload racoon")
 
     def commit(self):
         # Rewrite the Racoon configuration file
@@ -266,7 +265,7 @@ class IPsec:
                                  stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
         except:
-            s_log.error("could not call %s%s" % (root_prefix, setkey))
+            vlog.err("could not call %s%s" % (root_prefix, setkey))
             sys.exit(1)
 
         # xxx It is safer to pass the string into the communicate()
@@ -409,7 +408,7 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
         try:
             ipsec.add_entry(vals["local_ip"], vals["remote_ip"], vals)
         except error.Error, msg:
-            s_log.warning("skipping ipsec config for %s: %s" % (name, msg))
+            vlog.warn("skipping ipsec config for %s: %s" % (name, msg))
 
 
 def get_ssl_cert(data):
@@ -474,19 +473,18 @@ def main():
                     "psk": options.get("psk")}
 
                 if entry["peer_cert"] and entry["psk"]:
-                    s_log.warning("both 'peer_cert' and 'psk' defined for %s"
-                            % name)
+                    vlog.warn("both 'peer_cert' and 'psk' defined for %s"
+                              % name)
                     continue
                 elif not entry["peer_cert"] and not entry["psk"]:
-                    s_log.warning("no 'peer_cert' or 'psk' defined for %s"
-                            % name)
+                    vlog.warn("no 'peer_cert' or 'psk' defined for %s" % name)
                     continue
 
                 # The "use_ssl_cert" option is deprecated and will
                 # likely go away in the near future.
                 if entry["use_ssl_cert"] == "true":
                     if not ssl_cert:
-                        s_log.warning("no valid SSL entry for %s" % name)
+                        vlog.warn("no valid SSL entry for %s" % name)
                         continue
 
                     entry["certificate"] = ssl_cert[0]
