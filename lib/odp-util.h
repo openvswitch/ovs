@@ -28,6 +28,7 @@
 
 struct ds;
 struct flow;
+struct nlattr;
 struct ofpbuf;
 
 #define OVSP_NONE ((uint16_t) -1)

@@ -50,8 +50,6 @@
 #include "openvswitch/types.h"
 #include <sys/socket.h>
 #endif
-
-#include <linux/netlink.h>
 
 /* datapaths. */
 
