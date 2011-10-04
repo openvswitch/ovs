@@ -104,14 +104,16 @@
           omitted.
         </p>
 
-        <column name="other_config" key="enable-statistics">
+        <column name="other_config" key="enable-statistics"
+                type='{"type": "boolean"}'>
           Statistics are disabled by default to avoid overhead in the common
           case when statistics gathering is not useful.  Set this value to
           <code>true</code> to enable populating the <ref column="statistics"/>
           column or to <code>false</code> to explicitly disable it.
         </column>
 
-        <column name="statistics" key="cpu">
+        <column name="statistics" key="cpu"
+                type='{"type": "integer", "minInteger": 1}'>
           <p>
             Number of CPU processors, threads, or cores currently online and
             available to the operating system on which Open vSwitch is running,
@@ -417,12 +419,14 @@
         value.  May not be all-zero.
       </column>
 
-      <column name="other_config" key="disable-in-band">
+      <column name="other_config" key="disable-in-band"
+              type='{"type": "boolean"}'>
         If set to <code>true</code>, disable in-band control on the bridge
         regardless of controller and manager settings.
       </column>
 
-      <column name="other_config" key="in-band-queue">
+      <column name="other_config" key="in-band-queue"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
         A queue ID as a nonnegative integer.  This sets the OpenFlow queue ID
         that will be used by flows set up by in-band control on this bridge.
         If unset, or if the port used by an in-band control flow does not have
@@ -458,7 +462,8 @@
         datapath ID.
       </column>
 
-      <column name="other_config" key="flow-eviction-threshold">
+      <column name="other_config" key="flow-eviction-threshold"
+              type='{"type": "integer", "minInteger": 0}'>
         <p>
           A number of flows as a nonnegative integer.  This sets number of
           flows at which eviction from the kernel flow table will be triggered.
@@ -471,7 +476,8 @@
         </p>
       </column>
 
-      <column name="other_config" key="forward-bpdu">
+      <column name="other_config" key="forward-bpdu"
+              type='{"type": "boolean"}'>
         Option to allow forwarding of BPDU frames when NORMAL action if
         invoked. Frames with reserved Ethernet addresses (e.g. STP BPDU) will
         be forwarded when this option is enabled.  If the Open vSwitch bridge
@@ -672,15 +678,16 @@
           detects link failure.
         </p>
 
-        <column name="other_config" key="bond-detect-mode">
-          The means used to detect link failures.  Options are
-          <code>carrier</code> and <code>miimon</code>. Defaults to
+        <column name="other_config" key="bond-detect-mode"
+                type='{"type": "string", "enum": ["set", ["carrier", "miimon"]]}'>
+          The means used to detect link failures.  Defaults to
           <code>carrier</code> which uses each interface's carrier to detect
           failures.  When set to <code>miimon</code>, will check for failures
           by polling each interface's MII.
         </column>
 
-        <column name="other_config" key="bond-miimon-interval">
+        <column name="other_config" key="bond-miimon-interval"
+                type='{"type": "integer"}'>
           The interval, in milliseconds, between successive attempts to poll
           each interface's MII.  Relevant only when <ref column="other_config"
           key="bond-detect-mode"/> is <code>miimon</code>.
@@ -732,10 +739,11 @@
           nonzero MAC address.
         </column>
 
-        <column name="other_config" key="lacp-system-priority">
+        <column name="other_config" key="lacp-system-priority"
+                type='{"type": "integer", "minInteger": 1, "maxInteger": 65535}'>
           The LACP system priority of this <ref table="Port"/>.  In LACP
           negotiations, link status decisions are made by the system with the
-          numerically lower priority.  Must be a number between 1 and 65535.
+          numerically lower priority.
         </column>
 
         <column name="other_config" key="lacp-time">
@@ -759,13 +767,16 @@
           </p>
         </column>
 
-        <column name="other_config" key="lacp-heartbeat">
-          Treats LACP like a simple heartbeat protocol for link state
-          monitoring.  Most features of the LACP protocol are disabled when
-          this mode is in use.
+        <column name="other_config" key="lacp-heartbeat"
+                type='{"type": "boolean"}'>
+          Treat LACP like a simple heartbeat protocol for link state
+          monitoring.  Most features of the LACP protocol are disabled
+          when this mode is in use.  The default if not specified is
+          <code>false</code>.
         </column>
 
-        <column name="other_config" key="bond-hash-basis">
+        <column name="other_config" key="bond-hash-basis"
+                type='{"type": "integer"}'>
           An integer hashed along with flows when choosing output slaves.  When
           changed, all flows will be assigned different hash values possibly
           causing slave selection decisions to change.
@@ -780,12 +791,12 @@
           because LACP negotiation failed.
         </p>
 
-        <column name="other_config" key="bond-rebalance-interval">
+        <column name="other_config" key="bond-rebalance-interval"
+                type='{"type": "integer", "minInteger": 1000, "maxInteger": 10000}'>
           For an SLB bonded port, the number of milliseconds between successive
           attempts to rebalance the bond, that is, to move source MACs and
           their flows from one interface on the bond to another in an attempt
-          to keep usage of each interface roughly equal.  The default is 10000
-          (10 seconds), and the minimum is 1000 (1 second).
+          to keep usage of each interface roughly equal.
         </column>
       </group>
 
@@ -1031,21 +1042,22 @@
         system default, typically 64).  Default is the system default TTL.
       </column>
       
-      <column name="options" key="df_inherit">
+      <column name="options" key="df_inherit" type='{"type": "boolean"}'>
         Optional.  If enabled, the Don't Fragment bit will be copied from the
         inner IP headers (those of the encapsulated traffic) to the outer
         (tunnel) headers.  Default is disabled; set to <code>true</code> to
         enable.
       </column>
 
-      <column name="options" key="df_default">
+      <column name="options" key="df_default"
+              type='{"type": "boolean"}'>
         Optional.  If enabled, the Don't Fragment bit will be set by default on
         tunnel headers if the <code>df_inherit</code> option is not set, or if
         the encapsulated packet is not IP.  Default is enabled; set to
         <code>false</code> to disable.
       </column>
 
-      <column name="options" key="pmtud">
+      <column name="options" key="pmtud" type='{"type": "boolean"}'>
         Optional.  Enable tunnel path MTU discovery.  If enabled ``ICMP
         Destination Unreachable - Fragmentation Needed'' messages will be
         generated for IPv4 packets with the DF bit set and IPv6 packets above
@@ -1061,7 +1073,7 @@
           Only <code>gre</code> interfaces support these options.
         </p>
 
-        <column name="options" key="header_cache">
+        <column name="options" key="header_cache" type='{"type": "boolean"}'>
           Enable caching of tunnel headers and the output path.  This can lead
           to a significant performance increase without changing behavior.  In
           general it should not be necessary to adjust this setting.  However,
@@ -1078,7 +1090,7 @@
           these options.
         </p>
 
-        <column name="options" key="csum">
+        <column name="options" key="csum" type='{"type": "boolean"}'>
           <p>
             Optional.  Compute GRE checksums on outgoing packets.  Default is
             disabled, set to <code>true</code> to enable.  Checksums present on
@@ -1235,10 +1247,10 @@
         internal interface such as a bridge port.
       </column>
 
-      <column name="status" key="tunnel_egress_iface_carrier">
-        Whether a carrier is detected on <ref column="status"
-        key="tunnel_egress_iface"/>.  Valid values are <code>down</code> and
-        <code>up</code>.
+      <column name="status" key="tunnel_egress_iface_carrier"
+              type='{"type": "string", "enum": ["set", ["down", "up"]]}'>
+        Whether carrier is detected on <ref column="status"
+        key="tunnel_egress_iface"/>.
       </column>
     </group>
 
@@ -1432,13 +1444,15 @@
         collected and written to this column.
       </column>
 
-      <column name="other_config" key="cfm_interval">
+      <column name="other_config" key="cfm_interval"
+              type='{"type": "integer"}'>
         The interval, in milliseconds, between transmissions of CFM heartbeats.
         Three missed heartbeat receptions indicate a connectivity fault.
         Defaults to 1000.
       </column>
 
-      <column name="other_config" key="cfm_extended">
+      <column name="other_config" key="cfm_extended"
+              type='{"type": "boolean"}'>
         When <code>true</code>, the CFM module operates in extended mode. This
         causes it to use a nonstandard destination address to avoid conflicting
         with compliant implementations which may be running concurrently on the
@@ -1460,8 +1474,9 @@
     </group>
 
     <group title="Bonding Configuration">
-      <column name="other_config" key="bond-stable-id">
-        A positive integer using in <code>stable</code> bond mode to make slave
+      <column name="other_config" key="bond-stable-id"
+              type='{"type": "integer", "minInteger": 1}'>
+        Used in <code>stable</code> bond mode to make slave
         selection decisions.  Allocating <ref column="other_config"
         key="bond-stable-id"/> values consistently across interfaces
         participating in a bond will guarantee consistent slave selection
@@ -1469,25 +1484,25 @@
         <code>stable</code> bonding mode.
       </column>
 
-      <column name="other_config" key="lacp-port-id">
+      <column name="other_config" key="lacp-port-id"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 65535}'>
         The LACP port ID of this <ref table="Interface"/>.  Port IDs are
         used in LACP negotiations to identify individual ports
-        participating in a bond.  Must be a number between 1 and
-        65535.
+        participating in a bond.
       </column>
 
-      <column name="other_config" key="lacp-port-priority">
+      <column name="other_config" key="lacp-port-priority"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 65535}'>
         The LACP port priority of this <ref table="Interface"/>.  In LACP
         negotiations <ref table="Interface"/>s with numerically lower
-        priorities are preferred for aggregation.  Must be a number between 1
-        and 65535.
+        priorities are preferred for aggregation.
       </column>
 
-      <column name="other_config" key="lacp-aggregation-key">
+      <column name="other_config" key="lacp-aggregation-key"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 65535}'>
         The LACP aggregation key of this <ref table="Interface"/>.  <ref
         table="Interface"/>s with different aggregation keys may not be active
-        within a given <ref table="Port"/> at the same time. Must be a number
-        between 1 and 65535.
+        within a given <ref table="Port"/> at the same time.
       </column>
     </group>
 
@@ -1580,7 +1595,7 @@
         the following key-value pair:
       </p>
       
-      <column name="other_config" key="max-rate">
+      <column name="other_config" key="max-rate" type='{"type": "integer"}'>
         Maximum rate shared by all queued traffic, in bit/s.  Optional.  If not
         specified, for physical interfaces, the default is the link rate.  For
         other interfaces or if the link rate cannot be determined, the default
@@ -1608,7 +1623,8 @@
         table="QoS" column="type"/> of <code>min-rate</code>.
       </p>
       
-      <column name="other_config" key="min-rate">
+      <column name="other_config" key="min-rate"
+              type='{"type": "integer", "minInteger": 12000}'>
         Minimum guaranteed bandwidth, in bit/s.  Required.  The floor value is
         1500 bytes/s (12,000 bit/s).
       </column>
@@ -1620,30 +1636,33 @@
         table="QoS" column="type"/> of <code>linux-htb</code>.
       </p>
       
-      <column name="other_config" key="min-rate">
+      <column name="other_config" key="min-rate"
+              type='{"type": "integer", "minInteger": 1}'>
         Minimum guaranteed bandwidth, in bit/s.
       </column>
 
-      <column name="other_config" key="max-rate">
+      <column name="other_config" key="max-rate"
+              type='{"type": "integer", "minInteger": 1}'>
         Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
         queue's rate will not be allowed to exceed the specified value, even
         if excess bandwidth is available.  If unspecified, defaults to no
         limit.
       </column>
 
-      <column name="other_config" key="burst">
+      <column name="other_config" key="burst"
+              type='{"type": "integer", "minInteger": 1}'>
         Burst size, in bits.  This is the maximum amount of ``credits'' that a
         queue can accumulate while it is idle.  Optional.  Details of the
         <code>linux-htb</code> implementation require a minimum burst size, so
         a too-small <code>burst</code> will be silently ignored.
       </column>
 
-      <column name="other_config" key="priority">
-        A nonnegative 32-bit integer.  Defaults to 0 if unspecified.  A queue
-        with a smaller <code>priority</code> will receive all the excess
-        bandwidth that it can use before a queue with a larger value receives
-        any.  Specific priority values are unimportant; only relative ordering
-        matters.
+      <column name="other_config" key="priority"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
+        A queue with a smaller <code>priority</code> will receive all the
+        excess bandwidth that it can use before a queue with a larger value
+        receives any.  Specific priority values are unimportant; only relative
+        ordering matters.  Defaults to 0 if unspecified.
       </column>
     </group>
 
@@ -1653,11 +1672,13 @@
         table="QoS" column="type"/> of <code>linux-hfsc</code>.
       </p>
       
-      <column name="other_config" key="min-rate">
+      <column name="other_config" key="min-rate"
+              type='{"type": "integer", "minInteger": 1}'>
         Minimum guaranteed bandwidth, in bit/s.
       </column>
       
-      <column name="other_config" key="max-rate">
+      <column name="other_config" key="max-rate"
+              type='{"type": "integer", "minInteger": 1}'>
         Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
         queue's rate will not be allowed to exceed the specified value, even if
         excess bandwidth is available.  If unspecified, defaults to no
@@ -2040,7 +2061,8 @@
         <code>false</code> otherwise.
       </column>
 
-      <column name="role">
+      <column name="role"
+              type='{"type": "string", "enum": ["set", ["other", "master", "slave"]]}'>
         <p>The level of authority this controller has on the associated
         bridge. Possible values are:</p>
         <dl>
@@ -2066,9 +2088,10 @@
         will exist only if an error has occurred.
       </column>
 
-      <column name="status" key="state">
+      <column name="status" key="state"
+              type='{"type": "string", "enum": ["set", ["VOID", "BACKOFF", "CONNECTING", "ACTIVE", "IDLE"]]}'>
         <p>
-          The state of the connection to the controller.  Possible values are:
+          The state of the connection to the controller:
         </p>
         <dl>
           <dt><code>VOID</code></dt>
@@ -2092,13 +2115,15 @@
         </p>
       </column>
       
-      <column name="status" key="sec_since_connect">
+      <column name="status" key="sec_since_connect"
+              type='{"type": "integer", "minInteger": 0}'>
         The amount of time since this controller last successfully connected to
         the switch (in seconds).  Value is empty if controller has never
         successfully connected.
       </column>
       
-      <column name="status" key="sec_since_disconnect">
+      <column name="status" key="sec_since_disconnect"
+              type='{"type": "integer", "minInteger": 1}'>
         The amount of time since this controller last disconnected from
         the switch (in seconds). Value is empty if controller has never
         disconnected.
@@ -2254,9 +2279,10 @@
         will exist only if an error has occurred.
       </column>
 
-      <column name="status" key="state">
+      <column name="status" key="state"
+              type='{"type": "string", "enum": ["set", ["VOID", "BACKOFF", "CONNECTING", "ACTIVE", "IDLE"]]}'>
         <p>
-          The state of the connection to the manager.  Possible values are:
+          The state of the connection to the manager:
         </p>
         <dl>
           <dt><code>VOID</code></dt>
@@ -2280,13 +2306,15 @@
         </p>
       </column>
 
-      <column name="status" key="sec_since_connect">
+      <column name="status" key="sec_since_connect"
+              type='{"type": "integer", "minInteger": 0}'>
         The amount of time since this manager last successfully connected
         to the database (in seconds). Value is empty if manager has never
         successfully connected.
       </column>
 
-      <column name="status" key="sec_since_disconnect">
+      <column name="status" key="sec_since_disconnect"
+              type='{"type": "integer", "minInteger": 0}'>
         The amount of time since this manager last disconnected from the
         database (in seconds). Value is empty if manager has never
         disconnected.
@@ -2309,7 +2337,8 @@
         stolen from this connection.
       </column>
 
-      <column name="status" key="n_connections">
+      <column name="status" key="n_connections"
+              type='{"type": "integer", "minInteger": 2}'>
         <p>
           When <ref column="target"/> specifies a connection method that
           listens for inbound connections (e.g. <code>ptcp:</code> or

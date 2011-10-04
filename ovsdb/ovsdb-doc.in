@@ -174,8 +174,33 @@ def columnGroupToNroff(table, groupXml):
             column = table.columns[name]
             if node.hasAttribute('key'):
                 key = node.attributes['key'].nodeValue
+                if node.hasAttribute('type'):
+                    type_string = node.attributes['type'].nodeValue
+                    type_json = ovs.json.from_string(str(type_string))
+                    if type(type_json) in (str, unicode):
+                        raise error.Error("%s %s:%s has invalid 'type': %s" 
+                                          % (table.name, name, key, type_json))
+                    type_ = ovs.db.types.BaseType.from_json(type_json)
+                else:
+                    type_ = column.type.value
+
                 nameNroff = "%s : %s" % (name, key)
                 typeNroff = "optional %s" % column.type.value.toEnglish()
+                if (column.type.value.type == ovs.db.types.StringType and
+                    type_.type == ovs.db.types.BooleanType):
+                    # This is a little more explicit and helpful than
+                    # "containing a boolean"
+                    typeNroff += r", either \fBtrue\fR or \fBfalse\fR"
+                else:
+                    if type_.type != column.type.value.type:
+                        type_english = type_.toEnglish()
+                        if type_english[0] in 'aeiou':
+                            typeNroff += ", containing an %s" % type_english
+                        else:
+                            typeNroff += ", containing a %s" % type_english
+                    constraints = type_.constraintsToEnglish(escapeNroffLiteral)
+                    if constraints:
+                        typeNroff += ", %s" % constraints
             else:
                 nameNroff = name
                 typeNroff = typeAndConstraintsToNroff(column)
