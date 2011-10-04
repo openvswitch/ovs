@@ -102,9 +102,9 @@ struct dpif_linux_flow {
 
     /* Attributes.
      *
-     * The 'stats' and 'used' members point to 64-bit data that might only be
-     * aligned on 32-bit boundaries, so get_unaligned_u64() should be used to
-     * access their values.
+     * The 'stats' member points to 64-bit data that might only be aligned on
+     * 32-bit boundaries, so get_unaligned_u64() should be used to access its
+     * values.
      *
      * If 'actions' is nonnull then OVS_FLOW_ATTR_ACTIONS will be included in
      * the Netlink version of the command, even if actions_len is zero. */
@@ -115,7 +115,7 @@ struct dpif_linux_flow {
     const uint32_t *upcall_pid;         /* OVS_FLOW_ATTR_UPCALL_PID. */
     const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
     const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
-    const uint64_t *used;               /* OVS_FLOW_ATTR_USED. */
+    const ovs_32aligned_u64 *used;      /* OVS_FLOW_ATTR_USED. */
     bool clear;                         /* OVS_FLOW_ATTR_CLEAR. */
 };
 
@@ -1764,7 +1764,7 @@ dpif_linux_flow_get_stats(const struct dpif_linux_flow *flow,
         stats->n_packets = 0;
         stats->n_bytes = 0;
     }
-    stats->used = flow->used ? get_unaligned_u64(flow->used) : 0;
+    stats->used = flow->used ? get_32aligned_u64(flow->used) : 0;
     stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
 }
 
