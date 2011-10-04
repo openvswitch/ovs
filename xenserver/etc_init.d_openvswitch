@@ -73,7 +73,7 @@ start () {
     else
 	PYTHONPATH=/usr/share/openvswitch/python \
             /usr/share/openvswitch/scripts/ovs-xapi-sync \
-            --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
+            --log-file --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
     fi
 
     $ovs_ctl --protocol=gre enable-protocol
