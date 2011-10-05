@@ -1,2 +1,1 @@
-python/ovs/*.py usr/lib/python2.4/site-packages/ovs/
-python/ovs/db/*.py usr/lib/python2.4/site-packages/ovs/db/
+usr/share/openvswitch/python/* usr/lib/python2.4/site-packages/
