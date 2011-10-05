@@ -1940,6 +1940,7 @@
         <p>Output port for selected packets, if nonempty.</p>
         <p>Specifying a port for mirror output reserves that port exclusively
         for mirroring.  No frames other than those selected for mirroring
+        via this column
         will be forwarded to the port, and any frames received on the port
         will be discarded.</p>
         <p>

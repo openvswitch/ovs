@@ -4611,6 +4611,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
 
                 HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                     if (ofbundle_includes_vlan(bundle, m->out_vlan)
+                        && !bundle->mirror_out
                         && set_dst(ctx, &dst, in_bundle, bundle))
                     {
                         /* set_dst() got dst->vid from the input packet's VLAN,
