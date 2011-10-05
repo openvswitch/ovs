@@ -40,15 +40,8 @@
 #ifndef OPENVSWITCH_DATAPATH_PROTOCOL_H
 #define OPENVSWITCH_DATAPATH_PROTOCOL_H 1
 
-#ifdef __KERNEL__
 #include <linux/types.h>
-#define ovs_be16 __be16
-#define ovs_be32 __be32
-#define ovs_be64 __be64
-#else
-#include "openvswitch/types.h"
-#endif
-
+
 /* datapaths. */
 
 #define OVS_DATAPATH_FAMILY  "ovs_datapath"
@@ -119,26 +112,26 @@ enum ovs_datapath_frag {
 };
 
 struct ovs_dp_stats {
-    uint64_t n_frags;           /* Number of dropped IP fragments. */
-    uint64_t n_hit;             /* Number of flow table matches. */
-    uint64_t n_missed;          /* Number of flow table misses. */
-    uint64_t n_lost;            /* Number of misses not sent to userspace. */
-    uint64_t n_flows;           /* Number of flows present */
+    __u64 n_frags;           /* Number of dropped IP fragments. */
+    __u64 n_hit;             /* Number of flow table matches. */
+    __u64 n_missed;          /* Number of flow table misses. */
+    __u64 n_lost;            /* Number of misses not sent to userspace. */
+    __u64 n_flows;           /* Number of flows present */
 };
 
 struct ovs_vport_stats {
-	uint64_t   rx_packets;		/* total packets received       */
-	uint64_t   tx_packets;		/* total packets transmitted    */
-	uint64_t   rx_bytes;		/* total bytes received         */
-	uint64_t   tx_bytes;		/* total bytes transmitted      */
-	uint64_t   rx_errors;		/* bad packets received         */
-	uint64_t   tx_errors;		/* packet transmit problems     */
-	uint64_t   rx_dropped;		/* no space in linux buffers    */
-	uint64_t   tx_dropped;		/* no space available in linux  */
+	__u64   rx_packets;		/* total packets received       */
+	__u64   tx_packets;		/* total packets transmitted    */
+	__u64   rx_bytes;		/* total bytes received         */
+	__u64   tx_bytes;		/* total bytes transmitted      */
+	__u64   rx_errors;		/* bad packets received         */
+	__u64   tx_errors;		/* packet transmit problems     */
+	__u64   rx_dropped;		/* no space in linux buffers    */
+	__u64   tx_dropped;		/* no space available in linux  */
 };
 
 /* Logical ports. */
-#define OVSP_LOCAL      ((uint16_t)0)
+#define OVSP_LOCAL      ((__u16)0)
 
 #define OVS_PACKET_FAMILY "ovs_packet"
 
@@ -273,8 +266,8 @@ enum ovs_flow_cmd {
 };
 
 struct ovs_flow_stats {
-    uint64_t n_packets;         /* Number of matched packets. */
-    uint64_t n_bytes;           /* Number of matched bytes. */
+    __u64 n_packets;         /* Number of matched packets. */
+    __u64 n_bytes;           /* Number of matched bytes. */
 };
 
 enum ovs_key_attr {
@@ -298,61 +291,61 @@ enum ovs_key_attr {
 #define OVS_KEY_ATTR_MAX (__OVS_KEY_ATTR_MAX - 1)
 
 struct ovs_key_ethernet {
-	uint8_t	 eth_src[6];
-	uint8_t	 eth_dst[6];
+	__u8	 eth_src[6];
+	__u8	 eth_dst[6];
 };
 
 struct ovs_key_8021q {
-	ovs_be16 q_tpid;
-	ovs_be16 q_tci;
+	__be16 q_tpid;
+	__be16 q_tci;
 };
 
 struct ovs_key_ipv4 {
-	ovs_be32 ipv4_src;
-	ovs_be32 ipv4_dst;
-	uint8_t  ipv4_proto;
-	uint8_t  ipv4_tos;
+	__be32 ipv4_src;
+	__be32 ipv4_dst;
+	__u8   ipv4_proto;
+	__u8   ipv4_tos;
 };
 
 struct ovs_key_ipv6 {
-	ovs_be32 ipv6_src[4];
-	ovs_be32 ipv6_dst[4];
-	uint8_t  ipv6_proto;
-	uint8_t  ipv6_tos;
+	__be32 ipv6_src[4];
+	__be32 ipv6_dst[4];
+	__u8   ipv6_proto;
+	__u8   ipv6_tos;
 };
 
 struct ovs_key_tcp {
-	ovs_be16 tcp_src;
-	ovs_be16 tcp_dst;
+	__be16 tcp_src;
+	__be16 tcp_dst;
 };
 
 struct ovs_key_udp {
-	ovs_be16 udp_src;
-	ovs_be16 udp_dst;
+	__be16 udp_src;
+	__be16 udp_dst;
 };
 
 struct ovs_key_icmp {
-	uint8_t icmp_type;
-	uint8_t icmp_code;
+	__u8 icmp_type;
+	__u8 icmp_code;
 };
 
 struct ovs_key_icmpv6 {
-	uint8_t icmpv6_type;
-	uint8_t icmpv6_code;
+	__u8 icmpv6_type;
+	__u8 icmpv6_code;
 };
 
 struct ovs_key_arp {
-	ovs_be32 arp_sip;
-	ovs_be32 arp_tip;
-	ovs_be16 arp_op;
-	uint8_t  arp_sha[6];
-	uint8_t  arp_tha[6];
+	__be32 arp_sip;
+	__be32 arp_tip;
+	__be16 arp_op;
+	__u8   arp_sha[6];
+	__u8   arp_tha[6];
 };
 
 struct ovs_key_nd {
-	uint32_t nd_target[4];
-	uint8_t  nd_sll[6];
-	uint8_t  nd_tll[6];
+	__u32 nd_target[4];
+	__u8  nd_sll[6];
+	__u8  nd_tll[6];
 };
 
 /**

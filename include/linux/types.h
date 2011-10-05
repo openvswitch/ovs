@@ -1,0 +1,47 @@
+/*
+ * Copyright (c) 2011 Nicira Networks.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef LINUX_TYPES_H
+#define LINUX_TYPES_H 1
+
+/* On Linux, this header file just includes <linux/types.h>.
+ *
+ * On other platforms, this header file implements just enough of
+ * <linux/types.h> to allow datapath-protocol.h to work, that is, it defines
+ * the __u<N> and __be<N> types. */
+
+#if __KERNEL__ || HAVE_LINUX_TYPES_H
+#include_next <linux/types.h>
+#else  /* no <linux/types.h> */
+#include <stdint.h>
+
+#ifdef __CHECKER__
+#define __bitwise__ __attribute__((bitwise))
+#else
+#define __bitwise__
+#endif
+
+typedef uint8_t  __u8;
+typedef uint16_t __u16;
+typedef uint32_t __u32;
+typedef uint64_t __u64;
+
+typedef uint16_t __bitwise__ __be16;
+typedef uint32_t __bitwise__ __be32;
+typedef uint64_t __bitwise__ __be64;
+#endif	/* no <linux/types.h> */
+
+#endif /* <linux/types.h> */

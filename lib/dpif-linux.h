@@ -18,6 +18,7 @@
 #define DPIF_LINUX_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "openvswitch/datapath-protocol.h"
 
