@@ -333,7 +333,7 @@ dpif_linux_wait(struct dpif *dpif OVS_UNUSED)
 }
 
 static int
-dpif_linux_get_stats(const struct dpif *dpif_, struct ovs_dp_stats *stats)
+dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
 {
     struct dpif_linux_dp dp;
     struct ofpbuf *buf;
@@ -341,7 +341,11 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct ovs_dp_stats *stats)
 
     error = dpif_linux_dp_get(dpif_, &dp, &buf);
     if (!error) {
-        *stats = dp.stats;
+        stats->n_frags  = dp.stats.n_frags;
+        stats->n_hit    = dp.stats.n_hit;
+        stats->n_missed = dp.stats.n_missed;
+        stats->n_lost   = dp.stats.n_lost;
+        stats->n_flows  = dp.stats.n_flows;
         ofpbuf_delete(buf);
     }
     return error;

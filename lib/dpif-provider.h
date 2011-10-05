@@ -108,7 +108,7 @@ struct dpif_class {
     void (*wait)(struct dpif *dpif);
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
-    int (*get_stats)(const struct dpif *dpif, struct ovs_dp_stats *stats);
+    int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
     /* Retrieves 'dpif''s current treatment of IP fragments into '*drop_frags':
      * true indicates that fragments are dropped, false indicates that

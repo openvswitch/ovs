@@ -378,7 +378,7 @@ dpif_delete(struct dpif *dpif)
 /* Retrieves statistics for 'dpif' into 'stats'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
-dpif_get_dp_stats(const struct dpif *dpif, struct ovs_dp_stats *stats)
+dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     int error = dpif->dpif_class->get_stats(dpif, stats);
     if (error) {

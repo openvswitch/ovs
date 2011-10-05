@@ -366,17 +366,17 @@ show_dpif(struct dpif *dpif)
 {
     struct dpif_port_dump dump;
     struct dpif_port dpif_port;
-    struct ovs_dp_stats stats;
+    struct dpif_dp_stats stats;
     struct netdev *netdev;
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
-        printf("\tlookups: frags:%llu, hit:%llu, missed:%llu, lost:%llu\n",
-               (unsigned long long int) stats.n_frags,
-               (unsigned long long int) stats.n_hit,
-               (unsigned long long int) stats.n_missed,
-               (unsigned long long int) stats.n_lost);
-        printf("\tflows: %llu\n", (unsigned long long int)stats.n_flows);
+        printf("\tlookups: frags:%"PRIu64, stats.n_frags);
+        printf(" hit:%"PRIu64, stats.n_hit);
+        printf(" missed:%"PRIu64, stats.n_missed);
+        printf(" lost:%"PRIu64"\n", stats.n_lost);
+
+        printf("\tflows: %"PRIu64"\n", stats.n_flows);
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);

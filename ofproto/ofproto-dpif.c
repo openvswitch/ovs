@@ -710,7 +710,7 @@ static void
 get_tables(struct ofproto *ofproto_, struct ofp_table_stats *ots)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ovs_dp_stats s;
+    struct dpif_dp_stats s;
 
     strcpy(ots->name, "classifier");
 

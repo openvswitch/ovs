@@ -297,10 +297,9 @@ dpif_netdev_destroy(struct dpif *dpif)
 }
 
 static int
-dpif_netdev_get_stats(const struct dpif *dpif, struct ovs_dp_stats *stats)
+dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    memset(stats, 0, sizeof *stats);
     stats->n_flows = hmap_count(&dp->flow_table);
     stats->n_frags = dp->n_frags;
     stats->n_hit = dp->n_hit;
