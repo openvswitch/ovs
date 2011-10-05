@@ -790,9 +790,8 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
                        unsigned int *multicast_group, unsigned int fallback)
 {
     struct nlattr *family_attrs[ARRAY_SIZE(family_policy)];
-    struct ofpbuf all_mcs;
+    const struct nlattr *mc;
     struct ofpbuf *reply;
-    struct nlattr *mc;
     unsigned int left;
     int error;
 
@@ -810,8 +809,7 @@ nl_lookup_genl_mcgroup(const char *family_name, const char *group_name,
         goto exit;
     }
 
-    nl_attr_get_nested(family_attrs[CTRL_ATTR_MCAST_GROUPS], &all_mcs);
-    NL_ATTR_FOR_EACH (mc, left, all_mcs.data, all_mcs.size) {
+    NL_NESTED_FOR_EACH (mc, left, family_attrs[CTRL_ATTR_MCAST_GROUPS]) {
         static const struct nl_policy mc_policy[] = {
             [CTRL_ATTR_MCAST_GRP_ID] = {.type = NL_A_U32},
             [CTRL_ATTR_MCAST_GRP_NAME] = {.type = NL_A_STRING},

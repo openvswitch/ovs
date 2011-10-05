@@ -124,6 +124,12 @@ nl_attr_is_valid(const struct nlattr *nla, size_t maxlen)
          (LEFT) > 0;                                                    \
          (LEFT) -= NLA_ALIGN((ITER)->nla_len), (ITER) = nl_attr_next(ITER))
 
+/* These variants are convenient for iterating nested attributes. */
+#define NL_NESTED_FOR_EACH(ITER, LEFT, A)                               \
+    NL_ATTR_FOR_EACH(ITER, LEFT, nl_attr_get(A), nl_attr_get_size(A))
+#define NL_NESTED_FOR_EACH_UNSAFE(ITER, LEFT, A)                        \
+    NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, nl_attr_get(A), nl_attr_get_size(A))
+
 /* Netlink attribute parsing. */
 int nl_attr_type(const struct nlattr *);
 const void *nl_attr_get(const struct nlattr *);
