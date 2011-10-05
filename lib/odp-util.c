@@ -55,7 +55,7 @@ odp_action_len(uint16_t type)
         return -1;
     }
 
-    switch ((enum ovs_action_type) type) {
+    switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return 4;
     case OVS_ACTION_ATTR_USERSPACE: return -2;
     case OVS_ACTION_ATTR_PUSH_VLAN: return 2;
@@ -278,7 +278,7 @@ odp_flow_key_attr_len(uint16_t type)
         return -1;
     }
 
-    switch ((enum ovs_key_type) type) {
+    switch ((enum ovs_key_attr) type) {
     case OVS_KEY_ATTR_TUN_ID: return 8;
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
@@ -913,7 +913,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                      struct flow *flow)
 {
     const struct nlattr *nla;
-    enum ovs_key_type prev_type;
+    enum ovs_key_attr prev_type;
     size_t left;
 
     memset(flow, 0, sizeof *flow);

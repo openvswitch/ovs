@@ -79,7 +79,7 @@ struct dpif_linux_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
-    enum ovs_frag_handling ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
+    enum ovs_datapath_frag ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);

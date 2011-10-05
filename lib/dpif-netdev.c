@@ -1269,7 +1269,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
         int type = nl_attr_type(a);
 
-        switch ((enum ovs_action_type) type) {
+        switch ((enum ovs_action_attr) type) {
         case OVS_ACTION_ATTR_OUTPUT:
             dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;

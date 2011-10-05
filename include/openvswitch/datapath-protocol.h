@@ -99,20 +99,20 @@ enum ovs_datapath_attr {
 	OVS_DP_ATTR_NAME,       /* name of dp_ifindex netdev */
 	OVS_DP_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
 	OVS_DP_ATTR_STATS,      /* struct ovs_dp_stats */
-	OVS_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum ovs_frag_handling */
+	OVS_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum ovs_datapath_frag */
 	__OVS_DP_ATTR_MAX
 };
 
 #define OVS_DP_ATTR_MAX (__OVS_DP_ATTR_MAX - 1)
 
 /**
- * enum ovs_frag_handling - policy for handling received IPv4 fragments.
+ * enum ovs_datapath_frag - policy for handling received IPv4 fragments.
  * @OVS_DP_FRAG_ZERO: Treat IP fragments as IP protocol 0 and transport ports
  * zero.
  * @OVS_DP_FRAG_DROP: Drop IP fragments.  Do not pass them through the flow
  * table or up to userspace.
  */
-enum ovs_frag_handling {
+enum ovs_datapath_frag {
 	OVS_DP_FRAG_UNSPEC,
 	OVS_DP_FRAG_ZERO,	/* Treat IP fragments as transport port 0. */
 	OVS_DP_FRAG_DROP	/* Drop IP fragments. */
@@ -277,7 +277,7 @@ struct ovs_flow_stats {
     uint64_t n_bytes;           /* Number of matched bytes. */
 };
 
-enum ovs_key_type {
+enum ovs_key_attr {
 	OVS_KEY_ATTR_UNSPEC,
 	OVS_KEY_ATTR_TUN_ID,    /* 64-bit tunnel ID */
 	OVS_KEY_ATTR_IN_PORT,   /* 32-bit OVS dp port number */
@@ -431,7 +431,7 @@ enum ovs_userspace_attr {
 #define OVS_USERSPACE_ATTR_MAX (__OVS_USERSPACE_ATTR_MAX - 1)
 
 /* Action types. */
-enum ovs_action_type {
+enum ovs_action_attr {
 	OVS_ACTION_ATTR_UNSPEC,
 	OVS_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
 	OVS_ACTION_ATTR_USERSPACE,    /* Nested OVS_USERSPACE_ATTR_*. */
