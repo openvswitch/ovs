@@ -121,9 +121,10 @@ struct ofmirror {
     struct hmapx dsts;          /* Contains "struct ofbundle *"s. */
     unsigned long *vlans;       /* Bitmap of chosen VLANs, NULL selects all. */
 
-    /* Output (mutually exclusive). */
+    /* Output (exactly one of out == NULL and out_vlan == -1 is true). */
     struct ofbundle *out;       /* Output port or NULL. */
     int out_vlan;               /* Output VLAN or -1. */
+    mirror_mask_t dup_mirrors;  /* Bitmap of mirrors with the same output. */
 };
 
 static void mirror_destroy(struct ofmirror *);
@@ -1659,6 +1660,39 @@ mirror_lookup(struct ofproto_dpif *ofproto, void *aux)
     return NULL;
 }
 
+/* Update the 'dup_mirrors' member of each of the ofmirrors in 'ofproto'. */
+static void
+mirror_update_dups(struct ofproto_dpif *ofproto)
+{
+    int i;
+
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        struct ofmirror *m = ofproto->mirrors[i];
+
+        if (m) {
+            m->dup_mirrors = MIRROR_MASK_C(1) << i;
+        }
+    }
+
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        struct ofmirror *m1 = ofproto->mirrors[i];
+        int j;
+
+        if (!m1) {
+            continue;
+        }
+
+        for (j = i + 1; j < MAX_MIRRORS; j++) {
+            struct ofmirror *m2 = ofproto->mirrors[j];
+
+            if (m1->out == m2->out && m1->out_vlan == m2->out_vlan) {
+                m1->dup_mirrors |= MIRROR_MASK_C(1) << j;
+                m2->dup_mirrors |= m1->dup_mirrors;
+            }
+        }
+    }
+}
+
 static int
 mirror_set(struct ofproto *ofproto_, void *aux,
            const struct ofproto_mirror_settings *s)
@@ -1764,6 +1798,7 @@ mirror_set(struct ofproto *ofproto_, void *aux,
 
     ofproto->need_revalidate = true;
     mac_learning_flush(ofproto->ml);
+    mirror_update_dups(ofproto);
 
     return 0;
 }
@@ -1797,6 +1832,8 @@ mirror_destroy(struct ofmirror *mirror)
     ofproto->mirrors[mirror->idx] = NULL;
     free(mirror->name);
     free(mirror);
+
+    mirror_update_dups(ofproto);
 }
 
 static int
@@ -4524,19 +4561,6 @@ dst_set_free(struct dst_set *set)
 }
 
 static bool
-dst_is_duplicate(const struct dst_set *set, const struct dst *test)
-{
-    size_t i;
-    for (i = 0; i < set->n; i++) {
-        if (set->dsts[i].vid == test->vid
-            && set->dsts[i].port == test->port) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool
 ofbundle_trunks_vlan(const struct ofbundle *bundle, uint16_t vlan)
 {
     return (bundle->vlan_mode != PORT_VLAN_ACCESS
@@ -4650,38 +4674,40 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
     }
 
     flow_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
-    for (; mirrors; mirrors &= mirrors - 1) {
-        struct ofmirror *m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
-        if (vlan_is_mirrored(m, vlan)) {
-            struct dst dst;
+    while (mirrors) {
+        struct ofmirror *m;
+        struct dst dst;
 
-            if (m->out) {
-                if (set_dst(ctx, &dst, in_bundle, m->out)
-                    && !dst_is_duplicate(set, &dst)) {
-                    dst_set_add(set, &dst);
-                }
-            } else if (eth_dst_may_rspan(ctx->flow.dl_dst)) {
-                struct ofbundle *bundle;
+        m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
 
-                HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-                    if (ofbundle_includes_vlan(bundle, m->out_vlan)
-                        && !bundle->mirror_out
-                        && set_dst(ctx, &dst, in_bundle, bundle))
-                    {
-                        /* set_dst() got dst->vid from the input packet's VLAN,
-                         * not from m->out_vlan, so recompute it. */
-                        dst.vid = output_vlan_to_vid(bundle, m->out_vlan);
+        if (!vlan_is_mirrored(m, vlan)) {
+            mirrors &= mirrors - 1;
+            continue;
+        }
 
-                        if (dst_is_duplicate(set, &dst)) {
-                            continue;
-                        }
+        mirrors &= ~m->dup_mirrors;
+        if (m->out) {
+            if (set_dst(ctx, &dst, in_bundle, m->out)) {
+                dst_set_add(set, &dst);
+            }
+        } else if (eth_dst_may_rspan(ctx->flow.dl_dst)
+                   && vlan != m->out_vlan) {
+            struct ofbundle *bundle;
 
-                        if (bundle == in_bundle && dst.vid == flow_vid) {
-                            /* Don't send out input port on same VLAN. */
-                            continue;
-                        }
-                        dst_set_add(set, &dst);
+            HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+                if (ofbundle_includes_vlan(bundle, m->out_vlan)
+                    && !bundle->mirror_out
+                    && set_dst(ctx, &dst, in_bundle, bundle))
+                {
+                    /* set_dst() got dst->vid from the input packet's VLAN,
+                     * not from m->out_vlan, so recompute it. */
+                    dst.vid = output_vlan_to_vid(bundle, m->out_vlan);
+
+                    if (bundle == in_bundle && dst.vid == flow_vid) {
+                        /* Don't send out input port on same VLAN. */
+                        continue;
                     }
+                    dst_set_add(set, &dst);
                 }
             }
         }
