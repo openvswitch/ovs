@@ -42,13 +42,11 @@
 
 #ifdef __KERNEL__
 #include <linux/types.h>
-#include <linux/socket.h>
 #define ovs_be16 __be16
 #define ovs_be32 __be32
 #define ovs_be64 __be64
 #else
 #include "openvswitch/types.h"
-#include <sys/socket.h>
 #endif
 
 /* datapaths. */
