@@ -1087,8 +1087,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         return 0;
 
     case OVS_KEY_ATTR_ICMPV6:
-        if (flow->icmp_type == htons(ND_NEIGHBOR_SOLICIT)
-            || flow->icmp_type == htons(ND_NEIGHBOR_ADVERT)) {
+        if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)
+            || flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
             return EINVAL;
         }
         return 0;

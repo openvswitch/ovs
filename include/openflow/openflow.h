@@ -536,11 +536,6 @@ struct ofp_match {
 };
 OFP_ASSERT(sizeof(struct ofp_match) == 40);
 
-/* The match fields for ICMP type and code use the transport source and
- * destination port fields, respectively. */
-#define icmp_type tp_src
-#define icmp_code tp_dst
-
 /* Value used in "idle_timeout" and "hard_timeout" to indicate that the entry
  * is permanent. */
 #define OFP_FLOW_PERMANENT 0

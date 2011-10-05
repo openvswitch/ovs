@@ -739,9 +739,9 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
                "%u", om->nw_tos);
     if (om->nw_proto == IPPROTO_ICMP) {
         print_wild(&f, "icmp_type=", w & OFPFW_ICMP_TYPE, verbosity,
-                   "%d", ntohs(om->icmp_type));
+                   "%d", ntohs(om->tp_src));
         print_wild(&f, "icmp_code=", w & OFPFW_ICMP_CODE, verbosity,
-                   "%d", ntohs(om->icmp_code));
+                   "%d", ntohs(om->tp_dst));
     } else {
         print_wild(&f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
                    "%d", ntohs(om->tp_src));

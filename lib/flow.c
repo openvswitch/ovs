@@ -245,8 +245,8 @@ parse_icmpv6(struct ofpbuf *b, struct flow *flow)
 
     /* The ICMPv6 type and code fields use the 16-bit transport port
      * fields, so we need to store them in 16-bit network byte order. */
-    flow->icmp_type = htons(icmp->icmp6_type);
-    flow->icmp_code = htons(icmp->icmp6_code);
+    flow->tp_src = htons(icmp->icmp6_type);
+    flow->tp_dst = htons(icmp->icmp6_code);
 
     if (icmp->icmp6_code == 0 &&
         (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
@@ -373,8 +373,8 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t ofp_in_port,
                 } else if (flow->nw_proto == IPPROTO_ICMP) {
                     const struct icmp_header *icmp = pull_icmp(&b);
                     if (icmp) {
-                        flow->icmp_type = htons(icmp->icmp_type);
-                        flow->icmp_code = htons(icmp->icmp_code);
+                        flow->tp_src = htons(icmp->icmp_type);
+                        flow->tp_dst = htons(icmp->icmp_code);
                         packet->l7 = b.data;
                     }
                 }

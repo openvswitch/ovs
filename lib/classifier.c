@@ -327,7 +327,7 @@ void
 cls_rule_set_icmp_type(struct cls_rule *rule, uint8_t icmp_type)
 {
     rule->wc.wildcards &= ~FWW_TP_SRC;
-    rule->flow.icmp_type = htons(icmp_type);
+    rule->flow.tp_src = htons(icmp_type);
 
 }
 
@@ -335,7 +335,7 @@ void
 cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
 {
     rule->wc.wildcards &= ~FWW_TP_DST;
-    rule->flow.icmp_code = htons(icmp_code);
+    rule->flow.tp_dst = htons(icmp_code);
 }
 
 void
