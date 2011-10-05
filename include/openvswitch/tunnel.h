@@ -41,7 +41,7 @@
 #define OPENVSWITCH_TUNNEL_H 1
 
 #include <linux/types.h>
-#include "openvswitch/datapath-protocol.h"
+#include <linux/openvswitch.h>
 
 /* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
  *

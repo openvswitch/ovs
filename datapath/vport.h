@@ -10,12 +10,12 @@
 #define VPORT_H 1
 
 #include <linux/list.h>
+#include <linux/openvswitch.h>
 #include <linux/seqlock.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 
 #include "datapath.h"
-#include "openvswitch/datapath-protocol.h"
 
 struct vport;
 struct vport_parms;

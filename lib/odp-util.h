@@ -21,9 +21,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <linux/openvswitch.h>
 #include "hash.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
 #include "util.h"
 
 struct ds;

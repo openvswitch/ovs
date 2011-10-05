@@ -5,9 +5,9 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 #include <linux/mutex.h>
+#include <linux/openvswitch.h>
 
 #include "openvswitch/datapath-compat.h"
-#include "openvswitch/datapath-protocol.h"
 
 static DEFINE_MUTEX(mc_group_mutex);
 

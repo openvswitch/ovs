@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <linux/openvswitch.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -38,7 +39,6 @@
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "ofpbuf.h"
-#include "openvswitch/datapath-protocol.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "route-table.h"

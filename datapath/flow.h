@@ -11,6 +11,7 @@
 
 #include <linux/kernel.h>
 #include <linux/netlink.h>
+#include <linux/openvswitch.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/rcupdate.h>
@@ -19,7 +20,6 @@
 #include <linux/jiffies.h>
 #include <linux/time.h>
 #include <linux/flex_array.h>
-#include "openvswitch/datapath-protocol.h"
 
 struct sk_buff;
 

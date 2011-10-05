@@ -1,1 +1,3 @@
-noinst_HEADERS += include/linux/types.h
+noinst_HEADERS += \
+	include/linux/openvswitch.h \
+	include/linux/types.h

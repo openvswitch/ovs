@@ -39,12 +39,12 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>
 #include <linux/list.h>
+#include <linux/openvswitch.h>
 #include <linux/rculist.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
 #include <net/genetlink.h>
 
-#include "openvswitch/datapath-protocol.h"
 #include "checksum.h"
 #include "datapath.h"
 #include "actions.h"

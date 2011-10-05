@@ -20,7 +20,7 @@
 /* On Linux, this header file just includes <linux/types.h>.
  *
  * On other platforms, this header file implements just enough of
- * <linux/types.h> to allow datapath-protocol.h to work, that is, it defines
+ * <linux/types.h> to allow <linux/openvswitch.h> to work, that is, it defines
  * the __u<N> and __be<N> types. */
 
 #if __KERNEL__ || HAVE_LINUX_TYPES_H

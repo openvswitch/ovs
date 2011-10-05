@@ -13,6 +13,7 @@
 #include <linux/skbuff.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/openvswitch.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in6.h>
@@ -25,7 +26,6 @@
 #include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
-#include "openvswitch/datapath-protocol.h"
 #include "vlan.h"
 #include "vport.h"
 
