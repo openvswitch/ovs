@@ -692,77 +692,9 @@ dpif_netdev_flow_get(const struct dpif *dpif,
 }
 
 static int
-dpif_netdev_validate_actions(const struct nlattr *actions,
-                             size_t actions_len, bool *mutates)
-{
-    const struct nlattr *a;
-    unsigned int left;
-
-    *mutates = false;
-    NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
-        uint16_t type = nl_attr_type(a);
-        int len = odp_action_len(type);
-
-        if (len != nl_attr_get_size(a)) {
-            return EINVAL;
-        }
-
-        switch (type) {
-        case OVS_ACTION_ATTR_OUTPUT:
-            if (nl_attr_get_u32(a) >= MAX_PORTS) {
-                return EINVAL;
-            }
-            break;
-
-        case OVS_ACTION_ATTR_USERSPACE:
-            break;
-
-        case OVS_ACTION_ATTR_PUSH_VLAN:
-            *mutates = true;
-            if (nl_attr_get_be16(a) & htons(VLAN_CFI)) {
-                return EINVAL;
-            }
-            break;
-
-        case OVS_ACTION_ATTR_SET_NW_TOS:
-            *mutates = true;
-            if (nl_attr_get_u8(a) & IP_ECN_MASK) {
-                return EINVAL;
-            }
-            break;
-
-        case OVS_ACTION_ATTR_POP_VLAN:
-        case OVS_ACTION_ATTR_SET_DL_SRC:
-        case OVS_ACTION_ATTR_SET_DL_DST:
-        case OVS_ACTION_ATTR_SET_NW_SRC:
-        case OVS_ACTION_ATTR_SET_NW_DST:
-        case OVS_ACTION_ATTR_SET_TP_SRC:
-        case OVS_ACTION_ATTR_SET_TP_DST:
-            *mutates = true;
-            break;
-
-        case OVS_ACTION_ATTR_SET_TUNNEL:
-        case OVS_ACTION_ATTR_SET_PRIORITY:
-        case OVS_ACTION_ATTR_POP_PRIORITY:
-        default:
-            return EOPNOTSUPP;
-        }
-    }
-    return 0;
-}
-
-static int
 set_flow_actions(struct dp_netdev_flow *flow,
                  const struct nlattr *actions, size_t actions_len)
 {
-    bool mutates;
-    int error;
-
-    error = dpif_netdev_validate_actions(actions, actions_len, &mutates);
-    if (error) {
-        return error;
-    }
-
     flow->actions = xrealloc(flow->actions, actions_len);
     flow->actions_len = actions_len;
     memcpy(flow->actions, actions, actions_len);
@@ -956,7 +888,6 @@ dpif_netdev_execute(struct dpif *dpif,
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct ofpbuf copy;
-    bool mutates;
     struct flow key;
     int error;
 
@@ -964,24 +895,10 @@ dpif_netdev_execute(struct dpif *dpif,
         return EINVAL;
     }
 
-    error = dpif_netdev_validate_actions(actions, actions_len, &mutates);
-    if (error) {
-        return error;
-    }
-
-    if (mutates) {
-        /* We need a deep copy of 'packet' since we're going to modify its
-         * data. */
-        ofpbuf_init(&copy, DP_NETDEV_HEADROOM + packet->size);
-        ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
-        ofpbuf_put(&copy, packet->data, packet->size);
-    } else {
-        /* We still need a shallow copy of 'packet', even though we won't
-         * modify its data, because flow_extract() modifies packet->l2, etc.
-         * We could probably get away with modifying those but it's more polite
-         * if we don't. */
-        copy = *packet;
-    }
+    /* Make a deep copy of 'packet', because we might modify its data. */
+    ofpbuf_init(&copy, DP_NETDEV_HEADROOM + packet->size);
+    ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
+    ofpbuf_put(&copy, packet->data, packet->size);
 
     flow_extract(&copy, 0, -1, &key);
     error = dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
@@ -989,9 +906,8 @@ dpif_netdev_execute(struct dpif *dpif,
         error = dp_netdev_execute_actions(dp, &copy, &key,
                                           actions, actions_len);
     }
-    if (mutates) {
-        ofpbuf_uninit(&copy);
-    }
+
+    ofpbuf_uninit(&copy);
     return error;
 }
 
