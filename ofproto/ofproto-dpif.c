@@ -4650,7 +4650,7 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
     }
 
     flow_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
-    while (mirrors) {
+    for (; mirrors; mirrors &= mirrors - 1) {
         struct ofmirror *m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
         if (vlan_is_mirrored(m, vlan)) {
             struct dst dst;
@@ -4685,7 +4685,6 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
                 }
             }
         }
-        mirrors &= mirrors - 1;
     }
 }
 
