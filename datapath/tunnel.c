@@ -174,7 +174,7 @@ static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 
 static u32 port_hash(const struct port_lookup_key *key)
 {
-	return jhash2((u32*)key, (sizeof(*key) / sizeof(u32)), 0);
+	return jhash2((u32*)key, (PORT_KEY_LEN / sizeof(u32)), 0);
 }
 
 static inline struct hlist_head *find_bucket(u32 hash)
@@ -241,7 +241,7 @@ static struct tnl_vport *port_table_lookup(struct port_lookup_key *key,
 		struct tnl_mutable_config *mutable;
 
 		mutable = rcu_dereference_rtnl(tnl_vport->mutable);
-		if (!memcmp(&mutable->key, key, sizeof(*key))) {
+		if (!memcmp(&mutable->key, key, PORT_KEY_LEN)) {
 			*pmutable = mutable;
 			return tnl_vport;
 		}

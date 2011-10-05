@@ -58,6 +58,9 @@ struct port_lookup_key {
 	u32    tunnel_type;
 };
 
+#define PORT_KEY_LEN 	(offsetof(struct port_lookup_key, tunnel_type) + \
+			 FIELD_SIZEOF(struct port_lookup_key, tunnel_type))
+
 /**
  * struct tnl_mutable_config - modifiable configuration for a tunnel.
  * @key: Used as key for tunnel port.  Configured via OVS_TUNNEL_ATTR_*
