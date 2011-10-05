@@ -1281,8 +1281,7 @@ iface_refresh_status(struct iface *iface)
     }
 }
 
-/* Writes 'iface''s CFM statistics to the database.  Returns true if anything
- * changed, false otherwise. */
+/* Writes 'iface''s CFM statistics to the database. */
 static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
