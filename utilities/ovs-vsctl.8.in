@@ -825,7 +825,7 @@ with specific sampling parameters:
 .IP
 .B "\-\- set Bridge br0 sflow=@s"
 .PP
-Deconfigure sFlow from br0, which also destroys the sFlow record
+Deconfigure sFlow from \fBbr0\fR, which also destroys the sFlow record
 (since it is now unreferenced):
 .IP
 .B "ovs\-vsctl \-\- clear Bridge br0 sflow"
