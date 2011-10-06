@@ -366,12 +366,12 @@ print_db_changes(struct shash *tables, struct shash *names)
 
             if (!old_name) {
                 if (new_name) {
-                    printf(" insert row %s:\n", new_name);
+                    printf(" insert row %s (%.8s):\n", new_name, row_uuid);
                 } else {
                     printf(" insert row %.8s:\n", row_uuid);
                 }
             } else {
-                printf(" row %s:\n", old_name);
+                printf(" row %s (%.8s):\n", old_name, row_uuid);
             }
 
             if (columns->type == JSON_OBJECT) {
