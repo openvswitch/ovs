@@ -39,7 +39,6 @@ struct dpif_linux_vport {
     const uint8_t *address;                /* OVS_VPORT_ATTR_ADDRESS. */
     const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
-    int ifindex;                           /* OVS_VPORT_ATTR_IFINDEX. */
 };
 
 void dpif_linux_vport_init(struct dpif_linux_vport *);

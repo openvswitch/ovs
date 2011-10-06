@@ -230,14 +230,9 @@ enum ovs_vport_cmd {
  * @OVS_VPORT_ATTR_STATS: A &struct ovs_vport_stats giving statistics for
  * packets sent or received through the vport.
  * @OVS_VPORT_ATTR_ADDRESS: A 6-byte Ethernet address for the vport.
- * @OVS_VPORT_ATTR_IFINDEX: ifindex of the underlying network device, if any.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_VPORT_* commands.
- *
- * All attributes applicable to a given port are present in notifications.
- * This means that, for example, a vport that has no corresponding network
- * device would omit %OVS_VPORT_ATTR_IFINDEX.
  *
  * For %OVS_VPORT_CMD_NEW requests, the %OVS_VPORT_ATTR_TYPE and
  * %OVS_VPORT_ATTR_NAME attributes are required.  %OVS_VPORT_ATTR_PORT_NO is
@@ -259,7 +254,6 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_STATS,	/* struct ovs_vport_stats */
 	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
-	OVS_VPORT_ATTR_IFINDEX, /* 32-bit ifindex of backing netdev */
 	__OVS_VPORT_ATTR_MAX
 };
 

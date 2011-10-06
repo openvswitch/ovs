@@ -1551,7 +1551,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 {
 	struct ovs_header *ovs_header;
 	struct nlattr *nla;
-	int ifindex;
 	int err;
 
 	ovs_header = genlmsg_put(skb, pid, seq, &dp_vport_genl_family,
@@ -1577,10 +1576,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	err = vport_get_options(vport, skb);
 	if (err == -EMSGSIZE)
 		goto error;
-
-	ifindex = vport_get_ifindex(vport);
-	if (ifindex > 0)
-		NLA_PUT_U32(skb, OVS_VPORT_ATTR_IFINDEX, ifindex);
 
 	return genlmsg_end(skb, ovs_header);
 
