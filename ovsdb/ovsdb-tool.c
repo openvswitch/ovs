@@ -22,13 +22,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "column.h"
 #include "command-line.h"
 #include "compiler.h"
+#include "dynamic-string.h"
 #include "file.h"
 #include "lockfile.h"
 #include "log.h"
 #include "json.h"
 #include "ovsdb.h"
+#include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "socket-util.h"
 #include "table.h"
@@ -331,12 +334,14 @@ do_transact(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-print_db_changes(struct shash *tables, struct shash *names)
+print_db_changes(struct shash *tables, struct shash *names,
+                 const struct ovsdb_schema *schema)
 {
     struct shash_node *n1;
 
     SHASH_FOR_EACH (n1, tables) {
         const char *table = n1->name;
+        struct ovsdb_table_schema *table_schema;
         struct json *rows = n1->data;
         struct shash_node *n2;
 
@@ -344,6 +349,7 @@ print_db_changes(struct shash *tables, struct shash *names)
             continue;
         }
 
+        table_schema = shash_find_data(&schema->tables, table);
         SHASH_FOR_EACH (n2, json_object(rows)) {
             const char *row_uuid = n2->name;
             struct json *columns = n2->data;
@@ -378,10 +384,33 @@ print_db_changes(struct shash *tables, struct shash *names)
                 if (show_log_verbosity > 1) {
                     SHASH_FOR_EACH (n3, json_object(columns)) {
                         const char *column = n3->name;
+                        const struct ovsdb_column *column_schema;
                         struct json *value = n3->data;
-                        char *value_string;
+                        char *value_string = NULL;
 
-                        value_string = json_to_string(value, JSSF_SORT);
+                        column_schema =
+                            (table_schema
+                             ? shash_find_data(&table_schema->columns, column)
+                             : NULL);
+                        if (column_schema) {
+                            const struct ovsdb_error *error;
+                            const struct ovsdb_type *type;
+                            struct ovsdb_datum datum;
+
+                            type = &column_schema->type;
+                            error = ovsdb_datum_from_json(&datum, type,
+                                                          value, NULL);
+                            if (!error) {
+                                struct ds s;
+
+                                ds_init(&s);
+                                ovsdb_datum_to_string(&datum, type, &s);
+                                value_string = ds_steal_cstr(&s);
+                            }
+                        }
+                        if (!value_string) {
+                            value_string = json_to_string(value, JSSF_SORT);
+                        }
                         printf("\t\t%s=%s\n", column, value_string);
                         free(value_string);
                     }
@@ -420,11 +449,13 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
     const char *db_file_name = argv[1];
     struct shash names;
     struct ovsdb_log *log;
+    struct ovsdb_schema *schema;
     unsigned int i;
 
     check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_LOG_READ_ONLY,
                                      -1, &log));
     shash_init(&names);
+    schema = NULL;
     for (i = 0; ; i++) {
         struct json *json;
 
@@ -434,7 +465,11 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
         }
 
         printf("record %u:", i);
-        if (json->type == JSON_OBJECT) {
+        if (i == 0) {
+            check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
+            printf(" \"%s\" schema, version=\"%s\", cksum=\"%s\"\n",
+                   schema->name, schema->version, schema->cksum);
+        } else if (json->type == JSON_OBJECT) {
             struct json *date, *comment;
 
             date = shash_find_data(json_object(json), "_date");
@@ -453,7 +488,7 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
 
             if (i > 0 && show_log_verbosity > 0) {
                 putchar('\n');
-                print_db_changes(json_object(json), &names);
+                print_db_changes(json_object(json), &names, schema);
             }
         }
         json_destroy(json);
@@ -461,6 +496,7 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
     }
 
     ovsdb_log_close(log);
+    ovsdb_schema_destroy(schema);
     /* XXX free 'names'. */
 }
 
