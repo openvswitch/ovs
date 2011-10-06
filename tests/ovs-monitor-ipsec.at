@@ -219,4 +219,93 @@ sainfo anonymous {
 ])
 AT_CHECK([test ! -f etc/racoon/certs/ovs-2.3.4.5.pem])
 
+###
+### Add an SSL certificate interface.
+###
+cp cert.pem ssl-cert.pem
+cp key.pem ssl-key.pem
+AT_DATA([ssl-cacert.pem], [dnl
+-----BEGIN CERTIFICATE-----
+(not a real CA certificate)
+-----END CERTIFICATE-----
+])
+AT_CHECK([ovs_vsctl set-ssl /ssl-key.pem /ssl-cert.pem /ssl-cacert.pem \
+              -- add-port br0 gre2 \
+              -- set Interface gre2 type=ipsec_gre \
+                 options:remote_ip=3.4.5.6 \
+                 options:peer_cert='"-----BEGIN CERTIFICATE-----
+(not a real peer certificate)
+-----END CERTIFICATE-----
+"' \
+                 options:use_ssl_cert='"true"'])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 21])
+AT_CHECK([sed '1,29d' actions], [0], [dnl
+racoon: reload
+setkey:
+> spdadd 0.0.0.0/0 3.4.5.6 gre -P out ipsec esp/transport//require;
+> spdadd 3.4.5.6 0.0.0.0/0 gre -P in ipsec esp/transport//require;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+remote 3.4.5.6 {
+        exchange_mode main;
+        nat_traversal on;
+        ike_frag on;
+        certificate_type x509 "/ssl-cert.pem" "/ssl-key.pem";
+        my_identifier asn1dn;
+        peers_identifier asn1dn;
+        peers_certfile x509 "/etc/racoon/certs/ovs-3.4.5.6.pem";
+        verify_identifier on;
+        proposal {
+                encryption_algorithm aes;
+                hash_algorithm sha1;
+                authentication_method rsasig;
+                dh_group 2;
+        }
+}
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+AT_CHECK([cat etc/racoon/certs/ovs-3.4.5.6.pem], [0], [dnl
+-----BEGIN CERTIFICATE-----
+(not a real peer certificate)
+-----END CERTIFICATE-----
+])
+
+###
+### Delete the SSL certificate interface.
+###
+AT_CHECK([ovs_vsctl del-port gre2])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 29])
+AT_CHECK([sed '1,33d' actions], [0], [dnl
+racoon: reload
+setkey:
+> spddelete 0.0.0.0/0 3.4.5.6 gre -P out;
+> spddelete 3.4.5.6 0.0.0.0/0 gre -P in;
+setkey:
+> dump ;
+setkey:
+> dump ;
+])
+AT_CHECK([trim etc/racoon/psk.txt], [0], [])
+AT_CHECK([trim etc/racoon/racoon.conf], [0], [dnl
+path pre_shared_key "/etc/racoon/psk.txt";
+path certificate "/etc/racoon/certs";
+sainfo anonymous {
+        pfs_group 2;
+        lifetime time 1 hour;
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1, hmac_md5;
+        compression_algorithm deflate;
+}
+])
+AT_CHECK([test ! -f etc/racoon/certs/ovs-3.4.5.6.pem])
+
 AT_CLEANUP

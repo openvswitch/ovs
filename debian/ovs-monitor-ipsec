@@ -413,9 +413,10 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
 
 def get_ssl_cert(data):
     for ovs_rec in data["Open_vSwitch"].rows.itervalues():
-        ssl = ovs_rec.ssl
-        if ssl and ssl.certificate and ssl.private_key:
-            return (ssl.certificate, ssl.private_key)
+        if ovs_rec.ssl:
+            ssl = ovs_rec.ssl[0]
+            if ssl.certificate and ssl.private_key:
+                return (ssl.certificate, ssl.private_key)
 
     return None
 
