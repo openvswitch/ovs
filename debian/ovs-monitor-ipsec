@@ -436,7 +436,8 @@ def main():
     ovs.daemon.handle_args(args)
 
     global root_prefix
-    root_prefix = args.root_prefix
+    if args.root_prefix:
+        root_prefix = args.root_prefix
 
     remote = args.database
     schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
