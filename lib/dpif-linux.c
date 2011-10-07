@@ -77,7 +77,7 @@ struct dpif_linux_dp {
 
     /* Attributes. */
     const char *name;                  /* OVS_DP_ATTR_NAME. */
-    uint32_t upcall_pid;               /* OVS_DP_UPCALL_PID. */
+    const uint32_t *upcall_pid;        /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
     enum ovs_frag_handling ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
 };
@@ -112,7 +112,7 @@ struct dpif_linux_flow {
     size_t key_len;
     const struct nlattr *actions;       /* OVS_FLOW_ATTR_ACTIONS. */
     size_t actions_len;
-    uint32_t upcall_pid;                /* OVS_FLOW_ATTR_UPCALL_PID. */
+    const uint32_t *upcall_pid;         /* OVS_FLOW_ATTR_UPCALL_PID. */
     const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
     const uint8_t *tcp_flags;           /* OVS_FLOW_ATTR_TCP_FLAGS. */
     const uint64_t *used;               /* OVS_FLOW_ATTR_USED. */
@@ -415,16 +415,17 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 
     /* Loop until we find a port that isn't used. */
     do {
+        uint32_t upcall_pid;
+
         request.port_no = dpif_linux_pop_port(dpif);
-        request.upcall_pid = get_upcall_pid_port(dpif, request.port_no);
+        upcall_pid = get_upcall_pid_port(dpif, request.port_no);
+        request.upcall_pid = &upcall_pid;
         error = dpif_linux_vport_transact(&request, &reply, &buf);
 
         if (!error) {
             *port_nop = reply.port_no;
-            VLOG_DBG("%s: assigning port %"PRIu32" to netlink "
-                     "pid %"PRIu32,
-                     dpif_name(dpif_), request.port_no,
-                     request.upcall_pid);
+            VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
+                     dpif_name(dpif_), request.port_no, upcall_pid);
         }
         ofpbuf_delete(buf);
     } while (request.port_no != UINT32_MAX
@@ -668,8 +669,11 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow request, reply;
     struct nlattr dummy_action;
+    uint32_t upcall_pid;
     struct ofpbuf *buf;
     int error;
+
+    upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
 
     dpif_linux_flow_init(&request);
     request.cmd = flags & DPIF_FP_CREATE ? OVS_FLOW_CMD_NEW : OVS_FLOW_CMD_SET;
@@ -679,7 +683,7 @@ dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request.actions = actions ? actions : &dummy_action;
     request.actions_len = actions_len;
-    request.upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
+    request.upcall_pid = &upcall_pid;
     if (flags & DPIF_FP_ZERO_STATS) {
         request.clear = true;
     }
@@ -908,20 +912,19 @@ set_upcall_pids(struct dpif_linux *dpif)
     int error;
 
     DPIF_PORT_FOR_EACH (&port, &port_dump, &dpif->dpif) {
+        uint32_t upcall_pid = get_upcall_pid_port(dpif, port.port_no);
         struct dpif_linux_vport vport_request;
 
         dpif_linux_vport_init(&vport_request);
         vport_request.cmd = OVS_VPORT_CMD_SET;
         vport_request.dp_ifindex = dpif->dp_ifindex;
         vport_request.port_no = port.port_no;
-        vport_request.upcall_pid = get_upcall_pid_port(dpif,
-                                                       vport_request.port_no);
+        vport_request.upcall_pid = &upcall_pid;
         error = dpif_linux_vport_transact(&vport_request, NULL, NULL);
         if (!error) {
-            VLOG_DBG("%s: assigning port %"PRIu32" to netlink "
-                     "pid %"PRIu32,
+            VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
                      dpif_name(&dpif->dpif), vport_request.port_no,
-                     vport_request.upcall_pid);
+                     upcall_pid);
         } else {
             VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on port: %s",
                          dpif_name(&dpif->dpif), strerror(error));
@@ -931,6 +934,7 @@ set_upcall_pids(struct dpif_linux *dpif)
     dpif_flow_dump_start(&flow_dump, &dpif->dpif);
     while (dpif_flow_dump_next(&flow_dump, &key, &key_len,
                                NULL, NULL, NULL)) {
+        uint32_t upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
         struct dpif_linux_flow flow_request;
 
         dpif_linux_flow_init(&flow_request);
@@ -938,7 +942,7 @@ set_upcall_pids(struct dpif_linux *dpif)
         flow_request.dp_ifindex = dpif->dp_ifindex;
         flow_request.key = key;
         flow_request.key_len = key_len;
-        flow_request.upcall_pid = get_upcall_pid_flow(dpif, key, key_len);
+        flow_request.upcall_pid = &upcall_pid;
         error = dpif_linux_flow_transact(&flow_request, NULL, NULL);
         if (error) {
             VLOG_WARN_RL(&error_rl, "%s: failed to set upcall pid on flow: %s",
@@ -1326,7 +1330,7 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
     vport->type = nl_attr_get_u32(a[OVS_VPORT_ATTR_TYPE]);
     vport->name = nl_attr_get_string(a[OVS_VPORT_ATTR_NAME]);
     if (a[OVS_VPORT_ATTR_UPCALL_PID]) {
-        vport->upcall_pid = nl_attr_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
+        vport->upcall_pid = nl_attr_get(a[OVS_VPORT_ATTR_UPCALL_PID]);
     }
     if (a[OVS_VPORT_ATTR_STATS]) {
         vport->stats = nl_attr_get(a[OVS_VPORT_ATTR_STATS]);
@@ -1367,7 +1371,9 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
         nl_msg_put_string(buf, OVS_VPORT_ATTR_NAME, vport->name);
     }
 
-    nl_msg_put_u32(buf, OVS_VPORT_ATTR_UPCALL_PID, vport->upcall_pid);
+    if (vport->upcall_pid) {
+        nl_msg_put_u32(buf, OVS_VPORT_ATTR_UPCALL_PID, *vport->upcall_pid);
+    }
 
     if (vport->stats) {
         nl_msg_put_unspec(buf, OVS_VPORT_ATTR_STATS,
@@ -1521,7 +1527,9 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
         nl_msg_put_string(buf, OVS_DP_ATTR_NAME, dp->name);
     }
 
-    nl_msg_put_u32(buf, OVS_DP_ATTR_UPCALL_PID, dp->upcall_pid);
+    if (dp->upcall_pid) {
+        nl_msg_put_u32(buf, OVS_DP_ATTR_UPCALL_PID, *dp->upcall_pid);
+    }
 
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
 
@@ -1653,7 +1661,7 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
         flow->actions_len = nl_attr_get_size(a[OVS_FLOW_ATTR_ACTIONS]);
     }
     if (a[OVS_FLOW_ATTR_UPCALL_PID]) {
-        flow->upcall_pid = nl_attr_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
+        flow->upcall_pid = nl_attr_get(a[OVS_FLOW_ATTR_UPCALL_PID]);
     }
     if (a[OVS_FLOW_ATTR_STATS]) {
         flow->stats = nl_attr_get(a[OVS_FLOW_ATTR_STATS]);
@@ -1691,7 +1699,9 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
                           flow->actions, flow->actions_len);
     }
 
-    nl_msg_put_u32(buf, OVS_FLOW_ATTR_UPCALL_PID, flow->upcall_pid);
+    if (flow->upcall_pid) {
+        nl_msg_put_u32(buf, OVS_FLOW_ATTR_UPCALL_PID, *flow->upcall_pid);
+    }
 
     /* We never need to send these to the kernel. */
     assert(!flow->stats);
