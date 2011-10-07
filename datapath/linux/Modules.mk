@@ -11,7 +11,6 @@ openvswitch_sources += \
 	linux/compat/time.c
 openvswitch_headers += \
 	linux/compat/include/asm-generic/bug.h \
-	linux/compat/include/linux/bottom_half.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
 	linux/compat/include/linux/cpumask.h \

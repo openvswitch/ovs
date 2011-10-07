@@ -251,10 +251,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	skb->protocol = eth_type_trans(skb, netdev);
 	forward_ip_summed(skb, false);
 
-	if (in_interrupt())
-		netif_rx(skb);
-	else
-		netif_rx_ni(skb);
+	netif_rx(skb);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 	netdev->last_rx = jiffies;

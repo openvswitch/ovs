@@ -8,6 +8,8 @@
 
 /* Functions for executing flow actions. */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/skbuff.h>
 #include <linux/in.h>
 #include <linux/ip.h>
@@ -23,7 +25,6 @@
 #include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
-#include "loop_counter.h"
 #include "openvswitch/datapath-protocol.h"
 #include "vlan.h"
 #include "vport.h"
@@ -380,6 +381,26 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	return 0;
 }
 
+/* We limit the number of times that we pass into execute_actions()
+ * to avoid blowing out the stack in the event that we have a loop. */
+#define MAX_LOOPS 5
+
+struct loop_counter {
+	u8 count;		/* Count. */
+	bool looping;		/* Loop detected? */
+};
+
+static DEFINE_PER_CPU(struct loop_counter, loop_counters);
+
+static int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
+{
+	if (net_ratelimit())
+		pr_warn("%s: flow looped %d times, dropping\n",
+				dp_name(dp), MAX_LOOPS);
+	actions->actions_len = 0;
+	return -ELOOP;
+}
+
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb)
 {
@@ -388,7 +409,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb)
 	int error;
 
 	/* Check whether we've looped too much. */
-	loop = loop_get_counter();
+	loop = &__get_cpu_var(loop_counters);
 	if (unlikely(++loop->count > MAX_LOOPS))
 		loop->looping = true;
 	if (unlikely(loop->looping)) {
@@ -409,7 +430,6 @@ out_loop:
 	/* Decrement loop counter. */
 	if (!--loop->count)
 		loop->looping = false;
-	loop_put_counter();
 
 	return error;
 }

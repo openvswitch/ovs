@@ -813,9 +813,9 @@ static inline void create_eth_hdr(struct tnl_cache *cache,
 
 	cache->hh_seq = hh_seq;
 #else
-	read_lock_bh(&rt_dst(rt).hh->hh_lock);
+	read_lock(&rt_dst(rt).hh->hh_lock);
 	memcpy(cache_data, (void *)rt_dst(rt).hh->hh_data + hh_off, hh_len);
-	read_unlock_bh(&rt_dst(rt).hh->hh_lock);
+	read_unlock(&rt_dst(rt).hh->hh_lock);
 #endif
 }
 
@@ -842,7 +842,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	 * If lock is contended fall back to directly building the header.
 	 * We're not going to help performance by sitting here spinning.
 	 */
-	if (!spin_trylock_bh(&tnl_vport->cache_lock))
+	if (!spin_trylock(&tnl_vport->cache_lock))
 		return NULL;
 
 	cache = cache_dereference(tnl_vport);
@@ -910,7 +910,7 @@ done:
 	assign_cache_rcu(vport, cache);
 
 unlock:
-	spin_unlock_bh(&tnl_vport->cache_lock);
+	spin_unlock(&tnl_vport->cache_lock);
 
 	return cache;
 }

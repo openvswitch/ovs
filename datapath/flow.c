@@ -173,12 +173,12 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 		tcp_flags = *(tcp + TCP_FLAGS_OFFSET) & TCP_FLAG_MASK;
 	}
 
-	spin_lock_bh(&flow->lock);
+	spin_lock(&flow->lock);
 	flow->used = jiffies;
 	flow->packet_count++;
 	flow->byte_count += skb->len;
 	flow->tcp_flags |= tcp_flags;
-	spin_unlock_bh(&flow->lock);
+	spin_unlock(&flow->lock);
 }
 
 struct sw_flow_actions *flow_actions_alloc(const struct nlattr *actions)

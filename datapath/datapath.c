@@ -280,9 +280,10 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct sw_flow *flow;
 	struct dp_stats_percpu *stats;
-	int stats_counter_off;
+	u64 *stats_counter;
 	int error;
 
+	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 	OVS_CB(skb)->vport = p;
 
 	if (!OVS_CB(skb)->flow) {
@@ -299,7 +300,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 		if (is_frag && dp->drop_frags) {
 			consume_skb(skb);
-			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+			stats_counter = &stats->n_frags;
 			goto out;
 		}
 
@@ -312,27 +313,23 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 			upcall.key = &key;
 			dp_upcall(dp, skb, &upcall);
 			kfree_skb(skb);
-			stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
+			stats_counter = &stats->n_missed;
 			goto out;
 		}
 
 		OVS_CB(skb)->flow = flow;
 	}
 
-	stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
+	stats_counter = &stats->n_hit;
 	flow_used(OVS_CB(skb)->flow, skb);
 	execute_actions(dp, skb);
 
 out:
 	/* Update datapath statistics. */
-	local_bh_disable();
-	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 
 	write_seqcount_begin(&stats->seqlock);
-	(*(u64 *)((u8 *)stats + stats_counter_off))++;
+	(*stats_counter)++;
 	write_seqcount_end(&stats->seqlock);
-
-	local_bh_enable();
 }
 
 static void copy_and_csum_skb(struct sk_buff *skb, void *to)
@@ -406,14 +403,11 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 	return 0;
 
 err:
-	local_bh_disable();
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 
 	write_seqcount_begin(&stats->seqlock);
 	stats->n_lost++;
 	write_seqcount_end(&stats->seqlock);
-
-	local_bh_enable();
 
 	return err;
 }
@@ -706,7 +700,9 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 		OVS_CB(packet)->vport = get_vport_protected(dp,
 							flow->key.eth.in_port);
 
+	local_bh_disable();
 	err = execute_actions(dp, packet);
+	local_bh_enable();
 	rcu_read_unlock();
 
 	flow_put(flow);

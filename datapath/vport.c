@@ -563,15 +563,12 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 {
 	struct vport_percpu_stats *stats;
 
-	local_bh_disable();
 	stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
 
 	write_seqcount_begin(&stats->seqlock);
 	stats->rx_packets++;
 	stats->rx_bytes += skb->len;
 	write_seqcount_end(&stats->seqlock);
-
-	local_bh_enable();
 
 	if (!(vport->ops->flags & VPORT_F_FLOW))
 		OVS_CB(skb)->flow = NULL;
@@ -596,15 +593,12 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	struct vport_percpu_stats *stats;
 	int sent = vport->ops->send(vport, skb);
 
-	local_bh_disable();
 	stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
 
 	write_seqcount_begin(&stats->seqlock);
 	stats->tx_packets++;
 	stats->tx_bytes += sent;
 	write_seqcount_end(&stats->seqlock);
-
-	local_bh_enable();
 
 	return sent;
 }
@@ -620,7 +614,7 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
  */
 void vport_record_error(struct vport *vport, enum vport_err_type err_type)
 {
-	spin_lock_bh(&vport->stats_lock);
+	spin_lock(&vport->stats_lock);
 
 	switch (err_type) {
 	case VPORT_E_RX_DROPPED:
@@ -640,5 +634,5 @@ void vport_record_error(struct vport *vport, enum vport_err_type err_type)
 		break;
 	};
 
-	spin_unlock_bh(&vport->stats_lock);
+	spin_unlock(&vport->stats_lock);
 }
