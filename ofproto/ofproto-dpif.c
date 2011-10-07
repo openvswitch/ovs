@@ -1568,7 +1568,8 @@ port_run(struct ofport_dpif *ofport)
             ofpbuf_uninit(&packet);
         }
 
-        enable = enable && !cfm_get_fault(ofport->cfm);
+        enable = enable && !cfm_get_fault(ofport->cfm)
+            && cfm_get_opup(ofport->cfm);
     }
 
     if (ofport->bundle) {

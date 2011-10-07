@@ -1447,6 +1447,16 @@
         compatibility with 802.1ag compliant implementations.  Defaults to
         <code>false</code>.
       </column>
+      <column name="other_config" key="cfm_opstate">
+        When <code>down</code>, the CFM module marks all CCMs it generates as
+        operationally down without triggering a fault.  This allows remote
+        maintenance points to choose not to forward traffic to the
+        <ref table="Interface"/> on which this CFM module is running.
+        Currently, in Open vSwitch, the opdown bit of CCMs affects
+        <ref table="Interface"/>s participating in bonds, and the bundle
+        OpenFlow action. This setting is ignored when CFM is not in extended
+        mode.  Defaults to <code>up</code>.
+      </column>
     </group>
 
     <group title="Bonding Configuration">

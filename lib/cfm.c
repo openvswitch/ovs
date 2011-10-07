@@ -71,7 +71,8 @@ struct ccm {
     /* Defined by ITU-T Y.1731 should be zero */
     ovs_be16 interval_ms_x;      /* Transmission interval in ms. */
     ovs_be64 mpid64;             /* MPID in extended mode. */
-    uint8_t  zero[6];
+    uint8_t opdown;              /* Operationally down. */
+    uint8_t  zero[5];
 
     /* TLV space. */
     uint8_t end_tlv;
@@ -86,6 +87,8 @@ struct cfm {
     bool extended;         /* Extended mode. */
     bool fault;            /* Indicates connectivity fault. */
     bool unexpected_recv;  /* Received an unexpected CCM. */
+    bool opup;             /* Operational State. */
+    bool remote_opup;      /* Remote Operational State. */
 
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
@@ -112,6 +115,7 @@ struct remote_mp {
     bool recv;           /* CCM was received since last fault check. */
     bool rdi;            /* Remote Defect Indicator. Indicates remote_mp isn't
                             receiving CCMs that it's expecting to. */
+    bool opup;           /* Operational State. */
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -244,6 +248,7 @@ cfm_create(const char *name)
     hmap_init(&cfm->remote_mps);
     cfm_generate_maid(cfm);
     hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
+    cfm->remote_opup = true;
     return cfm;
 }
 
@@ -284,6 +289,7 @@ cfm_run(struct cfm *cfm)
         cfm->rmps_array = xmalloc(hmap_count(&cfm->remote_mps) *
                                   sizeof *cfm->rmps_array);
 
+        cfm->remote_opup = true;
         HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
 
             if (!rmp->recv) {
@@ -304,6 +310,10 @@ cfm_run(struct cfm *cfm)
                     VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
                              rmp->mpid);
                     cfm->fault = true;
+                }
+
+                if (!rmp->opup) {
+                    cfm->remote_opup = rmp->opup;
                 }
 
                 cfm->rmps_array[cfm->rmps_array_len++] = rmp->mpid;
@@ -349,9 +359,11 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     if (cfm->extended) {
         ccm->mpid = htons(hash_mpid(cfm->mpid));
         ccm->mpid64 = htonll(cfm->mpid);
+        ccm->opdown = !cfm->opup;
     } else {
         ccm->mpid = htons(cfm->mpid);
         ccm->mpid64 = htonll(0);
+        ccm->opdown = 0;
     }
 
     if (cfm->ccm_interval == 0) {
@@ -384,6 +396,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
 
     cfm->mpid = s->mpid;
     cfm->extended = s->extended;
+    cfm->opup = s->opup;
     interval = ms_to_ccm_interval(s->interval);
     interval_ms = ccm_interval_to_ms(interval);
 
@@ -455,8 +468,15 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
         struct remote_mp *rmp;
         uint64_t ccm_mpid;
+        bool ccm_opdown;
 
-        ccm_mpid = cfm->extended ? ntohll(ccm->mpid64) : ntohs(ccm->mpid);
+        if (cfm->extended) {
+            ccm_mpid = ntohll(ccm->mpid64);
+            ccm_opdown = ccm->opdown;
+        } else {
+            ccm_mpid = ntohs(ccm->mpid);
+            ccm_opdown = false;
+        }
 
         if (ccm_interval != cfm->ccm_interval) {
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
@@ -472,20 +492,24 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         }
 
         rmp = lookup_remote_mp(cfm, ccm_mpid);
+        if (!rmp) {
+            if (hmap_count(&cfm->remote_mps) < CFM_MAX_RMPS) {
+                rmp = xmalloc(sizeof *rmp);
+                hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(ccm_mpid));
+            } else {
+                cfm->unexpected_recv = true;
+                VLOG_WARN_RL(&rl,
+                             "%s: dropped CCM with MPID %"PRIu64" from MAC "
+                             ETH_ADDR_FMT, cfm->name, ccm_mpid,
+                             ETH_ADDR_ARGS(eth->eth_src));
+            }
+        }
+
         if (rmp) {
-            rmp->recv = true;
-            rmp->rdi = ccm_rdi;
-        } else if (hmap_count(&cfm->remote_mps) < CFM_MAX_RMPS) {
-            rmp = xmalloc(sizeof *rmp);
             rmp->mpid = ccm_mpid;
             rmp->recv = true;
             rmp->rdi = ccm_rdi;
-            hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(rmp->mpid));
-        } else {
-            cfm->unexpected_recv = true;
-            VLOG_WARN_RL(&rl, "%s: dropped CCM with MPID %"PRIu64" from MAC "
-                         ETH_ADDR_FMT, cfm->name, ccm_mpid,
-                         ETH_ADDR_ARGS(eth->eth_src));
+            rmp->opup = !ccm_opdown;
         }
 
         VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
@@ -500,6 +524,16 @@ bool
 cfm_get_fault(const struct cfm *cfm)
 {
     return cfm->fault;
+}
+
+/* Gets the operational state of 'cfm'.  'cfm' is considered operationally down
+ * if it has received a CCM with the operationally down bit set from any of its
+ * remote maintenance points. Returns true if 'cfm' is operationally up. False
+ * otherwise. */
+bool
+cfm_get_opup(const struct cfm *cfm)
+{
+    return cfm->remote_opup;
 }
 
 /* Populates 'rmps' with an array of remote maintenance points reachable by
@@ -537,6 +571,9 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
                   cfm->fault ? " fault" : "",
                   cfm->unexpected_recv ? " unexpected_recv" : "");
 
+    ds_put_format(ds, "\topstate: %s\n", cfm->opup ? "up" : "down");
+    ds_put_format(ds, "\tremote_opstate: %s\n",
+                  cfm->remote_opup ? "up" : "down");
     ds_put_format(ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
     ds_put_format(ds, "\tnext CCM tx: %lldms\n",
                   timer_msecs_until_expired(&cfm->tx_timer));
@@ -549,6 +586,7 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
                       rmp->rdi ? " rdi" : "");
         ds_put_format(ds, "\trecv since check: %s\n",
                       rmp->recv ? "true" : "false");
+        ds_put_format(ds, "\topstate: %s\n", rmp->opup? "up" : "down");
     }
 }
 
