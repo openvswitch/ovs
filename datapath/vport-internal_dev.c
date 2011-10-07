@@ -68,7 +68,7 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 	return 0;
 }
 
-/* Called with rcu_read_lock and bottom-halves disabled. */
+/* Called with rcu_read_lock_bh. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	if (unlikely(compute_ip_summed(skb, true))) {
@@ -79,7 +79,9 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	vlan_copy_skb_tci(skb);
 	OVS_CB(skb)->flow = NULL;
 
+	rcu_read_lock();
 	vport_receive(internal_dev_priv(netdev)->vport, skb);
+	rcu_read_unlock();
 	return 0;
 }
 
