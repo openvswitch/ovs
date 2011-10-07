@@ -49,8 +49,13 @@ static const uint8_t eth_addr_ccm_x[6] = {
 
 /* A 'ccm' represents a Continuity Check Message from the 802.1ag
  * specification.  Continuity Check Messages are broadcast periodically so that
- * hosts can determine whom they have connectivity to. */
-#define CCM_LEN 74
+ * hosts can determine whom they have connectivity to.
+ *
+ * The minimum length of a CCM as specified by IEEE 802.1ag is 75 bytes.
+ * Previous versions of Open vSwitch generated 74-byte CCM messages, so we
+ * accept such messages too. */
+#define CCM_LEN 75
+#define CCM_ACCEPT_LEN 74
 #define CCM_MAID_LEN 48
 #define CCM_OPCODE 1 /* CFM message opcode meaning CCM. */
 #define CCM_RDI_MASK 0x80
@@ -67,6 +72,9 @@ struct ccm {
     ovs_be16 interval_ms_x;      /* Transmission interval in ms. */
     ovs_be64 mpid64;             /* MPID in extended mode. */
     uint8_t  zero[6];
+
+    /* TLV space. */
+    uint8_t end_tlv;
 } __attribute__((packed));
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
@@ -336,6 +344,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     ccm->flags = cfm->ccm_interval;
     memcpy(ccm->maid, cfm->maid, sizeof ccm->maid);
     memset(ccm->zero, 0, sizeof ccm->zero);
+    ccm->end_tlv = 0;
 
     if (cfm->extended) {
         ccm->mpid = htons(hash_mpid(cfm->mpid));
@@ -412,7 +421,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     struct eth_header *eth;
 
     eth = p->l2;
-    ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_LEN);
+    ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_ACCEPT_LEN);
 
     if (!ccm) {
         VLOG_INFO_RL(&rl, "%s: Received an unparseable 802.1ag CCM heartbeat.",
