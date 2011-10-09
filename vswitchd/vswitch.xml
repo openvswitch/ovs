@@ -1445,7 +1445,7 @@
         network. Furthermore, extended mode increases the accuracy of the
         <code>cfm_interval</code> configuration parameter by breaking wire
         compatibility with 802.1ag compliant implementations.  Defaults to
-        false.
+        <code>false</code>.
       </column>
     </group>
 
