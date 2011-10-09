@@ -3034,6 +3034,8 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     ofp_port = ntohs(oae->port);
     if (ofp_port == OFPP_IN_PORT) {
         ofp_port = ctx->flow.in_port;
+    } else if (ofp_port == ctx->flow.in_port) {
+        return;
     }
     odp_port = ofp_port_to_odp_port(ofp_port);
 
