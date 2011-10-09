@@ -532,7 +532,8 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
     struct remote_mp *rmp;
 
     ds_put_format(ds, "---- %s ----\n", cfm->name);
-    ds_put_format(ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
+    ds_put_format(ds, "MPID %"PRIu64":%s%s%s\n", cfm->mpid,
+                  cfm->extended ? " extended" : "",
                   cfm->fault ? " fault" : "",
                   cfm->unexpected_recv ? " unexpected_recv" : "");
 
