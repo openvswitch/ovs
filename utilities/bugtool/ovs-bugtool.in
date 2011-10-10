@@ -588,7 +588,7 @@ exclude those logs from the archive.
     file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
     tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_LOG_DIR)
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
-        cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show'])
+        cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
             cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'show', d])
             cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'dump-flows', d])
