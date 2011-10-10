@@ -659,7 +659,7 @@ ofproto_set_flood_vlans(struct ofproto *ofproto, unsigned long *flood_vlans)
 /* Returns true if 'aux' is a registered bundle that is currently in use as the
  * output for a mirror. */
 bool
-ofproto_is_mirror_output_bundle(struct ofproto *ofproto, void *aux)
+ofproto_is_mirror_output_bundle(const struct ofproto *ofproto, void *aux)
 {
     return (ofproto->ofproto_class->is_mirror_output_bundle
             ? ofproto->ofproto_class->is_mirror_output_bundle(ofproto, aux)

@@ -249,7 +249,7 @@ int ofproto_mirror_register(struct ofproto *, void *aux,
 int ofproto_mirror_unregister(struct ofproto *, void *aux);
 
 int ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
-bool ofproto_is_mirror_output_bundle(struct ofproto *, void *aux);
+bool ofproto_is_mirror_output_bundle(const struct ofproto *, void *aux);
 
 /* Configuration querying. */
 bool ofproto_has_snoops(const struct ofproto *);

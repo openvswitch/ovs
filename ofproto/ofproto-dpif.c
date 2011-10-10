@@ -1543,7 +1543,7 @@ set_flood_vlans(struct ofproto *ofproto_, unsigned long *flood_vlans)
 }
 
 static bool
-is_mirror_output_bundle(struct ofproto *ofproto_, void *aux)
+is_mirror_output_bundle(const struct ofproto *ofproto_, void *aux)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofbundle *bundle = bundle_lookup(ofproto, aux);
