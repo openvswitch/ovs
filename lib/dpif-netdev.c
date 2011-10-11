@@ -47,6 +47,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "random.h"
 #include "shash.h"
 #include "timeval.h"
 #include "util.h"
@@ -1209,6 +1210,40 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
     return 0;
 }
 
+static void
+dp_netdev_sample(struct dp_netdev *dp,
+                 struct ofpbuf *packet, struct flow *key,
+                 const struct nlattr *action)
+{
+    const struct nlattr *subactions = NULL;
+    const struct nlattr *a;
+    size_t left;
+
+    NL_NESTED_FOR_EACH_UNSAFE (a, left, action) {
+        int type = nl_attr_type(a);
+
+        switch ((enum ovs_sample_attr) type) {
+        case OVS_SAMPLE_ATTR_PROBABILITY:
+            if (random_uint32() >= nl_attr_get_u32(a)) {
+                return;
+            }
+            break;
+
+        case OVS_SAMPLE_ATTR_ACTIONS:
+            subactions = a;
+            break;
+
+        case OVS_SAMPLE_ATTR_UNSPEC:
+        case __OVS_SAMPLE_ATTR_MAX:
+        default:
+            NOT_REACHED();
+        }
+    }
+
+    dp_netdev_execute_actions(dp, packet, key, nl_attr_get(subactions),
+                              nl_attr_get_size(subactions));
+}
+
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, struct flow *key,
@@ -1219,7 +1254,9 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     unsigned int left;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-        switch (nl_attr_type(a)) {
+        int type = nl_attr_type(a);
+
+        switch ((enum ovs_action_type) type) {
         case OVS_ACTION_ATTR_OUTPUT:
             dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;
@@ -1258,6 +1295,20 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
         case OVS_ACTION_ATTR_SET_TP_DST:
             dp_netdev_set_tp_port(packet, key, a);
             break;
+
+        case OVS_ACTION_ATTR_SAMPLE:
+            dp_netdev_sample(dp, packet, key, a);
+            break;
+
+        case OVS_ACTION_ATTR_SET_TUNNEL:
+        case OVS_ACTION_ATTR_SET_PRIORITY:
+        case OVS_ACTION_ATTR_POP_PRIORITY:
+            /* not implemented */
+            break;
+
+        case OVS_ACTION_ATTR_UNSPEC:
+        case __OVS_ACTION_ATTR_MAX:
+            NOT_REACHED();
         }
     }
     return 0;
