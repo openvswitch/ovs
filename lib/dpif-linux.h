@@ -32,7 +32,11 @@ struct dpif_linux_vport {
     uint32_t port_no;                      /* UINT32_MAX if unknown. */
     enum ovs_vport_type type;
 
-    /* Attributes. */
+    /* Attributes.
+     *
+     * The 'stats' member points to 64-bit data that might only be aligned on
+     * 32-bit boundaries, so use get_unaligned_u64() to access its values.
+     */
     const char *name;                      /* OVS_VPORT_ATTR_NAME. */
     const uint32_t *upcall_pid;            /* OVS_VPORT_ATTR_UPCALL_PID. */
     const struct ovs_vport_stats *stats;   /* OVS_VPORT_ATTR_STATS. */

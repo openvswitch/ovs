@@ -44,6 +44,7 @@
 #include "route-table.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "unaligned.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
@@ -361,22 +362,21 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
     return error;
 }
 
-#define COPY_OVS_STATS                                      \
-    dst->rx_packets = src->rx_packets;                      \
-    dst->tx_packets = src->tx_packets;                      \
-    dst->rx_bytes = src->rx_bytes;                          \
-    dst->tx_bytes = src->tx_bytes;                          \
-    dst->rx_errors = src->rx_errors;                        \
-    dst->tx_errors = src->tx_errors;                        \
-    dst->rx_dropped = src->rx_dropped;                      \
-    dst->tx_dropped = src->tx_dropped;
-
-/* Copies 'src' into 'dst', performing format conversion in the process. */
+/* Copies 'src' into 'dst', performing format conversion in the process.
+ *
+ * 'src' is allowed to be misaligned. */
 static void
 netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
                                   const struct ovs_vport_stats *src)
 {
-    COPY_OVS_STATS
+    dst->rx_packets = get_unaligned_u64(&src->rx_packets);
+    dst->tx_packets = get_unaligned_u64(&src->tx_packets);
+    dst->rx_bytes = get_unaligned_u64(&src->rx_bytes);
+    dst->tx_bytes = get_unaligned_u64(&src->tx_bytes);
+    dst->rx_errors = get_unaligned_u64(&src->rx_errors);
+    dst->tx_errors = get_unaligned_u64(&src->tx_errors);
+    dst->rx_dropped = get_unaligned_u64(&src->rx_dropped);
+    dst->tx_dropped = get_unaligned_u64(&src->tx_dropped);
     dst->multicast = 0;
     dst->collisions = 0;
     dst->rx_length_errors = 0;
@@ -397,7 +397,14 @@ static void
 netdev_stats_to_ovs_vport_stats(struct ovs_vport_stats *dst,
                                 const struct netdev_stats *src)
 {
-    COPY_OVS_STATS
+    dst->rx_packets = src->rx_packets;
+    dst->tx_packets = src->tx_packets;
+    dst->rx_bytes = src->rx_bytes;
+    dst->tx_bytes = src->tx_bytes;
+    dst->rx_errors = src->rx_errors;
+    dst->tx_errors = src->tx_errors;
+    dst->rx_dropped = src->rx_dropped;
+    dst->tx_dropped = src->tx_dropped;
 }
 
 int
