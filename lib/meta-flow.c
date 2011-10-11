@@ -716,7 +716,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 #if FLOW_N_REGS > 5
 #error
 #endif
-        value->be32 = htonl(flow->regs[0]);
+        value->be32 = htonl(flow->regs[mf->id - MFF_REG0]);
         break;
 
     case MFF_ETH_SRC:
