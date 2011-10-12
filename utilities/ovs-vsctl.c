@@ -45,6 +45,7 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
+#include "vconn.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vsctl);
@@ -2010,6 +2011,9 @@ insert_controllers(struct ovsdb_idl_txn *txn, char *targets[], size_t n)
 
     controllers = xmalloc(n * sizeof *controllers);
     for (i = 0; i < n; i++) {
+        if (vconn_verify_name(targets[i]) && pvconn_verify_name(targets[i])) {
+            VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
+        }
         controllers[i] = ovsrec_controller_insert(txn);
         ovsrec_controller_set_target(controllers[i], targets[i]);
     }
@@ -2168,6 +2172,9 @@ insert_managers(struct vsctl_context *ctx, char *targets[], size_t n)
     /* Insert each manager in a new row in Manager table. */
     managers = xmalloc(n * sizeof *managers);
     for (i = 0; i < n; i++) {
+        if (stream_verify_name(targets[i]) && pstream_verify_name(targets[i])) {
+            VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
+        }
         managers[i] = ovsrec_manager_insert(ctx->txn);
         ovsrec_manager_set_target(managers[i], targets[i]);
     }
