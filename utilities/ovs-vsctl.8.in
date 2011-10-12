@@ -324,8 +324,13 @@ output.
 .SS "OpenFlow Controller Connectivity"
 .
 \fBovs\-vswitchd\fR can perform all configured bridging and switching
-locally, or it can be configured to connect a given bridge to one or
-more external OpenFlow controllers, such as NOX.
+locally, or it can be configured to communicate with one or more
+external OpenFlow controllers.  The switch is typically configured to
+connect to a primary controller that takes charge of the bridge's flow
+table to implement a network policy.  In addition, the switch can be
+configured to listen to connections from service controllers.  Service
+controllers are typically used for occasional support and maintenance,
+e.g. with \fBovs\-ofctl\fR.
 .
 .IP "\fBget\-controller\fR \fIbridge\fR"
 Prints the configured controller target.
@@ -339,6 +344,7 @@ use any of the following forms:
 .
 .RS
 .so lib/vconn-active.man
+.so lib/vconn-passive.man
 .RE
 .
 .ST "Controller Failure Settings"
