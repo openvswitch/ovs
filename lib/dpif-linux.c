@@ -235,6 +235,7 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
 {
     struct dpif_linux_dp dp_request, dp;
     struct ofpbuf *buf;
+    uint32_t upcall_pid;
     int error;
 
     error = dpif_linux_init();
@@ -244,7 +245,13 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
 
     /* Create or look up datapath. */
     dpif_linux_dp_init(&dp_request);
-    dp_request.cmd = create ? OVS_DP_CMD_NEW : OVS_DP_CMD_GET;
+    if (create) {
+        dp_request.cmd = OVS_DP_CMD_NEW;
+        upcall_pid = 0;
+        dp_request.upcall_pid = &upcall_pid;
+    } else {
+        dp_request.cmd = OVS_DP_CMD_GET;
+    }
     dp_request.name = name;
     error = dpif_linux_dp_transact(&dp_request, &dp, &buf);
     if (error) {

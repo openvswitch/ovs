@@ -1282,7 +1282,7 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	int err;
 
 	err = -EINVAL;
-	if (!a[OVS_DP_ATTR_NAME])
+	if (!a[OVS_DP_ATTR_NAME] || !a[OVS_DP_ATTR_UPCALL_PID])
 		goto err;
 
 	err = ovs_dp_cmd_validate(a);
@@ -1326,10 +1326,7 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	parms.options = NULL;
 	parms.dp = dp;
 	parms.port_no = OVSP_LOCAL;
-	if (a[OVS_DP_ATTR_UPCALL_PID])
-		parms.upcall_pid = nla_get_u32(a[OVS_DP_ATTR_UPCALL_PID]);
-	else
-		parms.upcall_pid = NETLINK_CB(skb).pid;
+	parms.upcall_pid = nla_get_u32(a[OVS_DP_ATTR_UPCALL_PID]);
 
 	vport = new_vport(&parms);
 	if (IS_ERR(vport)) {
@@ -1664,7 +1661,8 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	int err;
 
 	err = -EINVAL;
-	if (!a[OVS_VPORT_ATTR_NAME] || !a[OVS_VPORT_ATTR_TYPE])
+	if (!a[OVS_VPORT_ATTR_NAME] || !a[OVS_VPORT_ATTR_TYPE] ||
+	    !a[OVS_VPORT_ATTR_UPCALL_PID])
 		goto exit;
 
 	err = ovs_vport_cmd_validate(a);
@@ -1705,10 +1703,7 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	parms.options = a[OVS_VPORT_ATTR_OPTIONS];
 	parms.dp = dp;
 	parms.port_no = port_no;
-	if (a[OVS_VPORT_ATTR_UPCALL_PID])
-		parms.upcall_pid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
-	else
-		parms.upcall_pid = NETLINK_CB(skb).pid;
+	parms.upcall_pid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
 
 	vport = new_vport(&parms);
 	err = PTR_ERR(vport);
