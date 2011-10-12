@@ -310,14 +310,16 @@ class BaseType(object):
                 english = 'at most %g' % self.max
         elif self.min_length != 0 and self.max_length != sys.maxint:
             if self.min_length == self.max_length:
-                english = 'exactly %d characters long' % (self.min_length)
+                english = ('exactly %s characters long'
+                           % commafy(self.min_length))
             else:
-                english = ('between %d and %d characters long'
-                        % (self.min_length, self.max_length))
+                english = ('between %s and %s characters long'
+                        % (commafy(self.min_length),
+                           commafy(self.max_length)))
         elif self.min_length != 0:
-            return 'at least %d characters long' % self.min_length
+            return 'at least %s characters long' % commafy(self.min_length)
         elif self.max_length != sys.maxint:
-            english = 'at most %d characters long' % self.max_length
+            english = 'at most %s characters long' % commafy(self.max_length)
         else:
             english = ''
 
@@ -517,13 +519,14 @@ class Type(object):
         else:
             if self.n_max == sys.maxint:
                 if self.n_min:
-                    quantity = "%d or more " % self.n_min
+                    quantity = "%s or more " % commafy(self.n_min)
                 else:
                     quantity = ""
             elif self.n_min:
-                quantity = "%d to %d " % (self.n_min, self.n_max)
+                quantity = "%s to %s " % (commafy(self.n_min),
+                                          commafy(self.n_max))
             else:
-                quantity = "up to %d " % self.n_max
+                quantity = "up to %s " % commafy(self.n_max)
 
             if self.value:
                 return "map of %s%s-%s pairs" % (quantity, keyName, valueName)
