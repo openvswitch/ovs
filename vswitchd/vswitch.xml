@@ -933,7 +933,7 @@
             not support GRE.  Only the tunneling component of the protocol is
             implemented.  UDP ports 58881 and 58882 are used as the source and
             destination ports respectively.  CAPWAP is currently supported only
-            with the Linux kernel datapath with kernel version 2.6.25 or later.
+            with the Linux kernel datapath with kernel version 2.6.26 or later.
           </dd>
 
           <dt><code>patch</code></dt>
