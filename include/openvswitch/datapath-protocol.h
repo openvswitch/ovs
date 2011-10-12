@@ -170,13 +170,9 @@ enum ovs_packet_cmd {
  * flow key against the kernel's.
  * @OVS_PACKET_ATTR_ACTIONS: Contains actions for the packet.  Used
  * for %OVS_PACKET_CMD_EXECUTE.  It has nested %OVS_ACTION_ATTR_* attributes.
- * @OVS_PACKET_ATTR_UPCALL_PID: Optionally present for OVS_PACKET_CMD_EXECUTE.
- * The Netlink socket in userspace that OVS_PACKET_CMD_USERSPACE and
- * OVS_PACKET_CMD_SAMPLE upcalls will be directed to for actions triggered by
- * this packet.  A value of zero indicates that upcalls should not be sent.
  * @OVS_PACKET_ATTR_USERDATA: Present for an %OVS_PACKET_CMD_ACTION
- * notification if the %OVS_ACTION_ATTR_USERSPACE, action's argument was
- * nonzero.
+ * notification if the %OVS_ACTION_ATTR_USERSPACE action specified an
+ * %OVS_USERSPACE_ATTR_USERDATA attribute.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_PACKET_* commands.
@@ -186,7 +182,6 @@ enum ovs_packet_attr {
 	OVS_PACKET_ATTR_PACKET,      /* Packet data. */
 	OVS_PACKET_ATTR_KEY,         /* Nested OVS_KEY_ATTR_* attributes. */
 	OVS_PACKET_ATTR_ACTIONS,     /* Nested OVS_ACTION_ATTR_* attributes. */
-	OVS_PACKET_ATTR_UPCALL_PID,  /* Netlink PID to receive upcalls. */
 	OVS_PACKET_ATTR_USERDATA,    /* u64 OVS_ACTION_ATTR_USERSPACE arg. */
 	__OVS_PACKET_ATTR_MAX
 };
@@ -372,12 +367,6 @@ struct ovs_key_nd {
  * @OVS_FLOW_ATTR_ACTIONS: Nested %OVS_ACTION_ATTR_* attributes specifying
  * the actions to take for packets that match the key.  Always present in
  * notifications.  Required for %OVS_FLOW_CMD_NEW requests, optional
- * @OVS_FLOW_ATTR_UPCALL_PID: The Netlink socket in userspace that
- * OVS_PACKET_CMD_USERSPACE and OVS_PACKET_CMD_SAMPLE upcalls will be
- * directed to for packets received on this port.  A value of zero indicates
- * that upcalls should not be sent.
- * on %OVS_FLOW_CMD_SET request to change the existing actions, ignored for
- * other requests.
  * @OVS_FLOW_ATTR_STATS: &struct ovs_flow_stats giving statistics for this
  * flow.  Present in notifications if the stats would be nonzero.  Ignored in
  * requests.
@@ -399,7 +388,6 @@ enum ovs_flow_attr {
 	OVS_FLOW_ATTR_UNSPEC,
 	OVS_FLOW_ATTR_KEY,       /* Sequence of OVS_KEY_ATTR_* attributes. */
 	OVS_FLOW_ATTR_ACTIONS,   /* Nested OVS_ACTION_ATTR_* attributes. */
-	OVS_FLOW_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls. */
 	OVS_FLOW_ATTR_STATS,     /* struct ovs_flow_stats. */
 	OVS_FLOW_ATTR_TCP_FLAGS, /* 8-bit OR'd TCP flags. */
 	OVS_FLOW_ATTR_USED,      /* u64 msecs last used in monotonic time. */
@@ -410,13 +398,16 @@ enum ovs_flow_attr {
 #define OVS_FLOW_ATTR_MAX (__OVS_FLOW_ATTR_MAX - 1)
 
 /**
- * enum ovs_sample_attr - Attributes for OVS_ACTION_ATTR_SAMPLE
+ * enum ovs_sample_attr - Attributes for %OVS_ACTION_ATTR_SAMPLE action.
  * @OVS_SAMPLE_ATTR_PROBABILITY: 32-bit fraction of packets to sample with
  * @OVS_ACTION_ATTR_SAMPLE.  A value of 0 samples no packets, a value of
  * %UINT32_MAX samples all packets and intermediate values sample intermediate
  * fractions of packets.
  * @OVS_SAMPLE_ATTR_ACTIONS: Set of actions to execute in sampling event.
  * Actions are passed as nested attributes.
+ *
+ * Executes the specified actions with the given probability on a per-packet
+ * basis.
  */
 enum ovs_sample_attr {
 	OVS_SAMPLE_ATTR_UNSPEC,
@@ -427,11 +418,27 @@ enum ovs_sample_attr {
 
 #define OVS_SAMPLE_ATTR_MAX (__OVS_SAMPLE_ATTR_MAX - 1)
 
+/**
+ * enum ovs_userspace_attr - Attributes for %OVS_ACTION_ATTR_USERSPACE action.
+ * @OVS_USERSPACE_ATTR_PID: u32 Netlink PID to which the %OVS_PACKET_CMD_ACTION
+ * message should be sent.  Required.
+ * @OVS_USERSPACE_ATTR_USERDATA: If present, its u64 argument is copied to the
+ * %OVS_PACKET_CMD_ACTION message as %OVS_PACKET_ATTR_USERDATA,
+ */
+enum ovs_userspace_attr {
+	OVS_USERSPACE_ATTR_UNSPEC,
+	OVS_USERSPACE_ATTR_PID,	      /* u32 Netlink PID to receive upcalls. */
+	OVS_USERSPACE_ATTR_USERDATA,  /* u64 optional user-specified cookie. */
+	__OVS_USERSPACE_ATTR_MAX
+};
+
+#define OVS_USERSPACE_ATTR_MAX (__OVS_USERSPACE_ATTR_MAX - 1)
+
 /* Action types. */
 enum ovs_action_type {
 	OVS_ACTION_ATTR_UNSPEC,
 	OVS_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
-	OVS_ACTION_ATTR_USERSPACE,    /* Send copy to userspace. */
+	OVS_ACTION_ATTR_USERSPACE,    /* Nested OVS_USERSPACE_ATTR_*. */
 	OVS_ACTION_ATTR_PUSH_VLAN,    /* Set the 802.1q TCI value. */
 	OVS_ACTION_ATTR_POP_VLAN,     /* Strip the 802.1q header. */
 	OVS_ACTION_ATTR_SET_DL_SRC,   /* Ethernet source address. */
@@ -444,8 +451,7 @@ enum ovs_action_type {
 	OVS_ACTION_ATTR_SET_TUNNEL,   /* Set the encapsulating tunnel ID. */
 	OVS_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
 	OVS_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
-	OVS_ACTION_ATTR_SAMPLE,       /* Execute list of actions at given
-					 probability. */
+	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	__OVS_ACTION_ATTR_MAX
 };
 

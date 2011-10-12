@@ -142,6 +142,18 @@ struct dpif_class {
      * actions. */
     int (*get_max_ports)(const struct dpif *dpif);
 
+    /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
+     * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
+     * flows whose packets arrived on port 'port_no'.
+     *
+     * The return value only needs to be meaningful when DPIF_UC_ACTION has
+     * been enabled in the 'dpif''s listen mask, and it is allowed to change
+     * when DPIF_UC_ACTION is disabled and then re-enabled.
+     *
+     * A dpif provider that doesn't have meaningful Netlink PIDs can use NULL
+     * for this function.  This is equivalent to always returning 0. */
+    uint32_t (*port_get_pid)(const struct dpif *dpif, uint16_t port_no);
+
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On
      * failure, returns a positive errno value. */
@@ -300,7 +312,11 @@ struct dpif_class {
     /* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set
      * in '*listen_mask' requests that 'dpif' will receive messages of the type
      * (from "enum dpif_upcall_type") with value X when its 'recv' function is
-     * called. */
+     * called.
+     *
+     * Turning DPIF_UC_ACTION off and then back on is allowed to change Netlink
+     * PID assignments (see ->port_get_pid()).  The client is responsible for
+     * updating flows as necessary if it does this. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a

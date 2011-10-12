@@ -542,6 +542,23 @@ dpif_get_max_ports(const struct dpif *dpif)
     return dpif->dpif_class->get_max_ports(dpif);
 }
 
+/* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE actions
+ * as the OVS_USERSPACE_ATTR_PID attribute's value, for use in flows whose
+ * packets arrived on port 'port_no'.
+ *
+ * The return value is only meaningful when DPIF_UC_ACTION has been enabled in
+ * the 'dpif''s listen mask.  It is allowed to change when DPIF_UC_ACTION is
+ * disabled and then re-enabled, so a client that does that must be prepared to
+ * update all of the flows that it installed that contain
+ * OVS_ACTION_ATTR_USERSPACE actions. */
+uint32_t
+dpif_port_get_pid(const struct dpif *dpif, uint16_t port_no)
+{
+    return (dpif->dpif_class->port_get_pid
+            ? (dpif->dpif_class->port_get_pid)(dpif, port_no)
+            : 0);
+}
+
 /* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and copies
  * the port's name into the 'name_size' bytes in 'name', ensuring that the
  * result is null-terminated.  On failure, returns a positive errno value and
@@ -1008,7 +1025,12 @@ dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
 /* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set in
  * '*listen_mask' requests that dpif_recv() will receive messages of the type
  * (from "enum dpif_upcall_type") with value X.  Returns 0 if successful,
- * otherwise a positive errno value. */
+ * otherwise a positive errno value.
+ *
+ * Turning DPIF_UC_ACTION off and then back on may change the Netlink PID
+ * assignments returned by dpif_port_get_pid().  If the client does this, it
+ * must update all of the flows that have OVS_ACTION_ATTR_USERSPACE actions
+ * using the new PID assignment. */
 int
 dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 {

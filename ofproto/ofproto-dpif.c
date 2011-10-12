@@ -2207,13 +2207,17 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     struct ofpbuf key;
     int error;
 
-    if (actions_len == NLA_ALIGN(NLA_HDRLEN + sizeof(uint64_t))
-        && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE) {
-        const struct user_action_cookie *cookie;
+    if (odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
+        && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
+        struct user_action_cookie cookie;
         struct dpif_upcall upcall;
+        uint64_t cookie_u64;
 
-        cookie = nl_attr_get_unspec(odp_actions, sizeof(*cookie));
-        if (cookie->type == USER_ACTION_COOKIE_CONTROLLER) {
+        cookie_u64 = nl_attr_get_u64(nl_attr_find_nested(
+                                         odp_actions,
+                                         OVS_USERSPACE_ATTR_USERDATA));
+        memcpy(&cookie, &cookie_u64, sizeof cookie);
+        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
             /* As an optimization, avoid a round-trip from userspace to kernel
              * to userspace.  This also avoids possibly filling up kernel packet
              * buffers along the way.
@@ -2965,6 +2969,27 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
 static void xlate_normal(struct action_xlate_ctx *);
 
+static size_t
+put_userspace_action(const struct ofproto_dpif *ofproto,
+                     struct ofpbuf *odp_actions,
+                     const struct flow *flow,
+                     const struct user_action_cookie *cookie)
+{
+    size_t offset;
+    uint32_t pid;
+
+    pid = dpif_port_get_pid(ofproto->dpif,
+                            ofp_port_to_odp_port(flow->in_port));
+
+    offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_USERSPACE);
+    nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
+    nl_msg_put_unspec(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
+                      cookie, sizeof *cookie);
+    nl_msg_end_nested(odp_actions, offset);
+
+    return odp_actions->size - NLA_ALIGN(sizeof *cookie);
+}
+
 /* Compose SAMPLE action for sFlow. */
 static size_t
 compose_sflow_action(const struct ofproto_dpif *ofproto,
@@ -2974,9 +2999,9 @@ compose_sflow_action(const struct ofproto_dpif *ofproto,
 {
     uint32_t port_ifindex;
     uint32_t probability;
-    struct user_action_cookie *cookie;
+    struct user_action_cookie cookie;
     size_t sample_offset, actions_offset;
-    int user_cookie_offset, n_output;
+    int cookie_offset, n_output;
 
     if (!ofproto->sflow || flow->in_port == OFPP_NONE) {
         return 0;
@@ -2998,17 +3023,15 @@ compose_sflow_action(const struct ofproto_dpif *ofproto,
 
     actions_offset = nl_msg_start_nested(odp_actions, OVS_SAMPLE_ATTR_ACTIONS);
 
-    cookie = nl_msg_put_unspec_uninit(odp_actions, OVS_ACTION_ATTR_USERSPACE,
-						 sizeof(*cookie));
-    cookie->type = USER_ACTION_COOKIE_SFLOW;
-    cookie->data = port_ifindex;
-    cookie->n_output = n_output;
-    cookie->vlan_tci = 0;
-    user_cookie_offset = (char *) cookie - (char *) odp_actions->data;
+    cookie.type = USER_ACTION_COOKIE_SFLOW;
+    cookie.data = port_ifindex;
+    cookie.n_output = n_output;
+    cookie.vlan_tci = 0;
+    cookie_offset = put_userspace_action(ofproto, odp_actions, flow, &cookie);
 
     nl_msg_end_nested(odp_actions, actions_offset);
     nl_msg_end_nested(odp_actions, sample_offset);
-    return user_cookie_offset;
+    return cookie_offset;
 }
 
 /* SAMPLE action must be first action in any given list of actions.
@@ -3253,7 +3276,7 @@ flood_packets(struct action_xlate_ctx *ctx, ovs_be32 mask)
 }
 
 static void
-compose_controller_action(struct ofpbuf *odp_actions, int len)
+compose_controller_action(struct action_xlate_ctx *ctx, int len)
 {
     struct user_action_cookie cookie;
 
@@ -3261,9 +3284,7 @@ compose_controller_action(struct ofpbuf *odp_actions, int len)
     cookie.data = len;
     cookie.n_output = 0;
     cookie.vlan_tci = 0;
-
-    nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_USERSPACE,
-                                       &cookie, sizeof(cookie));
+    put_userspace_action(ctx->ofproto, ctx->odp_actions, &ctx->flow, &cookie);
 }
 
 static void
@@ -3292,7 +3313,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         break;
     case OFPP_CONTROLLER:
         commit_odp_actions(ctx);
-        compose_controller_action(ctx->odp_actions, max_len);
+        compose_controller_action(ctx, max_len);
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, OFPP_LOCAL);

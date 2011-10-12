@@ -39,6 +39,15 @@
  * interactions with the datapath.
  */
 
+/* Returns one the following for the action with the given OVS_ACTION_ATTR_*
+ * 'type':
+ *
+ *   - For an action whose argument has a fixed length, returned that
+ *     nonnegative length in bytes.
+ *
+ *   - For an action with a variable-length argument, returns -2.
+ *
+ *   - For an invalid 'type', returns -1. */
 int
 odp_action_len(uint16_t type)
 {
@@ -48,7 +57,7 @@ odp_action_len(uint16_t type)
 
     switch ((enum ovs_action_type) type) {
     case OVS_ACTION_ATTR_OUTPUT: return 4;
-    case OVS_ACTION_ATTR_USERSPACE: return 8;
+    case OVS_ACTION_ATTR_USERSPACE: return -2;
     case OVS_ACTION_ATTR_PUSH_VLAN: return 2;
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
     case OVS_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
@@ -61,8 +70,8 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET_TUNNEL: return 8;
     case OVS_ACTION_ATTR_SET_PRIORITY: return 4;
     case OVS_ACTION_ATTR_POP_PRIORITY: return 0;
+    case OVS_ACTION_ATTR_SAMPLE: return -2;
 
-    case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         return -1;
@@ -121,18 +130,57 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
     ds_put_format(ds, "))");
 }
 
+static void
+format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
+{
+    static const struct nl_policy ovs_userspace_policy[] = {
+        [OVS_USERSPACE_ATTR_PID] = { .type = NL_A_U32 },
+        [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
+
+    if (!nl_parse_nested(attr, ovs_userspace_policy, a, ARRAY_SIZE(a))) {
+        ds_put_cstr(ds, "userspace(error)");
+        return;
+    }
+
+    ds_put_format(ds, "userspace(pid=%"PRIu32,
+                  nl_attr_get_u32(a[OVS_USERSPACE_ATTR_PID]));
+
+    if (a[OVS_USERSPACE_ATTR_USERDATA]) {
+        uint64_t userdata = nl_attr_get_u64(a[OVS_USERSPACE_ATTR_USERDATA]);
+        struct user_action_cookie cookie;
+
+        memcpy(&cookie, &userdata, sizeof cookie);
+
+        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
+            ds_put_format(ds, ",controller,length=%"PRIu32,
+                          cookie.data);
+        } else if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
+            ds_put_format(ds, ",sFlow,n_output=%"PRIu8","
+                          "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32,
+                          cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
+                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.data);
+        } else {
+            ds_put_format(ds, ",userdata=0x%"PRIx64, userdata);
+        }
+    }
+
+    ds_put_char(ds, ')');
+}
+
+
 void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     const uint8_t *eth;
+    int expected_len;
     ovs_be32 ip;
-    struct user_action_cookie cookie;
-    uint64_t data;
 
-    if (nl_attr_get_size(a) != odp_action_len(nl_attr_type(a)) &&
-            nl_attr_type(a) != OVS_ACTION_ATTR_SAMPLE) {
+    expected_len = odp_action_len(nl_attr_type(a));
+    if (expected_len != -2 && nl_attr_get_size(a) != expected_len) {
         ds_put_format(ds, "bad length %zu, expected %d for: ",
-                      nl_attr_get_size(a), odp_action_len(nl_attr_type(a)));
+                      nl_attr_get_size(a), expected_len);
         format_generic_odp_action(ds, a);
         return;
     }
@@ -142,21 +190,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
     case OVS_ACTION_ATTR_USERSPACE:
-        data = nl_attr_get_u64(a);
-        memcpy(&cookie, &data, sizeof(cookie));
-
-        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
-            ds_put_format(ds, "userspace(controller,length=%"PRIu32")",
-                          cookie.data);
-        } else if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
-            ds_put_format(ds, "userspace(sFlow,n_output=%"PRIu8","
-                          "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32")",
-                          cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
-                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.data);
-        } else {
-            ds_put_format(ds, "userspace(unknown,data=0x%"PRIx64")",
-                          nl_attr_get_u64(a));
-        }
+        format_odp_userspace_action(ds, a);
         break;
     case OVS_ACTION_ATTR_SET_TUNNEL:
         ds_put_format(ds, "set_tunnel(%#"PRIx64")",

@@ -81,7 +81,6 @@ struct sw_flow {
 	struct rcu_head rcu;
 	struct hlist_node  hash_node;
 	u32 hash;
-	u32 upcall_pid;
 
 	struct sw_flow_key key;
 	struct sw_flow_actions __rcu *sf_acts;

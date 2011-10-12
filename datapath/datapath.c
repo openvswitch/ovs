@@ -84,7 +84,7 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
-static int queue_userspace_packets(struct datapath *, u32 pid, struct sk_buff *,
+static int queue_userspace_packets(struct datapath *, struct sk_buff *,
 				 const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
@@ -311,6 +311,8 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 			upcall.cmd = OVS_PACKET_CMD_MISS;
 			upcall.key = &key;
+			upcall.userdata = NULL;
+			upcall.pid = p->upcall_pid;
 			dp_upcall(dp, skb, &upcall);
 			kfree_skb(skb);
 			stats_counter = &stats->n_missed;
@@ -360,15 +362,9 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 {
 	struct sk_buff *segs = NULL;
 	struct dp_stats_percpu *stats;
-	u32 pid;
 	int err;
 
-	if (OVS_CB(skb)->flow)
-		pid = OVS_CB(skb)->flow->upcall_pid;
-	else
-		pid = OVS_CB(skb)->vport->upcall_pid;
-
-	if (pid == 0) {
+	if (upcall_info->pid == 0) {
 		err = -ENOTCONN;
 		goto err;
 	}
@@ -387,7 +383,7 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 		skb = segs;
 	}
 
-	err = queue_userspace_packets(dp, pid, skb, upcall_info);
+	err = queue_userspace_packets(dp, skb, upcall_info);
 	if (segs) {
 		struct sk_buff *next;
 		/* Free GSO-segments */
@@ -416,8 +412,7 @@ err:
  * 'upcall_info'.  There will be only one packet unless we broke up a GSO
  * packet.
  */
-static int queue_userspace_packets(struct datapath *dp, u32 pid,
-				   struct sk_buff *skb,
+static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
 				   const struct dp_upcall_info *upcall_info)
 {
 	int dp_ifindex;
@@ -458,9 +453,9 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 		flow_to_nlattrs(upcall_info->key, user_skb);
 		nla_nest_end(user_skb, nla);
 
-		if (upcall_info->cmd == OVS_PACKET_CMD_ACTION)
+		if (upcall_info->userdata)
 			nla_put_u64(user_skb, OVS_PACKET_ATTR_USERDATA,
-						upcall_info->userdata);
+				    nla_get_u64(upcall_info->userdata));
 
 		nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
 		if (skb->ip_summed == CHECKSUM_PARTIAL)
@@ -468,7 +463,7 @@ static int queue_userspace_packets(struct datapath *dp, u32 pid,
 		else
 			skb_copy_bits(skb, 0, nla_data(nla), skb->len);
 
-		err = genlmsg_unicast(&init_net, user_skb, pid);
+		err = genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
 		if (err)
 			return err;
 
@@ -523,6 +518,26 @@ static int validate_sample(const struct nlattr *attr, int depth)
 	return validate_actions(a[OVS_SAMPLE_ATTR_ACTIONS], (depth + 1));
 }
 
+static int validate_userspace(const struct nlattr *attr)
+{
+	static const struct nla_policy userspace_policy[OVS_USERSPACE_ATTR_MAX + 1] =
+	{
+		[OVS_USERSPACE_ATTR_PID] = {.type = NLA_U32 },
+		[OVS_USERSPACE_ATTR_USERDATA] = {.type = NLA_U64 },
+	};
+	struct nlattr *a[OVS_USERSPACE_ATTR_MAX + 1];
+	int error;
+
+	error = nla_parse_nested(a, OVS_USERSPACE_ATTR_MAX, attr, userspace_policy);
+	if (error)
+		return error;
+
+	if (!a[OVS_USERSPACE_ATTR_PID] || !nla_get_u32(a[OVS_USERSPACE_ATTR_PID]))
+		return -EINVAL;
+
+	return 0;
+}
+
 static int validate_actions(const struct nlattr *attr, int depth)
 {
 	const struct nlattr *a;
@@ -532,9 +547,10 @@ static int validate_actions(const struct nlattr *attr, int depth)
 		return -EOVERFLOW;
 
 	nla_for_each_nested(a, attr, rem) {
+		/* Expected argument lengths, (u32)-1 for variable length. */
 		static const u32 action_lens[OVS_ACTION_ATTR_MAX + 1] = {
 			[OVS_ACTION_ATTR_OUTPUT] = 4,
-			[OVS_ACTION_ATTR_USERSPACE] = 8,
+			[OVS_ACTION_ATTR_USERSPACE] = (u32)-1,
 			[OVS_ACTION_ATTR_PUSH_VLAN] = 2,
 			[OVS_ACTION_ATTR_POP_VLAN] = 0,
 			[OVS_ACTION_ATTR_SET_DL_SRC] = ETH_ALEN,
@@ -547,22 +563,19 @@ static int validate_actions(const struct nlattr *attr, int depth)
 			[OVS_ACTION_ATTR_SET_TUNNEL] = 8,
 			[OVS_ACTION_ATTR_SET_PRIORITY] = 4,
 			[OVS_ACTION_ATTR_POP_PRIORITY] = 0,
+			[OVS_ACTION_ATTR_SAMPLE] = (u32)-1
 		};
 		int type = nla_type(a);
 
-		/* Match expected attr len for given attr len except for
-		 * OVS_ACTION_ATTR_SAMPLE, as it has nested actions list which
-		 * is variable size. */
 		if (type > OVS_ACTION_ATTR_MAX ||
-		   (nla_len(a) != action_lens[type] &&
-			  type != OVS_ACTION_ATTR_SAMPLE))
+		    (action_lens[type] != nla_len(a) &&
+		     action_lens[type] != (u32)-1))
 			return -EINVAL;
 
 		switch (type) {
 		case OVS_ACTION_ATTR_UNSPEC:
 			return -EINVAL;
 
-		case OVS_ACTION_ATTR_USERSPACE:
 		case OVS_ACTION_ATTR_POP_VLAN:
 		case OVS_ACTION_ATTR_SET_DL_SRC:
 		case OVS_ACTION_ATTR_SET_DL_DST:
@@ -574,6 +587,12 @@ static int validate_actions(const struct nlattr *attr, int depth)
 		case OVS_ACTION_ATTR_SET_PRIORITY:
 		case OVS_ACTION_ATTR_POP_PRIORITY:
 			/* No validation needed. */
+			break;
+
+		case OVS_ACTION_ATTR_USERSPACE:
+			err = validate_userspace(a);
+			if (err)
+				return err;
 			break;
 
 		case OVS_ACTION_ATTR_OUTPUT:
@@ -677,11 +696,6 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	flow->hash = flow_hash(&flow->key, key_len);
 
-	if (a[OVS_PACKET_ATTR_UPCALL_PID])
-		flow->upcall_pid = nla_get_u32(a[OVS_PACKET_ATTR_UPCALL_PID]);
-	else
-		flow->upcall_pid = NETLINK_CB(skb).pid;
-
 	acts = flow_actions_alloc(a[OVS_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
@@ -722,7 +736,6 @@ static const struct nla_policy packet_policy[OVS_PACKET_ATTR_MAX + 1] = {
 	[OVS_PACKET_ATTR_PACKET] = { .type = NLA_UNSPEC },
 	[OVS_PACKET_ATTR_KEY] = { .type = NLA_NESTED },
 	[OVS_PACKET_ATTR_ACTIONS] = { .type = NLA_NESTED },
-	[OVS_PACKET_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 };
 
 static struct genl_ops dp_packet_genl_ops[] = {
@@ -762,7 +775,6 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 
 static const struct nla_policy flow_policy[OVS_FLOW_ATTR_MAX + 1] = {
 	[OVS_FLOW_ATTR_KEY] = { .type = NLA_NESTED },
-	[OVS_FLOW_ATTR_UPCALL_PID] = { .type = NLA_U32 },
 	[OVS_FLOW_ATTR_ACTIONS] = { .type = NLA_NESTED },
 	[OVS_FLOW_ATTR_CLEAR] = { .type = NLA_FLAG },
 };
@@ -808,8 +820,6 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (err)
 		goto error;
 	nla_nest_end(skb, nla);
-
-	NLA_PUT_U32(skb, OVS_FLOW_ATTR_UPCALL_PID, flow->upcall_pid);
 
 	spin_lock_bh(&flow->lock);
 	used = flow->used;
@@ -948,11 +958,6 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		flow->key = key;
 		clear_stats(flow);
 
-		if (a[OVS_FLOW_ATTR_UPCALL_PID])
-			flow->upcall_pid = nla_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
-		else
-			flow->upcall_pid = NETLINK_CB(skb).pid;
-
 		/* Obtain actions. */
 		acts = flow_actions_alloc(a[OVS_FLOW_ATTR_ACTIONS]);
 		error = PTR_ERR(acts);
@@ -1001,9 +1006,6 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 		reply = ovs_flow_cmd_build_info(flow, dp, info->snd_pid,
 						info->snd_seq, OVS_FLOW_CMD_NEW);
-
-		if (a[OVS_FLOW_ATTR_UPCALL_PID])
-			flow->upcall_pid = nla_get_u32(a[OVS_FLOW_ATTR_UPCALL_PID]);
 
 		/* Clear stats. */
 		if (a[OVS_FLOW_ATTR_CLEAR]) {

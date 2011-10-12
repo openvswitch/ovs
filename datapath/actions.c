@@ -245,13 +245,31 @@ static int do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	return 0;
 }
 
-static int output_userspace(struct datapath *dp, struct sk_buff *skb, u64 arg)
+static int output_userspace(struct datapath *dp, struct sk_buff *skb,
+			    const struct nlattr *attr)
 {
 	struct dp_upcall_info upcall;
+	const struct nlattr *a;
+	int rem;
 
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.key = &OVS_CB(skb)->flow->key;
-	upcall.userdata = arg;
+	upcall.userdata = NULL;
+	upcall.pid = 0;
+
+	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
+		 a = nla_next(a, &rem)) {
+		switch (nla_type(a)) {
+		case OVS_USERSPACE_ATTR_USERDATA:
+			upcall.userdata = a;
+			break;
+
+		case OVS_USERSPACE_ATTR_PID:
+			upcall.pid = nla_get_u32(a);
+			break;
+		}
+	}
+
 	return dp_upcall(dp, skb, &upcall);
 }
 
@@ -308,7 +326,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_USERSPACE:
-			output_userspace(dp, skb, nla_get_u64(a));
+			output_userspace(dp, skb, a);
 			break;
 
 		case OVS_ACTION_ATTR_SET_TUNNEL:

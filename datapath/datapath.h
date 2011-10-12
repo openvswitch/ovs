@@ -117,13 +117,17 @@ struct ovs_skb_cb {
  * struct dp_upcall - metadata to include with a packet to send to userspace
  * @cmd: One of %OVS_PACKET_CMD_*.
  * @key: Becomes %OVS_PACKET_ATTR_KEY.  Must be nonnull.
- * @userdata: Is passed to user-space as %OVS_PACKET_ATTR_USERDATA if @cmd is
- * %OVS_PACKET_CMD_ACTION.
+ * @userdata: If nonnull, its u64 value is extracted and passed to userspace as
+ * %OVS_PACKET_ATTR_USERDATA.
+ * @pid: Netlink PID to which packet should be sent.  If @pid is 0 then no
+ * packet is sent and the packet is accounted in the datapath's @n_lost
+ * counter.
  */
 struct dp_upcall_info {
 	u8 cmd;
 	const struct sw_flow_key *key;
-	u64 userdata;
+	const struct nlattr *userdata;
+	u32 pid;
 };
 
 extern struct notifier_block dp_device_notifier;

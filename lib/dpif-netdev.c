@@ -1244,6 +1244,19 @@ dp_netdev_sample(struct dp_netdev *dp,
                               nl_attr_get_size(subactions));
 }
 
+static void
+dp_netdev_action_userspace(struct dp_netdev *dp,
+                          struct ofpbuf *packet, struct flow *key,
+                          const struct nlattr *a)
+{
+    const struct nlattr *userdata_attr;
+    uint64_t userdata;
+
+    userdata_attr = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+    userdata = userdata_attr ? nl_attr_get_u64(userdata_attr) : 0;
+    dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION, key, userdata);
+}
+
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, struct flow *key,
@@ -1262,8 +1275,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case OVS_ACTION_ATTR_USERSPACE:
-            dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION,
-                                     key, nl_attr_get_u64(a));
+            dp_netdev_action_userspace(dp, packet, key, a);
             break;
 
         case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -1330,6 +1342,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
     dpif_netdev_get_max_ports,
+    NULL,                       /* port_get_pid */
     dpif_netdev_port_dump_start,
     dpif_netdev_port_dump_next,
     dpif_netdev_port_dump_done,
