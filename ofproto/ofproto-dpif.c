@@ -2207,8 +2207,10 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     struct ofpbuf key;
     int error;
 
-    if (odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
-        && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
+    if (actions_len == 0) {
+        return true;
+    } else if (odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
+               && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
         struct user_action_cookie cookie;
         struct dpif_upcall upcall;
         uint64_t cookie_u64;
