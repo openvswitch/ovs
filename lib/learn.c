@@ -169,7 +169,7 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
 
             if (dst_type == NX_LEARN_DST_MATCH
                 && src_type == NX_LEARN_SRC_IMMEDIATE) {
-                mf_set_subfield(nxm_field_to_mf_field(ntohl(dst_field)), value,
+                mf_set_subfield(mf_from_nxm_header(ntohl(dst_field)), value,
                                 dst_ofs, n_bits, &rule);
             }
         }
@@ -232,7 +232,7 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
         case NX_LEARN_DST_MATCH:
             dst_field = get_be32(&p);
             dst_ofs = ntohs(get_be16(&p));
-            mf_set_subfield(nxm_field_to_mf_field(ntohl(dst_field)), value,
+            mf_set_subfield(mf_from_nxm_header(ntohl(dst_field)), value,
                             dst_ofs, n_bits, &fm->cr);
             break;
 
@@ -346,10 +346,10 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
         spec->n_bits = n_bits;
         spec->src_type = NX_LEARN_SRC_FIELD;
-        spec->src = nxm_field_to_mf_field(src_header);
+        spec->src = mf_from_nxm_header(src_header);
         spec->src_ofs = src_ofs;
         spec->dst_type = NX_LEARN_DST_MATCH;
-        spec->dst = nxm_field_to_mf_field(dst_header);
+        spec->dst = mf_from_nxm_header(dst_header);
         spec->dst_ofs = 0;
     } else if (!strcmp(name, "load")) {
         if (value[strcspn(value, "[-")] == '-') {
@@ -371,7 +371,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
                 spec->src_imm[i] = imm >> ((imm_bytes - i - 1) * 8);
             }
             spec->dst_type = NX_LEARN_DST_LOAD;
-            spec->dst = nxm_field_to_mf_field(ntohl(load.dst));
+            spec->dst = mf_from_nxm_header(ntohl(load.dst));
             spec->dst_ofs = nxm_decode_ofs(load.ofs_nbits);
         } else {
             struct nx_action_reg_move move;
@@ -380,10 +380,10 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
             spec->n_bits = ntohs(move.n_bits);
             spec->src_type = NX_LEARN_SRC_FIELD;
-            spec->src = nxm_field_to_mf_field(ntohl(move.src));
+            spec->src = mf_from_nxm_header(ntohl(move.src));
             spec->src_ofs = ntohs(move.src_ofs);
             spec->dst_type = NX_LEARN_DST_LOAD;
-            spec->dst = nxm_field_to_mf_field(ntohl(move.dst));
+            spec->dst = mf_from_nxm_header(ntohl(move.dst));
             spec->dst_ofs = ntohs(move.dst_ofs);
         }
     } else if (!strcmp(name, "output")) {
@@ -397,7 +397,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
         spec->n_bits = n_bits;
         spec->src_type = NX_LEARN_SRC_FIELD;
-        spec->src = nxm_field_to_mf_field(header);
+        spec->src = mf_from_nxm_header(header);
         spec->src_ofs = ofs;
         spec->dst_type = NX_LEARN_DST_OUTPUT;
         spec->dst = NULL;
@@ -605,7 +605,7 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
         /* Get the destination. */
         if (dst_type == NX_LEARN_DST_MATCH || dst_type == NX_LEARN_DST_LOAD) {
             dst_header = ntohl(get_be32(&p));
-            dst_field = nxm_field_to_mf_field(dst_header);
+            dst_field = mf_from_nxm_header(dst_header);
             dst_ofs = ntohs(get_be16(&p));
         } else {
             dst_header = 0;

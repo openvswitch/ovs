@@ -218,12 +218,10 @@ cls_rule_set_any_vid(struct cls_rule *rule)
 void
 cls_rule_set_dl_vlan(struct cls_rule *rule, ovs_be16 dl_vlan)
 {
+    flow_set_vlan_vid(&rule->flow, dl_vlan);
     if (dl_vlan == htons(OFP_VLAN_NONE)) {
-        cls_rule_set_dl_tci(rule, htons(0));
+        rule->wc.vlan_tci_mask = htons(UINT16_MAX);
     } else {
-        dl_vlan &= htons(VLAN_VID_MASK);
-        rule->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
-        rule->flow.vlan_tci |= htons(VLAN_CFI) | dl_vlan;
         rule->wc.vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
 }
@@ -247,9 +245,7 @@ cls_rule_set_any_pcp(struct cls_rule *rule)
 void
 cls_rule_set_dl_vlan_pcp(struct cls_rule *rule, uint8_t dl_vlan_pcp)
 {
-    dl_vlan_pcp &= 0x07;
-    rule->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
-    rule->flow.vlan_tci |= htons((dl_vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
+    flow_set_vlan_pcp(&rule->flow, dl_vlan_pcp);
     rule->wc.vlan_tci_mask |= htons(VLAN_CFI | VLAN_PCP_MASK);
 }
 

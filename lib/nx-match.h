@@ -64,7 +64,6 @@ void nxm_reg_load(ovs_be32 dst, ovs_be16 ofs_nbits, uint64_t src_data,
 
 int nxm_field_bytes(uint32_t header);
 int nxm_field_bits(uint32_t header);
-const struct mf_field *nxm_field_to_mf_field(uint32_t header);
 
 const char *nxm_parse_field_bits(const char *s,
                                  uint32_t *headerp, int *ofsp, int *n_bitsp);

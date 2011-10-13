@@ -178,7 +178,14 @@ struct mf_field {
     flow_wildcards_t fww_bit;   /* Either 0 or exactly one FWW_* bit. */
     enum mf_string string;
     enum mf_prereqs prereqs;
+    bool writable;              /* May be written by actions? */
+
+    /* NXM properties.
+     *
+     * A few "mf_field"s don't correspond to NXM fields.  Those have 0 and
+     * NULL for the following members, respectively. */
     uint32_t nxm_header;        /* An NXM_* constant (a few fields have 0). */
+    const char *nxm_name;       /* The "NXM_*" constant's name. */
 };
 
 /* The representation of a field's value. */
@@ -194,6 +201,8 @@ union mf_value {
 /* Finding mf_fields. */
 const struct mf_field *mf_from_id(enum mf_field_id);
 const struct mf_field *mf_from_name(const char *name);
+const struct mf_field *mf_from_nxm_header(uint32_t nxm_header);
+const struct mf_field *mf_from_nxm_name(const char *nxm_name);
 
 /* Inspecting wildcarded bits. */
 bool mf_is_all_wild(const struct mf_field *, const struct flow_wildcards *);
@@ -213,6 +222,8 @@ void mf_get_value(const struct mf_field *, const struct flow *,
                   union mf_value *value);
 void mf_set_value(const struct mf_field *, const union mf_value *value,
                   struct cls_rule *);
+void mf_set_flow_value(const struct mf_field *, const union mf_value *value,
+                       struct flow *);
 
 void mf_get(const struct mf_field *, const struct cls_rule *,
             union mf_value *value, union mf_value *mask);
