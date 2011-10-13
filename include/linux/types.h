@@ -23,7 +23,13 @@
  * <linux/types.h> to allow <linux/openvswitch.h> to work, that is, it defines
  * the __u<N> and __be<N> types. */
 
-#if __KERNEL__ || HAVE_LINUX_TYPES_H
+#ifdef __KERNEL__
+#include_next <linux/types.h>
+#elif defined(HAVE_LINUX_TYPES_H)
+/* With some combinations of kernel and userspace headers, including both
+ * <sys/types.h> and <linux/types.h> only works if you do so in that order, so
+ * force it.  */
+#include <sys/types.h>
 #include_next <linux/types.h>
 #else  /* no <linux/types.h> */
 #include <stdint.h>
