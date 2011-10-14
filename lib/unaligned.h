@@ -20,11 +20,12 @@
 #include <stdint.h>
 #include "byte-order.h"
 #include "openvswitch/types.h"
+#include "type-props.h"
+#include "util.h"
 
 /* Public API. */
 static inline uint16_t get_unaligned_u16(const uint16_t *);
 static inline uint32_t get_unaligned_u32(const uint32_t *);
-static inline uint64_t get_unaligned_u64(const uint64_t *);
 static inline void put_unaligned_u16(uint16_t *, uint16_t);
 static inline void put_unaligned_u32(uint32_t *, uint32_t);
 static inline void put_unaligned_u64(uint64_t *, uint64_t);
@@ -62,7 +63,7 @@ put_unaligned_##ABBREV(TYPE *p, TYPE x)         \
 
 GCC_UNALIGNED_ACCESSORS(uint16_t, u16);
 GCC_UNALIGNED_ACCESSORS(uint32_t, u32);
-GCC_UNALIGNED_ACCESSORS(uint64_t, u64);
+GCC_UNALIGNED_ACCESSORS(uint64_t, u64__); /* Special case: see below. */
 
 GCC_UNALIGNED_ACCESSORS(ovs_be16, be16);
 GCC_UNALIGNED_ACCESSORS(ovs_be32, be32);
@@ -102,7 +103,7 @@ static inline void put_unaligned_u32(uint32_t *p_, uint32_t x_)
     p[3] = x;
 }
 
-static inline uint64_t get_unaligned_u64(const uint64_t *p_)
+static inline uint64_t get_unaligned_u64__(const uint64_t *p_)
 {
     const uint8_t *p = (const uint8_t *) p_;
     return ntohll(((uint64_t) p[0] << 56)
@@ -115,7 +116,7 @@ static inline uint64_t get_unaligned_u64(const uint64_t *p_)
                   | p[7]);
 }
 
-static inline void put_unaligned_u64(uint64_t *p_, uint64_t x_)
+static inline void put_unaligned_u64__(uint64_t *p_, uint64_t x_)
 {
     uint8_t *p = (uint8_t *) p_;
     uint64_t x = ntohll(x_);
@@ -140,6 +141,38 @@ static inline void put_unaligned_u64(uint64_t *p_, uint64_t x_)
 #define put_unaligned_be32 put_unaligned_u32
 #define put_unaligned_be64 put_unaligned_u64
 #endif
+
+/* uint64_t get_unaligned_u64(uint64_t *p);
+ *
+ * Returns the value of the possibly misaligned uint64_t at 'p'.  'p' may
+ * actually be any type that points to a 64-bit integer.  That is, on Unix-like
+ * 32-bit ABIs, it may point to an "unsigned long long int", and on Unix-like
+ * 64-bit ABIs, it may point to an "unsigned long int" or an "unsigned long
+ * long int".
+ *
+ * This is special-cased because on some Linux targets, the kernel __u64 is
+ * unsigned long long int and the userspace uint64_t is unsigned long int, so
+ * that any single function prototype would fail to accept one or the other.
+ *
+ * Below, "sizeof (*(P) % 1)" verifies that *P has an integer type, since
+ * operands to % must be integers.
+ */
+#define get_unaligned_u64(P)                                \
+    (BUILD_ASSERT(sizeof *(P) == 8),                        \
+     BUILD_ASSERT_GCCONLY(!TYPE_IS_SIGNED(typeof(*(P)))),   \
+     (void) sizeof (*(P) % 1),                              \
+     get_unaligned_u64__((const uint64_t *) (P)))
+
+/* Stores 'x' at possibly misaligned address 'p'.
+ *
+ * put_unaligned_u64() could be overloaded in the same way as
+ * get_unaligned_u64(), but so far it has not proven necessary.
+ */
+static inline void
+put_unaligned_u64(uint64_t *p, uint64_t x)
+{
+    put_unaligned_u64__(p, x);
+}
 
 /* Returns the value in 'x'. */
 static inline uint64_t

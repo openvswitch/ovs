@@ -53,6 +53,14 @@
 #define BUILD_ASSERT_DECL BOOST_STATIC_ASSERT
 #endif /* __cplusplus */
 
+#ifdef __GNUC__
+#define BUILD_ASSERT_GCCONLY(EXPR) BUILD_ASSERT(EXPR)
+#define BUILD_ASSERT_DECL_GCCONLY(EXPR) BUILD_ASSERT_DECL(EXPR)
+#else
+#define BUILD_ASSERT_GCCONLY(EXPR) ((void) 0)
+#define BUILD_ASSERT_DECL_GCCONLY(EXPR) ((void) 0)
+#endif
+
 extern const char *program_name;
 
 /* Returns the number of elements in ARRAY. */
