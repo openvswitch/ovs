@@ -530,6 +530,79 @@ ofproto_set_sflow(struct ofproto *ofproto,
     }
 }
 
+/* Spanning Tree Protocol (STP) configuration. */
+
+/* Configures STP on 'ofproto' using the settings defined in 's'.  If
+ * 's' is NULL, disables STP.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_set_stp(struct ofproto *ofproto,
+                const struct ofproto_stp_settings *s)
+{
+    return (ofproto->ofproto_class->set_stp
+            ? ofproto->ofproto_class->set_stp(ofproto, s)
+            : EOPNOTSUPP);
+}
+
+/* Retrieves STP status of 'ofproto' and stores it in 's'.  If the
+ * 'enabled' member of 's' is false, then the other members are not
+ * meaningful.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_get_stp_status(struct ofproto *ofproto,
+                       struct ofproto_stp_status *s)
+{
+    return (ofproto->ofproto_class->get_stp_status
+            ? ofproto->ofproto_class->get_stp_status(ofproto, s)
+            : EOPNOTSUPP);
+}
+
+/* Configures STP on 'ofp_port' of 'ofproto' using the settings defined
+ * in 's'.  The caller is responsible for assigning STP port numbers
+ * (using the 'port_num' member in the range of 1 through 255, inclusive)
+ * and ensuring there are no duplicates.  If the 's' is NULL, then STP
+ * is disabled on the port.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_set_stp(struct ofproto *ofproto, uint16_t ofp_port,
+                     const struct ofproto_port_stp_settings *s)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure STP on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    return (ofproto->ofproto_class->set_stp_port
+            ? ofproto->ofproto_class->set_stp_port(ofport, s)
+            : EOPNOTSUPP);
+}
+
+/* Retrieves STP port status of 'ofp_port' on 'ofproto' and stores it in
+ * 's'.  If the 'enabled' member in 's' is false, then the other members
+ * are not meaningful.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.*/
+int
+ofproto_port_get_stp_status(struct ofproto *ofproto, uint16_t ofp_port,
+                            struct ofproto_port_stp_status *s)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot get STP status on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    return (ofproto->ofproto_class->get_stp_port_status
+            ? ofproto->ofproto_class->get_stp_port_status(ofport, s)
+            : EOPNOTSUPP);
+}
+
 /* Connectivity Fault Management configuration. */
 
 /* Clears the CFM configuration from 'ofp_port' on 'ofproto'. */

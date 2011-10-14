@@ -152,6 +152,7 @@ static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
+static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
                                      const struct sockaddr_in *managers,
                                      size_t n_managers);
@@ -161,6 +162,11 @@ static void bridge_pick_local_hw_addr(struct bridge *,
 static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
+static const char *bridge_get_other_config(const struct ovsrec_bridge *,
+                                            const char *key);
+static const char *get_port_other_config(const struct ovsrec_port *,
+                                         const char *key,
+                                         const char *default_value);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
@@ -229,8 +235,10 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
+    ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_status);
     ovsdb_idl_omit(idl, &ovsrec_bridge_col_external_ids);
 
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_status);
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_omit(idl, &ovsrec_port_col_fake_bridge);
 
@@ -423,6 +431,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
+        bridge_configure_stp(br);
     }
     free(managers);
 
@@ -714,6 +723,196 @@ bridge_configure_sflow(struct bridge *br, int *sflow_bridge_number)
     ofproto_set_sflow(br->ofproto, &oso);
 
     sset_destroy(&oso.targets);
+}
+
+static void
+port_configure_stp(const struct ofproto *ofproto, struct port *port,
+                   struct ofproto_port_stp_settings *port_s,
+                   int *port_num_counter, unsigned long *port_num_bitmap)
+{
+    const char *config_str;
+    struct iface *iface;
+
+    config_str = get_port_other_config(port->cfg, "stp-enable", NULL);
+    if (config_str && !strcmp(config_str, "false")) {
+        port_s->enable = false;
+        return;
+    } else {
+        port_s->enable = true;
+    }
+
+    /* STP over bonds is not supported. */
+    if (!list_is_singleton(&port->ifaces)) {
+        VLOG_ERR("port %s: cannot enable STP on bonds, disabling",
+                 port->name);
+        port_s->enable = false;
+        return;
+    }
+
+    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+
+    /* Internal ports shouldn't participate in spanning tree, so
+     * skip them. */
+    if (!strcmp(iface->type, "internal")) {
+        VLOG_DBG("port %s: disable STP on internal ports", port->name);
+        port_s->enable = false;
+        return;
+    }
+
+    /* STP on mirror output ports is not supported. */
+    if (ofproto_is_mirror_output_bundle(ofproto, port)) {
+        VLOG_DBG("port %s: disable STP on mirror ports", port->name);
+        port_s->enable = false;
+        return;
+    }
+
+    config_str = get_port_other_config(port->cfg, "stp-port-num", NULL);
+    if (config_str) {
+        unsigned long int port_num = strtoul(config_str, NULL, 0);
+        int port_idx = port_num - 1;
+
+        if (port_num < 1 || port_num > STP_MAX_PORTS) {
+            VLOG_ERR("port %s: invalid stp-port-num", port->name);
+            port_s->enable = false;
+            return;
+        }
+
+        if (bitmap_is_set(port_num_bitmap, port_idx)) {
+            VLOG_ERR("port %s: duplicate stp-port-num %lu, disabling",
+                    port->name, port_num);
+            port_s->enable = false;
+            return;
+        }
+        bitmap_set1(port_num_bitmap, port_idx);
+        port_s->port_num = port_idx;
+    } else {
+        if (*port_num_counter > STP_MAX_PORTS) {
+            VLOG_ERR("port %s: too many STP ports, disabling", port->name);
+            port_s->enable = false;
+            return;
+        }
+
+        port_s->port_num = (*port_num_counter)++;
+    }
+
+    config_str = get_port_other_config(port->cfg, "stp-path-cost", NULL);
+    if (config_str) {
+        port_s->path_cost = strtoul(config_str, NULL, 10);
+    } else {
+        uint32_t current;
+
+        if (netdev_get_features(iface->netdev, &current, NULL, NULL, NULL)) {
+            /* Couldn't get speed, so assume 100Mb/s. */
+            port_s->path_cost = 19;
+        } else {
+            unsigned int mbps;
+
+            mbps = netdev_features_to_bps(current) / 1000000;
+            port_s->path_cost = stp_convert_speed_to_cost(mbps);
+        }
+    }
+
+    config_str = get_port_other_config(port->cfg, "stp-port-priority", NULL);
+    if (config_str) {
+        port_s->priority = strtoul(config_str, NULL, 0);
+    } else {
+        port_s->priority = STP_DEFAULT_PORT_PRIORITY;
+    }
+}
+
+/* Set spanning tree configuration on 'br'. */
+static void
+bridge_configure_stp(struct bridge *br)
+{
+    if (!br->cfg->stp_enable) {
+        ofproto_set_stp(br->ofproto, NULL);
+    } else {
+        struct ofproto_stp_settings br_s;
+        const char *config_str;
+        struct port *port;
+        int port_num_counter;
+        unsigned long *port_num_bitmap;
+
+        config_str = bridge_get_other_config(br->cfg, "stp-system-id");
+        if (config_str) {
+            uint8_t ea[ETH_ADDR_LEN];
+
+            if (eth_addr_from_string(config_str, ea)) {
+                br_s.system_id = eth_addr_to_uint64(ea);
+            } else {
+                br_s.system_id = eth_addr_to_uint64(br->ea);
+                VLOG_ERR("bridge %s: invalid stp-system-id, defaulting "
+                         "to "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(br->ea));
+            }
+        } else {
+            br_s.system_id = eth_addr_to_uint64(br->ea);
+        }
+
+        config_str = bridge_get_other_config(br->cfg, "stp-priority");
+        if (config_str) {
+            br_s.priority = strtoul(config_str, NULL, 0);
+        } else {
+            br_s.priority = STP_DEFAULT_BRIDGE_PRIORITY;
+        }
+
+        config_str = bridge_get_other_config(br->cfg, "stp-hello-time");
+        if (config_str) {
+            br_s.hello_time = strtoul(config_str, NULL, 10) * 1000;
+        } else {
+            br_s.hello_time = STP_DEFAULT_HELLO_TIME;
+        }
+
+        config_str = bridge_get_other_config(br->cfg, "stp-max-age");
+        if (config_str) {
+            br_s.max_age = strtoul(config_str, NULL, 10) * 1000;
+        } else {
+            br_s.max_age = STP_DEFAULT_MAX_AGE;
+        }
+
+        config_str = bridge_get_other_config(br->cfg, "stp-forward-delay");
+        if (config_str) {
+            br_s.fwd_delay = strtoul(config_str, NULL, 10) * 1000;
+        } else {
+            br_s.fwd_delay = STP_DEFAULT_FWD_DELAY;
+        }
+
+        /* Configure STP on the bridge. */
+        if (ofproto_set_stp(br->ofproto, &br_s)) {
+            VLOG_ERR("bridge %s: could not enable STP", br->name);
+            return;
+        }
+
+        /* Users must either set the port number with the "stp-port-num"
+         * configuration on all ports or none.  If manual configuration
+         * is not done, then we allocate them sequentially. */
+        port_num_counter = 0;
+        port_num_bitmap = bitmap_allocate(STP_MAX_PORTS);
+        HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+            struct ofproto_port_stp_settings port_s;
+            struct iface *iface;
+
+            port_configure_stp(br->ofproto, port, &port_s,
+                               &port_num_counter, port_num_bitmap);
+
+            /* As bonds are not supported, just apply configuration to
+             * all interfaces. */
+            LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+                if (ofproto_port_set_stp(br->ofproto, iface->ofp_port,
+                                         &port_s)) {
+                    VLOG_ERR("port %s: could not enable STP", port->name);
+                    continue;
+                }
+            }
+        }
+
+        if (bitmap_scan(port_num_bitmap, 0, STP_MAX_PORTS) != STP_MAX_PORTS
+                    && port_num_counter) {
+            VLOG_ERR("bridge %s: must manually configure all STP port "
+                     "IDs or none, disabling", br->name);
+            ofproto_set_stp(br->ofproto, NULL);
+        }
+        bitmap_free(port_num_bitmap);
+    }
 }
 
 static bool
@@ -1361,6 +1560,79 @@ iface_refresh_stats(struct iface *iface)
 #undef IFACE_STATS
 }
 
+static void
+br_refresh_stp_status(struct bridge *br)
+{
+    struct ofproto *ofproto = br->ofproto;
+    struct ofproto_stp_status status;
+    char *keys[3], *values[3];
+    size_t i;
+
+    if (ofproto_get_stp_status(ofproto, &status)) {
+        return;
+    }
+
+    if (!status.enabled) {
+        ovsrec_bridge_set_status(br->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    keys[0] = "stp_bridge_id",
+    values[0] = xasprintf(STP_ID_FMT, STP_ID_ARGS(status.bridge_id));
+    keys[1] = "stp_designated_root",
+    values[1] = xasprintf(STP_ID_FMT, STP_ID_ARGS(status.designated_root));
+    keys[2] = "stp_root_path_cost",
+    values[2] = xasprintf("%d", status.root_path_cost);
+
+    ovsrec_bridge_set_status(br->cfg, keys, values, ARRAY_SIZE(values));
+
+    for (i = 0; i < ARRAY_SIZE(values); i++) {
+        free(values[i]);
+    }
+}
+
+static void
+port_refresh_stp_status(struct port *port)
+{
+    struct ofproto *ofproto = port->bridge->ofproto;
+    struct iface *iface;
+    struct ofproto_port_stp_status status;
+    char *keys[4], *values[4];
+    size_t i;
+
+    /* STP doesn't currently support bonds. */
+    if (!list_is_singleton(&port->ifaces)) {
+        ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+
+    if (ofproto_port_get_stp_status(ofproto, iface->ofp_port, &status)) {
+        return;
+    }
+
+    if (!status.enabled) {
+        ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    keys[0]  = "stp_port_id";
+    values[0] = xasprintf(STP_PORT_ID_FMT, status.port_id);
+    keys[1] = "stp_state";
+    values[1] = xstrdup(stp_state_name(status.state));
+    keys[2] = "stp_sec_in_state";
+    values[2] = xasprintf("%u", status.sec_in_state);
+    keys[3] = "stp_role";
+    values[3] = xstrdup(stp_role_name(status.role));
+
+    ovsrec_port_set_status(port->cfg, keys, values, ARRAY_SIZE(values));
+
+    for (i = 0; i < ARRAY_SIZE(values); i++) {
+        free(values[i]);
+    }
+}
+
 static bool
 enable_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
@@ -1572,6 +1844,13 @@ bridge_run(void)
         txn = ovsdb_idl_txn_create(idl);
         HMAP_FOR_EACH (br, node, &all_bridges) {
             struct iface *iface;
+            struct port *port;
+
+            br_refresh_stp_status(br);
+
+            HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                port_refresh_stp_status(port);
+            }
 
             HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
                 const char *link_state;

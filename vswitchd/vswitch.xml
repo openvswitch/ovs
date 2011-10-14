@@ -435,6 +435,55 @@
       </column>
     </group>
 
+    <group title="Spanning Tree Configuration">
+      The IEEE 802.1D Spanning Tree Protocol (STP) is a network protocol
+      that ensures loop-free topologies.  It allows redundant links to
+      be included in the network to provide automatic backup paths if
+      the active links fails.
+
+      <column name="stp_enable">
+        Enable spanning tree on the bridge.  By default, STP is disabled
+        on bridges.  Bond, internal, and mirror ports are not supported
+        and will not participate in the spanning tree.
+      </column>
+ 
+      <column name="other_config" key="stp-system-id">
+        The bridge's STP identifier (the lower 48 bits of the bridge-id)
+        in the form
+        <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+        By default, the identifier is the MAC address of the bridge.
+      </column>
+
+      <column name="other_config" key="stp-priority"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 65535}'>
+        The bridge's relative priority value for determining the root
+        bridge (the upper 16 bits of the bridge-id).  A bridge with the
+        lowest bridge-id is elected the root.  By default, the priority
+        is 0x8000.
+      </column>
+
+      <column name="other_config" key="stp-hello-time"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
+        The interval between transmissions of hello messages by
+        designated ports, in seconds.  By default the hello interval is
+        2 seconds.
+      </column>
+
+      <column name="other_config" key="stp-max-age"
+              type='{"type": "integer", "minInteger": 6, "maxInteger": 40}'>
+        The maximum age of the information transmitted by the bridge
+        when it is the root bridge, in seconds.  By default, the maximum
+        age is 20 seconds.
+      </column>
+
+      <column name="other_config" key="stp-forward-delay"
+              type='{"type": "integer", "minInteger": 4, "maxInteger": 30}'>
+        The delay to wait between transitioning root and designated
+        ports to <code>forwarding</code>, in seconds.  By default, the
+        forwarding delay is 15 seconds.
+      </column>
+    </group>
+
     <group title="Other Features">
       <column name="datapath_type">
         Name of datapath provider.  The kernel datapath has
@@ -478,12 +527,43 @@
 
       <column name="other_config" key="forward-bpdu"
               type='{"type": "boolean"}'>
-        Option to allow forwarding of BPDU frames when NORMAL action if
-        invoked. Frames with reserved Ethernet addresses (e.g. STP BPDU) will
-        be forwarded when this option is enabled.  If the Open vSwitch bridge
-        is used to connect different Ethernet networks, and if Open vSwitch
-        node does not run STP, then this option should be enabled.  Default is
-        disabled, set to <code>true</code> to enable.
+        Option to allow forwarding of BPDU frames when NORMAL action is
+        invoked.  Frames with reserved Ethernet addresses (e.g. STP
+        BPDU) will be forwarded when this option is enabled and the
+        switch is not providing that functionality.  If STP is enabled
+        on the port, STP BPDUs will never be forwarded.  If the Open
+        vSwitch bridge is used to connect different Ethernet networks,
+        and if Open vSwitch node does not run STP, then this option
+        should be enabled.  Default is disabled, set to
+        <code>true</code> to enable.
+      </column>
+    </group>
+
+    <group title="Bridge Status">
+      <p>
+        Status information about bridges.
+      </p>
+      <column name="status">
+        Key-value pairs that report bridge status.
+      </column>
+      <column name="status" key="stp_bridge_id">
+        <p>
+          The bridge-id (in hex) used in spanning tree advertisements.
+          Configuring the bridge-id is described in the
+          <code>stp-system-id</code> and <code>stp-priority</code> keys
+          of the <code>other_config</code> section earlier.
+        </p>
+      </column>
+      <column name="status" key="stp_designated_root">
+        <p>
+          The designated root (in hex) for this spanning tree.
+        </p>
+      </column>
+      <column name="status" key="stp_root_path_cost">
+        <p>
+          The path cost of reaching the designated bridge.  A lower
+          number is better.
+        </p>
       </column>
     </group>
 
@@ -807,6 +887,40 @@
       </column>
     </group>
 
+    <group title="Spanning Tree Configuration">
+      <column name="other_config" key="stp-enable"
+              type='{"type": "boolean"}'>
+        If spanning tree is enabled on the bridge, member ports are
+        enabled by default (with the exception of bond, internal, and
+        mirror ports which do not work with STP).  If this column's
+        value is <code>false</code> spanning tree is disabled on the
+        port.
+      </column>
+
+       <column name="other_config" key="stp-port-num"
+               type='{"type": "integer", "minInteger": 1, "maxInteger": 255}'>
+        The port number used for the lower 8 bits of the port-id.  By
+        default, the numbers will be assigned automatically.  If any
+        port's number is manually configured on a bridge, then they
+        must all be.
+      </column>
+
+       <column name="other_config" key="stp-port-priority"
+               type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+        The port's relative priority value for determining the root
+        port (the upper 8 bits of the port-id).  A port with a lower
+        port-id will be chosen as the root port.  By default, the
+        priority is 0x80.
+      </column>
+
+       <column name="other_config" key="stp-path-cost"
+               type='{"type": "integer", "minInteger": 0, "maxInteger": 65535}'>
+        Spanning tree path cost for the port.  A lower number indicates
+        a faster link.  By default, the cost is based on the maximum
+        speed of the link.
+      </column>
+    </group>
+
     <group title="Other Features">
       <column name="qos">
         Quality of Service configuration for this port.
@@ -830,6 +944,45 @@
         table="Bridge" column="external_ids"/> key with
         <code>fake-bridge-</code>,
         e.g. <code>fake-bridge-xs-network-uuids</code>.
+      </column>
+    </group>
+
+    <group title="Port Status">
+      <p>
+        Status information about ports attached to bridges.
+      </p>
+      <column name="status">
+        Key-value pairs that report port status.
+      </column>
+      <column name="status" key="stp_port_id">
+        <p>
+          The port-id (in hex) used in spanning tree advertisements for
+          this port.  Configuring the port-id is described in the
+          <code>stp-port-num</code> and <code>stp-port-priority</code>
+          keys of the <code>other_config</code> section earlier.
+        </p>
+      </column>
+      <column name="status" key="stp_state"
+              type='{"type": "string", "enum": ["set",
+                            ["disabled", "listening", "learning",
+                             "forwarding", "blocking"]]}'>
+        <p>
+          STP state of the port.
+        </p>
+      </column>
+      <column name="status" key="stp_sec_in_state"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          The amount of time (in seconds) port has been in the current
+          STP state.
+        </p>
+      </column>
+      <column name="status" key="stp_role"
+              type='{"type": "string", "enum": ["set",
+                            ["root", "designated", "alternate"]]}'>
+        <p>
+          STP role of the port.
+        </p>
       </column>
     </group>
 

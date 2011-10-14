@@ -17,6 +17,7 @@ Post-v1.2.0
         new NXAST_RESUBMIT_TABLE action can look up in additional
         tables.  Tables 128 and above are reserved for use by the
         switch itself; please use only tables 0 through 127.
+      - Add support for 802.1D spanning tree (STP).
     - Fragment handling extensions:
       - New OFPC_FRAG_NX_MATCH fragment handling mode, in which L4
         fields are made available for matching in fragments with

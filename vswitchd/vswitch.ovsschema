@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "6.2.0",
- "cksum": "212779557 14885",
+ "cksum": "145151998 15203",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -62,6 +62,8 @@
        "datapath_id": {
          "type": {"key": "string", "min": 0, "max": 1},
          "ephemeral": true},
+       "stp_enable": {
+         "type": "boolean"},
        "ports": {
          "type": {"key": {"type": "uuid",
                           "refTable": "Port"},
@@ -86,6 +88,9 @@
          "type": {"key": {"type": "string",
                           "enum": ["set", ["standalone", "secure"]]},
                   "min": 0, "max": 1}},
+       "status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
@@ -142,6 +147,9 @@
          "type": "boolean"},
        "fake_bridge": {
          "type": "boolean"},
+       "status": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {

@@ -918,6 +918,53 @@ struct ofproto_class {
     int (*get_cfm_remote_mpids)(const struct ofport *ofport,
                                 const uint64_t **rmps, size_t *n_rmps);
 
+    /* Configures spanning tree protocol (STP) on 'ofproto' using the
+     * settings defined in 's'.
+     *
+     * If 's' is nonnull, configures STP according to its members.
+     *
+     * If 's' is null, removes any STP configuration from 'ofproto'.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support STP, as does a null pointer. */
+    int (*set_stp)(struct ofproto *ofproto,
+                   const struct ofproto_stp_settings *s);
+
+    /* Retrieves state of spanning tree protocol (STP) on 'ofproto'.
+     *
+     * Stores STP state for 'ofproto' in 's'.  If the 'enabled' member
+     * is false, the other member values are not meaningful.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support STP, as does a null pointer. */
+    int (*get_stp_status)(struct ofproto *ofproto,
+                          struct ofproto_stp_status *s);
+
+    /* Configures spanning tree protocol (STP) on 'ofport' using the
+     * settings defined in 's'.
+     *
+     * If 's' is nonnull, configures STP according to its members.  The
+     * caller is responsible for assigning STP port numbers (using the
+     * 'port_num' member in the range of 1 through 255, inclusive) and
+     * ensuring there are no duplicates.
+     *
+     * If 's' is null, removes any STP configuration from 'ofport'.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support STP, as does a null pointer. */
+    int (*set_stp_port)(struct ofport *ofport,
+                        const struct ofproto_port_stp_settings *s);
+
+    /* Retrieves spanning tree protocol (STP) port status of 'ofport'.
+     *
+     * Stores STP state for 'ofport' in 's'.  If the 'enabled' member is
+     * false, the other member values are not meaningful.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support STP, as does a null pointer. */
+    int (*get_stp_port_status)(struct ofport *ofport,
+                               struct ofproto_port_stp_status *s);
+
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as
      * a Port in OVSDB, that is, it consists of one or more "slave" devices

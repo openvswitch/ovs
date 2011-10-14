@@ -579,6 +579,8 @@ netflow             : []
 other_config        : {}
 ports               : []
 sflow               : []
+status              : {}
+stp_enable          : false
 <0>
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
@@ -889,6 +891,8 @@ netflow             : []
 other_config        : {}
 ports               : []
 sflow               : []
+status              : {}
+stp_enable          : false
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP

@@ -26,6 +26,7 @@
 #include "flow.h"
 #include "netflow.h"
 #include "sset.h"
+#include "stp.h"
 #include "tag.h"
 
 #ifdef  __cplusplus
@@ -63,6 +64,36 @@ struct ofproto_sflow_options {
     uint32_t sub_id;
     char *agent_device;
     char *control_ip;
+};
+
+struct ofproto_stp_settings {
+    stp_identifier system_id;
+    uint16_t priority;
+    uint16_t hello_time;
+    uint16_t max_age;
+    uint16_t fwd_delay;
+};
+
+struct ofproto_stp_status {
+    bool enabled;               /* If false, ignore other members. */
+    stp_identifier bridge_id;
+    stp_identifier designated_root;
+    int root_path_cost;
+};
+
+struct ofproto_port_stp_settings {
+    bool enable;
+    uint8_t port_num;           /* In the range 1-255, inclusive. */
+    uint8_t priority;
+    uint16_t path_cost;
+};
+
+struct ofproto_port_stp_status {
+    bool enabled;               /* If false, ignore other members. */
+    int port_id;
+    enum stp_state state;
+    unsigned int sec_in_state;
+    enum stp_role role;
 };
 
 /* How the switch should act if the controller cannot be contacted. */
@@ -170,6 +201,8 @@ int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 int ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
+int ofproto_set_stp(struct ofproto *, const struct ofproto_stp_settings *);
+int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 
 /* Configuration of ports. */
 
@@ -179,6 +212,10 @@ void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
 void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
                           const struct cfm_settings *);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
+int ofproto_port_set_stp(struct ofproto *, uint16_t ofp_port,
+                         const struct ofproto_port_stp_settings *);
+int ofproto_port_get_stp_status(struct ofproto *, uint16_t ofp_port,
+                                struct ofproto_port_stp_status *);
 
 /* The behaviour of the port regarding VLAN handling */
 enum port_vlan_mode {

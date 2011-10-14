@@ -161,6 +161,9 @@ static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
 
+static void stp_run(struct ofproto_dpif *ofproto);
+static void stp_wait(struct ofproto_dpif *ofproto);
+
 struct action_xlate_ctx {
 /* action_xlate_ctx_init() initializes these members. */
 
@@ -314,6 +317,10 @@ struct ofport_dpif {
     tag_type tag;               /* Tag associated with this port. */
     uint32_t bond_stable_id;    /* stable_id to use as bond slave, or 0. */
     bool may_enable;            /* May be enabled in bonds. */
+
+    struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
+    enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
+    long long int stp_state_entered;
 };
 
 static struct ofport_dpif *
@@ -374,6 +381,10 @@ struct ofproto_dpif {
     struct list completions;
 
     bool has_bundle_action; /* True when the first bundle action appears. */
+
+    /* Spanning tree. */
+    struct stp *stp;
+    long long int stp_last_tick;
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -495,6 +506,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
 
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
+    ofproto->stp = NULL;
     hmap_init(&ofproto->bundles);
     ofproto->ml = mac_learning_create();
     for (i = 0; i < MAX_MIRRORS; i++) {
@@ -628,6 +640,7 @@ run(struct ofproto *ofproto_)
         bundle_run(bundle);
     }
 
+    stp_run(ofproto);
     mac_learning_run(ofproto->ml, &ofproto->revalidate_set);
 
     /* Now revalidate if there's anything to do. */
@@ -678,6 +691,7 @@ wait(struct ofproto *ofproto_)
         bundle_wait(bundle);
     }
     mac_learning_wait(ofproto->ml);
+    stp_wait(ofproto);
     if (ofproto->need_revalidate) {
         /* Shouldn't happen, but if it does just go around again. */
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
@@ -783,6 +797,8 @@ port_construct(struct ofport *port_)
     port->cfm = NULL;
     port->tag = tag_create_random();
     port->may_enable = true;
+    port->stp_port = NULL;
+    port->stp_state = STP_DISABLED;
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port->odp_port,
@@ -912,6 +928,252 @@ get_cfm_remote_mpids(const struct ofport *ofport_, const uint64_t **rmps,
     }
 }
 
+/* Spanning Tree. */
+
+static void
+send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
+{
+    struct ofproto_dpif *ofproto = ofproto_;
+    struct stp_port *sp = stp_get_port(ofproto->stp, port_num);
+    struct ofport_dpif *ofport;
+
+    ofport = stp_port_get_aux(sp);
+    if (!ofport) {
+        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
+                     ofproto->up.name, port_num);
+    } else {
+        struct eth_header *eth = pkt->l2;
+
+        netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+        if (eth_addr_is_zero(eth->eth_src)) {
+            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
+                         "with unknown MAC", ofproto->up.name, port_num);
+        } else {
+            int error = netdev_send(ofport->up.netdev, pkt);
+            if (error) {
+                VLOG_WARN_RL(&rl, "%s: sending BPDU on port %s failed (%s)",
+                             ofproto->up.name,
+                             netdev_get_name(ofport->up.netdev),
+                             strerror(error));
+            }
+        }
+    }
+    ofpbuf_delete(pkt);
+}
+
+/* Configures STP on 'ofproto_' using the settings defined in 's'. */
+static int
+set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    /* Only revalidate flows if the configuration changed. */
+    if (!s != !ofproto->stp) {
+        ofproto->need_revalidate = true;
+    }
+
+    if (s) {
+        if (!ofproto->stp) {
+            ofproto->stp = stp_create(ofproto_->name, s->system_id,
+                                      send_bpdu_cb, ofproto);
+            ofproto->stp_last_tick = time_msec();
+        }
+
+        stp_set_bridge_id(ofproto->stp, s->system_id);
+        stp_set_bridge_priority(ofproto->stp, s->priority);
+        stp_set_hello_time(ofproto->stp, s->hello_time);
+        stp_set_max_age(ofproto->stp, s->max_age);
+        stp_set_forward_delay(ofproto->stp, s->fwd_delay);
+    }  else {
+        stp_destroy(ofproto->stp);
+        ofproto->stp = NULL;
+    }
+
+    return 0;
+}
+
+static int
+get_stp_status(struct ofproto *ofproto_, struct ofproto_stp_status *s)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    if (ofproto->stp) {
+        s->enabled = true;
+        s->bridge_id = stp_get_bridge_id(ofproto->stp);
+        s->designated_root = stp_get_designated_root(ofproto->stp);
+        s->root_path_cost = stp_get_root_path_cost(ofproto->stp);
+    } else {
+        s->enabled = false;
+    }
+
+    return 0;
+}
+
+static void
+update_stp_port_state(struct ofport_dpif *ofport)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    enum stp_state state;
+
+    /* Figure out new state. */
+    state = ofport->stp_port ? stp_port_get_state(ofport->stp_port)
+                             : STP_DISABLED;
+
+    /* Update state. */
+    if (ofport->stp_state != state) {
+        ovs_be32 of_state;
+        bool fwd_change;
+
+        VLOG_DBG_RL(&rl, "port %s: STP state changed from %s to %s",
+                    netdev_get_name(ofport->up.netdev),
+                    stp_state_name(ofport->stp_state),
+                    stp_state_name(state));
+        if (stp_learn_in_state(ofport->stp_state)
+                != stp_learn_in_state(state)) {
+            /* xxx Learning action flows should also be flushed. */
+            mac_learning_flush(ofproto->ml);
+        }
+        fwd_change = stp_forward_in_state(ofport->stp_state)
+                        != stp_forward_in_state(state);
+
+        ofproto->need_revalidate = true;
+        ofport->stp_state = state;
+        ofport->stp_state_entered = time_msec();
+
+        if (fwd_change) {
+            bundle_update(ofport->bundle);
+        }
+
+        /* Update the STP state bits in the OpenFlow port description. */
+        of_state = (ofport->up.opp.state & htonl(~OFPPS_STP_MASK))
+                         | htonl(state == STP_LISTENING ? OFPPS_STP_LISTEN
+                               : state == STP_LEARNING ? OFPPS_STP_LEARN
+                               : state == STP_FORWARDING ? OFPPS_STP_FORWARD
+                               : state == STP_BLOCKING ?  OFPPS_STP_BLOCK
+                               : 0);
+        ofproto_port_set_state(&ofport->up, of_state);
+    }
+}
+
+/* Configures STP on 'ofport_' using the settings defined in 's'.  The
+ * caller is responsible for assigning STP port numbers and ensuring
+ * there are no duplicates. */
+static int
+set_stp_port(struct ofport *ofport_,
+             const struct ofproto_port_stp_settings *s)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct stp_port *sp = ofport->stp_port;
+
+    if (!s || !s->enable) {
+        if (sp) {
+            ofport->stp_port = NULL;
+            stp_port_disable(sp);
+        }
+        return 0;
+    } else if (sp && stp_port_no(sp) != s->port_num
+            && ofport == stp_port_get_aux(sp)) {
+        /* The port-id changed, so disable the old one if it's not
+         * already in use by another port. */
+        stp_port_disable(sp);
+    }
+
+    sp = ofport->stp_port = stp_get_port(ofproto->stp, s->port_num);
+    stp_port_enable(sp);
+
+    stp_port_set_aux(sp, ofport);
+    stp_port_set_priority(sp, s->priority);
+    stp_port_set_path_cost(sp, s->path_cost);
+
+    update_stp_port_state(ofport);
+
+    return 0;
+}
+
+static int
+get_stp_port_status(struct ofport *ofport_,
+                    struct ofproto_port_stp_status *s)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct stp_port *sp = ofport->stp_port;
+
+    if (!ofproto->stp || !sp) {
+        s->enabled = false;
+        return 0;
+    }
+
+    s->enabled = true;
+    s->port_id = stp_port_get_id(sp);
+    s->state = stp_port_get_state(sp);
+    s->sec_in_state = (time_msec() - ofport->stp_state_entered) / 1000;
+    s->role = stp_port_get_role(sp);
+
+    return 0;
+}
+
+static void
+stp_run(struct ofproto_dpif *ofproto)
+{
+    if (ofproto->stp) {
+        long long int now = time_msec();
+        long long int elapsed = now - ofproto->stp_last_tick;
+        struct stp_port *sp;
+
+        if (elapsed > 0) {
+            stp_tick(ofproto->stp, MIN(INT_MAX, elapsed));
+            ofproto->stp_last_tick = now;
+        }
+        while (stp_get_changed_port(ofproto->stp, &sp)) {
+            struct ofport_dpif *ofport = stp_port_get_aux(sp);
+
+            if (ofport) {
+                update_stp_port_state(ofport);
+            }
+        }
+    }
+}
+
+static void
+stp_wait(struct ofproto_dpif *ofproto)
+{
+    if (ofproto->stp) {
+        poll_timer_wait(1000);
+    }
+}
+
+/* Returns true if STP should process 'flow'. */
+static bool
+stp_should_process_flow(const struct flow *flow)
+{
+    return eth_addr_equals(flow->dl_dst, eth_addr_stp);
+}
+
+static void
+stp_process_packet(const struct ofport_dpif *ofport,
+                   const struct ofpbuf *packet)
+{
+    struct ofpbuf payload = *packet;
+    struct eth_header *eth = payload.data;
+    struct stp_port *sp = ofport->stp_port;
+
+    /* Sink packets on ports that have STP disabled when the bridge has
+     * STP enabled. */
+    if (!sp || stp_port_get_state(sp) == STP_DISABLED) {
+        return;
+    }
+
+    /* Trim off padding on payload. */
+    if (payload.size > htons(eth->eth_type) + ETH_HEADER_LEN) {
+        payload.size = htons(eth->eth_type) + ETH_HEADER_LEN;
+    }
+
+    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+        stp_received_bpdu(sp, payload.data, payload.size);
+    }
+}
+
 /* Bundles. */
 
 /* Expires all MAC learning entries associated with 'port' and forces ofproto
@@ -970,7 +1232,8 @@ bundle_update(struct ofbundle *bundle)
 
     bundle->floodable = true;
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
+        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)
+                    || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
             break;
         }
@@ -1017,7 +1280,8 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
 
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
+        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)
+                    || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
         }
     }
@@ -1838,6 +2102,11 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
             lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
         return true;
+    } else if (ofproto->stp && stp_should_process_flow(flow)) {
+        if (packet) {
+            stp_process_packet(ofport, packet);
+        }
+        return true;
     }
     return false;
 }
@@ -1989,7 +2258,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
         flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
 
-        /* Handle 802.1ag and LACP specially. */
+        /* Handle 802.1ag, LACP, and STP specially. */
         if (process_special(ofproto, &flow, upcall->packet)) {
             ofpbuf_delete(upcall->packet);
             ofproto->n_matches++;
@@ -3497,7 +3766,8 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
     uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
 
     if (ofport) {
-        if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)) {
+        if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)
+                || !stp_forward_in_state(ofport->stp_state)) {
             /* Forwarding disabled on port. */
             return;
         }
@@ -3590,7 +3860,9 @@ flood_packets(struct action_xlate_ctx *ctx, ovs_be32 mask)
     commit_odp_actions(ctx);
     HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
         uint16_t ofp_port = ofport->up.ofp_port;
-        if (ofp_port != ctx->flow.in_port && !(ofport->up.opp.config & mask)) {
+        if (ofp_port != ctx->flow.in_port
+                && !(ofport->up.opp.config & mask)
+                && stp_forward_in_state(ofport->stp_state)) {
             compose_output_action(ctx, ofport->odp_port);
         }
     }
@@ -3804,6 +4076,27 @@ xlate_learn_action(struct action_xlate_ctx *ctx,
     free(fm.actions);
 }
 
+static bool
+may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
+{
+    if (port->up.opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
+                               ? htonl(OFPPC_NO_RECV_STP)
+                               : htonl(OFPPC_NO_RECV))) {
+        return false;
+    }
+
+    /* Only drop packets here if both forwarding and learning are
+     * disabled.  If just learning is enabled, we need to have
+     * OFPP_NORMAL and the learning action have a look at the packet
+     * before we can drop it. */
+    if (!stp_forward_in_state(port->stp_state)
+            && !stp_learn_in_state(port->stp_state)) {
+        return false;
+    }
+
+    return true;
+}
+
 static void
 do_xlate_actions(const union ofp_action *in, size_t n_in,
                  struct action_xlate_ctx *ctx)
@@ -3813,11 +4106,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     size_t left;
 
     port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
-    if (port
-        && port->up.opp.config & htonl(OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->up.opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
-                               ? htonl(OFPPC_NO_RECV_STP)
-                               : htonl(OFPPC_NO_RECV))) {
+    if (port && !may_receive(port, ctx)) {
         /* Drop this flow. */
         return;
     }
@@ -3970,6 +4259,13 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             }
             break;
         }
+    }
+
+    /* We've let OFPP_NORMAL and the learning action look at the packet,
+     * so drop it now if forwarding is disabled. */
+    if (port && !stp_forward_in_state(port->stp_state)) {
+        ofpbuf_clear(ctx->odp_actions);
+        add_sflow_action(ctx);
     }
 }
 
@@ -4547,10 +4843,9 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
         return false;
     }
 
-    /* Drop frames for reserved multicast addresses
-     * only if forward_bpdu option is absent. */
-    if (eth_addr_is_reserved(flow->dl_dst) &&
-        !ofproto->up.forward_bpdu) {
+    /* Drop frames for reserved multicast addresses only if forward_bpdu
+     * option is absent. */
+    if (eth_addr_is_reserved(flow->dl_dst) && !ofproto->up.forward_bpdu) {
         return false;
     }
 
@@ -5113,6 +5408,10 @@ const struct ofproto_class ofproto_dpif_class = {
     set_cfm,
     get_cfm_fault,
     get_cfm_remote_mpids,
+    set_stp,
+    get_stp_status,
+    set_stp_port,
+    get_stp_port_status,
     bundle_set,
     bundle_remove,
     mirror_set,

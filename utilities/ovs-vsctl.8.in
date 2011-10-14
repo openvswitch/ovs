@@ -829,6 +829,24 @@ Deconfigure sFlow from \fBbr0\fR, which also destroys the sFlow record
 (since it is now unreferenced):
 .IP
 .B "ovs\-vsctl \-\- clear Bridge br0 sflow"
+.SS "802.1D Spanning Tree Protocol (STP)"
+.PP
+Configure bridge \fBbr0\fR to participate in an 802.1D spanning tree:
+.IP
+.B "ovs\-vsctl set Bridge br0 stp_enable=true"
+.PP
+Set the bridge priority of \fBbr0\fR to 0x7800:
+.IP
+.B "ovs\-vsctl set Bridge br0 other_config:stp-priority=0x7800"
+.PP
+Set the path cost of port \fBeth0\fR to 10:
+.IP
+.B "ovs\-vsctl set Port eth0 other_config:stp-path-cost=10"
+.PP
+Deconfigure STP from above:
+.IP
+.B "ovs\-vsctl clear Bridge br0 stp_enable"
+.PP
 .SH "EXIT STATUS"
 .IP "0"
 Successful program execution.
