@@ -118,6 +118,7 @@ int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
 
 /* PHY interface. */
 bool netdev_get_carrier(const struct netdev *);
+long long int netdev_get_carrier_resets(const struct netdev *);
 int netdev_set_miimon_interval(struct netdev *, long long int interval);
 int netdev_get_features(const struct netdev *,
                         uint32_t *current, uint32_t *advertised,

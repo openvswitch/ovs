@@ -892,6 +892,15 @@ netdev_get_carrier(const struct netdev *netdev)
     return carrier;
 }
 
+/* Returns the number of times 'netdev''s carrier has changed. */
+long long int
+netdev_get_carrier_resets(const struct netdev *netdev)
+{
+    return (netdev_get_dev(netdev)->netdev_class->get_carrier_resets
+            ? netdev_get_dev(netdev)->netdev_class->get_carrier_resets(netdev)
+            : 0);
+}
+
 /* Attempts to force netdev_get_carrier() to poll 'netdev''s MII registers for
  * link status instead of checking 'netdev''s carrier.  'netdev''s MII
  * registers will be polled once ever 'interval' milliseconds.  If 'netdev'

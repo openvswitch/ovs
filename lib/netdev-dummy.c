@@ -270,6 +270,7 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_set_mtu,
     NULL,                       /* get_ifindex */
     NULL,                       /* get_carrier */
+    NULL,                       /* get_carrier_resets */
     NULL,                       /* get_miimon */
     netdev_dummy_get_stats,
     netdev_dummy_set_stats,

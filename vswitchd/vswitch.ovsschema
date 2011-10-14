@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.1.1",
- "cksum": "282564184 14747",
+ "version": "6.2.0",
+ "cksum": "212779557 14885",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -207,6 +207,10 @@
        "link_state": {
          "type": {"key": {"type": "string",
                           "enum": ["set", ["up", "down"]]},
+                  "min": 0, "max": 1},
+         "ephemeral": true},
+       "link_resets": {
+         "type": {"key": {"type": "integer"},
                   "min": 0, "max": 1},
          "ephemeral": true},
        "link_speed": {

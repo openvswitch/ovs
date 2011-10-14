@@ -906,6 +906,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     NULL,                       /* set_mtu */               \
     NULL,                       /* get_ifindex */           \
     NULL,                       /* get_carrier */           \
+    NULL,                       /* get_carrier_resets */    \
     NULL,                       /* get_miimon */            \
     netdev_vport_get_stats,                                 \
     netdev_vport_set_stats,                                 \

@@ -238,6 +238,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_duplex);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_speed);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_state);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_resets);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_mtu);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_statistics);
@@ -1574,6 +1575,7 @@ bridge_run(void)
 
             HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
                 const char *link_state;
+                int64_t link_resets;
                 int current;
 
                 if (iface_is_synthetic(iface)) {
@@ -1591,6 +1593,9 @@ bridge_run(void)
 
                 link_state = netdev_get_carrier(iface->netdev) ? "up" : "down";
                 ovsrec_interface_set_link_state(iface->cfg, link_state);
+
+                link_resets = netdev_get_carrier_resets(iface->netdev);
+                ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
             }
         }
 

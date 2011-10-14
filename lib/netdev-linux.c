@@ -366,6 +366,7 @@ struct netdev_dev_linux {
     struct in6_addr in6;
     int mtu;
     bool carrier;
+    long long int carrier_resets;
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
     bool have_vport_stats;
@@ -505,6 +506,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
                 if (dev->carrier != change->running) {
                     dev->carrier = change->running;
+                    dev->carrier_resets++;
                 }
 
                 netdev_dev_linux_changed(dev);
@@ -524,6 +526,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
             get_carrier_via_sysfs(node->name, &carrier);
             if (dev->carrier != carrier) {
                 dev->carrier = carrier;
+                dev->carrier_resets++;
             }
 
             netdev_dev_linux_changed(dev);
@@ -1039,6 +1042,12 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
     }
 
     return 0;
+}
+
+static long long int
+netdev_linux_get_carrier_resets(const struct netdev *netdev)
+{
+    return netdev_dev_linux_cast(netdev_get_dev(netdev))->carrier_resets;
 }
 
 static int
@@ -2315,6 +2324,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_set_mtu,                                       \
     netdev_linux_get_ifindex,                                   \
     netdev_linux_get_carrier,                                   \
+    netdev_linux_get_carrier_resets,                            \
     netdev_linux_set_miimon_interval,                           \
     GET_STATS,                                                  \
     SET_STATS,                                                  \

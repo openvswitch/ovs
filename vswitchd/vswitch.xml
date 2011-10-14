@@ -1181,6 +1181,13 @@
         </p>
       </column>
 
+      <column name="link_resets">
+        <p>
+          The number of times Open vSwitch has observed the
+          <ref column="link_state"/> of this <ref table="Interface"/> change.
+        </p>
+      </column>
+
       <column name="link_speed">
         <p>
           The negotiated speed of the physical network link.
