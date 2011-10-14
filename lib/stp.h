@@ -36,9 +36,22 @@ struct ofpbuf;
 #define STP_DEFAULT_BRIDGE_PRIORITY 32768
 #define STP_DEFAULT_PORT_PRIORITY 128
 
+/* Default time values. */
+#define STP_DEFAULT_MAX_AGE    20000
+#define STP_DEFAULT_HELLO_TIME 2000
+#define STP_DEFAULT_FWD_DELAY  15000
+
 /* Bridge identifier.  Top 16 bits are a priority value (numerically lower
  * values are higher priorities).  Bottom 48 bits are MAC address of bridge. */
 typedef uint64_t stp_identifier;
+
+
+#define STP_ID_FMT "%04"PRIx16".%012"PRIx64
+#define STP_ID_ARGS(stp_id) \
+    (uint16_t)((stp_id) >> 48), \
+    (uint64_t)((stp_id) & 0xffffffffffffULL)
+
+#define STP_PORT_ID_FMT "%04"PRIx16
 
 /* Basic STP functionality. */
 #define STP_MAX_PORTS 255
@@ -72,9 +85,30 @@ bool stp_get_changed_port(struct stp *, struct stp_port **portp);
 /* State of an STP port.
  *
  * A port is in exactly one state at any given time, but distinct bits are used
- * for states to allow testing for more than one state with a bit mask. */
+ * for states to allow testing for more than one state with a bit mask.
+ *
+ * The STP_DISABLED state means that the port is disabled by management.
+ * In our implementation, this state means that the port does not
+ * participate in the spanning tree, but it still forwards traffic as if
+ * it were in the STP_FORWARDING state.  This may be different from
+ * other implementations.
+ *
+ * The following diagram describes the various states and what they are
+ * allowed to do in OVS:
+ *
+ *                     FWD  LRN  TX_BPDU RX_BPDU
+ *                     ---  ---  ------- -------
+ *        Disabled      Y    -      -       -
+ *        Blocking      -    -      -       Y
+ *        Listening     -    -      Y       Y
+ *        Learning      -    Y      Y       Y
+ *        Forwarding    Y    Y      Y       Y
+ *
+ * Once again, note that the disabled state forwards traffic, which is
+ * likely different than the spec would indicate.
+ */
 enum stp_state {
-    STP_DISABLED = 1 << 0,       /* 8.4.5: Disabled by management. */
+    STP_DISABLED = 1 << 0,       /* 8.4.5: See note above. */
     STP_LISTENING = 1 << 1,      /* 8.4.2: Not learning or relaying frames. */
     STP_LEARNING = 1 << 2,       /* 8.4.3: Learning but not relaying frames. */
     STP_FORWARDING = 1 << 3,     /* 8.4.4: Learning and relaying frames. */
@@ -84,14 +118,28 @@ const char *stp_state_name(enum stp_state);
 bool stp_forward_in_state(enum stp_state);
 bool stp_learn_in_state(enum stp_state);
 
+/* Role of an STP port. */
+enum stp_role {
+    STP_ROLE_ROOT,               /* Path to root bridge. */
+    STP_ROLE_DESIGNATED,         /* Path to LAN segments. */
+    STP_ROLE_ALTERNATE,          /* Backup path to root bridge. */
+    STP_ROLE_DISABLED            /* Port does not participate in STP. */
+};
+const char *stp_role_name(enum stp_role);
+
 void stp_received_bpdu(struct stp_port *, const void *bpdu, size_t bpdu_size);
 
 struct stp *stp_port_get_stp(struct stp_port *);
+void stp_port_set_aux(struct stp_port *, void *);
+void *stp_port_get_aux(struct stp_port *);
 int stp_port_no(const struct stp_port *);
+int stp_port_get_id(const struct stp_port *);
 enum stp_state stp_port_get_state(const struct stp_port *);
+enum stp_role stp_port_get_role(const struct stp_port *);
 void stp_port_enable(struct stp_port *);
 void stp_port_disable(struct stp_port *);
 void stp_port_set_priority(struct stp_port *, uint8_t new_priority);
+uint16_t stp_convert_speed_to_cost(unsigned int speed);
 void stp_port_set_path_cost(struct stp_port *, uint16_t path_cost);
 void stp_port_set_speed(struct stp_port *, unsigned int speed);
 void stp_port_enable_change_detection(struct stp_port *);

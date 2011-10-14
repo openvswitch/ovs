@@ -77,6 +77,7 @@ struct stp_timer {
 
 struct stp_port {
     struct stp *stp;
+    void *aux;                      /* Auxiliary data the user may retrieve. */
     int port_id;                    /* 8.5.5.1: Unique port identifier. */
     enum stp_state state;           /* 8.5.5.2: Current state. */
     int path_cost;                  /* 8.5.5.3: Cost of tx/rx on this port. */
@@ -223,9 +224,9 @@ stp_create(const char *name, stp_identifier bridge_id,
         stp->bridge_id |= (uint64_t) STP_DEFAULT_BRIDGE_PRIORITY << 48;
     }
 
-    stp->rq_max_age = 6000;
-    stp->rq_hello_time = 2000;
-    stp->rq_forward_delay = 4000;
+    stp->rq_max_age = STP_DEFAULT_MAX_AGE;
+    stp->rq_hello_time = STP_DEFAULT_HELLO_TIME;
+    stp->rq_forward_delay = STP_DEFAULT_FWD_DELAY;
     stp_update_bridge_timers(stp);
     stp->max_age = stp->bridge_max_age;
     stp->hello_time = stp->bridge_hello_time;
@@ -526,6 +527,25 @@ stp_learn_in_state(enum stp_state state)
     return (state & (STP_DISABLED | STP_LEARNING | STP_FORWARDING)) != 0;
 }
 
+/* Returns the name for the given 'role' (for use in debugging and log
+ * messages). */
+const char *
+stp_role_name(enum stp_role role)
+{
+    switch (role) {
+    case STP_ROLE_ROOT:
+        return "root";
+    case STP_ROLE_DESIGNATED:
+        return "designated";
+    case STP_ROLE_ALTERNATE:
+        return "alternate";
+    case STP_ROLE_DISABLED:
+        return "disabled";
+    default:
+        NOT_REACHED();
+    }
+}
+
 /* Notifies the STP entity that bridge protocol data unit 'bpdu', which is
  * 'bpdu_size' bytes in length, was received on port 'p'.
  *
@@ -589,6 +609,24 @@ stp_port_get_stp(struct stp_port *p)
     return p->stp;
 }
 
+/* Sets the 'aux' member of 'p'.
+ *
+ * The 'aux' member will be reset to NULL when stp_port_disable() is
+ * called or stp_port_enable() is called when the port is in a Disabled
+ * state. */
+void
+stp_port_set_aux(struct stp_port *p, void *aux)
+{
+    p->aux = aux;
+}
+
+/* Returns the 'aux' member of 'p'. */
+void *
+stp_port_get_aux(struct stp_port *p)
+{
+    return p->aux;
+}
+
 /* Returns the index of port 'p' within its bridge. */
 int
 stp_port_no(const struct stp_port *p)
@@ -598,11 +636,35 @@ stp_port_no(const struct stp_port *p)
     return p - stp->ports;
 }
 
+/* Returns the port ID for 'p'. */
+int
+stp_port_get_id(const struct stp_port *p)
+{
+    return p->port_id;
+}
+
 /* Returns the state of port 'p'. */
 enum stp_state
 stp_port_get_state(const struct stp_port *p)
 {
     return p->state;
+}
+
+/* Returns the role of port 'p'. */
+enum stp_role
+stp_port_get_role(const struct stp_port *p)
+{
+    struct stp_port *root_port = stp_get_root_port(p->stp);
+
+    if (root_port && root_port->port_id == p->port_id) {
+        return STP_ROLE_ROOT;
+    } else if (stp_is_designated_port(p)) {
+        return STP_ROLE_DESIGNATED;
+    } else if (p->state == STP_DISABLED) {
+        return STP_ROLE_DISABLED;
+    } else {
+        return STP_ROLE_ALTERNATE;
+    }
 }
 
 /* Disables STP on port 'p'. */
@@ -623,6 +685,7 @@ stp_port_disable(struct stp_port *p)
         if (stp_is_root_bridge(stp) && !root) {
             stp_become_root_bridge(stp);
         }
+        p->aux = NULL;
     }
 }
 
@@ -656,6 +719,19 @@ stp_port_set_priority(struct stp_port *p, uint8_t new_priority)
     }
 }
 
+/* Convert 'speed' (measured in Mb/s) into the path cost. */
+uint16_t
+stp_convert_speed_to_cost(unsigned int speed)
+{
+    return speed >= 10000 ? 2  /* 10 Gb/s. */
+           : speed >= 1000 ? 4 /* 1 Gb/s. */
+           : speed >= 100 ? 19 /* 100 Mb/s. */
+           : speed >= 16 ? 62  /* 16 Mb/s. */
+           : speed >= 10 ? 100 /* 10 Mb/s. */
+           : speed >= 4 ? 250  /* 4 Mb/s. */
+           : 19;             /* 100 Mb/s (guess). */
+}
+
 /* Sets the path cost of port 'p' to 'path_cost'.  Lower values are generally
  * used to indicate faster links.  Use stp_port_set_speed() to automatically
  * generate a default path cost from a link speed. */
@@ -674,13 +750,7 @@ stp_port_set_path_cost(struct stp_port *p, uint16_t path_cost)
 void
 stp_port_set_speed(struct stp_port *p, unsigned int speed)
 {
-    stp_port_set_path_cost(p, (speed >= 10000 ? 2  /* 10 Gb/s. */
-                               : speed >= 1000 ? 4 /* 1 Gb/s. */
-                               : speed >= 100 ? 19 /* 100 Mb/s. */
-                               : speed >= 16 ? 62  /* 16 Mb/s. */
-                               : speed >= 10 ? 100 /* 10 Mb/s. */
-                               : speed >= 4 ? 250  /* 4 Mb/s. */
-                               : 19));             /* 100 Mb/s (guess). */
+    stp_port_set_path_cost(p, stp_convert_speed_to_cost(speed));
 }
 
 /* Enables topology change detection on port 'p'. */
@@ -715,10 +785,10 @@ stp_transmit_config(struct stp_port *p)
         config.header.bpdu_type = STP_TYPE_CONFIG;
         config.flags = 0;
         if (p->topology_change_ack) {
-            config.flags |= htons(STP_CONFIG_TOPOLOGY_CHANGE_ACK);
+            config.flags |= STP_CONFIG_TOPOLOGY_CHANGE_ACK;
         }
         if (stp->topology_change) {
-            config.flags |= htons(STP_CONFIG_TOPOLOGY_CHANGE);
+            config.flags |= STP_CONFIG_TOPOLOGY_CHANGE;
         }
         config.root_id = htonll(stp->designated_root);
         config.root_path_cost = htonl(stp->root_path_cost);
@@ -776,7 +846,7 @@ stp_record_config_timeout_values(struct stp *stp,
     stp->max_age = ntohs(config->max_age);
     stp->hello_time = ntohs(config->hello_time);
     stp->forward_delay = ntohs(config->forward_delay);
-    stp->topology_change = config->flags & htons(STP_CONFIG_TOPOLOGY_CHANGE);
+    stp->topology_change = config->flags & STP_CONFIG_TOPOLOGY_CHANGE;
 }
 
 static bool
@@ -1004,7 +1074,7 @@ stp_received_config_bpdu(struct stp *stp, struct stp_port *p,
             if (p == stp->root_port) {
                 stp_record_config_timeout_values(stp, config);
                 stp_config_bpdu_generation(stp);
-                if (config->flags & htons(STP_CONFIG_TOPOLOGY_CHANGE_ACK)) {
+                if (config->flags & STP_CONFIG_TOPOLOGY_CHANGE_ACK) {
                     stp_topology_change_acknowledged(stp);
                 }
             }
@@ -1111,6 +1181,7 @@ stp_initialize_port(struct stp_port *p, enum stp_state state)
     p->topology_change_ack = false;
     p->config_pending = false;
     p->change_detection_enabled = true;
+    p->aux = NULL;
     stp_stop_timer(&p->message_age_timer);
     stp_stop_timer(&p->forward_delay_timer);
     stp_stop_timer(&p->hold_timer);
