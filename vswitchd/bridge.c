@@ -201,7 +201,6 @@ static void iface_configure_cfm(struct iface *);
 static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
-static bool iface_get_carrier(const struct iface *);
 static bool iface_is_synthetic(const struct iface *);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
@@ -1276,7 +1275,9 @@ iface_refresh_status(struct iface *iface)
     }
 
     ovsrec_interface_set_link_state(iface->cfg,
-                                    iface_get_carrier(iface) ? "up" : "down");
+                                    (netdev_get_carrier(iface->netdev)
+                                     ? "up"
+                                     : "down"));
 
     error = netdev_get_mtu(iface->netdev, &mtu);
     if (!error) {
@@ -2698,17 +2699,6 @@ iface_configure_cfm(struct iface *iface)
     s.opup = !strcasecmp("up", opstate_str);
 
     ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port, &s);
-}
-
-/* Read carrier or miimon status directly from 'iface''s netdev, according to
- * how 'iface''s port is configured.
- *
- * Returns true if 'iface' is up, false otherwise. */
-static bool
-iface_get_carrier(const struct iface *iface)
-{
-    /* XXX */
-    return netdev_get_carrier(iface->netdev);
 }
 
 /* Returns true if 'iface' is synthetic, that is, if we constructed it locally
