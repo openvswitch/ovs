@@ -260,42 +260,36 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
 
-	if (tunnel_type & TNL_T_KEY_EXACT) {
-		lookup.in_key = key;
-		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_MATCH;
+	/* First try for exact match on in_key. */
+	lookup.in_key = key;
+	lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
+	if (key_local_remote_ports) {
+		vport = port_table_lookup(&lookup, mutable);
+		if (vport)
+			return vport;
+	}
+	if (key_remote_ports) {
+		lookup.saddr = 0;
+		vport = port_table_lookup(&lookup, mutable);
+		if (vport)
+			return vport;
 
-		if (key_local_remote_ports) {
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-		}
-
-		if (key_remote_ports) {
-			lookup.saddr = 0;
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-
-			lookup.saddr = saddr;
-		}
+		lookup.saddr = saddr;
 	}
 
-	if (tunnel_type & TNL_T_KEY_MATCH) {
-		lookup.in_key = 0;
-		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_EXACT;
-
-		if (local_remote_ports) {
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-		}
-
-		if (remote_ports) {
-			lookup.saddr = 0;
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-		}
+	/* Then try matches that wildcard in_key. */
+	lookup.in_key = 0;
+	lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
+	if (local_remote_ports) {
+		vport = port_table_lookup(&lookup, mutable);
+		if (vport)
+			return vport;
+	}
+	if (remote_ports) {
+		lookup.saddr = 0;
+		vport = port_table_lookup(&lookup, mutable);
+		if (vport)
+			return vport;
 	}
 
 	return NULL;

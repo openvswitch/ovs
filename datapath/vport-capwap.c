@@ -334,8 +334,8 @@ static int capwap_rcv(struct sock *sk, struct sk_buff *skb)
 		goto out;
 
 	iph = ip_hdr(skb);
-	vport = tnl_find_port(iph->daddr, iph->saddr, key,
-			      TNL_T_PROTO_CAPWAP | TNL_T_KEY_EITHER, &mutable);
+	vport = tnl_find_port(iph->daddr, iph->saddr, key, TNL_T_PROTO_CAPWAP,
+			      &mutable);
 	if (unlikely(!vport)) {
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 		goto error;

@@ -33,7 +33,6 @@
 /* These flags are only needed when calling tnl_find_port(). */
 #define TNL_T_KEY_EXACT		(1 << 10)
 #define TNL_T_KEY_MATCH		(1 << 11)
-#define TNL_T_KEY_EITHER	(TNL_T_KEY_EXACT | TNL_T_KEY_MATCH)
 
 /* Private flags not exposed to userspace in this form. */
 #define TNL_F_IN_KEY_MATCH      (1 << 16) /* Store the key in tun_id to match in flow table. */

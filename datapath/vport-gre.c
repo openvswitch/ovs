@@ -193,8 +193,8 @@ static void gre_err(struct sk_buff *skb, u32 info)
 	if (tunnel_hdr_len < 0)
 		return;
 
-	vport = tnl_find_port(iph->saddr, iph->daddr, key,
-			      TNL_T_PROTO_GRE | TNL_T_KEY_EITHER, &mutable);
+	vport = tnl_find_port(iph->saddr, iph->daddr, key, TNL_T_PROTO_GRE,
+			      &mutable);
 	if (!vport)
 		return;
 
@@ -330,8 +330,8 @@ static int gre_rcv(struct sk_buff *skb)
 		goto error;
 
 	iph = ip_hdr(skb);
-	vport = tnl_find_port(iph->daddr, iph->saddr, key,
-			      TNL_T_PROTO_GRE | TNL_T_KEY_EITHER, &mutable);
+	vport = tnl_find_port(iph->daddr, iph->saddr, key, TNL_T_PROTO_GRE,
+			      &mutable);
 	if (unlikely(!vport)) {
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 		goto error;
