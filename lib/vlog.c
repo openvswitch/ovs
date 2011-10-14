@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <syslog.h>
 #include <time.h>
@@ -322,7 +323,25 @@ vlog_set_log_file(const char *file_name)
 int
 vlog_reopen_log_file(void)
 {
-    return log_file_name ? vlog_set_log_file(log_file_name) : 0;
+    struct stat old, new;
+
+    /* Skip re-opening if there's nothing to reopen. */
+    if (!log_file_name) {
+        return 0;
+    }
+
+    /* Skip re-opening if it would be a no-op because the old and new files are
+     * the same.  (This avoids writing "closing log file" followed immediately
+     * by "opened log file".) */
+    if (log_file
+        && !fstat(fileno(log_file), &old)
+        && !stat(log_file_name, &new)
+        && old.st_dev == new.st_dev
+        && old.st_ino == new.st_ino) {
+        return 0;
+    }
+
+    return vlog_set_log_file(log_file_name);
 }
 
 /* Set debugging levels:
