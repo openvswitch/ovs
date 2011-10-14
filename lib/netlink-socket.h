@@ -35,6 +35,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "list.h"
 
 struct ofpbuf;
 struct nl_sock;
@@ -62,6 +63,19 @@ void nl_sock_wait(const struct nl_sock *, short int events);
 short int nl_sock_woke(const struct nl_sock *);
 
 uint32_t nl_sock_pid(const struct nl_sock *);
+
+/* Batching transactions. */
+struct nl_transaction {
+    /* Filled in by client. */
+    struct ofpbuf *request;     /* Request to send. */
+
+    /* Filled in by nl_sock_transact_batch(). */
+    struct ofpbuf *reply;       /* Reply (NULL if reply was an error code). */
+    int error;                  /* Positive errno value, 0 if no error. */
+};
+
+void nl_sock_transact_multiple(struct nl_sock *,
+                               struct nl_transaction **, size_t n);
 
 /* Table dumping. */
 struct nl_dump {
