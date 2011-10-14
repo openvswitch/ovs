@@ -227,8 +227,8 @@ static void port_table_remove_port(struct vport *vport)
 	(*find_port_pool(rtnl_dereference(tnl_vport->mutable)))--;
 }
 
-static struct tnl_vport *port_table_lookup(struct port_lookup_key *key,
-			    const struct tnl_mutable_config **pmutable)
+static struct vport *port_table_lookup(struct port_lookup_key *key,
+				       const struct tnl_mutable_config **pmutable)
 {
 	struct hlist_node *n;
 	struct hlist_head *bucket;
@@ -243,7 +243,7 @@ static struct tnl_vport *port_table_lookup(struct port_lookup_key *key,
 		mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 		if (!memcmp(&mutable->key, key, PORT_KEY_LEN)) {
 			*pmutable = mutable;
-			return tnl_vport;
+			return tnl_vport_to_vport(tnl_vport);
 		}
 	}
 
@@ -255,7 +255,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 			    const struct tnl_mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
-	struct tnl_vport * tnl_vport;
+	struct vport *vport;
 
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
@@ -265,16 +265,16 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_MATCH;
 
 		if (key_local_remote_ports) {
-			tnl_vport = port_table_lookup(&lookup, mutable);
-			if (tnl_vport)
-				return tnl_vport_to_vport(tnl_vport);
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
 		}
 
 		if (key_remote_ports) {
 			lookup.saddr = 0;
-			tnl_vport = port_table_lookup(&lookup, mutable);
-			if (tnl_vport)
-				return tnl_vport_to_vport(tnl_vport);
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
 
 			lookup.saddr = saddr;
 		}
@@ -285,16 +285,16 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		lookup.tunnel_type = tunnel_type & ~TNL_T_KEY_EXACT;
 
 		if (local_remote_ports) {
-			tnl_vport = port_table_lookup(&lookup, mutable);
-			if (tnl_vport)
-				return tnl_vport_to_vport(tnl_vport);
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
 		}
 
 		if (remote_ports) {
 			lookup.saddr = 0;
-			tnl_vport = port_table_lookup(&lookup, mutable);
-			if (tnl_vport)
-				return tnl_vport_to_vport(tnl_vport);
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
 		}
 	}
 
