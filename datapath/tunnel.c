@@ -1326,10 +1326,7 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 
 	mutable->tunnel_hlen += sizeof(struct iphdr);
 
-	old_vport = tnl_find_port(mutable->key.saddr, mutable->key.daddr,
-				  mutable->key.in_key, mutable->key.tunnel_type,
-				  &old_mutable);
-
+	old_vport = port_table_lookup(&mutable->key, &old_mutable);
 	if (old_vport && old_vport != cur_vport)
 		return -EEXIST;
 
