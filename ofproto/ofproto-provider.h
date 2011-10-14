@@ -96,6 +96,8 @@ struct ofport {
     int mtu;
 };
 
+void ofproto_port_set_state(struct ofport *, ovs_be32 state);
+
 /* An OpenFlow flow within a "struct ofproto".
  *
  * With few exceptions, ofproto implementations may look at these fields but

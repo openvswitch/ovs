@@ -1278,6 +1278,17 @@ ofport_modified(struct ofport *port, struct ofp_phy_port *opp)
     connmgr_send_port_status(port->ofproto->connmgr, &port->opp, OFPPR_MODIFY);
 }
 
+/* Update OpenFlow 'state' in 'port' and notify controller. */
+void
+ofproto_port_set_state(struct ofport *port, ovs_be32 state)
+{
+    if (port->opp.state != state) {
+        port->opp.state = state;
+        connmgr_send_port_status(port->ofproto->connmgr, &port->opp,
+                                 OFPPR_MODIFY);
+    }
+}
+
 void
 ofproto_port_unregister(struct ofproto *ofproto, uint16_t ofp_port)
 {
