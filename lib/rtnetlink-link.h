@@ -37,6 +37,7 @@ struct rtnetlink_link_change {
     /* Extracted from Netlink attributes. */
     const char *ifname;         /* Name of network device. */
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
+    bool running;               /* Carrier of network device. */
 };
 
 /* Function called to report that a netdev has changed.  'change' describes the
