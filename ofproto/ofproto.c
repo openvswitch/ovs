@@ -1259,7 +1259,7 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
     }
 }
 
-/* Updates 'port' within 'ofproto' with the new 'netdev' and 'opp'.
+/* Updates 'port' with new 'opp' description.
  *
  * Does not handle a name or port number change.  The caller must implement
  * such a change as a delete followed by an add.  */
