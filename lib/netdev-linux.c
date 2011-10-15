@@ -113,9 +113,8 @@ enum {
     VALID_IN4               = 1 << 2,
     VALID_IN6               = 1 << 3,
     VALID_MTU               = 1 << 4,
-    VALID_CARRIER           = 1 << 5,
-    VALID_POLICING          = 1 << 6,
-    VALID_HAVE_VPORT_STATS  = 1 << 7
+    VALID_POLICING          = 1 << 5,
+    VALID_HAVE_VPORT_STATS  = 1 << 6
 };
 
 struct tap_state {
@@ -366,7 +365,7 @@ struct netdev_dev_linux {
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
-    int carrier;
+    bool carrier;
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
     bool have_vport_stats;
@@ -412,6 +411,7 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
+static int get_carrier_via_sysfs(const char *name, bool *carrier);
 static int af_packet_sock(void);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
@@ -502,6 +502,11 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             if (is_netdev_linux_class(netdev_class)) {
                 dev = netdev_dev_linux_cast(base_dev);
+
+                if (dev->carrier != change->running) {
+                    dev->carrier = change->running;
+                }
+
                 netdev_dev_linux_changed(dev);
             }
         }
@@ -512,7 +517,15 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         shash_init(&device_shash);
         netdev_dev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
+            bool carrier;
+
             dev = node->data;
+
+            get_carrier_via_sysfs(node->name, &carrier);
+            if (dev->carrier != carrier) {
+                dev->carrier = carrier;
+            }
+
             netdev_dev_linux_changed(dev);
         }
         shash_destroy(&device_shash);
@@ -541,6 +554,7 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
     netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    get_carrier_via_sysfs(name, &netdev_dev->carrier);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -1017,62 +1031,14 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
-    int error = 0;
-    char *fn = NULL;
-    int fd = -1;
 
     if (netdev_dev->miimon_interval > 0) {
         *carrier = netdev_dev->miimon;
-        return 0;
+    } else {
+        *carrier = netdev_dev->carrier;
     }
 
-    if (!(netdev_dev->cache_valid & VALID_CARRIER)) {
-        char line[8];
-        int retval;
-
-        fn = xasprintf("/sys/class/net/%s/carrier",
-                       netdev_get_name(netdev_));
-        fd = open(fn, O_RDONLY);
-        if (fd < 0) {
-            error = errno;
-            VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(error));
-            goto exit;
-        }
-
-        retval = read(fd, line, sizeof line);
-        if (retval < 0) {
-            error = errno;
-            if (error == EINVAL) {
-                /* This is the normal return value when we try to check carrier
-                 * if the network device is not up. */
-            } else {
-                VLOG_WARN_RL(&rl, "%s: read failed: %s", fn, strerror(error));
-            }
-            goto exit;
-        } else if (retval == 0) {
-            error = EPROTO;
-            VLOG_WARN_RL(&rl, "%s: unexpected end of file", fn);
-            goto exit;
-        }
-
-        if (line[0] != '0' && line[0] != '1') {
-            error = EPROTO;
-            VLOG_WARN_RL(&rl, "%s: value is %c (expected 0 or 1)",
-                         fn, line[0]);
-            goto exit;
-        }
-        netdev_dev->carrier = line[0] != '0';
-        netdev_dev->cache_valid |= VALID_CARRIER;
-    }
-    *carrier = netdev_dev->carrier;
-    error = 0;
-
-exit:
-    if (fd >= 0) {
-        close(fd);
-    }
-    free(fn);
-    return error;
+    return 0;
 }
 
 static int
@@ -4146,6 +4112,58 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
     VLOG_WARN_RL(&rl, "%s: no stats for %s", fn, netdev_name);
     fclose(stream);
     return ENODEV;
+}
+
+static int
+get_carrier_via_sysfs(const char *name, bool *carrier)
+{
+    char line[8];
+    int retval;
+
+    int error = 0;
+    char *fn = NULL;
+    int fd = -1;
+
+    *carrier = false;
+
+    fn = xasprintf("/sys/class/net/%s/carrier", name);
+    fd = open(fn, O_RDONLY);
+    if (fd < 0) {
+        error = errno;
+        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(error));
+        goto exit;
+    }
+
+    retval = read(fd, line, sizeof line);
+    if (retval < 0) {
+        error = errno;
+        if (error == EINVAL) {
+            /* This is the normal return value when we try to check carrier if
+             * the network device is not up. */
+        } else {
+            VLOG_WARN_RL(&rl, "%s: read failed: %s", fn, strerror(error));
+        }
+        goto exit;
+    } else if (retval == 0) {
+        error = EPROTO;
+        VLOG_WARN_RL(&rl, "%s: unexpected end of file", fn);
+        goto exit;
+    }
+
+    if (line[0] != '0' && line[0] != '1') {
+        error = EPROTO;
+        VLOG_WARN_RL(&rl, "%s: value is %c (expected 0 or 1)", fn, line[0]);
+        goto exit;
+    }
+    *carrier = line[0] != '0';
+    error = 0;
+
+exit:
+    if (fd >= 0) {
+        close(fd);
+    }
+    free(fn);
+    return error;
 }
 
 static int
