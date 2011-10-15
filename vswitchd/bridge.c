@@ -1274,11 +1274,6 @@ iface_refresh_status(struct iface *iface)
         ovsrec_interface_set_link_speed(iface->cfg, NULL, 0);
     }
 
-    ovsrec_interface_set_link_state(iface->cfg,
-                                    (netdev_get_carrier(iface->netdev)
-                                     ? "up"
-                                     : "down"));
-
     error = netdev_get_mtu(iface->netdev, &mtu);
     if (!error) {
         mtu_64 = mtu;
@@ -1578,6 +1573,7 @@ bridge_run(void)
             struct iface *iface;
 
             HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
+                const char *link_state;
                 int current;
 
                 if (iface_is_synthetic(iface)) {
@@ -1592,6 +1588,9 @@ bridge_run(void)
                 } else {
                     ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
                 }
+
+                link_state = netdev_get_carrier(iface->netdev) ? "up" : "down";
+                ovsrec_interface_set_link_state(iface->cfg, link_state);
             }
         }
 
