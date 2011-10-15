@@ -1321,20 +1321,6 @@ iface_refresh_cfm_stats(struct iface *iface)
     }
 }
 
-static bool
-iface_refresh_lacp_stats(struct iface *iface)
-{
-    struct ofproto *ofproto = iface->port->bridge->ofproto;
-    int old = iface->cfg->lacp_current ? *iface->cfg->lacp_current : -1;
-    int new = ofproto_port_is_lacp_current(ofproto, iface->ofp_port);
-
-    if (old != new) {
-        bool current = new;
-        ovsrec_interface_set_lacp_current(iface->cfg, &current, new >= 0);
-    }
-    return old != new;
-}
-
 static void
 iface_refresh_stats(struct iface *iface)
 {
@@ -1586,29 +1572,32 @@ bridge_run(void)
 
     if (time_msec() >= db_limiter) {
         struct ovsdb_idl_txn *txn;
-        bool changed = false;
 
         txn = ovsdb_idl_txn_create(idl);
         HMAP_FOR_EACH (br, node, &all_bridges) {
-            struct port *port;
+            struct iface *iface;
 
-            HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                struct iface *iface;
+            HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
+                int current;
 
-                LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-                    /* XXX: Eventually we need to remove the lacp_current flag
-                     * from the database so that we can completely get rid of
-                     * this rate limiter code. */
-                    changed = iface_refresh_lacp_stats(iface) || changed;
+                if (iface_is_synthetic(iface)) {
+                    continue;
+                }
+
+                current = ofproto_port_is_lacp_current(br->ofproto,
+                                                       iface->ofp_port);
+                if (current >= 0) {
+                    bool bl = current;
+                    ovsrec_interface_set_lacp_current(iface->cfg, &bl, 1);
+                } else {
+                    ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
                 }
             }
         }
 
-        if (changed) {
+        if (ovsdb_idl_txn_commit(txn) != TXN_UNCHANGED) {
             db_limiter = time_msec() + DB_LIMIT_INTERVAL;
         }
-
-        ovsdb_idl_txn_commit(txn);
         ovsdb_idl_txn_destroy(txn);
     }
 
