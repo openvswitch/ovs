@@ -585,9 +585,9 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         if (bond->active_slave != slave) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-            VLOG_WARN_RL(&rl, "active-backup bond received packet on backup"
-                         " slave (%s) destined for " ETH_ADDR_FMT,
-                         slave->name, ETH_ADDR_ARGS(eth_dst));
+            VLOG_DBG_RL(&rl, "active-backup bond received packet on backup"
+                        " slave (%s) destined for " ETH_ADDR_FMT,
+                        slave->name, ETH_ADDR_ARGS(eth_dst));
             return BV_DROP;
         }
     }
