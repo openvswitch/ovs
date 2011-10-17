@@ -1751,7 +1751,9 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 		goto exit_unlock;
 
 	err = 0;
-	if (a[OVS_VPORT_ATTR_OPTIONS])
+	if (a[OVS_VPORT_ATTR_TYPE] && nla_get_u32(a[OVS_VPORT_ATTR_TYPE]) != vport_get_type(vport))
+		err = -EINVAL;
+	if (!err && a[OVS_VPORT_ATTR_OPTIONS])
 		err = vport_set_options(vport, a[OVS_VPORT_ATTR_OPTIONS]);
 	if (!err)
 		err = change_vport(vport, a);
