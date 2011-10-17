@@ -1408,6 +1408,8 @@ int tnl_set_options(struct vport *vport, struct nlattr *options)
 
 	if (port_hash(&mutable->key) != port_hash(&old_mutable->key))
 		port_table_move_port(vport, mutable);
+	else
+		assign_config_rcu(vport, mutable);
 
 	return 0;
 
