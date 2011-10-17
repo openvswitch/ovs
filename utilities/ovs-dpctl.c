@@ -131,12 +131,16 @@ usage(void)
            "  add-dp DP [IFACE...]     add new datapath DP (with IFACEs)\n"
            "  del-dp DP                delete local datapath DP\n"
            "  add-if DP IFACE...       add each IFACE as a port on DP\n"
+           "  set-if DP IFACE...       reconfigure each IFACE within DP\n"
            "  del-if DP IFACE...       delete each IFACE from DP\n"
            "  dump-dps                 display names of all datapaths\n"
            "  show                     show basic info on all datapaths\n"
            "  show DP...               show basic info on each DP\n"
            "  dump-flows DP            display flows in DP\n"
-           "  del-flows DP             delete all flows from DP\n",
+           "  del-flows DP             delete all flows from DP\n"
+           "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
+           "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
+           "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -234,6 +238,7 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
 
         if (!name) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
+            failure = true;
             continue;
         }
 
@@ -276,6 +281,99 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
         error = if_up(name);
 
 next:
+        netdev_close(netdev);
+        if (error) {
+            failure = true;
+        }
+    }
+    dpif_close(dpif);
+    if (failure) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void
+do_set_if(int argc, char *argv[])
+{
+    bool failure = false;
+    struct dpif *dpif;
+    int i;
+
+    run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
+    for (i = 2; i < argc; i++) {
+        struct netdev *netdev = NULL;
+        struct dpif_port dpif_port;
+        char *save_ptr = NULL;
+        char *type = NULL;
+        const char *name;
+        struct shash args;
+        char *option;
+        int error;
+
+        name = strtok_r(argv[i], ",", &save_ptr);
+        if (!name) {
+            ovs_error(0, "%s is not a valid network device name", argv[i]);
+            failure = true;
+            continue;
+        }
+
+        /* Get the port's type from the datapath. */
+        error = dpif_port_query_by_name(dpif, name, &dpif_port);
+        if (error) {
+            ovs_error(error, "%s: failed to query port in %s", name, argv[1]);
+            goto next;
+        }
+        type = xstrdup(dpif_port.type);
+        dpif_port_destroy(&dpif_port);
+
+        /* Retrieve its existing configuration. */
+        error = netdev_open(name, type, &netdev);
+        if (error) {
+            ovs_error(error, "%s: failed to open network device", name);
+            goto next;
+        }
+
+        shash_init(&args);
+        error = netdev_get_config(netdev, &args);
+        if (error) {
+            ovs_error(error, "%s: failed to fetch configuration", name);
+            goto next;
+        }
+
+        /* Parse changes to configuration. */
+        while ((option = strtok_r(NULL, ",", &save_ptr)) != NULL) {
+            char *save_ptr_2 = NULL;
+            char *key, *value;
+
+            key = strtok_r(option, "=", &save_ptr_2);
+            value = strtok_r(NULL, "", &save_ptr_2);
+            if (!value) {
+                value = "";
+            }
+
+            if (!strcmp(key, "type")) {
+                if (strcmp(value, type)) {
+                    ovs_error(0, "%s: can't change type from %s to %s",
+                              name, type, value);
+                    failure = true;
+                }
+            } else if (value[0] == '\0') {
+                free(shash_find_and_delete(&args, key));
+            } else {
+                free(shash_replace(&args, key, xstrdup(value)));
+            }
+        }
+
+        /* Update configuration. */
+        error = netdev_set_config(netdev, &args);
+        smap_destroy(&args);
+        if (error) {
+            ovs_error(error, "%s: failed to configure network device", name);
+            goto next;
+        }
+
+next:
+        free(type);
         netdev_close(netdev);
         if (error) {
             failure = true;
@@ -600,6 +698,7 @@ static const struct command all_commands[] = {
     { "del-dp", 1, 1, do_del_dp },
     { "add-if", 2, INT_MAX, do_add_if },
     { "del-if", 2, INT_MAX, do_del_if },
+    { "set-if", 2, INT_MAX, do_set_if },
     { "dump-dps", 0, 0, do_dump_dps },
     { "show", 0, INT_MAX, do_show },
     { "dump-flows", 1, 1, do_dump_flows },

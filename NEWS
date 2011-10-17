@@ -11,6 +11,8 @@ Post-v1.2.0
         information about all interfaces with CFM enabled.
       - If no argument is provided for "lacp/show", displays detailed
         information about all ports with LACP enabled.
+    - ovs-dpctl:
+      - New "set-if" command to modify a datapath port's configuration.
     - ovs-vswitchd:
       - The software switch now supports 255 OpenFlow tables, instead
         of just one.  By default, only table 0 is consulted, but the

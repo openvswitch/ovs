@@ -34,11 +34,12 @@ default provider \fBsystem\fR is assumed.
 The following commands manage datapaths.
 .
 .TP
-\fBadd\-dp \fIdp\fR [\fInetdev\fR...]
+\fBadd\-dp \fIdp\fR [\fInetdev\fR[\fB,\fIoption\fR]...]
 Creates datapath \fIdp\fR, with a local port also named \fIdp\fR.
 This will fail if a network device \fIdp\fR already exists.
 .IP
-If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the datapath.
+If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the
+new datapath, just as if \fBadd\-if\fR was specified.
 .
 .TP
 \fBdel\-dp \fIdp\fR
@@ -68,6 +69,14 @@ Adds an arbitrary key-value option to the port's configuration.
 \fBovs\-vswitchd.conf.db\fR(5) documents the available port types and
 options.
 .
+.IP "\fBset\-if \fIdp port\fR[\fB,\fIoption\fR]..."
+Reconfigures each \fIport\fR in \fIdp\fR as specified.  An
+\fIoption\fR of the form \fIkey\fB=\fIvalue\fR adds the specified
+key-value option to the port or overrides an existing key's value.  An
+\fIoption\fR of the form \fIkey\fB=\fR, that is, without a value,
+deletes the key-value named \fIkey\fR.  The type of a port cannot be
+changed, so \fBtype=\fItype\fR is only allowed if \fItype\fR is the
+port's existing type.
 .TP
 \fBdel\-if \fIdp netdev\fR...
 Removes each \fInetdev\fR from the list of network devices datapath
