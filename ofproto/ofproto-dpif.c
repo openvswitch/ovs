@@ -147,6 +147,7 @@ struct ofbundle {
 };
 
 static void bundle_remove(struct ofport *);
+static void bundle_update(struct ofbundle *);
 static void bundle_destroy(struct ofbundle *);
 static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
@@ -760,6 +761,10 @@ port_reconfigured(struct ofport *port_, ovs_be32 old_config)
     if (changed & htonl(OFPPC_NO_RECV | OFPPC_NO_RECV_STP |
                         OFPPC_NO_FWD | OFPPC_NO_FLOOD)) {
         ofproto->need_revalidate = true;
+
+        if (changed & htonl(OFPPC_NO_FLOOD) && port->bundle) {
+            bundle_update(port->bundle);
+        }
     }
 }
 
@@ -871,6 +876,20 @@ bundle_lookup_multiple(struct ofproto_dpif *ofproto,
 }
 
 static void
+bundle_update(struct ofbundle *bundle)
+{
+    struct ofport_dpif *port;
+
+    bundle->floodable = true;
+    LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
+        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
+            bundle->floodable = false;
+            break;
+        }
+    }
+}
+
+static void
 bundle_del_port(struct ofport_dpif *port)
 {
     struct ofbundle *bundle = port->bundle;
@@ -887,12 +906,7 @@ bundle_del_port(struct ofport_dpif *port)
         bond_slave_unregister(bundle->bond, port);
     }
 
-    bundle->floodable = true;
-    LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
-            bundle->floodable = false;
-        }
-    }
+    bundle_update(bundle);
 }
 
 static bool
