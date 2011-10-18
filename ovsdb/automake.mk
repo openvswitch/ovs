@@ -67,16 +67,13 @@ EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.in \
 	ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
-SUFFIXES += .ovsidl .ovsschema .py
+SUFFIXES += .ovsidl .ovsschema
 OVSDB_IDLC = $(run_python) $(srcdir)/ovsdb/ovsdb-idlc.in
 .ovsidl.c:
 	$(OVSDB_IDLC) c-idl-source $< > $@.tmp
 	mv $@.tmp $@
 .ovsidl.h:
 	$(OVSDB_IDLC) c-idl-header $< > $@.tmp
-	mv $@.tmp $@
-.ovsschema.py:
-	$(OVSDB_IDLC) python-module $< > $@.tmp
 	mv $@.tmp $@
 
 EXTRA_DIST += $(OVSIDL_BUILT)
