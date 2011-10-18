@@ -3886,7 +3886,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
     } else {
         add_sflow_action(ctx);
         do_xlate_actions(in, n_in, ctx);
-        fix_sflow_action(ctx);
 
         if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
                                      ctx->odp_actions->data,
@@ -3895,10 +3894,10 @@ xlate_actions(struct action_xlate_ctx *ctx,
             if (ctx->packet
                 && connmgr_msg_in_hook(ctx->ofproto->up.connmgr, &ctx->flow,
                                        ctx->packet)) {
-                nl_msg_push_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT,
-                                OVSP_LOCAL);
+                compose_output_action(ctx, OVSP_LOCAL);
             }
         }
+        fix_sflow_action(ctx);
     }
 
     return ctx->odp_actions;
