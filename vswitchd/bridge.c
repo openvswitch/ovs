@@ -1990,6 +1990,26 @@ bridge_configure_local_iface_netdev(struct bridge *br,
     }
 }
 
+/* Returns true if 'a' and 'b' are the same except that any number of slashes
+ * in either string are treated as equal to any number of slashes in the other,
+ * e.g. "x///y" is equal to "x/y". */
+static bool
+equal_pathnames(const char *a, const char *b)
+{
+    while (*a == *b) {
+        if (*a == '/') {
+            a += strspn(a, "/");
+            b += strspn(b, "/");
+        } else if (*a == '\0') {
+            return true;
+        } else {
+            a++;
+            b++;
+        }
+    }
+    return false;
+}
+
 static void
 bridge_configure_remotes(struct bridge *br,
                          const struct sockaddr_in *managers, size_t n_managers)
@@ -2036,13 +2056,26 @@ bridge_configure_remotes(struct bridge *br,
         if (!strncmp(c->target, "punix:", 6)
             || !strncmp(c->target, "unix:", 5)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            char *whitelist;
 
-            /* Prevent remote ovsdb-server users from accessing arbitrary Unix
-             * domain sockets and overwriting arbitrary local files. */
-            VLOG_ERR_RL(&rl, "bridge %s: not adding Unix domain socket "
-                        "controller \"%s\" due to possibility for remote "
-                        "exploit", br->name, c->target);
-            continue;
+            whitelist = xasprintf("unix:%s/%s.controller",
+                                  ovs_rundir(), br->name);
+            if (!equal_pathnames(c->target, whitelist)) {
+                /* Prevent remote ovsdb-server users from accessing arbitrary
+                 * Unix domain sockets and overwriting arbitrary local
+                 * files. */
+                VLOG_ERR_RL(&rl, "bridge %s: Not adding Unix domain socket "
+                            "controller \"%s\" due to possibility for remote "
+                            "exploit.  Instead, specify whitelisted \"%s\" or "
+                            "connect to \"unix:%s/%s.mgmt\" (which is always "
+                            "available without special configuration).",
+                            br->name, c->target, whitelist,
+                            ovs_rundir(), br->name);
+                free(whitelist);
+                continue;
+            }
+
+            free(whitelist);
         }
 
         bridge_configure_local_iface_netdev(br, c);
