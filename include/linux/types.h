@@ -29,6 +29,11 @@
 /* With some combinations of kernel and userspace headers, including both
  * <sys/types.h> and <linux/types.h> only works if you do so in that order, so
  * force it.  */
+
+#ifdef __CHECKER__
+#define __CHECK_ENDIAN__
+#endif
+
 #include <sys/types.h>
 #include_next <linux/types.h>
 #else  /* no <linux/types.h> */
