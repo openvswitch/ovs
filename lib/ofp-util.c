@@ -1449,7 +1449,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                         struct ofpbuf *rw_packet)
 {
     int total_len = pin->packet->size;
-    struct ofp_packet_in *opi;
+    struct ofp_packet_in opi;
 
     if (rw_packet) {
         if (pin->send_len < rw_packet->size) {
@@ -1462,13 +1462,14 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     }
 
     /* Add OFPT_PACKET_IN. */
-    opi = ofpbuf_push_zeros(rw_packet, offsetof(struct ofp_packet_in, data));
-    opi->header.version = OFP_VERSION;
-    opi->header.type = OFPT_PACKET_IN;
-    opi->total_len = htons(total_len);
-    opi->in_port = htons(pin->in_port);
-    opi->reason = pin->reason;
-    opi->buffer_id = htonl(pin->buffer_id);
+    memset(&opi, 0, sizeof opi);
+    opi.header.version = OFP_VERSION;
+    opi.header.type = OFPT_PACKET_IN;
+    opi.total_len = htons(total_len);
+    opi.in_port = htons(pin->in_port);
+    opi.reason = pin->reason;
+    opi.buffer_id = htonl(pin->buffer_id);
+    ofpbuf_push(rw_packet, &opi, offsetof(struct ofp_packet_in, data));
     update_openflow_length(rw_packet);
 
     return rw_packet;
