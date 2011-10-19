@@ -2356,17 +2356,6 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct rule *rule;
     int error;
 
-    /* Check for overlap, if requested. */
-    if (fm->flags & OFPFF_CHECK_OVERLAP) {
-        struct classifier *cls;
-
-        FOR_EACH_MATCHING_TABLE (cls, fm->table_id, ofproto) {
-            if (classifier_rule_overlaps(cls, &fm->cr)) {
-                return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
-            }
-        }
-    }
-
     /* Pick table. */
     if (fm->table_id == 0xff) {
         uint8_t table_id;
@@ -2385,6 +2374,12 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         table = &ofproto->tables[fm->table_id];
     } else {
         return ofp_mkerr_nicira(OFPET_FLOW_MOD_FAILED, NXFMFC_BAD_TABLE_ID);
+    }
+
+    /* Check for overlap, if requested. */
+    if (fm->flags & OFPFF_CHECK_OVERLAP
+        && classifier_rule_overlaps(table, &fm->cr)) {
+        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
     }
 
     /* Serialize against pending deletion. */
