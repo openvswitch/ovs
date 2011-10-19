@@ -81,6 +81,8 @@ struct ofproto {
     bool vlans_changed;             /* True if new VLANs are in use. */
 };
 
+void ofproto_init_tables(struct ofproto *, int n_tables);
+
 struct ofproto *ofproto_lookup(const char *name);
 struct ofport *ofproto_get_port(const struct ofproto *, uint16_t ofp_port);
 
@@ -295,14 +297,11 @@ struct ofproto_class {
      *
      * When ->construct() is called, the client does not yet know how many flow
      * tables the datapath supports, so ofproto->n_tables will be 0 and
-     * ofproto->tables will be NULL.  ->construct() should store the number of
-     * flow tables supported by the datapath (between 1 and 255, inclusive)
-     * into '*n_tables'.  After a successful return, the client will initialize
-     * the base 'n_tables' member to '*n_tables' and allocate and initialize
-     * the base 'tables' member as the specified number of empty flow tables.
-     * Each flow table will be initially empty, so ->construct() should delete
-     * flows from the underlying datapath, if necessary, rather than populating
-     * the tables.
+     * ofproto->tables will be NULL.  ->construct() should call
+     * ofproto_init_tables() to allocate and initialize ofproto->n_tables and
+     * ofproto->tables.  Each flow table will be initially empty, so
+     * ->construct() should delete flows from the underlying datapath, if
+     * necessary, rather than populating the tables.
      *
      * Only one ofproto instance needs to be supported for any given datapath.
      * If a datapath is already open as part of one "ofproto", then another
@@ -325,7 +324,7 @@ struct ofproto_class {
      * returns.
      */
     struct ofproto *(*alloc)(void);
-    int (*construct)(struct ofproto *ofproto, int *n_tables);
+    int (*construct)(struct ofproto *ofproto);
     void (*destruct)(struct ofproto *ofproto);
     void (*dealloc)(struct ofproto *ofproto);
 

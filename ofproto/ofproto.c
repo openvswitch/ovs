@@ -298,8 +298,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 {
     const struct ofproto_class *class;
     struct ofproto *ofproto;
-    struct oftable *table;
-    int n_tables;
     int error;
 
     *ofprotop = NULL;
@@ -352,7 +350,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->vlan_bitmap = NULL;
     ofproto->vlans_changed = false;
 
-    error = ofproto->ofproto_class->construct(ofproto, &n_tables);
+    error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s",
                  datapath_name, strerror(error));
@@ -360,12 +358,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         return error;
     }
 
-    assert(n_tables >= 1 && n_tables <= 255);
-    ofproto->n_tables = n_tables;
-    ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
-    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        oftable_init(table);
-    }
+    assert(ofproto->n_tables);
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
     VLOG_INFO("using datapath ID %016"PRIx64, ofproto->datapath_id);
@@ -373,6 +366,21 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 
     *ofprotop = ofproto;
     return 0;
+}
+
+void
+ofproto_init_tables(struct ofproto *ofproto, int n_tables)
+{
+    struct oftable *table;
+
+    assert(!ofproto->n_tables);
+    assert(n_tables >= 1 && n_tables <= 255);
+
+    ofproto->n_tables = n_tables;
+    ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        oftable_init(table);
+    }
 }
 
 void

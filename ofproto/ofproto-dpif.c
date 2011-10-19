@@ -620,7 +620,7 @@ dealloc(struct ofproto *ofproto_)
 }
 
 static int
-construct(struct ofproto *ofproto_, int *n_tablesp)
+construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     const char *name = ofproto->up.name;
@@ -682,9 +682,10 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
 
     hmap_insert(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node,
                 hash_string(ofproto->up.name, 0));
-
-    *n_tablesp = N_TABLES;
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
+
+    ofproto_init_tables(ofproto_, N_TABLES);
+
     return 0;
 }
 
