@@ -327,6 +327,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->sw_desc = xstrdup(DEFAULT_SW_DESC);
     ofproto->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
     ofproto->dp_desc = xstrdup(DEFAULT_DP_DESC);
+    ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
     ofproto->tables = NULL;
@@ -1580,18 +1581,12 @@ static int
 handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofpbuf *buf;
     struct ofp_switch_config *osc;
-    uint16_t flags;
-    bool drop_frags;
-
-    /* Figure out flags. */
-    drop_frags = ofproto->ofproto_class->get_drop_frags(ofproto);
-    flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
+    struct ofpbuf *buf;
 
     /* Send reply. */
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
-    osc->flags = htons(flags);
+    osc->flags = htons(ofproto->frag_handling);
     osc->miss_send_len = htons(ofconn_get_miss_send_len(ofconn));
     ofconn_send_reply(ofconn, buf);
 
@@ -1604,19 +1599,20 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     uint16_t flags = ntohs(osc->flags);
 
-    if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
-        && ofconn_get_role(ofconn) != NX_ROLE_SLAVE) {
-        switch (flags & OFPC_FRAG_MASK) {
-        case OFPC_FRAG_NORMAL:
-            ofproto->ofproto_class->set_drop_frags(ofproto, false);
-            break;
-        case OFPC_FRAG_DROP:
-            ofproto->ofproto_class->set_drop_frags(ofproto, true);
-            break;
-        default:
-            VLOG_WARN_RL(&rl, "requested bad fragment mode (flags=%"PRIx16")",
-                         osc->flags);
-            break;
+    if (ofconn_get_type(ofconn) != OFCONN_PRIMARY
+        || ofconn_get_role(ofconn) != NX_ROLE_SLAVE) {
+        enum ofp_config_flags cur = ofproto->frag_handling;
+        enum ofp_config_flags next = flags & OFPC_FRAG_MASK;
+
+        assert((cur & OFPC_FRAG_MASK) == cur);
+        if (cur != next) {
+            if (ofproto->ofproto_class->set_frag_handling(ofproto, next)) {
+                ofproto->frag_handling = next;
+            } else {
+                VLOG_WARN_RL(&rl, "%s: unsupported fragment handling mode %s",
+                             ofproto->name,
+                             ofputil_frag_handling_to_string(next));
+            }
         }
     }
 

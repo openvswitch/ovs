@@ -99,7 +99,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -108,9 +108,10 @@ ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
     wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET);
 
-    if (ofpfw & OFPFW_NW_TOS) {
-        wc->wildcards |= FWW_NW_TOS;
+    if (!(ofpfw & OFPFW_NW_TOS)) {
+        wc->tos_frag_mask |= IP_DSCP_MASK;
     }
+
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
 
@@ -151,7 +152,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     rule->flow.tp_dst = match->tp_dst;
     memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
     memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
-    rule->flow.nw_tos = match->nw_tos;
+    rule->flow.tos_frag = match->nw_tos & IP_DSCP_MASK;
     rule->flow.nw_proto = match->nw_proto;
 
     /* Translate VLANs. */
@@ -190,7 +191,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     ofpfw = (OVS_FORCE uint32_t) (wc->wildcards & WC_INVARIANTS);
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
-    if (wc->wildcards & FWW_NW_TOS) {
+    if (!(wc->tos_frag_mask & IP_DSCP_MASK)) {
         ofpfw |= OFPFW_NW_TOS;
     }
 
@@ -224,7 +225,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
     match->nw_src = rule->flow.nw_src;
     match->nw_dst = rule->flow.nw_dst;
-    match->nw_tos = rule->flow.nw_tos;
+    match->nw_tos = rule->flow.tos_frag & IP_DSCP_MASK;
     match->nw_proto = rule->flow.nw_proto;
     match->tp_src = rule->flow.tp_src;
     match->tp_dst = rule->flow.tp_dst;
@@ -790,7 +791,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -815,6 +816,11 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 
     /* Only NXM supports matching tun_id. */
     if (wc->tun_id_mask != htonll(0)) {
+        return NXFF_NXM;
+    }
+
+    /* Only NXM supports matching fragments. */
+    if (wc->tos_frag_mask & FLOW_FRAG_MASK) {
         return NXFF_NXM;
     }
 
@@ -1932,6 +1938,36 @@ make_echo_reply(const struct ofp_header *rq)
     return out;
 }
 
+const char *
+ofputil_frag_handling_to_string(enum ofp_config_flags flags)
+{
+    switch (flags & OFPC_FRAG_MASK) {
+    case OFPC_FRAG_NORMAL:   return "normal";
+    case OFPC_FRAG_DROP:     return "drop";
+    case OFPC_FRAG_REASM:    return "reassemble";
+    case OFPC_FRAG_NX_MATCH: return "nx-match";
+    }
+
+    NOT_REACHED();
+}
+
+bool
+ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
+{
+    if (!strcasecmp(s, "normal")) {
+        *flags = OFPC_FRAG_NORMAL;
+    } else if (!strcasecmp(s, "drop")) {
+        *flags = OFPC_FRAG_DROP;
+    } else if (!strcasecmp(s, "reassemble")) {
+        *flags = OFPC_FRAG_REASM;
+    } else if (!strcasecmp(s, "nx-match")) {
+        *flags = OFPC_FRAG_NX_MATCH;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an ofp_mkerr() return code. */
@@ -2401,7 +2437,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         MAY_NW_ADDR     = 1 << 0, /* nw_src, nw_dst */
         MAY_TP_ADDR     = 1 << 1, /* tp_src, tp_dst */
         MAY_NW_PROTO    = 1 << 2, /* nw_proto */
-        MAY_NW_TOS      = 1 << 3, /* nw_tos */
+        MAY_TOS_FRAG    = 1 << 3, /* tos_frag */
         MAY_ARP_SHA     = 1 << 4, /* arp_sha */
         MAY_ARP_THA     = 1 << 5, /* arp_tha */
         MAY_IPV6_ADDR   = 1 << 6, /* ipv6_src, ipv6_dst */
@@ -2412,7 +2448,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
 
     /* Figure out what fields may be matched. */
     if (rule->flow.dl_type == htons(ETH_TYPE_IP)) {
-        may_match = MAY_NW_PROTO | MAY_NW_TOS | MAY_NW_ADDR;
+        may_match = MAY_NW_PROTO | MAY_TOS_FRAG | MAY_NW_ADDR;
         if (rule->flow.nw_proto == IPPROTO_TCP ||
             rule->flow.nw_proto == IPPROTO_UDP ||
             rule->flow.nw_proto == IPPROTO_ICMP) {
@@ -2420,7 +2456,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         }
     } else if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)
                && flow_format == NXFF_NXM) {
-        may_match = MAY_NW_PROTO | MAY_NW_TOS | MAY_IPV6_ADDR;
+        may_match = MAY_NW_PROTO | MAY_TOS_FRAG | MAY_IPV6_ADDR;
         if (rule->flow.nw_proto == IPPROTO_TCP ||
             rule->flow.nw_proto == IPPROTO_UDP) {
             may_match |= MAY_TP_ADDR;
@@ -2452,8 +2488,8 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
     if (!(may_match & MAY_NW_PROTO)) {
         wc.wildcards |= FWW_NW_PROTO;
     }
-    if (!(may_match & MAY_NW_TOS)) {
-        wc.wildcards |= FWW_NW_TOS;
+    if (!(may_match & MAY_TOS_FRAG)) {
+        wc.tos_frag_mask = 0;
     }
     if (!(may_match & MAY_ARP_SHA)) {
         wc.wildcards |= FWW_ARP_SHA;

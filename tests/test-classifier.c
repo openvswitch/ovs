@@ -55,7 +55,7 @@
     CLS_FIELD(FWW_DL_SRC,                 dl_src,      DL_SRC)      \
     CLS_FIELD(FWW_DL_DST | FWW_ETH_MCAST, dl_dst,      DL_DST)      \
     CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
-    CLS_FIELD(FWW_NW_TOS,                 nw_tos,      NW_TOS)
+    CLS_FIELD(0,                          tos_frag,    TOS_FRAG)
 
 /* Field indexes.
  *
@@ -203,6 +203,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
                    & wild->wc.vlan_tci_mask);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             eq = !((fixed->tun_id ^ wild->flow.tun_id) & wild->wc.tun_id_mask);
+        } else if (f_idx == CLS_F_IDX_TOS_FRAG) {
+            eq = !((fixed->tos_frag ^ wild->flow.tos_frag)
+                   & wild->wc.tos_frag_mask);
         } else {
             NOT_REACHED();
         }
@@ -263,7 +266,7 @@ static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
                                       { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
 static uint8_t nw_proto_values[] = { IPPROTO_TCP, IPPROTO_ICMP };
-static uint8_t nw_tos_values[] = { 49, 0 };
+static uint8_t tos_frag_values[] = { 48, 0 };
 
 static void *values[CLS_N_FIELDS][2];
 
@@ -297,8 +300,8 @@ init_values(void)
     values[CLS_F_IDX_NW_PROTO][0] = &nw_proto_values[0];
     values[CLS_F_IDX_NW_PROTO][1] = &nw_proto_values[1];
 
-    values[CLS_F_IDX_NW_TOS][0] = &nw_tos_values[0];
-    values[CLS_F_IDX_NW_TOS][1] = &nw_tos_values[1];
+    values[CLS_F_IDX_TOS_FRAG][0] = &tos_frag_values[0];
+    values[CLS_F_IDX_TOS_FRAG][1] = &tos_frag_values[1];
 
     values[CLS_F_IDX_TP_SRC][0] = &tp_src_values[0];
     values[CLS_F_IDX_TP_SRC][1] = &tp_src_values[1];
@@ -318,7 +321,7 @@ init_values(void)
 #define N_DL_SRC_VALUES ARRAY_SIZE(dl_src_values)
 #define N_DL_DST_VALUES ARRAY_SIZE(dl_dst_values)
 #define N_NW_PROTO_VALUES ARRAY_SIZE(nw_proto_values)
-#define N_NW_TOS_VALUES ARRAY_SIZE(nw_tos_values)
+#define N_TOS_FRAG_VALUES ARRAY_SIZE(tos_frag_values)
 
 #define N_FLOW_VALUES (N_NW_SRC_VALUES *        \
                        N_NW_DST_VALUES *        \
@@ -331,7 +334,7 @@ init_values(void)
                        N_DL_SRC_VALUES *        \
                        N_DL_DST_VALUES *        \
                        N_NW_PROTO_VALUES *      \
-                       N_NW_TOS_VALUES)
+                       N_TOS_FRAG_VALUES)
 
 static unsigned int
 get_value(unsigned int *x, unsigned n_values)
@@ -367,7 +370,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         memcpy(flow.dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
                ETH_ADDR_LEN);
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
-        flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
+        flow.tos_frag = tos_frag_values[get_value(&x, N_TOS_FRAG_VALUES)];
 
         cr0 = classifier_lookup(cls, &flow);
         cr1 = tcls_lookup(tcls, &flow);
@@ -465,6 +468,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             rule->cls_rule.wc.tun_id_mask = htonll(UINT64_MAX);
+        } else if (f_idx == CLS_F_IDX_TOS_FRAG) {
+            rule->cls_rule.wc.tos_frag_mask = UINT8_MAX;
         } else {
             NOT_REACHED();
         }

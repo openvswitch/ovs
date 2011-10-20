@@ -51,6 +51,7 @@ struct ofproto {
     char *sw_desc;              /* Software version. */
     char *serial_desc;          /* Serial number. */
     char *dp_desc;              /* Datapath description. */
+    enum ofp_config_flags frag_handling; /* One of OFPC_*.  */
 
     /* Datapath. */
     struct hmap ports;          /* Contains "struct ofport"s. */
@@ -80,7 +81,6 @@ struct ofport *ofproto_get_port(const struct ofproto *, uint16_t ofp_port);
     for ((CLS) = (OFPROTO)->tables;                         \
          (CLS) < &(OFPROTO)->tables[(OFPROTO)->n_tables];   \
          (CLS)++)
-
 
 /* An OpenFlow port within a "struct ofproto".
  *
@@ -807,14 +807,36 @@ struct ofproto_class {
      * rule. */
     void (*rule_modify_actions)(struct rule *rule);
 
-    /* These functions implement the OpenFlow IP fragment handling policy.  By
-     * default ('drop_frags' == false), an OpenFlow switch should treat IP
-     * fragments the same way as other packets (although TCP and UDP port
-     * numbers cannot be determined).  With 'drop_frags' == true, the switch
-     * should drop all IP fragments without passing them through the flow
-     * table. */
-    bool (*get_drop_frags)(struct ofproto *ofproto);
-    void (*set_drop_frags)(struct ofproto *ofproto, bool drop_frags);
+    /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
+     * which takes one of the following values, with the corresponding
+     * meanings:
+     *
+     *  - OFPC_FRAG_NORMAL: The switch should treat IP fragments the same way
+     *    as other packets, omitting TCP and UDP port numbers (always setting
+     *    them to 0).
+     *
+     *  - OFPC_FRAG_DROP: The switch should drop all IP fragments without
+     *    passing them through the flow table.
+     *
+     *  - OFPC_FRAG_REASM: The switch should reassemble IP fragments before
+     *    passing packets through the flow table.
+     *
+     *  - OFPC_FRAG_NX_MATCH (a Nicira extension): Similar to OFPC_FRAG_NORMAL,
+     *    except that TCP and UDP port numbers should be included in fragments
+     *    with offset 0.
+     *
+     * Implementations are not required to support every mode.
+     * OFPC_FRAG_NORMAL is the default mode when an ofproto is created.
+     *
+     * At the time of the call to ->set_frag_handling(), the current mode is
+     * available in 'ofproto->frag_handling'.  ->set_frag_handling() returns
+     * true if the requested mode was set, false if it is not supported.
+     *
+     * Upon successful return, the caller changes 'ofproto->frag_handling' to
+     * reflect the new mode.
+     */
+    bool (*set_frag_handling)(struct ofproto *ofproto,
+                              enum ofp_config_flags frag_handling);
 
     /* Implements the OpenFlow OFPT_PACKET_OUT command.  The datapath should
      * execute the 'n_actions' in the 'actions' array on 'packet'.

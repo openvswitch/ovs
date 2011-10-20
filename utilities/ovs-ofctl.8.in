@@ -92,6 +92,39 @@ spanning tree protocol is not in use.
 .
 .RE
 .
+.IP "\fBget\-frags \fIswitch\fR"
+Prints \fIswitch\fR's fragment handling mode.  See \fBset\-frags\fR,
+below, for a description of each fragment handling mode.
+.IP
+The \fBshow\fR command also prints the fragment handling mode among
+its other output.
+.
+.IP "\fBset\-frags \fIswitch frag_mode\fR"
+Configures \fIswitch\fR's treatment of IPv4 and IPv6 fragments.  The
+choices for \fIfrag_mode\fR are:
+.RS
+.IP "\fBnormal\fR"
+Fragments pass through the flow table like non-fragmented packets.
+The TCP ports, UDP ports, and ICMP type and code fields are always set
+to 0, even for fragments where that information would otherwise be
+available (fragments with offset 0).  This is the default fragment
+handling mode for an OpenFlow switch.
+.IP "\fBdrop\fR"
+Fragments are dropped without passing through the flow table.
+.IP "\fBreassemble\fR"
+The switch reassembles fragments into full IP packets before passing
+them through the flow table.  Open vSwitch does not implement this
+fragment handling mode.
+.IP "\fBnx\-match\fR"
+Fragments pass through the flow table like non-fragmented packets.
+The TCP ports, UDP ports, and ICMP type and code fields are available
+for matching for fragments with offset 0, and set to 0 in fragments
+with nonzero offset.  This mode is a Nicira extension.
+.RE
+.IP
+See the description of \fBip_frag\fR, below, for a way to match on
+whether a packet is a fragment and on its fragment offset.
+.
 .TP
 \fBdump\-flows \fIswitch \fR[\fIflows\fR]
 Prints to the console all flow entries in \fIswitch\fR's
@@ -475,6 +508,27 @@ Match packets with no 802.1Q header or tagged with VLAN 0 and priority
 .IP
 Some of these matching possibilities can also be achieved with
 \fBdl_vlan\fR and \fBdl_vlan_pcp\fR.
+.
+.IP \fBip_frag=\fIfrag_type\fR
+When \fBdl_type\fR specifies IP or IPv6, \fIfrag_type\fR
+specifies what kind of IP fragments or non-fragments to match.  The
+following values of \fIfrag_type\fR are supported:
+.RS
+.IP "\fBno\fR"
+Matches only non-fragmented packets.
+.IP "\fByes\fR"
+Matches all fragments.
+.IP "\fBfirst\fR"
+Matches only fragments with offset 0.
+.IP "\fBlater\fR"
+Matches only fragments with nonzero offset.
+.IP "\fBnot_later\fR"
+Matches non-fragmented packets and fragments with zero offset.
+.RE
+.IP
+The \fBip_frag\fR match type is likely to be most useful in
+\fBnx\-match\fR mode.  See the description of the \fBset\-frags\fR
+command, above, for more details.
 .
 .IP \fBarp_sha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
 .IQ \fBarp_tha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR

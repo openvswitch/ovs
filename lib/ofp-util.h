@@ -277,6 +277,9 @@ struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
                                           uint16_t in_port, uint16_t out_port);
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
+
+const char *ofputil_frag_handling_to_string(enum ofp_config_flags);
+bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
 
 /* Actions. */
 

@@ -81,12 +81,10 @@ struct dp_netdev {
     int open_cnt;
     bool destroyed;
 
-    bool drop_frags;            /* Drop all IP fragments, if true. */
     struct dp_netdev_queue queues[N_QUEUES];
     struct hmap flow_table;     /* Flow table. */
 
     /* Statistics. */
-    long long int n_frags;      /* Number of dropped IP fragments. */
     long long int n_hit;        /* Number of flow table matches. */
     long long int n_missed;     /* Number of flow table misses. */
     long long int n_lost;       /* Number of misses not passed to client. */
@@ -198,7 +196,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->class = class;
     dp->name = xstrdup(name);
     dp->open_cnt = 0;
-    dp->drop_frags = false;
     for (i = 0; i < N_QUEUES; i++) {
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
@@ -302,26 +299,9 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     stats->n_flows = hmap_count(&dp->flow_table);
-    stats->n_frags = dp->n_frags;
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
     stats->n_lost = dp->n_lost;
-    return 0;
-}
-
-static int
-dpif_netdev_get_drop_frags(const struct dpif *dpif, bool *drop_fragsp)
-{
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-    *drop_fragsp = dp->drop_frags;
-    return 0;
-}
-
-static int
-dpif_netdev_set_drop_frags(struct dpif *dpif, bool drop_frags)
-{
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-    dp->drop_frags = drop_frags;
     return 0;
 }
 
@@ -1001,11 +981,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     if (packet->size < ETH_HEADER_LEN) {
         return;
     }
-    if (flow_extract(packet, 0, port->port_no, &key) && dp->drop_frags) {
-        dp->n_frags++;
-        return;
-    }
-
+    flow_extract(packet, 0, port->port_no, &key);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         dp_netdev_flow_used(flow, &key, packet);
@@ -1364,8 +1340,6 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_run,
     dpif_netdev_wait,
     dpif_netdev_get_stats,
-    dpif_netdev_get_drop_frags,
-    dpif_netdev_set_drop_frags,
     dpif_netdev_port_add,
     dpif_netdev_port_del,
     dpif_netdev_port_query_by_number,

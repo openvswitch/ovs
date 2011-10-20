@@ -17,6 +17,14 @@ Post-v1.2.0
         new NXAST_RESUBMIT_TABLE action can look up in additional
         tables.  Tables 128 and above are reserved for use by the
         switch itself; please use only tables 0 through 127.
+    - Fragment handling extensions:
+      - New OFPC_FRAG_NX_MATCH fragment handling mode, in which L4
+        fields are made available for matching in fragments with
+        offset 0.
+      - New NXM_NX_IP_FRAG match field for matching IP fragments (usable
+        via "ip_frag" in ovs-ofctl).
+      - New ovs-ofctl "get-frags" and "set-frags" commands to get and set
+        fragment handling policy.
     - CAPWAP tunneling now supports an extension to transport a 64-key.  By
       default it remains compatible with the old version and other
       standards-based implementations.

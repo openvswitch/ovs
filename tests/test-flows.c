@@ -80,8 +80,11 @@ main(int argc OVS_UNUSED, char *argv[])
             printf("Packet:\n");
             ofp_print_packet(stdout, packet->data, packet->size, packet->size);
             ovs_hex_dump(stdout, packet->data, packet->size, 0, true);
+            cls_rule_print(&rule);
             printf("Expected flow:\n%s\n", exp_s);
             printf("Actually extracted flow:\n%s\n", got_s);
+            ovs_hex_dump(stdout, &expected_match, sizeof expected_match, 0, false);
+            ovs_hex_dump(stdout, &extracted_match, sizeof extracted_match, 0, false);
             printf("\n");
             free(exp_s);
             free(got_s);

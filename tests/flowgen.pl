@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Copyright (c) 2009, 2010 Nicira Networks.
+# Copyright (c) 2009, 2010, 2011 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ sub output {
         } else {
             die;
         }
-        if ($attrs{IP_FRAGMENT} ne 'no') {
+        if ($attrs{IP_FRAGMENT} ne 'no' && $attrs{IP_FRAGMENT} ne 'first') {
             $flow{TP_SRC} = $flow{TP_DST} = 0;
         }
     } elsif ($attrs{DL_TYPE} eq 'non-ip') {
@@ -158,14 +158,14 @@ sub output {
 
             if ($attrs{TP_PROTO} =~ '^TCP') {
                 my $tcp = pack('nnNNnnnn',
-                               $flow{TP_SRC},           # source port
-                               $flow{TP_DST},           # dest port
-                               87123455,                # seqno
-                               712378912,               # ackno
+                               $flow{TP_SRC},     # source port
+                               $flow{TP_DST},     # dest port
+                               87123455,          # seqno
+                               712378912,         # ackno
                                (5 << 12) | 0x02 | 0x10, # hdrlen, SYN, ACK
                                5823,                    # window size
                                18923,                   # checksum
-                               12893);                  # urgent pointer
+                               12893); # urgent pointer
                 if ($attrs{TP_PROTO} eq 'TCP+options') {
                     substr($tcp, 12, 2) = pack('n', (6 << 12) | 0x02 | 0x10);
                     $tcp .= pack('CCn', 2, 4, 1975); # MSS option
@@ -179,17 +179,16 @@ sub output {
                 $ip .= $udp;
             } elsif ($attrs{TP_PROTO} eq 'ICMP') {
                 $ip .= pack('CCnnn',
-                            8,    # echo request
-                            0,    # code
-                            0,    # checksum
-                            736,  # identifier
-                            931); # sequence number
+                            8,        # echo request
+                            0,        # code
+                            0,        # checksum
+                            736,      # identifier
+                            931);     # sequence number
             } elsif ($attrs{TP_PROTO} eq 'other') {
                 $ip .= 'other header';
             } else {
                 die;
             }
-
             substr($ip, 2, 2) = pack('n', length($ip));
             $packet .= $ip;
         }

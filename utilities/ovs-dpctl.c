@@ -371,12 +371,9 @@ show_dpif(struct dpif *dpif)
 
     printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
-        printf("\tlookups: frags:%"PRIu64, stats.n_frags);
-        printf(" hit:%"PRIu64, stats.n_hit);
-        printf(" missed:%"PRIu64, stats.n_missed);
-        printf(" lost:%"PRIu64"\n", stats.n_lost);
-
-        printf("\tflows: %"PRIu64"\n", stats.n_flows);
+        printf("\tlookups: hit:%"PRIu64" missed:%"PRIu64" lost:%"PRIu64"\n"
+               "\tflows: %"PRIu64"\n",
+               stats.n_hit, stats.n_missed, stats.n_lost, stats.n_flows);
     }
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
         printf("\tport %u: %s", dpif_port.port_no, dpif_port.name);

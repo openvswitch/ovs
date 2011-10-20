@@ -182,10 +182,17 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_TOS, "nw_tos", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_NW_TOS,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_IP_ANY,
         NXM_OF_IP_TOS,
+    }, {
+        MFF_IP_FRAG, "ip_frag", NULL,
+        1, 2,
+        MFM_FULLY, 0,
+        MFS_FRAG,
+        MFP_IP_ANY,
+        NXM_NX_IP_FRAG,
     },
 
     {
@@ -347,7 +354,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_TOS:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -407,6 +413,11 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IPV6_DST:
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
 
+    case MFF_IP_TOS:
+        return !(wc->tos_frag_mask & IP_DSCP_MASK);
+    case MFF_IP_FRAG:
+        return !(wc->tos_frag_mask & FLOW_FRAG_MASK);
+
     case MFF_ARP_SPA:
         return !wc->nw_src_mask;
     case MFF_ARP_TPA:
@@ -433,7 +444,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_TOS:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -502,6 +512,13 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_IPV6_DST:
         mask->ipv6 = wc->ipv6_dst_mask;
+        break;
+
+    case MFF_IP_TOS:
+        mask->u8 = wc->tos_frag_mask & IP_DSCP_MASK;
+        break;
+    case MFF_IP_FRAG:
+        mask->u8 = wc->tos_frag_mask & FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_SPA:
@@ -666,7 +683,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
         return true;
 
     case MFF_IP_TOS:
-        return !(value->u8 & 0x03);
+        return !(value->u8 & ~IP_DSCP_MASK);
+    case MFF_IP_FRAG:
+        return !(value->u8 & ~FLOW_FRAG_MASK);
 
     case MFF_ARP_OP:
         return !(value->be16 & htons(0xff00));
@@ -764,7 +783,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_IP_TOS:
-        value->u8 = flow->nw_tos;
+        value->u8 = flow->tos_frag & IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_FRAG:
+        value->u8 = flow->tos_frag & FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
@@ -908,6 +931,10 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_IP_TOS:
         cls_rule_set_nw_tos(rule, value->u8);
+        break;
+
+    case MFF_IP_FRAG:
+        cls_rule_set_frag(rule, value->u8);
         break;
 
     case MFF_ARP_OP:
@@ -1065,8 +1092,13 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_TOS:
-        rule->wc.wildcards |= FWW_NW_TOS;
-        rule->flow.nw_tos = 0;
+        rule->wc.tos_frag_mask |= IP_DSCP_MASK;
+        rule->flow.tos_frag &= ~IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_FRAG:
+        rule->wc.tos_frag_mask |= FLOW_FRAG_MASK;
+        rule->flow.tos_frag &= ~FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
@@ -1207,6 +1239,10 @@ mf_set(const struct mf_field *mf,
 
     case MFF_IPV6_DST:
         cls_rule_set_ipv6_dst_masked(rule, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_IP_FRAG:
+        cls_rule_set_frag_masked(rule, value->u8, mask->u8);
         break;
 
     case MFF_ARP_SPA:
@@ -1359,6 +1395,10 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
 
     case MFF_IP_TOS:
         value->u8 &= ~0x03;
+        break;
+
+    case MFF_IP_FRAG:
+        value->u8 &= FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
@@ -1524,6 +1564,49 @@ mf_from_ofp_port_string(const struct mf_field *mf, const char *s,
     }
 }
 
+struct frag_handling {
+    const char *name;
+    uint8_t mask;
+    uint8_t value;
+};
+
+static const struct frag_handling all_frags[] = {
+#define A FLOW_FRAG_ANY
+#define L FLOW_FRAG_LATER
+    /* name               mask  value */
+
+    { "no",               A|L,  0     },
+    { "first",            A|L,  A     },
+    { "later",            A|L,  A|L   },
+
+    { "no",               A,    0     },
+    { "yes",              A,    A     },
+
+    { "not_later",        L,    0     },
+    { "later",            L,    L     },
+#undef A
+#undef L
+};
+
+static char *
+mf_from_frag_string(const char *s, uint8_t *valuep, uint8_t *maskp)
+{
+    const struct frag_handling *h;
+
+    for (h = all_frags; h < &all_frags[ARRAY_SIZE(all_frags)]; h++) {
+        if (!strcasecmp(s, h->name)) {
+            /* We force the upper bits of the mask on to make mf_parse_value()
+             * happy (otherwise it will never think it's an exact match.) */
+            *maskp = h->mask | ~FLOW_FRAG_MASK;
+            *valuep = h->value;
+            return NULL;
+        }
+    }
+
+    return xasprintf("%s: unknown fragment type (valid types are \"no\", "
+                     "\"yes\", \"first\", \"later\", \"not_first\"", s);
+}
+
 /* Parses 's', a string value for field 'mf', into 'value' and 'mask'.  Returns
  * NULL if successful, otherwise a malloc()'d string describing the error. */
 char *
@@ -1553,6 +1636,9 @@ mf_parse(const struct mf_field *mf, const char *s,
 
     case MFS_OFP_PORT:
         return mf_from_ofp_port_string(mf, s, &value->be16, &mask->be16);
+
+    case MFS_FRAG:
+        return mf_from_frag_string(s, &value->u8, &mask->u8);
     }
     NOT_REACHED();
 }
@@ -1610,6 +1696,26 @@ mf_format_integer_string(const struct mf_field *mf, const uint8_t *valuep,
     }
 }
 
+static void
+mf_format_frag_string(const uint8_t *valuep, const uint8_t *maskp,
+                      struct ds *s)
+{
+    const struct frag_handling *h;
+    uint8_t value = *valuep;
+    uint8_t mask = *maskp;
+
+    value &= mask;
+    mask &= FLOW_FRAG_MASK;
+
+    for (h = all_frags; h < &all_frags[ARRAY_SIZE(all_frags)]; h++) {
+        if (value == h->value && mask == h->mask) {
+            ds_put_cstr(s, h->name);
+            return;
+        }
+    }
+    ds_put_cstr(s, "<error>");
+}
+
 /* Appends to 's' a string representation of field 'mf' whose value is in
  * 'value' and 'mask'.  'mask' may be NULL to indicate an exact match. */
 void
@@ -1652,6 +1758,10 @@ mf_format(const struct mf_field *mf,
 
     case MFS_IPV6:
         print_ipv6_masked(s, &value->ipv6, mask ? &mask->ipv6 : NULL);
+        break;
+
+    case MFS_FRAG:
+        mf_format_frag_string(&value->u8, &mask->u8, s);
         break;
 
     default:

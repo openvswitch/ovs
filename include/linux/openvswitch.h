@@ -80,9 +80,6 @@ struct ovs_header {
  * not be sent.
  * @OVS_DP_ATTR_STATS: Statistics about packets that have passed through the
  * datapath.  Always present in notifications.
- * @OVS_DP_ATTR_IPV4_FRAGS: One of %OVS_DP_FRAG_*.  Always present in
- * notifications.  May be included in %OVS_DP_NEW or %OVS_DP_SET requests to
- * change the fragment handling policy.
  *
  * These attributes follow the &struct ovs_header within the Generic Netlink
  * payload for %OVS_DP_* commands.
@@ -92,27 +89,12 @@ enum ovs_datapath_attr {
 	OVS_DP_ATTR_NAME,       /* name of dp_ifindex netdev */
 	OVS_DP_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
 	OVS_DP_ATTR_STATS,      /* struct ovs_dp_stats */
-	OVS_DP_ATTR_IPV4_FRAGS,	/* 32-bit enum ovs_datapath_frag */
 	__OVS_DP_ATTR_MAX
 };
 
 #define OVS_DP_ATTR_MAX (__OVS_DP_ATTR_MAX - 1)
 
-/**
- * enum ovs_datapath_frag - policy for handling received IPv4 fragments.
- * @OVS_DP_FRAG_ZERO: Treat IP fragments as IP protocol 0 and transport ports
- * zero.
- * @OVS_DP_FRAG_DROP: Drop IP fragments.  Do not pass them through the flow
- * table or up to userspace.
- */
-enum ovs_datapath_frag {
-	OVS_DP_FRAG_UNSPEC,
-	OVS_DP_FRAG_ZERO,	/* Treat IP fragments as transport port 0. */
-	OVS_DP_FRAG_DROP	/* Drop IP fragments. */
-};
-
 struct ovs_dp_stats {
-    __u64 n_frags;           /* Number of dropped IP fragments. */
     __u64 n_hit;             /* Number of flow table matches. */
     __u64 n_missed;          /* Number of flow table misses. */
     __u64 n_lost;            /* Number of misses not sent to userspace. */
@@ -290,6 +272,24 @@ enum ovs_key_attr {
 
 #define OVS_KEY_ATTR_MAX (__OVS_KEY_ATTR_MAX - 1)
 
+/**
+ * enum ovs_frag_type - IPv4 and IPv6 fragment type
+ * @OVS_FRAG_TYPE_NONE: Packet is not a fragment.
+ * @OVS_FRAG_TYPE_FIRST: Packet is a fragment with offset 0.
+ * @OVS_FRAG_TYPE_LATER: Packet is a fragment with nonzero offset.
+ *
+ * Used as the @ipv4_frag in &struct ovs_key_ipv4 and as @ipv6_frag &struct
+ * ovs_key_ipv6.
+ */
+enum ovs_frag_type {
+	OVS_FRAG_TYPE_NONE,
+	OVS_FRAG_TYPE_FIRST,
+	OVS_FRAG_TYPE_LATER,
+	__OVS_FRAG_TYPE_MAX
+};
+
+#define OVS_FRAG_TYPE_MAX (__OVS_FRAG_TYPE_MAX - 1)
+
 struct ovs_key_ethernet {
 	__u8	 eth_src[6];
 	__u8	 eth_dst[6];
@@ -305,6 +305,7 @@ struct ovs_key_ipv4 {
 	__be32 ipv4_dst;
 	__u8   ipv4_proto;
 	__u8   ipv4_tos;
+	__u8   ipv4_frag;	/* One of OVS_FRAG_TYPE_*. */
 };
 
 struct ovs_key_ipv6 {
@@ -312,6 +313,7 @@ struct ovs_key_ipv6 {
 	__be32 ipv6_dst[4];
 	__u8   ipv6_proto;
 	__u8   ipv6_tos;
+	__u8   ipv6_frag;	/* One of OVS_FRAG_TYPE_*. */
 };
 
 struct ovs_key_tcp {

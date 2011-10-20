@@ -172,6 +172,8 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
+           "  get-frags SWITCH            print fragment handling behavior\n"
+           "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
@@ -351,7 +353,9 @@ dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
 
 /* Sends 'request', which should be a request that only has a reply if an error
  * occurs, and waits for it to succeed or fail.  If an error does occur, prints
- * it and exits with an error. */
+ * it and exits with an error.
+ *
+ * Destroys all of the 'requests'. */
 static void
 transact_multiple_noreply(struct vconn *vconn, struct list *requests)
 {
@@ -372,7 +376,9 @@ transact_multiple_noreply(struct vconn *vconn, struct list *requests)
 
 /* Sends 'request', which should be a request that only has a reply if an error
  * occurs, and waits for it to succeed or fail.  If an error does occur, prints
- * it and exits with an error. */
+ * it and exits with an error.
+ *
+ * Destroys 'request'. */
 static void
 transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 {
@@ -381,6 +387,44 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
     list_init(&requests);
     list_push_back(&requests, &request->list_node);
     transact_multiple_noreply(vconn, &requests);
+}
+
+static void
+fetch_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
+{
+    struct ofp_switch_config *config;
+    struct ofp_header *header;
+    struct ofpbuf *request;
+    struct ofpbuf *reply;
+
+    make_openflow(sizeof(struct ofp_header), OFPT_GET_CONFIG_REQUEST,
+                  &request);
+    run(vconn_transact(vconn, request, &reply),
+        "talking to %s", vconn_get_name(vconn));
+
+    header = reply->data;
+    if (header->type != OFPT_GET_CONFIG_REPLY ||
+        header->length != htons(sizeof *config)) {
+        ovs_fatal(0, "%s: bad reply to config request", vconn_get_name(vconn));
+    }
+
+    config = reply->data;
+    *config_ = *config;
+}
+
+static void
+set_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
+{
+    struct ofp_switch_config *config;
+    struct ofp_header save_header;
+    struct ofpbuf *request;
+
+    config = make_openflow(sizeof *config, OFPT_SET_CONFIG, &request);
+    save_header = config->header;
+    *config = *config_;
+    config->header = save_header;
+
+    transact_noreply(vconn, request);
 }
 
 static void
@@ -720,13 +764,11 @@ do_monitor(int argc, char *argv[])
 
     open_vconn(argv[1], &vconn);
     if (argc > 2) {
-        int miss_send_len = atoi(argv[2]);
-        struct ofp_switch_config *osc;
-        struct ofpbuf *buf;
+        struct ofp_switch_config config;
 
-        osc = make_openflow(sizeof *osc, OFPT_SET_CONFIG, &buf);
-        osc->miss_send_len = htons(miss_send_len);
-        transact_noreply(vconn, buf);
+        fetch_switch_config(vconn, &config);
+        config.miss_send_len = htons(atoi(argv[2]));
+        set_switch_config(vconn, &config);
     }
     monitor_vconn(vconn);
 }
@@ -803,6 +845,51 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
 
     open_vconn(argv[1], &vconn);
     transact_noreply(vconn, request);
+    vconn_close(vconn);
+}
+
+static void
+do_get_frags(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofp_switch_config config;
+    struct vconn *vconn;
+
+    open_vconn(argv[1], &vconn);
+    fetch_switch_config(vconn, &config);
+    puts(ofputil_frag_handling_to_string(ntohs(config.flags)));
+    vconn_close(vconn);
+}
+
+static void
+do_set_frags(int argc OVS_UNUSED, char *argv[])
+{
+    struct ofp_switch_config config;
+    enum ofp_config_flags mode;
+    struct vconn *vconn;
+    ovs_be16 flags;
+
+    if (!ofputil_frag_handling_from_string(argv[2], &mode)) {
+        ovs_fatal(0, "%s: unknown fragment handling mode", argv[2]);
+    }
+
+    open_vconn(argv[1], &vconn);
+    fetch_switch_config(vconn, &config);
+    flags = htons(mode) | (config.flags & htons(~OFPC_FRAG_MASK));
+    if (flags != config.flags) {
+        /* Set the configuration. */
+        config.flags = flags;
+        set_switch_config(vconn, &config);
+
+        /* Then retrieve the configuration to see if it really took.  OpenFlow
+         * doesn't define error reporting for bad modes, so this is all we can
+         * do. */
+        fetch_switch_config(vconn, &config);
+        if (flags != config.flags) {
+            ovs_fatal(0, "%s: setting fragment handling mode failed (this "
+                      "switch probably doesn't support mode \"%s\")",
+                      argv[1], ofputil_frag_handling_to_string(mode));
+        }
+    }
     vconn_close(vconn);
 }
 
@@ -1442,6 +1529,8 @@ static const struct command all_commands[] = {
     { "diff-flows", 2, 2, do_diff_flows },
     { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
+    { "get-frags", 1, 1, do_get_frags },
+    { "set-frags", 2, 2, do_set_frags },
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },

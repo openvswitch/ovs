@@ -61,7 +61,6 @@ int dpif_delete(struct dpif *);
 
 /* Statisticss for a dpif as a whole. */
 struct dpif_dp_stats {
-    uint64_t n_frags;           /* Number of dropped IP fragments. */
     uint64_t n_hit;             /* Number of flow table matches. */
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
@@ -69,8 +68,6 @@ struct dpif_dp_stats {
 };
 int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 
-int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
-int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
 /* Port operations. */
 

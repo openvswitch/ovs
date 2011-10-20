@@ -68,8 +68,8 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * etc.) are protected by RTNL.
  *
  * Writes to other state (flow table modifications, set miscellaneous datapath
- * parameters such as drop frags, etc.) are protected by genl_mutex.  The RTNL
- * lock nests inside genl_mutex.
+ * parameters, etc.) are protected by genl_mutex.  The RTNL lock nests inside
+ * genl_mutex.
  *
  * Reads are protected by RCU.
  *
@@ -84,8 +84,10 @@ EXPORT_SYMBOL(dp_ioctl_hook);
 static LIST_HEAD(dps);
 
 static struct vport *new_vport(const struct vport_parms *);
-static int queue_userspace_packets(struct datapath *, struct sk_buff *,
-				 const struct dp_upcall_info *);
+static int queue_gso_packets(int dp_ifindex, struct sk_buff *,
+			     const struct dp_upcall_info *);
+static int queue_userspace_packet(int dp_ifindex, struct sk_buff *,
+				  const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
 struct datapath *get_dp(int dp_ifindex)
@@ -289,19 +291,12 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	if (!OVS_CB(skb)->flow) {
 		struct sw_flow_key key;
 		int key_len;
-		bool is_frag;
 
 		/* Extract flow from 'skb' into 'key'. */
-		error = flow_extract(skb, p->port_no, &key, &key_len, &is_frag);
+		error = flow_extract(skb, p->port_no, &key, &key_len);
 		if (unlikely(error)) {
 			kfree_skb(skb);
 			return;
-		}
-
-		if (is_frag && dp->drop_frags) {
-			consume_skb(skb);
-			stats_counter = &stats->n_frags;
-			goto out;
 		}
 
 		/* Look up flow. */
@@ -360,8 +355,8 @@ static struct genl_family dp_packet_genl_family = {
 int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 	      const struct dp_upcall_info *upcall_info)
 {
-	struct sk_buff *segs = NULL;
 	struct dp_stats_percpu *stats;
+	int dp_ifindex;
 	int err;
 
 	if (upcall_info->pid == 0) {
@@ -369,30 +364,18 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 		goto err;
 	}
 
+	dp_ifindex = get_dpifindex(dp);
+	if (!dp_ifindex) {
+		err = -ENODEV;
+		goto err;
+	}
+
 	forward_ip_summed(skb, true);
 
-	/* Break apart GSO packets into their component pieces.  Otherwise
-	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
-	if (skb_is_gso(skb)) {
-		segs = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
-		
-		if (IS_ERR(segs)) {
-			err = PTR_ERR(segs);
-			goto err;
-		}
-		skb = segs;
-	}
-
-	err = queue_userspace_packets(dp, skb, upcall_info);
-	if (segs) {
-		struct sk_buff *next;
-		/* Free GSO-segments */
-		do {
-			next = segs->next;
-			kfree_skb(segs);
-		} while ((segs = next) != NULL);
-	}
-
+	if (!skb_is_gso(skb))
+		err = queue_userspace_packet(dp_ifindex, skb, upcall_info);
+	else
+		err = queue_gso_packets(dp_ifindex, skb, upcall_info);
 	if (err)
 		goto err;
 
@@ -408,68 +391,97 @@ err:
 	return err;
 }
 
-/* Send each packet in the 'skb' list to userspace for 'dp' as directed by
- * 'upcall_info'.  There will be only one packet unless we broke up a GSO
- * packet.
- */
-static int queue_userspace_packets(struct datapath *dp, struct sk_buff *skb,
-				   const struct dp_upcall_info *upcall_info)
+static int queue_gso_packets(int dp_ifindex, struct sk_buff *skb,
+			     const struct dp_upcall_info *upcall_info)
 {
-	int dp_ifindex;
+	struct dp_upcall_info later_info;
+	struct sw_flow_key later_key;
+	struct sk_buff *segs, *nskb;
+	int err;
 
-	dp_ifindex = get_dpifindex(dp);
-	if (!dp_ifindex)
-		return -ENODEV;
+	segs = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
 
+	/* Queue all of the segments. */
+	skb = segs;
 	do {
-		struct ovs_header *upcall;
-		struct sk_buff *user_skb; /* to be queued to userspace */
-		struct nlattr *nla;
-		unsigned int len;
-		int err;
-
-		err = vlan_deaccel_tag(skb);
-		if (unlikely(err))
-			return err;
-
-		if (nla_attr_size(skb->len) > USHRT_MAX)
-			return -EFBIG;
-
-		len = sizeof(struct ovs_header);
-		len += nla_total_size(skb->len);
-		len += nla_total_size(FLOW_BUFSIZE);
-		if (upcall_info->cmd == OVS_PACKET_CMD_ACTION)
-			len += nla_total_size(8);
-
-		user_skb = genlmsg_new(len, GFP_ATOMIC);
-		if (!user_skb)
-			return -ENOMEM;
-
-		upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family,
-					 0, upcall_info->cmd);
-		upcall->dp_ifindex = dp_ifindex;
-
-		nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_KEY);
-		flow_to_nlattrs(upcall_info->key, user_skb);
-		nla_nest_end(user_skb, nla);
-
-		if (upcall_info->userdata)
-			nla_put_u64(user_skb, OVS_PACKET_ATTR_USERDATA,
-				    nla_get_u64(upcall_info->userdata));
-
-		nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
-		if (skb->ip_summed == CHECKSUM_PARTIAL)
-			copy_and_csum_skb(skb, nla_data(nla));
-		else
-			skb_copy_bits(skb, 0, nla_data(nla), skb->len);
-
-		err = genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
+		err = queue_userspace_packet(dp_ifindex, skb, upcall_info);
 		if (err)
-			return err;
+			break;
 
+		if (skb == segs && skb_shinfo(skb)->gso_type & SKB_GSO_UDP) {
+			/* The initial flow key extracted by flow_extract() in
+			 * this case is for a first fragment, so we need to
+			 * properly mark later fragments.
+			 */
+			later_key = *upcall_info->key;
+			later_key.ip.tos_frag &= ~OVS_FRAG_TYPE_MASK;
+			later_key.ip.tos_frag |= OVS_FRAG_TYPE_LATER;
+
+			later_info = *upcall_info;
+			later_info.key = &later_key;
+			upcall_info = &later_info;
+		}
 	} while ((skb = skb->next));
 
-	return 0;
+	/* Free all of the segments. */
+	skb = segs;
+	do {
+		nskb = skb->next;
+		if (err)
+			kfree_skb(skb);
+		else
+			consume_skb(skb);
+	} while ((skb = nskb));
+	return err;
+}
+
+static int queue_userspace_packet(int dp_ifindex, struct sk_buff *skb,
+				  const struct dp_upcall_info *upcall_info)
+{
+	struct ovs_header *upcall;
+	struct sk_buff *user_skb; /* to be queued to userspace */
+	struct nlattr *nla;
+	unsigned int len;
+	int err;
+
+	err = vlan_deaccel_tag(skb);
+	if (unlikely(err))
+		return err;
+
+	if (nla_attr_size(skb->len) > USHRT_MAX)
+		return -EFBIG;
+
+	len = sizeof(struct ovs_header);
+	len += nla_total_size(skb->len);
+	len += nla_total_size(FLOW_BUFSIZE);
+	if (upcall_info->cmd == OVS_PACKET_CMD_ACTION)
+		len += nla_total_size(8);
+
+	user_skb = genlmsg_new(len, GFP_ATOMIC);
+	if (!user_skb)
+		return -ENOMEM;
+
+	upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family,
+			     0, upcall_info->cmd);
+	upcall->dp_ifindex = dp_ifindex;
+
+	nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_KEY);
+	flow_to_nlattrs(upcall_info->key, user_skb);
+	nla_nest_end(user_skb, nla);
+
+	if (upcall_info->userdata)
+		nla_put_u64(user_skb, OVS_PACKET_ATTR_USERDATA,
+			    nla_get_u64(upcall_info->userdata));
+
+	nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
+	if (skb->ip_summed == CHECKSUM_PARTIAL)
+		copy_and_csum_skb(skb, nla_data(nla));
+	else
+		skb_copy_bits(skb, 0, nla_data(nla), skb->len);
+
+	return genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
 }
 
 /* Called with genl_mutex. */
@@ -567,6 +579,11 @@ static int validate_action_key(const struct nlattr *a,
 
 		if (ipv4_key->ipv4_tos & INET_ECN_MASK)
 			return -EINVAL;
+
+		if (ipv4_key->ipv4_frag !=
+		    (flow_key->ip.tos_frag & OVS_FRAG_TYPE_MASK))
+			return -EINVAL;
+
 		break;
 
 	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TCP):
@@ -708,7 +725,6 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	struct sw_flow *flow;
 	struct datapath *dp;
 	struct ethhdr *eth;
-	bool is_frag;
 	int len;
 	int err;
 	int key_len;
@@ -745,7 +761,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(flow))
 		goto err_kfree_skb;
 
-	err = flow_extract(packet, -1, &flow->key, &key_len, &is_frag);
+	err = flow_extract(packet, -1, &flow->key, &key_len);
 	if (err)
 		goto err_flow_put;
 
@@ -818,7 +834,7 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 
 	stats->n_flows = flow_tbl_count(table);
 
-	stats->n_frags = stats->n_hit = stats->n_missed = stats->n_lost = 0;
+	stats->n_hit = stats->n_missed = stats->n_lost = 0;
 	for_each_possible_cpu(i) {
 		const struct dp_stats_percpu *percpu_stats;
 		struct dp_stats_percpu local_stats;
@@ -831,7 +847,6 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 			local_stats = *percpu_stats;
 		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
 
-		stats->n_frags += local_stats.n_frags;
 		stats->n_hit += local_stats.n_hit;
 		stats->n_missed += local_stats.n_missed;
 		stats->n_lost += local_stats.n_lost;
@@ -1231,7 +1246,6 @@ static const struct nla_policy datapath_policy[OVS_DP_ATTR_MAX + 1] = {
 	[OVS_DP_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
 #endif
 	[OVS_DP_ATTR_UPCALL_PID] = { .type = NLA_U32 },
-	[OVS_DP_ATTR_IPV4_FRAGS] = { .type = NLA_U32 },
 };
 
 static struct genl_family dp_datapath_genl_family = {
@@ -1271,9 +1285,6 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 		goto nla_put_failure;
 	get_dp_stats(dp, nla_data(nla));
 
-	NLA_PUT_U32(skb, OVS_DP_ATTR_IPV4_FRAGS,
-		    dp->drop_frags ? OVS_DP_FRAG_DROP : OVS_DP_FRAG_ZERO);
-
 	return genlmsg_end(skb, ovs_header);
 
 nla_put_failure:
@@ -1302,13 +1313,6 @@ static struct sk_buff *ovs_dp_cmd_build_info(struct datapath *dp, u32 pid,
 
 static int ovs_dp_cmd_validate(struct nlattr *a[OVS_DP_ATTR_MAX + 1])
 {
-	if (a[OVS_DP_ATTR_IPV4_FRAGS]) {
-		u32 frags = nla_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]);
-
-		if (frags != OVS_DP_FRAG_ZERO && frags != OVS_DP_FRAG_DROP)
-			return -EINVAL;
-	}
-
 	return CHECK_NUL_STRING(a[OVS_DP_ATTR_NAME], IFNAMSIZ - 1);
 }
 
@@ -1328,13 +1332,6 @@ static struct datapath *lookup_datapath(struct ovs_header *ovs_header, struct nl
 		rcu_read_unlock();
 	}
 	return dp ? dp : ERR_PTR(-ENODEV);
-}
-
-/* Called with genl_mutex. */
-static void change_datapath(struct datapath *dp, struct nlattr *a[OVS_DP_ATTR_MAX + 1])
-{
-	if (a[OVS_DP_ATTR_IPV4_FRAGS])
-		dp->drop_frags = nla_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]) == OVS_DP_FRAG_DROP;
 }
 
 static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
@@ -1376,14 +1373,11 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (!dp->table)
 		goto err_free_dp;
 
-	dp->drop_frags = 0;
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
 	if (!dp->stats_percpu) {
 		err = -ENOMEM;
 		goto err_destroy_table;
 	}
-
-	change_datapath(dp, a);
 
 	/* Set up our datapath device. */
 	parms.name = nla_data(a[OVS_DP_ATTR_NAME]);
@@ -1496,8 +1490,6 @@ static int ovs_dp_cmd_set(struct sk_buff *skb, struct genl_info *info)
 	dp = lookup_datapath(info->userhdr, info->attrs);
 	if (IS_ERR(dp))
 		return PTR_ERR(dp);
-
-	change_datapath(dp, info->attrs);
 
 	reply = ovs_dp_cmd_build_info(dp, info->snd_pid, info->snd_seq, OVS_DP_CMD_NEW);
 	if (IS_ERR(reply)) {

@@ -893,7 +893,6 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		struct sw_flow_key flow_key;
 		struct vport *dst_vport;
 		struct sk_buff *skb;
-		bool is_frag;
 		int err;
 		int flow_key_len;
 		struct sw_flow *flow;
@@ -910,10 +909,10 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		memcpy(skb->data, get_cached_header(cache), cache->len);
 
 		err = flow_extract(skb, dst_vport->port_no, &flow_key,
-				   &flow_key_len, &is_frag);
+				   &flow_key_len);
 
 		consume_skb(skb);
-		if (err || is_frag)
+		if (err)
 			goto done;
 
 		flow = flow_tbl_lookup(rcu_dereference(dst_vport->dp->table),

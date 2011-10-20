@@ -388,33 +388,6 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     return error;
 }
 
-/* Retrieves the current IP fragment handling policy for 'dpif' into
- * '*drop_frags': true indicates that fragments are dropped, false indicates
- * that fragments are treated in the same way as other IP packets (except that
- * the L4 header cannot be read).  Returns 0 if successful, otherwise a
- * positive errno value. */
-int
-dpif_get_drop_frags(const struct dpif *dpif, bool *drop_frags)
-{
-    int error = dpif->dpif_class->get_drop_frags(dpif, drop_frags);
-    if (error) {
-        *drop_frags = false;
-    }
-    log_operation(dpif, "get_drop_frags", error);
-    return error;
-}
-
-/* Changes 'dpif''s treatment of IP fragments to 'drop_frags', whose meaning is
- * the same as for the get_drop_frags member function.  Returns 0 if
- * successful, otherwise a positive errno value. */
-int
-dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
-{
-    int error = dpif->dpif_class->set_drop_frags(dpif, drop_frags);
-    log_operation(dpif, "set_drop_frags", error);
-    return error;
-}
-
 /* Attempts to add 'netdev' as a port on 'dpif'.  If successful, returns 0 and
  * sets '*port_nop' to the new port's port number (if 'port_nop' is non-null).
  * On failure, returns a positive errno value and sets '*port_nop' to

@@ -266,6 +266,24 @@ nxm_put_8(struct ofpbuf *b, uint32_t header, uint8_t value)
 }
 
 static void
+nxm_put_8m(struct ofpbuf *b, uint32_t header, uint8_t value, uint8_t mask)
+{
+    switch (mask) {
+    case 0:
+        break;
+
+    case UINT8_MAX:
+        nxm_put_8(b, header, value);
+        break;
+
+    default:
+        nxm_put_header(b, NXM_MAKE_WILD_HEADER(header));
+        ofpbuf_put(b, &value, sizeof value);
+        ofpbuf_put(b, &mask, sizeof mask);
+    }
+}
+
+static void
 nxm_put_16(struct ofpbuf *b, uint32_t header, ovs_be16 value)
 {
     nxm_put_header(b, header);
@@ -403,6 +421,32 @@ nxm_put_ipv6(struct ofpbuf *b, uint32_t header,
     }
 }
 
+static void
+nxm_put_tos_frag(struct ofpbuf *b, const struct cls_rule *cr)
+{
+    uint8_t tos_frag = cr->flow.tos_frag;
+    uint8_t tos_frag_mask = cr->wc.tos_frag_mask;
+
+    if (tos_frag_mask & IP_DSCP_MASK) {
+        nxm_put_8(b, NXM_OF_IP_TOS, tos_frag & IP_DSCP_MASK);
+    }
+
+    switch (tos_frag_mask & FLOW_FRAG_MASK) {
+    case 0:
+        break;
+
+    case FLOW_FRAG_MASK:
+        /* Output it as exact-match even though only the low 2 bits matter. */
+        nxm_put_8(b, NXM_NX_IP_FRAG, tos_frag & FLOW_FRAG_MASK);
+        break;
+
+    default:
+        nxm_put_8m(b, NXM_NX_IP_FRAG, tos_frag & FLOW_FRAG_MASK,
+                   tos_frag_mask & FLOW_FRAG_MASK);
+        break;
+    }
+}
+
 /* Appends to 'b' the nx_match format that expresses 'cr' (except for
  * 'cr->priority', because priority is not part of nx_match), plus enough
  * zero bytes to pad the nx_match out to a multiple of 8.
@@ -422,7 +466,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 2);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -446,9 +490,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     /* L3. */
     if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
-        if (!(wc & FWW_NW_TOS)) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & 0xfc);
-        }
+        nxm_put_tos_frag(b, cr);
         nxm_put_32m(b, NXM_OF_IP_SRC, flow->nw_src, cr->wc.nw_src_mask);
         nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
 
@@ -488,10 +530,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         }
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
-
-        if (!(wc & FWW_NW_TOS)) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & 0xfc);
-        }
+        nxm_put_tos_frag(b, cr);
         nxm_put_ipv6(b, NXM_NX_IPV6_SRC, &flow->ipv6_src,
                 &cr->wc.ipv6_src_mask);
         nxm_put_ipv6(b, NXM_NX_IPV6_DST, &flow->ipv6_dst,
@@ -1000,7 +1039,10 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
         return ntohs(flow->vlan_tci);
 
     case NFI_NXM_OF_IP_TOS:
-        return flow->nw_tos;
+        return flow->tos_frag & IP_DSCP_MASK;
+
+    case NFI_NXM_NX_IP_FRAG:
+        return flow->tos_frag & FLOW_FRAG_MASK;
 
     case NFI_NXM_OF_IP_PROTO:
     case NFI_NXM_OF_ARP_OP:
@@ -1075,6 +1117,7 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     case NFI_NXM_NX_IPV6_SRC_W:
     case NFI_NXM_NX_IPV6_DST:
     case NFI_NXM_NX_IPV6_DST_W:
+    case NFI_NXM_NX_IP_FRAG_W:
     case NFI_NXM_NX_ND_TARGET:
     case N_NXM_FIELDS:
         NOT_REACHED();
@@ -1146,7 +1189,13 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
 #endif
 
     case NFI_NXM_OF_IP_TOS:
-        flow->nw_tos = new_value & IP_DSCP_MASK;
+        flow->tos_frag &= ~IP_DSCP_MASK;
+        flow->tos_frag |= new_value & IP_DSCP_MASK;
+        break;
+
+    case NFI_NXM_NX_IP_FRAG:
+        flow->tos_frag &= ~FLOW_FRAG_MASK;
+        flow->tos_frag |= new_value & FLOW_FRAG_MASK;
         break;
 
     case NFI_NXM_OF_IP_SRC:
@@ -1188,6 +1237,7 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_NX_IPV6_SRC_W:
     case NFI_NXM_NX_IPV6_DST:
     case NFI_NXM_NX_IPV6_DST_W:
+    case NFI_NXM_NX_IP_FRAG_W:
     case NFI_NXM_NX_ICMPV6_TYPE:
     case NFI_NXM_NX_ICMPV6_CODE:
     case NFI_NXM_NX_ND_TARGET:

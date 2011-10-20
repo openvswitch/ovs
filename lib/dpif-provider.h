@@ -110,16 +110,6 @@ struct dpif_class {
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
-    /* Retrieves 'dpif''s current treatment of IP fragments into '*drop_frags':
-     * true indicates that fragments are dropped, false indicates that
-     * fragments are treated in the same way as other IP packets (except that
-     * the L4 header cannot be read). */
-    int (*get_drop_frags)(const struct dpif *dpif, bool *drop_frags);
-
-    /* Changes 'dpif''s treatment of IP fragments to 'drop_frags', whose
-     * meaning is the same as for the get_drop_frags member function. */
-    int (*set_drop_frags)(struct dpif *dpif, bool drop_frags);
-
     /* Adds 'netdev' as a new port in 'dpif'.  If successful, sets '*port_no'
      * to the new port's port number. */
     int (*port_add)(struct dpif *dpif, struct netdev *netdev,

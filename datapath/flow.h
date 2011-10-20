@@ -20,6 +20,7 @@
 #include <linux/jiffies.h>
 #include <linux/time.h>
 #include <linux/flex_array.h>
+#include <net/inet_ecn.h>
 
 struct sk_buff;
 
@@ -28,6 +29,10 @@ struct sw_flow_actions {
 	u32 actions_len;
 	struct nlattr actions[];
 };
+
+/* Mask for the OVS_FRAG_TYPE_* value in the low 2 bits of ip.tos_frag in
+ * struct sw_flow_key. */
+#define OVS_FRAG_TYPE_MASK INET_ECN_MASK
 
 struct sw_flow_key {
 	struct {
@@ -40,7 +45,8 @@ struct sw_flow_key {
 	} eth;
 	struct {
 		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
-		u8     tos;		/* IP ToS (DSCP field, 6 bits). */
+		u8     tos_frag;	/* IP ToS DSCP in high 6 bits,
+					 * OVS_FRAG_TYPE_* in low 2 bits. */
 	} ip;
 	union {
 		struct {
@@ -123,7 +129,7 @@ void flow_hold(struct sw_flow *);
 void flow_put(struct sw_flow *);
 
 int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
-		 int *key_lenp, bool *is_frag);
+		 int *key_lenp);
 void flow_used(struct sw_flow *, struct sk_buff *);
 u64 flow_used_time(unsigned long flow_jiffies);
 

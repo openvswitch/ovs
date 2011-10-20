@@ -1531,6 +1531,55 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * Masking: Not maskable. */
 #define NXM_NX_ND_TLL      NXM_HEADER  (0x0001, 25, 6)
 
+/* IP fragment information.
+ *
+ * Prereqs:
+ *   NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
+ *
+ * Format: 8-bit value with one of the values 0, 1, or 3, as described below.
+ *
+ * Masking: Fully maskable.
+ *
+ * This field has three possible values:
+ *
+ *   - A packet that is not an IP fragment has value 0.
+ *
+ *   - A packet that is an IP fragment with offset 0 (the first fragment) has
+ *     bit 0 set and thus value 1.
+ *
+ *   - A packet that is an IP fragment with nonzero offset has bits 0 and 1 set
+ *     and thus value 3.
+ *
+ * NX_IP_FRAG_ANY and NX_IP_FRAG_LATER are declared to symbolically represent
+ * the meanings of bits 0 and 1.
+ *
+ * The switch may reject matches against values that can never appear.
+ *
+ * It is important to understand how this field interacts with the OpenFlow IP
+ * fragment handling mode:
+ *
+ *   - In OFPC_FRAG_DROP mode, the OpenFlow switch drops all IP fragments
+ *     before they reach the flow table, so every packet that is available for
+ *     matching will have value 0 in this field.
+ *
+ *   - Open vSwitch does not implement OFPC_FRAG_REASM mode, but if it did then
+ *     IP fragments would be reassembled before they reached the flow table and
+ *     again every packet available for matching would always have value 0.
+ *
+ *   - In OFPC_FRAG_NORMAL mode, all three values are possible, but OpenFlow
+ *     1.0 says that fragments' transport ports are always 0, even for the
+ *     first fragment, so this does not provide much extra information.
+ *
+ *   - In OFPC_FRAG_NX_MATCH mode, all three values are possible.  For
+ *     fragments with offset 0, Open vSwitch makes L4 header information
+ *     available.
+ */
+#define NXM_NX_IP_FRAG     NXM_HEADER  (0x0001, 26, 1)
+#define NXM_NX_IP_FRAG_W   NXM_HEADER_W(0x0001, 26, 1)
+
+/* Bits in the value of NXM_NX_IP_FRAG. */
+#define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */
+#define NX_IP_FRAG_LATER (1 << 1) /* Is this a fragment with nonzero offset? */
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

@@ -117,6 +117,8 @@ bool cls_rule_set_nw_src_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
 void cls_rule_set_nw_dst(struct cls_rule *, ovs_be32);
 bool cls_rule_set_nw_dst_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
 void cls_rule_set_nw_tos(struct cls_rule *, uint8_t);
+void cls_rule_set_frag(struct cls_rule *, uint8_t frag);
+void cls_rule_set_frag_masked(struct cls_rule *, uint8_t frag, uint8_t mask);
 void cls_rule_set_icmp_type(struct cls_rule *, uint8_t);
 void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
 void cls_rule_set_arp_sha(struct cls_rule *, const uint8_t[6]);

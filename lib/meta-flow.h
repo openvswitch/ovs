@@ -68,6 +68,7 @@ enum mf_field_id {
 
     MFF_IP_PROTO,               /* u8 (used for IPv4 or IPv6) */
     MFF_IP_TOS,                 /* u8 (used for IPv4 or IPv6) */
+    MFF_IP_FRAG,                /* u8 (used for IPv4 or IPv6) */
 
     MFF_ARP_OP,                 /* be16 */
     MFF_ARP_SPA,                /* be32 */
@@ -142,7 +143,8 @@ enum mf_string {
     MFS_ETHERNET,
     MFS_IPV4,
     MFS_IPV6,
-    MFS_OFP_PORT                /* An OpenFlow port number or name. */
+    MFS_OFP_PORT,               /* An OpenFlow port number or name. */
+    MFS_FRAG                    /* no, yes, first, later, not_later */
 };
 
 struct mf_field {

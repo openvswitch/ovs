@@ -2955,13 +2955,26 @@ static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
                  uint8_t table_id)
 {
+    struct cls_rule *cls_rule;
+    struct classifier *cls;
+
     if (table_id >= N_TABLES) {
         return NULL;
     }
 
-    return rule_dpif_cast(rule_from_cls_rule(
-                              classifier_lookup(&ofproto->up.tables[table_id],
-                                                flow)));
+    cls = &ofproto->up.tables[table_id];
+    if (flow->tos_frag & FLOW_FRAG_ANY
+        && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
+        /* For OFPC_NORMAL frag_handling, we must pretend that transport ports
+         * are unavailable. */
+        struct flow ofpc_normal_flow = *flow;
+        ofpc_normal_flow.tp_src = htons(0);
+        ofpc_normal_flow.tp_dst = htons(0);
+        cls_rule = classifier_lookup(cls, &ofpc_normal_flow);
+    } else {
+        cls_rule = classifier_lookup(cls, flow);
+    }
+    return rule_dpif_cast(rule_from_cls_rule(cls_rule));
 }
 
 static void
@@ -3363,6 +3376,7 @@ static void
 commit_set_nw_action(const struct flow *flow, struct flow *base,
                      struct ofpbuf *odp_actions)
 {
+    int frag = base->tos_frag & FLOW_FRAG_MASK;
     struct ovs_key_ipv4 ipv4_key;
 
     if (base->dl_type != htons(ETH_TYPE_IP) ||
@@ -3372,16 +3386,19 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
 
     if (base->nw_src == flow->nw_src &&
         base->nw_dst == flow->nw_dst &&
-        base->nw_tos == flow->nw_tos) {
+        base->tos_frag == flow->tos_frag) {
         return;
     }
+
 
     memset(&ipv4_key, 0, sizeof(ipv4_key));
     ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
     ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
-    ipv4_key.ipv4_tos = base->nw_tos = flow->nw_tos;
-
     ipv4_key.ipv4_proto = base->nw_proto;
+    ipv4_key.ipv4_tos = flow->tos_frag & IP_DSCP_MASK;
+    ipv4_key.ipv4_frag = (frag == 0 ? OVS_FRAG_TYPE_NONE
+                          : frag == FLOW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
+                          : OVS_FRAG_TYPE_LATER);
 
     commit_action__(odp_actions, OVS_ACTION_ATTR_SET,
              OVS_KEY_ATTR_IPV4, &ipv4_key, sizeof(ipv4_key));
@@ -3843,7 +3860,8 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPUTIL_OFPAT_SET_NW_TOS:
-            ctx->flow.nw_tos = ia->nw_tos.nw_tos & IP_DSCP_MASK;
+            ctx->flow.tos_frag &= ~IP_DSCP_MASK;
+            ctx->flow.tos_frag |= ia->nw_tos.nw_tos & IP_DSCP_MASK;
             break;
 
         case OFPUTIL_OFPAT_SET_TP_SRC:
@@ -3961,6 +3979,27 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     ctx->odp_actions = ofpbuf_new(512);
     ofpbuf_reserve(ctx->odp_actions, NL_A_U32_SIZE);
+
+    if (ctx->flow.tos_frag & FLOW_FRAG_ANY) {
+        switch (ctx->ofproto->up.frag_handling) {
+        case OFPC_FRAG_NORMAL:
+            /* We must pretend that transport ports are unavailable. */
+            ctx->flow.tp_src = htons(0);
+            ctx->flow.tp_dst = htons(0);
+            break;
+
+        case OFPC_FRAG_DROP:
+            return ctx->odp_actions;
+
+        case OFPC_FRAG_REASM:
+            NOT_REACHED();
+
+        case OFPC_FRAG_NX_MATCH:
+            /* Nothing to do. */
+            break;
+        }
+    }
+
     ctx->tags = 0;
     ctx->may_set_up_flow = true;
     ctx->has_learn = false;
@@ -4702,21 +4741,17 @@ rule_invalidate(const struct rule_dpif *rule)
 }
 
 static bool
-get_drop_frags(struct ofproto *ofproto_)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    bool drop_frags;
-
-    dpif_get_drop_frags(ofproto->dpif, &drop_frags);
-    return drop_frags;
-}
-
-static void
-set_drop_frags(struct ofproto *ofproto_, bool drop_frags)
+set_frag_handling(struct ofproto *ofproto_,
+                  enum ofp_config_flags frag_handling)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    dpif_set_drop_frags(ofproto->dpif, drop_frags);
+    if (frag_handling != OFPC_FRAG_REASM) {
+        ofproto->need_revalidate = true;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 static int
@@ -5056,8 +5091,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_get_stats,
     rule_execute,
     rule_modify_actions,
-    get_drop_frags,
-    set_drop_frags,
+    set_frag_handling,
     packet_out,
     set_netflow,
     get_netflow_ids,

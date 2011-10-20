@@ -79,7 +79,6 @@ struct dpif_linux_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_UPCALL_PID. */
     struct ovs_dp_stats stats;         /* OVS_DP_ATTR_STATS. */
-    enum ovs_datapath_frag ipv4_frags; /* OVS_DP_ATTR_IPV4_FRAGS. */
 };
 
 static void dpif_linux_dp_init(struct dpif_linux_dp *);
@@ -347,7 +346,6 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
 
     error = dpif_linux_dp_get(dpif_, &dp, &buf);
     if (!error) {
-        stats->n_frags  = dp.stats.n_frags;
         stats->n_hit    = dp.stats.n_hit;
         stats->n_missed = dp.stats.n_missed;
         stats->n_lost   = dp.stats.n_lost;
@@ -355,34 +353,6 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
         ofpbuf_delete(buf);
     }
     return error;
-}
-
-static int
-dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
-{
-    struct dpif_linux_dp dp;
-    struct ofpbuf *buf;
-    int error;
-
-    error = dpif_linux_dp_get(dpif_, &dp, &buf);
-    if (!error) {
-        *drop_fragsp = dp.ipv4_frags == OVS_DP_FRAG_DROP;
-        ofpbuf_delete(buf);
-    }
-    return error;
-}
-
-static int
-dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
-{
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_dp dp;
-
-    dpif_linux_dp_init(&dp);
-    dp.cmd = OVS_DP_CMD_SET;
-    dp.dp_ifindex = dpif->dp_ifindex;
-    dp.ipv4_frags = drop_frags ? OVS_DP_FRAG_DROP : OVS_DP_FRAG_ZERO;
-    return dpif_linux_dp_transact(&dp, NULL, NULL);
 }
 
 static int
@@ -1206,8 +1176,6 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_run,
     dpif_linux_wait,
     dpif_linux_get_stats,
-    dpif_linux_get_drop_frags,
-    dpif_linux_set_drop_frags,
     dpif_linux_port_add,
     dpif_linux_port_del,
     dpif_linux_port_query_by_number,
@@ -1540,7 +1508,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
                                 .min_len = sizeof(struct ovs_dp_stats),
                                 .max_len = sizeof(struct ovs_dp_stats),
                                 .optional = true },
-        [OVS_DP_ATTR_IPV4_FRAGS] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *a[ARRAY_SIZE(ovs_datapath_policy)];
@@ -1571,9 +1538,6 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
         memcpy(&dp->stats, nl_attr_get(a[OVS_DP_ATTR_STATS]),
                sizeof dp->stats);
     }
-    if (a[OVS_DP_ATTR_IPV4_FRAGS]) {
-        dp->ipv4_frags = nl_attr_get_u32(a[OVS_DP_ATTR_IPV4_FRAGS]);
-    }
 
     return 0;
 }
@@ -1599,10 +1563,6 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
     }
 
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
-
-    if (dp->ipv4_frags) {
-        nl_msg_put_u32(buf, OVS_DP_ATTR_IPV4_FRAGS, dp->ipv4_frags);
-    }
 }
 
 /* Clears 'dp' to "empty" values. */

@@ -33,7 +33,6 @@ struct vport;
 /**
  * struct dp_stats_percpu - per-cpu packet processing statistics for a given
  * datapath.
- * @n_frags: Number of IP fragments processed by datapath.
  * @n_hit: Number of received packets for which a matching flow was found in
  * the flow table.
  * @n_miss: Number of received packets that had no matching flow in the flow
@@ -44,7 +43,6 @@ struct vport;
  * one of the datapath's queues).
  */
 struct dp_stats_percpu {
-	u64 n_frags;
 	u64 n_hit;
 	u64 n_missed;
 	u64 n_lost;
@@ -56,7 +54,6 @@ struct dp_stats_percpu {
  * @rcu: RCU callback head for deferred destruction.
  * @list_node: Element in global 'dps' list.
  * @ifobj: Represents /sys/class/net/<devname>/brif.  Protected by RTNL.
- * @drop_frags: Drop all IP fragments if nonzero.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table.  Protected by genl_lock and RCU.
  * @ports: Map from port number to &struct vport.  %OVSP_LOCAL port
@@ -72,8 +69,6 @@ struct datapath {
 	struct rcu_head rcu;
 	struct list_head list_node;
 	struct kobject ifobj;
-
-	int drop_frags;
 
 	/* Flow table. */
 	struct flow_table __rcu *table;
