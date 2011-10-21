@@ -743,7 +743,13 @@ static inline void *get_cached_header(const struct tnl_cache *cache)
 static inline bool check_cache_valid(const struct tnl_cache *cache,
 				     const struct tnl_mutable_config *mutable)
 {
-	return cache &&
+	struct hh_cache *hh;
+
+	if (!cache)
+		return false;
+
+	hh = rt_dst(cache->rt).hh;
+	return hh &&
 #ifdef NEED_CACHE_TIMEOUT
 		time_before(jiffies, cache->expiration) &&
 #endif
@@ -751,7 +757,7 @@ static inline bool check_cache_valid(const struct tnl_cache *cache,
 		atomic_read(&init_net.ipv4.rt_genid) == cache->rt->rt_genid &&
 #endif
 #ifdef HAVE_HH_SEQ
-		rt_dst(cache->rt).hh->hh_lock.sequence == cache->hh_seq &&
+		hh->hh_lock.sequence == cache->hh_seq &&
 #endif
 		mutable->seq == cache->mutable_seq &&
 		(!is_internal_dev(rt_dst(cache->rt).dev) ||
@@ -791,25 +797,28 @@ static void cache_cleaner(struct work_struct *work)
 }
 
 static inline void create_eth_hdr(struct tnl_cache *cache,
-				  const struct rtable *rt)
+				  struct hh_cache *hh)
 {
 	void *cache_data = get_cached_header(cache);
-	int hh_len = rt_dst(rt).hh->hh_len;
-	int hh_off = HH_DATA_ALIGN(rt_dst(rt).hh->hh_len) - hh_len;
+	int hh_off;
 
 #ifdef HAVE_HH_SEQ
 	unsigned hh_seq;
 
 	do {
-		hh_seq = read_seqbegin(&rt_dst(rt).hh->hh_lock);
-		memcpy(cache_data, (void *)rt_dst(rt).hh->hh_data + hh_off, hh_len);
-	} while (read_seqretry(&rt_dst(rt).hh->hh_lock, hh_seq));
+		hh_seq = read_seqbegin(&hh->hh_lock);
+		hh_off = HH_DATA_ALIGN(hh->hh_len) - hh->hh_len;
+		memcpy(cache_data, (void *)hh->hh_data + hh_off, hh->hh_len);
+		cache->hh_len = hh->hh_len;
+	} while (read_seqretry(&hh->hh_lock, hh_seq));
 
 	cache->hh_seq = hh_seq;
 #else
-	read_lock(&rt_dst(rt).hh->hh_lock);
-	memcpy(cache_data, (void *)rt_dst(rt).hh->hh_data + hh_off, hh_len);
-	read_unlock(&rt_dst(rt).hh->hh_lock);
+	read_lock(&hh->hh_lock);
+	hh_off = HH_DATA_ALIGN(hh->hh_len) - hh->hh_len;
+	memcpy(cache_data, (void *)hh->hh_data + hh_off, hh->hh_len);
+	cache->hh_len = hh->hh_len;
+	read_unlock(&hh->hh_lock);
 #endif
 }
 
@@ -821,6 +830,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	struct tnl_cache *cache;
 	void *cache_data;
 	int cache_len;
+	struct hh_cache *hh;
 
 	if (!(mutable->flags & TNL_F_HDR_CACHE))
 		return NULL;
@@ -829,7 +839,9 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	 * If there is no entry in the ARP cache or if this device does not
 	 * support hard header caching just fall back to the IP stack.
 	 */
-	if (!rt_dst(rt).hh)
+
+	hh = rt_dst(rt).hh;
+	if (!hh)
 		return NULL;
 
 	/*
@@ -845,17 +857,16 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	else
 		cache = NULL;
 
-	cache_len = rt_dst(rt).hh->hh_len + mutable->tunnel_hlen;
+	cache_len = LL_RESERVED_SPACE(rt_dst(rt).dev) + mutable->tunnel_hlen;
 
 	cache = kzalloc(ALIGN(sizeof(struct tnl_cache), CACHE_DATA_ALIGN) +
 			cache_len, GFP_ATOMIC);
 	if (!cache)
 		goto unlock;
 
-	cache->len = cache_len;
-
-	create_eth_hdr(cache, rt);
-	cache_data = get_cached_header(cache) + rt_dst(rt).hh->hh_len;
+	create_eth_hdr(cache, hh);
+	cache_data = get_cached_header(cache) + cache->hh_len;
+	cache->len = cache->hh_len + mutable->tunnel_hlen;
 
 	create_tunnel_header(vport, mutable, rt, cache_data);
 
@@ -1181,7 +1192,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 			skb_push(skb, cache->len);
 			memcpy(skb->data, get_cached_header(cache), cache->len);
 			skb_reset_mac_header(skb);
-			skb_set_network_header(skb, rt_dst(rt).hh->hh_len);
+			skb_set_network_header(skb, cache->hh_len);
 
 		} else {
 			skb_push(skb, mutable->tunnel_hlen);

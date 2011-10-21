@@ -148,6 +148,7 @@ struct tnl_cache {
 	struct rcu_head rcu;
 
 	int len;		/* Length of data to be memcpy'd from cache. */
+	int hh_len;		/* Hardware hdr length, cached from hh_cache. */
 
 	/* Sequence number of mutable->seq from which this cache was generated. */
 	unsigned mutable_seq;
