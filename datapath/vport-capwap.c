@@ -507,13 +507,13 @@ static struct sk_buff *fragment(struct sk_buff *skb, const struct vport *vport,
 		remaining -= frag_size;
 	}
 
-	goto out;
+	consume_skb(skb);
+	return result;
 
 error:
 	tnl_free_linked_skbs(result);
-out:
 	kfree_skb(skb);
-	return result;
+	return NULL;
 }
 
 /* All of the following functions relate to fragmentation reassembly. */
