@@ -309,7 +309,7 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 			upcall.userdata = NULL;
 			upcall.pid = p->upcall_pid;
 			dp_upcall(dp, skb, &upcall);
-			kfree_skb(skb);
+			consume_skb(skb);
 			stats_counter = &stats->n_missed;
 			goto out;
 		}
