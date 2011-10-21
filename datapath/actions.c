@@ -311,12 +311,11 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 static int execute_set_action(struct sk_buff *skb,
 				 const struct nlattr *nested_attr)
 {
-	int err;
+	int err = 0;
 
 	switch (nla_type(nested_attr)) {
 	case OVS_KEY_ATTR_TUN_ID:
 		OVS_CB(skb)->tun_id = nla_get_be64(nested_attr);
-		err = 0;
 		break;
 
 	case OVS_KEY_ATTR_ETHERNET:
@@ -335,6 +334,7 @@ static int execute_set_action(struct sk_buff *skb,
 		err = set_udp_port(skb, nla_data(nested_attr));
 		break;
 	}
+
 	return err;
 }
 
@@ -396,8 +396,8 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case OVS_ACTION_ATTR_SAMPLE:
 			err = sample(dp, skb, a);
 			break;
-
 		}
+
 		if (unlikely(err)) {
 			kfree_skb(skb);
 			return err;
