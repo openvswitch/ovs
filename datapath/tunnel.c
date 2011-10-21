@@ -93,6 +93,19 @@ static unsigned int remote_ports __read_mostly;
 #define rt_dst(rt) (rt->u.dst)
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
+static struct hh_cache *rt_hh(struct rtable *rt)
+{
+	struct neighbour *neigh = dst_get_neighbour(&rt->dst);
+	if (!neigh || !(neigh->nud_state & NUD_CONNECTED) ||
+			!neigh->hh.hh_len)
+		return NULL;
+	return &neigh->hh;
+}
+#else
+#define rt_hh(rt) (rt_dst(rt).hh)
+#endif
+
 static inline struct vport *tnl_vport_to_vport(const struct tnl_vport *tnl_vport)
 {
 	return vport_from_priv(tnl_vport);
@@ -748,7 +761,7 @@ static inline bool check_cache_valid(const struct tnl_cache *cache,
 	if (!cache)
 		return false;
 
-	hh = rt_dst(cache->rt).hh;
+	hh = rt_hh(cache->rt);
 	return hh &&
 #ifdef NEED_CACHE_TIMEOUT
 		time_before(jiffies, cache->expiration) &&
@@ -840,7 +853,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	 * support hard header caching just fall back to the IP stack.
 	 */
 
-	hh = rt_dst(rt).hh;
+	hh = rt_hh(rt);
 	if (!hh)
 		return NULL;
 
