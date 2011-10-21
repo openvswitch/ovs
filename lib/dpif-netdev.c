@@ -149,10 +149,10 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
 static int dp_netdev_output_userspace(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, const struct flow *,
                                     uint64_t arg);
-static int dp_netdev_execute_actions(struct dp_netdev *,
-                                     struct ofpbuf *, struct flow *,
-                                     const struct nlattr *actions,
-                                     size_t actions_len);
+static void dp_netdev_execute_actions(struct dp_netdev *,
+                                      struct ofpbuf *, struct flow *,
+                                      const struct nlattr *actions,
+                                      size_t actions_len);
 
 static struct dpif_class dpif_dummy_class;
 
@@ -904,8 +904,8 @@ dpif_netdev_execute(struct dpif *dpif,
     flow_extract(&copy, 0, -1, &key);
     error = dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
     if (!error) {
-        error = dp_netdev_execute_actions(dp, &copy, &key,
-                                          actions, actions_len);
+        dp_netdev_execute_actions(dp, &copy, &key,
+                                  actions, actions_len);
     }
 
     ofpbuf_uninit(&copy);
@@ -1076,94 +1076,94 @@ dp_netdev_pop_vlan(struct ofpbuf *packet)
 }
 
 static void
-dp_netdev_set_dl_src(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
+dp_netdev_set_dl(struct ofpbuf *packet, const struct ovs_key_ethernet *eth_key)
 {
     struct eth_header *eh = packet->l2;
-    memcpy(eh->eth_src, dl_addr, sizeof eh->eth_src);
+
+    memcpy(eh->eth_src, eth_key->eth_src, sizeof eh->eth_src);
+    memcpy(eh->eth_dst, eth_key->eth_dst, sizeof eh->eth_dst);
 }
 
 static void
-dp_netdev_set_dl_dst(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
+dp_netdev_set_ip_addr(struct ofpbuf *packet, ovs_be32 *addr, ovs_be32 new_addr)
 {
-    struct eth_header *eh = packet->l2;
-    memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
-}
+    struct ip_header *nh = packet->l3;
 
-static bool
-is_ip(const struct ofpbuf *packet, const struct flow *key)
-{
-    return key->dl_type == htons(ETH_TYPE_IP) && packet->l4;
-}
-
-static void
-dp_netdev_set_nw_addr(struct ofpbuf *packet, const struct flow *key,
-                      const struct nlattr *a)
-{
-    if (is_ip(packet, key)) {
-        struct ip_header *nh = packet->l3;
-        ovs_be32 ip = nl_attr_get_be32(a);
-        uint16_t type = nl_attr_type(a);
-        ovs_be32 *field;
-
-        field = type == OVS_ACTION_ATTR_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
-        if (key->nw_proto == IPPROTO_TCP && packet->l7) {
-            struct tcp_header *th = packet->l4;
-            th->tcp_csum = recalc_csum32(th->tcp_csum, *field, ip);
-        } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
-            struct udp_header *uh = packet->l4;
-            if (uh->udp_csum) {
-                uh->udp_csum = recalc_csum32(uh->udp_csum, *field, ip);
-                if (!uh->udp_csum) {
-                    uh->udp_csum = htons(0xffff);
-                }
+    if (nh->ip_proto == IPPROTO_TCP && packet->l7) {
+        struct tcp_header *th = packet->l4;
+        th->tcp_csum = recalc_csum32(th->tcp_csum, *addr, new_addr);
+    } else if (nh->ip_proto == IPPROTO_UDP && packet->l7) {
+        struct udp_header *uh = packet->l4;
+        if (uh->udp_csum) {
+            uh->udp_csum = recalc_csum32(uh->udp_csum, *addr, new_addr);
+            if (!uh->udp_csum) {
+                uh->udp_csum = htons(0xffff);
             }
         }
-        nh->ip_csum = recalc_csum32(nh->ip_csum, *field, ip);
-        *field = ip;
+    }
+    nh->ip_csum = recalc_csum32(nh->ip_csum, *addr, new_addr);
+    *addr = new_addr;
+}
+
+static void
+dp_netdev_set_ip_tos(struct ip_header *nh, uint8_t new_tos)
+{
+    uint8_t *field = &nh->ip_tos;
+
+    /* Set the DSCP bits and preserve the ECN bits. */
+    uint8_t new = new_tos | (nh->ip_tos & IP_ECN_MASK);
+
+    nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
+			            htons((uint16_t) new));
+    *field = new;
+}
+
+static void
+dp_netdev_set_ipv4(struct ofpbuf *packet, const struct ovs_key_ipv4 *ipv4_key)
+{
+    struct ip_header *nh = packet->l3;
+
+    if (nh->ip_src != ipv4_key->ipv4_src) {
+        dp_netdev_set_ip_addr(packet, &nh->ip_src, ipv4_key->ipv4_src);
+    }
+    if (nh->ip_dst != ipv4_key->ipv4_dst) {
+        dp_netdev_set_ip_addr(packet, &nh->ip_dst, ipv4_key->ipv4_dst);
+    }
+    if (nh->ip_tos != ipv4_key->ipv4_tos) {
+        dp_netdev_set_ip_tos(nh, ipv4_key->ipv4_tos);
     }
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, const struct flow *key,
-                     uint8_t nw_tos)
+dp_netdev_set_port(ovs_be16 *port, ovs_be16 new_port, ovs_be16 *csum)
 {
-    if (is_ip(packet, key)) {
-        struct ip_header *nh = packet->l3;
-        uint8_t *field = &nh->ip_tos;
+    *csum = recalc_csum16(*csum, *port, new_port);
+    *port = new_port;
+}
 
-        /* Set the DSCP bits and preserve the ECN bits. */
-        uint8_t new = nw_tos | (nh->ip_tos & IP_ECN_MASK);
+static void
+dp_netdev_set_tcp_port(struct ofpbuf *packet, const struct ovs_key_tcp *tcp_key)
+{
+    struct tcp_header *th = packet->l4;
 
-        nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
-                htons((uint16_t) new));
-        *field = new;
+    if (th->tcp_src != tcp_key->tcp_src) {
+        dp_netdev_set_port(&th->tcp_src, tcp_key->tcp_src, &th->tcp_csum);
+    }
+    if (th->tcp_dst != tcp_key->tcp_dst) {
+        dp_netdev_set_port(&th->tcp_dst, tcp_key->tcp_dst, &th->tcp_csum);
     }
 }
 
 static void
-dp_netdev_set_tp_port(struct ofpbuf *packet, const struct flow *key,
-                      const struct nlattr *a)
+dp_netdev_set_udp_port(struct ofpbuf *packet, const struct ovs_key_udp *udp_key)
 {
-	if (is_ip(packet, key)) {
-        uint16_t type = nl_attr_type(a);
-        ovs_be16 port = nl_attr_get_be16(a);
-        ovs_be16 *field;
+    struct udp_header *uh = packet->l4;
 
-        if (key->nw_proto == IPPROTO_TCP && packet->l7) {
-            struct tcp_header *th = packet->l4;
-            field = (type == OVS_ACTION_ATTR_SET_TP_SRC
-                     ? &th->tcp_src : &th->tcp_dst);
-            th->tcp_csum = recalc_csum16(th->tcp_csum, *field, port);
-            *field = port;
-        } else if (key->nw_proto == IPPROTO_UDP && packet->l7) {
-            struct udp_header *uh = packet->l4;
-            field = (type == OVS_ACTION_ATTR_SET_TP_SRC
-                     ? &uh->udp_src : &uh->udp_dst);
-            uh->udp_csum = recalc_csum16(uh->udp_csum, *field, port);
-            *field = port;
-        } else {
-            return;
-        }
+    if (uh->udp_src != udp_key->udp_src) {
+        dp_netdev_set_port(&uh->udp_src, udp_key->udp_src, &uh->udp_csum);
+    }
+    if (uh->udp_dst != udp_key->udp_dst) {
+        dp_netdev_set_port(&uh->udp_dst, udp_key->udp_dst, &uh->udp_csum);
     }
 }
 
@@ -1257,7 +1257,50 @@ dp_netdev_action_userspace(struct dp_netdev *dp,
     dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION, key, userdata);
 }
 
-static int
+static void
+execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
+{
+    enum ovs_key_attr type = nl_attr_type(a);
+    switch (type) {
+    case OVS_KEY_ATTR_TUN_ID:
+        break;
+
+    case OVS_KEY_ATTR_ETHERNET:
+        dp_netdev_set_dl(packet,
+                   nl_attr_get_unspec(a, sizeof(struct ovs_key_ethernet)));
+        break;
+
+    case OVS_KEY_ATTR_IPV4:
+        dp_netdev_set_ipv4(packet,
+                   nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4)));
+        break;
+
+    case OVS_KEY_ATTR_TCP:
+        dp_netdev_set_tcp_port(packet,
+                   nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp)));
+        break;
+
+     case OVS_KEY_ATTR_UDP:
+        dp_netdev_set_udp_port(packet,
+                   nl_attr_get_unspec(a, sizeof(struct ovs_key_udp)));
+        break;
+
+     case OVS_KEY_ATTR_UNSPEC:
+     case OVS_KEY_ATTR_ETHERTYPE:
+     case OVS_KEY_ATTR_IPV6:
+     case OVS_KEY_ATTR_IN_PORT:
+     case OVS_KEY_ATTR_8021Q:
+     case OVS_KEY_ATTR_ICMP:
+     case OVS_KEY_ATTR_ICMPV6:
+     case OVS_KEY_ATTR_ARP:
+     case OVS_KEY_ATTR_ND:
+     case __OVS_KEY_ATTR_MAX:
+     default:
+        NOT_REACHED();
+    }
+}
+
+static void
 dp_netdev_execute_actions(struct dp_netdev *dp,
                           struct ofpbuf *packet, struct flow *key,
                           const struct nlattr *actions,
@@ -1267,6 +1310,8 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     unsigned int left;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
+        const struct nlattr *nested;
+        const struct ovs_key_8021q *q_key;
         int type = nl_attr_type(a);
 
         switch ((enum ovs_action_attr) type) {
@@ -1278,41 +1323,26 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             dp_netdev_action_userspace(dp, packet, key, a);
             break;
 
-        case OVS_ACTION_ATTR_PUSH_VLAN:
-            eth_push_vlan(packet, nl_attr_get_be16(a));
+        case OVS_ACTION_ATTR_PUSH:
+            nested = nl_attr_get(a);
+            assert(nl_attr_type(nested) == OVS_KEY_ATTR_8021Q);
+            q_key = nl_attr_get_unspec(nested, sizeof(*q_key));
+            eth_push_vlan(packet, q_key->q_tci);
             break;
 
-        case OVS_ACTION_ATTR_POP_VLAN:
+        case OVS_ACTION_ATTR_POP:
+            assert(nl_attr_get_u16(a) == OVS_KEY_ATTR_8021Q);
             dp_netdev_pop_vlan(packet);
             break;
 
-        case OVS_ACTION_ATTR_SET_DL_SRC:
-            dp_netdev_set_dl_src(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
-            break;
-
-        case OVS_ACTION_ATTR_SET_DL_DST:
-            dp_netdev_set_dl_dst(packet, nl_attr_get_unspec(a, ETH_ADDR_LEN));
-            break;
-
-        case OVS_ACTION_ATTR_SET_NW_SRC:
-        case OVS_ACTION_ATTR_SET_NW_DST:
-            dp_netdev_set_nw_addr(packet, key, a);
-            break;
-
-        case OVS_ACTION_ATTR_SET_NW_TOS:
-            dp_netdev_set_nw_tos(packet, key, nl_attr_get_u8(a));
-            break;
-
-        case OVS_ACTION_ATTR_SET_TP_SRC:
-        case OVS_ACTION_ATTR_SET_TP_DST:
-            dp_netdev_set_tp_port(packet, key, a);
+        case OVS_ACTION_ATTR_SET:
+            execute_set_action(packet, nl_attr_get(a));
             break;
 
         case OVS_ACTION_ATTR_SAMPLE:
             dp_netdev_sample(dp, packet, key, a);
             break;
 
-        case OVS_ACTION_ATTR_SET_TUNNEL:
         case OVS_ACTION_ATTR_SET_PRIORITY:
         case OVS_ACTION_ATTR_POP_PRIORITY:
             /* not implemented */
@@ -1323,7 +1353,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             NOT_REACHED();
         }
     }
-    return 0;
 }
 
 const struct dpif_class dpif_netdev_class = {

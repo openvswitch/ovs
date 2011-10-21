@@ -33,6 +33,9 @@
 #include "timeval.h"
 #include "util.h"
 
+static void
+format_odp_key_attr(const struct nlattr *a, struct ds *ds);
+
 /* The interface between userspace and kernel uses an "OVS_*" prefix.
  * Since this is fairly non-specific for the OVS userspace components,
  * "ODP_*" (Open vSwitch Datapath) is used as the prefix for
@@ -48,7 +51,7 @@
  *   - For an action with a variable-length argument, returns -2.
  *
  *   - For an invalid 'type', returns -1. */
-int
+static int
 odp_action_len(uint16_t type)
 {
     if (type > OVS_ACTION_ATTR_MAX) {
@@ -58,16 +61,9 @@ odp_action_len(uint16_t type)
     switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return 4;
     case OVS_ACTION_ATTR_USERSPACE: return -2;
-    case OVS_ACTION_ATTR_PUSH_VLAN: return 2;
-    case OVS_ACTION_ATTR_POP_VLAN: return 0;
-    case OVS_ACTION_ATTR_SET_DL_SRC: return ETH_ADDR_LEN;
-    case OVS_ACTION_ATTR_SET_DL_DST: return ETH_ADDR_LEN;
-    case OVS_ACTION_ATTR_SET_NW_SRC: return 4;
-    case OVS_ACTION_ATTR_SET_NW_DST: return 4;
-    case OVS_ACTION_ATTR_SET_NW_TOS: return 1;
-    case OVS_ACTION_ATTR_SET_TP_SRC: return 2;
-    case OVS_ACTION_ATTR_SET_TP_DST: return 2;
-    case OVS_ACTION_ATTR_SET_TUNNEL: return 8;
+    case OVS_ACTION_ATTR_PUSH: return -2;
+    case OVS_ACTION_ATTR_POP: return 2;
+    case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SET_PRIORITY: return 4;
     case OVS_ACTION_ATTR_POP_PRIORITY: return 0;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
@@ -170,12 +166,11 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 }
 
 
-void
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
-    const uint8_t *eth;
     int expected_len;
-    ovs_be32 ip;
+    enum ovs_action_attr type = nl_attr_type(a);
 
     expected_len = odp_action_len(nl_attr_type(a));
     if (expected_len != -2 && nl_attr_get_size(a) != expected_len) {
@@ -185,49 +180,30 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         return;
     }
 
-    switch (nl_attr_type(a)) {
+    switch (type) {
+
     case OVS_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu16, nl_attr_get_u32(a));
         break;
     case OVS_ACTION_ATTR_USERSPACE:
         format_odp_userspace_action(ds, a);
         break;
-    case OVS_ACTION_ATTR_SET_TUNNEL:
-        ds_put_format(ds, "set_tunnel(%#"PRIx64")",
-                      ntohll(nl_attr_get_be64(a)));
+    case OVS_ACTION_ATTR_SET:
+        ds_put_cstr(ds, "set(");
+        format_odp_key_attr(nl_attr_get(a), ds);
+        ds_put_cstr(ds, ")");
         break;
-    case OVS_ACTION_ATTR_PUSH_VLAN:
-        ds_put_format(ds, "push_vlan(vid=%"PRIu16",pcp=%d)",
-                      vlan_tci_to_vid(nl_attr_get_be16(a)),
-                      vlan_tci_to_pcp(nl_attr_get_be16(a)));
+    case OVS_ACTION_ATTR_PUSH:
+        ds_put_cstr(ds, "push(");
+        format_odp_key_attr(nl_attr_get(a), ds);
+        ds_put_cstr(ds, ")");
         break;
-    case OVS_ACTION_ATTR_POP_VLAN:
-        ds_put_format(ds, "pop_vlan");
-        break;
-    case OVS_ACTION_ATTR_SET_DL_SRC:
-        eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
-        ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
-        break;
-    case OVS_ACTION_ATTR_SET_DL_DST:
-        eth = nl_attr_get_unspec(a, ETH_ADDR_LEN);
-        ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth));
-        break;
-    case OVS_ACTION_ATTR_SET_NW_SRC:
-        ip = nl_attr_get_be32(a);
-        ds_put_format(ds, "set_nw_src("IP_FMT")", IP_ARGS(&ip));
-        break;
-    case OVS_ACTION_ATTR_SET_NW_DST:
-        ip = nl_attr_get_be32(a);
-        ds_put_format(ds, "set_nw_dst("IP_FMT")", IP_ARGS(&ip));
-        break;
-    case OVS_ACTION_ATTR_SET_NW_TOS:
-        ds_put_format(ds, "set_nw_tos(%"PRIu8")", nl_attr_get_u8(a));
-        break;
-    case OVS_ACTION_ATTR_SET_TP_SRC:
-        ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
-        break;
-    case OVS_ACTION_ATTR_SET_TP_DST:
-        ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(nl_attr_get_be16(a)));
+    case OVS_ACTION_ATTR_POP:
+        if (nl_attr_get_u16(a) == OVS_KEY_ATTR_8021Q) {
+            ds_put_cstr(ds, "pop(vlan)");
+        } else {
+            ds_put_format(ds, "pop(key%"PRIu16")", nl_attr_get_u16(a));
+        }
         break;
     case OVS_ACTION_ATTR_SET_PRIORITY:
         ds_put_format(ds, "set_priority(%#"PRIx32")", nl_attr_get_u32(a));
@@ -238,6 +214,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
         break;
+    case OVS_ACTION_ATTR_UNSPEC:
+    case __OVS_ACTION_ATTR_MAX:
     default:
         format_generic_odp_action(ds, a);
         break;

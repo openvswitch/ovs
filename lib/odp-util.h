@@ -58,9 +58,6 @@ odp_port_to_ofp_port(uint16_t odp_port)
         return odp_port;
     }
 }
-
-int odp_action_len(uint16_t type);
-void format_odp_action(struct ds *, const struct nlattr *);
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 

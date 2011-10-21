@@ -423,21 +423,37 @@ enum ovs_userspace_attr {
 
 #define OVS_USERSPACE_ATTR_MAX (__OVS_USERSPACE_ATTR_MAX - 1)
 
-/* Action types. */
+/**
+ * enum ovs_action_attr -  Action types.
+ *
+ * @OVS_ACTION_ATTR_OUTPUT: Output packet to port passed as NLA data.
+ * @OVS_ACTION_ATTR_USERSPACE: Nested %OVS_USERSPACE_ATTR_ attributes specifying
+ * PID.
+ * @OVS_ACTION_ATTR_PUSH: Nested %OVS_KEY_ATTR_* attribute specifying header to
+ * push to given packet.
+ * E.g. Push vlan tag action would be NLA of %OVS_ACTION_ATTR_PUSH type with
+ * nested attribute of type %OVS_KEY_ATTR_8021Q with struct ovs_key_8021q
+ * as NLA data.
+ * @OVS_ACTION_ATTR_POP: Pop header according to %OVS_KEY_ATTR_ sent as
+ * attribute data.
+ * @OVS_ACTION_ATTR_SET: Nested %OVS_KEY_ATTR_* attribute specifying the
+ * field to set to given packet.
+ * @OVS_ACTION_ATTR_SET_PRIORITY: A set skb->priority to 32-bit number passed
+ * as NLA data.
+ * @OVS_ACTION_ATTR_POP_PRIORITY: Restore skb->priority to original value.
+ * @OVS_ACTION_ATTR_SAMPLE: Execute set of actions according to probability
+ * %OVS_SAMPLE_ATTR_PROBABILITY.
+ *
+ * Only a single field can be set with a single %OVS_ACTION_ATTR_{SET,PUSH}.
+ */
+
 enum ovs_action_attr {
 	OVS_ACTION_ATTR_UNSPEC,
 	OVS_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
 	OVS_ACTION_ATTR_USERSPACE,    /* Nested OVS_USERSPACE_ATTR_*. */
-	OVS_ACTION_ATTR_PUSH_VLAN,    /* Set the 802.1q TCI value. */
-	OVS_ACTION_ATTR_POP_VLAN,     /* Strip the 802.1q header. */
-	OVS_ACTION_ATTR_SET_DL_SRC,   /* Ethernet source address. */
-	OVS_ACTION_ATTR_SET_DL_DST,   /* Ethernet destination address. */
-	OVS_ACTION_ATTR_SET_NW_SRC,   /* IPv4 source address. */
-	OVS_ACTION_ATTR_SET_NW_DST,   /* IPv4 destination address. */
-	OVS_ACTION_ATTR_SET_NW_TOS,   /* IP ToS/DSCP field (6 bits). */
-	OVS_ACTION_ATTR_SET_TP_SRC,   /* TCP/UDP source port. */
-	OVS_ACTION_ATTR_SET_TP_DST,   /* TCP/UDP destination port. */
-	OVS_ACTION_ATTR_SET_TUNNEL,   /* Set the encapsulating tunnel ID. */
+	OVS_ACTION_ATTR_PUSH,         /* Push packet header. */
+	OVS_ACTION_ATTR_POP,          /* Pop packet header. */
+	OVS_ACTION_ATTR_SET,          /* Set packet field(s). */
 	OVS_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
 	OVS_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */

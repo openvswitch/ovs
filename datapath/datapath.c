@@ -494,9 +494,11 @@ static int flush_flows(int dp_ifindex)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *attr, int depth);
+static int validate_actions(const struct nlattr *attr,
+				const struct sw_flow_key *key, int depth);
 
-static int validate_sample(const struct nlattr *attr, int depth)
+static int validate_sample(const struct nlattr *attr,
+				const struct sw_flow_key *key, int depth)
 {
 	static const struct nla_policy sample_policy[OVS_SAMPLE_ATTR_MAX + 1] =
 	{
@@ -515,7 +517,80 @@ static int validate_sample(const struct nlattr *attr, int depth)
 	if (!a[OVS_SAMPLE_ATTR_ACTIONS])
 		return -EINVAL;
 
-	return validate_actions(a[OVS_SAMPLE_ATTR_ACTIONS], (depth + 1));
+	return validate_actions(a[OVS_SAMPLE_ATTR_ACTIONS], key, (depth + 1));
+}
+
+static int validate_action_key(const struct nlattr *a,
+				const struct sw_flow_key *flow_key)
+{
+	int act_type = nla_type(a);
+	const struct nlattr *ovs_key = nla_data(a);
+	int key_type = nla_type(ovs_key);
+
+	/* There can be only one key in a action */
+	if (nla_total_size(nla_len(ovs_key)) != nla_len(a))
+		return -EINVAL;
+
+	if (key_type > OVS_KEY_ATTR_MAX ||
+	    nla_len(ovs_key) != ovs_key_lens[key_type])
+		return -EINVAL;
+
+#define ACTION(act, key)	((act << 8) | key)
+
+	switch(ACTION(act_type, key_type)) {
+	const struct ovs_key_ipv4 *ipv4_key;
+	const struct ovs_key_8021q *q_key;
+
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TUN_ID):
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_ETHERNET):
+			break;
+
+	case ACTION(OVS_ACTION_ATTR_PUSH, OVS_KEY_ATTR_8021Q):
+		q_key = nla_data(ovs_key);
+		if (q_key->q_tpid != htons(ETH_P_8021Q))
+			return -EINVAL;
+
+		if (q_key->q_tci & htons(VLAN_TAG_PRESENT))
+			return -EINVAL;
+		break;
+
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_IPV4):
+		if (flow_key->eth.type != htons(ETH_P_IP))
+			return -EINVAL;
+
+		if (!flow_key->ipv4.addr.src || !flow_key->ipv4.addr.dst)
+			return -EINVAL;
+
+		ipv4_key = nla_data(ovs_key);
+		if (ipv4_key->ipv4_proto != flow_key->ip.proto)
+			return -EINVAL;
+
+		if (ipv4_key->ipv4_tos & INET_ECN_MASK)
+			return -EINVAL;
+		break;
+
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TCP):
+		if (flow_key->ip.proto != IPPROTO_TCP)
+			return -EINVAL;
+
+		if (!flow_key->ipv4.tp.src || !flow_key->ipv4.tp.dst)
+			return -EINVAL;
+
+		break;
+
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_UDP):
+		if (flow_key->ip.proto != IPPROTO_UDP)
+			return -EINVAL;
+
+		if (!flow_key->ipv4.tp.src || !flow_key->ipv4.tp.dst)
+			return -EINVAL;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+#undef ACTION
+	return 0;
 }
 
 static int validate_userspace(const struct nlattr *attr)
@@ -538,7 +613,8 @@ static int validate_userspace(const struct nlattr *attr)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *attr, int depth)
+static int validate_actions(const struct nlattr *attr,
+				const struct sw_flow_key *key,  int depth)
 {
 	const struct nlattr *a;
 	int rem, err;
@@ -551,16 +627,9 @@ static int validate_actions(const struct nlattr *attr, int depth)
 		static const u32 action_lens[OVS_ACTION_ATTR_MAX + 1] = {
 			[OVS_ACTION_ATTR_OUTPUT] = 4,
 			[OVS_ACTION_ATTR_USERSPACE] = (u32)-1,
-			[OVS_ACTION_ATTR_PUSH_VLAN] = 2,
-			[OVS_ACTION_ATTR_POP_VLAN] = 0,
-			[OVS_ACTION_ATTR_SET_DL_SRC] = ETH_ALEN,
-			[OVS_ACTION_ATTR_SET_DL_DST] = ETH_ALEN,
-			[OVS_ACTION_ATTR_SET_NW_SRC] = 4,
-			[OVS_ACTION_ATTR_SET_NW_DST] = 4,
-			[OVS_ACTION_ATTR_SET_NW_TOS] = 1,
-			[OVS_ACTION_ATTR_SET_TP_SRC] = 2,
-			[OVS_ACTION_ATTR_SET_TP_DST] = 2,
-			[OVS_ACTION_ATTR_SET_TUNNEL] = 8,
+			[OVS_ACTION_ATTR_PUSH] = (u32)-1,
+			[OVS_ACTION_ATTR_POP] = 2,
+			[OVS_ACTION_ATTR_SET] = (u32)-1,
 			[OVS_ACTION_ATTR_SET_PRIORITY] = 4,
 			[OVS_ACTION_ATTR_POP_PRIORITY] = 0,
 			[OVS_ACTION_ATTR_SAMPLE] = (u32)-1
@@ -576,14 +645,6 @@ static int validate_actions(const struct nlattr *attr, int depth)
 		case OVS_ACTION_ATTR_UNSPEC:
 			return -EINVAL;
 
-		case OVS_ACTION_ATTR_POP_VLAN:
-		case OVS_ACTION_ATTR_SET_DL_SRC:
-		case OVS_ACTION_ATTR_SET_DL_DST:
-		case OVS_ACTION_ATTR_SET_NW_SRC:
-		case OVS_ACTION_ATTR_SET_NW_DST:
-		case OVS_ACTION_ATTR_SET_TP_SRC:
-		case OVS_ACTION_ATTR_SET_TP_DST:
-		case OVS_ACTION_ATTR_SET_TUNNEL:
 		case OVS_ACTION_ATTR_SET_PRIORITY:
 		case OVS_ACTION_ATTR_POP_PRIORITY:
 			/* No validation needed. */
@@ -600,24 +661,27 @@ static int validate_actions(const struct nlattr *attr, int depth)
 				return -EINVAL;
 			break;
 
-		case OVS_ACTION_ATTR_PUSH_VLAN:
-			if (nla_get_be16(a) & htons(VLAN_CFI_MASK))
+
+		case OVS_ACTION_ATTR_POP:
+			if (nla_get_u16(a) != OVS_KEY_ATTR_8021Q)
 				return -EINVAL;
 			break;
 
-		case OVS_ACTION_ATTR_SET_NW_TOS:
-			if (nla_get_u8(a) & INET_ECN_MASK)
-				return -EINVAL;
+		case OVS_ACTION_ATTR_SET:
+		case OVS_ACTION_ATTR_PUSH:
+			err = validate_action_key(a, key);
+			if (err)
+				return err;
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
-			err = validate_sample(a, depth);
+			err = validate_sample(a, key, depth);
 			if (err)
 				return err;
 			break;
 
 		default:
-			return -EOPNOTSUPP;
+			return -EINVAL;
 		}
 	}
 
@@ -626,6 +690,7 @@ static int validate_actions(const struct nlattr *attr, int depth)
 
 	return 0;
 }
+
 static void clear_stats(struct sw_flow *flow)
 {
 	flow->used = 0;
@@ -652,10 +717,6 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (!a[OVS_PACKET_ATTR_PACKET] || !a[OVS_PACKET_ATTR_KEY] ||
 	    !a[OVS_PACKET_ATTR_ACTIONS] ||
 	    nla_len(a[OVS_PACKET_ATTR_PACKET]) < ETH_HLEN)
-		goto err;
-
-	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], 0);
-	if (err)
 		goto err;
 
 	len = nla_len(a[OVS_PACKET_ATTR_PACKET]);
@@ -691,6 +752,10 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = flow_metadata_from_nlattrs(&flow->key.eth.in_port,
 					 &flow->key.eth.tun_id,
 					 a[OVS_PACKET_ATTR_KEY]);
+	if (err)
+		goto err_flow_put;
+
+	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], &flow->key, 0);
 	if (err)
 		goto err_flow_put;
 
@@ -914,7 +979,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		error = validate_actions(a[OVS_FLOW_ATTR_ACTIONS], 0);
+		error = validate_actions(a[OVS_FLOW_ATTR_ACTIONS], &key,  0);
 		if (error)
 			goto error;
 	} else if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW) {

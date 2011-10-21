@@ -180,5 +180,6 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
 u32 flow_hash(const struct sw_flow_key *key, int key_len);
 
 struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
+extern const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1];
 
 #endif /* flow.h */

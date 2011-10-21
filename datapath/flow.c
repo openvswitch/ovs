@@ -769,7 +769,7 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 }
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
-static const u32 key_lens[OVS_KEY_ATTR_MAX + 1] = {
+const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_TUN_ID] = 8,
 	[OVS_KEY_ATTR_IN_PORT] = 4,
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
@@ -827,8 +827,8 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
                 int type = nla_type(nla);
 
-                if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != key_lens[type])
-                        goto invalid;
+		if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != ovs_key_lens[type])
+			goto invalid;
 
 #define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
 		switch (TRANSITION(prev_type, type)) {
@@ -1069,8 +1069,8 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 	nla_for_each_nested(nla, attr, rem) {
                 int type = nla_type(nla);
 
-                if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != key_lens[type])
-                        return -EINVAL;
+		if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != ovs_key_lens[type])
+			return -EINVAL;
 
 		switch (TRANSITION(prev_type, type)) {
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):

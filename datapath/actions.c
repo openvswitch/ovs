@@ -97,7 +97,7 @@ static int pop_vlan(struct sk_buff *skb)
 	return 0;
 }
 
-static int push_vlan(struct sk_buff *skb, __be16 new_tci)
+static int push_vlan(struct sk_buff *skb, const struct ovs_key_8021q *q_key)
 {
 	if (unlikely(vlan_tx_tag_present(skb))) {
 		u16 current_tag;
@@ -113,40 +113,60 @@ static int push_vlan(struct sk_buff *skb, __be16 new_tci)
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
 	}
-	__vlan_hwaccel_put_tag(skb, ntohs(new_tci));
+	__vlan_hwaccel_put_tag(skb, ntohs(q_key->q_tci));
 	return 0;
 }
 
-static bool is_ip(struct sk_buff *skb)
+static int set_eth_addr(struct sk_buff *skb,
+			const struct ovs_key_ethernet *eth_key)
 {
-	return (OVS_CB(skb)->flow->key.eth.type == htons(ETH_P_IP) &&
-		skb->transport_header > skb->network_header);
-}
-
-static __sum16 *get_l4_checksum(struct sk_buff *skb)
-{
-	u8 nw_proto = OVS_CB(skb)->flow->key.ip.proto;
-	int transport_len = skb->len - skb_transport_offset(skb);
-	if (nw_proto == IPPROTO_TCP) {
-		if (likely(transport_len >= sizeof(struct tcphdr)))
-			return &tcp_hdr(skb)->check;
-	} else if (nw_proto == IPPROTO_UDP) {
-		if (likely(transport_len >= sizeof(struct udphdr)))
-			return &udp_hdr(skb)->check;
-	}
-	return NULL;
-}
-
-static int set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
-{
-	__be32 new_nwaddr = nla_get_be32(a);
-	struct iphdr *nh;
-	__sum16 *check;
-	__be32 *nwaddr;
 	int err;
+	err = make_writable(skb, ETH_HLEN);
+	if (unlikely(err))
+		return err;
 
-	if (unlikely(!is_ip(skb)))
-		return 0;
+	memcpy(eth_hdr(skb)->h_source, eth_key->eth_src, ETH_HLEN);
+	memcpy(eth_hdr(skb)->h_dest, eth_key->eth_dst, ETH_HLEN);
+
+	return 0;
+}
+
+static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
+				__be32 *addr, __be32 new_addr)
+{
+	int transport_len = skb->len - skb_transport_offset(skb);
+
+	if (nh->protocol == IPPROTO_TCP) {
+		if (likely(transport_len >= sizeof(struct tcphdr)))
+			inet_proto_csum_replace4(&tcp_hdr(skb)->check, skb,
+						 *addr, new_addr, 1);
+	} else if (nh->protocol == IPPROTO_UDP) {
+		if (likely(transport_len >= sizeof(struct udphdr)))
+			inet_proto_csum_replace4(&udp_hdr(skb)->check, skb,
+						 *addr, new_addr, 1);
+	}
+
+	csum_replace4(&nh->check, *addr, new_addr);
+	skb_clear_rxhash(skb);
+	*addr = new_addr;
+}
+
+static void set_ip_tos(struct sk_buff *skb, struct iphdr *nh, u8 new_tos)
+{
+	u8 old, new;
+
+	/* Set the DSCP bits and preserve the ECN bits. */
+	old = nh->tos;
+	new = new_tos | (nh->tos & INET_ECN_MASK);
+	csum_replace4(&nh->check, (__force __be32)old,
+				  (__force __be32)new);
+	nh->tos = new;
+}
+
+static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
+{
+	struct iphdr *nh;
+	int err;
 
 	err = make_writable(skb, skb_network_offset(skb) +
 				 sizeof(struct iphdr));
@@ -154,76 +174,66 @@ static int set_nw_addr(struct sk_buff *skb, const struct nlattr *a)
 		return err;
 
 	nh = ip_hdr(skb);
-	nwaddr = nla_type(a) == OVS_ACTION_ATTR_SET_NW_SRC ? &nh->saddr : &nh->daddr;
 
-	check = get_l4_checksum(skb);
-	if (likely(check))
-		inet_proto_csum_replace4(check, skb, *nwaddr, new_nwaddr, 1);
-	csum_replace4(&nh->check, *nwaddr, new_nwaddr);
+	if (ipv4_key->ipv4_src != nh->saddr)
+		set_ip_addr(skb, nh, &nh->saddr, ipv4_key->ipv4_src);
 
-	skb_clear_rxhash(skb);
+	if (ipv4_key->ipv4_dst != nh->daddr)
+		set_ip_addr(skb, nh, &nh->daddr, ipv4_key->ipv4_dst);
 
-	*nwaddr = new_nwaddr;
+	if (ipv4_key->ipv4_tos != nh->tos)
+		set_ip_tos(skb, nh, ipv4_key->ipv4_tos);
 
 	return 0;
 }
 
-static int set_nw_tos(struct sk_buff *skb, u8 nw_tos)
+/* Must follow make_writable() since that can move the skb data. */
+static void set_tp_port(struct sk_buff *skb, __be16 *port,
+			 __be16 new_port, __sum16 *check)
 {
-	struct iphdr *nh = ip_hdr(skb);
-	u8 old, new;
+	inet_proto_csum_replace2(check, skb, *port, new_port, 0);
+	*port = new_port;
+	skb_clear_rxhash(skb);
+}
+
+static int set_udp_port(struct sk_buff *skb,
+			const struct ovs_key_udp *udp_port_key)
+{
+	struct udphdr *uh;
 	int err;
 
-	if (unlikely(!is_ip(skb)))
-		return 0;
-
-	err = make_writable(skb, skb_network_offset(skb) +
-				 sizeof(struct iphdr));
+	err = make_writable(skb, skb_transport_offset(skb) +
+				 sizeof(struct udphdr));
 	if (unlikely(err))
 		return err;
 
-	/* Set the DSCP bits and preserve the ECN bits. */
-	old = nh->tos;
-	new = nw_tos | (nh->tos & INET_ECN_MASK);
-	csum_replace4(&nh->check, (__force __be32)old,
-				  (__force __be32)new);
-	nh->tos = new;
+	uh = udp_hdr(skb);
+	if (udp_port_key->udp_src != uh->source)
+		set_tp_port(skb, &uh->source, udp_port_key->udp_src, &uh->check);
+
+	if (udp_port_key->udp_dst != uh->dest)
+		set_tp_port(skb, &uh->dest, udp_port_key->udp_dst, &uh->check);
 
 	return 0;
 }
 
-static int set_tp_port(struct sk_buff *skb, const struct nlattr *a)
+static int set_tcp_port(struct sk_buff *skb,
+			const struct ovs_key_tcp *tcp_port_key)
 {
-	struct udphdr *th;
-	__sum16 *check;
-	__be16 *port;
+	struct tcphdr *th;
 	int err;
-
-	if (unlikely(!is_ip(skb)))
-		return 0;
 
 	err = make_writable(skb, skb_transport_offset(skb) +
 				 sizeof(struct tcphdr));
 	if (unlikely(err))
 		return err;
 
-	/* Must follow make_writable() since that can move the skb data. */
-	check = get_l4_checksum(skb);
-	if (unlikely(!check))
-		return 0;
+	th = tcp_hdr(skb);
+	if (tcp_port_key->tcp_src != th->source)
+		set_tp_port(skb, &th->source, tcp_port_key->tcp_src, &th->check);
 
-	/*
-	 * Update port and checksum.
-	 *
-	 * This is OK because source and destination port numbers are at the
-	 * same offsets in both UDP and TCP headers, and get_l4_checksum() only
-	 * supports those protocols.
-	 */
-	th = udp_hdr(skb);
-	port = nla_type(a) == OVS_ACTION_ATTR_SET_TP_SRC ? &th->source : &th->dest;
-	inet_proto_csum_replace2(check, skb, *port, nla_get_be16(a), 0);
-	*port = nla_get_be16(a);
-	skb_clear_rxhash(skb);
+	if (tcp_port_key->tcp_dst != th->dest)
+		set_tp_port(skb, &th->dest, tcp_port_key->tcp_dst, &th->check);
 
 	return 0;
 }
@@ -298,6 +308,36 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 						 nla_len(acts_list), true);
 }
 
+static int execute_set_action(struct sk_buff *skb,
+				 const struct nlattr *nested_attr)
+{
+	int err;
+
+	switch (nla_type(nested_attr)) {
+	case OVS_KEY_ATTR_TUN_ID:
+		OVS_CB(skb)->tun_id = nla_get_be64(nested_attr);
+		err = 0;
+		break;
+
+	case OVS_KEY_ATTR_ETHERNET:
+		err = set_eth_addr(skb, nla_data(nested_attr));
+		break;
+
+	case OVS_KEY_ATTR_IPV4:
+		err = set_ipv4(skb, nla_data(nested_attr));
+		break;
+
+	case OVS_KEY_ATTR_TCP:
+		err = set_tcp_port(skb, nla_data(nested_attr));
+		break;
+
+	case OVS_KEY_ATTR_UDP:
+		err = set_udp_port(skb, nla_data(nested_attr));
+		break;
+	}
+	return err;
+}
+
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			const struct nlattr *attr, int len, bool keep_skb)
@@ -329,44 +369,20 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			output_userspace(dp, skb, a);
 			break;
 
-		case OVS_ACTION_ATTR_SET_TUNNEL:
-			OVS_CB(skb)->tun_id = nla_get_be64(a);
-			break;
-
-		case OVS_ACTION_ATTR_PUSH_VLAN:
-			err = push_vlan(skb, nla_get_be16(a));
-			if (unlikely(err)) /* skb already freed */
+		case OVS_ACTION_ATTR_PUSH:
+			/* Only supported push action is on vlan tag. */
+			err = push_vlan(skb, nla_data(nla_data(a)));
+			if (unlikely(err)) /* skb already freed. */
 				return err;
 			break;
 
-		case OVS_ACTION_ATTR_POP_VLAN:
+		case OVS_ACTION_ATTR_POP:
+			/* Only supported pop action is on vlan tag. */
 			err = pop_vlan(skb);
 			break;
 
-		case OVS_ACTION_ATTR_SET_DL_SRC:
-			err = make_writable(skb, ETH_HLEN);
-			if (likely(!err))
-				memcpy(eth_hdr(skb)->h_source, nla_data(a), ETH_ALEN);
-			break;
-
-		case OVS_ACTION_ATTR_SET_DL_DST:
-			err = make_writable(skb, ETH_HLEN);
-			if (likely(!err))
-				memcpy(eth_hdr(skb)->h_dest, nla_data(a), ETH_ALEN);
-			break;
-
-		case OVS_ACTION_ATTR_SET_NW_SRC:
-		case OVS_ACTION_ATTR_SET_NW_DST:
-			err = set_nw_addr(skb, a);
-			break;
-
-		case OVS_ACTION_ATTR_SET_NW_TOS:
-			err = set_nw_tos(skb, nla_get_u8(a));
-			break;
-
-		case OVS_ACTION_ATTR_SET_TP_SRC:
-		case OVS_ACTION_ATTR_SET_TP_DST:
-			err = set_tp_port(skb, a);
+		case OVS_ACTION_ATTR_SET:
+			err = execute_set_action(skb, nla_data(a));
 			break;
 
 		case OVS_ACTION_ATTR_SET_PRIORITY:
