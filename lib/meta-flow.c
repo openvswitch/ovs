@@ -291,19 +291,33 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     },
 
     {
-        MFF_ICMP_TYPE, "icmp_type", NULL,
+        MFF_ICMPV4_TYPE, "icmp_type", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE, FWW_TP_SRC,
         MFS_DECIMAL,
-        MFP_ICMP_ANY,
+        MFP_ICMPV4,
         NXM_OF_ICMP_TYPE,
     }, {
-        MFF_ICMP_CODE, "icmp_code", NULL,
+        MFF_ICMPV4_CODE, "icmp_code", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE, FWW_TP_DST,
         MFS_DECIMAL,
-        MFP_ICMP_ANY,
+        MFP_ICMPV4,
         NXM_OF_ICMP_CODE,
+    }, {
+        MFF_ICMPV6_TYPE, "icmpv6_type", NULL,
+        MF_FIELD_SIZES(u8),
+        MFM_NONE, FWW_TP_SRC,
+        MFS_DECIMAL,
+        MFP_ICMPV6,
+        NXM_NX_ICMPV6_TYPE,
+    }, {
+        MFF_ICMPV6_CODE, "icmpv6_code", NULL,
+        MF_FIELD_SIZES(u8),
+        MFM_NONE, FWW_TP_DST,
+        MFS_DECIMAL,
+        MFP_ICMPV6,
+        NXM_NX_ICMPV6_CODE,
     },
 
     /* ## ---- ## */
@@ -387,8 +401,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
-    case MFF_ICMP_TYPE:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -479,8 +495,10 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
-    case MFF_ICMP_TYPE:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -626,10 +644,10 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP;
     case MFP_UDP:
         return is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP;
+    case MFP_ICMPV4:
+        return is_icmpv4(flow);
     case MFP_ICMPV6:
         return is_icmpv6(flow);
-    case MFP_ICMP_ANY:
-        return is_icmpv4(flow) || is_icmpv6(flow);
 
     case MFP_ND:
         return (is_icmpv6(flow)
@@ -701,8 +719,10 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
-    case MFF_ICMP_TYPE:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -871,11 +891,13 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->be16 = flow->tp_dst;
         break;
 
-    case MFF_ICMP_TYPE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV6_TYPE:
         value->u8 = ntohs(flow->tp_src);
         break;
 
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_CODE:
         value->u8 = ntohs(flow->tp_dst);
         break;
 
@@ -1030,11 +1052,13 @@ mf_set_value(const struct mf_field *mf,
         cls_rule_set_tp_dst(rule, value->be16);
         break;
 
-    case MFF_ICMP_TYPE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV6_TYPE:
         cls_rule_set_icmp_type(rule, value->u8);
         break;
 
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_CODE:
         cls_rule_set_icmp_code(rule, value->u8);
         break;
 
@@ -1190,14 +1214,16 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
-    case MFF_ICMP_TYPE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV6_TYPE:
         rule->wc.wildcards |= FWW_TP_SRC;
         rule->flow.tp_src = htons(0);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_CODE:
         rule->wc.wildcards |= FWW_TP_DST;
         rule->flow.tp_dst = htons(0);
         break;
@@ -1255,8 +1281,10 @@ mf_set(const struct mf_field *mf,
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
-    case MFF_ICMP_TYPE:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -1460,8 +1488,10 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_TCP_DST:
     case MFF_UDP_SRC:
     case MFF_UDP_DST:
-    case MFF_ICMP_TYPE:
-    case MFF_ICMP_CODE:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
