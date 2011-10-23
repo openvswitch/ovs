@@ -46,6 +46,7 @@
 
 #define OVS_DATAPATH_FAMILY  "ovs_datapath"
 #define OVS_DATAPATH_MCGROUP "ovs_datapath"
+#define OVS_DATAPATH_VERSION 0x1
 
 enum ovs_datapath_cmd {
 	OVS_DP_CMD_UNSPEC,
@@ -116,6 +117,7 @@ struct ovs_vport_stats {
 #define OVSP_LOCAL      ((__u16)0)
 
 #define OVS_PACKET_FAMILY "ovs_packet"
+#define OVS_PACKET_VERSION 0x1
 
 enum ovs_packet_cmd {
         OVS_PACKET_CMD_UNSPEC,
@@ -173,6 +175,7 @@ enum ovs_vport_type {
 
 #define OVS_VPORT_FAMILY  "ovs_vport"
 #define OVS_VPORT_MCGROUP "ovs_vport"
+#define OVS_VPORT_VERSION 0x1
 
 enum ovs_vport_cmd {
 	OVS_VPORT_CMD_UNSPEC,
@@ -238,6 +241,7 @@ enum {
 
 #define OVS_FLOW_FAMILY  "ovs_flow"
 #define OVS_FLOW_MCGROUP "ovs_flow"
+#define OVS_FLOW_VERSION 0x1
 
 enum ovs_flow_cmd {
 	OVS_FLOW_CMD_UNSPEC,

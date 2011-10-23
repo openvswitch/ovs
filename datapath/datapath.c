@@ -348,7 +348,7 @@ static struct genl_family dp_packet_genl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_PACKET_FAMILY,
-	.version = 1,
+	.version = OVS_PACKET_VERSION,
 	.maxattr = OVS_PACKET_ATTR_MAX
 };
 
@@ -863,7 +863,7 @@ static struct genl_family dp_flow_genl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_FLOW_FAMILY,
-	.version = 1,
+	.version = OVS_FLOW_VERSION,
 	.maxattr = OVS_FLOW_ATTR_MAX
 };
 
@@ -1252,7 +1252,7 @@ static struct genl_family dp_datapath_genl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_DATAPATH_FAMILY,
-	.version = 1,
+	.version = OVS_DATAPATH_VERSION,
 	.maxattr = OVS_DP_ATTR_MAX
 };
 
@@ -1589,7 +1589,7 @@ static struct genl_family dp_vport_genl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_VPORT_FAMILY,
-	.version = 1,
+	.version = OVS_VPORT_VERSION,
 	.maxattr = OVS_VPORT_ATTR_MAX
 };
 

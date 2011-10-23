@@ -832,7 +832,7 @@ dpif_linux_encode_execute(int dp_ifindex,
     buf = ofpbuf_new(128 + actions_len + packet->size);
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_packet_family, NLM_F_REQUEST,
-                          OVS_PACKET_CMD_EXECUTE, 1);
+                          OVS_PACKET_CMD_EXECUTE, OVS_PACKET_VERSION);
 
     execute = ofpbuf_put_uninit(buf, sizeof *execute);
     execute->dp_ifindex = dp_ifindex;
@@ -1389,7 +1389,7 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
     struct ovs_header *ovs_header;
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_vport_family, NLM_F_REQUEST | NLM_F_ECHO,
-                          vport->cmd, 1);
+                          vport->cmd, OVS_VPORT_VERSION);
 
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
     ovs_header->dp_ifindex = vport->dp_ifindex;
@@ -1549,7 +1549,8 @@ dpif_linux_dp_to_ofpbuf(const struct dpif_linux_dp *dp, struct ofpbuf *buf)
     struct ovs_header *ovs_header;
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_datapath_family,
-                          NLM_F_REQUEST | NLM_F_ECHO, dp->cmd, 1);
+                          NLM_F_REQUEST | NLM_F_ECHO, dp->cmd,
+                          OVS_DATAPATH_VERSION);
 
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
     ovs_header->dp_ifindex = dp->dp_ifindex;
@@ -1708,7 +1709,7 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_flow_family,
                           NLM_F_REQUEST | flow->nlmsg_flags,
-                          flow->cmd, 1);
+                          flow->cmd, OVS_FLOW_VERSION);
 
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
     ovs_header->dp_ifindex = flow->dp_ifindex;
