@@ -42,7 +42,20 @@
 
 #include <linux/types.h>
 
-/* datapaths. */
+/**
+ * struct ovs_header - header for OVS Generic Netlink messages.
+ * @dp_ifindex: ifindex of local port for datapath (0 to make a request not
+ * specific to a datapath).
+ *
+ * Attributes following the header are specific to a particular OVS Generic
+ * Netlink family, but all of the OVS families use this header.
+ */
+
+struct ovs_header {
+	int dp_ifindex;
+};
+
+/* Datapaths. */
 
 #define OVS_DATAPATH_FAMILY  "ovs_datapath"
 #define OVS_DATAPATH_MCGROUP "ovs_datapath"
@@ -56,18 +69,6 @@ enum ovs_datapath_cmd {
 	OVS_DP_CMD_SET
 };
 
-/**
- * struct ovs_header - header for OVS Generic Netlink messages.
- * @dp_ifindex: ifindex of local port for datapath (0 to make a request not
- * specific to a datapath).
- *
- * Attributes following the header are specific to a particular OVS Generic
- * Netlink family, but all of the OVS families use this header.
- */
-struct ovs_header {
-	int dp_ifindex;
-};
-
 /**
  * enum ovs_datapath_attr - attributes for %OVS_DP_* commands.
  * @OVS_DP_ATTR_NAME: Name of the network device that serves as the "local
@@ -96,10 +97,10 @@ enum ovs_datapath_attr {
 #define OVS_DP_ATTR_MAX (__OVS_DP_ATTR_MAX - 1)
 
 struct ovs_dp_stats {
-    __u64 n_hit;             /* Number of flow table matches. */
-    __u64 n_missed;          /* Number of flow table misses. */
-    __u64 n_lost;            /* Number of misses not sent to userspace. */
-    __u64 n_flows;           /* Number of flows present */
+	__u64 n_hit;             /* Number of flow table matches. */
+	__u64 n_missed;          /* Number of flow table misses. */
+	__u64 n_lost;            /* Number of misses not sent to userspace. */
+	__u64 n_flows;           /* Number of flows present */
 };
 
 struct ovs_vport_stats {
@@ -113,21 +114,23 @@ struct ovs_vport_stats {
 	__u64   tx_dropped;		/* no space available in linux  */
 };
 
-/* Logical ports. */
+/* Fixed logical ports. */
 #define OVSP_LOCAL      ((__u16)0)
-
+
+/* Packet transfer. */
+
 #define OVS_PACKET_FAMILY "ovs_packet"
 #define OVS_PACKET_VERSION 0x1
 
 enum ovs_packet_cmd {
-        OVS_PACKET_CMD_UNSPEC,
+	OVS_PACKET_CMD_UNSPEC,
 
-        /* Kernel-to-user notifications. */
-        OVS_PACKET_CMD_MISS,    /* Flow table miss. */
-        OVS_PACKET_CMD_ACTION,  /* OVS_ACTION_ATTR_USERSPACE action. */
+	/* Kernel-to-user notifications. */
+	OVS_PACKET_CMD_MISS,    /* Flow table miss. */
+	OVS_PACKET_CMD_ACTION,  /* OVS_ACTION_ATTR_USERSPACE action. */
 
-        /* User commands. */
-        OVS_PACKET_CMD_EXECUTE  /* Apply actions to a packet. */
+	/* Userspace commands. */
+	OVS_PACKET_CMD_EXECUTE  /* Apply actions to a packet. */
 };
 
 /**
@@ -160,19 +163,9 @@ enum ovs_packet_attr {
 };
 
 #define OVS_PACKET_ATTR_MAX (__OVS_PACKET_ATTR_MAX - 1)
-
-enum ovs_vport_type {
-	OVS_VPORT_TYPE_UNSPEC,
-	OVS_VPORT_TYPE_NETDEV,   /* network device */
-	OVS_VPORT_TYPE_INTERNAL, /* network device implemented by datapath */
-	OVS_VPORT_TYPE_PATCH,    /* virtual tunnel connecting two vports */
-	OVS_VPORT_TYPE_GRE,      /* GRE tunnel */
-	OVS_VPORT_TYPE_CAPWAP,   /* CAPWAP tunnel */
-	__OVS_VPORT_TYPE_MAX
-};
 
-#define OVS_VPORT_TYPE_MAX (__OVS_VPORT_TYPE_MAX - 1)
-
+/* Virtual ports. */
+
 #define OVS_VPORT_FAMILY  "ovs_vport"
 #define OVS_VPORT_MCGROUP "ovs_vport"
 #define OVS_VPORT_VERSION 0x1
@@ -184,6 +177,18 @@ enum ovs_vport_cmd {
 	OVS_VPORT_CMD_GET,
 	OVS_VPORT_CMD_SET
 };
+
+enum ovs_vport_type {
+	OVS_VPORT_TYPE_UNSPEC,
+	OVS_VPORT_TYPE_NETDEV,   /* network device */
+	OVS_VPORT_TYPE_INTERNAL, /* network device implemented by datapath */
+	OVS_VPORT_TYPE_PATCH,    /* virtual tunnel connecting two vports */
+	OVS_VPORT_TYPE_GRE,      /* GRE tunnel */
+	OVS_VPORT_TYPE_CAPWAP,   /* CAPWAP tunnel */
+	__OVS_VPORT_TYPE_MAX
+};
+
+#define OVS_VPORT_TYPE_MAX (__OVS_VPORT_TYPE_MAX - 1)
 
 /**
  * enum ovs_vport_attr - attributes for %OVS_VPORT_* commands.
@@ -236,7 +241,7 @@ enum {
 };
 
 #define OVS_PATCH_ATTR_MAX (__OVS_PATCH_ATTR_MAX - 1)
-
+
 /* Flows. */
 
 #define OVS_FLOW_FAMILY  "ovs_flow"
@@ -252,8 +257,8 @@ enum ovs_flow_cmd {
 };
 
 struct ovs_flow_stats {
-    __u64 n_packets;         /* Number of matched packets. */
-    __u64 n_bytes;           /* Number of matched bytes. */
+	__u64 n_packets;         /* Number of matched packets. */
+	__u64 n_bytes;           /* Number of matched bytes. */
 };
 
 enum ovs_key_attr {
