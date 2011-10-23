@@ -949,13 +949,8 @@ send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
             VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
                          "with unknown MAC", ofproto->up.name, port_num);
         } else {
-            int error = netdev_send(ofport->up.netdev, pkt);
-            if (error) {
-                VLOG_WARN_RL(&rl, "%s: sending BPDU on port %s failed (%s)",
-                             ofproto->up.name,
-                             netdev_get_name(ofport->up.netdev),
-                             strerror(error));
-            }
+            send_packet(ofproto_dpif_cast(ofport->up.ofproto),
+                        ofport->odp_port, pkt);
         }
     }
     ofpbuf_delete(pkt);
@@ -1549,12 +1544,8 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
                                  pdu_size);
         memcpy(packet_pdu, pdu, pdu_size);
 
-        error = netdev_send(port->up.netdev, &packet);
-        if (error) {
-            VLOG_WARN_RL(&rl, "port %s: sending LACP PDU on iface %s failed "
-                         "(%s)", port->bundle->name,
-                         netdev_get_name(port->up.netdev), strerror(error));
-        }
+        send_packet(ofproto_dpif_cast(port->up.ofproto), port->odp_port,
+                    &packet);
         ofpbuf_uninit(&packet);
     } else {
         VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
@@ -1573,7 +1564,16 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     error = n_packets = n_errors = 0;
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         if (e->port.p != bundle) {
-            int ret = bond_send_learning_packet(bundle->bond, e->mac, e->vlan);
+            struct ofpbuf *learning_packet;
+            struct ofport_dpif *port;
+            int ret;
+
+            learning_packet = bond_compose_learning_packet(bundle->bond, e->mac,
+                                                           e->vlan,
+                                                           (void **)&port);
+            ret = send_packet(ofproto_dpif_cast(port->up.ofproto),
+                              port->odp_port, learning_packet);
+            ofpbuf_delete(learning_packet);
             if (ret) {
                 error = ret;
                 n_errors++;

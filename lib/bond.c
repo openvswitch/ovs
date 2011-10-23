@@ -484,14 +484,15 @@ bond_wait(struct bond *bond)
 static bool
 may_send_learning_packets(const struct bond *bond)
 {
-    return !bond->lacp_negotiated && bond->balance != BM_AB;
+    return !bond->lacp_negotiated && bond->balance != BM_AB &&
+           bond->active_slave;
 }
 
 /* Returns true if 'bond' needs the client to send out packets to assist with
  * MAC learning on 'bond'.  If this function returns true, then the client
  * should iterate through its MAC learning table for the bridge on which 'bond'
  * is located.  For each MAC that has been learned on a port other than 'bond',
- * it should call bond_send_learning_packet().
+ * it should call bond_compose_learning_packet().
  *
  * This function will only return true if 'bond' is in SLB mode and LACP is not
  * negotiated.  Otherwise sending learning packets isn't necessary.
@@ -507,37 +508,33 @@ bond_should_send_learning_packets(struct bond *bond)
 
 /* Sends a gratuitous learning packet on 'bond' from 'eth_src' on 'vlan'.
  *
- * See bond_should_send_learning_packets() for description of usage. */
-int
-bond_send_learning_packet(struct bond *bond,
-                          const uint8_t eth_src[ETH_ADDR_LEN],
-                          uint16_t vlan)
+ * See bond_should_send_learning_packets() for description of usage. The
+ * caller should send the composed packet on the port associated with
+ * port_aux and takes ownership of the returned ofpbuf. */
+struct ofpbuf *
+bond_compose_learning_packet(struct bond *bond,
+                             const uint8_t eth_src[ETH_ADDR_LEN],
+                             uint16_t vlan, void **port_aux)
 {
     struct bond_slave *slave;
-    struct ofpbuf packet;
+    struct ofpbuf *packet;
     struct flow flow;
-    int error;
 
     assert(may_send_learning_packets(bond));
-    if (!bond->active_slave) {
-        /* Nowhere to send the learning packet. */
-        return 0;
-    }
 
     memset(&flow, 0, sizeof flow);
     memcpy(flow.dl_src, eth_src, ETH_ADDR_LEN);
     slave = choose_output_slave(bond, &flow, vlan);
 
-    ofpbuf_init(&packet, 0);
-    compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
+    packet = ofpbuf_new(0);
+    compose_benign_packet(packet, "Open vSwitch Bond Failover", 0xf177,
                           eth_src);
     if (vlan) {
-        eth_push_vlan(&packet, htons(vlan));
+        eth_push_vlan(packet, htons(vlan));
     }
-    error = netdev_send(slave->netdev, &packet);
-    ofpbuf_uninit(&packet);
 
-    return error;
+    *port_aux = slave->aux;
+    return packet;
 }
 
 /* Checks whether a packet that arrived on 'slave_' within 'bond', with an
