@@ -35,6 +35,7 @@ Post-v1.2.0
     - Added support for native VLAN tagging.  A new "vlan_mode"
       parameter can be set for "port". Possible values: "access",
       "trunk", "native-tagged" and "native-untagged".
+    - test-openflowd has been removed.  Please use ovs-vswitchd instead.
 
 v1.2.0 - 03 Aug 2011
 ------------------------

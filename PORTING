@@ -245,11 +245,6 @@ ovs_be64 as fixed-width types in network byte order.  Each of the
 latter is equivalent to the one of the former, but the difference in
 name makes the intended use obvious.
 
-ovs-vswitchd is the most sophisticated of ofproto's clients, but
-ofproto can have other clients as well.  test-openflowd, in the
-"tests" directory, is much simpler than ovs-vswitchd.  It may be
-easier to initially bring up test-openflowd as part of a port.
-
 lib/entropy.c assumes that it can obtain high-quality random number
 seeds at startup by reading from /dev/urandom.  You will need to
 modify it if this is not true on your platform.

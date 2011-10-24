@@ -2,26 +2,6 @@ m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
-m4_define([OFPROTO_START],
-  [OVS_RUNDIR=$PWD; export OVS_RUNDIR
-   OVS_LOGDIR=$PWD; export OVS_LOGDIR
-   trap 'kill `cat test-openflowd.pid`' 0
-   AT_CAPTURE_FILE([test-openflowd.log])
-   AT_CHECK(
-     [test-openflowd --detach --pidfile --enable-dummy --log-file --fail=closed dummy@br0 none --datapath-id=fedcba9876543210 $1],
-     [0], [], [stderr])
-   AT_CHECK([[sed < stderr '
-/vlog|INFO|opened log file/d
-/openflowd|INFO|Open vSwitch version/d
-/openflowd|INFO|OpenFlow protocol version/d
-/ofproto|INFO|using datapath ID/d
-/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
-])
-
-m4_define([OFPROTO_STOP],
-  [AT_CHECK([ovs-appctl -t test-openflowd exit])
-   trap '' 0])
-
 m4_define([OVS_VSWITCHD_START],
   [dnl Skip this test if running as root.  Otherwise ovs-vswitchd will tear
    dnl down any existing datapaths if the kernel module is loaded.
@@ -57,7 +37,7 @@ m4_define([OVS_VSWITCHD_START],
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
 
    dnl Add bridges, ports, etc.
-   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 -- $1])
+   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 fail-mode=secure -- $1])
 ])
 
 m4_define([OVS_VSWITCHD_STOP],

@@ -1,13 +1,13 @@
 AT_BANNER([ofproto])
 
 AT_SETUP([ofproto - echo request])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN probe br0])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto - feature request, config request])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
@@ -18,35 +18,35 @@ features: capabilities:0x87, actions:0xfff
      state:      LINK_DOWN
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - port stats])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN dump-ports br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_PORT reply: 1 ports
   port 65534: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=0, bytes=0, drop=0, errs=0, coll=0
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - queue stats])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN queue-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_QUEUE reply: 0 queues
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto - mod-port])
-OFPROTO_START
+OVS_VSWITCHD_START
 for command_config_state in \
     'up 0 0' \
     'noflood NO_FLOOD 0' \
@@ -67,11 +67,11 @@ features: capabilities:0x87, actions:0xfff
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 done
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto - basic flow_mod commands (NXM)])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
 ])
 AT_CHECK([echo 'in_port=1,actions=0' | ovs-ofctl add-flows br0 -])
@@ -89,11 +89,11 @@ NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS], [0], [NXST_FLOW reply:
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto - basic flow_mod commands (OpenFlow 1.0)])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS], [0], [OFPST_FLOW reply:
 ])
 AT_CHECK([echo 'in_port=1,actions=0' | ovs-ofctl -F openflow10 add-flows br0 -])
@@ -111,5 +111,5 @@ OFPST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
 AT_CHECK([ovs-ofctl -F openflow10 del-flows br0])
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS], [0], [OFPST_FLOW reply:
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP

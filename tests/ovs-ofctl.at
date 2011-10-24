@@ -540,45 +540,45 @@ dnl (If it doesn't, then either the tun_id won't show up at all, or it will
 dnl additionally show up as the top 32 bits of the cookie.)  This checks
 dnl for regression against bug #4566.
 AT_SETUP([ovs-ofctl -F option with flow_mods])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F nxm add-flow br0 tun_id=0x12345678,actions=drop])
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
 NXST_FLOW reply:
  cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, tun_id=0x12345678 actions=drop
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl Check that "-F openflow10" is really honored on dump-flows.
 dnl (If it isn't, then dump-flows will show the register match.)
 AT_SETUP([ovs-ofctl dump-flows honors -F option])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 reg0=0x12345,actions=drop])
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
 OFPST_FLOW reply:
  cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, actions=drop
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl Check that "-F openflow10" fails on dump-flows if the requested match
 dnl can't be represented in OpenFlow 1.0.
 AT_SETUP([ovs-ofctl dump-flows rejects bad -F option])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows unix:br0.mgmt reg0=0xabcdef], [1], [],
   [ovs-ofctl: unix:br0.mgmt: cannot use requested flow format nxm for specified flow
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl Check that add-flow reports non-normalized flows (feature #5029).
 AT_SETUP([ovs-ofctl add-flow reports non-normalized flows])
-OFPROTO_START
+OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl TESTABLE_LOG add-flow br0 nw_src=1.2.3.4,actions=5],
   [0], [], [dnl
 ofp_util|INFO|normalization changed ofp_match, details:
 ofp_util|INFO| pre: nw_src=1.2.3.4
 ofp_util|INFO|post: @&t@
 ])
-OFPROTO_STOP
+OVS_VSWITCHD_STOP
 AT_CLEANUP
