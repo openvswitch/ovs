@@ -1165,8 +1165,8 @@ stp_process_packet(const struct ofport_dpif *ofport,
     }
 
     /* Trim off padding on payload. */
-    if (payload.size > htons(eth->eth_type) + ETH_HEADER_LEN) {
-        payload.size = htons(eth->eth_type) + ETH_HEADER_LEN;
+    if (payload.size > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
+        payload.size = ntohs(eth->eth_type) + ETH_HEADER_LEN;
     }
 
     if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
