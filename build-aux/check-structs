@@ -23,13 +23,18 @@ token = None
 line = ""
 idRe = "[a-zA-Z_][a-zA-Z_0-9]*"
 tokenRe = "#?" + idRe + "|[0-9]+|."
+includeRe = re.compile(r'\s*#include\s+"(openflow/[^#]+)"')
+includePath = ''
 inComment = False
 inDirective = False
+inputStack = []
 def getToken():
     global token
     global line
     global inComment
     global inDirective
+    global inputFile
+    global fileName
     while True:
         line = line.lstrip()
         if line != "":
@@ -59,16 +64,27 @@ def getToken():
             return True
         else:
             global lineNumber
-            line = inputFile.readline()
-            lineNumber += 1
-            while line.endswith("\\\n"):
-                line = line[:-2] + inputFile.readline()
+            while True:
+                line = inputFile.readline()
                 lineNumber += 1
-            if line == "":
-                if token == None:
-                    fatal("unexpected end of input")
-                token = None
-                return False
+                while line.endswith("\\\n"):
+                    line = line[:-2] + inputFile.readline()
+                    lineNumber += 1
+                match = includeRe.match(line)
+                if match:
+                    inputStack.append((fileName, inputFile, lineNumber))
+                    inputFile = open(includePath + match.group(1))
+                    lineNumber = 0
+                    continue
+                if line == "":
+                    if inputStack:
+                        fileName, inputFile, lineNumber = inputStack.pop()
+                        continue
+                    if token == None:
+                        fatal("unexpected end of input")
+                    token = None
+                    return False
+                break
     
 def fatal(msg):
     sys.stderr.write("%s:%d: error at \"%s\": %s\n" % (fileName, lineNumber, token, msg))
@@ -199,7 +215,7 @@ def checkStructs():
         argv0 = os.path.basename(sys.argv[0])
         print '''\
 %(argv0)s, for checking struct and struct member alignment
-usage: %(argv0)s HEADER [HEADER]...
+usage: %(argv0)s -Ipath HEADER [HEADER]...
 
 This program reads the header files specified on the command line and
 verifies that all struct members are aligned on natural boundaries
@@ -210,16 +226,19 @@ some ABIs for ARM require all structs to be a multiple of 32 bits), or
 compiler adding additional padding.  Finally, it checks struct size
 assertions using OFP_ASSERT.
 
-Header files are read in the order specified.  #include directives are
-not processed, so specify them in dependency order.
-
-This program is specialized for reading include/openflow/openflow.h
-and include/openflow/nicira-ext.h.  It will not work on arbitrary
-header files without extensions.''' % {"argv0": argv0}
+This program is specialized for reading Open vSwitch's OpenFlow header
+files.  It will not work on arbitrary header files without extensions.\
+''' % {"argv0": argv0}
         sys.exit(0)
 
     global fileName
     for fileName in sys.argv[1:]:
+        if fileName.startswith('-I'):
+            global includePath
+            includePath = fileName[2:]
+            if not includePath.endswith('/'):
+                includePath += '/'
+            continue
         global inputFile
         global lineNumber
         inputFile = open(fileName)
