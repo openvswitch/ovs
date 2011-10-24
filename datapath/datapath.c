@@ -552,7 +552,7 @@ static int validate_action_key(const struct nlattr *a,
 	    nla_len(ovs_key) != ovs_key_lens[key_type])
 		return -EINVAL;
 
-#define ACTION(act, key)	((act << 8) | key)
+#define ACTION(act, key)	(((act) << 8) | (key))
 
 	switch(ACTION(act_type, key_type)) {
 	const struct ovs_key_ipv4 *ipv4_key;
