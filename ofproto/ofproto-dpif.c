@@ -4289,13 +4289,24 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     ctx->odp_actions = ofpbuf_new(512);
     ofpbuf_reserve(ctx->odp_actions, NL_A_U32_SIZE);
+    ctx->tags = 0;
+    ctx->may_set_up_flow = true;
+    ctx->has_learn = false;
+    ctx->has_normal = false;
+    ctx->nf_output_iface = NF_OUT_DROP;
+    ctx->recurse = 0;
+    ctx->priority = 0;
+    ctx->base_priority = 0;
+    ctx->base_flow = ctx->flow;
+    ctx->base_flow.tun_id = 0;
+    ctx->table_id = 0;
 
     if (ctx->flow.tos_frag & FLOW_FRAG_ANY) {
         switch (ctx->ofproto->up.frag_handling) {
         case OFPC_FRAG_NORMAL:
             /* We must pretend that transport ports are unavailable. */
-            ctx->flow.tp_src = htons(0);
-            ctx->flow.tp_dst = htons(0);
+            ctx->flow.tp_src = ctx->base_flow.tp_src = htons(0);
+            ctx->flow.tp_dst = ctx->base_flow.tp_dst = htons(0);
             break;
 
         case OFPC_FRAG_DROP:
@@ -4309,18 +4320,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
             break;
         }
     }
-
-    ctx->tags = 0;
-    ctx->may_set_up_flow = true;
-    ctx->has_learn = false;
-    ctx->has_normal = false;
-    ctx->nf_output_iface = NF_OUT_DROP;
-    ctx->recurse = 0;
-    ctx->priority = 0;
-    ctx->base_priority = 0;
-    ctx->base_flow = ctx->flow;
-    ctx->base_flow.tun_id = 0;
-    ctx->table_id = 0;
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
