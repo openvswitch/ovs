@@ -560,7 +560,7 @@ static int validate_action_key(const struct nlattr *a,
 
 	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TUN_ID):
 	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_ETHERNET):
-			break;
+		break;
 
 	case ACTION(OVS_ACTION_ATTR_PUSH, OVS_KEY_ATTR_8021Q):
 		q_key = nla_data(ovs_key);
