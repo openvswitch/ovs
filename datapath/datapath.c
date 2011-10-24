@@ -512,24 +512,29 @@ static int validate_actions(const struct nlattr *attr,
 static int validate_sample(const struct nlattr *attr,
 				const struct sw_flow_key *key, int depth)
 {
-	static const struct nla_policy sample_policy[OVS_SAMPLE_ATTR_MAX + 1] =
-	{
-		[OVS_SAMPLE_ATTR_PROBABILITY] = {.type = NLA_U32 },
-		[OVS_SAMPLE_ATTR_ACTIONS] = {.type = NLA_UNSPEC },
-	};
-	struct nlattr *a[OVS_SAMPLE_ATTR_MAX + 1];
-	int error;
+	const struct nlattr *attrs[OVS_SAMPLE_ATTR_MAX + 1];
+	const struct nlattr *probability, *actions;
+	const struct nlattr *a;
+	int rem;
 
-	error = nla_parse_nested(a, OVS_SAMPLE_ATTR_MAX, attr, sample_policy);
-	if (error)
-		return error;
-
-	if (!a[OVS_SAMPLE_ATTR_PROBABILITY])
-		return -EINVAL;
-	if (!a[OVS_SAMPLE_ATTR_ACTIONS])
+	memset(attrs, 0, sizeof(attrs));
+	nla_for_each_nested (a, attr, rem) {
+		int type = nla_type(a);
+		if (!type || type > OVS_SAMPLE_ATTR_MAX || attrs[type])
+			return -EINVAL;
+		attrs[type] = a;
+	}
+	if (rem)
 		return -EINVAL;
 
-	return validate_actions(a[OVS_SAMPLE_ATTR_ACTIONS], key, (depth + 1));
+	probability = attrs[OVS_SAMPLE_ATTR_PROBABILITY];
+	if (!probability || nla_len(probability) != sizeof(u32))
+		return -EINVAL;
+
+	actions = attrs[OVS_SAMPLE_ATTR_ACTIONS];
+	if (!actions || (nla_len(actions) && nla_len(actions) < NLA_HDRLEN))
+		return -EINVAL;
+	return validate_actions(actions, key, depth + 1);
 }
 
 static int validate_action_key(const struct nlattr *a,
