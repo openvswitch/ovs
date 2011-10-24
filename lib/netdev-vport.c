@@ -578,6 +578,7 @@ parse_tunnel_config(const char *name, const char *type,
     struct shash_node *node;
     bool ipsec_mech_set = false;
     ovs_be32 daddr = htonl(0);
+    ovs_be32 saddr = htonl(0);
     uint32_t flags;
 
     flags = TNL_F_DF_DEFAULT | TNL_F_PMTUD | TNL_F_HDR_CACHE;
@@ -603,8 +604,7 @@ parse_tunnel_config(const char *name, const char *type,
             if (lookup_ip(node->data, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
-                nl_msg_put_be32(options, OVS_TUNNEL_ATTR_SRC_IPV4,
-                                in_addr.s_addr);
+                saddr = in_addr.s_addr;
             }
         } else if (!strcmp(node->name, "tos")) {
             if (!strcmp(node->data, "inherit")) {
@@ -706,6 +706,14 @@ parse_tunnel_config(const char *name, const char *type,
         return EINVAL;
     }
     nl_msg_put_be32(options, OVS_TUNNEL_ATTR_DST_IPV4, daddr);
+
+    if (saddr) {
+        if (ip_is_multicast(daddr)) {
+            VLOG_WARN("%s: remote_ip is multicast, ignoring local_ip", name);
+        } else {
+            nl_msg_put_be32(options, OVS_TUNNEL_ATTR_SRC_IPV4, saddr);
+        }
+    }
 
     nl_msg_put_u32(options, OVS_TUNNEL_ATTR_FLAGS, flags);
 

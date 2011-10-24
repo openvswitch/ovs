@@ -89,6 +89,9 @@ struct tnl_mutable_config {
 	u32	flags;
 	u8	tos;
 	u8	ttl;
+
+	/* Multicast configuration. */
+	int	mlink;
 };
 
 struct tnl_ops {

@@ -10,8 +10,10 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/if_vlan.h>
+#include <linux/igmp.h>
 #include <linux/in.h>
 #include <linux/in_route.h>
+#include <linux/inetdevice.h>
 #include <linux/jhash.h>
 #include <linux/list.h>
 #include <linux/kernel.h>
@@ -147,6 +149,21 @@ static void free_cache_rcu(struct rcu_head *rcu)
 	free_cache(c);
 }
 
+/* Frees the portion of 'mutable' that requires RTNL and thus can't happen
+ * within an RCU callback.  Fortunately this part doesn't require waiting for
+ * an RCU grace period.
+ */
+static void free_mutable_rtnl(struct tnl_mutable_config *mutable)
+{
+	ASSERT_RTNL();
+	if (ipv4_is_multicast(mutable->key.daddr) && mutable->mlink) {
+		struct in_device *in_dev;
+		in_dev = inetdev_by_index(&init_net, mutable->mlink);
+		if (in_dev)
+			ip_mc_dec_group(in_dev, mutable->key.daddr);
+	}
+}
+
 static void assign_config_rcu(struct vport *vport,
 			      struct tnl_mutable_config *new_config)
 {
@@ -155,6 +172,8 @@ static void assign_config_rcu(struct vport *vport,
 
 	old_config = rtnl_dereference(tnl_vport->mutable);
 	rcu_assign_pointer(tnl_vport->mutable, new_config);
+
+	free_mutable_rtnl(old_config);
 	call_rcu(&old_config->rcu, free_config_rcu);
 }
 
@@ -269,6 +288,26 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 {
 	struct port_lookup_key lookup;
 	struct vport *vport;
+
+	if (ipv4_is_multicast(saddr)) {
+		lookup.saddr = 0;
+		lookup.daddr = saddr;
+		if (key_remote_ports) {
+			lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
+			lookup.in_key = key;
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
+		}
+		if (remote_ports) {
+			lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
+			lookup.in_key = 0;
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
+		}
+		return NULL;
+	}
 
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
@@ -932,6 +971,31 @@ unlock:
 	return cache;
 }
 
+static struct rtable *__find_route(const struct tnl_mutable_config *mutable,
+				   u8 ipproto, u8 tos)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
+	struct flowi fl = { .nl_u = { .ip4_u =
+				      { .daddr = mutable->key.daddr,
+					.saddr = mutable->key.saddr,
+					.tos = tos } },
+			    .proto = ipproto };
+	struct rtable *rt;
+
+	if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
+		return ERR_PTR(-EADDRNOTAVAIL);
+
+	return rt;
+#else
+	struct flowi4 fl = { .daddr = mutable->key.daddr,
+			     .saddr = mutable->key.saddr,
+			     .flowi4_tos = tos,
+			     .flowi4_proto = ipproto };
+
+	return ip_route_output_key(&init_net, &fl);
+#endif
+}
+
 static struct rtable *find_route(struct vport *vport,
 				 const struct tnl_mutable_config *mutable,
 				 u8 tos, struct tnl_cache **cache)
@@ -947,25 +1011,10 @@ static struct rtable *find_route(struct vport *vport,
 		return cur_cache->rt;
 	} else {
 		struct rtable *rt;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-		struct flowi fl = { .nl_u = { .ip4_u =
-					      { .daddr = mutable->key.daddr,
-						.saddr = mutable->key.saddr,
-						.tos = tos } },
-				    .proto = tnl_vport->tnl_ops->ipproto };
 
-		if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
-			return NULL;
-#else
-		struct flowi4 fl = { .daddr = mutable->key.daddr,
-				     .saddr = mutable->key.saddr,
-				     .flowi4_tos = tos,
-				     .flowi4_proto = tnl_vport->tnl_ops->ipproto };
-
-		rt = ip_route_output_key(&init_net, &fl);
+		rt = __find_route(mutable, tnl_vport->tnl_ops->ipproto, tos);
 		if (IS_ERR(rt))
 			return NULL;
-#endif
 
 		if (likely(tos == mutable->tos))
 			*cache = build_cache(vport, mutable, rt);
@@ -1310,9 +1359,12 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 
 	mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
 
-	if (a[OVS_TUNNEL_ATTR_SRC_IPV4])
-		mutable->key.saddr = nla_get_be32(a[OVS_TUNNEL_ATTR_SRC_IPV4]);
 	mutable->key.daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+	if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
+		if (ipv4_is_multicast(mutable->key.daddr))
+			return -EINVAL;
+		mutable->key.saddr = nla_get_be32(a[OVS_TUNNEL_ATTR_SRC_IPV4]);
+	}
 
 	if (a[OVS_TUNNEL_ATTR_TOS]) {
 		mutable->tos = nla_get_u8(a[OVS_TUNNEL_ATTR_TOS]);
@@ -1346,6 +1398,22 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 	old_vport = port_table_lookup(&mutable->key, &old_mutable);
 	if (old_vport && old_vport != cur_vport)
 		return -EEXIST;
+
+	mutable->mlink = 0;
+	if (ipv4_is_multicast(mutable->key.daddr)) {
+		struct net_device *dev;
+		struct rtable *rt;
+
+		rt = __find_route(mutable, tnl_ops->ipproto, mutable->tos);
+		if (IS_ERR(rt))
+			return -EADDRNOTAVAIL;
+		dev = rt_dst(rt).dev;
+		ip_rt_put(rt);
+		if (__in_dev_get_rtnl(dev) == NULL)
+			return -EADDRNOTAVAIL;
+		mutable->mlink = dev->ifindex;
+		ip_mc_inc_group(__in_dev_get_rtnl(dev), mutable->key.daddr);
+	}
 
 	return 0;
 }
@@ -1399,6 +1467,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	return vport;
 
 error_free_mutable:
+	free_mutable_rtnl(mutable);
 	kfree(mutable);
 error_free_vport:
 	vport_free(vport);
@@ -1437,6 +1506,7 @@ int tnl_set_options(struct vport *vport, struct nlattr *options)
 	return 0;
 
 error_free:
+	free_mutable_rtnl(mutable);
 	kfree(mutable);
 error:
 	return err;
@@ -1480,22 +1550,25 @@ static void free_port_rcu(struct rcu_head *rcu)
 void tnl_destroy(struct vport *vport)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	const struct tnl_mutable_config *mutable;
+	struct tnl_mutable_config *mutable;
 
 	mutable = rtnl_dereference(tnl_vport->mutable);
 	port_table_remove_port(vport);
+	free_mutable_rtnl(mutable);
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
 }
 
 int tnl_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_mutable_config *mutable;
+	struct tnl_mutable_config *old_mutable, *mutable;
 
-	mutable = kmemdup(rtnl_dereference(tnl_vport->mutable),
-			  sizeof(struct tnl_mutable_config), GFP_KERNEL);
+	old_mutable = rtnl_dereference(tnl_vport->mutable);
+	mutable = kmemdup(old_mutable, sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable)
 		return -ENOMEM;
+
+	old_mutable->mlink = 0;
 
 	memcpy(mutable->eth_addr, addr, ETH_ALEN);
 	assign_config_rcu(vport, mutable);

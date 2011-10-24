@@ -188,6 +188,8 @@ static void gre_err(struct sk_buff *skb, u32 info)
 		return;
 
 	iph = (struct iphdr *)skb->data;
+	if (ipv4_is_multicast(iph->daddr))
+		return;
 
 	tunnel_hdr_len = parse_header(iph, &flags, &key);
 	if (tunnel_hdr_len < 0)
