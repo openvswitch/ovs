@@ -111,7 +111,7 @@ HOSTS = '/etc/hosts'
 HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
 DHCP_LEASE_DIR = ['/var/lib/dhclient', '/var/lib/dhcp3']
-OPENVSWITCH_LOG_DIR = '@LOGDIR@'
+OPENVSWITCH_LOG_DIR = '@LOGDIR@/'
 OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
 OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
@@ -586,7 +586,6 @@ exclude those logs from the archive.
     tree_output(CAP_NETWORK_STATUS, PROC_NET_VLAN_DIR)
     cmd_output(CAP_NETWORK_STATUS, [TC, '-s', 'qdisc'])
     file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
-    tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_LOG_DIR)
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
@@ -610,17 +609,18 @@ exclude those logs from the archive.
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
+    logs = ([ VAR_LOG_DIR + x for x in
+             [ 'crit.log', 'kern.log', 'daemon.log', 'user.log',
+             'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot' ]]
+            + [ OPENVSWITCH_LOG_DIR + x for x in
+                [ 'ovs-vswitchd.log', 'ovs-brcompatd.log', 'ovsdb-server.log',
+                  'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log' ]])
+    file_output(CAP_SYSTEM_LOGS, logs)
     file_output(CAP_SYSTEM_LOGS,
-         [ VAR_LOG_DIR + x for x in
-           [ 'crit.log', 'kern.log', 'daemon.log', 'user.log', 'syslog', 
-             'messages', 'secure', 'debug', 'dmesg', 'boot'] +
-           [ f % n for n in range(1, 20) \
-                 for f in ['crit.log.%d', 'crit.log.%d.gz',
-                           'kern.log.%d', 'kern.log.%d.gz',
-                           'daemon.log.%d', 'daemon.log.%d.gz',
-                           'user.log.%d', 'user.log.%d.gz',
-                           'messages.%d', 'messages.%d.gz',
-                           'syslog.%d', 'syslog.%d.gz']]])
+                [ '%s.%d' % (f, n) for n in range(20) for f in logs ])
+    file_output(CAP_SYSTEM_LOGS,
+                [ '%s.%d.gz' % (f, n) for n in range(20) for f in logs ])
+
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
 
