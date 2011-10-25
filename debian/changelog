@@ -1,3 +1,45 @@
+openvswitch (1.3.0-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - OpenFlow:
+      - Added an OpenFlow extension which allows the "output" action to accept
+        NXM fields.
+      - Added an OpenFlow extension for flexible learning.
+      - Bumped number of NXM registers from four to five.
+    - ovs-appctl:
+      - New "version" command to determine version of running daemon.
+      - If no argument is provided for "cfm/show", displays detailed
+        information about all interfaces with CFM enabled.
+      - If no argument is provided for "lacp/show", displays detailed
+        information about all ports with LACP enabled.
+    - ovs-vswitchd:
+      - The software switch now supports 255 OpenFlow tables, instead
+        of just one.  By default, only table 0 is consulted, but the
+        new NXAST_RESUBMIT_TABLE action can look up in additional
+        tables.  Tables 128 and above are reserved for use by the
+        switch itself; please use only tables 0 through 127.
+      - Add support for 802.1D spanning tree (STP).
+    - Fragment handling extensions:
+      - New OFPC_FRAG_NX_MATCH fragment handling mode, in which L4
+        fields are made available for matching in fragments with
+        offset 0.
+      - New NXM_NX_IP_FRAG match field for matching IP fragments (usable
+        via "ip_frag" in ovs-ofctl).
+      - New ovs-ofctl "get-frags" and "set-frags" commands to get and set
+        fragment handling policy.
+    - CAPWAP tunneling now supports an extension to transport a 64-key.  By
+      default it remains compatible with the old version and other
+      standards-based implementations.
+    - Flow setups are now processed in a round-robin manner across ports
+      to prevent any single client from monopolizing the CPU and conducting
+      a denial of service attack.
+    - Added support for native VLAN tagging.  A new "vlan_mode"
+      parameter can be set for "port". Possible values: "access",
+      "trunk", "native-tagged" and "native-untagged".
+    - test-openflowd has been removed.  Please use ovs-vswitchd instead.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
+
 openvswitch (1.2.0-1) unstable; urgency=low
 
   [ Open vSwitch team ]
