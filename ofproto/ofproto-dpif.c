@@ -3516,19 +3516,12 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
                      const struct flow *flow,
                      const struct user_action_cookie *cookie)
 {
-    size_t offset;
     uint32_t pid;
 
     pid = dpif_port_get_pid(ofproto->dpif,
                             ofp_port_to_odp_port(flow->in_port));
 
-    offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_USERSPACE);
-    nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
-    nl_msg_put_unspec(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
-                      cookie, sizeof *cookie);
-    nl_msg_end_nested(odp_actions, offset);
-
-    return odp_actions->size - NLA_ALIGN(sizeof *cookie);
+    return odp_put_userspace_action(pid, cookie, odp_actions);
 }
 
 /* Compose SAMPLE action for sFlow. */

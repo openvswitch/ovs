@@ -1388,3 +1388,25 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
     return check_expectations(present_attrs, expected_attrs, key, key_len);
 }
+
+/* Appends an OVS_ACTION_ATTR_USERSPACE action to 'odp_actions' that specifies
+ * Netlink PID 'pid'.  If 'cookie' is nonnull, adds a userdata attribute whose
+ * contents contains 'cookie' and returns the offset within 'odp_actions' of
+ * the start of the cookie.  (If 'cookie' is null, then the return value is not
+ * meaningful.) */
+size_t
+odp_put_userspace_action(uint32_t pid, const struct user_action_cookie *cookie,
+                         struct ofpbuf *odp_actions)
+{
+    size_t offset;
+
+    offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_USERSPACE);
+    nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
+    if (cookie) {
+        nl_msg_put_unspec(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
+                          cookie, sizeof *cookie);
+    }
+    nl_msg_end_nested(odp_actions, offset);
+
+    return cookie ? odp_actions->size - NLA_ALIGN(sizeof *cookie) : 0;
+}
