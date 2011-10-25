@@ -96,14 +96,14 @@ void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);
-static inline int flow_compare(const struct flow *, const struct flow *);
+static inline int flow_compare_3way(const struct flow *, const struct flow *);
 static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);
 
 void flow_compose(struct ofpbuf *, const struct flow *);
 
 static inline int
-flow_compare(const struct flow *a, const struct flow *b)
+flow_compare_3way(const struct flow *a, const struct flow *b)
 {
     return memcmp(a, b, FLOW_SIG_SIZE);
 }
@@ -111,7 +111,7 @@ flow_compare(const struct flow *a, const struct flow *b)
 static inline bool
 flow_equal(const struct flow *a, const struct flow *b)
 {
-    return !flow_compare(a, b);
+    return !flow_compare_3way(a, b);
 }
 
 static inline size_t
