@@ -221,10 +221,10 @@ enum ovs_vport_type {
  */
 enum ovs_vport_attr {
 	OVS_VPORT_ATTR_UNSPEC,
-	OVS_VPORT_ATTR_PORT_NO,	/* port number within datapath */
-	OVS_VPORT_ATTR_TYPE,	/* 32-bit OVS_VPORT_TYPE_* constant. */
+	OVS_VPORT_ATTR_PORT_NO,	/* u32 port number within datapath */
+	OVS_VPORT_ATTR_TYPE,	/* u32 OVS_VPORT_TYPE_* constant. */
 	OVS_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
-	OVS_VPORT_ATTR_UPCALL_PID, /* Netlink PID to receive upcalls */
+	OVS_VPORT_ATTR_UPCALL_PID, /* u32 Netlink PID to receive upcalls */
 	OVS_VPORT_ATTR_STATS,	/* struct ovs_vport_stats */
 	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
 	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
@@ -435,38 +435,39 @@ enum ovs_userspace_attr {
 #define OVS_USERSPACE_ATTR_MAX (__OVS_USERSPACE_ATTR_MAX - 1)
 
 /**
- * enum ovs_action_attr -  Action types.
+ * enum ovs_action_attr - Action types.
  *
- * @OVS_ACTION_ATTR_OUTPUT: Output packet to port passed as NLA data.
- * @OVS_ACTION_ATTR_USERSPACE: Nested %OVS_USERSPACE_ATTR_ attributes specifying
- * PID.
- * @OVS_ACTION_ATTR_PUSH: Nested %OVS_KEY_ATTR_* attribute specifying header to
- * push to given packet.
- * E.g. Push vlan tag action would be NLA of %OVS_ACTION_ATTR_PUSH type with
- * nested attribute of type %OVS_KEY_ATTR_8021Q with struct ovs_key_8021q
- * as NLA data.
+ * @OVS_ACTION_ATTR_OUTPUT: Output packet to port.
+ * @OVS_ACTION_ATTR_USERSPACE: Send packet to userspace according to nested
+ * %OVS_USERSPACE_ATTR_* attributes.
+ * @OVS_ACTION_ATTR_PUSH: Push header onto head of packet.  The single nested
+ * %OVS_KEY_ATTR_* attribute specifies a header to push and its value, e.g.  a
+ * nested attribute of type %OVS_KEY_ATTR_8021Q, with struct ovs_key_8021q as
+ * argument, would push a VLAN header on the front of the packet.
  * @OVS_ACTION_ATTR_POP: Pop header according to %OVS_KEY_ATTR_ sent as
- * attribute data.
- * @OVS_ACTION_ATTR_SET: Nested %OVS_KEY_ATTR_* attribute specifying the
- * field to set to given packet.
- * @OVS_ACTION_ATTR_SET_PRIORITY: A set skb->priority to 32-bit number passed
- * as NLA data.
+ * attribute data, e.g. %OVS_KEY_ATTR_8021Q as argument pops an outer VLAN
+ * header.
+ * @OVS_ACTION_ATTR_SET: Replaces the contents of an existing header.
+ * The argument takes the same form as %OVS_ACTION_ATTR_PUSH.
+ * @OVS_ACTION_ATTR_SET_PRIORITY: Sets skb->priority to 32-bit number passed
+ * as argument.
  * @OVS_ACTION_ATTR_POP_PRIORITY: Restore skb->priority to original value.
- * @OVS_ACTION_ATTR_SAMPLE: Execute set of actions according to probability
- * %OVS_SAMPLE_ATTR_PROBABILITY.
+ * @OVS_ACTION_ATTR_SAMPLE: Probabilitically executes actions, as specified in
+ * the nested %OVS_SAMPLE_ATTR_* attributes.
  *
  * Only a single field can be set with a single %OVS_ACTION_ATTR_{SET,PUSH}.
+ * Not all fields are modifiable.
  */
 
 enum ovs_action_attr {
 	OVS_ACTION_ATTR_UNSPEC,
-	OVS_ACTION_ATTR_OUTPUT,	      /* Output to switch port. */
+	OVS_ACTION_ATTR_OUTPUT,	      /* u32 port number. */
 	OVS_ACTION_ATTR_USERSPACE,    /* Nested OVS_USERSPACE_ATTR_*. */
-	OVS_ACTION_ATTR_PUSH,         /* Push packet header. */
-	OVS_ACTION_ATTR_POP,          /* Pop packet header. */
-	OVS_ACTION_ATTR_SET,          /* Set packet field(s). */
-	OVS_ACTION_ATTR_SET_PRIORITY, /* Set skb->priority. */
-	OVS_ACTION_ATTR_POP_PRIORITY, /* Restore original skb->priority. */
+	OVS_ACTION_ATTR_PUSH,         /* One nested OVS_KEY_ATTR_*. */
+	OVS_ACTION_ATTR_POP,          /* u16 OVS_KEY_ATTR_*. */
+	OVS_ACTION_ATTR_SET,          /* One nested OVS_KEY_ATTR_*. */
+	OVS_ACTION_ATTR_SET_PRIORITY, /* u32 skb->priority value. */
+	OVS_ACTION_ATTR_POP_PRIORITY, /* No argument. */
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	__OVS_ACTION_ATTR_MAX
 };
