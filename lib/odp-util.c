@@ -182,8 +182,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
         memcpy(&cookie, &userdata, sizeof cookie);
 
         if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
-            ds_put_format(ds, ",controller,length=%"PRIu32,
-                          cookie.data);
+            ds_put_format(ds, ",controller,length=%"PRIu32, cookie.data);
         } else if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
             ds_put_format(ds, ",sFlow,n_output=%"PRIu8","
                           "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32,
