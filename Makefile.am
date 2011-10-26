@@ -46,8 +46,10 @@ EXTRA_DIST = \
 	SubmittingPatches \
 	WHY-OVS \
 	boot.sh \
+	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
-	$(MAN_FRAGMENTS)
+	$(MAN_FRAGMENTS) \
+	$(MAN_ROOTS)
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
@@ -61,6 +63,7 @@ INSTALL_DATA_LOCAL =
 UNINSTALL_LOCAL =
 man_MANS =
 MAN_FRAGMENTS =
+MAN_ROOTS =
 noinst_DATA =
 noinst_HEADERS =
 noinst_LIBRARIES =
@@ -159,6 +162,17 @@ manpage-check: $(MANS) $(MAN_FRAGMENTS)
 	LANG=en_US.UTF-8 groff -w mac -w delim -w escape -w input -w missing -w tab -T ascii -man -p -z $$manpages && touch $@
 CLEANFILES += manpage-check
 endif
+
+include $(srcdir)/manpages.mk
+$(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
+	@$(PERL) $(srcdir)/build-aux/sodepends.pl -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
+	@if cmp -s $(@F).tmp $@; then \
+		touch $@; \
+		rm -f $(@F).tmp; \
+	else \
+		mv $(@F).tmp $@; \
+	fi
+CLEANFILES += manpage-dep-check
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)

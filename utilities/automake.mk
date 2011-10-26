@@ -15,24 +15,26 @@ noinst_SCRIPTS += utilities/ovs-pki-cgi
 scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-lib.sh utilities/ovs-save
 
 EXTRA_DIST += \
+	utilities/ovs-ctl.in \
+	utilities/ovs-lib.sh.in \
+	utilities/ovs-parse-leaks.in \
+	utilities/ovs-pcap.in \
+	utilities/ovs-pki-cgi.in \
+	utilities/ovs-pki.in \
+	utilities/ovs-save \
+	utilities/ovs-tcpundump.in \
+	utilities/ovs-vlan-test.in
+MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-benchmark.1.in \
 	utilities/ovs-controller.8.in \
-	utilities/ovs-ctl.in \
+	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
-	utilities/ovs-lib.sh.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-parse-leaks.8 \
-	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pcap.1.in \
-	utilities/ovs-pcap.in \
-	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
-	utilities/ovs-pki.in \
-	utilities/ovs-save \
 	utilities/ovs-tcpundump.1.in \
-	utilities/ovs-tcpundump.in \
-	utilities/ovs-vlan-test.in \
 	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-vlan-test.8.in \
 	utilities/ovs-vsctl.8.in

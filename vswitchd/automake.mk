@@ -21,9 +21,8 @@ vswitchd_ovs_vswitchd_LDADD = \
 	lib/libsflow.a \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
-EXTRA_DIST += \
-	vswitchd/ovs-vswitchd.8.in \
-	vswitchd/INTERNALS
+EXTRA_DIST += vswitchd/INTERNALS
+MAN_ROOTS += vswitchd/ovs-vswitchd.8.in
 
 if HAVE_NETLINK
 sbin_PROGRAMS += vswitchd/ovs-brcompatd
@@ -33,7 +32,7 @@ vswitchd_ovs_brcompatd_SOURCES = \
 	vswitchd/vswitch-idl.h
 vswitchd_ovs_brcompatd_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 endif
-EXTRA_DIST += vswitchd/ovs-brcompatd.8.in
+MAN_ROOTS += vswitchd/ovs-brcompatd.8.in
 
 # vswitch schema and IDL
 OVSIDL_BUILT += \

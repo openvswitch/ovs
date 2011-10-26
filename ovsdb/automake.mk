@@ -40,7 +40,7 @@ ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
 # ovsdb-tool.1
 man_MANS += ovsdb/ovsdb-tool.1
 DISTCLEANFILES += ovsdb/ovsdb-tool.1
-EXTRA_DIST += ovsdb/ovsdb-tool.1.in
+MAN_ROOTS += ovsdb/ovsdb-tool.1.in
 
 # ovsdb-client
 bin_PROGRAMS += ovsdb/ovsdb-client
@@ -49,7 +49,7 @@ ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 # ovsdb-client.1
 man_MANS += ovsdb/ovsdb-client.1
 DISTCLEANFILES += ovsdb/ovsdb-client.1
-EXTRA_DIST += ovsdb/ovsdb-client.1.in
+MAN_ROOTS += ovsdb/ovsdb-client.1.in
 
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
@@ -58,14 +58,13 @@ ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 # ovsdb-server.1
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1
-EXTRA_DIST += ovsdb/ovsdb-server.1.in
+MAN_ROOTS += ovsdb/ovsdb-server.1.in
 
 # ovsdb-idlc
 EXTRA_DIST += ovsdb/SPECS
 noinst_SCRIPTS += ovsdb/ovsdb-idlc
-EXTRA_DIST += \
-	ovsdb/ovsdb-idlc.in \
-	ovsdb/ovsdb-idlc.1
+EXTRA_DIST += ovsdb/ovsdb-idlc.in
+MAN_ROOTS += ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
 SUFFIXES += .ovsidl .ovsschema
 OVSDB_IDLC = $(run_python) $(srcdir)/ovsdb/ovsdb-idlc.in
