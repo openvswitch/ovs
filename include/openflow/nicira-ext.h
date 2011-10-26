@@ -936,6 +936,13 @@ OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
  * slave.  If the switch does not support the specified 'algorithm' parameter,
  * it should reject the action.
  *
+ * Several algorithms take into account liveness when selecting slaves.  The
+ * liveness of a slave is implementation defined (with one exception), but will
+ * generally take into account things like its carrier status and the results
+ * of any link monitoring protocols which happen to be running on it.  In order
+ * to give controllers a place-holder value, the OFPP_NONE port is always
+ * considered live.
+ *
  * Some slave selection strategies require the use of a hash function, in which
  * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
  * parameter (one of NX_HASH_FIELDS_*) designates which parts of the flow to
