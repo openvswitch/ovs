@@ -4046,7 +4046,6 @@ slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
     case OFPP_NORMAL:
     case OFPP_FLOOD:
     case OFPP_ALL:
-    case OFPP_LOCAL:
     case OFPP_NONE:
         return true;
     case OFPP_CONTROLLER: /* Not supported by the bundle action. */
