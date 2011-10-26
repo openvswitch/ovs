@@ -184,6 +184,7 @@ static struct lacp_settings *port_configure_lacp(struct port *,
                                                  struct lacp_settings *);
 static void port_configure_bond(struct port *, struct bond_settings *,
                                 uint32_t *bond_stable_ids);
+static bool port_is_synthetic(const struct port *);
 
 static void bridge_configure_mirrors(struct bridge *);
 static struct mirror *mirror_create(struct bridge *,
@@ -1600,6 +1601,10 @@ port_refresh_stp_status(struct port *port)
     char *keys[4], *values[4];
     size_t i;
 
+    if (port_is_synthetic(port)) {
+        return;
+    }
+
     /* STP doesn't currently support bonds. */
     if (!list_is_singleton(&port->ifaces)) {
         ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
@@ -2696,6 +2701,14 @@ port_configure_bond(struct port *port, struct bond_settings *s,
 
         netdev_set_miimon_interval(iface->netdev, miimon_interval);
     }
+}
+
+/* Returns true if 'port' is synthetic, that is, if we constructed it locally
+ * instead of obtaining it from the database. */
+static bool
+port_is_synthetic(const struct port *port)
+{
+    return ovsdb_idl_row_is_synthetic(&port->cfg->header_);
 }
 
 /* Interface functions. */
