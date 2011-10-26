@@ -1705,8 +1705,15 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
                     struct ovsdb_datum *datum)
 {
     struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
-    const struct ovsdb_idl_table_class *class = row->table->class;
-    size_t column_idx = column - class->columns;
+    const struct ovsdb_idl_table_class *class;
+    size_t column_idx;
+
+    if (ovsdb_idl_row_is_synthetic(row)) {
+        return;
+    }
+
+    class = row->table->class;
+    column_idx = column - class->columns;
 
     assert(row->new != NULL);
     assert(column_idx < class->n_columns);
@@ -1782,8 +1789,15 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
                      const struct ovsdb_idl_column *column)
 {
     struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
-    const struct ovsdb_idl_table_class *class = row->table->class;
-    size_t column_idx = column - class->columns;
+    const struct ovsdb_idl_table_class *class;
+    size_t column_idx;
+
+    if (ovsdb_idl_row_is_synthetic(row)) {
+        return;
+    }
+
+    class = row->table->class;
+    column_idx = column - class->columns;
 
     assert(row->new != NULL);
     assert(row->old == NULL ||
@@ -1814,6 +1828,10 @@ void
 ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 {
     struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+
+    if (ovsdb_idl_row_is_synthetic(row)) {
+        return;
+    }
 
     assert(row->new != NULL);
     if (!row->old) {
