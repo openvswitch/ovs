@@ -52,7 +52,7 @@ main(void)
 
         /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);
-        error = odp_flow_key_from_string(ds_cstr(&in), &odp_key);
+        error = odp_flow_key_from_string(ds_cstr(&in), NULL, &odp_key);
         if (error) {
             printf("odp_flow_key_from_string: error\n");
             goto next;

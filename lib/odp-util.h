@@ -30,6 +30,7 @@ struct ds;
 struct flow;
 struct nlattr;
 struct ofpbuf;
+struct shash;
 
 #define OVSP_NONE ((uint16_t) -1)
 
@@ -88,7 +89,8 @@ struct odputil_keybuf {
 };
 
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
-int odp_flow_key_from_string(const char *s, struct ofpbuf *);
+int odp_flow_key_from_string(const char *s, const struct shash *port_names,
+                             struct ofpbuf *);
 
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);
 int odp_flow_key_to_flow(const struct nlattr *, size_t, struct flow *);

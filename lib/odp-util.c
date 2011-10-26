@@ -31,11 +31,15 @@
 #include "ofpbuf.h"
 #include "openvswitch/tunnel.h"
 #include "packets.h"
+#include "shash.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
+
+static int parse_odp_key_attr(const char *, const struct shash *port_names,
+                              struct ofpbuf *);
 
 /* The interface between userspace and kernel uses an "OVS_*" prefix.
  * Since this is fairly non-specific for the OVS userspace components,
@@ -564,7 +568,8 @@ ovs_frag_type_from_string(const char *s, enum ovs_frag_type *type)
 }
 
 static int
-parse_odp_key_attr(const char *s, struct ofpbuf *key)
+parse_odp_key_attr(const char *s, const struct shash *port_names,
+                   struct ofpbuf *key)
 {
     /* Many of the sscanf calls in this function use oversized destination
      * fields because some sscanf() implementations truncate the range of %i
@@ -605,6 +610,20 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         if (sscanf(s, "in_port(%lli)%n", &in_port, &n) > 0 && n > 0) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, in_port);
             return n;
+        }
+    }
+
+    if (port_names && !strncmp(s, "in_port(", 8)) {
+        const char *name;
+        const struct shash_node *node;
+        int name_len;
+
+        name = s + 8;
+        name_len = strcspn(s, ")");
+        node = shash_find_len(port_names, name, name_len);
+        if (node) {
+            nl_msg_put_u32(key, OVS_KEY_ATTR_IN_PORT, (uintptr_t) node->data);
+            return 8 + name_len + 1;
         }
     }
 
@@ -880,11 +899,16 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
  * data is appended to 'key'.  Either way, 'key''s data might be
  * reallocated.
  *
+ * If 'port_names' is nonnull, it points to an shash that maps from a port name
+ * to a port number cast to void *.  (Port names may be used instead of port
+ * numbers in in_port.)
+ *
  * On success, the attributes appended to 'key' are individually syntactically
  * valid, but they may not be valid as a sequence.  'key' might, for example,
  * have duplicated keys.  odp_flow_key_to_flow() will detect those errors. */
 int
-odp_flow_key_from_string(const char *s, struct ofpbuf *key)
+odp_flow_key_from_string(const char *s, const struct shash *port_names,
+                         struct ofpbuf *key)
 {
     const size_t old_size = key->size;
     for (;;) {
@@ -895,7 +919,7 @@ odp_flow_key_from_string(const char *s, struct ofpbuf *key)
             return 0;
         }
 
-        retval = parse_odp_key_attr(s, key);
+        retval = parse_odp_key_attr(s, port_names, key);
         if (retval < 0) {
             key->size = old_size;
             return -retval;

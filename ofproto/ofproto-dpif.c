@@ -5290,7 +5290,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
 
         /* Convert string to datapath key. */
         ofpbuf_init(&odp_key, 0);
-        error = odp_flow_key_from_string(arg1, &odp_key);
+        error = odp_flow_key_from_string(arg1, NULL, &odp_key);
         if (error) {
             unixctl_command_reply(conn, 501, "Bad flow syntax");
             goto exit;
