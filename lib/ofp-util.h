@@ -90,6 +90,8 @@ enum ofputil_msg_code {
 struct ofputil_msg_type;
 int ofputil_decode_msg_type(const struct ofp_header *,
                             const struct ofputil_msg_type **);
+int ofputil_decode_msg_type_partial(const struct ofp_header *, size_t length,
+                                    const struct ofputil_msg_type **);
 enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
 const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
 

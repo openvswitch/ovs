@@ -276,6 +276,11 @@ struct ofputil_msg_type {
     unsigned int extra_multiple;
 };
 
+/* Represents a malformed OpenFlow message. */
+static const struct ofputil_msg_type ofputil_invalid_type = {
+    OFPUTIL_MSG_INVALID, 0, "OFPUTIL_MSG_INVALID", 0, 0
+};
+
 struct ofputil_msg_category {
     const char *name;           /* e.g. "OpenFlow message" */
     const struct ofputil_msg_type *types;
@@ -283,56 +288,51 @@ struct ofputil_msg_category {
     int missing_error;          /* ofp_mkerr() value for missing type. */
 };
 
-static bool
-ofputil_length_ok(const struct ofputil_msg_category *cat,
-                  const struct ofputil_msg_type *type,
-                  unsigned int size)
+static int
+ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
 {
     switch (type->extra_multiple) {
     case 0:
         if (size != type->min_size) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s with incorrect "
                          "length %u (expected length %u)",
-                         cat->name, type->name, size, type->min_size);
-            return false;
+                         type->name, size, type->min_size);
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
         }
-        return true;
+        return 0;
 
     case 1:
         if (size < type->min_size) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s with incorrect "
                          "length %u (expected length at least %u bytes)",
-                         cat->name, type->name, size, type->min_size);
-            return false;
+                         type->name, size, type->min_size);
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
         }
-        return true;
+        return 0;
 
     default:
         if (size < type->min_size
             || (size - type->min_size) % type->extra_multiple) {
-            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s %s with incorrect "
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received %s with incorrect "
                          "length %u (must be exactly %u bytes or longer "
                          "by an integer multiple of %u bytes)",
-                         cat->name, type->name, size,
+                         type->name, size,
                          type->min_size, type->extra_multiple);
-            return false;
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
         }
-        return true;
+        return 0;
     }
 }
 
 static int
 ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
-                                uint32_t value, unsigned int size,
+                                uint32_t value,
                                 const struct ofputil_msg_type **typep)
 {
     const struct ofputil_msg_type *type;
 
     for (type = cat->types; type < &cat->types[cat->n_types]; type++) {
         if (type->value == value) {
-            if (!ofputil_length_ok(cat, type, size)) {
-                return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
-            }
             *typep = type;
             return 0;
         }
@@ -344,7 +344,7 @@ ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
 }
 
 static int
-ofputil_decode_vendor(const struct ofp_header *oh,
+ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
                       const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxt_messages[] = {
@@ -382,6 +382,13 @@ ofputil_decode_vendor(const struct ofp_header *oh,
     const struct ofp_vendor_header *ovh;
     const struct nicira_header *nh;
 
+    if (length < sizeof(struct ofp_vendor_header)) {
+        if (length == ntohs(oh->length)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "truncated vendor message");
+        }
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
     ovh = (const struct ofp_vendor_header *) oh;
     if (ovh->vendor != htonl(NX_VENDOR_ID)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor message for unknown "
@@ -389,23 +396,33 @@ ofputil_decode_vendor(const struct ofp_header *oh,
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
 
-    if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "received Nicira vendor message of "
-                     "length %u (expected at least %zu)",
-                     ntohs(ovh->header.length), sizeof(struct nicira_header));
+    if (length < sizeof(struct nicira_header)) {
+        if (length == ntohs(oh->length)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "received Nicira vendor message of "
+                         "length %u (expected at least %zu)",
+                         ntohs(ovh->header.length),
+                         sizeof(struct nicira_header));
+        }
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     nh = (const struct nicira_header *) oh;
     return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
-                                           ntohs(oh->length), typep);
+                                           typep);
 }
 
 static int
-check_nxstats_msg(const struct ofp_header *oh)
+check_nxstats_msg(const struct ofp_header *oh, size_t length)
 {
     const struct ofp_stats_msg *osm = (const struct ofp_stats_msg *) oh;
     ovs_be32 vendor;
+
+    if (length < sizeof(struct ofp_vendor_stats_msg)) {
+        if (length == ntohs(oh->length)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "truncated vendor stats message");
+        }
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
 
     memcpy(&vendor, osm + 1, sizeof vendor);
     if (vendor != htonl(NX_VENDOR_ID)) {
@@ -414,8 +431,10 @@ check_nxstats_msg(const struct ofp_header *oh)
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
 
-    if (ntohs(osm->header.length) < sizeof(struct nicira_stats_msg)) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "truncated Nicira stats message");
+    if (length < sizeof(struct nicira_stats_msg)) {
+        if (length == ntohs(osm->header.length)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "truncated Nicira stats message");
+        }
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
@@ -423,7 +442,7 @@ check_nxstats_msg(const struct ofp_header *oh)
 }
 
 static int
-ofputil_decode_nxst_request(const struct ofp_header *oh,
+ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
                             const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxst_requests[] = {
@@ -445,19 +464,18 @@ ofputil_decode_nxst_request(const struct ofp_header *oh,
     const struct nicira_stats_msg *nsm;
     int error;
 
-    error = check_nxstats_msg(oh);
+    error = check_nxstats_msg(oh, length);
     if (error) {
         return error;
     }
 
     nsm = (struct nicira_stats_msg *) oh;
     return ofputil_lookup_openflow_message(&nxst_request_category,
-                                           ntohl(nsm->subtype),
-                                           ntohs(oh->length), typep);
+                                           ntohl(nsm->subtype), typep);
 }
 
 static int
-ofputil_decode_nxst_reply(const struct ofp_header *oh,
+ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
                           const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxst_replies[] = {
@@ -479,19 +497,31 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh,
     const struct nicira_stats_msg *nsm;
     int error;
 
-    error = check_nxstats_msg(oh);
+    error = check_nxstats_msg(oh, length);
     if (error) {
         return error;
     }
 
     nsm = (struct nicira_stats_msg *) oh;
     return ofputil_lookup_openflow_message(&nxst_reply_category,
-                                           ntohl(nsm->subtype),
-                                           ntohs(oh->length), typep);
+                                           ntohl(nsm->subtype), typep);
 }
 
 static int
-ofputil_decode_ofpst_request(const struct ofp_header *oh,
+check_stats_msg(const struct ofp_header *oh, size_t length)
+{
+    if (length < sizeof(struct ofp_stats_msg)) {
+        if (length == ntohs(oh->length)) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "truncated stats message");
+        }
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    return 0;
+}
+
+static int
+ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
                              const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpst_requests[] = {
@@ -533,17 +563,21 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh,
     const struct ofp_stats_msg *request = (const struct ofp_stats_msg *) oh;
     int error;
 
+    error = check_stats_msg(oh, length);
+    if (error) {
+        return error;
+    }
+
     error = ofputil_lookup_openflow_message(&ofpst_request_category,
-                                            ntohs(request->type),
-                                            ntohs(oh->length), typep);
+                                            ntohs(request->type), typep);
     if (!error && request->type == htons(OFPST_VENDOR)) {
-        error = ofputil_decode_nxst_request(oh, typep);
+        error = ofputil_decode_nxst_request(oh, length, typep);
     }
     return error;
 }
 
 static int
-ofputil_decode_ofpst_reply(const struct ofp_header *oh,
+ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
                            const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpst_replies[] = {
@@ -585,28 +619,22 @@ ofputil_decode_ofpst_reply(const struct ofp_header *oh,
     const struct ofp_stats_msg *reply = (const struct ofp_stats_msg *) oh;
     int error;
 
+    error = check_stats_msg(oh, length);
+    if (error) {
+        return error;
+    }
+
     error = ofputil_lookup_openflow_message(&ofpst_reply_category,
-                                           ntohs(reply->type),
-                                           ntohs(oh->length), typep);
+                                           ntohs(reply->type), typep);
     if (!error && reply->type == htons(OFPST_VENDOR)) {
-        error = ofputil_decode_nxst_reply(oh, typep);
+        error = ofputil_decode_nxst_reply(oh, length, typep);
     }
     return error;
 }
 
-/* Decodes the message type represented by 'oh'.  Returns 0 if successful or
- * an OpenFlow error code constructed with ofp_mkerr() on failure.  Either
- * way, stores in '*typep' a type structure that can be inspected with the
- * ofputil_msg_type_*() functions.
- *
- * oh->length must indicate the correct length of the message (and must be at
- * least sizeof(struct ofp_header)).
- *
- * Success indicates that 'oh' is at least as long as the minimum-length
- * message of its type. */
-int
-ofputil_decode_msg_type(const struct ofp_header *oh,
-                        const struct ofputil_msg_type **typep)
+static int
+ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
+                          const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpt_messages[] = {
         { OFPUTIL_OFPT_HELLO,
@@ -698,32 +726,69 @@ ofputil_decode_msg_type(const struct ofp_header *oh,
 
     int error;
 
-    error = ofputil_lookup_openflow_message(&ofpt_category, oh->type,
-                                            ntohs(oh->length), typep);
+    error = ofputil_lookup_openflow_message(&ofpt_category, oh->type, typep);
     if (!error) {
         switch (oh->type) {
         case OFPT_VENDOR:
-            error = ofputil_decode_vendor(oh, typep);
+            error = ofputil_decode_vendor(oh, length, typep);
             break;
 
         case OFPT_STATS_REQUEST:
-            error = ofputil_decode_ofpst_request(oh, typep);
+            error = ofputil_decode_ofpst_request(oh, length, typep);
             break;
 
         case OFPT_STATS_REPLY:
-            error = ofputil_decode_ofpst_reply(oh, typep);
+            error = ofputil_decode_ofpst_reply(oh, length, typep);
 
         default:
             break;
         }
     }
-    if (error) {
-        static const struct ofputil_msg_type ofputil_invalid_type = {
-            OFPUTIL_MSG_INVALID,
-            0, "OFPUTIL_MSG_INVALID",
-            0, 0
-        };
+    return error;
+}
 
+/* Decodes the message type represented by 'oh'.  Returns 0 if successful or
+ * an OpenFlow error code constructed with ofp_mkerr() on failure.  Either
+ * way, stores in '*typep' a type structure that can be inspected with the
+ * ofputil_msg_type_*() functions.
+ *
+ * oh->length must indicate the correct length of the message (and must be at
+ * least sizeof(struct ofp_header)).
+ *
+ * Success indicates that 'oh' is at least as long as the minimum-length
+ * message of its type. */
+int
+ofputil_decode_msg_type(const struct ofp_header *oh,
+                        const struct ofputil_msg_type **typep)
+{
+    size_t length = ntohs(oh->length);
+    int error;
+
+    error = ofputil_decode_msg_type__(oh, length, typep);
+    if (!error) {
+        error = ofputil_check_length(*typep, length);
+    }
+    if (error) {
+        *typep = &ofputil_invalid_type;
+    }
+    return error;
+}
+
+/* Decodes the message type represented by 'oh', of which only the first
+ * 'length' bytes are available.  Returns 0 if successful or an OpenFlow error
+ * code constructed with ofp_mkerr() on failure.  Either way, stores in
+ * '*typep' a type structure that can be inspected with the
+ * ofputil_msg_type_*() functions.  */
+int
+ofputil_decode_msg_type_partial(const struct ofp_header *oh, size_t length,
+                                const struct ofputil_msg_type **typep)
+{
+    int error;
+
+    error = (length >= sizeof *oh
+             ? ofputil_decode_msg_type__(oh, length, typep)
+             : ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN));
+    if (error) {
         *typep = &ofputil_invalid_type;
     }
     return error;

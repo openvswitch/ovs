@@ -197,7 +197,7 @@ ff fe 50 54 00 00 00 01 62 72 30 00 00 00 00 00 \
 000000d0  00 00 02 08 00 00 02 8f-00 00 02 8f             |............    |
 ], [stderr])
 AT_CHECK([sed 's/.*|//' stderr], [0], [dnl
-received OpenFlow message OFPT_FEATURES_REPLY with incorrect length 220 (must be exactly 32 bytes or longer by an integer multiple of 48 bytes)
+received OFPT_FEATURES_REPLY with incorrect length 220 (must be exactly 32 bytes or longer by an integer multiple of 48 bytes)
 ])
 AT_CLEANUP
 
