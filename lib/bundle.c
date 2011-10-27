@@ -214,7 +214,7 @@ bundle_parse__(struct ofpbuf *b, const char *s, char **save_ptr,
         ovs_be16 slave_be;
         char *slave;
 
-        slave = strtok_r(NULL, ", ", save_ptr);
+        slave = strtok_r(NULL, ", [", save_ptr);
         if (!slave || n_slaves >= BUNDLE_MAX_SLAVES) {
             break;
         }
