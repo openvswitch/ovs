@@ -141,6 +141,20 @@ License:
    agrees to be bound by the terms and conditions of this License
    Agreement.
 
+* lib/ovs.tmac in the source distribution, and manpages in the
+  binaries, includes troff macros from groff 1.21 that contain the
+  following notice:
+
+    .\" an-ext.tmac
+    .\"
+    .\" Written by Eric S. Raymond <esr@thyrsus.com>
+    .\"            Werner Lemberg <wl@gnu.org>
+    .\"
+    .\" Version 2007-Feb-02
+    .\"
+    .\" Copyright (C) 2007, 2009, 2011 Free Software Foundation, Inc.
+    .\" You may freely use, modify and/or distribute this file.
+
 * All other components of this package are licensed under
   The Apache License Version 2.0.
 

@@ -1,9 +1,5 @@
 .\" -*- nroff -*-
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
+.so lib/ovs.tmac
 .TH ovs\-benchmark 1 "July 2011" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME

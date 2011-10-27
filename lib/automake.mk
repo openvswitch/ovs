@@ -249,6 +249,7 @@ MAN_FRAGMENTS += \
 	lib/daemon.man \
 	lib/daemon-syn.man \
 	lib/leak-checker.man \
+	lib/ovs.tmac \
 	lib/ssl-bootstrap.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-peer-ca-cert.man \
