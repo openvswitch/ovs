@@ -238,7 +238,7 @@ AT_CHECK([ovs_vsctl set-ssl /ssl-key.pem /ssl-cert.pem /ssl-cacert.pem \
 -----END CERTIFICATE-----
 "' \
                  options:use_ssl_cert='"true"'])
-OVS_WAIT_UNTIL([test `wc -l < actions` -ge 21])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 33])
 AT_CHECK([sed '1,29d' actions], [0], [dnl
 racoon: reload
 setkey:
@@ -283,7 +283,7 @@ AT_CHECK([cat etc/racoon/certs/ovs-3.4.5.6.pem], [0], [dnl
 ### Delete the SSL certificate interface.
 ###
 AT_CHECK([ovs_vsctl del-port gre2])
-OVS_WAIT_UNTIL([test `wc -l < actions` -ge 29])
+OVS_WAIT_UNTIL([test `wc -l < actions` -ge 41])
 AT_CHECK([sed '1,33d' actions], [0], [dnl
 racoon: reload
 setkey:
