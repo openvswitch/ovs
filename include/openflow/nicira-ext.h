@@ -970,7 +970,7 @@ struct nx_action_bundle {
     ovs_be16 algorithm;         /* One of NX_BD_ALG_*. */
 
     /* What fields to hash and how. */
-    ovs_be16 fields;            /* One of NX_BD_FIELDS_*. */
+    ovs_be16 fields;            /* One of NX_HASH_FIELDS_*. */
     ovs_be16 basis;             /* Universal hash parameter. */
 
     ovs_be32 slave_type;        /* NXM_OF_IN_PORT. */
