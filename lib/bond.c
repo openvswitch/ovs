@@ -578,9 +578,10 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         }
     }
 
-    /* Drop all packets which arrive on backup slaves.  This is similar to how
-     * Linux bonding handles active-backup bonds. */
-    if (bond->balance == BM_AB) {
+    switch (bond->balance) {
+    case BM_AB:
+        /* Drop all packets which arrive on backup slaves.  This is similar to
+         * how Linux bonding handles active-backup bonds. */
         *tags |= bond_get_active_slave_tag(bond);
         if (bond->active_slave != slave) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -590,14 +591,27 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
                         slave->name, ETH_ADDR_ARGS(eth_dst));
             return BV_DROP;
         }
+        return BV_ACCEPT;
+
+    case BM_TCP:
+        /* TCP balancing has degraded to SLB (otherwise the
+         * bond->lacp_negotiated check above would have processed this).
+         *
+         * Fall through. */
+    case BM_SLB:
+        /* Drop all packets for which we have learned a different input port,
+         * because we probably sent the packet on one slave and got it back on
+         * the other.  Gratuitous ARP packets are an exception to this rule:
+         * the host has moved to another switch.  The exception to the
+         * exception is if we locked the learning table to avoid reflections on
+         * bond slaves. */
+        return BV_DROP_IF_MOVED;
+
+    case BM_STABLE:
+        return BV_ACCEPT;
     }
 
-    /* Drop all packets for which we have learned a different input port,
-     * because we probably sent the packet on one slave and got it back on the
-     * other.  Gratuitous ARP packets are an exception to this rule: the host
-     * has moved to another switch.  The exception to the exception is if we
-     * locked the learning table to avoid reflections on bond slaves. */
-    return BV_DROP_IF_MOVED;
+    NOT_REACHED();
 }
 
 /* Returns the slave (registered on 'bond' by bond_slave_register()) to which
