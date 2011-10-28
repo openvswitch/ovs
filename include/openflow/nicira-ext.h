@@ -282,7 +282,8 @@ enum nx_action_subtype {
     NXAST_BUNDLE_LOAD,          /* struct nx_action_bundle */
     NXAST_RESUBMIT_TABLE,       /* struct nx_action_resubmit */
     NXAST_OUTPUT_REG,           /* struct nx_action_output_reg */
-    NXAST_LEARN                 /* struct nx_action_learn */
+    NXAST_LEARN,                /* struct nx_action_learn */
+    NXAST_EXIT                  /* struct nx_action_header */
 };
 
 /* Header for Nicira-defined actions. */
@@ -1033,6 +1034,18 @@ struct nx_action_output_reg {
     uint8_t zero[6];            /* Reserved, must be zero. */
 };
 OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
+
+/* NXAST_EXIT
+ *
+ * Discontinues action processing.
+ *
+ * The NXAST_EXIT action causes the switch to immediately halt processing
+ * actions for the flow.  Any actions which have already been processed are
+ * executed by the switch.  However, any further actions, including those which
+ * may be in different tables, or different levels of the NXAST_RESUBMIT
+ * hierarchy, will be ignored.
+ *
+ * Uses the nx_action_header structure. */
 
 /* Flexible flow specifications (aka NXM = Nicira Extended Match).
  *

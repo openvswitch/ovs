@@ -360,6 +360,9 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_NXAST_LEARN:
         learn_parse(b, arg, flow);
         break;
+    case OFPUTIL_NXAST_EXIT:
+        ofputil_put_NXAST_EXIT(b);
+        break;
     }
 }
 

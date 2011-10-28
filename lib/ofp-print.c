@@ -338,6 +338,10 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         learn_format((const struct nx_action_learn *) a, s);
         break;
 
+    case OFPUTIL_NXAST_EXIT:
+        ds_put_cstr(s, "exit");
+        break;
+
     default:
         break;
     }

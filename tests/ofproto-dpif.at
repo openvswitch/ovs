@@ -266,3 +266,26 @@ do
 done
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - exit])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:10,exit,output:11
+in_port=2 actions=output:12,resubmit:1,output:12
+in_port=3 actions=output:13,resubmit:2,output:14
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 10
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 12,10
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 13,12,10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

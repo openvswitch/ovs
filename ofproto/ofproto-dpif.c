@@ -212,6 +212,7 @@ struct action_xlate_ctx {
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     uint16_t sflow_odp_port;    /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
+    bool exit;                  /* No further actions should be processed. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -4123,6 +4124,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         enum ofputil_action_code code;
         ovs_be64 tun_id;
 
+        if (ctx->exit) {
+            break;
+        }
+
         code = ofputil_decode_action_unsafe(ia);
         switch (code) {
         case OFPUTIL_OFPAT_OUTPUT:
@@ -4258,6 +4263,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
                 xlate_learn_action(ctx, (const struct nx_action_learn *) ia);
             }
             break;
+
+        case OFPUTIL_NXAST_EXIT:
+            ctx->exit = true;
+            break;
         }
     }
 
@@ -4300,6 +4309,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->base_flow = ctx->flow;
     ctx->base_flow.tun_id = 0;
     ctx->table_id = 0;
+    ctx->exit = false;
 
     if (ctx->flow.tos_frag & FLOW_FRAG_ANY) {
         switch (ctx->ofproto->up.frag_handling) {

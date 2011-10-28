@@ -898,6 +898,12 @@ with no match criteria.  (This is why the default \fBtable\fR is 1, to
 keep the learned flows separate from the primary flow table 0.)
 .RE
 .
+.IP "\fBexit\fR"
+This action causes Open vSwitch to immediately halt execution of further
+actions.  Those actions which have already been executed are unaffected.  Any
+further actions, including those which may be in other tables, or different
+levels of the \fBresubmit\fR call stack, are ignored.
+.
 .PP
 The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
 support an additional optional field:
