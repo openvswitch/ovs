@@ -1647,7 +1647,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     osf->n_buffers = htonl(pktbuf_capacity());
     osf->n_tables = ofproto->n_tables;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                              OFPC_PORT_STATS);
+                              OFPC_PORT_STATS | OFPC_QUEUE_STATS);
     if (arp_match_ip) {
         osf->capabilities |= htonl(OFPC_ARP_MATCH_IP);
     }
