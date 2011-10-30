@@ -157,9 +157,12 @@ struct mf_field {
 
     /* Size.
      *
-     * Most fields have n_bytes * 8 == n_bits.  There are only two exceptions
-     * currently: "dl_vlan" is 2 bytes but only 12 bits, and "dl_vlan_pcp" is
-     * 1 byte but only 3 bits. */
+     * Most fields have n_bytes * 8 == n_bits.  There are a few exceptions:
+     *
+     *     - "dl_vlan" is 2 bytes but only 12 bits.
+     *     - "dl_vlan_pcp" is 1 byte but only 3 bits.
+     *     - "is_frag" is 1 byte but only 2 bits.
+     */
     unsigned int n_bytes;       /* Width of the field in bytes. */
     unsigned int n_bits;        /* Number of significant bits in field. */
 
