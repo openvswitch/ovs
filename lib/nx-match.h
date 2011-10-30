@@ -91,8 +91,8 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
     return (ntohs(ofs_nbits) & 0x3f) + 1;
 }
 
-/* Upper bound on the length of an nx_match.  The longest nx_match (assuming
- * we implement 4 registers) would be:
+/* Upper bound on the length of an nx_match.  The longest nx_match (an
+ * IPV6 neighbor discovery message using 5 registers) would be:
  *
  *                   header  value  mask  total
  *                   ------  -----  ----  -----
@@ -102,6 +102,7 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
  *  NXM_OF_ETH_TYPE     4       2    --      6
  *  NXM_OF_VLAN_TCI     4       2     2      8
  *  NXM_OF_IP_TOS       4       1    --      5
+ *  NXM_NX_IP_FRAG      4       1     1      8
  *  NXM_OF_IP_PROTO     4       2    --      6
  *  NXM_OF_IPV6_SRC_W   4      16    16     36
  *  NXM_OF_IPV6_DST_W   4      16    16     36
@@ -113,13 +114,14 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
  *  NXM_NX_REG_W(1)     4       4     4     12
  *  NXM_NX_REG_W(2)     4       4     4     12
  *  NXM_NX_REG_W(3)     4       4     4     12
+ *  NXM_NX_REG_W(4)     4       4     4     12
  *  NXM_NX_TUN_ID_W     4       8     8     20
  *  -------------------------------------------
- *  total                                  237
+ *  total                                  257
  *
  * So this value is conservative.
  */
-#define NXM_MAX_LEN 256
+#define NXM_MAX_LEN 384
 
 /* This is my guess at the length of a "typical" nx_match, for use in
  * predicting space requirements. */
