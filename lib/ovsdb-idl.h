@@ -120,9 +120,11 @@ enum ovsdb_idl_txn_status {
     TXN_INCOMPLETE,             /* Commit in progress, please wait. */
     TXN_ABORTED,                /* ovsdb_idl_txn_abort() called. */
     TXN_SUCCESS,                /* Commit successful. */
-    TXN_TRY_AGAIN,              /* Commit failed because a "verify" operation
+    TXN_AGAIN_WAIT,             /* Commit failed because a "verify" operation
                                  * reported an inconsistency, due to a network
-                                 * problem, or other transient failure. */
+                                 * problem, or other transient failure.  Wait
+                                 * for a change, then try again. */
+    TXN_AGAIN_NOW,              /* Same as above but try again immediately. */
     TXN_NOT_LOCKED,             /* Server hasn't given us the lock yet. */
     TXN_ERROR                   /* Commit failed due to a hard error. */
 };

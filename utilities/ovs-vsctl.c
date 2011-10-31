@@ -138,9 +138,9 @@ static void parse_command(int argc, char *argv[], struct vsctl_command *);
 static const struct vsctl_command_syntax *find_command(const char *name);
 static void run_prerequisites(struct vsctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
-static void do_vsctl(const char *args,
-                     struct vsctl_command *, size_t n_commands,
-                     struct ovsdb_idl *);
+static enum ovsdb_idl_txn_status do_vsctl(const char *args,
+                                          struct vsctl_command *, size_t n,
+                                          struct ovsdb_idl *);
 
 static const struct vsctl_table_class *get_table(const char *table_name);
 static void set_column(const struct vsctl_table_class *,
@@ -156,6 +156,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
+    enum ovsdb_idl_txn_status status;
     struct ovsdb_idl *idl;
     struct vsctl_command *commands;
     size_t n_commands;
@@ -184,13 +185,16 @@ main(int argc, char *argv[])
     run_prerequisites(commands, n_commands, idl);
 
     /* Now execute the commands. */
+    status = TXN_AGAIN_WAIT;
     for (;;) {
-        if (ovsdb_idl_run(idl)) {
-            do_vsctl(args, commands, n_commands, idl);
+        if (ovsdb_idl_run(idl) || status == TXN_AGAIN_NOW) {
+            status = do_vsctl(args, commands, n_commands, idl);
         }
 
-        ovsdb_idl_wait(idl);
-        poll_block();
+        if (status != TXN_AGAIN_NOW) {
+            ovsdb_idl_wait(idl);
+            poll_block();
+        }
     }
 }
 
@@ -3578,7 +3582,7 @@ run_prerequisites(struct vsctl_command *commands, size_t n_commands,
     }
 }
 
-static void
+static enum ovsdb_idl_txn_status
 do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl)
 {
@@ -3625,6 +3629,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         vsctl_context_done(&ctx, c);
 
         if (ctx.try_again) {
+            status = TXN_AGAIN_WAIT;
             goto try_again;
         }
     }
@@ -3681,7 +3686,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     case TXN_SUCCESS:
         break;
 
-    case TXN_TRY_AGAIN:
+    case TXN_AGAIN_WAIT:
+    case TXN_AGAIN_NOW:
         goto try_again;
 
     case TXN_ERROR:
@@ -3765,6 +3771,8 @@ try_again:
         free(c->table);
     }
     free(error);
+
+    return status;
 }
 
 static const struct vsctl_command_syntax all_commands[] = {
