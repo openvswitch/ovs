@@ -91,6 +91,7 @@ struct ovsdb_idl_txn {
     char *error;
     bool dry_run;
     struct ds comment;
+    unsigned int commit_seqno;
 
     /* Increments. */
     char *inc_table;
@@ -1173,8 +1174,10 @@ ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
         return "aborted";
     case TXN_SUCCESS:
         return "success";
-    case TXN_TRY_AGAIN:
-        return "try again";
+    case TXN_AGAIN_WAIT:
+        return "wait then try again";
+    case TXN_AGAIN_NOW:
+        return "try again now";
     case TXN_NOT_LOCKED:
         return "not locked";
     case TXN_ERROR:
@@ -1197,6 +1200,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->error = NULL;
     txn->dry_run = false;
     ds_init(&txn->comment);
+    txn->commit_seqno = txn->idl->change_seqno;
 
     txn->inc_table = NULL;
     txn->inc_column = NULL;
@@ -1587,7 +1591,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                     json_hash(txn->request_id, 0));
         txn->status = TXN_INCOMPLETE;
     } else {
-        txn->status = TXN_TRY_AGAIN;
+        txn->status = TXN_AGAIN_WAIT;
     }
 
     ovsdb_idl_txn_disassemble(txn);
@@ -1762,7 +1766,9 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
  * prerequisite to completing the transaction.  That is, if 'column' in 'row_'
  * changed (or if 'row_' was deleted) between the time that the IDL originally
  * read its contents and the time that the transaction commits, then the
- * transaction aborts and ovsdb_idl_txn_commit() returns TXN_TRY_AGAIN.
+ * transaction aborts and ovsdb_idl_txn_commit() returns TXN_AGAIN_WAIT or
+ * TXN_AGAIN_NOW (depending on whether the database change has already been
+ * received).
  *
  * The intention is that, to ensure that no transaction commits based on dirty
  * reads, an application should call ovsdb_idl_txn_verify() on each data item
@@ -1890,7 +1896,7 @@ ovsdb_idl_txn_abort_all(struct ovsdb_idl *idl)
     struct ovsdb_idl_txn *txn;
 
     HMAP_FOR_EACH (txn, hmap_node, &idl->outstanding_txns) {
-        ovsdb_idl_txn_complete(txn, TXN_TRY_AGAIN);
+        ovsdb_idl_txn_complete(txn, TXN_AGAIN_WAIT);
     }
 }
 
@@ -2091,7 +2097,9 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
 
         status = (hard_errors ? TXN_ERROR
                   : lock_errors ? TXN_NOT_LOCKED
-                  : soft_errors ? TXN_TRY_AGAIN
+                  : soft_errors ? (txn->commit_seqno == idl->change_seqno
+                                   ? TXN_AGAIN_WAIT
+                                   : TXN_AGAIN_NOW)
                   : TXN_SUCCESS);
     }
 
