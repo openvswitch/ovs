@@ -131,7 +131,8 @@ netdev_vport_get_vport_type(const struct netdev *netdev)
 
     return (is_vport_class(class) ? vport_class_cast(class)->type
             : class == &netdev_internal_class ? OVS_VPORT_TYPE_INTERNAL
-            : class == &netdev_linux_class ? OVS_VPORT_TYPE_NETDEV
+            : (class == &netdev_linux_class ||
+               class == &netdev_tap_class) ? OVS_VPORT_TYPE_NETDEV
             : OVS_VPORT_TYPE_UNSPEC);
 }
 
