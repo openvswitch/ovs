@@ -1,3 +1,5 @@
+AT_BANNER([datapath parsing and formatting])
+
 AT_SETUP([OVS datapath parsing and formatting - valid forms])
 AT_DATA([odp-base.txt], [dnl
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15)
