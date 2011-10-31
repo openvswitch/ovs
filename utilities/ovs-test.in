@@ -1,0 +1,180 @@
+#! @PYTHON@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+ovs test utility that allows to do tests between remote hosts
+"""
+
+import twisted
+import xmlrpclib
+import time
+import socket
+import math
+from ovstest import args, rpcserver
+
+
+def bandwidth_to_string(bwidth):
+    """Convert bandwidth from long to string and add units"""
+    bwidth = bwidth * 8 #  Convert back to bits/second
+    if bwidth >= 10000000:
+        return str(int(bwidth / 1000000)) + "Mbps"
+    elif bwidth > 10000:
+        return str(int(bwidth / 1000)) + "Kbps"
+    else:
+        return str(int(bwidth)) + "bps"
+
+
+def collect_information(node):
+    """Print information about hosts that will do testing"""
+    print "Node %s:%u " % (node[0], node[1])
+    server1 = xmlrpclib.Server("http://%s:%u/" % (node[0], node[1]))
+    interface_name = server1.get_interface(node[2])
+    uname = server1.uname()
+    mtu = 1500
+
+    if interface_name == "":
+        print ("Could not find interface that has %s IP address."
+               "Make sure that you specified correct Test IP." % (node[2]))
+    else:
+        mtu = server1.get_interface_mtu(interface_name)
+        driver = server1.get_driver(interface_name)
+        print "Will be using %s(%s) with MTU %u" % (interface_name, node[2],
+                                                    mtu)
+        if driver == "":
+            print "Install ethtool on this host to get NIC driver information"
+        else:
+            print "On this host %s has %s." % (interface_name, driver)
+
+    if uname == "":
+        print "Unable to retrieve kernel information. Is this Linux?"
+    else:
+        print "Running kernel %s." % uname
+    print "\n"
+    return mtu
+
+
+def do_udp_tests(receiver, sender, tbwidth, duration, sender_mtu):
+    """Schedule UDP tests between receiver and sender"""
+    server1 = xmlrpclib.Server("http://%s:%u/" % (receiver[0], receiver[1]))
+    server2 = xmlrpclib.Server("http://%s:%u/" % (sender[0], sender[1]))
+
+    udpformat = '{0:>15} {1:>15} {2:>15} {3:>15} {4:>15}'
+
+    print ("UDP test from %s:%u to %s:%u with target bandwidth %s" %
+                            (sender[0], sender[1], receiver[0], receiver[1],
+                             bandwidth_to_string(tbwidth)))
+    print udpformat.format("Datagram Size", "Snt Datagrams", "Rcv Datagrams",
+                            "Datagram Loss", "Bandwidth")
+
+    for size in [8, sender_mtu - 100, sender_mtu - 28, sender_mtu]:
+        listen_handle = -1
+        send_handle = -1
+        try:
+            packetcnt = (tbwidth * duration) / size
+
+            listen_handle = server1.create_udp_listener(receiver[3])
+            if listen_handle == -1:
+                print ("Server could not open UDP listening socket on port"
+                        " %u. Try to restart the server.\n" % receiver[3])
+                return
+            send_handle = server2.create_udp_sender(
+                                            (receiver[2], receiver[3]),
+                                            packetcnt, size, duration)
+
+            #Using sleep here because there is no other synchronization source
+            #that would notify us when all sent packets were received
+            time.sleep(duration + 1)
+
+            rcv_packets = server1.get_udp_listener_results(listen_handle)
+            snt_packets = server2.get_udp_sender_results(send_handle)
+
+            loss = math.ceil(((snt_packets - rcv_packets) * 10000.0) /
+                                                        snt_packets) / 100
+            bwidth = (rcv_packets * size) / duration
+
+            print udpformat.format(size, snt_packets, rcv_packets,
+                                '%.2f%%' % loss, bandwidth_to_string(bwidth))
+        finally:
+            if listen_handle != -1:
+                server1.close_udp_listener(listen_handle)
+            if send_handle != -1:
+                server2.close_udp_sender(send_handle)
+    print "\n"
+
+
+def do_tcp_tests(receiver, sender, duration):
+    """Schedule TCP tests between receiver and sender"""
+    server1 = xmlrpclib.Server("http://%s:%u/" % (receiver[0], receiver[1]))
+    server2 = xmlrpclib.Server("http://%s:%u/" % (sender[0], sender[1]))
+
+    tcpformat = '{0:>15} {1:>15} {2:>15}'
+    print "TCP test from %s:%u to %s:%u (full speed)" % (sender[0], sender[1],
+                                                    receiver[0], receiver[1])
+    print tcpformat.format("Snt Bytes", "Rcv Bytes", "Bandwidth")
+
+    listen_handle = -1
+    send_handle = -1
+    try:
+        listen_handle = server1.create_tcp_listener(receiver[3])
+        if listen_handle == -1:
+            print ("Server was unable to open TCP listening socket on port"
+                    " %u. Try to restart the server.\n" % receiver[3])
+            return
+        send_handle = server2.create_tcp_sender(receiver[2], receiver[3],
+                                                    duration)
+
+        time.sleep(duration + 1)
+
+        rcv_bytes = long(server1.get_tcp_listener_results(listen_handle))
+        snt_bytes = long(server2.get_tcp_sender_results(send_handle))
+
+        bwidth = rcv_bytes / duration
+
+        print tcpformat.format(snt_bytes, rcv_bytes,
+                               bandwidth_to_string(bwidth))
+    finally:
+        if listen_handle != -1:
+            server1.close_tcp_listener(listen_handle)
+        if send_handle != -1:
+            server2.close_tcp_sender(send_handle)
+    print "\n"
+
+
+if __name__ == '__main__':
+    try:
+        ovs_args = args.ovs_initialize_args()
+
+        if ovs_args.port is not None: #  Start in server mode
+            print "Starting RPC server"
+            try:
+                rpcserver.start_rpc_server(ovs_args.port)
+            except twisted.internet.error.CannotListenError:
+                print "Couldn't start XMLRPC server on port %u" % ovs_args.port
+
+        elif ovs_args.servers is not None: #  Run in client mode
+            node1 = ovs_args.servers[0]
+            node2 = ovs_args.servers[1]
+            bandwidth = ovs_args.targetBandwidth
+
+            mtu_node1 = collect_information(node1)
+            mtu_node2 = collect_information(node2)
+
+            do_udp_tests(node1, node2, bandwidth, 5, mtu_node1)
+            do_udp_tests(node2, node1, bandwidth, 5, mtu_node2)
+            do_tcp_tests(node1, node2, 5)
+            do_tcp_tests(node2, node1, 5)
+    except KeyboardInterrupt:
+        pass
+    except socket.error:
+        print "Couldn't establish XMLRPC control channel"

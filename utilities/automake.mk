@@ -9,6 +9,7 @@ if HAVE_PYTHON
 bin_SCRIPTS += \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpundump \
+	utilities/ovs-test \
 	utilities/ovs-vlan-test
 endif
 noinst_SCRIPTS += utilities/ovs-pki-cgi
@@ -23,6 +24,7 @@ EXTRA_DIST += \
 	utilities/ovs-pki.in \
 	utilities/ovs-save \
 	utilities/ovs-tcpundump.in \
+	utilities/ovs-test.in \
 	utilities/ovs-vlan-test.in
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
@@ -36,6 +38,7 @@ MAN_ROOTS += \
 	utilities/ovs-pki.8.in \
 	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-vlan-bug-workaround.8.in \
+	utilities/ovs-test.8.in \
 	utilities/ovs-vlan-test.8.in \
 	utilities/ovs-vsctl.8.in
 MAN_FRAGMENTS += utilities/ovs-vlan-bugs.man
@@ -55,6 +58,8 @@ DISTCLEANFILES += \
 	utilities/ovs-pki.8 \
 	utilities/ovs-tcpundump \
 	utilities/ovs-tcpundump.1 \
+	utilities/ovs-test \
+	utilities/ovs-test.8 \
 	utilities/ovs-vlan-test \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vlan-bug-workaround.8 \
@@ -71,6 +76,7 @@ man_MANS += \
 	utilities/ovs-pki.8 \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-vlan-bug-workaround.8 \
+	utilities/ovs-test.8 \
 	utilities/ovs-vlan-test.8 \
 	utilities/ovs-vsctl.8
 dist_man_MANS += utilities/ovs-ctl.8

@@ -8,7 +8,12 @@ post-v1.3.0
        - Added ability to modify TTL in IPv4.
     - ovs-appctl:
       - New "fdb/flush" command to flush bridge's MAC learning table.
+    - ovs-test:
+      - A new distributed testing tool that allows one to diagnose performance
+        and connectivity issues. This tool currently is not included in RH or
+        Xen packages.
     - RHEL packaging now supports integration with Red Hat network scripts.
+
 
 v1.3.0 - xx xxx xxxx
 ------------------------
@@ -88,7 +93,7 @@ v1.2.0 - 03 Aug 2011
       datapath/linux-2.6/compat-2.6 directories.
     - Feature removals:
       - Dropped support for "tun_id_from_cookie" OpenFlow extension.
-	    Please use the extensible match extensions instead.
+           Please use the extensible match extensions instead.
       - Removed the Maintenance_Point and Monitor tables in an effort
         to simplify 802.1ag configuration.
     - Performance and scalability improvements

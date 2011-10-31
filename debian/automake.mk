@@ -40,6 +40,9 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
+	debian/openvswitch-test.dirs \
+	debian/openvswitch-test.install \
+	debian/openvswitch-test.manpages \
 	debian/ovsdbmonitor.install \
 	debian/ovsdbmonitor.manpages \
 	debian/ovs-monitor-ipsec \

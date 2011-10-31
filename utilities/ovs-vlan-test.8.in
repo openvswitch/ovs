@@ -8,6 +8,12 @@
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
+The \fBovs\-vlan\-test\fR utility has some limitations, for example, it does
+not use TCP in its tests. Also it does not take into account MTU to detect
+potential edge cases. To overcome those limitations a new tool was
+developed \- \fBovs\-test\fR. \fBovs\-test\fR is currently supported only
+on Debian so, if possible try to use that on instead of \fBovs\-vlan\-test\fR.
+.PP
 The \fBovs\-vlan\-test\fR program may be used to check for problems sending
 802.1Q traffic which may occur when running Open vSwitch. These problems can
 occur when Open vSwitch is used to send 802.1Q traffic through physical
@@ -82,5 +88,6 @@ Run an \fBovs\-vlan\-test\fR client with a control server located at
 .BR ovs\-vswitchd (8),
 .BR ovs\-ofctl (8),
 .BR ovs\-vsctl (8),
+.BR ovs\-test (8),
 .BR ethtool (8),
 .BR uname (1)

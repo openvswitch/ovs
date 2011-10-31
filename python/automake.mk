@@ -1,5 +1,13 @@
 run_python = PYTHONPATH=$(top_srcdir)/python:$$PYTHON_PATH $(PYTHON)
 
+ovstest_pyfiles = \
+	python/ovstest/__init__.py \
+	python/ovstest/args.py \
+	python/ovstest/rpcserver.py \
+	python/ovstest/tcp.py \
+	python/ovstest/udp.py \
+	python/ovstest/util.py
+
 ovs_pyfiles = \
 	python/ovs/__init__.py \
 	python/ovs/daemon.py \
@@ -22,10 +30,10 @@ ovs_pyfiles = \
 	python/ovs/timeval.py \
 	python/ovs/vlog.py \
 	python/ovs/util.py
-EXTRA_DIST += $(ovs_pyfiles) python/ovs/dirs.py
+EXTRA_DIST += $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 
 if HAVE_PYTHON
-nobase_pkgdata_DATA = $(ovs_pyfiles)
+nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
 ovs-install-data-local:
 	$(MKDIR_P) python/ovs
 	(echo "import os" && \

@@ -1,0 +1,117 @@
+.TH ovs\-test 1 "October 2011" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+\fBovs\-test\fR \- check Linux drivers for performance and vlan problems
+.
+.SH SYNOPSIS
+\fBovs\-test\fR \fB\-s\fR \fIport\fR
+.PP
+\fBovs\-test\fR \fB\-c\fR \fIserver1\fR
+\fIserver2\fR [\fB\-b\fR \fIbandwidth\fR]
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovs\-test\fR program may be used to check for problems sending
+802.1Q traffic that Open vSwitch may uncover. These problems can
+occur when Open vSwitch is used to send 802.1Q traffic through physical
+interfaces running certain drivers of certain Linux kernel versions. To run a
+test, configure Open vSwitch to tag traffic originating from \fIserver1\fR and
+forward it to the \fIserver2\fR. On both servers run \fBovs\-test\fR
+in server mode. Then, on any other host, run the \fBovs\-test\fR in client
+mode. The client will connect to both \fBovs\-test\fR servers and schedule
+tests between them. \fBovs\-test\fR will perform UDP and TCP tests.
+.PP
+UDP tests can report packet loss and achieved bandwidth, because UDP flow
+control is done inside \fBovs\-test\fR. It is also possible to specify target
+bandwidth for UDP. By default it is 1Mbit/s.
+.PP
+TCP tests report only achieved bandwidth, because kernel TCP stack
+takes care of flow control and packet loss. TCP tests are essential to detect
+potential TSO related VLAN issues.
+.PP
+To determine whether Open vSwitch is encountering any 802.1Q related problems,
+the user must compare packet loss and achieved bandwidth in a setup where
+traffic is being tagged against one where it is not. If in the tagged setup
+both servers are unable to communicate or the achieved bandwidth is lower,
+then, most likely, Open vSwitch has encountered a pre-existing kernel or
+driver bug.
+.PP
+Some examples of the types of problems that may be encountered are:
+.so utilities/ovs-vlan-bugs.man
+.
+.SS "Client Mode"
+An \fBovs\-test\fR client will connect to two \fBovs\-test\fR servers and
+will ask them to exchange traffic.
+.
+.SS "Server Mode"
+To conduct tests, two \fBovs\-test\fR servers must be running on two different
+hosts where client can connect. The actual test traffic is exchanged only
+between both \fBovs\-test\fR server test IP addresses. It is recommended that
+both servers have their test IP addresses in the same subnet, otherwise one
+will need to change routing so that the test traffic actually goes through the
+interface that he originally intended to test.
+.
+.SH OPTIONS
+.
+.TP
+\fB\-s\fR, \fB\-\-server\fR \fIport\fR
+Run in server mode and wait for a client to establish XML RPC Control
+Connection on TCP \fIport\fR. It is recommended to have ethtool installed on
+the server so that it could retrieve information about NIC driver.
+.TP
+\fB\-c\fR, \fB\-\-client\fR \fIserver1\fR \fIserver2\fR
+Run in client mode and schedule tests between \fIserver1\fR and \fIserver2\fR,
+where each \fIserver\fR must be given in following format -
+ControlIP[:ControlPort][,TestIP[:TestPort]]. If TestIP is omitted then
+ovs-test server will use the ControlIP for testing purposes. ControlPort is
+TCP port where server will listen for incoming XML/RPC control
+connections to schedule tests (by default it is 15531). TestPort
+is port which will be used by server to listen for test traffic
+(by default it is 15532).
+.TP
+\fB\-b\fR, \fB\-\-bandwidth\fR \fIbandwidth\fR
+Target bandwidth for UDP tests. The \fIbandwidth\fR must be given in bits per
+second. It is possible to use postfix M or K to alter the target bandwidth
+magnitude.
+.
+.so lib/common.man
+.SH EXAMPLES
+.PP
+Set up a bridge which forwards traffic originating from \fB1.2.3.4\fR out
+\fBeth1\fR with VLAN tag 10.
+.IP
+.B ovs\-vsctl \-\- add\-br vlan\-br \(rs
+.IP
+.B \-\- add\-port vlan\-br eth1 \(rs
+.IP
+.B \-\- add\-port vlan\-br vlan\-br\-tag tag=10 \(rs
+.IP
+.B \-\- set Interface vlan\-br\-tag type=internal
+.IP
+.B ifconfig vlan\-br\-tag up 1.2.3.4
+.
+.PP
+On two different hosts start \fBovs\-test\fR in server mode and tell them to
+listen on port 15531 for incoming client control connections:
+.IP
+.B 1.2.3.4: ovs\-test \-s 15531
+.IP
+.B 1.2.3.5: ovs\-test \-s 15531
+.
+.PP
+On any other host start \fBovs\-test\fR in client mode and ask it to connect
+to those two servers - one at 1.2.3.4 and another at 1.2.3.5 (by default
+client will use TCP port 15531 to establish control channel).
+.IP
+.B ovs\-test -c 1.2.3.4 1.2.3.5
+.
+.TP
+
+.SH SEE ALSO
+.
+.BR ovs\-vswitchd (8),
+.BR ovs\-ofctl (8),
+.BR ovs\-vsctl (8),
+.BR ovs\-vlan\-test (8),
+.BR ethtool (8),
+.BR uname (1)

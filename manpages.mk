@@ -150,6 +150,16 @@ utilities/ovs-tcpundump.1.in:
 lib/common-syn.man:
 lib/common.man:
 
+utilities/ovs-test.8: \
+	utilities/ovs-test.8.in \
+	lib/common-syn.man \
+	lib/common.man \
+	utilities/ovs-vlan-bugs.man
+utilities/ovs-test.8.in:
+lib/common-syn.man:
+lib/common.man:
+utilities/ovs-vlan-bugs.man:
+
 utilities/ovs-vlan-bug-workaround.8: \
 	utilities/ovs-vlan-bug-workaround.8.in \
 	lib/common.man \
