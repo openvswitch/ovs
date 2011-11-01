@@ -1094,6 +1094,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 	case OVS_KEY_ATTR_ETHERTYPE:
 		if (swkey->eth.type == htons(ETH_P_IP) ||
+		    swkey->eth.type == htons(ETH_P_IPV6) ||
 		    swkey->eth.type == htons(ETH_P_ARP))
 			goto invalid;
 		goto ok;
