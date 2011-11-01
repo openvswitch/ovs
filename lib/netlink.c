@@ -632,8 +632,9 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
                 const struct nl_policy policy[],
                 struct nlattr *attrs[], size_t n_attrs)
 {
-    void *p, *tail;
+    struct nlattr *nla;
     size_t n_required;
+    size_t left;
     size_t i;
 
     n_required = 0;
@@ -648,36 +649,17 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
         }
     }
 
-    p = ofpbuf_at(msg, nla_offset, 0);
-    if (p == NULL) {
+    if (msg->size < nla_offset) {
         VLOG_DBG_RL(&rl, "missing headers in nl_policy_parse");
         return false;
     }
-    tail = ofpbuf_tail(msg);
 
-    while (p < tail) {
-        size_t offset = (char*)p - (char*)msg->data;
-        struct nlattr *nla = p;
-        size_t len, aligned_len;
-        uint16_t type;
-
-        /* Make sure its claimed length is plausible. */
-        if (nla->nla_len < NLA_HDRLEN) {
-            VLOG_DBG_RL(&rl, "%zu: attr shorter than NLA_HDRLEN (%"PRIu16")",
-                        offset, nla->nla_len);
-            return false;
-        }
-        len = nla->nla_len - NLA_HDRLEN;
-        aligned_len = NLA_ALIGN(len);
-        if (aligned_len > (char*)tail - (char*)p) {
-            VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" aligned data len (%zu) "
-                        "> bytes left (%tu)",
-                        offset, nl_attr_type(nla), aligned_len,
-                        (char*)tail - (char*)p);
-            return false;
-        }
-
-        type = nl_attr_type(nla);
+    NL_ATTR_FOR_EACH (nla, left,
+                      (struct nlattr *) ((char *) msg->data + nla_offset),
+                      msg->size - nla_offset) {
+        size_t offset = (char*)nla - (char*)msg->data;
+        size_t len = nl_attr_get_size(nla);
+        uint16_t type = nl_attr_type(nla);
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
             const struct nl_policy *e = &policy[type];
             size_t min_len, max_len;
@@ -714,7 +696,10 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
         } else {
             /* Skip attribute type that we don't care about. */
         }
-        p = (char*)p + NLA_ALIGN(nla->nla_len);
+    }
+    if (left) {
+        VLOG_DBG_RL(&rl, "attributes followed by garbage");
+        return false;
     }
     if (n_required) {
         VLOG_DBG_RL(&rl, "%zu required attrs missing", n_required);
