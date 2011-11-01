@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 
 struct flow;
 struct in_band;

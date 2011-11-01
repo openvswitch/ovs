@@ -18,6 +18,7 @@
 #include "packets.h"
 #include <assert.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include "byte-order.h"

@@ -41,6 +41,7 @@ AC_SYS_LARGEFILE
 
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
+AC_SEARCH_LIBS([timer_create], [rt])
 
 OVS_CHECK_COVERAGE
 OVS_CHECK_NDEBUG

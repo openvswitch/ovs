@@ -17,6 +17,8 @@
 #ifndef META_FLOW_H
 #define META_FLOW_H 1
 
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <netinet/ip6.h>
 #include "flow.h"
 #include "packets.h"

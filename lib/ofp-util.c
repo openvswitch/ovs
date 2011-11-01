@@ -18,6 +18,8 @@
 #include "ofp-print.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
 #include "autopath.h"

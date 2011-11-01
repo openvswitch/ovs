@@ -95,7 +95,11 @@ get_memory_stats(struct shash *stats)
     if (!LINUX) {
         unsigned int pagesize = get_page_size();
         long int phys_pages = sysconf(_SC_PHYS_PAGES);
+#ifdef _SC_AVPHYS_PAGES
         long int avphys_pages = sysconf(_SC_AVPHYS_PAGES);
+#else
+        long int avphys_pages = 0;
+#endif
         int mem_total, mem_used;
 
         if (pagesize <= 0 || phys_pages <= 0 || avphys_pages <= 0) {
