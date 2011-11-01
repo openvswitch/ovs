@@ -392,6 +392,9 @@ struct arp_eth_header {
 } __attribute__((packed));
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
+/* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */
+#define IPV6_LABEL_MASK 0x000fffff
+
 /* Example:
  *
  * char *string = "1 ::1 2";

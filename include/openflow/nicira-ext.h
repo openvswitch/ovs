@@ -1614,6 +1614,15 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 #define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */
 #define NX_IP_FRAG_LATER (1 << 1) /* Is this a fragment with nonzero offset? */
 
+/* The flow label in the IPv6 header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must match 0x86dd exactly.
+ *
+ * Format: 20-bit IPv6 flow label in least-significant bits.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_IPV6_LABEL  NXM_HEADER  (0x0001, 27, 4)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

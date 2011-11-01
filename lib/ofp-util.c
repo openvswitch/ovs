@@ -101,14 +101,15 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
-    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET);
+    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET
+                      | FWW_IPV6_LABEL);
 
     if (!(ofpfw & OFPFW_NW_TOS)) {
         wc->tos_frag_mask |= IP_DSCP_MASK;
@@ -858,7 +859,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -888,6 +889,11 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 
     /* Only NXM supports matching fragments. */
     if (wc->tos_frag_mask & FLOW_FRAG_MASK) {
+        return NXFF_NXM;
+    }
+
+    /* Only NXM supports matching IPv6 flow label. */
+    if (!(wc->wildcards & FWW_IPV6_LABEL)) {
         return NXFF_NXM;
     }
 
@@ -2567,6 +2573,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
     }
     if (!(may_match & MAY_IPV6_ADDR)) {
         wc.ipv6_src_mask = wc.ipv6_dst_mask = in6addr_any;
+        wc.wildcards |= FWW_IPV6_LABEL;
     }
     if (!(may_match & MAY_ND_TARGET)) {
         wc.wildcards |= FWW_ND_TARGET;

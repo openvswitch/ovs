@@ -72,13 +72,13 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_8021Q         4    --     4      8
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  OVS_KEY_ATTR_IPV6         34     2     4     40
+ *  OVS_KEY_ATTR_IPV6         38     2     4     44
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
- *  total                                       140
+ *  total                                       144
  */
-#define ODPUTIL_FLOW_KEY_BYTES 140
+#define ODPUTIL_FLOW_KEY_BYTES 144
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently

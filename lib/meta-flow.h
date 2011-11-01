@@ -67,6 +67,7 @@ enum mf_field_id {
 
     MFF_IPV6_SRC,               /* ipv6 */
     MFF_IPV6_DST,               /* ipv6 */
+    MFF_IPV6_LABEL,             /* be32 */
 
     MFF_IP_PROTO,               /* u8 (used for IPv4 or IPv6) */
     MFF_IP_TOS,                 /* u8 (used for IPv4 or IPv6) */
@@ -162,6 +163,7 @@ struct mf_field {
      *     - "dl_vlan" is 2 bytes but only 12 bits.
      *     - "dl_vlan_pcp" is 1 byte but only 3 bits.
      *     - "is_frag" is 1 byte but only 2 bits.
+     *     - "ipv6_label" is 4 bytes but only 20 bits.
      */
     unsigned int n_bytes;       /* Width of the field in bytes. */
     unsigned int n_bits;        /* Number of significant bits in field. */

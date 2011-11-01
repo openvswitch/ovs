@@ -73,6 +73,7 @@ struct sw_flow_key {
 				struct in6_addr src;	/* IPv6 source address. */
 				struct in6_addr dst;	/* IPv6 destination address. */
 			} addr;
+			__be32 label; 		/* IPv6 flow label. */
 			struct {
 				__be16 src;		/* TCP/UDP source port. */
 				__be16 dst;		/* TCP/UDP destination port. */
@@ -146,13 +147,13 @@ u64 flow_used_time(unsigned long flow_jiffies);
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_8021Q         4    --     4      8
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  OVS_KEY_ATTR_IPV6         34     2     4     40
+ *  OVS_KEY_ATTR_IPV6         38     2     4     44
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
- *  total					140
+ *  total                                       144
  */
-#define FLOW_BUFSIZE 140
+#define FLOW_BUFSIZE 144
 
 int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,

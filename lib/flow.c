@@ -149,6 +149,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 
     tc_flow = get_unaligned_be32(&nh->ip6_flow);
     flow->tos_frag = (ntohl(tc_flow) >> 4) & IP_DSCP_MASK;
+    flow->ipv6_label = tc_flow & htonl(IPV6_LABEL_MASK);
     flow->nw_proto = IPPROTO_NONE;
 
     while (1) {
@@ -437,7 +438,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -470,6 +471,9 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     }
     if (wc & FWW_NW_PROTO) {
         flow->nw_proto = 0;
+    }
+    if (wc & FWW_IPV6_LABEL) {
+        flow->ipv6_label = htonl(0);
     }
     flow->tos_frag &= wildcards->tos_frag_mask;
     if (wc & FWW_ARP_SHA) {
@@ -523,8 +527,9 @@ flow_format(struct ds *ds, const struct flow *flow)
                   ntohs(flow->dl_type));
 
     if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        ds_put_format(ds, " proto%"PRIu8" tos%"PRIu8" ipv6",
-                      flow->nw_proto, flow->tos_frag & IP_DSCP_MASK);
+        ds_put_format(ds, " label%#"PRIx32" proto%"PRIu8" tos%"PRIu8" ipv6",
+                      ntohl(flow->ipv6_label), flow->nw_proto,
+                      flow->tos_frag & IP_DSCP_MASK);
         print_ipv6_addr(ds, &flow->ipv6_src);
         ds_put_cstr(ds, "->");
         print_ipv6_addr(ds, &flow->ipv6_dst);
@@ -570,7 +575,7 @@ flow_print(FILE *stream, const struct flow *flow)
 void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     wc->wildcards = FWW_ALL;
     wc->tun_id_mask = htonll(0);
@@ -589,7 +594,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     wc->wildcards = 0;
     wc->tun_id_mask = htonll(UINT64_MAX);
@@ -610,7 +615,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
@@ -639,7 +644,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     if (wc->wildcards != FWW_ALL
         || wc->tun_id_mask != htonll(0)

@@ -171,6 +171,14 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_IPV6,
         NXM_NX_IPV6_DST,
     },
+    {
+        MFF_IPV6_LABEL, "ipv6_label", NULL,
+        4, 20,
+        MFM_NONE, FWW_IPV6_LABEL,
+        MFS_HEXADECIMAL,
+        MFP_IPV6,
+        NXM_NX_IPV6_LABEL,
+    },
 
     {
         MFF_IP_PROTO, "nw_proto", NULL,
@@ -354,6 +362,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
+    case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -444,6 +453,7 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
+    case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -696,6 +706,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_VLAN_PCP:
         return !(value->u8 & ~7);
 
+    case MFF_IPV6_LABEL:
+        return !(value->be32 & ~htonl(IPV6_LABEL_MASK));
+
     case MFF_N_IDS:
     default:
         NOT_REACHED();
@@ -776,6 +789,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_IPV6_DST:
         value->ipv6 = flow->ipv6_dst;
+        break;
+
+    case MFF_IPV6_LABEL:
+        value->be32 = flow->ipv6_label;
         break;
 
     case MFF_IP_PROTO:
@@ -923,6 +940,10 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_IPV6_DST:
         cls_rule_set_ipv6_dst(rule, &value->ipv6);
+        break;
+
+    case MFF_IPV6_LABEL:
+        cls_rule_set_ipv6_label(rule, value->be32);
         break;
 
     case MFF_IP_PROTO:
@@ -1086,6 +1107,11 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         memset(&rule->flow.ipv6_dst, 0, sizeof rule->flow.ipv6_dst);
         break;
 
+    case MFF_IPV6_LABEL:
+        rule->wc.wildcards |= FWW_IPV6_LABEL;
+        rule->flow.ipv6_label = 0;
+        break;
+
     case MFF_IP_PROTO:
         rule->wc.wildcards |= FWW_NW_PROTO;
         rule->flow.nw_proto = 0;
@@ -1173,6 +1199,7 @@ mf_set(const struct mf_field *mf,
     case MFF_ETH_TYPE:
     case MFF_VLAN_VID:
     case MFF_VLAN_PCP:
+    case MFF_IPV6_LABEL:
     case MFF_IP_PROTO:
     case MFF_IP_TOS:
     case MFF_ARP_OP:
@@ -1391,6 +1418,10 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
+        break;
+
+    case MFF_IPV6_LABEL:
+        value->be32 &= ~htonl(IPV6_LABEL_MASK);
         break;
 
     case MFF_IP_TOS:

@@ -466,7 +466,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 3);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -535,6 +535,9 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
                 &cr->wc.ipv6_src_mask);
         nxm_put_ipv6(b, NXM_NX_IPV6_DST, &flow->ipv6_dst,
                 &cr->wc.ipv6_dst_mask);
+        if (!(wc & FWW_IPV6_LABEL)) {
+            nxm_put_32(b, NXM_NX_IPV6_LABEL, flow->ipv6_label);
+        }
 
         if (!(wc & FWW_NW_PROTO)) {
             nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
@@ -1075,6 +1078,9 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     case NFI_NXM_NX_TUN_ID:
         return ntohll(flow->tun_id);
 
+    case NFI_NXM_NX_IPV6_LABEL:
+        return ntohl(flow->ipv6_label);
+
 #define NXM_READ_REGISTER(IDX)                  \
     case NFI_NXM_NX_REG##IDX:                   \
         return flow->regs[IDX];                 \
@@ -1204,6 +1210,10 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
 
     case NFI_NXM_OF_IP_DST:
         flow->nw_dst = htonl(new_value);
+        break;
+
+    case NFI_NXM_NX_IPV6_LABEL:
+        flow->ipv6_label = htonl(new_value);
         break;
 
     case NFI_NXM_OF_TCP_SRC:
