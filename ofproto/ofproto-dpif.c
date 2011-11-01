@@ -5116,6 +5116,22 @@ ofproto_dpif_lookup(const char *name)
 }
 
 static void
+ofproto_unixctl_fdb_flush(struct unixctl_conn *conn,
+                         const char *args, void *aux OVS_UNUSED)
+{
+    const struct ofproto_dpif *ofproto;
+
+    ofproto = ofproto_dpif_lookup(args);
+    if (!ofproto) {
+        unixctl_command_reply(conn, 501, "no such bridge");
+        return;
+    }
+    mac_learning_flush(ofproto->ml);
+
+    unixctl_command_reply(conn, 200, "table successfully flushed");
+}
+
+static void
 ofproto_unixctl_fdb_show(struct unixctl_conn *conn,
                          const char *args, void *aux OVS_UNUSED)
 {
@@ -5367,6 +5383,8 @@ ofproto_dpif_unixctl_init(void)
     unixctl_command_register("ofproto/trace",
                       "bridge {tun_id in_port packet | odp_flow [-generate]}",
                       ofproto_unixctl_trace, NULL);
+    unixctl_command_register("fdb/flush", "bridge", ofproto_unixctl_fdb_flush,
+                             NULL);
     unixctl_command_register("fdb/show", "bridge", ofproto_unixctl_fdb_show,
                              NULL); 
     unixctl_command_register("ofproto/clog", "", ofproto_dpif_clog, NULL);

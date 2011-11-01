@@ -120,6 +120,8 @@ then displays detailed information about all interfaces with CFM
 enabled.
 .SS "BRIDGE COMMANDS"
 These commands manage bridges.
+.IP "\fBfdb/flush\fR \fIbridge\fR"
+Flushes \fIbridge\fR MAC address learning table.
 .IP "\fBfdb/show\fR \fIbridge\fR"
 Lists each MAC address/VLAN pair learned by the specified \fIbridge\fR,
 along with the port on which it was learned and the age of the entry,

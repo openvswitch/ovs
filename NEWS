@@ -1,5 +1,7 @@
 post-v1.3.0
 ------------------------
+    - ovs-appctl:
+      - New "fdb/flush" command to flush bridge's MAC learning table.
 
 
 v1.3.0 - xx xxx xxxx
