@@ -24,7 +24,7 @@ case "$1" in
         rm -f /etc/openvswitch/conf.db
         rm -f /etc/openvswitch/.conf.db.~lock~
         rm -f /etc/default/openvswitch-switch
-        rm -f /var/log/openvswitch/*
+        rm -f /var/log/openvswitch/* || true
         ;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
