@@ -1143,7 +1143,6 @@ invalid:
 	error = -EINVAL;
 
 ok:
-	WARN_ON_ONCE(!key_len && !error);
 	*key_lenp = key_len;
 	return error;
 }
