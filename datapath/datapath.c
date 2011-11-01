@@ -558,6 +558,7 @@ static int validate_action_key(const struct nlattr *a,
 	const struct ovs_key_ipv4 *ipv4_key;
 	const struct ovs_key_8021q *q_key;
 
+	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_PRIORITY):
 	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TUN_ID):
 	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_ETHERNET):
 		break;
@@ -652,8 +653,6 @@ static int validate_actions(const struct nlattr *attr,
 			[OVS_ACTION_ATTR_PUSH] = (u32)-1,
 			[OVS_ACTION_ATTR_POP] = 2,
 			[OVS_ACTION_ATTR_SET] = (u32)-1,
-			[OVS_ACTION_ATTR_SET_PRIORITY] = 4,
-			[OVS_ACTION_ATTR_POP_PRIORITY] = 0,
 			[OVS_ACTION_ATTR_SAMPLE] = (u32)-1
 		};
 		int type = nla_type(a);
@@ -666,11 +665,6 @@ static int validate_actions(const struct nlattr *attr,
 		switch (type) {
 		case OVS_ACTION_ATTR_UNSPEC:
 			return -EINVAL;
-
-		case OVS_ACTION_ATTR_SET_PRIORITY:
-		case OVS_ACTION_ATTR_POP_PRIORITY:
-			/* No validation needed. */
-			break;
 
 		case OVS_ACTION_ATTR_USERSPACE:
 			err = validate_userspace(a);
@@ -770,8 +764,9 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto err_flow_put;
 
-	err = flow_metadata_from_nlattrs(&flow->key.eth.in_port,
-					 &flow->key.eth.tun_id,
+	err = flow_metadata_from_nlattrs(&flow->key.phy.priority,
+					 &flow->key.phy.in_port,
+					 &flow->key.phy.tun_id,
 					 a[OVS_PACKET_ATTR_KEY]);
 	if (err)
 		goto err_flow_put;
@@ -789,6 +784,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	rcu_assign_pointer(flow->sf_acts, acts);
 
 	OVS_CB(packet)->flow = flow;
+	packet->priority = flow->key.phy.priority;
 
 	rcu_read_lock();
 	dp = get_dp(ovs_header->dp_ifindex);
@@ -796,9 +792,9 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (!dp)
 		goto err_unlock;
 
-	if (flow->key.eth.in_port < DP_MAX_PORTS)
+	if (flow->key.phy.in_port < DP_MAX_PORTS)
 		OVS_CB(packet)->vport = get_vport_protected(dp,
-							flow->key.eth.in_port);
+							flow->key.phy.in_port);
 
 	local_bh_disable();
 	err = execute_actions(dp, packet);

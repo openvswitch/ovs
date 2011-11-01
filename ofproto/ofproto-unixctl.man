@@ -6,13 +6,15 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace \fIswitch tun_id in_port packet\fR"
+.IP "\fBofproto/trace \fIswitch priority tun_id in_port packet\fR"
 .IQ "\fBofproto/trace \fIswitch odp_flow \fB\-generate\fR"
 Traces the path of an imaginary packet through \fIswitch\fR.  Both
 forms require \fIswitch\fR, the switch on which the packet arrived
 (one of those listed by \fBofproto/list\fR).  The first form specifies
 a packet's contents explicitly:
 .RS
+.IP "\fIpriority\fR"
+Packet QoS priority. Use \fB0\fR if QoS is not setup.
 .IP "\fItun_id\fR"
 The tunnel ID on which the packet arrived.  Use
 \fB0\fR if the packet did not arrive through a tunnel.

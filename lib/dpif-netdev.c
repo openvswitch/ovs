@@ -881,7 +881,7 @@ dpif_netdev_execute(struct dpif *dpif,
     ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
     ofpbuf_put(&copy, packet->data, packet->size);
 
-    flow_extract(&copy, 0, -1, &key);
+    flow_extract(&copy, 0, 0, -1, &key);
     error = dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
     if (!error) {
         dp_netdev_execute_actions(dp, &copy, &key,
@@ -981,7 +981,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     if (packet->size < ETH_HEADER_LEN) {
         return;
     }
-    flow_extract(packet, 0, port->port_no, &key);
+    flow_extract(packet, 0, 0, port->port_no, &key);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         dp_netdev_flow_used(flow, &key, packet);
@@ -1239,6 +1239,8 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
     enum ovs_key_attr type = nl_attr_type(a);
     switch (type) {
     case OVS_KEY_ATTR_TUN_ID:
+    case OVS_KEY_ATTR_PRIORITY:
+        /* not implemented */
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
@@ -1317,11 +1319,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
         case OVS_ACTION_ATTR_SAMPLE:
             dp_netdev_sample(dp, packet, key, a);
-            break;
-
-        case OVS_ACTION_ATTR_SET_PRIORITY:
-        case OVS_ACTION_ATTR_POP_PRIORITY:
-            /* not implemented */
             break;
 
         case OVS_ACTION_ATTR_UNSPEC:

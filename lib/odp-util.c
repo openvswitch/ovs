@@ -65,8 +65,6 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_PUSH: return -2;
     case OVS_ACTION_ATTR_POP: return 2;
     case OVS_ACTION_ATTR_SET: return -2;
-    case OVS_ACTION_ATTR_SET_PRIORITY: return 4;
-    case OVS_ACTION_ATTR_POP_PRIORITY: return 0;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -206,12 +204,6 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
             ds_put_format(ds, "pop(key%"PRIu16")", nl_attr_get_u16(a));
         }
         break;
-    case OVS_ACTION_ATTR_SET_PRIORITY:
-        ds_put_format(ds, "set_priority(%#"PRIx32")", nl_attr_get_u32(a));
-        break;
-    case OVS_ACTION_ATTR_POP_PRIORITY:
-        ds_put_cstr(ds, "pop_priority");
-        break;
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
         break;
@@ -258,6 +250,7 @@ odp_flow_key_attr_len(uint16_t type)
     }
 
     switch ((enum ovs_key_attr) type) {
+    case OVS_KEY_ATTR_PRIORITY: return 4;
     case OVS_KEY_ATTR_TUN_ID: return 8;
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
@@ -339,6 +332,10 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     }
 
     switch (nl_attr_type(a)) {
+    case OVS_KEY_ATTR_PRIORITY:
+        ds_put_format(ds, "priority(%"PRIu32")", nl_attr_get_u32(a));
+        break;
+
     case OVS_KEY_ATTR_TUN_ID:
         ds_put_format(ds, "tun_id(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
@@ -527,6 +524,16 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
      *
      * The tun_id parser has to use an alternative approach because there is no
      * type larger than 64 bits. */
+
+    {
+        unsigned long long int priority;
+        int n = -1;
+
+        if (sscanf(s, "priority(%lli)%n", &priority, &n) > 0 && n > 0) {
+            nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
+            return n;
+        }
+    }
 
     {
         char tun_id_s[32];
@@ -825,6 +832,10 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 {
     struct ovs_key_ethernet *eth_key;
 
+    if (flow->priority) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, flow->priority);
+    }
+
     if (flow->tun_id != htonll(0)) {
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tun_id);
     }
@@ -992,11 +1003,17 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
 #define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
         switch (TRANSITION(prev_type, type)) {
+        case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_PRIORITY):
+            flow->priority = nl_attr_get_u32(nla);
+            break;
+
         case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):
+        case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_TUN_ID):
             flow->tun_id = nl_attr_get_be64(nla);
             break;
 
         case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_IN_PORT):
+        case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_IN_PORT):
         case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_IN_PORT):
             if (nl_attr_get_u32(nla) >= UINT16_MAX) {
                 return EINVAL;
@@ -1005,6 +1022,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             break;
 
         case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_ETHERNET):
+        case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_ETHERNET):
         case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_ETHERNET):
         case TRANSITION(OVS_KEY_ATTR_IN_PORT, OVS_KEY_ATTR_ETHERNET):
             eth_key = nl_attr_get(nla);
@@ -1138,6 +1156,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     case OVS_KEY_ATTR_UNSPEC:
         return EINVAL;
 
+    case OVS_KEY_ATTR_PRIORITY:
     case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_IN_PORT:
         return EINVAL;

@@ -83,6 +83,7 @@ cls_rule_init_exact(const struct flow *flow,
                     unsigned int priority, struct cls_rule *rule)
 {
     rule->flow = *flow;
+    rule->flow.priority = 0;
     flow_wildcards_init_exact(&rule->wc);
     rule->priority = priority;
 }

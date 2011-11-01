@@ -324,8 +324,8 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 void
-flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t ofp_in_port,
-             struct flow *flow)
+flow_extract(struct ofpbuf *packet, uint32_t priority, ovs_be64 tun_id,
+             uint16_t ofp_in_port, struct flow *flow)
 {
     struct ofpbuf b = *packet;
     struct eth_header *eth;
@@ -335,6 +335,7 @@ flow_extract(struct ofpbuf *packet, ovs_be64 tun_id, uint16_t ofp_in_port,
     memset(flow, 0, sizeof *flow);
     flow->tun_id = tun_id;
     flow->in_port = ofp_in_port;
+    flow->priority = priority;
 
     packet->l2 = b.data;
     packet->l3 = NULL;
@@ -484,6 +485,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     if (wc & FWW_ND_TARGET) {
         memset(&flow->nd_target, 0, sizeof flow->nd_target);
     }
+    flow->priority = 0;
 }
 
 char *
@@ -499,8 +501,14 @@ flow_format(struct ds *ds, const struct flow *flow)
 {
     int frag;
 
-    ds_put_format(ds, "tunnel%#"PRIx64":in_port%04"PRIx16":tci(",
-                  ntohll(flow->tun_id), flow->in_port);
+    ds_put_format(ds, "priority%"PRIu32
+                      ":tunnel%#"PRIx64
+                      ":in_port%04"PRIx16,
+                      flow->priority,
+                      ntohll(flow->tun_id),
+                      flow->in_port);
+
+    ds_put_format(ds, ":tci(");
     if (flow->vlan_tci) {
         ds_put_format(ds, "vlan%"PRIu16",pcp%d",
                       vlan_tci_to_vid(flow->vlan_tci),

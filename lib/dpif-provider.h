@@ -318,8 +318,7 @@ struct dpif_class {
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
-     * priority value for use in the OVS_ACTION_ATTR_SET_PRIORITY action in
-     * '*priority'. */
+     * priority value used for setting packet priority. */
     int (*queue_to_priority)(const struct dpif *dpif, uint32_t queue_id,
                              uint32_t *priority);
 

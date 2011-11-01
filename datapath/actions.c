@@ -314,6 +314,10 @@ static int execute_set_action(struct sk_buff *skb,
 	int err = 0;
 
 	switch (nla_type(nested_attr)) {
+	case OVS_KEY_ATTR_PRIORITY:
+		skb->priority = nla_get_u32(nested_attr);
+		break;
+
 	case OVS_KEY_ATTR_TUN_ID:
 		OVS_CB(skb)->tun_id = nla_get_be64(nested_attr);
 		break;
@@ -347,7 +351,6 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 	 * then freeing the original skbuff is wasteful.  So the following code
 	 * is slightly obscure just to avoid that. */
 	int prev_port = -1;
-	u32 priority = skb->priority;
 	const struct nlattr *a;
 	int rem;
 
@@ -383,14 +386,6 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case OVS_ACTION_ATTR_SET:
 			err = execute_set_action(skb, nla_data(a));
-			break;
-
-		case OVS_ACTION_ATTR_SET_PRIORITY:
-			skb->priority = nla_get_u32(a);
-			break;
-
-		case OVS_ACTION_ATTR_POP_PRIORITY:
-			skb->priority = priority;
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:

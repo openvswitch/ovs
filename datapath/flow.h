@@ -36,8 +36,11 @@ struct sw_flow_actions {
 
 struct sw_flow_key {
 	struct {
-		__be64 tun_id;		/* Encapsulating tunnel ID. */
-		u16    in_port;		/* Input switch port (or USHRT_MAX). */
+		__be64	tun_id;		/* Encapsulating tunnel ID. */
+		u32	priority;	/* Packet QoS priority. */
+		u16	in_port;	/* Input switch port (or USHRT_MAX). */
+	} phy;
+	struct {
 		u8     src[ETH_ALEN];	/* Ethernet source address. */
 		u8     dst[ETH_ALEN];	/* Ethernet destination address. */
 		__be16 tci;		/* 0 if no VLAN, VLAN_TAG_PRESENT set otherwise. */
@@ -138,6 +141,7 @@ u64 flow_used_time(unsigned long flow_jiffies);
  *
  *                         struct  pad  nl hdr  total
  *                         ------  ---  ------  -----
+ *  OVS_KEY_ATTR_PRIORITY      4    --     4      8
  *  OVS_KEY_ATTR_TUN_ID        8    --     4     12
  *  OVS_KEY_ATTR_IN_PORT       4    --     4      8
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
@@ -147,14 +151,14 @@ u64 flow_used_time(unsigned long flow_jiffies);
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
- *  total                                       132
+ *  total					140
  */
-#define FLOW_BUFSIZE 132
+#define FLOW_BUFSIZE 140
 
 int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *);
-int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
+int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 			       const struct nlattr *);
 
 #define TBL_MIN_BUCKETS		1024

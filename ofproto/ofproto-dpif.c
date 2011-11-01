@@ -205,9 +205,8 @@ struct action_xlate_ctx {
  * reason to look at them. */
 
     int recurse;                /* Recursion level, via xlate_table_action. */
-    uint32_t priority;          /* Current flow priority. 0 if none. */
     struct flow base_flow;      /* Flow at the last commit. */
-    uint32_t base_priority;     /* Priority at the last commit. */
+    uint32_t original_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     uint16_t sflow_odp_port;    /* Output port for composing sFlow action. */
@@ -2257,7 +2256,8 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         /* Obtain in_port and tun_id, at least, then set 'flow''s header
          * pointers. */
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-        flow_extract(upcall->packet, flow.tun_id, flow.in_port, &flow);
+        flow_extract(upcall->packet, flow.priority, flow.tun_id,
+                     flow.in_port, &flow);
 
         /* Handle 802.1ag, LACP, and STP specially. */
         if (process_special(ofproto, &flow, upcall->packet)) {
@@ -3449,7 +3449,7 @@ send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
     struct flow flow;
     int error;
 
-    flow_extract((struct ofpbuf *) packet, 0, 0, &flow);
+    flow_extract((struct ofpbuf *) packet, 0, 0, 0, &flow);
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow);
 
@@ -3722,19 +3722,17 @@ commit_set_port_action(const struct flow *flow, struct flow *base,
 }
 
 static void
-commit_priority_action(struct action_xlate_ctx *ctx)
+commit_set_priority_action(const struct flow *flow, struct flow *base,
+                           struct ofpbuf *odp_actions)
 {
-    if (ctx->base_priority == ctx->priority) {
+    if (base->priority == flow->priority) {
         return;
     }
+    base->priority = flow->priority;
 
-    if (ctx->priority) {
-        nl_msg_put_u32(ctx->odp_actions,
-                        OVS_ACTION_ATTR_SET_PRIORITY, ctx->priority);
-    } else {
-        nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_PRIORITY);
-    }
-    ctx->base_priority = ctx->priority;
+    commit_action__(odp_actions, OVS_ACTION_ATTR_SET,
+                    OVS_KEY_ATTR_PRIORITY, &base->priority,
+                    sizeof(base->priority));
 }
 
 static void
@@ -3749,7 +3747,7 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
     commit_vlan_action(ctx, flow->vlan_tci);
     commit_set_nw_action(flow, base, odp_actions);
     commit_set_port_action(flow, base, odp_actions);
-    commit_priority_action(ctx);
+    commit_set_priority_action(flow, base, odp_actions);
 }
 
 static void
@@ -3958,7 +3956,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
                      const struct ofp_action_enqueue *oae)
 {
     uint16_t ofp_port, odp_port;
-    uint32_t ctx_priority, priority;
+    uint32_t flow_priority, priority;
     int error;
 
     error = dpif_queue_to_priority(ctx->ofproto->dpif, ntohl(oae->queue_id),
@@ -3979,10 +3977,10 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     odp_port = ofp_port_to_odp_port(ofp_port);
 
     /* Add datapath actions. */
-    ctx_priority = ctx->priority;
-    ctx->priority = priority;
+    flow_priority = ctx->flow.priority;
+    ctx->flow.priority = priority;
     add_output_action(ctx, odp_port);
-    ctx->priority = ctx_priority;
+    ctx->flow.priority = flow_priority;
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
@@ -4007,7 +4005,7 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
         return;
     }
 
-    ctx->priority = priority;
+    ctx->flow.priority = priority;
 }
 
 struct xlate_reg_state {
@@ -4205,7 +4203,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPUTIL_NXAST_POP_QUEUE:
-            ctx->priority = 0;
+            ctx->flow.priority = ctx->original_priority;
             break;
 
         case OFPUTIL_NXAST_REG_MOVE:
@@ -4304,8 +4302,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->has_normal = false;
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
-    ctx->priority = 0;
-    ctx->base_priority = 0;
+    ctx->original_priority = ctx->flow.priority;
     ctx->base_flow = ctx->flow;
     ctx->base_flow.tun_id = 0;
     ctx->table_id = 0;
@@ -5215,7 +5212,7 @@ static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
                       void *aux OVS_UNUSED)
 {
-    char *dpname, *arg1, *arg2, *arg3;
+    char *dpname, *arg1, *arg2, *arg3, *arg4;
     char *args = xstrdup(args_);
     char *save_ptr = NULL;
     struct ofproto_dpif *ofproto;
@@ -5233,7 +5230,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     dpname = strtok_r(args, " ", &save_ptr);
     arg1 = strtok_r(NULL, " ", &save_ptr);
     arg2 = strtok_r(NULL, " ", &save_ptr);
-    arg3 = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
+    arg3 = strtok_r(NULL, " ", &save_ptr);
+    arg4 = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
     if (dpname && arg1 && (!arg2 || !strcmp(arg2, "-generate")) && !arg3) {
         /* ofproto/trace dpname flow [-generate] */
         int error;
@@ -5258,18 +5256,20 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
             packet = ofpbuf_new(0);
             flow_compose(packet, &flow);
         }
-    } else if (dpname && arg1 && arg2 && arg3) {
-        /* ofproto/trace dpname tun_id in_port packet */
+    } else if (dpname && arg1 && arg2 && arg3 && arg4) {
+        /* ofproto/trace dpname priority tun_id in_port packet */
         uint16_t in_port;
         ovs_be64 tun_id;
+        uint32_t priority;
 
-        tun_id = htonll(strtoull(arg1, NULL, 0));
-        in_port = ofp_port_to_odp_port(atoi(arg2));
+        priority = atoi(arg1);
+        tun_id = htonll(strtoull(arg2, NULL, 0));
+        in_port = ofp_port_to_odp_port(atoi(arg3));
 
         packet = ofpbuf_new(strlen(args) / 2);
-        arg3 = ofpbuf_put_hex(packet, arg3, NULL);
-        arg3 += strspn(arg3, " ");
-        if (*arg3 != '\0') {
+        arg4 = ofpbuf_put_hex(packet, arg4, NULL);
+        arg4 += strspn(arg4, " ");
+        if (*arg4 != '\0') {
             unixctl_command_reply(conn, 501, "Trailing garbage in command");
             goto exit;
         }
@@ -5284,7 +5284,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         ds_put_cstr(&result, s);
         free(s);
 
-        flow_extract(packet, tun_id, in_port, &flow);
+        flow_extract(packet, priority, tun_id, in_port, &flow);
     } else {
         unixctl_command_reply(conn, 501, "Bad command syntax");
         goto exit;

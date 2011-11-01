@@ -638,8 +638,10 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 	struct ethhdr *eth;
 
 	memset(key, 0, sizeof(*key));
-	key->eth.tun_id = OVS_CB(skb)->tun_id;
-	key->eth.in_port = in_port;
+
+	key->phy.priority = skb->priority;
+	key->phy.tun_id = OVS_CB(skb)->tun_id;
+	key->phy.in_port = in_port;
 
 	skb_reset_mac_header(skb);
 
@@ -849,6 +851,7 @@ static int parse_tos_frag(struct sw_flow_key *swkey, u8 tos, u8 frag)
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
 const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
+	[OVS_KEY_ATTR_PRIORITY] = 4,
 	[OVS_KEY_ATTR_TUN_ID] = 8,
 	[OVS_KEY_ATTR_IN_PORT] = 4,
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
@@ -874,7 +877,7 @@ const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
  * This state machine accepts the following forms, with [] for optional
  * elements and | for alternatives:
  *
- * [tun_id] [in_port] ethernet [8021q] [ethertype \
+ * [priority] [tun_id] [in_port] ethernet [8021q] [ethertype \
  *              [IPv4 [TCP|UDP|ICMP] | IPv6 [TCP|UDP|ICMPv6 [ND]] | ARP]]
  *
  * except that IPv4 or IPv6 terminates the sequence if its @ipv4_frag or
@@ -891,7 +894,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	int key_len;
 
 	memset(swkey, 0, sizeof(*swkey));
-	swkey->eth.in_port = USHRT_MAX;
+	swkey->phy.in_port = USHRT_MAX;
 	swkey->eth.type = htons(ETH_P_802_2);
 	key_len = SW_FLOW_KEY_OFFSET(eth);
 
@@ -915,18 +918,25 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 #define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
 		switch (TRANSITION(prev_type, type)) {
+		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_PRIORITY):
+			swkey->phy.priority = nla_get_u32(nla);
+			break;
+
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):
-			swkey->eth.tun_id = nla_get_be64(nla);
+		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_TUN_ID):
+			swkey->phy.tun_id = nla_get_be64(nla);
 			break;
 
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_IN_PORT):
+		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_IN_PORT):
 		case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_IN_PORT):
 			if (nla_get_u32(nla) >= DP_MAX_PORTS)
 				goto invalid;
-			swkey->eth.in_port = nla_get_u32(nla);
+			swkey->phy.in_port = nla_get_u32(nla);
 			break;
 
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_ETHERNET):
+		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_ETHERNET):
 		case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_ETHERNET):
 		case TRANSITION(OVS_KEY_ATTR_IN_PORT, OVS_KEY_ATTR_ETHERNET):
 			eth_key = nla_data(nla);
@@ -1073,6 +1083,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	case OVS_KEY_ATTR_UNSPEC:
 		goto invalid;
 
+	case OVS_KEY_ATTR_PRIORITY:
 	case OVS_KEY_ATTR_TUN_ID:
 	case OVS_KEY_ATTR_IN_PORT:
 		goto invalid;
@@ -1148,7 +1159,7 @@ ok:
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
-int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
+int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 			       const struct nlattr *attr)
 {
 	const struct nlattr *nla;
@@ -1157,6 +1168,7 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 
 	*in_port = USHRT_MAX;
 	*tun_id = 0;
+	*priority = 0;
 
 	prev_type = OVS_KEY_ATTR_UNSPEC;
 	nla_for_each_nested(nla, attr, rem) {
@@ -1166,11 +1178,17 @@ int flow_metadata_from_nlattrs(u16 *in_port, __be64 *tun_id,
 			return -EINVAL;
 
 		switch (TRANSITION(prev_type, type)) {
+		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_PRIORITY):
+			*priority = nla_get_u32(nla);
+			break;
+
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):
+		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_TUN_ID):
 			*tun_id = nla_get_be64(nla);
 			break;
 
 		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_IN_PORT):
+		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_IN_PORT):
 		case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_IN_PORT):
 			if (nla_get_u32(nla) >= DP_MAX_PORTS)
 				return -EINVAL;
@@ -1196,13 +1214,16 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	/* This is an imperfect sanity-check that FLOW_BUFSIZE doesn't need
 	 * to be updated, but will at least raise awareness when new
 	 * datapath key types are added. */
-	BUILD_BUG_ON(__OVS_KEY_ATTR_MAX != 14);
+	BUILD_BUG_ON(__OVS_KEY_ATTR_MAX != 15);
 
-	if (swkey->eth.tun_id != cpu_to_be64(0))
-		NLA_PUT_BE64(skb, OVS_KEY_ATTR_TUN_ID, swkey->eth.tun_id);
+	if (swkey->phy.priority)
+		NLA_PUT_U32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority);
 
-	if (swkey->eth.in_port != USHRT_MAX)
-		NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->eth.in_port);
+	if (swkey->phy.tun_id != cpu_to_be64(0))
+		NLA_PUT_BE64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun_id);
+
+	if (swkey->phy.in_port != USHRT_MAX)
+		NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->phy.in_port);
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));
 	if (!nla)

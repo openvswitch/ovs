@@ -1129,9 +1129,9 @@ dpif_get_netflow_ids(const struct dpif *dpif,
 }
 
 /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a priority
- * value for use in the OVS_ACTION_ATTR_SET_PRIORITY action.  On success,
- * returns 0 and stores the priority into '*priority'.  On failure, returns a
- * positive errno value and stores 0 into '*priority'. */
+ * value used for setting packet priority.
+ * On success, returns 0 and stores the priority into '*priority'.
+ * On failure, returns a positive errno value and stores 0 into '*priority'. */
 int
 dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
                        uint32_t *priority)

@@ -263,6 +263,7 @@ struct ovs_flow_stats {
 
 enum ovs_key_attr {
 	OVS_KEY_ATTR_UNSPEC,
+	OVS_KEY_ATTR_PRIORITY,  /* 32-bit skb->priority */
 	OVS_KEY_ATTR_TUN_ID,    /* 64-bit tunnel ID */
 	OVS_KEY_ATTR_IN_PORT,   /* 32-bit OVS dp port number */
 	OVS_KEY_ATTR_ETHERNET,  /* struct ovs_key_ethernet */
@@ -449,9 +450,6 @@ enum ovs_userspace_attr {
  * header.
  * @OVS_ACTION_ATTR_SET: Replaces the contents of an existing header.
  * The argument takes the same form as %OVS_ACTION_ATTR_PUSH.
- * @OVS_ACTION_ATTR_SET_PRIORITY: Sets skb->priority to 32-bit number passed
- * as argument.
- * @OVS_ACTION_ATTR_POP_PRIORITY: Restore skb->priority to original value.
  * @OVS_ACTION_ATTR_SAMPLE: Probabilitically executes actions, as specified in
  * the nested %OVS_SAMPLE_ATTR_* attributes.
  *
@@ -466,8 +464,6 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_PUSH,         /* One nested OVS_KEY_ATTR_*. */
 	OVS_ACTION_ATTR_POP,          /* u16 OVS_KEY_ATTR_*. */
 	OVS_ACTION_ATTR_SET,          /* One nested OVS_KEY_ATTR_*. */
-	OVS_ACTION_ATTR_SET_PRIORITY, /* u32 skb->priority value. */
-	OVS_ACTION_ATTR_POP_PRIORITY, /* No argument. */
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	__OVS_ACTION_ATTR_MAX
 };

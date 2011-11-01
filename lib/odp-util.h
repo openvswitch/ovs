@@ -66,6 +66,7 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  *
  *                         struct  pad  nl hdr  total
  *                         ------  ---  ------  -----
+ *  OVS_KEY_ATTR_PRIORITY      4    --     4      8
  *  OVS_KEY_ATTR_TUN_ID        8    --     4     12
  *  OVS_KEY_ATTR_IN_PORT       4    --     4      8
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
@@ -75,14 +76,14 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
- *  total                                       132
+ *  total                                       140
  */
-#define ODPUTIL_FLOW_KEY_BYTES 132
+#define ODPUTIL_FLOW_KEY_BYTES 140
 
 /* This is an imperfect sanity-check that ODPUTIL_FLOW_KEY_BYTES doesn't
  * need to be updated, but will at least raise awareness when new OVS
  * datapath key types are added. */
-BUILD_ASSERT_DECL(__OVS_KEY_ATTR_MAX == 14);
+BUILD_ASSERT_DECL(__OVS_KEY_ATTR_MAX == 15);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently

@@ -33,6 +33,10 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp
  sed 's/eth([[^)]]*)/&,vlan(vid=99,pcp=7)/' odp-base.txt
 
  echo
+ echo '# Valid forms with QoS priority.'
+ sed 's/^/priority(1234),/' odp-base.txt
+
+ echo
  echo '# Valid forms with tun_id and VLAN headers.'
  sed 's/^/tun_id(0xfedcba9876543210),/
 s/eth([[^)]]*)/&,vlan(vid=99,pcp=7)/' odp-base.txt

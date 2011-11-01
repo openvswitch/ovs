@@ -419,7 +419,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     pkt_ofs = offsetof(struct ofp_packet_in, data);
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
     ofpbuf_use_const(&pkt, opi->data, pkt_len);
-    flow_extract(&pkt, 0, in_port, &flow);
+    flow_extract(&pkt, 0, 0, in_port, &flow);
 
     /* Choose output port. */
     out_port = lswitch_choose_destination(sw, &flow);

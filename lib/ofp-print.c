@@ -140,7 +140,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
         struct ofpbuf packet;
 
         ofpbuf_use_const(&packet, op->data, data_len);
-        flow_extract(&packet, 0, ntohs(op->in_port), &flow);
+        flow_extract(&packet, 0, 0, ntohs(op->in_port), &flow);
         flow_format(string, &flow);
         ds_put_char(string, '\n');
     }
