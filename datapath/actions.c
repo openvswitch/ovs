@@ -77,7 +77,7 @@ static int pop_vlan(struct sk_buff *skb)
 		vlan_set_tci(skb, 0);
 	} else {
 		if (unlikely(skb->protocol != htons(ETH_P_8021Q) ||
-		    skb->len < VLAN_ETH_HLEN))
+			     skb->len < VLAN_ETH_HLEN))
 			return 0;
 
 		err = __pop_vlan_tci(skb, &tci);
@@ -86,7 +86,7 @@ static int pop_vlan(struct sk_buff *skb)
 	}
 	/* move next vlan tag to hw accel tag */
 	if (likely(skb->protocol != htons(ETH_P_8021Q) ||
-	    skb->len < VLAN_ETH_HLEN))
+		   skb->len < VLAN_ETH_HLEN))
 		return 0;
 
 	err = __pop_vlan_tci(skb, &tci);
