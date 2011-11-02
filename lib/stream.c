@@ -616,6 +616,7 @@ void
 stream_init(struct stream *stream, struct stream_class *class,
             int connect_status, const char *name)
 {
+    memset(stream, 0, sizeof *stream);
     stream->class = class;
     stream->state = (connect_status == EAGAIN ? SCS_CONNECTING
                     : !connect_status ? SCS_CONNECTED
