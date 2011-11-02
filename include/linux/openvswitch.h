@@ -264,11 +264,11 @@ struct ovs_flow_stats {
 
 enum ovs_key_attr {
 	OVS_KEY_ATTR_UNSPEC,
-	OVS_KEY_ATTR_PRIORITY,  /* 32-bit skb->priority */
-	OVS_KEY_ATTR_IN_PORT,   /* 32-bit OVS dp port number */
+	OVS_KEY_ATTR_PRIORITY,  /* u32 skb->priority */
+	OVS_KEY_ATTR_IN_PORT,   /* u32 OVS dp port number */
 	OVS_KEY_ATTR_ETHERNET,  /* struct ovs_key_ethernet */
 	OVS_KEY_ATTR_8021Q,     /* struct ovs_key_8021q */
-	OVS_KEY_ATTR_ETHERTYPE,	/* 16-bit Ethernet type */
+	OVS_KEY_ATTR_ETHERTYPE,	/* be16 Ethernet type */
 	OVS_KEY_ATTR_IPV4,      /* struct ovs_key_ipv4 */
 	OVS_KEY_ATTR_IPV6,      /* struct ovs_key_ipv6 */
 	OVS_KEY_ATTR_TCP,       /* struct ovs_key_tcp */
@@ -277,7 +277,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_ICMPV6,    /* struct ovs_key_icmpv6 */
 	OVS_KEY_ATTR_ARP,       /* struct ovs_key_arp */
 	OVS_KEY_ATTR_ND,        /* struct ovs_key_nd */
-	OVS_KEY_ATTR_TUN_ID = 100, /* 64-bit tunnel ID */
+	OVS_KEY_ATTR_TUN_ID = 100, /* be64 tunnel ID */
 	__OVS_KEY_ATTR_MAX
 };
 
