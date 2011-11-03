@@ -35,17 +35,19 @@ make %{_smp_mflags}
 %install
 rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
-install -d -m 755 $RPM_BUILD_ROOT/etc
-install -d -m 755 $RPM_BUILD_ROOT/etc/init.d
-install -m 755 rhel/etc_init.d_openvswitch \
-    $RPM_BUILD_ROOT/etc/init.d/openvswitch
-install -d -m 755 $RPM_BUILD_ROOT/etc/sysconfig
-install -d -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
-install -m 755 rhel/etc_logrotate.d_openvswitch \
-    $RPM_BUILD_ROOT/etc/logrotate.d/openvswitch
-install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
-install -m 755 rhel/usr_share_openvswitch_scripts_sysconfig.template \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
+for base in \
+	etc_init.d_openvswitch \
+	etc_logrotate.d_openvswitch \
+	etc_sysconfig_network-scripts_ifup-ovs \
+	etc_sysconfig_network-scripts_ifdown-ovs \
+	usr_share_openvswitch_scripts_sysconfig.template; do
+    dst=$RPM_BUILD_ROOT/$(echo $base | sed 's,_,/,g')
+    install -d -m755 "$(dirname $dst)"
+    install rhel/$base "$dst"
+done
+docdir=$RPM_BUILD_ROOT/usr/share/doc/openvswitch-%{version}
+install -d -m755 "$docdir"
+install rhel/README.RHEL "$docdir"
 install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
@@ -100,6 +102,8 @@ exit 0
 %defattr(-,root,root)
 /etc/init.d/openvswitch
 /etc/logrotate.d/openvswitch
+/etc/sysconfig/network-scripts/ifup-ovs
+/etc/sysconfig/network-scripts/ifdown-ovs
 /etc/openvswitch/bugtool-plugins/*
 /usr/bin/ovs-appctl
 /usr/bin/ovs-benchmark
@@ -142,4 +146,5 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
+/usr/share/doc/openvswitch-%{version}/README.RHEL
 /var/lib/openvswitch

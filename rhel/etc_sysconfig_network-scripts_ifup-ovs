@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Copyright (c) 2011 Alexey I. Froloff.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+. /etc/init.d/functions
+
+cd /etc/sysconfig/network-scripts
+. ./network-functions
+
+[ -f ../network ] && . ../network
+
+CONFIG=${1}
+
+need_config ${CONFIG}
+
+source_config
+
+OTHERSCRIPT="/etc/sysconfig/network-scripts/ifup-${REAL_DEVICETYPE}"
+
+if [ ! -x ${OTHERSCRIPT} ]; then
+	OTHERSCRIPT="/etc/sysconfig/network-scripts/ifup-eth"
+fi
+
+case "$TYPE" in
+	OVSBridge)
+		ovs-vsctl -- --may-exist add-br "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		${OTHERSCRIPT} ${CONFIG} ${2}
+		;;
+	OVSPort)
+		/sbin/ifup "$OVS_BRIDGE"
+		${OTHERSCRIPT} ${CONFIG} ${2}
+		ovs-vsctl -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
+	OVSIntPort)
+		/sbin/ifup "$OVS_BRIDGE"
+		ovs-vsctl -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
+		${OTHERSCRIPT} ${CONFIG} ${2}
+		;;
+	OVSBond)
+		/sbin/ifup "$OVS_BRIDGE"
+		for _iface in $BOND_IFACES; do
+			/sbin/ifup ${_iface}
+		done
+		ovs-vsctl -- --fake-iface add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		${OTHERSCRIPT} ${CONFIG} ${2}
+		;;
+	*)
+		echo $"Invalid OVS interface type $TYPE"
+		exit 1
+		;;
+esac

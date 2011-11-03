@@ -6,9 +6,12 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
+	rhel/README.RHEL \
 	rhel/automake.mk \
 	rhel/etc_init.d_openvswitch \
 	rhel/etc_logrotate.d_openvswitch \
+	rhel/etc_sysconfig_network-scripts_ifdown-ovs \
+	rhel/etc_sysconfig_network-scripts_ifup-ovs \
 	rhel/kmodtool-openvswitch-el5.sh \
 	rhel/openvswitch-kmod-rhel5.spec \
 	rhel/openvswitch-kmod-rhel5.spec.in \

@@ -64,6 +64,14 @@ RHEL.  On RHEL 5, the default RPM source directory is
     in this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
     "kmod-openvswitch-kdump".
 
+Red Hat Network Scripts Integration
+-----------------------------------
+
+Simple integration with Red Hat network scripts has been implemented.
+Please read rhel/README.RHEL in the source tree or
+/usr/share/doc/openvswitch/README.RHEL in the installed openvswitch
+package for details.
+
 Reporting Bugs
 --------------
 

@@ -8,6 +8,7 @@ post-v1.3.0
        - Added ability to modify TTL in IPv4.
     - ovs-appctl:
       - New "fdb/flush" command to flush bridge's MAC learning table.
+    - RHEL packaging now supports integration with Red Hat network scripts.
 
 v1.3.0 - xx xxx xxxx
 ------------------------
