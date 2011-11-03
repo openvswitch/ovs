@@ -54,6 +54,9 @@ BUILD_ASSERT_DECL(FLOW_FRAG_LATER == NX_IP_FRAG_LATER);
 
 struct flow {
     ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
+    struct in6_addr ipv6_src;   /* IPv6 source address. */
+    struct in6_addr ipv6_dst;   /* IPv6 destination address. */
+    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     uint32_t priority;          /* Packet priority for QoS. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
     ovs_be32 nw_src;            /* IPv4 source address. */
@@ -69,9 +72,6 @@ struct flow {
     uint8_t tos_frag;           /* IP ToS in top bits, FLOW_FRAG_* in low. */
     uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
-    struct in6_addr ipv6_src;   /* IPv6 source address. */
-    struct in6_addr ipv6_dst;   /* IPv6 destination address. */
-    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     uint32_t reserved;          /* Reserved for 64-bit packing. */
 };
 
@@ -79,8 +79,8 @@ struct flow {
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
 #define FLOW_SIG_SIZE (104 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 4
-BUILD_ASSERT_DECL(offsetof(struct flow, nd_target) == FLOW_SIG_SIZE - 16);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nd_target) == 16);
+BUILD_ASSERT_DECL(offsetof(struct flow, arp_tha) == FLOW_SIG_SIZE - 6);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->arp_tha) == 6);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
