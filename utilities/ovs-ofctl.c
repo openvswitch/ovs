@@ -1421,7 +1421,7 @@ do_parse_flows(int argc OVS_UNUSED, char *argv[])
 
     file = fopen(argv[1], "r");
     if (file == NULL) {
-        ovs_fatal(errno, "%s: open", argv[2]);
+        ovs_fatal(errno, "%s: open", argv[1]);
     }
 
     flow_format = NXFF_OPENFLOW10;
