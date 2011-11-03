@@ -897,6 +897,11 @@ ofputil_min_flow_format(const struct cls_rule *rule)
         return NXFF_NXM;
     }
 
+    /* Only NXM supports matching IP ECN bits. */
+    if (wc->tos_mask & IP_ECN_MASK) {
+        return NXFF_NXM;
+    }
+
     /* Other formats can express this rule. */
     return NXFF_OPENFLOW10;
 }

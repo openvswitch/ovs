@@ -1086,12 +1086,9 @@ dp_netdev_set_ip_tos(struct ip_header *nh, uint8_t new_tos)
 {
     uint8_t *field = &nh->ip_tos;
 
-    /* Set the DSCP bits and preserve the ECN bits. */
-    uint8_t new = new_tos | (nh->ip_tos & IP_ECN_MASK);
-
     nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
-			            htons((uint16_t) new));
-    *field = new;
+			            htons((uint16_t) new_tos));
+    *field = new_tos;
 }
 
 static void

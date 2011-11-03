@@ -148,7 +148,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     flow->ipv6_dst = nh->ip6_dst;
 
     tc_flow = get_unaligned_be32(&nh->ip6_flow);
-    flow->tos = (ntohl(tc_flow) >> 4) & IP_DSCP_MASK;
+    flow->tos = ntohl(tc_flow) >> 4;
     flow->ipv6_label = tc_flow & htonl(IPV6_LABEL_MASK);
     flow->nw_proto = IPPROTO_NONE;
 
@@ -369,7 +369,7 @@ flow_extract(struct ofpbuf *packet, uint32_t priority, ovs_be64 tun_id,
             flow->nw_dst = get_unaligned_be32(&nh->ip_dst);
             flow->nw_proto = nh->ip_proto;
 
-            flow->tos = nh->ip_tos & IP_DSCP_MASK;
+            flow->tos = nh->ip_tos;
             if (IP_IS_FRAGMENT(nh->ip_frag_off)) {
                 flow->frag = FLOW_FRAG_ANY;
                 if (nh->ip_frag_off & htons(IP_FRAG_OFF_MASK)) {
@@ -525,19 +525,15 @@ flow_format(struct ds *ds, const struct flow *flow)
                   ntohs(flow->dl_type));
 
     if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        ds_put_format(ds, " label%#"PRIx32" proto%"PRIu8" tos%"PRIu8" ipv6",
-                      ntohl(flow->ipv6_label), flow->nw_proto,
-                      flow->tos & IP_DSCP_MASK);
+        ds_put_format(ds, " label%#"PRIx32" proto%"PRIu8" tos%#"PRIx8" ipv6",
+                      ntohl(flow->ipv6_label), flow->nw_proto, flow->tos);
         print_ipv6_addr(ds, &flow->ipv6_src);
         ds_put_cstr(ds, "->");
         print_ipv6_addr(ds, &flow->ipv6_dst);
 
     } else {
-        ds_put_format(ds, " proto%"PRIu8
-                          " tos%"PRIu8
-                          " ip"IP_FMT"->"IP_FMT,
-                      flow->nw_proto,
-                      flow->tos & IP_DSCP_MASK,
+        ds_put_format(ds, " proto%"PRIu8" tos%#"PRIx8" ip"IP_FMT"->"IP_FMT,
+                      flow->nw_proto, flow->tos,
                       IP_ARGS(&flow->nw_src),
                       IP_ARGS(&flow->nw_dst));
     }
@@ -1016,7 +1012,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
 
         b->l3 = ip = ofpbuf_put_zeros(b, sizeof *ip);
         ip->ip_ihl_ver = IP_IHL_VER(5, 4);
-        ip->ip_tos = flow->tos & IP_DSCP_MASK;
+        ip->ip_tos = flow->tos;
         ip->ip_proto = flow->nw_proto;
         ip->ip_src = flow->nw_src;
         ip->ip_dst = flow->nw_dst;

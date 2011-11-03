@@ -44,7 +44,7 @@ struct sw_flow_key {
 	} eth;
 	struct {
 		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
-		u8     tos;         /* IP ToS DSCP in high 6 bits. */
+		u8     tos; 		/* IP ToS. */
 		u8     frag;        /* One of OVS_FRAG_TYPE_*. */
 	} ip;
 	union {

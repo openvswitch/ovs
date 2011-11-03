@@ -30,7 +30,6 @@
 #include <linux/icmp.h>
 #include <linux/icmpv6.h>
 #include <linux/rculist.h>
-#include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/ipv6.h>
 #include <net/ndisc.h>
@@ -200,7 +199,7 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	payload_ofs = (u8 *)(nh + 1) - skb->data;
 
 	key->ip.proto = NEXTHDR_NONE;
-	key->ip.tos = ipv6_get_dsfield(nh) & ~INET_ECN_MASK;
+	key->ip.tos = ipv6_get_dsfield(nh);
 	key->ipv6.label = *(__be32 *)nh & htonl(IPV6_FLOWINFO_FLOWLABEL);
 	ipv6_addr_copy(&key->ipv6.addr.src, &nh->saddr);
 	ipv6_addr_copy(&key->ipv6.addr.dst, &nh->daddr);
@@ -689,7 +688,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 		key->ipv4.addr.dst = nh->daddr;
 
 		key->ip.proto = nh->protocol;
-		key->ip.tos = nh->tos & ~INET_ECN_MASK;
+		key->ip.tos = nh->tos;
 
 		offset = nh->frag_off & htons(IP_OFFSET);
 		if (offset) {
@@ -958,8 +957,6 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			if (swkey->eth.type != htons(ETH_P_IP))
 				goto invalid;
 			ipv4_key = nla_data(nla);
-			if (ipv4_key->ipv4_tos & INET_ECN_MASK)
-				goto invalid;
 			if (ipv4_key->ipv4_frag > OVS_FRAG_TYPE_MAX)
 				goto invalid;
 			swkey->ip.proto = ipv4_key->ipv4_proto;
@@ -974,8 +971,6 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			if (swkey->eth.type != htons(ETH_P_IPV6))
 				goto invalid;
 			ipv6_key = nla_data(nla);
-			if (ipv6_key->ipv6_tos & INET_ECN_MASK)
-				goto invalid;
 			if (ipv6_key->ipv6_frag > OVS_FRAG_TYPE_MAX)
 				goto invalid;
 			swkey->ipv6.label = ipv6_key->ipv6_label;
@@ -1249,7 +1244,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		ipv4_key->ipv4_src = swkey->ipv4.addr.src;
 		ipv4_key->ipv4_dst = swkey->ipv4.addr.dst;
 		ipv4_key->ipv4_proto = swkey->ip.proto;
-		ipv4_key->ipv4_tos = swkey->ip.tos & ~INET_ECN_MASK;
+		ipv4_key->ipv4_tos = swkey->ip.tos;
 		ipv4_key->ipv4_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_IPV6)) {
 		struct ovs_key_ipv6 *ipv6_key;
@@ -1265,7 +1260,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 				sizeof(ipv6_key->ipv6_dst));
 		ipv6_key->ipv6_label = swkey->ipv6.label;
 		ipv6_key->ipv6_proto = swkey->ip.proto;
-		ipv6_key->ipv6_tos = swkey->ip.tos & ~INET_ECN_MASK;
+		ipv6_key->ipv6_tos = swkey->ip.tos;
 		ipv6_key->ipv6_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_ARP)) {
 		struct ovs_key_arp *arp_key;

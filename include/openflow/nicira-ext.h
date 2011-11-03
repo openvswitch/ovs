@@ -1623,6 +1623,15 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * Masking: Not maskable. */
 #define NXM_NX_IPV6_LABEL  NXM_HEADER  (0x0001, 27, 4)
 
+/* The ECN of the IP header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
+ *
+ * Format: ECN in the low-order 2 bits.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_IP_ECN      NXM_HEADER  (0x0001, 28, 1)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

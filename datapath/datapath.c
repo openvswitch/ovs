@@ -41,7 +41,6 @@
 #include <linux/openvswitch.h>
 #include <linux/rculist.h>
 #include <linux/dmi.h>
-#include <net/inet_ecn.h>
 #include <net/genetlink.h>
 
 #include "checksum.h"
@@ -587,9 +586,6 @@ static int validate_action_key(const struct nlattr *a,
 
 		ipv4_key = nla_data(ovs_key);
 		if (ipv4_key->ipv4_proto != flow_key->ip.proto)
-			return -EINVAL;
-
-		if (ipv4_key->ipv4_tos & INET_ECN_MASK)
 			return -EINVAL;
 
 		if (ipv4_key->ipv4_frag != flow_key->ip.frag)

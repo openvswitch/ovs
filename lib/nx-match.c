@@ -492,6 +492,10 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
             nxm_put_8(b, NXM_OF_IP_TOS, flow->tos & IP_DSCP_MASK);
         }
 
+        if (cr->wc.tos_mask & IP_ECN_MASK) {
+            nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
+        }
+
         if (!(wc & FWW_NW_PROTO)) {
             nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
             switch (flow->nw_proto) {
@@ -540,6 +544,10 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
         if (cr->wc.tos_mask & IP_DSCP_MASK) {
             nxm_put_8(b, NXM_OF_IP_TOS, flow->tos & IP_DSCP_MASK);
+        }
+
+        if (cr->wc.tos_mask & IP_ECN_MASK) {
+            nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
         }
 
         if (!(wc & FWW_NW_PROTO)) {
@@ -1047,6 +1055,9 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     case NFI_NXM_OF_IP_TOS:
         return flow->tos & IP_DSCP_MASK;
 
+    case NFI_NXM_NX_IP_ECN:
+        return flow->tos & IP_ECN_MASK;
+
     case NFI_NXM_NX_IP_FRAG:
         return flow->frag;
 
@@ -1200,6 +1211,11 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_OF_IP_TOS:
         flow->tos &= ~IP_DSCP_MASK;
         flow->tos |= new_value & IP_DSCP_MASK;
+        break;
+
+    case NFI_NXM_NX_IP_ECN:
+        flow->tos &= ~IP_ECN_MASK;
+        flow->tos |= new_value & IP_ECN_MASK;
         break;
 
     case NFI_NXM_NX_IP_FRAG:

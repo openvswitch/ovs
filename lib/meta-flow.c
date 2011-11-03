@@ -188,12 +188,19 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_IP_ANY,
         NXM_OF_IP_PROTO,
     }, {
-        MFF_IP_TOS, "nw_tos", NULL,
+        MFF_IP_DSCP, "nw_tos", NULL,
         MF_FIELD_SIZES(u8),
         MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_IP_ANY,
         NXM_OF_IP_TOS,
+    }, {
+        MFF_IP_ECN, "nw_ecn", NULL,
+        1, 2,
+        MFM_NONE, 0,
+        MFS_DECIMAL,
+        MFP_IP_ANY,
+        NXM_NX_IP_ECN,
     }, {
         MFF_IP_FRAG, "ip_frag", NULL,
         1, 2,
@@ -422,8 +429,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IPV6_DST:
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
 
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
         return !(wc->tos_mask & IP_DSCP_MASK);
+    case MFF_IP_ECN:
+        return !(wc->tos_mask & IP_ECN_MASK);
     case MFF_IP_FRAG:
         return !(wc->frag_mask & FLOW_FRAG_MASK);
 
@@ -524,8 +533,11 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         mask->ipv6 = wc->ipv6_dst_mask;
         break;
 
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
         mask->u8 = wc->tos_mask & IP_DSCP_MASK;
+        break;
+    case MFF_IP_ECN:
+        mask->u8 = wc->tos_mask & IP_ECN_MASK;
         break;
     case MFF_IP_FRAG:
         mask->u8 = wc->frag_mask & FLOW_FRAG_MASK;
@@ -643,7 +655,7 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
  * without the VLAN_CFI bit being set, but we can't reject those values because
  * it is still legitimate to test just for those bits (see the documentation
  * for NXM_OF_VLAN_TCI in nicira-ext.h).  On the other hand, there is never a
- * reason to set the low bit of MFF_IP_TOS to 1, so we reject that. */
+ * reason to set the low bit of MFF_IP_DSCP to 1, so we reject that. */
 bool
 mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 {
@@ -692,8 +704,10 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_ND_TLL:
         return true;
 
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
         return !(value->u8 & ~IP_DSCP_MASK);
+    case MFF_IP_ECN:
+        return !(value->u8 & ~IP_ECN_MASK);
     case MFF_IP_FRAG:
         return !(value->u8 & ~FLOW_FRAG_MASK);
 
@@ -799,8 +813,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->u8 = flow->nw_proto;
         break;
 
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
         value->u8 = flow->tos & IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_ECN:
+        value->u8 = flow->tos & IP_ECN_MASK;
         break;
 
     case MFF_IP_FRAG:
@@ -950,8 +968,12 @@ mf_set_value(const struct mf_field *mf,
         cls_rule_set_nw_proto(rule, value->u8);
         break;
 
-    case MFF_IP_TOS:
-        cls_rule_set_nw_tos(rule, value->u8);
+    case MFF_IP_DSCP:
+        cls_rule_set_nw_dscp(rule, value->u8);
+        break;
+
+    case MFF_IP_ECN:
+        cls_rule_set_nw_ecn(rule, value->u8);
         break;
 
     case MFF_IP_FRAG:
@@ -1117,9 +1139,14 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         rule->flow.nw_proto = 0;
         break;
 
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
         rule->wc.tos_mask |= IP_DSCP_MASK;
         rule->flow.tos &= ~IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_ECN:
+        rule->wc.tos_mask |= IP_ECN_MASK;
+        rule->flow.tos &= ~IP_ECN_MASK;
         break;
 
     case MFF_IP_FRAG:
@@ -1201,7 +1228,8 @@ mf_set(const struct mf_field *mf,
     case MFF_VLAN_PCP:
     case MFF_IPV6_LABEL:
     case MFF_IP_PROTO:
-    case MFF_IP_TOS:
+    case MFF_IP_DSCP:
+    case MFF_IP_ECN:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -1424,8 +1452,12 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
         value->be32 &= ~htonl(IPV6_LABEL_MASK);
         break;
 
-    case MFF_IP_TOS:
-        value->u8 &= ~0x03;
+    case MFF_IP_DSCP:
+        value->u8 &= IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_ECN:
+        value->u8 &= IP_ECN_MASK;
         break;
 
     case MFF_IP_FRAG:

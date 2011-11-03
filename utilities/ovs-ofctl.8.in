@@ -408,6 +408,14 @@ When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
 0x86dd, the value of \fBnw_tos\fR is ignored (see \fBFlow Syntax\fR
 above).
 .
+.IP \fBnw_ecn=\fIecn\fR
+Matches \fIecn\fR bits in IP ToS or IPv6 traffic class fields, which is
+specified as a decimal number between 0 and 3, inclusive.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
+0x86dd, the value of \fBnw_ecn\fR is ignored (see \fBFlow Syntax\fR
+above).
+.
 .IP \fBtp_src=\fIport\fR
 .IQ \fBtp_dst=\fIport\fR
 When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP, \fBtp_src\fR

@@ -19,9 +19,9 @@
 #include <linux/in6.h>
 #include <linux/if_arp.h>
 #include <linux/if_vlan.h>
-#include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/checksum.h>
+#include <net/dsfield.h>
 
 #include "actions.h"
 #include "checksum.h"
@@ -151,17 +151,6 @@ static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
 	*addr = new_addr;
 }
 
-static void set_ip_tos(struct sk_buff *skb, struct iphdr *nh, u8 new_tos)
-{
-	u8 old, new;
-
-	/* Set the DSCP bits and preserve the ECN bits. */
-	old = nh->tos;
-	new = new_tos | (nh->tos & INET_ECN_MASK);
-	csum_replace2(&nh->check, htons(old), htons(new));
-	nh->tos = new;
-}
-
 static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 {
 	struct iphdr *nh;
@@ -181,7 +170,7 @@ static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 		set_ip_addr(skb, nh, &nh->daddr, ipv4_key->ipv4_dst);
 
 	if (ipv4_key->ipv4_tos != nh->tos)
-		set_ip_tos(skb, nh, ipv4_key->ipv4_tos);
+		ipv4_change_dsfield(nh, 0, ipv4_key->ipv4_tos);
 
 	return 0;
 }

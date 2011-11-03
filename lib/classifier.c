@@ -318,11 +318,19 @@ cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 }
 
 void
-cls_rule_set_nw_tos(struct cls_rule *rule, uint8_t nw_tos)
+cls_rule_set_nw_dscp(struct cls_rule *rule, uint8_t nw_dscp)
 {
     rule->wc.tos_mask |= IP_DSCP_MASK;
     rule->flow.tos &= ~IP_DSCP_MASK;
-    rule->flow.tos |= nw_tos & IP_DSCP_MASK;
+    rule->flow.tos |= nw_dscp & IP_DSCP_MASK;
+}
+
+void
+cls_rule_set_nw_ecn(struct cls_rule *rule, uint8_t nw_ecn)
+{
+    rule->wc.tos_mask |= IP_ECN_MASK;
+    rule->flow.tos &= ~IP_ECN_MASK;
+    rule->flow.tos |= nw_ecn & IP_ECN_MASK;
 }
 
 void
@@ -619,6 +627,9 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     }
     if (wc->tos_mask & IP_DSCP_MASK) {
         ds_put_format(s, "nw_tos=%"PRIu8",", f->tos & IP_DSCP_MASK);
+    }
+    if (wc->tos_mask & IP_ECN_MASK) {
+        ds_put_format(s, "nw_ecn=%"PRIu8",", f->tos & IP_ECN_MASK);
     }
     switch (wc->frag_mask) {
     case FLOW_FRAG_ANY | FLOW_FRAG_LATER:

@@ -370,7 +370,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get(a);
         ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT","
-                      "proto=%"PRId8",tos=%"PRIu8",frag=%s)",
+                      "proto=%"PRId8",tos=%#"PRIx8",frag=%s)",
                       IP_ARGS(&ipv4_key->ipv4_src),
                       IP_ARGS(&ipv4_key->ipv4_dst),
                       ipv4_key->ipv4_proto, ipv4_key->ipv4_tos,
@@ -386,7 +386,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
 
         ds_put_format(ds, "ipv6(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRId8
-                      ",tos=%"PRIu8",frag=%s)",
+                      ",tos=%#"PRIx8",frag=%s)",
                       src_str, dst_str, ntohl(ipv6_key->ipv6_label),
                       ipv6_key->ipv6_proto, ipv6_key->ipv6_tos,
                       ovs_frag_type_to_string(ipv6_key->ipv6_frag));
@@ -876,7 +876,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv4_key->ipv4_src = flow->nw_src;
         ipv4_key->ipv4_dst = flow->nw_dst;
         ipv4_key->ipv4_proto = flow->nw_proto;
-        ipv4_key->ipv4_tos = flow->tos & IP_DSCP_MASK;
+        ipv4_key->ipv4_tos = flow->tos;
         ipv4_key->ipv4_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_key_ipv6 *ipv6_key;
@@ -888,7 +888,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
         ipv6_key->ipv6_label = flow->ipv6_label;
         ipv6_key->ipv6_proto = flow->nw_proto;
-        ipv6_key->ipv6_tos = flow->tos & IP_DSCP_MASK;
+        ipv6_key->ipv6_tos = flow->tos;
         ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         struct ovs_key_arp *arp_key;
