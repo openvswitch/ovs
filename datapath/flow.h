@@ -30,10 +30,6 @@ struct sw_flow_actions {
 	struct nlattr actions[];
 };
 
-/* Mask for the OVS_FRAG_TYPE_* value in the low 2 bits of ip.tos_frag in
- * struct sw_flow_key. */
-#define OVS_FRAG_TYPE_MASK INET_ECN_MASK
-
 struct sw_flow_key {
 	struct {
 		__be64	tun_id;		/* Encapsulating tunnel ID. */
@@ -48,8 +44,8 @@ struct sw_flow_key {
 	} eth;
 	struct {
 		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
-		u8     tos_frag;	/* IP ToS DSCP in high 6 bits,
-					 * OVS_FRAG_TYPE_* in low 2 bits. */
+		u8     tos;         /* IP ToS DSCP in high 6 bits. */
+		u8     frag;        /* One of OVS_FRAG_TYPE_*. */
 	} ip;
 	union {
 		struct {
@@ -147,7 +143,7 @@ u64 flow_used_time(unsigned long flow_jiffies);
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_8021Q         4    --     4      8
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  OVS_KEY_ATTR_IPV6         38     2     4     44
+ *  OVS_KEY_ATTR_IPV6         39     1     4     44
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------

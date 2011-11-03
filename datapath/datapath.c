@@ -423,8 +423,7 @@ static int queue_gso_packets(int dp_ifindex, struct sk_buff *skb,
 			 * properly mark later fragments.
 			 */
 			later_key = *upcall_info->key;
-			later_key.ip.tos_frag &= ~OVS_FRAG_TYPE_MASK;
-			later_key.ip.tos_frag |= OVS_FRAG_TYPE_LATER;
+			later_key.ip.frag = OVS_FRAG_TYPE_LATER;
 
 			later_info = *upcall_info;
 			later_info.key = &later_key;
@@ -593,8 +592,7 @@ static int validate_action_key(const struct nlattr *a,
 		if (ipv4_key->ipv4_tos & INET_ECN_MASK)
 			return -EINVAL;
 
-		if (ipv4_key->ipv4_frag !=
-		    (flow_key->ip.tos_frag & OVS_FRAG_TYPE_MASK))
+		if (ipv4_key->ipv4_frag != flow_key->ip.frag)
 			return -EINVAL;
 
 		break;

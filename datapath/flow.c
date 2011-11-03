@@ -126,10 +126,10 @@ u64 flow_used_time(unsigned long flow_jiffies)
  * @nexthdrp: Initially, points to the type of the extension header at @start.
  * This function updates it to point to the extension header at the final
  * offset.
- * @tos_frag: Points to the @tos_frag member in a &struct sw_flow_key.  This
+ * @frag: Points to the @frag member in a &struct sw_flow_key.  This
  * function sets an appropriate %OVS_FRAG_TYPE_* value.
  *
- * This is based on ipv6_skip_exthdr() but adds the updates to *@tos_frag.
+ * This is based on ipv6_skip_exthdr() but adds the updates to *@frag.
  *
  * When there is more than one fragment header, this version reports whether
  * the final fragment header that it examines is a first fragment.
@@ -137,7 +137,7 @@ u64 flow_used_time(unsigned long flow_jiffies)
  * Returns the final payload offset, or -1 on error.
  */
 static int skip_exthdr(const struct sk_buff *skb, int start, u8 *nexthdrp,
-		       u8 *tos_frag)
+		       u8 *frag)
 {
 	u8 nexthdr = *nexthdrp;
 
@@ -160,12 +160,11 @@ static int skip_exthdr(const struct sk_buff *skb, int start, u8 *nexthdrp,
 			if (fp == NULL)
 				return -1;
 
-			*tos_frag &= ~OVS_FRAG_TYPE_MASK;
 			if (ntohs(*fp) & ~0x7) {
-				*tos_frag |= OVS_FRAG_TYPE_LATER;
+				*frag = OVS_FRAG_TYPE_LATER;
 				break;
 			}
-			*tos_frag |= OVS_FRAG_TYPE_FIRST;
+			*frag = OVS_FRAG_TYPE_FIRST;
 			hdrlen = 8;
 		} else if (nexthdr == NEXTHDR_AUTH)
 			hdrlen = (hp->hdrlen+2)<<2;
@@ -201,13 +200,12 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	payload_ofs = (u8 *)(nh + 1) - skb->data;
 
 	key->ip.proto = NEXTHDR_NONE;
-	key->ip.tos_frag = ipv6_get_dsfield(nh) & ~INET_ECN_MASK;
+	key->ip.tos = ipv6_get_dsfield(nh) & ~INET_ECN_MASK;
 	key->ipv6.label = *(__be32 *)nh & htonl(IPV6_FLOWINFO_FLOWLABEL);
 	ipv6_addr_copy(&key->ipv6.addr.src, &nh->saddr);
 	ipv6_addr_copy(&key->ipv6.addr.dst, &nh->daddr);
 
-	payload_ofs = skip_exthdr(skb, payload_ofs,
-				  &nexthdr, &key->ip.tos_frag);
+	payload_ofs = skip_exthdr(skb, payload_ofs, &nexthdr, &key->ip.frag);
 	if (unlikely(payload_ofs < 0))
 		return -EINVAL;
 
@@ -691,16 +689,16 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 		key->ipv4.addr.dst = nh->daddr;
 
 		key->ip.proto = nh->protocol;
-		key->ip.tos_frag = nh->tos & ~INET_ECN_MASK;
+		key->ip.tos = nh->tos & ~INET_ECN_MASK;
 
 		offset = nh->frag_off & htons(IP_OFFSET);
 		if (offset) {
-			key->ip.tos_frag |= OVS_FRAG_TYPE_LATER;
+			key->ip.frag = OVS_FRAG_TYPE_LATER;
 			goto out;
 		}
 		if (nh->frag_off & htons(IP_MF) ||
 			 skb_shinfo(skb)->gso_type & SKB_GSO_UDP)
-			key->ip.tos_frag |= OVS_FRAG_TYPE_FIRST;
+			key->ip.frag = OVS_FRAG_TYPE_FIRST;
 
 		/* Transport layer. */
 		if (key->ip.proto == IPPROTO_TCP) {
@@ -764,10 +762,10 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 			goto out;
 		}
 
-		if ((key->ip.tos_frag & OVS_FRAG_TYPE_MASK) == OVS_FRAG_TYPE_LATER)
+		if (key->ip.frag == OVS_FRAG_TYPE_LATER)
 			goto out;
 		if (skb_shinfo(skb)->gso_type & SKB_GSO_UDP)
-			key->ip.tos_frag |= OVS_FRAG_TYPE_FIRST;
+			key->ip.frag = OVS_FRAG_TYPE_FIRST;
 
 		/* Transport layer. */
 		if (key->ip.proto == NEXTHDR_TCP) {
@@ -843,15 +841,6 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 	}
 }
 
-static int parse_tos_frag(struct sw_flow_key *swkey, u8 tos, u8 frag)
-{
-	if (tos & INET_ECN_MASK || frag > OVS_FRAG_TYPE_MAX)
-		return -EINVAL;
-
-	swkey->ip.tos_frag = tos | frag;
-	return 0;
-}
-
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
 const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_PRIORITY] = 4,
@@ -890,7 +879,6 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *attr)
 {
 	int error = 0;
-	enum ovs_frag_type frag_type;
 	const struct nlattr *nla;
 	u16 prev_type;
 	int rem;
@@ -970,10 +958,13 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			if (swkey->eth.type != htons(ETH_P_IP))
 				goto invalid;
 			ipv4_key = nla_data(nla);
-			swkey->ip.proto = ipv4_key->ipv4_proto;
-			if (parse_tos_frag(swkey, ipv4_key->ipv4_tos,
-					   ipv4_key->ipv4_frag))
+			if (ipv4_key->ipv4_tos & INET_ECN_MASK)
 				goto invalid;
+			if (ipv4_key->ipv4_frag > OVS_FRAG_TYPE_MAX)
+				goto invalid;
+			swkey->ip.proto = ipv4_key->ipv4_proto;
+			swkey->ip.tos = ipv4_key->ipv4_tos;
+			swkey->ip.frag = ipv4_key->ipv4_frag;
 			swkey->ipv4.addr.src = ipv4_key->ipv4_src;
 			swkey->ipv4.addr.dst = ipv4_key->ipv4_dst;
 			break;
@@ -983,11 +974,14 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			if (swkey->eth.type != htons(ETH_P_IPV6))
 				goto invalid;
 			ipv6_key = nla_data(nla);
+			if (ipv6_key->ipv6_tos & INET_ECN_MASK)
+				goto invalid;
+			if (ipv6_key->ipv6_frag > OVS_FRAG_TYPE_MAX)
+				goto invalid;
 			swkey->ipv6.label = ipv6_key->ipv6_label;
 			swkey->ip.proto = ipv6_key->ipv6_proto;
-			if (parse_tos_frag(swkey, ipv6_key->ipv6_tos,
-					   ipv6_key->ipv6_frag))
-				goto invalid;
+			swkey->ip.tos = ipv6_key->ipv6_tos;
+			swkey->ip.frag = ipv6_key->ipv6_frag;
 			memcpy(&swkey->ipv6.addr.src, ipv6_key->ipv6_src,
 					sizeof(swkey->ipv6.addr.src));
 			memcpy(&swkey->ipv6.addr.dst, ipv6_key->ipv6_dst,
@@ -1083,7 +1077,6 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	if (rem)
 		goto invalid;
 
-	frag_type = swkey->ip.tos_frag & OVS_FRAG_TYPE_MASK;
 	switch (prev_type) {
 	case OVS_KEY_ATTR_UNSPEC:
 		goto invalid;
@@ -1105,7 +1098,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		goto ok;
 
 	case OVS_KEY_ATTR_IPV4:
-		if (frag_type == OVS_FRAG_TYPE_LATER)
+		if (swkey->ip.frag == OVS_FRAG_TYPE_LATER)
 			goto ok;
 		if (swkey->ip.proto == IPPROTO_TCP ||
 		    swkey->ip.proto == IPPROTO_UDP ||
@@ -1114,7 +1107,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		goto ok;
 
 	case OVS_KEY_ATTR_IPV6:
-		if (frag_type == OVS_FRAG_TYPE_LATER)
+		if (swkey->ip.frag == OVS_FRAG_TYPE_LATER)
 			goto ok;
 		if (swkey->ip.proto == IPPROTO_TCP ||
 		    swkey->ip.proto == IPPROTO_UDP ||
@@ -1125,7 +1118,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	case OVS_KEY_ATTR_ICMPV6:
 		if (swkey->ipv6.tp.src == htons(NDISC_NEIGHBOUR_SOLICITATION) ||
 		    swkey->ipv6.tp.src == htons(NDISC_NEIGHBOUR_ADVERTISEMENT) ||
-		    frag_type == OVS_FRAG_TYPE_LATER)
+		    swkey->ip.frag == OVS_FRAG_TYPE_LATER)
 			goto invalid;
 		goto ok;
 
@@ -1133,7 +1126,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	case OVS_KEY_ATTR_UDP:
 	case OVS_KEY_ATTR_ICMP:
 	case OVS_KEY_ATTR_ND:
-		if (frag_type == OVS_FRAG_TYPE_LATER)
+		if (swkey->ip.frag == OVS_FRAG_TYPE_LATER)
 			goto invalid;
 		goto ok;
 
@@ -1256,8 +1249,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		ipv4_key->ipv4_src = swkey->ipv4.addr.src;
 		ipv4_key->ipv4_dst = swkey->ipv4.addr.dst;
 		ipv4_key->ipv4_proto = swkey->ip.proto;
-		ipv4_key->ipv4_tos = swkey->ip.tos_frag & ~INET_ECN_MASK;
-		ipv4_key->ipv4_frag = swkey->ip.tos_frag & OVS_FRAG_TYPE_MASK;
+		ipv4_key->ipv4_tos = swkey->ip.tos & ~INET_ECN_MASK;
+		ipv4_key->ipv4_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_IPV6)) {
 		struct ovs_key_ipv6 *ipv6_key;
 
@@ -1272,8 +1265,8 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 				sizeof(ipv6_key->ipv6_dst));
 		ipv6_key->ipv6_label = swkey->ipv6.label;
 		ipv6_key->ipv6_proto = swkey->ip.proto;
-		ipv6_key->ipv6_tos = swkey->ip.tos_frag & ~INET_ECN_MASK;
-		ipv6_key->ipv6_frag = swkey->ip.tos_frag & OVS_FRAG_TYPE_MASK;
+		ipv6_key->ipv6_tos = swkey->ip.tos & ~INET_ECN_MASK;
+		ipv6_key->ipv6_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_ARP)) {
 		struct ovs_key_arp *arp_key;
 
@@ -1291,7 +1284,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 
 	if ((swkey->eth.type == htons(ETH_P_IP) ||
 	     swkey->eth.type == htons(ETH_P_IPV6)) &&
-	    (swkey->ip.tos_frag & OVS_FRAG_TYPE_MASK) != OVS_FRAG_TYPE_LATER) {
+	     swkey->ip.frag != OVS_FRAG_TYPE_LATER) {
 
 		if (swkey->ip.proto == IPPROTO_TCP) {
 			struct ovs_key_tcp *tcp_key;

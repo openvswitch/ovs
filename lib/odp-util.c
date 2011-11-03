@@ -821,10 +821,10 @@ odp_flow_key_from_string(const char *s, struct ofpbuf *key)
 }
 
 static uint8_t
-tos_frag_to_odp_frag(uint8_t tos_frag)
+ovs_to_odp_frag(uint8_t ovs_frag)
 {
-    return (tos_frag & FLOW_FRAG_LATER ? OVS_FRAG_TYPE_LATER
-            : tos_frag & FLOW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
+    return (ovs_frag & FLOW_FRAG_LATER ? OVS_FRAG_TYPE_LATER
+            : ovs_frag & FLOW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
             : OVS_FRAG_TYPE_NONE);
 }
 
@@ -876,8 +876,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv4_key->ipv4_src = flow->nw_src;
         ipv4_key->ipv4_dst = flow->nw_dst;
         ipv4_key->ipv4_proto = flow->nw_proto;
-        ipv4_key->ipv4_tos = flow->tos_frag & IP_DSCP_MASK;
-        ipv4_key->ipv4_frag = tos_frag_to_odp_frag(flow->tos_frag);
+        ipv4_key->ipv4_tos = flow->tos & IP_DSCP_MASK;
+        ipv4_key->ipv4_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_key_ipv6 *ipv6_key;
 
@@ -888,8 +888,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
         ipv6_key->ipv6_label = flow->ipv6_label;
         ipv6_key->ipv6_proto = flow->nw_proto;
-        ipv6_key->ipv6_tos = flow->tos_frag & IP_DSCP_MASK;
-        ipv6_key->ipv6_frag = tos_frag_to_odp_frag(flow->tos_frag);
+        ipv6_key->ipv6_tos = flow->tos & IP_DSCP_MASK;
+        ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         struct ovs_key_arp *arp_key;
 
@@ -905,7 +905,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 
     if ((flow->dl_type == htons(ETH_TYPE_IP)
          || flow->dl_type == htons(ETH_TYPE_IPV6))
-        && !(flow->tos_frag & FLOW_FRAG_LATER)) {
+        && !(flow->frag & FLOW_FRAG_LATER)) {
 
         if (flow->nw_proto == IPPROTO_TCP) {
             struct ovs_key_tcp *tcp_key;
@@ -954,17 +954,16 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 }
 
 static bool
-odp_to_tos_frag(uint8_t odp_tos, uint8_t odp_frag, struct flow *flow)
+odp_to_ovs_frag(uint8_t odp_frag, struct flow *flow)
 {
-    if (odp_tos & ~IP_DSCP_MASK || odp_frag > OVS_FRAG_TYPE_LATER) {
+    if (odp_frag > OVS_FRAG_TYPE_LATER) {
         return false;
     }
 
-    flow->tos_frag = odp_tos;
     if (odp_frag != OVS_FRAG_TYPE_NONE) {
-        flow->tos_frag |= FLOW_FRAG_ANY;
+        flow->frag |= FLOW_FRAG_ANY;
         if (odp_frag == OVS_FRAG_TYPE_LATER) {
-            flow->tos_frag |= FLOW_FRAG_LATER;
+            flow->frag |= FLOW_FRAG_LATER;
         }
     }
     return true;
@@ -1061,8 +1060,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->nw_src = ipv4_key->ipv4_src;
             flow->nw_dst = ipv4_key->ipv4_dst;
             flow->nw_proto = ipv4_key->ipv4_proto;
-            if (!odp_to_tos_frag(ipv4_key->ipv4_tos, ipv4_key->ipv4_frag,
-                                 flow)) {
+            flow->tos = ipv4_key->ipv4_tos;
+            if (!odp_to_ovs_frag(ipv4_key->ipv4_frag, flow)) {
                 return EINVAL;
             }
             break;
@@ -1076,8 +1075,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             memcpy(&flow->ipv6_dst, ipv6_key->ipv6_dst, sizeof flow->ipv6_dst);
             flow->ipv6_label = ipv6_key->ipv6_label;
             flow->nw_proto = ipv6_key->ipv6_proto;
-            if (!odp_to_tos_frag(ipv6_key->ipv6_tos, ipv6_key->ipv6_frag,
-                                 flow)) {
+            flow->tos = ipv6_key->ipv6_tos;
+            if (!odp_to_ovs_frag(ipv6_key->ipv6_frag, flow)) {
                 return EINVAL;
             }
             break;
@@ -1178,7 +1177,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         return 0;
 
     case OVS_KEY_ATTR_IPV4:
-        if (flow->tos_frag & FLOW_FRAG_LATER) {
+        if (flow->frag & FLOW_FRAG_LATER) {
             return 0;
         }
         if (flow->nw_proto == IPPROTO_TCP
@@ -1189,7 +1188,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         return 0;
 
     case OVS_KEY_ATTR_IPV6:
-        if (flow->tos_frag & FLOW_FRAG_LATER) {
+        if (flow->frag & FLOW_FRAG_LATER) {
             return 0;
         }
         if (flow->nw_proto == IPPROTO_TCP
@@ -1202,7 +1201,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     case OVS_KEY_ATTR_ICMPV6:
         if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)
             || flow->tp_src == htons(ND_NEIGHBOR_ADVERT)
-            || flow->tos_frag & FLOW_FRAG_LATER) {
+            || flow->frag & FLOW_FRAG_LATER) {
             return EINVAL;
         }
         return 0;
@@ -1211,7 +1210,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     case OVS_KEY_ATTR_UDP:
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ND:
-        if (flow->tos_frag & FLOW_FRAG_LATER) {
+        if (flow->frag & FLOW_FRAG_LATER) {
             return EINVAL;
         }
         return 0;

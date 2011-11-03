@@ -320,26 +320,23 @@ cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 void
 cls_rule_set_nw_tos(struct cls_rule *rule, uint8_t nw_tos)
 {
-    rule->wc.tos_frag_mask |= IP_DSCP_MASK;
-    rule->flow.tos_frag &= ~IP_DSCP_MASK;
-    rule->flow.tos_frag |= nw_tos & IP_DSCP_MASK;
+    rule->wc.tos_mask |= IP_DSCP_MASK;
+    rule->flow.tos &= ~IP_DSCP_MASK;
+    rule->flow.tos |= nw_tos & IP_DSCP_MASK;
 }
 
 void
 cls_rule_set_frag(struct cls_rule *rule, uint8_t frag)
 {
-    rule->wc.tos_frag_mask |= FLOW_FRAG_MASK;
-    rule->flow.tos_frag &= ~FLOW_FRAG_MASK;
-    rule->flow.tos_frag |= frag & FLOW_FRAG_MASK;
+    rule->wc.frag_mask |= FLOW_FRAG_MASK;
+    rule->flow.frag = frag;
 }
 
 void
 cls_rule_set_frag_masked(struct cls_rule *rule, uint8_t frag, uint8_t mask)
 {
-    mask &= FLOW_FRAG_MASK;
-    frag &= mask;
-    rule->wc.tos_frag_mask = (rule->wc.tos_frag_mask & ~FLOW_FRAG_MASK) | mask;
-    rule->flow.tos_frag = (rule->flow.tos_frag & ~FLOW_FRAG_MASK) | frag;
+    rule->flow.frag = frag & mask;
+    rule->wc.frag_mask = mask;
 }
 
 void
@@ -475,7 +472,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -620,25 +617,25 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                     ETH_ADDR_ARGS(f->arp_tha));
         }
     }
-    if (wc->tos_frag_mask & IP_DSCP_MASK) {
-        ds_put_format(s, "nw_tos=%"PRIu8",", f->tos_frag & IP_DSCP_MASK);
+    if (wc->tos_mask & IP_DSCP_MASK) {
+        ds_put_format(s, "nw_tos=%"PRIu8",", f->tos & IP_DSCP_MASK);
     }
-    switch (wc->tos_frag_mask & FLOW_FRAG_MASK) {
+    switch (wc->frag_mask) {
     case FLOW_FRAG_ANY | FLOW_FRAG_LATER:
         ds_put_format(s, "frag=%s,",
-                      f->tos_frag & FLOW_FRAG_ANY
-                      ? (f->tos_frag & FLOW_FRAG_LATER ? "later" : "first")
-                      : (f->tos_frag & FLOW_FRAG_LATER ? "<error>" : "no"));
+                      f->frag & FLOW_FRAG_ANY
+                      ? (f->frag & FLOW_FRAG_LATER ? "later" : "first")
+                      : (f->frag & FLOW_FRAG_LATER ? "<error>" : "no"));
         break;
 
     case FLOW_FRAG_ANY:
         ds_put_format(s, "frag=%s,",
-                      f->tos_frag & FLOW_FRAG_ANY ? "yes" : "no");
+                      f->frag & FLOW_FRAG_ANY ? "yes" : "no");
         break;
 
     case FLOW_FRAG_LATER:
         ds_put_format(s, "frag=%s,",
-                      f->tos_frag & FLOW_FRAG_LATER ? "later" : "not_later");
+                      f->frag & FLOW_FRAG_LATER ? "later" : "not_later");
         break;
     }
     if (f->nw_proto == IPPROTO_ICMP) {
@@ -1169,7 +1166,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 4);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1196,7 +1193,8 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_ETH_MCAST
                 || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
-            && !((a->tos_frag ^ b->tos_frag) & wildcards->tos_frag_mask)
+            && !((a->tos ^ b->tos) & wildcards->tos_mask)
+            && !((a->frag ^ b->frag) & wildcards->frag_mask)
             && (wc & FWW_ARP_SHA || eth_addr_equals(a->arp_sha, b->arp_sha))
             && (wc & FWW_ARP_THA || eth_addr_equals(a->arp_tha, b->arp_tha))
             && (wc & FWW_IPV6_LABEL || a->ipv6_label == b->ipv6_label)

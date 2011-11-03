@@ -423,9 +423,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
 
     case MFF_IP_TOS:
-        return !(wc->tos_frag_mask & IP_DSCP_MASK);
+        return !(wc->tos_mask & IP_DSCP_MASK);
     case MFF_IP_FRAG:
-        return !(wc->tos_frag_mask & FLOW_FRAG_MASK);
+        return !(wc->frag_mask & FLOW_FRAG_MASK);
 
     case MFF_ARP_SPA:
         return !wc->nw_src_mask;
@@ -525,10 +525,10 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
 
     case MFF_IP_TOS:
-        mask->u8 = wc->tos_frag_mask & IP_DSCP_MASK;
+        mask->u8 = wc->tos_mask & IP_DSCP_MASK;
         break;
     case MFF_IP_FRAG:
-        mask->u8 = wc->tos_frag_mask & FLOW_FRAG_MASK;
+        mask->u8 = wc->frag_mask & FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_SPA:
@@ -800,11 +800,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_IP_TOS:
-        value->u8 = flow->tos_frag & IP_DSCP_MASK;
+        value->u8 = flow->tos & IP_DSCP_MASK;
         break;
 
     case MFF_IP_FRAG:
-        value->u8 = flow->tos_frag & FLOW_FRAG_MASK;
+        value->u8 = flow->frag;
         break;
 
     case MFF_ARP_OP:
@@ -1118,13 +1118,13 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_TOS:
-        rule->wc.tos_frag_mask |= IP_DSCP_MASK;
-        rule->flow.tos_frag &= ~IP_DSCP_MASK;
+        rule->wc.tos_mask |= IP_DSCP_MASK;
+        rule->flow.tos &= ~IP_DSCP_MASK;
         break;
 
     case MFF_IP_FRAG:
-        rule->wc.tos_frag_mask |= FLOW_FRAG_MASK;
-        rule->flow.tos_frag &= ~FLOW_FRAG_MASK;
+        rule->wc.frag_mask |= FLOW_FRAG_MASK;
+        rule->flow.frag &= ~FLOW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
