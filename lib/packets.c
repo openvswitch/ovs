@@ -259,7 +259,8 @@ ipv6_is_cidr(const struct in6_addr *netmask)
 /* Populates 'b' with an Ethernet II packet headed with the given 'eth_dst',
  * 'eth_src' and 'eth_type' parameters.  A payload of 'size' bytes is allocated
  * in 'b' and returned.  This payload may be populated with appropriate
- * information by the caller.
+ * information by the caller.  Sets 'b''s 'l2' and 'l3' pointers to the
+ * Ethernet header and payload respectively.
  *
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
  * desired. */
@@ -281,6 +282,9 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     memcpy(eth->eth_dst, eth_dst, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(eth_type);
+
+    b->l2 = eth;
+    b->l3 = data;
 
     return data;
 }

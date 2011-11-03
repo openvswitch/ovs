@@ -1642,6 +1642,13 @@
         OpenFlow action. This setting is ignored when CFM is not in extended
         mode.  Defaults to <code>up</code>.
       </column>
+
+      <column name="other_config" key="cfm_ccm_vlan"
+        type='{"type": "integer", "minInteger": 1, "maxInteger": 4095}'>
+        When set, the CFM module will apply a VLAN tag to all CCMs it generates
+        with the given value.
+      </column>
+
     </group>
 
     <group title="Bonding Configuration">

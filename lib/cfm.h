@@ -29,6 +29,7 @@ struct cfm_settings {
     int interval;               /* The requested transmission interval. */
     bool extended;              /* Run in extended mode. */
     bool opup;                  /* Operational State. */
+    uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none. */
 };
 
 void cfm_init(void);

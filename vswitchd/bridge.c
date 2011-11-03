@@ -3005,6 +3005,8 @@ iface_configure_cfm(struct iface *iface)
     s.mpid = *cfg->cfm_mpid;
     s.interval = atoi(get_interface_other_config(iface->cfg, "cfm_interval",
                                                  "0"));
+    s.ccm_vlan = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_vlan",
+                                                 "0"));
     if (s.interval <= 0) {
         s.interval = 1000;
     }

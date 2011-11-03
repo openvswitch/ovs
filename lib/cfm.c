@@ -93,6 +93,7 @@ struct cfm {
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
+    uint16_t ccm_vlan;     /* Vlan tag of CCM PDUs. */
     uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
 
     struct timer tx_timer;    /* Send CCM when expired. */
@@ -345,8 +346,13 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     struct ccm *ccm;
 
     timer_set_duration(&cfm->tx_timer, cfm->ccm_interval_ms);
-    ccm = eth_compose(packet, cfm_ccm_addr(cfm), eth_src, ETH_TYPE_CFM,
-                      sizeof *ccm);
+    eth_compose(packet, cfm_ccm_addr(cfm), eth_src, ETH_TYPE_CFM, sizeof *ccm);
+
+    if (cfm->ccm_vlan) {
+        eth_push_vlan(packet, htons(cfm->ccm_vlan));
+    }
+
+    ccm = packet->l3;
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
     ccm->tlv_offset = 70;
@@ -400,6 +406,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     interval = ms_to_ccm_interval(s->interval);
     interval_ms = ccm_interval_to_ms(interval);
 
+    cfm->ccm_vlan = s->ccm_vlan & VLAN_VID_MASK;
     if (cfm->extended && interval_ms != s->interval) {
         interval = 0;
         interval_ms = MIN(s->interval, UINT16_MAX);
