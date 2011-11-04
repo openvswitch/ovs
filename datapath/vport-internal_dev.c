@@ -110,12 +110,14 @@ static void internal_dev_getinfo(struct net_device *netdev,
 static const struct ethtool_ops internal_dev_ethtool_ops = {
 	.get_drvinfo	= internal_dev_getinfo,
 	.get_link	= ethtool_op_get_link,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
 	.get_sg		= ethtool_op_get_sg,
 	.set_sg		= ethtool_op_set_sg,
 	.get_tx_csum	= ethtool_op_get_tx_csum,
 	.set_tx_csum	= ethtool_op_set_tx_hw_csum,
 	.get_tso	= ethtool_op_get_tso,
 	.set_tso	= ethtool_op_set_tso,
+#endif
 };
 
 static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
@@ -184,6 +186,9 @@ static void do_setup(struct net_device *netdev)
 	netdev->features |= NETIF_F_HW_VLAN_TX;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+	netdev->hw_features = netdev->features & ~NETIF_F_LLTX;
+#endif
 	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
 
