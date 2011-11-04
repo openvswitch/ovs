@@ -120,7 +120,7 @@ binary-common:
 	dh_installinit -R -Nopenvswitch-switch
 	dh_installinit -R -popenvswitch-switch --error-handler=init_script_error
 	dh_installcron
-	dh_installman
+	dh_installman --language=C
 	dh_link
 	dh_strip --dbg-package=openvswitch-dbg
 	dh_compress 
