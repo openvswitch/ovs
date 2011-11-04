@@ -5,4 +5,4 @@ _debian/utilities/ovs-tcpundump.1
 _debian/utilities/ovs-vlan-test.8
 _debian/utilities/ovs-vsctl.8
 _debian/vswitchd/ovs-vswitchd.8
-_debian/vswitchd/ovs-vswitchd.conf.db.5
+vswitchd/ovs-vswitchd.conf.db.5
