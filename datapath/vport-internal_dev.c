@@ -28,7 +28,9 @@
 
 struct internal_dev {
 	struct vport *vport;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 	struct net_device_stats stats;
+#endif
 };
 
 static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
@@ -37,27 +39,34 @@ static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
 }
 
 /* This function is only called by the kernel network layer.*/
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+static struct rtnl_link_stats64 *internal_dev_get_stats(struct net_device *netdev,
+							struct rtnl_link_stats64 *stats)
+{
+#else
 static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev)
 {
-	struct vport *vport = internal_dev_get_vport(netdev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 	struct net_device_stats *stats = &internal_dev_priv(netdev)->stats;
+#else
+	struct net_device_stats *stats = &netdev->stats;
+#endif
+#endif
+	struct vport *vport = internal_dev_get_vport(netdev);
+	struct ovs_vport_stats vport_stats;
 
-	if (vport) {
-		struct ovs_vport_stats vport_stats;
+	vport_get_stats(vport, &vport_stats);
 
-		vport_get_stats(vport, &vport_stats);
-
-		/* The tx and rx stats need to be swapped because the switch
-		 * and host OS have opposite perspectives. */
-		stats->rx_packets	= vport_stats.tx_packets;
-		stats->tx_packets	= vport_stats.rx_packets;
-		stats->rx_bytes		= vport_stats.tx_bytes;
-		stats->tx_bytes		= vport_stats.rx_bytes;
-		stats->rx_errors	= vport_stats.tx_errors;
-		stats->tx_errors	= vport_stats.rx_errors;
-		stats->rx_dropped	= vport_stats.tx_dropped;
-		stats->tx_dropped	= vport_stats.rx_dropped;
-	}
+	/* The tx and rx stats need to be swapped because the
+	 * switch and host OS have opposite perspectives. */
+	stats->rx_packets	= vport_stats.tx_packets;
+	stats->tx_packets	= vport_stats.rx_packets;
+	stats->rx_bytes		= vport_stats.tx_bytes;
+	stats->tx_bytes		= vport_stats.rx_bytes;
+	stats->rx_errors	= vport_stats.tx_errors;
+	stats->tx_errors	= vport_stats.rx_errors;
+	stats->rx_dropped	= vport_stats.tx_dropped;
+	stats->tx_dropped	= vport_stats.rx_dropped;
 
 	return stats;
 }
@@ -153,7 +162,11 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_set_mac_address = internal_dev_mac_addr,
 	.ndo_do_ioctl = internal_dev_do_ioctl,
 	.ndo_change_mtu = internal_dev_change_mtu,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+	.ndo_get_stats64 = internal_dev_get_stats,
+#else
 	.ndo_get_stats = internal_dev_sys_stats,
+#endif
 };
 #endif
 
