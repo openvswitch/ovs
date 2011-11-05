@@ -285,7 +285,6 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	int error;
 
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
-	OVS_CB(skb)->vport = p;
 
 	if (!OVS_CB(skb)->flow) {
 		struct sw_flow_key key;
@@ -792,10 +791,6 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = -ENODEV;
 	if (!dp)
 		goto err_unlock;
-
-	if (flow->key.phy.in_port < DP_MAX_PORTS)
-		OVS_CB(packet)->vport = get_vport_protected(dp,
-							flow->key.phy.in_port);
 
 	local_bh_disable();
 	err = execute_actions(dp, packet);

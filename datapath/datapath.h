@@ -83,7 +83,6 @@ struct datapath {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
- * @vport: The datapath port on which the skb entered the switch.
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
  * @tun_id: ID of the tunnel that encapsulated this packet.  It is 0 if the
  * @ip_summed: Consistently stores L4 checksumming status across different
@@ -95,7 +94,6 @@ struct datapath {
  * before 2.6.27.
  */
 struct ovs_skb_cb {
-	struct vport		*vport;
 	struct sw_flow		*flow;
 	__be64			tun_id;
 #ifdef NEED_CSUM_NORMALIZE
