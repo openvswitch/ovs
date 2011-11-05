@@ -72,6 +72,7 @@ enum mf_field_id {
     MFF_IP_PROTO,               /* u8 (used for IPv4 or IPv6) */
     MFF_IP_DSCP,                /* u8 (used for IPv4 or IPv6) */
     MFF_IP_ECN,                 /* u8 (used for IPv4 or IPv6) */
+    MFF_IP_TTL,                 /* u8 (used for IPv4 or IPv6) */
     MFF_IP_FRAG,                /* u8 (used for IPv4 or IPv6) */
 
     MFF_ARP_OP,                 /* be16 */

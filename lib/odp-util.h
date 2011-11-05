@@ -72,7 +72,7 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_8021Q         4    --     4      8
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  OVS_KEY_ATTR_IPV6         39     1     4     44
+ *  OVS_KEY_ATTR_IPV6         40    --     4     44
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------

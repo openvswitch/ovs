@@ -237,7 +237,7 @@ dnl The tcpdump output format differs slightly from one version to another,
 dnl so trim off the end of the line where differences appear.
 AT_CHECK([sed 's/\(length 60:\).*/\1 .../' stdout], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 data_len=60 buffer=0x00000111
-priority0:tunnel0:in_port0003:tci(0) mac50:54:00:00:00:05->50:54:00:00:00:06 type0800 proto6 tos0 ip192.168.0.1->192.168.0.2 port10031->0
+priority0:tunnel0:in_port0003:tci(0) mac50:54:00:00:00:05->50:54:00:00:00:06 type0800 proto6 tos0 ttl64 ip192.168.0.1->192.168.0.2 port10031->0
 50:54:00:00:00:05 > 50:54:00:00:00:06, ethertype IPv4 (0x0800), length 60: ...
 ])
 AT_CLEANUP

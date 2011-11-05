@@ -3,7 +3,9 @@ post-v1.3.0
     - OpenFlow:
        - Added ability to match on IPv6 flow label through NXM.
        - Added ability to match on ECN bits in IPv4 and IPv6 through NXM.
+       - Added ability to match on TTL in IPv4 and IPv6 through NXM.
        - Added ability to modify ECN bits in IPv4.
+       - Added ability to modify TTL in IPv4.
     - ovs-appctl:
       - New "fdb/flush" command to flush bridge's MAC learning table.
 

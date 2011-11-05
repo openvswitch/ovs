@@ -1092,6 +1092,16 @@ dp_netdev_set_ip_tos(struct ip_header *nh, uint8_t new_tos)
 }
 
 static void
+dp_netdev_set_ip_ttl(struct ip_header *nh, uint8_t new_ttl)
+{
+    uint8_t *field = &nh->ip_ttl;
+
+    nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
+			            htons(new_ttl << 8));
+    *field = new_ttl;
+}
+
+static void
 dp_netdev_set_ipv4(struct ofpbuf *packet, const struct ovs_key_ipv4 *ipv4_key)
 {
     struct ip_header *nh = packet->l3;
@@ -1104,6 +1114,9 @@ dp_netdev_set_ipv4(struct ofpbuf *packet, const struct ovs_key_ipv4 *ipv4_key)
     }
     if (nh->ip_tos != ipv4_key->ipv4_tos) {
         dp_netdev_set_ip_tos(nh, ipv4_key->ipv4_tos);
+    }
+    if (nh->ip_ttl != ipv4_key->ipv4_ttl) {
+        dp_netdev_set_ip_ttl(nh, ipv4_key->ipv4_ttl);
     }
 }
 

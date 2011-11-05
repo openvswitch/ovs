@@ -3671,16 +3671,16 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     if (base->nw_src == flow->nw_src &&
         base->nw_dst == flow->nw_dst &&
         base->tos == flow->tos &&
+        base->nw_ttl == flow->nw_ttl &&
         base->frag == flow->frag) {
         return;
     }
 
-
-    memset(&ipv4_key, 0, sizeof(ipv4_key));
     ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
     ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
     ipv4_key.ipv4_proto = base->nw_proto;
     ipv4_key.ipv4_tos = flow->tos;
+    ipv4_key.ipv4_ttl = flow->nw_ttl;
     ipv4_key.ipv4_frag = (base->frag == 0 ? OVS_FRAG_TYPE_NONE
                           : base->frag == FLOW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
                           : OVS_FRAG_TYPE_LATER);

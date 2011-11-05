@@ -369,11 +369,12 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get(a);
-        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT","
-                      "proto=%"PRId8",tos=%#"PRIx8",frag=%s)",
+        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRId8
+                      ",tos=%#"PRIx8",ttl=%"PRIu8",frag=%s)",
                       IP_ARGS(&ipv4_key->ipv4_src),
                       IP_ARGS(&ipv4_key->ipv4_dst),
                       ipv4_key->ipv4_proto, ipv4_key->ipv4_tos,
+                      ipv4_key->ipv4_ttl,
                       ovs_frag_type_to_string(ipv4_key->ipv4_frag));
         break;
 
@@ -386,9 +387,10 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
 
         ds_put_format(ds, "ipv6(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRId8
-                      ",tos=%#"PRIx8",frag=%s)",
+                      ",tos=%#"PRIx8",hlimit=%"PRIu8",frag=%s)",
                       src_str, dst_str, ntohl(ipv6_key->ipv6_label),
                       ipv6_key->ipv6_proto, ipv6_key->ipv6_tos,
+                      ipv6_key->ipv6_hlimit,
                       ovs_frag_type_to_string(ipv6_key->ipv6_frag));
         break;
     }
@@ -606,23 +608,24 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         ovs_be32 ipv4_dst;
         int ipv4_proto;
         int ipv4_tos;
+        int ipv4_ttl;
         char frag[8];
         enum ovs_frag_type ipv4_frag;
         int n = -1;
 
         if (sscanf(s, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT","
-                   "proto=%i,tos=%i,frag=%7[a-z])%n",
+                   "proto=%i,tos=%i,ttl=%i,frag=%7[a-z])%n",
                    IP_SCAN_ARGS(&ipv4_src), IP_SCAN_ARGS(&ipv4_dst),
-                   &ipv4_proto, &ipv4_tos, frag, &n) > 0
+                   &ipv4_proto, &ipv4_tos, &ipv4_ttl, frag, &n) > 0
             && n > 0
             && ovs_frag_type_from_string(frag, &ipv4_frag)) {
             struct ovs_key_ipv4 ipv4_key;
 
-            memset(&ipv4_key, 0, sizeof ipv4_key);
             ipv4_key.ipv4_src = ipv4_src;
             ipv4_key.ipv4_dst = ipv4_dst;
             ipv4_key.ipv4_proto = ipv4_proto;
             ipv4_key.ipv4_tos = ipv4_tos;
+            ipv4_key.ipv4_ttl = ipv4_ttl;
             ipv4_key.ipv4_frag = ipv4_frag;
             nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4,
                               &ipv4_key, sizeof ipv4_key);
@@ -636,19 +639,19 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
         int ipv6_label;
         int ipv6_proto;
         int ipv6_tos;
+        int ipv6_hlimit;
         char frag[8];
         enum ovs_frag_type ipv6_frag;
         int n = -1;
 
         if (sscanf(s, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT","
-                   "label=%i,proto=%i,tos=%i,frag=%7[a-z])%n",
+                   "label=%i,proto=%i,tos=%i,hlimit=%i,frag=%7[a-z])%n",
                    ipv6_src_s, ipv6_dst_s, &ipv6_label,
-                   &ipv6_proto, &ipv6_tos, frag, &n) > 0
+                   &ipv6_proto, &ipv6_tos, &ipv6_hlimit, frag, &n) > 0
             && n > 0
             && ovs_frag_type_from_string(frag, &ipv6_frag)) {
             struct ovs_key_ipv6 ipv6_key;
 
-            memset(&ipv6_key, 0, sizeof ipv6_key);
             if (inet_pton(AF_INET6, ipv6_src_s, &ipv6_key.ipv6_src) != 1 ||
                 inet_pton(AF_INET6, ipv6_dst_s, &ipv6_key.ipv6_dst) != 1) {
                 return -EINVAL;
@@ -656,6 +659,7 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
             ipv6_key.ipv6_label = htonl(ipv6_label);
             ipv6_key.ipv6_proto = ipv6_proto;
             ipv6_key.ipv6_tos = ipv6_tos;
+            ipv6_key.ipv6_hlimit = ipv6_hlimit;
             ipv6_key.ipv6_frag = ipv6_frag;
             nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV6,
                               &ipv6_key, sizeof ipv6_key);
@@ -872,23 +876,23 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 
         ipv4_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4,
                                             sizeof *ipv4_key);
-        memset(ipv4_key, 0, sizeof *ipv4_key);
         ipv4_key->ipv4_src = flow->nw_src;
         ipv4_key->ipv4_dst = flow->nw_dst;
         ipv4_key->ipv4_proto = flow->nw_proto;
         ipv4_key->ipv4_tos = flow->tos;
+        ipv4_key->ipv4_ttl = flow->nw_ttl;
         ipv4_key->ipv4_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_key_ipv6 *ipv6_key;
 
         ipv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV6,
                                             sizeof *ipv6_key);
-        memset(ipv6_key, 0, sizeof *ipv6_key);
         memcpy(ipv6_key->ipv6_src, &flow->ipv6_src, sizeof ipv6_key->ipv6_src);
         memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
         ipv6_key->ipv6_label = flow->ipv6_label;
         ipv6_key->ipv6_proto = flow->nw_proto;
         ipv6_key->ipv6_tos = flow->tos;
+        ipv6_key->ipv6_hlimit = flow->nw_ttl;
         ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->frag);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         struct ovs_key_arp *arp_key;
@@ -1061,6 +1065,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->nw_dst = ipv4_key->ipv4_dst;
             flow->nw_proto = ipv4_key->ipv4_proto;
             flow->tos = ipv4_key->ipv4_tos;
+            flow->nw_ttl = ipv4_key->ipv4_ttl;
             if (!odp_to_ovs_frag(ipv4_key->ipv4_frag, flow)) {
                 return EINVAL;
             }
@@ -1076,6 +1081,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->ipv6_label = ipv6_key->ipv6_label;
             flow->nw_proto = ipv6_key->ipv6_proto;
             flow->tos = ipv6_key->ipv6_tos;
+            flow->nw_ttl = ipv6_key->ipv6_hlimit;
             if (!odp_to_ovs_frag(ipv6_key->ipv6_frag, flow)) {
                 return EINVAL;
             }

@@ -45,6 +45,7 @@ struct sw_flow_key {
 	struct {
 		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
 		u8     tos; 		/* IP ToS. */
+		u8     ttl;         /* IP TTL/hop limit. */
 		u8     frag;        /* One of OVS_FRAG_TYPE_*. */
 	} ip;
 	union {
@@ -143,7 +144,7 @@ u64 flow_used_time(unsigned long flow_jiffies);
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_8021Q         4    --     4      8
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8
- *  OVS_KEY_ATTR_IPV6         39     1     4     44
+ *  OVS_KEY_ATTR_IPV6         40    --     4     44
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------

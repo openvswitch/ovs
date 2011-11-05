@@ -11,7 +11,7 @@ table=1 in_port=2 priority=1500 icmp actions=output(17),resubmit(,2)
 table=1 in_port=3 priority=1500 icmp actions=output(14),resubmit(,2)
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 10,11,12,13,14,15,16,17,18,19,20,21
 ])
@@ -36,7 +36,7 @@ in_port=10,reg1=0xdeadbeef actions=output:21
 in_port=11,reg2=0xeef22dea actions=output:22
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 20,21,22
 ])
@@ -55,7 +55,7 @@ in_port=6 actions=output:NXM_NX_REG0[[0..15]],output:NXM_NX_REG0[[16..31]]
 in_port=7 actions=load:0x110000ff->NXM_NX_REG0[[]],output:NXM_NX_REG0[[]]
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 9,55,10,55,66,11,77,88
 ])
@@ -73,7 +73,7 @@ in_port=4 actions=set_tunnel:4,set_tunnel:3,output:4
 in_port=5 actions=set_tunnel:5
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'tun_id(0x1),in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'tun_id(0x1),in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tun_id(0x1)),1,2,set(tun_id(0x3)),3,4
 ])
@@ -239,7 +239,7 @@ priority=50 tcp ip_frag=later           actions=output:6
 ])
 AT_CHECK([ovs-ofctl replace-flows br0 flows.txt])
 
-base_flow="in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0"
+base_flow="in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=128"
 no_flow="$base_flow,frag=no),tcp(src=12345,dst=80)"
 first_flow="$base_flow,frag=first),tcp(src=12345,dst=80)"
 later_flow="$base_flow,frag=later)"
@@ -275,15 +275,15 @@ in_port=2 actions=output:12,resubmit:1,output:12
 in_port=3 actions=output:13,resubmit:2,output:14
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 10
 ])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 12,10
 ])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 13,12,10
 ])

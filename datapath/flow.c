@@ -200,6 +200,7 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 
 	key->ip.proto = NEXTHDR_NONE;
 	key->ip.tos = ipv6_get_dsfield(nh);
+	key->ip.ttl = nh->hop_limit;
 	key->ipv6.label = *(__be32 *)nh & htonl(IPV6_FLOWINFO_FLOWLABEL);
 	ipv6_addr_copy(&key->ipv6.addr.src, &nh->saddr);
 	ipv6_addr_copy(&key->ipv6.addr.dst, &nh->daddr);
@@ -689,6 +690,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 
 		key->ip.proto = nh->protocol;
 		key->ip.tos = nh->tos;
+		key->ip.ttl = nh->ttl;
 
 		offset = nh->frag_off & htons(IP_OFFSET);
 		if (offset) {
@@ -961,6 +963,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 				goto invalid;
 			swkey->ip.proto = ipv4_key->ipv4_proto;
 			swkey->ip.tos = ipv4_key->ipv4_tos;
+			swkey->ip.ttl = ipv4_key->ipv4_ttl;
 			swkey->ip.frag = ipv4_key->ipv4_frag;
 			swkey->ipv4.addr.src = ipv4_key->ipv4_src;
 			swkey->ipv4.addr.dst = ipv4_key->ipv4_dst;
@@ -976,6 +979,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			swkey->ipv6.label = ipv6_key->ipv6_label;
 			swkey->ip.proto = ipv6_key->ipv6_proto;
 			swkey->ip.tos = ipv6_key->ipv6_tos;
+			swkey->ip.ttl = ipv6_key->ipv6_hlimit;
 			swkey->ip.frag = ipv6_key->ipv6_frag;
 			memcpy(&swkey->ipv6.addr.src, ipv6_key->ipv6_src,
 					sizeof(swkey->ipv6.addr.src));
@@ -1240,11 +1244,11 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (!nla)
 			goto nla_put_failure;
 		ipv4_key = nla_data(nla);
-		memset(ipv4_key, 0, sizeof(struct ovs_key_ipv4));
 		ipv4_key->ipv4_src = swkey->ipv4.addr.src;
 		ipv4_key->ipv4_dst = swkey->ipv4.addr.dst;
 		ipv4_key->ipv4_proto = swkey->ip.proto;
 		ipv4_key->ipv4_tos = swkey->ip.tos;
+		ipv4_key->ipv4_ttl = swkey->ip.ttl;
 		ipv4_key->ipv4_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_IPV6)) {
 		struct ovs_key_ipv6 *ipv6_key;
@@ -1253,7 +1257,6 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		if (!nla)
 			goto nla_put_failure;
 		ipv6_key = nla_data(nla);
-		memset(ipv6_key, 0, sizeof(struct ovs_key_ipv6));
 		memcpy(ipv6_key->ipv6_src, &swkey->ipv6.addr.src,
 				sizeof(ipv6_key->ipv6_src));
 		memcpy(ipv6_key->ipv6_dst, &swkey->ipv6.addr.dst,
@@ -1261,6 +1264,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		ipv6_key->ipv6_label = swkey->ipv6.label;
 		ipv6_key->ipv6_proto = swkey->ip.proto;
 		ipv6_key->ipv6_tos = swkey->ip.tos;
+		ipv6_key->ipv6_hlimit = swkey->ip.ttl;
 		ipv6_key->ipv6_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_ARP)) {
 		struct ovs_key_arp *arp_key;

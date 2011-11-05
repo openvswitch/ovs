@@ -202,6 +202,13 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_IP_ANY,
         NXM_NX_IP_ECN,
     }, {
+        MFF_IP_TTL, "nw_ttl", NULL,
+        MF_FIELD_SIZES(u8),
+        MFM_NONE, FWW_NW_TTL,
+        MFS_DECIMAL,
+        MFP_IP_ANY,
+        NXM_NX_IP_TTL,
+    }, {
         MFF_IP_FRAG, "ip_frag", NULL,
         1, 2,
         MFM_FULLY, 0,
@@ -369,6 +376,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
+    case MFF_IP_TTL:
     case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
@@ -462,6 +470,7 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
+    case MFF_IP_TTL:
     case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
@@ -689,6 +698,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_IPV6_SRC:
     case MFF_IPV6_DST:
     case MFF_IP_PROTO:
+    case MFF_IP_TTL:
     case MFF_ARP_SPA:
     case MFF_ARP_TPA:
     case MFF_ARP_SHA:
@@ -819,6 +829,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_IP_ECN:
         value->u8 = flow->tos & IP_ECN_MASK;
+        break;
+
+    case MFF_IP_TTL:
+        value->u8 = flow->nw_ttl;
         break;
 
     case MFF_IP_FRAG:
@@ -974,6 +988,10 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_IP_ECN:
         cls_rule_set_nw_ecn(rule, value->u8);
+        break;
+
+    case MFF_IP_TTL:
+        cls_rule_set_nw_ttl(rule, value->u8);
         break;
 
     case MFF_IP_FRAG:
@@ -1149,6 +1167,11 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         rule->flow.tos &= ~IP_ECN_MASK;
         break;
 
+    case MFF_IP_TTL:
+        rule->wc.wildcards |= FWW_NW_TTL;
+        rule->flow.nw_ttl = 0;
+        break;
+
     case MFF_IP_FRAG:
         rule->wc.frag_mask |= FLOW_FRAG_MASK;
         rule->flow.frag &= ~FLOW_FRAG_MASK;
@@ -1228,6 +1251,7 @@ mf_set(const struct mf_field *mf,
     case MFF_VLAN_PCP:
     case MFF_IPV6_LABEL:
     case MFF_IP_PROTO:
+    case MFF_IP_TTL:
     case MFF_IP_DSCP:
     case MFF_IP_ECN:
     case MFF_ARP_OP:
@@ -1433,6 +1457,7 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_IPV6_SRC:
     case MFF_IPV6_DST:
     case MFF_IP_PROTO:
+    case MFF_IP_TTL:
     case MFF_ARP_SPA:
     case MFF_ARP_TPA:
     case MFF_ARP_SHA:

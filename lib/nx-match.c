@@ -460,7 +460,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -494,6 +494,10 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
         if (cr->wc.tos_mask & IP_ECN_MASK) {
             nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
+        }
+
+        if (!(wc & FWW_NW_TTL)) {
+            nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
         }
 
         if (!(wc & FWW_NW_PROTO)) {
@@ -548,6 +552,10 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
 
         if (cr->wc.tos_mask & IP_ECN_MASK) {
             nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
+        }
+
+        if (!(wc & FWW_NW_TTL)) {
+            nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
         }
 
         if (!(wc & FWW_NW_PROTO)) {
@@ -1058,6 +1066,9 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
     case NFI_NXM_NX_IP_ECN:
         return flow->tos & IP_ECN_MASK;
 
+    case NFI_NXM_NX_IP_TTL:
+        return flow->nw_ttl;
+
     case NFI_NXM_NX_IP_FRAG:
         return flow->frag;
 
@@ -1216,6 +1227,10 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
     case NFI_NXM_NX_IP_ECN:
         flow->tos &= ~IP_ECN_MASK;
         flow->tos |= new_value & IP_ECN_MASK;
+        break;
+
+    case NFI_NXM_NX_IP_TTL:
+        flow->nw_ttl = new_value;
         break;
 
     case NFI_NXM_NX_IP_FRAG:

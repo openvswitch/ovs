@@ -151,6 +151,12 @@ static void set_ip_addr(struct sk_buff *skb, struct iphdr *nh,
 	*addr = new_addr;
 }
 
+static void set_ip_ttl(struct sk_buff *skb, struct iphdr *nh, u8 new_ttl)
+{
+	csum_replace2(&nh->check, htons(nh->ttl << 8), htons(new_ttl << 8));
+	nh->ttl = new_ttl;
+}
+
 static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 {
 	struct iphdr *nh;
@@ -171,6 +177,9 @@ static int set_ipv4(struct sk_buff *skb, const struct ovs_key_ipv4 *ipv4_key)
 
 	if (ipv4_key->ipv4_tos != nh->tos)
 		ipv4_change_dsfield(nh, 0, ipv4_key->ipv4_tos);
+
+	if (ipv4_key->ipv4_ttl != nh->ttl)
+		set_ip_ttl(skb, nh, ipv4_key->ipv4_ttl);
 
 	return 0;
 }

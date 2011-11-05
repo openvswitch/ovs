@@ -416,6 +416,15 @@ When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
 0x86dd, the value of \fBnw_ecn\fR is ignored (see \fBFlow Syntax\fR
 above).
 .
+.IP \fBnw_ttl=\fIttl\fR
+Matches IP TTL or IPv6 hop limit value \fIttl\fR, which is
+specified as a decimal number between 0 and 255, inclusive.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
+0x86dd, the value of \fBnw_ttl\fR is ignored (see \fBFlow Syntax\fR
+above).
+.IP
+.
 .IP \fBtp_src=\fIport\fR
 .IQ \fBtp_dst=\fIport\fR
 When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP, \fBtp_src\fR

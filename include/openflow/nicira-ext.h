@@ -1632,6 +1632,15 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * Masking: Not maskable. */
 #define NXM_NX_IP_ECN      NXM_HEADER  (0x0001, 28, 1)
 
+/* The time-to-live/hop limit of the IP header.
+ *
+ * Prereqs: NXM_OF_ETH_TYPE must be either 0x0800 or 0x86dd.
+ *
+ * Format: 8-bit integer.
+ *
+ * Masking: Not maskable. */
+#define NXM_NX_IP_TTL      NXM_HEADER  (0x0001, 29, 1)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

@@ -150,6 +150,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     tc_flow = get_unaligned_be32(&nh->ip6_flow);
     flow->tos = ntohl(tc_flow) >> 4;
     flow->ipv6_label = tc_flow & htonl(IPV6_LABEL_MASK);
+    flow->nw_ttl = nh->ip6_hlim;
     flow->nw_proto = IPPROTO_NONE;
 
     while (1) {
@@ -376,6 +377,7 @@ flow_extract(struct ofpbuf *packet, uint32_t priority, ovs_be64 tun_id,
                     flow->frag |= FLOW_FRAG_LATER;
                 }
             }
+            flow->nw_ttl = nh->ip_ttl;
 
             if (!(nh->ip_frag_off & htons(IP_FRAG_OFF_MASK))) {
                 if (flow->nw_proto == IPPROTO_TCP) {
@@ -437,7 +439,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -475,6 +477,9 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
         flow->ipv6_label = htonl(0);
     }
     flow->tos &= wildcards->tos_mask;
+    if (wc & FWW_NW_TTL) {
+        flow->nw_ttl = 0;
+    }
     flow->frag &= wildcards->frag_mask;
     if (wc & FWW_ARP_SHA) {
         memset(flow->arp_sha, 0, sizeof flow->arp_sha);
@@ -525,17 +530,19 @@ flow_format(struct ds *ds, const struct flow *flow)
                   ntohs(flow->dl_type));
 
     if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        ds_put_format(ds, " label%#"PRIx32" proto%"PRIu8" tos%#"PRIx8" ipv6",
-                      ntohl(flow->ipv6_label), flow->nw_proto, flow->tos);
+        ds_put_format(ds, " label%#"PRIx32" proto%"PRIu8" tos%#"PRIx8
+                          " ttl%"PRIu8" ipv6",
+                      ntohl(flow->ipv6_label), flow->nw_proto,
+                      flow->tos, flow->nw_ttl);
         print_ipv6_addr(ds, &flow->ipv6_src);
         ds_put_cstr(ds, "->");
         print_ipv6_addr(ds, &flow->ipv6_dst);
 
     } else {
-        ds_put_format(ds, " proto%"PRIu8" tos%#"PRIx8" ip"IP_FMT"->"IP_FMT,
-                      flow->nw_proto, flow->tos,
-                      IP_ARGS(&flow->nw_src),
-                      IP_ARGS(&flow->nw_dst));
+        ds_put_format(ds, " proto%"PRIu8" tos%#"PRIx8" ttl%"PRIu8
+                          " ip"IP_FMT"->"IP_FMT,
+                      flow->nw_proto, flow->tos, flow->nw_ttl,
+                      IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst));
     }
     if (flow->frag) {
         ds_put_format(ds, " frag(%s)",
@@ -568,7 +575,7 @@ flow_print(FILE *stream, const struct flow *flow)
 void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     wc->wildcards = FWW_ALL;
     wc->tun_id_mask = htonll(0);
@@ -588,7 +595,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     wc->wildcards = 0;
     wc->tun_id_mask = htonll(UINT64_MAX);
@@ -610,7 +617,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
@@ -640,7 +647,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     if (wc->wildcards != FWW_ALL
         || wc->tun_id_mask != htonll(0)

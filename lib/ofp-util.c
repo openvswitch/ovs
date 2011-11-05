@@ -101,15 +101,15 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
-    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_ND_TARGET
-                      | FWW_IPV6_LABEL);
+    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_TTL
+                      | FWW_ND_TARGET | FWW_IPV6_LABEL);
 
     if (!(ofpfw & OFPFW_NW_TOS)) {
         wc->tos_mask |= IP_DSCP_MASK;
@@ -859,7 +859,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 5);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -899,6 +899,11 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 
     /* Only NXM supports matching IP ECN bits. */
     if (wc->tos_mask & IP_ECN_MASK) {
+        return NXFF_NXM;
+    }
+
+    /* Only NXM supports matching IP TTL/hop limit. */
+    if (!(wc->wildcards & FWW_NW_TTL)) {
         return NXFF_NXM;
     }
 
@@ -2516,7 +2521,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         MAY_NW_ADDR     = 1 << 0, /* nw_src, nw_dst */
         MAY_TP_ADDR     = 1 << 1, /* tp_src, tp_dst */
         MAY_NW_PROTO    = 1 << 2, /* nw_proto */
-        MAY_IPVx        = 1 << 3, /* tos, frag */
+        MAY_IPVx        = 1 << 3, /* tos, frag, ttl */
         MAY_ARP_SHA     = 1 << 4, /* arp_sha */
         MAY_ARP_THA     = 1 << 5, /* arp_tha */
         MAY_IPV6_ADDR   = 1 << 6, /* ipv6_src, ipv6_dst */
@@ -2570,6 +2575,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
     if (!(may_match & MAY_IPVx)) {
         wc.tos_mask = 0;
         wc.frag_mask = 0;
+        wc.wildcards |= FWW_NW_TTL;
     }
     if (!(may_match & MAY_ARP_SHA)) {
         wc.wildcards |= FWW_ARP_SHA;
