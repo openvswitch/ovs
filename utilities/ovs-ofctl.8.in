@@ -404,9 +404,9 @@ Matches IP ToS/DSCP or IPv6 traffic class field \fItos\fR, which is
 specified as a decimal number between 0 and 255, inclusive.  Note that
 the two lower reserved bits are ignored for matching purposes.
 .IP
-When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
-0x0806, or 0x86dd, the value of \fBnw_tos\fR is ignored (see \fBFlow
-Syntax\fR above).
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800 or
+0x86dd, the value of \fBnw_tos\fR is ignored (see \fBFlow Syntax\fR
+above).
 .
 .IP \fBtp_src=\fIport\fR
 .IQ \fBtp_dst=\fIport\fR
