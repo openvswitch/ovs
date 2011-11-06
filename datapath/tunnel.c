@@ -288,26 +288,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 {
 	struct port_lookup_key lookup;
 	struct vport *vport;
-
-	if (ipv4_is_multicast(saddr)) {
-		lookup.saddr = 0;
-		lookup.daddr = saddr;
-		if (key_remote_ports) {
-			lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
-			lookup.in_key = key;
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-		}
-		if (remote_ports) {
-			lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
-			lookup.in_key = 0;
-			vport = port_table_lookup(&lookup, mutable);
-			if (vport)
-				return vport;
-		}
-		return NULL;
-	}
+	bool is_multicast = ipv4_is_multicast(saddr);
 
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
@@ -315,7 +296,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 	/* First try for exact match on in_key. */
 	lookup.in_key = key;
 	lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
-	if (key_local_remote_ports) {
+	if (!is_multicast && key_local_remote_ports) {
 		vport = port_table_lookup(&lookup, mutable);
 		if (vport)
 			return vport;
@@ -332,7 +313,7 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 	/* Then try matches that wildcard in_key. */
 	lookup.in_key = 0;
 	lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
-	if (local_remote_ports) {
+	if (!is_multicast && local_remote_ports) {
 		vport = port_table_lookup(&lookup, mutable);
 		if (vport)
 			return vport;
@@ -342,6 +323,25 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 		vport = port_table_lookup(&lookup, mutable);
 		if (vport)
 			return vport;
+	}
+
+	if (is_multicast) {
+		lookup.saddr = 0;
+		lookup.daddr = saddr;
+		if (key_remote_ports) {
+			lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
+			lookup.in_key = key;
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
+		}
+		if (remote_ports) {
+			lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
+			lookup.in_key = 0;
+			vport = port_table_lookup(&lookup, mutable);
+			if (vport)
+				return vport;
+		}
 	}
 
 	return NULL;
