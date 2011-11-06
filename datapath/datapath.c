@@ -122,7 +122,8 @@ static struct vport *get_vport_protected(struct datapath *dp, u16 port_no)
 /* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
-	return vport_get_name(rcu_dereference_rtnl(dp->ports[OVSP_LOCAL]));
+	struct vport *vport = rcu_dereference_rtnl(dp->ports[OVSP_LOCAL]);
+	return vport->ops->get_name(vport);
 }
 
 static int get_dpifindex(struct datapath *dp)
@@ -134,7 +135,7 @@ static int get_dpifindex(struct datapath *dp)
 
 	local = get_vport_protected(dp, OVSP_LOCAL);
 	if (local)
-		ifindex = vport_get_ifindex(local);
+		ifindex = local->ops->get_ifindex(local);
 	else
 		ifindex = 0;
 
@@ -159,12 +160,11 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 			  int event, unsigned int flags)
 {
 	struct datapath *dp = port->dp;
-	int ifindex = vport_get_ifindex(port);
 	struct ifinfomsg *hdr;
 	struct nlmsghdr *nlh;
 
-	if (ifindex < 0)
-		return ifindex;
+	if (!port->ops->get_ifindex)
+		return -ENODEV;
 
 	nlh = nlmsg_put(skb, 0, 0, event, sizeof(*hdr), flags);
 	if (nlh == NULL)
@@ -174,21 +174,21 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr->ifi_family = AF_BRIDGE;
 	hdr->__ifi_pad = 0;
 	hdr->ifi_type = ARPHRD_ETHER;
-	hdr->ifi_index = ifindex;
-	hdr->ifi_flags = vport_get_flags(port);
+	hdr->ifi_index = port->ops->get_ifindex(port);
+	hdr->ifi_flags = port->ops->get_dev_flags(port);
 	hdr->ifi_change = 0;
 
-	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port));
+	NLA_PUT_STRING(skb, IFLA_IFNAME, port->ops->get_name(port));
 	NLA_PUT_U32(skb, IFLA_MASTER, get_dpifindex(dp));
-	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port));
+	NLA_PUT_U32(skb, IFLA_MTU, port->ops->get_mtu(port));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
-		   vport_is_running(port)
-			? vport_get_operstate(port)
+		   port->ops->is_running(port)
+			? port->ops->get_operstate(port)
 			: IF_OPER_DOWN);
 #endif
 
-	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN, vport_get_addr(port));
+	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN, port->ops->get_addr(port));
 
 	return nlmsg_end(skb, nlh);
 
@@ -201,24 +201,32 @@ nla_put_failure:
 static void dp_ifinfo_notify(int event, struct vport *port)
 {
 	struct sk_buff *skb;
-	int err = -ENOBUFS;
+	int err;
 
 	skb = nlmsg_new(br_nlmsg_size(), GFP_KERNEL);
-	if (skb == NULL)
-		goto errout;
+	if (!skb) {
+		err = -ENOBUFS;
+		goto err;
+	}
 
 	err = dp_fill_ifinfo(skb, port, event, 0);
 	if (err < 0) {
-		/* -EMSGSIZE implies BUG in br_nlmsg_size() */
-		WARN_ON(err == -EMSGSIZE);
-		kfree_skb(skb);
-		goto errout;
+		if (err == -ENODEV) {
+			goto out;
+		} else {
+			/* -EMSGSIZE implies BUG in br_nlmsg_size() */
+			WARN_ON(err == -EMSGSIZE);
+			goto err;
+		}
 	}
+
 	rtnl_notify(skb, &init_net, 0, RTNLGRP_LINK, NULL, GFP_KERNEL);
+
 	return;
-errout:
-	if (err < 0)
-		rtnl_set_sk_err(&init_net, RTNLGRP_LINK, err);
+err:
+	rtnl_set_sk_err(&init_net, RTNLGRP_LINK, err);
+out:
+	kfree_skb(skb);
 }
 
 static void release_dp(struct kobject *kobj)
@@ -1631,8 +1639,8 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	ovs_header->dp_ifindex = get_dpifindex(vport->dp);
 
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_PORT_NO, vport->port_no);
-	NLA_PUT_U32(skb, OVS_VPORT_ATTR_TYPE, vport_get_type(vport));
-	NLA_PUT_STRING(skb, OVS_VPORT_ATTR_NAME, vport_get_name(vport));
+	NLA_PUT_U32(skb, OVS_VPORT_ATTR_TYPE, vport->ops->type);
+	NLA_PUT_STRING(skb, OVS_VPORT_ATTR_NAME, vport->ops->get_name(vport));
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_UPCALL_PID, vport->upcall_pid);
 
 	nla = nla_reserve(skb, OVS_VPORT_ATTR_STATS,
@@ -1642,7 +1650,8 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 
 	vport_get_stats(vport, nla_data(nla));
 
-	NLA_PUT(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN, vport_get_addr(vport));
+	NLA_PUT(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN,
+		vport->ops->get_addr(vport));
 
 	err = vport_get_options(vport, skb);
 	if (err == -EMSGSIZE)
@@ -1830,7 +1839,7 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 
 	err = 0;
 	if (a[OVS_VPORT_ATTR_TYPE] &&
-	    nla_get_u32(a[OVS_VPORT_ATTR_TYPE]) != vport_get_type(vport))
+	    nla_get_u32(a[OVS_VPORT_ATTR_TYPE]) != vport->ops->type)
 		err = -EINVAL;
 
 	if (!err && a[OVS_VPORT_ATTR_OPTIONS])

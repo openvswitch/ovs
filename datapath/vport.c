@@ -129,7 +129,7 @@ struct vport *vport_locate(const char *name)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_rcu(vport, node, bucket, hash_node)
-		if (!strcmp(name, vport_get_name(vport)))
+		if (!strcmp(name, vport->ops->get_name(vport)))
 			return vport;
 
 	return NULL;
@@ -236,7 +236,7 @@ struct vport *vport_add(const struct vport_parms *parms)
 			}
 
 			hlist_add_head_rcu(&vport->hash_node,
-					   hash_bucket(vport_get_name(vport)));
+					   hash_bucket(vport->ops->get_name(vport)));
 			return vport;
 		}
 	}
@@ -328,61 +328,6 @@ void vport_set_stats(struct vport *vport, struct ovs_vport_stats *stats)
 }
 
 /**
- *	vport_get_name - retrieve device name
- *
- * @vport: vport from which to retrieve the name.
- *
- * Retrieves the name of the given device.  Either RTNL lock or rcu_read_lock
- * must be held for the entire duration that the name is in use.
- */
-const char *vport_get_name(const struct vport *vport)
-{
-	return vport->ops->get_name(vport);
-}
-
-/**
- *	vport_get_type - retrieve device type
- *
- * @vport: vport from which to retrieve the type.
- *
- * Retrieves the type of the given device.
- */
-enum ovs_vport_type vport_get_type(const struct vport *vport)
-{
-	return vport->ops->type;
-}
-
-/**
- *	vport_get_addr - retrieve device Ethernet address (for kernel callers)
- *
- * @vport: vport from which to retrieve the Ethernet address.
- *
- * Retrieves the Ethernet address of the given device.  Either RTNL lock or
- * rcu_read_lock must be held for the entire duration that the Ethernet address
- * is in use.
- */
-const unsigned char *vport_get_addr(const struct vport *vport)
-{
-	return vport->ops->get_addr(vport);
-}
-
-/**
- *	vport_get_kobj - retrieve associated kobj
- *
- * @vport: vport from which to retrieve the associated kobj
- *
- * Retrieves the associated kobj or null if no kobj.  The returned kobj is
- * valid for as long as the vport exists.
- */
-struct kobject *vport_get_kobj(const struct vport *vport)
-{
-	if (vport->ops->get_kobj)
-		return vport->ops->get_kobj(vport);
-	else
-		return NULL;
-}
-
-/**
  *	vport_get_stats - retrieve device stats
  *
  * @vport: vport from which to retrieve the stats
@@ -435,83 +380,6 @@ void vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 		stats->tx_bytes		+= local_stats.tx_bytes;
 		stats->tx_packets	+= local_stats.tx_packets;
 	}
-}
-
-/**
- *	vport_get_flags - retrieve device flags
- *
- * @vport: vport from which to retrieve the flags
- *
- * Retrieves the flags of the given device.
- *
- * Must be called with RTNL lock or rcu_read_lock.
- */
-unsigned vport_get_flags(const struct vport *vport)
-{
-	return vport->ops->get_dev_flags(vport);
-}
-
-/**
- *	vport_get_flags - check whether device is running
- *
- * @vport: vport on which to check status.
- *
- * Checks whether the given device is running.
- *
- * Must be called with RTNL lock or rcu_read_lock.
- */
-int vport_is_running(const struct vport *vport)
-{
-	return vport->ops->is_running(vport);
-}
-
-/**
- *	vport_get_flags - retrieve device operating state
- *
- * @vport: vport from which to check status
- *
- * Retrieves the RFC2863 operstate of the given device.
- *
- * Must be called with RTNL lock or rcu_read_lock.
- */
-unsigned char vport_get_operstate(const struct vport *vport)
-{
-	return vport->ops->get_operstate(vport);
-}
-
-/**
- *	vport_get_ifindex - retrieve device system interface index
- *
- * @vport: vport from which to retrieve index
- *
- * Retrieves the system interface index of the given device or 0 if
- * the device does not have one (in the case of virtual ports).
- * Returns a negative index on error.
- *
- * Must be called with RTNL lock or rcu_read_lock.
- */
-int vport_get_ifindex(const struct vport *vport)
-{
-	if (vport->ops->get_ifindex)
-		return vport->ops->get_ifindex(vport);
-	else
-		return 0;
-}
-
-/**
- *	vport_get_mtu - retrieve device MTU
- *
- * @vport: vport from which to retrieve MTU
- *
- * Retrieves the MTU of the given device.  Returns 0 if @vport does not have an
- * MTU (as e.g. some tunnels do not).  Either RTNL lock or rcu_read_lock must
- * be held.
- */
-int vport_get_mtu(const struct vport *vport)
-{
-	if (!vport->ops->get_mtu)
-		return 0;
-	return vport->ops->get_mtu(vport);
 }
 
 /**

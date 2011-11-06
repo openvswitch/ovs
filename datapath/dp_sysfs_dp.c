@@ -223,7 +223,7 @@ static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 	if (vport) {
 		const unsigned char *addr;
 
-		addr = vport_get_addr(vport);
+		addr = vport->ops->get_addr(vport);
 		result = sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
 				 0, 0, addr[0], addr[1], addr[2], addr[3],
 				 addr[4], addr[5]);
@@ -352,8 +352,8 @@ static struct attribute_group bridge_group = {
  */
 int dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj =
-		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL]));
+	struct vport *vport = rtnl_dereference(dp->ports[OVSP_LOCAL]);
+	struct kobject *kobj = vport->ops->get_kobj(vport);
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -382,8 +382,8 @@ int dp_sysfs_add_dp(struct datapath *dp)
 
 int dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj =
-		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL]));
+	struct vport *vport = rtnl_dereference(dp->ports[OVSP_LOCAL]);
+	struct kobject *kobj = vport->ops->get_kobj(vport);
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);

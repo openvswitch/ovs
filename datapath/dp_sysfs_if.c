@@ -204,23 +204,23 @@ const struct sysfs_ops brport_sysfs_ops = {
  */
 int dp_sysfs_add_if(struct vport *p)
 {
-	struct kobject *kobj = vport_get_kobj(p);
 	struct datapath *dp = p->dp;
+	struct vport *local_port = rtnl_dereference(dp->ports[OVSP_LOCAL]);
 	struct brport_attribute **a;
 	int err;
 
 	/* Create /sys/class/net/<devname>/brport directory. */
-	if (!kobj)
+	if (!p->ops->get_kobj)
 		return -ENOENT;
 
-	err = kobject_add(&p->kobj, kobj, SYSFS_BRIDGE_PORT_ATTR);
+	err = kobject_add(&p->kobj, p->ops->get_kobj(p),
+			  SYSFS_BRIDGE_PORT_ATTR);
 	if (err)
 		goto err;
 
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
-	err = sysfs_create_link(&p->kobj,
-		vport_get_kobj(rtnl_dereference(dp->ports[OVSP_LOCAL])),
+	err = sysfs_create_link(&p->kobj, local_port->ops->get_kobj(local_port),
 		SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;
@@ -234,10 +234,10 @@ int dp_sysfs_add_if(struct vport *p)
 
 	/* Create symlink from /sys/class/net/<bridgename>/brif/<devname> to
 	 * /sys/class/net/<devname>/brport.  */
-	err = sysfs_create_link(&dp->ifobj, &p->kobj, vport_get_name(p));
+	err = sysfs_create_link(&dp->ifobj, &p->kobj, p->ops->get_name(p));
 	if (err)
 		goto err_del;
-	strcpy(p->linkname, vport_get_name(p));
+	strcpy(p->linkname, p->ops->get_name(p));
 
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 

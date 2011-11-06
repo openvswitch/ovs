@@ -32,21 +32,7 @@ struct vport *vport_locate(const char *name);
 
 int vport_set_addr(struct vport *, const unsigned char *);
 void vport_set_stats(struct vport *, struct ovs_vport_stats *);
-
-const char *vport_get_name(const struct vport *);
-enum ovs_vport_type vport_get_type(const struct vport *);
-const unsigned char *vport_get_addr(const struct vport *);
-
-struct kobject *vport_get_kobj(const struct vport *);
 void vport_get_stats(struct vport *, struct ovs_vport_stats *);
-
-unsigned vport_get_flags(const struct vport *);
-int vport_is_running(const struct vport *);
-unsigned char vport_get_operstate(const struct vport *);
-
-int vport_get_ifindex(const struct vport *);
-
-int vport_get_mtu(const struct vport *);
 
 int vport_set_options(struct vport *, struct nlattr *options);
 int vport_get_options(const struct vport *, struct sk_buff *);
@@ -164,7 +150,8 @@ struct vport_parms {
  * @get_ifindex: Get the system interface index associated with the device.
  * May be null if the device does not have an ifindex.
  * @get_mtu: Get the device's MTU.  May be %NULL if the device does not have an
- * MTU (as e.g. some tunnels do not).
+ * MTU (as e.g. some tunnels do not).  Must be implemented if @get_ifindex is
+ * implemented.
  * @send: Send a packet on the device.  Returns the length of the packet sent.
  */
 struct vport_ops {
