@@ -80,11 +80,6 @@ void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
  */
 #define ODPUTIL_FLOW_KEY_BYTES 140
 
-/* This is an imperfect sanity-check that ODPUTIL_FLOW_KEY_BYTES doesn't
- * need to be updated, but will at least raise awareness when new OVS
- * datapath key types are added. */
-BUILD_ASSERT_DECL(__OVS_KEY_ATTR_MAX == 15);
-
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
  * aligned because it only contains 16-bit types. */

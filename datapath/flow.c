@@ -1214,11 +1214,6 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	struct ovs_key_ethernet *eth_key;
 	struct nlattr *nla;
 
-	/* This is an imperfect sanity-check that FLOW_BUFSIZE doesn't need
-	 * to be updated, but will at least raise awareness when new
-	 * datapath key types are added. */
-	BUILD_BUG_ON(__OVS_KEY_ATTR_MAX != 15);
-
 	if (swkey->phy.priority)
 		NLA_PUT_U32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority);
 

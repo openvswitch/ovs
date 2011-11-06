@@ -182,7 +182,7 @@ enum ovs_vport_type {
 	OVS_VPORT_TYPE_UNSPEC,
 	OVS_VPORT_TYPE_NETDEV,   /* network device */
 	OVS_VPORT_TYPE_INTERNAL, /* network device implemented by datapath */
-	OVS_VPORT_TYPE_PATCH,    /* virtual tunnel connecting two vports */
+	OVS_VPORT_TYPE_PATCH = 100, /* virtual tunnel connecting two vports */
 	OVS_VPORT_TYPE_GRE,      /* GRE tunnel */
 	OVS_VPORT_TYPE_CAPWAP,   /* CAPWAP tunnel */
 	__OVS_VPORT_TYPE_MAX
@@ -198,6 +198,7 @@ enum ovs_vport_type {
  * @OVS_VPORT_ATTR_NAME: Name of vport.  For a vport based on a network device
  * this is the name of the network device.  Maximum length %IFNAMSIZ-1 bytes
  * plus a null terminator.
+ * @OVS_VPORT_ATTR_OPTIONS: Vport-specific configuration information.
  * @OVS_VPORT_ATTR_UPCALL_PID: The Netlink socket in userspace that
  * OVS_PACKET_CMD_MISS upcalls will be directed to for packets received on
  * this port.  A value of zero indicates that upcalls should not be sent.
@@ -224,10 +225,10 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_PORT_NO,	/* u32 port number within datapath */
 	OVS_VPORT_ATTR_TYPE,	/* u32 OVS_VPORT_TYPE_* constant. */
 	OVS_VPORT_ATTR_NAME,	/* string name, up to IFNAMSIZ bytes long */
+	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
 	OVS_VPORT_ATTR_UPCALL_PID, /* u32 Netlink PID to receive upcalls */
 	OVS_VPORT_ATTR_STATS,	/* struct ovs_vport_stats */
-	OVS_VPORT_ATTR_ADDRESS, /* hardware address */
-	OVS_VPORT_ATTR_OPTIONS, /* nested attributes, varies by vport type */
+	OVS_VPORT_ATTR_ADDRESS = 100, /* hardware address */
 	__OVS_VPORT_ATTR_MAX
 };
 
@@ -264,7 +265,6 @@ struct ovs_flow_stats {
 enum ovs_key_attr {
 	OVS_KEY_ATTR_UNSPEC,
 	OVS_KEY_ATTR_PRIORITY,  /* 32-bit skb->priority */
-	OVS_KEY_ATTR_TUN_ID,    /* 64-bit tunnel ID */
 	OVS_KEY_ATTR_IN_PORT,   /* 32-bit OVS dp port number */
 	OVS_KEY_ATTR_ETHERNET,  /* struct ovs_key_ethernet */
 	OVS_KEY_ATTR_8021Q,     /* struct ovs_key_8021q */
@@ -277,6 +277,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_ICMPV6,    /* struct ovs_key_icmpv6 */
 	OVS_KEY_ATTR_ARP,       /* struct ovs_key_arp */
 	OVS_KEY_ATTR_ND,        /* struct ovs_key_nd */
+	OVS_KEY_ATTR_TUN_ID = 100, /* 64-bit tunnel ID */
 	__OVS_KEY_ATTR_MAX
 };
 
