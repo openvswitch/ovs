@@ -25,6 +25,11 @@ static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
 
 	*sum = csum_fold(csum_partial((char *)diff, sizeof(diff), ~csum_unfold(*sum)));
 }
+
+static inline void csum_replace2(__sum16 *sum, __be16 from, __be16 to)
+{
+	csum_replace4(sum, (__force __be32)from, (__force __be32)to);
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)

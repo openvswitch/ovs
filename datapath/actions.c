@@ -158,8 +158,7 @@ static void set_ip_tos(struct sk_buff *skb, struct iphdr *nh, u8 new_tos)
 	/* Set the DSCP bits and preserve the ECN bits. */
 	old = nh->tos;
 	new = new_tos | (nh->tos & INET_ECN_MASK);
-	csum_replace4(&nh->check, (__force __be32)old,
-				  (__force __be32)new);
+	csum_replace2(&nh->check, htons(old), htons(new));
 	nh->tos = new;
 }
 
