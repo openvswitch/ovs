@@ -9,7 +9,7 @@ include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
 
 EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
-EXTRA_CFLAGS += -I$(srcdir)/.. 
+EXTRA_CFLAGS += -I$(srcdir)/..
 EXTRA_CFLAGS += -I$(builddir)/..
 ifeq '$(BUILDNR)' '0'
 EXTRA_CFLAGS += -DBUILDNR=\"\"

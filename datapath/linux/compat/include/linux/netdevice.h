@@ -60,11 +60,11 @@ typedef int netdev_tx_t;
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 /* Linux 2.6.24 added a network namespace pointer to the macro. */
 #undef for_each_netdev
-#define for_each_netdev(net,d) list_for_each_entry(d, &dev_base_head, dev_list)
+#define for_each_netdev(net, d) list_for_each_entry(d, &dev_base_head, dev_list)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-#define net_xmit_eval(e)       ((e) == NET_XMIT_CN? 0 : (e))
+#define net_xmit_eval(e)       ((e) == NET_XMIT_CN ? 0 : (e))
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
@@ -100,7 +100,7 @@ static inline void netdev_rx_handler_unregister(struct net_device *dev)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 #undef SET_ETHTOOL_OPS
 #define SET_ETHTOOL_OPS(netdev, ops) \
-	( (netdev)->ethtool_ops = (struct ethtool_ops *)(ops) )
+	((netdev)->ethtool_ops = (struct ethtool_ops *)(ops))
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
@@ -149,8 +149,8 @@ u32 rpl_netif_skb_features(struct sk_buff *skb);
 #define netif_needs_gso rpl_netif_needs_gso
 static inline int rpl_netif_needs_gso(struct sk_buff *skb, int features)
 {
-        return skb_is_gso(skb) && (!skb_gso_ok(skb, features) ||
-                unlikely(skb->ip_summed != CHECKSUM_PARTIAL));
+	return skb_is_gso(skb) && (!skb_gso_ok(skb, features) ||
+		unlikely(skb->ip_summed != CHECKSUM_PARTIAL));
 }
 #endif
 

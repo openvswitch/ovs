@@ -5,7 +5,7 @@
 #include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
 
-#include <asm/semaphore.h>
+#include <linux/semaphore.h>
 
 struct mutex {
 	struct semaphore sema;
@@ -15,7 +15,7 @@ struct mutex {
 #define mutex_destroy(mutex) do { } while (0)
 
 #define __MUTEX_INITIALIZER(name) \
-			__SEMAPHORE_INITIALIZER(name,1)
+			__SEMAPHORE_INITIALIZER(name, 1)
 
 #define DEFINE_MUTEX(mutexname) \
 	struct mutex mutexname = { __MUTEX_INITIALIZER(mutexname.sema) }

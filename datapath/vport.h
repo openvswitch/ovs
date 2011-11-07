@@ -208,7 +208,8 @@ enum vport_err_type {
 	VPORT_E_TX_ERROR,
 };
 
-struct vport *vport_alloc(int priv_size, const struct vport_ops *, const struct vport_parms *);
+struct vport *vport_alloc(int priv_size, const struct vport_ops *,
+			  const struct vport_parms *);
 void vport_free(struct vport *);
 
 #define VPORT_ALIGN 8

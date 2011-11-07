@@ -6,11 +6,11 @@
 #include <linux/version.h>
 
 #ifndef RHEL_RELEASE_VERSION
-#define RHEL_RELEASE_VERSION(X,Y) ( 0 )
+#define RHEL_RELEASE_VERSION(X, Y)	(0)
 #endif
 #if ((LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)) && \
-     (!defined(RHEL_RELEASE_CODE) || \
-      (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5,1))))
+	(!defined(RHEL_RELEASE_CODE) || \
+	(RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 1))))
 
 extern unsigned long volatile jiffies;
 
@@ -88,7 +88,7 @@ static inline unsigned long __round_jiffies(unsigned long j, int cpu)
  */
 static inline unsigned long round_jiffies(unsigned long j)
 {
-	return __round_jiffies(j, 0);  // FIXME
+	return __round_jiffies(j, 0);  /* FIXME */
 }
 
 #endif /* linux kernel < 2.6.20 */

@@ -104,8 +104,7 @@ struct sw_flow {
 	u8 tcp_flags;		/* Union of seen TCP flags. */
 };
 
-struct arp_eth_header
-{
+struct arp_eth_header {
 	__be16      ar_hrd;	/* format of hardware address   */
 	__be16      ar_pro;	/* format of protocol address   */
 	unsigned char   ar_hln;	/* length of hardware address   */
@@ -164,9 +163,9 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 #define TBL_MIN_BUCKETS		1024
 
 struct flow_table {
-        struct flex_array *buckets;
-        unsigned int count, n_buckets;
-        struct rcu_head rcu;
+	struct flex_array *buckets;
+	unsigned int count, n_buckets;
+	struct rcu_head rcu;
 };
 
 static inline int flow_tbl_count(struct flow_table *table)

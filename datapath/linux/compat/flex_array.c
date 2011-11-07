@@ -64,7 +64,7 @@ static inline int elements_fit_in_base(struct flex_array *fa)
  * page pointers that we can fit in the base structure or (using
  * integer math):
  *
- * 	(PAGE_SIZE/element_size) * (PAGE_SIZE-8)/sizeof(void *)
+ *	(PAGE_SIZE/element_size) * (PAGE_SIZE-8)/sizeof(void *)
  *
  * Here's a table showing example capacities.  Note that the maximum
  * index that the get/put() functions is just nr_objects-1.   This
@@ -178,7 +178,7 @@ __fa_get_part(struct flex_array *fa, int part_nr, gfp_t flags)
  * flex_array_put - copy data into the array at @element_nr
  * @fa:		the flex array to copy data into
  * @element_nr:	index of the position in which to insert
- * 		the new element.
+ *		the new element.
  * @src:	address of data to copy into the array
  * @flags:	page allocation flags to use for array expansion
  *
@@ -248,7 +248,8 @@ int flex_array_clear(struct flex_array *fa, unsigned int element_nr)
 /**
  * flex_array_prealloc - guarantee that array space exists
  * @fa:			the flex array for which to preallocate parts
- * @start:		index of first array element for which space is allocated
+ * @start:		index of first array element for which space is
+ *			allocated
  * @nr_elements:	number of elements for which space is allocated
  * @flags:		page allocation flags
  *

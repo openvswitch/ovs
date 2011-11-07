@@ -33,7 +33,7 @@ struct internal_dev {
 #endif
 };
 
-static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
+static struct internal_dev *internal_dev_priv(struct net_device *netdev)
 {
 	return netdev_priv(netdev);
 }
@@ -138,7 +138,8 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 	return 0;
 }
 
-static int internal_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+static int internal_dev_do_ioctl(struct net_device *dev,
+				 struct ifreq *ifr, int cmd)
 {
 	if (dp_ioctl_hook)
 		return dp_ioctl_hook(dev, ifr, cmd);
@@ -212,7 +213,8 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 	struct internal_dev *internal_dev;
 	int err;
 
-	vport = vport_alloc(sizeof(struct netdev_vport), &internal_vport_ops, parms);
+	vport = vport_alloc(sizeof(struct netdev_vport),
+			    &internal_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;
@@ -220,7 +222,8 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 
 	netdev_vport = netdev_vport_priv(vport);
 
-	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev), parms->name, do_setup);
+	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev),
+					 parms->name, do_setup);
 	if (!netdev_vport->dev) {
 		err = -ENOMEM;
 		goto error_free_vport;

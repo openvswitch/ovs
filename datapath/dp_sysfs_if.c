@@ -12,6 +12,8 @@
  *  This has been shamelessly copied from the kernel sources.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/capability.h>
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
@@ -31,7 +33,7 @@ struct brport_attribute {
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-#define BRPORT_ATTR(_name,_mode,_show,_store)		        \
+#define BRPORT_ATTR(_name, _mode, _show, _store)		\
 struct brport_attribute brport_attr_##_name = {		        \
 	.attr = {.name = __stringify(_name),			\
 		 .mode = _mode },				\
@@ -39,10 +41,10 @@ struct brport_attribute brport_attr_##_name = {		        \
 	.store	= _store,					\
 };
 #else
-#define BRPORT_ATTR(_name,_mode,_show,_store)		        \
-struct brport_attribute brport_attr_##_name = { 	        \
-	.attr = {.name = __stringify(_name), 			\
-		 .mode = _mode, 				\
+#define BRPORT_ATTR(_name, _mode, _show, _store)		\
+struct brport_attribute brport_attr_##_name = {			\
+	.attr = {.name = __stringify(_name),			\
+		 .mode = _mode,					\
 		 .owner = THIS_MODULE, },			\
 	.show	= _show,					\
 	.store	= _store,					\
@@ -126,22 +128,19 @@ static ssize_t show_port_state(struct vport *p, char *buf)
 }
 static BRPORT_ATTR(state, S_IRUGO, show_port_state, NULL);
 
-static ssize_t show_message_age_timer(struct vport *p,
-					    char *buf)
+static ssize_t show_message_age_timer(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(message_age_timer, S_IRUGO, show_message_age_timer, NULL);
 
-static ssize_t show_forward_delay_timer(struct vport *p,
-					    char *buf)
+static ssize_t show_forward_delay_timer(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
 static BRPORT_ATTR(forward_delay_timer, S_IRUGO, show_forward_delay_timer, NULL);
 
-static ssize_t show_hold_timer(struct vport *p,
-					    char *buf)
+static ssize_t show_hold_timer(struct vport *p, char *buf)
 {
 	return sprintf(buf, "%d\n", 0);
 }
@@ -168,32 +167,32 @@ static struct brport_attribute *brport_attrs[] = {
 #define to_vport_attr(_at) container_of(_at, struct brport_attribute, attr)
 #define to_vport(obj)	container_of(obj, struct vport, kobj)
 
-static ssize_t brport_show(struct kobject * kobj,
-			   struct attribute * attr, char * buf)
+static ssize_t brport_show(struct kobject *kobj,
+			   struct attribute *attr, char *buf)
 {
-	struct brport_attribute * brport_attr = to_vport_attr(attr);
-	struct vport * p = to_vport(kobj);
+	struct brport_attribute *brport_attr = to_vport_attr(attr);
+	struct vport *p = to_vport(kobj);
 
 	return brport_attr->show(p, buf);
 }
 
-static ssize_t brport_store(struct kobject * kobj,
-			    struct attribute * attr,
-			    const char * buf, size_t count)
+static ssize_t brport_store(struct kobject *kobj,
+			    struct attribute *attr,
+			    const char *buf, size_t count)
 {
-	struct vport * p = to_vport(kobj);
+	struct vport *p = to_vport(kobj);
 	ssize_t ret = -EINVAL;
 
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	printk("%s: xxx writing port parms not supported yet!\n",
-	       dp_name(p->dp));
+	pr_warning("%s: xxx writing port parms not supported yet!\n",
+		   dp_name(p->dp));
 
 	return ret;
 }
 
-struct sysfs_ops brport_sysfs_ops = {
+const struct sysfs_ops brport_sysfs_ops = {
 	.show = brport_show,
 	.store = brport_store,
 };

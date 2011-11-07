@@ -149,8 +149,8 @@ int compute_ip_summed(struct sk_buff *skb, bool xmit)
 	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
 	 * However, on the receive side we should only get CHECKSUM_PARTIAL
 	 * packets from Xen, which uses some special fields to represent this
-	 * (see vswitch_skb_checksum_setup()).  Since we can only make one type work,
-	 * pick the one that actually happens in practice.
+	 * (see vswitch_skb_checksum_setup()).  Since we can only make one type
+	 * work, pick the one that actually happens in practice.
 	 *
 	 * On the transmit side (basically after skb_checksum_setup()
 	 * has been run or on internal dev transmit), packets with
@@ -178,13 +178,14 @@ int compute_ip_summed(struct sk_buff *skb, bool xmit)
 }
 
 /*
- *     forward_ip_summed - map internal checksum state back onto native kernel fields
+ *     forward_ip_summed - map internal checksum state back onto native
+ *			   kernel fields.
  *
  * @skb: Packet to manipulate.
- * @xmit: Whether we are about send on the transmit path the network stack.  This
- *	  follows the same logic as the @xmit field in compute_ip_summed().
- *	  Generally, a given vport will have opposite values for @xmit passed to these
- *	  two functions.
+ * @xmit: Whether we are about send on the transmit path the network stack.
+ *	  This follows the same logic as the @xmit field in compute_ip_summed().
+ *	  Generally, a given vport will have opposite values for @xmit passed to
+ *	  these two functions.
  *
  * When a packet is about to egress from OVS take our internal fields (including
  * any modifications we have made) and recreate the correct representation for
@@ -192,7 +193,7 @@ int compute_ip_summed(struct sk_buff *skb, bool xmit)
  */
 void forward_ip_summed(struct sk_buff *skb, bool xmit)
 {
-	switch(get_ip_summed(skb)) {
+	switch (get_ip_summed(skb)) {
 	case OVS_CSUM_NONE:
 		skb->ip_summed = CHECKSUM_NONE;
 		break;
@@ -230,7 +231,8 @@ void forward_ip_summed(struct sk_buff *skb, bool xmit)
 	}
 
 	if (get_ip_summed(skb) == OVS_CSUM_PARTIAL)
-		skb_set_transport_header(skb, OVS_CB(skb)->csum_start - skb_headroom(skb));
+		skb_set_transport_header(skb, OVS_CB(skb)->csum_start -
+					      skb_headroom(skb));
 }
 
 u8 get_ip_summed(struct sk_buff *skb)
@@ -250,7 +252,8 @@ void get_skb_csum_pointers(const struct sk_buff *skb, u16 *csum_start,
 	*csum_offset = skb->csum;
 }
 
-void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start, u16 csum_offset)
+void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start,
+			   u16 csum_offset)
 {
 	OVS_CB(skb)->csum_start = csum_start;
 	skb->csum = csum_offset;

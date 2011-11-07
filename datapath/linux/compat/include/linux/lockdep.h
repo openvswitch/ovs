@@ -27,8 +27,7 @@ struct lockdep_map;
 /*
  * Lock-class usage-state bits:
  */
-enum lock_usage_bit
-{
+enum lock_usage_bit {
 	LOCK_USED = 0,
 	LOCK_USED_IN_HARDIRQ,
 	LOCK_USED_IN_SOFTIRQ,
@@ -212,7 +211,7 @@ struct held_lock {
 	struct lockdep_map		*instance;
 
 #ifdef CONFIG_LOCK_STAT
-	u64 				waittime_stamp;
+	u64				waittime_stamp;
 	u64				holdtime_stamp;
 #endif
 	/*

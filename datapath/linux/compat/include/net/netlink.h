@@ -31,17 +31,17 @@
 
 #ifndef NLA_PUT_BE16
 #define NLA_PUT_BE16(skb, attrtype, value) \
-        NLA_PUT_TYPE(skb, __be16, attrtype, value)
+	NLA_PUT_TYPE(skb, __be16, attrtype, value)
 #endif  /* !NLA_PUT_BE16 */
 
 #ifndef NLA_PUT_BE32
 #define NLA_PUT_BE32(skb, attrtype, value) \
-        NLA_PUT_TYPE(skb, __be32, attrtype, value)
+	NLA_PUT_TYPE(skb, __be32, attrtype, value)
 #endif  /* !NLA_PUT_BE32 */
 
 #ifndef NLA_PUT_BE64
 #define NLA_PUT_BE64(skb, attrtype, value) \
-        NLA_PUT_TYPE(skb, __be64, attrtype, value)
+	NLA_PUT_TYPE(skb, __be64, attrtype, value)
 #endif  /* !NLA_PUT_BE64 */
 
 #ifndef HAVE_NLA_GET_BE16
@@ -51,7 +51,7 @@
  */
 static inline __be16 nla_get_be16(const struct nlattr *nla)
 {
-        return *(__be16 *) nla_data(nla);
+	return *(__be16 *) nla_data(nla);
 }
 #endif  /* !HAVE_NLA_GET_BE16 */
 
@@ -62,7 +62,7 @@ static inline __be16 nla_get_be16(const struct nlattr *nla)
  */
 static inline __be32 nla_get_be32(const struct nlattr *nla)
 {
-        return *(__be32 *) nla_data(nla);
+	return *(__be32 *) nla_data(nla);
 }
 #endif
 
@@ -91,12 +91,12 @@ static inline __be32 nla_get_be32(const struct nlattr *nla)
 #define nla_get_be64 rpl_nla_get_be64
 static inline __be64 nla_get_be64(const struct nlattr *nla)
 {
-        __be64 tmp;
+	__be64 tmp;
 
 	/* The additional cast is necessary because  */
-        nla_memcpy(&tmp, (struct nlattr *) nla, sizeof(tmp));
+	nla_memcpy(&tmp, (struct nlattr *) nla, sizeof(tmp));
 
-        return tmp;
+	return tmp;
 }
 #endif
 
@@ -107,13 +107,14 @@ static inline __be64 nla_get_be64(const struct nlattr *nla)
  */
 static inline int nla_type(const struct nlattr *nla)
 {
-        return nla->nla_type & NLA_TYPE_MASK;
+	return nla->nla_type & NLA_TYPE_MASK;
 }
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 #define nla_parse_nested(tb, maxtype, nla, policy) \
-	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), (struct nla_policy *)(policy))
+	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), \
+			(struct nla_policy *)(policy))
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 #define nla_parse_nested(tb, maxtype, nla, policy) \
 	nla_parse_nested(tb, maxtype, (struct nlattr *)(nla), policy)

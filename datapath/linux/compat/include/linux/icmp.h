@@ -6,7 +6,7 @@
 #ifndef HAVE_SKBUFF_HEADER_HELPERS
 static inline struct icmphdr *icmp_hdr(const struct sk_buff *skb)
 {
-        return (struct icmphdr *)skb_transport_header(skb);
+	return (struct icmphdr *)skb_transport_header(skb);
 }
 #endif
 

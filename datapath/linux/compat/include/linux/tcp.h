@@ -11,7 +11,7 @@ static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 
 static inline unsigned int tcp_hdrlen(const struct sk_buff *skb)
 {
-        return tcp_hdr(skb)->doff * 4;
+	return tcp_hdr(skb)->doff * 4;
 }
 #endif /* !HAVE_SKBUFF_HEADER_HELPERS */
 

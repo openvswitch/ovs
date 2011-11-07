@@ -35,8 +35,10 @@
 #define TNL_T_KEY_MATCH		(1 << 11)
 
 /* Private flags not exposed to userspace in this form. */
-#define TNL_F_IN_KEY_MATCH      (1 << 16) /* Store the key in tun_id to match in flow table. */
-#define TNL_F_OUT_KEY_ACTION	(1 << 17) /* Get the key from a SET_TUNNEL action. */
+#define TNL_F_IN_KEY_MATCH	(1 << 16) /* Store the key in tun_id to
+					   * match in flow table. */
+#define TNL_F_OUT_KEY_ACTION	(1 << 17) /* Get the key from a SET_TUNNEL
+					   * action. */
 
 /* All public tunnel flags. */
 #define TNL_F_PUBLIC (TNL_F_CSUM | TNL_F_TOS_INHERIT | TNL_F_TTL_INHERIT | \
@@ -57,7 +59,7 @@ struct port_lookup_key {
 	u32    tunnel_type;
 };
 
-#define PORT_KEY_LEN 	(offsetof(struct port_lookup_key, tunnel_type) + \
+#define PORT_KEY_LEN	(offsetof(struct port_lookup_key, tunnel_type) + \
 			 FIELD_SIZEOF(struct port_lookup_key, tunnel_type))
 
 /**
@@ -153,7 +155,8 @@ struct tnl_cache {
 	int len;		/* Length of data to be memcpy'd from cache. */
 	int hh_len;		/* Hardware hdr length, cached from hh_cache. */
 
-	/* Sequence number of mutable->seq from which this cache was generated. */
+	/* Sequence number of mutable->seq from which this cache was
+	 * generated. */
 	unsigned mutable_seq;
 
 #ifdef HAVE_HH_SEQ
@@ -216,7 +219,7 @@ struct tnl_vport {
 	atomic_t frag_id;
 
 	spinlock_t cache_lock;
-	struct tnl_cache __rcu *cache;		/* Protected by RCU/cache_lock. */
+	struct tnl_cache __rcu *cache;	/* Protected by RCU/cache_lock. */
 
 #ifdef NEED_CACHE_TIMEOUT
 	/*

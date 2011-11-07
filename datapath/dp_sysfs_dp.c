@@ -77,7 +77,7 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 
 		dp = sysfs_get_dp(to_net_dev(d));
 		if (dp)
-			printk("%s: xxx writing dp parms not supported yet!\n",
+			pr_warning("%s: xxx writing dp parms not supported yet!\n",
 			       dp_name(dp));
 		else
 			result = -ENODEV;
@@ -96,7 +96,7 @@ static ssize_t show_forward_delay(DEVICE_PARAMS, char *buf)
 
 static void set_forward_delay(struct datapath *dp, unsigned long val)
 {
-	printk("%s: xxx attempt to set_forward_delay()\n", dp_name(dp));
+	pr_info("%s: xxx attempt to set_forward_delay()\n", dp_name(dp));
 }
 
 static ssize_t store_forward_delay(DEVICE_PARAMS,
@@ -114,7 +114,7 @@ static ssize_t show_hello_time(DEVICE_PARAMS, char *buf)
 
 static void set_hello_time(struct datapath *dp, unsigned long val)
 {
-	printk("%s: xxx attempt to set_hello_time()\n", dp_name(dp));
+	pr_info("%s: xxx attempt to set_hello_time()\n", dp_name(dp));
 }
 
 static ssize_t store_hello_time(DEVICE_PARAMS,
@@ -133,7 +133,7 @@ static ssize_t show_max_age(DEVICE_PARAMS, char *buf)
 
 static void set_max_age(struct datapath *dp, unsigned long val)
 {
-	printk("%s: xxx attempt to set_max_age()\n", dp_name(dp));
+	pr_info("%s: xxx attempt to set_max_age()\n", dp_name(dp));
 }
 
 static ssize_t store_max_age(DEVICE_PARAMS,
@@ -150,7 +150,7 @@ static ssize_t show_ageing_time(DEVICE_PARAMS, char *buf)
 
 static void set_ageing_time(struct datapath *dp, unsigned long val)
 {
-	printk("%s: xxx attempt to set_ageing_time()\n", dp_name(dp));
+	pr_info("%s: xxx attempt to set_ageing_time()\n", dp_name(dp));
 }
 
 static ssize_t store_ageing_time(DEVICE_PARAMS,
@@ -178,7 +178,7 @@ static ssize_t store_stp_state(DEVICE_PARAMS,
 
 	dp = sysfs_get_dp(to_net_dev(d));
 	if (dp)
-		printk("%s: xxx attempt to set_stp_state()\n", dp_name(dp));
+		pr_info("%s: xxx attempt to set_stp_state()\n", dp_name(dp));
 	else
 		result = -ENODEV;
 
@@ -196,7 +196,7 @@ static ssize_t show_priority(DEVICE_PARAMS, char *buf)
 
 static void set_priority(struct datapath *dp, unsigned long val)
 {
-	printk("%s: xxx attempt to set_priority()\n", dp_name(dp));
+	pr_info("%s: xxx attempt to set_priority()\n", dp_name(dp));
 }
 
 static ssize_t store_priority(DEVICE_PARAMS,
@@ -225,7 +225,8 @@ static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 
 		addr = vport_get_addr(vport);
 		result = sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
-				 0, 0, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+				 0, 0, addr[0], addr[1], addr[2], addr[3],
+				 addr[4], addr[5]);
 	} else
 		result = -ENODEV;
 
@@ -300,7 +301,8 @@ static ssize_t store_group_addr(DEVICE_PARAMS,
 
 	dp = sysfs_get_dp(to_net_dev(d));
 	if (dp)
-		printk("%s: xxx attempt to store_group_addr()\n", dp_name(dp));
+		pr_info("%s: xxx attempt to store_group_addr()\n",
+		       dp_name(dp));
 	else
 		result = -ENODEV;
 
@@ -366,7 +368,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 	err = kobject_add(&dp->ifobj, kobj, SYSFS_BRIDGE_PORT_SUBDIR);
 	if (err) {
 		pr_info("%s: can't add kobject (directory) %s/%s\n",
-			__FUNCTION__, dp_name(dp), kobject_name(&dp->ifobj));
+			__func__, dp_name(dp), kobject_name(&dp->ifobj));
 		goto out2;
 	}
 	kobject_uevent(&dp->ifobj, KOBJ_ADD);

@@ -8,7 +8,7 @@
 
 #include "flow.h"
 #include "datapath.h"
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
@@ -49,13 +49,13 @@ static int check_header(struct sk_buff *skb, int len)
 	return 0;
 }
 
-static inline bool arphdr_ok(struct sk_buff *skb)
+static bool arphdr_ok(struct sk_buff *skb)
 {
 	return pskb_may_pull(skb, skb_network_offset(skb) +
 				  sizeof(struct arp_eth_header));
 }
 
-static inline int check_iphdr(struct sk_buff *skb)
+static int check_iphdr(struct sk_buff *skb)
 {
 	unsigned int nh_ofs = skb_network_offset(skb);
 	unsigned int ip_len;
@@ -74,7 +74,7 @@ static inline int check_iphdr(struct sk_buff *skb)
 	return 0;
 }
 
-static inline bool tcphdr_ok(struct sk_buff *skb)
+static bool tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
 	int tcp_len;
@@ -90,13 +90,13 @@ static inline bool tcphdr_ok(struct sk_buff *skb)
 	return true;
 }
 
-static inline bool udphdr_ok(struct sk_buff *skb)
+static bool udphdr_ok(struct sk_buff *skb)
 {
 	return pskb_may_pull(skb, skb_transport_offset(skb) +
 				  sizeof(struct udphdr));
 }
 
-static inline bool icmphdr_ok(struct sk_buff *skb)
+static bool icmphdr_ok(struct sk_buff *skb)
 {
 	return pskb_may_pull(skb, skb_transport_offset(skb) +
 				  sizeof(struct icmphdr));
@@ -116,8 +116,8 @@ u64 flow_used_time(unsigned long flow_jiffies)
 }
 
 #define SW_FLOW_KEY_OFFSET(field)		\
-	offsetof(struct sw_flow_key, field) +	\
-	FIELD_SIZEOF(struct sw_flow_key, field)
+	(offsetof(struct sw_flow_key, field) +	\
+	 FIELD_SIZEOF(struct sw_flow_key, field))
 
 /**
  * skip_exthdr - skip any IPv6 extension headers
@@ -205,7 +205,8 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	ipv6_addr_copy(&key->ipv6.addr.src, &nh->saddr);
 	ipv6_addr_copy(&key->ipv6.addr.dst, &nh->daddr);
 
-	payload_ofs = skip_exthdr(skb, payload_ofs, &nexthdr, &key->ip.tos_frag);
+	payload_ofs = skip_exthdr(skb, payload_ofs,
+				  &nexthdr, &key->ip.tos_frag);
 	if (unlikely(payload_ofs < 0))
 		return -EINVAL;
 
@@ -286,7 +287,7 @@ static struct hlist_head __rcu *find_bucket(struct flow_table * table, u32 hash)
 
 static struct flex_array  __rcu *alloc_buckets(unsigned int n_buckets)
 {
-	struct flex_array  __rcu * buckets;
+	struct flex_array  __rcu *buckets;
 	int i, err;
 
 	buckets = flex_array_alloc(sizeof(struct hlist_head *),
@@ -307,7 +308,7 @@ static struct flex_array  __rcu *alloc_buckets(unsigned int n_buckets)
 	return buckets;
 }
 
-static void free_buckets(struct flex_array * buckets)
+static void free_buckets(struct flex_array *buckets)
 {
 	flex_array_free(buckets);
 }
@@ -368,10 +369,10 @@ static void flow_tbl_destroy_rcu_cb(struct rcu_head *rcu)
 
 void flow_tbl_deferred_destroy(struct flow_table *table)
 {
-        if (!table)
-                return;
+	if (!table)
+		return;
 
-        call_rcu(&table->rcu, flow_tbl_destroy_rcu_cb);
+	call_rcu(&table->rcu, flow_tbl_destroy_rcu_cb);
 }
 
 struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *last)
@@ -565,7 +566,8 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 		icmp_len -= sizeof(*nd);
 		offset = 0;
 		while (icmp_len >= 8) {
-			struct nd_opt_hdr *nd_opt = (struct nd_opt_hdr *)(nd->opt + offset);
+			struct nd_opt_hdr *nd_opt =
+				 (struct nd_opt_hdr *)(nd->opt + offset);
 			int opt_len = nd_opt->nd_opt_len * 8;
 
 			if (unlikely(!opt_len || opt_len > icmp_len))
@@ -719,8 +721,8 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 			if (icmphdr_ok(skb)) {
 				struct icmphdr *icmp = icmp_hdr(skb);
 				/* The ICMP type and code fields use the 16-bit
-				 * transport port fields, so we need to store them
-				 * in 16-bit network byte order. */
+				 * transport port fields, so we need to store
+				 * them in 16-bit network byte order. */
 				key->ipv4.tp.src = htons(icmp->type);
 				key->ipv4.tp.dst = htons(icmp->code);
 			}
@@ -798,10 +800,10 @@ out:
 
 u32 flow_hash(const struct sw_flow_key *key, int key_len)
 {
-	return jhash2((u32*)key, DIV_ROUND_UP(key_len, sizeof(u32)), hash_seed);
+	return jhash2((u32 *)key, DIV_ROUND_UP(key_len, sizeof(u32)), hash_seed);
 }
 
-struct sw_flow * flow_tbl_lookup(struct flow_table *table,
+struct sw_flow *flow_tbl_lookup(struct flow_table *table,
 				struct sw_flow_key *key, int key_len)
 {
 	struct sw_flow *flow;
@@ -911,9 +913,10 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		const struct ovs_key_arp *arp_key;
 		const struct ovs_key_nd *nd_key;
 
-                int type = nla_type(nla);
+		int type = nla_type(nla);
 
-		if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != ovs_key_lens[type])
+		if (type > OVS_KEY_ATTR_MAX ||
+		    nla_len(nla) != ovs_key_lens[type])
 			goto invalid;
 
 #define TRANSITION(PREV_TYPE, TYPE) (((PREV_TYPE) << 16) | (TYPE))
@@ -1172,7 +1175,7 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 
 	prev_type = OVS_KEY_ATTR_UNSPEC;
 	nla_for_each_nested(nla, attr, rem) {
-                int type = nla_type(nla);
+		int type = nla_type(nla);
 
 		if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != ovs_key_lens[type])
 			return -EINVAL;

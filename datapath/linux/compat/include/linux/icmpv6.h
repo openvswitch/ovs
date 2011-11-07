@@ -6,7 +6,7 @@
 #ifndef HAVE_ICMP6_HDR
 static inline struct icmp6hdr *icmp6_hdr(const struct sk_buff *skb)
 {
-        return (struct icmp6hdr *)skb_transport_header(skb);
+	return (struct icmp6hdr *)skb_transport_header(skb);
 }
 #endif
 

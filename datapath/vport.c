@@ -159,7 +159,8 @@ static struct kobj_type brport_ktype = {
  * vport_priv().  vports that are no longer needed should be released with
  * vport_free().
  */
-struct vport *vport_alloc(int priv_size, const struct vport_ops *ops, const struct vport_parms *parms)
+struct vport *vport_alloc(int priv_size, const struct vport_ops *ops,
+			  const struct vport_parms *parms)
 {
 	struct vport *vport;
 	size_t alloc_size;

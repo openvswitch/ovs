@@ -131,7 +131,8 @@ extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
 void dp_process_received_packet(struct vport *, struct sk_buff *);
 void dp_detach_port(struct vport *);
-int dp_upcall(struct datapath *, struct sk_buff *, const struct dp_upcall_info *);
+int dp_upcall(struct datapath *, struct sk_buff *,
+	      const struct dp_upcall_info *);
 
 struct datapath *get_dp(int dp_idx);
 const char *dp_name(const struct datapath *dp);

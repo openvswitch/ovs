@@ -22,7 +22,7 @@
  * For negative values only the tv_sec field is negative !
  */
 void set_normalized_timespec(struct timespec *ts,
-                   time_t sec, long nsec)
+			     time_t sec, long nsec)
 {
 	while (nsec >= NSEC_PER_SEC) {
 		nsec -= NSEC_PER_SEC;

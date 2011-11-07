@@ -1,4 +1,4 @@
-SUBDIRS = 
+SUBDIRS =
 if LINUX_ENABLED
 SUBDIRS += linux
 endif

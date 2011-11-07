@@ -21,7 +21,7 @@ int dp_sysfs_add_if(struct vport *p);
 int dp_sysfs_del_if(struct vport *p);
 
 #ifdef CONFIG_SYSFS
-extern struct sysfs_ops brport_sysfs_ops;
+extern const struct sysfs_ops brport_sysfs_ops;
 #endif
 
 #endif /* dp_sysfs.h */

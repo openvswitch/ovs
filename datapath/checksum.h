@@ -34,7 +34,8 @@ u8 get_ip_summed(struct sk_buff *skb);
 void set_ip_summed(struct sk_buff *skb, u8 ip_summed);
 void get_skb_csum_pointers(const struct sk_buff *skb, u16 *csum_start,
 			   u16 *csum_offset);
-void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start, u16 csum_offset);
+void set_skb_csum_pointers(struct sk_buff *skb, u16 csum_start,
+			   u16 csum_offset);
 #else
 static inline int compute_ip_summed(struct sk_buff *skb, bool xmit)
 {
@@ -114,7 +115,7 @@ static inline int rpl_pskb_expand_head(struct sk_buff *skb, int nhead,
 
 	update_csum_start(skb, skb_headroom(skb) - old_headroom);
 
-	return 0; 
+	return 0;
 }
 #define pskb_expand_head rpl_pskb_expand_head
 

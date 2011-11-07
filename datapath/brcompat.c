@@ -9,7 +9,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/kernel.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/completion.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
@@ -39,7 +39,8 @@ static DECLARE_COMPLETION(brc_done); /* Userspace signaled operation done? */
 static struct sk_buff *brc_reply;    /* Reply from userspace. */
 static u32 brc_seq;		     /* Sequence number for current op. */
 
-static struct sk_buff *brc_send_command(struct sk_buff *, struct nlattr **attrs);
+static struct sk_buff *brc_send_command(struct sk_buff *,
+					struct nlattr **attrs);
 static int brc_send_simple_command(struct sk_buff *);
 
 static struct sk_buff *brc_make_request(int op, const char *bridge,
@@ -342,18 +343,18 @@ static int brc_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	int err;
 
 	switch (cmd) {
-		case SIOCDEVPRIVATE:
-			err = old_dev_ioctl(dev, rq, cmd);
-			break;
+	case SIOCDEVPRIVATE:
+		err = old_dev_ioctl(dev, rq, cmd);
+		break;
 
-		case SIOCBRADDIF:
-			return brc_add_del_port(dev, rq->ifr_ifindex, 1);
-		case SIOCBRDELIF:
-			return brc_add_del_port(dev, rq->ifr_ifindex, 0);
+	case SIOCBRADDIF:
+		return brc_add_del_port(dev, rq->ifr_ifindex, 1);
+	case SIOCBRDELIF:
+		return brc_add_del_port(dev, rq->ifr_ifindex, 0);
 
-		default:
-			err = -EOPNOTSUPP;
-			break;
+	default:
+		err = -EOPNOTSUPP;
+		break;
 	}
 
 	return err;
@@ -472,7 +473,7 @@ static struct sk_buff *brc_send_command(struct sk_buff *request,
 	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT)) {
 		pr_warn("timed out waiting for userspace\n");
 		goto error;
-    }
+	}
 
 	/* Grab reply. */
 	spin_lock_irqsave(&brc_lock, flags);
@@ -499,7 +500,7 @@ static int __init brc_init(void)
 {
 	int err;
 
-	printk("Open vSwitch Bridge Compatibility, built "__DATE__" "__TIME__"\n");
+	pr_info("Open vSwitch Bridge Compatibility, built "__DATE__" "__TIME__"\n");
 
 	/* Set the bridge ioctl handler */
 	brioctl_set(brc_ioctl_deviceless_stub);

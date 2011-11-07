@@ -52,8 +52,7 @@ extern int busted_nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
  * @list: list entry for linking
  * @family: pointer to family, need not be set before registering
  */
-struct genl_multicast_group
-{
+struct genl_multicast_group {
 	struct genl_family  *family;	/* private */
 	struct list_head	list;	   /* private */
 	char name[GENL_NAMSIZ];

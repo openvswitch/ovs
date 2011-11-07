@@ -41,7 +41,7 @@ static struct hlist_head *peer_table;
 
 static void update_peers(const char *name, struct vport *);
 
-static inline struct patch_vport *patch_vport_priv(const struct vport *vport)
+static struct patch_vport *patch_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
 }
@@ -127,7 +127,8 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	struct patch_config *patchconf;
 	int err;
 
-	vport = vport_alloc(sizeof(struct patch_vport), &patch_vport_ops, parms);
+	vport = vport_alloc(sizeof(struct patch_vport),
+			    &patch_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;

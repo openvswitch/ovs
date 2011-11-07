@@ -12,22 +12,22 @@
 #define skb_headroom rpl_skb_headroom
 static inline unsigned int rpl_skb_headroom(const struct sk_buff *skb)
 {
- 	return skb->data - skb->head;
+	return skb->data - skb->head;
 }
 #endif
 
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
-                                                    const int offset, void *to,
-                                                    const unsigned int len)
+						    const int offset, void *to,
+						    const unsigned int len)
 {
 	memcpy(to, skb->data + offset, len);
 }
 
 static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
-                                                  const int offset,
-                                                  const void *from,
-                                                  const unsigned int len)
+						  const int offset,
+						  const void *from,
+						  const unsigned int len)
 {
 	memcpy(skb->data + offset, from, len);
 }
@@ -55,7 +55,7 @@ static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
 
 #ifndef HAVE_SKB_COW_HEAD
 static inline int __skb_cow(struct sk_buff *skb, unsigned int headroom,
-                            int cloned)
+			    int cloned)
 {
 	int delta = 0;
 
@@ -174,7 +174,7 @@ static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 
 static inline int skb_transport_offset(const struct sk_buff *skb)
 {
-    return skb_transport_header(skb) - skb->data;
+	return skb_transport_header(skb) - skb->data;
 }
 
 static inline int skb_network_offset(const struct sk_buff *skb)

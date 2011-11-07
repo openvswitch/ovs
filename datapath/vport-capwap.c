@@ -32,7 +32,7 @@
 
 #define CAPWAP_FRAG_TIMEOUT (30 * HZ)
 #define CAPWAP_FRAG_MAX_MEM (256 * 1024)
-#define CAPWAP_FRAG_PRUNE_MEM (192 *1024)
+#define CAPWAP_FRAG_PRUNE_MEM (192 * 1024)
 #define CAPWAP_FRAG_SECRET_INTERVAL (10 * 60 * HZ)
 
 /*
@@ -100,7 +100,7 @@ struct capwaphdr_wsi_key {
 /* Flag indicating a 64bit key is stored in WSI data field */
 #define CAPWAP_WSI_F_KEY64 0x80
 
-static inline struct capwaphdr *capwap_hdr(const struct sk_buff *skb)
+static struct capwaphdr *capwap_hdr(const struct sk_buff *skb)
 {
 	return (struct capwaphdr *)(udp_hdr(skb) + 1);
 }
@@ -170,7 +170,7 @@ static int capwap_hdr_len(const struct tnl_mutable_config *mutable)
 	if (mutable->flags & TNL_F_CSUM)
 		return -EINVAL;
 
-        /* if keys are specified, then add WSI field */
+	/* if keys are specified, then add WSI field */
 	if (mutable->out_key || (mutable->flags & TNL_F_OUT_KEY_ACTION)) {
 		size += sizeof(struct capwaphdr_wsi) +
 			sizeof(struct capwaphdr_wsi_key);
@@ -282,8 +282,7 @@ static int process_capwap_wsi(struct sk_buff *skb, __be64 *key)
 	return 0;
 }
 
-static inline struct sk_buff *process_capwap_proto(struct sk_buff *skb,
-		                                   __be64 *key)
+static struct sk_buff *process_capwap_proto(struct sk_buff *skb, __be64 *key)
 {
 	struct capwaphdr *cwh = capwap_hdr(skb);
 	int hdr_len = sizeof(struct udphdr);
@@ -518,7 +517,7 @@ error:
 
 /* All of the following functions relate to fragmentation reassembly. */
 
-static inline struct frag_queue *ifq_cast(struct inet_frag_queue *ifq)
+static struct frag_queue *ifq_cast(struct inet_frag_queue *ifq)
 {
 	return container_of(ifq, struct frag_queue, ifq);
 }
