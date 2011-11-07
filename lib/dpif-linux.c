@@ -1329,9 +1329,7 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
         [OVS_VPORT_ATTR_TYPE] = { .type = NL_A_U32 },
         [OVS_VPORT_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
         [OVS_VPORT_ATTR_UPCALL_PID] = { .type = NL_A_U32 },
-        [OVS_VPORT_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                   .min_len = sizeof(struct ovs_vport_stats),
-                                   .max_len = sizeof(struct ovs_vport_stats),
+        [OVS_VPORT_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_vport_stats),
                                    .optional = true },
         [OVS_VPORT_ATTR_ADDRESS] = { .type = NL_A_UNSPEC,
                                      .min_len = ETH_ADDR_LEN,
@@ -1504,9 +1502,7 @@ dpif_linux_dp_from_ofpbuf(struct dpif_linux_dp *dp, const struct ofpbuf *buf)
 {
     static const struct nl_policy ovs_datapath_policy[] = {
         [OVS_DP_ATTR_NAME] = { .type = NL_A_STRING, .max_len = IFNAMSIZ },
-        [OVS_DP_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                .min_len = sizeof(struct ovs_dp_stats),
-                                .max_len = sizeof(struct ovs_dp_stats),
+        [OVS_DP_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_dp_stats),
                                 .optional = true },
     };
 
@@ -1651,9 +1647,7 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     static const struct nl_policy ovs_flow_policy[] = {
         [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
         [OVS_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
-        [OVS_FLOW_ATTR_STATS] = { .type = NL_A_UNSPEC,
-                                  .min_len = sizeof(struct ovs_flow_stats),
-                                  .max_len = sizeof(struct ovs_flow_stats),
+        [OVS_FLOW_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_flow_stats),
                                   .optional = true },
         [OVS_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
         [OVS_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },

@@ -184,6 +184,9 @@ struct nl_policy
     bool optional;
 };
 
+#define NL_POLICY_FOR(TYPE) \
+    .type = NL_A_UNSPEC, .min_len = sizeof(TYPE), .max_len = sizeof(TYPE)
+
 bool nl_policy_parse(const struct ofpbuf *, size_t offset,
                      const struct nl_policy[],
                      struct nlattr *[], size_t n_attrs);
