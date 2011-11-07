@@ -75,6 +75,36 @@ odp_action_len(uint16_t type)
     return -1;
 }
 
+static const char *
+ovs_key_attr_to_string(enum ovs_key_attr attr)
+{
+    static char unknown_attr[3 + INT_STRLEN(unsigned int) + 1];
+
+    switch (attr) {
+    case OVS_KEY_ATTR_UNSPEC: return "unspec";
+    case OVS_KEY_ATTR_PRIORITY: return "priority";
+    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
+    case OVS_KEY_ATTR_IN_PORT: return "in_port";
+    case OVS_KEY_ATTR_ETHERNET: return "eth";
+    case OVS_KEY_ATTR_8021Q: return "vlan";
+    case OVS_KEY_ATTR_ETHERTYPE: return "eth_type";
+    case OVS_KEY_ATTR_IPV4: return "ipv4";
+    case OVS_KEY_ATTR_IPV6: return "ipv6";
+    case OVS_KEY_ATTR_TCP: return "tcp";
+    case OVS_KEY_ATTR_UDP: return "udp";
+    case OVS_KEY_ATTR_ICMP: return "icmp";
+    case OVS_KEY_ATTR_ICMPV6: return "icmpv6";
+    case OVS_KEY_ATTR_ARP: return "arp";
+    case OVS_KEY_ATTR_ND: return "nd";
+
+    case __OVS_KEY_ATTR_MAX:
+    default:
+        snprintf(unknown_attr, sizeof unknown_attr, "key%u",
+                 (unsigned int) attr);
+        return unknown_attr;
+    }
+}
+
 static void
 format_generic_odp_action(struct ds *ds, const struct nlattr *a)
 {
@@ -164,7 +194,6 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
     ds_put_char(ds, ')');
 }
 
-
 static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
@@ -198,11 +227,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_cstr(ds, ")");
         break;
     case OVS_ACTION_ATTR_POP:
-        if (nl_attr_get_u16(a) == OVS_KEY_ATTR_8021Q) {
-            ds_put_cstr(ds, "pop(vlan)");
-        } else {
-            ds_put_format(ds, "pop(key%"PRIu16")", nl_attr_get_u16(a));
-        }
+        ds_put_format(ds, "pop(%s)",
+                      ovs_key_attr_to_string(nl_attr_get_u16(a)));
         break;
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
