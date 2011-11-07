@@ -34,14 +34,13 @@
 #include "timeval.h"
 #include "util.h"
 
-static void
-format_odp_key_attr(const struct nlattr *a, struct ds *ds);
-
 /* The interface between userspace and kernel uses an "OVS_*" prefix.
  * Since this is fairly non-specific for the OVS userspace components,
  * "ODP_*" (Open vSwitch Datapath) is used as the prefix for
  * interactions with the datapath.
  */
+
+static void format_odp_key_attr(const struct nlattr *a, struct ds *ds);
 
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
  * 'type':
