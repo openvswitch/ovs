@@ -348,6 +348,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct ovs_key_icmpv6 *icmpv6_key;
     const struct ovs_key_arp *arp_key;
     const struct ovs_key_nd *nd_key;
+    enum ovs_key_attr attr = nl_attr_type(a);
 
     if (nl_attr_get_size(a) != odp_flow_key_attr_len(nl_attr_type(a))) {
         ds_put_format(ds, "bad length %zu, expected %d for: ",
@@ -357,7 +358,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         return;
     }
 
-    switch (nl_attr_type(a)) {
+    switch (attr) {
     case OVS_KEY_ATTR_PRIORITY:
         ds_put_format(ds, "priority(%"PRIu32")", nl_attr_get_u32(a));
         break;
@@ -473,6 +474,8 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
     }
 
+    case OVS_KEY_ATTR_UNSPEC:
+    case __OVS_KEY_ATTR_MAX:
     default:
         format_generic_odp_key(a, ds);
         break;
