@@ -620,6 +620,51 @@ static const size_t attr_len_range[][2] = {
     [NL_A_NESTED] = { 0, SIZE_MAX },
 };
 
+bool
+nl_attr_validate(const struct nlattr *nla, const struct nl_policy *policy)
+{
+    uint16_t type = nl_attr_type(nla);
+    size_t min_len;
+    size_t max_len;
+    size_t len;
+
+    if (policy->type == NL_A_NO_ATTR) {
+        return true;
+    }
+
+    /* Figure out min and max length. */
+    min_len = policy->min_len;
+    if (!min_len) {
+        min_len = attr_len_range[policy->type][0];
+    }
+    max_len = policy->max_len;
+    if (!max_len) {
+        max_len = attr_len_range[policy->type][1];
+    }
+
+    /* Verify length. */
+    len = nl_attr_get_size(nla);
+    if (len < min_len || len > max_len) {
+        VLOG_DBG_RL(&rl, "attr %"PRIu16" length %zu not in "
+                    "allowed range %zu...%zu", type, len, min_len, max_len);
+        return false;
+    }
+
+    /* Strings must be null terminated and must not have embedded nulls. */
+    if (policy->type == NL_A_STRING) {
+        if (((char *) nla)[nla->nla_len - 1]) {
+            VLOG_DBG_RL(&rl, "attr %"PRIu16" lacks null at end", type);
+            return false;
+        }
+        if (memchr(nla + 1, '\0', len - 1) != NULL) {
+            VLOG_DBG_RL(&rl, "attr %"PRIu16" has bad length", type);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /* Parses the 'msg' starting at the given 'nla_offset' as a sequence of Netlink
  * attributes.  'policy[i]', for 0 <= i < n_attrs, specifies how the attribute
  * with nla_type == i is parsed; a pointer to attribute i is stored in
@@ -633,21 +678,10 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
                 struct nlattr *attrs[], size_t n_attrs)
 {
     struct nlattr *nla;
-    size_t n_required;
     size_t left;
     size_t i;
 
-    n_required = 0;
-    for (i = 0; i < n_attrs; i++) {
-        attrs[i] = NULL;
-
-        assert(policy[i].type < N_NL_ATTR_TYPES);
-        if (policy[i].type != NL_A_NO_ATTR
-            && policy[i].type != NL_A_FLAG
-            && !policy[i].optional) {
-            n_required++;
-        }
-    }
+    memset(attrs, 0, n_attrs * sizeof *attrs);
 
     if (msg->size < nla_offset) {
         VLOG_DBG_RL(&rl, "missing headers in nl_policy_parse");
@@ -656,54 +690,31 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
 
     NL_ATTR_FOR_EACH (nla, left,
                       (struct nlattr *) ((char *) msg->data + nla_offset),
-                      msg->size - nla_offset) {
-        size_t offset = (char*)nla - (char*)msg->data;
-        size_t len = nl_attr_get_size(nla);
+                      msg->size - nla_offset)
+    {
         uint16_t type = nl_attr_type(nla);
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
             const struct nl_policy *e = &policy[type];
-            size_t min_len, max_len;
-
-            /* Validate length and content. */
-            min_len = e->min_len ? e->min_len : attr_len_range[e->type][0];
-            max_len = e->max_len ? e->max_len : attr_len_range[e->type][1];
-            if (len < min_len || len > max_len) {
-                VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" length %zu not in "
-                            "allowed range %zu...%zu",
-                            offset, type, len, min_len, max_len);
+            if (!nl_attr_validate(nla, e)) {
                 return false;
             }
-            if (e->type == NL_A_STRING) {
-                if (((char *) nla)[nla->nla_len - 1]) {
-                    VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" lacks null at end",
-                                offset, type);
-                    return false;
-                }
-                if (memchr(nla + 1, '\0', len - 1) != NULL) {
-                    VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" has bad length",
-                                offset, type);
-                    return false;
-                }
-            }
-            if (!e->optional && attrs[type] == NULL) {
-                assert(n_required > 0);
-                --n_required;
-            }
             if (attrs[type]) {
-                VLOG_DBG_RL(&rl, "%zu: duplicate attr %"PRIu16, offset, type);
+                VLOG_DBG_RL(&rl, "duplicate attr %"PRIu16, type);
             }
             attrs[type] = nla;
-        } else {
-            /* Skip attribute type that we don't care about. */
         }
     }
     if (left) {
         VLOG_DBG_RL(&rl, "attributes followed by garbage");
         return false;
     }
-    if (n_required) {
-        VLOG_DBG_RL(&rl, "%zu required attrs missing", n_required);
-        return false;
+
+    for (i = 0; i < n_attrs; i++) {
+        const struct nl_policy *e = &policy[i];
+        if (!e->optional && e->type != NL_A_NO_ATTR && !attrs[i]) {
+            VLOG_DBG_RL(&rl, "required attr %zu missing", i);
+            return false;
+        }
     }
     return true;
 }
@@ -729,7 +740,7 @@ nl_attr_find__(const struct nlattr *attrs, size_t size, uint16_t type)
     size_t left;
 
     NL_ATTR_FOR_EACH (nla, left, attrs, size) {
-        if (nl_attr_type (nla) == type) {
+        if (nl_attr_type(nla) == type) {
             return nla;
         }
     }
