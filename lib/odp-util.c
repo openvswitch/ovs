@@ -298,13 +298,10 @@ odp_flow_key_attr_len(uint16_t type)
     return -1;
 }
 
-
 static void
 format_generic_odp_key(const struct nlattr *a, struct ds *ds)
 {
     size_t len = nl_attr_get_size(a);
-
-    ds_put_format(ds, "key%"PRId16, nl_attr_type(a));
     if (len) {
         const uint8_t *unspec;
         unsigned int i;
@@ -349,8 +346,9 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct ovs_key_nd *nd_key;
     enum ovs_key_attr attr = nl_attr_type(a);
 
+    ds_put_cstr(ds, ovs_key_attr_to_string(attr));
     if (nl_attr_get_size(a) != odp_flow_key_attr_len(nl_attr_type(a))) {
-        ds_put_format(ds, "bad length %zu, expected %d for: ",
+        ds_put_format(ds, "(bad length %zu, expected %d)",
                       nl_attr_get_size(a),
                       odp_flow_key_attr_len(nl_attr_type(a)));
         format_generic_odp_key(a, ds);
@@ -359,27 +357,27 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     switch (attr) {
     case OVS_KEY_ATTR_PRIORITY:
-        ds_put_format(ds, "priority(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_format(ds, "(%"PRIu32")", nl_attr_get_u32(a));
         break;
 
     case OVS_KEY_ATTR_TUN_ID:
-        ds_put_format(ds, "tun_id(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
+        ds_put_format(ds, "(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
-        ds_put_format(ds, "in_port(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_format(ds, "(%"PRIu32")", nl_attr_get_u32(a));
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
         eth_key = nl_attr_get(a);
-        ds_put_format(ds, "eth(src="ETH_ADDR_FMT",dst="ETH_ADDR_FMT")",
+        ds_put_format(ds, "(src="ETH_ADDR_FMT",dst="ETH_ADDR_FMT")",
                       ETH_ADDR_ARGS(eth_key->eth_src),
                       ETH_ADDR_ARGS(eth_key->eth_dst));
         break;
 
     case OVS_KEY_ATTR_8021Q:
         q_key = nl_attr_get(a);
-        ds_put_cstr(ds, "vlan(");
+        ds_put_cstr(ds, "(");
         if (q_key->q_tpid != htons(ETH_TYPE_VLAN)) {
             ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(q_key->q_tpid));
         }
@@ -389,13 +387,13 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
 
     case OVS_KEY_ATTR_ETHERTYPE:
-        ds_put_format(ds, "eth_type(0x%04"PRIx16")",
+        ds_put_format(ds, "(0x%04"PRIx16")",
                       ntohs(nl_attr_get_be16(a)));
         break;
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get(a);
-        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
+        ds_put_format(ds, "(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
                       ",tos=%#"PRIx8",ttl=%"PRIu8",frag=%s)",
                       IP_ARGS(&ipv4_key->ipv4_src),
                       IP_ARGS(&ipv4_key->ipv4_dst),
@@ -412,7 +410,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         inet_ntop(AF_INET6, ipv6_key->ipv6_src, src_str, sizeof src_str);
         inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
 
-        ds_put_format(ds, "ipv6(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRIu8
+        ds_put_format(ds, "(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRIu8
                       ",tclass=%#"PRIx8",hlimit=%"PRIu8",frag=%s)",
                       src_str, dst_str, ntohl(ipv6_key->ipv6_label),
                       ipv6_key->ipv6_proto, ipv6_key->ipv6_tclass,
@@ -423,31 +421,31 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_TCP:
         tcp_key = nl_attr_get(a);
-        ds_put_format(ds, "tcp(src=%"PRIu16",dst=%"PRIu16")",
+        ds_put_format(ds, "(src=%"PRIu16",dst=%"PRIu16")",
                       ntohs(tcp_key->tcp_src), ntohs(tcp_key->tcp_dst));
         break;
 
     case OVS_KEY_ATTR_UDP:
         udp_key = nl_attr_get(a);
-        ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16")",
+        ds_put_format(ds, "(src=%"PRIu16",dst=%"PRIu16")",
                       ntohs(udp_key->udp_src), ntohs(udp_key->udp_dst));
         break;
 
     case OVS_KEY_ATTR_ICMP:
         icmp_key = nl_attr_get(a);
-        ds_put_format(ds, "icmp(type=%"PRIu8",code=%"PRIu8")",
+        ds_put_format(ds, "(type=%"PRIu8",code=%"PRIu8")",
                       icmp_key->icmp_type, icmp_key->icmp_code);
         break;
 
     case OVS_KEY_ATTR_ICMPV6:
         icmpv6_key = nl_attr_get(a);
-        ds_put_format(ds, "icmpv6(type=%"PRIu8",code=%"PRIu8")",
+        ds_put_format(ds, "(type=%"PRIu8",code=%"PRIu8")",
                       icmpv6_key->icmpv6_type, icmpv6_key->icmpv6_code);
         break;
 
     case OVS_KEY_ATTR_ARP:
         arp_key = nl_attr_get(a);
-        ds_put_format(ds, "arp(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
+        ds_put_format(ds, "(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
                       "sha="ETH_ADDR_FMT",tha="ETH_ADDR_FMT")",
                       IP_ARGS(&arp_key->arp_sip), IP_ARGS(&arp_key->arp_tip),
                       ntohs(arp_key->arp_op), ETH_ADDR_ARGS(arp_key->arp_sha),
@@ -460,7 +458,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         nd_key = nl_attr_get(a);
         inet_ntop(AF_INET6, nd_key->nd_target, target, sizeof target);
 
-        ds_put_format(ds, "nd(target=%s", target);
+        ds_put_format(ds, "(target=%s", target);
         if (!eth_addr_is_zero(nd_key->nd_sll)) {
             ds_put_format(ds, ",sll="ETH_ADDR_FMT,
                           ETH_ADDR_ARGS(nd_key->nd_sll));
