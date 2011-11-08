@@ -459,16 +459,18 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
  */
 int vport_send(struct vport *vport, struct sk_buff *skb)
 {
-	struct vport_percpu_stats *stats;
 	int sent = vport->ops->send(vport, skb);
 
-	stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
+	if (likely(sent)) {
+		struct vport_percpu_stats *stats;
 
-	write_seqcount_begin(&stats->seqlock);
-	stats->tx_packets++;
-	stats->tx_bytes += sent;
-	write_seqcount_end(&stats->seqlock);
+		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
 
+		write_seqcount_begin(&stats->seqlock);
+		stats->tx_packets++;
+		stats->tx_bytes += sent;
+		write_seqcount_end(&stats->seqlock);
+	}
 	return sent;
 }
 
