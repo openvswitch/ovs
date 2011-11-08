@@ -86,8 +86,10 @@ static DECLARE_DELAYED_WORK(cache_cleaner_wq, cache_cleaner);
  */
 static unsigned int key_local_remote_ports __read_mostly;
 static unsigned int key_remote_ports __read_mostly;
+static unsigned int key_multicast_ports __read_mostly;
 static unsigned int local_remote_ports __read_mostly;
 static unsigned int remote_ports __read_mostly;
+static unsigned int multicast_ports __read_mostly;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 #define rt_dst(rt) (rt->dst)
@@ -191,14 +193,20 @@ static void assign_cache_rcu(struct vport *vport, struct tnl_cache *new_cache)
 
 static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 {
+	bool is_multicast = ipv4_is_multicast(mutable->key.daddr);
+
 	if (mutable->flags & TNL_F_IN_KEY_MATCH) {
 		if (mutable->key.saddr)
 			return &local_remote_ports;
+		else if (is_multicast)
+			return &multicast_ports;
 		else
 			return &remote_ports;
 	} else {
 		if (mutable->key.saddr)
 			return &key_local_remote_ports;
+		else if (is_multicast)
+			return &key_multicast_ports;
 		else
 			return &key_remote_ports;
 	}
@@ -328,14 +336,14 @@ struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
 	if (is_multicast) {
 		lookup.saddr = 0;
 		lookup.daddr = saddr;
-		if (key_remote_ports) {
+		if (key_multicast_ports) {
 			lookup.tunnel_type = tunnel_type | TNL_T_KEY_EXACT;
 			lookup.in_key = key;
 			vport = port_table_lookup(&lookup, mutable);
 			if (vport)
 				return vport;
 		}
-		if (remote_ports) {
+		if (multicast_ports) {
 			lookup.tunnel_type = tunnel_type | TNL_T_KEY_MATCH;
 			lookup.in_key = 0;
 			vport = port_table_lookup(&lookup, mutable);
