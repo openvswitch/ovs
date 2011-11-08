@@ -1361,33 +1361,10 @@ bridge_pick_datapath_id(struct bridge *br,
         return dpid;
     }
 
-    if (hw_addr_iface) {
-        int vlan;
-        if (!netdev_get_vlan_vid(hw_addr_iface->netdev, &vlan)) {
-            /*
-             * A bridge whose MAC address is taken from a VLAN network device
-             * (that is, a network device created with vconfig(8) or similar
-             * tool) will have the same MAC address as a bridge on the VLAN
-             * device's physical network device.
-             *
-             * Handle this case by hashing the physical network device MAC
-             * along with the VLAN identifier.
-             */
-            uint8_t buf[ETH_ADDR_LEN + 2];
-            memcpy(buf, bridge_ea, ETH_ADDR_LEN);
-            buf[ETH_ADDR_LEN] = vlan >> 8;
-            buf[ETH_ADDR_LEN + 1] = vlan;
-            return dpid_from_hash(buf, sizeof buf);
-        } else {
-            /*
-             * Assume that this bridge's MAC address is unique, since it
-             * doesn't fit any of the cases we handle specially.
-             */
-        }
-    } else {
+    if (!hw_addr_iface) {
         /*
          * A purely internal bridge, that is, one that has no non-virtual
-         * network devices on it at all, is more difficult because it has no
+         * network devices on it at all, is difficult because it has no
          * natural unique identifier at all.
          *
          * When the host is a XenServer, we handle this case by hashing the
