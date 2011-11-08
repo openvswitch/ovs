@@ -196,9 +196,6 @@ int netdev_dump_queue_stats(const struct netdev *,
 
 unsigned int netdev_change_seq(const struct netdev *netdev);
 
-/* Linux stuff. */
-int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
-
 #ifdef  __cplusplus
 }
 #endif

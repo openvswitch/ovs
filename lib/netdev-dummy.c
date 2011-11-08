@@ -277,7 +277,6 @@ static const struct netdev_class dummy_class = {
 
     NULL,                       /* get_features */
     NULL,                       /* set_advertisements */
-    NULL,                       /* get_vlan_vid */
 
     NULL,                       /* set_policing */
     NULL,                       /* get_qos_types */

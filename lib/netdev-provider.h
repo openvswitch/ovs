@@ -320,17 +320,6 @@ struct netdev_class {
      * support configuring advertisements. */
     int (*set_advertisements)(struct netdev *netdev, uint32_t advertise);
 
-    /* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
-     * sets '*vlan_vid' to the VLAN VID associated with that device and returns
-     * 0.
-     *
-     * Returns ENOENT if 'netdev' is a network device that is not a
-     * VLAN device.
-     *
-     * This function should be set to null if it doesn't make any sense for
-     * your network device (it probably doesn't). */
-    int (*get_vlan_vid)(const struct netdev *netdev, int *vlan_vid);
-
     /* Attempts to set input rate limiting (policing) policy, such that up to
      * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative
      * burst size of 'kbits' kb.

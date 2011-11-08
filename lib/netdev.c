@@ -1250,24 +1250,6 @@ netdev_change_seq(const struct netdev *netdev)
 {
     return netdev_get_dev(netdev)->netdev_class->change_seq(netdev);
 }
-
-/* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
- * sets '*vlan_vid' to the VLAN VID associated with that device and returns 0.
- * Otherwise returns a errno value (specifically ENOENT if 'netdev_name' is the
- * name of a network device that is not a VLAN device) and sets '*vlan_vid' to
- * -1. */
-int
-netdev_get_vlan_vid(const struct netdev *netdev, int *vlan_vid)
-{
-    int error = (netdev_get_dev(netdev)->netdev_class->get_vlan_vid
-                 ? netdev_get_dev(netdev)->netdev_class->get_vlan_vid(netdev,
-                        vlan_vid)
-                 : ENOENT);
-    if (error) {
-        *vlan_vid = 0;
-    }
-    return error;
-}
 
 /* Initializes 'netdev_dev' as a netdev device named 'name' of the specified
  * 'netdev_class'.  This function is ordinarily called from a netdev provider's

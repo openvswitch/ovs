@@ -922,7 +922,6 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
                                                             \
     NULL,                       /* get_features */          \
     NULL,                       /* set_advertisements */    \
-    NULL,                       /* get_vlan_vid */          \
                                                             \
     NULL,                       /* set_policing */          \
     NULL,                       /* get_qos_types */         \

@@ -72,7 +72,6 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
 
-COVERAGE_DEFINE(netdev_get_vlan_vid);
 COVERAGE_DEFINE(netdev_set_policing);
 COVERAGE_DEFINE(netdev_arp_lookup);
 COVERAGE_DEFINE(netdev_get_ifindex);
@@ -1544,60 +1543,6 @@ netdev_linux_set_advertisements(struct netdev *netdev, uint32_t advertise)
                                    ETHTOOL_SSET, "ETHTOOL_SSET");
 }
 
-/* If 'netdev_name' is the name of a VLAN network device (e.g. one created with
- * vconfig(8)), sets '*vlan_vid' to the VLAN VID associated with that device
- * and returns 0.  Otherwise returns a errno value (specifically ENOENT if
- * 'netdev_name' is the name of a network device that is not a VLAN device) and
- * sets '*vlan_vid' to -1. */
-static int
-netdev_linux_get_vlan_vid(const struct netdev *netdev, int *vlan_vid)
-{
-    const char *netdev_name = netdev_get_name(netdev);
-    struct ds line = DS_EMPTY_INITIALIZER;
-    FILE *stream = NULL;
-    int error;
-    char *fn;
-
-    COVERAGE_INC(netdev_get_vlan_vid);
-    fn = xasprintf("/proc/net/vlan/%s", netdev_name);
-    stream = fopen(fn, "r");
-    if (!stream) {
-        error = errno;
-        goto done;
-    }
-
-    if (ds_get_line(&line, stream)) {
-        if (ferror(stream)) {
-            error = errno;
-            VLOG_ERR_RL(&rl, "error reading \"%s\": %s", fn, strerror(errno));
-        } else {
-            error = EPROTO;
-            VLOG_ERR_RL(&rl, "unexpected end of file reading \"%s\"", fn);
-        }
-        goto done;
-    }
-
-    if (!sscanf(ds_cstr(&line), "%*s VID: %d", vlan_vid)) {
-        error = EPROTO;
-        VLOG_ERR_RL(&rl, "parse error reading \"%s\" line 1: \"%s\"",
-                    fn, ds_cstr(&line));
-        goto done;
-    }
-
-    error = 0;
-
-done:
-    free(fn);
-    if (stream) {
-        fclose(stream);
-    }
-    ds_destroy(&line);
-    if (error) {
-        *vlan_vid = -1;
-    }
-    return error;
-}
-
 #define POLICE_ADD_CMD "/sbin/tc qdisc add dev %s handle ffff: ingress"
 #define POLICE_CONFIG_CMD "/sbin/tc filter add dev %s parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate %dkbit burst %dk mtu 65535 drop flowid :1"
 
@@ -2331,7 +2276,6 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     netdev_linux_get_features,                                  \
     netdev_linux_set_advertisements,                            \
-    netdev_linux_get_vlan_vid,                                  \
                                                                 \
     netdev_linux_set_policing,                                  \
     netdev_linux_get_qos_types,                                 \
