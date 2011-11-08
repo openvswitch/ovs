@@ -1160,43 +1160,35 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 			       const struct nlattr *attr)
 {
 	const struct nlattr *nla;
-	u16 prev_type;
 	int rem;
 
 	*in_port = USHRT_MAX;
 	*tun_id = 0;
 	*priority = 0;
 
-	prev_type = OVS_KEY_ATTR_UNSPEC;
 	nla_for_each_nested(nla, attr, rem) {
 		int type = nla_type(nla);
 
-		if (type > OVS_KEY_ATTR_MAX || nla_len(nla) != ovs_key_lens[type])
-			return -EINVAL;
-
-		switch (TRANSITION(prev_type, type)) {
-		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_PRIORITY):
-			*priority = nla_get_u32(nla);
-			break;
-
-		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_TUN_ID):
-		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_TUN_ID):
-			*tun_id = nla_get_be64(nla);
-			break;
-
-		case TRANSITION(OVS_KEY_ATTR_UNSPEC, OVS_KEY_ATTR_IN_PORT):
-		case TRANSITION(OVS_KEY_ATTR_PRIORITY, OVS_KEY_ATTR_IN_PORT):
-		case TRANSITION(OVS_KEY_ATTR_TUN_ID, OVS_KEY_ATTR_IN_PORT):
-			if (nla_get_u32(nla) >= DP_MAX_PORTS)
+		if (type <= OVS_KEY_ATTR_MAX && ovs_key_lens[type] != 0) {
+			if (nla_len(nla) != ovs_key_lens[type])
 				return -EINVAL;
-			*in_port = nla_get_u32(nla);
-			break;
 
-		default:
-			return 0;
+			switch (type) {
+			case OVS_KEY_ATTR_PRIORITY:
+				*priority = nla_get_u32(nla);
+				break;
+
+			case OVS_KEY_ATTR_TUN_ID:
+				*tun_id = nla_get_be64(nla);
+				break;
+
+			case OVS_KEY_ATTR_IN_PORT:
+				if (nla_get_u32(nla) >= DP_MAX_PORTS)
+					return -EINVAL;
+				*in_port = nla_get_u32(nla);
+				break;
+			}
 		}
-
-		prev_type = type;
 	}
 	if (rem)
 		return -EINVAL;
