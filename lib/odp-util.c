@@ -369,7 +369,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get(a);
-        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRId8
+        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
                       ",tos=%#"PRIx8",ttl=%"PRIu8",frag=%s)",
                       IP_ARGS(&ipv4_key->ipv4_src),
                       IP_ARGS(&ipv4_key->ipv4_dst),
@@ -386,7 +386,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         inet_ntop(AF_INET6, ipv6_key->ipv6_src, src_str, sizeof src_str);
         inet_ntop(AF_INET6, ipv6_key->ipv6_dst, dst_str, sizeof dst_str);
 
-        ds_put_format(ds, "ipv6(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRId8
+        ds_put_format(ds, "ipv6(src=%s,dst=%s,label=%#"PRIx32",proto=%"PRIu8
                       ",tos=%#"PRIx8",hlimit=%"PRIu8",frag=%s)",
                       src_str, dst_str, ntohl(ipv6_key->ipv6_label),
                       ipv6_key->ipv6_proto, ipv6_key->ipv6_tos,
