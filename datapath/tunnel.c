@@ -1045,7 +1045,7 @@ static bool need_linearize(const struct sk_buff *skb)
 	 * change them from underneath us and we can skip the linearization.
 	 */
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
-		if (unlikely(page_count(skb_shinfo(skb)->frags[i].page) > 1))
+		if (unlikely(page_count(skb_frag_page(&skb_shinfo(skb)->frags[i])) > 1))
 			return true;
 
 	return false;

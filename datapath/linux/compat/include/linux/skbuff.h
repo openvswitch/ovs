@@ -232,4 +232,11 @@ static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 #define consume_skb kfree_skb
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0)
+static inline struct page *skb_frag_page(const skb_frag_t *frag)
+{
+	return frag->page;
+}
+#endif
+
 #endif
