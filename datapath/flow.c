@@ -978,7 +978,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 				goto invalid;
 			swkey->ipv6.label = ipv6_key->ipv6_label;
 			swkey->ip.proto = ipv6_key->ipv6_proto;
-			swkey->ip.tos = ipv6_key->ipv6_tos;
+			swkey->ip.tos = ipv6_key->ipv6_tclass;
 			swkey->ip.ttl = ipv6_key->ipv6_hlimit;
 			swkey->ip.frag = ipv6_key->ipv6_frag;
 			memcpy(&swkey->ipv6.addr.src, ipv6_key->ipv6_src,
@@ -1263,7 +1263,7 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 				sizeof(ipv6_key->ipv6_dst));
 		ipv6_key->ipv6_label = swkey->ipv6.label;
 		ipv6_key->ipv6_proto = swkey->ip.proto;
-		ipv6_key->ipv6_tos = swkey->ip.tos;
+		ipv6_key->ipv6_tclass = swkey->ip.tos;
 		ipv6_key->ipv6_hlimit = swkey->ip.ttl;
 		ipv6_key->ipv6_frag = swkey->ip.frag;
 	} else if (swkey->eth.type == htons(ETH_P_ARP)) {

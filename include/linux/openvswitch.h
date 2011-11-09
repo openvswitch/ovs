@@ -325,7 +325,7 @@ struct ovs_key_ipv6 {
 	__be32 ipv6_dst[4];
 	__be32 ipv6_label;	/* 20-bits in least-significant bits. */
 	__u8   ipv6_proto;
-	__u8   ipv6_tos;
+	__u8   ipv6_tclass;
 	__u8   ipv6_hlimit;
 	__u8   ipv6_frag;	/* One of OVS_FRAG_TYPE_*. */
 };
