@@ -1065,6 +1065,7 @@ set_stp_port(struct ofport *ofport_,
         if (sp) {
             ofport->stp_port = NULL;
             stp_port_disable(sp);
+            update_stp_port_state(ofport);
         }
         return 0;
     } else if (sp && stp_port_no(sp) != s->port_num
