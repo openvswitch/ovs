@@ -45,8 +45,8 @@ struct sw_flow_key {
 	struct {
 		u8     proto;		/* IP protocol or lower 8 bits of ARP opcode. */
 		u8     tos; 		/* IP ToS. */
-		u8     ttl;         /* IP TTL/hop limit. */
-		u8     frag;        /* One of OVS_FRAG_TYPE_*. */
+		u8     ttl;		/* IP TTL/hop limit. */
+		u8     frag;		/* One of OVS_FRAG_TYPE_*. */
 	} ip;
 	union {
 		struct {
@@ -70,7 +70,7 @@ struct sw_flow_key {
 				struct in6_addr src;	/* IPv6 source address. */
 				struct in6_addr dst;	/* IPv6 destination address. */
 			} addr;
-			__be32 label; 		/* IPv6 flow label. */
+			__be32 label;			/* IPv6 flow label. */
 			struct {
 				__be16 src;		/* TCP/UDP source port. */
 				__be16 dst;		/* TCP/UDP destination port. */
