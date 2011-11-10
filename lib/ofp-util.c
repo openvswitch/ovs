@@ -2524,7 +2524,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         MAY_IPVx        = 1 << 3, /* tos, frag, ttl */
         MAY_ARP_SHA     = 1 << 4, /* arp_sha */
         MAY_ARP_THA     = 1 << 5, /* arp_tha */
-        MAY_IPV6_ADDR   = 1 << 6, /* ipv6_src, ipv6_dst */
+        MAY_IPV6        = 1 << 6, /* ipv6_src, ipv6_dst, ipv6_label */
         MAY_ND_TARGET   = 1 << 7  /* nd_target */
     } may_match;
 
@@ -2540,7 +2540,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         }
     } else if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)
                && flow_format == NXFF_NXM) {
-        may_match = MAY_NW_PROTO | MAY_IPVx | MAY_IPV6_ADDR;
+        may_match = MAY_NW_PROTO | MAY_IPVx | MAY_IPV6;
         if (rule->flow.nw_proto == IPPROTO_TCP ||
             rule->flow.nw_proto == IPPROTO_UDP) {
             may_match |= MAY_TP_ADDR;
@@ -2583,7 +2583,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
     if (!(may_match & MAY_ARP_THA)) {
         wc.wildcards |= FWW_ARP_THA;
     }
-    if (!(may_match & MAY_IPV6_ADDR)) {
+    if (!(may_match & MAY_IPV6)) {
         wc.ipv6_src_mask = wc.ipv6_dst_mask = in6addr_any;
         wc.wildcards |= FWW_IPV6_LABEL;
     }
