@@ -1097,39 +1097,38 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
 
     for (i = 0; i < N_UPCALL_SOCKS; i++) {
         struct nl_sock *upcall_sock;
+        int dp_ifindex;
+
         dpif->last_read_upcall = (dpif->last_read_upcall + 1) &
                                  (N_UPCALL_SOCKS - 1);
         upcall_sock = dpif->upcall_socks[dpif->last_read_upcall];
 
-        if (nl_sock_woke(upcall_sock)) {
-            int dp_ifindex;
 
-            for (;;) {
-                struct ofpbuf *buf;
-                int error;
+        for (;;) {
+            struct ofpbuf *buf;
+            int error;
 
-                if (++read_tries > 50) {
-                    return EAGAIN;
-                }
+            if (++read_tries > 50) {
+                return EAGAIN;
+            }
 
-                error = nl_sock_recv(upcall_sock, &buf, false);
-                if (error == EAGAIN) {
-                    break;
-                } else if (error) {
-                    return error;
-                }
+            error = nl_sock_recv(upcall_sock, &buf, false);
+            if (error == EAGAIN) {
+                break;
+            } else if (error) {
+                return error;
+            }
 
-                error = parse_odp_packet(buf, upcall, &dp_ifindex);
-                if (!error
-                    && dp_ifindex == dpif->dp_ifindex
-                    && dpif->listen_mask & (1u << upcall->type)) {
-                    return 0;
-                }
+            error = parse_odp_packet(buf, upcall, &dp_ifindex);
+            if (!error
+                && dp_ifindex == dpif->dp_ifindex
+                && dpif->listen_mask & (1u << upcall->type)) {
+                return 0;
+            }
 
-                ofpbuf_delete(buf);
-                if (error) {
-                    return error;
-                }
+            ofpbuf_delete(buf);
+            if (error) {
+                return error;
             }
         }
     }
