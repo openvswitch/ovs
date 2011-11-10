@@ -192,7 +192,7 @@ static ssize_t brport_store(struct kobject *kobj,
 	return ret;
 }
 
-const struct sysfs_ops brport_sysfs_ops = {
+struct sysfs_ops brport_sysfs_ops = {
 	.show = brport_show,
 	.store = brport_store,
 };
