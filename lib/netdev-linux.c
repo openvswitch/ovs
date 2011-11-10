@@ -3930,6 +3930,55 @@ tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
     return tc_bytes_to_ticks(Bps, MAX(burst_bytes, min_burst));
 }
 
+/* Linux-only functions declared in netdev-linux.h  */
+
+/* Modifies the 'flag' bit in ethtool's flags field for 'netdev'.  If
+ * 'enable' is true, the bit is set.  Otherwise, it is cleared. */
+int
+netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
+                              const char *flag_name, bool enable)
+{
+    const char *netdev_name = netdev_get_name(netdev);
+    struct ethtool_value evalue;
+    uint32_t new_flags;
+    int error;
+
+    memset(&evalue, 0, sizeof evalue);
+    error = netdev_linux_do_ethtool(netdev_name,
+                                    (struct ethtool_cmd *)&evalue,
+                                    ETHTOOL_GFLAGS, "ETHTOOL_GFLAGS");
+    if (error) {
+        return error;
+    }
+
+    evalue.data = new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
+    error = netdev_linux_do_ethtool(netdev_name,
+                                    (struct ethtool_cmd *)&evalue,
+                                    ETHTOOL_SFLAGS, "ETHTOOL_SFLAGS");
+    if (error) {
+        return error;
+    }
+
+    memset(&evalue, 0, sizeof evalue);
+    error = netdev_linux_do_ethtool(netdev_name,
+                                    (struct ethtool_cmd *)&evalue,
+                                    ETHTOOL_GFLAGS, "ETHTOOL_GFLAGS");
+    if (error) {
+        return error;
+    }
+
+    if (new_flags != evalue.data) {
+        VLOG_WARN_RL(&rl, "attempt to %s ethtool %s flag on network "
+                     "device %s failed", enable ? "enable" : "disable",
+                     flag_name, netdev_name);
+        return EOPNOTSUPP;
+    }
+
+    return 0;
+}
+
+/* Utility functions. */
+
 /* Copies 'src' into 'dst', performing format conversion in the process. */
 static void
 netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
@@ -3957,9 +4006,6 @@ netdev_stats_from_rtnl_link_stats(struct netdev_stats *dst,
     dst->tx_heartbeat_errors = src->tx_heartbeat_errors;
     dst->tx_window_errors = src->tx_window_errors;
 }
-
-
-/* Utility functions. */
 
 static int
 get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
@@ -4245,51 +4291,6 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
         }
         return errno;
     }
-}
-
-/* Modifies the 'flag' bit in ethtool's flags field for 'netdev'.  If
- * 'enable' is true, the bit is set.  Otherwise, it is cleared. */
-int
-netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
-                              const char *flag_name, bool enable)
-{
-    const char *netdev_name = netdev_get_name(netdev);
-    struct ethtool_value evalue;
-    uint32_t new_flags;
-    int error;
-
-    memset(&evalue, 0, sizeof evalue);
-    error = netdev_linux_do_ethtool(netdev_name,
-                                    (struct ethtool_cmd *)&evalue,
-                                    ETHTOOL_GFLAGS, "ETHTOOL_GFLAGS");
-    if (error) {
-        return error;
-    }
-
-    evalue.data = new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
-    error = netdev_linux_do_ethtool(netdev_name,
-                                    (struct ethtool_cmd *)&evalue,
-                                    ETHTOOL_SFLAGS, "ETHTOOL_SFLAGS");
-    if (error) {
-        return error;
-    }
-
-    memset(&evalue, 0, sizeof evalue);
-    error = netdev_linux_do_ethtool(netdev_name,
-                                    (struct ethtool_cmd *)&evalue,
-                                    ETHTOOL_GFLAGS, "ETHTOOL_GFLAGS");
-    if (error) {
-        return error;
-    }
-
-    if (new_flags != evalue.data) {
-        VLOG_WARN_RL(&rl, "attempt to %s ethtool %s flag on network "
-                     "device %s failed", enable ? "enable" : "disable",
-                     flag_name, netdev_name);
-        return EOPNOTSUPP;
-    }
-
-    return 0;
 }
 
 static int
