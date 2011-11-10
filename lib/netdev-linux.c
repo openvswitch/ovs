@@ -3932,6 +3932,14 @@ tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
 
 /* Linux-only functions declared in netdev-linux.h  */
 
+/* Returns a fd for an AF_INET socket or a negative errno value. */
+int
+netdev_linux_get_af_inet_sock(void)
+{
+    int error = netdev_linux_init();
+    return error ? -error : af_inet_sock;
+}
+
 /* Modifies the 'flag' bit in ethtool's flags field for 'netdev'.  If
  * 'enable' is true, the bit is set.  Otherwise, it is cleared. */
 int

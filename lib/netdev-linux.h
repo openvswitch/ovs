@@ -29,5 +29,6 @@ struct rtnl_link_stats;
 
 int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
                                   const char *flag_name, bool enable);
+int netdev_linux_get_af_inet_sock(void);
 
 #endif /* netdev-linux.h */
