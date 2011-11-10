@@ -32,9 +32,6 @@ static struct cls_table *find_table(const struct classifier *,
 static struct cls_table *insert_table(struct classifier *,
                                       const struct flow_wildcards *);
 
-static struct cls_table *classifier_first_table(const struct classifier *);
-static struct cls_table *classifier_next_table(const struct classifier *,
-                                               const struct cls_table *);
 static void destroy_table(struct classifier *, struct cls_table *);
 
 static struct cls_rule *find_match(const struct cls_table *,
@@ -56,12 +53,6 @@ static bool flow_equal_except(const struct flow *, const struct flow *,
 
 static struct cls_rule *next_rule_in_list__(struct cls_rule *);
 static struct cls_rule *next_rule_in_list(struct cls_rule *);
-
-static struct cls_table *
-cls_table_from_hmap_node(const struct hmap_node *node)
-{
-    return node ? CONTAINER_OF(node, struct cls_table, hmap_node) : NULL;
-}
 
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'. */
@@ -966,8 +957,7 @@ cls_cursor_first(struct cls_cursor *cursor)
 {
     struct cls_table *table;
 
-    for (table = classifier_first_table(cursor->cls); table;
-         table = classifier_next_table(cursor->cls, table)) {
+    HMAP_FOR_EACH (table, hmap_node, &cursor->cls->tables) {
         struct cls_rule *rule = search_table(table, cursor->target);
         if (rule) {
             cursor->table = table;
@@ -1001,8 +991,8 @@ cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *rule)
         }
     }
 
-    for (table = classifier_next_table(cursor->cls, cursor->table); table;
-         table = classifier_next_table(cursor->cls, table)) {
+    table = cursor->table;
+    HMAP_FOR_EACH_CONTINUE (table, hmap_node, &cursor->cls->tables) {
         rule = search_table(table, cursor->target);
         if (rule) {
             cursor->table = table;
@@ -1038,20 +1028,6 @@ insert_table(struct classifier *cls, const struct flow_wildcards *wc)
     hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc, 0));
 
     return table;
-}
-
-static struct cls_table *
-classifier_first_table(const struct classifier *cls)
-{
-    return cls_table_from_hmap_node(hmap_first(&cls->tables));
-}
-
-static struct cls_table *
-classifier_next_table(const struct classifier *cls,
-                      const struct cls_table *table)
-{
-    return cls_table_from_hmap_node(hmap_next(&cls->tables,
-                                              &table->hmap_node));
 }
 
 static void
