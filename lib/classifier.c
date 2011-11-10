@@ -315,7 +315,7 @@ cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 void
 cls_rule_set_nw_dscp(struct cls_rule *rule, uint8_t nw_dscp)
 {
-    rule->wc.nw_tos_mask |= IP_DSCP_MASK;
+    rule->wc.wildcards &= ~FWW_NW_DSCP;
     rule->flow.nw_tos &= ~IP_DSCP_MASK;
     rule->flow.nw_tos |= nw_dscp & IP_DSCP_MASK;
 }
@@ -323,7 +323,7 @@ cls_rule_set_nw_dscp(struct cls_rule *rule, uint8_t nw_dscp)
 void
 cls_rule_set_nw_ecn(struct cls_rule *rule, uint8_t nw_ecn)
 {
-    rule->wc.nw_tos_mask |= IP_ECN_MASK;
+    rule->wc.wildcards &= ~FWW_NW_ECN;
     rule->flow.nw_tos &= ~IP_ECN_MASK;
     rule->flow.nw_tos |= nw_ecn & IP_ECN_MASK;
 }
@@ -477,7 +477,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -622,10 +622,10 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                     ETH_ADDR_ARGS(f->arp_tha));
         }
     }
-    if (wc->nw_tos_mask & IP_DSCP_MASK) {
+    if (!(w & FWW_NW_DSCP)) {
         ds_put_format(s, "nw_tos=%"PRIu8",", f->nw_tos & IP_DSCP_MASK);
     }
-    if (wc->nw_tos_mask & IP_ECN_MASK) {
+    if (!(w & FWW_NW_ECN)) {
         ds_put_format(s, "nw_ecn=%"PRIu8",", f->nw_tos & IP_ECN_MASK);
     }
     if (!(w & FWW_NW_TTL)) {
@@ -1177,7 +1177,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1205,7 +1205,8 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                 || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (wc & FWW_NW_TTL || a->nw_ttl == b->nw_ttl)
-            && !((a->nw_tos ^ b->nw_tos) & wildcards->nw_tos_mask)
+            && (wc & FWW_NW_DSCP || !((a->nw_tos ^ b->nw_tos) & IP_DSCP_MASK))
+            && (wc & FWW_NW_ECN || !((a->nw_tos ^ b->nw_tos) & IP_ECN_MASK))
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)
             && (wc & FWW_ARP_SHA || eth_addr_equals(a->arp_sha, b->arp_sha))
             && (wc & FWW_ARP_THA || eth_addr_equals(a->arp_tha, b->arp_tha))

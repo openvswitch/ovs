@@ -461,7 +461,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -489,11 +489,11 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
         nxm_put_frag(b, cr);
 
-        if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
+        if (!(wc & FWW_NW_DSCP)) {
             nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
         }
 
-        if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
+        if (!(wc & FWW_NW_ECN)) {
             nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
         }
 
@@ -547,11 +547,11 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
             nxm_put_32(b, NXM_NX_IPV6_LABEL, flow->ipv6_label);
         }
 
-        if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
+        if (!(wc & FWW_NW_DSCP)) {
             nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
         }
 
-        if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
+        if (!(wc & FWW_NW_ECN)) {
             nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
         }
 

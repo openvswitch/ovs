@@ -101,18 +101,20 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
-    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_TTL
+    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_ECN | FWW_NW_TTL
                       | FWW_ND_TARGET | FWW_IPV6_LABEL);
 
-    if (!(ofpfw & OFPFW_NW_TOS)) {
-        wc->nw_tos_mask |= IP_DSCP_MASK;
+    if (ofpfw & OFPFW_NW_TOS) {
+        /* OpenFlow 1.0 defines a TOS wildcard, but it's much later in
+         * the enum than we can use. */
+        wc->wildcards |= FWW_NW_DSCP;
     }
 
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
@@ -194,7 +196,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     ofpfw = (OVS_FORCE uint32_t) (wc->wildcards & WC_INVARIANTS);
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
-    if (!(wc->nw_tos_mask & IP_DSCP_MASK)) {
+    if (wc->wildcards & FWW_NW_DSCP) {
         ofpfw |= OFPFW_NW_TOS;
     }
 
@@ -859,7 +861,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 6);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -898,7 +900,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IP ECN bits. */
-    if (wc->nw_tos_mask & IP_ECN_MASK) {
+    if (!(wc->wildcards & FWW_NW_ECN)) {
         return NXFF_NXM;
     }
 
@@ -2573,8 +2575,8 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         wc.wildcards |= FWW_NW_PROTO;
     }
     if (!(may_match & MAY_IPVx)) {
-        wc.nw_tos_mask = 0;
-        wc.nw_frag_mask = 0;
+        wc.wildcards |= FWW_NW_DSCP;
+        wc.wildcards |= FWW_NW_ECN;
         wc.wildcards |= FWW_NW_TTL;
     }
     if (!(may_match & MAY_ARP_SHA)) {
