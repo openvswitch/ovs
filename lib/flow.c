@@ -452,13 +452,13 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     }
     flow->vlan_tci &= wildcards->vlan_tci_mask;
     if (wc & FWW_DL_TYPE) {
-        flow->dl_type = 0;
+        flow->dl_type = htons(0);
     }
     if (wc & FWW_TP_SRC) {
-        flow->tp_src = 0;
+        flow->tp_src = htons(0);
     }
     if (wc & FWW_TP_DST) {
-        flow->tp_dst = 0;
+        flow->tp_dst = htons(0);
     }
     if (wc & FWW_DL_SRC) {
         memset(flow->dl_src, 0, sizeof flow->dl_src);
