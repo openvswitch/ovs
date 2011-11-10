@@ -447,10 +447,10 @@ these settings are ignored (see \fBFlow Syntax\fR above).
 .
 .IP \fBtable=\fInumber\fR
 If specified, limits the flow manipulation and flow dump commands to
-only apply to the table with the given \fInumber\fR.
-\fInumber\fR is a number between 0 and 254, inclusive.
+only apply to the table with the given \fInumber\fR between 0 and 254.
 .
-Behavior varies if \fBtable\fR is not specified.  For flow table
+Behavior varies if \fBtable\fR is not specified (equivalent to
+specifying 255 as \fInumber\fR).  For flow table
 modification commands without \fB\-\-strict\fR, the switch will choose
 the table for these commands to operate on.  For flow table
 modification commands with \fB\-\-strict\fR, the command will operate
