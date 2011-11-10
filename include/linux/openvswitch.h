@@ -277,7 +277,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_ICMPV6,    /* struct ovs_key_icmpv6 */
 	OVS_KEY_ATTR_ARP,       /* struct ovs_key_arp */
 	OVS_KEY_ATTR_ND,        /* struct ovs_key_nd */
-	OVS_KEY_ATTR_TUN_ID = 100, /* be64 tunnel ID */
+	OVS_KEY_ATTR_TUN_ID = 63, /* be64 tunnel ID */
 	__OVS_KEY_ATTR_MAX
 };
 
