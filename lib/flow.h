@@ -45,12 +45,12 @@ BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 #define FLOW_DL_TYPE_NONE 0x5ff
 
 /* Fragment bits, used for IPv4 and IPv6, always zero for non-IP flows. */
-#define FLOW_FRAG_ANY   (1 << 0) /* Set for any IP fragment. */
-#define FLOW_FRAG_LATER (1 << 1) /* Set for IP fragment with nonzero offset. */
-#define FLOW_FRAG_MASK  (FLOW_FRAG_ANY | FLOW_FRAG_LATER)
+#define FLOW_NW_FRAG_ANY   (1 << 0) /* Set for any IP frag. */
+#define FLOW_NW_FRAG_LATER (1 << 1) /* Set for IP frag with nonzero offset. */
+#define FLOW_NW_FRAG_MASK  (FLOW_NW_FRAG_ANY | FLOW_NW_FRAG_LATER)
 
-BUILD_ASSERT_DECL(FLOW_FRAG_ANY == NX_IP_FRAG_ANY);
-BUILD_ASSERT_DECL(FLOW_FRAG_LATER == NX_IP_FRAG_LATER);
+BUILD_ASSERT_DECL(FLOW_NW_FRAG_ANY == NX_IP_FRAG_ANY);
+BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 
 struct flow {
     ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
@@ -70,11 +70,11 @@ struct flow {
     uint8_t dl_src[6];          /* Ethernet source address. */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
-    uint8_t tos;                /* IP ToS. */
+    uint8_t nw_tos;             /* IP ToS (including DSCP and ECN). */
     uint8_t arp_sha[6];         /* ARP/ND source hardware address. */
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
-    uint8_t frag;               /* FLOW_FRAG_* flags. */
+    uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
     uint8_t reserved[6];        /* Reserved for 64-bit packing. */
 };
 
@@ -82,8 +82,8 @@ struct flow {
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
 #define FLOW_SIG_SIZE (110 + FLOW_N_REGS * 4)
 #define FLOW_PAD_SIZE 6
-BUILD_ASSERT_DECL(offsetof(struct flow, frag) == FLOW_SIG_SIZE - 1);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->frag) == 1);
+BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) == FLOW_SIG_SIZE - 1);
+BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_frag) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
@@ -163,8 +163,8 @@ struct flow_wildcards {
     struct in6_addr ipv6_src_mask; /* 1-bit in each signficant ipv6_src bit. */
     struct in6_addr ipv6_dst_mask; /* 1-bit in each signficant ipv6_dst bit. */
     ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
-    uint8_t tos_mask;           /* 1-bit in each significant tos bit. */
-    uint8_t frag_mask;          /* 1-bit in each significant frag bit. */
+    uint8_t nw_tos_mask;        /* 1-bit in each significant nw_tos bit. */
+    uint8_t nw_frag_mask;       /* 1-bit in each significant nw_frag bit. */
     uint8_t zeros[4];           /* Padding field set to zero. */
 };
 

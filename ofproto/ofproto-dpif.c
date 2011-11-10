@@ -3248,7 +3248,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
     }
 
     cls = &ofproto->up.tables[table_id];
-    if (flow->frag & FLOW_FRAG_ANY
+    if (flow->nw_frag & FLOW_NW_FRAG_ANY
         && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
         /* For OFPC_NORMAL frag_handling, we must pretend that transport ports
          * are unavailable. */
@@ -3670,20 +3670,20 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
 
     if (base->nw_src == flow->nw_src &&
         base->nw_dst == flow->nw_dst &&
-        base->tos == flow->tos &&
+        base->nw_tos == flow->nw_tos &&
         base->nw_ttl == flow->nw_ttl &&
-        base->frag == flow->frag) {
+        base->nw_frag == flow->nw_frag) {
         return;
     }
 
     ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
     ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
     ipv4_key.ipv4_proto = base->nw_proto;
-    ipv4_key.ipv4_tos = flow->tos;
+    ipv4_key.ipv4_tos = flow->nw_tos;
     ipv4_key.ipv4_ttl = flow->nw_ttl;
-    ipv4_key.ipv4_frag = (base->frag == 0 ? OVS_FRAG_TYPE_NONE
-                          : base->frag == FLOW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
-                          : OVS_FRAG_TYPE_LATER);
+    ipv4_key.ipv4_frag = (base->nw_frag == 0 ? OVS_FRAG_TYPE_NONE
+                          : base->nw_frag == FLOW_NW_FRAG_ANY
+                          ? OVS_FRAG_TYPE_FIRST : OVS_FRAG_TYPE_LATER);
 
     commit_action__(odp_actions, OVS_ACTION_ATTR_SET,
              OVS_KEY_ATTR_IPV4, &ipv4_key, sizeof(ipv4_key));
@@ -4167,8 +4167,8 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPUTIL_OFPAT_SET_NW_TOS:
-            ctx->flow.tos &= ~IP_DSCP_MASK;
-            ctx->flow.tos |= ia->nw_tos.nw_tos & IP_DSCP_MASK;
+            ctx->flow.nw_tos &= ~IP_DSCP_MASK;
+            ctx->flow.nw_tos |= ia->nw_tos.nw_tos & IP_DSCP_MASK;
             break;
 
         case OFPUTIL_OFPAT_SET_TP_SRC:
@@ -4309,7 +4309,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->table_id = 0;
     ctx->exit = false;
 
-    if (ctx->flow.frag & FLOW_FRAG_ANY) {
+    if (ctx->flow.nw_frag & FLOW_NW_FRAG_ANY) {
         switch (ctx->ofproto->up.frag_handling) {
         case OFPC_FRAG_NORMAL:
             /* We must pretend that transport ports are unavailable. */

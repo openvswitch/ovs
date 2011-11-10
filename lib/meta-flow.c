@@ -438,11 +438,11 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
 
     case MFF_IP_DSCP:
-        return !(wc->tos_mask & IP_DSCP_MASK);
+        return !(wc->nw_tos_mask & IP_DSCP_MASK);
     case MFF_IP_ECN:
-        return !(wc->tos_mask & IP_ECN_MASK);
+        return !(wc->nw_tos_mask & IP_ECN_MASK);
     case MFF_IP_FRAG:
-        return !(wc->frag_mask & FLOW_FRAG_MASK);
+        return !(wc->nw_frag_mask & FLOW_NW_FRAG_MASK);
 
     case MFF_ARP_SPA:
         return !wc->nw_src_mask;
@@ -543,13 +543,13 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
 
     case MFF_IP_DSCP:
-        mask->u8 = wc->tos_mask & IP_DSCP_MASK;
+        mask->u8 = wc->nw_tos_mask & IP_DSCP_MASK;
         break;
     case MFF_IP_ECN:
-        mask->u8 = wc->tos_mask & IP_ECN_MASK;
+        mask->u8 = wc->nw_tos_mask & IP_ECN_MASK;
         break;
     case MFF_IP_FRAG:
-        mask->u8 = wc->frag_mask & FLOW_FRAG_MASK;
+        mask->u8 = wc->nw_frag_mask & FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_SPA:
@@ -719,7 +719,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_IP_ECN:
         return !(value->u8 & ~IP_ECN_MASK);
     case MFF_IP_FRAG:
-        return !(value->u8 & ~FLOW_FRAG_MASK);
+        return !(value->u8 & ~FLOW_NW_FRAG_MASK);
 
     case MFF_ARP_OP:
         return !(value->be16 & htons(0xff00));
@@ -824,11 +824,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_IP_DSCP:
-        value->u8 = flow->tos & IP_DSCP_MASK;
+        value->u8 = flow->nw_tos & IP_DSCP_MASK;
         break;
 
     case MFF_IP_ECN:
-        value->u8 = flow->tos & IP_ECN_MASK;
+        value->u8 = flow->nw_tos & IP_ECN_MASK;
         break;
 
     case MFF_IP_TTL:
@@ -836,7 +836,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_IP_FRAG:
-        value->u8 = flow->frag;
+        value->u8 = flow->nw_frag;
         break;
 
     case MFF_ARP_OP:
@@ -995,7 +995,7 @@ mf_set_value(const struct mf_field *mf,
         break;
 
     case MFF_IP_FRAG:
-        cls_rule_set_frag(rule, value->u8);
+        cls_rule_set_nw_frag(rule, value->u8);
         break;
 
     case MFF_ARP_OP:
@@ -1158,13 +1158,13 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_DSCP:
-        rule->wc.tos_mask |= IP_DSCP_MASK;
-        rule->flow.tos &= ~IP_DSCP_MASK;
+        rule->wc.nw_tos_mask |= IP_DSCP_MASK;
+        rule->flow.nw_tos &= ~IP_DSCP_MASK;
         break;
 
     case MFF_IP_ECN:
-        rule->wc.tos_mask |= IP_ECN_MASK;
-        rule->flow.tos &= ~IP_ECN_MASK;
+        rule->wc.nw_tos_mask |= IP_ECN_MASK;
+        rule->flow.nw_tos &= ~IP_ECN_MASK;
         break;
 
     case MFF_IP_TTL:
@@ -1173,8 +1173,8 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_FRAG:
-        rule->wc.frag_mask |= FLOW_FRAG_MASK;
-        rule->flow.frag &= ~FLOW_FRAG_MASK;
+        rule->wc.nw_frag_mask |= FLOW_NW_FRAG_MASK;
+        rule->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
@@ -1321,7 +1321,7 @@ mf_set(const struct mf_field *mf,
         break;
 
     case MFF_IP_FRAG:
-        cls_rule_set_frag_masked(rule, value->u8, mask->u8);
+        cls_rule_set_nw_frag_masked(rule, value->u8, mask->u8);
         break;
 
     case MFF_ARP_SPA:
@@ -1486,7 +1486,7 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
         break;
 
     case MFF_IP_FRAG:
-        value->u8 &= FLOW_FRAG_MASK;
+        value->u8 &= FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
@@ -1659,8 +1659,8 @@ struct frag_handling {
 };
 
 static const struct frag_handling all_frags[] = {
-#define A FLOW_FRAG_ANY
-#define L FLOW_FRAG_LATER
+#define A FLOW_NW_FRAG_ANY
+#define L FLOW_NW_FRAG_LATER
     /* name               mask  value */
 
     { "no",               A|L,  0     },
@@ -1685,7 +1685,7 @@ mf_from_frag_string(const char *s, uint8_t *valuep, uint8_t *maskp)
         if (!strcasecmp(s, h->name)) {
             /* We force the upper bits of the mask on to make mf_parse_value()
              * happy (otherwise it will never think it's an exact match.) */
-            *maskp = h->mask | ~FLOW_FRAG_MASK;
+            *maskp = h->mask | ~FLOW_NW_FRAG_MASK;
             *valuep = h->value;
             return NULL;
         }
@@ -1793,7 +1793,7 @@ mf_format_frag_string(const uint8_t *valuep, const uint8_t *maskp,
     uint8_t mask = *maskp;
 
     value &= mask;
-    mask &= FLOW_FRAG_MASK;
+    mask &= FLOW_NW_FRAG_MASK;
 
     for (h = all_frags; h < &all_frags[ARRAY_SIZE(all_frags)]; h++) {
         if (value == h->value && mask == h->mask) {

@@ -424,19 +424,20 @@ nxm_put_ipv6(struct ofpbuf *b, uint32_t header,
 static void
 nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
 {
-    uint8_t frag = cr->flow.frag;
-    uint8_t frag_mask = cr->wc.frag_mask;
+    uint8_t nw_frag = cr->flow.nw_frag;
+    uint8_t nw_frag_mask = cr->wc.nw_frag_mask;
 
-    switch (frag_mask) {
+    switch (nw_frag_mask) {
     case 0:
         break;
 
-    case FLOW_FRAG_MASK:
-        nxm_put_8(b, NXM_NX_IP_FRAG, frag);
+    case FLOW_NW_FRAG_MASK:
+        nxm_put_8(b, NXM_NX_IP_FRAG, nw_frag);
         break;
 
     default:
-        nxm_put_8m(b, NXM_NX_IP_FRAG, frag, frag_mask & FLOW_FRAG_MASK);
+        nxm_put_8m(b, NXM_NX_IP_FRAG, nw_frag,
+                   nw_frag_mask & FLOW_NW_FRAG_MASK);
         break;
     }
 }
@@ -488,12 +489,12 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
         nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
         nxm_put_frag(b, cr);
 
-        if (cr->wc.tos_mask & IP_DSCP_MASK) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->tos & IP_DSCP_MASK);
+        if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
+            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
         }
 
-        if (cr->wc.tos_mask & IP_ECN_MASK) {
-            nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
+        if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
+            nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
         }
 
         if (!(wc & FWW_NW_TTL)) {
@@ -546,12 +547,12 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
             nxm_put_32(b, NXM_NX_IPV6_LABEL, flow->ipv6_label);
         }
 
-        if (cr->wc.tos_mask & IP_DSCP_MASK) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->tos & IP_DSCP_MASK);
+        if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
+            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
         }
 
-        if (cr->wc.tos_mask & IP_ECN_MASK) {
-            nxm_put_8(b, NXM_NX_IP_ECN, flow->tos & IP_ECN_MASK);
+        if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
+            nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
         }
 
         if (!(wc & FWW_NW_TTL)) {
@@ -1061,16 +1062,16 @@ nxm_read_field(const struct nxm_field *src, const struct flow *flow)
         return ntohs(flow->vlan_tci);
 
     case NFI_NXM_OF_IP_TOS:
-        return flow->tos & IP_DSCP_MASK;
+        return flow->nw_tos & IP_DSCP_MASK;
 
     case NFI_NXM_NX_IP_ECN:
-        return flow->tos & IP_ECN_MASK;
+        return flow->nw_tos & IP_ECN_MASK;
 
     case NFI_NXM_NX_IP_TTL:
         return flow->nw_ttl;
 
     case NFI_NXM_NX_IP_FRAG:
-        return flow->frag;
+        return flow->nw_frag;
 
     case NFI_NXM_OF_IP_PROTO:
     case NFI_NXM_OF_ARP_OP:
@@ -1220,13 +1221,13 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
 #endif
 
     case NFI_NXM_OF_IP_TOS:
-        flow->tos &= ~IP_DSCP_MASK;
-        flow->tos |= new_value & IP_DSCP_MASK;
+        flow->nw_tos &= ~IP_DSCP_MASK;
+        flow->nw_tos |= new_value & IP_DSCP_MASK;
         break;
 
     case NFI_NXM_NX_IP_ECN:
-        flow->tos &= ~IP_ECN_MASK;
-        flow->tos |= new_value & IP_ECN_MASK;
+        flow->nw_tos &= ~IP_ECN_MASK;
+        flow->nw_tos |= new_value & IP_ECN_MASK;
         break;
 
     case NFI_NXM_NX_IP_TTL:
@@ -1234,7 +1235,7 @@ nxm_write_field(const struct nxm_field *dst, struct flow *flow,
         break;
 
     case NFI_NXM_NX_IP_FRAG:
-        flow->frag = new_value;
+        flow->nw_frag = new_value;
         break;
 
     case NFI_NXM_OF_IP_SRC:

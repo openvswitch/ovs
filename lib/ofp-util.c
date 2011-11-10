@@ -112,7 +112,7 @@ ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
                       | FWW_ND_TARGET | FWW_IPV6_LABEL);
 
     if (!(ofpfw & OFPFW_NW_TOS)) {
-        wc->tos_mask |= IP_DSCP_MASK;
+        wc->nw_tos_mask |= IP_DSCP_MASK;
     }
 
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
@@ -155,7 +155,7 @@ ofputil_cls_rule_from_match(const struct ofp_match *match,
     rule->flow.tp_dst = match->tp_dst;
     memcpy(rule->flow.dl_src, match->dl_src, ETH_ADDR_LEN);
     memcpy(rule->flow.dl_dst, match->dl_dst, ETH_ADDR_LEN);
-    rule->flow.tos = match->nw_tos & IP_DSCP_MASK;
+    rule->flow.nw_tos = match->nw_tos & IP_DSCP_MASK;
     rule->flow.nw_proto = match->nw_proto;
 
     /* Translate VLANs. */
@@ -194,7 +194,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     ofpfw = (OVS_FORCE uint32_t) (wc->wildcards & WC_INVARIANTS);
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_src_mask) << OFPFW_NW_SRC_SHIFT;
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
-    if (!(wc->tos_mask & IP_DSCP_MASK)) {
+    if (!(wc->nw_tos_mask & IP_DSCP_MASK)) {
         ofpfw |= OFPFW_NW_TOS;
     }
 
@@ -228,7 +228,7 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
     match->nw_src = rule->flow.nw_src;
     match->nw_dst = rule->flow.nw_dst;
-    match->nw_tos = rule->flow.tos & IP_DSCP_MASK;
+    match->nw_tos = rule->flow.nw_tos & IP_DSCP_MASK;
     match->nw_proto = rule->flow.nw_proto;
     match->tp_src = rule->flow.tp_src;
     match->tp_dst = rule->flow.tp_dst;
@@ -888,7 +888,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching fragments. */
-    if (wc->frag_mask) {
+    if (wc->nw_frag_mask) {
         return NXFF_NXM;
     }
 
@@ -898,7 +898,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IP ECN bits. */
-    if (wc->tos_mask & IP_ECN_MASK) {
+    if (wc->nw_tos_mask & IP_ECN_MASK) {
         return NXFF_NXM;
     }
 
@@ -2573,8 +2573,8 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         wc.wildcards |= FWW_NW_PROTO;
     }
     if (!(may_match & MAY_IPVx)) {
-        wc.tos_mask = 0;
-        wc.frag_mask = 0;
+        wc.nw_tos_mask = 0;
+        wc.nw_frag_mask = 0;
         wc.wildcards |= FWW_NW_TTL;
     }
     if (!(may_match & MAY_ARP_SHA)) {

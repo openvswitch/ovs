@@ -160,7 +160,7 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
     }
     nf_rec->tcp_flags = nf_flow->tcp_flags;
     nf_rec->ip_proto = expired->flow.nw_proto;
-    nf_rec->ip_tos = expired->flow.tos & IP_DSCP_MASK;
+    nf_rec->ip_tos = expired->flow.nw_tos & IP_DSCP_MASK;
 
     /* NetFlow messages are limited to 30 records. */
     if (ntohs(nf_hdr->count) >= 30) {
