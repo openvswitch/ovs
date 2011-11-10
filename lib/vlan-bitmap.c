@@ -24,29 +24,39 @@ unsigned long *
 vlan_bitmap_from_array(const int64_t *vlans, size_t n_vlans)
 {
     unsigned long *b;
-    size_t i, n;
 
     if (!n_vlans) {
         return NULL;
     }
 
     b = bitmap_allocate(4096);
+    if (!vlan_bitmap_from_array__(vlans, n_vlans, b)) {
+        free(b);
+        return NULL;
+    }
+    return b;
+}
+
+/* Adds to 4096-bit VLAN bitmap 'b' a 1-bit in each position in the 'n_vlans'
+ * bits indicated in 'vlans'.  Returns the number of 1-bits added to 'b'. */
+int
+vlan_bitmap_from_array__(const int64_t *vlans, size_t n_vlans,
+                         unsigned long int *b)
+{
+    size_t i;
+    int n;
+
     n = 0;
     for (i = 0; i < n_vlans; i++) {
         int64_t vlan = vlans[i];
 
-        if (vlan >= 0 && vlan < 4096) {
+        if (vlan >= 0 && vlan < 4096 && !bitmap_is_set(b, vlan)) {
             bitmap_set1(b, vlan);
             n++;
         }
     }
 
-    if (!n) {
-        free(b);
-        return NULL;
-    }
-
-    return b;
+    return n;
 }
 
 /* Returns true if 'a' and 'b' are the same: either both null or both the same

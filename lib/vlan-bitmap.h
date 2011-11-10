@@ -28,6 +28,9 @@
  * This is empirically a useful data structure. */
 
 unsigned long *vlan_bitmap_from_array(const int64_t *vlans, size_t n_vlans);
+int vlan_bitmap_from_array__(const int64_t *vlans, size_t n_vlans,
+                             unsigned long int *b);
+
 bool vlan_bitmap_equal(const unsigned long *a, const unsigned long *b);
 
 /* Returns a new copy of 'vlans'. */
