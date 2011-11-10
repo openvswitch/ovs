@@ -286,35 +286,30 @@ cls_rule_set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
 void
 cls_rule_set_nw_src(struct cls_rule *rule, ovs_be32 nw_src)
 {
-    cls_rule_set_nw_src_masked(rule, nw_src, htonl(UINT32_MAX));
+    rule->flow.nw_src = nw_src;
+    rule->wc.nw_src_mask = htonl(UINT32_MAX);
 }
 
-bool
-cls_rule_set_nw_src_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
+void
+cls_rule_set_nw_src_masked(struct cls_rule *rule,
+                           ovs_be32 nw_src, ovs_be32 mask)
 {
-    if (flow_wildcards_set_nw_src_mask(&rule->wc, mask)) {
-        rule->flow.nw_src = ip & mask;
-        return true;
-    } else {
-        return false;
-    }
+    rule->flow.nw_src = nw_src & mask;
+    rule->wc.nw_src_mask = mask;
 }
 
 void
 cls_rule_set_nw_dst(struct cls_rule *rule, ovs_be32 nw_dst)
 {
-    cls_rule_set_nw_dst_masked(rule, nw_dst, htonl(UINT32_MAX));
+    rule->flow.nw_dst = nw_dst;
+    rule->wc.nw_dst_mask = htonl(UINT32_MAX);
 }
 
-bool
+void
 cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 {
-    if (flow_wildcards_set_nw_dst_mask(&rule->wc, mask)) {
-        rule->flow.nw_dst = ip & mask;
-        return true;
-    } else {
-        return false;
-    }
+    rule->flow.nw_dst = ip & mask;
+    rule->wc.nw_dst_mask = mask;
 }
 
 void
@@ -386,37 +381,31 @@ cls_rule_set_arp_tha(struct cls_rule *rule, const uint8_t tha[ETH_ADDR_LEN])
 void
 cls_rule_set_ipv6_src(struct cls_rule *rule, const struct in6_addr *src)
 {
-    cls_rule_set_ipv6_src_masked(rule, src, &in6addr_exact);
+    rule->flow.ipv6_src = *src;
+    rule->wc.ipv6_src_mask = in6addr_exact;
 }
 
-bool
+void
 cls_rule_set_ipv6_src_masked(struct cls_rule *rule, const struct in6_addr *src,
                              const struct in6_addr *mask)
 {
-    if (flow_wildcards_set_ipv6_src_mask(&rule->wc, mask)) {
-        rule->flow.ipv6_src = ipv6_addr_bitand(src, mask);
-        return true;
-    } else {
-        return false;
-    }
+    rule->flow.ipv6_src = ipv6_addr_bitand(src, mask);
+    rule->wc.ipv6_src_mask = *mask;
 }
 
 void
 cls_rule_set_ipv6_dst(struct cls_rule *rule, const struct in6_addr *dst)
 {
-    cls_rule_set_ipv6_dst_masked(rule, dst, &in6addr_exact);
+    rule->flow.ipv6_dst = *dst;
+    rule->wc.ipv6_dst_mask = in6addr_exact;
 }
 
-bool
+void
 cls_rule_set_ipv6_dst_masked(struct cls_rule *rule, const struct in6_addr *dst,
                              const struct in6_addr *mask)
 {
-    if (flow_wildcards_set_ipv6_dst_mask(&rule->wc, mask)) {
-        rule->flow.ipv6_dst = ipv6_addr_bitand(dst, mask);
-        return true;
-    } else {
-        return false;
-    }
+    rule->flow.ipv6_dst = ipv6_addr_bitand(dst, mask);
+    rule->wc.ipv6_dst_mask = *mask;
 }
 
 void

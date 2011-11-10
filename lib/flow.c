@@ -764,66 +764,6 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask);
 }
 
-static bool
-set_nw_mask(ovs_be32 *maskp, ovs_be32 mask)
-{
-    if (ip_is_cidr(mask)) {
-        *maskp = mask;
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/* Sets the IP (or ARP) source wildcard mask to CIDR 'mask' (consisting of N
- * high-order 1-bit and 32-N low-order 0-bits).  Returns true if successful,
- * false if 'mask' is not a CIDR mask.  */
-bool
-flow_wildcards_set_nw_src_mask(struct flow_wildcards *wc, ovs_be32 mask)
-{
-    return set_nw_mask(&wc->nw_src_mask, mask);
-}
-
-/* Sets the IP (or ARP) destination wildcard mask to CIDR 'mask' (consisting of
- * N high-order 1-bit and 32-N low-order 0-bits).  Returns true if successful,
- * false if 'mask' is not a CIDR mask.  */
-bool
-flow_wildcards_set_nw_dst_mask(struct flow_wildcards *wc, ovs_be32 mask)
-{
-    return set_nw_mask(&wc->nw_dst_mask, mask);
-}
-
-static bool
-set_ipv6_mask(struct in6_addr *maskp, const struct in6_addr *mask)
-{
-    if (ipv6_is_cidr(mask)) {
-        *maskp = *mask;
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/* Sets the IPv6 source wildcard mask to CIDR 'mask' (consisting of N
- * high-order 1-bit and 128-N low-order 0-bits).  Returns true if successful,
- * false if 'mask' is not a CIDR mask.  */
-bool
-flow_wildcards_set_ipv6_src_mask(struct flow_wildcards *wc,
-                                 const struct in6_addr *mask)
-{
-    return set_ipv6_mask(&wc->ipv6_src_mask, mask);
-}
-
-/* Sets the IPv6 destination wildcard mask to CIDR 'mask' (consisting of
- * N high-order 1-bit and 128-N low-order 0-bits).  Returns true if
- * successful, false if 'mask' is not a CIDR mask.  */
-bool
-flow_wildcards_set_ipv6_dst_mask(struct flow_wildcards *wc,
-                                 const struct in6_addr *mask)
-{
-    return set_ipv6_mask(&wc->ipv6_dst_mask, mask);
-}
-
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
  * (A 0-bit indicates a wildcard bit.) */
 void
