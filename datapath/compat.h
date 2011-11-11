@@ -36,4 +36,11 @@ static inline int CHECK_NUL_STRING(struct nlattr *attr, int maxlen)
 }
 #endif  /* !HAVE_NLA_NUL_STRING */
 
+static inline void skb_clear_rxhash(struct sk_buff *skb)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
+	skb->rxhash = 0;
+#endif
+}
+
 #endif /* compat.h */

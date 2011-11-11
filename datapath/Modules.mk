@@ -28,7 +28,6 @@ openvswitch_sources = \
 	vport-patch.c
 
 openvswitch_headers = \
-	actions.h \
 	checksum.h \
 	compat.h \
 	datapath.h \

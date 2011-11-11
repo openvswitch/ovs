@@ -137,4 +137,5 @@ const char *dp_name(const struct datapath *dp);
 struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
 					 u8 cmd);
 
+int execute_actions(struct datapath *dp, struct sk_buff *skb);
 #endif /* datapath.h */

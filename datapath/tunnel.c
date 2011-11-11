@@ -32,7 +32,6 @@
 #include <net/route.h>
 #include <net/xfrm.h>
 
-#include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
 #include "tunnel.h"

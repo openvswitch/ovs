@@ -23,7 +23,6 @@
 #include <net/checksum.h>
 #include <net/dsfield.h>
 
-#include "actions.h"
 #include "checksum.h"
 #include "datapath.h"
 #include "vlan.h"

@@ -45,7 +45,6 @@
 
 #include "checksum.h"
 #include "datapath.h"
-#include "actions.h"
 #include "flow.h"
 #include "vlan.h"
 #include "tunnel.h"
