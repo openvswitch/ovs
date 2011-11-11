@@ -81,7 +81,7 @@ EXTRA_DIST += vswitchd/vswitch.gv vswitchd/vswitch.pic
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml
 dist_man_MANS += vswitchd/ovs-vswitchd.conf.db.5
-vswitchd/ovs-vswitchd.conf.db.5: \
+$(srcdir)/vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc.in vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
 	$(srcdir)/vswitchd/vswitch.pic
 	$(OVSDB_DOC) \
