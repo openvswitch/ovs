@@ -311,11 +311,6 @@ int is_internal_dev(const struct net_device *netdev)
 #endif
 }
 
-int is_internal_vport(const struct vport *vport)
-{
-	return vport->ops == &internal_vport_ops;
-}
-
 struct vport *internal_dev_get_vport(struct net_device *netdev)
 {
 	if (!is_internal_dev(netdev))

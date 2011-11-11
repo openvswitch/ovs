@@ -12,8 +12,6 @@
 #include "datapath.h"
 #include "vport.h"
 
-int is_internal_vport(const struct vport *);
-
 int is_internal_dev(const struct net_device *);
 struct vport *internal_dev_get_vport(struct net_device *);
 
