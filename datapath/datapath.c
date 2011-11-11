@@ -335,21 +335,6 @@ out:
 	write_seqcount_end(&stats->seqlock);
 }
 
-static void copy_and_csum_skb(struct sk_buff *skb, void *to)
-{
-	u16 csum_start, csum_offset;
-	__wsum csum;
-
-	get_skb_csum_pointers(skb, &csum_start, &csum_offset);
-	csum_start -= skb_headroom(skb);
-
-	skb_copy_bits(skb, 0, to, csum_start);
-
-	csum = skb_copy_and_csum_bits(skb, csum_start, to + csum_start,
-				      skb->len - csum_start, 0);
-	*(__sum16 *)(to + csum_start + csum_offset) = csum_fold(csum);
-}
-
 static struct genl_family dp_packet_genl_family = {
 	.id = GENL_ID_GENERATE,
 	.hdrsize = sizeof(struct ovs_header),
@@ -481,10 +466,8 @@ static int queue_userspace_packet(int dp_ifindex, struct sk_buff *skb,
 			    nla_get_u64(upcall_info->userdata));
 
 	nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
-	if (skb->ip_summed == CHECKSUM_PARTIAL)
-		copy_and_csum_skb(skb, nla_data(nla));
-	else
-		skb_copy_bits(skb, 0, nla_data(nla), skb->len);
+
+	skb_copy_and_csum_dev(skb, nla_data(nla));
 
 	return genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
 }
